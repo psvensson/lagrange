@@ -1,8 +1,8 @@
 {
   "scenarioName": "timed",
-  "startedAt": 1771955427082,
-  "endedAt": 1771955427442,
-  "durationMs": 360,
+  "startedAt": 1772268441888,
+  "endedAt": 1772268442242,
+  "durationMs": 354,
   "files": {
     "events": "test-output/timed/events.ndjson",
     "samples": "test-output/timed/samples.ndjson",

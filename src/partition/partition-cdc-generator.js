@@ -372,34 +372,8 @@ class PartitionCDCGenerator {
       data[columns[i]] = values[i];
     }
 
-    // Try to fetch the full row from DB to get any default values
-    // Find the primary key column (usually first column or 'id')
     const pkColumn = columns[NUM.ZERO];
-    const pkValue = values[NUM.ZERO];
-
-    if (pkValue !== null && pkValue !== undefined && this.db) {
-      try {
-        const stmt = this.db.prepare(`SELECT * FROM ${tableName} WHERE ${pkColumn} = ?`);
-        const row = stmt.get(pkValue);
-        if (row) {
-          if (tableName !== SystemTableName.LOGS) {
-            this.logger.info(PARTITION_SERVICE_LOG_MSG.FETCHED_INSERT_ROW, {
-              tableName,
-              rowKeys: Object.keys(row),
-            });
-          }
-          return row;
-        }
-      } catch (err) {
-        this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_FETCH_INSERT_FAILED, {
-          tableName,
-          error: err.message,
-        });
-        throw err;
-      }
-    }
-
-    return data;
+    return this.fetchInsertRow(tableName, pkColumn, values[NUM.ZERO], data);
   }
 
   /**
@@ -415,38 +389,12 @@ class PartitionCDCGenerator {
     if (whereMatch && this.db) {
       const keyColumn = whereMatch[NUM.ONE];
       const keyValue = whereMatch[NUM.TWO];
-      if (tableName !== SystemTableName.LOGS) {
-        this.logger.info(PARTITION_SERVICE_LOG_MSG.FETCHING_UPDATE_ROW, {
-          tableName,
-          keyColumn,
-          keyValue,
-        });
-      }
-      // Query the updated row to get full data for CDC
-      try {
-        const stmt = this.db.prepare(`SELECT * FROM ${tableName} WHERE ${keyColumn} = ?`);
-        const row = stmt.get(keyValue);
-        if (row) {
-          if (tableName !== SystemTableName.LOGS) {
-            this.logger.info(PARTITION_SERVICE_LOG_MSG.FETCHED_UPDATE_ROW, {
-              tableName,
-              rowKeys: Object.keys(row),
-            });
-          }
-          return row;
-        } else {
-          this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_NO_ROW_UPDATE, {
-            tableName,
-            keyColumn,
-            keyValue,
-          });
-        }
-      } catch (err) {
-        this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_FETCH_UPDATE_FAILED, {
-          tableName,
-          error: err.message,
-        });
-        throw err;
+      const authoritativeRow = this.fetchUpdatedRow(
+        tableName,
+        {[keyColumn]: keyValue},
+      );
+      if (authoritativeRow) {
+        return authoritativeRow;
       }
     } else {
       this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_EXTRACT_UPDATE_WHERE_FAILED, {
@@ -557,7 +505,12 @@ class PartitionCDCGenerator {
       dataKeys: Object.keys(data),
     });
 
-    return data;
+    return this.fetchInsertRow(
+      tableName,
+      columns[NUM.ZERO],
+      data[columns[NUM.ZERO]],
+      data,
+    );
   }
 
   /**
@@ -629,6 +582,16 @@ class PartitionCDCGenerator {
       tableName,
       dataKeys: Object.keys(data),
     });
+
+    const whereClause = {};
+    for (let i = NUM.ZERO; i < whereColumns.length; i++) {
+      whereClause[whereColumns[i]] = params[setColumns.length + i];
+    }
+
+    const authoritativeRow = this.fetchUpdatedRow(tableName, whereClause);
+    if (authoritativeRow) {
+      return authoritativeRow;
+    }
 
     return data;
   }
@@ -753,6 +716,114 @@ class PartitionCDCGenerator {
       return num;
     }
     return val;
+  }
+
+  /**
+   * Fetch the stored row after an INSERT/UPSERT so CDC emits canonical data.
+   * @param {string} tableName
+   * @param {string|undefined} keyColumn
+   * @param {*} keyValue
+   * @param {Object} fallbackData
+   * @return {Object}
+   * @private
+   */
+  fetchInsertRow(tableName, keyColumn, keyValue, fallbackData) {
+    if (!keyColumn || keyValue === null || keyValue === undefined || !this.db) {
+      return fallbackData;
+    }
+
+    try {
+      const stmt = this.db.prepare(
+        `SELECT * FROM ${tableName} WHERE ${keyColumn} = ?`,
+      );
+      const row = stmt.get(keyValue);
+      if (row) {
+        if (tableName !== SystemTableName.LOGS) {
+          this.logger.info(PARTITION_SERVICE_LOG_MSG.FETCHED_INSERT_ROW, {
+            tableName,
+            rowKeys: Object.keys(row),
+          });
+        }
+        return row;
+      }
+    } catch (err) {
+      this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_FETCH_INSERT_FAILED, {
+        tableName,
+        error: err.message,
+      });
+      throw err;
+    }
+
+    return fallbackData;
+  }
+
+  /**
+   * Fetch the stored row after an UPDATE so CDC emits canonical data.
+   * @param {string} tableName
+   * @param {Object} whereClause
+   * @return {Object|null}
+   * @private
+   */
+  fetchUpdatedRow(tableName, whereClause) {
+    if (!this.db ||
+      !whereClause ||
+      typeof whereClause !== 'object' ||
+      Object.keys(whereClause).length === NUM.ZERO) {
+      return null;
+    }
+
+    const entries = Object.entries(whereClause)
+      .filter(([_key, value]) => value !== null && value !== undefined);
+    if (entries.length === NUM.ZERO) {
+      return null;
+    }
+
+    if (tableName !== SystemTableName.LOGS) {
+      const [keyColumn, keyValue] = entries[NUM.ZERO];
+      this.logger.info(PARTITION_SERVICE_LOG_MSG.FETCHING_UPDATE_ROW, {
+        tableName,
+        keyColumn,
+        keyValue,
+      });
+    }
+
+    const whereSql = entries
+      .map(([key]) => `${key} = ?`)
+      .join(' AND ');
+    const whereValues = entries.map(([_key, value]) => value);
+
+    try {
+      const stmt = this.db.prepare(
+        `SELECT * FROM ${tableName} WHERE ${whereSql}`,
+      );
+      const row = stmt.get(...whereValues);
+      if (row) {
+        if (tableName !== SystemTableName.LOGS) {
+          this.logger.info(PARTITION_SERVICE_LOG_MSG.FETCHED_UPDATE_ROW, {
+            tableName,
+            rowKeys: Object.keys(row),
+          });
+        }
+        return row;
+      }
+
+      if (tableName !== SystemTableName.LOGS) {
+        const [keyColumn, keyValue] = entries[NUM.ZERO];
+        this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_NO_ROW_UPDATE, {
+          tableName,
+          keyColumn,
+          keyValue,
+        });
+      }
+    } catch (err) {
+      this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_FETCH_UPDATE_FAILED, {
+        tableName,
+        error: err.message,
+      });
+      throw err;
+    }
+
+    return null;
   }
 }
 

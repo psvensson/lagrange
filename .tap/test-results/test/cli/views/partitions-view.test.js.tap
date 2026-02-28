@@ -6,7 +6,7 @@ TAP version 14
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 1 - constructor initializes with default state # time=6.762ms
+    ok 1 - constructor initializes with default state # time=6.165ms
     
     # Subtest: getColumns returns correct column definitions
         ok 1 - should be equal
@@ -17,7 +17,7 @@ TAP version 14
         ok 6 - should be equal
         ok 7 - should be equal
         1..7
-    ok 2 - getColumns returns correct column definitions # time=0.84ms
+    ok 2 - getColumns returns correct column definitions # time=0.529ms
     
     # Subtest: formatRow formats partition data correctly
         ok 1 - should be equal
@@ -27,7 +27,7 @@ TAP version 14
         ok 5 - should be equal
         ok 6 - should be equal
         1..6
-    ok 3 - formatRow formats partition data correctly # time=0.63ms
+    ok 3 - formatRow formats partition data correctly # time=0.536ms
     
     # Subtest: formatRow handles missing values
         ok 1 - should be equal
@@ -37,7 +37,7 @@ TAP version 14
         ok 5 - should be equal
         ok 6 - should be equal
         1..6
-    ok 4 - formatRow handles missing values # time=0.487ms
+    ok 4 - formatRow handles missing values # time=0.422ms
     
     # Subtest: formatKeyRange formats ranges correctly
         ok 1 - should be equal
@@ -45,7 +45,7 @@ TAP version 14
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 5 - formatKeyRange formats ranges correctly # time=0.388ms
+    ok 5 - formatKeyRange formats ranges correctly # time=0.336ms
     
     # Subtest: formatSize formats sizes correctly
         ok 1 - should be equal
@@ -54,28 +54,28 @@ TAP version 14
         ok 4 - should be equal
         ok 5 - should be equal
         1..5
-    ok 6 - formatSize formats sizes correctly # time=0.441ms
+    ok 6 - formatSize formats sizes correctly # time=0.364ms
     
     # Subtest: getRowStatus returns ERROR for failed partitions
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 7 - getRowStatus returns ERROR for failed partitions # time=0.316ms
+    ok 7 - getRowStatus returns ERROR for failed partitions # time=0.263ms
     
     # Subtest: getRowStatus returns ERROR for no leader
         ok 1 - should be equal
         1..1
-    ok 8 - getRowStatus returns ERROR for no leader # time=0.213ms
+    ok 8 - getRowStatus returns ERROR for no leader # time=0.179ms
     
     # Subtest: getRowStatus returns WARNING for under-replicated
         ok 1 - should be equal
         1..1
-    ok 9 - getRowStatus returns WARNING for under-replicated # time=0.246ms
+    ok 9 - getRowStatus returns WARNING for under-replicated # time=0.205ms
     
     # Subtest: getRowStatus returns NORMAL for healthy partitions
         ok 1 - should be equal
         1..1
-    ok 10 - getRowStatus returns NORMAL for healthy partitions # time=0.269ms
+    ok 10 - getRowStatus returns NORMAL for healthy partitions # time=0.192ms
     
     # Subtest: isUnderReplicated detects under-replication
         ok 1 - should be equal
@@ -83,59 +83,59 @@ TAP version 14
         ok 3 - should be equal
         ok 4 - should be equal
         1..4
-    ok 11 - isUnderReplicated detects under-replication # time=0.421ms
+    ok 11 - isUnderReplicated detects under-replication # time=0.339ms
     
     # Subtest: isUnderReplicated returns false without expected count
         ok 1 - should be equal
         1..1
-    ok 12 - isUnderReplicated returns false without expected count # time=0.228ms
+    ok 12 - isUnderReplicated returns false without expected count # time=0.199ms
     
     # Subtest: setExpectedReplicaCount updates expected count
         ok 1 - should be equal
         1..1
-    ok 13 - setExpectedReplicaCount updates expected count # time=0.346ms
+    ok 13 - setExpectedReplicaCount updates expected count # time=0.293ms
     
     # Subtest: getItemKey returns partition_id
         ok 1 - should be equal
         1..1
-    ok 14 - getItemKey returns partition_id # time=0.22ms
+    ok 14 - getItemKey returns partition_id # time=0.206ms
     
     # Subtest: setTableFilter filters by table
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 15 - setTableFilter filters by table # time=0.38ms
+    ok 15 - setTableFilter filters by table # time=0.464ms
     
     # Subtest: clearTableFilter removes filter
         ok 1 - should be equal
         ok 2 - should be equal
         1..2
-    ok 16 - clearTableFilter removes filter # time=0.355ms
+    ok 16 - clearTableFilter removes filter # time=0.313ms
     
     # Subtest: handleDrillDown returns navigation action
         ok 1 - should be equivalent
         1..1
-    ok 17 - handleDrillDown returns navigation action # time=1.839ms
+    ok 17 - handleDrillDown returns navigation action # time=1.153ms
     
     # Subtest: handleDrillDown returns null when no selection
         ok 1 - should be equal
         1..1
-    ok 18 - handleDrillDown returns null when no selection # time=0.464ms
+    ok 18 - handleDrillDown returns null when no selection # time=0.235ms
     
     # Subtest: navigateToLeaderNode returns navigation action
         ok 1 - should be equivalent
         1..1
-    ok 19 - navigateToLeaderNode returns navigation action # time=0.579ms
+    ok 19 - navigateToLeaderNode returns navigation action # time=0.291ms
     
     # Subtest: navigateToLeaderNode returns null without leader
         ok 1 - should be equal
         1..1
-    ok 20 - navigateToLeaderNode returns null without leader # time=0.348ms
+    ok 20 - navigateToLeaderNode returns null without leader # time=0.247ms
     
     # Subtest: handleKey triggers navigation on n key
         ok 1 - should be equivalent
         1..1
-    ok 21 - handleKey triggers navigation on n key # time=0.457ms
+    ok 21 - handleKey triggers navigation on n key # time=0.267ms
     
     # Subtest: getSelectedDetails returns partition details
         ok 1 - should be equal
@@ -144,19 +144,19 @@ TAP version 14
         ok 4 - should be equal
         ok 5 - should be equal
         1..5
-    ok 22 - getSelectedDetails returns partition details # time=1.056ms
+    ok 22 - getSelectedDetails returns partition details # time=0.779ms
     
     # Subtest: getSelectedDetails includes Raft state when available
         ok 1 - should be equal
         1..1
-    ok 23 - getSelectedDetails includes Raft state when available # time=0.589ms
+    ok 23 - getSelectedDetails includes Raft state when available # time=0.399ms
     
     # Subtest: getSelectedDetails returns null when no selection
         ok 1 - should be equal
         1..1
-    ok 24 - getSelectedDetails returns null when no selection # time=0.325ms
+    ok 24 - getSelectedDetails returns null when no selection # time=0.247ms
     
     1..24
-ok 1 - PartitionsView # time=24.726ms
+ok 1 - PartitionsView # time=19.574ms
 
 1..1

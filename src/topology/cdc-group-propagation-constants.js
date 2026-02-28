@@ -30,6 +30,13 @@ const CDC_GROUP_PROPAGATION_STATUS = Object.freeze({
   SAFE: 'safe',
 });
 
+const CDC_GROUP_PROPAGATION_RETRY = Object.freeze({
+  MAX_ATTEMPTS: 3,
+  INITIAL_DELAY_MS: 50,
+  BACKOFF_MULTIPLIER: 2,
+  MAX_DELAY_MS: 1000,
+});
+
 const CDC_GROUP_PROPAGATION_LOG_MSG = Object.freeze({
   INITIALIZED: 'CDCGroupPropagationService initialized',
   STARTED: 'CDCGroupPropagationService started',
@@ -38,6 +45,8 @@ const CDC_GROUP_PROPAGATION_LOG_MSG = Object.freeze({
   PROPAGATED_SAFE: 'CDC event propagated through safe mode',
   SAFE_FALLBACK: 'Falling back to safe CDC propagation mode',
   GROUPED_DELIVERY_FAILED: 'Grouped propagation delivery failed',
+  RETRYING_DELIVERY_FAILURES: 'Retrying CDC propagation delivery failures',
+  DELIVERY_RETRY_EXHAUSTED: 'CDC propagation delivery retries exhausted',
 });
 
 const CDC_GROUP_PROPAGATION_ERROR_MSG = Object.freeze({
@@ -55,6 +64,7 @@ export {
   CDC_GROUP_PROPAGATION_EVENT,
   CDC_GROUP_PROPAGATION_LOG_MSG,
   CDC_GROUP_PROPAGATION_REASON,
+  CDC_GROUP_PROPAGATION_RETRY,
   CDC_GROUP_PROPAGATION_STATE,
   CDC_GROUP_PROPAGATION_STATUS,
   CDC_GROUP_PROPAGATION_SUBSYSTEM,

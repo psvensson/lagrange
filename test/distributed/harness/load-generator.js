@@ -34,6 +34,7 @@ const UNDISPATCHED_REASON_CANCELLED = 'cancelled';
 const DISPATCH_STOP_REASON_TARGET = 'target';
 const DISPATCH_STOP_REASON_DURATION = 'duration';
 const DISPATCH_STOP_REASON_CANCELLED = 'cancelled';
+const REJECTED_REASON_QUEUE_FULL = 'queueFull';
 
 const LOAD_TABLE_NAME = 'logs';
 const LOAD_TABLE_BENCHMARK_EVENTS = 'benchmark_events';
@@ -182,7 +183,8 @@ function percentile(sorted, percentile) {
 function computeMetrics(
   latencies, successCount, failedCount, operationErrorCount, durationMs,
   distinctErrors, attemptErrorCount = ZERO, queueDelays = [],
-  dispatchAccounting = null, perNodeMetrics = null,
+  dispatchAccounting = null, perNodeMetrics = null, rejectedAccounting = null,
+  queuePressure = null,
 ) {
   const sorted = [...latencies].sort((a, b) => a - b);
   const total = successCount + failedCount;
@@ -248,6 +250,43 @@ function computeMetrics(
   if (perNodeMetrics && typeof perNodeMetrics === 'object') {
     metrics.perNode = perNodeMetrics;
   }
+  if (rejectedAccounting && typeof rejectedAccounting === 'object') {
+    const rejectedOperations = Number(rejectedAccounting.rejectedOperations);
+    metrics.rejectedOperations = Number.isFinite(rejectedOperations) ?
+      Math.max(ZERO, Math.floor(rejectedOperations)) :
+      ZERO;
+    metrics.rejectedByReason = rejectedAccounting.rejectedByReason &&
+      typeof rejectedAccounting.rejectedByReason === 'object' ?
+      {...rejectedAccounting.rejectedByReason} :
+      {
+        [REJECTED_REASON_QUEUE_FULL]: ZERO,
+      };
+  }
+  if (queuePressure && typeof queuePressure === 'object') {
+    const pendingQueueDepth = queuePressure.pendingQueueDepth &&
+      typeof queuePressure.pendingQueueDepth === 'object' ?
+      queuePressure.pendingQueueDepth :
+      {};
+    metrics.queuePressure = {
+      samples: Number.isFinite(queuePressure.samples) ?
+        Math.max(ZERO, Math.floor(queuePressure.samples)) :
+        ZERO,
+      pendingQueueDepth: {
+        avg: Number.isFinite(pendingQueueDepth.avg) ?
+          Math.max(ZERO, pendingQueueDepth.avg) :
+          ZERO,
+        p95: Number.isFinite(pendingQueueDepth.p95) ?
+          Math.max(ZERO, pendingQueueDepth.p95) :
+          ZERO,
+        p99: Number.isFinite(pendingQueueDepth.p99) ?
+          Math.max(ZERO, pendingQueueDepth.p99) :
+          ZERO,
+        max: Number.isFinite(pendingQueueDepth.max) ?
+          Math.max(ZERO, pendingQueueDepth.max) :
+          ZERO,
+      },
+    };
+  }
   return metrics;
 }
 
@@ -271,8 +310,12 @@ class LoadRun {
    *   cooldown duration.
    * @param {number} [options.queryTimeoutMs] - Load query timeout
    *   for timeout-aware node handles.
-   * @param {number} [options.nodeMaxInFlight] - Per-node in-flight
-   *   cap to prevent one node from monopolizing global concurrency.
+  * @param {number} [options.nodeMaxInFlight] - Per-node in-flight
+  *   cap to prevent one node from monopolizing global concurrency.
+   * @param {number} [options.maxPendingQueueDepth] - Optional max
+   *   dispatch queue depth before overload rejection.
+   * @param {boolean} [options.earlyRejectOnQueueFull] - Reject
+   *   scheduled operations when pending queue exceeds depth.
    */
   constructor(nodes, options) {
     this._nodes = [...nodes];
@@ -305,9 +348,20 @@ class LoadRun {
       options.queryTimeoutMs > ZERO ?
         options.queryTimeoutMs :
         QUERY_TIMEOUT_MS_DEFAULT;
+    this._admissionBackoffMs =
+      Number.isInteger(options.admissionBackoffMs) &&
+      options.admissionBackoffMs > ZERO ?
+        options.admissionBackoffMs :
+        ADMISSION_BACKOFF_MS_DEFAULT;
     this._dispatchIntervalMs = this._opsPerSec > ZERO ?
       MS_PER_SECOND / this._opsPerSec :
       MS_PER_SECOND;
+    this._maxPendingQueueDepth =
+      Number.isInteger(options.maxPendingQueueDepth) &&
+      options.maxPendingQueueDepth >= ZERO ?
+        options.maxPendingQueueDepth :
+        null;
+    this._earlyRejectOnQueueFull = options.earlyRejectOnQueueFull === true;
     this._targetOperationCount = Math.max(
       ZERO,
       Math.floor((this._durationMs * this._opsPerSec) / MS_PER_SECOND),
@@ -321,6 +375,12 @@ class LoadRun {
     this._distinctErrorSet = new Set();
     this._distinctErrors = [];
     this._queueDelaySamples = [];
+    this._pendingQueueDepthSamples = [];
+    this._rejectedOperations = ZERO;
+    this._rejectedByReason = {
+      [REJECTED_REASON_QUEUE_FULL]: ZERO,
+    };
+    this._dispatchedOperationCount = ZERO;
     this._counter = ZERO;
     this._nextNodeIndex = ZERO;
     this._inFlight = ZERO;
@@ -365,6 +425,11 @@ class LoadRun {
         success: ZERO,
         attemptErrors: ZERO,
         admissionSignals: ZERO,
+        queuePressureSignals: ZERO,
+        rejected: ZERO,
+        rejectedByReason: {
+          [REJECTED_REASON_QUEUE_FULL]: ZERO,
+        },
       });
     }
   }
@@ -446,7 +511,18 @@ class LoadRun {
     const now = Date.now();
     const nextDispatchAtMs = Number(this._nextDispatchAtMs);
     if (Number.isFinite(nextDispatchAtMs) && now < nextDispatchAtMs) {
+      this._recordPendingQueueDepth(now);
       this._scheduleNextDispatch(nextDispatchAtMs - now);
+      return;
+    }
+    this._recordPendingQueueDepth(now);
+    this._enforceQueueDepthBound(now);
+    if (this._counter >= this._targetOperationCount) {
+      this._schedulingStopped = true;
+      if (!this._dispatchStoppedBy) {
+        this._dispatchStoppedBy = DISPATCH_STOP_REASON_TARGET;
+      }
+      this._clearDispatchTimer();
       return;
     }
 
@@ -456,7 +532,7 @@ class LoadRun {
       now >= this._nextDispatchAtMs &&
       this._inFlight < this._maxInFlight &&
       this._counter < this._targetOperationCount &&
-      this._hasDispatchCapacity(now) &&
+      this._hasDispatchCapacity(now, {trackQueuePressure: true}) &&
       dispatchedThisTick < MAX_DISPATCHES_PER_TICK
     ) {
       const queueDelayMs = Math.max(
@@ -471,6 +547,7 @@ class LoadRun {
         workloadProfile: this._workloadProfile,
       });
       this._counter++;
+      this._dispatchedOperationCount++;
 
       this._inFlight++;
       this._executeWithFailover(sql).finally(() => {
@@ -493,6 +570,87 @@ class LoadRun {
       this._nextDispatchAtMs - Date.now(),
     );
     this._scheduleNextDispatch(delayMs);
+  }
+
+  _recordPendingQueueDepth(nowMs) {
+    this._pendingQueueDepthSamples.push(this._estimatePendingQueueDepth(nowMs));
+  }
+
+  _estimatePendingQueueDepth(nowMs) {
+    if (!Number.isFinite(this._nextDispatchAtMs) ||
+        this._counter >= this._targetOperationCount) {
+      return ZERO;
+    }
+    if (nowMs < this._nextDispatchAtMs) {
+      return ZERO;
+    }
+    const intervalMs = this._dispatchIntervalMs > ZERO ?
+      this._dispatchIntervalMs :
+      ONE;
+    const depth = Math.floor((nowMs - this._nextDispatchAtMs) / intervalMs) + ONE;
+    const remaining = Math.max(ZERO, this._targetOperationCount - this._counter);
+    return Math.max(ZERO, Math.min(remaining, depth));
+  }
+
+  _enforceQueueDepthBound(nowMs) {
+    if (this._maxPendingQueueDepth === null ||
+        this._earlyRejectOnQueueFull !== true) {
+      return;
+    }
+    const pendingDepth = this._estimatePendingQueueDepth(nowMs);
+    const overflow = pendingDepth - this._maxPendingQueueDepth;
+    if (overflow <= ZERO) {
+      return;
+    }
+    this._rejectScheduledOperations(overflow, REJECTED_REASON_QUEUE_FULL);
+  }
+
+  _rejectScheduledOperations(count, reason) {
+    const rejectedCount = Number.isFinite(count) ?
+      Math.max(ZERO, Math.floor(count)) :
+      ZERO;
+    if (rejectedCount === ZERO ||
+        this._counter >= this._targetOperationCount) {
+      return;
+    }
+    const remaining = Math.max(ZERO, this._targetOperationCount - this._counter);
+    const accepted = Math.min(remaining, rejectedCount);
+    if (accepted === ZERO) {
+      return;
+    }
+    this._counter += accepted;
+    this._rejectedOperations += accepted;
+    if (Number.isFinite(this._nextDispatchAtMs)) {
+      this._nextDispatchAtMs += this._dispatchIntervalMs * accepted;
+    }
+    if (!Object.hasOwn(this._rejectedByReason, reason)) {
+      this._rejectedByReason[reason] = ZERO;
+    }
+    this._rejectedByReason[reason] += accepted;
+
+    const nodeCount = this._nodeHealthKeys.length;
+    if (nodeCount === ZERO) {
+      return;
+    }
+    for (let index = ZERO; index < accepted; index += ONE) {
+      const nodeKeyIndex = (this._nextNodeIndex + index) % nodeCount;
+      const nodeKey = this._nodeHealthKeys[nodeKeyIndex];
+      const nodeMetrics = this._nodeMetricsByKey.get(nodeKey);
+      if (!nodeMetrics) {
+        continue;
+      }
+      nodeMetrics.rejected += ONE;
+      if (!nodeMetrics.rejectedByReason ||
+          typeof nodeMetrics.rejectedByReason !== 'object') {
+        nodeMetrics.rejectedByReason = {
+          [REJECTED_REASON_QUEUE_FULL]: ZERO,
+        };
+      }
+      if (!Object.hasOwn(nodeMetrics.rejectedByReason, reason)) {
+        nodeMetrics.rejectedByReason[reason] = ZERO;
+      }
+      nodeMetrics.rejectedByReason[reason] += ONE;
+    }
   }
 
   /**
@@ -582,28 +740,30 @@ class LoadRun {
     return node.query(sql);
   }
 
-  _hasDispatchCapacity(nowMs) {
+  _hasDispatchCapacity(nowMs, options = {}) {
     if (this._availableNodes.length === ZERO) {
       return false;
     }
-    if (this._buildAvailableNodeCandidates(nowMs).length > ZERO) {
+    if (this._buildAvailableNodeCandidates(nowMs, options).length > ZERO) {
       return true;
     }
     return this._buildRecoveryNodeCandidate(nowMs).length > ZERO;
   }
 
-  _buildAvailableNodeCandidates(nowMs) {
+  _buildAvailableNodeCandidates(nowMs, options = {}) {
+    const trackQueuePressure = options.trackQueuePressure === true;
     const candidates = [];
     for (let index = ZERO; index < this._availableNodes.length; index++) {
       const node = this._availableNodes[index];
       const healthKey = this._nodeHealthKeys[index];
       const state = this._nodeHealthByKey.get(healthKey);
-      if (this._isNodeDispatchReady(state, nowMs) &&
-          this._getNodeInFlight(healthKey) < this._nodeMaxInFlight) {
-        candidates.push({
-          node,
-          healthKey,
-        });
+      const nodeReady = this._isNodeDispatchReady(state, nowMs);
+      const nodeInFlight = this._getNodeInFlight(healthKey);
+      if (nodeReady &&
+          nodeInFlight < this._nodeMaxInFlight) {
+        candidates.push({node, healthKey});
+      } else if (trackQueuePressure) {
+        this._recordNodeQueuePressure(healthKey);
       }
     }
     return candidates;
@@ -667,6 +827,14 @@ class LoadRun {
       return;
     }
     nodeMetrics.dispatched += ONE;
+  }
+
+  _recordNodeQueuePressure(healthKey) {
+    const nodeMetrics = this._nodeMetricsByKey.get(healthKey);
+    if (!nodeMetrics) {
+      return;
+    }
+    nodeMetrics.queuePressureSignals += ONE;
   }
 
   _recordNodeAttemptFailure(healthKey, error) {
@@ -821,10 +989,11 @@ class LoadRun {
    */
   _buildDispatchAccounting() {
     const targetOperations = Math.max(ZERO, this._targetOperationCount);
-    const dispatchedOperations = Math.max(ZERO, this._counter);
+    const dispatchedOperations = Math.max(ZERO, this._dispatchedOperationCount);
+    const rejectedOperations = Math.max(ZERO, this._rejectedOperations);
     const undispatchedOperations = Math.max(
       ZERO,
-      targetOperations - dispatchedOperations,
+      targetOperations - dispatchedOperations - rejectedOperations,
     );
     const undispatchedByReason = {
       [UNDISPATCHED_REASON_CAPACITY]: ZERO,
@@ -862,6 +1031,11 @@ class LoadRun {
           success: ZERO,
           attemptErrors: ZERO,
           admissionSignals: ZERO,
+          queuePressureSignals: ZERO,
+          rejected: ZERO,
+          rejectedByReason: {
+            [REJECTED_REASON_QUEUE_FULL]: ZERO,
+          },
         };
       }
       summary[nodeId].dispatched += Number(nodeMetrics?.dispatched || ZERO);
@@ -870,8 +1044,49 @@ class LoadRun {
       summary[nodeId].admissionSignals += Number(
         nodeMetrics?.admissionSignals || ZERO,
       );
+      summary[nodeId].queuePressureSignals += Number(
+        nodeMetrics?.queuePressureSignals || ZERO,
+      );
+      summary[nodeId].rejected += Number(nodeMetrics?.rejected || ZERO);
+      const rejectedByReason = nodeMetrics?.rejectedByReason &&
+        typeof nodeMetrics.rejectedByReason === 'object' ?
+        nodeMetrics.rejectedByReason :
+        {
+          [REJECTED_REASON_QUEUE_FULL]: ZERO,
+        };
+      for (const [reason, count] of Object.entries(rejectedByReason)) {
+        if (!Object.hasOwn(summary[nodeId].rejectedByReason, reason)) {
+          summary[nodeId].rejectedByReason[reason] = ZERO;
+        }
+        summary[nodeId].rejectedByReason[reason] += Number(count || ZERO);
+      }
     }
     return summary;
+  }
+
+  _buildQueuePressureSummary() {
+    const sampleCount = this._pendingQueueDepthSamples.length;
+    if (sampleCount === ZERO) {
+      return {
+        samples: ZERO,
+        pendingQueueDepth: {
+          avg: ZERO,
+          p95: ZERO,
+          p99: ZERO,
+          max: ZERO,
+        },
+      };
+    }
+    const sortedDepth = [...this._pendingQueueDepthSamples].sort((a, b) => a - b);
+    return {
+      samples: sampleCount,
+      pendingQueueDepth: {
+        avg: sortedDepth.reduce((sum, value) => sum + value, ZERO) / sampleCount,
+        p95: percentile(sortedDepth, PERCENTILE_P95),
+        p99: percentile(sortedDepth, PERCENTILE_P99),
+        max: sortedDepth[sortedDepth.length - ONE],
+      },
+    };
   }
 
   _computeCurrentMetrics() {
@@ -880,6 +1095,13 @@ class LoadRun {
       ZERO;
     const dispatchAccounting = this._buildDispatchAccounting();
     const perNodeMetrics = this._buildPerNodeMetricsSummary();
+    const rejectedAccounting = {
+      rejectedOperations: this._rejectedOperations,
+      rejectedByReason: {
+        ...this._rejectedByReason,
+      },
+    };
+    const queuePressureSummary = this._buildQueuePressureSummary();
     return computeMetrics(
       this._latencies,
       this._successCount,
@@ -891,6 +1113,8 @@ class LoadRun {
       this._queueDelaySamples,
       dispatchAccounting,
       perNodeMetrics,
+      rejectedAccounting,
+      queuePressureSummary,
     );
   }
 
@@ -947,8 +1171,12 @@ class LoadGenerator {
    *   cooldown duration.
    * @param {number} [options.queryTimeoutMs] - Load query timeout
    *   for timeout-aware node handles.
-   * @param {number} [options.nodeMaxInFlight] - Per-node in-flight
-   *   cap to prevent one node from monopolizing global concurrency.
+  * @param {number} [options.nodeMaxInFlight] - Per-node in-flight
+  *   cap to prevent one node from monopolizing global concurrency.
+   * @param {number} [options.maxPendingQueueDepth] - Optional max
+   *   dispatch queue depth before overload rejection.
+   * @param {boolean} [options.earlyRejectOnQueueFull] - Reject
+   *   scheduled operations when pending queue exceeds depth.
    */
   constructor(nodes, options = {}) {
     this._nodes = nodes;
@@ -987,6 +1215,12 @@ class LoadGenerator {
       options.nodeMaxInFlight > ZERO ?
         options.nodeMaxInFlight :
         null;
+    this._maxPendingQueueDepth =
+      Number.isInteger(options.maxPendingQueueDepth) &&
+      options.maxPendingQueueDepth >= ZERO ?
+        options.maxPendingQueueDepth :
+        null;
+    this._earlyRejectOnQueueFull = options.earlyRejectOnQueueFull === true;
     this._tableName = normalizeTableName(
       options.tableName,
       this._workloadProfile === WORKLOAD_PROFILE_BENCHMARK_EVENTS ?
@@ -1010,6 +1244,9 @@ class LoadGenerator {
       nodeFailureThreshold: this._nodeFailureThreshold,
       nodeFailureCooldownMs: this._nodeFailureCooldownMs,
       queryTimeoutMs: this._queryTimeoutMs,
+      admissionBackoffMs: this._admissionBackoffMs,
+      maxPendingQueueDepth: this._maxPendingQueueDepth,
+      earlyRejectOnQueueFull: this._earlyRejectOnQueueFull,
       ...(this._nodeMaxInFlight !== null ?
         {nodeMaxInFlight: this._nodeMaxInFlight} :
         {}),

@@ -67,6 +67,7 @@ import {
 import {
   validateRuntimeDescriptor,
 } from '../wasm-service/runtime-descriptor-validator.js';
+import {getOrCreateCauseId, normalizeCauseId} from '../utils/cause-id.js';
 
 /**
  * Resolve the runtime kind string from a service definition object.
@@ -373,7 +374,7 @@ class ServiceRuntimeLifecycle extends EventEmitter {
    * @private
    */
   async _projectReplicaState(
-    serviceId, definition, status, extras,
+    serviceId, definition, status, extras, context,
   ) {
     if (!this._stateProjectionWriter) {
       return;
@@ -393,14 +394,15 @@ class ServiceRuntimeLifecycle extends EventEmitter {
       updated_at: now,
       ...extras,
     };
+    const causeId = normalizeCauseId(context?.causeId);
     try {
-      await this._stateProjectionWriter(serviceId, stateRow);
+      await this._stateProjectionWriter(serviceId, stateRow, {causeId});
       this.emit(STATE_PROJECTION_EVENT.STATE_PROJECTED, {
-        serviceId, status, nodeId,
+        serviceId, status, nodeId, causeId,
       });
     } catch (err) {
       this.emit(STATE_PROJECTION_EVENT.STATE_PROJECTION_FAILED, {
-        serviceId, status, nodeId, error: err,
+        serviceId, status, nodeId, causeId, error: err,
       });
     }
   }
@@ -812,6 +814,7 @@ class ServiceRuntimeLifecycle extends EventEmitter {
     });
     const start = Date.now();
     let operation = null;
+    let causeId = null;
 
     try {
       operation = await this._journalCreate(
@@ -840,6 +843,8 @@ class ServiceRuntimeLifecycle extends EventEmitter {
         WASM_OPERATION_STATE.IN_PROGRESS,
       );
 
+      causeId = getOrCreateCauseId(operation?.operationId);
+
       const driver = this._resolveDriver(runtimeKind);
       const result = await driver.start(replicaContext);
       const durationMs = Date.now() - start;
@@ -856,20 +861,24 @@ class ServiceRuntimeLifecycle extends EventEmitter {
         }
         this.emit(LIFECYCLE_EVENT.ENDPOINT_INTENT_RECEIVED, {
           runtimeKind, serviceId, endpointIntent: result.endpointIntent,
+          causeId,
         });
 
         if (this._endpointWriter) {
           try {
             await this._endpointWriter(
               serviceId, runtimeKind, result.endpointIntent,
+              {causeId},
             );
             this.emit(LIFECYCLE_EVENT.ENDPOINT_REGISTERED, {
               runtimeKind, serviceId,
               endpointIntent: result.endpointIntent,
+              causeId,
             });
           } catch (writeErr) {
             this.emit(LIFECYCLE_EVENT.ENDPOINT_REGISTRATION_FAILED, {
               runtimeKind, serviceId, error: writeErr,
+              causeId,
             });
             throw new LifecycleOrchestrationError(
               op, runtimeKind, serviceId,
@@ -888,7 +897,7 @@ class ServiceRuntimeLifecycle extends EventEmitter {
       );
 
       await this._projectReplicaState(
-        serviceId, definition, RUNTIME_REPLICA_STATUS.ACTIVE,
+        serviceId, definition, RUNTIME_REPLICA_STATUS.ACTIVE, null, {causeId},
       );
 
       this.emit(LIFECYCLE_EVENT.START_SUCCESS, {
@@ -910,6 +919,7 @@ class ServiceRuntimeLifecycle extends EventEmitter {
       await this._projectReplicaState(
         serviceId, definition, RUNTIME_REPLICA_STATUS.FAILED,
         {error_message: err.message},
+        {causeId: causeId || getOrCreateCauseId(operation?.operationId)},
       );
       this.emit(LIFECYCLE_EVENT.START_FAILURE, {
         runtimeKind, serviceId, durationMs, error: err,

@@ -62,8 +62,16 @@ test(
     let capturedCdcSubscriber = null;
 
     const mockPartition = {
-      subscribeToCDC: (subscriber) => {
+      subscribeToCDCWithHandshake: async (subscriber, options = {}) => {
         capturedCdcSubscriber = subscriber;
+        return {
+          subscriberId: options.subscriberId || null,
+          subscriptionEpoch: 1,
+          catchup: {
+            mode: 'none',
+            bufferedEventsReplayed: 0,
+          },
+        };
       },
       isLeader: false,
     };
@@ -139,8 +147,16 @@ test(
     let partitionSubscriberRegistrations = 0;
 
     const makePartition = () => ({
-      subscribeToCDC: () => {
+      subscribeToCDCWithHandshake: async () => {
         partitionSubscriberRegistrations += 1;
+        return {
+          subscriberId: 'mock-subscriber',
+          subscriptionEpoch: 1,
+          catchup: {
+            mode: 'none',
+            bufferedEventsReplayed: 0,
+          },
+        };
       },
       isLeader: false,
     });

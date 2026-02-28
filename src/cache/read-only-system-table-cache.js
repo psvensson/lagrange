@@ -91,6 +91,33 @@ class ReadOnlySystemTableCache {
   }
 
   /**
+   * Get the latest applied schema/version watermark for one table.
+   * @param {string} tableName - Name of the system table.
+   * @return {string|number|null}
+   */
+  getAppliedSchemaVersion(tableName) {
+    return this._cache.getAppliedSchemaVersion(tableName);
+  }
+
+  /**
+   * Get the last local wall-clock apply time for one table.
+   * @param {string} tableName - Name of the system table.
+   * @return {number|null}
+   */
+  getLastAppliedAtMs(tableName) {
+    return this._cache.getLastAppliedAtMs(tableName);
+  }
+
+  /**
+   * Get the last applied cause ID for one table when available.
+   * @param {string} tableName - Name of the system table.
+   * @return {string|null}
+   */
+  getLastAppliedCauseId(tableName) {
+    return this._cache.getLastAppliedCauseId(tableName);
+  }
+
+  /**
    * Get the list of supported system table names.
    * @return {Array<string>} Array of system table names.
    */

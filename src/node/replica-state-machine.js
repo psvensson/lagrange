@@ -6,6 +6,7 @@
  */
 
 import {EventEmitter} from 'events';
+import {AddressManager} from '../address/address-manager.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {SERVICE_TYPE, TABLES} from '../constants/index.js';
 import {assertCritical} from '../utils/assert.js';
@@ -255,6 +256,8 @@ class ReplicaStateMachine extends EventEmitter {
       errorMessage: context.errorMessage || null,
       metadata: context.metadata || existingState?.metadata || {},
       serviceId: context.serviceId || existingState?.serviceId || null,
+      serviceType: context.serviceType || existingState?.serviceType || SERVICE_TYPE.PARTITION,
+      serviceAddress: context.serviceAddress || existingState?.serviceAddress || null,
     };
 
     this.replicas.set(replicaId, replicaState);
@@ -294,6 +297,7 @@ class ReplicaStateMachine extends EventEmitter {
    */
   async _persistStateToCdc(replicaState, previousState) {
     try {
+      const serviceId = replicaState.serviceId || replicaState.replicaId;
       const cdcData = {
         status: replicaState.state,
         state_entered_at: replicaState.stateEnteredAt,
@@ -307,28 +311,51 @@ class ReplicaStateMachine extends EventEmitter {
         cdcData.error_message = replicaState.errorMessage;
       }
 
-      // If we have a service_id, update the existing row
-      if (replicaState.serviceId) {
+      if (previousState !== null) {
         await this.cdcIntegrationService.updateSystemTableRow(
           TABLES.SERVICES,
-          {service_id: replicaState.serviceId},
+          {service_id: serviceId},
           cdcData,
         );
       } else {
-        // Insert new row with replica state data
+        const addressManager = AddressManager.getInstance();
+        const serviceType = replicaState.serviceType || SERVICE_TYPE.PARTITION;
+        const address = replicaState.serviceAddress ||
+          addressManager.format(replicaState.nodeId, serviceType, serviceId);
         const insertData = {
           ...cdcData,
-          service_id: replicaState.replicaId,
-          service_type: SERVICE_TYPE.PARTITION,
+          service_id: serviceId,
+          service_type: serviceType,
           node_id: replicaState.nodeId,
           partition_id: replicaState.partitionId,
           replica_id: replicaState.replicaId,
+          address,
           created_at: replicaState.stateEnteredAt,
         };
-        await this.cdcIntegrationService.insertSystemTableRow(
-          TABLES.SERVICES,
-          insertData,
-        );
+        if (typeof this.cdcIntegrationService.upsertSystemTableRow ===
+          'function') {
+          await this.cdcIntegrationService.upsertSystemTableRow(
+            TABLES.SERVICES,
+            insertData,
+          );
+        } else {
+          try {
+            await this.cdcIntegrationService.insertSystemTableRow(
+              TABLES.SERVICES,
+              insertData,
+            );
+          } catch (error) {
+            if (!this.isDuplicateServicesInsertError(error)) {
+              throw error;
+            }
+
+            await this.cdcIntegrationService.updateSystemTableRow(
+              TABLES.SERVICES,
+              {service_id: serviceId},
+              cdcData,
+            );
+          }
+        }
       }
 
       this.logger.debug(REPLICA_STATE_MACHINE_LOG_MSG.STATE_PERSISTED, {
@@ -354,6 +381,20 @@ class ReplicaStateMachine extends EventEmitter {
 
       throw error;
     }
+  }
+
+  /**
+   * Check whether an initial services-row insert raced with an existing row.
+   *
+   * @param {Error} error - Insert error.
+   * @return {boolean} True when the error is a duplicate services row.
+   * @private
+   */
+  isDuplicateServicesInsertError(error) {
+    const message = String(error?.message || '');
+    return error?.code === 'SQLITE_CONSTRAINT_PRIMARYKEY' ||
+      error?.code === 'SQLITE_CONSTRAINT_UNIQUE' ||
+      message.includes('UNIQUE constraint failed: services.service_id');
   }
 
   /**
@@ -881,6 +922,51 @@ class ReplicaStateMachine extends EventEmitter {
   }
 
   /**
+   * Register a replica snapshot directly without transitional writes.
+   * Used during bootstrap to seed in-memory state from already-created services
+   * rows while avoiding synthetic CDC write storms.
+   * @param {string} replicaId - Replica identifier.
+   * @param {Object} context - Replica context.
+   * @param {string} context.partitionId - Partition identifier.
+   * @param {string} [context.nodeId] - Node identifier.
+   * @param {string} [context.state] - Snapshot state (default: active).
+   * @param {string} [context.serviceId] - Service ID for CDC linkage.
+   * @param {string} [context.reason] - Trigger reason.
+   * @return {boolean} True when registration succeeded.
+   */
+  registerReplicaSnapshot(replicaId, context = {}) {
+    if (!replicaId || typeof replicaId !== 'string') {
+      return false;
+    }
+
+    if (this.replicas.has(replicaId)) {
+      return true;
+    }
+
+    const state = context.state || ReplicaState.ACTIVE;
+    if (!Object.values(ReplicaState).includes(state)) {
+      this.logger.error(REPLICA_STATE_MACHINE_LOG_MSG.INVALID_TRANSITION, {
+        replicaId,
+        currentState: null,
+        attemptedState: state,
+        reason: context.reason,
+        nodeId: this.nodeId,
+      });
+      return false;
+    }
+
+    this._registerReplicaForRecovery(replicaId, {
+      partitionId: context.partitionId,
+      nodeId: context.nodeId || this.nodeId,
+      state,
+      serviceId: context.serviceId || null,
+      triggerReason: context.reason ||
+        REPLICA_STATE_MACHINE_REASON.RECOVERY_REGISTRATION,
+    });
+    return true;
+  }
+
+  /**
    * Register a replica directly for recovery purposes.
    * This bypasses normal transition validation to restore state from persistence.
    * @param {string} replicaId - Replica identifier.
@@ -906,10 +992,13 @@ class ReplicaStateMachine extends EventEmitter {
       state,
       stateEnteredAt: now,
       previousState: null,
-      triggerReason: REPLICA_STATE_MACHINE_REASON.RECOVERY_REGISTRATION,
+      triggerReason: context.triggerReason ||
+        REPLICA_STATE_MACHINE_REASON.RECOVERY_REGISTRATION,
       errorMessage: null,
       metadata: {},
       serviceId: context.serviceId || null,
+      serviceType: context.serviceType || SERVICE_TYPE.PARTITION,
+      serviceAddress: context.serviceAddress || null,
     };
 
     this.replicas.set(replicaId, replicaState);

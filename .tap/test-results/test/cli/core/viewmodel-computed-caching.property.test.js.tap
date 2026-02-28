@@ -3,39 +3,39 @@ TAP version 14
     # Subtest: computed value is cached after first call
         ok 1 - computed value is cached after first call
         1..1
-    ok 1 - computed value is cached after first call # time=4.343ms
+    ok 1 - computed value is cached after first call # time=8.998ms
     
     # Subtest: cache is invalidated on data change
         ok 1 - cache is invalidated on data change
         1..1
-    ok 2 - cache is invalidated on data change # time=1.525ms
+    ok 2 - cache is invalidated on data change # time=3.867ms
     
     # Subtest: cache is invalidated on explicit invalidation
         ok 1 - cache is invalidated on explicit invalidation
         1..1
-    ok 3 - cache is invalidated on explicit invalidation # time=1.237ms
+    ok 3 - cache is invalidated on explicit invalidation # time=2.219ms
     
     # Subtest: multiple computed properties cache independently
         ok 1 - multiple computed properties cache independently
         1..1
-    ok 4 - multiple computed properties cache independently # time=0.786ms
+    ok 4 - multiple computed properties cache independently # time=1.515ms
     
     # Subtest: isComputedCached reflects cache state
         ok 1 - isComputedCached reflects cache state
         1..1
-    ok 5 - isComputedCached reflects cache state # time=1.086ms
+    ok 5 - isComputedCached reflects cache state # time=2.367ms
     
     # Subtest: cached value equals recomputed value
         ok 1 - cached value equals recomputed value
         1..1
-    ok 6 - cached value equals recomputed value # time=3.012ms
+    ok 6 - cached value equals recomputed value # time=2.545ms
     
     # Subtest: clear invalidates all caches
         ok 1 - clear invalidates all caches
         1..1
-    ok 7 - clear invalidates all caches # time=0.717ms
+    ok 7 - clear invalidates all caches # time=1.242ms
     
     1..7
-ok 1 - Property 38: ViewModel Computed Property Caching # time=16.765ms
+ok 1 - Property 38: ViewModel Computed Property Caching # time=29.889ms
 
 1..1

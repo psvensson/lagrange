@@ -4,35 +4,35 @@ TAP version 14
     ok 2 - should not be initialized
     ok 3 - should not be running
     1..3
-ok 1 - FailureDetector - constructor # time=2.903ms
+ok 1 - FailureDetector - constructor # time=3.848ms
 
 # Subtest: FailureDetector - initialize
     ok 1 - should be initialized
     1..1
-ok 2 - FailureDetector - initialize # time=0.59ms
+ok 2 - FailureDetector - initialize # time=1.056ms
 
 # Subtest: FailureDetector - initialize requires nodeId
     ok 1 - should have error message
     1..1
-ok 3 - FailureDetector - initialize requires nodeId # time=0.463ms
+ok 3 - FailureDetector - initialize requires nodeId # time=0.644ms
 
 # Subtest: FailureDetector - start and stop
     ok 1 - should be running after start
     ok 2 - should not be running after stop
     1..2
-ok 4 - FailureDetector - start and stop # time=0.697ms
+ok 4 - FailureDetector - start and stop # time=0.918ms
 
 # Subtest: FailureDetector - adaptive reset timer is demand-driven
     ok 1 - should not schedule reset timer before failures
     ok 2 - should start reset timer once failures are tracked
     ok 3 - should clear reset timer on stop
     1..3
-ok 5 - FailureDetector - adaptive reset timer is demand-driven # time=0.546ms
+ok 5 - FailureDetector - adaptive reset timer is demand-driven # time=0.909ms
 
 # Subtest: FailureDetector - start requires initialization
     ok 1 - should have error message
     1..1
-ok 6 - FailureDetector - start requires initialization # time=0.308ms
+ok 6 - FailureDetector - start requires initialization # time=0.482ms
 
 # Subtest: FailureDetector - detects node suspicion
     ok 1 - should emit nodeSuspected event
@@ -40,46 +40,46 @@ ok 6 - FailureDetector - start requires initialization # time=0.308ms
     ok 3 - should have one CDC operation
     ok 4 - should update status to suspected
     1..4
-ok 7 - FailureDetector - detects node suspicion # time=1.418ms
+ok 7 - FailureDetector - detects node suspicion # time=1.293ms
 
-{"level":50,"time":"2026-02-21T09:28:22.907Z","nodeId":"90aebbea-360f-4248-94f9-11d8130ed3d8","pid":3763003,"subsystem":"failure-detector","nodeId":"90aebbea-360f-4248-94f9-11d8130ed3d8","lastHeartbeat":"2026-02-21T09:28:02.907Z","threshold":15000,"msg":"Node failure detected"}
+{"level":50,"time":"2026-02-28T08:54:24.250Z","nodeId":"ba65d61d-e47b-4577-a5d4-37d5de873d3d","pid":3858942,"subsystem":"failure-detector","nodeId":"ba65d61d-e47b-4577-a5d4-37d5de873d3d","lastHeartbeat":"2026-02-28T08:54:04.249Z","threshold":15000,"msg":"Node failure detected"}
 # Subtest: FailureDetector - detects node failure
     ok 1 - should emit nodeFailure event
     ok 2 - should have correct nodeId
     ok 3 - should update status to failed
     1..3
-ok 8 - FailureDetector - detects node failure # time=2.013ms
+ok 8 - FailureDetector - detects node failure # time=2.176ms
 
-{"level":50,"time":"2026-02-21T09:28:22.933Z","nodeId":"844f3b8f-6db7-49f6-b3c9-ec8d5447c6af","pid":3763003,"subsystem":"failure-detector","nodeId":"844f3b8f-6db7-49f6-b3c9-ec8d5447c6af","lastHeartbeat":"2026-02-21T09:28:02.933Z","threshold":15000,"msg":"Node failure detected"}
+{"level":50,"time":"2026-02-28T08:54:24.280Z","nodeId":"9dae3506-a6bd-4df8-97a2-6b05aaff5d37","pid":3858942,"subsystem":"failure-detector","nodeId":"9dae3506-a6bd-4df8-97a2-6b05aaff5d37","lastHeartbeat":"2026-02-28T08:54:04.279Z","threshold":15000,"msg":"Node failure detected"}
 # Subtest: FailureDetector - marks replicas as failed on node failure
     ok 1 - should emit 2 replicaFailed events
     ok 2 - should mark partition replica as failed
     ok 3 - should mark message group replica as failed
     ok 4 - should have 2 replica status updates
     1..4
-ok 9 - FailureDetector - marks replicas as failed on node failure # time=0.86ms
+ok 9 - FailureDetector - marks replicas as failed on node failure # time=1.453ms
 
 # Subtest: FailureDetector - detects node recovery
     ok 1 - should emit nodeRecovery event
     ok 2 - should have correct nodeId
     ok 3 - should update status to recovering
     1..3
-ok 10 - FailureDetector - detects node recovery # time=0.962ms
+ok 10 - FailureDetector - detects node recovery # time=0.606ms
 
 # Subtest: FailureDetector - skips self node
     ok 1 - should not update self node
     1..1
-ok 11 - FailureDetector - skips self node # time=0.55ms
+ok 11 - FailureDetector - skips self node # time=0.404ms
 
 # Subtest: FailureDetector - skips already failed nodes
     ok 1 - should not update already failed node
     1..1
-ok 12 - FailureDetector - skips already failed nodes # time=0.349ms
+ok 12 - FailureDetector - skips already failed nodes # time=0.373ms
 
 # Subtest: FailureDetector - healthy nodes are not affected
     ok 1 - should not update healthy node
     1..1
-ok 13 - FailureDetector - healthy nodes are not affected # time=0.572ms
+ok 13 - FailureDetector - healthy nodes are not affected # time=0.355ms
 
 # Subtest: FailureDetector - getStats
     ok 1 - should have nodeId
@@ -88,14 +88,14 @@ ok 13 - FailureDetector - healthy nodes are not affected # time=0.572ms
     ok 4 - should not be running
     ok 5 - should be initialized
     1..5
-ok 14 - FailureDetector - getStats # time=0.612ms
+ok 14 - FailureDetector - getStats # time=0.536ms
 
 # Subtest: FailureDetector - shutdown
     ok 1 - should be running
     ok 2 - should not be running
     ok 3 - should not be initialized
     1..3
-ok 15 - FailureDetector - shutdown # time=0.631ms
+ok 15 - FailureDetector - shutdown # time=0.716ms
 
 # Subtest: FailureDetector - NodeStatus values
     ok 1 - should have active
@@ -103,7 +103,7 @@ ok 15 - FailureDetector - shutdown # time=0.631ms
     ok 3 - should have failed
     ok 4 - should have recovering
     1..4
-ok 16 - FailureDetector - NodeStatus values # time=0.738ms
+ok 16 - FailureDetector - NodeStatus values # time=0.364ms
 
 # Subtest: FailureDetector - ReplicaStatus values
     ok 1 - should have pending
@@ -114,6 +114,6 @@ ok 16 - FailureDetector - NodeStatus values # time=0.738ms
     ok 6 - should have removed
     ok 7 - should have failed
     1..7
-ok 17 - FailureDetector - ReplicaStatus values # time=1.081ms
+ok 17 - FailureDetector - ReplicaStatus values # time=0.478ms
 
 1..17

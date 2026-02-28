@@ -12,7 +12,7 @@ TAP version 14
         ok 6 - joining node should receive one message
         ok 7 - should receive CREATE_REPLICA
         1..7
-    ok 1 - seed node can send to joining node via incoming connection # time=119.372ms
+    ok 1 - seed node can send to joining node via incoming connection # time=128.18ms
     
     # Subtest: MessageRouter routes to joining node via WebSocket
         ok 1 - seed should have connection to joining node
@@ -21,9 +21,9 @@ TAP version 14
         ok 4 - should have status initiated
         ok 5 - joining node should receive one message
         1..5
-    ok 2 - MessageRouter routes to joining node via WebSocket # time=109.339ms
+    ok 2 - MessageRouter routes to joining node via WebSocket # time=117.313ms
     
     1..2
-ok 1 - Bidirectional WebSocket communication # time=297.966ms
+ok 1 - Bidirectional WebSocket communication # time=308.232ms
 
 1..1

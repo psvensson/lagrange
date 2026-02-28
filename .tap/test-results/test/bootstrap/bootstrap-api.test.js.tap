@@ -5,14 +5,14 @@ TAP version 14
     ok 3 - should have fastify instance
     ok 4 - should not be initialized after shutdown
     1..4
-ok 1 - BootstrapAPI - initialization # time=65.19ms
+ok 1 - BootstrapAPI - initialization # time=61.634ms
 
 # Subtest: BootstrapAPI - health endpoint
     ok 1 - should return 200
     ok 2 - should return healthy status
     ok 3 - should return seed node ID
     1..3
-ok 2 - BootstrapAPI - health endpoint # time=39.461ms
+ok 2 - BootstrapAPI - health endpoint # time=32.909ms
 
 # Subtest: BootstrapAPI - health reports initializing before SQL engine is ready
     ok 1 - should return 200 for liveness even before SQL engine is available
@@ -22,14 +22,14 @@ ok 2 - BootstrapAPI - health endpoint # time=39.461ms
     ok 5 - should report healthy status
     ok 6 - should expose readiness=true after SQL engine is set
     1..6
-ok 3 - BootstrapAPI - health reports initializing before SQL engine is ready # time=19.676ms
+ok 3 - BootstrapAPI - health reports initializing before SQL engine is ready # time=20.969ms
 
 # Subtest: BootstrapAPI - keeps legacy /health available while readiness remains blocked
     ok 1 - legacy /health should remain available during readiness migration
     ok 2 - legacy /health should continue reporting bootstrap initialization
     ok 3 - /readyz should still gate join readiness independently of /health
     1..3
-ok 4 - BootstrapAPI - keeps legacy /health available while readiness remains blocked # time=18.695ms
+ok 4 - BootstrapAPI - keeps legacy /health available while readiness remains blocked # time=19.683ms
 
 # Subtest: BootstrapAPI - exposes explicit liveness, startup, and readiness probes
     ok 1 - livez should return 200
@@ -49,7 +49,7 @@ ok 4 - BootstrapAPI - keeps legacy /health available while readiness remains blo
     ok 15 - bootstrap readiness probe should expose lifecycle phase
     ok 16 - bootstrap readiness probe should declare bootstrap_join scope
     1..16
-ok 5 - BootstrapAPI - exposes explicit liveness, startup, and readiness probes # time=20.521ms
+ok 5 - BootstrapAPI - exposes explicit liveness, startup, and readiness probes # time=19.711ms
 
 # Subtest: BootstrapAPI - bootstrap join readiness tolerates isolated leader metadata blockers
     ok 1 - strict readiness should stay blocked on missing leader metadata
@@ -57,14 +57,14 @@ ok 5 - BootstrapAPI - exposes explicit liveness, startup, and readiness probes #
     ok 3 - bootstrap join readiness should project ready=true for startup gate
     ok 4 - bootstrap join readiness should clear tolerated blocker reasons
     1..4
-ok 6 - BootstrapAPI - bootstrap join readiness tolerates isolated leader metadata blockers # time=19.179ms
+ok 6 - BootstrapAPI - bootstrap join readiness tolerates isolated leader metadata blockers # time=16.088ms
 
 # Subtest: BootstrapAPI - bootstrap join readiness keeps blocking when additional blockers exist
     ok 1 - bootstrap join readiness should remain blocked when other blockers exist
     ok 2 - bootstrap join readiness should expose ready=false with hard blockers
     ok 3 - bootstrap join readiness should preserve blocking reasons
     1..3
-ok 7 - BootstrapAPI - bootstrap join readiness keeps blocking when additional blockers exist # time=19.81ms
+ok 7 - BootstrapAPI - bootstrap join readiness keeps blocking when additional blockers exist # time=15.665ms
 
 # Subtest: BootstrapAPI - readiness stays gated until startup dependencies and stable window complete
     ok 1 - readyz should stay unavailable while bootstrap phase is incomplete
@@ -78,7 +78,7 @@ ok 7 - BootstrapAPI - bootstrap join readiness keeps blocking when additional bl
     ok 9 - readyz should promote after sustained success window elapses
     ok 10 - readyz should expose ready=true after promotion
     1..10
-ok 8 - BootstrapAPI - readiness stays gated until startup dependencies and stable window complete # time=19.175ms
+ok 8 - BootstrapAPI - readiness stays gated until startup dependencies and stable window complete # time=17.159ms
 
 # Subtest: BootstrapAPI - transitions probes to draining non-ready state during shutdown
     ok 1 - readyz should be healthy before draining signal
@@ -87,7 +87,7 @@ ok 8 - BootstrapAPI - readiness stays gated until startup dependencies and stabl
     ok 4 - readyz payload should include drain deadline
     ok 5 - readyz payload should include node-draining reason
     1..5
-ok 9 - BootstrapAPI - transitions probes to draining non-ready state during shutdown # time=15.997ms
+ok 9 - BootstrapAPI - transitions probes to draining non-ready state during shutdown # time=15.485ms
 
 # Subtest: BootstrapAPI - bootstrap validation
     ok 1 - should return 400 for missing nodeId
@@ -97,7 +97,7 @@ ok 9 - BootstrapAPI - transitions probes to draining non-ready state during shut
     ok 5 - should return 400 for missing nodeAddress
     ok 6 - error should mention nodeAddress
     1..6
-ok 10 - BootstrapAPI - bootstrap validation # time=19.875ms
+ok 10 - BootstrapAPI - bootstrap validation # time=17.925ms
 
 # Subtest: BootstrapAPI - liveness remains true while readiness degrades on repeated control writes
     ok 1 - liveness should stay green despite control-plane write degradation
@@ -105,7 +105,7 @@ ok 10 - BootstrapAPI - bootstrap validation # time=19.875ms
     ok 3 - readyz should expose degraded readiness
     ok 4 - readiness should include structured control-plane degradation reason
     1..4
-ok 11 - BootstrapAPI - liveness remains true while readiness degrades on repeated control writes # time=23.991ms
+ok 11 - BootstrapAPI - liveness remains true while readiness degrades on repeated control writes # time=15.018ms
 
 # Subtest: BootstrapAPI - bootstrap conflict detection
     ok 1 - first bootstrap should succeed
@@ -113,7 +113,7 @@ ok 11 - BootstrapAPI - liveness remains true while readiness degrades on repeate
     ok 3 - error should mention already registered
     ok 4 - seed node ID should fail validation
     1..4
-ok 12 - BootstrapAPI - bootstrap conflict detection # time=26.469ms
+ok 12 - BootstrapAPI - bootstrap conflict detection # time=16.529ms
 
 # Subtest: BootstrapAPI - returns bootstrap not ready before touching cache
     ok 1 - should return 503 while bootstrap service is not complete
@@ -123,7 +123,7 @@ ok 12 - BootstrapAPI - bootstrap conflict detection # time=26.469ms
     ok 5 - should include retry hint while bootstrap is not ready
     ok 6 - should include machine-readable blocker reasons
     1..6
-ok 13 - BootstrapAPI - returns bootstrap not ready before touching cache # time=15.703ms
+ok 13 - BootstrapAPI - returns bootstrap not ready before touching cache # time=15.06ms
 
 # Subtest: BootstrapAPI - blocks bootstrap until raft leaders are ready
     ok 1 - should return 503 when leaders are missing
@@ -134,13 +134,13 @@ ok 13 - BootstrapAPI - returns bootstrap not ready before touching cache # time=
     ok 6 - should include reasons array for readiness-aware retries
     ok 7 - should include leader metadata blocker reason code
     1..7
-ok 14 - BootstrapAPI - blocks bootstrap until raft leaders are ready # time=16.418ms
+ok 14 - BootstrapAPI - blocks bootstrap until raft leaders are ready # time=15.032ms
 
 # Subtest: BootstrapAPI - waitForServiceLeaders returns promptly when leaders are missing
     ok 1 - should report leaders as not ready
     ok 2 - should return quickly without waiting full timeout (elapsed=0ms)
     1..2
-ok 15 - BootstrapAPI - waitForServiceLeaders returns promptly when leaders are missing # time=15.395ms
+ok 15 - BootstrapAPI - waitForServiceLeaders returns promptly when leaders are missing # time=12.318ms
 
 # Subtest: BootstrapAPI - successful bootstrap with CREATE_SELF_HOSTED
     ok 1 - bootstrap should succeed
@@ -152,7 +152,7 @@ ok 15 - BootstrapAPI - waitForServiceLeaders returns promptly when leaders are m
     ok 7 - should have cluster config
     ok 8 - should have timestamp
     1..8
-ok 16 - BootstrapAPI - successful bootstrap with CREATE_SELF_HOSTED # time=16.274ms
+ok 16 - BootstrapAPI - successful bootstrap with CREATE_SELF_HOSTED # time=14.82ms
 
 # Subtest: BootstrapAPI - bootstrap with MOVE_REPLICA strategy
     ok 1 - bootstrap should succeed
@@ -164,7 +164,7 @@ ok 16 - BootstrapAPI - successful bootstrap with CREATE_SELF_HOSTED # time=16.27
     ok 7 - should identify replica to move
     ok 8 - should have replica addresses
     1..8
-ok 17 - BootstrapAPI - bootstrap with MOVE_REPLICA strategy # time=18.293ms
+ok 17 - BootstrapAPI - bootstrap with MOVE_REPLICA strategy # time=16.106ms
 
 # Subtest: BootstrapAPI - cluster state endpoint
     ok 1 - should return 200
@@ -174,7 +174,7 @@ ok 17 - BootstrapAPI - bootstrap with MOVE_REPLICA strategy # time=18.293ms
     ok 5 - should have seed node
     ok 6 - should have new node
     1..6
-ok 18 - BootstrapAPI - cluster state endpoint # time=16.507ms
+ok 18 - BootstrapAPI - cluster state endpoint # time=13.973ms
 
 # Subtest: BootstrapAPI - buildSystemTableSnapshots
     ok 1 - should return snapshots object
@@ -206,7 +206,7 @@ ok 18 - BootstrapAPI - cluster state endpoint # time=16.507ms
     ok 27 - should have correct node data
     ok 28 - should have correct partition data
     1..28
-ok 19 - BootstrapAPI - buildSystemTableSnapshots # time=17.042ms
+ok 19 - BootstrapAPI - buildSystemTableSnapshots # time=14.761ms
 
 # Subtest: BootstrapAPI - buildSystemTableSnapshots handles empty cache
     ok 1 - should return snapshots object
@@ -247,12 +247,12 @@ ok 19 - BootstrapAPI - buildSystemTableSnapshots # time=17.042ms
     ok 36 - latency_groups should be empty
     ok 37 - inter_group_latencies should be empty
     1..37
-ok 20 - BootstrapAPI - buildSystemTableSnapshots handles empty cache # time=15.999ms
+ok 20 - BootstrapAPI - buildSystemTableSnapshots handles empty cache # time=15.069ms
 
 # Subtest: BootstrapAPI - buildSystemTableSnapshots handles missing cache
     ok 1 - should throw error when cache is missing
     1..1
-ok 21 - BootstrapAPI - buildSystemTableSnapshots handles missing cache # time=17.783ms
+ok 21 - BootstrapAPI - buildSystemTableSnapshots handles missing cache # time=13.206ms
 
 # Subtest: BootstrapAPI - handleBootstrapRequest includes systemTableSnapshots
     ok 1 - should return 200
@@ -268,26 +268,26 @@ ok 21 - BootstrapAPI - buildSystemTableSnapshots handles missing cache # time=17
     ok 11 - should have 1 partition in snapshot
     ok 12 - should have 2 services in snapshot
     1..12
-ok 22 - BootstrapAPI - handleBootstrapRequest includes systemTableSnapshots # time=19.005ms
+ok 22 - BootstrapAPI - handleBootstrapRequest includes systemTableSnapshots # time=14.094ms
 
 # Subtest: BootstrapAPI - getReadyNodes includes seed node when lease expired
     ok 1 - should include seed node despite expired lease
     ok 2 - should include other ready nodes
     ok 3 - should have 2 ready nodes
     1..3
-ok 23 - BootstrapAPI - getReadyNodes includes seed node when lease expired # time=16.131ms
+ok 23 - BootstrapAPI - getReadyNodes includes seed node when lease expired # time=12.801ms
 
 # Subtest: BootstrapAPI - getReadyNodes does not duplicate seed node
     ok 1 - should not duplicate seed node
     ok 2 - should have exactly 1 ready node
     1..2
-ok 24 - BootstrapAPI - getReadyNodes does not duplicate seed node # time=14.828ms
+ok 24 - BootstrapAPI - getReadyNodes does not duplicate seed node # time=13.073ms
 
 # Subtest: BootstrapAPI - getReadyNodes handles empty cache
     ok 1 - should include seed node even with empty cache
     ok 2 - should have exactly 1 ready node (seed)
     1..2
-ok 25 - BootstrapAPI - getReadyNodes handles empty cache # time=14.586ms
+ok 25 - BootstrapAPI - getReadyNodes handles empty cache # time=12.809ms
 
 # Subtest: BootstrapAPI - buildSystemTableSnapshots includes node_endpoints
     ok 1 - should return snapshots object
@@ -297,7 +297,7 @@ ok 25 - BootstrapAPI - getReadyNodes handles empty cache # time=14.586ms
     ok 5 - should have correct transport_type
     ok 6 - should have correct transport_type for second endpoint
     1..6
-ok 26 - BootstrapAPI - buildSystemTableSnapshots includes node_endpoints # time=14.926ms
+ok 26 - BootstrapAPI - buildSystemTableSnapshots includes node_endpoints # time=13.04ms
 
 # Subtest: BootstrapAPI - handleBootstrapRequest includes node_endpoints in snapshots
     ok 1 - should return 200
@@ -308,7 +308,7 @@ ok 26 - BootstrapAPI - buildSystemTableSnapshots includes node_endpoints # time=
     ok 6 - should have correct endpoint_id in bootstrap response
     ok 7 - should have correct transport_type in bootstrap response
     1..7
-ok 27 - BootstrapAPI - handleBootstrapRequest includes node_endpoints in snapshots # time=16.164ms
+ok 27 - BootstrapAPI - handleBootstrapRequest includes node_endpoints in snapshots # time=14.03ms
 
 # Subtest: BootstrapAPI - handleBootstrapRequest includes latency topology hints
     ok 1 - should return 200
@@ -319,6 +319,6 @@ ok 27 - BootstrapAPI - handleBootstrapRequest includes node_endpoints in snapsho
     ok 6 - should include configured propagation mode
     ok 7 - should include topology hint timestamp
     1..7
-ok 28 - BootstrapAPI - handleBootstrapRequest includes latency topology hints # time=23.097ms
+ok 28 - BootstrapAPI - handleBootstrapRequest includes latency topology hints # time=20.106ms
 
 1..28

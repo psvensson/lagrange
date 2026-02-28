@@ -1,8 +1,8 @@
 {
   "scenarioName": "examples-catalog",
-  "startedAt": 1771839150019,
-  "endedAt": 1771839181145,
-  "durationMs": 31126,
+  "startedAt": 1772087210085,
+  "endedAt": 1772087240832,
+  "durationMs": 30747,
   "files": {
     "events": "test-output/.playback/report/examples-catalog/events.ndjson",
     "samples": "test-output/.playback/report/examples-catalog/samples.ndjson",
@@ -12,8 +12,8 @@
   },
   "counts": {
     "events": 13,
-    "samples": 29,
-    "snapshots": 0
+    "samples": 28,
+    "snapshots": 19
   },
   "warnings": []
 }

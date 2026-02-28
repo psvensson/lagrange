@@ -22,6 +22,7 @@ const BENCHMARK_DETAILS_KEY_POLICY = 'policy';
 const BENCHMARK_DETAILS_KEY_PHASE_TIMELINE = 'phaseTimeline';
 const BENCHMARK_DETAILS_KEY_CHANNEL_METRICS = 'channelMetrics';
 const BENCHMARK_DETAILS_KEY_PARITY = 'parity';
+const BENCHMARK_DETAILS_KEY_SATURATION = 'saturation';
 const BENCHMARK_DETAILS_KEY_EFFECTIVE_ADMISSION_POLICY =
   'effectiveAdmissionPolicy';
 const BENCHMARK_DETAILS_KEY_DIAGNOSTICS_COVERAGE = 'diagnosticsCoverage';
@@ -188,10 +189,14 @@ function normalizeBenchmarkDetailsEnvelope(details) {
   if (!isBenchmarkDetailsShape(details)) {
     return details;
   }
+  const benchmark = normalizeObject(details[BENCHMARK_DETAILS_KEY_BENCHMARK]);
   return {
     ...details,
-    [BENCHMARK_DETAILS_KEY_BENCHMARK]:
-      normalizeObject(details[BENCHMARK_DETAILS_KEY_BENCHMARK]),
+    [BENCHMARK_DETAILS_KEY_BENCHMARK]: {
+      ...benchmark,
+      [BENCHMARK_DETAILS_KEY_SATURATION]:
+        normalizeSaturationDetails(benchmark[BENCHMARK_DETAILS_KEY_SATURATION]),
+    },
     [BENCHMARK_DETAILS_KEY_BASELINE]:
       normalizeObject(details[BENCHMARK_DETAILS_KEY_BASELINE]),
     [BENCHMARK_DETAILS_KEY_COMPARISON]:
@@ -212,6 +217,21 @@ function normalizeBenchmarkDetailsEnvelope(details) {
       normalizeDiagnosticsCoverage(
         details[BENCHMARK_DETAILS_KEY_DIAGNOSTICS_COVERAGE],
       ),
+  };
+}
+
+function normalizeSaturationDetails(saturation) {
+  if (!saturation || typeof saturation !== 'object' || Array.isArray(saturation)) {
+    return {};
+  }
+  return {
+    ...saturation,
+    cdcForwardTimeoutCount:
+      normalizeFiniteNumber(saturation.cdcForwardTimeoutCount) || ZERO,
+    systemTableQueryTimeoutCount:
+      normalizeFiniteNumber(saturation.systemTableQueryTimeoutCount) || ZERO,
+    snapshotCollectionErrorCount:
+      normalizeFiniteNumber(saturation.snapshotCollectionErrorCount) || ZERO,
   };
 }
 

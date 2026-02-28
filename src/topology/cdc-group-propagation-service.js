@@ -20,6 +20,7 @@ import {
   CDC_GROUP_PROPAGATION_EVENT,
   CDC_GROUP_PROPAGATION_LOG_MSG,
   CDC_GROUP_PROPAGATION_REASON,
+  CDC_GROUP_PROPAGATION_RETRY,
   CDC_GROUP_PROPAGATION_STATE,
   CDC_GROUP_PROPAGATION_STATUS,
   CDC_GROUP_PROPAGATION_SUBSYSTEM,
@@ -67,6 +68,24 @@ class CDCGroupPropagationService extends EventEmitter {
       lastPropagationAt: null,
       lastTargetGroupCount: NUM.ZERO,
     };
+
+    this.deliveryRetryMaxAttempts = this.resolvePositiveInteger(
+      options.deliveryRetryMaxAttempts,
+      CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS,
+    );
+    this.deliveryRetryDelayMs = this.resolvePositiveInteger(
+      options.deliveryRetryDelayMs,
+      CDC_GROUP_PROPAGATION_RETRY.INITIAL_DELAY_MS,
+    );
+    this.deliveryRetryBackoffMultiplier = this.resolvePositiveNumber(
+      options.deliveryRetryBackoffMultiplier,
+      CDC_GROUP_PROPAGATION_RETRY.BACKOFF_MULTIPLIER,
+    );
+    this.deliveryRetryMaxDelayMs = this.resolvePositiveInteger(
+      options.deliveryRetryMaxDelayMs,
+      CDC_GROUP_PROPAGATION_RETRY.MAX_DELAY_MS,
+    );
+    this.backgroundRetryTimers = new Set();
   }
 
   /**
@@ -129,6 +148,7 @@ class CDCGroupPropagationService extends EventEmitter {
    */
   stop() {
     this.state = CDC_GROUP_PROPAGATION_STATE.STOPPED;
+    this.clearBackgroundRetryTimers();
     this.logger.info(CDC_GROUP_PROPAGATION_LOG_MSG.STOPPED, {
       nodeId: this.nodeId,
     });
@@ -184,7 +204,7 @@ class CDCGroupPropagationService extends EventEmitter {
 
     await sourceMessageGroupService.applyCDCEvent(tableName, operation, data);
 
-    const deliveryFailures = await this.deliverToTargets({
+    const deliveryFailures = await this.deliverToTargetsWithRetry({
       tableName,
       operation,
       data,
@@ -247,7 +267,7 @@ class CDCGroupPropagationService extends EventEmitter {
       options.sourceMessageGroupService,
     );
     const safeTargets = this.buildSafeTargets(sourceGroupId);
-    const deliveryFailures = await this.deliverToTargets({
+    const deliveryFailures = await this.deliverToTargetsWithRetry({
       tableName: options.tableName,
       operation: options.operation,
       data: options.data,
@@ -298,6 +318,194 @@ class CDCGroupPropagationService extends EventEmitter {
       fallbackReason: options.fallbackReason || null,
       timestamp,
     };
+  }
+
+  /**
+   * Deliver CDC payload to targets with bounded retry on failed destinations.
+   * @param {Object} options
+   * @return {Promise<Array<Object>>}
+   * @private
+   */
+  async deliverToTargetsWithRetry(options) {
+    let pendingTargets = Array.isArray(options.targets) ?
+      [...options.targets] :
+      [];
+    let deliveryFailures = [];
+    let attempt = NUM.ONE;
+    const maxAttempts = Math.max(NUM.ONE, this.deliveryRetryMaxAttempts);
+
+    while (pendingTargets.length > NUM.ZERO && attempt <= maxAttempts) {
+      deliveryFailures = await this.deliverToTargets({
+        ...options,
+        targets: pendingTargets,
+      });
+
+      if (deliveryFailures.length === NUM.ZERO) {
+        return [];
+      }
+
+      if (attempt >= maxAttempts) {
+        break;
+      }
+
+      const retryDelayMs = this.computeRetryDelayMs(attempt);
+      this.logger.warn(CDC_GROUP_PROPAGATION_LOG_MSG.RETRYING_DELIVERY_FAILURES, {
+        nodeId: this.nodeId,
+        tableName: options.tableName,
+        operation: options.operation,
+        attempt,
+        retryDelayMs,
+        failureCount: deliveryFailures.length,
+      });
+      await this.sleep(retryDelayMs);
+
+      pendingTargets = this.convertFailuresToRetryTargets(deliveryFailures);
+      attempt += NUM.ONE;
+    }
+
+    if (deliveryFailures.length > NUM.ZERO) {
+      this.logger.warn(CDC_GROUP_PROPAGATION_LOG_MSG.DELIVERY_RETRY_EXHAUSTED, {
+        nodeId: this.nodeId,
+        tableName: options.tableName,
+        operation: options.operation,
+        attempts: maxAttempts,
+        failureCount: deliveryFailures.length,
+      });
+      const retryTargets = this.convertFailuresToRetryTargets(deliveryFailures);
+      this.scheduleBackgroundRetry({
+        tableName: options.tableName,
+        operation: options.operation,
+        data: options.data,
+        sourceGroupId: options.sourceGroupId,
+        targets: retryTargets,
+        attempt: maxAttempts + NUM.ONE,
+      });
+    }
+
+    return deliveryFailures;
+  }
+
+  /**
+   * Continue delivery retries in background after bounded synchronous retries.
+   * @param {Object} options
+   * @param {string} options.tableName
+   * @param {string} options.operation
+   * @param {Object} options.data
+   * @param {string|null} options.sourceGroupId
+   * @param {Array<Object>} options.targets
+   * @param {number} options.attempt
+   * @private
+   */
+  scheduleBackgroundRetry(options) {
+    if (this.state !== CDC_GROUP_PROPAGATION_STATE.RUNNING) {
+      return;
+    }
+    if (!Array.isArray(options.targets) || options.targets.length === NUM.ZERO) {
+      return;
+    }
+
+    const attempt = Number.isFinite(options.attempt) && options.attempt > NUM.ZERO ?
+      Math.floor(options.attempt) :
+      NUM.ONE;
+    const retryDelayMs = this.computeRetryDelayMs(attempt);
+    this.logger.warn(CDC_GROUP_PROPAGATION_LOG_MSG.RETRYING_DELIVERY_FAILURES, {
+      nodeId: this.nodeId,
+      tableName: options.tableName,
+      operation: options.operation,
+      attempt,
+      retryDelayMs,
+      failureCount: options.targets.length,
+      background: true,
+    });
+
+    const retryTimer = setTimeout(async () => {
+      this.backgroundRetryTimers.delete(retryTimer);
+      if (this.state !== CDC_GROUP_PROPAGATION_STATE.RUNNING) {
+        return;
+      }
+
+      const deliveryFailures = await this.deliverToTargets({
+        tableName: options.tableName,
+        operation: options.operation,
+        data: options.data,
+        sourceGroupId: options.sourceGroupId,
+        targets: options.targets,
+      });
+      if (deliveryFailures.length === NUM.ZERO) {
+        return;
+      }
+      const retryTargets = this.convertFailuresToRetryTargets(deliveryFailures);
+      this.scheduleBackgroundRetry({
+        tableName: options.tableName,
+        operation: options.operation,
+        data: options.data,
+        sourceGroupId: options.sourceGroupId,
+        targets: retryTargets,
+        attempt: attempt + NUM.ONE,
+      });
+    }, retryDelayMs);
+    this.backgroundRetryTimers.add(retryTimer);
+  }
+
+  /**
+   * Clear all pending background retry timers.
+   * @private
+   */
+  clearBackgroundRetryTimers() {
+    for (const retryTimer of this.backgroundRetryTimers) {
+      clearTimeout(retryTimer);
+    }
+    this.backgroundRetryTimers.clear();
+  }
+
+  /**
+   * Convert delivery failures into retry targets.
+   * @param {Array<Object>} deliveryFailures
+   * @return {Array<Object>}
+   * @private
+   */
+  convertFailuresToRetryTargets(deliveryFailures) {
+    const targetsByGroupId = new Map();
+    for (const failure of deliveryFailures) {
+      const groupId = failure?.targetGroupId;
+      if (typeof groupId !== TYPEOF.STRING || groupId.length === NUM.ZERO) {
+        continue;
+      }
+      targetsByGroupId.set(groupId, {
+        groupId,
+        coordinatorNodeId: failure?.coordinatorNodeId || null,
+        address: failure?.address || null,
+      });
+    }
+    return [...targetsByGroupId.values()];
+  }
+
+  /**
+   * Compute exponential backoff retry delay.
+   * @param {number} attempt
+   * @return {number}
+   * @private
+   */
+  computeRetryDelayMs(attempt) {
+    const safeAttempt = Number.isFinite(attempt) && attempt > NUM.ZERO ?
+      attempt :
+      NUM.ONE;
+    const exponentialFactor = Math.pow(
+      this.deliveryRetryBackoffMultiplier,
+      safeAttempt - NUM.ONE,
+    );
+    const delayMs = this.deliveryRetryDelayMs * exponentialFactor;
+    return Math.min(this.deliveryRetryMaxDelayMs, Math.max(NUM.ONE, Math.floor(delayMs)));
+  }
+
+  /**
+   * Sleep helper for retry delay.
+   * @param {number} delayMs
+   * @return {Promise<void>}
+   * @private
+   */
+  async sleep(delayMs) {
+    return new Promise((resolve) => setTimeout(resolve, delayMs));
   }
 
   /**
@@ -618,6 +826,10 @@ class CDCGroupPropagationService extends EventEmitter {
       nodeId: this.nodeId,
       state: this.state,
       propagationMode: this.propagationMode,
+      deliveryRetryMaxAttempts: this.deliveryRetryMaxAttempts,
+      deliveryRetryDelayMs: this.deliveryRetryDelayMs,
+      deliveryRetryBackoffMultiplier: this.deliveryRetryBackoffMultiplier,
+      deliveryRetryMaxDelayMs: this.deliveryRetryMaxDelayMs,
     };
   }
 
@@ -639,6 +851,41 @@ class CDCGroupPropagationService extends EventEmitter {
    */
   now() {
     return this.nowFn();
+  }
+
+  /**
+   * Resolve positive integer option with fallback.
+   * @param {*} value
+   * @param {number} fallback
+   * @return {number}
+   * @private
+   */
+  resolvePositiveInteger(value, fallback) {
+    if (!Number.isFinite(value)) {
+      return fallback;
+    }
+    const normalized = Math.floor(value);
+    if (normalized < NUM.ONE) {
+      return fallback;
+    }
+    return normalized;
+  }
+
+  /**
+   * Resolve positive numeric option with fallback.
+   * @param {*} value
+   * @param {number} fallback
+   * @return {number}
+   * @private
+   */
+  resolvePositiveNumber(value, fallback) {
+    if (!Number.isFinite(value)) {
+      return fallback;
+    }
+    if (value <= NUM.ZERO) {
+      return fallback;
+    }
+    return value;
   }
 }
 

@@ -45,12 +45,31 @@ import {RAFT_ROLE} from '../raft/constants.js';
 import {
   ReplicaCreationProgressReporter,
 } from '../utils/replica-creation-progress-reporter.js';
+import {ReplicaStateMachine} from './replica-state-machine.js';
 
 const CRITICAL_SYSTEM_PARTITION_IDS = new Set(
   Object.values(SystemTableName).map((tableName) => `${tableName}-p1`),
 );
 
 const VOTER_READY_CHECK_INTERVAL_MS = 250;
+const METADATA_RESOLUTION_POLL_INTERVAL_MS = 50;
+const partitionMetadataMissingError =
+  REPLICA_HANDLER_ERROR_MSG.PARTITION_METADATA_MISSING;
+const tableMetadataMissingError =
+  REPLICA_HANDLER_ERROR_MSG.TABLE_METADATA_MISSING;
+const PARTITION_METADATA_MISSING_PREFIX =
+  partitionMetadataMissingError('');
+const TABLE_METADATA_MISSING_PREFIX =
+  tableMetadataMissingError('');
+const SYSTEM_TABLE_HYDRATION_SQL = Object.freeze({
+  PARTITION_BY_ID:
+    `SELECT * FROM ${SystemTableName.PARTITIONS} WHERE partition_id = ?`,
+  TABLE_BY_ID:
+    `SELECT * FROM ${SystemTableName.TABLES} WHERE table_id = ?`,
+  PARTITION_SERVICES:
+    `SELECT * FROM ${SystemTableName.SERVICES} ` +
+    'WHERE partition_id = ? AND service_type = ?',
+});
 
 /**
  * ReplicaHandler handles replica creation and removal requests on target nodes.
@@ -66,6 +85,7 @@ class ReplicaHandler extends EventEmitter {
    * @param {Object} options.rpcClient - RPC client for responses.
    * @param {Function} options.createPartitionService - Factory for creating partitions.
    * @param {string} options.dataDir - Base data directory for partition storage.
+   * @param {Object} [options.replicaStateMachine] - Replica lifecycle state machine.
    */
   constructor(options = {}) {
     super();
@@ -87,6 +107,11 @@ class ReplicaHandler extends EventEmitter {
       this.createPartitionService,
       REPLICA_HANDLER_ERROR_MSG.CREATE_PARTITION_SERVICE_REQUIRED,
     );
+    this.replicaStateMachine = options.replicaStateMachine ||
+      new ReplicaStateMachine({
+        nodeId: this.nodeId,
+        cdcIntegrationService: this.cdcIntegrationService,
+      });
 
     // Track live service references by replica_id (needed for shutdown, voter-readiness)
     this.localServices = new Map();
@@ -370,7 +395,8 @@ class ReplicaHandler extends EventEmitter {
         };
       }
 
-      if (existingReplica.status === ReplicaStatus.CREATING ||
+      if (existingReplica.status === ReplicaStatus.PENDING ||
+          existingReplica.status === ReplicaStatus.CREATING ||
           existingReplica.status === ReplicaStatus.SYNCING) {
         this.logger.info(REPLICA_HANDLER_LOG_MSG.CREATE_IN_PROGRESS, {
           replicaId: existingReplica.replicaId,
@@ -403,7 +429,7 @@ class ReplicaHandler extends EventEmitter {
       replicaId,
       partitionId,
       tableName,
-      status: ReplicaStatus.CREATING,
+      status: ReplicaStatus.PENDING,
     });
     this.inProgressOperations.set(operationId, {
       type: ReplicaOperationMessageType.CREATE_REPLICA,
@@ -411,6 +437,9 @@ class ReplicaHandler extends EventEmitter {
       partitionId,
       tableName,
       startedAt: Date.now(),
+    });
+    await this.updateReplicaStatus(replicaId, ReplicaStatus.PENDING, {
+      partitionId,
     });
 
     // Start async creation after ACK has returned.
@@ -456,11 +485,14 @@ class ReplicaHandler extends EventEmitter {
     });
 
     try {
+      await this.updateReplicaStatus(replicaId, ReplicaStatus.CREATING, {
+        partitionId,
+      });
       this.updateReplicaCreationProgress(progress, {
         stage: REPLICA_HANDLER_PROGRESS.STAGE_RESOLVING_CONTEXT,
       });
 
-      const context = this.resolveReplicaContext(partitionId, replicaId);
+      const context = await this.resolveReplicaContextWithRetry(partitionId, replicaId);
       const {
         tableName,
         tableId,
@@ -861,9 +893,8 @@ class ReplicaHandler extends EventEmitter {
   }
 
   /**
-   * Update replica status via CDC.
-   * Uses upsert to ensure the status is persisted even if the row doesn't exist yet
-   * (handles race conditions during replica creation).
+   * Update replica status through the replica lifecycle state machine.
+   * The state machine owns services-table lifecycle persistence.
    * @param {string} replicaId - Replica ID.
    * @param {string} newStatus - New status.
    * @param {Object} additionalData - Additional data to update.
@@ -878,14 +909,10 @@ class ReplicaHandler extends EventEmitter {
     });
 
     try {
-      const now = Date.now();
       const existing = this.systemTableCache.get(SystemTableName.SERVICES, replicaId);
       const partitionId = additionalData.partitionId !== undefined ?
         additionalData.partitionId :
         (existing?.partition_id || null);
-      const addressManager = AddressManager.getInstance();
-      const address = existing?.address ||
-        addressManager.format(this.nodeId, REPLICA_HANDLER_SERVICE.TYPE, replicaId);
       const localService = this.getTrackedService(replicaId);
       this.setLocalReplica(replicaId, {
         replicaId,
@@ -893,50 +920,30 @@ class ReplicaHandler extends EventEmitter {
         status: newStatus,
         service: localService,
       });
+      const trackedState = this.replicaStateMachine?.getState?.(replicaId) || null;
+      if (!trackedState && newStatus !== ReplicaStatus.PENDING && existing) {
+        this.replicaStateMachine.registerReplicaSnapshot(replicaId, {
+          partitionId,
+          nodeId: existing.node_id || this.nodeId,
+          state: existing.status || ReplicaStatus.ACTIVE,
+          serviceId: existing.service_id || replicaId,
+        });
+      }
 
-      const rowData = {
-        service_id: replicaId,
-        service_type: existing?.service_type || REPLICA_HANDLER_SERVICE.TYPE,
-        node_id: existing?.node_id || this.nodeId,
-        partition_id: partitionId,
-        group_id: existing?.group_id || null,
-        replica_id: existing?.replica_id || replicaId,
-        raft_role: existing?.raft_role || null,
-        status: newStatus,
-        state_entered_at: existing?.state_entered_at || null,
-        previous_state: existing?.previous_state || null,
-        trigger_reason: existing?.trigger_reason || null,
-        error_message: additionalData.errorMessage || existing?.error_message || null,
-        address,
-        created_at: existing?.created_at || now,
-        updated_at: now,
-      };
-
-      if (
-        typeof this.cdcIntegrationService.upsertSystemTableRow ===
-          REPLICA_HANDLER_TYPEOF.FUNCTION
-      ) {
-        await this.cdcIntegrationService.upsertSystemTableRow(
-          SystemTableName.SERVICES,
-          rowData,
-        );
-      } else if (
-        typeof this.cdcIntegrationService.updateSystemTableRow === REPLICA_HANDLER_TYPEOF.FUNCTION
-      ) {
-        await this.cdcIntegrationService.updateSystemTableRow(
-          SystemTableName.SERVICES,
-          {service_id: replicaId},
-          rowData,
-        );
-      } else if (
-        typeof this.cdcIntegrationService.insertSystemTableRow === REPLICA_HANDLER_TYPEOF.FUNCTION
-      ) {
-        await this.cdcIntegrationService.insertSystemTableRow(
-          SystemTableName.SERVICES,
-          rowData,
-        );
-      } else {
-        throw new Error(REPLICA_HANDLER_LOG_MSG.CDC_UNAVAILABLE);
+      const transitionResult = this.replicaStateMachine.transition(
+        replicaId,
+        newStatus,
+        {
+          partitionId,
+          nodeId: existing?.node_id || this.nodeId,
+          errorMessage: additionalData.errorMessage,
+          serviceId: existing?.service_id || replicaId,
+          serviceType: existing?.service_type || REPLICA_HANDLER_SERVICE.TYPE,
+          serviceAddress: existing?.address || this.buildTrackedServiceAddress(replicaId),
+        },
+      );
+      if (transitionResult && typeof transitionResult.then === REPLICA_HANDLER_TYPEOF.FUNCTION) {
+        await transitionResult;
       }
     } catch (error) {
       this.logger.error(REPLICA_HANDLER_LOG_MSG.UPDATE_STATUS_FAILED, {
@@ -1078,17 +1085,7 @@ class ReplicaHandler extends EventEmitter {
    * @private
    */
   isReplicaVoterReady(replicaId) {
-    const service = this.getTrackedService(replicaId);
-    if (!service) {
-      return false;
-    }
-
-    const role = typeof service.getRole === REPLICA_HANDLER_TYPEOF.FUNCTION ?
-      service.getRole() :
-      service.role;
-    const normalizedRole = typeof role === REPLICA_HANDLER_TYPEOF.STRING ?
-      role.toLowerCase() :
-      null;
+    const normalizedRole = this.getTrackedReplicaRole(replicaId);
 
     if (!normalizedRole || normalizedRole === RAFT_ROLE.LEARNER) {
       return false;
@@ -1207,6 +1204,67 @@ class ReplicaHandler extends EventEmitter {
   }
 
   /**
+   * Resolve replica context with retry for transient metadata propagation lag.
+   * @param {string} partitionId - Partition ID.
+   * @param {string} replicaId - Replica ID.
+   * @return {Promise<Object>} Resolved metadata.
+   * @private
+   */
+  async resolveReplicaContextWithRetry(partitionId, replicaId) {
+    const deadline = Date.now() + this.syncTimeoutMs;
+    let metadataWaitLogged = false;
+    let lastError = null;
+    let metadataHydrationCount = NUM.ZERO;
+
+    while (Date.now() <= deadline) {
+      try {
+        return this.resolveReplicaContext(partitionId, replicaId);
+      } catch (error) {
+        if (!this.isTransientMetadataResolutionError(error)) {
+          throw error;
+        }
+        lastError = error;
+        metadataHydrationCount += await this.hydrateMetadataFromAuthority(
+          partitionId,
+        );
+
+        if (!metadataWaitLogged) {
+          this.logger.info(REPLICA_HANDLER_LOG_MSG.WAITING_METADATA_PROPAGATION, {
+            partitionId,
+            replicaId,
+            timeoutMs: this.syncTimeoutMs,
+            hydratedRows: metadataHydrationCount,
+            nodeId: this.nodeId,
+          });
+          metadataWaitLogged = true;
+        }
+      }
+
+      await new Promise((resolve) => {
+        setTimeout(resolve, METADATA_RESOLUTION_POLL_INTERVAL_MS);
+      });
+    }
+
+    throw lastError || new Error(
+      partitionMetadataMissingError(partitionId),
+    );
+  }
+
+  /**
+   * Check whether replica context resolution error can be retried.
+   * @param {Error} error - Resolution error.
+   * @return {boolean} True when error is a transient metadata visibility miss.
+   * @private
+   */
+  isTransientMetadataResolutionError(error) {
+    const message = typeof error?.message === REPLICA_HANDLER_TYPEOF.STRING ?
+      error.message :
+      '';
+    return message.startsWith(PARTITION_METADATA_MISSING_PREFIX) ||
+      message.startsWith(TABLE_METADATA_MISSING_PREFIX);
+  }
+
+  /**
    * Resolve replica metadata from the system table cache.
    * @param {string} partitionId - Partition ID.
    * @param {string} replicaId - Replica ID.
@@ -1273,7 +1331,8 @@ class ReplicaHandler extends EventEmitter {
         seenReplicaIds.add(serviceReplicaId);
         replicaIds.push(serviceReplicaId);
       }
-      if (service.status !== ReplicaStatus.REMOVED &&
+      if (serviceReplicaId !== replicaId &&
+          service.status !== ReplicaStatus.REMOVED &&
           service.status !== ReplicaStatus.FAILED) {
         activeExistingReplicaIds.add(serviceReplicaId);
       }
@@ -1321,6 +1380,156 @@ class ReplicaHandler extends EventEmitter {
       peerAddresses,
       existingReplicaCount: activeExistingReplicaIds.size,
     };
+  }
+
+  /**
+   * Hydrate replica metadata from authoritative system-table SQL queries.
+   * This covers cases where local cache propagation lags behind the operation.
+   * @param {string} partitionId - Partition ID.
+   * @return {Promise<number>} Number of hydrated rows.
+   * @private
+   */
+  async hydrateMetadataFromAuthority(partitionId) {
+    if (!partitionId ||
+        typeof partitionId !== REPLICA_HANDLER_TYPEOF.STRING ||
+        partitionId.length === NUM.ZERO) {
+      return NUM.ZERO;
+    }
+    if (!this.systemTableCache ||
+        typeof this.systemTableCache.applySystemTableChange !==
+          REPLICA_HANDLER_TYPEOF.FUNCTION) {
+      return NUM.ZERO;
+    }
+
+    const executeSql = this.resolveMetadataQueryExecutor();
+    if (!executeSql) {
+      return NUM.ZERO;
+    }
+
+    let hydratedRows = NUM.ZERO;
+    try {
+      const partitionRows = await this.querySystemTableRows(
+        executeSql,
+        SYSTEM_TABLE_HYDRATION_SQL.PARTITION_BY_ID,
+        [partitionId],
+      );
+      const partitionRow = partitionRows[NUM.ZERO] || null;
+      if (partitionRow) {
+        hydratedRows += this.applyHydratedSystemTableRow(
+          SystemTableName.PARTITIONS,
+          partitionRow,
+        );
+      }
+
+      const tableId = partitionRow?.table_id || null;
+      if (typeof tableId === REPLICA_HANDLER_TYPEOF.STRING &&
+          tableId.length > NUM.ZERO) {
+        const tableRows = await this.querySystemTableRows(
+          executeSql,
+          SYSTEM_TABLE_HYDRATION_SQL.TABLE_BY_ID,
+          [tableId],
+        );
+        const tableRow = tableRows[NUM.ZERO] || null;
+        if (tableRow) {
+          hydratedRows += this.applyHydratedSystemTableRow(
+            SystemTableName.TABLES,
+            tableRow,
+          );
+        }
+      }
+
+      const serviceRows = await this.querySystemTableRows(
+        executeSql,
+        SYSTEM_TABLE_HYDRATION_SQL.PARTITION_SERVICES,
+        [partitionId, REPLICA_HANDLER_SERVICE.TYPE],
+      );
+      for (const serviceRow of serviceRows) {
+        hydratedRows += this.applyHydratedSystemTableRow(
+          SystemTableName.SERVICES,
+          serviceRow,
+        );
+      }
+
+      if (hydratedRows > NUM.ZERO) {
+        this.logger.debug(REPLICA_HANDLER_LOG_MSG.HYDRATED_METADATA_FROM_QUERY, {
+          partitionId,
+          hydratedRows,
+          nodeId: this.nodeId,
+        });
+      }
+      return hydratedRows;
+    } catch (error) {
+      this.logger.debug(REPLICA_HANDLER_LOG_MSG.METADATA_HYDRATION_QUERY_FAILED, {
+        partitionId,
+        error: error.message,
+        nodeId: this.nodeId,
+      });
+      return NUM.ZERO;
+    }
+  }
+
+  /**
+   * Resolve SQL query executor for authoritative metadata hydration.
+   * @return {Function|null}
+   * @private
+   */
+  resolveMetadataQueryExecutor() {
+    if (this.cdcIntegrationService &&
+        typeof this.cdcIntegrationService.executeSQL ===
+          REPLICA_HANDLER_TYPEOF.FUNCTION) {
+      return (sql, params = []) => this.cdcIntegrationService.executeSQL(
+        sql,
+        params,
+      );
+    }
+
+    const sqlQueryEngine = this.cdcIntegrationService?.sqlQueryEngine || null;
+    if (sqlQueryEngine &&
+        typeof sqlQueryEngine.executeQuery === REPLICA_HANDLER_TYPEOF.FUNCTION) {
+      return (sql, params = []) => sqlQueryEngine.executeQuery(sql, params);
+    }
+
+    return null;
+  }
+
+  /**
+   * Execute a system-table query and normalize result to row array.
+   * @param {Function} executeSql - SQL execution callback.
+   * @param {string} sql - Query text.
+   * @param {Array<*>} params - Positional params.
+   * @return {Promise<Array<Object>>}
+   * @private
+   */
+  async querySystemTableRows(executeSql, sql, params = []) {
+    if (typeof executeSql !== REPLICA_HANDLER_TYPEOF.FUNCTION) {
+      return [];
+    }
+    const result = await executeSql(sql, params);
+    if (Array.isArray(result)) {
+      return result;
+    }
+    if (!result || typeof result !== REPLICA_HANDLER_TYPEOF.OBJECT) {
+      return [];
+    }
+    if (result.success === false) {
+      throw new Error(result.error || 'system table query failed');
+    }
+    return Array.isArray(result.rows) ? result.rows : [];
+  }
+
+  /**
+   * Apply hydrated system-table row into local cache.
+   * @param {string} tableName - System table name.
+   * @param {Object} row - Row payload.
+   * @return {number} 1 when applied; otherwise 0.
+   * @private
+   */
+  applyHydratedSystemTableRow(tableName, row) {
+    if (!row || typeof row !== REPLICA_HANDLER_TYPEOF.OBJECT) {
+      return NUM.ZERO;
+    }
+    this.systemTableCache.applySystemTableChange(tableName, 'INSERT', row);
+    return NUM.ONE;
   }
 
   /**
@@ -1754,6 +1963,41 @@ class ReplicaHandler extends EventEmitter {
     }
 
     return null;
+  }
+
+  /**
+   * Get normalized raft role from the locally tracked service owner.
+   * @param {string} replicaId - Replica ID.
+   * @return {string|null} Lower-cased raft role or null.
+   * @private
+   */
+  getTrackedReplicaRole(replicaId) {
+    const service = this.getTrackedService(replicaId);
+    if (!service) {
+      return null;
+    }
+
+    const role = typeof service.getRole === REPLICA_HANDLER_TYPEOF.FUNCTION ?
+      service.getRole() :
+      service.role;
+    return typeof role === REPLICA_HANDLER_TYPEOF.STRING ?
+      role.toLowerCase() :
+      null;
+  }
+
+  /**
+   * Build the canonical service address for a tracked replica.
+   * @param {string} replicaId - Replica ID.
+   * @return {string} Formatted address.
+   * @private
+   */
+  buildTrackedServiceAddress(replicaId) {
+    const addressManager = AddressManager.getInstance();
+    return addressManager.format(
+      this.nodeId,
+      REPLICA_HANDLER_SERVICE.TYPE,
+      replicaId,
+    );
   }
 
   /**

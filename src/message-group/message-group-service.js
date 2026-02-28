@@ -35,6 +35,7 @@ import {
 } from '../raft/raft-timing-utils.js';
 import {assertRaftProviderContract} from '../raft/raft-provider-contract.js';
 import {LiferaftProvider} from '../raft/liferaft-provider.js';
+import {applyReplicaDemotion} from '../raft/replica-leadership-state.js';
 import {AddressManager} from '../address/address-manager.js';
 import {
   UnifiedRebalancer,
@@ -44,11 +45,16 @@ import {
   MESSAGE_GROUP_APPLICATION_ERROR_MSG,
   MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE,
   MESSAGE_GROUP_APPLICATION_STATUS,
+  MESSAGE_GROUP_CDC_ERROR_MSG,
   MESSAGE_GROUP_SUBSYSTEM,
   MESSAGE_STATUS as MessageStatus,
   RAFT_ROLE as RaftRole,
 } from './constants.js';
+import {
+  resolveMessageGroupLeaderServiceFromCache,
+} from './message-group-target-resolver.js';
 import {CDCHandler} from './cdc-handler.js';
+import {getOrCreateCauseId, normalizeCauseId} from '../utils/cause-id.js';
 
 // Note: isRaftPacket and RAFT_PACKET_TYPES are imported from shared module
 // src/raft/raft-packet-utils.js - Requirements: 9.1, 9.2, 9.3, 9.4
@@ -630,30 +636,14 @@ class MessageGroupService extends EventEmitter {
     });
 
     this.raft.on(RAFT_EVENT.FOLLOWER, () => {
-      this.role = RaftRole.FOLLOWER;
-      this.isLeader = false;
-      this.queueRoleUpdate(this.role);
-      this.pendingLeaderNodeUpdate = null;
-      this.persistedLeaderNodeId = null;
+      applyReplicaDemotion(this, RaftRole.FOLLOWER);
       this.updateRebalancerLeadership();
-      if (this.leaderNodeUpdateRetryTimer) {
-        clearTimeout(this.leaderNodeUpdateRetryTimer);
-        this.leaderNodeUpdateRetryTimer = null;
-      }
       this.storage.currentTerm = this.raftProvider.getCurrentTerm(this.raft);
     });
 
     this.raft.on(RAFT_EVENT.CANDIDATE, () => {
-      this.role = RaftRole.CANDIDATE;
-      this.isLeader = false;
-      this.queueRoleUpdate(this.role);
-      this.pendingLeaderNodeUpdate = null;
-      this.persistedLeaderNodeId = null;
+      applyReplicaDemotion(this, RaftRole.CANDIDATE);
       this.updateRebalancerLeadership();
-      if (this.leaderNodeUpdateRetryTimer) {
-        clearTimeout(this.leaderNodeUpdateRetryTimer);
-        this.leaderNodeUpdateRetryTimer = null;
-      }
       this.storage.currentTerm = this.raftProvider.getCurrentTerm(this.raft);
     });
 
@@ -880,6 +870,7 @@ class MessageGroupService extends EventEmitter {
           operation: command.operation,
           data: command.data,
           timestamp: command.timestamp || this.hlcClock.now().toString(),
+          causeId: normalizeCauseId(command.causeId),
         },
         {skipSubscriptionCheck: true},
       );
@@ -941,7 +932,7 @@ class MessageGroupService extends EventEmitter {
         persistPromise,
       ]);
 
-      if (deliveryResult.success) {
+      if (deliveryResult.delivered) {
         // Direct delivery succeeded
         messageEnvelope.status = MessageStatus.DELIVERED;
         this.logger.debug('Message delivered directly', {
@@ -949,7 +940,7 @@ class MessageGroupService extends EventEmitter {
           targetService,
         });
         // Spread the transport result directly - ACK structure is flat
-        const {success: _s, attempt: _a, ...transportResult} = deliveryResult;
+        const {delivered: _d, attempt: _a, ...transportResult} = deliveryResult;
         return {
           messageId,
           status: MessageStatus.DELIVERED,
@@ -1029,7 +1020,7 @@ class MessageGroupService extends EventEmitter {
 
         if (result && result.acknowledged) {
           // Spread transport result directly - ACK structure is flat
-          return {success: true, attempt: attempt + 1, ...result};
+          return {delivered: true, attempt: attempt + 1, ...result};
         }
       } catch (error) {
         lastError = error;
@@ -1042,7 +1033,10 @@ class MessageGroupService extends EventEmitter {
       }
     }
 
-    return {success: false, error: lastError?.message || 'Max retries exceeded'};
+    return {
+      delivered: false,
+      error: lastError?.message || 'Max retries exceeded',
+    };
   }
 
 
@@ -1231,15 +1225,52 @@ class MessageGroupService extends EventEmitter {
     const tableName = payload.tableName;
     const operation = payload.operation;
     const data = payload.data;
+    const eventTimestamp = typeof payload.timestamp === 'string' &&
+      payload.timestamp.length > NUM.ZERO ?
+      payload.timestamp :
+      null;
+    const causeId = normalizeCauseId(payload.causeId);
+    const relayDepth = Number.isInteger(payload.relayDepth) &&
+      payload.relayDepth >= NUM.ZERO ?
+      payload.relayDepth :
+      NUM.ZERO;
     if (!tableName || !operation || !data) {
       throw new Error(
         MESSAGE_GROUP_APPLICATION_ERROR_MSG.INVALID_LATENCY_CDC_PAYLOAD,
       );
     }
 
-    await this.applyCDCEvent(tableName, operation, data, {
+    // Followers relay one hop to the current leader. This avoids local
+    // side-effects on non-leaders while still tolerating transient stale
+    // leader metadata on the original sender.
+    if (!this.isCurrentRaftLeader()) {
+      if (relayDepth >= NUM.ONE) {
+        throw new Error(MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN);
+      }
+      await this.forwardCDCEventToLeader(tableName, operation, data, {
+        timestamp: eventTimestamp || undefined,
+        relayDepth: relayDepth + NUM.ONE,
+        causeId,
+      });
+      return {
+        messageId,
+        status: MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_PROPAGATED,
+        acknowledged: true,
+        tableName,
+        operation,
+      };
+    }
+
+    const applyOptions = {
       skipSubscriptionCheck: true,
-    });
+    };
+    if (eventTimestamp) {
+      applyOptions.timestamp = eventTimestamp;
+    }
+    if (causeId) {
+      applyOptions.causeId = causeId;
+    }
+    await this.applyCDCEvent(tableName, operation, data, applyOptions);
 
     return {
       messageId,
@@ -1327,23 +1358,97 @@ class MessageGroupService extends EventEmitter {
     const applyStartMs = Date.now();
     const skipSubscriptionCheck =
       options.skipSubscriptionCheck === true;
+    const skipReplication =
+      options.skipReplication === true;
     const eventTimestamp =
       options.timestamp || this.hlcClock.now().toString();
-    const applied = this.cdcHandler.applyImmediate(
-      {
+    const causeId = getOrCreateCauseId(options.causeId);
+    const isSingleReplicaGroup = Array.isArray(this.replicaIds) &&
+      this.replicaIds.length <= NUM.ONE;
+    const requiresRaftReplication = !skipReplication && !isSingleReplicaGroup;
+    const shouldApplyLocally = !requiresRaftReplication ||
+      this.isCurrentRaftLeader();
+
+    let applied = false;
+    if (shouldApplyLocally) {
+      applied = this.cdcHandler.applyImmediate(
+        {
+          tableName,
+          operation,
+          data,
+          timestamp: eventTimestamp,
+          causeId,
+        },
+        {skipSubscriptionCheck},
+      );
+    }
+
+    if (requiresRaftReplication) {
+      const cdcCommand = {
+        type: 'CDC',
         tableName,
         operation,
         data,
         timestamp: eventTimestamp,
-      },
-      {skipSubscriptionCheck},
-    );
+        causeId,
+      };
+
+      // Persist CDC event to Raft log for replication
+      const entry = this.storage.appendEntry({
+        ...cdcCommand,
+      });
+      // Replicate via Raft so all message group replicas (and their
+      // co-located system caches) receive this CDC event. Cache updates
+      // are applied only from committed CDC entries.
+      await this.proposeCDCCommand(cdcCommand);
+
+      try {
+        const handlerDurationMs = Date.now() - applyStartMs;
+        const metricsData = {
+          tableName,
+          operation,
+          causeId,
+          handlerDurationMs,
+        };
+        if (options.timestamp != null) {
+          metricsData.eventAgeMs =
+            Date.now() - options.timestamp;
+        }
+        this.logger.info(
+          METRICS_LOG_TAG.CDC_PROPAGATION, metricsData,
+        );
+      } catch (_metricsErr) {
+        // Metrics logging must not propagate to callers
+      }
+
+      this.logger.debug('CDC event proposed for replication; awaiting commit apply', {
+        tableName,
+        operation,
+        logIndex: entry.index,
+        groupId: this.groupId,
+        replicaId: this.replicaId,
+        causeId,
+      });
+
+      if (!shouldApplyLocally) {
+        return;
+      }
+      if (!applied) {
+        return;
+      }
+
+      this.emit('cdcApplied', {
+        tableName, operation, data, logIndex: entry.index,
+        causeId,
+      });
+      return;
+    }
+
     if (!applied) {
       return;
     }
 
-    if (!options.skipReplication) {
-      // Persist CDC event to Raft log for replication
+    if (!skipReplication) {
       const entry = this.storage.appendEntry({
         type: 'CDC',
         tableName,
@@ -1352,39 +1457,12 @@ class MessageGroupService extends EventEmitter {
         timestamp: eventTimestamp,
       });
 
-      // Replicate via Raft so all message group replicas (and their
-      // co-located system caches) receive this CDC event.
-      const isLiferaftLeader =
-        this.raft && this.raft.state === LifeRaft.LEADER;
-      if (isLiferaftLeader) {
-        // Leader: propose directly to Raft log for replication.
-        this.raftProvider.propose(this.raft, {
-          type: 'CDC',
-          tableName,
-          operation,
-          data,
-        }, (err) => {
-          if (err) {
-            this.logger.debug('Raft CDC command failed', {
-              tableName,
-              error: err.message,
-            });
-          }
-        });
-      } else {
-        // Non-leader: forward to the MG leader for Raft replication.
-        // Without this, CDC events from partition leaders co-located
-        // with a non-leader MG replica never reach other nodes.
-        // Dedup in cdcHandler.applyImmediate prevents double-apply
-        // when the Raft-replicated entry arrives back on this node.
-        this.forwardCDCEventToLeader(tableName, operation, data);
-      }
-
       try {
         const handlerDurationMs = Date.now() - applyStartMs;
         const metricsData = {
           tableName,
           operation,
+          causeId,
           handlerDurationMs,
         };
         if (options.timestamp != null) {
@@ -1400,6 +1478,7 @@ class MessageGroupService extends EventEmitter {
 
       this.emit('cdcApplied', {
         tableName, operation, data, logIndex: entry.index,
+        causeId,
       });
       return;
     }
@@ -1409,6 +1488,7 @@ class MessageGroupService extends EventEmitter {
       const metricsData = {
         tableName,
         operation,
+        causeId,
         handlerDurationMs,
       };
       if (options.timestamp != null) {
@@ -1424,7 +1504,90 @@ class MessageGroupService extends EventEmitter {
 
     this.emit('cdcApplied', {
       tableName, operation, data, logIndex: null,
+      causeId,
     });
+  }
+
+  /**
+   * Propose a CDC command through Raft and fail closed on replication errors.
+   * @param {Object} cdcCommand
+   * @return {Promise<void>}
+   * @private
+   */
+  async proposeCDCCommand(cdcCommand) {
+    const configuredRetryBudget = Number.isInteger(this.retryMaxAttempts) &&
+      this.retryMaxAttempts > NUM.ZERO ?
+      this.retryMaxAttempts :
+      NUM.ONE;
+    const proposeTimeoutMs = this.computeCdcProposeTimeoutMs(configuredRetryBudget);
+    try {
+      if (typeof this.raftProvider.proposeWithLeaderRouting === 'function') {
+        await this.raftProvider.proposeWithLeaderRouting(this.raft, cdcCommand, {
+          maxAttempts: configuredRetryBudget,
+          proposeTimeoutMs,
+          forwardToLeader: async (command) => {
+            await this.forwardCDCEventToLeader(
+              command.tableName,
+              command.operation,
+              command.data,
+              {
+                timestamp: command.timestamp,
+                causeId: command.causeId,
+              },
+            );
+          },
+          computeRetryDelayMs: (attempt) =>
+            this.computeCdcForwardRetryDelayMs(attempt),
+          onRetry: ({attempt, mode, retryDelayMs, error}) => {
+            this.logger.warn('Retrying Raft CDC command', {
+              groupId: this.groupId,
+              replicaId: this.replicaId,
+              tableName: cdcCommand.tableName,
+              causeId: normalizeCauseId(cdcCommand.causeId),
+              attempt,
+              mode,
+              retryDelayMs,
+              error: error?.message || null,
+            });
+          },
+        });
+        return;
+      }
+
+      await new Promise((resolve, reject) => {
+        this.raftProvider.propose(this.raft, cdcCommand, (error) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+          resolve();
+        });
+      });
+    } catch (error) {
+      this.logger.error('Raft CDC command failed', {
+        groupId: this.groupId,
+        replicaId: this.replicaId,
+        tableName: cdcCommand.tableName,
+        causeId: normalizeCauseId(cdcCommand.causeId),
+        attempts: configuredRetryBudget,
+        proposeTimeoutMs,
+        error: error?.message || null,
+      });
+      throw new Error(
+        `${MESSAGE_GROUP_CDC_ERROR_MSG.RAFT_PROPOSE_FAILED}: ` +
+        `${error?.message || 'unknown error'}`,
+      );
+    }
+  }
+
+  /**
+   * Determine whether this replica is currently the active Raft leader.
+   * @return {boolean}
+   * @private
+   */
+  isCurrentRaftLeader() {
+    return (this.raft && this.raft.state === LifeRaft.LEADER) ||
+      this.role === RaftRole.LEADER;
   }
 
   /**
@@ -1432,42 +1595,151 @@ class MessageGroupService extends EventEmitter {
    * Called when the local MG replica is not the Raft leader. Uses the
    * existing latency CDC propagation message type which the leader
    * already handles via handleLatencyCdcPropagationMessage.
-   * Fire-and-forget: forwarding failures are logged but do not block
-   * the caller. The local cache is already updated before this runs.
    * @param {string} tableName - System table name.
    * @param {string} operation - CDC operation.
    * @param {Object} data - Record data.
+   * @param {Object} [options]
+   * @param {string} [options.timestamp]
+   * @return {Promise<void>}
    * @private
    */
-  forwardCDCEventToLeader(tableName, operation, data) {
-    if (!this.leaderId || this.leaderId === this.replicaId) {
-      return;
+  async forwardCDCEventToLeader(tableName, operation, data, options = {}) {
+    const eventTimestamp = typeof options.timestamp === 'string' &&
+      options.timestamp.length > NUM.ZERO ?
+      options.timestamp :
+      this.hlcClock.now().toString();
+    const relayDepth = Number.isInteger(options.relayDepth) &&
+      options.relayDepth >= NUM.ZERO ?
+      options.relayDepth :
+      NUM.ZERO;
+    const causeId = normalizeCauseId(options.causeId);
+    const cacheLeaderService = resolveMessageGroupLeaderServiceFromCache(
+      this.systemTableCache,
+      this.groupId,
+      {excludeServiceId: this.replicaId},
+    );
+    const resolvedLeaderId = this.leaderId && this.leaderId !== this.replicaId ?
+      this.leaderId :
+      cacheLeaderService?.service_id || null;
+    if (!resolvedLeaderId) {
+      throw new Error(MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN);
     }
-    let leaderAddress;
+
+    let leaderAddress = null;
     try {
-      leaderAddress = this.buildPeerAddress(this.leaderId);
-    } catch (_err) {
-      this.logger.debug('Cannot resolve leader address for CDC forward', {
-        groupId: this.groupId,
-        leaderId: this.leaderId,
-      });
-      return;
+      leaderAddress = resolvedLeaderId === cacheLeaderService?.service_id &&
+        cacheLeaderService?.address ?
+        cacheLeaderService.address :
+        this.buildPeerAddress(resolvedLeaderId);
+    } catch (error) {
+      throw new Error(
+        `${MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_ADDRESS_UNRESOLVED}: ` +
+          `${error.message}`,
+      );
     }
+    if (!leaderAddress) {
+      throw new Error(
+        MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_ADDRESS_UNRESOLVED,
+      );
+    }
+
     const payload = {
       type: MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE.LATENCY_CDC_PROPAGATION,
       tableName,
       operation,
       data,
+      timestamp: eventTimestamp,
       sourceNodeId: this.nodeId,
+      relayDepth,
+      causeId,
     };
-    this.transport.deliver(leaderAddress, payload).catch((err) => {
-      this.logger.debug('CDC forward to leader failed', {
+    const forwardStartMs = Date.now();
+    const deliveryResult = await this.transport.deliver(leaderAddress, payload);
+    const deliveryAcked = deliveryResult?.acknowledged === true;
+    const deliverySucceeded = deliveryResult?.success !== false;
+    const deliveryRejectedByHandler = deliveryResult?.noHandler === true ||
+      (typeof deliveryResult?.error === TYPEOF.STRING &&
+        deliveryResult.error.length > NUM.ZERO);
+    if (!deliveryAcked || !deliverySucceeded || deliveryRejectedByHandler) {
+      this.logger.warn('CDC forward to leader rejected', {
         groupId: this.groupId,
-        leaderId: this.leaderId,
+        replicaId: this.replicaId,
+        leaderId: resolvedLeaderId,
+        leaderAddress,
         tableName,
-        error: err.message,
+        operation,
+        relayDepth,
+        causeId,
+        durationMs: Date.now() - forwardStartMs,
+        acknowledged: deliveryResult?.acknowledged === true,
+        success: deliveryResult?.success !== false,
+        noHandler: deliveryResult?.noHandler === true,
+        error: deliveryResult?.error || null,
       });
-    });
+      const deliveryError =
+        typeof deliveryResult?.error === TYPEOF.STRING &&
+        deliveryResult.error.length > NUM.ZERO ?
+          `: ${deliveryResult.error}` :
+          '';
+      throw new Error(
+        `${MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_DELIVERY_REJECTED}${deliveryError}`,
+      );
+    }
+  }
+
+  /**
+   * Compute retry delay for CDC forward attempts.
+   * @param {number} attempt
+   * @return {number}
+   * @private
+   */
+  computeCdcForwardRetryDelayMs(attempt) {
+    const retryInitialDelayMs = Number.isFinite(this.retryInitialDelayMs) &&
+      this.retryInitialDelayMs > NUM.ZERO ?
+      this.retryInitialDelayMs :
+      NUM.HUNDRED;
+    const retryBackoffMultiplier = Number.isFinite(this.retryBackoffMultiplier) &&
+      this.retryBackoffMultiplier >= NUM.ONE ?
+      this.retryBackoffMultiplier :
+      NUM.TWO;
+    const retryMaxDelayMs = Number.isFinite(this.retryMaxDelayMs) &&
+      this.retryMaxDelayMs > NUM.ZERO ?
+      this.retryMaxDelayMs :
+      TIME_MS.SECOND * NUM.TEN;
+    return Math.min(
+      retryMaxDelayMs,
+      Math.floor(
+        retryInitialDelayMs * (
+          retryBackoffMultiplier ** Math.max(NUM.ZERO, attempt - NUM.TWO)
+        ),
+      ),
+    );
+  }
+
+  /**
+   * Compute bounded timeout for one CDC Raft propose attempt.
+   * Keeps end-to-end forwarding attempts below transport message timeout.
+   * @param {number} attemptBudget
+   * @return {number}
+   * @private
+   */
+  computeCdcProposeTimeoutMs(attemptBudget) {
+    const retryBudget = Number.isInteger(attemptBudget) && attemptBudget > NUM.ZERO ?
+      attemptBudget :
+      NUM.ONE;
+    const deliveryTimeoutMs = Number.isFinite(this.deliveryTimeoutMs) &&
+      this.deliveryTimeoutMs > NUM.ZERO ?
+      Math.floor(this.deliveryTimeoutMs) :
+      TIME_MS.SECOND * NUM.FIVE;
+    const safetyBufferMs = NUM.TWO * NUM.HUNDRED;
+    const perAttemptBudgetMs = Math.floor(
+      (Math.max(NUM.HUNDRED, deliveryTimeoutMs - safetyBufferMs)) / retryBudget,
+    );
+    const cappedBudgetMs = Math.min(
+      TIME_MS.SECOND + NUM.FIVE * NUM.HUNDRED,
+      perAttemptBudgetMs,
+    );
+    return Math.max(NUM.TWO * NUM.HUNDRED, cappedBudgetMs);
   }
 
   /**

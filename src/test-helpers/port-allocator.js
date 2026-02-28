@@ -11,7 +11,10 @@
  */
 
 import {createHash} from 'node:crypto';
+import fs from 'node:fs';
 import {createServer} from 'node:net';
+import os from 'node:os';
+import path from 'node:path';
 import {
   PORT_RANGE_START,
   PORT_RANGE_END,
@@ -26,12 +29,33 @@ import {
 const TOTAL_RANGES = Math.floor(
   (PORT_RANGE_END - PORT_RANGE_START) / PORTS_PER_TEST_FILE,
 );
+const TOTAL_PORTS = PORT_RANGE_END - PORT_RANGE_START;
+const PORT_ALLOCATOR_NAMESPACE =
+  process.env.DDB_TEST_PORT_ALLOCATOR_NAMESPACE || 'default';
+const PORT_ALLOCATOR_STATE_DIR = path.join(
+  os.tmpdir(),
+  'ddb-test-port-allocator',
+  PORT_ALLOCATOR_NAMESPACE,
+);
+const PORT_ALLOCATOR_STATE_FILE = path.join(
+  PORT_ALLOCATOR_STATE_DIR,
+  'state.json',
+);
+const PORT_ALLOCATOR_LOCK_DIR = path.join(
+  PORT_ALLOCATOR_STATE_DIR,
+  'lock',
+);
+const PORT_ALLOCATOR_LOCK_WAIT_MS = 10;
+const PORT_ALLOCATOR_LOCK_ATTEMPTS = 200;
+const lockWaitArray = new Int32Array(new SharedArrayBuffer(4));
 
 /**
  * Per-file port counters.
  * Maps test file identifier to current port offset within its range.
  */
 const filePortOffsets = new Map();
+const processReservedPorts = new Set();
+let exitCleanupRegistered = false;
 
 /**
  * Hash a string to get a deterministic number.
@@ -57,6 +81,192 @@ function getBasePort(testFileId) {
 }
 
 /**
+ * Ensure allocator state directory exists.
+ */
+function ensureAllocatorStateDir() {
+  fs.mkdirSync(PORT_ALLOCATOR_STATE_DIR, {recursive: true});
+}
+
+/**
+ * Load allocator reservation state from disk.
+ *
+ * @return {Object} Reservation state.
+ */
+function loadAllocatorState() {
+  try {
+    const raw = fs.readFileSync(PORT_ALLOCATOR_STATE_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ?
+      parsed :
+      {reservations: {}};
+  } catch {
+    return {reservations: {}};
+  }
+}
+
+/**
+ * Persist allocator reservation state to disk.
+ *
+ * @param {Object} state - Reservation state.
+ */
+function saveAllocatorState(state) {
+  ensureAllocatorStateDir();
+  fs.writeFileSync(PORT_ALLOCATOR_STATE_FILE, JSON.stringify(state), 'utf8');
+}
+
+/**
+ * Check whether a process is still alive.
+ *
+ * @param {number} pid - Process identifier.
+ * @return {boolean} True if the process still exists.
+ */
+function isProcessAlive(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) {
+    return false;
+  }
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error?.code === 'EPERM';
+  }
+}
+
+/**
+ * Remove stale reservations for dead worker processes.
+ *
+ * @param {Object} state - Reservation state.
+ */
+function pruneDeadReservations(state) {
+  const reservations = state?.reservations || {};
+  for (const [port, reservation] of Object.entries(reservations)) {
+    if (!isProcessAlive(reservation?.pid)) {
+      delete reservations[port];
+    }
+  }
+}
+
+/**
+ * Execute a critical section while holding the allocator lock.
+ *
+ * @param {Function} fn - Critical section.
+ * @return {*} Result returned by fn().
+ */
+function withAllocatorLock(fn) {
+  ensureAllocatorStateDir();
+  let lockHeld = false;
+
+  for (let attempt = 0; attempt < PORT_ALLOCATOR_LOCK_ATTEMPTS; attempt++) {
+    try {
+      fs.mkdirSync(PORT_ALLOCATOR_LOCK_DIR);
+      lockHeld = true;
+      break;
+    } catch (error) {
+      if (error?.code !== 'EEXIST') {
+        throw error;
+      }
+      Atomics.wait(lockWaitArray, 0, 0, PORT_ALLOCATOR_LOCK_WAIT_MS);
+    }
+  }
+
+  if (!lockHeld) {
+    throw new Error('Timed out acquiring test port allocator lock');
+  }
+
+  try {
+    return fn();
+  } finally {
+    try {
+      fs.rmdirSync(PORT_ALLOCATOR_LOCK_DIR);
+    } catch {
+      // Best-effort lock cleanup only.
+    }
+  }
+}
+
+/**
+ * Release this process's reserved ports.
+ */
+function releaseReservedPorts() {
+  if (processReservedPorts.size === 0) {
+    return;
+  }
+
+  withAllocatorLock(() => {
+    const state = loadAllocatorState();
+    const reservations = state.reservations || {};
+
+    for (const port of processReservedPorts) {
+      const key = String(port);
+      if (reservations[key]?.pid === process.pid) {
+        delete reservations[key];
+      }
+    }
+
+    state.reservations = reservations;
+    saveAllocatorState(state);
+  });
+
+  processReservedPorts.clear();
+}
+
+/**
+ * Register process-exit cleanup for reserved ports.
+ */
+function registerExitCleanup() {
+  if (exitCleanupRegistered) {
+    return;
+  }
+  exitCleanupRegistered = true;
+  process.on('exit', () => {
+    try {
+      releaseReservedPorts();
+    } catch {
+      // Best-effort cleanup only.
+    }
+  });
+}
+
+/**
+ * Reserve a unique port across concurrent test worker processes.
+ *
+ * @param {number} requestedPort - Preferred port candidate.
+ * @param {string} testFileId - Allocator owner identifier.
+ * @return {number} Reserved port.
+ */
+function reservePort(requestedPort, testFileId) {
+  registerExitCleanup();
+
+  return withAllocatorLock(() => {
+    const state = loadAllocatorState();
+    pruneDeadReservations(state);
+    const reservations = state.reservations || {};
+    const startOffset =
+      ((requestedPort - PORT_RANGE_START) % TOTAL_PORTS + TOTAL_PORTS) %
+      TOTAL_PORTS;
+
+    for (let attempt = 0; attempt < TOTAL_PORTS; attempt++) {
+      const port = PORT_RANGE_START + ((startOffset + attempt) % TOTAL_PORTS);
+      const key = String(port);
+      if (reservations[key]) {
+        continue;
+      }
+
+      reservations[key] = {
+        pid: process.pid,
+        testFileId,
+      };
+      state.reservations = reservations;
+      saveAllocatorState(state);
+      processReservedPorts.add(port);
+      return port;
+    }
+
+    throw new Error('No available test ports remain in allocator range');
+  });
+}
+
+/**
  * Get a unique port for a test.
  *
  * @param {string} [testFileId] - Optional test file identifier.
@@ -76,7 +286,7 @@ export function getTestPort(testFileId = DEFAULT_TEST_FILE_ID) {
   }
 
   filePortOffsets.set(testFileId, currentOffset + 1);
-  return basePort + currentOffset;
+  return reservePort(basePort + currentOffset, testFileId);
 }
 
 /**

@@ -4,34 +4,34 @@ TAP version 14
     ok 2 - should not be initialized
     ok 3 - should not be running
     1..3
-ok 1 - NodeReintegrationService - constructor # time=2.713ms
+ok 1 - NodeReintegrationService - constructor # time=4.381ms
 
 # Subtest: NodeReintegrationService - initialize
     ok 1 - should be initialized
     1..1
-ok 2 - NodeReintegrationService - initialize # time=0.571ms
+ok 2 - NodeReintegrationService - initialize # time=0.73ms
 
 # Subtest: NodeReintegrationService - initialize requires nodeId
     ok 1 - should have error message
     1..1
-ok 3 - NodeReintegrationService - initialize requires nodeId # time=0.317ms
+ok 3 - NodeReintegrationService - initialize requires nodeId # time=0.408ms
 
 # Subtest: NodeReintegrationService - start and stop
     ok 1 - should be running after start
     ok 2 - should not be running after stop
     1..2
-ok 4 - NodeReintegrationService - start and stop # time=0.779ms
+ok 4 - NodeReintegrationService - start and stop # time=0.485ms
 
 # Subtest: NodeReintegrationService - idle cadence backs off and resets on activity
     ok 1 - should increase interval after idle cycle
     ok 2 - should reset interval to base when activity is detected
     1..2
-ok 5 - NodeReintegrationService - idle cadence backs off and resets on activity # time=0.573ms
+ok 5 - NodeReintegrationService - idle cadence backs off and resets on activity # time=1.025ms
 
 # Subtest: NodeReintegrationService - start requires initialization
     ok 1 - should have error message
     1..1
-ok 6 - NodeReintegrationService - start requires initialization # time=0.379ms
+ok 6 - NodeReintegrationService - start requires initialization # time=0.612ms
 
 # Subtest: NodeReintegrationService - reintegrates recovering node
     ok 1 - should emit nodeReintegrated event
@@ -39,26 +39,26 @@ ok 6 - NodeReintegrationService - start requires initialization # time=0.379ms
     ok 3 - should have update operation
     ok 4 - should update status to active
     1..4
-ok 7 - NodeReintegrationService - reintegrates recovering node # time=0.961ms
+ok 7 - NodeReintegrationService - reintegrates recovering node # time=1.133ms
 
 # Subtest: NodeReintegrationService - skips self node
     ok 1 - should not process self node
     1..1
-ok 8 - NodeReintegrationService - skips self node # time=3.432ms
+ok 8 - NodeReintegrationService - skips self node # time=0.506ms
 
 # Subtest: NodeReintegrationService - skips non-recovering nodes
     ok 1 - should not process non-recovering nodes
     1..1
-ok 9 - NodeReintegrationService - skips non-recovering nodes # time=2.64ms
+ok 9 - NodeReintegrationService - skips non-recovering nodes # time=0.506ms
 
-{"level":50,"time":"2026-02-21T09:28:24.341Z","nodeId":"deee9ab7-fa55-4f6f-b44d-785047f15986","pid":3763093,"subsystem":"node-reintegration","nodeId":"deee9ab7-fa55-4f6f-b44d-785047f15986","reason":"health_check_failed","msg":"Node reintegration failed"}
+{"level":50,"time":"2026-02-28T08:54:25.604Z","nodeId":"d577dad1-0ae0-4647-b179-c029dff053e4","pid":3859024,"subsystem":"node-reintegration","nodeId":"d577dad1-0ae0-4647-b179-c029dff053e4","reason":"health_check_failed","msg":"Node reintegration failed"}
 # Subtest: NodeReintegrationService - fails reintegration on stale heartbeat
     ok 1 - should emit reintegrationFailed event
     ok 2 - should have correct nodeId
     ok 3 - should have correct reason
     ok 4 - should mark node as failed
     1..4
-ok 10 - NodeReintegrationService - fails reintegration on stale heartbeat # time=3.066ms
+ok 10 - NodeReintegrationService - fails reintegration on stale heartbeat # time=1.161ms
 
 # Subtest: NodeReintegrationService - getStats
     ok 1 - should have nodeId
@@ -69,20 +69,20 @@ ok 10 - NodeReintegrationService - fails reintegration on stale heartbeat # time
     ok 6 - should not be running
     ok 7 - should be initialized
     1..7
-ok 11 - NodeReintegrationService - getStats # time=0.602ms
+ok 11 - NodeReintegrationService - getStats # time=0.548ms
 
 # Subtest: NodeReintegrationService - getPendingReintegrations
     ok 1 - should return array
     ok 2 - should be empty initially
     1..2
-ok 12 - NodeReintegrationService - getPendingReintegrations # time=0.605ms
+ok 12 - NodeReintegrationService - getPendingReintegrations # time=0.396ms
 
 # Subtest: NodeReintegrationService - shutdown
     ok 1 - should be running
     ok 2 - should not be running
     ok 3 - should not be initialized
     1..3
-ok 13 - NodeReintegrationService - shutdown # time=0.534ms
+ok 13 - NodeReintegrationService - shutdown # time=0.416ms
 
 # Subtest: NodeReintegrationService - NodeStatus values
     ok 1 - should have active
@@ -90,7 +90,7 @@ ok 13 - NodeReintegrationService - shutdown # time=0.534ms
     ok 3 - should have failed
     ok 4 - should have recovering
     1..4
-ok 14 - NodeReintegrationService - NodeStatus values # time=0.41ms
+ok 14 - NodeReintegrationService - NodeStatus values # time=0.383ms
 
 # Subtest: NodeReintegrationService - ReintegrationStatus values
     ok 1 - should have pending
@@ -98,6 +98,6 @@ ok 14 - NodeReintegrationService - NodeStatus values # time=0.41ms
     ok 3 - should have completed
     ok 4 - should have failed
     1..4
-ok 15 - NodeReintegrationService - ReintegrationStatus values # time=0.39ms
+ok 15 - NodeReintegrationService - ReintegrationStatus values # time=0.445ms
 
 1..15

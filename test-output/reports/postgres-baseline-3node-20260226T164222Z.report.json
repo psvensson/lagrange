@@ -1,0 +1,195 @@
+{
+  "timestamp": "2026-02-26T16:44:00.625Z",
+  "summary": {
+    "total": 1,
+    "passed": 0,
+    "failed": 1,
+    "duration": 97578
+  },
+  "optimizationSummary": {
+    "totalPriorityItems": 0,
+    "scenariosWithPriorities": 0,
+    "topComponents": [],
+    "topPartitions": []
+  },
+  "standardSummary": {
+    "historicalReportsConsidered": 20,
+    "scenariosComparedToPrevious": 1,
+    "scenariosComparedToPostgresBaseline": 0,
+    "diagnosticsCoverageSummary": {
+      "scenariosWithCoverage": 0,
+      "scenariosWithoutCoverage": 1,
+      "totalSamples": 0,
+      "coverageRate": 0,
+      "scenarios": [
+        {
+          "scenario": "postgres-baseline-comparison",
+          "status": "unavailable",
+          "reason": "not_reported",
+          "sampleCount": 0
+        }
+      ]
+    },
+    "writePathAttributionSummary": {
+      "scenariosWithDiagnostics": 0,
+      "topPhases": []
+    },
+    "scaleEfficiencySummary": {
+      "observationCount": 0,
+      "comparableGroupCount": 0,
+      "groups": [],
+      "topOpportunities": []
+    },
+    "scenarios": [
+      {
+        "scenario": "postgres-baseline-comparison",
+        "similarityKey": "postgres-baseline-comparison|default",
+        "current": {
+          "passed": false,
+          "clusterSize": 3,
+          "durationMs": 97578,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "previousSimilarRun": {
+          "reportTimestamp": "2026-02-26T16:35:31.500Z",
+          "reportPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-3node-20260226T163239Z.report.json",
+          "passed": false,
+          "clusterSize": 3,
+          "durationMs": 171438,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "deltaVsPrevious": {
+          "passedChanged": false,
+          "clusterSizeChanged": false,
+          "durationMs": -73860,
+          "durationRatio": -0.43082630455324955,
+          "opsPerSec": 0,
+          "opsPerSecRatio": null,
+          "opsPerSecPerNode": 0,
+          "opsPerSecPerNodeRatio": null,
+          "p99LatencyMs": 0,
+          "p99LatencyMsRatio": null
+        },
+        "postgresBaseline": null,
+        "parity": null,
+        "writePathTopPhases": []
+      }
+    ]
+  },
+  "scenarios": [
+    {
+      "scenario": "postgres-baseline-comparison",
+      "passed": false,
+      "duration": 97578,
+      "clusterSize": 3,
+      "startedAt": "2026-02-26T16:42:23.028Z",
+      "convergenceTiming": null,
+      "analysisSummary": null,
+      "error": "postgres-baseline-comparison failed in phase pre_load_gate: strict_preload_readiness_failed: SUT load nodes did not reach quiescent state within 30000ms (nodeProbeFailures=node_probe_error:35a891b8-c1a0-5064-9c6e-2acfba61c2a7=discovery_not_ready:readiness_missing; node_probe_error:11601fe0-72d6-5853-8590-ec2881853e72=discovery_not_ready:schema_table_missing=table \"benchmark_events\" not found, leadershipStability=leadership_unstable:0,leadership_unstable:602,leadership_unstable:1159,leadership_unstable:1731, readyLoadNodes=1), node_reasons=35a891b8-c1a0-5064-9c6e-2acfba61c2a7:discovery_not_ready:readiness_missing;11601fe0-72d6-5853-8590-ec2881853e72:discovery_not_ready:schema_table_missing=table \"benchmark_events\" not found",
+      "stackTrace": "Error: postgres-baseline-comparison failed in phase pre_load_gate: strict_preload_readiness_failed: SUT load nodes did not reach quiescent state within 30000ms (nodeProbeFailures=node_probe_error:35a891b8-c1a0-5064-9c6e-2acfba61c2a7=discovery_not_ready:readiness_missing; node_probe_error:11601fe0-72d6-5853-8590-ec2881853e72=discovery_not_ready:schema_table_missing=table \"benchmark_events\" not found, leadershipStability=leadership_unstable:0,leadership_unstable:602,leadership_unstable:1159,leadership_unstable:1731, readyLoadNodes=1), node_reasons=35a891b8-c1a0-5064-9c6e-2acfba61c2a7:discovery_not_ready:readiness_missing;11601fe0-72d6-5853-8590-ec2881853e72:discovery_not_ready:schema_table_missing=table \"benchmark_events\" not found\n    at Module.run (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/scenarios/postgres-baseline-comparison.js:5322:19)\n    at async runScenarios (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:1056:9)\n    at async main (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:1593:33)",
+      "logs": null,
+      "playback": {
+        "scenarioName": "postgres-baseline-comparison",
+        "startedAt": 1772124143029,
+        "endedAt": 1772124240621,
+        "durationMs": 97592,
+        "files": {
+          "events": "test-output/reports/.playback/postgres-baseline-3node-20260226T164222Z/postgres-baseline-comparison/events.ndjson",
+          "samples": "test-output/reports/.playback/postgres-baseline-3node-20260226T164222Z/postgres-baseline-comparison/samples.ndjson",
+          "snapshots": "test-output/reports/.playback/postgres-baseline-3node-20260226T164222Z/postgres-baseline-comparison/snapshots.ndjson",
+          "manifest": "test-output/reports/.playback/postgres-baseline-3node-20260226T164222Z/postgres-baseline-comparison/playback-manifest.json",
+          "viewer": "test-output/reports/.playback/postgres-baseline-3node-20260226T164222Z/postgres-baseline-comparison/playback-viewer.html"
+        },
+        "counts": {
+          "events": 31,
+          "samples": 158,
+          "snapshots": 66
+        },
+        "warnings": []
+      },
+      "trace": null,
+      "traceAssertion": null,
+      "memoryLeak": {
+        "enabled": false,
+        "analyzed": false,
+        "leakDetected": false,
+        "sampleCount": 0,
+        "nodeCount": 0,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "nodes": [],
+        "warnings": [],
+        "config": {
+          "enabled": false,
+          "failOnDetection": false,
+          "requireSamples": false,
+          "minSamplesPerNode": 8,
+          "warmupFraction": 0.2,
+          "minWarmupMs": 30000,
+          "minAnalysisWindowMs": 60000,
+          "maxPositiveSlopeBytesPerMin": 1048576,
+          "minGrowthBytes": 16777216,
+          "minPositiveDeltaRatio": 0.65,
+          "captureHeapArtifacts": false,
+          "heapSnapshotNearLimitCount": 2
+        }
+      },
+      "memoryLeakAssertion": null,
+      "performanceDiagnostics": null,
+      "details": {
+        "diagnostics": {
+          "failure": {
+            "schemaVersion": 1,
+            "rootCauseClass": "discovery",
+            "phase": "pre_load_gate",
+            "affectedNodeIds": [
+              "11601fe0-72d6-5853-8590-ec2881853e72",
+              "35a891b8-c1a0-5064-9c6e-2acfba61c2a7"
+            ],
+            "reasonCounts": {
+              "strict_preload_readiness_failed: SUT load nodes did not reach quiescent state within 30000ms (nodeProbeFailures=node_probe_error:35a891b8-c1a0-5064-9c6e-2acfba61c2a7=discovery_not_ready:readiness_missing; node_probe_error:11601fe0-72d6-5853-8590-ec2881853e72=discovery_not_ready:schema_table_missing=table \"benchmark_events\" not found, leadershipStability=leadership_unstable:0,leadership_unstable:602,leadership_unstable:1159,leadership_unstable:1731, readyLoadNodes=1), node_reasons=35a891b8-c1a0-5064-9c6e-2acfba61c2a7:discovery_not_ready:readiness_missing;11601fe0-72d6-5853-8590-ec2881853e72:discovery_not_ready:schema_table_missing=table \"benchmark_events\" not found": 1
+            },
+            "strictMode": true
+          }
+        }
+      },
+      "exampleResults": null,
+      "loadMetrics": null,
+      "partitionHotspots": null,
+      "optimizationPriorities": null
+    }
+  ],
+  "benchmarkRegressionGate": {
+    "enabled": false,
+    "status": "skipped",
+    "reason": "disabled",
+    "settings": {
+      "enabled": false,
+      "maxThroughputRegressionRatio": 0.1,
+      "minimumThroughputRatioSutToBaseline": 0.1,
+      "baselineProvider": "liferaft",
+      "failIfBaselineMissing": false,
+      "approvedMitigationId": null,
+      "parityMismatchPolicy": "warn"
+    },
+    "currentProvider": "liferaft",
+    "baselineProvider": "liferaft",
+    "comparedScenarioCount": 0,
+    "failedScenarioCount": 0,
+    "mitigatedScenarioCount": 0,
+    "missingBaselineScenarios": [],
+    "comparisons": [],
+    "parityMismatchCount": 0,
+    "lowThroughputRatioCount": 0,
+    "warnings": []
+  },
+  "metadata": {
+    "raftProvider": "liferaft",
+    "configPath": "test/distributed/config/local-benchmark-3node.json",
+    "scenarioFilter": "postgres-baseline-comparison"
+  }
+}

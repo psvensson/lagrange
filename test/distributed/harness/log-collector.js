@@ -11,6 +11,7 @@ import {join} from 'node:path';
 import {
   OUTPUT,
   LOG_SUBSCRIPTION_CAPABILITY,
+  CONTAINER_LOG_TAIL_LINES,
 } from './constants.js';
 
 const LIVE_SELECT_PREFIX = 'LIVE SELECT * FROM logs';
@@ -40,6 +41,7 @@ const DOCKER_LOG_FRAME_PADDING_LENGTH = 3;
 const DOCKER_LOG_STREAM_STDOUT = 1;
 const DOCKER_LOG_STREAM_STDERR = 2;
 const DOCKER_LOG_OPTION_RAW_BUFFER = 'rawBuffer';
+const DOCKER_LOG_OPTION_TAIL = 'tail';
 const LIVE_SELECT_UNSUPPORTED_TOKEN_SYNTAX = 'syntax';
 const LIVE_SELECT_UNSUPPORTED_TOKEN_PARSE = 'parse';
 const DEFAULT_LOG_SUBSCRIPTION_CAPABILITIES = Object.freeze({
@@ -159,6 +161,7 @@ class LogCollector {
           node.containerId,
           {
             [DOCKER_LOG_OPTION_RAW_BUFFER]: true,
+            [DOCKER_LOG_OPTION_TAIL]: CONTAINER_LOG_TAIL_LINES,
           },
         );
         const lines = extractContainerLogLines(logs);

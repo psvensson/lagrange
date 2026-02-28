@@ -1,8 +1,8 @@
 {
   "scenarioName": "network-partition-split-brain",
-  "startedAt": 1771839181146,
-  "endedAt": 1771839212141,
-  "durationMs": 30995,
+  "startedAt": 1772087240848,
+  "endedAt": 1772087271817,
+  "durationMs": 30969,
   "files": {
     "events": "test-output/.playback/report/network-partition-split-brain/events.ndjson",
     "samples": "test-output/.playback/report/network-partition-split-brain/samples.ndjson",
@@ -11,63 +11,9 @@
     "viewer": "test-output/.playback/report/network-partition-split-brain/playback-viewer.html"
   },
   "counts": {
-    "events": 14,
+    "events": 13,
     "samples": 29,
-    "snapshots": 1
+    "snapshots": 19
   },
-  "warnings": [
-    {
-      "code": "query-node-unavailable",
-      "message": "No admin-ready reachable node available for topology snapshot query",
-      "timestamp": 1771839201455,
-      "details": {
-        "reachability": [
-          {
-            "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
-            "timestamp": 1771839201151,
-            "reachable": true,
-            "adminReady": false,
-            "reachableBy": "bootstrap_health",
-            "bootstrapHealth": {
-              "attempted": true,
-              "ok": true,
-              "statusCode": 200,
-              "error": null,
-              "url": "http://172.19.0.2:8080/health",
-              "endpoint": null,
-              "query": null
-            },
-            "adminHealth": {
-              "attempted": false,
-              "ok": false,
-              "statusCode": null,
-              "error": null,
-              "url": "http://172.19.0.2:8081/health",
-              "endpoint": null,
-              "query": null
-            },
-            "adminWs": {
-              "attempted": false,
-              "ok": false,
-              "statusCode": null,
-              "error": null,
-              "url": null,
-              "endpoint": "ws://172.19.0.2:8081/api/admin/stream",
-              "query": null
-            },
-            "sqlProbe": {
-              "attempted": false,
-              "ok": false,
-              "statusCode": null,
-              "error": null,
-              "url": null,
-              "endpoint": null,
-              "query": "SELECT node_id FROM nodes LIMIT 1"
-            },
-            "lastError": null
-          }
-        ]
-      }
-    }
-  ]
+  "warnings": []
 }

@@ -60,6 +60,7 @@ class QueryExecutor {
   constructor(options = {}) {
     this.messageRouter = options.messageRouter || null;
     this.systemCache = options.systemCache || null;
+    this.routingMetadataOverlay = options.routingMetadataOverlay || null;
     this.nodeId = options.nodeId || QUERY_SUBSYSTEM.QUERY_EXECUTOR;
     this.hlcClock = new HLCClockService(this.nodeId);
     this.mergeEngine = options.mergeEngine || new DistributedMergeEngine();
@@ -131,6 +132,15 @@ class QueryExecutor {
     if (this.parallelQueryCoordinator) {
       this.parallelQueryCoordinator.setSystemCache(cache);
     }
+  }
+
+  /**
+   * Set optional routing metadata overlay.
+   * Overlay entries are used when local cache is stale or incomplete.
+   * @param {Object|null} overlay - Overlay provider.
+   */
+  setRoutingMetadataOverlay(overlay) {
+    this.routingMetadataOverlay = overlay || null;
   }
 
   /**
@@ -1142,13 +1152,15 @@ class QueryExecutor {
     preferSameLatencyGroup = false,
   ) {
     const prioritizeLeader = preferLeader || !forRead;
+    const overlayServices = this.getOverlayPartitionServices(partitionId);
+    const hasOverlayServices = overlayServices.length > 0;
 
-    if (!this.systemCache) {
+    if (!this.systemCache && !hasOverlayServices) {
       this.logger.warn(LOG_MSG.SYSTEM_CACHE_PARTITION_LOOKUP_UNAVAILABLE, {partitionId});
       return [];
     }
 
-    if (typeof this.systemCache.filter !== 'function') {
+    if (!hasOverlayServices && typeof this.systemCache?.filter !== 'function') {
       this.logger.warn(QUERY_LOG_MSG.SYSTEM_CACHE_FILTER_UNSUPPORTED, {partitionId});
       return [];
     }
@@ -1261,18 +1273,41 @@ class QueryExecutor {
    * @private
    */
   getRoutablePartitionServices(partitionId) {
-    if (!this.systemCache || typeof this.systemCache.filter !== 'function') {
+    const services = [];
+
+    if (this.systemCache && typeof this.systemCache.filter === 'function') {
+      const cacheRows = this.systemCache.filter(TABLES.SERVICES, (service) =>
+        service.partition_id === partitionId &&
+        service.service_type === SERVICE_TYPE.PARTITION &&
+        this.isRoutablePartitionService(service),
+      ) || [];
+      services.push(...cacheRows);
+    }
+
+    const overlayRows = this.getOverlayPartitionServices(partitionId)
+      .filter((service) =>
+        service.partition_id === partitionId &&
+        service.service_type === SERVICE_TYPE.PARTITION &&
+        this.isRoutablePartitionService(service),
+      );
+    services.push(...overlayRows);
+
+    if (services.length === 0) {
       return [];
     }
 
-    return this.systemCache.filter(TABLES.SERVICES, (service) =>
-      service.partition_id === partitionId &&
-      service.service_type === SERVICE_TYPE.PARTITION &&
-      service.status !== ReplicaStatus.FAILED &&
-      service.status !== ReplicaStatus.REMOVED &&
-      typeof service.address === 'string' &&
-      service.address.length > NUM.ZERO,
-    ) || [];
+    const deduped = [];
+    const seen = new Set();
+    for (const service of services) {
+      const dedupeKey = service.service_id || service.replica_id || service.address;
+      if (!dedupeKey || seen.has(dedupeKey)) {
+        continue;
+      }
+      seen.add(dedupeKey);
+      deduped.push(service);
+    }
+
+    return deduped;
   }
 
   /**
@@ -1292,25 +1327,25 @@ class QueryExecutor {
    * @private
    */
   hasPartitionRecord(partitionId) {
-    if (!this.systemCache) {
-      return false;
+    if (this.systemCache) {
+      if (typeof this.systemCache.has === 'function') {
+        if (this.systemCache.has(TABLES.PARTITIONS, partitionId)) {
+          return true;
+        }
+      } else if (typeof this.systemCache.get === 'function') {
+        if (Boolean(this.systemCache.get(TABLES.PARTITIONS, partitionId))) {
+          return true;
+        }
+      } else if (typeof this.systemCache.filter === 'function') {
+        if (this.systemCache.filter(TABLES.PARTITIONS, (partition) =>
+          partition.partition_id === partitionId,
+        ).length > NUM.ZERO) {
+          return true;
+        }
+      }
     }
 
-    if (typeof this.systemCache.has === 'function') {
-      return this.systemCache.has(TABLES.PARTITIONS, partitionId);
-    }
-
-    if (typeof this.systemCache.get === 'function') {
-      return Boolean(this.systemCache.get(TABLES.PARTITIONS, partitionId));
-    }
-
-    if (typeof this.systemCache.filter === 'function') {
-      return this.systemCache.filter(TABLES.PARTITIONS, (partition) =>
-        partition.partition_id === partitionId,
-      ).length > NUM.ZERO;
-    }
-
-    return false;
+    return this.getOverlayPartitionRecord(partitionId) !== null;
   }
 
   /**
@@ -1323,18 +1358,18 @@ class QueryExecutor {
    * @return {string|null} Leader address or null if not found.
    */
   findPartitionLeaderAddress(partitionId) {
-    if (!this.systemCache) {
+    if (!this.systemCache && this.getOverlayPartitionServices(partitionId).length === 0) {
       this.logger.warn(LOG_MSG.SYSTEM_CACHE_NOT_AVAILABLE, {partitionId});
       return null;
     }
 
-    if (typeof this.systemCache.filter !== 'function') {
+    if (typeof this.systemCache?.filter !== 'function' &&
+        this.getOverlayPartitionServices(partitionId).length === 0) {
       this.logger.warn(QUERY_LOG_MSG.SYSTEM_CACHE_FILTER_UNSUPPORTED, {partitionId});
       return null;
     }
 
-    // Query services table for partition leader
-    const services = this.systemCache.filter(TABLES.SERVICES, (s) =>
+    const services = this.getRoutablePartitionServices(partitionId).filter((s) =>
       s.partition_id === partitionId &&
       s.service_type === SERVICE_TYPE.PARTITION &&
       s.raft_role === RAFT_ROLE.LEADER &&
@@ -1360,6 +1395,49 @@ class QueryExecutor {
   findPartitionService(partitionId, forRead = false) {
     const candidates = this.getPartitionServiceCandidates(partitionId, forRead);
     return candidates[0] || null;
+  }
+
+  /**
+   * Determine whether a service row is routable.
+   * @param {Object} service - Service row.
+   * @return {boolean} True when row can be used for routing.
+   * @private
+   */
+  isRoutablePartitionService(service) {
+    return service.status !== ReplicaStatus.FAILED &&
+      service.status !== ReplicaStatus.REMOVED &&
+      typeof service.address === 'string' &&
+      service.address.length > NUM.ZERO;
+  }
+
+  /**
+   * Resolve overlay partition row by ID.
+   * @param {string} partitionId - Partition ID.
+   * @return {Object|null} Overlay partition row.
+   * @private
+   */
+  getOverlayPartitionRecord(partitionId) {
+    const overlay = this.routingMetadataOverlay;
+    if (!overlay || typeof overlay.getPartitionById !== 'function') {
+      return null;
+    }
+    const partition = overlay.getPartitionById(partitionId);
+    return partition && typeof partition === 'object' ? partition : null;
+  }
+
+  /**
+   * Resolve overlay services for a partition.
+   * @param {string} partitionId - Partition ID.
+   * @return {Array<Object>} Overlay service rows.
+   * @private
+   */
+  getOverlayPartitionServices(partitionId) {
+    const overlay = this.routingMetadataOverlay;
+    if (!overlay || typeof overlay.getServicesForPartition !== 'function') {
+      return [];
+    }
+    const services = overlay.getServicesForPartition(partitionId);
+    return Array.isArray(services) ? services : [];
   }
 
   /**

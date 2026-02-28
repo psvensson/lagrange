@@ -100,6 +100,7 @@ import {ENTRYPOINT_ENV} from '../../../../src/constants/entrypoint.js';
 const LOAD_STOP_DISPATCH_SETTLE_MS = 25;
 const LOAD_STOP_WAIT_TIMEOUT_MS = 250;
 const ACTIVE_WAIT_HANG_TEST_TIMEOUT_MS = 150;
+const ADMIN_QUERY_TRACE_TIMEOUT_TEST_MS = 80;
 
 /**
  * Unit: createCluster returns object with all required methods (Req 2.4)
@@ -506,7 +507,8 @@ test('Unit: NodeHandle.isReachable falls back to admin query when HTTP probes ar
   });
 
 test(
-  'Unit: NodeHandle.getReachabilityDiagnostics checks admin readiness even when bootstrap health is reachable',
+  'Unit: NodeHandle.getReachabilityDiagnostics checks admin readiness even when ' +
+    'bootstrap health is reachable',
   async () => {
     const node = new NodeHandle(
       'node-1',
@@ -581,6 +583,73 @@ test(
         calledUrls.length,
         2,
         'diagnostics should execute both bootstrap and admin HTTP probes',
+      );
+    } finally {
+      http.get = originalGet;
+      node.queryWithTimeout = originalQueryWithTimeout;
+      node._getAdminSocket = originalGetAdminSocket;
+    }
+  },
+);
+
+test(
+  'Unit: NodeHandle.getReachabilityDiagnostics applies a shared timeout budget across probes',
+  async () => {
+    const node = new NodeHandle(
+      'node-1',
+      'container-1',
+      '127.0.0.1',
+      NODE_ROLES.JOINER,
+      {getContainerLogs: async () => ''},
+    );
+
+    const originalGet = http.get;
+    const originalQueryWithTimeout = node.queryWithTimeout;
+    const originalGetAdminSocket = node._getAdminSocket;
+    const observedTimeouts = [];
+    let requestCount = 0;
+    http.get = (_url, options, callback) => {
+      requestCount += 1;
+      observedTimeouts.push(Number(options?.timeout));
+      const req = {
+        on: () => req,
+        destroy: () => {},
+      };
+      if (requestCount === 1) {
+        setTimeout(() => {
+          callback({
+            statusCode: 503,
+            resume: () => {},
+          });
+        }, 30);
+      } else {
+        process.nextTick(() => {
+          callback({
+            statusCode: 503,
+            resume: () => {},
+          });
+        });
+      }
+      return req;
+    };
+    node._getAdminSocket = async () => {
+      throw new Error('admin ws unavailable');
+    };
+    node.queryWithTimeout = async () => {
+      throw new Error('sql probe failed');
+    };
+
+    try {
+      await node.getReachabilityDiagnostics({timeoutMs: 40});
+      assert.strictEqual(
+        observedTimeouts.length >= 2,
+        true,
+        'should issue at least bootstrap/admin HTTP probes',
+      );
+      assert.strictEqual(
+        observedTimeouts[1] < observedTimeouts[0],
+        true,
+        'admin probe should receive remaining timeout budget',
       );
     } finally {
       http.get = originalGet;
@@ -706,6 +775,84 @@ test('Unit: NodeHandle.query sends queryId and ignores initial cache dump', asyn
     });
   }
 });
+
+test('Unit: NodeHandle.queryWithTimeout captures timeout query trace entries',
+  async () => {
+    const server = new WebSocketServer({
+      host: '127.0.0.1',
+      port: 0,
+    });
+    await new Promise((resolve, reject) => {
+      server.once('listening', resolve);
+      server.once('error', reject);
+    });
+
+    const address = server.address();
+    assert.ok(address && typeof address === 'object',
+      'server should expose listen address');
+    const adminApiPort = address.port;
+
+    let capturedQuery = null;
+    server.on('connection', (socket) => {
+      socket.send(JSON.stringify({
+        type: 'cache_dump',
+        data: {},
+      }));
+      socket.once('message', (data) => {
+        capturedQuery = JSON.parse(data.toString());
+      });
+    });
+
+    const node = new NodeHandle(
+      'node-1',
+      'container-1',
+      '127.0.0.1',
+      NODE_ROLES.SEED,
+      {getContainerLogs: async () => ''},
+      adminApiPort,
+    );
+
+    try {
+      await assert.rejects(
+        node.queryWithTimeout('SELECT 1', [], {
+          timeoutMs: ADMIN_QUERY_TRACE_TIMEOUT_TEST_MS,
+        }),
+        /timed out/i,
+      );
+      const traces = node.getAdminQueryTraceSnapshot();
+      assert.ok(
+        Array.isArray(traces),
+        'node should expose query trace snapshot array',
+      );
+      assert.strictEqual(traces.length, 1, 'timeout query should capture one trace');
+      const trace = traces[0];
+      assert.strictEqual(trace.queryId, capturedQuery.queryId);
+      assert.strictEqual(trace.lane, 'default');
+      assert.strictEqual(trace.operation, 'query');
+      assert.strictEqual(trace.outcome, 'timeout');
+      assert.strictEqual(trace.statementPreview, 'SELECT 1');
+      assert.ok(Number.isFinite(trace.startedAtMs));
+      assert.ok(Number.isFinite(trace.socketReadyAtMs));
+      assert.ok(Number.isFinite(trace.sentAtMs));
+      assert.ok(Number.isFinite(trace.timeoutAtMs));
+      assert.strictEqual(trace.resolvedAtMs, null);
+      assert.ok(
+        typeof trace.error === 'string' && trace.error.length > 0,
+        'timeout trace should include non-empty error message',
+      );
+    } finally {
+      node.closeQueryConnection();
+      await new Promise((resolve, reject) => {
+        server.close((err) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          resolve();
+        });
+      });
+    }
+  });
 
 test('Unit: NodeHandle.partitionCallback sends callback envelope and returns hostResult',
   async () => {
@@ -1520,6 +1667,60 @@ test('Unit: _probeClusterActiveState prefers lightweight bootstrap readiness pro
       getStatusCalls,
       0,
       'legacy status query path should not be used when bootstrap readiness probe exists',
+    );
+  });
+
+test(
+  'Unit: _probeClusterActiveState keeps ACTIVE gate closed when bootstrap ' +
+    'readiness passes but admin readiness fails',
+  async () => {
+    const cluster = createCluster({
+      size: 1,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+    });
+
+    const node = {
+      id: 'node-a',
+      role: NODE_ROLES.JOINER,
+      async probeBootstrapReadiness(_options) {
+        return {
+          status: 200,
+          phase: 'TRAFFIC_READY',
+          state: 'join_ready',
+          reasons: [],
+        };
+      },
+      async getReachabilityDiagnostics(_options) {
+        return {
+          adminReady: false,
+          lastError: 'connect ECONNREFUSED 127.0.0.1:8081',
+        };
+      },
+      async getControlSnapshot() {
+        return {
+          rows: [{
+            nodes: ['node-a'],
+          }],
+        };
+      },
+      async getLogs(_options) {
+        return '';
+      },
+    };
+
+    cluster._nodes.set('node-a', node);
+
+    const probeResult = await cluster._probeClusterActiveState(Date.now() + 1000);
+    assert.strictEqual(
+      probeResult.allActive,
+      false,
+      'startup gate should require admin readiness, not just bootstrap readiness',
+    );
+    assert.strictEqual(
+      probeResult.nodeDiagnostics[0].active,
+      false,
+      'node should remain inactive when admin readiness is false',
     );
   });
 

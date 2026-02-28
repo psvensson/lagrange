@@ -280,15 +280,13 @@ const SQL_PARSE_CACHE = Object.freeze({
 });
 
 /**
- * Tables excluded from non-transactional write tracking to prevent
- * infinite recursion. Write tracking persists rows into
- * sql_write_operations via the SQL engine, which would re-trigger
- * tracking for these metadata tables, causing a stack overflow.
+ * System tables excluded from non-transactional write tracking.
+ * This path is observability-only and would otherwise amplify control-plane
+ * churn by emitting extra sql_write_operations rows for every system write.
+ * User-table writes remain tracked.
  */
 const WRITE_TRACKING_EXCLUDED_TABLES = Object.freeze(new Set([
-  TABLES.SQL_WRITE_OPERATIONS,
-  TABLES.SQL_TRANSACTIONS,
-  TABLES.SQL_TRANSACTION_PARTICIPANTS,
+  ...Object.values(TABLES),
 ]));
 
 // Canonical config keys used by query subsystem components.

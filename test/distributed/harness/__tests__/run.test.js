@@ -12,6 +12,7 @@ import {URL} from 'node:url';
 import {mkdtemp, rm, writeFile} from 'node:fs/promises';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
+import * as runModule from '../../run.js';
 import {
   parseArgs,
   runScenarios,
@@ -71,6 +72,14 @@ describe('parseArgs', () => {
     assert.equal(result.fastLocal, false);
   });
 
+  it('parses deterministic debug mode flags', () => {
+    const enabled = parseArgs(['--deterministic-debug']);
+    assert.equal(enabled.deterministicDebug, true);
+
+    const disabled = parseArgs(['--no-deterministic-debug']);
+    assert.equal(disabled.deterministicDebug, false);
+  });
+
   it('parses all flags together', () => {
     const result = parseArgs([
       '--config', 'local.json',
@@ -96,6 +105,80 @@ describe('parseArgs', () => {
     const result = parseArgs(['--config']);
     assert.equal(result.config, CLI.DEFAULT_CONFIG);
   });
+});
+
+describe('deterministic debug mode helpers', () => {
+  it('pins seed and sampling intervals and records settings in report metadata',
+    () => {
+      assert.equal(
+        typeof runModule.resolveDeterministicDebugConfig,
+        'function',
+      );
+      assert.equal(
+        typeof runModule.applyDeterministicDebugConfig,
+        'function',
+      );
+      assert.equal(
+        typeof runModule.buildReportMetadata,
+        'function',
+      );
+
+      const resolved = runModule.resolveDeterministicDebugConfig(
+        {deterministicDebug: true},
+        {
+          deterministicDebug: {
+            enabled: false,
+            seed: 424242,
+            convergenceSampleIntervalMs: 111,
+            preflightSampleIntervalMs: 333,
+          },
+          convergence: {
+            sampleIntervalMs: 999,
+          },
+          benchmark: {
+            readyPollIntervalMs: 777,
+            quiescentPollIntervalMs: 888,
+            postLoadDrainPollIntervalMs: 999,
+          },
+        },
+      );
+      assert.deepEqual(resolved, {
+        enabled: true,
+        seed: 424242,
+        convergenceSampleIntervalMs: 111,
+        preflightSampleIntervalMs: 333,
+      });
+
+      const pinnedConfig = runModule.applyDeterministicDebugConfig(
+        {
+          convergence: {
+            sampleIntervalMs: 999,
+          },
+          benchmark: {
+            readyPollIntervalMs: 777,
+            quiescentPollIntervalMs: 888,
+            postLoadDrainPollIntervalMs: 999,
+          },
+        },
+        resolved,
+      );
+      assert.equal(pinnedConfig.convergence.sampleIntervalMs, 111);
+      assert.equal(pinnedConfig.benchmark.readyPollIntervalMs, 333);
+      assert.equal(pinnedConfig.benchmark.quiescentPollIntervalMs, 333);
+      assert.equal(pinnedConfig.benchmark.postLoadDrainPollIntervalMs, 333);
+
+      const metadata = runModule.buildReportMetadata(
+        {config: 'local.json', scenario: null},
+        {raftProvider: 'liferaft'},
+        resolved,
+      );
+      assert.deepEqual(metadata.deterministicDebug, {
+        enabled: true,
+        seed: 424242,
+        convergenceSampleIntervalMs: 111,
+        preflightSampleIntervalMs: 333,
+      });
+    });
 });
 
 describe('runScenarios', () => {

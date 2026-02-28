@@ -1,0 +1,434 @@
+{
+  "timestamp": "2026-02-27T19:31:13.399Z",
+  "summary": {
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "duration": 207565
+  },
+  "optimizationSummary": {
+    "totalPriorityItems": 0,
+    "scenariosWithPriorities": 0,
+    "topComponents": [],
+    "topPartitions": []
+  },
+  "standardSummary": {
+    "historicalReportsConsidered": 20,
+    "scenariosComparedToPrevious": 1,
+    "scenariosComparedToPostgresBaseline": 0,
+    "diagnosticsCoverageSummary": {
+      "scenariosWithCoverage": 0,
+      "scenariosWithoutCoverage": 1,
+      "totalSamples": 0,
+      "coverageRate": 0,
+      "scenarios": [
+        {
+          "scenario": "diag-admin-discovery",
+          "status": "unavailable",
+          "reason": "not_reported",
+          "sampleCount": 0
+        }
+      ]
+    },
+    "writePathAttributionSummary": {
+      "scenariosWithDiagnostics": 0,
+      "topPhases": []
+    },
+    "scaleEfficiencySummary": {
+      "observationCount": 0,
+      "comparableGroupCount": 0,
+      "groups": [],
+      "topOpportunities": []
+    },
+    "scenarios": [
+      {
+        "scenario": "diag-admin-discovery",
+        "similarityKey": "diag-admin-discovery|default",
+        "current": {
+          "passed": true,
+          "clusterSize": 3,
+          "durationMs": 207565,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "previousSimilarRun": {
+          "reportTimestamp": "2026-02-27T12:27:53.453Z",
+          "reportPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/diag-admin-discovery-3node-20260227T122645Z.report.json",
+          "passed": true,
+          "clusterSize": 3,
+          "durationMs": 67811,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "deltaVsPrevious": {
+          "passedChanged": false,
+          "clusterSizeChanged": false,
+          "durationMs": 139754,
+          "durationRatio": 2.0609340667443337,
+          "opsPerSec": 0,
+          "opsPerSecRatio": null,
+          "opsPerSecPerNode": 0,
+          "opsPerSecPerNodeRatio": null,
+          "p99LatencyMs": 0,
+          "p99LatencyMsRatio": null
+        },
+        "postgresBaseline": null,
+        "parity": null,
+        "writePathTopPhases": []
+      }
+    ]
+  },
+  "scenarios": [
+    {
+      "scenario": "diag-admin-discovery",
+      "passed": true,
+      "duration": 207565,
+      "clusterSize": 3,
+      "startedAt": "2026-02-27T19:27:45.813Z",
+      "convergenceTiming": null,
+      "analysisSummary": null,
+      "error": null,
+      "stackTrace": null,
+      "logs": null,
+      "playback": {
+        "scenarioName": "diag-admin-discovery",
+        "startedAt": 1772220465814,
+        "endedAt": 1772220673397,
+        "durationMs": 207583,
+        "files": {
+          "events": "test-output/reports/.playback/diag-admin-discovery-3node-20260227T202200Z/diag-admin-discovery/events.ndjson",
+          "samples": "test-output/reports/.playback/diag-admin-discovery-3node-20260227T202200Z/diag-admin-discovery/samples.ndjson",
+          "snapshots": "test-output/reports/.playback/diag-admin-discovery-3node-20260227T202200Z/diag-admin-discovery/snapshots.ndjson",
+          "manifest": "test-output/reports/.playback/diag-admin-discovery-3node-20260227T202200Z/diag-admin-discovery/playback-manifest.json",
+          "viewer": "test-output/reports/.playback/diag-admin-discovery-3node-20260227T202200Z/diag-admin-discovery/playback-viewer.html"
+        },
+        "counts": {
+          "events": 36,
+          "samples": 491,
+          "snapshots": 179
+        },
+        "warnings": []
+      },
+      "trace": null,
+      "traceAssertion": null,
+      "memoryLeak": {
+        "enabled": false,
+        "analyzed": false,
+        "leakDetected": false,
+        "sampleCount": 0,
+        "nodeCount": 0,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "nodes": [],
+        "warnings": [],
+        "config": {
+          "enabled": false,
+          "failOnDetection": false,
+          "requireSamples": false,
+          "minSamplesPerNode": 8,
+          "warmupFraction": 0.2,
+          "minWarmupMs": 30000,
+          "minAnalysisWindowMs": 60000,
+          "maxPositiveSlopeBytesPerMin": 1048576,
+          "minGrowthBytes": 16777216,
+          "minPositiveDeltaRatio": 0.65,
+          "captureHeapArtifacts": false,
+          "heapSnapshotNearLimitCount": 2
+        }
+      },
+      "memoryLeakAssertion": null,
+      "performanceDiagnostics": null,
+      "details": {
+        "nodeCount": 3,
+        "benchmarkTable": "benchmark_events",
+        "postgresServiceId": "sys-postgres-wire",
+        "ddlError": "Admin API query timed out for node 7493b0ab-a054-5fad-a91b-5e331db29304 on lane default after 15000ms",
+        "resultsByNodeId": {
+          "7493b0ab-a054-5fad-a91b-5e331db29304": {
+            "role": "seed",
+            "unscoped": {
+              "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+              "capturedAt": 1772220673003,
+              "serviceCount": 3,
+              "postgresWireServiceCount": 1,
+              "postgresWireReplicaCount": 1,
+              "postgresWireReadyNodeIds": [
+                "7493b0ab-a054-5fad-a91b-5e331db29304"
+              ],
+              "postgresWireNotReadyByNodeId": {}
+            },
+            "tableScoped": {
+              "skipped": true,
+              "reason": "ddl_failed",
+              "ddlError": "Admin API query timed out for node 7493b0ab-a054-5fad-a91b-5e331db29304 on lane default after 15000ms"
+            },
+            "error": null,
+            "tableMetadata": {
+              "partitionRows": [
+                {
+                  "partitionId": "tbl-795cbb86-0dda-4c1c-a341-f481bb2c1d7c-p1",
+                  "tableId": "tbl-795cbb86-0dda-4c1c-a341-f481bb2c1d7c",
+                  "tableName": "benchmark_events",
+                  "replicaCount": 3
+                },
+                {
+                  "partitionId": "tbl-8526e348-e8ba-421c-95b6-b54bf8ead047-p1",
+                  "tableId": "tbl-8526e348-e8ba-421c-95b6-b54bf8ead047",
+                  "tableName": "benchmark_events",
+                  "replicaCount": 3
+                },
+                {
+                  "partitionId": "tbl-558cc62c-e667-4d11-9bf3-3354601f76bb-p1",
+                  "tableId": "tbl-558cc62c-e667-4d11-9bf3-3354601f76bb",
+                  "tableName": "benchmark_events",
+                  "replicaCount": 3
+                },
+                {
+                  "partitionId": "tbl-b6291366-f9fc-4198-86b3-1ae9ef4048d4-p1",
+                  "tableId": "tbl-b6291366-f9fc-4198-86b3-1ae9ef4048d4",
+                  "tableName": "benchmark_events",
+                  "replicaCount": 3
+                },
+                {
+                  "partitionId": "tbl-03578880-ecba-45d2-adfc-b9399c193bde-p1",
+                  "tableId": "tbl-03578880-ecba-45d2-adfc-b9399c193bde",
+                  "tableName": "benchmark_events",
+                  "replicaCount": 3
+                },
+                {
+                  "partitionId": "tbl-becb46ec-7c2d-4a62-a8cf-861574895ca6-p1",
+                  "tableId": "tbl-becb46ec-7c2d-4a62-a8cf-861574895ca6",
+                  "tableName": "benchmark_events",
+                  "replicaCount": 3
+                },
+                {
+                  "partitionId": "tbl-a0148bf5-52f9-473e-a4e1-915dd643822e-p1",
+                  "tableId": "tbl-a0148bf5-52f9-473e-a4e1-915dd643822e",
+                  "tableName": "benchmark_events",
+                  "replicaCount": 3
+                },
+                {
+                  "partitionId": "tbl-1fdf7f32-6802-4707-946a-7dbf94829455-p1",
+                  "tableId": "tbl-1fdf7f32-6802-4707-946a-7dbf94829455",
+                  "tableName": "benchmark_events",
+                  "replicaCount": 3
+                }
+              ],
+              "serviceRowsByPartitionId": {
+                "tbl-795cbb86-0dda-4c1c-a341-f481bb2c1d7c-p1": [],
+                "tbl-8526e348-e8ba-421c-95b6-b54bf8ead047-p1": [],
+                "tbl-558cc62c-e667-4d11-9bf3-3354601f76bb-p1": [],
+                "tbl-b6291366-f9fc-4198-86b3-1ae9ef4048d4-p1": [],
+                "tbl-03578880-ecba-45d2-adfc-b9399c193bde-p1": [],
+                "tbl-becb46ec-7c2d-4a62-a8cf-861574895ca6-p1": [],
+                "tbl-a0148bf5-52f9-473e-a4e1-915dd643822e-p1": [],
+                "tbl-1fdf7f32-6802-4707-946a-7dbf94829455-p1": []
+              }
+            }
+          },
+          "35a891b8-c1a0-5064-9c6e-2acfba61c2a7": {
+            "role": "joiner",
+            "unscoped": {
+              "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+              "capturedAt": 1772220673031,
+              "serviceCount": 3,
+              "postgresWireServiceCount": 1,
+              "postgresWireReplicaCount": 1,
+              "postgresWireReadyNodeIds": [
+                "7493b0ab-a054-5fad-a91b-5e331db29304"
+              ],
+              "postgresWireNotReadyByNodeId": {}
+            },
+            "tableScoped": {
+              "skipped": true,
+              "reason": "ddl_failed",
+              "ddlError": "Admin API query timed out for node 7493b0ab-a054-5fad-a91b-5e331db29304 on lane default after 15000ms"
+            },
+            "error": null,
+            "tableMetadata": {
+              "partitionRows": [
+                {
+                  "partitionId": "tbl-795cbb86-0dda-4c1c-a341-f481bb2c1d7c-p1",
+                  "tableId": "tbl-795cbb86-0dda-4c1c-a341-f481bb2c1d7c",
+                  "tableName": "benchmark_events",
+                  "replicaCount": 3
+                },
+                {
+                  "partitionId": "tbl-8526e348-e8ba-421c-95b6-b54bf8ead047-p1",
+                  "tableId": "tbl-8526e348-e8ba-421c-95b6-b54bf8ead047",
+                  "tableName": "benchmark_events",
+                  "replicaCount": 3
+                },
+                {
+                  "partitionId": "tbl-558cc62c-e667-4d11-9bf3-3354601f76bb-p1",
+                  "tableId": "tbl-558cc62c-e667-4d11-9bf3-3354601f76bb",
+                  "tableName": "benchmark_events",
+                  "replicaCount": 3
+                },
+                {
+                  "partitionId": "tbl-b6291366-f9fc-4198-86b3-1ae9ef4048d4-p1",
+                  "tableId": "tbl-b6291366-f9fc-4198-86b3-1ae9ef4048d4",
+                  "tableName": "benchmark_events",
+                  "replicaCount": 3
+                },
+                {
+                  "partitionId": "tbl-03578880-ecba-45d2-adfc-b9399c193bde-p1",
+                  "tableId": "tbl-03578880-ecba-45d2-adfc-b9399c193bde",
+                  "tableName": "benchmark_events",
+                  "replicaCount": 3
+                },
+                {
+                  "partitionId": "tbl-becb46ec-7c2d-4a62-a8cf-861574895ca6-p1",
+                  "tableId": "tbl-becb46ec-7c2d-4a62-a8cf-861574895ca6",
+                  "tableName": "benchmark_events",
+                  "replicaCount": 3
+                },
+                {
+                  "partitionId": "tbl-a0148bf5-52f9-473e-a4e1-915dd643822e-p1",
+                  "tableId": "tbl-a0148bf5-52f9-473e-a4e1-915dd643822e",
+                  "tableName": "benchmark_events",
+                  "replicaCount": 3
+                },
+                {
+                  "partitionId": "tbl-1fdf7f32-6802-4707-946a-7dbf94829455-p1",
+                  "tableId": "tbl-1fdf7f32-6802-4707-946a-7dbf94829455",
+                  "tableName": "benchmark_events",
+                  "replicaCount": 3
+                }
+              ],
+              "serviceRowsByPartitionId": {
+                "tbl-795cbb86-0dda-4c1c-a341-f481bb2c1d7c-p1": [],
+                "tbl-8526e348-e8ba-421c-95b6-b54bf8ead047-p1": [],
+                "tbl-558cc62c-e667-4d11-9bf3-3354601f76bb-p1": [],
+                "tbl-b6291366-f9fc-4198-86b3-1ae9ef4048d4-p1": [],
+                "tbl-03578880-ecba-45d2-adfc-b9399c193bde-p1": [],
+                "tbl-becb46ec-7c2d-4a62-a8cf-861574895ca6-p1": [],
+                "tbl-a0148bf5-52f9-473e-a4e1-915dd643822e-p1": [],
+                "tbl-1fdf7f32-6802-4707-946a-7dbf94829455-p1": []
+              }
+            }
+          },
+          "11601fe0-72d6-5853-8590-ec2881853e72": {
+            "role": "joiner",
+            "unscoped": {
+              "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+              "capturedAt": 1772220673045,
+              "serviceCount": 3,
+              "postgresWireServiceCount": 1,
+              "postgresWireReplicaCount": 3,
+              "postgresWireReadyNodeIds": [
+                "11601fe0-72d6-5853-8590-ec2881853e72",
+                "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "7493b0ab-a054-5fad-a91b-5e331db29304"
+              ],
+              "postgresWireNotReadyByNodeId": {}
+            },
+            "tableScoped": {
+              "skipped": true,
+              "reason": "ddl_failed",
+              "ddlError": "Admin API query timed out for node 7493b0ab-a054-5fad-a91b-5e331db29304 on lane default after 15000ms"
+            },
+            "error": null,
+            "tableMetadata": {
+              "partitionRows": [
+                {
+                  "partitionId": "tbl-795cbb86-0dda-4c1c-a341-f481bb2c1d7c-p1",
+                  "tableId": "tbl-795cbb86-0dda-4c1c-a341-f481bb2c1d7c",
+                  "tableName": "benchmark_events",
+                  "replicaCount": 3
+                },
+                {
+                  "partitionId": "tbl-8526e348-e8ba-421c-95b6-b54bf8ead047-p1",
+                  "tableId": "tbl-8526e348-e8ba-421c-95b6-b54bf8ead047",
+                  "tableName": "benchmark_events",
+                  "replicaCount": 3
+                },
+                {
+                  "partitionId": "tbl-558cc62c-e667-4d11-9bf3-3354601f76bb-p1",
+                  "tableId": "tbl-558cc62c-e667-4d11-9bf3-3354601f76bb",
+                  "tableName": "benchmark_events",
+                  "replicaCount": 3
+                },
+                {
+                  "partitionId": "tbl-b6291366-f9fc-4198-86b3-1ae9ef4048d4-p1",
+                  "tableId": "tbl-b6291366-f9fc-4198-86b3-1ae9ef4048d4",
+                  "tableName": "benchmark_events",
+                  "replicaCount": 3
+                },
+                {
+                  "partitionId": "tbl-03578880-ecba-45d2-adfc-b9399c193bde-p1",
+                  "tableId": "tbl-03578880-ecba-45d2-adfc-b9399c193bde",
+                  "tableName": "benchmark_events",
+                  "replicaCount": 3
+                },
+                {
+                  "partitionId": "tbl-becb46ec-7c2d-4a62-a8cf-861574895ca6-p1",
+                  "tableId": "tbl-becb46ec-7c2d-4a62-a8cf-861574895ca6",
+                  "tableName": "benchmark_events",
+                  "replicaCount": 3
+                },
+                {
+                  "partitionId": "tbl-a0148bf5-52f9-473e-a4e1-915dd643822e-p1",
+                  "tableId": "tbl-a0148bf5-52f9-473e-a4e1-915dd643822e",
+                  "tableName": "benchmark_events",
+                  "replicaCount": 3
+                },
+                {
+                  "partitionId": "tbl-1fdf7f32-6802-4707-946a-7dbf94829455-p1",
+                  "tableId": "tbl-1fdf7f32-6802-4707-946a-7dbf94829455",
+                  "tableName": "benchmark_events",
+                  "replicaCount": 3
+                }
+              ],
+              "serviceRowsByPartitionId": {
+                "tbl-795cbb86-0dda-4c1c-a341-f481bb2c1d7c-p1": [],
+                "tbl-8526e348-e8ba-421c-95b6-b54bf8ead047-p1": [],
+                "tbl-558cc62c-e667-4d11-9bf3-3354601f76bb-p1": [],
+                "tbl-b6291366-f9fc-4198-86b3-1ae9ef4048d4-p1": [],
+                "tbl-03578880-ecba-45d2-adfc-b9399c193bde-p1": [],
+                "tbl-becb46ec-7c2d-4a62-a8cf-861574895ca6-p1": [],
+                "tbl-a0148bf5-52f9-473e-a4e1-915dd643822e-p1": [],
+                "tbl-1fdf7f32-6802-4707-946a-7dbf94829455-p1": []
+              }
+            }
+          }
+        }
+      },
+      "exampleResults": null,
+      "loadMetrics": null,
+      "partitionHotspots": null,
+      "optimizationPriorities": null
+    }
+  ],
+  "benchmarkRegressionGate": {
+    "enabled": false,
+    "status": "skipped",
+    "reason": "disabled",
+    "settings": {
+      "enabled": false,
+      "maxThroughputRegressionRatio": 0.1,
+      "minimumThroughputRatioSutToBaseline": 0.1,
+      "baselineProvider": "liferaft",
+      "failIfBaselineMissing": false,
+      "approvedMitigationId": null,
+      "parityMismatchPolicy": "warn"
+    },
+    "currentProvider": "liferaft",
+    "baselineProvider": "liferaft",
+    "comparedScenarioCount": 0,
+    "failedScenarioCount": 0,
+    "mitigatedScenarioCount": 0,
+    "missingBaselineScenarios": [],
+    "comparisons": [],
+    "parityMismatchCount": 0,
+    "lowThroughputRatioCount": 0,
+    "warnings": []
+  },
+  "metadata": {
+    "raftProvider": "liferaft",
+    "configPath": "test/distributed/config/local-benchmark-3node.json",
+    "scenarioFilter": "diag-admin-discovery"
+  }
+}

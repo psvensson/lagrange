@@ -165,6 +165,191 @@ function seedServiceDiscoveryRows(cache) {
 }
 
 /**
+ * Seed table-scoped discovery rows where only one node hosts partition replicas.
+ * This models routed queryability: all active postgres-wire nodes should remain
+ * schema-ready when table metadata is available cluster-wide.
+ *
+ * @param {SystemTableCache} cache
+ */
+function seedRoutedTableDiscoveryRows(cache) {
+  const updatedAt = Date.now();
+
+  cache.applySystemTableChange(TABLES.NODES, 'INSERT', {
+    id: 'node-2',
+    address: 'localhost:8081',
+    status: 'active',
+  });
+
+  cache.applySystemTableChange(TABLES.SERVICE_DEFINITIONS, 'INSERT', {
+    service_id: 'sys-postgres-wire',
+    service_name: 'sys-postgres-wire',
+    replica_count: 2,
+    runtime_kind: 'native_js',
+  });
+
+  cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
+    endpoint_id: 'sys-postgres-wire-ep-node-1',
+    service_id: 'sys-postgres-wire',
+    node_id: 'node-1',
+    protocol: 'postgresql',
+    address: '10.0.0.1',
+    port: 5432,
+    health_status: 'healthy',
+    metadata: JSON.stringify({
+      service_name: 'sys-postgres-wire',
+      protocol: 'postgresql',
+      version: '1.0.0',
+    }),
+    updated_at: updatedAt,
+  });
+
+  cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
+    endpoint_id: 'sys-postgres-wire-ep-node-2',
+    service_id: 'sys-postgres-wire',
+    node_id: 'node-2',
+    protocol: 'postgresql',
+    address: '10.0.0.2',
+    port: 5432,
+    health_status: 'healthy',
+    metadata: JSON.stringify({
+      service_name: 'sys-postgres-wire',
+      protocol: 'postgresql',
+      version: '1.0.0',
+    }),
+    updated_at: updatedAt,
+  });
+
+  cache.applySystemTableChange(TABLES.TABLES, 'INSERT', {
+    id: 'table-benchmark-events',
+    table_id: 'table-benchmark-events',
+    name: 'benchmark_events',
+    table_name: 'benchmark_events',
+  });
+
+  cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
+    id: 'partition-benchmark-events-1',
+    partition_id: 'partition-benchmark-events-1',
+    table_id: 'table-benchmark-events',
+    table_name: 'benchmark_events',
+    keyStart: null,
+    keyEnd: null,
+  });
+
+  cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+    id: 'service-benchmark-events-node-1',
+    service_type: 'partition',
+    partition_id: 'partition-benchmark-events-1',
+    node_id: 'node-1',
+    status: 'active',
+    raft_role: 'leader',
+    address: '10.0.0.1:7001',
+  });
+}
+
+/**
+ * Seed table-scoped discovery rows without a local TABLES row.
+ * This verifies applied schema watermark fallback from partition metadata.
+ *
+ * @param {SystemTableCache} cache
+ * @param {number} updatedAt
+ */
+function seedPartitionScopedDiscoveryRowsWithoutTableRecord(cache, updatedAt) {
+  cache.applySystemTableChange(TABLES.SERVICE_DEFINITIONS, 'INSERT', {
+    service_id: 'sys-postgres-wire',
+    service_name: 'sys-postgres-wire',
+    replica_count: 1,
+    runtime_kind: 'native_js',
+  });
+
+  cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
+    endpoint_id: 'sys-postgres-wire-ep-node-1',
+    service_id: 'sys-postgres-wire',
+    node_id: 'node-1',
+    protocol: 'postgresql',
+    address: '10.0.0.1',
+    port: 5432,
+    health_status: 'healthy',
+    metadata: JSON.stringify({
+      service_name: 'sys-postgres-wire',
+      protocol: 'postgresql',
+      version: '1.0.0',
+    }),
+    updated_at: updatedAt,
+  });
+
+  cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
+    id: 'partition-benchmark-events-1',
+    partition_id: 'partition-benchmark-events-1',
+    table_id: 'table-benchmark-events',
+    table_name: 'benchmark_events',
+    keyStart: null,
+    keyEnd: null,
+    updated_at: updatedAt,
+  });
+
+  cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+    id: 'service-benchmark-events-node-1',
+    service_type: 'partition',
+    partition_id: 'partition-benchmark-events-1',
+    node_id: 'node-1',
+    status: 'active',
+    raft_role: 'leader',
+    address: '10.0.0.1:7001',
+  });
+}
+
+/**
+ * Seed table-scoped discovery rows without local TABLES row and without
+ * partition table_name metadata. Partition matching must rely on table_id.
+ *
+ * @param {SystemTableCache} cache
+ * @param {number} updatedAt
+ */
+function seedPartitionScopedDiscoveryRowsWithoutTableName(cache, updatedAt) {
+  cache.applySystemTableChange(TABLES.SERVICE_DEFINITIONS, 'INSERT', {
+    service_id: 'sys-postgres-wire',
+    service_name: 'sys-postgres-wire',
+    replica_count: 1,
+    runtime_kind: 'native_js',
+  });
+
+  cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, 'INSERT', {
+    endpoint_id: 'sys-postgres-wire-ep-node-1',
+    service_id: 'sys-postgres-wire',
+    node_id: 'node-1',
+    protocol: 'postgresql',
+    address: '10.0.0.1',
+    port: 5432,
+    health_status: 'healthy',
+    metadata: JSON.stringify({
+      service_name: 'sys-postgres-wire',
+      protocol: 'postgresql',
+      version: '1.0.0',
+    }),
+    updated_at: updatedAt,
+  });
+
+  cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
+    id: 'partition-benchmark-events-1',
+    partition_id: 'partition-benchmark-events-1',
+    table_id: 'table-benchmark-events',
+    keyStart: null,
+    keyEnd: null,
+    updated_at: updatedAt,
+  });
+
+  cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+    id: 'service-benchmark-events-node-1',
+    service_type: 'partition',
+    partition_id: 'partition-benchmark-events-1',
+    node_id: 'node-1',
+    status: 'active',
+    raft_role: 'leader',
+    address: '10.0.0.1:7001',
+  });
+}
+
+/**
  * Connect to AdminWebSocketAPI in-process and wait for first message.
  * Avoids binding TCP ports (not permitted in some test sandboxes).
  * @param {AdminWebSocketAPI} api - Admin API instance.
@@ -974,6 +1159,16 @@ test('AdminWebSocketAPI - local service discovery endpoint shape and filtering',
       'should include canonical workload readiness',
     );
     t.equal(
+      payload.services[0].replicas[0].readiness.topologyReady,
+      true,
+      'should include canonical topology readiness',
+    );
+    t.equal(
+      payload.services[0].replicas[0].readiness.benchmarkReady,
+      true,
+      'should include canonical benchmark readiness',
+    );
+    t.equal(
       payload.services[0].replicas[0].readiness.schemaReady,
       true,
       'default discovery scope should mark schema readiness true',
@@ -1032,6 +1227,16 @@ test('AdminWebSocketAPI - local service discovery query avoids distributed fanou
       true,
       'query snapshot should include readiness block',
     );
+    t.equal(
+      response.results[0].services[0].replicas[0].readiness.topologyReady,
+      true,
+      'query snapshot should include topology readiness',
+    );
+    t.equal(
+      response.results[0].services[0].replicas[0].readiness.benchmarkReady,
+      true,
+      'query snapshot should include benchmark readiness',
+    );
     t.equal(executeRequestCalls, 0,
       'local service discovery query should not execute distributed SQL requests');
 
@@ -1061,6 +1266,12 @@ test('AdminWebSocketAPI - table-scoped discovery readiness marks missing schema'
     const readiness = payload.services[0].replicas[0].readiness;
     t.equal(readiness.schemaReady, false, 'missing table should mark schema not ready');
     t.equal(readiness.workloadReady, false, 'missing table should block workload readiness');
+    t.equal(readiness.topologyReady, true, 'topology can still be ready when schema is missing');
+    t.equal(
+      readiness.benchmarkReady,
+      false,
+      'benchmark readiness should fail when schema is missing',
+    );
     t.equal(
       readiness.reasons.some((reason) => reason.code === 'schema_table_missing'),
       true,
@@ -1069,6 +1280,189 @@ test('AdminWebSocketAPI - table-scoped discovery readiness marks missing schema'
 
     await api.shutdown();
   });
+
+test(
+  'AdminWebSocketAPI - table-scoped discovery keeps routed replicas schema ready',
+  async (t) => {
+    const cache = createPopulatedCache();
+    seedRoutedTableDiscoveryRows(cache);
+    const api = new AdminWebSocketAPI({
+      nodeId: 'test-node',
+      systemTableCache: cache,
+      sqlQueryEngine: createMockQueryEngine(),
+    });
+
+    await api.initialize(0, {listen: false});
+    const response = await api.getFastify().inject({
+      method: 'GET',
+      url: '/api/admin/discovery/services?' +
+        'serviceId=sys-postgres-wire&protocol=postgresql&tableName=benchmark_events',
+    });
+    const payload = response.json();
+
+    t.equal(response.statusCode, 200, 'should return 200');
+    const replicas = Array.isArray(payload?.services?.[0]?.replicas) ?
+      payload.services[0].replicas :
+      [];
+    const readinessByNodeId = new Map(replicas.map((replica) => [
+      String(replica?.nodeId || ''),
+      replica?.readiness || null,
+    ]));
+
+    t.equal(
+      readinessByNodeId.get('node-1')?.schemaReady,
+      true,
+      'node-1 should remain schema ready',
+    );
+    t.equal(
+      readinessByNodeId.get('node-2')?.routingReady,
+      true,
+      'node-2 should remain routing ready',
+    );
+    t.equal(
+      readinessByNodeId.get('node-2')?.schemaReady,
+      true,
+      'node-2 should remain schema ready via routed partition ownership',
+    );
+    t.equal(
+      readinessByNodeId.get('node-2')?.reasons?.some((reason) =>
+        reason.code === 'schema_partition_unavailable'),
+      false,
+      'node-2 should not be excluded for lacking local partition replica',
+    );
+
+    await api.shutdown();
+  },
+);
+
+test(
+  'AdminWebSocketAPI - table-scoped discovery falls back to partition schema watermark',
+  async (t) => {
+    const expectedSchemaVersion = 1740589945999;
+    const cache = createPopulatedCache();
+    seedPartitionScopedDiscoveryRowsWithoutTableRecord(cache, expectedSchemaVersion);
+    const api = new AdminWebSocketAPI({
+      nodeId: 'test-node',
+      systemTableCache: cache,
+      sqlQueryEngine: createMockQueryEngine(),
+    });
+
+    await api.initialize(0, {listen: false});
+    const response = await api.getFastify().inject({
+      method: 'GET',
+      url: '/api/admin/discovery/services?' +
+        'serviceId=sys-postgres-wire&protocol=postgresql&tableName=benchmark_events',
+    });
+    const payload = response.json();
+
+    t.equal(response.statusCode, 200, 'should return 200');
+    const readiness = payload.services[0].replicas[0].readiness;
+    t.equal(
+      readiness.schemaReady,
+      true,
+      'partition coverage should keep schema readiness true',
+    );
+    t.equal(
+      readiness.appliedSchemaVersion,
+      String(expectedSchemaVersion),
+      'readiness should expose partition-derived schema watermark',
+    );
+    t.equal(
+      readiness.benchmarkReady,
+      true,
+      'benchmark readiness should remain true when partition watermark is available',
+    );
+
+    await api.shutdown();
+  },
+);
+
+test(
+  'AdminWebSocketAPI - local discovery query supports table-id hints',
+  async (t) => {
+    const expectedSchemaVersion = 1740589946999;
+    const cache = createPopulatedCache();
+    seedPartitionScopedDiscoveryRowsWithoutTableName(cache, expectedSchemaVersion);
+    const api = new AdminWebSocketAPI({
+      nodeId: 'test-node',
+      systemTableCache: cache,
+      sqlQueryEngine: createMockQueryEngine(),
+    });
+
+    await api.initialize(0, {listen: false});
+    const {ws} = await connectAndReceive(api);
+
+    ws.send(JSON.stringify({
+      type: MessageType.QUERY,
+      queryId: 'q-table-id-hint',
+      sql: 'SELECT * FROM service_discovery_local(' +
+        '\'benchmark_events\', \'table-benchmark-events\')',
+    }));
+    const response = await waitForMessage(ws);
+
+    t.equal(response.type, MessageType.QUERY_RESULT, 'should return query_result');
+    t.equal(response.queryId, 'q-table-id-hint', 'should preserve query id');
+    t.equal(Array.isArray(response.results), true, 'should include one snapshot row');
+    t.equal(response.results.length, 1, 'should return one discovery snapshot');
+
+    const readiness =
+      response.results[0]?.services?.[0]?.replicas?.[0]?.readiness || null;
+    t.equal(
+      readiness?.schemaReady,
+      true,
+      'table-id hint should resolve partition-scoped schema readiness',
+    );
+    t.equal(
+      readiness?.appliedSchemaVersion,
+      String(expectedSchemaVersion),
+      'table-id hint should expose partition-derived schema watermark',
+    );
+
+    ws.close();
+    await api.shutdown();
+  },
+);
+
+test(
+  'AdminWebSocketAPI - preflight cache freshness keeps unknown watermark as null',
+  async (t) => {
+    const api = new AdminWebSocketAPI({
+      nodeId: 'test-node',
+      systemTableCache: {
+        getAll() {
+          return [];
+        },
+        count() {
+          return 0;
+        },
+        getLastAppliedAtMs() {
+          return null;
+        },
+        getLastAppliedCauseId() {
+          return null;
+        },
+        getAppliedSchemaVersion() {
+          return null;
+        },
+      },
+    });
+
+    const cacheFreshness = api.buildPreflightCacheFreshnessSummary({
+      capturedAtMs: 12345,
+    });
+
+    t.equal(
+      cacheFreshness.lastAppliedAtMs,
+      null,
+      'unknown watermark must remain null in snapshot output',
+    );
+    t.equal(
+      cacheFreshness.stalenessMs,
+      null,
+      'unknown watermark must not coerce staleness to a synthetic value',
+    );
+  },
+);
 
 test('AdminWebSocketAPI - cleanup on disconnect', async (t) => {
   const api = new AdminWebSocketAPI({

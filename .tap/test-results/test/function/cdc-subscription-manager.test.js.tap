@@ -3,20 +3,20 @@ TAP version 14
     ok 1 - Should not be initialized
     ok 2 - Should have no subscriptions
     1..2
-ok 1 - CDCSubscriptionManager - constructor # time=6.256ms
+ok 1 - CDCSubscriptionManager - constructor # time=4.634ms
 
 CDC subscription manager initialized
 # Subtest: CDCSubscriptionManager - initialize
     ok 1 - Should be initialized
     ok 2 - Should have registry
     1..2
-ok 2 - CDCSubscriptionManager - initialize # time=1.325ms
+ok 2 - CDCSubscriptionManager - initialize # time=0.739ms
 
 CDC subscription created {
-  subscriptionId: [32m'subscriber-1:users:0408a76f-a746-4310-9be4-a1bd12b9e86e'[39m,
-  subscriberId: [32m'subscriber-1'[39m,
-  tableName: [32m'users'[39m,
-  type: [32m'callback'[39m
+  subscriptionId: 'subscriber-1:users:757f8118-3f01-4af7-b7f4-c495b623ab08',
+  subscriberId: 'subscriber-1',
+  tableName: 'users',
+  type: 'callback'
 }
 # Subtest: CDCSubscriptionManager - subscribe creates callback subscription
     ok 1 - Should return subscription ID
@@ -25,19 +25,19 @@ CDC subscription created {
     ok 4 - Should be callback type
     ok 5 - Should have table name
     1..5
-ok 3 - CDCSubscriptionManager - subscribe creates callback subscription # time=1.622ms
+ok 3 - CDCSubscriptionManager - subscribe creates callback subscription # time=1.098ms
 
 # Subtest: CDCSubscriptionManager - subscribe requires callback function
     ok 1 - Should reject non-function callback
     1..1
-ok 4 - CDCSubscriptionManager - subscribe requires callback function # time=1.747ms
+ok 4 - CDCSubscriptionManager - subscribe requires callback function # time=1.394ms
 
 CDC subscription with invoke created {
-  subscriptionId: [32m'subscriber-1:orders:f58650de-cfc8-468d-9af7-55baba31ff4a'[39m,
-  subscriberId: [32m'subscriber-1'[39m,
-  tableName: [32m'orders'[39m,
-  functionId: [32m'process-order'[39m,
-  type: [32m'invoke'[39m
+  subscriptionId: 'subscriber-1:orders:c0a07280-b24c-4114-8846-62424909fe73',
+  subscriberId: 'subscriber-1',
+  tableName: 'orders',
+  functionId: 'process-order',
+  type: 'invoke'
 }
 # Subtest: CDCSubscriptionManager - subscribeWithInvoke creates invoke subscription
     ok 1 - Should return subscription ID
@@ -46,98 +46,98 @@ CDC subscription with invoke created {
     ok 4 - Should have function ID
     ok 5 - Should have base context
     1..5
-ok 5 - CDCSubscriptionManager - subscribeWithInvoke creates invoke subscription # time=1.935ms
+ok 5 - CDCSubscriptionManager - subscribeWithInvoke creates invoke subscription # time=1.869ms
 
 # Subtest: CDCSubscriptionManager - subscribeWithInvoke requires function ID
     ok 1 - Should reject null function ID
     1..1
-ok 6 - CDCSubscriptionManager - subscribeWithInvoke requires function ID # time=0.761ms
+ok 6 - CDCSubscriptionManager - subscribeWithInvoke requires function ID # time=0.576ms
 
 CDC subscription created {
-  subscriptionId: [32m'sub-1:users:b3aad647-46fd-4380-98ad-8a5602be1e6d'[39m,
-  subscriberId: [32m'sub-1'[39m,
-  tableName: [32m'users'[39m,
-  type: [32m'callback'[39m
+  subscriptionId: 'sub-1:users:da4f5872-9e89-476c-91a5-1da3caea6c52',
+  subscriberId: 'sub-1',
+  tableName: 'users',
+  type: 'callback'
 }
 CDC subscription removed {
-  subscriptionId: [32m'sub-1:users:b3aad647-46fd-4380-98ad-8a5602be1e6d'[39m,
-  subscriberId: [32m'sub-1'[39m,
-  tableName: [32m'users'[39m
+  subscriptionId: 'sub-1:users:da4f5872-9e89-476c-91a5-1da3caea6c52',
+  subscriberId: 'sub-1',
+  tableName: 'users'
 }
 # Subtest: CDCSubscriptionManager - unsubscribe removes subscription
     ok 1 - Should return true
     ok 2 - Should remove subscription
     1..2
-ok 7 - CDCSubscriptionManager - unsubscribe removes subscription # time=0.97ms
+ok 7 - CDCSubscriptionManager - unsubscribe removes subscription # time=0.873ms
 
-Subscription not found for unsubscribe { subscriptionId: [32m'nonexistent'[39m }
+Subscription not found for unsubscribe { subscriptionId: 'nonexistent' }
 # Subtest: CDCSubscriptionManager - unsubscribe returns false for nonexistent
     ok 1 - Should return false
     1..1
-ok 8 - CDCSubscriptionManager - unsubscribe returns false for nonexistent # time=0.422ms
+ok 8 - CDCSubscriptionManager - unsubscribe returns false for nonexistent # time=0.33ms
 
 CDC subscription created {
-  subscriptionId: [32m'sub-1:users:0bef54e0-90ab-4514-9199-58c1fb9eddfb'[39m,
-  subscriberId: [32m'sub-1'[39m,
-  tableName: [32m'users'[39m,
-  type: [32m'callback'[39m
+  subscriptionId: 'sub-1:users:3defab40-3bda-4309-a4c8-fb07eae502d8',
+  subscriberId: 'sub-1',
+  tableName: 'users',
+  type: 'callback'
 }
 CDC subscription created {
-  subscriptionId: [32m'sub-1:orders:3a0ba725-081f-429a-a423-490099d8a8b5'[39m,
-  subscriberId: [32m'sub-1'[39m,
-  tableName: [32m'orders'[39m,
-  type: [32m'callback'[39m
+  subscriptionId: 'sub-1:orders:ebf6fdd6-06c6-4f34-b053-23253974f846',
+  subscriberId: 'sub-1',
+  tableName: 'orders',
+  type: 'callback'
 }
 CDC subscription created {
-  subscriptionId: [32m'sub-2:users:b02b888b-3f74-4027-a274-336e5f0678fe'[39m,
-  subscriberId: [32m'sub-2'[39m,
-  tableName: [32m'users'[39m,
-  type: [32m'callback'[39m
+  subscriptionId: 'sub-2:users:8d6d4029-24a3-4d44-b6e9-f5923d0be060',
+  subscriberId: 'sub-2',
+  tableName: 'users',
+  type: 'callback'
 }
 CDC subscription removed {
-  subscriptionId: [32m'sub-1:users:0bef54e0-90ab-4514-9199-58c1fb9eddfb'[39m,
-  subscriberId: [32m'sub-1'[39m,
-  tableName: [32m'users'[39m
+  subscriptionId: 'sub-1:users:3defab40-3bda-4309-a4c8-fb07eae502d8',
+  subscriberId: 'sub-1',
+  tableName: 'users'
 }
 CDC subscription removed {
-  subscriptionId: [32m'sub-1:orders:3a0ba725-081f-429a-a423-490099d8a8b5'[39m,
-  subscriberId: [32m'sub-1'[39m,
-  tableName: [32m'orders'[39m
+  subscriptionId: 'sub-1:orders:ebf6fdd6-06c6-4f34-b053-23253974f846',
+  subscriberId: 'sub-1',
+  tableName: 'orders'
 }
-All subscriptions removed for subscriber { subscriberId: [32m'sub-1'[39m, count: [33m2[39m }
+All subscriptions removed for subscriber { subscriberId: 'sub-1', count: 2 }
 # Subtest: CDCSubscriptionManager - unsubscribeAll removes all for subscriber
     ok 1 - Should remove 2 subscriptions
     ok 2 - Should have none for sub-1
     ok 3 - Should still have sub-2
     1..3
-ok 9 - CDCSubscriptionManager - unsubscribeAll removes all for subscriber # time=1.03ms
+ok 9 - CDCSubscriptionManager - unsubscribeAll removes all for subscriber # time=1.189ms
 
 CDC subscription created {
-  subscriptionId: [32m'sub-1:users:0514318a-19d8-44bf-b1c8-02110c1e6736'[39m,
-  subscriberId: [32m'sub-1'[39m,
-  tableName: [32m'users'[39m,
-  type: [32m'callback'[39m
+  subscriptionId: 'sub-1:users:05e0ad4c-6b52-4736-a5af-205f5b68cd3f',
+  subscriberId: 'sub-1',
+  tableName: 'users',
+  type: 'callback'
 }
 CDC callback executed {
-  subscriptionId: [32m'sub-1:users:0514318a-19d8-44bf-b1c8-02110c1e6736'[39m,
-  matchType: [32m'insert'[39m
+  subscriptionId: 'sub-1:users:05e0ad4c-6b52-4736-a5af-205f5b68cd3f',
+  matchType: 'insert'
 }
 # Subtest: CDCSubscriptionManager - handleCDCEvent calls callback for INSERT
     ok 1 - Should receive 1 event
     ok 2 - Should be insert type
     ok 3 - Should have row data
     1..3
-ok 10 - CDCSubscriptionManager - handleCDCEvent calls callback for INSERT # time=0.908ms
+ok 10 - CDCSubscriptionManager - handleCDCEvent calls callback for INSERT # time=0.858ms
 
 CDC subscription created {
-  subscriptionId: [32m'sub-1:users:202bc8a8-361a-453d-bbc1-aaae40dda014'[39m,
-  subscriberId: [32m'sub-1'[39m,
-  tableName: [32m'users'[39m,
-  type: [32m'callback'[39m
+  subscriptionId: 'sub-1:users:08266fd9-6013-4183-a238-5fdea0eafe5d',
+  subscriberId: 'sub-1',
+  tableName: 'users',
+  type: 'callback'
 }
 CDC callback executed {
-  subscriptionId: [32m'sub-1:users:202bc8a8-361a-453d-bbc1-aaae40dda014'[39m,
-  matchType: [32m'update'[39m
+  subscriptionId: 'sub-1:users:08266fd9-6013-4183-a238-5fdea0eafe5d',
+  matchType: 'update'
 }
 # Subtest: CDCSubscriptionManager - handleCDCEvent calls callback for UPDATE
     ok 1 - Should receive 1 event
@@ -145,36 +145,36 @@ CDC callback executed {
     ok 3 - Should have old data
     ok 4 - Should have new data
     1..4
-ok 11 - CDCSubscriptionManager - handleCDCEvent calls callback for UPDATE # time=0.719ms
+ok 11 - CDCSubscriptionManager - handleCDCEvent calls callback for UPDATE # time=0.615ms
 
 CDC subscription created {
-  subscriptionId: [32m'sub-1:users:86d21cd9-b41c-4cdf-9807-d1a4d4d160a7'[39m,
-  subscriberId: [32m'sub-1'[39m,
-  tableName: [32m'users'[39m,
-  type: [32m'callback'[39m
+  subscriptionId: 'sub-1:users:bfc2ff1f-1b7e-4b8f-981e-87f1b22c5c09',
+  subscriberId: 'sub-1',
+  tableName: 'users',
+  type: 'callback'
 }
 CDC callback executed {
-  subscriptionId: [32m'sub-1:users:86d21cd9-b41c-4cdf-9807-d1a4d4d160a7'[39m,
-  matchType: [32m'delete'[39m
+  subscriptionId: 'sub-1:users:bfc2ff1f-1b7e-4b8f-981e-87f1b22c5c09',
+  matchType: 'delete'
 }
 # Subtest: CDCSubscriptionManager - handleCDCEvent calls callback for DELETE
     ok 1 - Should receive 1 event
     ok 2 - Should be delete type
     ok 3 - Should have row data
     1..3
-ok 12 - CDCSubscriptionManager - handleCDCEvent calls callback for DELETE # time=0.606ms
+ok 12 - CDCSubscriptionManager - handleCDCEvent calls callback for DELETE # time=0.619ms
 
 CDC subscription with invoke created {
-  subscriptionId: [32m'sub-1:orders:40061e33-e32f-4015-b8bf-dcba9b748cc5'[39m,
-  subscriberId: [32m'sub-1'[39m,
-  tableName: [32m'orders'[39m,
-  functionId: [32m'process-order'[39m,
-  type: [32m'invoke'[39m
+  subscriptionId: 'sub-1:orders:971635a0-4d67-4ebe-a06d-2c99850abfa4',
+  subscriberId: 'sub-1',
+  tableName: 'orders',
+  functionId: 'process-order',
+  type: 'invoke'
 }
 CDC function invoked {
-  subscriptionId: [32m'sub-1:orders:40061e33-e32f-4015-b8bf-dcba9b748cc5'[39m,
-  functionId: [32m'process-order'[39m,
-  matchType: [32m'insert'[39m
+  subscriptionId: 'sub-1:orders:971635a0-4d67-4ebe-a06d-2c99850abfa4',
+  functionId: 'process-order',
+  matchType: 'insert'
 }
 # Subtest: CDCSubscriptionManager - handleCDCEvent invokes function
     ok 1 - Should invoke function once
@@ -183,91 +183,91 @@ CDC function invoked {
     ok 4 - Should pass CDC event
     ok 5 - Should pass match result
     1..5
-ok 13 - CDCSubscriptionManager - handleCDCEvent invokes function # time=0.752ms
+ok 13 - CDCSubscriptionManager - handleCDCEvent invokes function # time=0.931ms
 
 CDC subscription created {
-  subscriptionId: [32m'sub-1:users:5e1eb15e-3393-4610-8a88-79007ecc5df7'[39m,
-  subscriberId: [32m'sub-1'[39m,
-  tableName: [32m'users'[39m,
-  type: [32m'callback'[39m
+  subscriptionId: 'sub-1:users:f6c34ffa-50f7-4011-a534-967b1dede3df',
+  subscriberId: 'sub-1',
+  tableName: 'users',
+  type: 'callback'
 }
 CDC subscription created {
-  subscriptionId: [32m'sub-1:orders:042f07ca-7c76-4e1a-ac0c-eddc0adc311a'[39m,
-  subscriberId: [32m'sub-1'[39m,
-  tableName: [32m'orders'[39m,
-  type: [32m'callback'[39m
+  subscriptionId: 'sub-1:orders:1f0f881c-78a5-4d28-9ff2-4132ecaa52ed',
+  subscriberId: 'sub-1',
+  tableName: 'orders',
+  type: 'callback'
 }
 CDC callback executed {
-  subscriptionId: [32m'sub-1:users:5e1eb15e-3393-4610-8a88-79007ecc5df7'[39m,
-  matchType: [32m'insert'[39m
+  subscriptionId: 'sub-1:users:f6c34ffa-50f7-4011-a534-967b1dede3df',
+  matchType: 'insert'
 }
 # Subtest: CDCSubscriptionManager - handleCDCEvent filters by table
     ok 1 - Should receive user event
     ok 2 - Should not receive order event
     1..2
-ok 14 - CDCSubscriptionManager - handleCDCEvent filters by table # time=0.604ms
+ok 14 - CDCSubscriptionManager - handleCDCEvent filters by table # time=0.625ms
 
 CDC subscription created {
-  subscriptionId: [32m'sub-1:users:32f5d88c-399f-4da0-96fb-87aca37aeeec'[39m,
-  subscriberId: [32m'sub-1'[39m,
-  tableName: [32m'users'[39m,
-  type: [32m'callback'[39m
+  subscriptionId: 'sub-1:users:4d7d6acc-4c63-481d-9862-33dbc0c6dd23',
+  subscriberId: 'sub-1',
+  tableName: 'users',
+  type: 'callback'
 }
 CDC callback executed {
-  subscriptionId: [32m'sub-1:users:32f5d88c-399f-4da0-96fb-87aca37aeeec'[39m,
-  matchType: [32m'insert'[39m
+  subscriptionId: 'sub-1:users:4d7d6acc-4c63-481d-9862-33dbc0c6dd23',
+  matchType: 'insert'
 }
 # Subtest: CDCSubscriptionManager - handleCDCEvent filters by predicate
     ok 1 - Should only receive matching event
     ok 2 - Should have correct row
     1..2
-ok 15 - CDCSubscriptionManager - handleCDCEvent filters by predicate # time=0.736ms
+ok 15 - CDCSubscriptionManager - handleCDCEvent filters by predicate # time=0.845ms
 
 CDC subscription created {
-  subscriptionId: [32m'sub-1:users:b5ef86d5-df0a-4937-826b-163231d4fc63'[39m,
-  subscriberId: [32m'sub-1'[39m,
-  tableName: [32m'users'[39m,
-  type: [32m'callback'[39m
+  subscriptionId: 'sub-1:users:ba3bc8ea-fbfc-493e-b935-b9c5a9f76630',
+  subscriberId: 'sub-1',
+  tableName: 'users',
+  type: 'callback'
 }
 CDC callback executed {
-  subscriptionId: [32m'sub-1:users:b5ef86d5-df0a-4937-826b-163231d4fc63'[39m,
-  matchType: [32m'enter'[39m
+  subscriptionId: 'sub-1:users:ba3bc8ea-fbfc-493e-b935-b9c5a9f76630',
+  matchType: 'enter'
 }
 # Subtest: CDCSubscriptionManager - UPDATE enter/exit detection
     ok 1 - Should receive enter event
     ok 2 - Should be enter type
 CDC callback executed {
-  subscriptionId: [32m'sub-1:users:b5ef86d5-df0a-4937-826b-163231d4fc63'[39m,
-  matchType: [32m'exit'[39m
+  subscriptionId: 'sub-1:users:ba3bc8ea-fbfc-493e-b935-b9c5a9f76630',
+  matchType: 'exit'
 }
     ok 3 - Should receive exit event
     ok 4 - Should be exit type
     1..4
-ok 16 - CDCSubscriptionManager - UPDATE enter/exit detection # time=1.082ms
+ok 16 - CDCSubscriptionManager - UPDATE enter/exit detection # time=0.918ms
 
 CDC subscription created {
-  subscriptionId: [32m'sub-1:users:a64a22c0-5294-49bb-9f08-8716de9aa749'[39m,
-  subscriberId: [32m'sub-1'[39m,
-  tableName: [32m'users'[39m,
-  type: [32m'callback'[39m
+  subscriptionId: 'sub-1:users:c46ad6e2-db2e-427d-b2e5-62e26b478b5d',
+  subscriberId: 'sub-1',
+  tableName: 'users',
+  type: 'callback'
 }
 CDC subscription created {
-  subscriptionId: [32m'sub-2:orders:2df5662a-3032-4437-a1cd-ae1545487b34'[39m,
-  subscriberId: [32m'sub-2'[39m,
-  tableName: [32m'orders'[39m,
-  type: [32m'callback'[39m
+  subscriptionId: 'sub-2:orders:b5da0546-d7f3-4bee-b453-9df2f131352b',
+  subscriberId: 'sub-2',
+  tableName: 'orders',
+  type: 'callback'
 }
 # Subtest: CDCSubscriptionManager - getStats returns statistics
     ok 1 - Should have 2 subscriptions
     ok 2 - Should have 2 subscribers
     1..2
-ok 17 - CDCSubscriptionManager - getStats returns statistics # time=0.887ms
+ok 17 - CDCSubscriptionManager - getStats returns statistics # time=0.494ms
 
 CDC subscription created {
-  subscriptionId: [32m'sub-1:users:92d9961f-113a-42c0-a8a9-c97d4da78a3b'[39m,
-  subscriberId: [32m'sub-1'[39m,
-  tableName: [32m'users'[39m,
-  type: [32m'callback'[39m
+  subscriptionId: 'sub-1:users:cc75554b-8a11-4a4a-bb2f-a233a64c5d3f',
+  subscriberId: 'sub-1',
+  tableName: 'users',
+  type: 'callback'
 }
 CDC subscription manager initialized
 CDC subscription manager shutdown
@@ -275,6 +275,6 @@ CDC subscription manager shutdown
     ok 1 - Should not be initialized
     ok 2 - Should have no subscriptions
     1..2
-ok 18 - CDCSubscriptionManager - shutdown clears state # time=0.533ms
+ok 18 - CDCSubscriptionManager - shutdown clears state # time=0.49ms
 
 1..18

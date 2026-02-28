@@ -4,19 +4,19 @@ TAP version 14
 Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 65 }
     ok 2 - should be initialized after init
     1..2
-ok 1 - DynamicConfigService initialization # time=10.561ms
+ok 1 - DynamicConfigService initialization # time=5.672ms
 
 Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 65 }
 # Subtest: DynamicConfigService get with default value
     ok 1 - should return default value for missing key
     1..1
-ok 2 - DynamicConfigService get with default value # time=1.174ms
+ok 2 - DynamicConfigService get with default value # time=0.653ms
 
 Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 65 }
 # Subtest: DynamicConfigService get from SQL engine
     ok 1 - should return value from SQL engine
     1..1
-ok 3 - DynamicConfigService get from SQL engine # time=0.843ms
+ok 3 - DynamicConfigService get from SQL engine # time=0.411ms
 
 Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 65 }
 Configuration updated {
@@ -32,7 +32,7 @@ Configuration updated {
     ok 5 - should insert correct key
     ok 6 - should record who made change
     1..6
-ok 4 - DynamicConfigService set value # time=1.638ms
+ok 4 - DynamicConfigService set value # time=0.93ms
 
 Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 65 }
 Configuration updated { key: 'logging.level', updatedBy: 'admin', requiresRestart: false }
@@ -41,19 +41,19 @@ Configuration updated { key: 'logging.level', updatedBy: 'admin', requiresRestar
     ok 2 - should update row
     ok 3 - should record who made change
     1..3
-ok 5 - DynamicConfigService update existing value # time=0.967ms
+ok 5 - DynamicConfigService update existing value # time=0.605ms
 
 Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 65 }
 # Subtest: DynamicConfigService validation - invalid log level
     ok 1 - should reject invalid log level
     1..1
-ok 6 - DynamicConfigService validation - invalid log level # time=2.056ms
+ok 6 - DynamicConfigService validation - invalid log level # time=1.518ms
 
 Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 65 }
 # Subtest: DynamicConfigService validation - wrong type
     ok 1 - should reject wrong type
     1..1
-ok 7 - DynamicConfigService validation - wrong type # time=0.781ms
+ok 7 - DynamicConfigService validation - wrong type # time=0.552ms
 
 Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 65 }
 Configuration watcher registered { key: 'logging.level' }
@@ -64,7 +64,7 @@ Configuration updated { key: 'logging.level', updatedBy: 'test', requiresRestart
 Configuration updated { key: 'logging.level', updatedBy: 'test', requiresRestart: false }
     ok 3 - watcher should not be called after unsubscribe
     1..3
-ok 8 - DynamicConfigService watchers # time=1.504ms
+ok 8 - DynamicConfigService watchers # time=1.033ms
 
 Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 65 }
 # Subtest: DynamicConfigService requiresRestart
@@ -73,7 +73,7 @@ Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 65
     ok 3 - logging.level should not require restart
     ok 4 - split threshold should not require restart
     1..4
-ok 9 - DynamicConfigService requiresRestart # time=0.759ms
+ok 9 - DynamicConfigService requiresRestart # time=0.46ms
 
 Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 65 }
 # Subtest: DynamicConfigService getRestartRequiredKeys
@@ -82,7 +82,7 @@ Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 65
     ok 3 - should not include raft timeout
     ok 4 - should not include logging.level
     1..4
-ok 10 - DynamicConfigService getRestartRequiredKeys # time=0.812ms
+ok 10 - DynamicConfigService getRestartRequiredKeys # time=0.487ms
 
 Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 65 }
 # Subtest: DynamicConfigService getHotReloadKeys
@@ -92,7 +92,7 @@ Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 65
     ok 4 - should include raft timeout
     ok 5 - should not include restApiPort
     1..5
-ok 11 - DynamicConfigService getHotReloadKeys # time=1.003ms
+ok 11 - DynamicConfigService getHotReloadKeys # time=0.552ms
 
 Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 65 }
 Configuration updated {
@@ -111,7 +111,7 @@ Configuration updated {
 Configuration updated { key: 'logging.level', updatedBy: 'test', requiresRestart: false }
     ok 3 - should use string type
     1..3
-ok 12 - DynamicConfigService value types # time=1.338ms
+ok 12 - DynamicConfigService value types # time=0.76ms
 
 Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 65 }
 # Subtest: DynamicConfigService getMetadata
@@ -122,7 +122,7 @@ Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 65
     ok 5 - should have default value
     ok 6 - should return null for unknown key
     1..6
-ok 13 - DynamicConfigService getMetadata # time=0.923ms
+ok 13 - DynamicConfigService getMetadata # time=0.753ms
 
 Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 65 }
 Configuration watcher registered { key: 'logging.level' }
@@ -130,7 +130,7 @@ Configuration watcher registered { key: 'logging.level' }
     ok 1 - watcher should be called on CDC event
     ok 2 - cache should be updated
     1..2
-ok 14 - DynamicConfigService handleCDCEvent # time=0.777ms
+ok 14 - DynamicConfigService handleCDCEvent # time=0.674ms
 
 Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 65 }
 Configuration watcher registered { key: 'logging.persistMetricsLogs' }
@@ -138,7 +138,7 @@ Configuration watcher registered { key: 'logging.persistMetricsLogs' }
     ok 1 - watcher should receive boolean when CDC payload omits value_type
     ok 2 - cache should store boolean value
     1..2
-ok 15 - DynamicConfigService handleCDCEvent resolves definition type when value_type is missing # time=0.783ms
+ok 15 - DynamicConfigService handleCDCEvent resolves definition type when value_type is missing # time=0.606ms
 
 Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 65 }
 Configuration updated { key: 'logging.level', updatedBy: 'test', requiresRestart: false }
@@ -148,7 +148,7 @@ Configuration updated { key: 'logging.level', updatedBy: 'test', requiresRestart
     ok 3 - should have watcher count
     ok 4 - should have cached keys count
     1..4
-ok 16 - DynamicConfigService getStats # time=1.041ms
+ok 16 - DynamicConfigService getStats # time=0.72ms
 
 # Subtest: CONFIG_DEFINITIONS coverage
     ok 1 - should have definitions
@@ -413,7 +413,7 @@ ok 16 - DynamicConfigService getStats # time=1.041ms
     ok 260 - queryCoordinator.speculativeExecutionEnabled should have requiresRestart
     ok 261 - queryCoordinator.speculativeExecutionEnabled should have description
     1..261
-ok 17 - CONFIG_DEFINITIONS coverage # time=18.047ms
+ok 17 - CONFIG_DEFINITIONS coverage # time=15.119ms
 
 Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 65 }
 Configuration seeding complete { seeded: 65, skipped: 0 }
@@ -428,7 +428,7 @@ Configuration seeding complete { seeded: 65, skipped: 0 }
     ok 8 - should have default_value
     ok 9 - should record updatedBy
     1..9
-ok 18 - DynamicConfigService seedConfiguration # time=1.733ms
+ok 18 - DynamicConfigService seedConfiguration # time=1.776ms
 
 Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 65 }
 Configuration seeding complete { seeded: 64, skipped: 1 }
@@ -436,7 +436,7 @@ Configuration seeding complete { seeded: 64, skipped: 1 }
     ok 1 - should skip existing key
     ok 2 - should not seed existing key
     1..2
-ok 19 - DynamicConfigService seedConfiguration skips existing # time=1.171ms
+ok 19 - DynamicConfigService seedConfiguration skips existing # time=1.394ms
 
 Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 65 }
 Configuration seeding complete { seeded: 65, skipped: 0 }
@@ -444,7 +444,7 @@ Configuration seeding complete { seeded: 65, skipped: 0 }
     ok 1 - should insert heartbeat interval
     ok 2 - should use env var value
     1..2
-ok 20 - DynamicConfigService seedConfiguration from env vars # time=1ms
+ok 20 - DynamicConfigService seedConfiguration from env vars # time=1.038ms
 
 Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 65 }
 Configuration watcher registered { key: 'partition.splitThresholdBytes' }
@@ -458,7 +458,7 @@ Configuration updated {
     ok 2 - watcher should be called
     ok 3 - should receive new value
     1..3
-ok 21 - DynamicConfigService hot reload notification # time=0.691ms
+ok 21 - DynamicConfigService hot reload notification # time=0.557ms
 
 Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 65 }
 Configuration watcher registered { key: 'node.restApiPort' }
@@ -468,7 +468,7 @@ Configuration updated { key: 'node.restApiPort', updatedBy: 'admin', requiresRes
     ok 2 - watcher should still be called
     ok 3 - should receive new value
     1..3
-ok 22 - DynamicConfigService restart-required notification # time=0.591ms
+ok 22 - DynamicConfigService restart-required notification # time=0.535ms
 
 Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 65 }
 Configuration watcher registered { key: 'logging.level' }
@@ -478,7 +478,7 @@ Configuration updated { key: 'logging.level', updatedBy: 'test', requiresRestart
     ok 1 - first watcher should be called
     ok 2 - second watcher should be called
     1..2
-ok 23 - DynamicConfigService multiple watchers # time=0.574ms
+ok 23 - DynamicConfigService multiple watchers # time=0.524ms
 
 Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 65 }
 Configuration watcher registered { key: 'logging.level' }
@@ -488,19 +488,19 @@ Configuration updated { key: 'logging.level', updatedBy: 'test', requiresRestart
     ok 2 - should have new value
     ok 3 - change event should be emitted
     1..3
-ok 24 - DynamicConfigService event emission # time=0.554ms
+ok 24 - DynamicConfigService event emission # time=0.499ms
 
 Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 65 }
 # Subtest: DynamicConfigService validation - negative number
     ok 1 - should reject negative values
     1..1
-ok 25 - DynamicConfigService validation - negative number # time=0.403ms
+ok 25 - DynamicConfigService validation - negative number # time=0.361ms
 
 Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 65 }
 # Subtest: DynamicConfigService validation - boolean type
     ok 1 - should reject non-boolean for boolean config
     1..1
-ok 26 - DynamicConfigService validation - boolean type # time=0.388ms
+ok 26 - DynamicConfigService validation - boolean type # time=0.37ms
 
 Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 65 }
 Configuration updated {
@@ -513,7 +513,7 @@ Configuration updated {
     ok 2 - should have timestamp <= after
     ok 3 - should have created_at
     1..3
-ok 27 - DynamicConfigService auditing - timestamp recorded # time=0.463ms
+ok 27 - DynamicConfigService auditing - timestamp recorded # time=0.434ms
 
 Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 65 }
 Configuration updated {
@@ -524,7 +524,7 @@ Configuration updated {
 # Subtest: DynamicConfigService auditing - updatedBy recorded
     ok 1 - should record who made the change
     1..1
-ok 28 - DynamicConfigService auditing - updatedBy recorded # time=0.431ms
+ok 28 - DynamicConfigService auditing - updatedBy recorded # time=0.339ms
 
 Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 65 }
 Configuration updated {
@@ -536,7 +536,7 @@ Configuration updated {
     ok 1 - should record updater
     ok 2 - should record update time
     1..2
-ok 29 - DynamicConfigService auditing - update records change # time=0.507ms
+ok 29 - DynamicConfigService auditing - update records change # time=0.448ms
 
 Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 65 }
 # Subtest: DynamicConfigService validateValue method
@@ -548,7 +548,7 @@ Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 65
     ok 6 - should accept valid boolean
     ok 7 - should allow unknown keys
     1..7
-ok 30 - DynamicConfigService validateValue method # time=0.512ms
+ok 30 - DynamicConfigService validateValue method # time=0.48ms
 
 Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 65 }
 # Subtest: DynamicConfigService getAll returns defaults
@@ -556,12 +556,12 @@ Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 65
     ok 2 - should have default value
     ok 3 - should have heartbeat interval
     1..3
-ok 31 - DynamicConfigService getAll returns defaults # time=0.491ms
+ok 31 - DynamicConfigService getAll returns defaults # time=0.458ms
 
 Dynamic configuration service initialized { nodeId: 'test-node', definedKeys: 65 }
 # Subtest: DynamicConfigService clearCache
     ok 1 - cache should be empty after clear
     1..1
-ok 32 - DynamicConfigService clearCache # time=0.335ms
+ok 32 - DynamicConfigService clearCache # time=0.288ms
 
 1..32

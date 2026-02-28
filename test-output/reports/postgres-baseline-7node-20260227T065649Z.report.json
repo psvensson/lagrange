@@ -1,0 +1,346 @@
+{
+  "timestamp": "2026-02-27T06:59:10.740Z",
+  "summary": {
+    "total": 1,
+    "passed": 0,
+    "failed": 1,
+    "duration": 141269
+  },
+  "optimizationSummary": {
+    "totalPriorityItems": 0,
+    "scenariosWithPriorities": 0,
+    "topComponents": [],
+    "topPartitions": []
+  },
+  "standardSummary": {
+    "historicalReportsConsidered": 20,
+    "scenariosComparedToPrevious": 1,
+    "scenariosComparedToPostgresBaseline": 0,
+    "diagnosticsCoverageSummary": {
+      "scenariosWithCoverage": 0,
+      "scenariosWithoutCoverage": 1,
+      "totalSamples": 0,
+      "coverageRate": 0,
+      "scenarios": [
+        {
+          "scenario": "postgres-baseline-comparison",
+          "status": "unavailable",
+          "reason": "not_reported",
+          "sampleCount": 0
+        }
+      ]
+    },
+    "writePathAttributionSummary": {
+      "scenariosWithDiagnostics": 0,
+      "topPhases": []
+    },
+    "scaleEfficiencySummary": {
+      "observationCount": 0,
+      "comparableGroupCount": 0,
+      "groups": [],
+      "topOpportunities": []
+    },
+    "scenarios": [
+      {
+        "scenario": "postgres-baseline-comparison",
+        "similarityKey": "postgres-baseline-comparison|default",
+        "current": {
+          "passed": false,
+          "clusterSize": 7,
+          "durationMs": 141269,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "previousSimilarRun": {
+          "reportTimestamp": "2026-02-27T06:56:37.894Z",
+          "reportPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-3node-20260227T065520Z.report.json",
+          "passed": false,
+          "clusterSize": 3,
+          "durationMs": 76193,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "deltaVsPrevious": {
+          "passedChanged": false,
+          "clusterSizeChanged": true,
+          "durationMs": 65076,
+          "durationRatio": 0.8540942081293558,
+          "opsPerSec": 0,
+          "opsPerSecRatio": null,
+          "opsPerSecPerNode": 0,
+          "opsPerSecPerNodeRatio": null,
+          "p99LatencyMs": 0,
+          "p99LatencyMsRatio": null
+        },
+        "postgresBaseline": null,
+        "parity": null,
+        "writePathTopPhases": []
+      }
+    ]
+  },
+  "scenarios": [
+    {
+      "scenario": "postgres-baseline-comparison",
+      "passed": false,
+      "duration": 141269,
+      "clusterSize": 7,
+      "startedAt": "2026-02-27T06:56:49.443Z",
+      "convergenceTiming": null,
+      "analysisSummary": null,
+      "error": "postgres-baseline-comparison failed in phase pre_load_gate: strict_preload_readiness_failed: SUT load nodes did not reach quiescent state within 90000ms (nodeProbeFailures=node_probe_error:35a891b8-c1a0-5064-9c6e-2acfba61c2a7=discovery_not_ready:schema_version_unknown; node_probe_error:11601fe0-72d6-5853-8590-ec2881853e72=discovery_not_ready:routing_not_ready|schema_version_unknown; node_probe_error:ebc4aa0b-06c6-506d-93ea-1dd2deca3f58=discovery_not_ready:routing_not_ready|schema_version_unknown; node_probe_error:8be8d30f-4499-5eed-865c-71b4d529a67a=discovery_not_ready:routing_not_ready|schema_version_unknown; node_probe_error:ff60df70-c157-50cb-bfdf-f617df0e5cb4=discovery_not_ready:routing_not_ready|schema_version_unknown; node_probe_error:37ab9190-8bcc-5378-ac57-9d012e3bf838=discovery_not_ready:routing_not_ready|schema_version_unknown; node_probe_error:11601fe0-72d6-5853-8590-ec2881853e72=discovery_not_ready:schema_version_unknown, inFlightReplicaOperations=in_flight_replica_operations:2, leadershipStability=leadership_unstable:0,leadership_unstable:645,leadership_unstable:1349,leadership_unstable:1980, readyLoadNodes=1), node_reasons=35a891b8-c1a0-5064-9c6e-2acfba61c2a7:discovery_not_ready:schema_version_unknown;11601fe0-72d6-5853-8590-ec2881853e72:discovery_not_ready:routing_not_ready|schema_version_unknown|discovery_not_ready:schema_version_unknown;ebc4aa0b-06c6-506d-93ea-1dd2deca3f58:discovery_not_ready:routing_not_ready|schema_version_unknown;8be8d30f-4499-5eed-865c-71b4d529a67a:discovery_not_ready:routing_not_ready|schema_version_unknown;ff60df70-c157-50cb-bfdf-f617df0e5cb4:discovery_not_ready:routing_not_ready|schema_version_unknown;37ab9190-8bcc-5378-ac57-9d012e3bf838:discovery_not_ready:routing_not_ready|schema_version_unknown",
+      "stackTrace": "Error: postgres-baseline-comparison failed in phase pre_load_gate: strict_preload_readiness_failed: SUT load nodes did not reach quiescent state within 90000ms (nodeProbeFailures=node_probe_error:35a891b8-c1a0-5064-9c6e-2acfba61c2a7=discovery_not_ready:schema_version_unknown; node_probe_error:11601fe0-72d6-5853-8590-ec2881853e72=discovery_not_ready:routing_not_ready|schema_version_unknown; node_probe_error:ebc4aa0b-06c6-506d-93ea-1dd2deca3f58=discovery_not_ready:routing_not_ready|schema_version_unknown; node_probe_error:8be8d30f-4499-5eed-865c-71b4d529a67a=discovery_not_ready:routing_not_ready|schema_version_unknown; node_probe_error:ff60df70-c157-50cb-bfdf-f617df0e5cb4=discovery_not_ready:routing_not_ready|schema_version_unknown; node_probe_error:37ab9190-8bcc-5378-ac57-9d012e3bf838=discovery_not_ready:routing_not_ready|schema_version_unknown; node_probe_error:11601fe0-72d6-5853-8590-ec2881853e72=discovery_not_ready:schema_version_unknown, inFlightReplicaOperations=in_flight_replica_operations:2, leadershipStability=leadership_unstable:0,leadership_unstable:645,leadership_unstable:1349,leadership_unstable:1980, readyLoadNodes=1), node_reasons=35a891b8-c1a0-5064-9c6e-2acfba61c2a7:discovery_not_ready:schema_version_unknown;11601fe0-72d6-5853-8590-ec2881853e72:discovery_not_ready:routing_not_ready|schema_version_unknown|discovery_not_ready:schema_version_unknown;ebc4aa0b-06c6-506d-93ea-1dd2deca3f58:discovery_not_ready:routing_not_ready|schema_version_unknown;8be8d30f-4499-5eed-865c-71b4d529a67a:discovery_not_ready:routing_not_ready|schema_version_unknown;ff60df70-c157-50cb-bfdf-f617df0e5cb4:discovery_not_ready:routing_not_ready|schema_version_unknown;37ab9190-8bcc-5378-ac57-9d012e3bf838:discovery_not_ready:routing_not_ready|schema_version_unknown\n    at Module.run (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/scenarios/postgres-baseline-comparison.js:5770:19)\n    at async runScenarios (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:1056:9)\n    at async main (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:1593:33)",
+      "logs": null,
+      "playback": {
+        "scenarioName": "postgres-baseline-comparison",
+        "startedAt": 1772175409457,
+        "endedAt": 1772175550736,
+        "durationMs": 141279,
+        "files": {
+          "events": "test-output/reports/.playback/postgres-baseline-7node-20260227T065649Z/postgres-baseline-comparison/events.ndjson",
+          "samples": "test-output/reports/.playback/postgres-baseline-7node-20260227T065649Z/postgres-baseline-comparison/samples.ndjson",
+          "snapshots": "test-output/reports/.playback/postgres-baseline-7node-20260227T065649Z/postgres-baseline-comparison/snapshots.ndjson",
+          "manifest": "test-output/reports/.playback/postgres-baseline-7node-20260227T065649Z/postgres-baseline-comparison/playback-manifest.json",
+          "viewer": "test-output/reports/.playback/postgres-baseline-7node-20260227T065649Z/postgres-baseline-comparison/playback-viewer.html"
+        },
+        "counts": {
+          "events": 57,
+          "samples": 761,
+          "snapshots": 133
+        },
+        "warnings": []
+      },
+      "trace": null,
+      "traceAssertion": null,
+      "memoryLeak": {
+        "enabled": false,
+        "analyzed": false,
+        "leakDetected": false,
+        "sampleCount": 0,
+        "nodeCount": 0,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "nodes": [],
+        "warnings": [],
+        "config": {
+          "enabled": false,
+          "failOnDetection": false,
+          "requireSamples": false,
+          "minSamplesPerNode": 8,
+          "warmupFraction": 0.2,
+          "minWarmupMs": 30000,
+          "minAnalysisWindowMs": 60000,
+          "maxPositiveSlopeBytesPerMin": 1048576,
+          "minGrowthBytes": 16777216,
+          "minPositiveDeltaRatio": 0.65,
+          "captureHeapArtifacts": false,
+          "heapSnapshotNearLimitCount": 2
+        }
+      },
+      "memoryLeakAssertion": null,
+      "performanceDiagnostics": null,
+      "details": {
+        "diagnostics": {
+          "failure": {
+            "schemaVersion": 1,
+            "rootCauseClass": "discovery",
+            "phase": "pre_load_gate",
+            "affectedNodeIds": [
+              "11601fe0-72d6-5853-8590-ec2881853e72",
+              "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+              "37ab9190-8bcc-5378-ac57-9d012e3bf838",
+              "8be8d30f-4499-5eed-865c-71b4d529a67a",
+              "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58",
+              "ff60df70-c157-50cb-bfdf-f617df0e5cb4"
+            ],
+            "reasonCounts": {
+              "strict_preload_readiness_failed: SUT load nodes did not reach quiescent state within 90000ms (nodeProbeFailures=node_probe_error:35a891b8-c1a0-5064-9c6e-2acfba61c2a7=discovery_not_ready:schema_version_unknown; node_probe_error:11601fe0-72d6-5853-8590-ec2881853e72=discovery_not_ready:routing_not_ready|schema_version_unknown; node_probe_error:ebc4aa0b-06c6-506d-93ea-1dd2deca3f58=discovery_not_ready:routing_not_ready|schema_version_unknown; node_probe_error:8be8d30f-4499-5eed-865c-71b4d529a67a=discovery_not_ready:routing_not_ready|schema_version_unknown; node_probe_error:ff60df70-c157-50cb-bfdf-f617df0e5cb4=discovery_not_ready:routing_not_ready|schema_version_unknown; node_probe_error:37ab9190-8bcc-5378-ac57-9d012e3bf838=discovery_not_ready:routing_not_ready|schema_version_unknown; node_probe_error:11601fe0-72d6-5853-8590-ec2881853e72=discovery_not_ready:schema_version_unknown, inFlightReplicaOperations=in_flight_replica_operations:2, leadershipStability=leadership_unstable:0,leadership_unstable:645,leadership_unstable:1349,leadership_unstable:1980, readyLoadNodes=1), node_reasons=35a891b8-c1a0-5064-9c6e-2acfba61c2a7:discovery_not_ready:schema_version_unknown;11601fe0-72d6-5853-8590-ec2881853e72:discovery_not_ready:routing_not_ready|schema_version_unknown|discovery_not_ready:schema_version_unknown;ebc4aa0b-06c6-506d-93ea-1dd2deca3f58:discovery_not_ready:routing_not_ready|schema_version_unknown;8be8d30f-4499-5eed-865c-71b4d529a67a:discovery_not_ready:routing_not_ready|schema_version_unknown;ff60df70-c157-50cb-bfdf-f617df0e5cb4:discovery_not_ready:routing_not_ready|schema_version_unknown;37ab9190-8bcc-5378-ac57-9d012e3bf838:discovery_not_ready:routing_not_ready|schema_version_unknown": 1
+            },
+            "strictMode": true,
+            "versionConvergence": {
+              "requiredSchemaVersion": "1772175445874",
+              "nodes": {
+                "7493b0ab-a054-5fad-a91b-5e331db29304": {
+                  "requiredSchemaVersion": "1772175445874",
+                  "observedSchemaVersion": "1772175445874",
+                  "ready": true,
+                  "unmetReasons": []
+                },
+                "35a891b8-c1a0-5064-9c6e-2acfba61c2a7": {
+                  "requiredSchemaVersion": "1772175445874",
+                  "observedSchemaVersion": null,
+                  "ready": false,
+                  "unmetReasons": [
+                    "schema_version_unknown"
+                  ]
+                },
+                "11601fe0-72d6-5853-8590-ec2881853e72": {
+                  "requiredSchemaVersion": "1772175445874",
+                  "observedSchemaVersion": null,
+                  "ready": false,
+                  "unmetReasons": [
+                    "schema_version_unknown"
+                  ]
+                },
+                "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58": {
+                  "requiredSchemaVersion": "1772175445874",
+                  "observedSchemaVersion": null,
+                  "ready": false,
+                  "unmetReasons": [
+                    "routing_not_ready",
+                    "schema_version_unknown"
+                  ]
+                },
+                "8be8d30f-4499-5eed-865c-71b4d529a67a": {
+                  "requiredSchemaVersion": "1772175445874",
+                  "observedSchemaVersion": null,
+                  "ready": false,
+                  "unmetReasons": [
+                    "routing_not_ready",
+                    "schema_version_unknown"
+                  ]
+                },
+                "ff60df70-c157-50cb-bfdf-f617df0e5cb4": {
+                  "requiredSchemaVersion": "1772175445874",
+                  "observedSchemaVersion": null,
+                  "ready": false,
+                  "unmetReasons": [
+                    "routing_not_ready",
+                    "schema_version_unknown"
+                  ]
+                },
+                "37ab9190-8bcc-5378-ac57-9d012e3bf838": {
+                  "requiredSchemaVersion": "1772175445874",
+                  "observedSchemaVersion": null,
+                  "ready": false,
+                  "unmetReasons": [
+                    "routing_not_ready",
+                    "schema_version_unknown"
+                  ]
+                }
+              }
+            },
+            "versionLagSummary": {
+              "requiredSchemaVersion": "1772175445874",
+              "nodes": {
+                "7493b0ab-a054-5fad-a91b-5e331db29304": {
+                  "observedSchemaVersion": "1772175445874",
+                  "requiredSchemaVersion": "1772175445874",
+                  "unmetReasons": [],
+                  "lagging": false
+                },
+                "35a891b8-c1a0-5064-9c6e-2acfba61c2a7": {
+                  "observedSchemaVersion": null,
+                  "requiredSchemaVersion": "1772175445874",
+                  "unmetReasons": [
+                    "schema_version_unknown"
+                  ],
+                  "lagging": true
+                },
+                "11601fe0-72d6-5853-8590-ec2881853e72": {
+                  "observedSchemaVersion": null,
+                  "requiredSchemaVersion": "1772175445874",
+                  "unmetReasons": [
+                    "schema_version_unknown"
+                  ],
+                  "lagging": true
+                },
+                "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58": {
+                  "observedSchemaVersion": null,
+                  "requiredSchemaVersion": "1772175445874",
+                  "unmetReasons": [
+                    "routing_not_ready",
+                    "schema_version_unknown"
+                  ],
+                  "lagging": true
+                },
+                "8be8d30f-4499-5eed-865c-71b4d529a67a": {
+                  "observedSchemaVersion": null,
+                  "requiredSchemaVersion": "1772175445874",
+                  "unmetReasons": [
+                    "routing_not_ready",
+                    "schema_version_unknown"
+                  ],
+                  "lagging": true
+                },
+                "ff60df70-c157-50cb-bfdf-f617df0e5cb4": {
+                  "observedSchemaVersion": null,
+                  "requiredSchemaVersion": "1772175445874",
+                  "unmetReasons": [
+                    "routing_not_ready",
+                    "schema_version_unknown"
+                  ],
+                  "lagging": true
+                },
+                "37ab9190-8bcc-5378-ac57-9d012e3bf838": {
+                  "observedSchemaVersion": null,
+                  "requiredSchemaVersion": "1772175445874",
+                  "unmetReasons": [
+                    "routing_not_ready",
+                    "schema_version_unknown"
+                  ],
+                  "lagging": true
+                }
+              }
+            },
+            "nodeReasonsByNodeId": {
+              "35a891b8-c1a0-5064-9c6e-2acfba61c2a7": [
+                "discovery_not_ready:schema_version_unknown"
+              ],
+              "11601fe0-72d6-5853-8590-ec2881853e72": [
+                "discovery_not_ready:routing_not_ready|schema_version_unknown",
+                "discovery_not_ready:schema_version_unknown"
+              ],
+              "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58": [
+                "discovery_not_ready:routing_not_ready|schema_version_unknown"
+              ],
+              "8be8d30f-4499-5eed-865c-71b4d529a67a": [
+                "discovery_not_ready:routing_not_ready|schema_version_unknown"
+              ],
+              "ff60df70-c157-50cb-bfdf-f617df0e5cb4": [
+                "discovery_not_ready:routing_not_ready|schema_version_unknown"
+              ],
+              "37ab9190-8bcc-5378-ac57-9d012e3bf838": [
+                "discovery_not_ready:routing_not_ready|schema_version_unknown"
+              ]
+            }
+          }
+        }
+      },
+      "exampleResults": null,
+      "loadMetrics": null,
+      "partitionHotspots": null,
+      "optimizationPriorities": null
+    }
+  ],
+  "benchmarkRegressionGate": {
+    "enabled": false,
+    "status": "skipped",
+    "reason": "disabled",
+    "settings": {
+      "enabled": false,
+      "maxThroughputRegressionRatio": 0.1,
+      "minimumThroughputRatioSutToBaseline": 0.1,
+      "baselineProvider": "liferaft",
+      "failIfBaselineMissing": false,
+      "approvedMitigationId": null,
+      "parityMismatchPolicy": "warn"
+    },
+    "currentProvider": "liferaft",
+    "baselineProvider": "liferaft",
+    "comparedScenarioCount": 0,
+    "failedScenarioCount": 0,
+    "mitigatedScenarioCount": 0,
+    "missingBaselineScenarios": [],
+    "comparisons": [],
+    "parityMismatchCount": 0,
+    "lowThroughputRatioCount": 0,
+    "warnings": []
+  },
+  "metadata": {
+    "raftProvider": "liferaft",
+    "configPath": "test/distributed/config/local-benchmark-7node.json",
+    "scenarioFilter": "postgres-baseline-comparison"
+  }
+}

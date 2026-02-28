@@ -42,6 +42,12 @@ const ADMIN_STREAM_PATH = '/api/admin/stream';
 const ADMIN_MESSAGE_TYPE_QUERY = 'query';
 const ADMIN_MESSAGE_TYPE_QUERY_RESULT = 'query_result';
 const ADMIN_SMOKE_QUERY_SQL = 'SELECT node_id FROM nodes LIMIT 1';
+const ADMIN_DISCOVERY_TABLE_NAME = 'nodes';
+const ADMIN_DISCOVERY_SQL =
+  'SELECT * FROM service_discovery_local(\'' + ADMIN_DISCOVERY_TABLE_NAME + '\')';
+const ADMIN_DISCOVERY_SERVICE_ID = 'sys-postgres-wire';
+const ADMIN_DISCOVERY_PROTOCOL = 'postgresql';
+const ADMIN_DISCOVERY_HEALTHY_STATUS = 'healthy';
 
 const SEED_NODE_ID = '550e8400-e29b-41d4-a716-446655440600';
 const JOINING_NODE_IDS = Object.freeze([
@@ -49,6 +55,8 @@ const JOINING_NODE_IDS = Object.freeze([
   '550e8400-e29b-41d4-a716-446655440602',
   '550e8400-e29b-41d4-a716-446655440603',
   '550e8400-e29b-41d4-a716-446655440604',
+  '550e8400-e29b-41d4-a716-446655440605',
+  '550e8400-e29b-41d4-a716-446655440606',
 ]);
 
 const JOINING_CONFIG = Object.freeze({
@@ -64,6 +72,13 @@ function getNodeMessageGroupRows(systemTableCache, nodeId) {
     return row[COLUMN.NODE_ID] === nodeId &&
       row[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP &&
       row[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE;
+  }) || [];
+}
+
+function getNodeMessageGroupRowsAnyStatus(systemTableCache, nodeId) {
+  return systemTableCache.filter(TABLES.SERVICES, (row) => {
+    return row[COLUMN.NODE_ID] === nodeId &&
+      row[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP;
   }) || [];
 }
 
@@ -239,6 +254,22 @@ async function queryAdminWebSocket(port, sql) {
   });
 }
 
+function extractPostgresWireReplicas(discoveryRows) {
+  const snapshot = discoveryRows[NUM.ZERO];
+  const services = Array.isArray(snapshot?.services) ? snapshot.services : [];
+  const service = services.find((entry) => {
+    if (!entry || typeof entry !== 'object') {
+      return false;
+    }
+    if (entry.protocol !== ADMIN_DISCOVERY_PROTOCOL) {
+      return false;
+    }
+    const serviceIds = Array.isArray(entry.serviceIds) ? entry.serviceIds : [];
+    return serviceIds.includes(ADMIN_DISCOVERY_SERVICE_ID);
+  });
+  return Array.isArray(service?.replicas) ? service.replicas : [];
+}
+
 test('message group formation across multi-node joins', {timeout: TEST_TIMEOUT_MS}, async (t) => {
   initializeTestEnvironment({
     rebalancer: {
@@ -369,6 +400,31 @@ test('message group formation across multi-node joins', {timeout: TEST_TIMEOUT_M
         const rows = getNodeMessageGroupRows(systemTableCache, joiningNodeId);
         return rows.length >= MIN_LOCAL_MESSAGE_GROUPS;
       }, MESSAGE_GROUP_WAIT_TIMEOUT_MS, POLL_INTERVAL_MS);
+      if (!hasCacheRows) {
+        const seedRowsAnyStatus = getNodeMessageGroupRowsAnyStatus(
+          systemTableCache,
+          joiningNodeId,
+        );
+        const localSystemTableCache = joiningServicesByNode
+          .get(joiningNodeId)?.cdcIntegrationService?.systemTableCache;
+        const localRowsAnyStatus = localSystemTableCache ?
+          getNodeMessageGroupRowsAnyStatus(localSystemTableCache, joiningNodeId) :
+          [];
+        t.comment(
+          `[diag] missing active message-group rows for ${joiningNodeId}; ` +
+          `seedRowsAnyStatus=${JSON.stringify(seedRowsAnyStatus.map((row) => ({
+            serviceId: row[COLUMN.SERVICE_ID],
+            status: row[COLUMN.STATUS],
+            groupId: row[COLUMN.GROUP_ID],
+            raftRole: row[COLUMN.RAFT_ROLE] || null,
+          })))}; localRowsAnyStatus=${JSON.stringify(localRowsAnyStatus.map((row) => ({
+            serviceId: row[COLUMN.SERVICE_ID],
+            status: row[COLUMN.STATUS],
+            groupId: row[COLUMN.GROUP_ID],
+            raftRole: row[COLUMN.RAFT_ROLE] || null,
+          })))}`,
+        );
+      }
       t.equal(
         hasCacheRows,
         true,
@@ -485,6 +541,55 @@ test('message group formation across multi-node joins', {timeout: TEST_TIMEOUT_M
         t.ok(
           queryRows.length >= NUM.ONE,
           `${adminNodeId} admin websocket should return node rows`,
+        );
+      }
+
+      let latestDiscoveryReplicaSummary = null;
+      const allReplicaReadinessReady = await waitFor(async () => {
+        try {
+          const discoveryRows = await queryAdminWebSocket(
+            adminPort,
+            ADMIN_DISCOVERY_SQL,
+          );
+          const replicas = extractPostgresWireReplicas(discoveryRows)
+            .filter((replica) => {
+              if (!replica || typeof replica !== 'object') {
+                return false;
+              }
+              const replicaNodeId = String(replica.nodeId || '');
+              if (!replicaNodeId) {
+                return false;
+              }
+              const healthStatus = String(replica.healthStatus || '').toLowerCase();
+              return healthStatus === ADMIN_DISCOVERY_HEALTHY_STATUS;
+            });
+          latestDiscoveryReplicaSummary = replicas.map((replica) => ({
+            nodeId: replica.nodeId,
+            routingReady: replica?.readiness?.routingReady,
+            schemaReady: replica?.readiness?.schemaReady,
+          }));
+          if (replicas.length < expectedReadyNodeCount) {
+            return false;
+          }
+          return replicas.every((replica) =>
+            replica?.readiness?.routingReady === true &&
+            replica?.readiness?.schemaReady === true,
+          );
+        } catch (_error) {
+          return false;
+        }
+      }, ADMIN_HEALTH_WAIT_TIMEOUT_MS, POLL_INTERVAL_MS);
+
+      t.equal(
+        allReplicaReadinessReady,
+        true,
+        `${adminNodeId} table-scoped discovery should keep ` +
+          'postgres-wire replicas route/schema ready',
+      );
+      if (!allReplicaReadinessReady) {
+        t.comment(
+          '[diag] ' + adminNodeId + ' readiness snapshot=' +
+            JSON.stringify(latestDiscoveryReplicaSummary),
         );
       }
     }

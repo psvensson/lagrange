@@ -4,30 +4,30 @@ TAP version 14
         ok 1 - should return same instance
         ok 2 - should be ServiceThreadManager
         1..2
-    ok 1 - singleton pattern # time=5.474ms
+    ok 1 - singleton pattern # time=4.779ms
     
     # Subtest: initialization
         ok 1 - should not be initialized initially
         ok 2 - should be initialized after init
         1..2
-    ok 2 - initialization # time=2.445ms
+    ok 2 - initialization # time=2.154ms
     
     # Subtest: double initialization is idempotent
         ok 1 - should remain initialized
         1..1
-    ok 3 - double initialization is idempotent # time=0.909ms
+    ok 3 - double initialization is idempotent # time=1.129ms
     
     # Subtest: execute operation without initialization throws
         ok 1 - should throw not initialized error
         1..1
-    ok 4 - execute operation without initialization throws # time=0.864ms
+    ok 4 - execute operation without initialization throws # time=1.077ms
     
     # Subtest: execute ping operation
         ok 1 - should return ok status
         ok 2 - should return service ID
         ok 3 - should include timestamp
         1..3
-    ok 5 - execute ping operation # time=454.55ms
+    ok 5 - execute ping operation # time=661.084ms
     
     # Subtest: register and unregister service
         ok 1 - should register successfully
@@ -36,24 +36,24 @@ TAP version 14
         ok 4 - should unregister successfully
         ok 5 - should not find service after unregister
         1..5
-    ok 6 - register and unregister service # time=498.393ms
+    ok 6 - register and unregister service # time=633.516ms
     
     # Subtest: duplicate registration throws
         ok 1 - should throw already registered
         1..1
-    ok 7 - duplicate registration throws # time=469.778ms
+    ok 7 - duplicate registration throws # time=651.522ms
     
     # Subtest: unregister non-existent service throws
         ok 1 - should throw not found error
         1..1
-    ok 8 - unregister non-existent service throws # time=0.735ms
+    ok 8 - unregister non-existent service throws # time=0.879ms
     
     # Subtest: get all services
         ok 1 - should have 2 services
         ok 2 - should include service-1
         ok 3 - should include service-2
         1..3
-    ok 9 - get all services # time=447.08ms
+    ok 9 - get all services # time=585.853ms
     
     # Subtest: get service count
         ok 1 - should start with 0 services
@@ -61,38 +61,38 @@ TAP version 14
         ok 3 - should have 2 services
         ok 4 - should have 1 service after unregister
         1..4
-    ok 10 - get service count # time=447.85ms
+    ok 10 - get service count # time=594.915ms
     
     # Subtest: check service health
         ok 1 - should return service ID
         ok 2 - should be healthy
         ok 3 - should include timestamp
         1..3
-    ok 11 - check service health # time=447.051ms
+    ok 11 - check service health # time=589.867ms
     
     # Subtest: health check for non-existent service throws
         ok 1 - should throw not found error
         1..1
-    ok 12 - health check for non-existent service throws # time=0.745ms
+    ok 12 - health check for non-existent service throws # time=0.928ms
     
     # Subtest: get pool stats
         ok 1 - should return stats object
         ok 2 - should have threads count
         ok 3 - should have completed count
         1..3
-    ok 13 - get pool stats # time=1.774ms
+    ok 13 - get pool stats # time=2.613ms
     
     # Subtest: pool stats returns null when not initialized
         ok 1 - should return null when not initialized
         1..1
-    ok 14 - pool stats returns null when not initialized # time=0.283ms
+    ok 14 - pool stats returns null when not initialized # time=0.437ms
     
     # Subtest: shutdown cleans up resources
         ok 1 - should have 1 service
         ok 2 - should not be initialized
         ok 3 - should have 0 services
         1..3
-    ok 15 - shutdown cleans up resources # time=457.586ms
+    ok 15 - shutdown cleans up resources # time=596.276ms
     
     # Subtest: shutdown still destroys pool when unregister fails
         ok 1 - shutdown should surface first unregister error
@@ -100,16 +100,16 @@ TAP version 14
         ok 3 - manager should be marked uninitialized
         ok 4 - service map should be cleared on shutdown
         1..4
-    ok 16 - shutdown still destroys pool when unregister fails # time=1.555ms
+    ok 16 - shutdown still destroys pool when unregister fails # time=1.589ms
     
     # Subtest: emits events on service lifecycle
         ok 1 - should emit 2 events
         ok 2 - should be equivalent
         ok 3 - should be equivalent
         1..3
-    ok 17 - emits events on service lifecycle # time=481.186ms
+    ok 17 - emits events on service lifecycle # time=594.64ms
     
     1..17
-ok 1 - ServiceThreadManager # time=4006.456ms
+ok 1 - ServiceThreadManager # time=5398.827ms
 
 1..1

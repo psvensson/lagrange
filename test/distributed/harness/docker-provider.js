@@ -11,11 +11,11 @@ import {
   TIMEOUTS,
   DOCKER_DEFAULTS,
   RESOURCE_DEFAULTS,
+  CONTAINER_LOG_TAIL_LINES,
 } from './constants.js';
 
 const CONTAINER_RUNNING_STATE = 'running';
 const START_POLL_INTERVAL_MS = 250;
-const LOG_TAIL_ON_FAILURE = 50;
 const STOP_TIMEOUT_SECONDS = 10;
 const PERCENT_MULTIPLIER = 100;
 const MIN_CPU_COUNT = 1;
@@ -473,7 +473,7 @@ class DockerProvider {
   async _cleanupFailedContainer(containerId) {
     try {
       const logs = await this.getContainerLogs(containerId, {
-        tail: LOG_TAIL_ON_FAILURE,
+        tail: CONTAINER_LOG_TAIL_LINES,
       });
       if (logs) {
         process.stderr.write(
@@ -651,7 +651,7 @@ class DockerProvider {
       if (isStringTooLongError && normalizedTail === null) {
         return this.getContainerLogs(containerId, {
           ...options,
-          tail: LOG_TAIL_ON_FAILURE,
+          tail: CONTAINER_LOG_TAIL_LINES,
         });
       }
       throw error;

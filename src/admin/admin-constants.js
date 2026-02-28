@@ -16,6 +16,8 @@ const ADMIN_ROUTE = Object.freeze({
   TEST_RUN_STOP: '/api/admin/test-runs/:runId/stop',
   TEST_RUN_STREAM: '/api/admin/test-runs/:runId/stream',
   SERVICE_DIAGNOSTICS: '/api/admin/diagnostics/services',
+  PREFLIGHT_CRITICAL_PATH_SNAPSHOT:
+    '/api/admin/diagnostics/preflight-critical-path-snapshot',
   CONTROL_SNAPSHOT: '/api/admin/control-snapshot',
   SERVICE_DISCOVERY: '/api/admin/discovery/services',
   DEBUG_SESSIONS: '/api/admin/debug/sessions',
@@ -298,6 +300,12 @@ const ADMIN_SERVICE_DISCOVERY = Object.freeze({
   QUERY_UNHEALTHY_POLICY_KEY: 'unhealthyPolicy',
 });
 
+const ADMIN_PREFLIGHT_CRITICAL_PATH_SNAPSHOT = Object.freeze({
+  QUERY_SQL: 'SELECT * FROM preflight_critical_path_snapshot_local()',
+  SCHEMA_VERSION: 1,
+  TABLE_NAME: 'preflight_critical_path_snapshot_local',
+});
+
 export {
   ADMIN_CONTENT_TYPE,
   ADMIN_CONFIG_KEY,
@@ -318,6 +326,7 @@ export {
   ADMIN_QUERY_RESULT,
   ADMIN_CONTROL_SNAPSHOT,
   ADMIN_SERVICE_DISCOVERY,
+  ADMIN_PREFLIGHT_CRITICAL_PATH_SNAPSHOT,
   ADMIN_ROUTE,
   ADMIN_STATUS,
   ADMIN_SUBSYSTEM,

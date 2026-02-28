@@ -356,6 +356,7 @@ class BootstrapService extends EventEmitter {
     // Node-ready rebalance dedupe state.
     this.rebalanceTriggeredNodeIds = new Set();
     this.pendingNodeReadyRebalanceTimers = new Map();
+    this.nodeReadyRebalanceRetryEligibleNodeIds = new Set();
 
     // Logging
     const loggingService = LoggingService.getInstance();
@@ -1130,6 +1131,11 @@ class BootstrapService extends EventEmitter {
     // Use MessageRouter directly for all services
     // MessageRouter handles both local and remote message delivery
     // No MessageGroupTransport needed - all messages go through MessageRouter
+    if (typeof this.messageRouter.setQueryMessageGroupServiceResolver === 'function') {
+      this.messageRouter.setQueryMessageGroupServiceResolver(() =>
+        this.getLeaderMessageGroupService(),
+      );
+    }
     this.transport = this.messageRouter;
 
     this.logger.debug(BootstrapLog.INFRA_READY, {
@@ -2013,8 +2019,15 @@ class BootstrapService extends EventEmitter {
 
       // Register partition CDC callback for each message-group replica.
       for (const messageGroup of messageGroups) {
+        const subscriberId = [
+          'bootstrap',
+          this.nodeId,
+          tableName,
+          replicaId,
+          messageGroup?.groupId || 'message-group',
+        ].join(':');
         // Register CDC handler on this partition replica
-        partition.subscribeToCDC(async (cdcEvent) => {
+        const cdcSubscriber = async (cdcEvent) => {
           if (cdcEvent.tableName === tableName) {
             this.logger.debug(BootstrapLog.CDC_EVENT_RECEIVED, {
               tableName: cdcEvent.tableName,
@@ -2058,6 +2071,19 @@ class BootstrapService extends EventEmitter {
               );
             }
           }
+        };
+        const handshake = await partition.subscribeToCDCWithHandshake(
+          cdcSubscriber,
+          {subscriberId},
+        );
+        this.logger.debug(BootstrapLog.CDC_SUBSCRIPTION_REGISTERED, {
+          tableName,
+          partitionId,
+          replicaId,
+          subscriberId: handshake.subscriberId,
+          subscriptionEpoch: handshake.subscriptionEpoch,
+          catchupMode: handshake.catchup.mode,
+          bufferedEventsReplayed: handshake.catchup.bufferedEventsReplayed,
         });
       }
 
@@ -2162,20 +2188,38 @@ class BootstrapService extends EventEmitter {
         // to schedule once the node becomes ready again.
         this.rebalanceTriggeredNodeIds.delete(nodeId);
       }
+      this.nodeReadyRebalanceRetryEligibleNodeIds.delete(nodeId);
       return false;
     }
 
+    const hasExistingTrigger = this.rebalanceTriggeredNodeIds.has(nodeId);
+    const hasPendingTimer = this.pendingNodeReadyRebalanceTimers.has(nodeId);
+    const retryEligible = this.nodeReadyRebalanceRetryEligibleNodeIds.has(nodeId);
+
     if (wasReady) {
-      this.logger.debug(
-        'Skipping node-ready rebalance trigger: no not-ready to ready transition',
+      if (!retryEligible || hasExistingTrigger || hasPendingTimer) {
+        this.logger.debug(
+          'Skipping node-ready rebalance trigger: no not-ready to ready transition',
+          {
+            nodeId,
+            status: nodeRow.status || null,
+            readyLeaseExpiresAt: nodeRow.ready_lease_expires_at || null,
+            operation: cdcEvent?.operation || null,
+          },
+        );
+        return false;
+      }
+
+      this.logger.info(
+        'Retrying node-ready rebalance trigger after previous cache-gated miss',
         {
           nodeId,
+          reason: BOOTSTRAP_REBALANCE_REASON.NODE_READY,
           status: nodeRow.status || null,
           readyLeaseExpiresAt: nodeRow.ready_lease_expires_at || null,
           operation: cdcEvent?.operation || null,
         },
       );
-      return false;
     }
 
     if (this.rebalanceTriggeredNodeIds.has(nodeId)) {
@@ -2220,6 +2264,7 @@ class BootstrapService extends EventEmitter {
     try {
       await this.waitForReadyNodeInCache(nodeId);
     } catch (error) {
+      this.nodeReadyRebalanceRetryEligibleNodeIds.add(nodeId);
       this.rebalanceTriggeredNodeIds.delete(nodeId);
       this.logger.warn(
         'Skipping node-ready rebalance trigger: node not ready in cache before timeout',
@@ -2232,6 +2277,7 @@ class BootstrapService extends EventEmitter {
       return;
     }
 
+    this.nodeReadyRebalanceRetryEligibleNodeIds.delete(nodeId);
     this.triggerRebalancingOnAllPartitions(BOOTSTRAP_REBALANCE_REASON.NODE_READY);
   }
 
@@ -2244,6 +2290,7 @@ class BootstrapService extends EventEmitter {
     }
     this.pendingNodeReadyRebalanceTimers.clear();
     this.rebalanceTriggeredNodeIds.clear();
+    this.nodeReadyRebalanceRetryEligibleNodeIds.clear();
   }
 
   /**
@@ -3186,7 +3233,14 @@ class BootstrapService extends EventEmitter {
       ) {
         await messageGroupService.subscribeToCDC(tableName);
 
-        partition.subscribeToCDC(async (cdcEvent) => {
+        const subscriberId = [
+          'bootstrap',
+          this.nodeId,
+          tableName,
+          options.replicaId,
+          messageGroupService?.groupId || 'message-group',
+        ].join(':');
+        const cdcSubscriber = async (cdcEvent) => {
           if (cdcEvent.tableName === tableName) {
             this.logger.debug(BootstrapLog.CDC_DYNAMIC_PARTITION_EVENT, {
               tableName: cdcEvent.tableName,
@@ -3216,12 +3270,20 @@ class BootstrapService extends EventEmitter {
               this.applyCurrentEpochFromCache();
             }
           }
-        });
+        };
+        const handshake = await partition.subscribeToCDCWithHandshake(
+          cdcSubscriber,
+          {subscriberId},
+        );
 
         this.logger.debug(BootstrapLog.CDC_DYNAMIC_SUBSCRIPTION, {
           tableName,
           partitionId: options.partitionId,
           replicaId: options.replicaId,
+          subscriberId: handshake.subscriberId,
+          subscriptionEpoch: handshake.subscriptionEpoch,
+          catchupMode: handshake.catchup.mode,
+          bufferedEventsReplayed: handshake.catchup.bufferedEventsReplayed,
         });
       }
 
@@ -3368,9 +3430,9 @@ class BootstrapService extends EventEmitter {
         writeRegistrationTrace(
           BOOTSTRAP_REPLICA_REGISTRATION_TRACE.EVENT_SKIP_MISSING_PARTITION,
           {
-          nodeId: this.nodeId,
-          attemptedCount,
-          replicaId,
+            nodeId: this.nodeId,
+            attemptedCount,
+            replicaId,
           },
         );
         this.logger.error(BootstrapLog.REPLICA_HANDLER_REGISTER_FAILED, {
@@ -3662,6 +3724,8 @@ class BootstrapService extends EventEmitter {
 
     const startedAt = Date.now();
     const totalPartitions = partitions.size;
+    const supportsSnapshotRegistration =
+      typeof stateMachine.registerReplicaSnapshot === 'function';
     let registeredCount = NUM.ZERO;
     let attemptedCount = NUM.ZERO;
     let skippedCount = NUM.ZERO;
@@ -3690,6 +3754,45 @@ class BootstrapService extends EventEmitter {
         return false;
       });
       persistSettles.push(tracked);
+    };
+    const registerReplicaSnapshot = (
+      replicaId,
+      partitionId,
+      currentAttempt,
+    ) => {
+      writeStateTrace(
+        BOOTSTRAP_REPLICA_REGISTRATION_TRACE.EVENT_TRANSITION_BEGIN,
+        {
+          nodeId: this.nodeId,
+          attemptedCount: currentAttempt,
+          replicaId,
+          partitionId,
+          targetState: ReplicaState.ACTIVE,
+        },
+      );
+      const registrationResult = stateMachine.registerReplicaSnapshot(
+        replicaId,
+        {
+          partitionId,
+          nodeId: this.nodeId,
+          state: ReplicaState.ACTIVE,
+          reason: BOOTSTRAP_REPLICA_REGISTRATION_REASON.BOOTSTRAP_REGISTRATION,
+          serviceId: replicaId,
+        },
+      );
+      writeStateTrace(
+        BOOTSTRAP_REPLICA_REGISTRATION_TRACE.EVENT_TRANSITION_END,
+        {
+          nodeId: this.nodeId,
+          attemptedCount: currentAttempt,
+          replicaId,
+          partitionId,
+          targetState: ReplicaState.ACTIVE,
+        },
+      );
+      if (registrationResult !== true) {
+        throw new Error('Replica snapshot registration rejected');
+      }
     };
     const transitionReplicaState = (
       replicaId,
@@ -3766,30 +3869,38 @@ class BootstrapService extends EventEmitter {
       }
 
       try {
-        transitionReplicaState(
-          replicaId,
-          partition.partitionId,
-          ReplicaState.PENDING,
-          attemptedCount,
-        );
-        transitionReplicaState(
-          replicaId,
-          partition.partitionId,
-          ReplicaState.CREATING,
-          attemptedCount,
-        );
-        transitionReplicaState(
-          replicaId,
-          partition.partitionId,
-          ReplicaState.SYNCING,
-          attemptedCount,
-        );
-        transitionReplicaState(
-          replicaId,
-          partition.partitionId,
-          ReplicaState.ACTIVE,
-          attemptedCount,
-        );
+        if (supportsSnapshotRegistration) {
+          registerReplicaSnapshot(
+            replicaId,
+            partition.partitionId,
+            attemptedCount,
+          );
+        } else {
+          transitionReplicaState(
+            replicaId,
+            partition.partitionId,
+            ReplicaState.PENDING,
+            attemptedCount,
+          );
+          transitionReplicaState(
+            replicaId,
+            partition.partitionId,
+            ReplicaState.CREATING,
+            attemptedCount,
+          );
+          transitionReplicaState(
+            replicaId,
+            partition.partitionId,
+            ReplicaState.SYNCING,
+            attemptedCount,
+          );
+          transitionReplicaState(
+            replicaId,
+            partition.partitionId,
+            ReplicaState.ACTIVE,
+            attemptedCount,
+          );
+        }
 
         registeredCount++;
         writeStateTrace(BOOTSTRAP_REPLICA_REGISTRATION_TRACE.EVENT_SUCCESS, {
@@ -3830,7 +3941,9 @@ class BootstrapService extends EventEmitter {
     }
 
     const expectedPersistCount =
-      registeredCount * BOOTSTRAP_REPLICA_STATE_TRANSITIONS_PER_REPLICA;
+      supportsSnapshotRegistration ?
+        NUM.ZERO :
+        registeredCount * BOOTSTRAP_REPLICA_STATE_TRANSITIONS_PER_REPLICA;
     this.logger.debug(BootstrapLog.STATE_MACHINE_REGISTERED, {
       registeredCount,
       totalPartitions: partitions.size,

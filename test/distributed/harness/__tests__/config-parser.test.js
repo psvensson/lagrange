@@ -9,6 +9,7 @@ import assert from 'node:assert';
 import {writeFile, mkdtemp, rm} from 'node:fs/promises';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
+import * as harnessConstants from '../constants.js';
 import {parseConfig, mergeWithDefaults} from '../config-parser.js';
 import {
   DEFAULT_CLUSTER_SIZE,
@@ -176,6 +177,29 @@ test('Unit: mergeWithDefaults fills all fields from empty object', async (t) => 
         config.raftProvider,
         RAFT_PROVIDER_DEFAULTS.provider,
       );
+    },
+  );
+});
+
+test('Unit: mergeWithDefaults includes deterministic debug defaults', async (t) => {
+  await t.test(
+    'deterministic debug defaults include seed and pinned intervals',
+    async () => {
+      const config = mergeWithDefaults({});
+      assert.ok(
+        harnessConstants.DETERMINISTIC_DEBUG_DEFAULTS &&
+          typeof harnessConstants.DETERMINISTIC_DEBUG_DEFAULTS === 'object',
+      );
+      assert.deepStrictEqual(config.deterministicDebug, {
+        enabled: harnessConstants.DETERMINISTIC_DEBUG_DEFAULTS.enabled,
+        seed: harnessConstants.DETERMINISTIC_DEBUG_DEFAULTS.seed,
+        convergenceSampleIntervalMs:
+          harnessConstants.DETERMINISTIC_DEBUG_DEFAULTS.
+            convergenceSampleIntervalMs,
+        preflightSampleIntervalMs:
+          harnessConstants.DETERMINISTIC_DEBUG_DEFAULTS.
+            preflightSampleIntervalMs,
+      });
     },
   );
 });

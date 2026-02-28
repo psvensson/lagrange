@@ -1,0 +1,19 @@
+{
+  "scenarioName": "diag-admin-discovery",
+  "startedAt": 1772225929105,
+  "endedAt": 1772226018876,
+  "durationMs": 89771,
+  "files": {
+    "events": "test-output/reports/.playback/diag-admin-discovery-3node-node-ready-retry-fix/diag-admin-discovery/events.ndjson",
+    "samples": "test-output/reports/.playback/diag-admin-discovery-3node-node-ready-retry-fix/diag-admin-discovery/samples.ndjson",
+    "snapshots": "test-output/reports/.playback/diag-admin-discovery-3node-node-ready-retry-fix/diag-admin-discovery/snapshots.ndjson",
+    "manifest": "test-output/reports/.playback/diag-admin-discovery-3node-node-ready-retry-fix/diag-admin-discovery/playback-manifest.json",
+    "viewer": "test-output/reports/.playback/diag-admin-discovery-3node-node-ready-retry-fix/diag-admin-discovery/playback-viewer.html"
+  },
+  "counts": {
+    "events": 29,
+    "samples": 140,
+    "snapshots": 61
+  },
+  "warnings": []
+}

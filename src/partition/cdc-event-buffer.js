@@ -98,14 +98,23 @@ class CDCEventBuffer {
     this.events = [];
 
     let replayedCount = NUM.ZERO;
-    for (const cdcEvent of eventsToReplay) {
+    for (let index = NUM.ZERO; index < eventsToReplay.length; index++) {
+      const cdcEvent = eventsToReplay[index];
       const identity = buildEventIdentity(cdcEvent);
       if (seen.has(identity)) {
         continue;
       }
       seen.add(identity);
-      await subscriber(cdcEvent);
-      replayedCount++;
+      try {
+        await subscriber(cdcEvent);
+        replayedCount++;
+      } catch (error) {
+        // Preserve the failed event and any remaining tail for the next replay.
+        // This prevents silent CDC loss when a subscriber fails transiently.
+        seen.delete(identity);
+        this.events = eventsToReplay.slice(index).concat(this.events);
+        throw error;
+      }
     }
     return replayedCount;
   }

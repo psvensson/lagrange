@@ -3,9 +3,9 @@
  *
  * Property 13: Heartbeat service periodic writes
  * For any running HeartbeatService instance, after N heartbeat intervals
- * have elapsed, the service shall issue N node heartbeat updates and
- * throttle node_endpoints upserts to avoid rewriting unchanged endpoints
- * on every heartbeat.
+ * have elapsed in a short burst, the service shall coalesce unchanged
+ * node heartbeat updates and throttle node_endpoints upserts to avoid
+ * rewriting unchanged rows on every tick.
  *
  * **Validates: Requirements 8.2**
  */
@@ -92,25 +92,34 @@ test('Property 13: Heartbeat service periodic writes',
             nodeAddress: 'ws://localhost:8080',
             cdcIntegrationService: mockCdc,
             systemTableCache: mockCache,
+            nodeMetadataMinUpdateIntervalMs: 1000,
+            nodeMetadataMaxStalenessMs: 5000,
           });
 
           service.initialize();
 
-          // Directly call sendHeartbeat N times instead of
-          // relying on timers (avoids real-time delays)
-          for (let i = 0; i < heartbeatCount; i++) {
-            await service.sendHeartbeat(null, null);
-            service.heartbeatCount++;
+          const originalNow = Date.now;
+          let now = 0;
+          Date.now = () => now;
+          try {
+            // Directly call sendHeartbeat N times instead of relying on timers.
+            // Keep calls inside min update interval to verify coalescing.
+            for (let i = 0; i < heartbeatCount; i++) {
+              await service.sendHeartbeat(null, null);
+              service.heartbeatCount++;
+              now += 10;
+            }
+          } finally {
+            Date.now = originalNow;
           }
 
-          // Heartbeat updates nodes every beat, and endpoint upsert is throttled.
-          const expectedNodeWrites = heartbeatCount;
+          const expectedNodeWrites = 1;
           const expectedEndpointWrites = 1;
 
           t.equal(
             mockCdc.updateCount, expectedNodeWrites,
-            `${heartbeatCount} heartbeats should produce ` +
-            `${expectedNodeWrites} node heartbeat updates`,
+            `${heartbeatCount} heartbeats should coalesce to ` +
+            `${expectedNodeWrites} node heartbeat update`,
           );
           t.equal(
             mockCdc.upsertCount, expectedEndpointWrites,

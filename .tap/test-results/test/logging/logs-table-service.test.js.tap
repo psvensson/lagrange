@@ -2,12 +2,12 @@ TAP version 14
 # Subtest: setup
     ok 1 - configuration initialized
     1..1
-ok 1 - setup # time=37.913ms
+ok 1 - setup # time=50.677ms
 
 # Subtest: LogsTableService singleton
     ok 1 - should return the same instance
     1..1
-ok 2 - LogsTableService singleton # time=0.805ms
+ok 2 - LogsTableService singleton # time=0.979ms
 
 # Subtest: LogsTableService initialization
     ok 1 - should not be initialized before initialize()
@@ -17,7 +17,7 @@ LogsTableService initialized
     ok 4 - should have zero write count
     ok 5 - should have zero error count
     1..5
-ok 3 - LogsTableService initialization # time=0.974ms
+ok 3 - LogsTableService initialization # time=1.188ms
 
 # Subtest: LogsTableService default config
     ok 1 - should have default batch size
@@ -25,21 +25,21 @@ ok 3 - LogsTableService initialization # time=0.974ms
     ok 3 - should have default max retries
     ok 4 - should have default retry delay
     1..4
-ok 4 - LogsTableService default config # time=0.297ms
+ok 4 - LogsTableService default config # time=0.416ms
 
 LogsTableService initialized
 # Subtest: LogsTableService flush routes write work through class C scheduler when configured
     ok 1 - flush should schedule execution under class C
 LogsTableService shutdown
     1..1
-ok 5 - LogsTableService flush routes write work through class C scheduler when configured # time=1.043ms
+ok 5 - LogsTableService flush routes write work through class C scheduler when configured # time=1.778ms
 
 LogsTableService initialized
 # Subtest: LogsTableService writeLogEntry queues entries
     ok 1 - should queue the entry
 LogsTableService shutdown
     1..1
-ok 6 - LogsTableService writeLogEntry queues entries # time=0.369ms
+ok 6 - LogsTableService writeLogEntry queues entries # time=0.536ms
 
 LogsTableService initialized
 # Subtest: LogsTableService bounds pending queue and drops overflow
@@ -47,7 +47,7 @@ LogsTableService initialized
     ok 2 - should count dropped writes when queue overflows
 LogsTableService shutdown
     1..2
-ok 7 - LogsTableService bounds pending queue and drops overflow # time=0.471ms
+ok 7 - LogsTableService bounds pending queue and drops overflow # time=0.895ms
 
 LogsTableService initialized
 # Subtest: LogsTableService prioritizes non-metrics entries when queue is full
@@ -56,7 +56,7 @@ LogsTableService initialized
     ok 3 - should drop one metrics entry
 LogsTableService shutdown
     1..3
-ok 8 - LogsTableService prioritizes non-metrics entries when queue is full # time=0.631ms
+ok 8 - LogsTableService prioritizes non-metrics entries when queue is full # time=0.673ms
 
 LogsTableService initialized
 # Subtest: LogsTableService flush with mock CDC service
@@ -70,7 +70,7 @@ LogsTableService initialized
     ok 8 - should have no pending writes after flush
     ok 9 - should update write count
     1..9
-ok 9 - LogsTableService flush with mock CDC service # time=0.943ms
+ok 9 - LogsTableService flush with mock CDC service # time=1.133ms
 
 LogsTableService initialized
 # Subtest: LogsTableService writes logs via upsert for idempotency
@@ -80,7 +80,7 @@ LogsTableService initialized
     ok 4 - should not record write error for duplicate-safe upsert
 LogsTableService shutdown
     1..4
-ok 10 - LogsTableService writes logs via upsert for idempotency # time=0.473ms
+ok 10 - LogsTableService writes logs via upsert for idempotency # time=0.575ms
 
 LogsTableService initialized
 # Subtest: LogsTableService handles write errors
@@ -88,7 +88,7 @@ LogsTableService initialized
     ok 2 - should increment error count
 LogsTableService shutdown
     1..2
-ok 11 - LogsTableService handles write errors # time=11.056ms
+ok 11 - LogsTableService handles write errors # time=10.774ms
 
 LogsTableService initialized
 # Subtest: LogsTableService batch flush on size threshold
@@ -96,9 +96,9 @@ LogsTableService initialized
     ok 2 - should eventually drain pending writes
 LogsTableService shutdown
     1..2
-ok 12 - LogsTableService batch flush on size threshold # time=21.607ms
+ok 12 - LogsTableService batch flush on size threshold # time=22.105ms
 
-{"level":30,"time":"2026-02-25T14:12:18.562Z","nodeId":"test-node","pid":2093525,"nodeId":"test-node","msg":"Buffered message 1"}
+{"level":30,"time":"2026-02-28T08:54:18.777Z","nodeId":"test-node","pid":3858589,"nodeId":"test-node","msg":"Buffered message 1"}
 # Subtest: LogsTableService connectToLoggingService flushes buffer
     ok 1 - should have buffered entries
 LogsTableService initialized
@@ -112,13 +112,13 @@ Connected to LoggingService, flushed 2 buffered entries
     ok 2 - should return flushed count
     ok 3 - logs table should be marked ready
     ok 4 - buffer should be empty
-{"level":30,"time":"2026-02-25T14:12:18.562Z","nodeId":"test-node","pid":2093525,"nodeId":"test-node","msg":"Buffered message 2"}
-{"level":30,"time":"2026-02-25T14:12:18.563Z","nodeId":"test-node","pid":2093525,"bufferedEntries":2,"flushMode":"background","nodeId":"test-node","msg":"Logs table ready, flushing buffer"}
+{"level":30,"time":"2026-02-28T08:54:18.777Z","nodeId":"test-node","pid":3858589,"nodeId":"test-node","msg":"Buffered message 2"}
+{"level":30,"time":"2026-02-28T08:54:18.778Z","nodeId":"test-node","pid":3858589,"bufferedEntries":2,"flushMode":"background","nodeId":"test-node","msg":"Logs table ready, flushing buffer"}
     ok 5 - should queue buffered entries via background flush
     ok 6 - should write buffered entries
 LogsTableService shutdown
     1..6
-ok 13 - LogsTableService connectToLoggingService flushes buffer # time=13.646ms
+ok 13 - LogsTableService connectToLoggingService flushes buffer # time=15.533ms
 
 LogsTableService initialized
 # Subtest: LogsTableService shutdown flushes pending
@@ -127,7 +127,7 @@ LogsTableService shutdown
     ok 2 - should flush on shutdown
     ok 3 - should not be initialized after shutdown
     1..3
-ok 14 - LogsTableService shutdown flushes pending # time=0.408ms
+ok 14 - LogsTableService shutdown flushes pending # time=0.925ms
 
 LogsTableService initialized
 # Subtest: LogsTableService shutdown drains queue while write is in-flight
@@ -137,13 +137,13 @@ LogsTableService shutdown
     ok 3 - shutdown should drain pending writes
     ok 4 - shutdown should finish with no in-flight writes
     1..4
-ok 15 - LogsTableService shutdown drains queue while write is in-flight # time=6.842ms
+ok 15 - LogsTableService shutdown drains queue while write is in-flight # time=7.945ms
 
 LogsTableService initialized
 # Subtest: LogsTableService handles null entry
     ok 1 - should not queue null entry
     1..1
-ok 16 - LogsTableService handles null entry # time=0.181ms
+ok 16 - LogsTableService handles null entry # time=0.51ms
 
 LogsTableService initialized
 # Subtest: LogsTableService drops logging-pipeline metrics to prevent recursion
@@ -151,25 +151,25 @@ LogsTableService initialized
     ok 2 - should not persist recursive pipeline metrics
 LogsTableService shutdown
     1..2
-ok 17 - LogsTableService drops logging-pipeline metrics to prevent recursion # time=0.309ms
+ok 17 - LogsTableService drops logging-pipeline metrics to prevent recursion # time=0.879ms
 
 LogsTableService initialized
 # Subtest: LogsTableService resetInstance avoids async shutdown side effects
     ok 1 - resetInstance should not start async shutdown work
     ok 2 - resetInstance should clear singleton
     1..2
-ok 18 - LogsTableService resetInstance avoids async shutdown side effects # time=0.223ms
+ok 18 - LogsTableService resetInstance avoids async shutdown side effects # time=0.537ms
 
 LogsTableService initialized
 # Subtest: LogsTableService drops writes once shutdown has started
     ok 1 - writeLogEntry should ignore writes after shutdown starts
 LogsTableService shutdown
     1..1
-ok 19 - LogsTableService drops writes once shutdown has started # time=0.186ms
+ok 19 - LogsTableService drops writes once shutdown has started # time=0.553ms
 
 # Subtest: cleanup
     ok 1 - cleanup complete
     1..1
-ok 20 - cleanup # time=0.111ms
+ok 20 - cleanup # time=0.266ms
 
 1..20

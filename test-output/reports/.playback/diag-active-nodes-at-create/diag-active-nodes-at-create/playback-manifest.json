@@ -1,0 +1,19 @@
+{
+  "scenarioName": "diag-active-nodes-at-create",
+  "startedAt": 1772086732912,
+  "endedAt": 1772086805526,
+  "durationMs": 72614,
+  "files": {
+    "events": "test-output/reports/.playback/diag-active-nodes-at-create/diag-active-nodes-at-create/events.ndjson",
+    "samples": "test-output/reports/.playback/diag-active-nodes-at-create/diag-active-nodes-at-create/samples.ndjson",
+    "snapshots": "test-output/reports/.playback/diag-active-nodes-at-create/diag-active-nodes-at-create/snapshots.ndjson",
+    "manifest": "test-output/reports/.playback/diag-active-nodes-at-create/diag-active-nodes-at-create/playback-manifest.json",
+    "viewer": "test-output/reports/.playback/diag-active-nodes-at-create/diag-active-nodes-at-create/playback-viewer.html"
+  },
+  "counts": {
+    "events": 59,
+    "samples": 81,
+    "snapshots": 29
+  },
+  "warnings": []
+}

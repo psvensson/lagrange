@@ -16,12 +16,6 @@ entrypoint: internal API, external PostgreSQL-wire protocol, or programmatic
 entrypoint into a canonical `SqlRequest` before delegation to SqlCore, so there
 is exactly one planner, one optimizer, and one execution path.
 
-Everything in the system is stored as tables.
-All tables are imnplemented as partitions.
-All partitions are raft groups using sqlite for storage..
-
-The system stores information abohut itself in itself.
-
 There are other raft abstractions - one is the message group, where every node in the system must be a part of one. So nodes organizes in one way themselves in three-ring raft group replicas which uses in-memory sqlite to ensure message deliveries to other nodes. Another is the WASM service group, a persistent Raft consensus group that hosts WASI/WASM handler functions with a replicated key-value store for session context, configurable read consistency (leader-only, strong via safety interval, or eventual), persistent timers with exactly-once firing semantics, and communication port allocation for external connectivity.
 
 It will be several orders of magnitude slower than any comparable system running on just one node, but it will never get slower - regardless of how much the system grows horizontally.
@@ -82,6 +76,30 @@ npm test
 npm run lint
 ```
 
+## On-Save System-Guideline Checks
+
+You can enforce `.kiro/steering/system guidelines.md` on every file save with
+an LLM-backed checker.
+
+1. Install the VS Code extension `emeraldwalk.runonsave`
+  (recommended in `.vscode/extensions.json`).
+2. Set env vars (for example in `.env.local`):
+
+```bash
+GUIDELINE_LLM_API_KEY=your_key
+GUIDELINE_LLM_BASE_URL=https://api.openai.com/v1
+GUIDELINE_LLM_MODEL=gpt-4.1-mini
+```
+
+When you save a `.js`, `.mjs`, `.cjs`, or `.md` file, VS Code runs:
+
+```bash
+npm run guard:guidelines:file -- <saved-file>
+```
+
+If a violation is found, the command exits non-zero and prints structured
+errors that include title, rule reference, and suggested fix.
+
 ## Deployment Probes
 
 Seed nodes expose dedicated probe endpoints:
@@ -91,8 +109,8 @@ Seed nodes expose dedicated probe endpoints:
 - `GET /readyz` for join/admin readiness
 - `GET /bootstrap/ready` for lightweight bootstrap-operation readiness
 
-Deployment profiles, NGINX retry guidance, and `/health` migration notes are
-documented in `docs/bootstrap-readiness-probes.md`.
+Readiness probe endpoint usage is documented in
+`docs/bootstrap-readiness-probes.md`.
 
 ## Architecture
 
@@ -107,7 +125,7 @@ documented in `docs/bootstrap-readiness-probes.md`.
 
 ### System Cache Seeding Architecture
 
-The system cache is the single source of truth for cluster metadata. All nodes maintain an in-memory cache of system tables that is kept up-to-date through Change Data Capture (CDC) events.
+System tables are the source of truth for cluster metadata. `SystemTableCache` is the read-optimized local view of CDC-propagated system tables on each node.
 
 #### System Tables
 

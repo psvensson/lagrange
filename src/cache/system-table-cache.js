@@ -8,6 +8,7 @@
 import {LoggingService} from '../logging/logging-service.js';
 import {COLUMN, NUM, STATE, TABLES, TYPEOF} from '../constants/index.js';
 import {assertCritical} from '../utils/assert.js';
+import {normalizeCauseId} from '../utils/cause-id.js';
 import {
   CACHE_CDC_OPERATIONS,
   CACHE_DEFAULT,
@@ -20,6 +21,7 @@ import {
   SYSTEM_CACHE_KEY_DESCRIPTOR,
   getSystemCachePrimaryKeyField,
 } from './system-cache-key-descriptor.js';
+import {HLCTimestamp} from '../hlc/hlc-timestamp.js';
 
 /**
  * System table names that are cached.
@@ -47,6 +49,9 @@ class SystemTableCache {
    */
   constructor() {
     this.tables = new Map();
+    this.appliedSchemaVersions = new Map();
+    this.lastAppliedAtMsByTableName = new Map();
+    this.lastAppliedCauseIdByTableName = new Map();
     this.listeners = new Set();
     this.logger = LoggingService.getInstance().forSubsystem(CACHE_SUBSYSTEM.CACHE);
     this.currentEpoch = CACHE_DEFAULT.INITIAL_EPOCH;
@@ -59,6 +64,71 @@ class SystemTableCache {
     for (const tableName of SYSTEM_TABLES) {
       this.tables.set(tableName, new Map());
     }
+  }
+
+  /**
+   * Record the latest applied schema version for one system table.
+   * Keeps the watermark monotonic when out-of-order CDC events are observed.
+   * @param {string} tableName - Name of the system table.
+   * @param {string|number} version - Applied schema/version watermark.
+   * @return {string|number|null} Current stored watermark for this table.
+   */
+  recordAppliedSchemaVersion(tableName, version) {
+    this.validateTableName(tableName);
+    if (version === null || typeof version === TYPEOF.UNDEFINED) {
+      return this.getAppliedSchemaVersion(tableName);
+    }
+
+    const currentVersion = this.appliedSchemaVersions.get(tableName);
+    if (typeof currentVersion === TYPEOF.UNDEFINED ||
+        this.compareSchemaVersions(version, currentVersion) >= NUM.ZERO) {
+      this.appliedSchemaVersions.set(tableName, version);
+      return version;
+    }
+
+    return currentVersion;
+  }
+
+  /**
+   * Get the latest applied schema/version watermark for one table.
+   * @param {string} tableName - Name of the system table.
+   * @return {string|number|null} Stored watermark, or null if unknown.
+   */
+  getAppliedSchemaVersion(tableName) {
+    this.validateTableName(tableName);
+    return this.appliedSchemaVersions.get(tableName) ?? null;
+  }
+
+  /**
+   * Get a read-only snapshot of applied schema/version watermarks.
+   * @return {Object<string, string|number>} Table-to-watermark map.
+   */
+  getAppliedSchemaVersions() {
+    const snapshot = {};
+    for (const [tableName, version] of this.appliedSchemaVersions.entries()) {
+      snapshot[tableName] = version;
+    }
+    return snapshot;
+  }
+
+  /**
+   * Get the last local wall-clock time (ms) we applied a change for a system table.
+   * @param {string} tableName - Name of the system table.
+   * @return {number|null}
+   */
+  getLastAppliedAtMs(tableName) {
+    this.validateTableName(tableName);
+    return this.lastAppliedAtMsByTableName.get(tableName) ?? null;
+  }
+
+  /**
+   * Get the last applied causal correlation ID for a system table, when available.
+   * @param {string} tableName - Name of the system table.
+   * @return {string|null}
+   */
+  getLastAppliedCauseId(tableName) {
+    this.validateTableName(tableName);
+    return this.lastAppliedCauseIdByTableName.get(tableName) ?? null;
   }
 
   /**
@@ -205,16 +275,20 @@ class SystemTableCache {
    * @param {Object} record - The record data
    * @private
    */
-  notifyListeners(tableName, operation, record) {
+  notifyListeners(tableName, operation, record, metadata) {
     if (this.listeners.size === NUM.ZERO) {
       return;
     }
+
+    const normalizedMetadata = metadata && typeof metadata === TYPEOF.OBJECT ?
+      metadata :
+      null;
 
     // Use setImmediate to make notifications non-blocking
     setImmediate(() => {
       for (const listener of this.listeners) {
         try {
-          listener(tableName, operation, record);
+          listener(tableName, operation, record, normalizedMetadata);
         } catch (error) {
           // Log but don't re-throw - listener errors should not break other listeners
           this.logger.warn(CACHE_LOG_MSG.CACHE_LISTENER_ERROR, {error: error.message});
@@ -329,9 +403,11 @@ class SystemTableCache {
    * @param {Object} data - Record data (must include primary key field).
    * @throws {Error} If operation is invalid or data is missing required fields.
    */
-  applySystemTableChange(tableName, operation, data) {
+  applySystemTableChange(tableName, operation, data, options = {}) {
     this.validateTableName(tableName);
     this.validateOperation(operation);
+
+    const causeId = normalizeCauseId(options?.causeId);
 
     // Get the primary key field for this table
     const pkField = getSystemCachePrimaryKeyField(tableName);
@@ -349,12 +425,22 @@ class SystemTableCache {
       if (table.has(key)) {
         const existing = table.get(key);
         if (this.isStaleForExistingRecord(existing, data)) {
+          const staleMergeResult = this.applyStaleRowBackfill(
+            table,
+            key,
+            existing,
+            data,
+          );
+          if (staleMergeResult.applied) {
+            recordForNotification = staleMergeResult.record;
+          }
           this.logger.debug(CACHE_LOG_MSG.STALE_EVENT_IGNORED, {
             tableName,
             key,
             operation,
             existingUpdatedAt: this.getRecordTimestamp(existing),
             incomingUpdatedAt: this.getRecordTimestamp(data),
+            backfilledFields: staleMergeResult.backfilledFields,
           });
           break;
         }
@@ -377,12 +463,22 @@ class SystemTableCache {
       } else {
         const existing = table.get(key);
         if (this.isStaleForExistingRecord(existing, data)) {
+          const staleMergeResult = this.applyStaleRowBackfill(
+            table,
+            key,
+            existing,
+            data,
+          );
+          if (staleMergeResult.applied) {
+            recordForNotification = staleMergeResult.record;
+          }
           this.logger.debug(CACHE_LOG_MSG.STALE_EVENT_IGNORED, {
             tableName,
             key,
             operation,
             existingUpdatedAt: this.getRecordTimestamp(existing),
             incomingUpdatedAt: this.getRecordTimestamp(data),
+            backfilledFields: staleMergeResult.backfilledFields,
           });
           break;
         }
@@ -397,12 +493,22 @@ class SystemTableCache {
       } else {
         const existing = table.get(key);
         if (this.isStaleForExistingRecord(existing, data)) {
+          const staleMergeResult = this.applyStaleRowBackfill(
+            table,
+            key,
+            existing,
+            data,
+          );
+          if (staleMergeResult.applied) {
+            recordForNotification = staleMergeResult.record;
+          }
           this.logger.debug(CACHE_LOG_MSG.STALE_EVENT_IGNORED, {
             tableName,
             key,
             operation,
             existingUpdatedAt: this.getRecordTimestamp(existing),
             incomingUpdatedAt: this.getRecordTimestamp(data),
+            backfilledFields: staleMergeResult.backfilledFields,
           });
           break;
         }
@@ -439,11 +545,19 @@ class SystemTableCache {
       tableName,
       operation,
       key,
+      causeId,
     });
 
     // Notify listeners after applying the change
     if (recordForNotification) {
-      this.notifyListeners(tableName, operation, this.deepClone(recordForNotification));
+      this.lastAppliedAtMsByTableName.set(tableName, Date.now());
+      this.lastAppliedCauseIdByTableName.set(tableName, causeId);
+      this.notifyListeners(
+        tableName,
+        operation,
+        this.deepClone(recordForNotification),
+        {causeId},
+      );
     }
   }
 
@@ -455,6 +569,9 @@ class SystemTableCache {
     for (const tableName of SYSTEM_TABLES) {
       this.tables.get(tableName).clear();
     }
+    this.appliedSchemaVersions.clear();
+    this.lastAppliedAtMsByTableName.clear();
+    this.lastAppliedCauseIdByTableName.clear();
     this.logger.debug(CACHE_LOG_MSG.CACHE_CLEARED);
   }
 
@@ -543,6 +660,116 @@ class SystemTableCache {
     }
 
     return incomingTimestamp < existingTimestamp;
+  }
+
+  /**
+   * Backfill missing fields from a stale CDC row without overriding newer data.
+   * @param {Map<string, Object>} table - Table storage map.
+   * @param {string} key - Primary key value.
+   * @param {Object} existing - Existing cached row.
+   * @param {Object} incoming - Incoming stale row.
+   * @return {{applied: boolean, record: Object, backfilledFields: string[]}}
+   * @private
+   */
+  applyStaleRowBackfill(table, key, existing, incoming) {
+    const merged = this.deepClone(existing);
+    const backfilledFields = [];
+
+    for (const [field, incomingValue] of Object.entries(incoming)) {
+      if (this.shouldBackfillMissingField(merged[field], incomingValue)) {
+        merged[field] = this.cloneFieldValue(incomingValue);
+        backfilledFields.push(field);
+      }
+    }
+
+    if (backfilledFields.length === NUM.ZERO) {
+      return {
+        applied: false,
+        record: existing,
+        backfilledFields,
+      };
+    }
+
+    table.set(key, merged);
+    return {
+      applied: true,
+      record: merged,
+      backfilledFields,
+    };
+  }
+
+  /**
+   * Clone one field value while preserving primitives/null.
+   * @param {*} value - Field value.
+   * @return {*} Cloned value.
+   * @private
+   */
+  cloneFieldValue(value) {
+    if (value === null || typeof value !== TYPEOF.OBJECT) {
+      return value;
+    }
+    return this.deepClone(value);
+  }
+
+  /**
+   * Determine if a stale incoming field may backfill an existing missing field.
+   * @param {*} existingValue - Existing field value.
+   * @param {*} incomingValue - Incoming stale field value.
+   * @return {boolean} True when the field should be backfilled.
+   * @private
+   */
+  shouldBackfillMissingField(existingValue, incomingValue) {
+    const existingMissing = existingValue === null ||
+      typeof existingValue === TYPEOF.UNDEFINED;
+    const incomingPresent = incomingValue !== null &&
+      typeof incomingValue !== TYPEOF.UNDEFINED;
+    return existingMissing && incomingPresent;
+  }
+
+  /**
+   * Compare schema/version watermarks.
+   * Supports HLC strings primarily, with number/string fallback ordering.
+   * @param {string|number} incomingVersion
+   * @param {string|number} currentVersion
+   * @return {number}
+   * @private
+   */
+  compareSchemaVersions(incomingVersion, currentVersion) {
+    if (incomingVersion === currentVersion) {
+      return NUM.ZERO;
+    }
+
+    const incomingHlc = this.tryParseHLCTimestamp(incomingVersion);
+    const currentHlc = this.tryParseHLCTimestamp(currentVersion);
+    if (incomingHlc && currentHlc) {
+      return incomingHlc.compare(currentHlc);
+    }
+
+    const incomingNumber = Number(incomingVersion);
+    const currentNumber = Number(currentVersion);
+    if (Number.isFinite(incomingNumber) && Number.isFinite(currentNumber)) {
+      return incomingNumber - currentNumber;
+    }
+
+    return String(incomingVersion).localeCompare(String(currentVersion));
+  }
+
+  /**
+   * Best-effort parse for HLC-formatted version values.
+   * @param {string|number} value
+   * @return {HLCTimestamp|null}
+   * @private
+   */
+  tryParseHLCTimestamp(value) {
+    if (typeof value === TYPEOF.UNDEFINED || value === null) {
+      return null;
+    }
+
+    try {
+      return HLCTimestamp.fromString(String(value));
+    } catch {
+      return null;
+    }
   }
 }
 

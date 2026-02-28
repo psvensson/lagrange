@@ -135,6 +135,9 @@ const JOINING_ERROR_MSG = Object.freeze({
   BOOTSTRAP_REQUEST_FAILED: 'Bootstrap request failed',
   MESSAGE_ROUTER_REQUIRED: 'MessageRouter must be initialized before creating message groups',
   MOVE_REPLICA_MISSING: 'MOVE_REPLICA strategy requires replicaToMove in assignment',
+  replicaOwnerConflict: (replicaId, existingNodeId, joiningNodeId) =>
+    `replica_owner_conflict: replica ${replicaId} owned by ${existingNodeId}, ` +
+    `joining node ${joiningNodeId} is not authorized`,
   CONTROL_PLANE_TARGET_MISSING: 'No reachable control plane target address available',
   CONTROL_PLANE_SERVICE_REQUIRED: 'Control plane service must be initialized',
   MESSAGE_GROUP_LEADER_REQUIRED: 'Message group leader is required for control plane routing',

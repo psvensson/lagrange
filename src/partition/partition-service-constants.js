@@ -13,6 +13,8 @@ const PARTITION_SERVICE_DEFAULT = Object.freeze({
   PENDING_REQUEST_TIMEOUT_MS: TIME_MS.SECOND * 30,
   KEY_RANGE_START: null,
   KEY_RANGE_END: null,
+  CDC_BUFFER_REPLAY_INITIAL_DELAY_MS: 50,
+  CDC_BUFFER_REPLAY_MAX_DELAY_MS: TIME_MS.SECOND,
   // Learner phase: new replicas joining existing groups start as non-voting learners
   // They receive log entries but don't vote until caught up
   // This prevents new replicas from disrupting existing leadership
@@ -107,6 +109,8 @@ const PARTITION_SERVICE_EVENT = Object.freeze({
   KEY_RANGE_CHANGED: 'keyRangeChanged',
   SIZE_UPDATED: 'sizeUpdated',
   CDC_EVENT: 'cdcEvent',
+  CDC_CATCHUP_STARTED: 'cdcCatchupStarted',
+  CDC_CATCHUP_COMPLETED: 'cdcCatchupCompleted',
   SHUTDOWN: 'shutdown',
 });
 
@@ -170,6 +174,16 @@ const PARTITION_SERVICE_TYPE = Object.freeze({
   FUNCTION: 'function',
 });
 
+const PARTITION_SERVICE_CDC = Object.freeze({
+  HANDSHAKE_STATUS_OK: 'ok',
+  HANDSHAKE_STATUS_ALREADY_SUBSCRIBED: 'already_subscribed',
+  CATCHUP_MODE_NONE: 'none',
+  CATCHUP_MODE_BACKFILL: 'backfill',
+  STREAM_MODE_CATCHUP: 'catchup',
+  STREAM_MODE_STEADY: 'steady',
+  SUBSCRIBER_ID_PREFIX: 'cdc-subscriber',
+});
+
 const PARTITION_SERVICE_INIT_STAGE = Object.freeze({
   STARTING: 'starting',
   OPENING_DB: 'opening_db',
@@ -228,6 +242,11 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
   EXTRACTED_TABLE_NAME: 'Extracted table name from SQL',
   GENERATED_CDC_EVENT: 'Generated CDC event',
   CDC_DELIVERY_COMPLETE: 'CDC event delivery complete',
+  CDC_DELIVERY_BUFFERED_FOR_RETRY:
+    'CDC event buffered for retry after delivery failure',
+  CDC_BUFFER_REPLAY_SCHEDULED: 'Scheduled buffered CDC replay',
+  CDC_BUFFER_REPLAY_COMPLETE: 'Buffered CDC replay complete',
+  CDC_BUFFER_REPLAY_FAILED: 'Buffered CDC replay failed',
   FETCHED_INSERT_ROW: 'Fetched inserted row for CDC',
   FETCHING_UPDATE_ROW: 'Fetching updated row for CDC',
   FETCHED_UPDATE_ROW: 'Fetched updated row for CDC',
@@ -236,6 +255,10 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
   EXTRACTED_PARAM_DELETE: 'Extracted data from parameterized DELETE',
   CDC_SUBSCRIBER_ADDED: 'CDC subscriber added',
   CDC_SUBSCRIBER_REMOVED: 'CDC subscriber removed',
+  CDC_SUBSCRIPTION_HANDSHAKE_ACK:
+    'CDC subscription handshake acknowledged',
+  CDC_CATCHUP_STARTED: 'CDC catch-up replay started',
+  CDC_CATCHUP_COMPLETED: 'CDC catch-up replay completed',
   PARTITION_SIZE_UPDATED: 'Partition size updated',
   INIT_STAGE_CALLBACK_FAILED: 'Partition initialization stage callback failed',
   DELIVERING_WITH_ACK: 'Delivering message with ACK via PendingRequestTracker',
@@ -297,6 +320,9 @@ const PARTITION_SERVICE_ERROR_MSG = Object.freeze({
   CDC_PARAM_DELETE_MISMATCH:
     'Column/param count mismatch in parameterized DELETE',
   CDC_DELIVERY_FAILED: 'Failed to deliver CDC event',
+  CDC_SUBSCRIPTION_FAILED: 'Failed to subscribe CDC listener',
+  CDC_INVALID_SUBSCRIBER:
+    'CDC subscriber must be a function or object with handleCDCEvent',
   PARTITION_SIZE_FAILED: 'Failed to calculate partition size',
   PARTITION_SIZE_UPDATE_FAILED: 'Failed to update partition size',
   PERSIST_LEADER_AFTER_CDC_FAILED:
@@ -349,6 +375,7 @@ const PARTITION_SERVICE_VALUE = Object.freeze({
 });
 
 export {
+  PARTITION_SERVICE_CDC,
   PARTITION_SERVICE_ADDRESS,
   PARTITION_SERVICE_COLUMN,
   PARTITION_SERVICE_COLUMN_SQL,

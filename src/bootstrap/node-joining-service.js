@@ -27,6 +27,9 @@ import {assertCritical} from '../utils/assert.js';
 import {NodeService} from '../node/node-service.js';
 import {MessageGroupService} from '../message-group/message-group-service.js';
 import {
+  resolveMessageGroupTargetAddressFromCache,
+} from '../message-group/message-group-target-resolver.js';
+import {
   MESSAGE_GROUP_ASSIGNMENT_STRATEGY as AssignmentStrategy,
 } from './message-group-assignment.js';
 import {ReplicaHandlerSetup} from './shared/replica-handler-setup.js';
@@ -155,6 +158,35 @@ const JOINING_UNIFIED_RECONCILE = Object.freeze({
   CHECK_INTERVAL_MS: 60 * 60 * 1000,
   RUNTIME_KIND: RUNTIME_KIND.NATIVE_JS,
 });
+const MOVE_REPLICA_ASSIGNMENT_ID_FIELD = 'assignment_id';
+const JOIN_READINESS_REASON = Object.freeze({
+  ROUTING_NOT_READY: 'routing_not_ready',
+  TOPOLOGY_NOT_READY: 'topology_not_ready',
+  SCHEMA_VERSION_UNKNOWN: 'schema_version_unknown',
+  SCHEMA_VERSION_LAG: 'schema_version_lag',
+});
+const JOIN_READINESS_SCHEMA_FIELDS = Object.freeze([
+  'updated_at_hlc',
+  'updatedAtHlc',
+  'schema_version',
+  'schemaVersion',
+  'updated_at',
+  'updatedAt',
+  'created_at',
+  'createdAt',
+]);
+const JOIN_READINESS_IN_FLIGHT_EXCLUDED_STATUSES = new Set([
+  String(SERVICE_STATUS.ACTIVE).toLowerCase(),
+  String(ReplicaStatus.REMOVED).toLowerCase(),
+  String(ReplicaStatus.FAILED).toLowerCase(),
+]);
+const JOIN_READINESS_REASON_PRECEDENCE = Object.freeze([
+  JOIN_READINESS_REASON.ROUTING_NOT_READY,
+  JOIN_READINESS_REASON.SCHEMA_VERSION_UNKNOWN,
+  JOIN_READINESS_REASON.SCHEMA_VERSION_LAG,
+  JOIN_READINESS_REASON.TOPOLOGY_NOT_READY,
+]);
+const JOIN_READINESS_DEFAULT_TABLE = TABLES.SERVICES;
 
 /**
  * Maps each JOINING_PHASE to its index in the cleanup steps array.
@@ -237,6 +269,10 @@ class NodeJoiningService extends EventEmitter {
     this.sleep = typeof options.sleep === TYPEOF.FUNCTION ?
       options.sleep :
       (delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs));
+    this.joinReadinessSnapshotProvider =
+      typeof options.joinReadinessSnapshotProvider === TYPEOF.FUNCTION ?
+        options.joinReadinessSnapshotProvider :
+        null;
 
     // Allow tests to bypass real network I/O by providing an in-process HTTP POST.
     this.httpPostImpl = typeof options.httpPost === TYPEOF.FUNCTION ?
@@ -407,6 +443,7 @@ class NodeJoiningService extends EventEmitter {
         phases: joinPlan.phases.slice(4, 5),
       });
 
+      await this.waitForCanonicalJoinReadinessConvergence();
       await this.signalReadyForReplicas();
 
       // Transition to READY state
@@ -536,6 +573,713 @@ class NodeJoiningService extends EventEmitter {
       error: lastError?.message || STRING.UNKNOWN,
     });
     throw lastError;
+  }
+
+  /**
+   * Wait for canonical join readiness convergence before transitioning READY.
+   * The gate is snapshot-only and mirrors strict pre-load semantics.
+   * @return {Promise<void>}
+   * @private
+   */
+  async waitForCanonicalJoinReadinessConvergence() {
+    if (this.systemCacheHydrated !== true) {
+      return;
+    }
+
+    const timeoutMs = this.resolveJoinReadinessTimeoutMs();
+    if (!Number.isFinite(timeoutMs) || timeoutMs <= NUM.ZERO) {
+      return;
+    }
+
+    const pollIntervalMs = this.resolveJoinReadinessPollIntervalMs();
+    const startTime = Date.now();
+    let attempts = NUM.ZERO;
+    let lastEvaluation = null;
+    let lastSnapshotError = null;
+
+    while (Date.now() - startTime < timeoutMs) {
+      attempts += NUM.ONE;
+      const snapshotResult = await this.collectCanonicalJoinReadinessSnapshot();
+      if (snapshotResult.error) {
+        lastSnapshotError = snapshotResult.error;
+      }
+
+      lastEvaluation = this.evaluateCanonicalJoinReadinessSnapshot(
+        snapshotResult.snapshot,
+      );
+      if (lastEvaluation.ready) {
+        this.logger.info('Join canonical readiness converged', {
+          nodeId: this.nodeId,
+          attempts,
+          elapsedMs: Date.now() - startTime,
+          requiredSchemaVersion: lastEvaluation.requiredSchemaVersion,
+          appliedSchemaVersion: lastEvaluation.appliedSchemaVersion,
+        });
+        return;
+      }
+
+      await this.sleep(pollIntervalMs);
+    }
+
+    const fallbackEvaluation = this.evaluateCanonicalJoinReadinessSnapshot({
+      routingReady: false,
+      topologyReady: false,
+      requiredSchemaVersion: null,
+      appliedSchemaVersion: null,
+    });
+    const terminalEvaluation = lastEvaluation || fallbackEvaluation;
+    const reasonText = terminalEvaluation.reasons.join(', ');
+    const error = new Error(
+      `join_readiness_timeout: ${reasonText} after ${timeoutMs}ms`,
+    );
+    error.code = 'JOIN_READINESS_TIMEOUT';
+    error.joinReadiness = {
+      reasons: terminalEvaluation.reasons,
+      requiredSchemaVersion: terminalEvaluation.requiredSchemaVersion,
+      appliedSchemaVersion: terminalEvaluation.appliedSchemaVersion,
+      requiredVsObservedByNode:
+        this.buildJoinSchemaDiagnosticsByNode(terminalEvaluation),
+      elapsedMs: Date.now() - startTime,
+      attempts,
+      snapshotError: lastSnapshotError?.message || null,
+    };
+
+    this.logger.error('Join canonical readiness timed out', {
+      nodeId: this.nodeId,
+      timeoutMs,
+      attempts,
+      reasons: terminalEvaluation.reasons,
+      requiredSchemaVersion: terminalEvaluation.requiredSchemaVersion,
+      appliedSchemaVersion: terminalEvaluation.appliedSchemaVersion,
+      snapshotError: lastSnapshotError?.message || null,
+    });
+    throw error;
+  }
+
+  /**
+   * Resolve join-readiness timeout.
+   * @return {number}
+   * @private
+   */
+  resolveJoinReadinessTimeoutMs() {
+    if (Number.isFinite(this.config.joinReadinessTimeoutMs)) {
+      return Math.max(NUM.ZERO, Math.floor(this.config.joinReadinessTimeoutMs));
+    }
+    return this.config.leadershipWaitTimeoutMs;
+  }
+
+  /**
+   * Resolve join-readiness poll interval.
+   * @return {number}
+   * @private
+   */
+  resolveJoinReadinessPollIntervalMs() {
+    if (Number.isFinite(this.config.joinReadinessPollIntervalMs)) {
+      return Math.max(NUM.ONE, Math.floor(this.config.joinReadinessPollIntervalMs));
+    }
+    return Math.max(
+      NUM.ONE,
+      Math.floor(this.config.leadershipWaitInitialDelayMs),
+    );
+  }
+
+  /**
+   * Determine the table scope for canonical join schema checks.
+   * @return {string}
+   * @private
+   */
+  resolveJoinReadinessTableName() {
+    if (typeof this.config.joinReadinessTableName === TYPEOF.STRING) {
+      const normalized = this.config.joinReadinessTableName.trim().toLowerCase();
+      if (normalized.length > NUM.ZERO) {
+        return normalized;
+      }
+    }
+    return JOIN_READINESS_DEFAULT_TABLE;
+  }
+
+  /**
+   * Collect one canonical join-readiness snapshot.
+   * Provider errors are folded into a fail-closed snapshot.
+   * @return {Promise<{snapshot: Object, error: Error|null}>}
+   * @private
+   */
+  async collectCanonicalJoinReadinessSnapshot() {
+    const context = {
+      nodeId: this.nodeId,
+      tableName: this.resolveJoinReadinessTableName(),
+      bootstrapResponse: this.bootstrapResponse,
+      systemTableCache: NodeService.getInstance().getSystemTableCache(),
+      messageRouter: this.messageRouter,
+    };
+
+    try {
+      const snapshot = this.joinReadinessSnapshotProvider ?
+        await this.joinReadinessSnapshotProvider(context) :
+        this.buildCanonicalJoinReadinessSnapshot(context);
+      return {
+        snapshot,
+        error: null,
+      };
+    } catch (error) {
+      return {
+        snapshot: {
+          nodeId: this.nodeId,
+          tableName: context.tableName,
+          routingReady: false,
+          topologyReady: false,
+          requiredSchemaVersion: null,
+          appliedSchemaVersion: null,
+        },
+        error,
+      };
+    }
+  }
+
+  /**
+   * Build canonical join-readiness snapshot from local control-plane state.
+   * @param {Object} context
+   * @return {Object}
+   * @private
+   */
+  buildCanonicalJoinReadinessSnapshot(context = {}) {
+    const systemTableCache = context.systemTableCache ||
+      NodeService.getInstance().getSystemTableCache();
+    const tableName = context.tableName || this.resolveJoinReadinessTableName();
+    const targetAddress =
+      this.resolveControlPlaneTargetAddress({allowBootstrapHints: false}) ||
+      this.resolveControlPlaneTargetAddress({allowBootstrapHints: true});
+    const routingReady = this.isControlPlaneAddressReachable(targetAddress);
+    const topology = this.evaluateCanonicalJoinTopologyReadiness(systemTableCache);
+    const requiredSchemaVersion = this.resolveCanonicalRequiredSchemaVersion(
+      tableName,
+      systemTableCache,
+    );
+    const appliedSchemaVersion = this.resolveCanonicalAppliedSchemaVersion(
+      tableName,
+      systemTableCache,
+    );
+
+    return {
+      nodeId: this.nodeId,
+      tableName,
+      routingReady,
+      topologyReady: topology.ready,
+      requiredSchemaVersion,
+      appliedSchemaVersion,
+      requiredNodeIds: this.resolveJoinReadinessRequiredNodeIds(systemTableCache),
+      missingLeaders: topology.missingLeaders,
+      inFlightReplicaOperations: topology.inFlightReplicaOperations,
+    };
+  }
+
+  /**
+   * Check whether control-plane target address is currently reachable.
+   * @param {string|null} targetAddress
+   * @return {boolean}
+   * @private
+   */
+  isControlPlaneAddressReachable(targetAddress) {
+    if (typeof targetAddress !== TYPEOF.STRING ||
+        targetAddress.length === NUM.ZERO) {
+      return false;
+    }
+
+    const match = targetAddress.match(/^([^/]+)\//);
+    const targetNodeId = match ? match[NUM.ONE] : null;
+    if (!targetNodeId) {
+      return false;
+    }
+    if (targetNodeId === this.nodeId) {
+      return true;
+    }
+
+    if (typeof this.messageRouter?.getConnectionState !== TYPEOF.FUNCTION) {
+      return true;
+    }
+    return this.messageRouter.getConnectionState(targetNodeId) === STATE.CONNECTED;
+  }
+
+  /**
+   * Evaluate topology readiness for canonical join convergence.
+   * @param {Object|null} systemTableCache
+   * @return {{ready: boolean, missingLeaders: Object|null, inFlightReplicaOperations: number}}
+   * @private
+   */
+  evaluateCanonicalJoinTopologyReadiness(systemTableCache) {
+    if (!systemTableCache) {
+      return {
+        ready: false,
+        missingLeaders: null,
+        inFlightReplicaOperations: NUM.ZERO,
+      };
+    }
+
+    let missingLeaders = null;
+    let missingCount = Number.POSITIVE_INFINITY;
+    try {
+      const missing = this.getMissingSystemServiceLeaders(systemTableCache);
+      missingLeaders = this.getBlockingSystemServiceLeaders(
+        missing,
+        systemTableCache,
+      );
+      missingCount = getMissingSystemServiceLeaderCount(missingLeaders);
+    } catch {
+      missingLeaders = null;
+      missingCount = Number.POSITIVE_INFINITY;
+    }
+
+    const inFlightReplicaOperations =
+      this.countCanonicalInFlightReplicaOperations(systemTableCache);
+
+    return {
+      ready: missingCount === NUM.ZERO && inFlightReplicaOperations === NUM.ZERO,
+      missingLeaders,
+      inFlightReplicaOperations,
+    };
+  }
+
+  /**
+   * Count non-terminal replica operations from local cache.
+   * @param {Object|null} systemTableCache
+   * @return {number}
+   * @private
+   */
+  countCanonicalInFlightReplicaOperations(systemTableCache) {
+    if (!systemTableCache ||
+        typeof systemTableCache.getAll !== TYPEOF.FUNCTION) {
+      return NUM.ZERO;
+    }
+
+    const rows = systemTableCache.getAll(TABLES.REPLICA_OPERATIONS) || [];
+    let inFlightCount = NUM.ZERO;
+    for (const row of rows) {
+      const status = String(row?.status || '').toLowerCase();
+      if (!status || !JOIN_READINESS_IN_FLIGHT_EXCLUDED_STATUSES.has(status)) {
+        inFlightCount += NUM.ONE;
+      }
+    }
+    return inFlightCount;
+  }
+
+  /**
+   * Resolve the required schema version for canonical join checks.
+   * @param {string} tableName
+   * @param {Object|null} systemTableCache
+   * @return {string|null}
+   * @private
+   */
+  resolveCanonicalRequiredSchemaVersion(tableName, systemTableCache) {
+    let requiredSchemaVersion = null;
+    requiredSchemaVersion = this.selectNewestJoinSchemaVersion(
+      requiredSchemaVersion,
+      this.extractCanonicalSnapshotSchemaVersion(tableName),
+    );
+    requiredSchemaVersion = this.selectNewestJoinSchemaVersion(
+      requiredSchemaVersion,
+      this.extractCanonicalCacheSchemaVersion(systemTableCache, tableName),
+    );
+    requiredSchemaVersion = this.selectNewestJoinSchemaVersion(
+      requiredSchemaVersion,
+      this.extractCanonicalTableMetadataSchemaVersion(systemTableCache, tableName),
+    );
+    return requiredSchemaVersion;
+  }
+
+  /**
+   * Resolve the applied schema version for canonical join checks.
+   * @param {string} tableName
+   * @param {Object|null} systemTableCache
+   * @return {string|null}
+   * @private
+   */
+  resolveCanonicalAppliedSchemaVersion(tableName, systemTableCache) {
+    let appliedSchemaVersion = null;
+    appliedSchemaVersion = this.selectNewestJoinSchemaVersion(
+      appliedSchemaVersion,
+      this.extractCanonicalCacheSchemaVersion(systemTableCache, tableName),
+    );
+    appliedSchemaVersion = this.selectNewestJoinSchemaVersion(
+      appliedSchemaVersion,
+      this.extractCanonicalTableMetadataSchemaVersion(systemTableCache, tableName),
+    );
+    return appliedSchemaVersion;
+  }
+
+  /**
+   * Extract required schema version candidate from bootstrap snapshot scope.
+   * @param {string} tableName
+   * @return {string|null}
+   * @private
+   */
+  extractCanonicalSnapshotSchemaVersion(tableName) {
+    const snapshots = this.bootstrapResponse?.systemTableSnapshots;
+    if (!snapshots || typeof snapshots !== TYPEOF.OBJECT) {
+      return null;
+    }
+
+    let version = null;
+    const tableSnapshotRows = Array.isArray(snapshots[tableName]) ?
+      snapshots[tableName] :
+      [];
+    for (const row of tableSnapshotRows) {
+      version = this.selectNewestJoinSchemaVersion(
+        version,
+        this.extractJoinSchemaVersionFromRecord(row),
+      );
+    }
+
+    const tableMetadataRows = Array.isArray(snapshots[TABLES.TABLES]) ?
+      snapshots[TABLES.TABLES] :
+      [];
+    for (const row of tableMetadataRows) {
+      const rowTableName = row?.table_name || row?.tableName || null;
+      if (rowTableName !== tableName) {
+        continue;
+      }
+      version = this.selectNewestJoinSchemaVersion(
+        version,
+        this.extractJoinSchemaVersionFromRecord(row),
+      );
+    }
+
+    return version;
+  }
+
+  /**
+   * Extract schema version candidate from local cache rows for one table.
+   * @param {Object|null} systemTableCache
+   * @param {string} tableName
+   * @return {string|null}
+   * @private
+   */
+  extractCanonicalCacheSchemaVersion(systemTableCache, tableName) {
+    if (!systemTableCache ||
+        typeof systemTableCache.getAll !== TYPEOF.FUNCTION) {
+      return null;
+    }
+
+    let version = null;
+    const tableRows = systemTableCache.getAll(tableName) || [];
+    for (const row of tableRows) {
+      version = this.selectNewestJoinSchemaVersion(
+        version,
+        this.extractJoinSchemaVersionFromRecord(row),
+      );
+    }
+
+    return version;
+  }
+
+  /**
+   * Extract schema version candidate from `tables` metadata row.
+   * @param {Object|null} systemTableCache
+   * @param {string} tableName
+   * @return {string|null}
+   * @private
+   */
+  extractCanonicalTableMetadataSchemaVersion(systemTableCache, tableName) {
+    if (!systemTableCache ||
+        typeof systemTableCache.filter !== TYPEOF.FUNCTION) {
+      return null;
+    }
+
+    let version = null;
+    const rows = systemTableCache.filter(TABLES.TABLES, (row) => {
+      const rowTableName = row?.table_name || row?.tableName || null;
+      return rowTableName === tableName;
+    });
+    for (const row of rows) {
+      version = this.selectNewestJoinSchemaVersion(
+        version,
+        this.extractJoinSchemaVersionFromRecord(row),
+      );
+    }
+    return version;
+  }
+
+  /**
+   * Resolve node IDs required for join-readiness diagnostics.
+   * @param {Object|null} systemTableCache
+   * @return {Array<string>}
+   * @private
+   */
+  resolveJoinReadinessRequiredNodeIds(systemTableCache) {
+    if (!systemTableCache ||
+        typeof systemTableCache.filter !== TYPEOF.FUNCTION) {
+      return [this.nodeId];
+    }
+
+    const activeNodes = systemTableCache.filter(TABLES.NODES, (row) => {
+      const status = String(row?.status || '').toLowerCase();
+      return status === SERVICE_STATUS.ACTIVE;
+    });
+
+    const nodeIds = [...new Set(activeNodes
+      .map((row) => row?.node_id || row?.nodeId)
+      .filter((value) => typeof value === TYPEOF.STRING && value.length > NUM.ZERO),
+    )];
+
+    if (!nodeIds.includes(this.nodeId)) {
+      nodeIds.push(this.nodeId);
+    }
+    return nodeIds;
+  }
+
+  /**
+   * Evaluate one canonical join-readiness snapshot.
+   * @param {Object} snapshot
+   * @return {Object}
+   * @private
+   */
+  evaluateCanonicalJoinReadinessSnapshot(snapshot) {
+    const normalized = this.normalizeCanonicalJoinReadinessSnapshot(snapshot);
+    const reasons = this.classifyCanonicalJoinReadinessReasons(normalized);
+    return {
+      ...normalized,
+      reasons,
+      ready: reasons.length === NUM.ZERO,
+    };
+  }
+
+  /**
+   * Classify canonical join-readiness reasons with stable precedence.
+   * @param {Object} snapshot
+   * @return {Array<string>}
+   */
+  classifyCanonicalJoinReadinessReasons(snapshot) {
+    const reasons = [];
+    if (snapshot?.routingReady !== true) {
+      reasons.push(JOIN_READINESS_REASON.ROUTING_NOT_READY);
+    }
+
+    const requiredSchemaVersion = this.normalizeJoinSchemaVersion(
+      snapshot?.requiredSchemaVersion,
+    );
+    const appliedSchemaVersion = this.normalizeJoinSchemaVersion(
+      snapshot?.appliedSchemaVersion,
+    );
+    if (!requiredSchemaVersion || !appliedSchemaVersion) {
+      reasons.push(JOIN_READINESS_REASON.SCHEMA_VERSION_UNKNOWN);
+    } else if (this.compareJoinSchemaVersions(
+      appliedSchemaVersion,
+      requiredSchemaVersion,
+    ) < NUM.ZERO) {
+      reasons.push(JOIN_READINESS_REASON.SCHEMA_VERSION_LAG);
+    }
+
+    if (snapshot?.topologyReady !== true) {
+      reasons.push(JOIN_READINESS_REASON.TOPOLOGY_NOT_READY);
+    }
+
+    return reasons.sort((left, right) => {
+      const leftRank = this.getJoinReadinessReasonRank(left);
+      const rightRank = this.getJoinReadinessReasonRank(right);
+      if (leftRank !== rightRank) {
+        return leftRank - rightRank;
+      }
+      return String(left).localeCompare(String(right));
+    });
+  }
+
+  /**
+   * Normalize one canonical join-readiness snapshot.
+   * @param {Object} snapshot
+   * @return {Object}
+   * @private
+   */
+  normalizeCanonicalJoinReadinessSnapshot(snapshot) {
+    const source = snapshot && typeof snapshot === TYPEOF.OBJECT ?
+      snapshot :
+      {};
+    const requiredSchemaVersion = this.normalizeJoinSchemaVersion(
+      source.requiredSchemaVersion,
+    );
+    const appliedSchemaVersion = this.normalizeJoinSchemaVersion(
+      source.appliedSchemaVersion,
+    );
+    const requiredNodeIds = Array.isArray(source.requiredNodeIds) ?
+      source.requiredNodeIds.filter((value) =>
+        typeof value === TYPEOF.STRING && value.length > NUM.ZERO,
+      ) :
+      [this.nodeId];
+
+    return {
+      nodeId: source.nodeId || this.nodeId,
+      tableName: source.tableName || this.resolveJoinReadinessTableName(),
+      routingReady: source.routingReady === true,
+      topologyReady: source.topologyReady === true,
+      requiredSchemaVersion,
+      appliedSchemaVersion,
+      requiredNodeIds,
+      observedSchemaByNodeId:
+        source.observedSchemaByNodeId &&
+        typeof source.observedSchemaByNodeId === TYPEOF.OBJECT ?
+          source.observedSchemaByNodeId :
+          null,
+    };
+  }
+
+  /**
+   * Build per-node schema diagnostics for join timeout reporting.
+   * @param {Object} evaluation
+   * @return {Object}
+   * @private
+   */
+  buildJoinSchemaDiagnosticsByNode(evaluation) {
+    const requiredSchemaVersion = evaluation?.requiredSchemaVersion || null;
+    const observedSchemaVersion = evaluation?.appliedSchemaVersion || null;
+    const reasons = Array.isArray(evaluation?.reasons) ?
+      evaluation.reasons :
+      [];
+    const requiredNodeIds = Array.isArray(evaluation?.requiredNodeIds) &&
+      evaluation.requiredNodeIds.length > NUM.ZERO ?
+      evaluation.requiredNodeIds :
+      [this.nodeId];
+    const observedByNodeId =
+      evaluation?.observedSchemaByNodeId &&
+      typeof evaluation.observedSchemaByNodeId === TYPEOF.OBJECT ?
+        evaluation.observedSchemaByNodeId :
+        {};
+
+    const diagnostics = {};
+    for (const nodeId of requiredNodeIds) {
+      diagnostics[nodeId] = {
+        requiredSchemaVersion,
+        observedSchemaVersion:
+          this.normalizeJoinSchemaVersion(observedByNodeId[nodeId]) ||
+          observedSchemaVersion,
+        unmetReasons: reasons,
+      };
+    }
+    return diagnostics;
+  }
+
+  /**
+   * Extract one schema-version candidate from a record.
+   * @param {Object} record
+   * @return {string|null}
+   * @private
+   */
+  extractJoinSchemaVersionFromRecord(record) {
+    if (!record || typeof record !== TYPEOF.OBJECT) {
+      return null;
+    }
+    for (const fieldName of JOIN_READINESS_SCHEMA_FIELDS) {
+      const normalized = this.normalizeJoinSchemaVersion(record[fieldName]);
+      if (normalized) {
+        return normalized;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Keep the newest schema-version watermark.
+   * @param {string|null} current
+   * @param {string|null} candidate
+   * @return {string|null}
+   * @private
+   */
+  selectNewestJoinSchemaVersion(current, candidate) {
+    if (!candidate) {
+      return current;
+    }
+    if (!current) {
+      return candidate;
+    }
+    return this.compareJoinSchemaVersions(candidate, current) >= NUM.ZERO ?
+      candidate :
+      current;
+  }
+
+  /**
+   * Normalize a schema-version value to canonical string representation.
+   * @param {*} value
+   * @return {string|null}
+   * @private
+   */
+  normalizeJoinSchemaVersion(value) {
+    if (typeof value === TYPEOF.STRING) {
+      const normalized = value.trim();
+      return normalized.length > NUM.ZERO ? normalized : null;
+    }
+    if (typeof value === TYPEOF.NUMBER && Number.isFinite(value)) {
+      return String(value);
+    }
+    if (typeof value === 'bigint') {
+      return String(value);
+    }
+    return null;
+  }
+
+  /**
+   * Compare schema versions supporting HLC and numeric fallback.
+   * @param {string} left
+   * @param {string} right
+   * @return {number}
+   * @private
+   */
+  compareJoinSchemaVersions(left, right) {
+    if (left === right) {
+      return NUM.ZERO;
+    }
+
+    const leftHlc = this.tryParseJoinSchemaHlc(left);
+    const rightHlc = this.tryParseJoinSchemaHlc(right);
+    if (leftHlc && rightHlc) {
+      if (leftHlc.physical !== rightHlc.physical) {
+        return leftHlc.physical - rightHlc.physical;
+      }
+      if (leftHlc.logical !== rightHlc.logical) {
+        return leftHlc.logical - rightHlc.logical;
+      }
+      return leftHlc.nodeId.localeCompare(rightHlc.nodeId);
+    }
+
+    const leftNumber = Number(left);
+    const rightNumber = Number(right);
+    if (Number.isFinite(leftNumber) && Number.isFinite(rightNumber)) {
+      return leftNumber - rightNumber;
+    }
+
+    return String(left).localeCompare(String(right));
+  }
+
+  /**
+   * Parse HLC-like schema version.
+   * @param {string} value
+   * @return {{physical: number, logical: number, nodeId: string}|null}
+   * @private
+   */
+  tryParseJoinSchemaHlc(value) {
+    const parts = String(value || '').split(':');
+    if (parts.length < NUM.THREE) {
+      return null;
+    }
+    const physical = Number.parseInt(parts[NUM.ZERO], 10);
+    const logical = Number.parseInt(parts[NUM.ONE], 10);
+    if (!Number.isFinite(physical) || !Number.isFinite(logical)) {
+      return null;
+    }
+    return {
+      physical,
+      logical,
+      nodeId: parts.slice(NUM.TWO).join(':'),
+    };
+  }
+
+  /**
+   * Rank one join-readiness reason according to stable precedence.
+   * @param {string} reason
+   * @return {number}
+   * @private
+   */
+  getJoinReadinessReasonRank(reason) {
+    const index = JOIN_READINESS_REASON_PRECEDENCE.indexOf(reason);
+    return index >= NUM.ZERO ?
+      index :
+      JOIN_READINESS_REASON_PRECEDENCE.length;
   }
 
   /**
@@ -829,8 +1573,11 @@ class NodeJoiningService extends EventEmitter {
     const code = typeof parsedError?.code === TYPEOF.STRING ?
       parsedError.code :
       null;
-    const retryableCode = code === BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE ||
-      code === BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY;
+    const retryableCode =
+      code === BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE ||
+      code === BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY ||
+      code === BOOTSTRAP_PIPELINE_ERROR_CODE
+        .SERVICE_REGISTRATION_CACHE_VISIBILITY_TIMEOUT;
     const retryableTimeout = error?.message === retryableTimeoutErrorMessage;
     const retryableStatus = statusCode === HTTP_STATUS.SERVICE_UNAVAILABLE;
     const terminalValidationOrConflict = statusCode === HTTP_STATUS.BAD_REQUEST ||
@@ -1362,6 +2109,7 @@ class NodeJoiningService extends EventEmitter {
     this.joinMessageGroupReplicas = [];
     for (let index = NUM.ZERO; index < replicaIds.length; index++) {
       const replicaId = replicaIds[index];
+      this.assertReplicaStartupOwnership(replicaId);
       this.queueJoinServiceReplica(
         this.createJoinServiceDescriptor(
           UNIFIED_SERVICE_TYPE.MESSAGE_GROUP,
@@ -1444,6 +2192,56 @@ class NodeJoiningService extends EventEmitter {
   }
 
   /**
+   * Enforce single-owner invariant before starting a local message-group replica.
+   * Unauthorized duplicate startup must fail fast.
+   * @param {string} replicaId
+   * @return {void}
+   * @private
+   */
+  assertReplicaStartupOwnership(replicaId) {
+    const systemTableCache = NodeService.getInstance().getSystemTableCache();
+    if (!systemTableCache || typeof systemTableCache.get !== TYPEOF.FUNCTION) {
+      return;
+    }
+
+    const existingService = systemTableCache.get(TABLES.SERVICES, replicaId);
+    if (!existingService) {
+      return;
+    }
+    if (existingService[COLUMN.SERVICE_TYPE] !== SERVICE_TYPE.MESSAGE_GROUP) {
+      return;
+    }
+
+    const existingNodeId = existingService[COLUMN.NODE_ID] || null;
+    const existingStatus = String(existingService[COLUMN.STATUS] || STRING.UNKNOWN)
+      .toLowerCase();
+    if (!existingNodeId ||
+        existingNodeId === this.nodeId ||
+        existingStatus !== SERVICE_STATUS.ACTIVE) {
+      return;
+    }
+
+    const assignment = this.bootstrapResponse?.messageGroupAssignment;
+    const authorizedMoveReplicaStartup = assignment &&
+      assignment.strategy === AssignmentStrategy.MOVE_REPLICA &&
+      assignment.replicaToMove === replicaId &&
+      assignment.sourceNodeId === existingNodeId &&
+      typeof assignment.assignmentId === TYPEOF.STRING &&
+      assignment.assignmentId.length > NUM.ZERO;
+    if (authorizedMoveReplicaStartup) {
+      return;
+    }
+
+    throw new Error(
+      JOINING_ERROR_MSG.replicaOwnerConflict(
+        replicaId,
+        existingNodeId,
+        this.nodeId,
+      ),
+    );
+  }
+
+  /**
    * Phase 3b: Join existing message group by moving a replica.
    * Requirements: 8.3 - Services created AFTER self-connection established.
    * @param {Object} assignment - Assignment instructions.
@@ -1476,6 +2274,7 @@ class NodeJoiningService extends EventEmitter {
     if (!replicaId) {
       throw new Error(JOINING_ERROR_MSG.MOVE_REPLICA_MISSING);
     }
+    this.assertReplicaStartupOwnership(replicaId);
 
     // The replica IDs stay the same - we're just moving one replica to a different node
     // existingPeerIds already contains all replica IDs including the one being moved
@@ -1554,6 +2353,13 @@ class NodeJoiningService extends EventEmitter {
    */
   async registerMessageGroupService(groupId, replicaId, service) {
     const now = Date.now();
+    const moveReplicaAssignment =
+      this.bootstrapResponse?.messageGroupAssignment || null;
+    const assignmentId = moveReplicaAssignment &&
+      moveReplicaAssignment.strategy === AssignmentStrategy.MOVE_REPLICA &&
+      moveReplicaAssignment.replicaToMove === replicaId ?
+      moveReplicaAssignment.assignmentId || null :
+      null;
     const serviceData = {
       service_id: replicaId,
       service_type: SERVICE_TYPE.MESSAGE_GROUP,
@@ -1567,6 +2373,9 @@ class NodeJoiningService extends EventEmitter {
         `${ENTITY_TYPE.MESSAGE_GROUP}${ADDRESS.SEPARATOR}${replicaId}`,
       created_at: now,
       updated_at: now,
+      ...(assignmentId ?
+        {[MOVE_REPLICA_ASSIGNMENT_ID_FIELD]: assignmentId} :
+        {}),
     };
 
     // Register via HTTP POST to seed node's register-service endpoint
@@ -1576,6 +2385,7 @@ class NodeJoiningService extends EventEmitter {
       nodeId: this.nodeId,
       replicaId,
       groupId,
+      assignmentId,
       registerUrl,
     });
 
@@ -1649,6 +2459,7 @@ class NodeJoiningService extends EventEmitter {
             lastCode: classification.code,
             lastStatusCode: classification.statusCode,
             retryAfterMs: classification.retryAfterMs,
+            lastErrorDetails: classification.parsedError?.details || null,
             nextDelayMs,
             retryTimeoutMs,
           });
@@ -2075,45 +2886,11 @@ class NodeJoiningService extends EventEmitter {
       return this.messageRouter.getConnectionState(nodeId) === STATE.CONNECTED;
     };
 
-    const candidates = cache.filter(TABLES.SERVICES, (row) => {
-      return row?.service_type === SERVICE_TYPE.MESSAGE_GROUP &&
-        row?.group_id === groupId &&
-        row?.status === SERVICE_STATUS.ACTIVE &&
-        typeof row?.address === TYPEOF.STRING &&
-        row.address.length > NUM.ZERO;
+    return resolveMessageGroupTargetAddressFromCache(cache, groupId, {
+      excludeServiceId: replicaToMove,
+      seedNodeId,
+      isConnectedNode,
     });
-
-    if (candidates.length === NUM.ZERO) {
-      return null;
-    }
-
-    const preferredConnected = candidates.find((row) => {
-      return row.raft_role === 'leader' &&
-        (!replicaToMove || row.service_id !== replicaToMove) &&
-        isConnectedNode(row.node_id);
-    });
-    if (preferredConnected) {
-      return preferredConnected.address;
-    }
-
-    const preferredSeedConnected = candidates.find((row) => {
-      return (!!seedNodeId && row.node_id === seedNodeId) &&
-        (!replicaToMove || row.service_id !== replicaToMove) &&
-        isConnectedNode(row.node_id);
-    });
-    if (preferredSeedConnected) {
-      return preferredSeedConnected.address;
-    }
-
-    const anyConnected = candidates.find((row) => {
-      return (!replicaToMove || row.service_id !== replicaToMove) &&
-        isConnectedNode(row.node_id);
-    });
-    if (anyConnected) {
-      return anyConnected.address;
-    }
-
-    return null;
   }
 
   /**
@@ -2211,6 +2988,11 @@ class NodeJoiningService extends EventEmitter {
 
     // Use MessageRouter directly for all services
     // MessageRouter handles both local and remote message delivery
+    if (typeof this.messageRouter.setQueryMessageGroupServiceResolver === 'function') {
+      this.messageRouter.setQueryMessageGroupServiceResolver(() =>
+        this.getLeaderMessageGroupService(),
+      );
+    }
     this.transport = this.messageRouter;
     await this.initializeJoiningLifecycleOwners();
     await this.triggerJoinReconciler(
@@ -2342,8 +3124,12 @@ class NodeJoiningService extends EventEmitter {
       const targetNodeId = node.node_id;
       const nodeAddress = node.node_address;
 
-      // Skip if already connected (check via nodeConnections map)
-      if (this.messageRouter.nodeConnections?.has(targetNodeId)) {
+      const connectionState =
+        typeof this.messageRouter.getConnectionState === TYPEOF.FUNCTION ?
+          this.messageRouter.getConnectionState(targetNodeId) :
+          this.messageRouter.nodeConnections?.get(targetNodeId)?.state || null;
+
+      if (connectionState === STATE.CONNECTED) {
         return;
       }
 
@@ -3685,7 +4471,14 @@ class NodeJoiningService extends EventEmitter {
       ) {
         await messageGroupService.subscribeToCDC(tableName);
 
-        partition.subscribeToCDC(async (cdcEvent) => {
+        const subscriberId = [
+          'joining',
+          this.nodeId,
+          tableName,
+          options.replicaId,
+          messageGroupService?.groupId || 'message-group',
+        ].join(':');
+        const cdcSubscriber = async (cdcEvent) => {
           if (cdcEvent.tableName === tableName) {
             this.logger.debug(JOINING_LOG_MSG.CDC_EVENT_RECEIVED, {
               tableName: cdcEvent.tableName,
@@ -3711,12 +4504,20 @@ class NodeJoiningService extends EventEmitter {
               cdcEvent,
             );
           }
-        });
+        };
+        const handshake = await partition.subscribeToCDCWithHandshake(
+          cdcSubscriber,
+          {subscriberId},
+        );
 
         this.logger.debug(JOINING_LOG_MSG.CDC_SUBSCRIPTION_REGISTERED, {
           tableName,
           partitionId: options.partitionId,
           replicaId: options.replicaId,
+          subscriberId: handshake.subscriberId,
+          subscriptionEpoch: handshake.subscriptionEpoch,
+          catchupMode: handshake.catchup.mode,
+          bufferedEventsReplayed: handshake.catchup.bufferedEventsReplayed,
         });
       }
 

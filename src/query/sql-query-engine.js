@@ -35,7 +35,12 @@ import {
 import {OperationType} from '../rebalancer/replica-status.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
-import {TABLES, METRICS_LOG_TAG, SERVICE_TYPE} from '../constants/index.js';
+import {
+  TABLES,
+  METRICS_LOG_TAG,
+  SERVICE_TYPE,
+  STATE,
+} from '../constants/index.js';
 import {
   QUERY_AST_TYPE,
   QUERY_CONFIG_KEY,
@@ -86,6 +91,12 @@ const NATIVE_CALLBACK_RETURN_LINE = 'return module.exports;';
 const DEFAULT_CODE_VERSION = '1';
 const ZERO_SHA256_DIGEST = 'sha256:' + '0'.repeat(64);
 const EXPLAIN_DISTRIBUTED_PREFIX_REGEX = /^\s*EXPLAIN\s+DISTRIBUTED\s+/i;
+const STATUS_ACTIVE = 'active';
+const CONNECTION_STATE_CONNECTED = String(STATE.CONNECTED).toLowerCase();
+const CONNECTION_STATE_READY = String(STATE.READY).toLowerCase();
+const MIN_ROUTABLE_REPLICA_COUNT = 1;
+const BEST_EFFORT_PROVISION_DISPATCH_TIMEOUT_MS = 250;
+const BEST_EFFORT_PROVISION_TIMEOUT_REASON = 'best_effort_dispatch_timeout';
 
 /**
  * SQLQueryEngine is the main entry point for SQL query processing.
@@ -1217,7 +1228,11 @@ class SQLQueryEngine {
    */
   async provisionInitialTablePartition(context) {
     const partitionId = context?.partitionId;
-    const tableId = context?.tableId || null;
+    const requestedReplicaCount =
+      Number.isInteger(context?.replicaCount) &&
+      context.replicaCount > 0 ?
+        context.replicaCount :
+        1;
 
     if (!partitionId) {
       throw new Error(QUERY_ERROR_MSG.TABLE_PARTITION_PROVISION_PARTITION_ID_REQUIRED);
@@ -1229,30 +1244,82 @@ class SQLQueryEngine {
       throw new Error(QUERY_ERROR_MSG.TABLE_PARTITION_PROVISION_COORDINATOR_REQUIRED);
     }
 
-    await this.waitForTablePartitionMetadata(tableId, partitionId);
+    const provisionTargetNodeIds =
+      this.resolveProvisionTargetNodeIds(requestedReplicaCount);
+    const targetReplicaCount = Math.max(
+      1,
+      Math.min(
+        requestedReplicaCount,
+        provisionTargetNodeIds.length > 0 ?
+          provisionTargetNodeIds.length :
+          1,
+      ),
+    );
 
-    if (this.hasRoutablePartitionService(partitionId)) {
+    let routableNodeIds = this.getRoutablePartitionServiceNodeIds(partitionId);
+    if (routableNodeIds.length >= targetReplicaCount) {
       return;
     }
 
-    const operation = await this.rebalanceCoordinator.createOperation({
-      type: OperationType.ADD,
-      partitionId,
-      entityType: SERVICE_TYPE.PARTITION,
-      entityId: partitionId,
-      nodeId: this.nodeId,
-    });
-    const executionResult = await this.rebalanceCoordinator.executeOperation(operation);
+    for (const targetNodeId of provisionTargetNodeIds) {
+      if (routableNodeIds.includes(targetNodeId)) {
+        continue;
+      }
 
-    if (executionResult && executionResult.success === false &&
-        executionResult.skipped !== true) {
-      throw new Error(
-        executionResult.error ||
-        QUERY_ERROR_MSG.TABLE_PARTITION_PROVISION_DISPATCH_FAILED,
+      const operation = await this.rebalanceCoordinator.createOperation({
+        type: OperationType.ADD,
+        partitionId,
+        entityType: SERVICE_TYPE.PARTITION,
+        entityId: partitionId,
+        nodeId: targetNodeId,
+      });
+      const requiresMinimumRouting =
+        routableNodeIds.length < MIN_ROUTABLE_REPLICA_COUNT;
+      const executionPromise = this.rebalanceCoordinator.executeOperation(
+        operation,
       );
-    }
+      const executionResult = requiresMinimumRouting ?
+        await executionPromise :
+        await Promise.race([
+          executionPromise,
+          this.sleep(BEST_EFFORT_PROVISION_DISPATCH_TIMEOUT_MS).then(() => ({
+            success: false,
+            skipped: true,
+            reason: BEST_EFFORT_PROVISION_TIMEOUT_REASON,
+          })),
+        ]);
 
-    await this.waitForRoutablePartitionService(partitionId);
+      if (executionResult?.reason === BEST_EFFORT_PROVISION_TIMEOUT_REASON) {
+        this.logger.warn('Best-effort replica provision dispatch timed out', {
+          partitionId,
+          targetNodeId,
+          timeoutMs: BEST_EFFORT_PROVISION_DISPATCH_TIMEOUT_MS,
+          targetReplicaCount,
+        });
+        continue;
+      }
+
+      if (executionResult && executionResult.success === false &&
+          executionResult.skipped !== true) {
+        if (requiresMinimumRouting) {
+          throw new Error(
+            executionResult.error ||
+            QUERY_ERROR_MSG.TABLE_PARTITION_PROVISION_DISPATCH_FAILED,
+          );
+        }
+        this.logger.warn('Best-effort replica provision dispatch failed', {
+          partitionId,
+          targetNodeId,
+          targetReplicaCount,
+          error:
+            executionResult.error ||
+            QUERY_ERROR_MSG.TABLE_PARTITION_PROVISION_DISPATCH_FAILED,
+        });
+        continue;
+      }
+
+      routableNodeIds = this.getRoutablePartitionServiceNodeIds(partitionId);
+    }
   }
 
   /**
@@ -1283,8 +1350,24 @@ class SQLQueryEngine {
    * @private
    */
   async waitForRoutablePartitionService(partitionId) {
+    await this.waitForRoutablePartitionServiceCount(partitionId, 1);
+  }
+
+  /**
+   * Wait for minimum routable partition service replica count.
+   * @param {string} partitionId - Partition ID.
+   * @param {number} minimumCount - Minimum routable replicas.
+   * @return {Promise<void>}
+   * @private
+   */
+  async waitForRoutablePartitionServiceCount(partitionId, minimumCount) {
+    const requiredCount = Number.isInteger(minimumCount) &&
+      minimumCount > 0 ?
+      minimumCount :
+      1;
     await this.waitForCondition(
-      () => this.hasRoutablePartitionService(partitionId),
+      () => this.getRoutablePartitionServiceNodeIds(partitionId).length >=
+        requiredCount,
       this.tablePartitionProvisioningTimeoutMs,
       this.tablePartitionProvisioningPollIntervalMs,
       QUERY_ERROR_MSG.TABLE_PARTITION_ROUTING_TIMEOUT_PREFIX + partitionId,
@@ -1328,11 +1411,158 @@ class SQLQueryEngine {
    * @private
    */
   hasRoutablePartitionService(partitionId) {
+    return this.getRoutablePartitionServiceNodeIds(partitionId).length > 0;
+  }
+
+  /**
+   * Get unique node IDs with routable partition services.
+   * @param {string} partitionId - Partition ID.
+   * @return {Array<string>} Unique node IDs.
+   * @private
+   */
+  getRoutablePartitionServiceNodeIds(partitionId) {
     if (!this.queryExecutor ||
-        typeof this.queryExecutor.hasRoutablePartitionService !== 'function') {
-      return false;
+        typeof this.queryExecutor.getRoutablePartitionServices !== 'function') {
+      return [];
     }
-    return this.queryExecutor.hasRoutablePartitionService(partitionId);
+    const services = this.queryExecutor.getRoutablePartitionServices(partitionId);
+    const nodeIds = new Set();
+    for (const service of services) {
+      const nodeId = service?.node_id || service?.nodeId || null;
+      if (typeof nodeId === 'string' && nodeId.length > 0) {
+        nodeIds.add(nodeId);
+      }
+    }
+    return [...nodeIds];
+  }
+
+  /**
+   * Resolve active node IDs eligible for initial replica provisioning.
+   * Prefers local node first to keep early routing local.
+   * @param {number} requestedReplicaCount
+   * @return {Array<string>} Ordered node IDs.
+   * @private
+   */
+  resolveProvisionTargetNodeIds(requestedReplicaCount) {
+    const desiredReplicaCount = Number.isInteger(requestedReplicaCount) &&
+      requestedReplicaCount > 0 ?
+      requestedReplicaCount :
+      1;
+
+    const activeNodeIds = this.getActiveNodeIdsFromCache();
+    if (activeNodeIds.length === 0) {
+      return [this.nodeId];
+    }
+
+    const uniqueNodeIds = [...new Set(activeNodeIds)];
+    if (!uniqueNodeIds.includes(this.nodeId)) {
+      uniqueNodeIds.unshift(this.nodeId);
+    }
+    uniqueNodeIds.sort((left, right) => left.localeCompare(right));
+    if (uniqueNodeIds.includes(this.nodeId)) {
+      uniqueNodeIds.splice(uniqueNodeIds.indexOf(this.nodeId), 1);
+      uniqueNodeIds.unshift(this.nodeId);
+    }
+
+    return uniqueNodeIds.slice(
+      0,
+      Math.max(1, Math.min(desiredReplicaCount, uniqueNodeIds.length)),
+    );
+  }
+
+  /**
+   * Get active node IDs from local system cache.
+   * @return {Array<string>}
+   * @private
+   */
+  getActiveNodeIdsFromCache() {
+    if (!this.systemCache) {
+      return [];
+    }
+    const activeNodeRows = [];
+    const serviceRows = [];
+    if (typeof this.systemCache.filter === 'function') {
+      const filteredRows = this.systemCache.filter(TABLES.NODES, (nodeRow) => {
+        const status = String(nodeRow?.status || nodeRow?.state || '')
+          .toLowerCase();
+        return status === STATUS_ACTIVE;
+      });
+      if (Array.isArray(filteredRows)) {
+        activeNodeRows.push(...filteredRows);
+      }
+      const filteredServiceRows = this.systemCache.filter(
+        TABLES.SERVICES,
+        (serviceRow) => {
+          const status = String(serviceRow?.status || '').toLowerCase();
+          const nodeId = serviceRow?.node_id || serviceRow?.nodeId || null;
+          return status === STATUS_ACTIVE &&
+            typeof nodeId === 'string' &&
+            nodeId.length > 0;
+        },
+      );
+      if (Array.isArray(filteredServiceRows)) {
+        serviceRows.push(...filteredServiceRows);
+      }
+    } else if (typeof this.systemCache.getAll === 'function') {
+      const allRows = this.systemCache.getAll(TABLES.NODES);
+      if (Array.isArray(allRows)) {
+        for (const nodeRow of allRows) {
+          const status = String(nodeRow?.status || nodeRow?.state || '')
+            .toLowerCase();
+          if (status === STATUS_ACTIVE) {
+            activeNodeRows.push(nodeRow);
+          }
+        }
+      }
+      const allServiceRows = this.systemCache.getAll(TABLES.SERVICES);
+      if (Array.isArray(allServiceRows)) {
+        for (const serviceRow of allServiceRows) {
+          const status = String(serviceRow?.status || '').toLowerCase();
+          const nodeId = serviceRow?.node_id || serviceRow?.nodeId || null;
+          if (status === STATUS_ACTIVE &&
+              typeof nodeId === 'string' &&
+              nodeId.length > 0) {
+            serviceRows.push(serviceRow);
+          }
+        }
+      }
+    }
+
+    const activeNodeEligibilityById = new Map();
+    for (const row of activeNodeRows) {
+      const nodeId = row?.node_id || row?.nodeId || row?.id || null;
+      if (typeof nodeId !== 'string' || nodeId.length === 0) {
+        continue;
+      }
+      const connectionState = String(
+        row?.connection_state || row?.connectionState || '',
+      ).toLowerCase();
+      const hasConnectionState = connectionState.length > 0;
+      const isConnectionReady = connectionState === CONNECTION_STATE_CONNECTED ||
+        connectionState === CONNECTION_STATE_READY;
+      activeNodeEligibilityById.set(
+        nodeId,
+        !hasConnectionState || isConnectionReady,
+      );
+    }
+
+    const eligibleNodeIds = [...activeNodeEligibilityById.entries()]
+      .filter(([_nodeId, eligible]) => eligible === true)
+      .map(([nodeId]) => nodeId)
+      .filter((nodeId) => typeof nodeId === 'string' && nodeId.length > 0);
+    const serviceNodeIds = serviceRows
+      .map((row) => row?.node_id || row?.nodeId || null)
+      .filter((nodeId) => {
+        if (typeof nodeId !== 'string' || nodeId.length === 0) {
+          return false;
+        }
+        if (!activeNodeEligibilityById.has(nodeId)) {
+          return true;
+        }
+        return activeNodeEligibilityById.get(nodeId) === true;
+      })
+      .filter((nodeId) => typeof nodeId === 'string' && nodeId.length > 0);
+    return [...new Set([...eligibleNodeIds, ...serviceNodeIds])];
   }
 
   /**
@@ -2368,9 +2598,21 @@ class SQLQueryEngine {
         }
       }
       if (typeof this.systemCache.find === 'function') {
-        return this.systemCache.find(TABLES.TABLES, (t) =>
+        const found = this.systemCache.find(TABLES.TABLES, (t) =>
           t.table_name === tableName || t.tableName === tableName,
         );
+        if (found) {
+          return found;
+        }
+      }
+      if (typeof this.systemCache.getAll === 'function') {
+        const tables = this.systemCache.getAll(TABLES.TABLES) || [];
+        return tables.find((table) =>
+          table.table_name === tableName ||
+          table.tableName === tableName ||
+          table.table_id === tableName ||
+          table.tableId === tableName,
+        ) || null;
       }
     } catch {
       // Cache not available

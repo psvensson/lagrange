@@ -34,7 +34,10 @@ import websocket from '@fastify/websocket';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {COLUMN, ERRNO, NUM, TABLES, TYPEOF} from '../constants/index.js';
-import {TRANSPORT_EVENT} from '../constants/transport.js';
+import {CONNECTION_STATE, TRANSPORT_EVENT} from '../constants/transport.js';
+import {INITIAL_PARTITION_IDS} from
+  '../bootstrap/system-table-schemas-constants.js';
+import {META_SERVICE_ID} from '../constants/wasm-meta.js';
 import {createSqlRequest} from '../query/sql-request.js';
 import {EXECUTION_MODE} from '../query/sql-adapter-constants.js';
 import {guardedAdaptAdminAction} from './admin-api-adapter.js';
@@ -85,6 +88,7 @@ import {
   ADMIN_LOG_MSG,
   ADMIN_MESSAGE_TYPE,
   ADMIN_QUERY_RESULT,
+  ADMIN_PREFLIGHT_CRITICAL_PATH_SNAPSHOT,
   ADMIN_SERVICE_DISCOVERY,
   ADMIN_ROUTE,
   ADMIN_STATUS,
@@ -126,8 +130,11 @@ const SERVICE_TYPE_PARTITION = 'partition';
 const STATUS_ACTIVE = 'active';
 const STATUS_UNKNOWN = 'unknown';
 const IDENTIFIER_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const SERVICE_DISCOVERY_TABLE_ID_PATTERN = /^[A-Za-z0-9_-]+$/;
 const SERVICE_DISCOVERY_SQL_WITH_TABLE_PATTERN =
   /^select \* from service_discovery_local\(\s*'([a-z_][a-z0-9_]*)'\s*\)$/;
+const SERVICE_DISCOVERY_SQL_WITH_TABLE_AND_ID_PATTERN =
+  /^select \* from service_discovery_local\(\s*'([a-z_][a-z0-9_]*)'\s*,\s*'([a-z0-9_-]+)'\s*\)$/;
 const SERVICE_DISCOVERY_READINESS_REASON = Object.freeze({
   ROUTING_NOT_READY: 'routing_not_ready',
   SCHEMA_TABLE_MISSING: 'schema_table_missing',
@@ -135,6 +142,16 @@ const SERVICE_DISCOVERY_READINESS_REASON = Object.freeze({
   REPLICA_OPERATIONS_IN_FLIGHT: 'replica_operations_in_flight',
   LEADERSHIP_UNSTABLE: 'leadership_unstable',
 });
+const SERVICE_DISCOVERY_SCHEMA_VERSION_FIELD_CANDIDATES = Object.freeze([
+  'updated_at_hlc',
+  'updatedAtHlc',
+  'schema_version',
+  'schemaVersion',
+  'updated_at',
+  'updatedAt',
+  'created_at',
+  'createdAt',
+]);
 const ADMIN_LOCAL_DISPATCH = Object.freeze({
   TARGET_ADDRESS: 'local/admin-websocket-api',
 });
@@ -170,6 +187,57 @@ function firstStringField(record, ...keys) {
     const value = record?.[key];
     if (typeof value === TYPEOF.STRING && value.length > NUM.ZERO) {
       return value;
+    }
+  }
+  return null;
+}
+
+function normalizeSchemaVersionValue(value) {
+  if (typeof value === TYPEOF.STRING) {
+    const normalized = value.trim();
+    return normalized.length > NUM.ZERO ? normalized : null;
+  }
+  if (typeof value === TYPEOF.NUMBER && Number.isFinite(value)) {
+    return String(value);
+  }
+  if (typeof value === 'bigint') {
+    return String(value);
+  }
+  return null;
+}
+
+function compareSchemaVersionValues(left, right) {
+  if (left === right) {
+    return NUM.ZERO;
+  }
+  const leftNumber = Number(left);
+  const rightNumber = Number(right);
+  if (Number.isFinite(leftNumber) && Number.isFinite(rightNumber)) {
+    return leftNumber - rightNumber;
+  }
+  return String(left).localeCompare(String(right));
+}
+
+function selectNewestSchemaVersion(current, candidate) {
+  if (!candidate) {
+    return current;
+  }
+  if (!current) {
+    return candidate;
+  }
+  return compareSchemaVersionValues(candidate, current) >= NUM.ZERO ?
+    candidate :
+    current;
+}
+
+function extractSchemaVersionFromRecord(record) {
+  if (!record || typeof record !== TYPEOF.OBJECT) {
+    return null;
+  }
+  for (const fieldName of SERVICE_DISCOVERY_SCHEMA_VERSION_FIELD_CANDIDATES) {
+    const normalized = normalizeSchemaVersionValue(record[fieldName]);
+    if (normalized) {
+      return normalized;
     }
   }
   return null;
@@ -255,10 +323,30 @@ function normalizeIdentifier(value) {
 }
 
 /**
- * Parse local service-discovery SQL with optional tableName argument.
+ * Normalize optional table-id discovery scope value.
+ *
+ * @param {*} value
+ * @return {string|null}
+ */
+function normalizeDiscoveryTableId(value) {
+  if (typeof value !== TYPEOF.STRING) {
+    return null;
+  }
+  const trimmedValue = value.trim();
+  if (trimmedValue.length === NUM.ZERO) {
+    return null;
+  }
+  if (!SERVICE_DISCOVERY_TABLE_ID_PATTERN.test(trimmedValue)) {
+    return null;
+  }
+  return trimmedValue;
+}
+
+/**
+ * Parse local service-discovery SQL with optional tableName and tableId args.
  *
  * @param {string} sql
- * @return {{isQuery: boolean, tableName: (string|null)}}
+ * @return {{isQuery: boolean, tableName: (string|null), tableId: (string|null)}}
  */
 function parseServiceDiscoverySqlQuery(sql) {
   const normalizedSql = normalizeSql(sql);
@@ -266,6 +354,17 @@ function parseServiceDiscoverySqlQuery(sql) {
     return {
       isQuery: true,
       tableName: null,
+      tableId: null,
+    };
+  }
+
+  const tableAndIdMatch =
+    normalizedSql.match(SERVICE_DISCOVERY_SQL_WITH_TABLE_AND_ID_PATTERN);
+  if (tableAndIdMatch) {
+    return {
+      isQuery: true,
+      tableName: normalizeIdentifier(tableAndIdMatch[1]),
+      tableId: normalizeDiscoveryTableId(tableAndIdMatch[2]),
     };
   }
 
@@ -274,12 +373,14 @@ function parseServiceDiscoverySqlQuery(sql) {
     return {
       isQuery: false,
       tableName: null,
+      tableId: null,
     };
   }
 
   return {
     isQuery: true,
     tableName: normalizeIdentifier(match[1]),
+    tableId: null,
   };
 }
 
@@ -297,12 +398,14 @@ class AdminWebSocketAPI {
    * @param {Object} options - Configuration options.
    * @param {Object} options.systemTableCache - System table cache.
    * @param {Object} options.sqlQueryEngine - SQL query engine.
+   * @param {Object|null} [options.messageRouter] - MessageRouter instance (optional).
    * @param {string} options.nodeId - Node ID.
    * @param {boolean} [options.enableAdminStream] - Enable legacy admin stream.
    */
   constructor(options = {}) {
     this.systemTableCache = options.systemTableCache || null;
     this.sqlQueryEngine = options.sqlQueryEngine || null;
+    this.messageRouter = options.messageRouter || null;
     this.nodeId = options.nodeId || ADMIN_DEFAULT.NODE_ID;
     this.enforcementMode = options.enforcementMode ||
       ADMIN_DEFAULT.ENFORCEMENT_MODE;
@@ -454,6 +557,12 @@ class AdminWebSocketAPI {
     this.fastify.get(ADMIN_ROUTE.SERVICE_DIAGNOSTICS, async (_request, reply) => {
       return this.handleServiceDiagnostics(reply);
     });
+    this.fastify.get(
+      ADMIN_ROUTE.PREFLIGHT_CRITICAL_PATH_SNAPSHOT,
+      async (_request, reply) => {
+        return this.handlePreflightCriticalPathSnapshot(reply);
+      },
+    );
     this.fastify.get(ADMIN_ROUTE.CONTROL_SNAPSHOT, async (request, reply) => {
       return this.handleControlSnapshot(request, reply);
     });
@@ -1507,6 +1616,9 @@ class AdminWebSocketAPI {
         ADMIN_ERROR_HINT.MISSING_SQL,
       );
     }
+    if (this.isPreflightCriticalPathSnapshotQuery(sql)) {
+      return this.buildPreflightCriticalPathSnapshotQueryResult();
+    }
     if (this.isControlSnapshotQuery(sql)) {
       return this.buildControlSnapshotQueryResult();
     }
@@ -1514,6 +1626,7 @@ class AdminWebSocketAPI {
     if (serviceDiscoveryQuery.isQuery) {
       return this.buildServiceDiscoveryQueryResult({
         tableName: serviceDiscoveryQuery.tableName,
+        tableId: serviceDiscoveryQuery.tableId,
       });
     }
 
@@ -1932,6 +2045,23 @@ class AdminWebSocketAPI {
   }
 
   /**
+   * Handle preflight critical-path snapshot diagnostics route.
+   * @param {Object} reply
+   * @return {Promise<void>}
+   * @private
+   */
+  async handlePreflightCriticalPathSnapshot(reply) {
+    try {
+      const snapshot = this.buildLocalPreflightCriticalPathSnapshot();
+      reply.code(HTTP_STATUS.OK).send(snapshot);
+    } catch (error) {
+      reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE).send({
+        error: error.message,
+      });
+    }
+  }
+
+  /**
    * Handle local control snapshot route.
    * @param {Object} request
    * @param {Object} reply
@@ -2014,6 +2144,17 @@ class AdminWebSocketAPI {
   }
 
   /**
+   * Determine whether one SQL statement requests preflight critical path snapshot.
+   * @param {string} sql
+   * @return {boolean}
+   * @private
+   */
+  isPreflightCriticalPathSnapshotQuery(sql) {
+    return normalizeSql(sql) ===
+      normalizeSql(ADMIN_PREFLIGHT_CRITICAL_PATH_SNAPSHOT.QUERY_SQL);
+  }
+
+  /**
    * Determine whether one SQL statement requests local control snapshot.
    * @param {string} sql
    * @return {boolean}
@@ -2089,6 +2230,7 @@ class AdminWebSocketAPI {
    */
   buildServiceDiscoveryReadinessContext(options = {}) {
     const tableName = normalizeIdentifier(options.tableName);
+    const tableId = normalizeDiscoveryTableId(options.tableId);
     const nodeRows = this.systemTableCache.getAll(TABLES.NODES);
     const serviceRows = this.systemTableCache.getAll(TABLES.SERVICES);
     const partitionRows = this.systemTableCache.getAll(TABLES.PARTITIONS);
@@ -2108,10 +2250,11 @@ class AdminWebSocketAPI {
 
     const tablePartitionContext = this.resolveDiscoveryTablePartitionContext(
       tableName,
+      tableId,
       partitionRows,
       tableRows,
     );
-    const schemaReadyNodeIds = this.resolveDiscoverySchemaReadyNodeIds(
+    const schemaReady = this.resolveDiscoverySchemaReady(
       tablePartitionContext.partitionIds,
       serviceRows,
     );
@@ -2125,8 +2268,9 @@ class AdminWebSocketAPI {
     return {
       tableName,
       tableFound: tablePartitionContext.tableFound,
+      appliedSchemaVersion: tablePartitionContext.appliedSchemaVersion,
       activeNodeIds,
-      schemaReadyNodeIds,
+      schemaReady,
       leadershipStable,
       replicaOpsInFlight: replicaOperationSummary.inFlightCount,
     };
@@ -2135,20 +2279,23 @@ class AdminWebSocketAPI {
   /**
    * Resolve partition context for optional table-scoped readiness.
    * @param {string|null} tableName
+   * @param {string|null} tableId
    * @param {Array<Object>} partitionRows
    * @param {Array<Object>} tableRows
-   * @return {{tableFound: boolean, partitionIds: Set<string>}}
+   * @return {{tableFound: boolean, partitionIds: Set<string>, appliedSchemaVersion: string|null}}
    * @private
    */
-  resolveDiscoveryTablePartitionContext(tableName, partitionRows, tableRows) {
-    if (!tableName) {
+  resolveDiscoveryTablePartitionContext(tableName, tableId, partitionRows, tableRows) {
+    if (!tableName && !tableId) {
       return {
         tableFound: true,
         partitionIds: new Set(),
+        appliedSchemaVersion: null,
       };
     }
 
     const tableIds = new Set();
+    let appliedSchemaVersion = null;
     for (const tableRow of tableRows) {
       const rowTableName = firstStringField(
         tableRow,
@@ -2157,19 +2304,29 @@ class AdminWebSocketAPI {
         'tableName',
         'name',
       );
-      if (rowTableName !== tableName) {
-        continue;
-      }
-      const tableId = firstStringField(
+      const rowTableId = firstStringField(
         tableRow,
         COLUMN.TABLE_ID,
         'table_id',
         'tableId',
         'id',
       );
-      if (tableId) {
-        tableIds.add(tableId);
+      const matchesTableName = tableName && rowTableName === tableName;
+      const matchesTableId = tableId && rowTableId === tableId;
+      if (!matchesTableName && !matchesTableId) {
+        continue;
       }
+      if (rowTableId) {
+        tableIds.add(rowTableId);
+      }
+      const rowSchemaVersion = extractSchemaVersionFromRecord(tableRow);
+      appliedSchemaVersion = selectNewestSchemaVersion(
+        appliedSchemaVersion,
+        rowSchemaVersion,
+      );
+    }
+    if (tableId) {
+      tableIds.add(tableId);
     }
 
     const partitionIds = new Set();
@@ -2197,30 +2354,38 @@ class AdminWebSocketAPI {
         'table_id',
         'tableId',
       );
-      if (rowTableName === tableName || (rowTableId && tableIds.has(rowTableId))) {
+      const matchesTableName = tableName && rowTableName === tableName;
+      const matchesTableId = rowTableId && tableIds.has(rowTableId);
+      if (matchesTableName || matchesTableId) {
         partitionIds.add(partitionId);
+        const rowSchemaVersion = extractSchemaVersionFromRecord(partitionRow);
+        appliedSchemaVersion = selectNewestSchemaVersion(
+          appliedSchemaVersion,
+          rowSchemaVersion,
+        );
       }
     }
 
     return {
       tableFound: partitionIds.size > NUM.ZERO,
       partitionIds,
+      appliedSchemaVersion,
     };
   }
 
   /**
-   * Resolve nodes with active partition replicas for target partitions.
+   * Resolve table-scope schema readiness from active partition coverage.
    * @param {Set<string>} partitionIds
    * @param {Array<Object>} serviceRows
-   * @return {Set<string>}
+   * @return {boolean}
    * @private
    */
-  resolveDiscoverySchemaReadyNodeIds(partitionIds, serviceRows) {
-    const schemaReadyNodeIds = new Set();
+  resolveDiscoverySchemaReady(partitionIds, serviceRows) {
     if (!(partitionIds instanceof Set) || partitionIds.size === NUM.ZERO) {
-      return schemaReadyNodeIds;
+      return false;
     }
 
+    const readyPartitionIds = new Set();
     for (const serviceRow of serviceRows) {
       const serviceType = firstStringField(
         serviceRow,
@@ -2252,12 +2417,13 @@ class AdminWebSocketAPI {
         'node_id',
         'nodeId',
       );
-      if (nodeId) {
-        schemaReadyNodeIds.add(nodeId);
+      if (!nodeId) {
+        continue;
       }
+      readyPartitionIds.add(partitionId);
     }
 
-    return schemaReadyNodeIds;
+    return readyPartitionIds.size === partitionIds.size;
   }
 
   /**
@@ -2329,11 +2495,12 @@ class AdminWebSocketAPI {
       readinessContext.activeNodeIds.has(nodeId);
     const schemaReady = readinessContext.tableName ?
       (readinessContext.tableFound &&
-        readinessContext.schemaReadyNodeIds.has(nodeId)) :
+        readinessContext.schemaReady === true) :
       true;
     const topologyReady = readinessContext.replicaOpsInFlight === NUM.ZERO &&
       readinessContext.leadershipStable === true;
-    const workloadReady = routingReady && schemaReady && topologyReady;
+    const benchmarkReady = routingReady && schemaReady && topologyReady;
+    const workloadReady = benchmarkReady;
     const reasons = [];
 
     if (!routingReady) {
@@ -2369,12 +2536,414 @@ class AdminWebSocketAPI {
 
     return {
       workloadReady,
+      benchmarkReady,
       routingReady,
       schemaReady,
+      topologyReady,
+      appliedSchemaVersion: readinessContext.tableName ?
+        readinessContext.appliedSchemaVersion :
+        null,
       replicaOpsInFlight: readinessContext.replicaOpsInFlight,
       leadershipStable: readinessContext.leadershipStable,
       tableName: readinessContext.tableName,
       reasons,
+    };
+  }
+
+  /**
+   * Build bounded preflight critical-path snapshot from node-local diagnostics.
+   * @return {Object}
+   * @private
+   */
+  buildLocalPreflightCriticalPathSnapshot() {
+    const capturedAtMs = Date.now();
+    const nodeAddress = this.resolvePreflightSnapshotNodeAddress();
+    const routerConnectivity = this.buildPreflightRouterConnectivitySummary();
+    const controlPlanePartitions = this.buildPreflightControlPlanePartitionsSummary();
+    const cdcHealth = this.buildPreflightCdcHealthSummary();
+    const cacheFreshness = this.buildPreflightCacheFreshnessSummary({
+      capturedAtMs,
+    });
+    const rowCounts = this.buildPreflightRowCountsSummary();
+    const discovery = this.buildPreflightDiscoverySummary();
+
+    return {
+      schemaVersion: ADMIN_PREFLIGHT_CRITICAL_PATH_SNAPSHOT.SCHEMA_VERSION,
+      capturedAtMs,
+      nodeId: this.nodeId,
+      address: nodeAddress,
+      routerConnectivity,
+      controlPlanePartitions,
+      cdcHealth,
+      cacheFreshness,
+      rowCounts,
+      discovery,
+    };
+  }
+
+  /**
+   * Resolve best-effort node address for preflight snapshots.
+   * @return {string}
+   * @private
+   */
+  resolvePreflightSnapshotNodeAddress() {
+    const routerAddress = typeof this.messageRouter?.nodeAddress === TYPEOF.STRING ?
+      this.messageRouter.nodeAddress :
+      null;
+    if (routerAddress) {
+      return routerAddress;
+    }
+
+    if (this.systemTableCache &&
+        typeof this.systemTableCache.getAll === TYPEOF.FUNCTION) {
+      const nodes = this.systemTableCache.getAll(TABLES.NODES);
+      const localRow = nodes.find((row) =>
+        firstStringField(row, COLUMN.NODE_ID, 'id') === this.nodeId,
+      );
+      const address = firstStringField(localRow, COLUMN.NODE_ADDRESS, 'address');
+      if (address) {
+        return address;
+      }
+    }
+
+    return this.nodeId || ADMIN_DEFAULT.NODE_ID;
+  }
+
+  /**
+   * Summarize message-router connectivity by coarse state buckets.
+   * @return {Object}
+   * @private
+   */
+  buildPreflightRouterConnectivitySummary() {
+    const defaultSummary = {
+      connectedCount: NUM.ZERO,
+      reconnectingCount: NUM.ZERO,
+      disconnectedCount: NUM.ZERO,
+    };
+    if (!this.messageRouter ||
+        typeof this.messageRouter.getStats !== TYPEOF.FUNCTION) {
+      return defaultSummary;
+    }
+
+    const stats = this.messageRouter.getStats();
+    const connections = stats?.connections && typeof stats.connections === TYPEOF.OBJECT ?
+      stats.connections :
+      {};
+    let connectedCount = NUM.ZERO;
+    let reconnectingCount = NUM.ZERO;
+    let disconnectedCount = NUM.ZERO;
+    for (const [nodeId, info] of Object.entries(connections)) {
+      if (!nodeId || nodeId === this.nodeId) {
+        continue;
+      }
+      const state = String(info?.state || EMPTY_STRING)
+        .trim()
+        .toLowerCase();
+      if (state === CONNECTION_STATE.CONNECTED) {
+        connectedCount += NUM.ONE;
+      } else if (state === CONNECTION_STATE.RECONNECTING) {
+        reconnectingCount += NUM.ONE;
+      } else {
+        disconnectedCount += NUM.ONE;
+      }
+    }
+    return {
+      connectedCount,
+      reconnectingCount,
+      disconnectedCount,
+    };
+  }
+
+  /**
+   * Summarize leadership/health for control-plane partitions required for discovery.
+   * @return {Object}
+   * @private
+   */
+  buildPreflightControlPlanePartitionsSummary() {
+    const partitionTables = [
+      TABLES.NODES,
+      TABLES.SERVICES,
+      TABLES.NODE_ENDPOINTS,
+      TABLES.SERVICE_ENDPOINTS,
+    ];
+    const summary = {};
+    for (const tableName of partitionTables) {
+      summary[tableName] = this.buildPreflightControlPlanePartitionEntry(tableName);
+    }
+    return summary;
+  }
+
+  buildPreflightControlPlanePartitionEntry(tableName) {
+    const partitionId = INITIAL_PARTITION_IDS[tableName] || null;
+    if (!partitionId) {
+      return {
+        leaderKnown: false,
+        leaderNodeId: null,
+        isLeaderLocal: false,
+        lastErrorCode: 'partition_id_unknown',
+      };
+    }
+
+    if (!this.systemTableCache ||
+        typeof this.systemTableCache.getAll !== TYPEOF.FUNCTION) {
+      return {
+        leaderKnown: false,
+        leaderNodeId: null,
+        isLeaderLocal: false,
+        lastErrorCode: 'cache_unavailable',
+      };
+    }
+
+    const partitionRows = this.systemTableCache.getAll(TABLES.PARTITIONS);
+    const partitionRow = partitionRows.find((row) =>
+      row?.[COLUMN.PARTITION_ID] === partitionId,
+    );
+    if (!partitionRow) {
+      return {
+        leaderKnown: false,
+        leaderNodeId: null,
+        isLeaderLocal: false,
+        lastErrorCode: 'partition_row_missing',
+      };
+    }
+
+    const serviceRows = this.systemTableCache.getAll(TABLES.SERVICES);
+    const requiresAddress = tableName !== TABLES.SERVICES;
+    const leaderService = serviceRows.find((service) => {
+      if (service?.[COLUMN.SERVICE_TYPE] !== SERVICE_TYPE_PARTITION) {
+        return false;
+      }
+      if (service?.[COLUMN.PARTITION_ID] !== partitionId) {
+        return false;
+      }
+      if (String(service?.[COLUMN.RAFT_ROLE] || EMPTY_STRING)
+        .toLowerCase() !== LEADER_RAFT_ROLE) {
+        return false;
+      }
+      if (String(service?.[COLUMN.STATUS] || EMPTY_STRING)
+        .toLowerCase() !== STATUS_ACTIVE) {
+        return false;
+      }
+      if (requiresAddress && !service?.[COLUMN.ADDRESS]) {
+        return false;
+      }
+      return true;
+    });
+    if (!leaderService) {
+      return {
+        leaderKnown: false,
+        leaderNodeId: null,
+        isLeaderLocal: false,
+        lastErrorCode: 'leader_service_missing',
+      };
+    }
+
+    const leaderNodeId = firstStringField(
+      partitionRow,
+      COLUMN.LEADER_NODE_ID,
+    ) ||
+      firstStringField(leaderService, COLUMN.NODE_ID, 'nodeId');
+    if (!leaderNodeId) {
+      return {
+        leaderKnown: false,
+        leaderNodeId: null,
+        isLeaderLocal: false,
+        lastErrorCode: 'leader_node_id_missing',
+      };
+    }
+
+    return {
+      leaderKnown: true,
+      leaderNodeId,
+      isLeaderLocal: leaderNodeId === this.nodeId,
+      lastErrorCode: null,
+    };
+  }
+
+  /**
+   * Summarize CDC/mutation pipeline health.
+   * @return {Object}
+   * @private
+   */
+  buildPreflightCdcHealthSummary() {
+    let bufferDepth = NUM.ZERO;
+    let retryCount = NUM.ZERO;
+    if (this.messageRouter &&
+        typeof this.messageRouter.getStats === TYPEOF.FUNCTION) {
+      const stats = this.messageRouter.getStats();
+      const outboundQueues = stats?.outboundQueues &&
+        typeof stats.outboundQueues === TYPEOF.OBJECT ?
+        stats.outboundQueues :
+        {};
+      for (const queue of Object.values(outboundQueues)) {
+        bufferDepth += Number(queue?.pending || NUM.ZERO);
+      }
+      const connections = stats?.connections &&
+        typeof stats.connections === TYPEOF.OBJECT ?
+        stats.connections :
+        {};
+      for (const conn of Object.values(connections)) {
+        retryCount += Number(conn?.reconnectAttempts || NUM.ZERO);
+      }
+    }
+    return {
+      bufferDepth: Number.isFinite(bufferDepth) ?
+        Math.max(NUM.ZERO, Math.floor(bufferDepth)) :
+        NUM.ZERO,
+      retryCount: Number.isFinite(retryCount) ?
+        Math.max(NUM.ZERO, Math.floor(retryCount)) :
+        NUM.ZERO,
+      lastErrorCode: null,
+      lastForwardAttemptAtMs: null,
+    };
+  }
+
+  /**
+   * Summarize cache freshness/watermark relevant to readiness.
+   * @param {Object} options
+   * @param {number} options.capturedAtMs
+   * @return {Object}
+   * @private
+   */
+  buildPreflightCacheFreshnessSummary(options) {
+    const capturedAtMs = Number(options?.capturedAtMs);
+    const lastAppliedAtMs = typeof this.systemTableCache?.getLastAppliedAtMs === TYPEOF.FUNCTION ?
+      this.systemTableCache.getLastAppliedAtMs(TABLES.SERVICE_ENDPOINTS) :
+      null;
+    const tableNames = [
+      TABLES.SERVICES,
+      TABLES.NODE_ENDPOINTS,
+      TABLES.SERVICE_ENDPOINTS,
+    ];
+    const lastAppliedCauseIdByTableName = {};
+    for (const tableName of tableNames) {
+      lastAppliedCauseIdByTableName[tableName] =
+        typeof this.systemTableCache?.getLastAppliedCauseId === TYPEOF.FUNCTION ?
+          this.systemTableCache.getLastAppliedCauseId(tableName) :
+          null;
+    }
+    const appliedSchemaVersion = typeof this.systemTableCache?.getAppliedSchemaVersion ===
+      TYPEOF.FUNCTION ?
+      normalizeSchemaVersionValue(
+        this.systemTableCache.getAppliedSchemaVersion(TABLES.SERVICE_ENDPOINTS),
+      ) :
+      null;
+    const numericLastAppliedAtMs = Number(lastAppliedAtMs);
+    const hasNumericLastAppliedAtMs =
+      lastAppliedAtMs !== null &&
+      typeof lastAppliedAtMs !== TYPEOF.UNDEFINED &&
+      Number.isFinite(numericLastAppliedAtMs);
+    const stalenessMs = Number.isFinite(capturedAtMs) &&
+      hasNumericLastAppliedAtMs ?
+      Math.max(NUM.ZERO, Math.floor(capturedAtMs - numericLastAppliedAtMs)) :
+      null;
+    return {
+      lastAppliedAtMs: hasNumericLastAppliedAtMs ?
+        Math.floor(numericLastAppliedAtMs) :
+        null,
+      appliedSchemaVersion,
+      stalenessMs,
+      lastAppliedCauseIdByTableName,
+    };
+  }
+
+  /**
+   * Summarize control-plane row counts relevant to readiness.
+   * @return {Object}
+   * @private
+   */
+  buildPreflightRowCountsSummary() {
+    if (!this.systemTableCache ||
+        typeof this.systemTableCache.getAll !== TYPEOF.FUNCTION) {
+      return {
+        sysPostgresWireServiceCount: NUM.ZERO,
+        nodeEndpointsCount: NUM.ZERO,
+        serviceEndpointsCount: NUM.ZERO,
+      };
+    }
+
+    const serviceRows = this.systemTableCache.getAll(TABLES.SERVICES);
+    const sysPostgresWireServiceCount = serviceRows.filter((row) =>
+      row?.[COLUMN.SERVICE_ID] === META_SERVICE_ID.POSTGRES_WIRE,
+    ).length;
+
+    const nodeEndpointsCount =
+      typeof this.systemTableCache.count === TYPEOF.FUNCTION ?
+        this.systemTableCache.count(TABLES.NODE_ENDPOINTS) :
+        this.systemTableCache.getAll(TABLES.NODE_ENDPOINTS).length;
+    const serviceEndpointsCount =
+      typeof this.systemTableCache.count === TYPEOF.FUNCTION ?
+        this.systemTableCache.count(TABLES.SERVICE_ENDPOINTS) :
+        this.systemTableCache.getAll(TABLES.SERVICE_ENDPOINTS).length;
+
+    return {
+      sysPostgresWireServiceCount,
+      nodeEndpointsCount,
+      serviceEndpointsCount,
+    };
+  }
+
+  /**
+   * Summarize strict discovery selection/exclusion from local service discovery state.
+   * @return {Object}
+   * @private
+   */
+  buildPreflightDiscoverySummary() {
+    try {
+      const snapshot = this.buildLocalServiceDiscoverySnapshot({
+        serviceIdAllowlist: [META_SERVICE_ID.POSTGRES_WIRE],
+      });
+      const selectedNodeIds = [];
+      const excludedByNodeId = {};
+
+      const services = Array.isArray(snapshot?.services) ? snapshot.services : [];
+      for (const service of services) {
+        const replicas = Array.isArray(service?.replicas) ? service.replicas : [];
+        for (const replica of replicas) {
+          const nodeId = typeof replica?.nodeId === TYPEOF.STRING ?
+            replica.nodeId :
+            null;
+          if (!nodeId) {
+            continue;
+          }
+          const readiness = replica?.readiness || null;
+          const reasons = Array.isArray(readiness?.reasons) ? readiness.reasons : [];
+          const reasonCodes = uniqueSorted(reasons
+            .map((reason) => String(reason?.code || EMPTY_STRING))
+            .filter(Boolean));
+          if (reasonCodes.length === NUM.ZERO) {
+            selectedNodeIds.push(nodeId);
+          } else {
+            excludedByNodeId[nodeId] = reasonCodes;
+          }
+        }
+      }
+
+      return {
+        selectedNodeIds: uniqueSorted(selectedNodeIds),
+        excludedByNodeId,
+      };
+    } catch (_error) {
+      return {
+        selectedNodeIds: ADMIN_CACHE_DUMP.EMPTY,
+        excludedByNodeId: {},
+      };
+    }
+  }
+
+  /**
+   * Build canonical query_result payload for preflight critical-path snapshot query.
+   * @return {Object}
+   * @private
+   */
+  buildPreflightCriticalPathSnapshotQueryResult() {
+    const snapshot = this.buildLocalPreflightCriticalPathSnapshot();
+    return {
+      success: true,
+      rows: [snapshot],
+      count: NUM.ONE,
+      partitions: ADMIN_CACHE_DUMP.EMPTY,
+      tableName: ADMIN_PREFLIGHT_CRITICAL_PATH_SNAPSHOT.TABLE_NAME,
     };
   }
 

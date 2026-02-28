@@ -16,6 +16,7 @@ const DEFAULT_LOAD_TIMEOUT_MS = 4000;
 const DEFAULT_CONTROL_TIMEOUT_MS = 15000;
 const DEFAULT_SNAPSHOT_TIMEOUT_MS = 15000;
 const DISCOVERY_TABLE_BENCHMARK_EVENTS = 'benchmark_events';
+const DISCOVERY_TABLE_ID_BENCHMARK_EVENTS = 'table-benchmark-events';
 
 function createRecordingNode(options = {}) {
   const queryResponses = Array.isArray(options.queryResponses) ?
@@ -427,6 +428,8 @@ test('NodeClient fetchServiceDiscovery supports table-scoped readiness queries',
                   workloadReady: true,
                   routingReady: true,
                   schemaReady: true,
+                  topologyReady: true,
+                  benchmarkReady: true,
                   replicaOpsInFlight: 0,
                   leadershipStable: true,
                   tableName: DISCOVERY_TABLE_BENCHMARK_EVENTS,
@@ -457,6 +460,77 @@ test('NodeClient fetchServiceDiscovery supports table-scoped readiness queries',
     assert.equal(
       discovery.services[0].replicas[0].readiness.schemaReady,
       true,
+    );
+  });
+
+test('NodeClient fetchServiceDiscovery supports table-id discovery hints',
+  async () => {
+    let capturedSql = '';
+    const node = {
+      id: 'node-local',
+      async queryWithTimeout(sql) {
+        capturedSql = String(sql);
+        return {
+          rows: [{
+            schemaVersion: NODE_CLIENT_SERVICE_DISCOVERY_SCHEMA_VERSION,
+            nodeId: 'node-local',
+            capturedAt: 1,
+            serviceCount: 1,
+            replicaCount: 1,
+            services: [{
+              serviceKey:
+                NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE +
+                '|' +
+                NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
+              logicalServiceName: NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE,
+              protocol: NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
+              serviceIds: [NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE],
+              nodes: ['node-local'],
+              replicas: [{
+                endpointId: 'sys-postgres-wire-ep-node-local',
+                serviceId: NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE,
+                nodeId: 'node-local',
+                address: '127.0.0.1',
+                port: 5432,
+                healthStatus: 'healthy',
+                updatedAt: 1,
+                metadata: {},
+                readiness: {
+                  workloadReady: true,
+                  routingReady: true,
+                  schemaReady: true,
+                  topologyReady: true,
+                  benchmarkReady: true,
+                  replicaOpsInFlight: 0,
+                  leadershipStable: true,
+                  tableName: DISCOVERY_TABLE_BENCHMARK_EVENTS,
+                  reasons: [],
+                },
+              }],
+            }],
+          }],
+        };
+      },
+      async getReachabilityDiagnostics() {
+        return {reachable: true};
+      },
+    };
+
+    const client = new NodeClient();
+    await client.fetchServiceDiscovery(node, {
+      tableName: DISCOVERY_TABLE_BENCHMARK_EVENTS,
+      tableId: DISCOVERY_TABLE_ID_BENCHMARK_EVENTS,
+      requireReadiness: true,
+    });
+
+    assert.equal(
+      capturedSql,
+      'SELECT * FROM service_discovery_local(\'' +
+        DISCOVERY_TABLE_BENCHMARK_EVENTS +
+        '\', \'' +
+        DISCOVERY_TABLE_ID_BENCHMARK_EVENTS +
+        '\')',
+      'expected table-scoped local discovery SQL with table-id hint',
     );
   });
 
@@ -509,6 +583,64 @@ test('NodeClient fetchServiceDiscovery fails closed when readiness is required',
     );
   });
 
+test('NodeClient fetchServiceDiscovery requires canonical benchmark readiness fields',
+  async () => {
+    const node = {
+      id: 'node-local',
+      async queryWithTimeout() {
+        return {
+          rows: [{
+            schemaVersion: NODE_CLIENT_SERVICE_DISCOVERY_SCHEMA_VERSION,
+            nodeId: 'node-local',
+            capturedAt: 1,
+            serviceCount: 1,
+            replicaCount: 1,
+            services: [{
+              serviceKey:
+                NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE +
+                '|' +
+                NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
+              logicalServiceName: NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE,
+              protocol: NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
+              serviceIds: [NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE],
+              nodes: ['node-local'],
+              replicas: [{
+                endpointId: 'sys-postgres-wire-ep-node-local',
+                serviceId: NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE,
+                nodeId: 'node-local',
+                address: '127.0.0.1',
+                port: 5432,
+                healthStatus: 'healthy',
+                updatedAt: 1,
+                metadata: {},
+                readiness: {
+                  workloadReady: true,
+                  routingReady: true,
+                  schemaReady: true,
+                  replicaOpsInFlight: 0,
+                  leadershipStable: true,
+                  tableName: DISCOVERY_TABLE_BENCHMARK_EVENTS,
+                  reasons: [],
+                },
+              }],
+            }],
+          }],
+        };
+      },
+      async getReachabilityDiagnostics() {
+        return {reachable: true};
+      },
+    };
+
+    const client = new NodeClient();
+    await assert.rejects(
+      client.fetchServiceDiscovery(node, {
+        requireReadiness: true,
+      }),
+      /benchmarkReady|topologyReady/i,
+    );
+  });
+
 test('NodeClient normalizes errors with node/channel/operation/timeout metadata',
   async () => {
     const recorder = createRecordingNode({
@@ -546,6 +678,45 @@ test('NodeClient keeps load and control timeout policies independent', async () 
     'load timeout must remain independent from control timeout',
   );
 });
+
+test('NodeClient allows per-request retry budget override on control lane',
+  async () => {
+    let controlCallCount = ZERO;
+    const node = {
+      id: 'node-retry-override',
+      async queryWithTimeout(sql) {
+        if (sql !== 'SELECT control') {
+          return {rows: []};
+        }
+        controlCallCount += ONE;
+        if (controlCallCount === ONE) {
+          throw new Error('transient control failure');
+        }
+        return {rows: [{ok: true}]};
+      },
+      async getReachabilityDiagnostics() {
+        return {reachable: true};
+      },
+    };
+    const client = new NodeClient();
+
+    await assert.rejects(
+      client.queryControl(
+        node,
+        'SELECT control',
+        [],
+        {
+          [NODE_CLIENT_CONTEXT_KEYS.RETRY_BUDGET]: 0,
+        },
+      ),
+      /transient control failure/i,
+    );
+    assert.equal(
+      controlCallCount,
+      ONE,
+      'retry override should prevent automatic control retries',
+    );
+  });
 
 test('NodeClient applies benchmark config overrides to channel policies', async () => {
   const recorder = createRecordingNode();
@@ -832,6 +1003,65 @@ test('NodeClient suppresses breaker opens for transient control errors',
       'transient control failures should not trigger breaker short-circuit',
     );
   });
+
+test(
+  'NodeClient suppresses breaker opens for transient distributed participant failures',
+  async () => {
+    let controlCallCount = ZERO;
+    const node = {
+      id: 'node-transient-participant-failure',
+      async queryWithTimeout(sql) {
+        if (sql !== 'SELECT control') {
+          return {rows: []};
+        }
+        controlCallCount += ONE;
+        if (controlCallCount === ONE) {
+          throw new Error('Distributed operation failed due to participant failures');
+        }
+        return {rows: [{ok: true}]};
+      },
+      async getReachabilityDiagnostics() {
+        return {reachable: true};
+      },
+    };
+
+    const client = new NodeClient({
+      channelPolicies: {
+        control: {
+          circuitBreakerThreshold: 1,
+          cooldownMs: 1000,
+          retryBudget: 0,
+        },
+      },
+    });
+
+    await assert.rejects(
+      client.queryControl(
+        node,
+        'SELECT control',
+        [],
+        {
+          [NODE_CLIENT_CONTEXT_KEYS.TOLERATE_TRANSIENT_ERRORS]: true,
+        },
+      ),
+      /participant failures/i,
+    );
+    const result = await client.queryControl(
+      node,
+      'SELECT control',
+      [],
+      {
+        [NODE_CLIENT_CONTEXT_KEYS.TOLERATE_TRANSIENT_ERRORS]: true,
+      },
+    );
+    assert.equal(result.rows[0].ok, true);
+    assert.equal(
+      controlCallCount,
+      2,
+      'transient participant failures should not trigger breaker short-circuit',
+    );
+  },
+);
 
 test('NodeClient tracks timeout budget mismatches for probe responses', async () => {
   const node = {

@@ -39,16 +39,23 @@ class MessageGroupAssignment {
    * Strategy 2: Create self-hosted message group (3 replicas on new node)
    * @param {string} newNodeId - New node ID.
    * @param {Array<Object>} messageGroups - Existing message groups.
+   * @param {Object} [options={}] - Optional assignment filters.
+   * @param {Set<string>} [options.excludedReplicaIds] - Replica IDs that are
+   *   temporarily unavailable for MOVE_REPLICA selection.
    * @return {Object} Assignment instructions.
    */
-  determineAssignment(newNodeId, messageGroups) {
+  determineAssignment(newNodeId, messageGroups, options = {}) {
     this.logger.debug(MESSAGE_GROUP_ASSIGNMENT_LOG_MSG.DETERMINING, {
       newNodeId,
       messageGroupCount: messageGroups.length,
+      excludedReplicaCount:
+        options.excludedReplicaIds instanceof Set ?
+          options.excludedReplicaIds.size :
+          NUM.ZERO,
     });
 
     // Strategy 1: Find a message group with 2+ replicas on the same node
-    const movableReplica = this.findMovableReplica(messageGroups);
+    const movableReplica = this.findMovableReplica(messageGroups, options);
 
     if (movableReplica) {
       this.logger.info(MESSAGE_GROUP_ASSIGNMENT_LOG_MSG.USING_MOVE_REPLICA, {
@@ -86,9 +93,16 @@ class MessageGroupAssignment {
   /**
    * Find a message group with 2+ replicas on the same node.
    * @param {Array<Object>} messageGroups - Message groups to search.
+   * @param {Object} [options={}] - Optional candidate filters.
+   * @param {Set<string>} [options.excludedReplicaIds] - Replica IDs excluded
+   *   from MOVE_REPLICA consideration.
    * @return {Object|null} Movable replica info or null.
    */
-  findMovableReplica(messageGroups) {
+  findMovableReplica(messageGroups, options = {}) {
+    const excludedReplicaIds = options.excludedReplicaIds instanceof Set ?
+      options.excludedReplicaIds :
+      null;
+
     for (const group of messageGroups) {
       const replicas = group.replicas || [];
 
@@ -98,7 +112,15 @@ class MessageGroupAssignment {
       }
 
       // Count replicas per node
-      const replicasByNode = this.countReplicasByNode(replicas);
+      const selectableReplicas = excludedReplicaIds ?
+        replicas.filter((replica) =>
+          !excludedReplicaIds.has(replica.replica_id),
+        ) :
+        replicas;
+
+      // If reservations leave fewer than 2 replicas on every node, this
+      // group cannot safely provide another MOVE_REPLICA candidate.
+      const replicasByNode = this.countReplicasByNode(selectableReplicas);
 
       // Find node with 2+ replicas
       for (const [nodeId, nodeReplicas] of replicasByNode) {
@@ -149,12 +171,26 @@ class MessageGroupAssignment {
    * @return {string} Generated group ID.
    */
   generateGroupId(nodeId) {
-    // Use first 8 characters of node ID for readability
-    const shortId = nodeId.substring(
-      NUM.ZERO,
-      MESSAGE_GROUP_ASSIGNMENT_DEFAULT.GROUP_ID_LENGTH,
-    );
-    return `${MESSAGE_GROUP_ASSIGNMENT_DEFAULT.GROUP_ID_PREFIX}${shortId}`;
+    const normalizedNodeId = typeof nodeId === 'string' ?
+      nodeId.replace(/[^a-zA-Z0-9]/g, STRING.EMPTY) :
+      STRING.EMPTY;
+    if (normalizedNodeId.length === NUM.ZERO) {
+      return `${MESSAGE_GROUP_ASSIGNMENT_DEFAULT.GROUP_ID_PREFIX}` +
+        MESSAGE_GROUP_ASSIGNMENT_DEFAULT.GROUP_ID_FALLBACK;
+    }
+
+    const headLength = MESSAGE_GROUP_ASSIGNMENT_DEFAULT.GROUP_ID_HEAD_LENGTH;
+    const tailLength = MESSAGE_GROUP_ASSIGNMENT_DEFAULT.GROUP_ID_TAIL_LENGTH;
+    const groupPrefix = MESSAGE_GROUP_ASSIGNMENT_DEFAULT.GROUP_ID_PREFIX;
+    const separator = MESSAGE_GROUP_ASSIGNMENT_DEFAULT.GROUP_ID_SEGMENT_SEPARATOR;
+    const headSegment = normalizedNodeId.slice(NUM.ZERO, headLength);
+
+    if (normalizedNodeId.length <= headLength) {
+      return `${groupPrefix}${headSegment}`;
+    }
+
+    const tailSegment = normalizedNodeId.slice(-tailLength);
+    return `${groupPrefix}${headSegment}${separator}${tailSegment}`;
   }
 
   /**

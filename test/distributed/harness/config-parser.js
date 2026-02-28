@@ -18,6 +18,7 @@ import {
   BENCHMARK_DEFAULTS,
   BENCHMARK_GATE_DEFAULTS,
   RAFT_PROVIDER_DEFAULTS,
+  DETERMINISTIC_DEBUG_DEFAULTS,
 } from './constants.js';
 
 /**
@@ -141,6 +142,15 @@ function mergeWithDefaults(partial = {}) {
       failIfBaselineMissing: BENCHMARK_GATE_DEFAULTS.failIfBaselineMissing,
       approvedMitigationId: BENCHMARK_GATE_DEFAULTS.approvedMitigationId,
       ...(partial.benchmarkGate || {}),
+    },
+    deterministicDebug: {
+      enabled: DETERMINISTIC_DEBUG_DEFAULTS.enabled,
+      seed: DETERMINISTIC_DEBUG_DEFAULTS.seed,
+      convergenceSampleIntervalMs:
+        DETERMINISTIC_DEBUG_DEFAULTS.convergenceSampleIntervalMs,
+      preflightSampleIntervalMs:
+        DETERMINISTIC_DEBUG_DEFAULTS.preflightSampleIntervalMs,
+      ...(partial.deterministicDebug || {}),
     },
     raftProvider:
       partial.raftProvider || RAFT_PROVIDER_DEFAULTS.provider,

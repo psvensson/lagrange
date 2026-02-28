@@ -22,6 +22,12 @@ const REPLICA_HANDLER_LOG_MSG = Object.freeze({
   CREATE_MISSING_FIELDS: 'CREATE_REPLICA missing required fields',
   CREATE_ALREADY_ACTIVE: 'Replica already exists in active state',
   CREATE_IN_PROGRESS: 'Replica creation already in progress',
+  WAITING_METADATA_PROPAGATION:
+    'Waiting for partition/table metadata propagation before replica creation',
+  HYDRATED_METADATA_FROM_QUERY:
+    'Hydrated replica metadata from authoritative system-table query',
+  METADATA_HYDRATION_QUERY_FAILED:
+    'Failed to hydrate replica metadata from authoritative system-table query',
   WAITING_VOTER_READY: 'Waiting for replica voter-ready activation',
   VOTER_READY_ACTIVATED: 'Replica reached voter-ready activation state',
   VOTER_READY_TIMEOUT: 'Replica did not reach voter-ready activation before timeout',

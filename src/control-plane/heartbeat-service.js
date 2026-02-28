@@ -26,6 +26,7 @@ import {
   HEARTBEAT_FAILURE_WARN_THRESHOLD,
   HEARTBEAT_LOG_MSG,
   HEARTBEAT_MEMORY_TREND,
+  HEARTBEAT_QUIET_MODE_BYPASS_REASON,
   HEARTBEAT_STATE,
   HEARTBEAT_SUBSYSTEM,
 } from './heartbeat-service-constants.js';
@@ -84,6 +85,7 @@ class HeartbeatService extends EventEmitter {
     this.nodeAddress = options.nodeAddress || null;
     this.cdcIntegrationService = options.cdcIntegrationService || null;
     this.systemTableCache = options.systemTableCache || null;
+    this.quietMode = options.quietMode || null;
 
     const config = ConfigurationManager.getInstance();
     this.heartbeatIntervalMs =
@@ -97,14 +99,31 @@ class HeartbeatService extends EventEmitter {
       options.endpointRefreshIntervalMs > ZERO ?
         Math.floor(options.endpointRefreshIntervalMs) :
         HEARTBEAT_DEFAULT.ENDPOINT_REFRESH_INTERVAL_MS;
+    this.nodeMetadataMinUpdateIntervalMs =
+      Number.isFinite(options.nodeMetadataMinUpdateIntervalMs) &&
+      options.nodeMetadataMinUpdateIntervalMs >= ZERO ?
+        Math.floor(options.nodeMetadataMinUpdateIntervalMs) :
+        HEARTBEAT_DEFAULT.NODE_METADATA_MIN_UPDATE_INTERVAL_MS;
+    this.nodeMetadataMaxStalenessMs =
+      Number.isFinite(options.nodeMetadataMaxStalenessMs) &&
+      options.nodeMetadataMaxStalenessMs > ZERO ?
+        Math.floor(options.nodeMetadataMaxStalenessMs) :
+        HEARTBEAT_DEFAULT.NODE_METADATA_MAX_STALENESS_MS;
 
     this.heartbeatTimer = null;
     this.heartbeatConsecutiveFailures = NUM.ZERO;
     this.heartbeatCount = NUM.ZERO;
     this.state = HEARTBEAT_STATE.CREATED;
     this.heartbeatInFlight = false;
+    this.lastNodeHeartbeatWriteAt = null;
+    this.lastNodeHeartbeatWriteSignature = null;
     this.lastEndpointUpsertAt = null;
     this.lastEndpointUpsertSignature = null;
+    this.quietModeSuppressedCounts = {
+      nodeHeartbeatWrites: NUM.ZERO,
+      endpointUpserts: NUM.ZERO,
+    };
+    this.quietModeBypassReasonHistogram = {};
 
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
@@ -292,11 +311,37 @@ class HeartbeatService extends EventEmitter {
       now,
     );
 
-    await this.cdcIntegrationService.updateSystemTableRow(
-      SystemTableName.NODES,
-      {node_id: this.nodeId},
+    const quietModeActive = this.isQuietModeActive();
+    const nodeWriteDecision = this.resolveNodeHeartbeatWriteDecision(
       updateRow,
+      now,
     );
+    let shouldWriteNodeHeartbeat = nodeWriteDecision.shouldWrite;
+    if (quietModeActive && shouldWriteNodeHeartbeat) {
+      if (nodeWriteDecision.reason === 'no_previous_write') {
+        this.recordQuietModeBypassReason(
+          HEARTBEAT_QUIET_MODE_BYPASS_REASON.NODE_HEARTBEAT_INITIAL_WRITE,
+        );
+      } else if (nodeWriteDecision.reason === 'max_staleness') {
+        this.recordQuietModeBypassReason(
+          HEARTBEAT_QUIET_MODE_BYPASS_REASON.NODE_HEARTBEAT_MAX_STALENESS,
+        );
+      } else {
+        shouldWriteNodeHeartbeat = false;
+        this.recordQuietModeSuppressedWrite('nodeHeartbeatWrites');
+      }
+    }
+
+    if (shouldWriteNodeHeartbeat) {
+      await this.cdcIntegrationService.updateSystemTableRow(
+        SystemTableName.NODES,
+        {node_id: this.nodeId},
+        updateRow,
+      );
+      this.lastNodeHeartbeatWriteAt = now;
+      this.lastNodeHeartbeatWriteSignature =
+        this.buildNodeHeartbeatWriteSignature(updateRow);
+    }
 
     // Register or refresh WebSocket endpoint, but avoid rewriting unchanged
     // endpoint rows on every heartbeat.
@@ -306,6 +351,10 @@ class HeartbeatService extends EventEmitter {
     ) || null;
     const endpointRow = this.buildEndpointRow(existingEp, now);
     if (this.shouldUpsertEndpointRow(endpointRow, now)) {
+      if (quietModeActive) {
+        this.recordQuietModeSuppressedWrite('endpointUpserts');
+        return;
+      }
       await this.cdcIntegrationService.upsertSystemTableRow(
         SystemTableName.NODE_ENDPOINTS, endpointRow,
       );
@@ -353,6 +402,130 @@ class HeartbeatService extends EventEmitter {
       metadata: endpointRow[COLUMN.METADATA],
       status: endpointRow[COLUMN.STATUS],
     });
+  }
+
+  /**
+   * Build signature used to detect materially-changed node heartbeat payloads.
+   * @param {Object} updateRow
+   * @return {string}
+   * @private
+   */
+  buildNodeHeartbeatWriteSignature(updateRow) {
+    return JSON.stringify({
+      nodeAddress: updateRow.node_address,
+      cpuCores: updateRow.cpu_cores,
+      memoryMb: updateRow.memory_mb,
+      diskGb: updateRow.disk_gb,
+      cpuUsagePercent: updateRow.cpu_usage_percent,
+      memoryUsagePercent: updateRow.memory_usage_percent,
+      diskUsagePercent: updateRow.disk_usage_percent,
+      status: updateRow.status,
+      connectionState: updateRow.connection_state,
+      capabilities: updateRow.capabilities,
+    });
+  }
+
+  /**
+   * Decide if nodes heartbeat row should be written on this tick.
+   * @param {Object} updateRow
+   * @param {number} now
+   * @return {{shouldWrite: boolean, reason: string}}
+   * @private
+   */
+  resolveNodeHeartbeatWriteDecision(updateRow, now) {
+    if (!Number.isFinite(this.lastNodeHeartbeatWriteAt)) {
+      return {
+        shouldWrite: true,
+        reason: 'no_previous_write',
+      };
+    }
+
+    const signature = this.buildNodeHeartbeatWriteSignature(updateRow);
+    if (this.lastNodeHeartbeatWriteSignature !== signature) {
+      return {
+        shouldWrite: true,
+        reason: 'signature_changed',
+      };
+    }
+
+    const elapsedMs = now - this.lastNodeHeartbeatWriteAt;
+    if (elapsedMs >= this.nodeMetadataMaxStalenessMs) {
+      return {
+        shouldWrite: true,
+        reason: 'max_staleness',
+      };
+    }
+
+    if (elapsedMs >= this.nodeMetadataMinUpdateIntervalMs) {
+      return {
+        shouldWrite: true,
+        reason: 'min_interval_elapsed',
+      };
+    }
+
+    return {
+      shouldWrite: false,
+      reason: 'coalesced_min_interval',
+    };
+  }
+
+  /**
+   * Determine if heartbeat quiet mode is currently active.
+   * @return {boolean}
+   * @private
+   */
+  isQuietModeActive() {
+    if (!this.quietMode) {
+      return false;
+    }
+    if (typeof this.quietMode === 'boolean') {
+      return this.quietMode;
+    }
+    if (typeof this.quietMode?.isActive === 'function') {
+      return this.quietMode.isActive() === true;
+    }
+    if (this.quietMode.enabled === false) {
+      return false;
+    }
+    return this.quietMode.active === true;
+  }
+
+  /**
+   * Record a quiet-mode suppressed write.
+   * @param {string} key
+   * @private
+   */
+  recordQuietModeSuppressedWrite(key) {
+    if (!Object.prototype.hasOwnProperty.call(this.quietModeSuppressedCounts, key)) {
+      this.quietModeSuppressedCounts[key] = NUM.ZERO;
+    }
+    this.quietModeSuppressedCounts[key] += ONE;
+  }
+
+  /**
+   * Record a quiet-mode safety bypass reason.
+   * @param {string} reason
+   * @private
+   */
+  recordQuietModeBypassReason(reason) {
+    const normalizedReason = String(reason || 'unknown');
+    if (!Object.prototype.hasOwnProperty.call(
+      this.quietModeBypassReasonHistogram,
+      normalizedReason,
+    )) {
+      this.quietModeBypassReasonHistogram[normalizedReason] = NUM.ZERO;
+    }
+    this.quietModeBypassReasonHistogram[normalizedReason] += ONE;
+  }
+
+  /**
+   * Get quiet-mode bypass reason histogram snapshot.
+   * @return {Object}
+   */
+  getQuietModeBypassReasonHistogram() {
+    return {
+      ...this.quietModeBypassReasonHistogram,
+    };
   }
 
   /**

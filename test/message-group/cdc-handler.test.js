@@ -155,6 +155,50 @@ test('CDCHandler - handleEvent deduplicates events', async (t) => {
   handler.shutdown();
 });
 
+test(
+  'CDCHandler - dedupe uses table primary key when id is absent',
+  async (t) => {
+    const handler = new CDCHandler(cache, {bufferSize: 10});
+    handler.initialize();
+    handler.subscribe('partitions');
+
+    const timestamp = hlcClock.now().toString();
+    const firstEvent = {
+      tableName: 'partitions',
+      operation: CDC_OPERATIONS.INSERT,
+      data: {
+        partition_id: 'partition-1',
+        table_id: 'table-a',
+      },
+      timestamp,
+    };
+    const secondEvent = {
+      tableName: 'partitions',
+      operation: CDC_OPERATIONS.INSERT,
+      data: {
+        partition_id: 'partition-2',
+        table_id: 'table-a',
+      },
+      timestamp,
+    };
+
+    const firstAccepted = handler.handleEvent(firstEvent);
+    handler.flushBuffer('partitions');
+    const secondAccepted = handler.handleEvent(secondEvent);
+    handler.flushBuffer('partitions');
+
+    t.ok(firstAccepted, 'Should accept first event');
+    t.ok(
+      secondAccepted,
+      'Should not deduplicate distinct partition_id events at same timestamp',
+    );
+    t.ok(cache.get('partitions', 'partition-1'), 'Should apply first partition event');
+    t.ok(cache.get('partitions', 'partition-2'), 'Should apply second partition event');
+
+    handler.shutdown();
+  },
+);
+
 test('CDCHandler - flushBuffer applies events to cache', async (t) => {
   const handler = new CDCHandler(cache, {bufferSize: 10});
   handler.initialize();
@@ -247,6 +291,69 @@ test('CDCHandler - applyImmediate bypasses buffer', async (t) => {
 
   handler.shutdown();
 });
+
+test('CDCHandler - applyImmediate preserves causeId in apply telemetry', async (t) => {
+  const handler = new CDCHandler(cache, {bufferSize: 10});
+  handler.initialize();
+  handler.subscribe('nodes');
+
+  const appliedEvents = [];
+  handler.on('eventApplied', (event) => {
+    appliedEvents.push(event);
+  });
+
+  const timestamp = hlcClock.now().toString();
+  const causeId = 'cause-1';
+  handler.applyImmediate({
+    tableName: 'nodes',
+    operation: CDC_OPERATIONS.INSERT,
+    data: {id: 'node-cause', status: 'active'},
+    timestamp,
+    causeId,
+  });
+
+  t.equal(appliedEvents.length, 1, 'Should emit eventApplied');
+  t.equal(
+    appliedEvents[0].causeId,
+    causeId,
+    'Should include the initiating causeId on cache apply telemetry',
+  );
+
+  handler.shutdown();
+});
+
+test(
+  'CDCHandler - last applied timestamp should stay monotonic for out-of-order immediate events',
+  async (t) => {
+    const handler = new CDCHandler(cache, {bufferSize: 10});
+    handler.initialize();
+    handler.subscribe('nodes');
+
+    const olderTimestamp = hlcClock.now().toString();
+    const newerTimestamp = hlcClock.now().toString();
+
+    handler.applyImmediate({
+      tableName: 'nodes',
+      operation: CDC_OPERATIONS.INSERT,
+      data: {id: 'node-monotonic-a', status: 'active'},
+      timestamp: newerTimestamp,
+    });
+    handler.applyImmediate({
+      tableName: 'nodes',
+      operation: CDC_OPERATIONS.INSERT,
+      data: {id: 'node-monotonic-b', status: 'active'},
+      timestamp: olderTimestamp,
+    });
+
+    t.equal(
+      handler.getLastAppliedTimestamp('nodes'),
+      newerTimestamp,
+      'out-of-order immediate event should not regress last applied timestamp',
+    );
+
+    handler.shutdown();
+  },
+);
 
 test('CDCHandler - auto-flush when buffer full', async (t) => {
   const handler = new CDCHandler(cache, {bufferSize: 2});

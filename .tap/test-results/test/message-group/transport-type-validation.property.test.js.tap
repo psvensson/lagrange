@@ -21,7 +21,7 @@ TAP version 14
     ok 19 - Service should be created with valid transport
     ok 20 - Transport should be set
     1..20
-ok 1 - Property 1: Transport Type Validation - valid transports accepted # time=6.572ms
+ok 1 - Property 1: Transport Type Validation - valid transports accepted # time=6.831ms
 
 # Subtest: Property 1: Transport Type Validation - invalid transports rejected
     ok 1 - Should reject transport without WebSocket markers
@@ -35,7 +35,7 @@ ok 1 - Property 1: Transport Type Validation - valid transports accepted # time=
     ok 9 - Should reject transport without WebSocket markers
     ok 10 - Should reject transport without WebSocket markers
     1..10
-ok 2 - Property 1: Transport Type Validation - invalid transports rejected # time=2.367ms
+ok 2 - Property 1: Transport Type Validation - invalid transports rejected # time=2.406ms
 
 # Subtest: Property 1: Transport Type Validation - null/undefined rejected
     ok 1 - Should reject null/undefined transport
@@ -49,7 +49,7 @@ ok 2 - Property 1: Transport Type Validation - invalid transports rejected # tim
     ok 9 - Should reject null/undefined transport
     ok 10 - Should reject null/undefined transport
     1..10
-ok 3 - Property 1: Transport Type Validation - null/undefined rejected # time=2.186ms
+ok 3 - Property 1: Transport Type Validation - null/undefined rejected # time=2.13ms
 
 # Subtest: Property 1: Transport Type Validation - missing deliver rejected
     ok 1 - Should reject transport without deliver method
@@ -63,7 +63,7 @@ ok 3 - Property 1: Transport Type Validation - null/undefined rejected # time=2.
     ok 9 - Should reject transport without deliver method
     ok 10 - Should reject transport without deliver method
     1..10
-ok 4 - Property 1: Transport Type Validation - missing deliver rejected # time=1.601ms
+ok 4 - Property 1: Transport Type Validation - missing deliver rejected # time=1.921ms
 
 # Subtest: Property 1: Transport Type Validation - missing initialize rejected
     ok 1 - Should reject transport without initialize method
@@ -77,6 +77,6 @@ ok 4 - Property 1: Transport Type Validation - missing deliver rejected # time=1
     ok 9 - Should reject transport without initialize method
     ok 10 - Should reject transport without initialize method
     1..10
-ok 5 - Property 1: Transport Type Validation - missing initialize rejected # time=1.73ms
+ok 5 - Property 1: Transport Type Validation - missing initialize rejected # time=1.651ms
 
 1..5

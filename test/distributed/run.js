@@ -31,6 +31,7 @@ import {
   EXIT_CODES,
   BENCHMARK_GATE_DEFAULTS,
   RAFT_PROVIDER_DEFAULTS,
+  DETERMINISTIC_DEBUG_DEFAULTS,
 } from './harness/constants.js';
 
 const LIVE_LOG_PREFIX = '[live-log] ';
@@ -59,6 +60,7 @@ const RUNNER_STAGE_LOCAL_SOCKET = 'local-socket';
 const RUNNER_STAGE_SCENARIO_COUNT_PREFIX = 'Found ';
 const RUNNER_STAGE_SCENARIO_COUNT_SUFFIX = ' scenario(s)\n';
 const RUNNER_STAGE_ARTIFACTS_DIR_PREFIX = 'Artifacts dir: ';
+const RUNNER_STAGE_DETERMINISTIC_DEBUG_PREFIX = 'Deterministic debug mode: ';
 const BUILD_PROGRESS_LOG_PREFIX = 'docker-build: ';
 const DOCKER_COMMAND_LOG_PREFIX = 'docker-cmd: ';
 const BUILD_PROGRESS_ID_KEY = 'id';
@@ -139,6 +141,9 @@ const FAST_LOCAL_BIND_READ_ONLY_SUFFIX = ':ro';
 const FAST_LOCAL_LOG_PREFIX =
   'Fast local mode enabled: mounted host source, container reuse, ' +
   'and relaxed dirty rebuild policy\n';
+const SEEDED_PRNG_MULTIPLIER = 1664525;
+const SEEDED_PRNG_INCREMENT = 1013904223;
+const SEEDED_PRNG_MODULUS = 4294967296;
 
 function resolveClusterSize(config) {
   return Number.isInteger(config?.size) && config.size > 0 ?
@@ -150,7 +155,8 @@ function resolveClusterSize(config) {
  * Parse CLI arguments from argv.
  * @param {Array<string>} argv - process.argv.slice(2)
  * @returns {{config: string, scenario: string|null,
- *   output: string, verbose: boolean, fastLocal: boolean|null}}
+ *   output: string, verbose: boolean, fastLocal: boolean|null,
+ *   deterministicDebug: boolean|null}}
  */
 function parseArgs(argv) {
   let config = CLI.DEFAULT_CONFIG;
@@ -158,6 +164,7 @@ function parseArgs(argv) {
   let output = CLI.DEFAULT_OUTPUT;
   let verbose = false;
   let fastLocal = null;
+  let deterministicDebug = null;
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -173,10 +180,21 @@ function parseArgs(argv) {
       fastLocal = true;
     } else if (arg === CLI.ARG_NO_FAST_LOCAL) {
       fastLocal = false;
+    } else if (arg === CLI.ARG_DETERMINISTIC_DEBUG) {
+      deterministicDebug = true;
+    } else if (arg === CLI.ARG_NO_DETERMINISTIC_DEBUG) {
+      deterministicDebug = false;
     }
   }
 
-  return {config, scenario, output, verbose, fastLocal};
+  return {
+    config,
+    scenario,
+    output,
+    verbose,
+    fastLocal,
+    deterministicDebug,
+  };
 }
 
 function buildFastLocalSourceBind(cwd = process.cwd()) {
@@ -228,6 +246,115 @@ function resolveFastLocalMode(args, config) {
     return false;
   }
   return true;
+}
+
+function normalizePositiveInteger(value, fallback) {
+  const normalized = Number(value);
+  if (!Number.isFinite(normalized) || normalized <= 0) {
+    return fallback;
+  }
+  return Math.floor(normalized);
+}
+
+function resolveDeterministicDebugConfig(args, config) {
+  const configured = config?.deterministicDebug &&
+    typeof config.deterministicDebug === 'object' ?
+    config.deterministicDebug :
+    {};
+  const enabled = args?.deterministicDebug === true ?
+    true :
+    (args?.deterministicDebug === false ?
+      false :
+      configured.enabled === true);
+
+  return {
+    enabled,
+    seed: normalizePositiveInteger(
+      configured.seed,
+      DETERMINISTIC_DEBUG_DEFAULTS.seed,
+    ),
+    convergenceSampleIntervalMs: normalizePositiveInteger(
+      configured.convergenceSampleIntervalMs,
+      DETERMINISTIC_DEBUG_DEFAULTS.convergenceSampleIntervalMs,
+    ),
+    preflightSampleIntervalMs: normalizePositiveInteger(
+      configured.preflightSampleIntervalMs,
+      DETERMINISTIC_DEBUG_DEFAULTS.preflightSampleIntervalMs,
+    ),
+  };
+}
+
+function applyDeterministicDebugConfig(config, deterministicDebug) {
+  if (!deterministicDebug?.enabled) {
+    return config;
+  }
+  const convergenceConfig =
+    config?.convergence && typeof config.convergence === 'object' ?
+      config.convergence :
+      {};
+  const benchmarkConfig =
+    config?.benchmark && typeof config.benchmark === 'object' ?
+      config.benchmark :
+      {};
+  return {
+    ...config,
+    deterministicDebug: {
+      enabled: true,
+      seed: deterministicDebug.seed,
+      convergenceSampleIntervalMs:
+        deterministicDebug.convergenceSampleIntervalMs,
+      preflightSampleIntervalMs:
+        deterministicDebug.preflightSampleIntervalMs,
+    },
+    convergence: {
+      ...convergenceConfig,
+      sampleIntervalMs: deterministicDebug.convergenceSampleIntervalMs,
+    },
+    benchmark: {
+      ...benchmarkConfig,
+      readyPollIntervalMs: deterministicDebug.preflightSampleIntervalMs,
+      quiescentPollIntervalMs: deterministicDebug.preflightSampleIntervalMs,
+      postLoadDrainPollIntervalMs:
+        deterministicDebug.preflightSampleIntervalMs,
+    },
+  };
+}
+
+function createSeededRandom(seed) {
+  let state = normalizePositiveInteger(
+    seed,
+    DETERMINISTIC_DEBUG_DEFAULTS.seed,
+  ) >>> 0;
+  if (state === 0) {
+    state = DETERMINISTIC_DEBUG_DEFAULTS.seed >>> 0;
+  }
+  return () => {
+    state = (SEEDED_PRNG_MULTIPLIER * state + SEEDED_PRNG_INCREMENT) >>> 0;
+    return state / SEEDED_PRNG_MODULUS;
+  };
+}
+
+function installDeterministicRandom(seed) {
+  Math.random = createSeededRandom(seed);
+}
+
+function buildReportMetadata(args, runConfig, deterministicDebug) {
+  const metadata = {
+    raftProvider: resolveRunRaftProvider(runConfig),
+    configPath: String(args?.config || CLI.DEFAULT_CONFIG),
+    scenarioFilter: String(args?.scenario || SCENARIO_FILTER_ALL),
+  };
+  if (deterministicDebug?.enabled === true) {
+    metadata.deterministicDebug = {
+      enabled: true,
+      seed: deterministicDebug.seed,
+      convergenceSampleIntervalMs:
+        deterministicDebug.convergenceSampleIntervalMs,
+      preflightSampleIntervalMs:
+        deterministicDebug.preflightSampleIntervalMs,
+    };
+  }
+  return metadata;
 }
 
 /**
@@ -1206,6 +1333,32 @@ async function runScenarios(config, scenarios, options) {
       }
       scenarioResult.trace = trace;
 
+      if (scenarioResult?.details?.diagnostics?.rootCauseBundle &&
+          playback && typeof playback === 'object') {
+        const files = playback.files && typeof playback.files === 'object' ?
+          playback.files :
+          {};
+        const manifestPath = typeof files.manifest === 'string' &&
+          files.manifest.length > 0 ?
+          files.manifest :
+          null;
+        const viewerPath = typeof files.viewer === 'string' &&
+          files.viewer.length > 0 ?
+          files.viewer :
+          null;
+        const manifestDir = manifestPath ? dirname(manifestPath) : null;
+        const bundle = scenarioResult.details.diagnostics.rootCauseBundle;
+        const existingPlayback = bundle.playback && typeof bundle.playback === 'object' ?
+          bundle.playback :
+          {};
+        bundle.playback = {
+          ...existingPlayback,
+          ...(manifestDir ? {manifestDir} : {}),
+          ...(manifestPath ? {manifestPath} : {}),
+          ...(viewerPath ? {viewerPath} : {}),
+        };
+      }
+
       scenarioResult.memoryLeak = await analyzeMemoryLeakFromPlayback(
         scenarioResult.playback,
         config.memoryLeak || {},
@@ -1530,6 +1683,11 @@ async function main() {
       process.stdout.write(FAST_LOCAL_LOG_PREFIX);
     }
   }
+  const deterministicDebug = resolveDeterministicDebugConfig(args, runConfig);
+  if (deterministicDebug.enabled) {
+    runConfig = applyDeterministicDebugConfig(runConfig, deterministicDebug);
+    installDeterministicRandom(deterministicDebug.seed);
+  }
   if (args.verbose) {
     const hasRemoteHosts = Array.isArray(runConfig?.docker?.hosts) &&
       runConfig.docker.hosts.length > 0;
@@ -1544,6 +1702,17 @@ async function main() {
     process.stdout.write(
       RUNNER_STAGE_ARTIFACTS_DIR_PREFIX + runConfig.outputDir + '\n',
     );
+    if (deterministicDebug.enabled) {
+      process.stdout.write(
+        RUNNER_STAGE_DETERMINISTIC_DEBUG_PREFIX +
+        'seed=' + deterministicDebug.seed +
+        ', convergence_sample_interval_ms=' +
+        deterministicDebug.convergenceSampleIntervalMs +
+        ', preflight_sample_interval_ms=' +
+        deterministicDebug.preflightSampleIntervalMs +
+        '\n',
+      );
+    }
     process.stdout.write(RUNNER_STAGE_SCENARIO_DISCOVERY);
   }
 
@@ -1584,11 +1753,11 @@ async function main() {
   }
 
   const historicalReports = await loadHistoricalReports(args.output);
-  const reportMetadata = {
-    raftProvider: resolveRunRaftProvider(runConfig),
-    configPath: String(args.config),
-    scenarioFilter: String(args.scenario || SCENARIO_FILTER_ALL),
-  };
+  const reportMetadata = buildReportMetadata(
+    args,
+    runConfig,
+    deterministicDebug,
+  );
 
   const {report, hasFailures} = await runScenarios(
     runConfig,
@@ -1663,6 +1832,9 @@ export {
   loadScenarioModule,
   shouldPrintLiveLogEntry,
   resolveFastLocalMode,
+  resolveDeterministicDebugConfig,
+  applyDeterministicDebugConfig,
+  buildReportMetadata,
   resolveGitDirty,
   deriveRunOutputDir,
   loadHistoricalReports,

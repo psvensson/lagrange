@@ -592,6 +592,30 @@ test('collectContainerFallback demultiplexes Docker-framed logs',
     );
   });
 
+test('collectContainerFallback requests bounded Docker tail to avoid oversized payloads',
+  async (_t) => {
+    let observedOptions = null;
+    const mockDockerProvider = {
+      getContainerLogs: async (_containerId, options) => {
+        observedOptions = options;
+        return '';
+      },
+    };
+
+    const nodes = [
+      {id: 'node-1', containerId: 'c1'},
+    ];
+
+    const collector = new LogCollector(tempDir());
+    await collector.collectContainerFallback(
+      mockDockerProvider,
+      nodes,
+    );
+
+    assert.equal(observedOptions.tail, 50);
+    assert.equal(observedOptions.rawBuffer, true);
+  });
+
 /**
  * Unit test: collectContainerFallback skips unreachable containers
  * Validates: Requirements 7.6

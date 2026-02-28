@@ -542,6 +542,60 @@ class RebalanceCoordinator extends EventEmitter {
   }
 
   /**
+   * Resolve in-flight replica IDs for an entity from authoritative SQL state.
+   * Falls back to cache rows when SQL is temporarily unavailable.
+   * @param {Object} params - Lookup parameters.
+   * @param {string} params.partitionId - Partition ID compatibility key.
+   * @param {string} params.entityType - Entity type.
+   * @param {string} params.entityId - Entity ID.
+   * @return {Promise<Set<string>>} In-flight replica IDs.
+   * @private
+   */
+  async getEntityInFlightReplicaIds({partitionId, entityType, entityId}) {
+    const replicaIds = new Set();
+
+    try {
+      const operations = await this.getOperationsByEntity(entityType, entityId);
+      for (const operation of operations) {
+        if (!operation || TERMINAL_STATUSES.includes(operation.status)) {
+          continue;
+        }
+
+        const replicaId = operation.replicaId;
+        if (typeof replicaId === 'string' && replicaId.length > NUM.ZERO) {
+          replicaIds.add(replicaId);
+        }
+      }
+
+      return replicaIds;
+    } catch (error) {
+      this.logger.warn(
+        'Failed to load in-flight replica IDs from SQL; using cache fallback',
+        {
+          partitionId,
+          entityType,
+          entityId,
+          error: error.message,
+        },
+      );
+    }
+
+    const inFlightRows = this.getEntityInFlightOperationRows({
+      partitionId,
+      entityType,
+      entityId,
+    });
+    for (const row of inFlightRows) {
+      const replicaId = row?.replica_id;
+      if (typeof replicaId === 'string' && replicaId.length > NUM.ZERO) {
+        replicaIds.add(replicaId);
+      }
+    }
+
+    return replicaIds;
+  }
+
+  /**
    * Allocate canonical replica ID for ADD/REPLACE create phase.
    * Canonical format mirrors bootstrap replicas: `${entityId}-rN`.
    * @param {Object} params - Allocation parameters.
@@ -550,10 +604,10 @@ class RebalanceCoordinator extends EventEmitter {
    * @param {string} params.entityId - Entity ID.
    * @param {Array<string>} [params.excludeReplicaIds] - IDs that cannot be
    *   selected (e.g., REPLACE source replica during create phase).
-   * @return {string} Allocated canonical replica ID.
+   * @return {Promise<string>} Allocated canonical replica ID.
    * @private
    */
-  allocateCanonicalReplicaId({
+  async allocateCanonicalReplicaId({
     partitionId,
     entityType,
     entityId,
@@ -565,7 +619,7 @@ class RebalanceCoordinator extends EventEmitter {
       entityType,
       entityId,
     });
-    const inFlightRows = this.getEntityInFlightOperationRows({
+    const inFlightReplicaIds = await this.getEntityInFlightReplicaIds({
       partitionId,
       entityType,
       entityId,
@@ -578,11 +632,8 @@ class RebalanceCoordinator extends EventEmitter {
       }
     }
 
-    for (const row of inFlightRows) {
-      const replicaId = row?.replica_id;
-      if (typeof replicaId === 'string' && replicaId.length > 0) {
-        usedReplicaIds.add(replicaId);
-      }
+    for (const replicaId of inFlightReplicaIds) {
+      usedReplicaIds.add(replicaId);
     }
 
     for (const replicaId of excludeReplicaIds) {
@@ -796,7 +847,7 @@ class RebalanceCoordinator extends EventEmitter {
     let operationReplicaId = move.replicaId || null;
 
     if (move.type === OperationType.ADD && !operationReplicaId) {
-      operationReplicaId = this.allocateCanonicalReplicaId({
+      operationReplicaId = await this.allocateCanonicalReplicaId({
         partitionId,
         entityType,
         entityId,
@@ -1321,7 +1372,7 @@ class RebalanceCoordinator extends EventEmitter {
       } else {
         messageType = ReplicaOperationMessageType.CREATE_REPLICA;
         if (!operation.replicaId || operation.replicaId === replaceSourceReplicaId) {
-          operation.replicaId = this.allocateCanonicalReplicaId({
+          operation.replicaId = await this.allocateCanonicalReplicaId({
             partitionId: operation.partitionId,
             entityType,
             entityId,

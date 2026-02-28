@@ -100,6 +100,47 @@ test('Bug: coordinator dedup gap on sequential calls', async (t) => {
       }
     });
 
+  t.test('ADD allocation uses unique replica IDs across target nodes',
+    async (t) => {
+      const coordinator = createTestCoordinator({
+        nodeId: 'seed-node',
+        enableTimeouts: false,
+      });
+      coordinator.initialize();
+
+      try {
+        const first = await coordinator.createOperation({
+          type: 'ADD',
+          partitionId: 'tbl-test-p1',
+          nodeId: 'node-2',
+        });
+
+        const second = await coordinator.createOperation({
+          type: 'ADD',
+          partitionId: 'tbl-test-p1',
+          nodeId: 'node-3',
+        });
+
+        t.equal(
+          first.replicaId,
+          'tbl-test-p1-r1',
+          'first ADD should allocate canonical replica r1',
+        );
+        t.equal(
+          second.replicaId,
+          'tbl-test-p1-r2',
+          'second ADD should allocate next canonical replica',
+        );
+        t.not(
+          second.replicaId,
+          first.replicaId,
+          'sequential ADD operations for one partition must not reuse replica ID',
+        );
+      } finally {
+        await coordinator.shutdown();
+      }
+    });
+
   t.test('REMOVE operations are deduplicated by replica intent, not only node',
     async (t) => {
       const coordinator = createTestCoordinator({

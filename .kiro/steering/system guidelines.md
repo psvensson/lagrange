@@ -63,6 +63,81 @@ Concrete ownership assignments (see architecture.md for full list):
 - Failure detection → `FailureDetector` (single instance, no duplicates)
 - System cache → `SystemTableCache` (one per node, fed only by CDC)
 
+### 1.4.1 Injected Owners Must Be Used
+
+If a component is constructed with an owner dependency such as
+`replicaStateMachine`, `serviceLifecycleManager`, `failureDetector`, or another
+explicit owner, that component MUST route the owned behavior through it.
+
+It is FORBIDDEN to:
+
+- Accept the owner as a dependency and then persist the same state directly.
+- Keep parallel local logic for the same transition "just in case".
+- Treat an injected owner as optional when the owned behavior still executes.
+- Leave owner dependencies unused while mutating the owned state elsewhere.
+
+An injected-but-bypassed owner is an architecture violation, not a cleanup task.
+
+### 1.4.2 One Owner Per System-Table Row Lifecycle
+
+For every system-table-backed entity, exactly one component must own the row
+lifecycle:
+
+- Row creation
+- Row lifecycle transitions
+- Row deletion
+
+Other components may request actions through that owner, but they may NOT:
+
+- Create temporary or repair rows themselves
+- Recreate missing rows from partial local knowledge
+- Mix row creation into status-update code paths
+
+### 1.4.3 One Owner Per Field Subset
+
+For shared system-table rows, field ownership must be explicit and non-overlapping.
+
+Example: a `services` row may have different owners for:
+
+- Identity fields: `service_id`, `service_type`, `node_id`, `partition_id`,
+  `replica_id`, `address`, `created_at`
+- Lifecycle fields: `status`, `state_entered_at`, `previous_state`,
+  `trigger_reason`, `error_message`, `updated_at`
+- Raft-role fields: `raft_role`
+
+No component may rewrite fields outside its owned subset.
+
+### 1.4.4 Create Once, Update Partially
+
+Initial row creation and subsequent lifecycle updates are different operations
+and MUST remain separate.
+
+- Initial creation must write the full canonical row shape.
+- Later lifecycle changes must use partial updates only.
+- `INSERT OR REPLACE` or full-row replacement is FORBIDDEN for steady-state
+  lifecycle/status mutation of existing system rows.
+
+If a row is expected to exist and does not, the code must either:
+
+- Fail loudly, or
+- Route the request through the canonical row-creation owner
+
+It must NOT silently recreate the row inside an updater.
+
+### 1.4.5 Cache Is For Observation, Not Reconstruction
+
+`SystemTableCache` is the read path for current cluster metadata. It is NOT an
+authoritative source for reconstructing fields that another owner already owns.
+
+It is FORBIDDEN to:
+
+- Rebuild authoritative write payloads from stale cache rows when the owner is
+  available
+- Copy owner-managed fields such as `raft_role` from cache into unrelated write
+  paths
+- Infer missing identity data from local convenience state when a canonical row
+  owner exists
+
 ### 1.5 Verification Checklist (run this before writing code)
 
 Before generating or modifying code, answer these questions:
@@ -73,8 +148,12 @@ Before generating or modifying code, answer these questions:
 4. Am I adding a second way to do something that already has one way? → Stop.
 5. Am I adding state that another component already tracks? → Read from owner.
 6. Am I adding a field that means the same thing as an existing field? → Reuse.
+7. Am I accepting an owner dependency but not routing the behavior through it? → Stop.
+8. Am I mixing row creation and row updates in the same code path? → Stop.
+9. Am I writing fields owned by another component? → Stop.
+10. Am I reconstructing authoritative write state from cache when an owner exists? → Stop.
 
-If the answer to any of 4/5/6 is yes, you are violating this contract.
+If the answer to any of 4/5/6/7/8/9/10 is yes, you are violating this contract.
 
 ---
 
@@ -127,6 +206,10 @@ If the answer to any of 4/5/6 is yes, you are violating this contract.
 - These bypasses MUST be removed immediately after bootstrap completes.
 - These are the ONLY exceptions to the single write path rule.
 
+Bootstrap-only write exceptions must NOT leak into steady-state runtime paths.
+If runtime code can still call a bootstrap shortcut after initialization, that
+is a bug.
+
 ---
 
 ## 3. Communication
@@ -135,6 +218,19 @@ If the answer to any of 4/5/6 is yes, you are violating this contract.
 - ALL communication (including local) goes through the MessageRouter.
 - Do not create direct function calls between services that bypass the router
   for operations that should be messages.
+
+### 3.1 Query/Data-Plane Transport Rule
+
+- ALL query/data-plane traffic MUST use Message Group transport.
+- Query requests, query responses, and data-plane coordination messages MUST be
+  sent through the owning Message Group (replicated path), not a direct
+  best-effort path.
+- Do not add alternate fast paths for query/data-plane traffic (direct local
+  handler calls, ad-hoc sockets, admin API forwarding, or service-to-service
+  in-process bypasses).
+- There must be one data-plane transport path only: Message Group transport.
+- If performance is insufficient, optimize inside that path. Do not introduce a
+  second non-replicated path.
 
 ---
 
@@ -205,6 +301,12 @@ This section exists because LLMs tend to generate these patterns. Do not:
 - Introduce `async retryWithBackoff()` when one already exists elsewhere.
 - Store derived state (like "is this node ready?") when it can be computed from
   the single source of truth on demand.
+- Accept `replicaStateMachine` and then write `services` rows directly anyway.
+- Use a status updater to insert a missing row "for safety".
+- Rewrite `raft_role` from cache in a lifecycle/status code path.
+- Use one row shape for initial insert and another partial/incompatible shape in
+  later replace/upsert paths.
+- Let bootstrap-only write helpers remain reachable from normal runtime logic.
 
 When you catch yourself about to do any of these: stop, search, reuse.
 

@@ -49,6 +49,7 @@ const QUEUE_WAIT_BUCKETS = Object.freeze([
   {upperBoundMs: 1000, label: 'le_1000ms'},
 ]);
 const QUEUE_WAIT_BUCKET_OVERFLOW = 'gt_1000ms';
+const QUERY_DATA_PLANE_MESSAGE_TYPE = 'QUERY';
 
 // In-process transport for test environments. This is only enabled when explicitly
 // requested via options.inProcess to avoid hidden behavior in production.
@@ -316,6 +317,8 @@ class MessageRouter extends EventEmitter {
 
     // Function to resolve service address to node ID
     this.resolveServiceNode = options.resolveServiceNode || null;
+    this.resolveQueryMessageGroupService =
+      options.resolveQueryMessageGroupService || null;
   }
 
   /**
@@ -1351,6 +1354,29 @@ class MessageRouter extends EventEmitter {
   }
 
   /**
+   * Set resolver for query/data-plane message-group transport.
+   * Resolver must return a local MessageGroupService with sendMessage().
+   * @param {Function|null} resolver - Resolver function.
+   */
+  setQueryMessageGroupServiceResolver(resolver) {
+    this.resolveQueryMessageGroupService = resolver || null;
+  }
+
+  /**
+   * Check whether a payload is a query/data-plane message.
+   * @param {Object} message - Delivery payload.
+   * @return {boolean} True for query/data-plane payloads.
+   * @private
+   */
+  isQueryDataPlaneMessage(message) {
+    return Boolean(
+      message &&
+      typeof message === TRANSPORT_TYPEOF.OBJECT &&
+      message.type === QUERY_DATA_PLANE_MESSAGE_TYPE,
+    );
+  }
+
+  /**
    * Get or create outbound queue for a node.
    * @param {string} nodeId - Target node ID.
    * @return {Object} Queue state.
@@ -1668,8 +1694,25 @@ class MessageRouter extends EventEmitter {
     }
 
     let deliveryOutcome;
-
-    if (targetNodeId === this.nodeId) {
+    if (this.isQueryDataPlaneMessage(message)) {
+      const queryTransport = this.resolveQueryMessageGroupService ?
+        this.resolveQueryMessageGroupService() :
+        null;
+      if (!queryTransport ||
+        typeof queryTransport.sendMessage !== TRANSPORT_TYPEOF.FUNCTION) {
+        throw new Error(
+          ROUTER_ERROR_MSG.QUERY_MESSAGE_GROUP_TRANSPORT_REQUIRED,
+        );
+      }
+      const queryResult = await queryTransport.sendMessage(
+        targetAddress,
+        message,
+      );
+      deliveryOutcome = {
+        result: queryResult,
+        queueWaitMs: TRANSPORT_NUM.ZERO,
+      };
+    } else if (targetNodeId === this.nodeId) {
       deliveryOutcome = await this.deliverLocal(
         targetAddress, messageId, message, correlationId,
       );

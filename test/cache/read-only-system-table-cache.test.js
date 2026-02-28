@@ -103,6 +103,29 @@ test('ReadOnlySystemTableCache - getTableNames works correctly', async (t) => {
   t.ok(names.includes('partitions'), 'Should include partitions');
 });
 
+test('ReadOnlySystemTableCache - forwards freshness/version accessors', async (t) => {
+  const readOnly = new ReadOnlySystemTableCache(underlyingCache);
+  underlyingCache.getLastAppliedAtMs = (_tableName) => 1234;
+  underlyingCache.getLastAppliedCauseId = (_tableName) => 'cause-1';
+  underlyingCache.getAppliedSchemaVersion = (_tableName) => '42';
+
+  t.equal(
+    readOnly.getLastAppliedAtMs('service_endpoints'),
+    1234,
+    'should forward getLastAppliedAtMs to underlying cache',
+  );
+  t.equal(
+    readOnly.getLastAppliedCauseId('service_endpoints'),
+    'cause-1',
+    'should forward getLastAppliedCauseId to underlying cache',
+  );
+  t.equal(
+    readOnly.getAppliedSchemaVersion('service_endpoints'),
+    '42',
+    'should forward getAppliedSchemaVersion to underlying cache',
+  );
+});
+
 test('createReadOnlyCache - blocks applySystemTableChange', async (t) => {
   const readOnly = createReadOnlyCache(underlyingCache);
 

@@ -6,6 +6,7 @@
  */
 
 import {v4 as uuidv4, v5 as uuidv5} from 'uuid';
+import {createHash} from 'node:crypto';
 import http from 'node:http';
 import {DockerProvider} from './docker-provider.js';
 import {ChaosPrimitives} from './chaos.js';
@@ -33,6 +34,7 @@ import {
   NODE_CLIENT_CONTROL_SNAPSHOT_SQL,
   NODE_CLIENT_SERVICE_DISCOVERY_SQL,
   NODE_CLIENT_SERVICE_ID_ADMIN_META,
+  CONTAINER_LOG_TAIL_LINES,
 } from './constants.js';
 
 const BOOTSTRAP_POLL_INTERVAL_MS = 500;
@@ -46,6 +48,7 @@ const INACTIVE_STATE = 'inactive';
 const UNKNOWN_STATE = 'unknown';
 const UNKNOWN_PHASE = 'unknown';
 const DATA_DIR_PATH = '/data';
+const ZERO = 0;
 const MIN_TIMEOUT_MS = 1;
 const HTTP_OK_LOWER = 200;
 const HTTP_OK_UPPER = 299;
@@ -56,7 +59,6 @@ const BOOTSTRAP_READY_STABLE_WINDOW_MS = 10000;
 const ADMIN_QUERY_TIMEOUT_MS = 15000;
 const REQUEST_TIMEOUT_OPTION_DEFAULT_MS = ADMIN_QUERY_TIMEOUT_MS;
 const LOG_COLLECTION_TIMEOUT_MS = 1000;
-const LOG_TAIL_LINES = 50;
 const BOOTSTRAP_HEALTH_PATH = '/health';
 const BOOTSTRAP_JOIN_READY_PATH = '/bootstrap/ready';
 const ADMIN_HEALTH_PATH = '/health';
@@ -94,6 +96,8 @@ const REACHABILITY_SOURCE_ADMIN_WS = 'admin_ws';
 const REACHABILITY_SOURCE_SQL_PROBE = 'sql_probe';
 const REACHABILITY_STATUS_HTTP = 'http_status_';
 const REACHABILITY_ERROR_UNKNOWN = 'unknown reachability error';
+const ACTIVE_PROBE_REASON_ADMIN_NOT_READY = 'admin_not_ready';
+const ACTIVE_PROBE_REASON_ADMIN_PROBE_ERROR_PREFIX = 'admin_probe_error=';
 const STATUS_ACTIVE_LOWER = ACTIVE_STATE.toLowerCase();
 const WS_READY_STATE_OPEN = 1;
 const WS_READY_STATE_CONNECTING = 0;
@@ -168,6 +172,17 @@ const CONTAINER_STOP_NOT_FOUND_PATTERN = 'no such container';
 const ADMIN_SOCKET_LANE_DEFAULT = 'default';
 const ADMIN_SOCKET_LANE_PROBE = 'probe';
 const ADMIN_SOCKET_LANE_SNAPSHOT = 'snapshot';
+const ADMIN_QUERY_TRACE_MAX_ENTRIES = 64;
+const ADMIN_QUERY_TRACE_SQL_PREVIEW_MAX_LENGTH = 160;
+const ADMIN_QUERY_TRACE_SQL_FINGERPRINT_LENGTH = 16;
+const ADMIN_QUERY_TRACE_NORMALIZE_PATTERN = /\s+/g;
+const ADMIN_QUERY_TRACE_UNKNOWN = 'unknown';
+const ADMIN_QUERY_TRACE_OUTCOME_PENDING = 'pending';
+const ADMIN_QUERY_TRACE_OUTCOME_OK = 'ok';
+const ADMIN_QUERY_TRACE_OUTCOME_ERROR = 'error';
+const ADMIN_QUERY_TRACE_OUTCOME_TIMEOUT = 'timeout';
+const ADMIN_QUERY_TRACE_ERROR_UNKNOWN = 'unknown admin query error';
+const ERROR_MESSAGE_TIMEOUT_FRAGMENT = 'timed out';
 
 /**
  * Simple HTTP request with timeout using node:http.
@@ -542,6 +557,92 @@ function buildHealthProbeResult(url, statusCode) {
 }
 
 /**
+ * Normalize SQL/callback statements for compact query tracing.
+ * @param {string} statement
+ * @returns {string}
+ */
+function normalizeAdminStatement(statement) {
+  return String(statement || '')
+    .replace(ADMIN_QUERY_TRACE_NORMALIZE_PATTERN, ' ')
+    .trim();
+}
+
+/**
+ * Build a short SQL preview for admin query tracing.
+ * @param {string} statement
+ * @returns {string|null}
+ */
+function buildAdminStatementPreview(statement) {
+  const normalized = normalizeAdminStatement(statement);
+  if (normalized.length === ZERO) {
+    return null;
+  }
+  return normalized.length > ADMIN_QUERY_TRACE_SQL_PREVIEW_MAX_LENGTH ?
+    normalized.slice(ZERO, ADMIN_QUERY_TRACE_SQL_PREVIEW_MAX_LENGTH) :
+    normalized;
+}
+
+/**
+ * Build a stable SQL fingerprint for cross-report correlation.
+ * @param {string} statement
+ * @returns {string|null}
+ */
+function buildAdminStatementFingerprint(statement) {
+  const normalized = normalizeAdminStatement(statement).toLowerCase();
+  if (normalized.length === ZERO) {
+    return null;
+  }
+  return createHash('sha1')
+    .update(normalized)
+    .digest('hex')
+    .slice(ZERO, ADMIN_QUERY_TRACE_SQL_FINGERPRINT_LENGTH);
+}
+
+/**
+ * Resolve the request statement field for trace diagnostics.
+ * @param {Object} requestPayload
+ * @returns {string}
+ */
+function resolveAdminRequestStatement(requestPayload) {
+  if (!requestPayload || typeof requestPayload !== 'object') {
+    return '';
+  }
+  if (typeof requestPayload.sql === 'string') {
+    return requestPayload.sql;
+  }
+  if (typeof requestPayload.statement === 'string') {
+    return requestPayload.statement;
+  }
+  return '';
+}
+
+/**
+ * Convert an error-like value into a stable message.
+ * @param {*} error
+ * @returns {string}
+ */
+function normalizeAdminQueryError(error) {
+  if (error && typeof error.message === 'string' && error.message.length > ZERO) {
+    return error.message;
+  }
+  if (typeof error === 'string' && error.length > ZERO) {
+    return error;
+  }
+  return ADMIN_QUERY_TRACE_ERROR_UNKNOWN;
+}
+
+/**
+ * Determine whether a query failure message is timeout-shaped.
+ * @param {string} message
+ * @returns {boolean}
+ */
+function isTimeoutErrorMessage(message) {
+  return String(message || '')
+    .toLowerCase()
+    .includes(ERROR_MESSAGE_TIMEOUT_FRAGMENT);
+}
+
+/**
  * Lightweight handle for interacting with a single cluster node.
  */
 class NodeHandle {
@@ -563,6 +664,7 @@ class NodeHandle {
     this._adminSocketReadyByLane = new Map();
     this._pendingAdminSocketByLane = new Map();
     this._pendingQueriesByLane = new Map();
+    this._adminQueryTrace = [];
     this._logStreamListeners = new Set();
     this._lastReachabilityDiagnostics = null;
   }
@@ -649,6 +751,33 @@ class NodeHandle {
   }
 
   /**
+   * Return recent admin query trace entries for diagnostics.
+   * @returns {Array<Object>}
+   */
+  getAdminQueryTraceSnapshot() {
+    return this._adminQueryTrace.map((entry) => ({
+      nodeId: entry.nodeId,
+      queryId: entry.queryId,
+      lane: entry.lane,
+      requestType: entry.requestType,
+      operation: entry.operation,
+      statementPreview: entry.statementPreview,
+      statementFingerprint: entry.statementFingerprint,
+      timeoutMs: entry.timeoutMs,
+      startedAtMs: entry.startedAtMs,
+      socketReadyAtMs: entry.socketReadyAtMs,
+      sentAtMs: entry.sentAtMs,
+      resolvedAtMs: entry.resolvedAtMs,
+      timeoutAtMs: entry.timeoutAtMs,
+      erroredAtMs: entry.erroredAtMs,
+      durationMs: entry.durationMs,
+      rowCount: entry.rowCount,
+      outcome: entry.outcome,
+      error: entry.error,
+    }));
+  }
+
+  /**
    * Send one request over the shared admin socket and await query_result.
    * @param {Object} requestPayload
    * @param {string} operationLabel
@@ -661,27 +790,69 @@ class NodeHandle {
       REQUEST_TIMEOUT_OPTION_DEFAULT_MS,
     );
     const lane = this._resolveAdminLane(options);
-    const ws = await withTimeout(
-      this._getAdminSocket(lane),
-      requestTimeoutMs,
-      'Admin API ' + operationLabel + ' timed out for node ' +
-        this.id + ' on lane ' + lane + ' after ' + requestTimeoutMs + 'ms',
-    );
     const queryId = this._nextQueryId();
+    const timeoutMessage =
+      'Admin API ' + operationLabel + ' timed out for node ' +
+      this.id + ' on lane ' + lane + ' after ' + requestTimeoutMs + 'ms';
+    const traceEntry = this._createAdminQueryTraceEntry({
+      queryId,
+      lane,
+      requestPayload,
+      operationLabel,
+      timeoutMs: requestTimeoutMs,
+    });
+    let ws = null;
+    try {
+      ws = await withTimeout(
+        this._getAdminSocket(lane),
+        requestTimeoutMs,
+        timeoutMessage,
+      );
+      traceEntry.socketReadyAtMs = Date.now();
+    } catch (error) {
+      const errorMessage = normalizeAdminQueryError(error);
+      const outcome = isTimeoutErrorMessage(errorMessage) ?
+        ADMIN_QUERY_TRACE_OUTCOME_TIMEOUT :
+        ADMIN_QUERY_TRACE_OUTCOME_ERROR;
+      this._finalizeAdminQueryTrace(traceEntry, outcome, {
+        error: errorMessage,
+      });
+      throw error;
+    }
     const pendingQueries = this._getPendingQueries(lane);
 
     return new Promise((resolve, reject) => {
+      const rejectWithOutcome = (
+        error,
+        outcome = ADMIN_QUERY_TRACE_OUTCOME_ERROR,
+      ) => {
+        const normalizedError = error instanceof Error ?
+          error :
+          new Error(normalizeAdminQueryError(error));
+        this._finalizeAdminQueryTrace(traceEntry, outcome, {
+          error: normalizeAdminQueryError(normalizedError),
+        });
+        reject(normalizedError);
+      };
+      const resolveWithTrace = (result) => {
+        const rowCount = Array.isArray(result?.rows) ? result.rows.length : null;
+        this._finalizeAdminQueryTrace(traceEntry, ADMIN_QUERY_TRACE_OUTCOME_OK, {
+          rowCount,
+        });
+        resolve(result);
+      };
+
       const timeout = setTimeout(() => {
         pendingQueries.delete(queryId);
-        reject(new Error(
-          'Admin API ' + operationLabel + ' timed out for node ' +
-          this.id + ' on lane ' + lane + ' after ' + requestTimeoutMs + 'ms',
-        ));
+        rejectWithOutcome(
+          new Error(timeoutMessage),
+          ADMIN_QUERY_TRACE_OUTCOME_TIMEOUT,
+        );
       }, requestTimeoutMs);
 
       pendingQueries.set(queryId, {
-        resolve,
-        reject,
+        resolve: resolveWithTrace,
+        reject: (error) => rejectWithOutcome(error),
         timeout,
         operationLabel,
       });
@@ -691,6 +862,7 @@ class NodeHandle {
           ...requestPayload,
           queryId,
         }));
+        traceEntry.sentAtMs = Date.now();
       } catch (err) {
         pendingQueries.delete(queryId);
         clearTimeout(timeout);
@@ -700,7 +872,7 @@ class NodeHandle {
         } catch (_closeErr) {
           // Best-effort cleanup
         }
-        reject(new Error(
+        rejectWithOutcome(new Error(
           'Admin API ' + operationLabel + ' failed for node ' +
           this.id + ' on lane ' + lane + ': ' + err.message,
         ));
@@ -716,6 +888,75 @@ class NodeHandle {
   _nextQueryId() {
     return 'q-' + Date.now() + '-' +
       Math.random().toString(36).slice(2);
+  }
+
+  _createAdminQueryTraceEntry(options = {}) {
+    const requestPayload = options.requestPayload;
+    const statement = resolveAdminRequestStatement(requestPayload);
+    const requestType = typeof requestPayload?.type === 'string' &&
+      requestPayload.type.length > ZERO ?
+      requestPayload.type :
+      ADMIN_QUERY_TRACE_UNKNOWN;
+    return {
+      nodeId: this.id,
+      queryId: options.queryId,
+      lane: options.lane,
+      requestType,
+      operation: typeof options.operationLabel === 'string' &&
+        options.operationLabel.length > ZERO ?
+        options.operationLabel :
+        ADMIN_QUERY_TRACE_UNKNOWN,
+      statementPreview: buildAdminStatementPreview(statement),
+      statementFingerprint: buildAdminStatementFingerprint(statement),
+      timeoutMs: Number.isFinite(options.timeoutMs) ?
+        Math.floor(options.timeoutMs) :
+        null,
+      startedAtMs: Date.now(),
+      socketReadyAtMs: null,
+      sentAtMs: null,
+      resolvedAtMs: null,
+      timeoutAtMs: null,
+      erroredAtMs: null,
+      durationMs: null,
+      rowCount: null,
+      outcome: ADMIN_QUERY_TRACE_OUTCOME_PENDING,
+      error: null,
+      finalized: false,
+    };
+  }
+
+  _finalizeAdminQueryTrace(traceEntry, outcome, details = {}) {
+    if (!traceEntry || traceEntry.finalized === true) {
+      return;
+    }
+    const finalizedAtMs = Date.now();
+    traceEntry.finalized = true;
+    traceEntry.outcome = outcome;
+    traceEntry.durationMs = finalizedAtMs - traceEntry.startedAtMs;
+    traceEntry.error = typeof details.error === 'string' &&
+      details.error.length > ZERO ?
+      details.error :
+      null;
+    if (Number.isInteger(details.rowCount) && details.rowCount >= ZERO) {
+      traceEntry.rowCount = details.rowCount;
+    }
+    if (outcome === ADMIN_QUERY_TRACE_OUTCOME_OK) {
+      traceEntry.resolvedAtMs = finalizedAtMs;
+    } else if (outcome === ADMIN_QUERY_TRACE_OUTCOME_TIMEOUT) {
+      traceEntry.timeoutAtMs = finalizedAtMs;
+    } else if (outcome === ADMIN_QUERY_TRACE_OUTCOME_ERROR) {
+      traceEntry.erroredAtMs = finalizedAtMs;
+    }
+    this._recordAdminQueryTrace(traceEntry);
+  }
+
+  _recordAdminQueryTrace(traceEntry) {
+    this._adminQueryTrace.push(traceEntry);
+    const overflowCount =
+      this._adminQueryTrace.length - ADMIN_QUERY_TRACE_MAX_ENTRIES;
+    if (overflowCount > ZERO) {
+      this._adminQueryTrace.splice(ZERO, overflowCount);
+    }
   }
 
   /**
@@ -1196,6 +1437,13 @@ class NodeHandle {
       options.timeoutMs,
       FETCH_TIMEOUT_MS,
     );
+    const deadlineMs = Date.now() + probeTimeoutMs;
+    const remainingProbeBudgetMs = () => {
+      return Math.max(
+        MIN_TIMEOUT_MS,
+        deadlineMs - Date.now(),
+      );
+    };
     const bootstrapUrl =
       'http://' + this.ip + ':' + PORTS.REST + BOOTSTRAP_HEALTH_PATH;
     const adminUrl =
@@ -1225,7 +1473,10 @@ class NodeHandle {
       lastError: null,
     };
 
-    const bootstrapStatus = await httpGet(bootstrapUrl, probeTimeoutMs);
+    const bootstrapStatus = await httpGet(
+      bootstrapUrl,
+      remainingProbeBudgetMs(),
+    );
     diagnostics.bootstrapHealth = buildHealthProbeResult(
       bootstrapUrl,
       bootstrapStatus,
@@ -1238,7 +1489,10 @@ class NodeHandle {
       diagnostics.lastError = diagnostics.bootstrapHealth.error;
     }
 
-    const adminStatus = await httpGet(adminUrl, probeTimeoutMs);
+    const adminStatus = await httpGet(
+      adminUrl,
+      remainingProbeBudgetMs(),
+    );
     diagnostics.adminHealth = buildHealthProbeResult(
       adminUrl,
       adminStatus,
@@ -1254,7 +1508,11 @@ class NodeHandle {
     diagnostics.lastError = diagnostics.adminHealth.error;
 
     try {
-      await this._getAdminSocket();
+      await withTimeout(
+        this._getAdminSocket(),
+        remainingProbeBudgetMs(),
+        'Admin WebSocket probe timed out for node ' + this.id,
+      );
       diagnostics.adminWs = createProbeResult({
         attempted: true,
         ok: true,
@@ -1281,7 +1539,7 @@ class NodeHandle {
         REACHABILITY_PROBE_SQL,
         [],
         {
-          timeoutMs: probeTimeoutMs,
+          timeoutMs: remainingProbeBudgetMs(),
           lane: ADMIN_SOCKET_LANE_PROBE,
         },
       );
@@ -2671,6 +2929,41 @@ class Cluster {
           } else if (phase && phase.length > 0) {
             state = phase.toLowerCase();
           }
+          if (active &&
+              typeof node.getReachabilityDiagnostics === 'function') {
+            try {
+              const adminDiagnostics = await withTimeout(
+                node.getReachabilityDiagnostics({
+                  timeoutMs: probeTimeoutMs,
+                }),
+                probeTimeoutMs,
+                'Node admin readiness probe timed out for ' + node.id,
+              );
+              if (adminDiagnostics?.adminReady !== true) {
+                active = false;
+                state = INACTIVE_STATE;
+                const adminLastError =
+                  typeof adminDiagnostics?.lastError === 'string' &&
+                    adminDiagnostics.lastError.length > 0 ?
+                    adminDiagnostics.lastError :
+                    ACTIVE_PROBE_REASON_ADMIN_NOT_READY;
+                reasons = [
+                  ...reasons,
+                  ACTIVE_PROBE_REASON_ADMIN_NOT_READY +
+                    '=' +
+                    adminLastError,
+                ];
+              }
+            } catch (adminProbeError) {
+              active = false;
+              state = INACTIVE_STATE;
+              reasons = [
+                ...reasons,
+                ACTIVE_PROBE_REASON_ADMIN_PROBE_ERROR_PREFIX +
+                  normalizeProbeError(adminProbeError),
+              ];
+            }
+          }
         } else {
           const status = await withTimeout(
             node.getStatus({
@@ -2933,7 +3226,7 @@ class Cluster {
     for (const node of this._nodes.values()) {
       try {
         const logs = await withTimeout(
-          node.getLogs({tail: LOG_TAIL_LINES}),
+          node.getLogs({tail: CONTAINER_LOG_TAIL_LINES}),
           LOG_COLLECTION_TIMEOUT_MS,
           'Timed out collecting logs for node ' + node.id,
         );

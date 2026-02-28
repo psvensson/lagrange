@@ -1,0 +1,3652 @@
+{
+  "timestamp": "2026-02-27T11:57:13.251Z",
+  "summary": {
+    "total": 1,
+    "passed": 0,
+    "failed": 1,
+    "duration": 123320
+  },
+  "optimizationSummary": {
+    "totalPriorityItems": 0,
+    "scenariosWithPriorities": 0,
+    "topComponents": [],
+    "topPartitions": []
+  },
+  "standardSummary": {
+    "historicalReportsConsidered": 20,
+    "scenariosComparedToPrevious": 1,
+    "scenariosComparedToPostgresBaseline": 0,
+    "diagnosticsCoverageSummary": {
+      "scenariosWithCoverage": 0,
+      "scenariosWithoutCoverage": 1,
+      "totalSamples": 0,
+      "coverageRate": 0,
+      "scenarios": [
+        {
+          "scenario": "postgres-baseline-comparison",
+          "status": "unavailable",
+          "reason": "not_reported",
+          "sampleCount": 0
+        }
+      ]
+    },
+    "writePathAttributionSummary": {
+      "scenariosWithDiagnostics": 0,
+      "topPhases": []
+    },
+    "scaleEfficiencySummary": {
+      "observationCount": 0,
+      "comparableGroupCount": 0,
+      "groups": [],
+      "topOpportunities": []
+    },
+    "scenarios": [
+      {
+        "scenario": "postgres-baseline-comparison",
+        "similarityKey": "postgres-baseline-comparison|default",
+        "current": {
+          "passed": false,
+          "clusterSize": 3,
+          "durationMs": 123320,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "previousSimilarRun": {
+          "reportTimestamp": "2026-02-27T11:36:17.317Z",
+          "reportPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-3node-20260227T113507Z.report.json",
+          "passed": false,
+          "clusterSize": 3,
+          "durationMs": 68938,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "deltaVsPrevious": {
+          "passedChanged": false,
+          "clusterSizeChanged": false,
+          "durationMs": 54382,
+          "durationRatio": 0.7888537526473063,
+          "opsPerSec": 0,
+          "opsPerSecRatio": null,
+          "opsPerSecPerNode": 0,
+          "opsPerSecPerNodeRatio": null,
+          "p99LatencyMs": 0,
+          "p99LatencyMsRatio": null
+        },
+        "postgresBaseline": null,
+        "parity": null,
+        "writePathTopPhases": []
+      }
+    ]
+  },
+  "scenarios": [
+    {
+      "scenario": "postgres-baseline-comparison",
+      "passed": false,
+      "duration": 123320,
+      "clusterSize": 3,
+      "startedAt": "2026-02-27T11:55:09.871Z",
+      "convergenceTiming": null,
+      "analysisSummary": null,
+      "error": "postgres-baseline-comparison failed in phase pre_load_gate: strict_preload_readiness_failed: SUT load nodes did not reach quiescent state within 30000ms (nodeProbeFailures=node_probe_error:11601fe0-72d6-5853-8590-ec2881853e72=discovery_not_ready:routing_not_ready|topology_not_ready|schema_version_unknown; node_probe_error:11601fe0-72d6-5853-8590-ec2881853e72=discovery_not_ready:schema_version_unknown|discovery_reasons=schema_table_missing=table \"benchmark_events\" not found, readyLoadNodes=2), node_reasons=11601fe0-72d6-5853-8590-ec2881853e72:discovery_not_ready:routing_not_ready|topology_not_ready|schema_version_unknown|discovery_not_ready:schema_version_unknown|discovery_reasons=schema_table_missing=table \"benchmark_events\" not found",
+      "stackTrace": "Error: postgres-baseline-comparison failed in phase pre_load_gate: strict_preload_readiness_failed: SUT load nodes did not reach quiescent state within 30000ms (nodeProbeFailures=node_probe_error:11601fe0-72d6-5853-8590-ec2881853e72=discovery_not_ready:routing_not_ready|topology_not_ready|schema_version_unknown; node_probe_error:11601fe0-72d6-5853-8590-ec2881853e72=discovery_not_ready:schema_version_unknown|discovery_reasons=schema_table_missing=table \"benchmark_events\" not found, readyLoadNodes=2), node_reasons=11601fe0-72d6-5853-8590-ec2881853e72:discovery_not_ready:routing_not_ready|topology_not_ready|schema_version_unknown|discovery_not_ready:schema_version_unknown|discovery_reasons=schema_table_missing=table \"benchmark_events\" not found\n    at Module.run (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/scenarios/postgres-baseline-comparison.js:6216:19)\n    at async runScenarios (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:1056:9)\n    at async main (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:1593:33)",
+      "logs": null,
+      "playback": {
+        "scenarioName": "postgres-baseline-comparison",
+        "startedAt": 1772193309873,
+        "endedAt": 1772193433247,
+        "durationMs": 123374,
+        "files": {
+          "events": "test-output/reports/.playback/postgres-baseline-3node-20260227T115509Z/postgres-baseline-comparison/events.ndjson",
+          "samples": "test-output/reports/.playback/postgres-baseline-3node-20260227T115509Z/postgres-baseline-comparison/samples.ndjson",
+          "snapshots": "test-output/reports/.playback/postgres-baseline-3node-20260227T115509Z/postgres-baseline-comparison/snapshots.ndjson",
+          "manifest": "test-output/reports/.playback/postgres-baseline-3node-20260227T115509Z/postgres-baseline-comparison/playback-manifest.json",
+          "viewer": "test-output/reports/.playback/postgres-baseline-3node-20260227T115509Z/postgres-baseline-comparison/playback-viewer.html"
+        },
+        "counts": {
+          "events": 29,
+          "samples": 199,
+          "snapshots": 90
+        },
+        "warnings": []
+      },
+      "trace": null,
+      "traceAssertion": null,
+      "memoryLeak": {
+        "enabled": false,
+        "analyzed": false,
+        "leakDetected": false,
+        "sampleCount": 0,
+        "nodeCount": 0,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "nodes": [],
+        "warnings": [],
+        "config": {
+          "enabled": false,
+          "failOnDetection": false,
+          "requireSamples": false,
+          "minSamplesPerNode": 8,
+          "warmupFraction": 0.2,
+          "minWarmupMs": 30000,
+          "minAnalysisWindowMs": 60000,
+          "maxPositiveSlopeBytesPerMin": 1048576,
+          "minGrowthBytes": 16777216,
+          "minPositiveDeltaRatio": 0.65,
+          "captureHeapArtifacts": false,
+          "heapSnapshotNearLimitCount": 2
+        }
+      },
+      "memoryLeakAssertion": null,
+      "performanceDiagnostics": null,
+      "details": {
+        "diagnostics": {
+          "failure": {
+            "schemaVersion": 1,
+            "rootCauseClass": "topology",
+            "phase": "pre_load_gate",
+            "affectedNodeIds": [
+              "11601fe0-72d6-5853-8590-ec2881853e72"
+            ],
+            "reasonCounts": {
+              "routing_not_ready": 1,
+              "schema_version_unknown": 2,
+              "topology_not_ready": 1
+            },
+            "dominantReason": "routing_not_ready",
+            "strictMode": true,
+            "versionConvergence": {
+              "requiredSchemaVersion": "1772193387210",
+              "nodes": {
+                "7493b0ab-a054-5fad-a91b-5e331db29304": {
+                  "requiredSchemaVersion": "1772193387210",
+                  "observedSchemaVersion": "1772193387244",
+                  "ready": true,
+                  "unmetReasons": [],
+                  "discoveryReasons": [],
+                  "readinessState": {
+                    "workloadReady": true,
+                    "benchmarkReady": true,
+                    "routingReady": true,
+                    "schemaReady": true,
+                    "topologyReady": true,
+                    "replicaOpsInFlight": 0,
+                    "leadershipStable": true,
+                    "tableName": "benchmark_events",
+                    "discoveryReasons": []
+                  }
+                },
+                "35a891b8-c1a0-5064-9c6e-2acfba61c2a7": {
+                  "requiredSchemaVersion": "1772193387210",
+                  "observedSchemaVersion": "1772193387244",
+                  "ready": true,
+                  "unmetReasons": [],
+                  "discoveryReasons": [],
+                  "readinessState": {
+                    "workloadReady": true,
+                    "benchmarkReady": true,
+                    "routingReady": true,
+                    "schemaReady": true,
+                    "topologyReady": true,
+                    "replicaOpsInFlight": 0,
+                    "leadershipStable": true,
+                    "tableName": "benchmark_events",
+                    "discoveryReasons": []
+                  }
+                },
+                "11601fe0-72d6-5853-8590-ec2881853e72": {
+                  "requiredSchemaVersion": "1772193387210",
+                  "observedSchemaVersion": null,
+                  "ready": false,
+                  "unmetReasons": [
+                    "schema_version_unknown"
+                  ],
+                  "discoveryReasons": [
+                    "schema_table_missing=table \"benchmark_events\" not found"
+                  ],
+                  "readinessState": {
+                    "workloadReady": false,
+                    "benchmarkReady": false,
+                    "routingReady": true,
+                    "schemaReady": false,
+                    "topologyReady": true,
+                    "replicaOpsInFlight": 0,
+                    "leadershipStable": true,
+                    "tableName": "benchmark_events",
+                    "discoveryReasons": [
+                      "schema_table_missing=table \"benchmark_events\" not found"
+                    ]
+                  }
+                }
+              }
+            },
+            "versionLagSummary": {
+              "requiredSchemaVersion": "1772193387210",
+              "nodes": {
+                "7493b0ab-a054-5fad-a91b-5e331db29304": {
+                  "observedSchemaVersion": "1772193387244",
+                  "requiredSchemaVersion": "1772193387210",
+                  "unmetReasons": [],
+                  "lagging": false
+                },
+                "35a891b8-c1a0-5064-9c6e-2acfba61c2a7": {
+                  "observedSchemaVersion": "1772193387244",
+                  "requiredSchemaVersion": "1772193387210",
+                  "unmetReasons": [],
+                  "lagging": false
+                },
+                "11601fe0-72d6-5853-8590-ec2881853e72": {
+                  "observedSchemaVersion": null,
+                  "requiredSchemaVersion": "1772193387210",
+                  "unmetReasons": [
+                    "schema_version_unknown"
+                  ],
+                  "lagging": true
+                }
+              }
+            },
+            "saturation": {
+              "schemaVersion": 1,
+              "cdcForwardTimeoutCount": 0,
+              "systemTableQueryTimeoutCount": 0,
+              "snapshotCollectionErrorCount": 0
+            },
+            "readinessTimeline": [
+              {
+                "type": "poll_snapshot",
+                "sequence": 1,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193402860
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 2,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772193402860
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 3,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193402861
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 4,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772193402861
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 5,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "routing_not_ready",
+                  "topology_not_ready",
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": null,
+                "discoveryReasons": [],
+                "timestampMs": 1772193402862
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 6,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "from": null,
+                "to": "routing_not_ready|topology_not_ready|schema_version_unknown",
+                "timestampMs": 1772193402862
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 7,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193403436
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 8,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193403437
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 9,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "routing_not_ready",
+                  "topology_not_ready",
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": null,
+                "discoveryReasons": [],
+                "timestampMs": 1772193403438
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 10,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193404010
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 11,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193404010
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 12,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "routing_not_ready",
+                  "topology_not_ready",
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": null,
+                "discoveryReasons": [],
+                "timestampMs": 1772193404012
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 13,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193404978
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 14,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193404979
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 15,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "routing_not_ready",
+                  "topology_not_ready",
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": null,
+                "discoveryReasons": [],
+                "timestampMs": 1772193404980
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 16,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193406200
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 17,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193406203
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 18,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "routing_not_ready",
+                  "topology_not_ready",
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": null,
+                "discoveryReasons": [],
+                "timestampMs": 1772193406204
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 19,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193406750
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 20,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193406751
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 21,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": null,
+                "discoveryReasons": [
+                  "schema_table_missing=table \"benchmark_events\" not found"
+                ],
+                "readinessState": {
+                  "workloadReady": false,
+                  "benchmarkReady": false,
+                  "routingReady": true,
+                  "schemaReady": false,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": [
+                    "schema_table_missing=table \"benchmark_events\" not found"
+                  ]
+                },
+                "timestampMs": 1772193406753
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 22,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "from": "routing_not_ready|topology_not_ready|schema_version_unknown",
+                "to": "schema_version_unknown",
+                "timestampMs": 1772193406753
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 23,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193407355
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 24,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193407356
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 25,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": null,
+                "discoveryReasons": [
+                  "schema_table_missing=table \"benchmark_events\" not found"
+                ],
+                "readinessState": {
+                  "workloadReady": false,
+                  "benchmarkReady": false,
+                  "routingReady": true,
+                  "schemaReady": false,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": [
+                    "schema_table_missing=table \"benchmark_events\" not found"
+                  ]
+                },
+                "timestampMs": 1772193407358
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 26,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193407928
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 27,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193408248
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 28,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": null,
+                "discoveryReasons": [
+                  "schema_table_missing=table \"benchmark_events\" not found"
+                ],
+                "readinessState": {
+                  "workloadReady": false,
+                  "benchmarkReady": false,
+                  "routingReady": true,
+                  "schemaReady": false,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": [
+                    "schema_table_missing=table \"benchmark_events\" not found"
+                  ]
+                },
+                "timestampMs": 1772193408249
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 29,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193408821
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 30,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193408822
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 31,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": null,
+                "discoveryReasons": [
+                  "schema_table_missing=table \"benchmark_events\" not found"
+                ],
+                "readinessState": {
+                  "workloadReady": false,
+                  "benchmarkReady": false,
+                  "routingReady": true,
+                  "schemaReady": false,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": [
+                    "schema_table_missing=table \"benchmark_events\" not found"
+                  ]
+                },
+                "timestampMs": 1772193408823
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 32,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193409430
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 33,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193409431
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 34,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": null,
+                "discoveryReasons": [
+                  "schema_table_missing=table \"benchmark_events\" not found"
+                ],
+                "readinessState": {
+                  "workloadReady": false,
+                  "benchmarkReady": false,
+                  "routingReady": true,
+                  "schemaReady": false,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": [
+                    "schema_table_missing=table \"benchmark_events\" not found"
+                  ]
+                },
+                "timestampMs": 1772193409432
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 35,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193410047
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 36,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193410049
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 37,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": null,
+                "discoveryReasons": [
+                  "schema_table_missing=table \"benchmark_events\" not found"
+                ],
+                "readinessState": {
+                  "workloadReady": false,
+                  "benchmarkReady": false,
+                  "routingReady": true,
+                  "schemaReady": false,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": [
+                    "schema_table_missing=table \"benchmark_events\" not found"
+                  ]
+                },
+                "timestampMs": 1772193410050
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 38,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193411330
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 39,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193411331
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 40,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": null,
+                "discoveryReasons": [
+                  "schema_table_missing=table \"benchmark_events\" not found"
+                ],
+                "readinessState": {
+                  "workloadReady": false,
+                  "benchmarkReady": false,
+                  "routingReady": true,
+                  "schemaReady": false,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": [
+                    "schema_table_missing=table \"benchmark_events\" not found"
+                  ]
+                },
+                "timestampMs": 1772193411332
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 41,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193411936
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 42,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193411937
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 43,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": null,
+                "discoveryReasons": [
+                  "schema_table_missing=table \"benchmark_events\" not found"
+                ],
+                "readinessState": {
+                  "workloadReady": false,
+                  "benchmarkReady": false,
+                  "routingReady": true,
+                  "schemaReady": false,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": [
+                    "schema_table_missing=table \"benchmark_events\" not found"
+                  ]
+                },
+                "timestampMs": 1772193411938
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 44,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193412536
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 45,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193412536
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 46,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": null,
+                "discoveryReasons": [
+                  "schema_table_missing=table \"benchmark_events\" not found"
+                ],
+                "readinessState": {
+                  "workloadReady": false,
+                  "benchmarkReady": false,
+                  "routingReady": true,
+                  "schemaReady": false,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": [
+                    "schema_table_missing=table \"benchmark_events\" not found"
+                  ]
+                },
+                "timestampMs": 1772193412537
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 47,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193413067
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 48,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193413225
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 49,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": null,
+                "discoveryReasons": [
+                  "schema_table_missing=table \"benchmark_events\" not found"
+                ],
+                "readinessState": {
+                  "workloadReady": false,
+                  "benchmarkReady": false,
+                  "routingReady": true,
+                  "schemaReady": false,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": [
+                    "schema_table_missing=table \"benchmark_events\" not found"
+                  ]
+                },
+                "timestampMs": 1772193413225
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 50,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193413833
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 51,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193413834
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 52,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": null,
+                "discoveryReasons": [
+                  "schema_table_missing=table \"benchmark_events\" not found"
+                ],
+                "readinessState": {
+                  "workloadReady": false,
+                  "benchmarkReady": false,
+                  "routingReady": true,
+                  "schemaReady": false,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": [
+                    "schema_table_missing=table \"benchmark_events\" not found"
+                  ]
+                },
+                "timestampMs": 1772193413835
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 53,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193414441
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 54,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193414442
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 55,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": null,
+                "discoveryReasons": [
+                  "schema_table_missing=table \"benchmark_events\" not found"
+                ],
+                "readinessState": {
+                  "workloadReady": false,
+                  "benchmarkReady": false,
+                  "routingReady": true,
+                  "schemaReady": false,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": [
+                    "schema_table_missing=table \"benchmark_events\" not found"
+                  ]
+                },
+                "timestampMs": 1772193414443
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 56,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193415053
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 57,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193415054
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 58,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": null,
+                "discoveryReasons": [
+                  "schema_table_missing=table \"benchmark_events\" not found"
+                ],
+                "readinessState": {
+                  "workloadReady": false,
+                  "benchmarkReady": false,
+                  "routingReady": true,
+                  "schemaReady": false,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": [
+                    "schema_table_missing=table \"benchmark_events\" not found"
+                  ]
+                },
+                "timestampMs": 1772193415055
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 59,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193416140
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 60,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193416141
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 61,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": null,
+                "discoveryReasons": [
+                  "schema_table_missing=table \"benchmark_events\" not found"
+                ],
+                "readinessState": {
+                  "workloadReady": false,
+                  "benchmarkReady": false,
+                  "routingReady": true,
+                  "schemaReady": false,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": [
+                    "schema_table_missing=table \"benchmark_events\" not found"
+                  ]
+                },
+                "timestampMs": 1772193416142
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 62,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193416723
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 63,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193416724
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 64,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": null,
+                "discoveryReasons": [
+                  "schema_table_missing=table \"benchmark_events\" not found"
+                ],
+                "readinessState": {
+                  "workloadReady": false,
+                  "benchmarkReady": false,
+                  "routingReady": true,
+                  "schemaReady": false,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": [
+                    "schema_table_missing=table \"benchmark_events\" not found"
+                  ]
+                },
+                "timestampMs": 1772193416724
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 65,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193417284
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 66,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193417285
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 67,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": null,
+                "discoveryReasons": [
+                  "schema_table_missing=table \"benchmark_events\" not found"
+                ],
+                "readinessState": {
+                  "workloadReady": false,
+                  "benchmarkReady": false,
+                  "routingReady": true,
+                  "schemaReady": false,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": [
+                    "schema_table_missing=table \"benchmark_events\" not found"
+                  ]
+                },
+                "timestampMs": 1772193417286
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 68,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193417880
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 69,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193418228
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 70,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": null,
+                "discoveryReasons": [
+                  "schema_table_missing=table \"benchmark_events\" not found"
+                ],
+                "readinessState": {
+                  "workloadReady": false,
+                  "benchmarkReady": false,
+                  "routingReady": true,
+                  "schemaReady": false,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": [
+                    "schema_table_missing=table \"benchmark_events\" not found"
+                  ]
+                },
+                "timestampMs": 1772193418229
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 71,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193418773
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 72,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193418774
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 73,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": null,
+                "discoveryReasons": [
+                  "schema_table_missing=table \"benchmark_events\" not found"
+                ],
+                "readinessState": {
+                  "workloadReady": false,
+                  "benchmarkReady": false,
+                  "routingReady": true,
+                  "schemaReady": false,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": [
+                    "schema_table_missing=table \"benchmark_events\" not found"
+                  ]
+                },
+                "timestampMs": 1772193418775
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 74,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193419335
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 75,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193419336
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 76,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": null,
+                "discoveryReasons": [
+                  "schema_table_missing=table \"benchmark_events\" not found"
+                ],
+                "readinessState": {
+                  "workloadReady": false,
+                  "benchmarkReady": false,
+                  "routingReady": true,
+                  "schemaReady": false,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": [
+                    "schema_table_missing=table \"benchmark_events\" not found"
+                  ]
+                },
+                "timestampMs": 1772193419337
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 77,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193420021
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 78,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193420022
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 79,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": null,
+                "discoveryReasons": [
+                  "schema_table_missing=table \"benchmark_events\" not found"
+                ],
+                "readinessState": {
+                  "workloadReady": false,
+                  "benchmarkReady": false,
+                  "routingReady": true,
+                  "schemaReady": false,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": [
+                    "schema_table_missing=table \"benchmark_events\" not found"
+                  ]
+                },
+                "timestampMs": 1772193420023
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 80,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193420813
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 81,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193420814
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 82,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": null,
+                "discoveryReasons": [
+                  "schema_table_missing=table \"benchmark_events\" not found"
+                ],
+                "readinessState": {
+                  "workloadReady": false,
+                  "benchmarkReady": false,
+                  "routingReady": true,
+                  "schemaReady": false,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": [
+                    "schema_table_missing=table \"benchmark_events\" not found"
+                  ]
+                },
+                "timestampMs": 1772193420815
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 83,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193421346
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 84,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193421347
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 85,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": null,
+                "discoveryReasons": [
+                  "schema_table_missing=table \"benchmark_events\" not found"
+                ],
+                "readinessState": {
+                  "workloadReady": false,
+                  "benchmarkReady": false,
+                  "routingReady": true,
+                  "schemaReady": false,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": [
+                    "schema_table_missing=table \"benchmark_events\" not found"
+                  ]
+                },
+                "timestampMs": 1772193421348
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 86,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193421894
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 87,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193421895
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 88,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": null,
+                "discoveryReasons": [
+                  "schema_table_missing=table \"benchmark_events\" not found"
+                ],
+                "readinessState": {
+                  "workloadReady": false,
+                  "benchmarkReady": false,
+                  "routingReady": true,
+                  "schemaReady": false,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": [
+                    "schema_table_missing=table \"benchmark_events\" not found"
+                  ]
+                },
+                "timestampMs": 1772193421896
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 89,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193422435
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 90,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193422436
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 91,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": null,
+                "discoveryReasons": [
+                  "schema_table_missing=table \"benchmark_events\" not found"
+                ],
+                "readinessState": {
+                  "workloadReady": false,
+                  "benchmarkReady": false,
+                  "routingReady": true,
+                  "schemaReady": false,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": [
+                    "schema_table_missing=table \"benchmark_events\" not found"
+                  ]
+                },
+                "timestampMs": 1772193422437
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 92,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193422940
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 93,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193423241
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 94,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": null,
+                "discoveryReasons": [
+                  "schema_table_missing=table \"benchmark_events\" not found"
+                ],
+                "readinessState": {
+                  "workloadReady": false,
+                  "benchmarkReady": false,
+                  "routingReady": true,
+                  "schemaReady": false,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": [
+                    "schema_table_missing=table \"benchmark_events\" not found"
+                  ]
+                },
+                "timestampMs": 1772193423243
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 95,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193423746
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 96,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193423747
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 97,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": null,
+                "discoveryReasons": [
+                  "schema_table_missing=table \"benchmark_events\" not found"
+                ],
+                "readinessState": {
+                  "workloadReady": false,
+                  "benchmarkReady": false,
+                  "routingReady": true,
+                  "schemaReady": false,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": [
+                    "schema_table_missing=table \"benchmark_events\" not found"
+                  ]
+                },
+                "timestampMs": 1772193423749
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 98,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193424252
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 99,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193424254
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 100,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": null,
+                "discoveryReasons": [
+                  "schema_table_missing=table \"benchmark_events\" not found"
+                ],
+                "readinessState": {
+                  "workloadReady": false,
+                  "benchmarkReady": false,
+                  "routingReady": true,
+                  "schemaReady": false,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": [
+                    "schema_table_missing=table \"benchmark_events\" not found"
+                  ]
+                },
+                "timestampMs": 1772193424255
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 101,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193424992
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 102,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193424995
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 103,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": null,
+                "discoveryReasons": [
+                  "schema_table_missing=table \"benchmark_events\" not found"
+                ],
+                "readinessState": {
+                  "workloadReady": false,
+                  "benchmarkReady": false,
+                  "routingReady": true,
+                  "schemaReady": false,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": [
+                    "schema_table_missing=table \"benchmark_events\" not found"
+                  ]
+                },
+                "timestampMs": 1772193424997
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 104,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193425638
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 105,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193425639
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 106,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": null,
+                "discoveryReasons": [
+                  "schema_table_missing=table \"benchmark_events\" not found"
+                ],
+                "readinessState": {
+                  "workloadReady": false,
+                  "benchmarkReady": false,
+                  "routingReady": true,
+                  "schemaReady": false,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": [
+                    "schema_table_missing=table \"benchmark_events\" not found"
+                  ]
+                },
+                "timestampMs": 1772193425640
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 107,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193426184
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 108,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193426185
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 109,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": null,
+                "discoveryReasons": [
+                  "schema_table_missing=table \"benchmark_events\" not found"
+                ],
+                "readinessState": {
+                  "workloadReady": false,
+                  "benchmarkReady": false,
+                  "routingReady": true,
+                  "schemaReady": false,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": [
+                    "schema_table_missing=table \"benchmark_events\" not found"
+                  ]
+                },
+                "timestampMs": 1772193426185
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 110,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193426687
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 111,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193426688
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 112,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": null,
+                "discoveryReasons": [
+                  "schema_table_missing=table \"benchmark_events\" not found"
+                ],
+                "readinessState": {
+                  "workloadReady": false,
+                  "benchmarkReady": false,
+                  "routingReady": true,
+                  "schemaReady": false,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": [
+                    "schema_table_missing=table \"benchmark_events\" not found"
+                  ]
+                },
+                "timestampMs": 1772193426689
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 113,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193427192
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 114,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193427193
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 115,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": null,
+                "discoveryReasons": [
+                  "schema_table_missing=table \"benchmark_events\" not found"
+                ],
+                "readinessState": {
+                  "workloadReady": false,
+                  "benchmarkReady": false,
+                  "routingReady": true,
+                  "schemaReady": false,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": [
+                    "schema_table_missing=table \"benchmark_events\" not found"
+                  ]
+                },
+                "timestampMs": 1772193427193
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 116,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193427695
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 117,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193427696
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 118,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": null,
+                "discoveryReasons": [
+                  "schema_table_missing=table \"benchmark_events\" not found"
+                ],
+                "readinessState": {
+                  "workloadReady": false,
+                  "benchmarkReady": false,
+                  "routingReady": true,
+                  "schemaReady": false,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": [
+                    "schema_table_missing=table \"benchmark_events\" not found"
+                  ]
+                },
+                "timestampMs": 1772193427696
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 119,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193428200
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 120,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193428235
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 121,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": null,
+                "discoveryReasons": [
+                  "schema_table_missing=table \"benchmark_events\" not found"
+                ],
+                "readinessState": {
+                  "workloadReady": false,
+                  "benchmarkReady": false,
+                  "routingReady": true,
+                  "schemaReady": false,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": [
+                    "schema_table_missing=table \"benchmark_events\" not found"
+                  ]
+                },
+                "timestampMs": 1772193428236
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 122,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193428756
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 123,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193428756
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 124,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": null,
+                "discoveryReasons": [
+                  "schema_table_missing=table \"benchmark_events\" not found"
+                ],
+                "readinessState": {
+                  "workloadReady": false,
+                  "benchmarkReady": false,
+                  "routingReady": true,
+                  "schemaReady": false,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": [
+                    "schema_table_missing=table \"benchmark_events\" not found"
+                  ]
+                },
+                "timestampMs": 1772193428757
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 125,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193429258
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 126,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193429259
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 127,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": null,
+                "discoveryReasons": [
+                  "schema_table_missing=table \"benchmark_events\" not found"
+                ],
+                "readinessState": {
+                  "workloadReady": false,
+                  "benchmarkReady": false,
+                  "routingReady": true,
+                  "schemaReady": false,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": [
+                    "schema_table_missing=table \"benchmark_events\" not found"
+                  ]
+                },
+                "timestampMs": 1772193429260
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 128,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193430014
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 129,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193430015
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 130,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": null,
+                "discoveryReasons": [
+                  "schema_table_missing=table \"benchmark_events\" not found"
+                ],
+                "readinessState": {
+                  "workloadReady": false,
+                  "benchmarkReady": false,
+                  "routingReady": true,
+                  "schemaReady": false,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": [
+                    "schema_table_missing=table \"benchmark_events\" not found"
+                  ]
+                },
+                "timestampMs": 1772193430015
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 131,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193430615
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 132,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193430616
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 133,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": null,
+                "discoveryReasons": [
+                  "schema_table_missing=table \"benchmark_events\" not found"
+                ],
+                "readinessState": {
+                  "workloadReady": false,
+                  "benchmarkReady": false,
+                  "routingReady": true,
+                  "schemaReady": false,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": [
+                    "schema_table_missing=table \"benchmark_events\" not found"
+                  ]
+                },
+                "timestampMs": 1772193430616
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 134,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193431148
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 135,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193431149
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 136,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": null,
+                "discoveryReasons": [
+                  "schema_table_missing=table \"benchmark_events\" not found"
+                ],
+                "readinessState": {
+                  "workloadReady": false,
+                  "benchmarkReady": false,
+                  "routingReady": true,
+                  "schemaReady": false,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": [
+                    "schema_table_missing=table \"benchmark_events\" not found"
+                  ]
+                },
+                "timestampMs": 1772193431150
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 137,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193431679
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 138,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193431680
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 139,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": null,
+                "discoveryReasons": [
+                  "schema_table_missing=table \"benchmark_events\" not found"
+                ],
+                "readinessState": {
+                  "workloadReady": false,
+                  "benchmarkReady": false,
+                  "routingReady": true,
+                  "schemaReady": false,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": [
+                    "schema_table_missing=table \"benchmark_events\" not found"
+                  ]
+                },
+                "timestampMs": 1772193431681
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 140,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193432184
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 141,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193432186
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 142,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": null,
+                "discoveryReasons": [
+                  "schema_table_missing=table \"benchmark_events\" not found"
+                ],
+                "readinessState": {
+                  "workloadReady": false,
+                  "benchmarkReady": false,
+                  "routingReady": true,
+                  "schemaReady": false,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": [
+                    "schema_table_missing=table \"benchmark_events\" not found"
+                  ]
+                },
+                "timestampMs": 1772193432187
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 143,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193432689
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 144,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": "1772193387244",
+                "discoveryReasons": [],
+                "readinessState": {
+                  "workloadReady": true,
+                  "benchmarkReady": true,
+                  "routingReady": true,
+                  "schemaReady": true,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": []
+                },
+                "timestampMs": 1772193432691
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 145,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772193387210",
+                "observedSchemaVersion": null,
+                "discoveryReasons": [
+                  "schema_table_missing=table \"benchmark_events\" not found"
+                ],
+                "readinessState": {
+                  "workloadReady": false,
+                  "benchmarkReady": false,
+                  "routingReady": true,
+                  "schemaReady": false,
+                  "topologyReady": true,
+                  "replicaOpsInFlight": 0,
+                  "leadershipStable": true,
+                  "tableName": "benchmark_events",
+                  "discoveryReasons": [
+                    "schema_table_missing=table \"benchmark_events\" not found"
+                  ]
+                },
+                "timestampMs": 1772193432692
+              }
+            ],
+            "nodeReasonsByNodeId": {
+              "11601fe0-72d6-5853-8590-ec2881853e72": [
+                "discovery_not_ready:routing_not_ready|topology_not_ready|schema_version_unknown",
+                "discovery_not_ready:schema_version_unknown|discovery_reasons=schema_table_missing=table \"benchmark_events\" not found"
+              ]
+            }
+          }
+        }
+      },
+      "exampleResults": null,
+      "loadMetrics": null,
+      "partitionHotspots": null,
+      "optimizationPriorities": null
+    }
+  ],
+  "benchmarkRegressionGate": {
+    "enabled": false,
+    "status": "skipped",
+    "reason": "disabled",
+    "settings": {
+      "enabled": false,
+      "maxThroughputRegressionRatio": 0.1,
+      "minimumThroughputRatioSutToBaseline": 0.1,
+      "baselineProvider": "liferaft",
+      "failIfBaselineMissing": false,
+      "approvedMitigationId": null,
+      "parityMismatchPolicy": "warn"
+    },
+    "currentProvider": "liferaft",
+    "baselineProvider": "liferaft",
+    "comparedScenarioCount": 0,
+    "failedScenarioCount": 0,
+    "mitigatedScenarioCount": 0,
+    "missingBaselineScenarios": [],
+    "comparisons": [],
+    "parityMismatchCount": 0,
+    "lowThroughputRatioCount": 0,
+    "warnings": []
+  },
+  "metadata": {
+    "raftProvider": "liferaft",
+    "configPath": "test/distributed/config/local-benchmark-3node.json",
+    "scenarioFilter": "postgres-baseline-comparison"
+  }
+}

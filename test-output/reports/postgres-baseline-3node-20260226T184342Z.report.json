@@ -1,0 +1,321 @@
+{
+  "timestamp": "2026-02-26T18:45:34.066Z",
+  "summary": {
+    "total": 1,
+    "passed": 0,
+    "failed": 1,
+    "duration": 111552
+  },
+  "optimizationSummary": {
+    "totalPriorityItems": 0,
+    "scenariosWithPriorities": 0,
+    "topComponents": [],
+    "topPartitions": []
+  },
+  "standardSummary": {
+    "historicalReportsConsidered": 20,
+    "scenariosComparedToPrevious": 1,
+    "scenariosComparedToPostgresBaseline": 0,
+    "diagnosticsCoverageSummary": {
+      "scenariosWithCoverage": 0,
+      "scenariosWithoutCoverage": 1,
+      "totalSamples": 0,
+      "coverageRate": 0,
+      "scenarios": [
+        {
+          "scenario": "postgres-baseline-comparison",
+          "status": "unavailable",
+          "reason": "not_reported",
+          "sampleCount": 0
+        }
+      ]
+    },
+    "writePathAttributionSummary": {
+      "scenariosWithDiagnostics": 0,
+      "topPhases": []
+    },
+    "scaleEfficiencySummary": {
+      "observationCount": 0,
+      "comparableGroupCount": 0,
+      "groups": [],
+      "topOpportunities": []
+    },
+    "scenarios": [
+      {
+        "scenario": "postgres-baseline-comparison",
+        "similarityKey": "postgres-baseline-comparison|default",
+        "current": {
+          "passed": false,
+          "clusterSize": 3,
+          "durationMs": 111552,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "previousSimilarRun": {
+          "reportTimestamp": "2026-02-26T17:24:24.930Z",
+          "reportPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-7node-20260226T172048Z.report.json",
+          "passed": false,
+          "clusterSize": 7,
+          "durationMs": 215368,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "deltaVsPrevious": {
+          "passedChanged": false,
+          "clusterSizeChanged": true,
+          "durationMs": -103816,
+          "durationRatio": -0.4820400430890383,
+          "opsPerSec": 0,
+          "opsPerSecRatio": null,
+          "opsPerSecPerNode": 0,
+          "opsPerSecPerNodeRatio": null,
+          "p99LatencyMs": 0,
+          "p99LatencyMsRatio": null
+        },
+        "postgresBaseline": null,
+        "parity": null,
+        "writePathTopPhases": []
+      }
+    ]
+  },
+  "scenarios": [
+    {
+      "scenario": "postgres-baseline-comparison",
+      "passed": false,
+      "duration": 111552,
+      "clusterSize": 3,
+      "startedAt": "2026-02-26T18:43:42.309Z",
+      "convergenceTiming": null,
+      "analysisSummary": null,
+      "error": "postgres-baseline-comparison failed in phase pre_load_gate: strict_preload_readiness_failed: SUT load nodes did not reach quiescent state within 30000ms (nodeProbeFailures=node_probe_error:7493b0ab-a054-5fad-a91b-5e331db29304=discovery_not_ready:schema_version_unknown; node_probe_error:35a891b8-c1a0-5064-9c6e-2acfba61c2a7=discovery_not_ready:schema_version_unknown; node_probe_error:11601fe0-72d6-5853-8590-ec2881853e72=discovery_not_ready:routing_not_ready|schema_version_unknown, leadershipStability=leadership_unstable:0,leadership_unstable:561,leadership_unstable:1105,leadership_unstable:1710), node_reasons=7493b0ab-a054-5fad-a91b-5e331db29304:discovery_not_ready:schema_version_unknown;35a891b8-c1a0-5064-9c6e-2acfba61c2a7:discovery_not_ready:schema_version_unknown;11601fe0-72d6-5853-8590-ec2881853e72:discovery_not_ready:routing_not_ready|schema_version_unknown",
+      "stackTrace": "Error: postgres-baseline-comparison failed in phase pre_load_gate: strict_preload_readiness_failed: SUT load nodes did not reach quiescent state within 30000ms (nodeProbeFailures=node_probe_error:7493b0ab-a054-5fad-a91b-5e331db29304=discovery_not_ready:schema_version_unknown; node_probe_error:35a891b8-c1a0-5064-9c6e-2acfba61c2a7=discovery_not_ready:schema_version_unknown; node_probe_error:11601fe0-72d6-5853-8590-ec2881853e72=discovery_not_ready:routing_not_ready|schema_version_unknown, leadershipStability=leadership_unstable:0,leadership_unstable:561,leadership_unstable:1105,leadership_unstable:1710), node_reasons=7493b0ab-a054-5fad-a91b-5e331db29304:discovery_not_ready:schema_version_unknown;35a891b8-c1a0-5064-9c6e-2acfba61c2a7:discovery_not_ready:schema_version_unknown;11601fe0-72d6-5853-8590-ec2881853e72:discovery_not_ready:routing_not_ready|schema_version_unknown\n    at Module.run (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/scenarios/postgres-baseline-comparison.js:5774:19)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async runScenarios (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:1056:9)\n    at async main (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:1593:33)",
+      "logs": null,
+      "playback": {
+        "scenarioName": "postgres-baseline-comparison",
+        "startedAt": 1772131422311,
+        "endedAt": 1772131534060,
+        "durationMs": 111749,
+        "files": {
+          "events": "test-output/reports/.playback/postgres-baseline-3node-20260226T184342Z/postgres-baseline-comparison/events.ndjson",
+          "samples": "test-output/reports/.playback/postgres-baseline-3node-20260226T184342Z/postgres-baseline-comparison/samples.ndjson",
+          "snapshots": "test-output/reports/.playback/postgres-baseline-3node-20260226T184342Z/postgres-baseline-comparison/snapshots.ndjson",
+          "manifest": "test-output/reports/.playback/postgres-baseline-3node-20260226T184342Z/postgres-baseline-comparison/playback-manifest.json",
+          "viewer": "test-output/reports/.playback/postgres-baseline-3node-20260226T184342Z/postgres-baseline-comparison/playback-viewer.html"
+        },
+        "counts": {
+          "events": 33,
+          "samples": 175,
+          "snapshots": 72
+        },
+        "warnings": [
+          {
+            "code": "service-query-failed-7493b0ab-a054-5fad-a91b-5e331db29304",
+            "message": "Failed to query services on node 7493b0ab-a054-5fad-a91b-5e331db29304: Admin API query connection closed for node 7493b0ab-a054-5fad-a91b-5e331db29304",
+            "timestamp": 1772131534060,
+            "details": {
+              "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+              "error": "Admin API query connection closed for node 7493b0ab-a054-5fad-a91b-5e331db29304",
+              "reachability": {
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "timestamp": 1772131533364,
+                "reachable": true,
+                "adminReady": true,
+                "reachableBy": "admin_health",
+                "bootstrapHealth": {
+                  "attempted": true,
+                  "ok": true,
+                  "statusCode": 200,
+                  "error": null,
+                  "url": "http://172.18.0.2:8080/health",
+                  "endpoint": null,
+                  "query": null
+                },
+                "adminHealth": {
+                  "attempted": true,
+                  "ok": true,
+                  "statusCode": 200,
+                  "error": null,
+                  "url": "http://172.18.0.2:8081/health",
+                  "endpoint": null,
+                  "query": null
+                },
+                "adminWs": {
+                  "attempted": false,
+                  "ok": false,
+                  "statusCode": null,
+                  "error": null,
+                  "url": null,
+                  "endpoint": "ws://172.18.0.2:8081/api/admin/stream",
+                  "query": null
+                },
+                "sqlProbe": {
+                  "attempted": false,
+                  "ok": false,
+                  "statusCode": null,
+                  "error": null,
+                  "url": null,
+                  "endpoint": null,
+                  "query": "SELECT node_id FROM nodes LIMIT 1"
+                },
+                "lastError": null
+              }
+            }
+          }
+        ]
+      },
+      "trace": null,
+      "traceAssertion": null,
+      "memoryLeak": {
+        "enabled": false,
+        "analyzed": false,
+        "leakDetected": false,
+        "sampleCount": 0,
+        "nodeCount": 0,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "nodes": [],
+        "warnings": [],
+        "config": {
+          "enabled": false,
+          "failOnDetection": false,
+          "requireSamples": false,
+          "minSamplesPerNode": 8,
+          "warmupFraction": 0.2,
+          "minWarmupMs": 30000,
+          "minAnalysisWindowMs": 60000,
+          "maxPositiveSlopeBytesPerMin": 1048576,
+          "minGrowthBytes": 16777216,
+          "minPositiveDeltaRatio": 0.65,
+          "captureHeapArtifacts": false,
+          "heapSnapshotNearLimitCount": 2
+        }
+      },
+      "memoryLeakAssertion": null,
+      "performanceDiagnostics": null,
+      "details": {
+        "diagnostics": {
+          "failure": {
+            "schemaVersion": 1,
+            "rootCauseClass": "discovery",
+            "phase": "pre_load_gate",
+            "affectedNodeIds": [
+              "11601fe0-72d6-5853-8590-ec2881853e72",
+              "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+              "7493b0ab-a054-5fad-a91b-5e331db29304"
+            ],
+            "reasonCounts": {
+              "strict_preload_readiness_failed: SUT load nodes did not reach quiescent state within 30000ms (nodeProbeFailures=node_probe_error:7493b0ab-a054-5fad-a91b-5e331db29304=discovery_not_ready:schema_version_unknown; node_probe_error:35a891b8-c1a0-5064-9c6e-2acfba61c2a7=discovery_not_ready:schema_version_unknown; node_probe_error:11601fe0-72d6-5853-8590-ec2881853e72=discovery_not_ready:routing_not_ready|schema_version_unknown, leadershipStability=leadership_unstable:0,leadership_unstable:561,leadership_unstable:1105,leadership_unstable:1710), node_reasons=7493b0ab-a054-5fad-a91b-5e331db29304:discovery_not_ready:schema_version_unknown;35a891b8-c1a0-5064-9c6e-2acfba61c2a7:discovery_not_ready:schema_version_unknown;11601fe0-72d6-5853-8590-ec2881853e72:discovery_not_ready:routing_not_ready|schema_version_unknown": 1
+            },
+            "strictMode": true,
+            "versionConvergence": {
+              "requiredSchemaVersion": "tbl-e4f388a7-1494-4e39-90f0-5b893ee97fde",
+              "nodes": {
+                "7493b0ab-a054-5fad-a91b-5e331db29304": {
+                  "requiredSchemaVersion": "tbl-e4f388a7-1494-4e39-90f0-5b893ee97fde",
+                  "observedSchemaVersion": null,
+                  "ready": false,
+                  "unmetReasons": [
+                    "schema_version_unknown"
+                  ]
+                },
+                "35a891b8-c1a0-5064-9c6e-2acfba61c2a7": {
+                  "requiredSchemaVersion": "tbl-e4f388a7-1494-4e39-90f0-5b893ee97fde",
+                  "observedSchemaVersion": null,
+                  "ready": false,
+                  "unmetReasons": [
+                    "schema_version_unknown"
+                  ]
+                },
+                "11601fe0-72d6-5853-8590-ec2881853e72": {
+                  "requiredSchemaVersion": "tbl-e4f388a7-1494-4e39-90f0-5b893ee97fde",
+                  "observedSchemaVersion": null,
+                  "ready": false,
+                  "unmetReasons": [
+                    "routing_not_ready",
+                    "schema_version_unknown"
+                  ]
+                }
+              }
+            },
+            "versionLagSummary": {
+              "requiredSchemaVersion": "tbl-e4f388a7-1494-4e39-90f0-5b893ee97fde",
+              "nodes": {
+                "7493b0ab-a054-5fad-a91b-5e331db29304": {
+                  "observedSchemaVersion": null,
+                  "requiredSchemaVersion": "tbl-e4f388a7-1494-4e39-90f0-5b893ee97fde",
+                  "unmetReasons": [
+                    "schema_version_unknown"
+                  ],
+                  "lagging": true
+                },
+                "35a891b8-c1a0-5064-9c6e-2acfba61c2a7": {
+                  "observedSchemaVersion": null,
+                  "requiredSchemaVersion": "tbl-e4f388a7-1494-4e39-90f0-5b893ee97fde",
+                  "unmetReasons": [
+                    "schema_version_unknown"
+                  ],
+                  "lagging": true
+                },
+                "11601fe0-72d6-5853-8590-ec2881853e72": {
+                  "observedSchemaVersion": null,
+                  "requiredSchemaVersion": "tbl-e4f388a7-1494-4e39-90f0-5b893ee97fde",
+                  "unmetReasons": [
+                    "routing_not_ready",
+                    "schema_version_unknown"
+                  ],
+                  "lagging": true
+                }
+              }
+            },
+            "nodeReasonsByNodeId": {
+              "7493b0ab-a054-5fad-a91b-5e331db29304": [
+                "discovery_not_ready:schema_version_unknown"
+              ],
+              "35a891b8-c1a0-5064-9c6e-2acfba61c2a7": [
+                "discovery_not_ready:schema_version_unknown"
+              ],
+              "11601fe0-72d6-5853-8590-ec2881853e72": [
+                "discovery_not_ready:routing_not_ready|schema_version_unknown"
+              ]
+            }
+          }
+        }
+      },
+      "exampleResults": null,
+      "loadMetrics": null,
+      "partitionHotspots": null,
+      "optimizationPriorities": null
+    }
+  ],
+  "benchmarkRegressionGate": {
+    "enabled": false,
+    "status": "skipped",
+    "reason": "disabled",
+    "settings": {
+      "enabled": false,
+      "maxThroughputRegressionRatio": 0.1,
+      "minimumThroughputRatioSutToBaseline": 0.1,
+      "baselineProvider": "liferaft",
+      "failIfBaselineMissing": false,
+      "approvedMitigationId": null,
+      "parityMismatchPolicy": "warn"
+    },
+    "currentProvider": "liferaft",
+    "baselineProvider": "liferaft",
+    "comparedScenarioCount": 0,
+    "failedScenarioCount": 0,
+    "mitigatedScenarioCount": 0,
+    "missingBaselineScenarios": [],
+    "comparisons": [],
+    "parityMismatchCount": 0,
+    "lowThroughputRatioCount": 0,
+    "warnings": []
+  },
+  "metadata": {
+    "raftProvider": "liferaft",
+    "configPath": "test/distributed/config/local-benchmark-3node.json",
+    "scenarioFilter": "postgres-baseline-comparison"
+  }
+}

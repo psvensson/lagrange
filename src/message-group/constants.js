@@ -42,10 +42,23 @@ const MESSAGE_GROUP_APPLICATION_ERROR_MSG = Object.freeze({
   INVALID_LATENCY_CDC_PAYLOAD: 'Invalid latency CDC propagation payload',
 });
 
+const MESSAGE_GROUP_CDC_ERROR_MSG = Object.freeze({
+  FORWARD_LEADER_UNKNOWN:
+    'Cannot forward CDC event because message-group leader is unknown',
+  FORWARD_LEADER_ADDRESS_UNRESOLVED:
+    'Cannot forward CDC event because message-group leader address is unavailable',
+  FORWARD_DELIVERY_REJECTED:
+    'CDC forward to message-group leader was not acknowledged',
+  FORWARD_RETRY_EXHAUSTED:
+    'CDC forward retry budget exhausted',
+  RAFT_PROPOSE_FAILED: 'Raft CDC replication failed',
+});
+
 export {
   MESSAGE_GROUP_APPLICATION_ERROR_MSG,
   MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE,
   MESSAGE_GROUP_APPLICATION_STATUS,
+  MESSAGE_GROUP_CDC_ERROR_MSG,
   MESSAGE_GROUP_SUBSYSTEM,
   MESSAGE_STATUS,
   MESSAGE_GROUP_METADATA_TABLE,

@@ -22,6 +22,9 @@ import {
 import {RUNTIME_KIND, LIFECYCLE_EVENT} from
   '../../src/constants/runtime.js';
 import {
+  OPERATION_JOURNAL_EVENT,
+} from '../../src/constants/runtime.js';
+import {
   executeMetaWrite,
   executeMetaRead,
   META_WRITE_ERROR_MSG,
@@ -185,11 +188,19 @@ describe('ServiceRuntimeLifecycle endpointWriter (SQL/CDC path)',
   () => {
     let lifecycle;
     let endpointCalls;
+    let projectionCalls;
+    let createdOperationId;
 
     beforeEach(() => {
       endpointCalls = [];
       const registry = makeRegistry(new EndpointDriver());
       lifecycle = new ServiceRuntimeLifecycle(registry);
+      projectionCalls = [];
+      createdOperationId = null;
+
+      lifecycle.on(OPERATION_JOURNAL_EVENT.OPERATION_CREATED, (event) => {
+        createdOperationId = event.operationId;
+      });
     });
 
     it('writes endpoint intent through endpointWriter', async () => {
@@ -207,6 +218,42 @@ describe('ServiceRuntimeLifecycle endpointWriter (SQL/CDC path)',
       assert.deepStrictEqual(
         endpointCalls[0].endpointIntent, {port: 8081},
       );
+    });
+
+    it('threads one causeId from operation journal through service/endpoint writes', async () => {
+      lifecycle.setOperationWriter(async (_sql, _params) => {});
+      lifecycle.setStateProjectionWriter(
+        async (serviceId, stateRow, context) => {
+          projectionCalls.push({serviceId, stateRow, context});
+        },
+      );
+      lifecycle.setEndpointWriter(
+        async (serviceId, runtimeKind, endpointIntent, context) => {
+          endpointCalls.push({serviceId, runtimeKind, endpointIntent, context});
+        },
+      );
+
+      const endpointEvents = [];
+      lifecycle.on(LIFECYCLE_EVENT.ENDPOINT_REGISTERED, (event) => {
+        endpointEvents.push(event);
+      });
+
+      await lifecycle.start(replicaCtx(nativeDef('cause-svc')));
+
+      assert.equal(typeof createdOperationId, 'string');
+      assert.ok(createdOperationId.length > 0);
+
+      assert.equal(projectionCalls.length, 1);
+      assert.equal(projectionCalls[0].serviceId, 'cause-svc');
+      assert.equal(projectionCalls[0].context?.causeId, createdOperationId);
+
+      assert.equal(endpointCalls.length, 1);
+      assert.equal(endpointCalls[0].serviceId, 'cause-svc');
+      assert.equal(endpointCalls[0].context?.causeId, createdOperationId);
+
+      assert.equal(endpointEvents.length, 1);
+      assert.equal(endpointEvents[0].serviceId, 'cause-svc');
+      assert.equal(endpointEvents[0].causeId, createdOperationId);
     });
 
     it('writer receives (serviceId, runtimeKind, endpointIntent)',

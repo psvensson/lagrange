@@ -5,6 +5,6 @@ TAP version 14
     ok 3 - status initiated
     ok 4 - replica created
     1..4
-ok 1 - ACK delivery via real WebSocket # time=80.882ms
+ok 1 - ACK delivery via real WebSocket # time=78.794ms
 
 1..1

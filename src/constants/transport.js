@@ -204,6 +204,8 @@ const ROUTER_ERROR_MSG = Object.freeze({
   connectionClosed: (nodeId) => `Connection to node ${nodeId} closed`,
   selfConnectionFailed: (message) => `Self-connection failed: ${message}`,
   noHandlerForAddress: (address) => `No handler registered for address ${address}`,
+  QUERY_MESSAGE_GROUP_TRANSPORT_REQUIRED:
+    'Query/data-plane message-group transport is not configured',
   PENDING_RESPONSE_TIMEOUT: 'Pending response timeout',
   SHUTDOWN: 'Router shutdown',
   ALL_TRANSPORTS_FAILED: 'All transport endpoints failed',

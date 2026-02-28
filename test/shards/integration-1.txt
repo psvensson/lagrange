@@ -7,3 +7,4 @@ test/integration/admin-cdc-propagation.integration.test.js
 test/integration/insert-or-ignore-raft-replay.integration.test.js
 test/integration/websocket-create-replica-ack.integration.test.js
 test/integration/three-node-partition-rebalance.integration.test.js
+test/integration/replica-handler-metadata-propagation.integration.test.js

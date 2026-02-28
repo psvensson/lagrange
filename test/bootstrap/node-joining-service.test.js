@@ -226,6 +226,211 @@ test('NodeJoiningService - retries register-service request after timeout',
     t.same(retryDelays, [10], 'should apply configured retry delay before retry');
   });
 
+test('NodeJoiningService - retries register-service on cache visibility timeout code',
+  async (t) => {
+    initializeTestEnvironment();
+
+    let attempts = 0;
+    const retryDelays = [];
+    const warnEvents = [];
+    const service = new NodeJoiningService({
+      nodeId: '550e8400-e29b-41d4-a716-446655440106',
+      nodeAddress: 'ws://localhost:9090',
+      seedNodeAddress: 'http://localhost:8080',
+      config: {
+        httpTimeoutMs: 1000,
+        leadershipWaitTimeoutMs: 200,
+        leadershipWaitInitialDelayMs: 10,
+        leadershipWaitMaxDelayMs: 10,
+        leadershipWaitBackoffMultiplier: 2,
+        leadershipWaitJitterRatio: 0,
+      },
+      sleep: async (delayMs) => {
+        retryDelays.push(delayMs);
+      },
+      httpPost: async (url) => {
+        if (!url.endsWith('/register-service')) {
+          throw new Error('unexpected URL in register-service retry test');
+        }
+        attempts += 1;
+        if (attempts === 1) {
+          const error = new Error(
+            'HTTP 500: {"success":false,"error":"cache visibility timeout",' +
+            '"code":"SERVICE_REGISTRATION_CACHE_VISIBILITY_TIMEOUT"}',
+          );
+          error.statusCode = 500;
+          error.responseJson = {
+            success: false,
+            error: 'cache visibility timeout',
+            code: 'SERVICE_REGISTRATION_CACHE_VISIBILITY_TIMEOUT',
+            details: {
+              lastVisibilityCheck: {
+                reason: 'field_mismatch',
+                mismatchFields: ['node_id'],
+              },
+            },
+          };
+          throw error;
+        }
+        return {success: true};
+      },
+    });
+    service.logger = {
+      debug() {},
+      info() {},
+      warn(message, details) {
+        warnEvents.push({message, details});
+      },
+      error() {},
+    };
+
+    await service.registerMessageGroupService(
+      'mg-1',
+      'mg-1-r0',
+      {getRole: () => 'leader'},
+    );
+
+    t.equal(
+      attempts,
+      2,
+      'should retry register-service once after typed cache visibility timeout',
+    );
+    t.same(retryDelays, [10], 'should apply configured retry delay before retry');
+    const retryEvent = warnEvents.find((event) =>
+      event.details &&
+      event.details.lastCode === 'SERVICE_REGISTRATION_CACHE_VISIBILITY_TIMEOUT',
+    );
+    t.ok(retryEvent, 'should emit retry warning for typed cache visibility timeout');
+    t.same(
+      retryEvent.details.lastErrorDetails,
+      {
+        lastVisibilityCheck: {
+          reason: 'field_mismatch',
+          mismatchFields: ['node_id'],
+        },
+      },
+      'retry warning should preserve seed-provided timeout diagnostics',
+    );
+  });
+
+test('NodeJoiningService - includes assignment_id on MOVE_REPLICA register-service',
+  async (t) => {
+    initializeTestEnvironment();
+
+    let capturedPayload = null;
+    const service = new NodeJoiningService({
+      nodeId: '550e8400-e29b-41d4-a716-446655440105',
+      nodeAddress: 'ws://localhost:9090',
+      seedNodeAddress: 'http://localhost:8080',
+      httpPost: async (_url, payload) => {
+        capturedPayload = payload;
+        return {success: true};
+      },
+    });
+    service.bootstrapResponse = {
+      messageGroupAssignment: {
+        strategy: AssignmentStrategy.MOVE_REPLICA,
+        groupId: 'mg-1',
+        replicaToMove: 'mg-1-r0',
+        assignmentId: '5ef301f9-6f73-4cb5-bb4e-8d73ef2a9ce5',
+      },
+    };
+
+    await service.registerMessageGroupService(
+      'mg-1',
+      'mg-1-r0',
+      {getRole: () => 'leader'},
+    );
+
+    t.ok(capturedPayload, 'register-service payload should be captured');
+    t.equal(
+      capturedPayload.assignment_id,
+      '5ef301f9-6f73-4cb5-bb4e-8d73ef2a9ce5',
+      'MOVE_REPLICA register-service should include assignment_id token',
+    );
+  });
+
+test('NodeJoiningService - fails fast on unauthorized replica owner conflict at startup',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const service = new NodeJoiningService({
+      nodeId: 'joining-node-ownership-1',
+      nodeAddress: 'ws://localhost:9090',
+      seedNodeAddress: 'http://localhost:8080',
+    });
+    service.bootstrapResponse = {
+      messageGroupAssignment: {
+        strategy: AssignmentStrategy.MOVE_REPLICA,
+        groupId: 'mg-1',
+        replicaToMove: 'mg-1-r1',
+        sourceNodeId: 'seed-node-1',
+      },
+    };
+
+    const nodeService = NodeService.getInstance();
+    nodeService.initialize({nodeId: 'joining-node-ownership-1'});
+    const cache = nodeService.getSystemTableCache();
+    cache.applySystemTableChange('services', 'INSERT', {
+      service_id: 'mg-1-r1',
+      service_type: 'message_group',
+      node_id: 'seed-node-1',
+      group_id: 'mg-1',
+      replica_id: 'mg-1-r1',
+      raft_role: 'follower',
+      status: 'active',
+      address: 'seed-node-1/message-group/mg-1-r1',
+    });
+
+    t.throws(
+      () => service.assertReplicaStartupOwnership('mg-1-r1'),
+      /replica_owner_conflict/i,
+      'startup guard should reject unauthorized duplicate active ownership',
+    );
+  });
+
+test(
+  'NodeJoiningService - allows replica startup when MOVE_REPLICA assignment token ' +
+    'authorizes ownership transfer',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const service = new NodeJoiningService({
+      nodeId: 'joining-node-ownership-2',
+      nodeAddress: 'ws://localhost:9090',
+      seedNodeAddress: 'http://localhost:8080',
+    });
+    service.bootstrapResponse = {
+      messageGroupAssignment: {
+        strategy: AssignmentStrategy.MOVE_REPLICA,
+        groupId: 'mg-1',
+        replicaToMove: 'mg-1-r1',
+        sourceNodeId: 'seed-node-1',
+        assignmentId: '6201a7c2-e6d6-4fd2-9278-a8233f4f0ad3',
+      },
+    };
+
+    const nodeService = NodeService.getInstance();
+    nodeService.initialize({nodeId: 'joining-node-ownership-2'});
+    const cache = nodeService.getSystemTableCache();
+    cache.applySystemTableChange('services', 'INSERT', {
+      service_id: 'mg-1-r1',
+      service_type: 'message_group',
+      node_id: 'seed-node-1',
+      group_id: 'mg-1',
+      replica_id: 'mg-1-r1',
+      raft_role: 'follower',
+      status: 'active',
+      address: 'seed-node-1/message-group/mg-1-r1',
+    });
+
+    t.doesNotThrow(
+      () => service.assertReplicaStartupOwnership('mg-1-r1'),
+      'authorized MOVE_REPLICA assignment should permit startup handoff',
+    );
+  },
+);
+
 test('NodeJoiningService - retries generic HTTP 503 and honors retry hints with jitter',
   async (t) => {
     initializeTestEnvironment();
@@ -475,6 +680,54 @@ test('NodeJoiningService - falls back to bootstrap hints when authoritative targ
     );
   });
 
+test('NodeJoiningService - reconnects disconnected cluster peers during mesh connect',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const service = new NodeJoiningService({
+      nodeId: 'joining-node-3',
+      nodeAddress: 'ws://localhost:9092',
+      seedNodeAddress: 'http://localhost:8080',
+    });
+
+    const reconnectCalls = [];
+    service.bootstrapResponse = {
+      systemTableSnapshots: {
+        nodes: [
+          {node_id: 'joining-node-3', node_address: 'localhost:9092'},
+          {node_id: 'peer-disconnected', node_address: 'localhost:8081'},
+          {node_id: 'peer-connected', node_address: 'localhost:8082'},
+        ],
+      },
+    };
+    service.messageRouter = {
+      nodeConnections: new Map([
+        ['peer-disconnected', {state: 'disconnected'}],
+        ['peer-connected', {state: 'connected'}],
+      ]),
+      getConnectionState(nodeId) {
+        return this.nodeConnections.get(nodeId)?.state || null;
+      },
+      async connectToNode(nodeId, wsAddress) {
+        reconnectCalls.push({nodeId, wsAddress});
+        this.nodeConnections.set(nodeId, {state: 'connected'});
+      },
+      getConnectedNodes() {
+        return ['peer-connected'];
+      },
+    };
+
+    await service.connectToClusterNodes();
+
+    t.equal(reconnectCalls.length, 1, 'should reconnect only disconnected peers');
+    t.equal(reconnectCalls[0].nodeId, 'peer-disconnected', 'should reconnect stale entry');
+    t.equal(
+      reconnectCalls[0].wsAddress,
+      'ws://localhost:8083',
+      'should derive reconnect address from node_address',
+    );
+  });
+
 test('NodeJoiningService - fails without seed node address', async (t) => {
   initializeTestEnvironment();
 
@@ -694,6 +947,111 @@ test('NodeJoiningService - signals readiness after querying state', async (t) =>
   t.equal(order.indexOf('query') < order.indexOf('ready'), true,
     'should signal readiness after state query');
 });
+
+test(
+  'NodeJoiningService - does not transition READY when canonical join readiness has ' +
+    'unknown schema version',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const service = new NodeJoiningService({
+      nodeId: 'joining-node-join-gate-1',
+      nodeAddress: 'ws://localhost:9090',
+      seedNodeAddress: 'http://localhost:8080',
+      config: {
+        joinReadinessTimeoutMs: 40,
+        joinReadinessPollIntervalMs: 5,
+      },
+    });
+
+    service.phaseContactSeed = async () => {
+      service.bootstrapResponse = {
+        success: true,
+        seedNodeId: 'seed-node-1',
+        seedNodeWsAddress: 'ws://localhost:8080',
+        messageGroupAssignment: {
+          strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
+          groupId: 'mg-1',
+          replicaCount: 1,
+        },
+        systemTableSnapshots: {
+          nodes: [],
+          partitions: [],
+          services: [],
+          tables: [],
+          message_groups: [],
+          replica_operations: [],
+        },
+      };
+      service.seedNodeId = 'seed-node-1';
+      service.seedNodeWsAddress = 'ws://localhost:8080';
+    };
+    service.phaseConnectWebSocket = async () => {
+      service.messageRouter = {
+        deliver: async () => ({acknowledged: true}),
+      };
+      service.controlPlaneTargetAddress = 'seed-node-1/message-group/mg-1-r0';
+    };
+    service.phaseCreateSelfHostedMessageGroup = async () => {};
+    service.phaseJoinExistingMessageGroup = async () => {};
+    service.phaseWaitForLeadership = async () => {};
+    service.initializeReplicaHandler = () => {};
+    service.initializeControlPlaneService = async () => {};
+    service.createCdcIntegrationService = () => ({});
+    service.ensureLatencyTopologyOwners = () => ({});
+    service.rpcClient = {
+      shutdown: async () => {},
+    };
+    service.initializeRuntimeServiceHandler = () => {};
+    service.phaseQuerySystemState = async () => {};
+    service.signalReadyForReplicas = async () => {};
+    service.systemCacheHydrated = true;
+    service.joinReadinessSnapshotProvider = async () => {
+      return {
+        routingReady: true,
+        topologyReady: true,
+        requiredSchemaVersion: '1740589945123:7:seed-1',
+        appliedSchemaVersion: null,
+      };
+    };
+
+    const result = await service.join();
+    t.equal(
+      result.success,
+      false,
+      'join should fail when canonical schema version is unknown',
+    );
+    t.match(
+      result.error,
+      /schema_version_unknown/i,
+      'failure should classify schema version unknown',
+    );
+  },
+);
+
+test('NodeJoiningService - canonical join readiness reason classification is deterministic',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const service = new NodeJoiningService({
+      nodeId: 'joining-node-join-gate-2',
+      nodeAddress: 'ws://localhost:9090',
+      seedNodeAddress: 'http://localhost:8080',
+    });
+
+    const reasons = service.classifyCanonicalJoinReadinessReasons({
+      routingReady: false,
+      topologyReady: false,
+      requiredSchemaVersion: '1740589945123:7:seed-1',
+      appliedSchemaVersion: null,
+    });
+
+    t.same(
+      reasons,
+      ['routing_not_ready', 'schema_version_unknown', 'topology_not_ready'],
+      'classification should use stable precedence for canonical reasons',
+    );
+  });
 
 test('NodeJoiningService - full join with MOVE_REPLICA', async (t) => {
   initializeTestEnvironment();

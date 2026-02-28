@@ -1,0 +1,73 @@
+{
+  "scenarioName": "diag-admin-delay-7node",
+  "startedAt": 1772085339500,
+  "endedAt": 1772085455241,
+  "durationMs": 115741,
+  "files": {
+    "events": "test-output/reports/.playback/diag-admin-delay-7node/diag-admin-delay-7node/events.ndjson",
+    "samples": "test-output/reports/.playback/diag-admin-delay-7node/diag-admin-delay-7node/samples.ndjson",
+    "snapshots": "test-output/reports/.playback/diag-admin-delay-7node/diag-admin-delay-7node/snapshots.ndjson",
+    "manifest": "test-output/reports/.playback/diag-admin-delay-7node/diag-admin-delay-7node/playback-manifest.json",
+    "viewer": "test-output/reports/.playback/diag-admin-delay-7node/diag-admin-delay-7node/playback-viewer.html"
+  },
+  "counts": {
+    "events": 62,
+    "samples": 178,
+    "snapshots": 42
+  },
+  "warnings": [
+    {
+      "code": "service-query-failed-c9f0cf40-b3c6-4c44-85d2-bb89db0b44f0",
+      "message": "Failed to query services on node c9f0cf40-b3c6-4c44-85d2-bb89db0b44f0: Admin API query failed for node c9f0cf40-b3c6-4c44-85d2-bb89db0b44f0 on lane default: Distributed operation failed due to participant failures",
+      "timestamp": 1772085393224,
+      "details": {
+        "nodeId": "c9f0cf40-b3c6-4c44-85d2-bb89db0b44f0",
+        "error": "Admin API query failed for node c9f0cf40-b3c6-4c44-85d2-bb89db0b44f0 on lane default: Distributed operation failed due to participant failures",
+        "reachability": {
+          "nodeId": "c9f0cf40-b3c6-4c44-85d2-bb89db0b44f0",
+          "timestamp": 1772085387794,
+          "reachable": true,
+          "adminReady": true,
+          "reachableBy": "admin_health",
+          "bootstrapHealth": {
+            "attempted": true,
+            "ok": true,
+            "statusCode": 200,
+            "error": null,
+            "url": "http://172.21.0.3:8080/health",
+            "endpoint": null,
+            "query": null
+          },
+          "adminHealth": {
+            "attempted": true,
+            "ok": true,
+            "statusCode": 200,
+            "error": null,
+            "url": "http://172.21.0.3:8081/health",
+            "endpoint": null,
+            "query": null
+          },
+          "adminWs": {
+            "attempted": false,
+            "ok": false,
+            "statusCode": null,
+            "error": null,
+            "url": null,
+            "endpoint": "ws://172.21.0.3:8081/api/admin/stream",
+            "query": null
+          },
+          "sqlProbe": {
+            "attempted": false,
+            "ok": false,
+            "statusCode": null,
+            "error": null,
+            "url": null,
+            "endpoint": null,
+            "query": "SELECT node_id FROM nodes LIMIT 1"
+          },
+          "lastError": null
+        }
+      }
+    }
+  ]
+}

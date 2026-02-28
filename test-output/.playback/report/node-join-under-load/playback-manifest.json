@@ -1,8 +1,8 @@
 {
   "scenarioName": "node-join-under-load",
-  "startedAt": 1771430912911,
-  "endedAt": 1771430952002,
-  "durationMs": 39091,
+  "startedAt": 1772087302737,
+  "endedAt": 1772087333732,
+  "durationMs": 30995,
   "files": {
     "events": "test-output/.playback/report/node-join-under-load/events.ndjson",
     "samples": "test-output/.playback/report/node-join-under-load/samples.ndjson",
@@ -11,9 +11,9 @@
     "viewer": "test-output/.playback/report/node-join-under-load/playback-viewer.html"
   },
   "counts": {
-    "events": 69,
-    "samples": 74,
-    "snapshots": 6
+    "events": 13,
+    "samples": 29,
+    "snapshots": 20
   },
   "warnings": []
 }

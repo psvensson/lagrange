@@ -24,9 +24,10 @@ import {
   CDC_OPERATION,
   SERVICE_TYPE,
   SERVICE_STATUS,
-  STATE,
   TABLES,
 } from '../../src/constants/index.js';
+import LifeRaft from '@markwylde/liferaft';
+import {RAFT_EVENT} from '../../src/raft/constants.js';
 
 // Port counter for unique ports per test
 let testPortCounter = 24000;
@@ -155,6 +156,30 @@ test('MessageGroupService - initialize becomes leader for single replica', async
     t.equal(service.initialized, true, 'Should be initialized');
     // Single replica services become leader immediately (no election needed)
     t.equal(service.getRole(), RaftRole.LEADER, 'Should become leader for single replica');
+
+    await service.shutdown();
+  } finally {
+    await cleanup();
+  }
+});
+
+test('MessageGroupService - follower demotion clears stale self leader id', async (t) => {
+  const {router, nodeId, cleanup} = await createTestTransport();
+  try {
+    const service = new MessageGroupService({
+      groupId: 'mg-demotion-clear',
+      replicaId: 'mg-demotion-clear-r1',
+      nodeId,
+      transport: router,
+    });
+
+    await service.initialize();
+    t.equal(service.leaderId, service.replicaId, 'single replica should start as self leader');
+
+    service.raft.emit(RAFT_EVENT.FOLLOWER);
+
+    t.equal(service.isLeader, false, 'follower event should clear leader flag');
+    t.equal(service.leaderId, null, 'follower event should clear stale self leader id');
 
     await service.shutdown();
   } finally {
@@ -560,6 +585,115 @@ test('MessageGroupService - applyCDCEvent updates cache', async (t) => {
     await cleanup();
   }
 });
+
+test('MessageGroupService - applyCDCEvent fails closed on Raft propose error', async (t) => {
+  const {router, nodeId, cleanup} = await createTestTransport();
+  try {
+    const service = new MessageGroupService({
+      groupId: 'mg-raft-fail',
+      replicaId: 'mg-raft-fail-r1',
+      nodeId,
+      transport: router,
+    });
+
+    await service.initialize();
+    service.replicaIds = ['mg-raft-fail-r1', 'mg-raft-fail-r2'];
+    if (service.raft) {
+      Object.defineProperty(service.raft, 'state', {
+        value: LifeRaft.LEADER,
+        writable: true,
+        configurable: true,
+      });
+    }
+    await service.subscribeToCDC('nodes');
+
+    service.raftProvider.proposeWithLeaderRouting = async () => {
+      throw new Error('raft propose failed');
+    };
+
+    await t.rejects(
+      service.applyCDCEvent('nodes', 'INSERT', {
+        id: 'node-raft-fail',
+        status: 'active',
+      }),
+      /raft propose failed/,
+      'should surface Raft replication failure to caller',
+    );
+
+    await service.shutdown();
+  } finally {
+    await cleanup();
+  }
+});
+
+test(
+  'MessageGroupService - replicated CDC retry must re-propose even with same timestamp',
+  async (t) => {
+    const {router, nodeId, cleanup} = await createTestTransport();
+    try {
+      const service = new MessageGroupService({
+        groupId: 'mg-retry-same-ts',
+        replicaId: 'mg-retry-same-ts-r1',
+        nodeId,
+        transport: router,
+      });
+
+      await service.initialize();
+      service.replicaIds = ['mg-retry-same-ts-r1', 'mg-retry-same-ts-r2'];
+      if (service.raft) {
+        Object.defineProperty(service.raft, 'state', {
+          value: LifeRaft.LEADER,
+          writable: true,
+          configurable: true,
+        });
+      }
+      await service.subscribeToCDC('nodes');
+
+      let proposeAttempts = 0;
+      service.raftProvider.proposeWithLeaderRouting = async () => {
+        proposeAttempts += 1;
+        if (proposeAttempts === 1) {
+          throw new Error('synthetic propose failure');
+        }
+      };
+
+      const retryTimestamp = '1234567890:42:test-node';
+      await t.rejects(
+        service.applyCDCEvent(
+          'nodes',
+          'INSERT',
+          {id: 'node-retry-same-ts', status: 'active'},
+          {timestamp: retryTimestamp},
+        ),
+        /synthetic propose failure/,
+        'first attempt should surface replicated CDC propose failure',
+      );
+
+      await service.applyCDCEvent(
+        'nodes',
+        'INSERT',
+        {id: 'node-retry-same-ts', status: 'active'},
+        {timestamp: retryTimestamp},
+      );
+
+      t.equal(
+        proposeAttempts,
+        2,
+        'second attempt with same timestamp should still re-propose',
+      );
+
+      const cached = service.getWritableCache().get('nodes', 'node-retry-same-ts');
+      t.ok(
+        cached,
+        'leader path may apply locally before commit; retry path must still re-propose',
+      );
+
+      await service.shutdown();
+    } finally {
+      await cleanup();
+    }
+  },
+);
 
 test('MessageGroupService - CDC paths delegate to CDCHandler owner', async (t) => {
   const {router, nodeId, cleanup} = await createTestTransport();

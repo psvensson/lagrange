@@ -3,19 +3,19 @@ TAP version 14
     # Subtest: partition CDC event only affects owning table metadata
         ok 1 - Partition CDC event only affects owning table metadata
         1..1
-    ok 1 - partition CDC event only affects owning table metadata # time=5.153ms
+    ok 1 - partition CDC event only affects owning table metadata # time=3.963ms
     
     # Subtest: partition update CDC event affects only owning table
         ok 1 - Partition update CDC event affects only owning table
         1..1
-    ok 2 - partition update CDC event affects only owning table # time=1.024ms
+    ok 2 - partition update CDC event affects only owning table # time=0.933ms
     
     # Subtest: partition delete CDC event affects only owning table
         ok 1 - Partition delete CDC event affects only owning table
         1..1
-    ok 3 - partition delete CDC event affects only owning table # time=0.945ms
+    ok 3 - partition delete CDC event affects only owning table # time=0.921ms
     
     1..3
-ok 1 - Property 32: CDC Selective Update # time=9.929ms
+ok 1 - Property 32: CDC Selective Update # time=8.457ms
 
 1..1

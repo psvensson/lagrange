@@ -1,4 +1,5 @@
 import {test} from '../../src/test-helpers/tap.js';
+import LifeRaft from '@markwylde/liferaft';
 import {assertRaftProviderContract} from '../../src/raft/raft-provider-contract.js';
 import {LiferaftProvider} from '../../src/raft/liferaft-provider.js';
 import {
@@ -46,19 +47,19 @@ test('assertRaftProviderContract accepts LiferaftProvider', async (t) => {
 test('LiferaftProvider propose delegates to raft.command', async (t) => {
   const provider = new LiferaftProvider();
   let proposedCommand = null;
-  let callbackArg = null;
+  let callbackError = 'unset';
   const raftNode = {
-    command: (command, callback) => {
+    command: async (command) => {
       proposedCommand = command;
-      callbackArg = callback;
+      return {ok: true};
     },
   };
-  const callback = () => {};
-
-  provider.propose(raftNode, {type: 'write'}, callback);
+  await provider.propose(raftNode, {type: 'write'}, (error) => {
+    callbackError = error || null;
+  });
 
   t.same(proposedCommand, {type: 'write'});
-  t.equal(callbackArg, callback);
+  t.equal(callbackError, null);
 });
 
 test('LiferaftProvider joinPeer delegates to raft.join', async (t) => {
@@ -140,4 +141,64 @@ test('LiferaftProvider current term and committed index return numeric defaults'
     };
     t.equal(provider.getCurrentTerm(raftNode), 5);
     t.equal(provider.getCommittedIndex(raftNode), 9);
+  });
+
+test('LiferaftProvider proposeWithLeaderRouting retries on propose timeout',
+  async (t) => {
+    const provider = new LiferaftProvider();
+    let proposeCalls = 0;
+    let forwardCalls = 0;
+    const raftNode = {
+      state: LifeRaft.LEADER,
+      command: () => {
+        proposeCalls += 1;
+        if (proposeCalls === 1) {
+          // Simulate leadership loss while proposal never resolves.
+          raftNode.state = LifeRaft.FOLLOWER;
+          return new Promise(() => {});
+        }
+        return Promise.resolve();
+      },
+    };
+
+    const result = await provider.proposeWithLeaderRouting(
+      raftNode,
+      {type: 'CDC'},
+      {
+        maxAttempts: 2,
+        proposeTimeoutMs: 5,
+        computeRetryDelayMs: () => 0,
+        forwardToLeader: async () => {
+          forwardCalls += 1;
+        },
+      },
+    );
+
+    t.same(result, {
+      attempt: 2,
+      mode: 'forward',
+    });
+    t.equal(proposeCalls, 1);
+    t.equal(forwardCalls, 1);
+  });
+
+test('LiferaftProvider proposeWithLeaderRouting throws when propose keeps timing out',
+  async (t) => {
+    const provider = new LiferaftProvider();
+    const raftNode = {
+      state: LifeRaft.LEADER,
+      command: () => new Promise(() => {}),
+    };
+
+    await t.rejects(
+      provider.proposeWithLeaderRouting(
+        raftNode,
+        {type: 'CDC'},
+        {
+          maxAttempts: 1,
+          proposeTimeoutMs: 5,
+        },
+      ),
+      /timed out/i,
+    );
   });

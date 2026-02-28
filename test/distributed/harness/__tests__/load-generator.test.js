@@ -598,6 +598,43 @@ test('undispatched reason classes are populated when dispatch falls behind',
     }
   });
 
+test('bounded queue emits stable queueFull reject reason when early reject is enabled',
+  async () => {
+    const nodes = [{
+      id: 'slow-node',
+      async query(_sql) {
+        await new Promise((resolve) => setTimeout(resolve, 40));
+        return {rows: []};
+      },
+    }];
+
+    const gen = new LoadGenerator(nodes, {
+      opsPerSec: 300,
+      duration: 220,
+      maxInFlight: ONE,
+      nodeMaxInFlight: ONE,
+      maxPendingQueueDepth: ZERO,
+      earlyRejectOnQueueFull: true,
+    });
+    const run = gen.start();
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 160));
+      run.cancel();
+      const metrics = await run.waitComplete();
+      assert.ok(metrics.rejectedByReason);
+      assert.strictEqual(
+        typeof metrics.rejectedByReason.queueFull,
+        'number',
+      );
+      assert.ok(
+        metrics.rejectedByReason.queueFull > ZERO,
+        'expected queueFull rejects when bounded queue is saturated',
+      );
+    } finally {
+      run.cancel();
+    }
+  });
+
 test('load path uses queryWithTimeout when node supports timeout-aware query',
   async () => {
     const capturedTimeouts = [];

@@ -245,6 +245,7 @@ function createAdminAPIWithLiveQuery(options) {
     nodeId: options.nodeId,
     systemTableCache: options.systemTableCache,
     sqlQueryEngine: options.sqlQueryEngine || null,
+    messageRouter: options.messageRouter || null,
     serviceDiagnosticsProvider: options.serviceDiagnosticsProvider || null,
     liveQueryManager,
   });
@@ -604,6 +605,7 @@ async function main() {
       nodeId: config.get(CONFIG_KEY.NODE_ID),
       systemTableCache,
       sqlQueryEngine,
+      messageRouter: joinResult.messageRouter,
       serviceDiagnosticsProvider:
         createServiceDiagnosticsProvider(nodeJoiningService),
     });
@@ -809,6 +811,7 @@ async function main() {
       nodeId: config.get(CONFIG_KEY.NODE_ID),
       systemTableCache,
       sqlQueryEngine,
+      messageRouter: bootstrapResult.messageRouter,
       serviceDiagnosticsProvider:
         createServiceDiagnosticsProvider(bootstrapService),
     });

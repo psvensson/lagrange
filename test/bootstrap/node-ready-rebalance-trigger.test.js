@@ -267,6 +267,63 @@ test('BootstrapService node-ready rebalance trigger ownership', async (t) => {
     },
   );
 
+  await t.test(
+    'retries node-ready rebalance scheduling after cache-gated timeout on a later ready update',
+    async (t) => {
+      const nodeId = 'node-retry';
+      const readyNodeRow = createNodeEvent(nodeId, LEASE_VALID_MS).data;
+      let cacheReady = false;
+
+      const bootstrapService = new BootstrapService({
+        nodeId: 'seed-node',
+        nodeAddress: 'localhost:8080',
+        config: {
+          nodeReadyRebalanceDelayMs: NODE_READY_REBALANCE_DELAY_MS,
+          leadershipWaitTimeoutMs: CACHE_WAIT_TIMEOUT_MS,
+          leadershipWaitInitialDelayMs: CACHE_WAIT_DELAY_MS,
+          leadershipWaitMaxDelayMs: CACHE_WAIT_DELAY_MS,
+          leadershipWaitBackoffMultiplier: CACHE_WAIT_DELAY_MS,
+        },
+      });
+      bootstrapService.systemTableCache = {
+        get: (_tableName, lookupNodeId) => {
+          if (lookupNodeId !== nodeId) {
+            return null;
+          }
+          return cacheReady ? readyNodeRow : createPreviousNodeRow(nodeId, LEASE_EXPIRED_MS);
+        },
+      };
+
+      let triggerCount = 0;
+      bootstrapService.triggerRebalancingOnAllPartitions = () => {
+        triggerCount++;
+      };
+
+      const firstScheduled = bootstrapService.handleNodeReadyRebalanceTrigger(
+        createNodeEvent(nodeId, LEASE_VALID_MS, STATE.DISCONNECTED),
+        createPreviousNodeRow(nodeId, LEASE_EXPIRED_MS),
+      );
+      t.equal(firstScheduled, true, 'initial not-ready to ready transition should schedule');
+
+      await new Promise((resolve) => setTimeout(resolve, CACHE_GATE_WAIT_MS));
+      t.equal(triggerCount, 0, 'initial trigger should not fire before cache becomes ready');
+
+      cacheReady = true;
+      const retryScheduled = bootstrapService.handleNodeReadyRebalanceTrigger(
+        createNodeEvent(nodeId, LEASE_VALID_MS, STATE.DISCONNECTED),
+        createPreviousNodeRow(nodeId, LEASE_VALID_MS),
+      );
+      t.equal(
+        retryScheduled,
+        true,
+        'ready update should reschedule after prior cache-gated timeout',
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, CACHE_BECOMES_READY_MS));
+      t.equal(triggerCount, 1, 'retry should trigger node-ready rebalance once');
+    },
+  );
+
   await t.test('cleanup cancels pending node-ready rebalance timers', async (t) => {
     const bootstrapService = new BootstrapService({
       nodeId: 'seed-node',

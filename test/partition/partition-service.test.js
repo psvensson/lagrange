@@ -370,6 +370,45 @@ test('PartitionService - generates CDC events on update', async (t) => {
   await partition.shutdown();
 });
 
+test('PartitionService - suppresses CDC for no-op updates', async (t) => {
+  const schema = {
+    columns: [
+      {name: 'id', type: 'TEXT', primaryKey: true},
+      {name: 'value', type: 'INTEGER'},
+    ],
+  };
+
+  const partition = new PartitionService({
+    partitionId: 'test-partition-7-noop',
+    tableId: 'cdc_test',
+    tableName: 'cdc_test',
+    replicaId: 'replica-1',
+    replicaIds: ['replica-1'],
+    schema,
+    dbPath: ':memory:',
+  });
+
+  await partition.initialize();
+  await Promise.resolve();
+
+  const cdcEvents = [];
+  partition.subscribeToCDC((event) => {
+    cdcEvents.push(event);
+  });
+
+  const updateResult = await partition.updateData(
+    'cdc_test',
+    {id: 'missing-row'},
+    {value: 999},
+  );
+
+  t.equal(updateResult.success, true);
+  t.equal(updateResult.changes, 0, 'update should affect zero rows');
+  t.equal(cdcEvents.length, 0, 'no-op update must not emit CDC');
+
+  await partition.shutdown();
+});
+
 test('PartitionService - generates CDC events on delete', async (t) => {
   const schema = {
     columns: [
@@ -570,6 +609,129 @@ test('PartitionService - follower applyCommittedEntry must not emit CDC', async 
 
   await partition.shutdown();
 });
+
+test('PartitionService - leader applyCommittedEntry must not raise unhandled rejection when CDC fails',
+  async (t) => {
+    const schema = {
+      columns: [
+        {name: 'id', type: 'TEXT', primaryKey: true},
+        {name: 'value', type: 'INTEGER'},
+      ],
+    };
+
+    const partition = new PartitionService({
+      partitionId: 'test-leader-committed-cdc-failure',
+      tableId: 'cdc_test',
+      tableName: 'cdc_test',
+      replicaId: 'replica-1',
+      replicaIds: ['replica-1'],
+      schema,
+      dbPath: ':memory:',
+    });
+
+    await partition.initialize();
+    await Promise.resolve();
+
+    partition.isLeader = true;
+    partition.role = RaftRole.LEADER;
+    partition.generateCDCEvent = async () => {
+      throw new Error('forced-cdc-failure');
+    };
+
+    let unhandledReason = null;
+    const onUnhandledRejection = (reason) => {
+      unhandledReason = reason;
+    };
+    process.once('unhandledRejection', onUnhandledRejection);
+
+    partition.applyCommittedEntry({
+      type: 'INSERT',
+      sql: 'INSERT INTO cdc_test (id, value) VALUES (?, ?)',
+      params: ['leader-failure-1', 7],
+      timestamp: String(Date.now()),
+      proposedBy: 'other-replica',
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    process.removeListener('unhandledRejection', onUnhandledRejection);
+
+    t.equal(
+      unhandledReason,
+      null,
+      'CDC failure in committed-entry path must stay logged, not unhandled',
+    );
+
+    await partition.shutdown();
+  });
+
+test('PartitionService - buffers CDC event on subscriber failure and replays after recovery',
+  async (t) => {
+    const schema = {
+      columns: [
+        {name: 'id', type: 'TEXT', primaryKey: true},
+        {name: 'value', type: 'INTEGER'},
+      ],
+    };
+
+    const partition = new PartitionService({
+      partitionId: 'test-cdc-retry-buffer',
+      tableId: 'cdc_test',
+      tableName: 'cdc_test',
+      replicaId: 'replica-1',
+      replicaIds: ['replica-1'],
+      schema,
+      dbPath: ':memory:',
+    });
+
+    await partition.initialize();
+    await Promise.resolve();
+
+    let shouldFailDelivery = true;
+    const delivered = [];
+    const subscriber = async (event) => {
+      if (shouldFailDelivery) {
+        throw new Error('forced-subscriber-failure');
+      }
+      delivered.push(event);
+    };
+
+    await partition.subscribeToCDCWithHandshake(subscriber, {
+      subscriberId: 'cdc-retry-subscriber',
+    });
+
+    await partition.insertData('cdc_test', {id: 'retry-1', value: 1});
+    await new Promise((resolve) => setTimeout(resolve, 80));
+
+    t.equal(delivered.length, 0,
+      'event should not be delivered while subscriber is failing');
+    t.equal(partition.cdcEventBuffer.size(), 1,
+      'failed delivery should be preserved in retry buffer');
+
+    shouldFailDelivery = false;
+
+    const waitForReplay = async () => {
+      const timeoutMs = 2000;
+      const pollMs = 25;
+      const startedAt = Date.now();
+      while (Date.now() - startedAt < timeoutMs) {
+        if (delivered.length >= 1 && partition.cdcEventBuffer.size() === 0) {
+          return true;
+        }
+        await new Promise((resolve) => setTimeout(resolve, pollMs));
+      }
+      return false;
+    };
+
+    t.equal(
+      await waitForReplay(),
+      true,
+      'buffered CDC event should replay after subscriber recovers',
+    );
+    t.equal(delivered[0].data.id, 'retry-1',
+      'replayed event should preserve original payload');
+
+    await partition.shutdown();
+  });
 
 test('PartitionService - calculates partition size', async (t) => {
   const schema = {
@@ -849,6 +1011,39 @@ test('PartitionService - handleTransportMessage handles application messages', a
   );
   t.equal(queryResult.rows.length, 1);
   t.equal(queryResult.rows[0].value, 42);
+
+  await partition.shutdown();
+});
+
+test('PartitionService - handleTransportMessage unwraps message-group query envelopes', async (t) => {
+  const partition = new PartitionService({
+    partitionId: 'test-partition-query-envelope',
+    tableId: 'query_envelope_test',
+    replicaId: 'replica-1',
+    replicaIds: ['replica-1'],
+    dbPath: ':memory:',
+  });
+
+  await partition.initialize();
+
+  const wrappedQueryMessage = {
+    payload: {
+      messageId: 'mg-msg-1',
+      payload: {
+        type: 'QUERY',
+        sql: 'SELECT 42 AS value',
+        params: [],
+      },
+      sourceGroup: 'mg-1',
+      sourceReplica: 'mg-1-r1',
+    },
+  };
+
+  const result = await partition.handleTransportMessage(wrappedQueryMessage);
+
+  t.equal(result.acknowledged, true, 'wrapped query should be acknowledged');
+  t.equal(result.success, true, 'wrapped query should execute successfully');
+  t.equal(result.rows?.[0]?.value, 42, 'wrapped query should return expected row');
 
   await partition.shutdown();
 });

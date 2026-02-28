@@ -1,0 +1,458 @@
+{
+  "timestamp": "2026-02-27T15:50:18.186Z",
+  "summary": {
+    "total": 1,
+    "passed": 0,
+    "failed": 1,
+    "duration": 97136
+  },
+  "optimizationSummary": {
+    "totalPriorityItems": 0,
+    "scenariosWithPriorities": 0,
+    "topComponents": [],
+    "topPartitions": []
+  },
+  "standardSummary": {
+    "historicalReportsConsidered": 20,
+    "scenariosComparedToPrevious": 1,
+    "scenariosComparedToPostgresBaseline": 0,
+    "diagnosticsCoverageSummary": {
+      "scenariosWithCoverage": 0,
+      "scenariosWithoutCoverage": 1,
+      "totalSamples": 0,
+      "coverageRate": 0,
+      "scenarios": [
+        {
+          "scenario": "postgres-baseline-comparison",
+          "status": "unavailable",
+          "reason": "not_reported",
+          "sampleCount": 0
+        }
+      ]
+    },
+    "writePathAttributionSummary": {
+      "scenariosWithDiagnostics": 0,
+      "topPhases": []
+    },
+    "scaleEfficiencySummary": {
+      "observationCount": 0,
+      "comparableGroupCount": 0,
+      "groups": [],
+      "topOpportunities": []
+    },
+    "scenarios": [
+      {
+        "scenario": "postgres-baseline-comparison",
+        "similarityKey": "postgres-baseline-comparison|default",
+        "current": {
+          "passed": false,
+          "clusterSize": 3,
+          "durationMs": 97136,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "previousSimilarRun": {
+          "reportTimestamp": "2026-02-27T12:37:51.177Z",
+          "reportPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-3node-20260227T123545Z.report.json",
+          "passed": false,
+          "clusterSize": 3,
+          "durationMs": 124918,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "deltaVsPrevious": {
+          "passedChanged": false,
+          "clusterSizeChanged": false,
+          "durationMs": -27782,
+          "durationRatio": -0.22240189564354215,
+          "opsPerSec": 0,
+          "opsPerSecRatio": null,
+          "opsPerSecPerNode": 0,
+          "opsPerSecPerNodeRatio": null,
+          "p99LatencyMs": 0,
+          "p99LatencyMsRatio": null
+        },
+        "postgresBaseline": null,
+        "parity": null,
+        "writePathTopPhases": []
+      }
+    ]
+  },
+  "scenarios": [
+    {
+      "scenario": "postgres-baseline-comparison",
+      "passed": false,
+      "duration": 97136,
+      "clusterSize": 3,
+      "startedAt": "2026-02-27T15:48:40.991Z",
+      "convergenceTiming": null,
+      "analysisSummary": null,
+      "error": "postgres-baseline-comparison failed in phase preflight: No discovered admin-ready load service nodes available for benchmark load (insufficient_reachable_nodes: required=3, reachable=0, attempts=57, timedOut=true, requiredReachable=3, strictMinReachable=true, discovered=7493b0ab-a054-5fad-a91b-5e331db29304, gateReason=insufficient_reachable_nodes, sources=7493b0ab-a054-5fad-a91b-5e331db29304:discovered=sys-postgres-wire@postgresql:7493b0ab-a054-5fad-a91b-5e331db29304;35a891b8-c1a0-5064-9c6e-2acfba61c2a7:error=Admin API query failed for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 on lane snapshot: connect ECONNREFUSED 172.18.0.3:8081 (nodeClient(operation=fetchServiceDi;11601fe0-72d6-5853-8590-ec2881853e72:error=Admin API query failed for node 11601fe0-72d6-5853-8590-ec2881853e72 on lane snapshot: connect ECONNREFUSED 172.18.0.4:8081 (nodeClient(operation=fetchServiceDi, excludedReasonCounts=none)",
+      "stackTrace": "Error: postgres-baseline-comparison failed in phase preflight: No discovered admin-ready load service nodes available for benchmark load (insufficient_reachable_nodes: required=3, reachable=0, attempts=57, timedOut=true, requiredReachable=3, strictMinReachable=true, discovered=7493b0ab-a054-5fad-a91b-5e331db29304, gateReason=insufficient_reachable_nodes, sources=7493b0ab-a054-5fad-a91b-5e331db29304:discovered=sys-postgres-wire@postgresql:7493b0ab-a054-5fad-a91b-5e331db29304;35a891b8-c1a0-5064-9c6e-2acfba61c2a7:error=Admin API query failed for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 on lane snapshot: connect ECONNREFUSED 172.18.0.3:8081 (nodeClient(operation=fetchServiceDi;11601fe0-72d6-5853-8590-ec2881853e72:error=Admin API query failed for node 11601fe0-72d6-5853-8590-ec2881853e72 on lane snapshot: connect ECONNREFUSED 172.18.0.4:8081 (nodeClient(operation=fetchServiceDi, excludedReasonCounts=none)\n    at Module.run (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/scenarios/postgres-baseline-comparison.js:6317:19)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async runScenarios (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:1183:9)\n    at async main (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:1762:33)",
+      "logs": null,
+      "playback": {
+        "scenarioName": "postgres-baseline-comparison",
+        "startedAt": 1772207320992,
+        "endedAt": 1772207418183,
+        "durationMs": 97191,
+        "files": {
+          "events": "test-output/reports/.playback/postgres-baseline-3node-20260227T154840Z/postgres-baseline-comparison/events.ndjson",
+          "samples": "test-output/reports/.playback/postgres-baseline-3node-20260227T154840Z/postgres-baseline-comparison/samples.ndjson",
+          "snapshots": "test-output/reports/.playback/postgres-baseline-3node-20260227T154840Z/postgres-baseline-comparison/snapshots.ndjson",
+          "manifest": "test-output/reports/.playback/postgres-baseline-3node-20260227T154840Z/postgres-baseline-comparison/playback-manifest.json",
+          "viewer": "test-output/reports/.playback/postgres-baseline-3node-20260227T154840Z/postgres-baseline-comparison/playback-viewer.html"
+        },
+        "counts": {
+          "events": 30,
+          "samples": 128,
+          "snapshots": 59
+        },
+        "warnings": []
+      },
+      "trace": null,
+      "traceAssertion": null,
+      "memoryLeak": {
+        "enabled": false,
+        "analyzed": false,
+        "leakDetected": false,
+        "sampleCount": 0,
+        "nodeCount": 0,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "nodes": [],
+        "warnings": [],
+        "config": {
+          "enabled": false,
+          "failOnDetection": false,
+          "requireSamples": false,
+          "minSamplesPerNode": 8,
+          "warmupFraction": 0.2,
+          "minWarmupMs": 30000,
+          "minAnalysisWindowMs": 60000,
+          "maxPositiveSlopeBytesPerMin": 1048576,
+          "minGrowthBytes": 16777216,
+          "minPositiveDeltaRatio": 0.65,
+          "captureHeapArtifacts": false,
+          "heapSnapshotNearLimitCount": 2
+        }
+      },
+      "memoryLeakAssertion": null,
+      "performanceDiagnostics": null,
+      "details": {
+        "diagnostics": {
+          "failure": {
+            "schemaVersion": 1,
+            "rootCauseClass": "load",
+            "phase": "preflight",
+            "affectedNodeIds": [],
+            "reasonCounts": {
+              "No discovered admin-ready load service nodes available for benchmark load (insufficient_reachable_nodes: required=3, reachable=0, attempts=57, timedOut=true, requiredReachable=3, strictMinReachable=true, discovered=7493b0ab-a054-5fad-a91b-5e331db29304, gateReason=insufficient_reachable_nodes, sources=7493b0ab-a054-5fad-a91b-5e331db29304:discovered=sys-postgres-wire@postgresql:7493b0ab-a054-5fad-a91b-5e331db29304;35a891b8-c1a0-5064-9c6e-2acfba61c2a7:error=Admin API query failed for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 on lane snapshot: connect ECONNREFUSED 172.18.0.3:8081 (nodeClient(operation=fetchServiceDi;11601fe0-72d6-5853-8590-ec2881853e72:error=Admin API query failed for node 11601fe0-72d6-5853-8590-ec2881853e72 on lane snapshot: connect ECONNREFUSED 172.18.0.4:8081 (nodeClient(operation=fetchServiceDi, excludedReasonCounts=none)": 1
+            },
+            "dominantReason": "No discovered admin-ready load service nodes available for benchmark load (insufficient_reachable_nodes: required=3, reachable=0, attempts=57, timedOut=true, requiredReachable=3, strictMinReachable=true, discovered=7493b0ab-a054-5fad-a91b-5e331db29304, gateReason=insufficient_reachable_nodes, sources=7493b0ab-a054-5fad-a91b-5e331db29304:discovered=sys-postgres-wire@postgresql:7493b0ab-a054-5fad-a91b-5e331db29304;35a891b8-c1a0-5064-9c6e-2acfba61c2a7:error=Admin API query failed for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 on lane snapshot: connect ECONNREFUSED 172.18.0.3:8081 (nodeClient(operation=fetchServiceDi;11601fe0-72d6-5853-8590-ec2881853e72:error=Admin API query failed for node 11601fe0-72d6-5853-8590-ec2881853e72 on lane snapshot: connect ECONNREFUSED 172.18.0.4:8081 (nodeClient(operation=fetchServiceDi, excludedReasonCounts=none)",
+            "strictMode": true
+          },
+          "rootCauseBundle": {
+            "schemaVersion": 1,
+            "rootCauseCode": "cache_stale_watermark",
+            "rootCauseClass": "cache",
+            "snapshotsByNodeId": {
+              "7493b0ab-a054-5fad-a91b-5e331db29304": {
+                "schemaVersion": 1,
+                "capturedAtMs": 1772207418123,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "address": "ddb-test-reuse-3-1:8080",
+                "routerConnectivity": {
+                  "connectedCount": 3,
+                  "reconnectingCount": 0,
+                  "disconnectedCount": 0
+                },
+                "controlPlanePartitions": {
+                  "nodes": {
+                    "leaderKnown": true,
+                    "leaderNodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                    "isLeaderLocal": true,
+                    "lastErrorCode": null
+                  },
+                  "services": {
+                    "leaderKnown": true,
+                    "leaderNodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                    "isLeaderLocal": true,
+                    "lastErrorCode": null
+                  },
+                  "node_endpoints": {
+                    "leaderKnown": true,
+                    "leaderNodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                    "isLeaderLocal": true,
+                    "lastErrorCode": null
+                  },
+                  "service_endpoints": {
+                    "leaderKnown": true,
+                    "leaderNodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                    "isLeaderLocal": true,
+                    "lastErrorCode": null
+                  }
+                },
+                "cdcHealth": {
+                  "bufferDepth": 0,
+                  "retryCount": 0,
+                  "lastErrorCode": null,
+                  "lastForwardAttemptAtMs": 0
+                },
+                "cacheFreshness": {
+                  "lastAppliedAtMs": 1772207359762,
+                  "appliedSchemaVersion": "1772207359762-5-mg-1-r1",
+                  "stalenessMs": 58361,
+                  "lastAppliedCauseIdByTableName": {
+                    "services": "762e6bd8-6dc8-4ca9-8780-629a3f6003fd",
+                    "node_endpoints": "82fff125-e809-4fce-b548-c130464b8e76",
+                    "service_endpoints": "dd5c5881-cfcf-4c88-ae3a-50d98b52aeda"
+                  }
+                },
+                "rowCounts": {
+                  "sysPostgresWireServiceCount": 0,
+                  "nodeEndpointsCount": 2,
+                  "serviceEndpointsCount": 3
+                },
+                "discovery": {
+                  "selectedNodeIds": [
+                    "7493b0ab-a054-5fad-a91b-5e331db29304"
+                  ],
+                  "excludedByNodeId": {}
+                }
+              },
+              "35a891b8-c1a0-5064-9c6e-2acfba61c2a7": {
+                "schemaVersion": 1,
+                "capturedAtMs": 1772207418123,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "address": "ddb-test-reuse-3-2:8080",
+                "routerConnectivity": {
+                  "connectedCount": 2,
+                  "reconnectingCount": 0,
+                  "disconnectedCount": 0
+                },
+                "controlPlanePartitions": {
+                  "nodes": {
+                    "leaderKnown": true,
+                    "leaderNodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                    "isLeaderLocal": false,
+                    "lastErrorCode": null
+                  },
+                  "services": {
+                    "leaderKnown": true,
+                    "leaderNodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                    "isLeaderLocal": false,
+                    "lastErrorCode": null
+                  },
+                  "node_endpoints": {
+                    "leaderKnown": true,
+                    "leaderNodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                    "isLeaderLocal": false,
+                    "lastErrorCode": null
+                  },
+                  "service_endpoints": {
+                    "leaderKnown": true,
+                    "leaderNodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                    "isLeaderLocal": false,
+                    "lastErrorCode": null
+                  }
+                },
+                "cdcHealth": {
+                  "bufferDepth": 0,
+                  "retryCount": 0,
+                  "lastErrorCode": null,
+                  "lastForwardAttemptAtMs": 0
+                },
+                "cacheFreshness": {
+                  "lastAppliedAtMs": 0,
+                  "appliedSchemaVersion": null,
+                  "stalenessMs": 1772207418123,
+                  "lastAppliedCauseIdByTableName": {
+                    "services": null,
+                    "node_endpoints": null,
+                    "service_endpoints": null
+                  }
+                },
+                "rowCounts": {
+                  "sysPostgresWireServiceCount": 0,
+                  "nodeEndpointsCount": 1,
+                  "serviceEndpointsCount": 3
+                },
+                "discovery": {
+                  "selectedNodeIds": [
+                    "7493b0ab-a054-5fad-a91b-5e331db29304"
+                  ],
+                  "excludedByNodeId": {}
+                }
+              },
+              "11601fe0-72d6-5853-8590-ec2881853e72": {
+                "schemaVersion": 1,
+                "capturedAtMs": 1772207418123,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "address": "ddb-test-reuse-3-3:8080",
+                "routerConnectivity": {
+                  "connectedCount": 2,
+                  "reconnectingCount": 0,
+                  "disconnectedCount": 0
+                },
+                "controlPlanePartitions": {
+                  "nodes": {
+                    "leaderKnown": true,
+                    "leaderNodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                    "isLeaderLocal": false,
+                    "lastErrorCode": null
+                  },
+                  "services": {
+                    "leaderKnown": true,
+                    "leaderNodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                    "isLeaderLocal": false,
+                    "lastErrorCode": null
+                  },
+                  "node_endpoints": {
+                    "leaderKnown": true,
+                    "leaderNodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                    "isLeaderLocal": false,
+                    "lastErrorCode": null
+                  },
+                  "service_endpoints": {
+                    "leaderKnown": true,
+                    "leaderNodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                    "isLeaderLocal": false,
+                    "lastErrorCode": null
+                  }
+                },
+                "cdcHealth": {
+                  "bufferDepth": 0,
+                  "retryCount": 0,
+                  "lastErrorCode": null,
+                  "lastForwardAttemptAtMs": 0
+                },
+                "cacheFreshness": {
+                  "lastAppliedAtMs": 0,
+                  "appliedSchemaVersion": null,
+                  "stalenessMs": 1772207418123,
+                  "lastAppliedCauseIdByTableName": {
+                    "services": null,
+                    "node_endpoints": null,
+                    "service_endpoints": null
+                  }
+                },
+                "rowCounts": {
+                  "sysPostgresWireServiceCount": 0,
+                  "nodeEndpointsCount": 3,
+                  "serviceEndpointsCount": 9
+                },
+                "discovery": {
+                  "selectedNodeIds": [
+                    "11601fe0-72d6-5853-8590-ec2881853e72",
+                    "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                    "7493b0ab-a054-5fad-a91b-5e331db29304"
+                  ],
+                  "excludedByNodeId": {}
+                }
+              }
+            },
+            "invariants": [
+              {
+                "code": "leadership_unknown_control_plane_partition",
+                "passed": true,
+                "details": {
+                  "violationCount": 0,
+                  "violations": []
+                }
+              },
+              {
+                "code": "cdc_retry_storm",
+                "passed": true,
+                "details": {
+                  "threshold": 1,
+                  "maxRetryCount": 0,
+                  "violatingNodeIds": []
+                }
+              },
+              {
+                "code": "cache_stale_watermark",
+                "passed": false,
+                "details": {
+                  "thresholdMs": 5000,
+                  "maxStalenessMs": 1772207418123,
+                  "violatingNodeIds": [
+                    "7493b0ab-a054-5fad-a91b-5e331db29304",
+                    "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                    "11601fe0-72d6-5853-8590-ec2881853e72"
+                  ]
+                }
+              },
+              {
+                "code": "services_missing_sys_postgres_wire",
+                "passed": false,
+                "details": {
+                  "violatingNodeIds": [
+                    "7493b0ab-a054-5fad-a91b-5e331db29304",
+                    "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                    "11601fe0-72d6-5853-8590-ec2881853e72"
+                  ]
+                }
+              },
+              {
+                "code": "discovery_empty_with_services_present",
+                "passed": true,
+                "details": {
+                  "violatingNodeIds": []
+                }
+              },
+              {
+                "code": "snapshot_missing",
+                "passed": true,
+                "details": {
+                  "missingCount": 0,
+                  "missingNodeIds": []
+                }
+              }
+            ],
+            "dominantInvariant": "cache_stale_watermark",
+            "playback": {
+              "manifestDir": "test-output/reports/.playback/postgres-baseline-3node-20260227T154840Z/postgres-baseline-comparison",
+              "manifestPath": "test-output/reports/.playback/postgres-baseline-3node-20260227T154840Z/postgres-baseline-comparison/playback-manifest.json",
+              "viewerPath": "test-output/reports/.playback/postgres-baseline-3node-20260227T154840Z/postgres-baseline-comparison/playback-viewer.html"
+            }
+          }
+        }
+      },
+      "exampleResults": null,
+      "loadMetrics": null,
+      "partitionHotspots": null,
+      "optimizationPriorities": null
+    }
+  ],
+  "benchmarkRegressionGate": {
+    "enabled": false,
+    "status": "skipped",
+    "reason": "disabled",
+    "settings": {
+      "enabled": false,
+      "maxThroughputRegressionRatio": 0.1,
+      "minimumThroughputRatioSutToBaseline": 0.1,
+      "baselineProvider": "liferaft",
+      "failIfBaselineMissing": false,
+      "approvedMitigationId": null,
+      "parityMismatchPolicy": "warn"
+    },
+    "currentProvider": "liferaft",
+    "baselineProvider": "liferaft",
+    "comparedScenarioCount": 0,
+    "failedScenarioCount": 0,
+    "mitigatedScenarioCount": 0,
+    "missingBaselineScenarios": [],
+    "comparisons": [],
+    "parityMismatchCount": 0,
+    "lowThroughputRatioCount": 0,
+    "warnings": []
+  },
+  "metadata": {
+    "raftProvider": "liferaft",
+    "configPath": "test/distributed/config/local-benchmark-3node.json",
+    "scenarioFilter": "postgres-baseline-comparison"
+  }
+}

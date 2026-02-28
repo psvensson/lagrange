@@ -253,12 +253,27 @@ class PartitionResolver {
 
     try {
       if (typeof this.systemCache.get === 'function') {
-        return this.systemCache.get(TABLES.TABLES, tableName);
+        const byPrimaryKey = this.systemCache.get(TABLES.TABLES, tableName);
+        if (byPrimaryKey) {
+          return byPrimaryKey;
+        }
       }
       if (typeof this.systemCache.find === 'function') {
-        return this.systemCache.find(TABLES.TABLES, (t) =>
+        const found = this.systemCache.find(TABLES.TABLES, (t) =>
           t.table_name === tableName || t.tableName === tableName,
         );
+        if (found) {
+          return found;
+        }
+      }
+      if (typeof this.systemCache.getAll === 'function') {
+        const tables = this.systemCache.getAll(TABLES.TABLES) || [];
+        return tables.find((table) =>
+          table.table_name === tableName ||
+          table.tableName === tableName ||
+          table.table_id === tableName ||
+          table.tableId === tableName,
+        ) || null;
       }
     } catch {
       // Cache not available

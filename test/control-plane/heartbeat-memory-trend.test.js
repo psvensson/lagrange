@@ -152,6 +152,8 @@ test('HeartbeatService throttles endpoint upserts but refreshes after interval',
     },
     systemTableCache: createMockCache(),
     endpointRefreshIntervalMs: 100,
+    nodeMetadataMinUpdateIntervalMs: 0,
+    nodeMetadataMaxStalenessMs: 1000,
   });
 
   const originalNow = Date.now;
@@ -185,6 +187,260 @@ test('HeartbeatService throttles endpoint upserts but refreshes after interval',
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
 });
+
+test('HeartbeatService coalesces unchanged node heartbeat writes within min interval',
+  async (t) => {
+    initEnv();
+
+    const counters = {
+      nodeUpdates: 0,
+      endpointUpserts: 0,
+    };
+    const service = new HeartbeatService({
+      nodeId: 'node-e',
+      nodeAddress: '10.0.0.5:8080',
+      cdcIntegrationService: {
+        updateSystemTableRow: async () => {
+          counters.nodeUpdates += 1;
+          return {success: true};
+        },
+        upsertSystemTableRow: async () => {
+          counters.endpointUpserts += 1;
+          return {success: true};
+        },
+      },
+      systemTableCache: createMockCache(),
+      nodeMetadataMinUpdateIntervalMs: 1000,
+      nodeMetadataMaxStalenessMs: 5000,
+    });
+
+    const originalNow = Date.now;
+    let now = 0;
+    Date.now = () => now;
+    try {
+      await service.sendHeartbeat(null, null);
+      now += 10;
+      await service.sendHeartbeat(null, null);
+      now += 10;
+      await service.sendHeartbeat(null, null);
+
+      t.equal(
+        counters.nodeUpdates,
+        1,
+        'unchanged node metadata should be coalesced within min update interval',
+      );
+      t.equal(
+        counters.endpointUpserts,
+        1,
+        'endpoint upsert should still be coalesced independently',
+      );
+    } finally {
+      Date.now = originalNow;
+      ConfigurationManager.resetInstance();
+      LoggingService.resetInstance();
+    }
+  });
+
+test('HeartbeatService forces node heartbeat refresh once max staleness elapses',
+  async (t) => {
+    initEnv();
+
+    let nodeUpdates = 0;
+    const service = new HeartbeatService({
+      nodeId: 'node-f',
+      nodeAddress: '10.0.0.6:8080',
+      cdcIntegrationService: {
+        updateSystemTableRow: async () => {
+          nodeUpdates += 1;
+          return {success: true};
+        },
+        upsertSystemTableRow: async () => ({success: true}),
+      },
+      systemTableCache: createMockCache(),
+      nodeMetadataMinUpdateIntervalMs: 1000,
+      nodeMetadataMaxStalenessMs: 50,
+    });
+
+    const originalNow = Date.now;
+    let now = 0;
+    Date.now = () => now;
+    try {
+      await service.sendHeartbeat(null, null);
+      now += 10;
+      await service.sendHeartbeat(null, null);
+      now += 60;
+      await service.sendHeartbeat(null, null);
+
+      t.equal(
+        nodeUpdates,
+        2,
+        'liveness refresh should force a write when max staleness is reached',
+      );
+    } finally {
+      Date.now = originalNow;
+      ConfigurationManager.resetInstance();
+      LoggingService.resetInstance();
+    }
+  });
+
+test('HeartbeatService suppresses non-critical heartbeat writes while quiet mode is active',
+  async (t) => {
+    initEnv();
+
+    const counters = {
+      nodeUpdates: 0,
+      endpointUpserts: 0,
+    };
+    let quietModeActive = false;
+    const service = new HeartbeatService({
+      nodeId: 'node-g',
+      nodeAddress: '10.0.0.7:8080',
+      cdcIntegrationService: {
+        updateSystemTableRow: async () => {
+          counters.nodeUpdates += 1;
+          return {success: true};
+        },
+        upsertSystemTableRow: async () => {
+          counters.endpointUpserts += 1;
+          return {success: true};
+        },
+      },
+      systemTableCache: createMockCache(),
+      endpointRefreshIntervalMs: 1000,
+      nodeMetadataMinUpdateIntervalMs: 1000,
+      nodeMetadataMaxStalenessMs: 5000,
+      quietMode: {
+        isActive: () => quietModeActive,
+      },
+    });
+
+    const originalNow = Date.now;
+    let now = 0;
+    Date.now = () => now;
+    try {
+      await service.sendHeartbeat(null, null);
+      quietModeActive = true;
+      now += 1500;
+      await service.sendHeartbeat(null, null);
+
+      t.equal(
+        counters.nodeUpdates,
+        1,
+        'quiet mode should suppress non-critical node heartbeat writes',
+      );
+      t.equal(
+        counters.endpointUpserts,
+        1,
+        'quiet mode should suppress non-critical endpoint upserts',
+      );
+    } finally {
+      Date.now = originalNow;
+      ConfigurationManager.resetInstance();
+      LoggingService.resetInstance();
+    }
+  });
+
+test('HeartbeatService allows initial node heartbeat write during quiet mode',
+  async (t) => {
+    initEnv();
+
+    let nodeUpdates = 0;
+    let endpointUpserts = 0;
+    const service = new HeartbeatService({
+      nodeId: 'node-g0',
+      nodeAddress: '10.0.0.70:8080',
+      cdcIntegrationService: {
+        updateSystemTableRow: async () => {
+          nodeUpdates += 1;
+          return {success: true};
+        },
+        upsertSystemTableRow: async () => {
+          endpointUpserts += 1;
+          return {success: true};
+        },
+      },
+      systemTableCache: createMockCache(),
+      endpointRefreshIntervalMs: 1000,
+      nodeMetadataMinUpdateIntervalMs: 1000,
+      nodeMetadataMaxStalenessMs: 5000,
+      quietMode: {
+        isActive: () => true,
+      },
+    });
+
+    try {
+      await service.sendHeartbeat(null, null);
+
+      t.equal(
+        nodeUpdates,
+        1,
+        'initial heartbeat write should bypass quiet mode suppression',
+      );
+      t.equal(
+        endpointUpserts,
+        0,
+        'endpoint upserts should remain suppressed in quiet mode',
+      );
+      t.same(
+        service.getQuietModeBypassReasonHistogram(),
+        {node_heartbeat_initial_write: 1},
+        'quiet mode should record initial-write bypass reason',
+      );
+    } finally {
+      ConfigurationManager.resetInstance();
+      LoggingService.resetInstance();
+    }
+  });
+
+test('HeartbeatService allows quiet-mode safety bypass for staleness guard and records reason',
+  async (t) => {
+    initEnv();
+
+    let nodeUpdates = 0;
+    let quietModeActive = false;
+    const service = new HeartbeatService({
+      nodeId: 'node-h',
+      nodeAddress: '10.0.0.8:8080',
+      cdcIntegrationService: {
+        updateSystemTableRow: async () => {
+          nodeUpdates += 1;
+          return {success: true};
+        },
+        upsertSystemTableRow: async () => ({success: true}),
+      },
+      systemTableCache: createMockCache(),
+      nodeMetadataMinUpdateIntervalMs: 1000,
+      nodeMetadataMaxStalenessMs: 50,
+      quietMode: {
+        isActive: () => quietModeActive,
+      },
+    });
+
+    const originalNow = Date.now;
+    let now = 0;
+    Date.now = () => now;
+    try {
+      await service.sendHeartbeat(null, null);
+      quietModeActive = true;
+      now += 60;
+      await service.sendHeartbeat(null, null);
+
+      t.equal(
+        nodeUpdates,
+        2,
+        'staleness guard should bypass quiet mode suppression for liveness',
+      );
+      t.same(
+        service.getQuietModeBypassReasonHistogram(),
+        {node_heartbeat_max_staleness: 1},
+        'quiet mode safety bypass should record reason histogram',
+      );
+    } finally {
+      Date.now = originalNow;
+      ConfigurationManager.resetInstance();
+      LoggingService.resetInstance();
+    }
+  });
 
 test('HeartbeatService does not overlap heartbeat writes when a tick is still in-flight',
   async (t) => {

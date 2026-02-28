@@ -180,6 +180,62 @@ t.test('MessageRouter unit tests', async (t) => {
     await router.shutdown();
   });
 
+  t.test('should route QUERY messages via message-group transport', async (t) => {
+    const router = new MessageRouter({nodeId: 'test-node'});
+    await router.initialize();
+
+    let localHandlerCalls = 0;
+    router.register('test-node/partition/p1', () => {
+      localHandlerCalls++;
+      return {acknowledged: true, success: true, rows: [{id: 'local'}]};
+    });
+
+    let queryTransportCalls = 0;
+    router.setQueryMessageGroupServiceResolver(() => ({
+      sendMessage: async (targetAddress, message) => {
+        queryTransportCalls++;
+        return {
+          acknowledged: true,
+          success: true,
+          routedVia: 'message-group',
+          targetAddress,
+          sql: message.sql,
+          rows: [{id: 'mg'}],
+        };
+      },
+    }));
+
+    const result = await router.deliver('test-node/partition/p1', {
+      type: 'QUERY',
+      sql: 'SELECT 1',
+      params: [],
+    });
+
+    t.equal(queryTransportCalls, 1, 'should use message-group transport once');
+    t.equal(localHandlerCalls, 0, 'should not use direct local handler path');
+    t.equal(result.acknowledged, true, 'should acknowledge query delivery');
+    t.equal(result.routedVia, 'message-group', 'should report message-group routing');
+
+    await router.shutdown();
+  });
+
+  t.test('should fail QUERY messages when message-group transport is missing', async (t) => {
+    const router = new MessageRouter({nodeId: 'test-node'});
+    await router.initialize();
+
+    await t.rejects(
+      router.deliver('test-node/partition/p1', {
+        type: 'QUERY',
+        sql: 'SELECT 1',
+        params: [],
+      }),
+      /message-group transport is not configured/i,
+      'should fail closed when query transport resolver is missing',
+    );
+
+    await router.shutdown();
+  });
+
   t.test('should deliver locally for async handler without connection', async (t) => {
     const router = new MessageRouter({nodeId: 'test-node'});
     await router.initialize();

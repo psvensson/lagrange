@@ -20,7 +20,7 @@ import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapAPI, BootstrapStrategy} from '../../src/bootstrap/bootstrap-api.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {SERVICE_STATUS, SERVICE_TYPE, TABLES} from '../../src/constants/index.js';
+import {SERVICE_STATUS, SERVICE_TYPE} from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 
 function initializeTestEnvironment() {
@@ -325,3 +325,172 @@ test('BootstrapAPI - getMessageGroups should prefer system cache over stale serv
 
     await api.shutdown();
   });
+
+test(
+  'BootstrapAPI - register-service should not return before services cache reflects ownership',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const systemCacheData = {
+      services: [
+        {
+          service_id: 'mg-1-r1',
+          service_type: SERVICE_TYPE.MESSAGE_GROUP,
+          node_id: 'seed-node-1',
+          group_id: 'mg-1',
+          replica_id: 'mg-1-r1',
+          address: 'seed-node-1/message-group/mg-1-r1',
+          raft_role: RAFT_ROLE.FOLLOWER,
+          status: SERVICE_STATUS.ACTIVE,
+        },
+        {
+          service_id: 'mg-1-r2',
+          service_type: SERVICE_TYPE.MESSAGE_GROUP,
+          node_id: 'seed-node-1',
+          group_id: 'mg-1',
+          replica_id: 'mg-1-r2',
+          address: 'seed-node-1/message-group/mg-1-r2',
+          raft_role: RAFT_ROLE.FOLLOWER,
+          status: SERVICE_STATUS.ACTIVE,
+        },
+        {
+          service_id: 'mg-1-r3',
+          service_type: SERVICE_TYPE.MESSAGE_GROUP,
+          node_id: 'seed-node-1',
+          group_id: 'mg-1',
+          replica_id: 'mg-1-r3',
+          address: 'seed-node-1/message-group/mg-1-r3',
+          raft_role: RAFT_ROLE.FOLLOWER,
+          status: SERVICE_STATUS.ACTIVE,
+        },
+      ],
+      nodes: [],
+      partitions: [],
+      tables: [],
+      message_groups: [],
+      replica_operations: [],
+      indices: [],
+      config: [],
+      logs: [],
+      live_queries: [],
+      contexts: [],
+      code: [],
+      node_endpoints: [],
+    };
+
+    const mockSystemTableCache = {
+      getAll(table) {
+        return systemCacheData[table] || [];
+      },
+      get(table, id) {
+        const rows = systemCacheData[table] || [];
+        return rows.find((row) => row.service_id === id || row.node_id === id) || null;
+      },
+      filter(table, predicate) {
+        return (systemCacheData[table] || []).filter(predicate);
+      },
+      getReadyNodes() {
+        return ['seed-node-1'];
+      },
+    };
+
+    const delayedTimers = new Set();
+    t.teardown(() => {
+      for (const timer of delayedTimers) {
+        clearTimeout(timer);
+      }
+    });
+
+    const mockSqlQueryEngine = {
+      async executeQuery(sql, params) {
+        if (typeof sql === 'string' && sql.includes('INSERT OR REPLACE INTO services')) {
+          const [
+            serviceId,
+            _serviceType,
+            targetNodeId,
+            _partitionId,
+            _groupId,
+            _replicaId,
+            _raftRole,
+            status,
+            address,
+            _createdAt,
+            updatedAt,
+          ] = params;
+          const timer = setTimeout(() => {
+            delayedTimers.delete(timer);
+            const row = systemCacheData.services.find((service) => {
+              return service.service_id === serviceId;
+            });
+            if (row) {
+              row.node_id = targetNodeId;
+              row.address = address;
+              row.status = status;
+              row.updated_at = updatedAt;
+            }
+          }, 80);
+          delayedTimers.add(timer);
+          if (typeof timer.unref === 'function') {
+            timer.unref();
+          }
+        }
+        return {success: true};
+      },
+    };
+
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: mockSystemTableCache,
+      messageGroupServices: new Map(),
+      sqlQueryEngine: mockSqlQueryEngine,
+    });
+    await api.initialize(0, {listen: false});
+
+    const node2Id = '550e8400-e29b-41d4-a716-446655440012';
+    const bootstrap1 = await api.getFastify().inject({
+      method: 'POST',
+      url: '/bootstrap',
+      payload: {nodeId: node2Id, nodeAddress: 'ws://localhost:9090'},
+    });
+    t.equal(bootstrap1.statusCode, 200, 'first bootstrap should succeed');
+    const firstBody = JSON.parse(bootstrap1.body);
+    const firstAssignedReplica = firstBody.messageGroupAssignment.replicaToMove;
+    const firstAssignmentId = firstBody.messageGroupAssignment.assignmentId;
+    t.equal(firstAssignedReplica, 'mg-1-r1', 'first node should receive first movable replica');
+    t.type(firstAssignmentId, 'string', 'first bootstrap should include assignmentId');
+
+    const registerResult = await api.getFastify().inject({
+      method: 'POST',
+      url: '/register-service',
+      payload: {
+        service_id: firstAssignedReplica,
+        service_type: SERVICE_TYPE.MESSAGE_GROUP,
+        node_id: node2Id,
+        group_id: 'mg-1',
+        replica_id: firstAssignedReplica,
+        assignment_id: firstAssignmentId,
+        raft_role: RAFT_ROLE.FOLLOWER,
+        status: SERVICE_STATUS.ACTIVE,
+        address: `${node2Id}/message-group/${firstAssignedReplica}`,
+      },
+    });
+    t.equal(registerResult.statusCode, 200, 'register-service should succeed');
+
+    const node3Id = '550e8400-e29b-41d4-a716-446655440013';
+    const bootstrap2 = await api.getFastify().inject({
+      method: 'POST',
+      url: '/bootstrap',
+      payload: {nodeId: node3Id, nodeAddress: 'ws://localhost:9091'},
+    });
+    t.equal(bootstrap2.statusCode, 200, 'second bootstrap should succeed');
+    const secondBody = JSON.parse(bootstrap2.body);
+    t.not(
+      secondBody.messageGroupAssignment.replicaToMove,
+      firstAssignedReplica,
+      'second node should not receive replica already registered to first node',
+    );
+
+    await api.shutdown();
+  },
+);

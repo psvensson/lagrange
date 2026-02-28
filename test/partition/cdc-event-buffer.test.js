@@ -91,6 +91,41 @@ test('CDCEventBuffer unit tests', async (t) => {
     t.equal(buffer.hasEvents(), false, 'hasEvents false after replay');
   });
 
+  t.test('replay preserves undelivered tail when subscriber fails', async (t) => {
+    const logger = createMockLogger();
+    const buffer = new CDCEventBuffer({capacity: 10, logger});
+
+    const event1 = createNodeEvent('node-1', '1000000000001');
+    const event2 = createNodeEvent('node-2', '1000000000002');
+    buffer.buffer(event1);
+    buffer.buffer(event2);
+
+    let firstAttempt = true;
+    await t.rejects(
+      buffer.replay(async () => {
+        if (firstAttempt) {
+          firstAttempt = false;
+          throw new Error('transient-replay-failure');
+        }
+      }),
+      /transient-replay-failure/,
+      'replay should surface subscriber failure',
+    );
+
+    t.equal(
+      buffer.size(),
+      2,
+      'failed replay must preserve undelivered events in the buffer',
+    );
+
+    const replayed = [];
+    const count = await buffer.replay((event) => {
+      replayed.push(event);
+    });
+    t.equal(count, 2, 'second replay should deliver all preserved events');
+    t.equal(buffer.size(), 0, 'buffer should clear after successful replay');
+  });
+
   t.test('buffer at exact capacity boundary', async (t) => {
     const capacity = 5;
     const logger = createMockLogger();

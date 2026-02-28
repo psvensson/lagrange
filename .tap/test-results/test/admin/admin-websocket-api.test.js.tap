@@ -5,7 +5,7 @@ TAP version 14
     ok 3 - should have no clients initially
     ok 4 - should not be initialized after shutdown
     1..4
-ok 1 - AdminWebSocketAPI - initialization # time=181.822ms
+ok 1 - AdminWebSocketAPI - initialization # time=31.911ms
 
 # Subtest: AdminWebSocketAPI - cache dump on connection
     ok 1 - should receive cache_dump
@@ -24,13 +24,13 @@ ok 1 - AdminWebSocketAPI - initialization # time=181.822ms
     ok 14 - should have 1 node
     ok 15 - should have correct node
     1..15
-ok 2 - AdminWebSocketAPI - cache dump on connection # time=6.422ms
+ok 2 - AdminWebSocketAPI - cache dump on connection # time=6.469ms
 
 # Subtest: AdminWebSocketAPI - multiple concurrent connections
     ok 1 - should have 3 connected clients
     ok 2 - should have 2 clients after disconnect
     1..2
-ok 3 - AdminWebSocketAPI - multiple concurrent connections # time=55.551ms
+ok 3 - AdminWebSocketAPI - multiple concurrent connections # time=55.463ms
 
 # Subtest: AdminWebSocketAPI - query execution SELECT
     ok 1 - should receive query_result
@@ -40,7 +40,7 @@ ok 3 - AdminWebSocketAPI - multiple concurrent connections # time=55.551ms
     ok 5 - should have partitions array
     ok 6 - should have tableName
     1..6
-ok 4 - AdminWebSocketAPI - query execution SELECT # time=7.028ms
+ok 4 - AdminWebSocketAPI - query execution SELECT # time=6.039ms
 
 # Subtest: AdminWebSocketAPI - query execution INSERT
     ok 1 - should receive query_result
@@ -50,19 +50,19 @@ ok 4 - AdminWebSocketAPI - query execution SELECT # time=7.028ms
     ok 5 - should have partitions
     ok 6 - should have tableName
     1..6
-ok 5 - AdminWebSocketAPI - query execution INSERT # time=5.984ms
+ok 5 - AdminWebSocketAPI - query execution INSERT # time=5.292ms
 
 # Subtest: AdminWebSocketAPI - query execution UPDATE
     ok 1 - should have UPDATE operation
     ok 2 - should have affectedRows
     1..2
-ok 6 - AdminWebSocketAPI - query execution UPDATE # time=5.804ms
+ok 6 - AdminWebSocketAPI - query execution UPDATE # time=4.66ms
 
 # Subtest: AdminWebSocketAPI - query execution DELETE
     ok 1 - should have DELETE operation
     ok 2 - should have affectedRows
     1..2
-ok 7 - AdminWebSocketAPI - query execution DELETE # time=5.125ms
+ok 7 - AdminWebSocketAPI - query execution DELETE # time=6.475ms
 
 # Subtest: AdminWebSocketAPI - partition callback execution route
     ok 1 - should receive query_result
@@ -74,7 +74,7 @@ ok 7 - AdminWebSocketAPI - query execution DELETE # time=5.125ms
     ok 7 - should pass callbackExport to SqlRequest
     ok 8 - should pass runtimeKind to SqlRequest
     1..8
-ok 8 - AdminWebSocketAPI - partition callback execution route # time=7ms
+ok 8 - AdminWebSocketAPI - partition callback execution route # time=5.676ms
 
 # Subtest: AdminWebSocketAPI - partition callback validation requires callback fields
     ok 1 - should return query_result envelope
@@ -82,7 +82,7 @@ ok 8 - AdminWebSocketAPI - partition callback execution route # time=7ms
     ok 3 - should return malformed error for missing module ref
     ok 4 - should include validation error
     1..4
-ok 9 - AdminWebSocketAPI - partition callback validation requires callback fields # time=5.387ms
+ok 9 - AdminWebSocketAPI - partition callback validation requires callback fields # time=4.595ms
 
 # Subtest: AdminWebSocketAPI - error handling TABLE_NOT_FOUND
     ok 1 - should receive query_result
@@ -90,31 +90,31 @@ ok 9 - AdminWebSocketAPI - partition callback validation requires callback field
     ok 3 - should have error
     ok 4 - should have error code
     1..4
-ok 10 - AdminWebSocketAPI - error handling TABLE_NOT_FOUND # time=5.78ms
+ok 10 - AdminWebSocketAPI - error handling TABLE_NOT_FOUND # time=4.441ms
 
 # Subtest: AdminWebSocketAPI - error handling SYNTAX_ERROR
     ok 1 - should have SYNTAX_ERROR
     1..1
-ok 11 - AdminWebSocketAPI - error handling SYNTAX_ERROR # time=7.86ms
+ok 11 - AdminWebSocketAPI - error handling SYNTAX_ERROR # time=4.226ms
 
 # Subtest: AdminWebSocketAPI - malformed JSON handling
     ok 1 - should have error code
     ok 2 - should have error message
     ok 3 - should have hint
     1..3
-ok 12 - AdminWebSocketAPI - malformed JSON handling # time=4.496ms
+ok 12 - AdminWebSocketAPI - malformed JSON handling # time=4.331ms
 
 # Subtest: AdminWebSocketAPI - unknown message type ignored
     ok 1 - should receive query result
     ok 2 - should have correct queryId
     1..2
-ok 13 - AdminWebSocketAPI - unknown message type ignored # time=4.331ms
+ok 13 - AdminWebSocketAPI - unknown message type ignored # time=6.061ms
 
 # Subtest: AdminWebSocketAPI - refresh message
     ok 1 - should receive initial dump
     ok 2 - should receive refresh dump
     1..2
-ok 14 - AdminWebSocketAPI - refresh message # time=4.523ms
+ok 14 - AdminWebSocketAPI - refresh message # time=4.338ms
 
 # Subtest: AdminWebSocketAPI - CDC event broadcasting
     ok 1 - client 1 should receive event
@@ -123,7 +123,7 @@ ok 14 - AdminWebSocketAPI - refresh message # time=4.523ms
     ok 4 - should have correct record
     ok 5 - client 2 should receive event
     1..5
-ok 15 - AdminWebSocketAPI - CDC event broadcasting # time=4.224ms
+ok 15 - AdminWebSocketAPI - CDC event broadcasting # time=4.282ms
 
 # Subtest: AdminWebSocketAPI - health endpoint
     ok 1 - should return 200
@@ -131,7 +131,7 @@ ok 15 - AdminWebSocketAPI - CDC event broadcasting # time=4.224ms
     ok 3 - should have nodeId
     ok 4 - should have 1 connected client
     1..4
-ok 16 - AdminWebSocketAPI - health endpoint # time=56.336ms
+ok 16 - AdminWebSocketAPI - health endpoint # time=9.98ms
 
 # Subtest: AdminWebSocketAPI - local control snapshot endpoint shape and non-mutation
     ok 1 - should return 200 for local snapshot
@@ -153,7 +153,7 @@ ok 16 - AdminWebSocketAPI - health endpoint # time=56.336ms
     ok 17 - should not mutate services table
     ok 18 - should not mutate replica operations table
     1..18
-ok 17 - AdminWebSocketAPI - local control snapshot endpoint shape and non-mutation # time=8.842ms
+ok 17 - AdminWebSocketAPI - local control snapshot endpoint shape and non-mutation # time=5.449ms
 
 # Subtest: AdminWebSocketAPI - local control snapshot query avoids distributed fanout
     ok 1 - should return query_result
@@ -165,7 +165,7 @@ ok 17 - AdminWebSocketAPI - local control snapshot endpoint shape and non-mutati
     ok 7 - query result should include voter-count map
     ok 8 - local control snapshot query should not execute distributed SQL requests
     1..8
-ok 18 - AdminWebSocketAPI - local control snapshot query avoids distributed fanout # time=4.764ms
+ok 18 - AdminWebSocketAPI - local control snapshot query avoids distributed fanout # time=4.211ms
 
 # Subtest: AdminWebSocketAPI - local service discovery endpoint shape and filtering
     ok 1 - should return 200
@@ -181,12 +181,14 @@ ok 18 - AdminWebSocketAPI - local control snapshot query avoids distributed fano
     ok 11 - should include filtered replica rows
     ok 12 - should keep only requested node replica
     ok 13 - should include canonical workload readiness
-    ok 14 - default discovery scope should mark schema readiness true
-    ok 15 - service discovery endpoint should not execute distributed SQL requests
-    ok 16 - should not mutate service definitions table
-    ok 17 - should not mutate service endpoints table
-    1..17
-ok 19 - AdminWebSocketAPI - local service discovery endpoint shape and filtering # time=6.822ms
+    ok 14 - should include canonical topology readiness
+    ok 15 - should include canonical benchmark readiness
+    ok 16 - default discovery scope should mark schema readiness true
+    ok 17 - service discovery endpoint should not execute distributed SQL requests
+    ok 18 - should not mutate service definitions table
+    ok 19 - should not mutate service endpoints table
+    1..19
+ok 19 - AdminWebSocketAPI - local service discovery endpoint shape and filtering # time=7.631ms
 
 # Subtest: AdminWebSocketAPI - local service discovery query avoids distributed fanout
     ok 1 - should return query_result
@@ -197,36 +199,73 @@ ok 19 - AdminWebSocketAPI - local service discovery endpoint shape and filtering
     ok 6 - query snapshot should include services array
     ok 7 - query snapshot should include grouped service count
     ok 8 - query snapshot should include readiness block
-    ok 9 - local service discovery query should not execute distributed SQL requests
-    1..9
-ok 20 - AdminWebSocketAPI - local service discovery query avoids distributed fanout # time=9.247ms
+    ok 9 - query snapshot should include topology readiness
+    ok 10 - query snapshot should include benchmark readiness
+    ok 11 - local service discovery query should not execute distributed SQL requests
+    1..11
+ok 20 - AdminWebSocketAPI - local service discovery query avoids distributed fanout # time=8.595ms
 
 # Subtest: AdminWebSocketAPI - table-scoped discovery readiness marks missing schema
     ok 1 - should return 200
     ok 2 - missing table should mark schema not ready
     ok 3 - missing table should block workload readiness
-    ok 4 - readiness reasons should include schema_table_missing
+    ok 4 - topology can still be ready when schema is missing
+    ok 5 - benchmark readiness should fail when schema is missing
+    ok 6 - readiness reasons should include schema_table_missing
+    1..6
+ok 21 - AdminWebSocketAPI - table-scoped discovery readiness marks missing schema # time=4.531ms
+
+# Subtest: AdminWebSocketAPI - table-scoped discovery keeps routed replicas schema ready
+    ok 1 - should return 200
+    ok 2 - node-1 should remain schema ready
+    ok 3 - node-2 should remain routing ready
+    ok 4 - node-2 should remain schema ready via routed partition ownership
+    ok 5 - node-2 should not be excluded for lacking local partition replica
+    1..5
+ok 22 - AdminWebSocketAPI - table-scoped discovery keeps routed replicas schema ready # time=4.419ms
+
+# Subtest: AdminWebSocketAPI - table-scoped discovery falls back to partition schema watermark
+    ok 1 - should return 200
+    ok 2 - partition coverage should keep schema readiness true
+    ok 3 - readiness should expose partition-derived schema watermark
+    ok 4 - benchmark readiness should remain true when partition watermark is available
     1..4
-ok 21 - AdminWebSocketAPI - table-scoped discovery readiness marks missing schema # time=4.924ms
+ok 23 - AdminWebSocketAPI - table-scoped discovery falls back to partition schema watermark # time=4.383ms
+
+# Subtest: AdminWebSocketAPI - local discovery query supports table-id hints
+    ok 1 - should return query_result
+    ok 2 - should preserve query id
+    ok 3 - should include one snapshot row
+    ok 4 - should return one discovery snapshot
+    ok 5 - table-id hint should resolve partition-scoped schema readiness
+    ok 6 - table-id hint should expose partition-derived schema watermark
+    1..6
+ok 24 - AdminWebSocketAPI - local discovery query supports table-id hints # time=4.176ms
+
+# Subtest: AdminWebSocketAPI - preflight cache freshness keeps unknown watermark as null
+    ok 1 - unknown watermark must remain null in snapshot output
+    ok 2 - unknown watermark must not coerce staleness to a synthetic value
+    1..2
+ok 25 - AdminWebSocketAPI - preflight cache freshness keeps unknown watermark as null # time=0.395ms
 
 # Subtest: AdminWebSocketAPI - cleanup on disconnect
     ok 1 - should have 1 client
     ok 2 - should have 0 clients after disconnect
     1..2
-ok 22 - AdminWebSocketAPI - cleanup on disconnect # time=55.363ms
+ok 26 - AdminWebSocketAPI - cleanup on disconnect # time=55.614ms
 
 # Subtest: AdminWebSocketAPI - query without queryId
     ok 1 - should have error
     ok 2 - should have error code
     1..2
-ok 23 - AdminWebSocketAPI - query without queryId # time=4.293ms
+ok 27 - AdminWebSocketAPI - query without queryId # time=3.462ms
 
 # Subtest: AdminWebSocketAPI - query without sql
     ok 1 - should have queryId
     ok 2 - should have error
     ok 3 - should have error code
     1..3
-ok 24 - AdminWebSocketAPI - query without sql # time=4.267ms
+ok 28 - AdminWebSocketAPI - query without sql # time=3.246ms
 
 # Subtest: AdminWebSocketAPI - dashboard landing page
     ok 1 - should return 200
@@ -234,7 +273,7 @@ ok 24 - AdminWebSocketAPI - query without sql # time=4.267ms
     ok 3 - should disable dashboard page caching
     ok 4 - should return dashboard html
     1..4
-ok 25 - AdminWebSocketAPI - dashboard landing page # time=5.007ms
+ok 29 - AdminWebSocketAPI - dashboard landing page # time=3.755ms
 
 # Subtest: AdminWebSocketAPI - test catalog endpoint
     ok 1 - should return 200
@@ -243,7 +282,7 @@ ok 25 - AdminWebSocketAPI - dashboard landing page # time=5.007ms
     ok 4 - should include config entries
     ok 5 - should publish default config for UI selection
     1..5
-ok 26 - AdminWebSocketAPI - test catalog endpoint # time=4.671ms
+ok 30 - AdminWebSocketAPI - test catalog endpoint # time=3.489ms
 
 # Subtest: AdminWebSocketAPI - start/stop test run endpoints
     ok 1 - should start run
@@ -251,27 +290,27 @@ ok 26 - AdminWebSocketAPI - test catalog endpoint # time=4.671ms
     ok 3 - should stop run
     ok 4 - should return stop status
     1..4
-ok 27 - AdminWebSocketAPI - start/stop test run endpoints # time=6.12ms
+ok 31 - AdminWebSocketAPI - start/stop test run endpoints # time=4.732ms
 
 # Subtest: AdminWebSocketAPI - delete test run endpoint
     ok 1 - should delete run
     ok 2 - should return deleted flag
     ok 3 - should return deleted run id
     1..3
-ok 28 - AdminWebSocketAPI - delete test run endpoint # time=4.539ms
+ok 32 - AdminWebSocketAPI - delete test run endpoint # time=3.407ms
 
 # Subtest: AdminWebSocketAPI - output asset endpoint
     ok 1 - should return output file
     ok 2 - should be equal
     ok 3 - should return requested payload
     1..3
-ok 29 - AdminWebSocketAPI - output asset endpoint # time=3.874ms
+ok 33 - AdminWebSocketAPI - output asset endpoint # time=3.355ms
 
 # Subtest: AdminWebSocketAPI - stream endpoint returns 404 for unknown run
     ok 1 - should return not found
     ok 2 - should be equal
     1..2
-ok 30 - AdminWebSocketAPI - stream endpoint returns 404 for unknown run # time=5.094ms
+ok 34 - AdminWebSocketAPI - stream endpoint returns 404 for unknown run # time=3.127ms
 
 # Subtest: AdminWebSocketAPI - stream endpoint serves archived run backlog
     ok 1 - should return stream response for archived run
@@ -279,13 +318,13 @@ ok 30 - AdminWebSocketAPI - stream endpoint returns 404 for unknown run # time=5
     ok 3 - should include archived log frame
     ok 4 - should include archived log content
     1..4
-ok 31 - AdminWebSocketAPI - stream endpoint serves archived run backlog # time=5.357ms
+ok 35 - AdminWebSocketAPI - stream endpoint serves archived run backlog # time=4.28ms
 
 # Subtest: AdminWebSocketAPI - debug routes require security headers
     ok 1 - should reject missing security context
     ok 2 - should match pattern
     1..2
-ok 32 - AdminWebSocketAPI - debug routes require security headers # time=4.245ms
+ok 36 - AdminWebSocketAPI - debug routes require security headers # time=3.573ms
 
 # Subtest: AdminWebSocketAPI - debug session create/get/attach routes
     ok 1 - should create debug session
@@ -297,7 +336,7 @@ ok 32 - AdminWebSocketAPI - debug routes require security headers # time=4.245ms
     ok 7 - should route to metadata store methods
     ok 8 - should be equal
     1..8
-ok 33 - AdminWebSocketAPI - debug session create/get/attach routes # time=6.006ms
+ok 37 - AdminWebSocketAPI - debug session create/get/attach routes # time=3.97ms
 
 # Subtest: AdminWebSocketAPI - debug session update/detach routes
     ok 1 - should update debug session
@@ -310,7 +349,7 @@ ok 33 - AdminWebSocketAPI - debug session create/get/attach routes # time=6.006m
     ok 8 - should be equal
     ok 9 - should be equal
     1..9
-ok 34 - AdminWebSocketAPI - debug session update/detach routes # time=5.633ms
+ok 38 - AdminWebSocketAPI - debug session update/detach routes # time=4.078ms
 
 # Subtest: AdminWebSocketAPI - debug breakpoints/snapshots and DAP routes
     ok 1 - should write breakpoints
@@ -327,7 +366,7 @@ ok 34 - AdminWebSocketAPI - debug session update/detach routes # time=5.633ms
     ok 12 - should be equal
     ok 13 - should be equal
     1..13
-ok 35 - AdminWebSocketAPI - debug breakpoints/snapshots and DAP routes # time=7.922ms
+ok 39 - AdminWebSocketAPI - debug breakpoints/snapshots and DAP routes # time=5.977ms
 
 # Subtest: AdminWebSocketAPI - debug trace stream route wiring and filtering
     ok 1 - should register debug trace websocket route
@@ -335,7 +374,7 @@ ok 35 - AdminWebSocketAPI - debug breakpoints/snapshots and DAP routes # time=7.
     ok 3 - should be equal
     ok 4 - should cleanup subscription on disconnect
     1..4
-ok 36 - AdminWebSocketAPI - debug trace stream route wiring and filtering # time=108.836ms
+ok 40 - AdminWebSocketAPI - debug trace stream route wiring and filtering # time=106.394ms
 
 # Subtest: live query subscribe routes to liveQueryManager
     ok 1 - should respond with live_query_event
@@ -343,22 +382,22 @@ ok 36 - AdminWebSocketAPI - debug trace stream route wiring and filtering # time
     ok 3 - should register with live query manager
     ok 4 - should pass parsed query to manager
     1..4
-ok 37 - live query subscribe routes to liveQueryManager # time=6.094ms
+ok 41 - live query subscribe routes to liveQueryManager # time=21.221ms
 
 # Subtest: live query subscribe rejects missing subscriptionId
     ok 1 - should respond with error
     ok 2 - should include error message
     1..2
-ok 38 - live query subscribe rejects missing subscriptionId # time=5.61ms
+ok 42 - live query subscribe rejects missing subscriptionId # time=3.584ms
 
 # Subtest: live query unsubscribe routes to liveQueryManager
     ok 1 - should unregister from live query manager
     1..1
-ok 39 - live query unsubscribe routes to liveQueryManager # time=56.741ms
+ok 43 - live query unsubscribe routes to liveQueryManager # time=54.748ms
 
 # Subtest: live query client disconnect cleans up subscriptions
     ok 1 - should notify live query manager of disconnection
     1..1
-ok 40 - live query client disconnect cleans up subscriptions # time=53.18ms
+ok 44 - live query client disconnect cleans up subscriptions # time=62.724ms
 
-1..40
+1..44

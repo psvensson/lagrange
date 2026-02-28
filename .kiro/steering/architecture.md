@@ -374,6 +374,26 @@ snapshots and CDC subscriptions by default.
 | `latency_groups` | Latency group assignments | `group_id` | TOPOLOGY |
 | `inter_group_latencies` | Inter-group RTT measurements | `source_group_id` | TOPOLOGY |
 
+#### `services` Row Ownership Matrix
+
+`services` is a shared control-plane table. Ownership is split by field subset
+and must remain single-path:
+
+| Field subset | Owner | Mutation rule |
+|-------------|-------|---------------|
+| Identity: `service_id`, `service_type`, `node_id`, `partition_id`, `group_id`, `replica_id`, `address`, `created_at` | Canonical service-row creation owner for that service kind | Written on initial row creation only; later code must not recreate or replace these fields ad hoc |
+| Lifecycle: `status`, `state_entered_at`, `previous_state`, `trigger_reason`, `error_message`, `updated_at` | `ReplicaStateMachine` for partition replicas; corresponding canonical lifecycle owner for other service kinds | Updated through the lifecycle owner only |
+| Raft metadata: `raft_role` | `PartitionService` / `MessageGroupService` role persistence path | Written independently of lifecycle state; no other component may shadow or rewrite it |
+
+Hard rules:
+
+1. Initial row creation and later lifecycle transitions are separate operations.
+2. Missing `services` rows must be handled by the canonical creation owner, not
+   by a status updater.
+3. `INSERT OR REPLACE` is not allowed for steady-state lifecycle updates.
+4. Cache rows may be observed for routing or diagnostics, but must not be used
+   to reconstruct owner-managed fields for writes.
+
 ### Non-Propagated Tables (queryable from owning partition only)
 
 | Table | Purpose | Primary Key | Exclusion Reason |
@@ -1193,6 +1213,11 @@ Budget violations terminate the operation with a descriptive `BudgetLimitError`.
 - ReplicaLifecycleManager and ReplicaHandler delegate to it (no independent state maps)
 - All replica state changes produce exactly one CDC write to the services table
 - Replaces the former triple-tracking in ReplicaStateMachine, ReplicaLifecycleManager, and ReplicaHandler
+- Owns partition-replica lifecycle persistence in `services`:
+  initial row creation for runtime-created replicas and later partial lifecycle
+  transitions
+- Does not own `raft_role`; Raft-role persistence remains with the replica
+  service (`PartitionService` / `MessageGroupService`)
 
 ### Control Plane Services (Decomposed)
 The former monolithic ControlPlaneService is decomposed into four focused services, each with a CREATED → INITIALIZED → RUNNING → STOPPED lifecycle:

@@ -6,6 +6,7 @@
  */
 
 import {EventEmitter} from 'events';
+import {randomUUID} from 'node:crypto';
 import fs from 'fs';
 import path from 'path';
 import Database from 'better-sqlite3';
@@ -29,6 +30,7 @@ import {isRaftPacket} from '../raft/raft-packet-utils.js';
 import {SQLiteLogAdapter} from '../raft/sqlite-log-adapter.js';
 import {assertRaftProviderContract} from '../raft/raft-provider-contract.js';
 import {LiferaftProvider} from '../raft/liferaft-provider.js';
+import {applyReplicaDemotion} from '../raft/replica-leadership-state.js';
 import {
   applyRuntimeRaftTiming,
   computeReplicaElectionTimeouts,
@@ -56,6 +58,7 @@ import {
 } from '../constants/index.js';
 import {PARTITION_RAFT_ROLE, PARTITION_STATE, PARTITION_SUBSYSTEM} from './partition-constants.js';
 import {
+  PARTITION_SERVICE_CDC,
   PARTITION_SERVICE_ADDRESS,
   PARTITION_SERVICE_COLUMN,
   PARTITION_SERVICE_COLUMN_SQL,
@@ -93,6 +96,7 @@ const RaftRole = PARTITION_RAFT_ROLE;
  * CDC operation types.
  */
 const CDCOperation = CDC_OPERATION;
+const PartitionServiceCDC = PARTITION_SERVICE_CDC;
 
 const CDC_ROW_FETCH_LOG_SUPPRESSED_TABLES = new Set([
   SystemTableName.LOGS,
@@ -116,6 +120,16 @@ function shouldEmitCdcRowFetchInfoLog(tableName) {
 
 function shouldBufferCdcWithoutSubscribers(tableName) {
   return !CDC_NO_SUBSCRIBER_BUFFER_SUPPRESSED_TABLES.has(tableName);
+}
+
+function isCDCSubscriber(subscriber) {
+  if (typeof subscriber === PARTITION_SERVICE_TYPE.FUNCTION) {
+    return true;
+  }
+  return Boolean(
+    subscriber &&
+    typeof subscriber.handleCDCEvent === PARTITION_SERVICE_TYPE.FUNCTION,
+  );
 }
 
 /**
@@ -396,8 +410,16 @@ class PartitionService extends EventEmitter {
 
     // CDC subscribers
     this.cdcSubscribers = new Set();
+    this.cdcSubscriberWrappers = new Map();
+    this.cdcSubscriberStates = new Map();
+    this.cdcSubscriptionEpoch = NUM.ZERO;
+    this.cdcEventSequenceNumber = NUM.ZERO;
     // CDC event buffer for events generated before subscribers register
     this.cdcEventBuffer = new CDCEventBuffer({logger: this.logger});
+    this.cdcBufferReplayTimer = null;
+    this.cdcBufferReplayInFlight = false;
+    this.cdcBufferReplayDelayMs =
+      PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
     // CDC pipeline metrics (shared across the node)
     this.cdcPipelineMetrics = options.cdcPipelineMetrics ||
       new CDCPipelineMetrics();
@@ -846,16 +868,8 @@ class PartitionService extends EventEmitter {
       if (isSingleReplica && this.isLeader) {
         return;
       }
-      this.role = RaftRole.FOLLOWER;
-      this.isLeader = false;
+      applyReplicaDemotion(this, RaftRole.FOLLOWER);
       this.storage.currentTerm = this.raftProvider.getCurrentTerm(this.raft);
-      this.queueRoleUpdate(this.role);
-      this.pendingLeaderNodeUpdate = null;
-      this.persistedLeaderNodeId = null;
-      if (this.leaderNodeUpdateRetryTimer) {
-        clearTimeout(this.leaderNodeUpdateRetryTimer);
-        this.leaderNodeUpdateRetryTimer = null;
-      }
 
       // Deactivate rebalancer when losing leadership
       if (this.rebalancer) {
@@ -869,16 +883,8 @@ class PartitionService extends EventEmitter {
       if (isSingleReplica && this.isLeader) {
         return;
       }
-      this.role = RaftRole.CANDIDATE;
-      this.isLeader = false;
+      applyReplicaDemotion(this, RaftRole.CANDIDATE);
       this.storage.currentTerm = this.raftProvider.getCurrentTerm(this.raft);
-      this.queueRoleUpdate(this.role);
-      this.pendingLeaderNodeUpdate = null;
-      this.persistedLeaderNodeId = null;
-      if (this.leaderNodeUpdateRetryTimer) {
-        clearTimeout(this.leaderNodeUpdateRetryTimer);
-        this.leaderNodeUpdateRetryTimer = null;
-      }
     });
 
     // Handle committed entries
@@ -1369,7 +1375,7 @@ class PartitionService extends EventEmitter {
    * @return {Promise<Object>} Processing result
    */
   async handleApplicationMessage(message) {
-    const payload = message.payload || message;
+    const payload = this.extractApplicationPayload(message);
 
     if (!payload || !payload.type) {
       return {acknowledged: false, error: PARTITION_SERVICE_ERROR_MSG.INVALID_MESSAGE};
@@ -1404,6 +1410,26 @@ class PartitionService extends EventEmitter {
         error: PARTITION_SERVICE_ERROR_MSG.unknownMessage(payload.type),
       };
     }
+  }
+
+  /**
+   * Extract canonical application payload from transport envelopes.
+   * Message-group direct deliveries wrap payloads as:
+   * {messageId, payload, sourceGroup, sourceReplica}.
+   * @param {Object} message - Incoming transport message/envelope.
+   * @return {Object|null} Canonical payload.
+   * @private
+   */
+  extractApplicationPayload(message) {
+    const directPayload = message?.payload || message;
+    if (directPayload &&
+      typeof directPayload === 'object' &&
+      !directPayload.type &&
+      directPayload.payload &&
+      typeof directPayload.payload === 'object') {
+      return directPayload.payload;
+    }
+    return directPayload || null;
   }
 
   /**
@@ -1605,7 +1631,6 @@ class PartitionService extends EventEmitter {
                 partitionId: this.partitionId,
                 error: err.message,
               });
-              throw err;
             });
           }
         } catch (error) {
@@ -1981,6 +2006,7 @@ class PartitionService extends EventEmitter {
 
     const entry = {
       ...operation,
+      entryId: operation.entryId || randomUUID(),
       timestamp: timestamp.toString(),
       proposedBy: this.replicaId,
       proposedAt: Date.now(),
@@ -1991,7 +2017,10 @@ class PartitionService extends EventEmitter {
       const info = stmt.run(...(entry.params || []));
 
       // Track operation for later CDC generation and Raft replication
-      this.transactionOperations.push(entry);
+      this.transactionOperations.push({
+        ...entry,
+        changes: info.changes,
+      });
 
       return {
         success: true,
@@ -2412,7 +2441,7 @@ class PartitionService extends EventEmitter {
       };
 
       // Generate CDC event asynchronously to avoid blocking write acknowledgments.
-      this.generateCDCEvent(entry).catch((error) => {
+      this.generateCDCEvent({...entry, changes: info.changes}).catch((error) => {
         this.logger.error(PARTITION_SERVICE_ERROR_MSG.CDC_EVENT_FAILED, {
           partitionId: this.partitionId,
           error: error.message,
@@ -2504,6 +2533,21 @@ class PartitionService extends EventEmitter {
       });
     }
 
+    const hasChangeCount = typeof entry.changes === 'number';
+    const isNoOpWrite = hasChangeCount && entry.changes <= NUM.ZERO &&
+      (entryType === PARTITION_SERVICE_OPERATION.UPDATE ||
+      entryType === PARTITION_SERVICE_OPERATION.DELETE ||
+      entryType === PARTITION_SERVICE_OPERATION.UPSERT ||
+      entryType === PARTITION_SERVICE_OPERATION.QUERY);
+    if (isNoOpWrite) {
+      this.logger.debug('Suppressing CDC event for no-op write', {
+        partitionId: this.partitionId,
+        entryType,
+        changes: entry.changes,
+      });
+      return;
+    }
+
     switch (entryType) {
     case PARTITION_SERVICE_OPERATION.INSERT:
       operation = CDCOperation.INSERT;
@@ -2588,7 +2632,16 @@ class PartitionService extends EventEmitter {
       timestamp: entry.timestamp,
       sourcePartition: this.partitionId,
       sourceReplica: this.replicaId,
+      sequenceNumber: this.nextCDCEventSequenceNumber(),
     };
+    this.cdcPipelineMetrics.increment(CDC_PIPELINE_METRIC.EVENTS_GENERATED);
+
+    // Preserve event order after a transient delivery failure by queuing
+    // newly generated events behind the buffered backlog.
+    if (this.cdcSubscribers.size > NUM.ZERO && this.cdcEventBuffer.hasEvents()) {
+      this.bufferCDCEventForRetry(cdcEvent, 'buffered_backlog_present');
+      return;
+    }
 
     // Buffer the event when no subscribers are registered
     if (this.cdcSubscribers.size === NUM.ZERO) {
@@ -2628,22 +2681,26 @@ class PartitionService extends EventEmitter {
 
     // Deliver to subscribers
     let deliveredCount = NUM.ZERO;
+    let deliveryFailureCount = NUM.ZERO;
     for (const subscriber of this.cdcSubscribers) {
       try {
-        if (typeof subscriber === PARTITION_SERVICE_TYPE.FUNCTION) {
-          await subscriber(cdcEvent);
-          deliveredCount++;
-        } else if (subscriber.handleCDCEvent) {
-          await subscriber.handleCDCEvent(cdcEvent);
-          deliveredCount++;
-        }
+        await this.deliverCDCEventToSubscriber(subscriber, cdcEvent);
+        deliveredCount++;
       } catch (error) {
+        deliveryFailureCount++;
+        this.cdcPipelineMetrics.increment(CDC_PIPELINE_METRIC.DELIVERY_FAILURES);
         this.logger.error(PARTITION_SERVICE_ERROR_MSG.CDC_DELIVERY_FAILED, {
           partitionId: this.partitionId,
+          tableName: cdcEvent.tableName,
+          operation: cdcEvent.operation,
           error: error.message,
         });
-        throw error;
       }
+    }
+
+    if (deliveryFailureCount > NUM.ZERO) {
+      this.bufferCDCEventForRetry(cdcEvent, 'subscriber_delivery_failed');
+      return;
     }
 
     this.logger.debug(PARTITION_SERVICE_LOG_MSG.CDC_DELIVERY_COMPLETE, {
@@ -2652,6 +2709,7 @@ class PartitionService extends EventEmitter {
       subscriberCount: this.cdcSubscribers.size,
     });
 
+    this.cdcPipelineMetrics.increment(CDC_PIPELINE_METRIC.EVENTS_DELIVERED);
     this.emit(PARTITION_SERVICE_EVENT.CDC_EVENT, cdcEvent);
   }
 
@@ -2664,6 +2722,9 @@ class PartitionService extends EventEmitter {
   getCommittedEntryKey(command) {
     if (!command || !command.sql) {
       return null;
+    }
+    if (command.entryId) {
+      return `entry:${command.entryId}`;
     }
     const params = Array.isArray(command.params) ?
       JSON.stringify(command.params) :
@@ -3092,18 +3153,374 @@ class PartitionService extends EventEmitter {
   }
 
   /**
+   * Allocate next CDC event sequence number.
+   * @return {number} Monotonic sequence number.
+   * @private
+   */
+  nextCDCEventSequenceNumber() {
+    this.cdcEventSequenceNumber += NUM.ONE;
+    return this.cdcEventSequenceNumber;
+  }
+
+  /**
+   * Buffer one CDC event for retry and schedule replay when possible.
+   * @param {Object} cdcEvent - Event payload.
+   * @param {string} reason - Buffering reason.
+   * @return {boolean} True when buffered, false when dropped.
+   * @private
+   */
+  bufferCDCEventForRetry(cdcEvent, reason) {
+    if (!shouldBufferCdcWithoutSubscribers(cdcEvent.tableName)) {
+      return false;
+    }
+
+    const buffered = this.cdcEventBuffer.buffer(cdcEvent);
+    if (buffered) {
+      this.cdcPipelineMetrics.increment(CDC_PIPELINE_METRIC.EVENTS_BUFFERED);
+      this.logger.warn(PARTITION_SERVICE_LOG_MSG.CDC_DELIVERY_BUFFERED_FOR_RETRY, {
+        partitionId: this.partitionId,
+        tableName: cdcEvent.tableName,
+        operation: cdcEvent.operation,
+        reason,
+        bufferedEvents: this.cdcEventBuffer.size(),
+      });
+      this.scheduleBufferedCDCReplay(reason);
+      return true;
+    }
+
+    this.cdcPipelineMetrics.increment(CDC_PIPELINE_METRIC.EVENTS_DROPPED);
+    this.logger.warn(CDC_LIFECYCLE_LOG_MSG.EVENT_DROPPED_OVERFLOW, {
+      partitionId: this.partitionId,
+      tableName: cdcEvent.tableName,
+      operation: cdcEvent.operation,
+      reason,
+      bufferedEvents: this.cdcEventBuffer.size(),
+      bufferCapacity: this.cdcEventBuffer.capacity,
+    });
+    return false;
+  }
+
+  /**
+   * Schedule buffered CDC replay with bounded backoff.
+   * @param {string} reason - Trigger reason.
+   * @private
+   */
+  scheduleBufferedCDCReplay(reason) {
+    if (this.cdcBufferReplayTimer || this.cdcBufferReplayInFlight) {
+      return;
+    }
+    if (this.cdcSubscribers.size === NUM.ZERO || !this.cdcEventBuffer.hasEvents()) {
+      return;
+    }
+
+    const retryDelayMs = Math.max(
+      NUM.ONE,
+      Math.floor(this.cdcBufferReplayDelayMs),
+    );
+    this.logger.debug(PARTITION_SERVICE_LOG_MSG.CDC_BUFFER_REPLAY_SCHEDULED, {
+      partitionId: this.partitionId,
+      reason,
+      retryDelayMs,
+      bufferedEvents: this.cdcEventBuffer.size(),
+      subscriberCount: this.cdcSubscribers.size,
+    });
+
+    this.cdcBufferReplayTimer = setTimeout(() => {
+      this.cdcBufferReplayTimer = null;
+      this.flushBufferedCDCEvents(reason).catch((error) => {
+        this.logger.warn(PARTITION_SERVICE_LOG_MSG.CDC_BUFFER_REPLAY_FAILED, {
+          partitionId: this.partitionId,
+          reason,
+          error: error.message,
+        });
+      });
+    }, retryDelayMs);
+  }
+
+  /**
+   * Replay buffered CDC events to current subscribers.
+   * @param {string} reason - Trigger reason.
+   * @return {Promise<void>}
+   * @private
+   */
+  async flushBufferedCDCEvents(reason) {
+    if (this.cdcBufferReplayInFlight) {
+      return;
+    }
+    if (this.cdcSubscribers.size === NUM.ZERO || !this.cdcEventBuffer.hasEvents()) {
+      return;
+    }
+
+    this.cdcBufferReplayInFlight = true;
+    let replayedEvents = NUM.ZERO;
+    try {
+      while (this.cdcSubscribers.size > NUM.ZERO && this.cdcEventBuffer.hasEvents()) {
+        const replayedCount = await this.cdcEventBuffer.replay(async (cdcEvent) => {
+          for (const subscriber of this.cdcSubscribers) {
+            await this.deliverCDCEventToSubscriber(subscriber, cdcEvent);
+          }
+          this.cdcPipelineMetrics.increment(CDC_PIPELINE_METRIC.EVENTS_DELIVERED);
+          this.emit(PARTITION_SERVICE_EVENT.CDC_EVENT, cdcEvent);
+        });
+        replayedEvents += replayedCount;
+        if (replayedCount === NUM.ZERO) {
+          break;
+        }
+      }
+
+      this.cdcBufferReplayDelayMs =
+        PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
+      this.logger.debug(PARTITION_SERVICE_LOG_MSG.CDC_BUFFER_REPLAY_COMPLETE, {
+        partitionId: this.partitionId,
+        reason,
+        replayedEvents,
+        bufferedEvents: this.cdcEventBuffer.size(),
+      });
+    } catch (error) {
+      this.cdcPipelineMetrics.increment(CDC_PIPELINE_METRIC.DELIVERY_FAILURES);
+      this.cdcBufferReplayDelayMs = Math.min(
+        PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_MAX_DELAY_MS,
+        this.cdcBufferReplayDelayMs * NUM.TWO,
+      );
+      this.logger.warn(PARTITION_SERVICE_LOG_MSG.CDC_BUFFER_REPLAY_FAILED, {
+        partitionId: this.partitionId,
+        reason,
+        error: error.message,
+        retryDelayMs: this.cdcBufferReplayDelayMs,
+        bufferedEvents: this.cdcEventBuffer.size(),
+      });
+    } finally {
+      this.cdcBufferReplayInFlight = false;
+    }
+
+    if (this.cdcSubscribers.size > NUM.ZERO && this.cdcEventBuffer.hasEvents()) {
+      this.scheduleBufferedCDCReplay('buffered_events_remaining');
+    }
+  }
+
+  /**
+   * Resolve a stable subscriber identifier.
+   * @param {Function|Object} subscriber - Subscriber.
+   * @param {Object} options - Subscription options.
+   * @return {string} Stable subscriber identifier.
+   * @private
+   */
+  resolveCDCSubscriberId(subscriber, options = {}) {
+    const candidateId = options.subscriberId;
+    if (typeof candidateId === 'string' && candidateId.length > NUM.ZERO) {
+      return candidateId;
+    }
+
+    const existingState = this.cdcSubscriberStates.get(subscriber);
+    if (existingState?.subscriberId) {
+      return existingState.subscriberId;
+    }
+
+    const fallbackOrdinal = this.cdcSubscriberStates.size + NUM.ONE;
+    return `${PartitionServiceCDC.SUBSCRIBER_ID_PREFIX}-${fallbackOrdinal}`;
+  }
+
+  /**
+   * Deliver one CDC event to a subscriber callback/object.
+   * @param {Function|Object} subscriber - Subscriber callback/object.
+   * @param {Object} cdcEvent - Event payload.
+   * @return {Promise<void>}
+   * @private
+   */
+  async deliverCDCEventToSubscriber(subscriber, cdcEvent) {
+    if (typeof subscriber === PARTITION_SERVICE_TYPE.FUNCTION) {
+      await subscriber(cdcEvent);
+      return;
+    }
+    await subscriber.handleCDCEvent(cdcEvent);
+  }
+
+  /**
+   * Create a wrapper that enriches stream metadata for one subscriber.
+   * @param {Function|Object} subscriber - Target subscriber.
+   * @param {Object} subscriptionState - Mutable state for this subscriber.
+   * @return {Function} Wrapper callback.
+   * @private
+   */
+  buildCDCSubscriberWrapper(subscriber, subscriptionState) {
+    return async (cdcEvent) => {
+      const sequencedEvent = Number.isFinite(cdcEvent.sequenceNumber) ?
+        cdcEvent :
+        {
+          ...cdcEvent,
+          sequenceNumber: this.nextCDCEventSequenceNumber(),
+        };
+
+      const decoratedEvent = {
+        ...sequencedEvent,
+        streamMode: subscriptionState.streamMode,
+        subscriberId: subscriptionState.subscriberId,
+        subscriptionEpoch: subscriptionState.subscriptionEpoch,
+      };
+
+      await this.deliverCDCEventToSubscriber(subscriber, decoratedEvent);
+      subscriptionState.lastDeliveredSequenceNumber =
+        decoratedEvent.sequenceNumber;
+      subscriptionState.lastDeliveredAt = Date.now();
+    };
+  }
+
+  /**
+   * Subscribe to CDC with explicit handshake acknowledgment and catch-up.
+   * @param {Function|Object} subscriber - Subscriber function or object.
+   * @param {Object} [options] - Handshake options.
+   * @param {string} [options.subscriberId] - Stable subscriber identifier.
+   * @return {Promise<Object>} Handshake acknowledgment.
+   */
+  async subscribeToCDCWithHandshake(subscriber, options = {}) {
+    if (!isCDCSubscriber(subscriber)) {
+      throw new Error(PARTITION_SERVICE_ERROR_MSG.CDC_INVALID_SUBSCRIBER);
+    }
+
+    const existingWrapper = this.cdcSubscriberWrappers.get(subscriber);
+    const status = existingWrapper ?
+      PartitionServiceCDC.HANDSHAKE_STATUS_ALREADY_SUBSCRIBED :
+      PartitionServiceCDC.HANDSHAKE_STATUS_OK;
+
+    const subscriptionEpoch = this.cdcSubscriptionEpoch + NUM.ONE;
+    this.cdcSubscriptionEpoch = subscriptionEpoch;
+    const handshakeStartSequence = this.cdcEventSequenceNumber;
+    const subscriberId = this.resolveCDCSubscriberId(subscriber, options);
+
+    let subscriptionState = this.cdcSubscriberStates.get(subscriber);
+    if (!subscriptionState) {
+      subscriptionState = {
+        subscriberId,
+        subscriptionEpoch,
+        streamMode: PartitionServiceCDC.STREAM_MODE_STEADY,
+        lastDeliveredSequenceNumber: null,
+        lastDeliveredAt: null,
+        catchupCompletedAt: null,
+      };
+      this.cdcSubscriberStates.set(subscriber, subscriptionState);
+    } else {
+      subscriptionState.subscriberId = subscriberId;
+      subscriptionState.subscriptionEpoch = subscriptionEpoch;
+      subscriptionState.catchupCompletedAt = null;
+    }
+
+    let wrapper = existingWrapper;
+    if (!wrapper) {
+      wrapper = this.buildCDCSubscriberWrapper(subscriber, subscriptionState);
+      this.cdcSubscriberWrappers.set(subscriber, wrapper);
+      this.cdcSubscribers.add(wrapper);
+      this.logger.debug(PARTITION_SERVICE_LOG_MSG.CDC_SUBSCRIBER_ADDED, {
+        partitionId: this.partitionId,
+        subscriberId,
+        subscriberCount: this.cdcSubscribers.size,
+      });
+    }
+
+    const bufferedEventsAtHandshake = this.cdcEventBuffer.size();
+    const catchupMode = bufferedEventsAtHandshake > NUM.ZERO ?
+      PartitionServiceCDC.CATCHUP_MODE_BACKFILL :
+      PartitionServiceCDC.CATCHUP_MODE_NONE;
+    let bufferedEventsReplayed = NUM.ZERO;
+    let catchupCompletedAt = Date.now();
+
+    if (catchupMode === PartitionServiceCDC.CATCHUP_MODE_BACKFILL) {
+      subscriptionState.streamMode = PartitionServiceCDC.STREAM_MODE_CATCHUP;
+      this.emit(PARTITION_SERVICE_EVENT.CDC_CATCHUP_STARTED, {
+        partitionId: this.partitionId,
+        subscriberId,
+        subscriptionEpoch,
+        bufferedEventsAtHandshake,
+      });
+      this.logger.debug(PARTITION_SERVICE_LOG_MSG.CDC_CATCHUP_STARTED, {
+        partitionId: this.partitionId,
+        subscriberId,
+        subscriptionEpoch,
+        bufferedEventsAtHandshake,
+      });
+
+      try {
+        bufferedEventsReplayed = await this.cdcEventBuffer.replay(wrapper);
+      } catch (error) {
+        this.cdcPipelineMetrics.increment(CDC_PIPELINE_METRIC.DELIVERY_FAILURES);
+        this.cdcBufferReplayDelayMs = Math.min(
+          PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_MAX_DELAY_MS,
+          this.cdcBufferReplayDelayMs * NUM.TWO,
+        );
+        this.logger.warn(PARTITION_SERVICE_LOG_MSG.CDC_BUFFER_REPLAY_FAILED, {
+          partitionId: this.partitionId,
+          subscriberId,
+          reason: 'handshake_catchup_replay_failed',
+          error: error.message,
+          retryDelayMs: this.cdcBufferReplayDelayMs,
+          bufferedEvents: this.cdcEventBuffer.size(),
+        });
+      }
+      catchupCompletedAt = Date.now();
+      subscriptionState.catchupCompletedAt = catchupCompletedAt;
+      this.emit(PARTITION_SERVICE_EVENT.CDC_CATCHUP_COMPLETED, {
+        partitionId: this.partitionId,
+        subscriberId,
+        subscriptionEpoch,
+        bufferedEventsReplayed,
+        bufferedEventsRemaining: this.cdcEventBuffer.size(),
+      });
+      this.logger.debug(PARTITION_SERVICE_LOG_MSG.CDC_CATCHUP_COMPLETED, {
+        partitionId: this.partitionId,
+        subscriberId,
+        subscriptionEpoch,
+        bufferedEventsReplayed,
+        bufferedEventsRemaining: this.cdcEventBuffer.size(),
+      });
+    }
+
+    subscriptionState.streamMode = PartitionServiceCDC.STREAM_MODE_STEADY;
+    subscriptionState.subscriptionEpoch = subscriptionEpoch;
+
+    const handshake = {
+      status,
+      subscriberId,
+      subscriptionEpoch,
+      versionContext: {
+        streamVersion: this.cdcEventSequenceNumber,
+        handshakeStartSequence,
+      },
+      catchup: {
+        mode: catchupMode,
+        bufferedEventsAtHandshake,
+        bufferedEventsReplayed,
+        completed: this.cdcEventBuffer.size() === NUM.ZERO,
+        completedAt: catchupCompletedAt,
+      },
+      streamMode: subscriptionState.streamMode,
+    };
+
+    this.logger.debug(PARTITION_SERVICE_LOG_MSG.CDC_SUBSCRIPTION_HANDSHAKE_ACK, {
+      partitionId: this.partitionId,
+      subscriberId,
+      subscriptionEpoch,
+      status: handshake.status,
+      catchupMode: handshake.catchup.mode,
+      bufferedEventsAtHandshake,
+      bufferedEventsReplayed,
+      streamVersion: handshake.versionContext.streamVersion,
+    });
+
+    this.scheduleBufferedCDCReplay('post_subscription_handshake');
+
+    return handshake;
+  }
+
+  /**
    * Subscribe to CDC events from this partition.
    * @param {Function|Object} subscriber - Subscriber function or object.
    */
   subscribeToCDC(subscriber) {
-    this.cdcSubscribers.add(subscriber);
-    this.logger.debug(PARTITION_SERVICE_LOG_MSG.CDC_SUBSCRIBER_ADDED, {
-      partitionId: this.partitionId,
-      subscriberCount: this.cdcSubscribers.size,
+    this.subscribeToCDCWithHandshake(subscriber).catch((error) => {
+      this.logger.error(PARTITION_SERVICE_ERROR_MSG.CDC_SUBSCRIPTION_FAILED, {
+        partitionId: this.partitionId,
+        error: error.message,
+      });
     });
-    if (this.cdcEventBuffer.hasEvents()) {
-      this.cdcEventBuffer.replay(subscriber);
-    }
   }
 
   /**
@@ -3111,11 +3528,48 @@ class PartitionService extends EventEmitter {
    * @param {Function|Object} subscriber - Subscriber to remove.
    */
   unsubscribeFromCDC(subscriber) {
-    this.cdcSubscribers.delete(subscriber);
+    const wrapper = this.cdcSubscriberWrappers.get(subscriber);
+    const subscriberToDelete = wrapper || subscriber;
+    this.cdcSubscribers.delete(subscriberToDelete);
+    this.cdcSubscriberWrappers.delete(subscriber);
+    this.cdcSubscriberStates.delete(subscriber);
+    if (this.cdcSubscribers.size === NUM.ZERO && this.cdcBufferReplayTimer) {
+      clearTimeout(this.cdcBufferReplayTimer);
+      this.cdcBufferReplayTimer = null;
+    }
     this.logger.debug(PARTITION_SERVICE_LOG_MSG.CDC_SUBSCRIBER_REMOVED, {
       partitionId: this.partitionId,
       subscriberCount: this.cdcSubscribers.size,
     });
+  }
+
+  /**
+   * Get CDC subscription diagnostics for this partition.
+   * @return {Object} CDC subscription diagnostics.
+   */
+  getCDCSubscriptionDiagnostics() {
+    const subscriptions = [];
+    for (const state of this.cdcSubscriberStates.values()) {
+      subscriptions.push({
+        subscriberId: state.subscriberId,
+        subscriptionEpoch: state.subscriptionEpoch,
+        streamMode: state.streamMode,
+        lastDeliveredSequenceNumber: state.lastDeliveredSequenceNumber,
+        lastDeliveredAt: state.lastDeliveredAt,
+        catchupCompletedAt: state.catchupCompletedAt,
+      });
+    }
+
+    return {
+      partitionId: this.partitionId,
+      subscriptionEpoch: this.cdcSubscriptionEpoch,
+      streamVersion: this.cdcEventSequenceNumber,
+      subscriberCount: this.cdcSubscribers.size,
+      bufferedEvents: this.cdcEventBuffer.size(),
+      bufferReplayInFlight: this.cdcBufferReplayInFlight,
+      bufferReplayDelayMs: this.cdcBufferReplayDelayMs,
+      subscriptions,
+    };
   }
 
 
@@ -4239,6 +4693,11 @@ class PartitionService extends EventEmitter {
       clearTimeout(this.leaderNodeUpdateRetryTimer);
       this.leaderNodeUpdateRetryTimer = null;
     }
+    if (this.cdcBufferReplayTimer) {
+      clearTimeout(this.cdcBufferReplayTimer);
+      this.cdcBufferReplayTimer = null;
+    }
+    this.cdcBufferReplayInFlight = false;
 
     // Clear pending requests via PendingRequestTracker (Requirements: 3.5)
     if (this.pendingRequestTracker) {
@@ -4260,6 +4719,12 @@ class PartitionService extends EventEmitter {
 
     this.initialized = false;
     this.cdcSubscribers.clear();
+    this.cdcSubscriberWrappers.clear();
+    this.cdcSubscriberStates.clear();
+    this.cdcSubscriptionEpoch = NUM.ZERO;
+    this.cdcEventSequenceNumber = NUM.ZERO;
+    this.cdcBufferReplayDelayMs =
+      PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
     this.recentlyAppliedEntryKeys.clear();
     this.recentlyAppliedEntryOrder = [];
 

@@ -2,26 +2,26 @@ TAP version 14
 # Subtest: Property 7: Split triggered when storage exceeds threshold
     ok 1 - Split triggered when storage exceeds threshold
     1..1
-ok 1 - Property 7: Split triggered when storage exceeds threshold # time=8.768ms
+ok 1 - Property 7: Split triggered when storage exceeds threshold # time=4.443ms
 
 # Subtest: Property 7: Split triggered when traffic exceeds threshold
     ok 1 - Split triggered when traffic exceeds threshold
     1..1
-ok 2 - Property 7: Split triggered when traffic exceeds threshold # time=1.334ms
+ok 2 - Property 7: Split triggered when traffic exceeds threshold # time=1.178ms
 
 # Subtest: Property 7: No split when both metrics below thresholds
     ok 1 - No split when both metrics below thresholds
     1..1
-ok 3 - Property 7: No split when both metrics below thresholds # time=1.127ms
+ok 3 - Property 7: No split when both metrics below thresholds # time=1.11ms
 
 # Subtest: Property 7: Split criteria is OR - either condition triggers split
     ok 1 - Split criteria is OR - either condition triggers split
     1..1
-ok 4 - Property 7: Split criteria is OR - either condition triggers split # time=1.585ms
+ok 4 - Property 7: Split criteria is OR - either condition triggers split # time=1.133ms
 
 # Subtest: Property 7: Custom policy thresholds are respected
     ok 1 - Custom policy thresholds are respected
     1..1
-ok 5 - Property 7: Custom policy thresholds are respected # time=0.974ms
+ok 5 - Property 7: Custom policy thresholds are respected # time=1.106ms
 
 1..5

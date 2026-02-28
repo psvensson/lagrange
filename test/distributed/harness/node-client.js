@@ -4,6 +4,8 @@ import {
   NODE_CLIENT_CONTROL_SNAPSHOT_SCHEMA_VERSION,
   NODE_CLIENT_CONTROL_SNAPSHOT_SQL,
   NODE_CLIENT_ERROR_CODES,
+  NODE_CLIENT_PREFLIGHT_CRITICAL_PATH_SNAPSHOT_SCHEMA_VERSION,
+  NODE_CLIENT_PREFLIGHT_CRITICAL_PATH_SNAPSHOT_SQL,
   NODE_CLIENT_SERVICE_DISCOVERY_SCHEMA_VERSION,
   NODE_CLIENT_SERVICE_DISCOVERY_SQL,
   NODE_CLIENT_TIMEOUT_CLASS,
@@ -22,9 +24,18 @@ const TIMEOUT_ERROR_PATTERN = /timeout|timed out|deadline exceeded|etimedout/i;
 const TRANSIENT_ERROR_PATTERN_TABLE_NOT_FOUND = /table not found/i;
 const TRANSIENT_ERROR_PATTERN_CONNECTION_REFUSED =
   /econnrefused|connection refused/i;
+const TRANSIENT_ERROR_PATTERN_PARTICIPANT_FAILURES =
+  /distributed operation failed due to participant failures/i;
+const TRANSIENT_ERROR_PATTERN_NO_ACTIVE_SERVICE =
+  /no active service found for partition/i;
+const TRANSIENT_ERROR_PATTERN_NO_PARTITIONS =
+  /no partitions available for table/i;
 const TRANSIENT_OPERATION_ERROR_PATTERNS = Object.freeze([
   TRANSIENT_ERROR_PATTERN_TABLE_NOT_FOUND,
   TRANSIENT_ERROR_PATTERN_CONNECTION_REFUSED,
+  TRANSIENT_ERROR_PATTERN_PARTICIPANT_FAILURES,
+  TRANSIENT_ERROR_PATTERN_NO_ACTIVE_SERVICE,
+  TRANSIENT_ERROR_PATTERN_NO_PARTITIONS,
 ]);
 
 const OPERATION_QUERY_LOAD = 'queryLoad';
@@ -32,6 +43,8 @@ const OPERATION_QUERY_CONTROL = 'queryControl';
 const OPERATION_PROBE_READINESS = 'probeReadiness';
 const OPERATION_FETCH_CONTROL_SNAPSHOT = 'fetchControlSnapshot';
 const OPERATION_FETCH_SERVICE_DISCOVERY = 'fetchServiceDiscovery';
+const OPERATION_FETCH_PREFLIGHT_CRITICAL_PATH_SNAPSHOT =
+  'fetchPreflightCriticalPathSnapshot';
 const DEFAULT_PROBE_SCOPE = 'default';
 const SNAPSHOT_FIELD_SCHEMA_VERSION = 'schemaVersion';
 const SNAPSHOT_FIELD_NODE_ID = 'nodeId';
@@ -65,17 +78,105 @@ const DISCOVERY_REPLICA_FIELD_UPDATED_AT = 'updatedAt';
 const DISCOVERY_REPLICA_FIELD_METADATA = 'metadata';
 const DISCOVERY_REPLICA_FIELD_READINESS = 'readiness';
 const DISCOVERY_READINESS_FIELD_WORKLOAD_READY = 'workloadReady';
+const DISCOVERY_READINESS_FIELD_BENCHMARK_READY = 'benchmarkReady';
 const DISCOVERY_READINESS_FIELD_ROUTING_READY = 'routingReady';
 const DISCOVERY_READINESS_FIELD_SCHEMA_READY = 'schemaReady';
+const DISCOVERY_READINESS_FIELD_TOPOLOGY_READY = 'topologyReady';
 const DISCOVERY_READINESS_FIELD_REPLICA_OPS_IN_FLIGHT = 'replicaOpsInFlight';
 const DISCOVERY_READINESS_FIELD_LEADERSHIP_STABLE = 'leadershipStable';
 const DISCOVERY_READINESS_FIELD_REASONS = 'reasons';
 const DISCOVERY_READINESS_FIELD_TABLE_NAME = 'tableName';
+const DISCOVERY_READINESS_FIELD_APPLIED_SCHEMA_VERSION =
+  'appliedSchemaVersion';
+const DISCOVERY_READINESS_FIELD_REQUIRED_SCHEMA_VERSION =
+  'requiredSchemaVersion';
 const DISCOVERY_READINESS_REASON_FIELD_CODE = 'code';
 const DISCOVERY_READINESS_REASON_FIELD_DETAIL = 'detail';
 const IDENTIFIER_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const DISCOVERY_TABLE_ID_PATTERN = /^[A-Za-z0-9_-]+$/;
 const DISCOVERY_SQL_PREFIX = 'SELECT * FROM service_discovery_local(';
 const DISCOVERY_SQL_SUFFIX = ')';
+const DISCOVERY_SQL_ARGUMENT_SEPARATOR = ', ';
+
+const PREFLIGHT_SNAPSHOT_FIELD_CAPTURED_AT_MS = 'capturedAtMs';
+const PREFLIGHT_SNAPSHOT_FIELD_ADDRESS = 'address';
+const PREFLIGHT_SNAPSHOT_FIELD_ROUTER_CONNECTIVITY = 'routerConnectivity';
+const PREFLIGHT_SNAPSHOT_FIELD_CONNECTED_COUNT = 'connectedCount';
+const PREFLIGHT_SNAPSHOT_FIELD_RECONNECTING_COUNT = 'reconnectingCount';
+const PREFLIGHT_SNAPSHOT_FIELD_DISCONNECTED_COUNT = 'disconnectedCount';
+const PREFLIGHT_SNAPSHOT_FIELD_CONTROL_PLANE_PARTITIONS = 'controlPlanePartitions';
+const PREFLIGHT_SNAPSHOT_FIELD_CDC_HEALTH = 'cdcHealth';
+const PREFLIGHT_SNAPSHOT_FIELD_CACHE_FRESHNESS = 'cacheFreshness';
+const PREFLIGHT_SNAPSHOT_FIELD_ROW_COUNTS = 'rowCounts';
+const PREFLIGHT_SNAPSHOT_FIELD_DISCOVERY = 'discovery';
+
+const PREFLIGHT_PARTITION_KEY_NODES = 'nodes';
+const PREFLIGHT_PARTITION_KEY_SERVICES = 'services';
+const PREFLIGHT_PARTITION_KEY_NODE_ENDPOINTS = 'node_endpoints';
+const PREFLIGHT_PARTITION_KEY_SERVICE_ENDPOINTS = 'service_endpoints';
+const PREFLIGHT_PARTITION_KEYS = Object.freeze([
+  PREFLIGHT_PARTITION_KEY_NODES,
+  PREFLIGHT_PARTITION_KEY_SERVICES,
+  PREFLIGHT_PARTITION_KEY_NODE_ENDPOINTS,
+  PREFLIGHT_PARTITION_KEY_SERVICE_ENDPOINTS,
+]);
+
+const PREFLIGHT_PARTITION_FIELD_LEADER_KNOWN = 'leaderKnown';
+const PREFLIGHT_PARTITION_FIELD_LEADER_NODE_ID = 'leaderNodeId';
+const PREFLIGHT_PARTITION_FIELD_IS_LEADER_LOCAL = 'isLeaderLocal';
+const PREFLIGHT_PARTITION_FIELD_LAST_ERROR_CODE = 'lastErrorCode';
+
+const PREFLIGHT_CDC_FIELD_BUFFER_DEPTH = 'bufferDepth';
+const PREFLIGHT_CDC_FIELD_RETRY_COUNT = 'retryCount';
+const PREFLIGHT_CDC_FIELD_LAST_ERROR_CODE = 'lastErrorCode';
+const PREFLIGHT_CDC_FIELD_LAST_FORWARD_ATTEMPT_AT_MS = 'lastForwardAttemptAtMs';
+
+const PREFLIGHT_CACHE_FIELD_LAST_APPLIED_AT_MS = 'lastAppliedAtMs';
+const PREFLIGHT_CACHE_FIELD_APPLIED_SCHEMA_VERSION = 'appliedSchemaVersion';
+const PREFLIGHT_CACHE_FIELD_STALENESS_MS = 'stalenessMs';
+const PREFLIGHT_CACHE_FIELD_LAST_APPLIED_CAUSE_ID_BY_TABLE_NAME =
+  'lastAppliedCauseIdByTableName';
+
+const PREFLIGHT_ROW_COUNT_FIELD_SYS_POSTGRES_WIRE_SERVICE_COUNT =
+  'sysPostgresWireServiceCount';
+const PREFLIGHT_ROW_COUNT_FIELD_NODE_ENDPOINTS_COUNT = 'nodeEndpointsCount';
+const PREFLIGHT_ROW_COUNT_FIELD_SERVICE_ENDPOINTS_COUNT = 'serviceEndpointsCount';
+
+const PREFLIGHT_DISCOVERY_FIELD_SELECTED_NODE_IDS = 'selectedNodeIds';
+const PREFLIGHT_DISCOVERY_FIELD_EXCLUDED_BY_NODE_ID = 'excludedByNodeId';
+
+const PREFLIGHT_DEFAULT_ROUTER_CONNECTIVITY = Object.freeze({
+  [PREFLIGHT_SNAPSHOT_FIELD_CONNECTED_COUNT]: ZERO,
+  [PREFLIGHT_SNAPSHOT_FIELD_RECONNECTING_COUNT]: ZERO,
+  [PREFLIGHT_SNAPSHOT_FIELD_DISCONNECTED_COUNT]: ZERO,
+});
+const PREFLIGHT_DEFAULT_PARTITION_ENTRY = Object.freeze({
+  [PREFLIGHT_PARTITION_FIELD_LEADER_KNOWN]: false,
+  [PREFLIGHT_PARTITION_FIELD_LEADER_NODE_ID]: null,
+  [PREFLIGHT_PARTITION_FIELD_IS_LEADER_LOCAL]: false,
+  [PREFLIGHT_PARTITION_FIELD_LAST_ERROR_CODE]: null,
+});
+const PREFLIGHT_DEFAULT_CDC_HEALTH = Object.freeze({
+  [PREFLIGHT_CDC_FIELD_BUFFER_DEPTH]: ZERO,
+  [PREFLIGHT_CDC_FIELD_RETRY_COUNT]: ZERO,
+  [PREFLIGHT_CDC_FIELD_LAST_ERROR_CODE]: null,
+  [PREFLIGHT_CDC_FIELD_LAST_FORWARD_ATTEMPT_AT_MS]: null,
+});
+const PREFLIGHT_DEFAULT_CACHE_FRESHNESS = Object.freeze({
+  [PREFLIGHT_CACHE_FIELD_LAST_APPLIED_AT_MS]: null,
+  [PREFLIGHT_CACHE_FIELD_APPLIED_SCHEMA_VERSION]: null,
+  [PREFLIGHT_CACHE_FIELD_STALENESS_MS]: null,
+  [PREFLIGHT_CACHE_FIELD_LAST_APPLIED_CAUSE_ID_BY_TABLE_NAME]: Object.freeze({}),
+});
+const PREFLIGHT_DEFAULT_ROW_COUNTS = Object.freeze({
+  [PREFLIGHT_ROW_COUNT_FIELD_SYS_POSTGRES_WIRE_SERVICE_COUNT]: ZERO,
+  [PREFLIGHT_ROW_COUNT_FIELD_NODE_ENDPOINTS_COUNT]: ZERO,
+  [PREFLIGHT_ROW_COUNT_FIELD_SERVICE_ENDPOINTS_COUNT]: ZERO,
+});
+const PREFLIGHT_DEFAULT_DISCOVERY = Object.freeze({
+  [PREFLIGHT_DISCOVERY_FIELD_SELECTED_NODE_IDS]: Object.freeze([]),
+  [PREFLIGHT_DISCOVERY_FIELD_EXCLUDED_BY_NODE_ID]: Object.freeze({}),
+});
 
 const NODE_CLIENT_METRIC_KEY_REQUESTS = 'requests';
 const NODE_CLIENT_METRIC_KEY_SUCCESSES = 'successes';
@@ -133,6 +234,49 @@ function normalizeErrorMessage(error) {
     return error;
   }
   return ERROR_MESSAGE_UNKNOWN;
+}
+
+function normalizeOptionalSchemaVersion(value) {
+  if (typeof value === 'string') {
+    const normalized = value.trim();
+    return normalized.length > ZERO ? normalized : null;
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return String(value);
+  }
+  if (typeof value === 'bigint') {
+    return String(value);
+  }
+  return null;
+}
+
+function normalizeOptionalCauseIdByTableName(value) {
+  if (!value || typeof value !== 'object') {
+    return {};
+  }
+
+  const normalized = {};
+  for (const [tableName, rawCauseId] of Object.entries(value)) {
+    const causeId = typeof rawCauseId === 'string' ?
+      rawCauseId.trim() :
+      '';
+    normalized[String(tableName)] = causeId.length > ZERO ? causeId : null;
+  }
+  return normalized;
+}
+
+function normalizeNonNegativeIntegerOrDefault(value, fallback) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+  const floored = Math.floor(parsed);
+  return floored >= ZERO ? floored : fallback;
+}
+
+function normalizeOptionalFiniteNumber(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function classifyTimeoutClass(error) {
@@ -219,12 +363,31 @@ function resolveOperationTimeoutMs(context, fallbackTimeoutMs) {
   return fallbackTimeoutMs;
 }
 
+function resolveOperationRetryBudget(context, fallbackRetryBudget) {
+  const contextRetryBudget = Number(context?.[NODE_CLIENT_CONTEXT_KEYS.RETRY_BUDGET]);
+  if (Number.isFinite(contextRetryBudget) && contextRetryBudget >= ZERO) {
+    return Math.floor(contextRetryBudget);
+  }
+  return fallbackRetryBudget;
+}
+
 function normalizeIdentifier(value) {
   if (typeof value !== 'string') {
     return null;
   }
   const trimmedValue = value.trim();
   if (!IDENTIFIER_PATTERN.test(trimmedValue)) {
+    return null;
+  }
+  return trimmedValue;
+}
+
+function normalizeDiscoveryTableId(value) {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const trimmedValue = value.trim();
+  if (!DISCOVERY_TABLE_ID_PATTERN.test(trimmedValue)) {
     return null;
   }
   return trimmedValue;
@@ -239,8 +402,16 @@ function buildServiceDiscoverySql(context = {}) {
   if (!tableName) {
     return NODE_CLIENT_SERVICE_DISCOVERY_SQL;
   }
+  const tableId = normalizeDiscoveryTableId(context.tableId);
+  if (!tableId) {
+    return DISCOVERY_SQL_PREFIX +
+      '\'' + escapeSqlLiteral(tableName) + '\'' +
+      DISCOVERY_SQL_SUFFIX;
+  }
   return DISCOVERY_SQL_PREFIX +
     '\'' + escapeSqlLiteral(tableName) + '\'' +
+    DISCOVERY_SQL_ARGUMENT_SEPARATOR +
+    '\'' + escapeSqlLiteral(tableId) + '\'' +
     DISCOVERY_SQL_SUFFIX;
 }
 
@@ -374,6 +545,25 @@ class NodeClient {
     });
   }
 
+  async fetchPreflightCriticalPathSnapshot(node, context = {}) {
+    return this._executeChannelOperation({
+      node,
+      channel: NODE_CLIENT_CHANNEL.SNAPSHOT,
+      operation: OPERATION_FETCH_PREFLIGHT_CRITICAL_PATH_SNAPSHOT,
+      context,
+      invoke: async (timeoutMs) => {
+        const rawResult = await this._queryWithTimeout(
+          node,
+          NODE_CLIENT_PREFLIGHT_CRITICAL_PATH_SNAPSHOT_SQL,
+          [],
+          timeoutMs,
+          NODE_CLIENT_CHANNEL.SNAPSHOT,
+        );
+        return this._normalizePreflightCriticalPathSnapshot(rawResult, node);
+      },
+    });
+  }
+
   getPolicySnapshot() {
     return resolveNodeClientChannelPolicies({
       channelPolicies: this._policies,
@@ -393,6 +583,10 @@ class NodeClient {
     const timeoutMs = resolveOperationTimeoutMs(
       options.context,
       policy.timeoutMs,
+    );
+    const retryBudget = resolveOperationRetryBudget(
+      options.context,
+      policy.retryBudget,
     );
     const state = this._getNodeChannelState(nodeId, channel);
     this._recordTimeoutBudgetMismatch(channel, timeoutMs, options.context);
@@ -422,7 +616,7 @@ class NodeClient {
       });
     }
 
-    const maxAttempts = ONE + Math.max(ZERO, policy.retryBudget);
+    const maxAttempts = ONE + Math.max(ZERO, retryBudget);
     let attempt = ZERO;
 
     try {
@@ -1046,6 +1240,12 @@ class NodeClient {
       DISCOVERY_READINESS_FIELD_SCHEMA_READY,
       DISCOVERY_READINESS_FIELD_LEADERSHIP_STABLE,
     ];
+    if (requireReadiness) {
+      requiredBooleanFields.push(
+        DISCOVERY_READINESS_FIELD_TOPOLOGY_READY,
+        DISCOVERY_READINESS_FIELD_BENCHMARK_READY,
+      );
+    }
     for (const field of requiredBooleanFields) {
       if (typeof readiness[field] !== 'boolean') {
         throw new Error(
@@ -1126,13 +1326,36 @@ class NodeClient {
       };
     });
 
+    const topologyReady =
+      typeof readiness[DISCOVERY_READINESS_FIELD_TOPOLOGY_READY] === 'boolean' ?
+        readiness[DISCOVERY_READINESS_FIELD_TOPOLOGY_READY] :
+        (readiness[DISCOVERY_READINESS_FIELD_REPLICA_OPS_IN_FLIGHT] === ZERO &&
+          readiness[DISCOVERY_READINESS_FIELD_LEADERSHIP_STABLE] === true);
+    const benchmarkReady =
+      typeof readiness[DISCOVERY_READINESS_FIELD_BENCHMARK_READY] === 'boolean' ?
+        readiness[DISCOVERY_READINESS_FIELD_BENCHMARK_READY] :
+        (readiness[DISCOVERY_READINESS_FIELD_WORKLOAD_READY] === true &&
+          topologyReady === true);
+    const appliedSchemaVersion = normalizeOptionalSchemaVersion(
+      readiness[DISCOVERY_READINESS_FIELD_APPLIED_SCHEMA_VERSION] ??
+      readiness.applied_schema_version,
+    );
+    const requiredSchemaVersion = normalizeOptionalSchemaVersion(
+      readiness[DISCOVERY_READINESS_FIELD_REQUIRED_SCHEMA_VERSION] ??
+      readiness.required_schema_version,
+    );
+
     return {
       [DISCOVERY_READINESS_FIELD_WORKLOAD_READY]:
         readiness[DISCOVERY_READINESS_FIELD_WORKLOAD_READY],
+      [DISCOVERY_READINESS_FIELD_BENCHMARK_READY]:
+        benchmarkReady,
       [DISCOVERY_READINESS_FIELD_ROUTING_READY]:
         readiness[DISCOVERY_READINESS_FIELD_ROUTING_READY],
       [DISCOVERY_READINESS_FIELD_SCHEMA_READY]:
         readiness[DISCOVERY_READINESS_FIELD_SCHEMA_READY],
+      [DISCOVERY_READINESS_FIELD_TOPOLOGY_READY]:
+        topologyReady,
       [DISCOVERY_READINESS_FIELD_REPLICA_OPS_IN_FLIGHT]:
         readiness[DISCOVERY_READINESS_FIELD_REPLICA_OPS_IN_FLIGHT],
       [DISCOVERY_READINESS_FIELD_LEADERSHIP_STABLE]:
@@ -1140,6 +1363,214 @@ class NodeClient {
       [DISCOVERY_READINESS_FIELD_TABLE_NAME]:
         readiness[DISCOVERY_READINESS_FIELD_TABLE_NAME] || null,
       [DISCOVERY_READINESS_FIELD_REASONS]: normalizedReasons,
+      ...(appliedSchemaVersion ?
+        {
+          [DISCOVERY_READINESS_FIELD_APPLIED_SCHEMA_VERSION]:
+            appliedSchemaVersion,
+        } :
+        {}),
+      ...(requiredSchemaVersion ?
+        {
+          [DISCOVERY_READINESS_FIELD_REQUIRED_SCHEMA_VERSION]:
+            requiredSchemaVersion,
+        } :
+        {}),
+    };
+  }
+
+  _normalizePreflightCriticalPathSnapshot(rawResult, node) {
+    const snapshot = this._extractSnapshotPayload(rawResult);
+    const schemaVersion = snapshot[SNAPSHOT_FIELD_SCHEMA_VERSION];
+    if (schemaVersion !==
+        NODE_CLIENT_PREFLIGHT_CRITICAL_PATH_SNAPSHOT_SCHEMA_VERSION) {
+      throw new Error(
+        SNAPSHOT_FIELD_SCHEMA_VERSION + ' mismatch for node ' +
+          normalizeNodeId(node) +
+          ': expected ' +
+          NODE_CLIENT_PREFLIGHT_CRITICAL_PATH_SNAPSHOT_SCHEMA_VERSION +
+          ', got ' +
+          String(schemaVersion),
+      );
+    }
+
+    const nodeId = snapshot[SNAPSHOT_FIELD_NODE_ID];
+    if (typeof nodeId !== 'string' || nodeId.length === ZERO) {
+      throw new Error(
+        'preflight snapshot missing string ' + SNAPSHOT_FIELD_NODE_ID +
+          ' for node ' + normalizeNodeId(node),
+      );
+    }
+
+    const capturedAtMs =
+      Number(snapshot[PREFLIGHT_SNAPSHOT_FIELD_CAPTURED_AT_MS]);
+    if (!Number.isFinite(capturedAtMs)) {
+      throw new Error(
+        'preflight snapshot missing numeric ' +
+          PREFLIGHT_SNAPSHOT_FIELD_CAPTURED_AT_MS +
+          ' for node ' + normalizeNodeId(node),
+      );
+    }
+
+    const fallbackAddress =
+      typeof node?.ip === 'string' && node.ip.length > ZERO ?
+        node.ip :
+        normalizeNodeId(node);
+    const addressRaw = snapshot[PREFLIGHT_SNAPSHOT_FIELD_ADDRESS];
+    const address =
+      typeof addressRaw === 'string' && addressRaw.length > ZERO ?
+        addressRaw :
+        fallbackAddress;
+
+    const routerConnectivityRaw =
+      snapshot[PREFLIGHT_SNAPSHOT_FIELD_ROUTER_CONNECTIVITY];
+    const routerConnectivity = {
+      [PREFLIGHT_SNAPSHOT_FIELD_CONNECTED_COUNT]:
+        normalizeNonNegativeIntegerOrDefault(
+          routerConnectivityRaw?.[PREFLIGHT_SNAPSHOT_FIELD_CONNECTED_COUNT],
+          ZERO,
+        ),
+      [PREFLIGHT_SNAPSHOT_FIELD_RECONNECTING_COUNT]:
+        normalizeNonNegativeIntegerOrDefault(
+          routerConnectivityRaw?.[PREFLIGHT_SNAPSHOT_FIELD_RECONNECTING_COUNT],
+          ZERO,
+        ),
+      [PREFLIGHT_SNAPSHOT_FIELD_DISCONNECTED_COUNT]:
+        normalizeNonNegativeIntegerOrDefault(
+          routerConnectivityRaw?.[PREFLIGHT_SNAPSHOT_FIELD_DISCONNECTED_COUNT],
+          ZERO,
+        ),
+    };
+
+    const partitionsRaw =
+      snapshot[PREFLIGHT_SNAPSHOT_FIELD_CONTROL_PLANE_PARTITIONS];
+    const controlPlanePartitions = {};
+    for (const partitionKey of PREFLIGHT_PARTITION_KEYS) {
+      const entryRaw = partitionsRaw?.[partitionKey];
+      controlPlanePartitions[partitionKey] = {
+        [PREFLIGHT_PARTITION_FIELD_LEADER_KNOWN]:
+          entryRaw?.[PREFLIGHT_PARTITION_FIELD_LEADER_KNOWN] === true,
+        [PREFLIGHT_PARTITION_FIELD_LEADER_NODE_ID]:
+          typeof entryRaw?.[PREFLIGHT_PARTITION_FIELD_LEADER_NODE_ID] === 'string' &&
+            entryRaw[PREFLIGHT_PARTITION_FIELD_LEADER_NODE_ID].length > ZERO ?
+            entryRaw[PREFLIGHT_PARTITION_FIELD_LEADER_NODE_ID] :
+            null,
+        [PREFLIGHT_PARTITION_FIELD_IS_LEADER_LOCAL]:
+          entryRaw?.[PREFLIGHT_PARTITION_FIELD_IS_LEADER_LOCAL] === true,
+        [PREFLIGHT_PARTITION_FIELD_LAST_ERROR_CODE]:
+          typeof entryRaw?.[PREFLIGHT_PARTITION_FIELD_LAST_ERROR_CODE] === 'string' &&
+            entryRaw[PREFLIGHT_PARTITION_FIELD_LAST_ERROR_CODE].length > ZERO ?
+            entryRaw[PREFLIGHT_PARTITION_FIELD_LAST_ERROR_CODE] :
+            null,
+      };
+    }
+
+    const cdcHealthRaw = snapshot[PREFLIGHT_SNAPSHOT_FIELD_CDC_HEALTH];
+    const cdcHealth = {
+      [PREFLIGHT_CDC_FIELD_BUFFER_DEPTH]:
+        normalizeNonNegativeIntegerOrDefault(
+          cdcHealthRaw?.[PREFLIGHT_CDC_FIELD_BUFFER_DEPTH],
+          ZERO,
+        ),
+      [PREFLIGHT_CDC_FIELD_RETRY_COUNT]:
+        normalizeNonNegativeIntegerOrDefault(
+          cdcHealthRaw?.[PREFLIGHT_CDC_FIELD_RETRY_COUNT],
+          ZERO,
+        ),
+      [PREFLIGHT_CDC_FIELD_LAST_ERROR_CODE]:
+        typeof cdcHealthRaw?.[PREFLIGHT_CDC_FIELD_LAST_ERROR_CODE] === 'string' &&
+          cdcHealthRaw[PREFLIGHT_CDC_FIELD_LAST_ERROR_CODE].length > ZERO ?
+          cdcHealthRaw[PREFLIGHT_CDC_FIELD_LAST_ERROR_CODE] :
+          null,
+      [PREFLIGHT_CDC_FIELD_LAST_FORWARD_ATTEMPT_AT_MS]:
+        normalizeOptionalFiniteNumber(
+          cdcHealthRaw?.[PREFLIGHT_CDC_FIELD_LAST_FORWARD_ATTEMPT_AT_MS],
+        ),
+    };
+
+    const cacheFreshnessRaw =
+      snapshot[PREFLIGHT_SNAPSHOT_FIELD_CACHE_FRESHNESS];
+    const cacheFreshness = {
+      [PREFLIGHT_CACHE_FIELD_LAST_APPLIED_AT_MS]:
+        normalizeOptionalFiniteNumber(
+          cacheFreshnessRaw?.[PREFLIGHT_CACHE_FIELD_LAST_APPLIED_AT_MS],
+        ),
+      [PREFLIGHT_CACHE_FIELD_APPLIED_SCHEMA_VERSION]:
+        typeof cacheFreshnessRaw?.[PREFLIGHT_CACHE_FIELD_APPLIED_SCHEMA_VERSION] === 'string' ?
+          cacheFreshnessRaw[PREFLIGHT_CACHE_FIELD_APPLIED_SCHEMA_VERSION] :
+          null,
+      [PREFLIGHT_CACHE_FIELD_STALENESS_MS]:
+        (() => {
+          const staleness = normalizeOptionalFiniteNumber(
+            cacheFreshnessRaw?.[PREFLIGHT_CACHE_FIELD_STALENESS_MS],
+          );
+          if (staleness === null) {
+            return null;
+          }
+          return staleness >= ZERO ? staleness : null;
+        })(),
+      [PREFLIGHT_CACHE_FIELD_LAST_APPLIED_CAUSE_ID_BY_TABLE_NAME]:
+        normalizeOptionalCauseIdByTableName(
+          cacheFreshnessRaw?.[PREFLIGHT_CACHE_FIELD_LAST_APPLIED_CAUSE_ID_BY_TABLE_NAME],
+        ),
+    };
+
+    const rowCountsRaw = snapshot[PREFLIGHT_SNAPSHOT_FIELD_ROW_COUNTS];
+    const rowCounts = {
+      [PREFLIGHT_ROW_COUNT_FIELD_SYS_POSTGRES_WIRE_SERVICE_COUNT]:
+        normalizeNonNegativeIntegerOrDefault(
+          rowCountsRaw?.[PREFLIGHT_ROW_COUNT_FIELD_SYS_POSTGRES_WIRE_SERVICE_COUNT],
+          ZERO,
+        ),
+      [PREFLIGHT_ROW_COUNT_FIELD_NODE_ENDPOINTS_COUNT]:
+        normalizeNonNegativeIntegerOrDefault(
+          rowCountsRaw?.[PREFLIGHT_ROW_COUNT_FIELD_NODE_ENDPOINTS_COUNT],
+          ZERO,
+        ),
+      [PREFLIGHT_ROW_COUNT_FIELD_SERVICE_ENDPOINTS_COUNT]:
+        normalizeNonNegativeIntegerOrDefault(
+          rowCountsRaw?.[PREFLIGHT_ROW_COUNT_FIELD_SERVICE_ENDPOINTS_COUNT],
+          ZERO,
+        ),
+    };
+
+    const discoveryRaw = snapshot[PREFLIGHT_SNAPSHOT_FIELD_DISCOVERY];
+    const selectedNodeIds = Array.isArray(
+      discoveryRaw?.[PREFLIGHT_DISCOVERY_FIELD_SELECTED_NODE_IDS],
+    ) ?
+      discoveryRaw[PREFLIGHT_DISCOVERY_FIELD_SELECTED_NODE_IDS]
+        .map((value) => String(value))
+        .filter((value) => value.length > ZERO) :
+      [];
+    const excludedByNodeIdRaw =
+      discoveryRaw?.[PREFLIGHT_DISCOVERY_FIELD_EXCLUDED_BY_NODE_ID];
+    const excludedByNodeId = {};
+    if (excludedByNodeIdRaw && typeof excludedByNodeIdRaw === 'object') {
+      for (const [excludedNodeId, reasons] of Object.entries(excludedByNodeIdRaw)) {
+        if (!Array.isArray(reasons)) {
+          continue;
+        }
+        excludedByNodeId[String(excludedNodeId)] = reasons
+          .map((value) => String(value))
+          .filter((value) => value.length > ZERO);
+      }
+    }
+    const discovery = {
+      [PREFLIGHT_DISCOVERY_FIELD_SELECTED_NODE_IDS]: selectedNodeIds,
+      [PREFLIGHT_DISCOVERY_FIELD_EXCLUDED_BY_NODE_ID]: excludedByNodeId,
+    };
+
+    return {
+      [SNAPSHOT_FIELD_SCHEMA_VERSION]: schemaVersion,
+      [PREFLIGHT_SNAPSHOT_FIELD_CAPTURED_AT_MS]: capturedAtMs,
+      [SNAPSHOT_FIELD_NODE_ID]: nodeId,
+      [PREFLIGHT_SNAPSHOT_FIELD_ADDRESS]: address,
+      [PREFLIGHT_SNAPSHOT_FIELD_ROUTER_CONNECTIVITY]: routerConnectivity,
+      [PREFLIGHT_SNAPSHOT_FIELD_CONTROL_PLANE_PARTITIONS]:
+        controlPlanePartitions,
+      [PREFLIGHT_SNAPSHOT_FIELD_CDC_HEALTH]: cdcHealth,
+      [PREFLIGHT_SNAPSHOT_FIELD_CACHE_FRESHNESS]: cacheFreshness,
+      [PREFLIGHT_SNAPSHOT_FIELD_ROW_COUNTS]: rowCounts,
+      [PREFLIGHT_SNAPSHOT_FIELD_DISCOVERY]: discovery,
     };
   }
 

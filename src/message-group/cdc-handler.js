@@ -11,6 +11,9 @@ import {CONFIG_KEY} from '../config/config-constants.js';
 import {CDC_OPERATION} from '../constants/index.js';
 import {CDC_PIPELINE_METRIC} from '../constants/cdc-lifecycle-constants.js';
 import {HLCTimestamp} from '../hlc/hlc-timestamp.js';
+import {
+  getSystemCachePrimaryKeyFieldOrFallback,
+} from '../cache/system-cache-key-descriptor.js';
 
 /**
  * CDC event structure.
@@ -23,13 +26,22 @@ class CDCEvent {
    * @param {Object} data - Record data.
    * @param {string} timestamp - HLC timestamp string.
    * @param {string} sourcePartition - Source partition ID.
+   * @param {string|null} causeId - Correlation ID for causal tracing.
    */
-  constructor(tableName, operation, data, timestamp, sourcePartition = null) {
+  constructor(
+    tableName,
+    operation,
+    data,
+    timestamp,
+    sourcePartition = null,
+    causeId = null,
+  ) {
     this.tableName = tableName;
     this.operation = operation;
     this.data = data;
     this.timestamp = timestamp;
     this.sourcePartition = sourcePartition;
+    this.causeId = causeId;
     this.receivedAt = Date.now();
   }
 
@@ -38,7 +50,8 @@ class CDCEvent {
    * @return {string} Record key (id field).
    */
   getKey() {
-    return this.data?.id;
+    const keyField = getSystemCachePrimaryKeyFieldOrFallback(this.tableName);
+    return this.data?.[keyField] || this.data?.id;
   }
 
   /**
@@ -185,6 +198,7 @@ class CDCHandler extends EventEmitter {
         event.data,
         event.timestamp,
         event.sourcePartition,
+        event.causeId,
       );
 
     const {tableName} = cdcEvent;
@@ -243,6 +257,7 @@ class CDCHandler extends EventEmitter {
         event.data,
         event.timestamp,
         event.sourcePartition,
+        event.causeId,
       );
 
     const skipSubscriptionCheck = options.skipSubscriptionCheck === true;
@@ -371,7 +386,7 @@ class CDCHandler extends EventEmitter {
    * @private
    */
   applyEvent(event) {
-    const {tableName, operation, data, timestamp} = event;
+    const {tableName, operation, data, timestamp, causeId} = event;
     const key = event.getKey();
 
     // Check timestamp ordering
@@ -393,7 +408,7 @@ class CDCHandler extends EventEmitter {
     try {
       // Canonical CDC apply path: all steady-state cache mutations flow here.
       // See architecture.md: Sanctioned direct applySystemTableChange call sites.
-      this.cache.applySystemTableChange(tableName, operation, data);
+      this.cache.applySystemTableChange(tableName, operation, data, {causeId});
 
       // Track successful delivery to cache
       if (this.cdcPipelineMetrics) {
@@ -403,7 +418,10 @@ class CDCHandler extends EventEmitter {
       }
 
       // Update tracking
-      this.lastAppliedTimestamp.set(tableName, timestamp);
+      this.recordLastAppliedTimestamp(tableName, timestamp);
+      if (typeof this.cache.recordAppliedSchemaVersion === 'function') {
+        this.cache.recordAppliedSchemaVersion(tableName, timestamp);
+      }
       this.markEventProcessed(event);
 
       this.logger.debug('Applied CDC event', {
@@ -411,6 +429,7 @@ class CDCHandler extends EventEmitter {
         operation,
         key,
         timestamp,
+        causeId,
       });
 
       this.emit('eventApplied', {
@@ -418,12 +437,14 @@ class CDCHandler extends EventEmitter {
         operation,
         key,
         timestamp,
+        causeId,
       });
     } catch (error) {
       this.logger.error('Failed to apply CDC event', {
         tableName,
         operation,
         key,
+        causeId,
         error: error.message,
       });
 
@@ -431,9 +452,48 @@ class CDCHandler extends EventEmitter {
         tableName,
         operation,
         key,
+        causeId,
         error: error.message,
       });
       throw error;
+    }
+  }
+
+  /**
+   * Record per-table last applied timestamp without allowing regressions.
+   * @param {string} tableName
+   * @param {string} timestamp
+   * @return {string|null}
+   * @private
+   */
+  recordLastAppliedTimestamp(tableName, timestamp) {
+    if (!timestamp) {
+      return this.getLastAppliedTimestamp(tableName);
+    }
+
+    const previous = this.lastAppliedTimestamp.get(tableName);
+    if (!previous || this.compareTimestampStrings(timestamp, previous) >= 0) {
+      this.lastAppliedTimestamp.set(tableName, timestamp);
+      return timestamp;
+    }
+
+    return previous;
+  }
+
+  /**
+   * Compare two timestamp strings (prefers HLC ordering when possible).
+   * @param {string} a
+   * @param {string} b
+   * @return {number}
+   * @private
+   */
+  compareTimestampStrings(a, b) {
+    try {
+      const aTs = HLCTimestamp.fromString(a);
+      const bTs = HLCTimestamp.fromString(b);
+      return aTs.compare(bTs);
+    } catch {
+      return String(a).localeCompare(String(b));
     }
   }
 
@@ -444,7 +504,7 @@ class CDCHandler extends EventEmitter {
    * @private
    */
   generateEventId(event) {
-    return `${event.tableName}:${event.getKey()}:${event.timestamp}`;
+    return `${event.tableName}:${event.operation}:${event.getKey()}:${event.timestamp}`;
   }
 
   /**

@@ -1,0 +1,128 @@
+{
+  "scenarioName": "postgres-baseline-comparison",
+  "startedAt": 1772194105221,
+  "endedAt": 1772194199518,
+  "durationMs": 94297,
+  "files": {
+    "events": "test-output/reports/.playback/postgres-baseline-3node-20260227T120824Z/postgres-baseline-comparison/events.ndjson",
+    "samples": "test-output/reports/.playback/postgres-baseline-3node-20260227T120824Z/postgres-baseline-comparison/samples.ndjson",
+    "snapshots": "test-output/reports/.playback/postgres-baseline-3node-20260227T120824Z/postgres-baseline-comparison/snapshots.ndjson",
+    "manifest": "test-output/reports/.playback/postgres-baseline-3node-20260227T120824Z/postgres-baseline-comparison/playback-manifest.json",
+    "viewer": "test-output/reports/.playback/postgres-baseline-3node-20260227T120824Z/postgres-baseline-comparison/playback-viewer.html"
+  },
+  "counts": {
+    "events": 104,
+    "samples": 68,
+    "snapshots": 51
+  },
+  "warnings": [
+    {
+      "code": "topology-capture-failed",
+      "message": "Failed to capture topology snapshot: Admin API query timed out for node 7493b0ab-a054-5fad-a91b-5e331db29304 on lane default after 15000ms",
+      "timestamp": 1772194195277,
+      "details": {
+        "anchorNodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+        "error": "Admin API query timed out for node 7493b0ab-a054-5fad-a91b-5e331db29304 on lane default after 15000ms",
+        "reachability": [
+          {
+            "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+            "timestamp": 1772194178273,
+            "reachable": true,
+            "adminReady": true,
+            "reachableBy": "admin_ws",
+            "bootstrapHealth": {
+              "attempted": true,
+              "ok": false,
+              "statusCode": -1,
+              "error": "http_status_-1",
+              "url": "http://172.18.0.2:8080/health",
+              "endpoint": null,
+              "query": null
+            },
+            "adminHealth": {
+              "attempted": true,
+              "ok": false,
+              "statusCode": -1,
+              "error": "http_status_-1",
+              "url": "http://172.18.0.2:8081/health",
+              "endpoint": null,
+              "query": null
+            },
+            "adminWs": {
+              "attempted": true,
+              "ok": true,
+              "statusCode": null,
+              "error": null,
+              "url": null,
+              "endpoint": "ws://172.18.0.2:8081/api/admin/stream",
+              "query": null
+            },
+            "sqlProbe": {
+              "attempted": false,
+              "ok": false,
+              "statusCode": null,
+              "error": null,
+              "url": null,
+              "endpoint": null,
+              "query": "SELECT node_id FROM nodes LIMIT 1"
+            },
+            "lastError": null
+          }
+        ]
+      }
+    },
+    {
+      "code": "service-query-failed-7493b0ab-a054-5fad-a91b-5e331db29304",
+      "message": "Failed to query services on node 7493b0ab-a054-5fad-a91b-5e331db29304: Admin API query timed out for node 7493b0ab-a054-5fad-a91b-5e331db29304 on lane default after 15000ms",
+      "timestamp": 1772194195277,
+      "details": {
+        "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+        "error": "Admin API query timed out for node 7493b0ab-a054-5fad-a91b-5e331db29304 on lane default after 15000ms",
+        "reachability": {
+          "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+          "timestamp": 1772194178273,
+          "reachable": true,
+          "adminReady": true,
+          "reachableBy": "admin_ws",
+          "bootstrapHealth": {
+            "attempted": true,
+            "ok": false,
+            "statusCode": -1,
+            "error": "http_status_-1",
+            "url": "http://172.18.0.2:8080/health",
+            "endpoint": null,
+            "query": null
+          },
+          "adminHealth": {
+            "attempted": true,
+            "ok": false,
+            "statusCode": -1,
+            "error": "http_status_-1",
+            "url": "http://172.18.0.2:8081/health",
+            "endpoint": null,
+            "query": null
+          },
+          "adminWs": {
+            "attempted": true,
+            "ok": true,
+            "statusCode": null,
+            "error": null,
+            "url": null,
+            "endpoint": "ws://172.18.0.2:8081/api/admin/stream",
+            "query": null
+          },
+          "sqlProbe": {
+            "attempted": false,
+            "ok": false,
+            "statusCode": null,
+            "error": null,
+            "url": null,
+            "endpoint": null,
+            "query": "SELECT node_id FROM nodes LIMIT 1"
+          },
+          "lastError": null
+        }
+      }
+    }
+  ]
+}

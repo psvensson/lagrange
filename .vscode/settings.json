@@ -1,3 +1,12 @@
 {
-    "kiroAgent.configureMCP": "Disabled"
+    "kiroAgent.configureMCP": "Disabled",
+    "emeraldwalk.runonsave": {
+        "commands": [
+            {
+                "match": "\\.(js|mjs|cjs|md)$",
+                "isAsync": true,
+                "cmd": "npm run guard:guidelines:file -- \"${file}\""
+            }
+        ]
+    }
 }

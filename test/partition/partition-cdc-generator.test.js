@@ -303,6 +303,32 @@ describe('PartitionCDCGenerator', () => {
       assert.strictEqual(receivedEvents[0].data.value, 200);
     });
 
+    it('should fetch the authoritative row for parameterized INSERT', async () => {
+      const receivedEvents = [];
+      generator.subscribe((event) => receivedEvents.push(event));
+      db.exec(
+        'ALTER TABLE test_table ADD COLUMN status TEXT DEFAULT \'ready\'',
+      );
+      db.prepare(
+        'INSERT INTO test_table (id, name, value) VALUES (?, ?, ?)',
+      ).run('param-insert-1', 'param-name', 200);
+
+      const entry = {
+        type: 'QUERY',
+        sql: 'INSERT INTO test_table (id, name, value) VALUES (?, ?, ?)',
+        params: ['param-insert-1', 'param-name', 200],
+        timestamp: Date.now(),
+      };
+
+      await generator.generateEvent(entry);
+
+      assert.strictEqual(receivedEvents.length, 1);
+      assert.strictEqual(receivedEvents[0].data.id, 'param-insert-1');
+      assert.strictEqual(receivedEvents[0].data.name, 'param-name');
+      assert.strictEqual(receivedEvents[0].data.value, 200);
+      assert.strictEqual(receivedEvents[0].data.status, 'ready');
+    });
+
     it('should extract data from parameterized UPDATE', async () => {
       const receivedEvents = [];
       generator.subscribe((event) => receivedEvents.push(event));
@@ -320,6 +346,35 @@ describe('PartitionCDCGenerator', () => {
       assert.strictEqual(receivedEvents[0].data.name, 'new-name');
       assert.strictEqual(receivedEvents[0].data.value, 300);
       assert.strictEqual(receivedEvents[0].data.id, 'upd-param-1');
+    });
+
+    it('should fetch the authoritative row for parameterized UPDATE', async () => {
+      const receivedEvents = [];
+      generator.subscribe((event) => receivedEvents.push(event));
+      db.exec(
+        'ALTER TABLE test_table ADD COLUMN status TEXT DEFAULT \'ready\'',
+      );
+      db.prepare(
+        'INSERT INTO test_table (id, name, value, status) VALUES (?, ?, ?, ?)',
+      ).run('upd-param-2', 'original-name', 250, 'kept');
+      db.prepare(
+        'UPDATE test_table SET name = ?, value = ? WHERE id = ?',
+      ).run('new-name', 300, 'upd-param-2');
+
+      const entry = {
+        type: 'QUERY',
+        sql: 'UPDATE test_table SET name = ?, value = ? WHERE id = ?',
+        params: ['new-name', 300, 'upd-param-2'],
+        timestamp: Date.now(),
+      };
+
+      await generator.generateEvent(entry);
+
+      assert.strictEqual(receivedEvents.length, 1);
+      assert.strictEqual(receivedEvents[0].data.name, 'new-name');
+      assert.strictEqual(receivedEvents[0].data.value, 300);
+      assert.strictEqual(receivedEvents[0].data.id, 'upd-param-2');
+      assert.strictEqual(receivedEvents[0].data.status, 'kept');
     });
 
     it('should extract data from parameterized DELETE', async () => {

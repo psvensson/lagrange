@@ -1,0 +1,511 @@
+{
+  "timestamp": "2026-02-27T17:19:25.694Z",
+  "summary": {
+    "total": 1,
+    "passed": 0,
+    "failed": 1,
+    "duration": 118932
+  },
+  "optimizationSummary": {
+    "totalPriorityItems": 0,
+    "scenariosWithPriorities": 0,
+    "topComponents": [],
+    "topPartitions": []
+  },
+  "standardSummary": {
+    "historicalReportsConsidered": 20,
+    "scenariosComparedToPrevious": 1,
+    "scenariosComparedToPostgresBaseline": 0,
+    "diagnosticsCoverageSummary": {
+      "scenariosWithCoverage": 0,
+      "scenariosWithoutCoverage": 1,
+      "totalSamples": 0,
+      "coverageRate": 0,
+      "scenarios": [
+        {
+          "scenario": "postgres-baseline-comparison",
+          "status": "unavailable",
+          "reason": "not_reported",
+          "sampleCount": 0
+        }
+      ]
+    },
+    "writePathAttributionSummary": {
+      "scenariosWithDiagnostics": 0,
+      "topPhases": []
+    },
+    "scaleEfficiencySummary": {
+      "observationCount": 0,
+      "comparableGroupCount": 0,
+      "groups": [],
+      "topOpportunities": []
+    },
+    "scenarios": [
+      {
+        "scenario": "postgres-baseline-comparison",
+        "similarityKey": "postgres-baseline-comparison|default",
+        "current": {
+          "passed": false,
+          "clusterSize": 7,
+          "durationMs": 118932,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "previousSimilarRun": {
+          "reportTimestamp": "2026-02-27T17:04:52.283Z",
+          "reportPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-7node-20260227T170227Z.report.json",
+          "passed": false,
+          "clusterSize": 7,
+          "durationMs": 144180,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "deltaVsPrevious": {
+          "passedChanged": false,
+          "clusterSizeChanged": false,
+          "durationMs": -25248,
+          "durationRatio": -0.17511444028297962,
+          "opsPerSec": 0,
+          "opsPerSecRatio": null,
+          "opsPerSecPerNode": 0,
+          "opsPerSecPerNodeRatio": null,
+          "p99LatencyMs": 0,
+          "p99LatencyMsRatio": null
+        },
+        "postgresBaseline": null,
+        "parity": null,
+        "writePathTopPhases": []
+      }
+    ]
+  },
+  "scenarios": [
+    {
+      "scenario": "postgres-baseline-comparison",
+      "passed": false,
+      "duration": 118932,
+      "clusterSize": 7,
+      "startedAt": "2026-02-27T17:17:26.714Z",
+      "convergenceTiming": null,
+      "analysisSummary": null,
+      "error": "postgres-baseline-comparison failed in phase preflight: No discovered admin-ready load service nodes available for benchmark load (insufficient_reachable_nodes: required=7, reachable=0, attempts=113, timedOut=true, requiredReachable=7, strictMinReachable=true, discovered=37ab9190-8bcc-5378-ac57-9d012e3bf838|7493b0ab-a054-5fad-a91b-5e331db29304|8be8d30f-4499-5eed-865c-71b4d529a67a|ebc4aa0b-06c6-506d-93ea-1dd2deca3f58|ff60df70-c157-50cb-bfdf-f617df0e5cb4, gateReason=insufficient_reachable_nodes, sources=7493b0ab-a054-5fad-a91b-5e331db29304:discovered=sys-postgres-wire@postgresql:37ab9190-8bcc-5378-ac57-9d012e3bf838|7493b0ab-a054-5fad-a91b-5e331db29304|8be8d30f-4499-5eed-865c-71b4d529a67a|ebc4aa0b-06c6-506d-93ea-1dd2deca3f58|ff60df70-c157-50cb-bfdf-f617df0e5cb4;35a891b8-c1a0-5064-9c6e-2acfba61c2a7:error=Admin API query failed for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 on lane snapshot: connect ECONNREFUSED 172.19.0.3:8081 (nodeClient(operation=fetchServiceDi;11601fe0-72d6-5853-8590-ec2881853e72:error=Admin API query failed for node 11601fe0-72d6-5853-8590-ec2881853e72 on lane snapshot: connect ECONNREFUSED 172.19.0.4:8081 (nodeClient(operation=fetchServiceDi;ebc4aa0b-06c6-506d-93ea-1dd2deca3f58:error=Admin API query failed for node ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 on lane snapshot: connect ECONNREFUSED 172.19.0.5:8081 (nodeClient(operation=fetchServiceDi;8be8d30f-4499-5eed-865c-71b4d529a67a:error=Admin API query failed for node 8be8d30f-4499-5eed-865c-71b4d529a67a on lane snapshot: connect ECONNREFUSED 172.19.0.6:8081 (nodeClient(operation=fetchServiceDi;ff60df70-c157-50cb-bfdf-f617df0e5cb4:error=Admin API query failed for node ff60df70-c157-50cb-bfdf-f617df0e5cb4 on lane snapshot: connect ECONNREFUSED 172.19.0.7:8081 (nodeClient(operation=fetchServiceDi;37ab9190-8bcc-5378-ac57-9d012e3bf838:error=Admin API query failed for node 37ab9190-8bcc-5378-ac57-9d012e3bf838 on lane snapshot: connect ECONNREFUSED 172.19.0.8:8081 (nodeClient(operation=fetchServiceDi, probes=ebc4aa0b-06c6-506d-93ea-1dd2deca3f58:reachable_by=bootstrap_health|last_error=Admin API query failed for node ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 on lane probe: connect ECONNREFUSED 172.19.0.5:8081;8be8d30f-4499-5eed-865c-71b4d529a67a:reachable_by=bootstrap_health|last_error=Admin API query failed for node 8be8d30f-4499-5eed-865c-71b4d529a67a on lane probe: connect ECONNREFUSED 172.19.0.6:8081;ff60df70-c157-50cb-bfdf-f617df0e5cb4:reachable_by=bootstrap_health|last_error=Admin API query failed for node ff60df70-c157-50cb-bfdf-f617df0e5cb4 on lane probe: connect ECONNREFUSED 172.19.0.7:8081;37ab9190-8bcc-5378-ac57-9d012e3bf838:reachable_by=bootstrap_health|last_error=Admin API query failed for node 37ab9190-8bcc-5378-ac57-9d012e3bf838 on lane probe: connect ECONNREFUSED 172.19.0.8:8081, excludedReasonCounts=none)",
+      "stackTrace": "Error: postgres-baseline-comparison failed in phase preflight: No discovered admin-ready load service nodes available for benchmark load (insufficient_reachable_nodes: required=7, reachable=0, attempts=113, timedOut=true, requiredReachable=7, strictMinReachable=true, discovered=37ab9190-8bcc-5378-ac57-9d012e3bf838|7493b0ab-a054-5fad-a91b-5e331db29304|8be8d30f-4499-5eed-865c-71b4d529a67a|ebc4aa0b-06c6-506d-93ea-1dd2deca3f58|ff60df70-c157-50cb-bfdf-f617df0e5cb4, gateReason=insufficient_reachable_nodes, sources=7493b0ab-a054-5fad-a91b-5e331db29304:discovered=sys-postgres-wire@postgresql:37ab9190-8bcc-5378-ac57-9d012e3bf838|7493b0ab-a054-5fad-a91b-5e331db29304|8be8d30f-4499-5eed-865c-71b4d529a67a|ebc4aa0b-06c6-506d-93ea-1dd2deca3f58|ff60df70-c157-50cb-bfdf-f617df0e5cb4;35a891b8-c1a0-5064-9c6e-2acfba61c2a7:error=Admin API query failed for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 on lane snapshot: connect ECONNREFUSED 172.19.0.3:8081 (nodeClient(operation=fetchServiceDi;11601fe0-72d6-5853-8590-ec2881853e72:error=Admin API query failed for node 11601fe0-72d6-5853-8590-ec2881853e72 on lane snapshot: connect ECONNREFUSED 172.19.0.4:8081 (nodeClient(operation=fetchServiceDi;ebc4aa0b-06c6-506d-93ea-1dd2deca3f58:error=Admin API query failed for node ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 on lane snapshot: connect ECONNREFUSED 172.19.0.5:8081 (nodeClient(operation=fetchServiceDi;8be8d30f-4499-5eed-865c-71b4d529a67a:error=Admin API query failed for node 8be8d30f-4499-5eed-865c-71b4d529a67a on lane snapshot: connect ECONNREFUSED 172.19.0.6:8081 (nodeClient(operation=fetchServiceDi;ff60df70-c157-50cb-bfdf-f617df0e5cb4:error=Admin API query failed for node ff60df70-c157-50cb-bfdf-f617df0e5cb4 on lane snapshot: connect ECONNREFUSED 172.19.0.7:8081 (nodeClient(operation=fetchServiceDi;37ab9190-8bcc-5378-ac57-9d012e3bf838:error=Admin API query failed for node 37ab9190-8bcc-5378-ac57-9d012e3bf838 on lane snapshot: connect ECONNREFUSED 172.19.0.8:8081 (nodeClient(operation=fetchServiceDi, probes=ebc4aa0b-06c6-506d-93ea-1dd2deca3f58:reachable_by=bootstrap_health|last_error=Admin API query failed for node ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 on lane probe: connect ECONNREFUSED 172.19.0.5:8081;8be8d30f-4499-5eed-865c-71b4d529a67a:reachable_by=bootstrap_health|last_error=Admin API query failed for node 8be8d30f-4499-5eed-865c-71b4d529a67a on lane probe: connect ECONNREFUSED 172.19.0.6:8081;ff60df70-c157-50cb-bfdf-f617df0e5cb4:reachable_by=bootstrap_health|last_error=Admin API query failed for node ff60df70-c157-50cb-bfdf-f617df0e5cb4 on lane probe: connect ECONNREFUSED 172.19.0.7:8081;37ab9190-8bcc-5378-ac57-9d012e3bf838:reachable_by=bootstrap_health|last_error=Admin API query failed for node 37ab9190-8bcc-5378-ac57-9d012e3bf838 on lane probe: connect ECONNREFUSED 172.19.0.8:8081, excludedReasonCounts=none)\n    at Module.run (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/scenarios/postgres-baseline-comparison.js:6317:19)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async runScenarios (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:1183:9)\n    at async main (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:1762:33)",
+      "logs": null,
+      "playback": {
+        "scenarioName": "postgres-baseline-comparison",
+        "startedAt": 1772212646717,
+        "endedAt": 1772212765682,
+        "durationMs": 118965,
+        "files": {
+          "events": "test-output/reports/.playback/postgres-baseline-7node-20260227T171726Z/postgres-baseline-comparison/events.ndjson",
+          "samples": "test-output/reports/.playback/postgres-baseline-7node-20260227T171726Z/postgres-baseline-comparison/samples.ndjson",
+          "snapshots": "test-output/reports/.playback/postgres-baseline-7node-20260227T171726Z/postgres-baseline-comparison/snapshots.ndjson",
+          "manifest": "test-output/reports/.playback/postgres-baseline-7node-20260227T171726Z/postgres-baseline-comparison/playback-manifest.json",
+          "viewer": "test-output/reports/.playback/postgres-baseline-7node-20260227T171726Z/postgres-baseline-comparison/playback-viewer.html"
+        },
+        "counts": {
+          "events": 50,
+          "samples": 468,
+          "snapshots": 90
+        },
+        "warnings": []
+      },
+      "trace": null,
+      "traceAssertion": null,
+      "memoryLeak": {
+        "enabled": false,
+        "analyzed": false,
+        "leakDetected": false,
+        "sampleCount": 0,
+        "nodeCount": 0,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "nodes": [],
+        "warnings": [],
+        "config": {
+          "enabled": false,
+          "failOnDetection": false,
+          "requireSamples": false,
+          "minSamplesPerNode": 8,
+          "warmupFraction": 0.2,
+          "minWarmupMs": 30000,
+          "minAnalysisWindowMs": 60000,
+          "maxPositiveSlopeBytesPerMin": 1048576,
+          "minGrowthBytes": 16777216,
+          "minPositiveDeltaRatio": 0.65,
+          "captureHeapArtifacts": false,
+          "heapSnapshotNearLimitCount": 2
+        }
+      },
+      "memoryLeakAssertion": null,
+      "performanceDiagnostics": null,
+      "details": {
+        "diagnostics": {
+          "failure": {
+            "schemaVersion": 1,
+            "rootCauseClass": "startup",
+            "phase": "preflight",
+            "affectedNodeIds": [],
+            "reasonCounts": {
+              "No discovered admin-ready load service nodes available for benchmark load (insufficient_reachable_nodes: required=7, reachable=0, attempts=113, timedOut=true, requiredReachable=7, strictMinReachable=true, discovered=37ab9190-8bcc-5378-ac57-9d012e3bf838|7493b0ab-a054-5fad-a91b-5e331db29304|8be8d30f-4499-5eed-865c-71b4d529a67a|ebc4aa0b-06c6-506d-93ea-1dd2deca3f58|ff60df70-c157-50cb-bfdf-f617df0e5cb4, gateReason=insufficient_reachable_nodes, sources=7493b0ab-a054-5fad-a91b-5e331db29304:discovered=sys-postgres-wire@postgresql:37ab9190-8bcc-5378-ac57-9d012e3bf838|7493b0ab-a054-5fad-a91b-5e331db29304|8be8d30f-4499-5eed-865c-71b4d529a67a|ebc4aa0b-06c6-506d-93ea-1dd2deca3f58|ff60df70-c157-50cb-bfdf-f617df0e5cb4;35a891b8-c1a0-5064-9c6e-2acfba61c2a7:error=Admin API query failed for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 on lane snapshot: connect ECONNREFUSED 172.19.0.3:8081 (nodeClient(operation=fetchServiceDi;11601fe0-72d6-5853-8590-ec2881853e72:error=Admin API query failed for node 11601fe0-72d6-5853-8590-ec2881853e72 on lane snapshot: connect ECONNREFUSED 172.19.0.4:8081 (nodeClient(operation=fetchServiceDi;ebc4aa0b-06c6-506d-93ea-1dd2deca3f58:error=Admin API query failed for node ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 on lane snapshot: connect ECONNREFUSED 172.19.0.5:8081 (nodeClient(operation=fetchServiceDi;8be8d30f-4499-5eed-865c-71b4d529a67a:error=Admin API query failed for node 8be8d30f-4499-5eed-865c-71b4d529a67a on lane snapshot: connect ECONNREFUSED 172.19.0.6:8081 (nodeClient(operation=fetchServiceDi;ff60df70-c157-50cb-bfdf-f617df0e5cb4:error=Admin API query failed for node ff60df70-c157-50cb-bfdf-f617df0e5cb4 on lane snapshot: connect ECONNREFUSED 172.19.0.7:8081 (nodeClient(operation=fetchServiceDi;37ab9190-8bcc-5378-ac57-9d012e3bf838:error=Admin API query failed for node 37ab9190-8bcc-5378-ac57-9d012e3bf838 on lane snapshot: connect ECONNREFUSED 172.19.0.8:8081 (nodeClient(operation=fetchServiceDi, probes=ebc4aa0b-06c6-506d-93ea-1dd2deca3f58:reachable_by=bootstrap_health|last_error=Admin API query failed for node ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 on lane probe: connect ECONNREFUSED 172.19.0.5:8081;8be8d30f-4499-5eed-865c-71b4d529a67a:reachable_by=bootstrap_health|last_error=Admin API query failed for node 8be8d30f-4499-5eed-865c-71b4d529a67a on lane probe: connect ECONNREFUSED 172.19.0.6:8081;ff60df70-c157-50cb-bfdf-f617df0e5cb4:reachable_by=bootstrap_health|last_error=Admin API query failed for node ff60df70-c157-50cb-bfdf-f617df0e5cb4 on lane probe: connect ECONNREFUSED 172.19.0.7:8081;37ab9190-8bcc-5378-ac57-9d012e3bf838:reachable_by=bootstrap_health|last_error=Admin API query failed for node 37ab9190-8bcc-5378-ac57-9d012e3bf838 on lane probe: connect ECONNREFUSED 172.19.0.8:8081, excludedReasonCounts=none)": 1
+            },
+            "dominantReason": "No discovered admin-ready load service nodes available for benchmark load (insufficient_reachable_nodes: required=7, reachable=0, attempts=113, timedOut=true, requiredReachable=7, strictMinReachable=true, discovered=37ab9190-8bcc-5378-ac57-9d012e3bf838|7493b0ab-a054-5fad-a91b-5e331db29304|8be8d30f-4499-5eed-865c-71b4d529a67a|ebc4aa0b-06c6-506d-93ea-1dd2deca3f58|ff60df70-c157-50cb-bfdf-f617df0e5cb4, gateReason=insufficient_reachable_nodes, sources=7493b0ab-a054-5fad-a91b-5e331db29304:discovered=sys-postgres-wire@postgresql:37ab9190-8bcc-5378-ac57-9d012e3bf838|7493b0ab-a054-5fad-a91b-5e331db29304|8be8d30f-4499-5eed-865c-71b4d529a67a|ebc4aa0b-06c6-506d-93ea-1dd2deca3f58|ff60df70-c157-50cb-bfdf-f617df0e5cb4;35a891b8-c1a0-5064-9c6e-2acfba61c2a7:error=Admin API query failed for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 on lane snapshot: connect ECONNREFUSED 172.19.0.3:8081 (nodeClient(operation=fetchServiceDi;11601fe0-72d6-5853-8590-ec2881853e72:error=Admin API query failed for node 11601fe0-72d6-5853-8590-ec2881853e72 on lane snapshot: connect ECONNREFUSED 172.19.0.4:8081 (nodeClient(operation=fetchServiceDi;ebc4aa0b-06c6-506d-93ea-1dd2deca3f58:error=Admin API query failed for node ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 on lane snapshot: connect ECONNREFUSED 172.19.0.5:8081 (nodeClient(operation=fetchServiceDi;8be8d30f-4499-5eed-865c-71b4d529a67a:error=Admin API query failed for node 8be8d30f-4499-5eed-865c-71b4d529a67a on lane snapshot: connect ECONNREFUSED 172.19.0.6:8081 (nodeClient(operation=fetchServiceDi;ff60df70-c157-50cb-bfdf-f617df0e5cb4:error=Admin API query failed for node ff60df70-c157-50cb-bfdf-f617df0e5cb4 on lane snapshot: connect ECONNREFUSED 172.19.0.7:8081 (nodeClient(operation=fetchServiceDi;37ab9190-8bcc-5378-ac57-9d012e3bf838:error=Admin API query failed for node 37ab9190-8bcc-5378-ac57-9d012e3bf838 on lane snapshot: connect ECONNREFUSED 172.19.0.8:8081 (nodeClient(operation=fetchServiceDi, probes=ebc4aa0b-06c6-506d-93ea-1dd2deca3f58:reachable_by=bootstrap_health|last_error=Admin API query failed for node ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 on lane probe: connect ECONNREFUSED 172.19.0.5:8081;8be8d30f-4499-5eed-865c-71b4d529a67a:reachable_by=bootstrap_health|last_error=Admin API query failed for node 8be8d30f-4499-5eed-865c-71b4d529a67a on lane probe: connect ECONNREFUSED 172.19.0.6:8081;ff60df70-c157-50cb-bfdf-f617df0e5cb4:reachable_by=bootstrap_health|last_error=Admin API query failed for node ff60df70-c157-50cb-bfdf-f617df0e5cb4 on lane probe: connect ECONNREFUSED 172.19.0.7:8081;37ab9190-8bcc-5378-ac57-9d012e3bf838:reachable_by=bootstrap_health|last_error=Admin API query failed for node 37ab9190-8bcc-5378-ac57-9d012e3bf838 on lane probe: connect ECONNREFUSED 172.19.0.8:8081, excludedReasonCounts=none)",
+            "strictMode": true
+          },
+          "rootCauseBundle": {
+            "schemaVersion": 1,
+            "rootCauseCode": "cache_stale_watermark",
+            "rootCauseClass": "cache",
+            "snapshotsByNodeId": {
+              "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58": {
+                "nodeId": "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58",
+                "address": "172.19.0.5",
+                "missing": {
+                  "reasonCode": "snapshot_query_failed",
+                  "timeoutClass": "non_timeout",
+                  "code": "operation_error",
+                  "channel": "snapshot",
+                  "operation": "fetchPreflightCriticalPathSnapshot"
+                }
+              },
+              "8be8d30f-4499-5eed-865c-71b4d529a67a": {
+                "nodeId": "8be8d30f-4499-5eed-865c-71b4d529a67a",
+                "address": "172.19.0.6",
+                "missing": {
+                  "reasonCode": "snapshot_query_failed",
+                  "timeoutClass": "non_timeout",
+                  "code": "operation_error",
+                  "channel": "snapshot",
+                  "operation": "fetchPreflightCriticalPathSnapshot"
+                }
+              },
+              "ff60df70-c157-50cb-bfdf-f617df0e5cb4": {
+                "nodeId": "ff60df70-c157-50cb-bfdf-f617df0e5cb4",
+                "address": "172.19.0.7",
+                "missing": {
+                  "reasonCode": "snapshot_query_failed",
+                  "timeoutClass": "non_timeout",
+                  "code": "operation_error",
+                  "channel": "snapshot",
+                  "operation": "fetchPreflightCriticalPathSnapshot"
+                }
+              },
+              "37ab9190-8bcc-5378-ac57-9d012e3bf838": {
+                "nodeId": "37ab9190-8bcc-5378-ac57-9d012e3bf838",
+                "address": "172.19.0.8",
+                "missing": {
+                  "reasonCode": "snapshot_query_failed",
+                  "timeoutClass": "non_timeout",
+                  "code": "operation_error",
+                  "channel": "snapshot",
+                  "operation": "fetchPreflightCriticalPathSnapshot"
+                }
+              },
+              "11601fe0-72d6-5853-8590-ec2881853e72": {
+                "schemaVersion": 1,
+                "capturedAtMs": 1772212765644,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "address": "ddb-test-reuse-7-3:8080",
+                "routerConnectivity": {
+                  "connectedCount": 7,
+                  "reconnectingCount": 0,
+                  "disconnectedCount": 0
+                },
+                "controlPlanePartitions": {
+                  "nodes": {
+                    "leaderKnown": true,
+                    "leaderNodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                    "isLeaderLocal": false,
+                    "lastErrorCode": null
+                  },
+                  "services": {
+                    "leaderKnown": true,
+                    "leaderNodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                    "isLeaderLocal": false,
+                    "lastErrorCode": null
+                  },
+                  "node_endpoints": {
+                    "leaderKnown": true,
+                    "leaderNodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                    "isLeaderLocal": false,
+                    "lastErrorCode": null
+                  },
+                  "service_endpoints": {
+                    "leaderKnown": true,
+                    "leaderNodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                    "isLeaderLocal": false,
+                    "lastErrorCode": null
+                  }
+                },
+                "cdcHealth": {
+                  "bufferDepth": 0,
+                  "retryCount": 0,
+                  "lastErrorCode": null,
+                  "lastForwardAttemptAtMs": 0
+                },
+                "cacheFreshness": {
+                  "lastAppliedAtMs": 1772212708253,
+                  "appliedSchemaVersion": null,
+                  "stalenessMs": 57391,
+                  "lastAppliedCauseIdByTableName": {
+                    "services": "304e9ee1-d3e8-4666-97ea-cb2f358c2e30",
+                    "node_endpoints": null,
+                    "service_endpoints": null
+                  }
+                },
+                "rowCounts": {
+                  "sysPostgresWireServiceCount": 0,
+                  "nodeEndpointsCount": 1,
+                  "serviceEndpointsCount": 3
+                },
+                "discovery": {
+                  "selectedNodeIds": [
+                    "7493b0ab-a054-5fad-a91b-5e331db29304"
+                  ],
+                  "excludedByNodeId": {}
+                }
+              },
+              "35a891b8-c1a0-5064-9c6e-2acfba61c2a7": {
+                "schemaVersion": 1,
+                "capturedAtMs": 1772212765644,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "address": "ddb-test-reuse-7-2:8080",
+                "routerConnectivity": {
+                  "connectedCount": 7,
+                  "reconnectingCount": 0,
+                  "disconnectedCount": 0
+                },
+                "controlPlanePartitions": {
+                  "nodes": {
+                    "leaderKnown": true,
+                    "leaderNodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                    "isLeaderLocal": false,
+                    "lastErrorCode": null
+                  },
+                  "services": {
+                    "leaderKnown": true,
+                    "leaderNodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                    "isLeaderLocal": false,
+                    "lastErrorCode": null
+                  },
+                  "node_endpoints": {
+                    "leaderKnown": true,
+                    "leaderNodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                    "isLeaderLocal": false,
+                    "lastErrorCode": null
+                  },
+                  "service_endpoints": {
+                    "leaderKnown": true,
+                    "leaderNodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                    "isLeaderLocal": false,
+                    "lastErrorCode": null
+                  }
+                },
+                "cdcHealth": {
+                  "bufferDepth": 0,
+                  "retryCount": 0,
+                  "lastErrorCode": null,
+                  "lastForwardAttemptAtMs": 0
+                },
+                "cacheFreshness": {
+                  "lastAppliedAtMs": 1772212712291,
+                  "appliedSchemaVersion": "1772212712291-1-mg-1-r1",
+                  "stalenessMs": 53353,
+                  "lastAppliedCauseIdByTableName": {
+                    "services": "dbe17745-7a65-49b5-96cd-fc7fee97fbe8",
+                    "node_endpoints": "fc8a8877-ebab-4dca-9580-af04dde58904",
+                    "service_endpoints": "60202b48-b0be-424f-970f-851109f6d0f1"
+                  }
+                },
+                "rowCounts": {
+                  "sysPostgresWireServiceCount": 0,
+                  "nodeEndpointsCount": 3,
+                  "serviceEndpointsCount": 7
+                },
+                "discovery": {
+                  "selectedNodeIds": [
+                    "11601fe0-72d6-5853-8590-ec2881853e72",
+                    "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                    "7493b0ab-a054-5fad-a91b-5e331db29304"
+                  ],
+                  "excludedByNodeId": {}
+                }
+              },
+              "7493b0ab-a054-5fad-a91b-5e331db29304": {
+                "schemaVersion": 1,
+                "capturedAtMs": 1772212765644,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "address": "ddb-test-reuse-7-1:8080",
+                "routerConnectivity": {
+                  "connectedCount": 7,
+                  "reconnectingCount": 0,
+                  "disconnectedCount": 0
+                },
+                "controlPlanePartitions": {
+                  "nodes": {
+                    "leaderKnown": true,
+                    "leaderNodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                    "isLeaderLocal": true,
+                    "lastErrorCode": null
+                  },
+                  "services": {
+                    "leaderKnown": true,
+                    "leaderNodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                    "isLeaderLocal": true,
+                    "lastErrorCode": null
+                  },
+                  "node_endpoints": {
+                    "leaderKnown": true,
+                    "leaderNodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                    "isLeaderLocal": true,
+                    "lastErrorCode": null
+                  },
+                  "service_endpoints": {
+                    "leaderKnown": true,
+                    "leaderNodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                    "isLeaderLocal": true,
+                    "lastErrorCode": null
+                  }
+                },
+                "cdcHealth": {
+                  "bufferDepth": 0,
+                  "retryCount": 0,
+                  "lastErrorCode": null,
+                  "lastForwardAttemptAtMs": 0
+                },
+                "cacheFreshness": {
+                  "lastAppliedAtMs": 1772212706346,
+                  "appliedSchemaVersion": "1772212706346-1-mg-1-r1",
+                  "stalenessMs": 59298,
+                  "lastAppliedCauseIdByTableName": {
+                    "services": "82ee854c-de63-4d73-b8b2-c7e531d48178",
+                    "node_endpoints": "572dc8c6-e58a-42ea-aee7-243bf4da4ce7",
+                    "service_endpoints": "81a92c06-3ff8-4915-80ea-1ab6f2466d36"
+                  }
+                },
+                "rowCounts": {
+                  "sysPostgresWireServiceCount": 0,
+                  "nodeEndpointsCount": 6,
+                  "serviceEndpointsCount": 17
+                },
+                "discovery": {
+                  "selectedNodeIds": [
+                    "37ab9190-8bcc-5378-ac57-9d012e3bf838",
+                    "7493b0ab-a054-5fad-a91b-5e331db29304",
+                    "8be8d30f-4499-5eed-865c-71b4d529a67a",
+                    "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58",
+                    "ff60df70-c157-50cb-bfdf-f617df0e5cb4"
+                  ],
+                  "excludedByNodeId": {}
+                }
+              }
+            },
+            "invariants": [
+              {
+                "code": "leadership_unknown_control_plane_partition",
+                "passed": true,
+                "details": {
+                  "violationCount": 0,
+                  "violations": []
+                }
+              },
+              {
+                "code": "cdc_retry_storm",
+                "passed": true,
+                "details": {
+                  "threshold": 1,
+                  "maxRetryCount": 0,
+                  "violatingNodeIds": []
+                }
+              },
+              {
+                "code": "cache_stale_watermark",
+                "passed": false,
+                "details": {
+                  "thresholdMs": 5000,
+                  "maxStalenessMs": 59298,
+                  "violatingNodeIds": [
+                    "11601fe0-72d6-5853-8590-ec2881853e72",
+                    "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                    "7493b0ab-a054-5fad-a91b-5e331db29304"
+                  ]
+                }
+              },
+              {
+                "code": "services_missing_sys_postgres_wire",
+                "passed": false,
+                "details": {
+                  "violatingNodeIds": [
+                    "11601fe0-72d6-5853-8590-ec2881853e72",
+                    "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                    "7493b0ab-a054-5fad-a91b-5e331db29304"
+                  ]
+                }
+              },
+              {
+                "code": "discovery_empty_with_services_present",
+                "passed": true,
+                "details": {
+                  "violatingNodeIds": []
+                }
+              },
+              {
+                "code": "snapshot_missing",
+                "passed": false,
+                "details": {
+                  "missingCount": 4,
+                  "missingNodeIds": [
+                    "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58",
+                    "8be8d30f-4499-5eed-865c-71b4d529a67a",
+                    "ff60df70-c157-50cb-bfdf-f617df0e5cb4",
+                    "37ab9190-8bcc-5378-ac57-9d012e3bf838"
+                  ]
+                }
+              }
+            ],
+            "dominantInvariant": "cache_stale_watermark",
+            "playback": {
+              "manifestDir": "test-output/reports/.playback/postgres-baseline-7node-20260227T171726Z/postgres-baseline-comparison",
+              "manifestPath": "test-output/reports/.playback/postgres-baseline-7node-20260227T171726Z/postgres-baseline-comparison/playback-manifest.json",
+              "viewerPath": "test-output/reports/.playback/postgres-baseline-7node-20260227T171726Z/postgres-baseline-comparison/playback-viewer.html"
+            }
+          }
+        }
+      },
+      "exampleResults": null,
+      "loadMetrics": null,
+      "partitionHotspots": null,
+      "optimizationPriorities": null
+    }
+  ],
+  "benchmarkRegressionGate": {
+    "enabled": false,
+    "status": "skipped",
+    "reason": "disabled",
+    "settings": {
+      "enabled": false,
+      "maxThroughputRegressionRatio": 0.1,
+      "minimumThroughputRatioSutToBaseline": 0.1,
+      "baselineProvider": "liferaft",
+      "failIfBaselineMissing": false,
+      "approvedMitigationId": null,
+      "parityMismatchPolicy": "warn"
+    },
+    "currentProvider": "liferaft",
+    "baselineProvider": "liferaft",
+    "comparedScenarioCount": 0,
+    "failedScenarioCount": 0,
+    "mitigatedScenarioCount": 0,
+    "missingBaselineScenarios": [],
+    "comparisons": [],
+    "parityMismatchCount": 0,
+    "lowThroughputRatioCount": 0,
+    "warnings": []
+  },
+  "metadata": {
+    "raftProvider": "liferaft",
+    "configPath": "test/distributed/config/local-benchmark-7node.json",
+    "scenarioFilter": "postgres-baseline-comparison"
+  }
+}

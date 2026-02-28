@@ -1,0 +1,2733 @@
+{
+  "timestamp": "2026-02-27T08:22:04.201Z",
+  "summary": {
+    "total": 1,
+    "passed": 0,
+    "failed": 1,
+    "duration": 102381
+  },
+  "optimizationSummary": {
+    "totalPriorityItems": 0,
+    "scenariosWithPriorities": 0,
+    "topComponents": [],
+    "topPartitions": []
+  },
+  "standardSummary": {
+    "historicalReportsConsidered": 20,
+    "scenariosComparedToPrevious": 1,
+    "scenariosComparedToPostgresBaseline": 0,
+    "diagnosticsCoverageSummary": {
+      "scenariosWithCoverage": 0,
+      "scenariosWithoutCoverage": 1,
+      "totalSamples": 0,
+      "coverageRate": 0,
+      "scenarios": [
+        {
+          "scenario": "postgres-baseline-comparison",
+          "status": "unavailable",
+          "reason": "not_reported",
+          "sampleCount": 0
+        }
+      ]
+    },
+    "writePathAttributionSummary": {
+      "scenariosWithDiagnostics": 0,
+      "topPhases": []
+    },
+    "scaleEfficiencySummary": {
+      "observationCount": 0,
+      "comparableGroupCount": 0,
+      "groups": [],
+      "topOpportunities": []
+    },
+    "scenarios": [
+      {
+        "scenario": "postgres-baseline-comparison",
+        "similarityKey": "postgres-baseline-comparison|default",
+        "current": {
+          "passed": false,
+          "clusterSize": 3,
+          "durationMs": 102381,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "previousSimilarRun": {
+          "reportTimestamp": "2026-02-27T08:19:39.870Z",
+          "reportPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/postgres-baseline-3node-20260227T081800Z.report.json",
+          "passed": false,
+          "clusterSize": 3,
+          "durationMs": 99281,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "deltaVsPrevious": {
+          "passedChanged": false,
+          "clusterSizeChanged": false,
+          "durationMs": 3100,
+          "durationRatio": 0.031224504185090804,
+          "opsPerSec": 0,
+          "opsPerSecRatio": null,
+          "opsPerSecPerNode": 0,
+          "opsPerSecPerNodeRatio": null,
+          "p99LatencyMs": 0,
+          "p99LatencyMsRatio": null
+        },
+        "postgresBaseline": null,
+        "parity": null,
+        "writePathTopPhases": []
+      }
+    ]
+  },
+  "scenarios": [
+    {
+      "scenario": "postgres-baseline-comparison",
+      "passed": false,
+      "duration": 102381,
+      "clusterSize": 3,
+      "startedAt": "2026-02-27T08:20:21.799Z",
+      "convergenceTiming": null,
+      "analysisSummary": null,
+      "error": "postgres-baseline-comparison failed in phase pre_load_gate: strict_preload_readiness_failed: SUT load nodes did not reach quiescent state within 30000ms (nodeProbeFailures=node_probe_error:35a891b8-c1a0-5064-9c6e-2acfba61c2a7=discovery_not_ready:schema_version_unknown; node_probe_error:11601fe0-72d6-5853-8590-ec2881853e72=discovery_not_ready:routing_not_ready|topology_not_ready|schema_version_unknown; node_probe_error:11601fe0-72d6-5853-8590-ec2881853e72=discovery_not_ready:schema_version_unknown, readyLoadNodes=1), node_reasons=35a891b8-c1a0-5064-9c6e-2acfba61c2a7:discovery_not_ready:schema_version_unknown;11601fe0-72d6-5853-8590-ec2881853e72:discovery_not_ready:routing_not_ready|topology_not_ready|schema_version_unknown|discovery_not_ready:schema_version_unknown",
+      "stackTrace": "Error: postgres-baseline-comparison failed in phase pre_load_gate: strict_preload_readiness_failed: SUT load nodes did not reach quiescent state within 30000ms (nodeProbeFailures=node_probe_error:35a891b8-c1a0-5064-9c6e-2acfba61c2a7=discovery_not_ready:schema_version_unknown; node_probe_error:11601fe0-72d6-5853-8590-ec2881853e72=discovery_not_ready:routing_not_ready|topology_not_ready|schema_version_unknown; node_probe_error:11601fe0-72d6-5853-8590-ec2881853e72=discovery_not_ready:schema_version_unknown, readyLoadNodes=1), node_reasons=35a891b8-c1a0-5064-9c6e-2acfba61c2a7:discovery_not_ready:schema_version_unknown;11601fe0-72d6-5853-8590-ec2881853e72:discovery_not_ready:routing_not_ready|topology_not_ready|schema_version_unknown|discovery_not_ready:schema_version_unknown\n    at Module.run (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/scenarios/postgres-baseline-comparison.js:6075:19)\n    at async runScenarios (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:1056:9)\n    at async main (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:1593:33)",
+      "logs": null,
+      "playback": {
+        "scenarioName": "postgres-baseline-comparison",
+        "startedAt": 1772180421800,
+        "endedAt": 1772180524198,
+        "durationMs": 102398,
+        "files": {
+          "events": "test-output/reports/.playback/postgres-baseline-3node-20260227T082021Z/postgres-baseline-comparison/events.ndjson",
+          "samples": "test-output/reports/.playback/postgres-baseline-3node-20260227T082021Z/postgres-baseline-comparison/samples.ndjson",
+          "snapshots": "test-output/reports/.playback/postgres-baseline-3node-20260227T082021Z/postgres-baseline-comparison/snapshots.ndjson",
+          "manifest": "test-output/reports/.playback/postgres-baseline-3node-20260227T082021Z/postgres-baseline-comparison/playback-manifest.json",
+          "viewer": "test-output/reports/.playback/postgres-baseline-3node-20260227T082021Z/postgres-baseline-comparison/playback-viewer.html"
+        },
+        "counts": {
+          "events": 32,
+          "samples": 175,
+          "snapshots": 72
+        },
+        "warnings": []
+      },
+      "trace": null,
+      "traceAssertion": null,
+      "memoryLeak": {
+        "enabled": false,
+        "analyzed": false,
+        "leakDetected": false,
+        "sampleCount": 0,
+        "nodeCount": 0,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "nodes": [],
+        "warnings": [],
+        "config": {
+          "enabled": false,
+          "failOnDetection": false,
+          "requireSamples": false,
+          "minSamplesPerNode": 8,
+          "warmupFraction": 0.2,
+          "minWarmupMs": 30000,
+          "minAnalysisWindowMs": 60000,
+          "maxPositiveSlopeBytesPerMin": 1048576,
+          "minGrowthBytes": 16777216,
+          "minPositiveDeltaRatio": 0.65,
+          "captureHeapArtifacts": false,
+          "heapSnapshotNearLimitCount": 2
+        }
+      },
+      "memoryLeakAssertion": null,
+      "performanceDiagnostics": null,
+      "details": {
+        "diagnostics": {
+          "failure": {
+            "schemaVersion": 1,
+            "rootCauseClass": "discovery",
+            "phase": "pre_load_gate",
+            "affectedNodeIds": [
+              "11601fe0-72d6-5853-8590-ec2881853e72",
+              "35a891b8-c1a0-5064-9c6e-2acfba61c2a7"
+            ],
+            "reasonCounts": {
+              "schema_version_unknown": 3,
+              "routing_not_ready": 1,
+              "topology_not_ready": 1
+            },
+            "dominantReason": "routing_not_ready",
+            "strictMode": true,
+            "versionConvergence": {
+              "requiredSchemaVersion": "1772180480496",
+              "nodes": {
+                "7493b0ab-a054-5fad-a91b-5e331db29304": {
+                  "requiredSchemaVersion": "1772180480496",
+                  "observedSchemaVersion": "1772180480496",
+                  "ready": true,
+                  "unmetReasons": []
+                },
+                "35a891b8-c1a0-5064-9c6e-2acfba61c2a7": {
+                  "requiredSchemaVersion": "1772180480496",
+                  "observedSchemaVersion": null,
+                  "ready": false,
+                  "unmetReasons": [
+                    "schema_version_unknown"
+                  ]
+                },
+                "11601fe0-72d6-5853-8590-ec2881853e72": {
+                  "requiredSchemaVersion": "1772180480496",
+                  "observedSchemaVersion": null,
+                  "ready": false,
+                  "unmetReasons": [
+                    "schema_version_unknown"
+                  ]
+                }
+              }
+            },
+            "versionLagSummary": {
+              "requiredSchemaVersion": "1772180480496",
+              "nodes": {
+                "7493b0ab-a054-5fad-a91b-5e331db29304": {
+                  "observedSchemaVersion": "1772180480496",
+                  "requiredSchemaVersion": "1772180480496",
+                  "unmetReasons": [],
+                  "lagging": false
+                },
+                "35a891b8-c1a0-5064-9c6e-2acfba61c2a7": {
+                  "observedSchemaVersion": null,
+                  "requiredSchemaVersion": "1772180480496",
+                  "unmetReasons": [
+                    "schema_version_unknown"
+                  ],
+                  "lagging": true
+                },
+                "11601fe0-72d6-5853-8590-ec2881853e72": {
+                  "observedSchemaVersion": null,
+                  "requiredSchemaVersion": "1772180480496",
+                  "unmetReasons": [
+                    "schema_version_unknown"
+                  ],
+                  "lagging": true
+                }
+              }
+            },
+            "saturation": {
+              "schemaVersion": 1,
+              "cdcForwardTimeoutCount": 0,
+              "systemTableQueryTimeoutCount": 0,
+              "snapshotCollectionErrorCount": 0
+            },
+            "readinessTimeline": [
+              {
+                "type": "poll_snapshot",
+                "sequence": 1,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180493703
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 2,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180493703
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 3,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180493704
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 4,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "from": null,
+                "to": "schema_version_unknown",
+                "timestampMs": 1772180493704
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 5,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "routing_not_ready",
+                  "topology_not_ready",
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180493705
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 6,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "from": null,
+                "to": "routing_not_ready|topology_not_ready|schema_version_unknown",
+                "timestampMs": 1772180493705
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 7,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180494222
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 8,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180494222
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 9,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180494223
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 10,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "routing_not_ready",
+                  "topology_not_ready",
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180494224
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 11,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180494741
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 12,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180494741
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 13,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180494742
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 14,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "routing_not_ready",
+                  "topology_not_ready",
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180494743
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 15,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180495247
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 16,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180495247
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 17,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180495251
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 18,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "routing_not_ready",
+                  "topology_not_ready",
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180495255
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 19,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180495759
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 20,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180495759
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 21,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180495762
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 22,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "routing_not_ready",
+                  "topology_not_ready",
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180495765
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 23,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180496272
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 24,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180496272
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 25,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180496273
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 26,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "routing_not_ready",
+                  "topology_not_ready",
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180496274
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 27,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180496775
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 28,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180496775
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 29,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180496776
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 30,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "routing_not_ready",
+                  "topology_not_ready",
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180496777
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 31,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180497279
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 32,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180497279
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 33,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180497281
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 34,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "routing_not_ready",
+                  "topology_not_ready",
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180497282
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 35,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180497787
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 36,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180497787
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 37,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180497788
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 38,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "routing_not_ready",
+                  "topology_not_ready",
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180497788
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 39,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180498289
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 40,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180498289
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 41,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180498290
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 42,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "routing_not_ready",
+                  "topology_not_ready",
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180498551
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 43,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180499064
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 44,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180499064
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 45,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180499065
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 46,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "routing_not_ready",
+                  "topology_not_ready",
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180499066
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 47,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180499570
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 48,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180499570
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 49,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180499573
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 50,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "routing_not_ready",
+                  "topology_not_ready",
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180499576
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 51,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180500078
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 52,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180500078
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 53,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180500080
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 54,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "routing_not_ready",
+                  "topology_not_ready",
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180500083
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 55,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180500583
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 56,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180500583
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 57,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180500584
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 58,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "routing_not_ready",
+                  "topology_not_ready",
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180500585
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 59,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180501087
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 60,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180501087
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 61,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180501088
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 62,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "routing_not_ready",
+                  "topology_not_ready",
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180501089
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 63,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180501599
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 64,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180501599
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 65,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180501600
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 66,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "routing_not_ready",
+                  "topology_not_ready",
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180501600
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 67,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180502103
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 68,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180502103
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 69,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180502104
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 70,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "routing_not_ready",
+                  "topology_not_ready",
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180502107
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 71,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180502608
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 72,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180502608
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 73,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180502609
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 74,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "routing_not_ready",
+                  "topology_not_ready",
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180502610
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 75,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180503113
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 76,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180503113
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 77,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180503116
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 78,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "routing_not_ready",
+                  "topology_not_ready",
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180503119
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 79,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180503639
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 80,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180503639
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 81,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180503640
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 82,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "routing_not_ready",
+                  "topology_not_ready",
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180503641
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 83,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180504144
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 84,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180504144
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 85,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180504145
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 86,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "routing_not_ready",
+                  "topology_not_ready",
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180504145
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 87,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180504650
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 88,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180504650
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 89,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180504653
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 90,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "routing_not_ready",
+                  "topology_not_ready",
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180504655
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 91,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180505158
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 92,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180505158
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 93,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180505161
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 94,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "routing_not_ready",
+                  "topology_not_ready",
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180505164
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 95,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180505682
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 96,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180505682
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 97,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180505683
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 98,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180505684
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 99,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "from": "routing_not_ready|topology_not_ready|schema_version_unknown",
+                "to": "schema_version_unknown",
+                "timestampMs": 1772180505684
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 100,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180506185
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 101,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180506185
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 102,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180506186
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 103,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180506187
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 104,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180506688
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 105,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180506688
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 106,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180506689
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 107,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180506690
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 108,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180507193
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 109,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180507193
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 110,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180507193
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 111,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180507194
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 112,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180507695
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 113,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180507695
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 114,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180507696
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 115,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180507697
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 116,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180508202
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 117,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180508202
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 118,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180508203
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 119,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180508522
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 120,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180509219
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 121,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180509219
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 122,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180509220
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 123,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180509221
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 124,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180509723
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 125,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180509723
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 126,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180509725
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 127,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180509728
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 128,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180510232
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 129,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180510232
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 130,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180510236
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 131,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180510239
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 132,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180510742
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 133,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180510742
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 134,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180510745
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 135,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180510747
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 136,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180511265
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 137,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180511265
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 138,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180511266
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 139,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180511267
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 140,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180511768
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 141,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180511768
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 142,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180511769
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 143,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180511770
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 144,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180512271
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 145,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180512271
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 146,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180512272
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 147,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180512273
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 148,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180512777
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 149,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180512777
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 150,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180512780
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 151,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180512782
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 152,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180513284
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 153,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180513284
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 154,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180513286
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 155,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180513554
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 156,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180514190
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 157,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180514190
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 158,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180514191
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 159,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180514192
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 160,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180514696
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 161,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180514696
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 162,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180514700
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 163,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180514703
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 164,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180515218
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 165,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180515218
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 166,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180515219
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 167,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180515220
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 168,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180515724
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 169,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180515724
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 170,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180515725
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 171,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180515726
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 172,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180516228
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 173,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180516228
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 174,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180516229
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 175,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180516230
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 176,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180516731
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 177,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180516731
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 178,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180516733
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 179,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180516733
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 180,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180517235
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 181,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180517235
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 182,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180517237
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 183,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180517239
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 184,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180517740
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 185,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180517740
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 186,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180517741
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 187,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180517742
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 188,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180518244
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 189,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180518244
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 190,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180518245
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 191,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180518566
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 192,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180519101
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 193,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180519101
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 194,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180519102
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 195,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180519103
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 196,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180519607
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 197,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180519607
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 198,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180519610
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 199,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180519613
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 200,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180520117
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 201,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180520117
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 202,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180520121
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 203,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180520124
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 204,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180520627
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 205,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180520627
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 206,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180520629
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 207,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180520631
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 208,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180521133
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 209,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180521133
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 210,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180521135
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 211,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180521138
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 212,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180521643
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 213,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180521643
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 214,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180521646
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 215,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180521648
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 216,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180522155
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 217,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180522155
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 218,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180522158
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 219,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180522162
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 220,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180522663
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 221,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180522663
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 222,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180522664
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 223,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180522665
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 224,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180523168
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 225,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180523168
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 226,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180523170
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 227,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180523173
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 228,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "ready": true,
+                "reasons": [],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": "1772180480496",
+                "timestampMs": 1772180523675
+              },
+              {
+                "type": "reason_transition",
+                "sequence": 229,
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "from": null,
+                "to": "",
+                "timestampMs": 1772180523675
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 230,
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180523676
+              },
+              {
+                "type": "poll_snapshot",
+                "sequence": 231,
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "ready": false,
+                "reasons": [
+                  "schema_version_unknown"
+                ],
+                "requiredSchemaVersion": "1772180480496",
+                "observedSchemaVersion": null,
+                "timestampMs": 1772180523677
+              }
+            ],
+            "nodeReasonsByNodeId": {
+              "35a891b8-c1a0-5064-9c6e-2acfba61c2a7": [
+                "discovery_not_ready:schema_version_unknown"
+              ],
+              "11601fe0-72d6-5853-8590-ec2881853e72": [
+                "discovery_not_ready:routing_not_ready|topology_not_ready|schema_version_unknown",
+                "discovery_not_ready:schema_version_unknown"
+              ]
+            }
+          }
+        }
+      },
+      "exampleResults": null,
+      "loadMetrics": null,
+      "partitionHotspots": null,
+      "optimizationPriorities": null
+    }
+  ],
+  "benchmarkRegressionGate": {
+    "enabled": false,
+    "status": "skipped",
+    "reason": "disabled",
+    "settings": {
+      "enabled": false,
+      "maxThroughputRegressionRatio": 0.1,
+      "minimumThroughputRatioSutToBaseline": 0.1,
+      "baselineProvider": "liferaft",
+      "failIfBaselineMissing": false,
+      "approvedMitigationId": null,
+      "parityMismatchPolicy": "warn"
+    },
+    "currentProvider": "liferaft",
+    "baselineProvider": "liferaft",
+    "comparedScenarioCount": 0,
+    "failedScenarioCount": 0,
+    "mitigatedScenarioCount": 0,
+    "missingBaselineScenarios": [],
+    "comparisons": [],
+    "parityMismatchCount": 0,
+    "lowThroughputRatioCount": 0,
+    "warnings": []
+  },
+  "metadata": {
+    "raftProvider": "liferaft",
+    "configPath": "test/distributed/config/local-benchmark-3node.json",
+    "scenarioFilter": "postgres-baseline-comparison"
+  }
+}

@@ -27,6 +27,28 @@ This ensures:
 - Regressions are prevented by the new test
 - The test suite grows to cover real-world failure scenarios
 
+## Owner-Path Regression Policy
+
+When a bug involves component ownership, lifecycle persistence, or system-table
+row mutation, tests must prove that the canonical owner is actually used.
+
+Required coverage:
+
+1. **Injected owner usage** - If setup injects an owner such as
+   `replicaStateMachine`, `serviceLifecycleManager`, or similar, add a test that
+   fails if the consumer bypasses that owner.
+2. **Create-vs-update separation** - Add coverage proving that the initial row
+   creation path uses insert/full-shape semantics and later lifecycle changes use
+   update/partial-shape semantics.
+3. **Field ownership protection** - Add a regression test that a component does
+   not rewrite fields owned by another component (for example, `raft_role`).
+4. **Missing-row behavior** - Add a test proving a missing authoritative row is
+   handled only by the canonical creation owner, not by a local fallback inside
+   an updater.
+
+These tests should be small and targeted. The goal is to prove architecture
+conformance, not just end-state behavior.
+
 ## Test Duration Hard Limit
 
 **Any uinit test taking longer than 2 seconds is a HARD ERROR that requires immediate analysis. INtegration tests can take up to 30 seconds**
@@ -117,6 +139,22 @@ When you discover failing or timing-out tests:
 5. **VERIFY** - Re-run the test to confirm it passes
 
 **Rationale:** Broken tests erode confidence in the test suite. If tests are allowed to fail, developers stop trusting test results and the suite becomes worthless. Every test must pass, every time.
+
+## System-Table Mutation Test Requirements
+
+For any change that affects writes to `services`, `nodes`, `partitions`,
+`tables`, or another system table with shared ownership:
+
+1. Add or update a unit test for the direct writer/owner path.
+2. Add or update one integration test that verifies the resulting row becomes
+   visible through `SystemTableCache` on the relevant node or nodes.
+3. When the mutation is lifecycle-related, assert both:
+   - the initial row exists with canonical identity fields
+   - later transitions preserve owner boundaries and do not recreate or replace
+     the row
+
+Do not rely on a broad scenario test alone when the bug is in a narrow
+system-table write path.
 
 ## Test Execution Strategy
 

@@ -75,19 +75,47 @@ function createMockRebalancer() {
  */
 function createMockMessageRouter(options = {}) {
   const connections = [];
-  const nodeConnections = options.connectedNodes ?
-    new Map(options.connectedNodes.map((id) => [id, true])) :
-    new Map();
+  const nodeConnections = new Map();
+
+  if (Array.isArray(options.connectedNodes)) {
+    for (const nodeId of options.connectedNodes) {
+      nodeConnections.set(nodeId, {state: 'connected'});
+    }
+  }
+  if (options.connectionStates && typeof options.connectionStates === 'object') {
+    for (const [nodeId, state] of Object.entries(options.connectionStates)) {
+      nodeConnections.set(nodeId, {state});
+    }
+  }
+
+  const resolveConnectionState = (entry) => {
+    if (!entry) {
+      return null;
+    }
+    if (typeof entry === 'string') {
+      return entry;
+    }
+    if (entry === true) {
+      return 'connected';
+    }
+    if (typeof entry === 'object' && typeof entry.state === 'string') {
+      return entry.state;
+    }
+    return null;
+  };
 
   return {
     nodeConnections,
     connections,
+    getConnectionState(nodeId) {
+      return resolveConnectionState(nodeConnections.get(nodeId));
+    },
     async connectToNode(nodeId, wsAddress) {
       if (options.shouldFail) {
         throw new Error(options.failureMessage || 'Connection failed');
       }
       connections.push({nodeId, wsAddress});
-      nodeConnections.set(nodeId, true);
+      nodeConnections.set(nodeId, {state: 'connected'});
     },
   };
 }
@@ -778,6 +806,35 @@ test('handleNodeJoinedCDC - skips already connected node', async (t) => {
   t.equal(result.skipped, true, 'should indicate skipped');
   t.equal(result.reason, 'already_connected', 'should have already_connected reason');
   t.equal(result.connected, false, 'should not connect');
+  t.end();
+});
+
+test('handleNodeJoinedCDC - reconnects when existing entry is disconnected', async (t) => {
+  const messageRouter = createMockMessageRouter({
+    connectionStates: {'existing-node': 'disconnected'},
+  });
+  const context = createMockEventContext({messageRouter});
+
+  const handler = new CDCEventHandler({
+    nodeId: 'test-node',
+    eventContext: context,
+  });
+
+  const cdcEvent = {
+    tableName: SystemTableName.NODES,
+    operation: CDC_OPERATION.INSERT,
+    data: {
+      node_id: 'existing-node',
+      node_address: 'localhost:8080',
+    },
+  };
+
+  const result = await handler.handleNodeJoinedCDC(cdcEvent);
+
+  t.equal(result.processed, true, 'should process event');
+  t.equal(result.connected, true, 'should reconnect disconnected entry');
+  t.equal(messageRouter.connections.length, 1, 'should attempt reconnect');
+  t.equal(messageRouter.connections[0].nodeId, 'existing-node');
   t.end();
 });
 

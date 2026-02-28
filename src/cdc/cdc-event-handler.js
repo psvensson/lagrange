@@ -9,8 +9,8 @@
  * @module cdc/cdc-event-handler
  */
 
-import {COLUMN, NUM, TYPEOF} from '../constants/index.js';
-import {ADDRESS, PROTOCOL, CDC_OPERATION} from '../constants/index.js';
+import {ADDRESS, COLUMN, NUM, PROTOCOL, CDC_OPERATION, STATE, TYPEOF} from
+  '../constants/index.js';
 import {METRICS_LOG_TAG} from '../constants/index.js';
 import {ENTRYPOINT_DEFAULT} from '../constants/entrypoint.js';
 import {LoggingService} from '../logging/logging-service.js';
@@ -475,8 +475,11 @@ class CDCEventHandler {
       };
     }
 
-    // Skip if already connected
-    if (messageRouter.nodeConnections?.has(targetNodeId)) {
+    const connectionState = this.resolveRouterConnectionState(
+      messageRouter,
+      targetNodeId,
+    );
+    if (connectionState === STATE.CONNECTED) {
       this.logger.debug(CDC_LOG_MSG.NEW_NODE_SKIP_CONNECTED, {
         nodeId: this.nodeId,
         targetNodeId,
@@ -564,6 +567,38 @@ class CDCEventHandler {
         error: connectError.message,
       };
     }
+  }
+
+  /**
+   * Resolve connection state for one node from message router.
+   * @param {Object} messageRouter - Message router instance.
+   * @param {string} targetNodeId - Remote node ID.
+   * @return {string|null} Connection state or null when unavailable.
+   * @private
+   */
+  resolveRouterConnectionState(messageRouter, targetNodeId) {
+    if (!messageRouter || !targetNodeId) {
+      return null;
+    }
+
+    if (typeof messageRouter.getConnectionState === TYPEOF.FUNCTION) {
+      return messageRouter.getConnectionState(targetNodeId);
+    }
+
+    const connectionEntry = messageRouter.nodeConnections?.get(targetNodeId);
+    if (typeof connectionEntry === TYPEOF.STRING) {
+      return connectionEntry;
+    }
+    if (connectionEntry === true) {
+      return STATE.CONNECTED;
+    }
+    if (connectionEntry && typeof connectionEntry === TYPEOF.OBJECT) {
+      const state = connectionEntry.state;
+      if (typeof state === TYPEOF.STRING) {
+        return state;
+      }
+    }
+    return null;
   }
 
   /**

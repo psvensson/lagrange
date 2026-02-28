@@ -18,16 +18,22 @@ import {
   ReplicaOperationMessageType,
   ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
+import {RAFT_ROLE} from '../../src/raft/constants.js';
 
 /**
  * Create a mock CDC integration service.
  * @param {SystemTableCache} [cache] - Optional cache to update.
+ * @param {Object} [options] - Optional behavior overrides.
+ * @param {Function} [options.executeSQL] - SQL execution callback.
  * @return {Object} Mock CDC service.
  */
-function createMockCDCService(cache) {
+function createMockCDCService(cache, options = {}) {
   const operations = [];
+  const executeSQL = typeof options.executeSQL === 'function' ?
+    options.executeSQL :
+    null;
 
-  return {
+  const service = {
     operations,
     async insertSystemTableRow(tableName, data) {
       operations.push({type: 'insert', tableName, data});
@@ -54,6 +60,15 @@ function createMockCDCService(cache) {
       operations.length = 0;
     },
   };
+
+  if (executeSQL) {
+    service.executeSQL = async (sql, params = []) => {
+      operations.push({type: 'executeSQL', sql, params});
+      return executeSQL(sql, params);
+    };
+  }
+
+  return service;
 }
 
 /**
@@ -143,6 +158,32 @@ function createMetadataOnlyCache(options = {}) {
     partition_key_start: null,
     partition_key_end: null,
     leader_node_id: null,
+  });
+
+  return cache;
+}
+
+/**
+ * Seed a cache with partition service metadata only.
+ * @param {Object} options - Seed options.
+ * @return {SystemTableCache} Seeded cache.
+ */
+function createServiceOnlyCache(options = {}) {
+  const cache = new SystemTableCache();
+  const partitionId = options.partitionId || 'partition-1';
+  const leaderNodeId = options.leaderNodeId || 'leader-node';
+  const leaderReplicaId = options.leaderReplicaId || 'leader-replica';
+
+  cache.applySystemTableChange(SystemTableName.SERVICES, 'INSERT', {
+    service_id: leaderReplicaId,
+    service_type: 'partition',
+    partition_id: partitionId,
+    node_id: leaderNodeId,
+    raft_role: 'leader',
+    status: ReplicaStatus.ACTIVE,
+    address: `${leaderNodeId}/partition/${leaderReplicaId}`,
+    created_at: Date.now(),
+    updated_at: Date.now(),
   });
 
   return cache;
@@ -346,7 +387,7 @@ test('ReplicaHandler', async (t) => {
     // Check local replica was tracked
     const localReplica = handler.getLocalReplica('replica-1');
     t.ok(localReplica, 'local replica tracked');
-    t.equal(localReplica.status, ReplicaStatus.CREATING, 'status is creating');
+    t.equal(localReplica.status, ReplicaStatus.PENDING, 'status is pending');
 
     await created;
 
@@ -563,6 +604,180 @@ test('ReplicaHandler', async (t) => {
 
     handler.shutdown();
   });
+
+  t.test('handleCreateReplica - retries metadata resolution during cache lag',
+    async (t) => {
+      const partitionId = 'partition-1';
+      const replicaId = 'replica-1';
+      const operationId = 'op-1';
+      const tableId = 'table-1';
+      const tableName = 'test_table';
+      const cache = createServiceOnlyCache({partitionId});
+      seedReplicaOperation(cache, operationId, {partitionId, replicaId});
+      const mockCDC = createMockCDCService(cache);
+
+      const handler = new ReplicaHandler({
+        nodeId: 'test-node',
+        cdcIntegrationService: mockCDC,
+        systemTableCache: cache,
+        createPartitionService: createMockPartitionServiceFactory(),
+        dataDir: tempDir,
+      });
+
+      handler.initialize();
+      const created = waitForReplicaEvent(
+        handler,
+        'replicaCreated',
+        'replicaCreationFailed',
+      );
+
+      const delayedMetadataSeedTimer = setTimeout(() => {
+        cache.applySystemTableChange(SystemTableName.TABLES, 'INSERT', {
+          table_id: tableId,
+          table_name: tableName,
+          schema_definition: JSON.stringify({
+            columns: [{name: 'id', type: 'TEXT', primaryKey: true}],
+          }),
+        });
+        cache.applySystemTableChange(SystemTableName.PARTITIONS, 'INSERT', {
+          partition_id: partitionId,
+          table_id: tableId,
+          partition_key_start: null,
+          partition_key_end: null,
+          leader_node_id: 'leader-node',
+        });
+      }, 50);
+      t.teardown(() => clearTimeout(delayedMetadataSeedTimer));
+
+      const response = await handler.handleCreateReplica({
+        operationId,
+        partitionId,
+        replicaId,
+      });
+      t.equal(response.status, ReplicaOperationResponseStatus.INITIATED,
+        'create request should be acknowledged');
+
+      await created;
+
+      const failedOperationUpdates = mockCDC.operations.filter((operation) =>
+        operation.type === 'update' &&
+        operation.tableName === SystemTableName.REPLICA_OPERATIONS &&
+        operation.data?.workflow_step === 'FAILED',
+      );
+      t.equal(failedOperationUpdates.length, 0,
+        'replica operation should not fail during transient metadata lag');
+
+      const serviceRow = cache.get(SystemTableName.SERVICES, replicaId);
+      t.equal(serviceRow?.status, ReplicaStatus.ACTIVE,
+        'replica should become ACTIVE after delayed metadata propagation');
+
+      handler.shutdown();
+    });
+
+  t.test(
+    'handleCreateReplica - hydrates missing metadata from authoritative system table SQL',
+    async (t) => {
+      const partitionId = 'partition-1';
+      const replicaId = 'replica-1';
+      const operationId = 'op-1';
+      const tableId = 'table-1';
+      const tableName = 'test_table';
+      const cache = createServiceOnlyCache({partitionId});
+      seedReplicaOperation(cache, operationId, {partitionId, replicaId});
+      const mockCDC = createMockCDCService(cache, {
+        executeSQL: async (sql, params = []) => {
+          if (String(sql).includes('FROM partitions') &&
+              params[0] === partitionId) {
+            return {
+              success: true,
+              rows: [{
+                partition_id: partitionId,
+                table_id: tableId,
+                partition_key_start: null,
+                partition_key_end: null,
+                leader_node_id: 'leader-node',
+              }],
+            };
+          }
+          if (String(sql).includes('FROM tables') &&
+              params[0] === tableId) {
+            return {
+              success: true,
+              rows: [{
+                table_id: tableId,
+                table_name: tableName,
+                schema_definition: JSON.stringify({
+                  columns: [{name: 'id', type: 'TEXT', primaryKey: true}],
+                }),
+              }],
+            };
+          }
+          if (String(sql).includes('FROM services') &&
+              params[0] === partitionId) {
+            return {
+              success: true,
+              rows: [{
+                service_id: 'leader-replica',
+                service_type: 'partition',
+                partition_id: partitionId,
+                node_id: 'leader-node',
+                raft_role: 'leader',
+                status: ReplicaStatus.ACTIVE,
+                address: 'leader-node/partition/leader-replica',
+                created_at: Date.now(),
+                updated_at: Date.now(),
+              }],
+            };
+          }
+          return {success: true, rows: []};
+        },
+      });
+
+      const handler = new ReplicaHandler({
+        nodeId: 'test-node',
+        cdcIntegrationService: mockCDC,
+        systemTableCache: cache,
+        createPartitionService: createMockPartitionServiceFactory(),
+        dataDir: tempDir,
+      });
+      handler.syncTimeoutMs = 300;
+      handler.initialize();
+
+      const created = waitForReplicaEvent(
+        handler,
+        'replicaCreated',
+        'replicaCreationFailed',
+      );
+
+      const response = await handler.handleCreateReplica({
+        operationId,
+        partitionId,
+        replicaId,
+      });
+      t.equal(response.status, ReplicaOperationResponseStatus.INITIATED,
+        'create request should be acknowledged');
+
+      await created;
+
+      const tableRow = cache.get(SystemTableName.TABLES, tableId);
+      t.ok(tableRow, 'table metadata should be hydrated into local cache');
+      const partitionRow = cache.get(SystemTableName.PARTITIONS, partitionId);
+      t.equal(partitionRow?.table_id, tableId,
+        'partition metadata should be hydrated into local cache');
+
+      const serviceRow = cache.get(SystemTableName.SERVICES, replicaId);
+      t.equal(serviceRow?.status, ReplicaStatus.ACTIVE,
+        'replica should become ACTIVE after metadata hydration');
+
+      const metadataQueries = mockCDC.operations.filter((operation) =>
+        operation.type === 'executeSQL',
+      );
+      t.ok(metadataQueries.length >= 2,
+        'handler should query authoritative system tables during metadata hydration');
+
+      handler.shutdown();
+    },
+  );
 
   t.test('handleRemoveReplica - returns not_found for missing replica',
     async (t) => {
@@ -948,21 +1163,134 @@ test('ReplicaHandler', async (t) => {
 
     // Check CDC operations
     const syncingUpdate = mockCDC.operations.find(
-      (op) => op.type === 'upsert' && op.data.status === ReplicaStatus.SYNCING,
+      (op) => op.type === 'update' && op.data.status === ReplicaStatus.SYNCING,
     );
     t.ok(syncingUpdate, 'syncing status update via CDC');
 
     const activeUpdate = mockCDC.operations.find(
-      (op) => op.type === 'upsert' && op.data.status === ReplicaStatus.ACTIVE,
+      (op) => op.type === 'update' && op.data.status === ReplicaStatus.ACTIVE,
     );
     t.ok(activeUpdate, 'active status update via CDC');
 
     handler.shutdown();
   });
 
+  t.test('status update does not overwrite raft role owned by partition service',
+    async (t) => {
+      const cache = createMetadataOnlyCache({partitionId: 'partition-1'});
+      cache.applySystemTableChange(SystemTableName.SERVICES, 'INSERT', {
+        service_id: 'replica-1',
+        service_type: 'partition',
+        partition_id: 'partition-1',
+        node_id: 'test-node',
+        replica_id: 'replica-1',
+        raft_role: null,
+        status: ReplicaStatus.SYNCING,
+        address: 'test-node/partition/replica-1',
+        created_at: Date.now(),
+        updated_at: Date.now(),
+      });
+      const mockCDC = createMockCDCService(cache);
+
+      const handler = new ReplicaHandler({
+        nodeId: 'test-node',
+        cdcIntegrationService: mockCDC,
+        systemTableCache: cache,
+        createPartitionService: createMockPartitionServiceFactory(),
+        dataDir: tempDir,
+      });
+
+      handler.localServices.set('replica-1', {
+        getRole() {
+          return RAFT_ROLE.LEADER;
+        },
+      });
+
+      await handler.updateReplicaStatus('replica-1', ReplicaStatus.ACTIVE, {
+        partitionId: 'partition-1',
+      });
+
+      const activeUpdate = mockCDC.operations.find((op) =>
+        op.type === 'update' && op.data.service_id === 'replica-1' &&
+        op.data.status === ReplicaStatus.ACTIVE,
+      );
+      t.ok(activeUpdate, 'status update should emit an update');
+      t.notOk(
+        Object.prototype.hasOwnProperty.call(activeUpdate?.data || {}, 'raft_role'),
+        'status update should not write raft_role',
+      );
+    });
+
+  t.test('create replica routes lifecycle through replica state machine',
+    async (t) => {
+      const cache = createSeededCache();
+      seedReplicaOperation(cache, 'op-1');
+      const mockCDC = createMockCDCService(cache);
+      const transitions = [];
+      const mockReplicaStateMachine = {
+        transition(replicaId, newState, context) {
+          transitions.push({replicaId, newState, context});
+          return true;
+        },
+        getState() {
+          return null;
+        },
+        registerReplicaSnapshot() {
+          return true;
+        },
+      };
+
+      const handler = new ReplicaHandler({
+        nodeId: 'test-node',
+        cdcIntegrationService: mockCDC,
+        systemTableCache: cache,
+        replicaStateMachine: mockReplicaStateMachine,
+        createPartitionService: createMockPartitionServiceFactory(),
+        dataDir: tempDir,
+      });
+
+      handler.initialize();
+
+      const created = waitForReplicaEvent(
+        handler,
+        'replicaCreated',
+        'replicaCreationFailed',
+      );
+
+      await handler.handleCreateReplica({
+        operationId: 'op-1',
+        partitionId: 'partition-1',
+        replicaId: 'replica-1',
+      });
+      await created;
+
+      t.same(
+        transitions.map((transition) => transition.newState),
+        [
+          ReplicaStatus.PENDING,
+          ReplicaStatus.CREATING,
+          ReplicaStatus.SYNCING,
+          ReplicaStatus.ACTIVE,
+        ],
+        'handler should drive replica lifecycle via the shared state machine',
+      );
+    });
+
   t.test('async removal updates status via CDC', async (t) => {
     const cache = createSeededCache();
     seedReplicaOperation(cache, 'op-1', {type: 'REMOVE'});
+    cache.applySystemTableChange(SystemTableName.SERVICES, 'INSERT', {
+      service_id: 'replica-1',
+      service_type: 'partition',
+      partition_id: 'partition-1',
+      node_id: 'test-node',
+      replica_id: 'replica-1',
+      raft_role: RAFT_ROLE.FOLLOWER,
+      status: ReplicaStatus.ACTIVE,
+      address: 'test-node/partition/replica-1',
+      created_at: Date.now(),
+      updated_at: Date.now(),
+    });
     const mockCDC = createMockCDCService(cache);
 
     const handler = new ReplicaHandler({
@@ -1007,12 +1335,12 @@ test('ReplicaHandler', async (t) => {
 
     // Check CDC operations
     const removingUpdate = mockCDC.operations.find(
-      (op) => op.type === 'upsert' && op.data.status === ReplicaStatus.REMOVING,
+      (op) => op.type === 'update' && op.data.status === ReplicaStatus.REMOVING,
     );
     t.ok(removingUpdate, 'removing status update via CDC');
 
     const removedUpdate = mockCDC.operations.find(
-      (op) => op.type === 'upsert' && op.data.status === ReplicaStatus.REMOVED,
+      (op) => op.type === 'update' && op.data.status === ReplicaStatus.REMOVED,
     );
     t.ok(removedUpdate, 'removed status update via CDC');
 

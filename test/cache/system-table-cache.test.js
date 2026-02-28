@@ -11,6 +11,7 @@ import {
 } from '../../src/cache/system-table-cache.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {HLCClockService} from '../../src/hlc/hlc-clock-service.js';
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -37,6 +38,43 @@ test('SystemTableCache - constructor initializes all system tables', async (t) =
   t.equal(cache.getTableNames().length, SYSTEM_TABLES.length,
     'Should have all system tables');
 });
+
+test(
+  'SystemTableCache - applied schema version should stay monotonic on out-of-order updates',
+  async (t) => {
+    const cache = new SystemTableCache();
+    const hlcClock = new HLCClockService('cache-monotonic');
+    const olderVersion = hlcClock.now().toString();
+    const newerVersion = hlcClock.now().toString();
+
+    cache.recordAppliedSchemaVersion('tables', newerVersion);
+    cache.recordAppliedSchemaVersion('tables', olderVersion);
+
+    t.equal(
+      cache.getAppliedSchemaVersion('tables'),
+      newerVersion,
+      'out-of-order version update should not regress applied schema version',
+    );
+  },
+);
+
+test(
+  'SystemTableCache - duplicate applied schema versions should be no-regression',
+  async (t) => {
+    const cache = new SystemTableCache();
+    const hlcClock = new HLCClockService('cache-duplicate');
+    const schemaVersion = hlcClock.now().toString();
+
+    cache.recordAppliedSchemaVersion('tables', schemaVersion);
+    cache.recordAppliedSchemaVersion('tables', schemaVersion);
+
+    t.same(
+      cache.getAppliedSchemaVersions(),
+      {tables: schemaVersion},
+      'duplicate schema version should keep a stable applied-version snapshot',
+    );
+  },
+);
 
 test('SystemTableCache - get returns undefined for non-existent key', async (t) => {
   const cache = new SystemTableCache();
@@ -210,6 +248,78 @@ test('SystemTableCache - stale UPDATE is ignored when existing row is newer', as
   t.equal(result.status, 'active', 'stale update should not override newer cache row');
   t.equal(result.updated_at, 200, 'updated_at should remain at newer timestamp');
 });
+
+test(
+  'SystemTableCache - stale INSERT backfills missing table fields on newer partial row',
+  async (t) => {
+    const cache = new SystemTableCache();
+
+    cache.applySystemTableChange('tables', CDC_OPERATIONS.UPDATE, {
+      table_id: 'tbl-1',
+      table_policies: '{"retentionDays":7}',
+      updated_at: 200,
+    });
+
+    cache.applySystemTableChange('tables', CDC_OPERATIONS.INSERT, {
+      table_id: 'tbl-1',
+      table_name: 'benchmark_events',
+      schema_definition: '{"columns":[{"name":"id","type":"TEXT"}]}',
+      partition_key: 'id',
+      table_policies: '{}',
+      partition_count: 1,
+      created_at: 100,
+      updated_at: 100,
+    });
+
+    const tableRow = cache.get('tables', 'tbl-1');
+    t.equal(tableRow.table_name, 'benchmark_events',
+      'stale full-row insert should backfill missing table_name');
+    t.equal(tableRow.partition_key, 'id',
+      'stale full-row insert should backfill missing partition_key');
+    t.equal(tableRow.updated_at, 200,
+      'newer updated_at must be preserved');
+    t.equal(tableRow.table_policies, '{"retentionDays":7}',
+      'newer field values must not be overwritten by stale rows');
+  },
+);
+
+test(
+  'SystemTableCache - stale INSERT backfills missing partition fields on newer partial row',
+  async (t) => {
+    const cache = new SystemTableCache();
+
+    cache.applySystemTableChange('partitions', CDC_OPERATIONS.UPDATE, {
+      partition_id: 'tbl-1-p1',
+      table_id: 'tbl-1',
+      leader_node_id: 'node-2',
+      updated_at: 300,
+    });
+
+    cache.applySystemTableChange('partitions', CDC_OPERATIONS.INSERT, {
+      partition_id: 'tbl-1-p1',
+      table_id: 'tbl-1',
+      table_name: 'benchmark_events',
+      partition_key_start: null,
+      partition_key_end: null,
+      replica_count: 3,
+      size_bytes: 0,
+      leader_node_id: null,
+      state: 'NORMAL',
+      created_at: 100,
+      updated_at: 100,
+    });
+
+    const partitionRow = cache.get('partitions', 'tbl-1-p1');
+    t.equal(partitionRow.table_name, 'benchmark_events',
+      'stale full-row insert should backfill missing partition table_name');
+    t.equal(partitionRow.replica_count, 3,
+      'stale full-row insert should backfill missing replica_count');
+    t.equal(partitionRow.updated_at, 300,
+      'newer updated_at must be preserved');
+    t.equal(partitionRow.leader_node_id, 'node-2',
+      'newer field values must not be overwritten by stale rows');
+  },
+);
 
 test('SystemTableCache - applySystemTableChange DELETE', async (t) => {
   const cache = new SystemTableCache();

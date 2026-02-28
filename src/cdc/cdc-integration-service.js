@@ -1581,8 +1581,11 @@ class CDCIntegrationService extends EventEmitter {
       };
     }
 
-    // Skip if already connected
-    if (this.messageRouter.nodeConnections?.has(targetNodeId)) {
+    const connectionState =
+      typeof this.messageRouter.getConnectionState === TYPEOF.FUNCTION ?
+        this.messageRouter.getConnectionState(targetNodeId) :
+        this.messageRouter.nodeConnections?.get(targetNodeId)?.state || null;
+    if (connectionState === STATE.CONNECTED) {
       this.logger.debug(CDC_LOG_MSG.NEW_NODE_SKIP_CONNECTED, {
         nodeId: this.nodeId,
         targetNodeId,

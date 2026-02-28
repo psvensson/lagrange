@@ -206,6 +206,71 @@ test('SQLQueryEngine - falls back to tables.find when tables.get is keyed by tab
     mockPartitionData.clear();
   });
 
+test('SQLQueryEngine - resolves partitions when table metadata is only available' +
+  ' via tables.getAll', async (t) => {
+    mockPartitionData.set('p1', [{id: 'alice', name: 'Alice'}]);
+
+    const tableRecord = {table_id: 'tbl-users', table_name: 'users', primaryKey: 'id'};
+    const partitionRecords = [{
+      partition_id: 'p1',
+      table_id: 'tbl-users',
+      partition_key_start: null,
+      partition_key_end: null,
+    }];
+    const serviceRecords = [{
+      service_id: 'p1',
+      service_type: 'partition',
+      partition_id: 'p1',
+      node_id: 'remote-node',
+      raft_role: 'leader',
+      address: 'remote-node/partition/p1',
+      status: 'active',
+    }];
+
+    const cache = {
+      get(type, key) {
+        if (type === TABLES.TABLES && key === tableRecord.table_id) {
+          return tableRecord;
+        }
+        return null;
+      },
+      filter(type, predicate) {
+        if (type === TABLES.PARTITIONS) {
+          return partitionRecords.filter(predicate);
+        }
+        if (type === TABLES.SERVICES) {
+          return serviceRecords.filter(predicate);
+        }
+        return [];
+      },
+      getAll(type) {
+        if (type === TABLES.TABLES) {
+          return [tableRecord];
+        }
+        if (type === TABLES.PARTITIONS) {
+          return partitionRecords;
+        }
+        if (type === TABLES.SERVICES) {
+          return serviceRecords;
+        }
+        return [];
+      },
+    };
+
+    const engine = new SQLQueryEngine({
+      systemCache: cache,
+      messageRouter: createMockMessageRouter(),
+    });
+
+    const result = await engine.executeQuery('SELECT * FROM users');
+
+    t.equal(result.success, true);
+    t.same(result.partitions, ['p1']);
+    t.equal(result.rows.length, 1);
+
+    mockPartitionData.clear();
+  });
+
 test('SQLQueryEngine - routes SELECT with key filter to single partition', async (t) => {
   // Set up mock partition data
   mockPartitionData.set('p1', [{id: 'alice', name: 'Alice'}]);
@@ -994,4 +1059,435 @@ test('SQLQueryEngine - non-transactional write persistence does not block ' +
   }
   upsertResolvers = [];
   await new Promise((resolve) => setTimeout(resolve, SLOW_PERSIST_MS + 10));
+});
+
+test('SQLQueryEngine - provisionInitialTablePartition provisions requested ' +
+  'replicas across active nodes', async (t) => {
+  const tableId = 'tbl-users';
+  const partitionId = 'tbl-users-p1';
+  const localNodeId = 'node-a';
+  const createdTargetNodeIds = [];
+  const nodes = [
+    {node_id: localNodeId, status: 'active'},
+    {node_id: 'node-b', status: 'active'},
+    {node_id: 'node-c', status: 'active'},
+  ];
+  const tables = [{table_id: tableId, table_name: 'users'}];
+  const partitions = [{partition_id: partitionId, table_id: tableId}];
+  const services = [];
+
+  const cache = {
+    has(type, key) {
+      if (type === TABLES.TABLES) {
+        return tables.some((row) => row.table_id === key);
+      }
+      if (type === TABLES.PARTITIONS) {
+        return partitions.some((row) => row.partition_id === key);
+      }
+      return false;
+    },
+    get(type, key) {
+      if (type !== TABLES.TABLES) {
+        return null;
+      }
+      return tables.find((row) =>
+        row.table_id === key || row.table_name === key,
+      ) || null;
+    },
+    filter(type, predicate) {
+      if (type === TABLES.NODES) {
+        return nodes.filter(predicate);
+      }
+      if (type === TABLES.TABLES) {
+        return tables.filter(predicate);
+      }
+      if (type === TABLES.PARTITIONS) {
+        return partitions.filter(predicate);
+      }
+      if (type === TABLES.SERVICES) {
+        return services.filter(predicate);
+      }
+      return [];
+    },
+    getAll(type) {
+      if (type === TABLES.NODES) {
+        return nodes;
+      }
+      if (type === TABLES.TABLES) {
+        return tables;
+      }
+      if (type === TABLES.PARTITIONS) {
+        return partitions;
+      }
+      if (type === TABLES.SERVICES) {
+        return services;
+      }
+      return [];
+    },
+  };
+
+  const rebalanceCoordinator = {
+    async createOperation(move) {
+      createdTargetNodeIds.push(move.nodeId);
+      return {
+        operationId: `op-${move.nodeId}`,
+        ...move,
+      };
+    },
+    async executeOperation(operation) {
+      const targetNodeId = operation.targetNodeId || operation.nodeId;
+      services.push({
+        partition_id: operation.partitionId,
+        service_type: 'partition',
+        status: 'active',
+        node_id: targetNodeId,
+        address: `${targetNodeId}/partition/${operation.partitionId}`,
+      });
+      return {success: true};
+    },
+  };
+
+  const engine = new SQLQueryEngine({
+    nodeId: localNodeId,
+    systemCache: cache,
+    messageRouter: createMockMessageRouter(),
+    rebalanceCoordinator,
+    tablePartitionProvisioningTimeoutMs: 500,
+    tablePartitionProvisioningPollIntervalMs: 5,
+  });
+
+  await engine.provisionInitialTablePartition({
+    tableId,
+    partitionId,
+    replicaCount: 3,
+  });
+
+  t.same(
+    createdTargetNodeIds,
+    ['node-a', 'node-b', 'node-c'],
+    'provisioning should target local node first, then active peers',
+  );
+  t.equal(
+    engine.getRoutablePartitionServiceNodeIds(partitionId).length,
+    3,
+    'partition should expose three routable replicas',
+  );
+});
+
+test('SQLQueryEngine - provisionInitialTablePartition skips disconnected nodes',
+  async (t) => {
+    const tableId = 'tbl-orders';
+    const partitionId = 'tbl-orders-p1';
+    const localNodeId = 'node-a';
+    const createdTargetNodeIds = [];
+    const nodes = [
+      {node_id: localNodeId, status: 'active', connection_state: 'ready'},
+      {node_id: 'node-b', status: 'active', connection_state: 'disconnected'},
+      {node_id: 'node-c', status: 'active', connection_state: 'disconnected'},
+      {node_id: 'node-d', status: 'active', connection_state: 'connected'},
+      {node_id: 'node-e', status: 'active', connection_state: 'connected'},
+    ];
+    const tables = [{table_id: tableId, table_name: 'orders'}];
+    const partitions = [{partition_id: partitionId, table_id: tableId}];
+    const services = [];
+
+    const cache = {
+      has(type, key) {
+        if (type === TABLES.TABLES) {
+          return tables.some((row) => row.table_id === key);
+        }
+        if (type === TABLES.PARTITIONS) {
+          return partitions.some((row) => row.partition_id === key);
+        }
+        return false;
+      },
+      get(type, key) {
+        if (type !== TABLES.TABLES) {
+          return null;
+        }
+        return tables.find((row) =>
+          row.table_id === key || row.table_name === key,
+        ) || null;
+      },
+      filter(type, predicate) {
+        if (type === TABLES.NODES) {
+          return nodes.filter(predicate);
+        }
+        if (type === TABLES.TABLES) {
+          return tables.filter(predicate);
+        }
+        if (type === TABLES.PARTITIONS) {
+          return partitions.filter(predicate);
+        }
+        if (type === TABLES.SERVICES) {
+          return services.filter(predicate);
+        }
+        return [];
+      },
+      getAll(type) {
+        if (type === TABLES.NODES) {
+          return nodes;
+        }
+        if (type === TABLES.TABLES) {
+          return tables;
+        }
+        if (type === TABLES.PARTITIONS) {
+          return partitions;
+        }
+        if (type === TABLES.SERVICES) {
+          return services;
+        }
+        return [];
+      },
+    };
+
+    const rebalanceCoordinator = {
+      async createOperation(move) {
+        createdTargetNodeIds.push(move.nodeId);
+        return {
+          operationId: `op-${move.nodeId}`,
+          ...move,
+        };
+      },
+      async executeOperation(operation) {
+        const targetNodeId = operation.targetNodeId || operation.nodeId;
+        services.push({
+          partition_id: operation.partitionId,
+          service_type: 'partition',
+          status: 'active',
+          node_id: targetNodeId,
+          address: `${targetNodeId}/partition/${operation.partitionId}`,
+        });
+        return {success: true};
+      },
+    };
+
+    const engine = new SQLQueryEngine({
+      nodeId: localNodeId,
+      systemCache: cache,
+      messageRouter: createMockMessageRouter(),
+      rebalanceCoordinator,
+      tablePartitionProvisioningTimeoutMs: 500,
+      tablePartitionProvisioningPollIntervalMs: 5,
+    });
+
+    await engine.provisionInitialTablePartition({
+      tableId,
+      partitionId,
+      replicaCount: 3,
+    });
+
+    t.same(
+      createdTargetNodeIds,
+      ['node-a', 'node-d', 'node-e'],
+      'provisioning should target connected/ready active nodes only',
+    );
+  });
+
+test('SQLQueryEngine - provisionInitialTablePartition does not block on stale ' +
+  'table/partition cache metadata', async (t) => {
+  const partitionId = 'tbl-stale-cache-p1';
+  const localNodeId = 'node-a';
+  const createdTargetNodeIds = [];
+  const nodes = [
+    {node_id: localNodeId, status: 'active', connection_state: 'ready'},
+    {node_id: 'node-b', status: 'active', connection_state: 'ready'},
+  ];
+  const services = [];
+
+  const cache = {
+    has() {
+      return false;
+    },
+    get() {
+      return null;
+    },
+    filter(type, predicate) {
+      if (type === TABLES.NODES) {
+        return nodes.filter(predicate);
+      }
+      if (type === TABLES.SERVICES) {
+        return services.filter(predicate);
+      }
+      return [];
+    },
+    getAll(type) {
+      if (type === TABLES.NODES) {
+        return nodes;
+      }
+      if (type === TABLES.SERVICES) {
+        return services;
+      }
+      return [];
+    },
+  };
+
+  const rebalanceCoordinator = {
+    async createOperation(move) {
+      createdTargetNodeIds.push(move.nodeId);
+      return {
+        operationId: `op-${move.nodeId}`,
+        ...move,
+      };
+    },
+    async executeOperation(operation) {
+      const targetNodeId = operation.targetNodeId || operation.nodeId;
+      services.push({
+        partition_id: operation.partitionId,
+        service_type: 'partition',
+        status: 'active',
+        node_id: targetNodeId,
+        address: `${targetNodeId}/partition/${operation.partitionId}`,
+      });
+      return {success: true};
+    },
+  };
+
+  const engine = new SQLQueryEngine({
+    nodeId: localNodeId,
+    systemCache: cache,
+    messageRouter: createMockMessageRouter(),
+    rebalanceCoordinator,
+    tablePartitionProvisioningTimeoutMs: 500,
+    tablePartitionProvisioningPollIntervalMs: 5,
+  });
+
+  await engine.provisionInitialTablePartition({
+    tableId: 'tbl-stale-cache',
+    partitionId,
+    replicaCount: 2,
+  });
+
+  t.same(
+    createdTargetNodeIds,
+    ['node-a', 'node-b'],
+    'provisioning should continue even when table/partition rows are not yet visible in cache',
+  );
+  t.equal(
+    engine.getRoutablePartitionServiceNodeIds(partitionId).length,
+    2,
+    'provisioning should still create routable replicas',
+  );
+});
+
+test('SQLQueryEngine - provisionInitialTablePartition does not block on slow ' +
+  'best-effort replica dispatches', async (t) => {
+  const tableId = 'tbl-fast-return';
+  const partitionId = 'tbl-fast-return-p1';
+  const localNodeId = 'node-a';
+  const createdTargetNodeIds = [];
+  const nodes = [
+    {node_id: localNodeId, status: 'active'},
+    {node_id: 'node-b', status: 'active'},
+    {node_id: 'node-c', status: 'active'},
+  ];
+  const tables = [{table_id: tableId, table_name: 'fast_return'}];
+  const partitions = [{partition_id: partitionId, table_id: tableId}];
+  const services = [];
+
+  const cache = {
+    has(type, key) {
+      if (type === TABLES.TABLES) {
+        return tables.some((row) => row.table_id === key);
+      }
+      if (type === TABLES.PARTITIONS) {
+        return partitions.some((row) => row.partition_id === key);
+      }
+      return false;
+    },
+    get(type, key) {
+      if (type !== TABLES.TABLES) {
+        return null;
+      }
+      return tables.find((row) =>
+        row.table_id === key || row.table_name === key,
+      ) || null;
+    },
+    filter(type, predicate) {
+      if (type === TABLES.NODES) {
+        return nodes.filter(predicate);
+      }
+      if (type === TABLES.TABLES) {
+        return tables.filter(predicate);
+      }
+      if (type === TABLES.PARTITIONS) {
+        return partitions.filter(predicate);
+      }
+      if (type === TABLES.SERVICES) {
+        return services.filter(predicate);
+      }
+      return [];
+    },
+    getAll(type) {
+      if (type === TABLES.NODES) {
+        return nodes;
+      }
+      if (type === TABLES.TABLES) {
+        return tables;
+      }
+      if (type === TABLES.PARTITIONS) {
+        return partitions;
+      }
+      if (type === TABLES.SERVICES) {
+        return services;
+      }
+      return [];
+    },
+  };
+
+  const rebalanceCoordinator = {
+    async createOperation(move) {
+      createdTargetNodeIds.push(move.nodeId);
+      return {
+        operationId: `op-${move.nodeId}`,
+        ...move,
+      };
+    },
+    async executeOperation(operation) {
+      const targetNodeId = operation.targetNodeId || operation.nodeId;
+      if (targetNodeId === localNodeId) {
+        services.push({
+          partition_id: operation.partitionId,
+          service_type: 'partition',
+          status: 'active',
+          node_id: targetNodeId,
+          address: `${targetNodeId}/partition/${operation.partitionId}`,
+        });
+        return {success: true};
+      }
+      return new Promise(() => {});
+    },
+  };
+
+  const engine = new SQLQueryEngine({
+    nodeId: localNodeId,
+    systemCache: cache,
+    messageRouter: createMockMessageRouter(),
+    rebalanceCoordinator,
+    tablePartitionProvisioningTimeoutMs: 3000,
+    tablePartitionProvisioningPollIntervalMs: 5,
+  });
+
+  const startedAt = Date.now();
+  await engine.provisionInitialTablePartition({
+    tableId,
+    partitionId,
+    replicaCount: 3,
+  });
+  const durationMs = Date.now() - startedAt;
+
+  t.same(
+    createdTargetNodeIds,
+    ['node-a', 'node-b', 'node-c'],
+    'provisioning should attempt all target nodes',
+  );
+  t.equal(
+    engine.getRoutablePartitionServiceNodeIds(partitionId).includes(localNodeId),
+    true,
+    'local routable replica should be available before returning',
+  );
+  t.ok(
+    durationMs < 1500,
+    'provisioning should return quickly even when non-local dispatches stall',
+  );
 });

@@ -155,8 +155,23 @@ test('MessageGroupAssignment - generateGroupId', async (t) => {
   const groupId = assignment.generateGroupId('550e8400-e29b-41d4-a716-446655440000');
 
   t.ok(groupId.startsWith('mg-'));
-  t.equal(groupId, 'mg-550e8400');
+  t.equal(groupId, 'mg-550e8400-446655440000');
 });
+
+test('MessageGroupAssignment - generateGroupId avoids collisions on shared UUID prefix',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const assignment = new MessageGroupAssignment();
+    const groupIdA = assignment.generateGroupId(
+      '550e8400-e29b-41d4-a716-446655440603',
+    );
+    const groupIdB = assignment.generateGroupId(
+      '550e8400-e29b-41d4-a716-446655440606',
+    );
+
+    t.not(groupIdA, groupIdB, 'different nodes should not reuse the same groupId');
+  });
 
 test('MessageGroupAssignment - generateReplicaIds', async (t) => {
   initializeTestEnvironment();

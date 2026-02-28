@@ -63,7 +63,8 @@ compare_profile() {
   local latest_report
   local previous_report
 
-  if ! mapfile -t report_pair < <(find_latest_two_reports "$report_dir" "$profile"); then
+  mapfile -t report_pair < <(find_latest_two_reports "$report_dir" "$profile" || true)
+  if [[ "${#report_pair[@]}" -lt 2 ]]; then
     printf '[%s] skipped: fewer than 2 matching reports in %s\n\n' \
       "$profile" "$report_dir"
     return 0
@@ -115,6 +116,12 @@ compare_profile() {
       obj(details_root($scenario).benchmark);
     def channel_metrics($scenario):
       obj(details_root($scenario).channelMetrics);
+    def cdc_telemetry($scenario):
+      obj(benchmark($scenario).cdcTelemetry);
+    def cdc_summary($scenario):
+      obj(cdc_telemetry($scenario).summary);
+    def cdc_schema($scenario):
+      obj(cdc_telemetry($scenario).schema);
     def phase_map($scenario):
       (arr(details_root($scenario).phaseTimeline)
        | map({key: .phase, value: (.durationMs // 0)})
@@ -175,6 +182,277 @@ compare_profile() {
               map(select(.status == "error")) |
               length) | tostring)
         end;
+    def fanout_line($tag; $scenario):
+      benchmark($scenario) as $b
+      | if ($b | length) == 0 then
+          "fanout_contract[" + $tag + "]: unavailable"
+        else
+          "fanout_contract[" + $tag + "]: strict_mode=" +
+            ((($b.strictMode // false) | tostring)) +
+            ", opt_out=" +
+            ((($b.strictFanoutOptOut // false) | tostring)) +
+            ", cluster_candidates=" +
+            (num($b.clusterCandidateLoadNodeCount) | tostring) +
+            ", requested=" +
+            (num($b.requestedSutLoadNodeCount) | tostring) +
+            ", required=" +
+            (num($b.requiredSutLoadNodeCount) | tostring) +
+            ", explicit_required=" +
+            (if $b.explicitRequiredSutLoadNodeCount == null then
+              "null"
+            else
+              (num($b.explicitRequiredSutLoadNodeCount) | tostring)
+            end) +
+            (if ($b.strictFanoutOptOutReason // "") != "" then
+              ", reason=" + ($b.strictFanoutOptOutReason | tostring)
+            else
+              ""
+            end)
+        end;
+    def cdc_line($tag; $scenario):
+      cdc_telemetry($scenario) as $cdc
+      | cdc_summary($scenario) as $summary
+      | cdc_schema($scenario) as $schema
+      | if ($cdc | length) == 0 or ($summary | length) == 0 then
+          "cdc_pressure[" + $tag + "]: unavailable"
+        else
+          "cdc_pressure[" + $tag + "]: schema_valid=" +
+            ((($schema.valid // true) | tostring)) +
+            ", total_subscribers=" +
+            (num($summary.totalSubscriberCount) | tostring) +
+            ", total_buffered_events=" +
+            (num($summary.totalBufferedEvents) | tostring) +
+            ", max_catchup_lag_events=" +
+            (num($summary.maxCatchupLagEvents) | tostring) +
+            ", avg_catchup_throughput_eps=" +
+            ((num($summary.avgCatchupThroughputEventsPerSec) | f3) | tostring) +
+            ", catchup_nodes=" +
+            (num($summary.catchupNodeCount) | tostring) +
+            ", steady_nodes=" +
+            (num($summary.steadyNodeCount) | tostring)
+        end;
+    def scenario_details($scenario):
+      obj($scenario.details);
+    def failure($scenario):
+      obj(details_root($scenario).failure) as $root_failure
+      | if ($root_failure | length) > 0 then
+          $root_failure
+        else
+          obj(scenario_details($scenario).diagnostics.failure)
+        end;
+    def pre_load_gate($scenario):
+      obj(details_root($scenario).phaseArtifacts.pre_load_gate);
+    def convergence($scenario):
+      obj(failure($scenario).versionConvergence) as $failure_convergence
+      | if ($failure_convergence | length) > 0 then
+          $failure_convergence
+        else
+          obj(pre_load_gate($scenario).versionConvergence)
+        end;
+    def convergence_nodes($scenario):
+      obj(convergence($scenario).nodes);
+    def convergence_required($scenario):
+      (convergence($scenario).requiredSchemaVersion // "unknown" | tostring);
+    def convergence_node_count($scenario):
+      (convergence_nodes($scenario) | keys | length);
+    def convergence_lagging_count($scenario):
+      (convergence_nodes($scenario)
+       | to_entries
+       | map(select(
+           (arr(.value.unmetReasons) | length) > 0
+         ))
+       | length);
+    def convergence_node_details($scenario):
+      convergence($scenario) as $c
+      | convergence_nodes($scenario)
+      | to_entries
+      | sort_by(.key)
+      | map(
+          .key + "=" +
+          ((.value.observedSchemaVersion // "null") | tostring) +
+          "->" +
+          ((.value.requiredSchemaVersion // $c.requiredSchemaVersion // "null") | tostring) +
+          ":" +
+          (if (arr(.value.unmetReasons) | length) == 0 then
+            "ok"
+          else
+            (arr(.value.unmetReasons) | join("|"))
+          end)
+        )
+      | join(", ");
+    def convergence_line($tag; $scenario):
+      convergence($scenario) as $c
+      | if ($c | length) == 0 then
+          "convergence[" + $tag + "]: unavailable"
+        else
+          "convergence[" + $tag + "]: required_schema_version=" +
+            convergence_required($scenario) +
+            ", node_count=" +
+            (convergence_node_count($scenario) | tostring) +
+            ", lagging_nodes=" +
+            (convergence_lagging_count($scenario) | tostring) +
+            ", node_details=" +
+            convergence_node_details($scenario)
+        end;
+    def convergence_delta_line($latest; $previous):
+      "convergence_delta: lagging_nodes=" +
+      (((convergence_lagging_count($latest) - convergence_lagging_count($previous)) |
+        sgn)) +
+      ", node_count=" +
+      (((convergence_node_count($latest) - convergence_node_count($previous)) |
+        sgn)) +
+      ", required_changed=" +
+      ((convergence_required($latest) != convergence_required($previous)) | tostring);
+    def failure_reason_counts($scenario):
+      obj(failure($scenario).reasonCounts);
+    def failure_reason_total($scenario):
+      (failure_reason_counts($scenario)
+       | to_entries
+       | map(.value // 0)
+       | add // 0);
+    def failure_reason_keys($scenario):
+      (failure_reason_counts($scenario)
+       | keys
+       | sort
+       | join("|"));
+    def root_cause_bundle($scenario):
+      obj(failure($scenario).rootCauseBundle) as $failure_bundle
+      | if ($failure_bundle | length) > 0 then
+          $failure_bundle
+        else
+          obj(details_root($scenario).rootCauseBundle) as $details_bundle
+          | if ($details_bundle | length) > 0 then
+              $details_bundle
+            else
+              obj(details_root($scenario).diagnostics.rootCauseBundle) as $details_diag_bundle
+              | if ($details_diag_bundle | length) > 0 then
+                  $details_diag_bundle
+                else
+                  obj(scenario_details($scenario).diagnostics.rootCauseBundle)
+                end
+            end
+        end;
+    def root_cause_code($scenario):
+      (root_cause_bundle($scenario).rootCauseCode //
+        failure($scenario).rootCauseCode //
+        "unknown" | tostring);
+    def root_cause_class($scenario):
+      (root_cause_bundle($scenario).rootCauseClass //
+        failure($scenario).rootCauseClass //
+        "unknown" | tostring);
+    def root_cause_snapshots($scenario):
+      obj(root_cause_bundle($scenario).snapshotsByNodeId);
+    def has_root_cause_snapshots($scenario):
+      ((root_cause_snapshots($scenario) | length) > 0);
+    def root_cause_snapshot_entries($scenario):
+      (root_cause_snapshots($scenario) | to_entries | map(.value));
+    def snapshot_missing_nodes($scenario):
+      (root_cause_snapshot_entries($scenario)
+       | map(select(
+           (type == "object") and ((.missing | type) == "object")
+         ))
+       | length);
+    def max_cache_staleness_ms($scenario):
+      (root_cause_snapshot_entries($scenario)
+       | map(.cacheFreshness.stalenessMs)
+       | map(select(type == "number"))
+       | if length == 0 then 0 else (max | floor) end);
+    def max_cdc_retry_count($scenario):
+      (root_cause_snapshot_entries($scenario)
+       | map(.cdcHealth.retryCount)
+       | map(select(type == "number"))
+       | if length == 0 then 0 else (max | floor) end);
+    def sys_postgres_wire_rows($scenario):
+      (root_cause_snapshot_entries($scenario)
+       | map(.rowCounts.sysPostgresWireServiceCount)
+       | map(select(type == "number"))
+       | map(floor)
+       | add // 0);
+    def root_cause_signal_line($tag; $scenario):
+      if has_root_cause_snapshots($scenario) then
+        "root_cause_signals[" + $tag + "]: snapshot_missing_nodes=" +
+          (snapshot_missing_nodes($scenario) | tostring) +
+          ", max_cache_staleness_ms=" +
+          (max_cache_staleness_ms($scenario) | tostring) +
+          ", max_cdc_retry_count=" +
+          (max_cdc_retry_count($scenario) | tostring) +
+          ", sys_postgres_wire_rows=" +
+          (sys_postgres_wire_rows($scenario) | tostring)
+      else
+        "root_cause_signals[" + $tag + "]: unavailable"
+      end;
+    def root_cause_signal_delta_line($latest; $previous):
+      if has_root_cause_snapshots($latest) and has_root_cause_snapshots($previous) then
+        "root_cause_key_deltas: snapshot_missing_nodes=" +
+          (((snapshot_missing_nodes($latest) -
+            snapshot_missing_nodes($previous)) | sgn)) +
+          ", max_cache_staleness_ms=" +
+          (((max_cache_staleness_ms($latest) -
+            max_cache_staleness_ms($previous)) | sgn)) +
+          ", max_cdc_retry_count=" +
+          (((max_cdc_retry_count($latest) -
+            max_cdc_retry_count($previous)) | sgn)) +
+          ", sys_postgres_wire_rows=" +
+          (((sys_postgres_wire_rows($latest) -
+            sys_postgres_wire_rows($previous)) | sgn))
+      else
+        "root_cause_key_deltas: unavailable"
+      end;
+    def root_cause_line($tag; $scenario):
+      failure($scenario) as $f
+      | if ($f | length) == 0 and (root_cause_bundle($scenario) | length) == 0 then
+          "root_cause[" + $tag + "]: unavailable"
+        else
+          "root_cause[" + $tag + "]: code=" +
+            root_cause_code($scenario) +
+            ", class=" + root_cause_class($scenario) +
+            ", phase=" + (($f.phase // "unknown") | tostring) +
+            ", affected_nodes=" + ((arr($f.affectedNodeIds) | length) | tostring) +
+            ", reason_total=" + (failure_reason_total($scenario) | tostring) +
+            ", reason_keys=" + failure_reason_keys($scenario)
+        end;
+    def dominant_reason($scenario):
+      (failure($scenario).dominantReason // null) as $explicit
+      | if $explicit != null and (($explicit | tostring) != "") then
+          ($explicit | tostring)
+        else
+          (failure_reason_counts($scenario)
+           | to_entries
+           | sort_by((-(.value // 0)), .key)
+           | .[0].key // "unknown")
+        end;
+    def dominant_reason_line($tag; $scenario):
+      "dominant_reason[" + $tag + "]: " + dominant_reason($scenario);
+    def dominant_reason_delta_line($latest; $previous):
+      "dominant_reason_delta: changed=" +
+      ((dominant_reason($latest) != dominant_reason($previous)) | tostring) +
+      ", previous=" + dominant_reason($previous) +
+      ", latest=" + dominant_reason($latest);
+    def saturation($scenario):
+      obj(failure($scenario).saturation) as $failure_saturation
+      | if ($failure_saturation | length) > 0 then
+          $failure_saturation
+        else
+          obj(benchmark($scenario).saturation)
+        end;
+    def saturation_line($tag; $scenario):
+      saturation($scenario) as $s
+      | "saturation[" + $tag + "]: cdc_forward_timeouts=" +
+          (num($s.cdcForwardTimeoutCount) | tostring) +
+          ", system_table_query_timeouts=" +
+          (num($s.systemTableQueryTimeoutCount) | tostring) +
+          ", snapshot_collection_errors=" +
+          (num($s.snapshotCollectionErrorCount) | tostring);
+    def saturation_delta_line($latest; $previous):
+      "saturation_delta: cdc_forward_timeouts=" +
+      (((num(saturation($latest).cdcForwardTimeoutCount) -
+        num(saturation($previous).cdcForwardTimeoutCount)) | sgn)) +
+      ", system_table_query_timeouts=" +
+      (((num(saturation($latest).systemTableQueryTimeoutCount) -
+        num(saturation($previous).systemTableQueryTimeoutCount)) | sgn)) +
+      ", snapshot_collection_errors=" +
+      (((num(saturation($latest).snapshotCollectionErrorCount) -
+        num(saturation($previous).snapshotCollectionErrorCount)) | sgn));
 
     .[0] as $latest_report
     | .[1] as $previous_report
@@ -212,12 +490,39 @@ compare_profile() {
       "discovery:",
       "  " + discovery_line("previous"; $previous),
       "  " + discovery_line("latest"; $latest),
+      "fanout contract:",
+      "  " + fanout_line("previous"; $previous),
+      "  " + fanout_line("latest"; $latest),
+      "  fanout_delta: strict_mode_changed=\(((benchmark($previous).strictMode // false) != (benchmark($latest).strictMode // false))), opt_out_changed=\(((benchmark($previous).strictFanoutOptOut // false) != (benchmark($latest).strictFanoutOptOut // false))), required=\(((num(benchmark($latest).requiredSutLoadNodeCount) - num(benchmark($previous).requiredSutLoadNodeCount)) | sgn))",
+      "cdc pressure:",
+      "  " + cdc_line("previous"; $previous),
+      "  " + cdc_line("latest"; $latest),
+      "  deltas: total_buffered_events=\(((num(cdc_summary($latest).totalBufferedEvents) - num(cdc_summary($previous).totalBufferedEvents)) | sgn)), max_catchup_lag_events=\(((num(cdc_summary($latest).maxCatchupLagEvents) - num(cdc_summary($previous).maxCatchupLagEvents)) | sgn)), avg_catchup_throughput_eps=\(((num(cdc_summary($latest).avgCatchupThroughputEventsPerSec) - num(cdc_summary($previous).avgCatchupThroughputEventsPerSec)) | f3 | sgn))",
       "channels:",
       "  errors previous(load/control/probe/snapshot): \(num(channel_metrics($previous).load.errors))/\(num(channel_metrics($previous).control.errors))/\(num(channel_metrics($previous).probe.errors))/\(num(channel_metrics($previous).snapshot.errors))",
       "  errors latest(load/control/probe/snapshot): \(num(channel_metrics($latest).load.errors))/\(num(channel_metrics($latest).control.errors))/\(num(channel_metrics($latest).probe.errors))/\(num(channel_metrics($latest).snapshot.errors))",
       "errors:",
       "  previous: \(short($previous.error; 220))",
       "  latest:   \(short($latest.error; 220))",
+      "root_cause:",
+      "  " + root_cause_line("previous"; $previous),
+      "  " + root_cause_line("latest"; $latest),
+      "  root_cause_delta: code_changed=\((root_cause_code($previous) != root_cause_code($latest))), class_changed=\((root_cause_class($previous) != root_cause_class($latest))), reason_total=\(((failure_reason_total($latest) - failure_reason_total($previous)) | sgn)), affected_nodes=\((((arr(failure($latest).affectedNodeIds) | length) - (arr(failure($previous).affectedNodeIds) | length)) | sgn))",
+      "  " + root_cause_signal_line("previous"; $previous),
+      "  " + root_cause_signal_line("latest"; $latest),
+      "  " + root_cause_signal_delta_line($latest; $previous),
+      "dominant_reason:",
+      "  " + dominant_reason_line("previous"; $previous),
+      "  " + dominant_reason_line("latest"; $latest),
+      "  " + dominant_reason_delta_line($latest; $previous),
+      "saturation:",
+      "  " + saturation_line("previous"; $previous),
+      "  " + saturation_line("latest"; $latest),
+      "  " + saturation_delta_line($latest; $previous),
+      "convergence:",
+      "  " + convergence_line("previous"; $previous),
+      "  " + convergence_line("latest"; $latest),
+      "  " + convergence_delta_line($latest; $previous),
       "phases duration_ms (previous -> latest):",
       ($all_phases[]
         | "  - \(.) : \((($previous_phases[.] // 0))) -> \((($latest_phases[.] // 0))) (Δ \((((($latest_phases[.] // 0) - ($previous_phases[.] // 0))) | sgn)))")

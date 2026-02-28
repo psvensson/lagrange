@@ -94,8 +94,14 @@ test('WRITE_TRACKING_EXCLUDED_TABLES contains all three ' +
   t.ok(WRITE_TRACKING_EXCLUDED_TABLES.has(
     TABLES.SQL_TRANSACTION_PARTICIPANTS),
   'sql_transaction_participants must be excluded');
-  t.equal(WRITE_TRACKING_EXCLUDED_TABLES.size, 3,
-    'exactly three tables excluded');
+  t.ok(WRITE_TRACKING_EXCLUDED_TABLES.has(TABLES.NODES),
+    'nodes must be excluded');
+  t.ok(WRITE_TRACKING_EXCLUDED_TABLES.has(TABLES.SERVICES),
+    'services must be excluded');
+  t.ok(
+    WRITE_TRACKING_EXCLUDED_TABLES.size >= Object.keys(TABLES).length,
+    'all system tables should be excluded from non-transactional tracking',
+  );
   t.end();
 });
 

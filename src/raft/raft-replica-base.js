@@ -16,6 +16,10 @@ import {ensureLiferaftProviderForRuntime} from './raft-provider-control.js';
 import {assertRaftProviderContract} from './raft-provider-contract.js';
 import {LiferaftProvider} from './liferaft-provider.js';
 import {
+  applyReplicaDemotion,
+  clearReplicaLeaderUpdateState,
+} from './replica-leadership-state.js';
+import {
   RAFT_REPLICA_BASE_ADDRESS,
   RAFT_REPLICA_BASE_DEFAULT,
   RAFT_REPLICA_BASE_ERROR_MSG,
@@ -297,10 +301,7 @@ class RaftReplicaBase extends EventEmitter {
       if (isSingleReplica && this.isLeader) {
         return;
       }
-      this.role = RaftRole.FOLLOWER;
-      this.isLeader = false;
-      this.queueRoleUpdate(this.role);
-      this.clearLeaderNodeUpdateState();
+      applyReplicaDemotion(this, RaftRole.FOLLOWER);
       this.onBecameFollower();
     });
 
@@ -308,10 +309,7 @@ class RaftReplicaBase extends EventEmitter {
       if (isSingleReplica && this.isLeader) {
         return;
       }
-      this.role = RaftRole.CANDIDATE;
-      this.isLeader = false;
-      this.queueRoleUpdate(this.role);
-      this.clearLeaderNodeUpdateState();
+      applyReplicaDemotion(this, RaftRole.CANDIDATE);
       this.onBecameCandidate();
     });
 
@@ -547,12 +545,7 @@ class RaftReplicaBase extends EventEmitter {
    * @protected
    */
   clearLeaderNodeUpdateState() {
-    this.pendingLeaderNodeUpdate = null;
-    this.persistedLeaderNodeId = null;
-    if (this.leaderNodeUpdateRetryTimer) {
-      clearTimeout(this.leaderNodeUpdateRetryTimer);
-      this.leaderNodeUpdateRetryTimer = null;
-    }
+    clearReplicaLeaderUpdateState(this);
   }
 
   /**
