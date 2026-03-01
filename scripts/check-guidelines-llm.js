@@ -3,13 +3,27 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
+import {
+  ENV_FILE,
+  EXIT_CODE,
+  GUIDELINE_LLM_DEFAULT,
+  GUIDELINE_LLM_ENV_KEY,
+  GUIDELINE_LLM_HEADER,
+  GUIDELINE_LLM_MESSAGE,
+  GUIDELINE_LLM_PATH,
+  GUIDELINE_LLM_PROMPT,
+  GUIDELINE_LLM_REQUEST,
+  GUIDELINE_LLM_SKIP_PATH_PART,
+  GUIDELINE_POSITION,
+  SCRIPT_TEXT,
+} from './guideline-check-constants.js';
 
 const WORKSPACE_ROOT = process.cwd();
 const GUIDELINES_PATH = path.join(
-    WORKSPACE_ROOT,
-    '.kiro',
-    'steering',
-    'system guidelines.md',
+  WORKSPACE_ROOT,
+  '.kiro',
+  'steering',
+  GUIDELINE_LLM_PATH.GUIDELINES_FILE,
 );
 
 let DEFAULT_MODEL;
@@ -17,6 +31,8 @@ let BASE_URL;
 let API_KEY;
 let REQUEST_TIMEOUT_MS;
 let MAX_FILE_CHARS;
+const AbortController = globalThis.AbortController;
+const FULL_CONTENT_PREFIXES = GUIDELINE_LLM_PATH.FULL_CONTENT_PREFIXES;
 
 function parseEnvLine(line) {
   const trimmed = line.trim();
@@ -49,7 +65,7 @@ async function loadEnvFile(fileName) {
   const filePath = path.join(WORKSPACE_ROOT, fileName);
   let fileContent;
   try {
-    fileContent = await fs.readFile(filePath, 'utf8');
+    fileContent = await fs.readFile(filePath, SCRIPT_TEXT.ENCODING_UTF8);
   } catch (error) {
     if (error.code === 'ENOENT') {
       return;
@@ -71,29 +87,38 @@ async function loadEnvFile(fileName) {
 }
 
 async function initializeConfig() {
-  await loadEnvFile('.env');
-  await loadEnvFile('.env.local');
+  await loadEnvFile(ENV_FILE.DEFAULT);
+  await loadEnvFile(ENV_FILE.LOCAL);
 
-  DEFAULT_MODEL = process.env.GUIDELINE_LLM_MODEL || 'gpt-4.1-mini';
-  BASE_URL = (process.env.GUIDELINE_LLM_BASE_URL ||
-    'https://api.openai.com/v1').replace(/\/$/, '');
-  API_KEY = process.env.GUIDELINE_LLM_API_KEY || process.env.OPENAI_API_KEY;
-  REQUEST_TIMEOUT_MS = Number(process.env.GUIDELINE_LLM_TIMEOUT_MS || 30000);
-  MAX_FILE_CHARS = Number(process.env.GUIDELINE_LLM_MAX_FILE_CHARS || 14000);
+  DEFAULT_MODEL = process.env[GUIDELINE_LLM_ENV_KEY.MODEL] ||
+    GUIDELINE_LLM_DEFAULT.MODEL;
+  BASE_URL = (process.env[GUIDELINE_LLM_ENV_KEY.BASE_URL] ||
+    GUIDELINE_LLM_DEFAULT.BASE_URL).replace(/\/$/, '');
+  API_KEY = process.env[GUIDELINE_LLM_ENV_KEY.API_KEY] ||
+    process.env[GUIDELINE_LLM_ENV_KEY.OPENAI_API_KEY];
+  REQUEST_TIMEOUT_MS = Number(
+    process.env[GUIDELINE_LLM_ENV_KEY.TIMEOUT_MS] ||
+    GUIDELINE_LLM_DEFAULT.TIMEOUT_MS,
+  );
+  MAX_FILE_CHARS = Number(
+    process.env[GUIDELINE_LLM_ENV_KEY.MAX_FILE_CHARS] ||
+    GUIDELINE_LLM_DEFAULT.MAX_FILE_CHARS,
+  );
 }
 
-const IGNORED_PATH_PARTS = new Set([
-  'node_modules',
-  '.git',
-  'dist',
-  'test-output',
-  'data',
-  'data2',
-  'data3',
-]);
+const IGNORED_PATH_PARTS = new Set(GUIDELINE_LLM_SKIP_PATH_PART);
+const IGNORED_RELATIVE_PREFIXES = [
+  GUIDELINE_LLM_PATH.ARCHIVED_SPECS_PREFIX,
+  ...GUIDELINE_LLM_PATH.SELF_TOOLING_PREFIXES,
+];
 
 function printUsage() {
-  console.error('Usage: node scripts/check-guidelines-llm.js <file> [more-files]');
+  console.error(GUIDELINE_LLM_MESSAGE.USAGE);
+}
+
+function formatGuidelineLocation(relativePath, line = GUIDELINE_POSITION.DEFAULT_LINE,
+  column = GUIDELINE_POSITION.DEFAULT_COLUMN) {
+  return `${relativePath}:${line}:${column}`;
 }
 
 function isProbablyBinary(content) {
@@ -117,7 +142,14 @@ function shouldSkipPath(absolutePath) {
     return true;
   }
 
-  const pathParts = relativePath.split(path.sep);
+  const normalizedRelativePath = path.normalize(relativePath);
+  if (IGNORED_RELATIVE_PREFIXES.some((prefix) =>
+    normalizedRelativePath.startsWith(prefix)
+  )) {
+    return true;
+  }
+
+  const pathParts = normalizedRelativePath.split(path.sep);
   return pathParts.some((part) => IGNORED_PATH_PARTS.has(part));
 }
 
@@ -131,7 +163,7 @@ function extractJsonObject(rawText) {
     return trimmed;
   }
 
-  const fencedMatch = trimmed.match(/```json\s*([\s\S]*?)\s*```/i);
+  const fencedMatch = trimmed.match(GUIDELINE_LLM_PROMPT.JSON_FENCE_PATTERN);
   if (fencedMatch && fencedMatch[1]) {
     return fencedMatch[1].trim();
   }
@@ -146,11 +178,11 @@ function extractJsonObject(rawText) {
 }
 
 async function readGuidelines() {
-  return fs.readFile(GUIDELINES_PATH, 'utf8');
+  return fs.readFile(GUIDELINES_PATH, SCRIPT_TEXT.ENCODING_UTF8);
 }
 
 async function readFileSafe(absolutePath) {
-  const content = await fs.readFile(absolutePath, 'utf8');
+  const content = await fs.readFile(absolutePath, SCRIPT_TEXT.ENCODING_UTF8);
   if (isProbablyBinary(content)) {
     return null;
   }
@@ -158,24 +190,28 @@ async function readFileSafe(absolutePath) {
 }
 
 function buildPrompt(relativePath, fileContent, guidelines) {
-  const truncatedContent = fileContent.length > MAX_FILE_CHARS ?
-    `${fileContent.slice(0, MAX_FILE_CHARS)}\n\n[TRUNCATED]` : fileContent;
+  const normalizedRelativePath = path.normalize(relativePath);
+  const shouldPreserveFullContent = FULL_CONTENT_PREFIXES.some((prefix) =>
+    normalizedRelativePath.startsWith(prefix),
+  );
+  const truncatedContent = !shouldPreserveFullContent &&
+    fileContent.length > MAX_FILE_CHARS ?
+    `${fileContent.slice(0, MAX_FILE_CHARS)}\n\n${GUIDELINE_LLM_PROMPT.TRUNCATED_MARKER}` :
+    fileContent;
 
   return [
-    'Evaluate this file against the provided SYSTEM GUIDELINES only.',
-    'Return strict JSON with this exact shape and no extra keys:',
-    '{"violations":[{"title":"string","description":"string",' +
-      '"rule_reference":"string","line":number,"suggested_fix":"string"}],'+
-      '"summary":"string"}',
-    'If there are no violations, return {"violations":[],"summary":"ok"}.',
-    'Only report clear, high-confidence violations.',
+    GUIDELINE_LLM_PROMPT.INTRO,
+    GUIDELINE_LLM_PROMPT.JSON_SHAPE,
+    GUIDELINE_LLM_PROMPT.JSON_SCHEMA,
+    GUIDELINE_LLM_PROMPT.NO_VIOLATION_SCHEMA,
+    GUIDELINE_LLM_PROMPT.HIGH_CONFIDENCE_ONLY,
     '',
-    `FILE: ${relativePath}`,
+    `${GUIDELINE_LLM_PROMPT.FILE_LABEL} ${relativePath}`,
     '',
-    'SYSTEM GUIDELINES:',
+    GUIDELINE_LLM_PROMPT.SYSTEM_GUIDELINES_LABEL,
     guidelines,
     '',
-    'FILE CONTENT:',
+    GUIDELINE_LLM_PROMPT.FILE_CONTENT_LABEL,
     truncatedContent,
   ].join('\n');
 }
@@ -184,22 +220,23 @@ async function checkWithLlm(relativePath, fileContent, guidelines) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
-    const response = await fetch(`${BASE_URL}/chat/completions`, {
-      method: 'POST',
+    const response = await fetch(`${BASE_URL}${GUIDELINE_LLM_DEFAULT.API_PATH}`, {
+      method: GUIDELINE_LLM_REQUEST.METHOD_POST,
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${API_KEY}`,
+        [GUIDELINE_LLM_HEADER.CONTENT_TYPE]: GUIDELINE_LLM_HEADER.JSON,
+        [GUIDELINE_LLM_HEADER.AUTHORIZATION]:
+          `${GUIDELINE_LLM_HEADER.BEARER_PREFIX}${API_KEY}`,
       },
       body: JSON.stringify({
         model: DEFAULT_MODEL,
         temperature: 0,
         messages: [
           {
-            role: 'system',
-            content: 'You are a strict system-guideline compliance checker.',
+            role: GUIDELINE_LLM_REQUEST.ROLE_SYSTEM,
+            content: GUIDELINE_LLM_MESSAGE.SYSTEM_PROMPT,
           },
           {
-            role: 'user',
+            role: GUIDELINE_LLM_REQUEST.ROLE_USER,
             content: buildPrompt(relativePath, fileContent, guidelines),
           },
         ],
@@ -228,11 +265,19 @@ async function checkWithLlm(relativePath, fileContent, guidelines) {
 
     const violations = Array.isArray(parsed.violations) ? parsed.violations : [];
     return violations.map((violation) => ({
-      title: String(violation.title || 'Guideline violation'),
-      description: String(violation.description || 'Violation detected.'),
-      ruleReference: String(violation.rule_reference || 'system guidelines.md'),
-      line: Number.isInteger(violation.line) && violation.line > 0 ? violation.line : 1,
-      suggestedFix: String(violation.suggested_fix || 'Refactor to satisfy the rule.'),
+      title: String(violation.title || GUIDELINE_LLM_MESSAGE.DEFAULT_TITLE),
+      description: String(
+        violation.description || GUIDELINE_LLM_MESSAGE.DEFAULT_DESCRIPTION,
+      ),
+      ruleReference: String(
+        violation.rule_reference || GUIDELINE_LLM_MESSAGE.DEFAULT_RULE_REFERENCE,
+      ),
+      line: Number.isInteger(violation.line) && violation.line > 0 ?
+        violation.line :
+        GUIDELINE_POSITION.DEFAULT_LINE,
+      suggestedFix: String(
+        violation.suggested_fix || GUIDELINE_LLM_MESSAGE.DEFAULT_SUGGESTED_FIX,
+      ),
     }));
   } finally {
     clearTimeout(timeoutId);
@@ -242,7 +287,7 @@ async function checkWithLlm(relativePath, fileContent, guidelines) {
 function printViolations(relativePath, violations) {
   for (const violation of violations) {
     console.error(
-        `${relativePath}:${violation.line}:1: error [SYS-GUIDELINE] ` +
+      `${formatGuidelineLocation(relativePath, violation.line)}: error [SYS-GUIDELINE] ` +
         `${violation.title} - ${violation.description}`,
     );
     console.error(`  rule: ${violation.ruleReference}`);
@@ -256,15 +301,13 @@ async function main() {
   const fileArgs = process.argv.slice(2).filter(Boolean);
   if (fileArgs.length === 0) {
     printUsage();
-    process.exitCode = 2;
+    process.exitCode = EXIT_CODE.USAGE;
     return;
   }
 
   if (!API_KEY) {
-    console.error(
-        'Missing API key. Set GUIDELINE_LLM_API_KEY or OPENAI_API_KEY.',
-    );
-    process.exitCode = 2;
+    console.error(GUIDELINE_LLM_MESSAGE.MISSING_API_KEY);
+    process.exitCode = EXIT_CODE.USAGE;
     return;
   }
 
@@ -282,7 +325,9 @@ async function main() {
     try {
       fileContent = await readFileSafe(absolutePath);
     } catch (error) {
-      console.error(`${relativePath}:1:1: error [SYS-GUIDELINE] ${error.message}`);
+      console.error(
+        `${formatGuidelineLocation(relativePath)}: error [SYS-GUIDELINE] ${error.message}`,
+      );
       hasViolations = true;
       continue;
     }
@@ -300,17 +345,18 @@ async function main() {
     } catch (error) {
       hasViolations = true;
       console.error(
-          `${relativePath}:1:1: error [SYS-GUIDELINE] Check failed: ${error.message}`,
+        `${formatGuidelineLocation(relativePath)}: error [SYS-GUIDELINE] ` +
+        `${GUIDELINE_LLM_MESSAGE.CHECK_FAILED_PREFIX}${error.message}`,
       );
     }
   }
 
   if (hasViolations) {
-    process.exitCode = 1;
+    process.exitCode = EXIT_CODE.FAILURE;
   }
 }
 
 main().catch((error) => {
-  console.error(`fatal: ${error.message}`);
-  process.exit(1);
+  console.error(`${GUIDELINE_LLM_MESSAGE.FATAL_PREFIX}${error.message}`);
+  process.exit(EXIT_CODE.FAILURE);
 });

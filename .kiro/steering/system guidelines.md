@@ -138,6 +138,50 @@ It is FORBIDDEN to:
 - Infer missing identity data from local convenience state when a canonical row
   owner exists
 
+### 1.4.6 Canonical Owner Rows Must Outrank Read Models
+
+When leader identity or group state is needed, the canonical owner row MUST be
+consulted before any supporting replica rows.
+
+Mandatory owner precedence:
+
+- `partitions.leader_node_id` outranks `services.raft_role` for partition
+  leader identity
+- `message_groups.leader_node_id` outranks `services.raft_role` for
+  message-group leader identity
+- `services` remains the owner of replica-only fields such as replica role,
+  status, and address
+
+It is FORBIDDEN to:
+
+- Derive canonical leader identity from `services` row iteration order
+- Treat replica rows as alternative truth when the owner row is present
+- Collapse owner-row mismatch and replica-role mismatch into one undifferentiated
+  error
+
+### 1.4.7 New Raft-Backed Runtime Services Must Extend Shared Owners
+
+A new raft-backed runtime service MUST be built by extending existing shared
+runtime owners, not by copying an older service and editing it in place.
+
+Required implementation path:
+
+1. Declare the canonical owner row and owned field subset first.
+2. Reuse the shared raft lifecycle owner for leader/follower/candidate and
+   leader-change handling.
+3. Reuse the shared authoritative row mutation helper for role and owner-row
+   persistence.
+4. Feed control snapshots and diagnostics from the owner row first, then attach
+   replica detail separately.
+5. Add owner-path regressions that prove the shared owners are actually used.
+
+It is FORBIDDEN to:
+
+- Add service-local raft lifecycle wiring that duplicates shared behavior
+- Add service-local retry/cache-gap mutation loops
+- Introduce a second mutation helper for the same owner-row concern
+- Publish diagnostics that infer canonical leader truth from replica rows alone
+
 ### 1.5 Verification Checklist (run this before writing code)
 
 Before generating or modifying code, answer these questions:
@@ -310,5 +354,8 @@ This section exists because LLMs tend to generate these patterns. Do not:
 
 When you catch yourself about to do any of these: stop, search, reuse.
 
-If you run in to long periods of failures or have a hard time implementing something, take a step back and consider if changing the local architecutre in some way would make your current taks easier - while still adhering to all other rules. 
+If you run into long periods of failures or have a hard time implementing
+something, take a step back and consider whether changing the local
+architecture in some way would make your current task easier while still
+adhering to all other rules.
 In that case, bring it to attention and come with a suggestion instead of just plodding on.
