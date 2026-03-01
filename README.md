@@ -100,6 +100,20 @@ npm run guard:guidelines:file -- <saved-file>
 If a violation is found, the command exits non-zero and prints structured
 errors that include title, rule reference, and suggested fix.
 
+### Pre-commit enforcement
+
+To enforce the same rule checks on staged files before each commit:
+
+```bash
+npm run hooks:install
+```
+
+This configures git `core.hooksPath` to `.githooks`, where `pre-commit` runs:
+
+```bash
+npm run -s guard:guidelines:staged
+```
+
 ## Deployment Probes
 
 Seed nodes expose dedicated probe endpoints:
