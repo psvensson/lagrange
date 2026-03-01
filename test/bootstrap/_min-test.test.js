@@ -26,6 +26,7 @@ test('constructor works', async (t) => {
   stub.sqlQueryEngine = {
     setSystemCache: () => {},
     setMessageRouter: () => {},
+    executeQuery: async () => ({success: true, rows: []}),
   };
   svc.cdcIntegrationService = stub;
   svc.messageRouter = {deliver: async () => ({})};

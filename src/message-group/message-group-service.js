@@ -35,7 +35,8 @@ import {
 } from '../raft/raft-timing-utils.js';
 import {assertRaftProviderContract} from '../raft/raft-provider-contract.js';
 import {LiferaftProvider} from '../raft/liferaft-provider.js';
-import {applyReplicaDemotion} from '../raft/replica-leadership-state.js';
+import {AuthoritativeRowMutationHelper} from '../raft/authoritative-row-mutation-helper.js';
+import {wireReplicaLifecycleEvents} from '../raft/replica-leadership-state.js';
 import {AddressManager} from '../address/address-manager.js';
 import {
   UnifiedRebalancer,
@@ -51,6 +52,7 @@ import {
   RAFT_ROLE as RaftRole,
 } from './constants.js';
 import {
+  resolveMessageGroupForwardServiceFromCache,
   resolveMessageGroupLeaderServiceFromCache,
 } from './message-group-target-resolver.js';
 import {CDCHandler} from './cdc-handler.js';
@@ -242,14 +244,6 @@ class MessageGroupService extends EventEmitter {
     this.role = RaftRole.FOLLOWER;
     this.leaderId = null;
     this.cdcIntegrationService = options.cdcIntegrationService || null;
-    this.pendingRoleUpdate = this.role;
-    this.persistedRole = null;
-    this.roleUpdateInFlight = false;
-    this.roleUpdateRetryTimer = null;
-    this.pendingLeaderNodeUpdate = null;
-    this.persistedLeaderNodeId = null;
-    this.leaderNodeUpdateInFlight = false;
-    this.leaderNodeUpdateRetryTimer = null;
     this.tablePolicyService = options.tablePolicyService || null;
     this.rebalanceCoordinator = options.rebalanceCoordinator || null;
     this.rebalancer = null;
@@ -278,6 +272,13 @@ class MessageGroupService extends EventEmitter {
     this.logger = loggingService.isInitialized() ?
       loggingService.forSubsystem(MESSAGE_GROUP_SUBSYSTEM.NAME) : console;
 
+    this.roleMutationHelper = this.createRoleMutationHelper();
+    this.pendingRoleUpdate = this.role;
+    this.persistedRole = null;
+    this.leaderNodeMutationHelper = this.createLeaderNodeMutationHelper();
+    this.pendingLeaderNodeUpdate = null;
+    this.persistedLeaderNodeId = null;
+
     // State
     this.initialized = false;
     this.isLeader = false;
@@ -288,6 +289,149 @@ class MessageGroupService extends EventEmitter {
     this.deferElection = options.deferElection || false;
     this.electionStarted = false;
     this.raftTimingConfig = null;
+  }
+
+  get systemTableCache() {
+    return this._systemTableCache || null;
+  }
+
+  set systemTableCache(systemTableCache) {
+    this._systemTableCache = systemTableCache;
+    this.roleMutationHelper?.setSystemTableCache(systemTableCache);
+    this.leaderNodeMutationHelper?.setSystemTableCache(systemTableCache);
+    if (this.rebalancer) {
+      this.rebalancer.systemTableCache = systemTableCache;
+    }
+  }
+
+  get cdcIntegrationService() {
+    return this._cdcIntegrationService || null;
+  }
+
+  set cdcIntegrationService(cdcIntegrationService) {
+    this._cdcIntegrationService = cdcIntegrationService;
+    this.roleMutationHelper?.setCdcIntegrationService(cdcIntegrationService);
+    this.leaderNodeMutationHelper?.setCdcIntegrationService(cdcIntegrationService);
+    if (this.rebalancer) {
+      this.rebalancer.cdcIntegrationService = cdcIntegrationService;
+    }
+  }
+
+  get pendingRoleUpdate() {
+    return this.roleMutationHelper?.pendingValue || null;
+  }
+
+  set pendingRoleUpdate(role) {
+    if (this.roleMutationHelper) {
+      this.roleMutationHelper.pendingValue = role;
+    }
+  }
+
+  get persistedRole() {
+    return this.roleMutationHelper?.persistedValue || null;
+  }
+
+  set persistedRole(role) {
+    if (this.roleMutationHelper) {
+      this.roleMutationHelper.persistedValue = role;
+    }
+  }
+
+  get roleUpdateInFlight() {
+    return this.roleMutationHelper?.inFlight || false;
+  }
+
+  get roleUpdateRetryTimer() {
+    return this.roleMutationHelper?.retryTimer || null;
+  }
+
+  get pendingLeaderNodeUpdate() {
+    return this.leaderNodeMutationHelper?.pendingValue || null;
+  }
+
+  set pendingLeaderNodeUpdate(leaderNodeId) {
+    if (this.leaderNodeMutationHelper) {
+      this.leaderNodeMutationHelper.pendingValue = leaderNodeId;
+    }
+  }
+
+  get persistedLeaderNodeId() {
+    return this.leaderNodeMutationHelper?.persistedValue || null;
+  }
+
+  set persistedLeaderNodeId(leaderNodeId) {
+    if (this.leaderNodeMutationHelper) {
+      this.leaderNodeMutationHelper.persistedValue = leaderNodeId;
+    }
+  }
+
+  get leaderNodeUpdateInFlight() {
+    return this.leaderNodeMutationHelper?.inFlight || false;
+  }
+
+  get leaderNodeUpdateRetryTimer() {
+    return this.leaderNodeMutationHelper?.retryTimer || null;
+  }
+
+  createRoleMutationHelper() {
+    return new AuthoritativeRowMutationHelper({
+      tableName: SystemTableName.SERVICES,
+      buildWhereClause: () => ({service_id: this.replicaId}),
+      buildUpdateData: (role, updatedAt) => ({
+        raft_role: role,
+        updated_at: updatedAt,
+      }),
+      buildExpectedCacheFields: (role) => ({raft_role: role}),
+      readValueFromCache: (systemTableCache) => {
+        const cached = systemTableCache?.get?.(TABLES.SERVICES, this.replicaId);
+        return cached?.raft_role || null;
+      },
+      isWriteReady: () => this.isServicesLeaderAvailable(),
+      systemTableCache: this.systemTableCache,
+      cdcIntegrationService: this.cdcIntegrationService,
+      onAsyncError: (error, context = {}) => {
+        this.logger.warn('Failed to persist raft role update', {
+          groupId: this.groupId,
+          replicaId: this.replicaId,
+          role: context.value ?? this.pendingRoleUpdate,
+          error: error.message,
+        });
+      },
+    });
+  }
+
+  createLeaderNodeMutationHelper() {
+    return new AuthoritativeRowMutationHelper({
+      tableName: SystemTableName.MESSAGE_GROUPS,
+      buildWhereClause: () => ({[COLUMN.GROUP_ID]: this.groupId}),
+      buildUpdateData: (leaderNodeId, updatedAt) => ({
+        [COLUMN.LEADER_NODE_ID]: leaderNodeId,
+        [COLUMN.UPDATED_AT]: updatedAt,
+      }),
+      buildExpectedCacheFields: (leaderNodeId) => ({
+        [COLUMN.LEADER_NODE_ID]: leaderNodeId,
+      }),
+      readValueFromCache: (systemTableCache) => {
+        const cached = systemTableCache?.get?.(TABLES.MESSAGE_GROUPS, this.groupId);
+        return cached?.[COLUMN.LEADER_NODE_ID] || null;
+      },
+      prepareFlush: () => ({
+        skip: !this.isLeader,
+        clearPending: !this.isLeader,
+        reason: !this.isLeader ? 'not-owner' : 'ready',
+      }),
+      isWriteReady: () => this.isMessageGroupsLeaderAvailable(),
+      systemTableCache: this.systemTableCache,
+      cdcIntegrationService: this.cdcIntegrationService,
+      onAsyncError: (error, context = {}) => {
+        this.logger.warn('Failed to persist message group leader update', {
+          groupId: this.groupId,
+          replicaId: this.replicaId,
+          leaderNodeId: context.value ?? this.pendingLeaderNodeUpdate,
+          error: error.message,
+        });
+      },
+    });
   }
 
 
@@ -612,57 +756,46 @@ class MessageGroupService extends EventEmitter {
    * @private
    */
   wireRaftEvents() {
-    this.raft.on(RAFT_EVENT.LEADER, () => {
-      this.role = RaftRole.LEADER;
-      this.isLeader = true;
-      this.leaderId = this.replicaId;
-      this.queueRoleUpdate(this.role);
-      this.queueLeaderNodeUpdate(this.nodeId);
-      this.updateRebalancerLeadership();
-      this.storage.currentTerm = this.raftProvider.getCurrentTerm(this.raft);
-      const term = this.raftProvider.getCurrentTerm(this.raft);
+    wireReplicaLifecycleEvents(this, {
+      events: RAFT_EVENT,
+      roles: RaftRole,
+      getCurrentTerm: () => this.raftProvider.getCurrentTerm(this.raft),
+      onLeader: ({term}) => {
+        this.updateRebalancerLeadership();
+        this.storage.currentTerm = term;
 
-      this.logger.info('Became leader', {
-        term,
-        replicaId: this.replicaId,
-        groupId: this.groupId,
-      });
+        this.logger.info('Became leader', {
+          term,
+          replicaId: this.replicaId,
+          groupId: this.groupId,
+        });
 
-      this.emit('leaderElected', {
-        leaderId: this.replicaId,
-        term,
-        groupId: this.groupId,
-      });
-    });
-
-    this.raft.on(RAFT_EVENT.FOLLOWER, () => {
-      applyReplicaDemotion(this, RaftRole.FOLLOWER);
-      this.updateRebalancerLeadership();
-      this.storage.currentTerm = this.raftProvider.getCurrentTerm(this.raft);
-    });
-
-    this.raft.on(RAFT_EVENT.CANDIDATE, () => {
-      applyReplicaDemotion(this, RaftRole.CANDIDATE);
-      this.updateRebalancerLeadership();
-      this.storage.currentTerm = this.raftProvider.getCurrentTerm(this.raft);
-    });
-
-    // Handle committed entries
-    // Requirements: 6.1, 6.2, 6.4, 6.5
-    this.raft.on(RAFT_EVENT.COMMIT, (command) => {
-      this.applyCommittedEntry(command);
-    });
-
-    this.raft.on(RAFT_EVENT.LEADER_CHANGE, (to) => {
-      this.leaderId = to;
-      this.logger.debug('Leader changed', {
-        newLeader: to,
-        groupId: this.groupId,
-      });
-    });
-
-    this.raft.on(RAFT_EVENT.TERM_CHANGE, (term) => {
-      this.storage.currentTerm = term;
+        this.emit('leaderElected', {
+          leaderId: this.replicaId,
+          term,
+          groupId: this.groupId,
+        });
+      },
+      onFollower: ({term}) => {
+        this.updateRebalancerLeadership();
+        this.storage.currentTerm = term;
+      },
+      onCandidate: ({term}) => {
+        this.updateRebalancerLeadership();
+        this.storage.currentTerm = term;
+      },
+      onCommit: (command) => {
+        this.applyCommittedEntry(command);
+      },
+      onLeaderChange: ({leaderId}) => {
+        this.logger.debug('Leader changed', {
+          newLeader: leaderId,
+          groupId: this.groupId,
+        });
+      },
+      onTermChange: ({term}) => {
+        this.storage.currentTerm = term;
+      },
     });
   }
 
@@ -1591,6 +1724,64 @@ class MessageGroupService extends EventEmitter {
   }
 
   /**
+   * Build an ordered list of CDC forwarding targets.
+   * Prefers explicit leader metadata, then cache-backed peers, then
+   * bootstrap-time replica hints.
+   * @param {?Object} cacheLeaderService
+   * @param {?Object} cacheForwardService
+   * @return {Array<{serviceId: string, address: ?string}>}
+   * @private
+   */
+  buildCDCForwardTargets(cacheLeaderService, cacheForwardService) {
+    const targets = [];
+    const targetsByServiceId = new Map();
+    const addTarget = (serviceId, address = null) => {
+      if (typeof serviceId !== TYPEOF.STRING ||
+        serviceId.length === NUM.ZERO ||
+        serviceId === this.replicaId) {
+        return;
+      }
+
+      const normalizedAddress = typeof address === TYPEOF.STRING &&
+        address.length > NUM.ZERO ?
+        address :
+        null;
+      const existingTarget = targetsByServiceId.get(serviceId);
+      if (existingTarget) {
+        if (!existingTarget.address && normalizedAddress) {
+          existingTarget.address = normalizedAddress;
+        }
+        return;
+      }
+
+      const target = {
+        serviceId,
+        address: normalizedAddress,
+      };
+      targetsByServiceId.set(serviceId, target);
+      targets.push(target);
+    };
+
+    addTarget(this.leaderId);
+    addTarget(
+      cacheLeaderService?.[COLUMN.SERVICE_ID],
+      cacheLeaderService?.[COLUMN.ADDRESS],
+    );
+    addTarget(
+      cacheForwardService?.[COLUMN.SERVICE_ID],
+      cacheForwardService?.[COLUMN.ADDRESS],
+    );
+
+    if (Array.isArray(this.replicaIds)) {
+      for (const peerId of this.replicaIds) {
+        addTarget(peerId);
+      }
+    }
+
+    return targets;
+  }
+
+  /**
    * Forward a CDC event to the message group leader for Raft replication.
    * Called when the local MG replica is not the Raft leader. Uses the
    * existing latency CDC propagation message type which the leader
@@ -1618,29 +1809,17 @@ class MessageGroupService extends EventEmitter {
       this.groupId,
       {excludeServiceId: this.replicaId},
     );
-    const resolvedLeaderId = this.leaderId && this.leaderId !== this.replicaId ?
-      this.leaderId :
-      cacheLeaderService?.service_id || null;
-    if (!resolvedLeaderId) {
+    const cacheForwardService = resolveMessageGroupForwardServiceFromCache(
+      this.systemTableCache,
+      this.groupId,
+      {excludeServiceId: this.replicaId},
+    );
+    const forwardTargets = this.buildCDCForwardTargets(
+      cacheLeaderService,
+      cacheForwardService,
+    );
+    if (forwardTargets.length === NUM.ZERO) {
       throw new Error(MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN);
-    }
-
-    let leaderAddress = null;
-    try {
-      leaderAddress = resolvedLeaderId === cacheLeaderService?.service_id &&
-        cacheLeaderService?.address ?
-        cacheLeaderService.address :
-        this.buildPeerAddress(resolvedLeaderId);
-    } catch (error) {
-      throw new Error(
-        `${MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_ADDRESS_UNRESOLVED}: ` +
-          `${error.message}`,
-      );
-    }
-    if (!leaderAddress) {
-      throw new Error(
-        MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_ADDRESS_UNRESOLVED,
-      );
     }
 
     const payload = {
@@ -1653,38 +1832,76 @@ class MessageGroupService extends EventEmitter {
       relayDepth,
       causeId,
     };
-    const forwardStartMs = Date.now();
-    const deliveryResult = await this.transport.deliver(leaderAddress, payload);
-    const deliveryAcked = deliveryResult?.acknowledged === true;
-    const deliverySucceeded = deliveryResult?.success !== false;
-    const deliveryRejectedByHandler = deliveryResult?.noHandler === true ||
-      (typeof deliveryResult?.error === TYPEOF.STRING &&
-        deliveryResult.error.length > NUM.ZERO);
-    if (!deliveryAcked || !deliverySucceeded || deliveryRejectedByHandler) {
-      this.logger.warn('CDC forward to leader rejected', {
-        groupId: this.groupId,
-        replicaId: this.replicaId,
-        leaderId: resolvedLeaderId,
-        leaderAddress,
-        tableName,
-        operation,
-        relayDepth,
-        causeId,
-        durationMs: Date.now() - forwardStartMs,
-        acknowledged: deliveryResult?.acknowledged === true,
-        success: deliveryResult?.success !== false,
-        noHandler: deliveryResult?.noHandler === true,
-        error: deliveryResult?.error || null,
-      });
-      const deliveryError =
-        typeof deliveryResult?.error === TYPEOF.STRING &&
-        deliveryResult.error.length > NUM.ZERO ?
-          `: ${deliveryResult.error}` :
-          '';
+    let lastAddressError = null;
+    let lastDeliveryError = null;
+
+    for (const target of forwardTargets) {
+      let leaderAddress = target.address;
+      try {
+        if (!leaderAddress) {
+          leaderAddress = this.buildPeerAddress(target.serviceId);
+        }
+        if (!leaderAddress) {
+          throw new Error(
+            MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_ADDRESS_UNRESOLVED,
+          );
+        }
+      } catch (error) {
+        lastAddressError = error;
+        continue;
+      }
+
+      const forwardStartMs = Date.now();
+      try {
+        const deliveryResult = await this.transport.deliver(leaderAddress, payload);
+        const deliveryAcked = deliveryResult?.acknowledged === true;
+        const deliverySucceeded = deliveryResult?.success !== false;
+        const deliveryRejectedByHandler = deliveryResult?.noHandler === true ||
+          (typeof deliveryResult?.error === TYPEOF.STRING &&
+            deliveryResult.error.length > NUM.ZERO);
+        if (!deliveryAcked || !deliverySucceeded || deliveryRejectedByHandler) {
+          this.logger.warn('CDC forward to leader rejected', {
+            groupId: this.groupId,
+            replicaId: this.replicaId,
+            leaderId: target.serviceId,
+            leaderAddress,
+            tableName,
+            operation,
+            relayDepth,
+            causeId,
+            durationMs: Date.now() - forwardStartMs,
+            acknowledged: deliveryResult?.acknowledged === true,
+            success: deliveryResult?.success !== false,
+            noHandler: deliveryResult?.noHandler === true,
+            error: deliveryResult?.error || null,
+          });
+          const deliveryError =
+            typeof deliveryResult?.error === TYPEOF.STRING &&
+            deliveryResult.error.length > NUM.ZERO ?
+              `: ${deliveryResult.error}` :
+              '';
+          lastDeliveryError = new Error(
+            `${MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_DELIVERY_REJECTED}${deliveryError}`,
+          );
+          continue;
+        }
+        return;
+      } catch (error) {
+        lastDeliveryError = error;
+      }
+    }
+
+    if (lastDeliveryError) {
+      throw lastDeliveryError;
+    }
+    if (lastAddressError) {
       throw new Error(
-        `${MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_DELIVERY_REJECTED}${deliveryError}`,
+        `${MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_ADDRESS_UNRESOLVED}: ` +
+          `${lastAddressError.message}`,
       );
     }
+
+    throw new Error(MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN);
   }
 
   /**
@@ -1887,23 +2104,7 @@ class MessageGroupService extends EventEmitter {
    * @private
    */
   queueRoleUpdate(role) {
-    if (!role || role === this.persistedRole) {
-      return;
-    }
-
-    this.pendingRoleUpdate = role;
-    if (!this.cdcIntegrationService) {
-      return;
-    }
-
-    this.flushRoleUpdate().catch((error) => {
-      this.logger.warn('Failed to persist raft role update', {
-        groupId: this.groupId,
-        replicaId: this.replicaId,
-        role,
-        error: error.message,
-      });
-    });
+    this.roleMutationHelper.queue(role);
   }
 
   /**
@@ -1912,23 +2113,7 @@ class MessageGroupService extends EventEmitter {
    * @private
    */
   queueLeaderNodeUpdate(leaderNodeId) {
-    if (!leaderNodeId || leaderNodeId === this.persistedLeaderNodeId) {
-      return;
-    }
-
-    this.pendingLeaderNodeUpdate = leaderNodeId;
-    if (!this.cdcIntegrationService) {
-      return;
-    }
-
-    this.flushLeaderNodeUpdate().catch((error) => {
-      this.logger.warn('Failed to persist message group leader update', {
-        groupId: this.groupId,
-        replicaId: this.replicaId,
-        leaderNodeId,
-        error: error.message,
-      });
-    });
+    this.leaderNodeMutationHelper.queue(leaderNodeId);
   }
 
   /**
@@ -1937,39 +2122,7 @@ class MessageGroupService extends EventEmitter {
    * @private
    */
   async flushRoleUpdate() {
-    if (this.roleUpdateInFlight) {
-      return;
-    }
-
-    if (!this.cdcIntegrationService || !this.pendingRoleUpdate ||
-        this.pendingRoleUpdate === this.persistedRole) {
-      return;
-    }
-
-    if (!this.isServicesLeaderAvailable()) {
-      this.scheduleRoleUpdateRetry();
-      return;
-    }
-
-    this.roleUpdateInFlight = true;
-    const role = this.pendingRoleUpdate;
-
-    try {
-      await this.cdcIntegrationService.updateSystemTableRow(
-        SystemTableName.SERVICES,
-        {service_id: this.replicaId},
-        {
-          raft_role: role,
-          updated_at: Date.now(),
-        },
-      );
-      this.persistedRole = role;
-    } catch (error) {
-      this.scheduleRoleUpdateRetry();
-      throw error;
-    } finally {
-      this.roleUpdateInFlight = false;
-    }
+    return this.roleMutationHelper.flush();
   }
 
   /**
@@ -1978,65 +2131,7 @@ class MessageGroupService extends EventEmitter {
    * @private
    */
   async flushLeaderNodeUpdate() {
-    if (this.leaderNodeUpdateInFlight) {
-      return;
-    }
-
-    this.syncLeaderNodeFromCache();
-
-    if (!this.isLeader) {
-      this.pendingLeaderNodeUpdate = null;
-      return;
-    }
-
-    if (!this.cdcIntegrationService || !this.pendingLeaderNodeUpdate ||
-        this.pendingLeaderNodeUpdate === this.persistedLeaderNodeId) {
-      return;
-    }
-
-    if (!this.isMessageGroupsLeaderAvailable()) {
-      this.scheduleLeaderNodeUpdateRetry();
-      return;
-    }
-
-    this.leaderNodeUpdateInFlight = true;
-    const leaderNodeId = this.pendingLeaderNodeUpdate;
-
-    try {
-      await this.cdcIntegrationService.updateSystemTableRow(
-        SystemTableName.MESSAGE_GROUPS,
-        {[COLUMN.GROUP_ID]: this.groupId},
-        {
-          [COLUMN.LEADER_NODE_ID]: leaderNodeId,
-          [COLUMN.UPDATED_AT]: Date.now(),
-        },
-      );
-      this.persistedLeaderNodeId = leaderNodeId;
-    } catch (error) {
-      this.scheduleLeaderNodeUpdateRetry();
-      throw error;
-    } finally {
-      this.leaderNodeUpdateInFlight = false;
-    }
-  }
-
-  /**
-   * Sync persisted leader node state from the system cache.
-   * @private
-   */
-  syncLeaderNodeFromCache() {
-    if (!this.systemTableCache || !this.systemTableCache.get) {
-      return;
-    }
-    const cached = this.systemTableCache.get(TABLES.MESSAGE_GROUPS, this.groupId);
-    const cachedLeaderNodeId = cached?.[COLUMN.LEADER_NODE_ID] || null;
-    if (!cachedLeaderNodeId) {
-      return;
-    }
-    this.persistedLeaderNodeId = cachedLeaderNodeId;
-    if (this.pendingLeaderNodeUpdate === cachedLeaderNodeId) {
-      this.pendingLeaderNodeUpdate = null;
-    }
+    return this.leaderNodeMutationHelper.flush();
   }
 
   /**
@@ -2055,48 +2150,6 @@ class MessageGroupService extends EventEmitter {
    */
   isServicesLeaderAvailable() {
     return isSystemTableWriteReady(this.systemTableCache, SystemTableName.SERVICES);
-  }
-
-  /**
-   * Schedule a retry for persisting the pending role update.
-   * @private
-   */
-  scheduleRoleUpdateRetry() {
-    if (this.roleUpdateRetryTimer) {
-      return;
-    }
-    this.roleUpdateRetryTimer = setTimeout(() => {
-      this.roleUpdateRetryTimer = null;
-      this.flushRoleUpdate().catch((error) => {
-        this.logger.warn('Failed to persist raft role update', {
-          groupId: this.groupId,
-          replicaId: this.replicaId,
-          role: this.pendingRoleUpdate,
-          error: error.message,
-        });
-      });
-    }, TIME_MS.SECOND);
-  }
-
-  /**
-   * Schedule a retry for persisting the pending message group leader update.
-   * @private
-   */
-  scheduleLeaderNodeUpdateRetry() {
-    if (this.leaderNodeUpdateRetryTimer) {
-      return;
-    }
-    this.leaderNodeUpdateRetryTimer = setTimeout(() => {
-      this.leaderNodeUpdateRetryTimer = null;
-      this.flushLeaderNodeUpdate().catch((error) => {
-        this.logger.warn('Failed to persist message group leader update', {
-          groupId: this.groupId,
-          replicaId: this.replicaId,
-          leaderNodeId: this.pendingLeaderNodeUpdate,
-          error: error.message,
-        });
-      });
-    }, TIME_MS.SECOND);
   }
 
   /**
@@ -2206,14 +2259,8 @@ class MessageGroupService extends EventEmitter {
       this.raft = null;
     }
 
-    if (this.roleUpdateRetryTimer) {
-      clearTimeout(this.roleUpdateRetryTimer);
-      this.roleUpdateRetryTimer = null;
-    }
-    if (this.leaderNodeUpdateRetryTimer) {
-      clearTimeout(this.leaderNodeUpdateRetryTimer);
-      this.leaderNodeUpdateRetryTimer = null;
-    }
+    this.roleMutationHelper.shutdown();
+    this.leaderNodeMutationHelper.shutdown();
     await this.quiesceRebalancing();
     this.cdcHandler.shutdown();
 

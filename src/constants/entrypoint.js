@@ -47,6 +47,7 @@ const ENTRYPOINT_SUBSYSTEM = Object.freeze({
 
 const ENTRYPOINT_LOG_MSG = Object.freeze({
   STARTING: 'Distributed Database System starting',
+  DRY_RUN_COMPLETED: 'Dry run completed',
   JOINING_CLUSTER: 'Joining existing cluster',
   FAILED_JOIN: 'Failed to join cluster',
   JOINED_CLUSTER: 'Successfully joined cluster',

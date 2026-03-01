@@ -1434,7 +1434,66 @@ class BootstrapService extends EventEmitter {
       delay = Math.min(delay * backoffMultiplier, maxDelay);
     }
 
+    try {
+      await this.repairPropagatedCacheTablesFromLocalPartitions({
+        reason: 'ready_node_timeout',
+        targetNodeId: nodeId,
+      });
+      const repairedNode = cache.get(TABLES.NODES, nodeId);
+      if (isNodeRecordReady(repairedNode, {now: Date.now()})) {
+        return;
+      }
+    } catch (error) {
+      this.logger.error(
+        'Failed to repair propagated cache tables after ready-node cache timeout',
+        {
+          nodeId: this.nodeId,
+          targetNodeId: nodeId,
+          error: error?.message || String(error),
+        },
+      );
+    }
+
     throw new Error(bootstrapError.seedReadyTimeout(nodeId, timeoutMs));
+  }
+
+  /**
+   * Repair propagated cache tables from authoritative local partition reads.
+   * This closes CDC visibility holes that can otherwise leave the seed node
+   * with a stale cache long after durable control-plane writes committed.
+   * @param {Object} [options={}]
+   * @return {Promise<Object>}
+   * @private
+   */
+  async repairPropagatedCacheTablesFromLocalPartitions(options = {}) {
+    const systemTableCache = this.getSystemTableCache();
+    const hydrationMessageGroup = assertCritical(
+      this.getLeaderMessageGroupService(),
+      bootstrapError.CDC_HYDRATION_MISSING,
+    );
+    const result = await this.hydrateFromLocalPartitions(
+      systemTableCache,
+      hydrationMessageGroup,
+    );
+    if (result?.success === false ||
+        (Array.isArray(result?.errors) && result.errors.length > NUM.ZERO)) {
+      const errorDetails = (result?.errors || [])
+        .map((entry) => `${entry.tableName}:${entry.error}`)
+        .join(', ');
+      throw new Error(
+        'Failed to repair propagated cache tables from local partitions' +
+          (errorDetails ? ` (${errorDetails})` : ''),
+      );
+    }
+
+    this.logger.warn('Repaired propagated cache tables from local partitions', {
+      nodeId: this.nodeId,
+      reason: options.reason || null,
+      targetNodeId: options.targetNodeId || null,
+      tablesHydrated: Object.keys(result?.tables || {}).length,
+      totalRows: this.countTotalRows(result),
+    });
+    return result;
   }
 
   /**
@@ -4359,7 +4418,7 @@ class BootstrapService extends EventEmitter {
         this.replicaHandler.unregisterFromRouter(
           this.messageRouter,
         );
-        this.replicaHandler.shutdown();
+        await this.replicaHandler.shutdown();
         this.replicaHandler = null;
       }
 
@@ -4685,7 +4744,7 @@ class BootstrapService extends EventEmitter {
     // Shutdown replica handler
     if (this.replicaHandler) {
       this.replicaHandler.unregisterFromRouter(this.messageRouter);
-      this.replicaHandler.shutdown();
+      await this.replicaHandler.shutdown();
       this.replicaHandler = null;
     }
 

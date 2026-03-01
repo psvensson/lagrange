@@ -124,7 +124,13 @@ class CDCIntegrationSetup {
    * @return {CDCIntegrationService} Configured CDC integration service in normal mode.
    * @throws {DependencyError} If required dependencies are not provided.
    */
-  static createForNormal({nodeId, sqlQueryEngine, systemTableCache, messageRouter}) {
+  static createForNormal({
+    nodeId,
+    sqlQueryEngine,
+    systemTableCache,
+    messageRouter,
+    cacheMutationTarget = null,
+  }) {
     // Validate required dependencies
     if (!nodeId) {
       throw new DependencyError('CDCIntegrationSetup', ERROR_MSG.NODE_ID_REQUIRED);
@@ -152,9 +158,13 @@ class CDCIntegrationSetup {
       nodeId,
       sqlQueryEngine,
       systemTableCache,
+      cacheMutationTarget,
     });
     cdcIntegrationService.initialize();
     cdcIntegrationService.setSystemTableCache(systemTableCache);
+    if (cacheMutationTarget) {
+      cdcIntegrationService.setCacheMutationTarget(cacheMutationTarget);
+    }
 
     // Set message router for mesh connectivity
     cdcIntegrationService.setMessageRouter(messageRouter);
@@ -183,7 +193,13 @@ class CDCIntegrationSetup {
    * @param {Object} options.messageRouter - Message router (optional, updates if provided).
    * @throws {DependencyError} If required dependencies are not provided.
    */
-  static upgrade({cdcIntegrationService, sqlQueryEngine, systemTableCache, messageRouter}) {
+  static upgrade({
+    cdcIntegrationService,
+    sqlQueryEngine,
+    systemTableCache,
+    messageRouter,
+    cacheMutationTarget = null,
+  }) {
     if (!cdcIntegrationService) {
       throw new DependencyError('CDCIntegrationSetup', 'cdcIntegrationService');
     }
@@ -207,6 +223,9 @@ class CDCIntegrationSetup {
     // Update the service to use cache-based routing
     cdcIntegrationService.sqlQueryEngine = sqlQueryEngine;
     cdcIntegrationService.setSystemTableCache(systemTableCache);
+    if (cacheMutationTarget) {
+      cdcIntegrationService.setCacheMutationTarget(cacheMutationTarget);
+    }
 
     // Update message router if provided and not already set
     if (messageRouter && !cdcIntegrationService.messageRouter) {

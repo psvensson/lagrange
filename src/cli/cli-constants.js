@@ -78,6 +78,9 @@ const CLI_DEFAULT = Object.freeze({
 
 const CLI_COMMAND = Object.freeze({
   CONNECT: 'connect',
+  DRAIN: 'drain',
+  ACTIVATE: 'activate',
+  REMOVE_NODE: 'remove-node',
   REFRESH: 'refresh',
   FILTER: 'filter',
   SORT: 'sort',
@@ -95,6 +98,24 @@ const CLI_COMMAND_DEFINITIONS = Object.freeze([
     params: ['address'],
     description: 'Connect to node at specified address',
     aliases: ['c'],
+  },
+  {
+    name: CLI_COMMAND.DRAIN,
+    params: ['node_id'],
+    description: 'Mark a node as draining',
+    aliases: [],
+  },
+  {
+    name: CLI_COMMAND.ACTIVATE,
+    params: ['node_id'],
+    description: 'Mark a node as active',
+    aliases: [],
+  },
+  {
+    name: CLI_COMMAND.REMOVE_NODE,
+    params: ['node_id'],
+    description: 'Remove a node from cluster metadata',
+    aliases: ['rm-node'],
   },
   {
     name: CLI_COMMAND.REFRESH,

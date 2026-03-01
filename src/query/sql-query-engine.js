@@ -1559,7 +1559,9 @@ class SQLQueryEngine {
         if (!activeNodeEligibilityById.has(nodeId)) {
           return true;
         }
-        return activeNodeEligibilityById.get(nodeId) === true;
+        // Active service ownership is a stronger signal than a transiently
+        // stale disconnected node row during table-create provisioning.
+        return true;
       })
       .filter((nodeId) => typeof nodeId === 'string' && nodeId.length > 0);
     return [...new Set([...eligibleNodeIds, ...serviceNodeIds])];

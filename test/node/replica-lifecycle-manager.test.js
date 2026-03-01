@@ -151,8 +151,33 @@ test('ReplicaLifecycleManager', async (t) => {
     t.equal(manager.isInitialized(), true, 'initialized after init');
     t.equal(manager.nodeId, 'test-node', 'node ID set correctly');
 
-    manager.shutdown();
+    await manager.shutdown();
     t.equal(manager.isInitialized(), false, 'not initialized after shutdown');
+  });
+
+  t.test('shutdown cascades to the delegated replica handler once', async (t) => {
+    const mockCDC = createMockCDCService();
+
+    const manager = new ReplicaLifecycleManager({
+      nodeId: 'test-node',
+      dataDir: tempDir,
+      systemTableCache: createMockCache(),
+      cdcIntegrationService: mockCDC,
+      createPartitionService: createMockPartitionServiceFactory(),
+    });
+
+    let shutdownCalls = 0;
+    manager.replicaHandler.shutdown = async () => {
+      shutdownCalls += 1;
+    };
+
+    manager.initialize();
+
+    await manager.shutdown();
+    await manager.shutdown();
+
+    t.equal(shutdownCalls, 1, 'delegated handler shutdown should be idempotent');
+    t.equal(manager.isInitialized(), false, 'manager should be marked uninitialized');
   });
 
   t.test('initializes with message group service', async (t) => {

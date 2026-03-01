@@ -131,6 +131,8 @@ const CDC_ERROR_MSG = Object.freeze({
   UPDATE_FAILED: 'Update failed',
   DELETE_FAILED: 'Delete failed',
   UPSERT_FAILED: 'Upsert failed',
+  CACHE_WAIT_TIMEOUT: (tableName, key, timeoutMs) =>
+    `Cache update not observed for ${tableName}:${key} within ${timeoutMs}ms`,
   INVALID_EVENT: 'Invalid CDC event: event must be an object',
   NOT_EPOCH_CHANGE_PREFIX: 'Not an epoch change event: config_key is ',
   EPOCH_MANAGER_REQUIRED: 'epochManager is required',

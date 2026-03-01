@@ -184,6 +184,10 @@ class NodeStorageBudgetService {
    */
   async registerNodeBudget(options = {}) {
     const nodeRow = options.nodeRow;
+    const upsertOptions = options.upsertOptions &&
+      typeof options.upsertOptions === TYPEOF.OBJECT ?
+      options.upsertOptions :
+      undefined;
     assertCritical(
       nodeRow && typeof nodeRow === TYPEOF.OBJECT,
       NODE_STORAGE_BUDGET_ERROR_MSG.INVALID_NODE_ROW,
@@ -203,6 +207,7 @@ class NodeStorageBudgetService {
     const result = await this.cdcIntegrationService.upsertSystemTableRow(
       TABLES.NODES,
       budgetRow,
+      upsertOptions,
     );
 
     if (!result?.success) {

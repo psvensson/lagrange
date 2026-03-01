@@ -1096,8 +1096,12 @@ class MessageRouter extends EventEmitter {
       this.pendingMessages.delete(messageId);
 
       if (acknowledged) {
+        const resolved = {messageId, acknowledged: true, ...rest};
+        if (error !== undefined) {
+          resolved.error = error;
+        }
         // Pass through flat structure - spread all fields from ACK
-        pending.resolve({messageId, acknowledged: true, ...rest});
+        pending.resolve(resolved);
       } else {
         pending.reject(new Error(error || TRANSPORT_ERROR_MSG.MESSAGE_NOT_ACKNOWLEDGED));
       }

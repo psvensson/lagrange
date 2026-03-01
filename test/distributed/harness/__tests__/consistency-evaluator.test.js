@@ -20,6 +20,14 @@ function createSnapshot(nodeId, overrides = {}) {
     leaders: {
       'partition-1': 'leader-a',
     },
+    replicaRoleDiagnostics: {
+      'partition-1': {
+        canonicalLeaderNodeId: 'leader-a',
+        source: 'partitions',
+        inconsistentReplicaRoles: false,
+        replicaLeaderNodeIds: ['leader-a'],
+      },
+    },
     ...overrides,
   };
 }
@@ -77,6 +85,56 @@ test('ConsistencyEvaluatorV2 classifies leader disagreement as inconsistent',
       'node-2': 'leader-b',
     });
   });
+
+test('ConsistencyEvaluatorV2 reports replica-role inconsistency separately ' +
+  'from canonical leader mismatch', async () => {
+  const evaluator = new ConsistencyEvaluatorV2();
+
+  const result = evaluator.evaluate({
+    reachableNodeIds: ['node-1', 'node-2'],
+    snapshots: [
+      createSnapshot('node-1'),
+      createSnapshot('node-2', {
+        replicaRoleDiagnostics: {
+          'partition-1': {
+            canonicalLeaderNodeId: 'leader-a',
+            source: 'partitions',
+            inconsistentReplicaRoles: true,
+            replicaLeaderNodeIds: ['leader-a', 'leader-b'],
+          },
+        },
+      }),
+    ],
+  });
+
+  assert.equal(result.verdict, 'inconsistent');
+  assert.equal(result.hardFailure, true);
+
+  const leaderMismatch = result.mismatches.find((entry) =>
+    entry.kind === 'leader_mismatch',
+  );
+  assert.equal(leaderMismatch, undefined, 'canonical leaders should still agree');
+
+  const replicaRoleMismatch = result.mismatches.find((entry) =>
+    entry.kind === 'replica_role_inconsistency',
+  );
+  assert.ok(replicaRoleMismatch, 'should report replica-role inconsistency separately');
+  assert.equal(replicaRoleMismatch.partitionId, 'partition-1');
+  assert.deepEqual(replicaRoleMismatch.byNode, {
+    'node-1': {
+      canonicalLeaderNodeId: 'leader-a',
+      inconsistentReplicaRoles: false,
+      replicaLeaderNodeIds: ['leader-a'],
+      source: 'partitions',
+    },
+    'node-2': {
+      canonicalLeaderNodeId: 'leader-a',
+      inconsistentReplicaRoles: true,
+      replicaLeaderNodeIds: ['leader-a', 'leader-b'],
+      source: 'partitions',
+    },
+  });
+});
 
 test('ConsistencyEvaluatorV2 classifies sparse snapshot coverage as insufficient_evidence',
   async () => {

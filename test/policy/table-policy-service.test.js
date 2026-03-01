@@ -620,6 +620,38 @@ test('TablePolicyService - getMessageGroupPolicy without engine returns default'
     t.end();
   });
 
+test('TablePolicyService - getMessageGroupPolicy uses system cache fallback',
+  async (t) => {
+    const service = new TablePolicyService({
+      systemTableCache: {
+        filter(tableName, predicate) {
+          if (tableName !== 'message_groups') {
+            return [];
+          }
+          return [
+            {
+              group_id: 'mg-self-hosted-1',
+              policy: JSON.stringify({
+                ensureLocalAccess: false,
+                placementConstraints: {
+                  spreadAcrossNodes: false,
+                },
+              }),
+            },
+          ].filter(predicate);
+        },
+      },
+    });
+
+    const policy = await service.getMessageGroupPolicy('mg-self-hosted-1');
+
+    t.equal(policy.ensureLocalAccess, false,
+      'Should use cached ensureLocalAccess override');
+    t.equal(policy.placementConstraints.spreadAcrossNodes, false,
+      'Should use cached spreadAcrossNodes override');
+    t.end();
+  });
+
 test('TablePolicyService - getMessageGroupPolicy merges stored policy',
   async (t) => {
     const mockEngine = createMockSqlEngine({});

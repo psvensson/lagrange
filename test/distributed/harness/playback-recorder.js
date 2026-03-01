@@ -55,6 +55,7 @@ const WARNING_CODE_TOPOLOGY_CAPTURE_FAILED = 'topology-capture-failed';
 const WARNING_CODE_SERVICE_QUERY_FAILED = 'service-query-failed';
 const WARNING_CODE_STATS_CAPTURE_FAILED = 'stats-capture-failed';
 const WARNING_CODE_STATS_API_MISSING = 'stats-api-missing';
+const SNAPSHOT_QUERY_LANE = 'snapshot';
 
 const CAPTURE_ERROR_MESSAGE = 'capture-error';
 const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
@@ -77,6 +78,18 @@ function extractRows(result) {
     return result[FIELD_RESULTS];
   }
   return [];
+}
+
+async function queryTopologySnapshot(node, sql) {
+  if (typeof node?.queryWithTimeout === 'function') {
+    return node.queryWithTimeout(sql, [], {
+      lane: SNAPSHOT_QUERY_LANE,
+    });
+  }
+  if (typeof node?.query === 'function') {
+    return node.query(sql);
+  }
+  throw new Error('Node does not support topology snapshot queries');
 }
 
 function normalizeProbeResult(probe) {
@@ -992,13 +1005,16 @@ class PlaybackRecorder {
         perNodeServices,
       ] =
         await Promise.all([
-          anchorNode.query(NODES_QUERY),
-          anchorNode.query(PARTITIONS_QUERY),
-          anchorNode.query(REPLICA_OPERATIONS_QUERY),
+          queryTopologySnapshot(anchorNode, NODES_QUERY),
+          queryTopologySnapshot(anchorNode, PARTITIONS_QUERY),
+          queryTopologySnapshot(anchorNode, REPLICA_OPERATIONS_QUERY),
           Promise.all(snapshotNodes.map(async (node) => {
             const nodeId = String(node?.id || 'unknown');
             try {
-              const servicesResult = await node.query(SERVICES_QUERY);
+              const servicesResult = await queryTopologySnapshot(
+                node,
+                SERVICES_QUERY,
+              );
               return {
                 nodeId,
                 rows: extractRows(servicesResult),

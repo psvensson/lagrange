@@ -35,6 +35,7 @@ const RAFT_REPLICA_BASE_EVENT = Object.freeze({
   DATA: 'data',
   INITIALIZED: 'initialized',
   LEADER_ELECTED: 'leaderElected',
+  LEADER_CHANGED: 'leaderChanged',
   SHUTDOWN: 'shutdown',
   STATE_TRANSITION: 'stateTransition',
 });

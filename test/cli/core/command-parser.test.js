@@ -13,6 +13,9 @@ test('CommandParser', async (t) => {
 
     const commands = parser.getCommandNames();
     t.ok(commands.includes('connect'), 'has connect command');
+    t.ok(commands.includes('drain'), 'has drain command');
+    t.ok(commands.includes('activate'), 'has activate command');
+    t.ok(commands.includes('remove-node'), 'has remove-node command');
     t.ok(commands.includes('refresh'), 'has refresh command');
     t.ok(commands.includes('filter'), 'has filter command');
     t.ok(commands.includes('sort'), 'has sort command');
@@ -248,6 +251,20 @@ test('CommandParser', async (t) => {
 
     const result = parser.parse('hist replica-456');
     t.same(result, {command: 'history', args: ['replica-456']});
+  });
+
+  await t.test('drain command parses with a required node id', async (t) => {
+    const parser = new CommandParser();
+
+    const result = parser.parse('drain node-1');
+    t.same(result, {command: 'drain', args: ['node-1']});
+  });
+
+  await t.test('remove-node alias parses to canonical command', async (t) => {
+    const parser = new CommandParser();
+
+    const result = parser.parse('rm-node node-2');
+    t.same(result, {command: 'remove-node', args: ['node-2']});
   });
 
   await t.test('since command parses with a required argument', async (t) => {

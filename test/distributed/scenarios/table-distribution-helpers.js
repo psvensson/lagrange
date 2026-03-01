@@ -4,6 +4,10 @@
  */
 
 import assert from 'node:assert/strict';
+import {
+  resolvePartitionGrowthAndSpreadScenarioConfig,
+  resolveTableDistributionQueryConfig,
+} from '../harness/scenario-config.js';
 
 const TABLE_NAME_LOGS = 'logs';
 const SERVICE_TYPE_PARTITION = 'partition';
@@ -23,11 +27,6 @@ const SQL_SELECT_ACTIVE_PARTITION_SERVICES =
   'SELECT partition_id, node_id, status FROM services ' +
   'WHERE service_type = \'' + SERVICE_TYPE_PARTITION + '\' ' +
   'AND status = \'' + STATUS_ACTIVE + '\'';
-
-const DEFAULT_WAIT_TIMEOUT_MS = 90000;
-const DEFAULT_WAIT_POLL_INTERVAL_MS = 250;
-const DEFAULT_MIN_ADDITIONAL_PARTITIONS = 2;
-const DEFAULT_MIN_DISTINCT_REPLICA_NODES = 6;
 
 /**
  * Sleep helper for polling loops.
@@ -92,10 +91,7 @@ async function queryTableDistribution(seedNode, options = {}) {
     'queryTableDistribution requires a seed node with query(sql)',
   );
 
-  const tableName = typeof options.tableName === 'string' &&
-    options.tableName.length > ZERO ?
-    options.tableName :
-    TABLE_NAME_LOGS;
+  const {tableName} = resolveTableDistributionQueryConfig(options);
   const partitionSql = SQL_SELECT_TABLE_PARTITIONS_PREFIX +
     escapeSql(tableName) +
     SQL_SELECT_TABLE_PARTITIONS_SUFFIX;
@@ -173,24 +169,13 @@ async function queryTableDistribution(seedNode, options = {}) {
  * @return {Promise<Object>}
  */
 async function waitForPartitionGrowthAndSpread(seedNode, options = {}) {
-  const tableName = typeof options.tableName === 'string' &&
-    options.tableName.length > ZERO ?
-    options.tableName :
-    TABLE_NAME_LOGS;
-  const timeoutMs = Number.isFinite(options.timeoutMs) ?
-    options.timeoutMs :
-    DEFAULT_WAIT_TIMEOUT_MS;
-  const pollIntervalMs = Number.isFinite(options.pollIntervalMs) ?
-    options.pollIntervalMs :
-    DEFAULT_WAIT_POLL_INTERVAL_MS;
-  const minAdditionalPartitions =
-    Number.isFinite(options.minAdditionalPartitions) ?
-      options.minAdditionalPartitions :
-      DEFAULT_MIN_ADDITIONAL_PARTITIONS;
-  const minDistinctReplicaNodes =
-    Number.isFinite(options.minDistinctReplicaNodes) ?
-      options.minDistinctReplicaNodes :
-      DEFAULT_MIN_DISTINCT_REPLICA_NODES;
+  const {
+    tableName,
+    timeoutMs,
+    pollIntervalMs,
+    minAdditionalPartitions,
+    minDistinctReplicaNodes,
+  } = resolvePartitionGrowthAndSpreadScenarioConfig(options);
 
   const baseline = await queryTableDistribution(seedNode, {tableName});
   assert.ok(

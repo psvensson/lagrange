@@ -41,6 +41,13 @@ import {
 } from '../harness/pgbench-runner.js';
 import {GateEngine} from '../harness/gate-engine.js';
 import {
+  normalizeTableName,
+  resolveInternalSignalThresholds,
+  resolveOverloadPolicy,
+  resolvePostgresBaselineBenchmarkConfig,
+  resolveWritePressureThresholds,
+} from '../harness/postgres-baseline-config.js';
+import {
   buildRootCauseBundle,
   collectPreflightCriticalPathSnapshots,
 } from '../harness/root-cause-bundle.js';
@@ -89,7 +96,6 @@ const REPLICATION_STATE_STREAMING = 'streaming';
 const REPLICATION_HBA_IPV4 = 'host replication all 0.0.0.0/0 scram-sha-256';
 const REPLICATION_HBA_IPV6 = 'host replication all ::/0 scram-sha-256';
 const DEFAULT_REPLICATION_PORT = 5432;
-const MIN_REPLICATION_FACTOR = 1;
 const BOOTSTRAP_DB_NAME = 'replication';
 const POSTGRES_ENTRYPOINT_COMMAND = 'docker-entrypoint.sh postgres';
 const POSTGRES_BINARY_PATH_EXPORT =
@@ -185,10 +191,6 @@ const REQUIRED_SCHEMA_VERSION_FIELD_CANDIDATES = Object.freeze([
 ]);
 const QUIESCENCE_DEFAULT_STABLE_WINDOW_MS =
   BENCHMARK_DEFAULTS.quiescentStableWindowMs;
-const CONSISTENCY_ASSERT_MAX_ATTEMPTS_DEFAULT =
-  BENCHMARK_DEFAULTS.consistencyAssertMaxAttempts;
-const CONSISTENCY_ASSERT_RETRY_DELAY_MS_DEFAULT =
-  BENCHMARK_DEFAULTS.consistencyAssertRetryDelayMs;
 const BASELINE_LOAD_NODE_PREFIX = 'postgres-baseline-load-node-';
 const BENCHMARK_EVENT_TABLE_FALLBACK = 'benchmark_events';
 const LOAD_PARITY_STATUS_MATCHED = 'matched';
@@ -209,23 +211,10 @@ const LOAD_METRIC_UNDISPATCHED_REASON_CAPACITY = 'capacity';
 const LOAD_METRIC_UNDISPATCHED_REASON_DURATION_TIMEOUT = 'durationTimeout';
 const LOAD_METRIC_UNDISPATCHED_REASON_CANCELLED = 'cancelled';
 const LOAD_METRIC_REJECTED_REASON_QUEUE_FULL = 'queueFull';
-const BENCHMARK_STRICT_DISCOVERY_DEFAULT = false;
-const BENCHMARK_STRICT_PARITY_DEFAULT = false;
-const BENCHMARK_STRICT_PRELOAD_READINESS_DEFAULT = false;
-const BENCHMARK_STRICT_CDC_TELEMETRY_SCHEMA_DEFAULT = false;
-const BENCHMARK_STRICT_OVERLOAD_POLICY_DEFAULT = false;
-const BENCHMARK_STRICT_WRITE_PRESSURE_DEFAULT = false;
-const BENCHMARK_QUIET_MODE_ENABLED_DEFAULT = null;
-const BENCHMARK_REQUIRED_SUT_LOAD_NODE_COUNT_DEFAULT = null;
 const BENCHMARK_PRELOAD_MAX_REPLICA_OPS_IN_FLIGHT_DEFAULT = 0;
-const BENCHMARK_PIN_REBALANCING_DURING_LOAD_DEFAULT = false;
-const BENCHMARK_ALLOW_LOAD_REBALANCE_PINNING_BYPASS_DEFAULT = false;
-const BENCHMARK_REBALANCE_HYSTERESIS_COOLDOWN_MS_DEFAULT = 2000;
 const BENCHMARK_REBALANCE_HYSTERESIS_MIN_DELTA_DEFAULT = 2;
 const BENCHMARK_LOAD_REBALANCE_MONITOR_POLL_INTERVAL_MS_DEFAULT = 250;
-const BENCHMARK_LOAD_REBALANCE_MAX_REPLICA_OPS_IN_FLIGHT_DEFAULT = 0;
 const BENCHMARK_CRITICAL_REBALANCING_SUSTAINED_SAMPLES_DEFAULT = 3;
-const BENCHMARK_FORCE_LOCAL_SYSTEM_TABLE_READ_SHORTCUT_DEFAULT = false;
 const REBALANCING_PRESSURE_SCHEMA_VERSION = 1;
 const REBALANCING_CRITICAL_STATE_SCHEMA_VERSION = 1;
 const REBALANCING_WINDOW_PINNING_VIOLATION_REASON =
@@ -418,14 +407,6 @@ function parseDurationToMs(duration) {
   }
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) ? Math.max(ZERO, parsed) : ZERO;
-}
-
-function normalizeTableName(tableName, fallback = BENCHMARK_EVENT_TABLE_FALLBACK) {
-  const candidate = String(tableName || fallback).trim();
-  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(candidate)) {
-    return fallback;
-  }
-  return candidate;
 }
 
 function normalizeTableId(tableId, fallback = '') {
@@ -2072,48 +2053,6 @@ function buildStrictParityGate(options = {}) {
   };
 }
 
-function normalizeInternalSignalThresholdMap(value) {
-  if (!value || typeof value !== 'object') {
-    return {};
-  }
-  const normalized = {};
-  for (const [signalClass, threshold] of Object.entries(value)) {
-    if (!INTERNAL_SIGNAL_CLASSES.includes(signalClass)) {
-      continue;
-    }
-    if (Number.isInteger(threshold) && threshold >= ZERO) {
-      normalized[signalClass] = threshold;
-    }
-  }
-  return normalized;
-}
-
-function resolveInternalSignalThresholds(configuredThresholds, options = {}) {
-  const configured = configuredThresholds &&
-    typeof configuredThresholds === 'object' ?
-    configuredThresholds :
-    {};
-  const strictBenchmarkMode = options.strictBenchmarkMode === true;
-  const warningsByClass = normalizeInternalSignalThresholdMap(
-    configured.warningsByClass,
-  );
-  if (
-    strictBenchmarkMode &&
-    !Object.prototype.hasOwnProperty.call(
-      warningsByClass,
-      INTERNAL_SIGNAL_CLASS_CRITICAL_REBALANCING_STATE,
-    )
-  ) {
-    warningsByClass[INTERNAL_SIGNAL_CLASS_CRITICAL_REBALANCING_STATE] = ONE;
-  }
-  return {
-    failOnThresholdBreach:
-      configured.failOnThresholdBreach === true || strictBenchmarkMode,
-    errorsByClass: normalizeInternalSignalThresholdMap(configured.errorsByClass),
-    warningsByClass,
-  };
-}
-
 function createEmptyInternalSignalClassCounts() {
   const counts = {};
   for (const signalClass of INTERNAL_SIGNAL_CLASSES) {
@@ -3729,295 +3668,7 @@ async function waitForStreamingReplicas(provider, primaryContainerId, benchmarkC
 }
 
 function resolveBenchmarkConfig(cluster) {
-  const configured = cluster?._config?.benchmark || {};
-  const tableName = normalizeTableName(
-    configured.tableName || BENCHMARK_DEFAULTS.tableName,
-    BENCHMARK_EVENT_TABLE_FALLBACK,
-  );
-  const baselineLoadNodeCount =
-    Number.isInteger(configured.clients) && configured.clients > ZERO ?
-      configured.clients :
-      BENCHMARK_DEFAULTS.clients;
-  const replicationFactor = Number.isInteger(configured.replicationFactor) &&
-    configured.replicationFactor >= MIN_REPLICATION_FACTOR ?
-    configured.replicationFactor :
-    BENCHMARK_DEFAULTS.replicationFactor;
-  const maxSyncReplicaAcks = Math.max(ZERO, replicationFactor - ONE);
-  const minSyncReplicaAcks = replicationFactor > ONE ? ONE : ZERO;
-  const syncReplicaAcks = Number.isInteger(configured.syncReplicaAcks) ?
-    Math.max(
-      minSyncReplicaAcks,
-      Math.min(configured.syncReplicaAcks, maxSyncReplicaAcks),
-    ) :
-    Math.max(
-      minSyncReplicaAcks,
-      Math.min(BENCHMARK_DEFAULTS.syncReplicaAcks, maxSyncReplicaAcks),
-    );
-  const baselineCacheTtlMs = Number.isFinite(configured.baselineCacheTtlMs) &&
-    configured.baselineCacheTtlMs >= ZERO ?
-    Math.floor(configured.baselineCacheTtlMs) :
-    BENCHMARK_DEFAULTS.baselineCacheTtlMs;
-  const strictDiscovery =
-    configured.strictDiscovery === true ?
-      true :
-      BENCHMARK_STRICT_DISCOVERY_DEFAULT;
-  const strictParity =
-    configured.strictParity === true ?
-      true :
-      BENCHMARK_STRICT_PARITY_DEFAULT;
-  const strictPreloadReadiness =
-    configured.strictPreloadReadiness === true ?
-      true :
-      BENCHMARK_STRICT_PRELOAD_READINESS_DEFAULT;
-  const strictCdcTelemetrySchema =
-    configured.strictCdcTelemetrySchema === true ?
-      true :
-      BENCHMARK_STRICT_CDC_TELEMETRY_SCHEMA_DEFAULT;
-  const strictOverloadPolicy =
-    configured.strictOverloadPolicy === true ?
-      true :
-      BENCHMARK_STRICT_OVERLOAD_POLICY_DEFAULT;
-  const strictWritePressure =
-    configured.strictWritePressure === true ?
-      true :
-      BENCHMARK_STRICT_WRITE_PRESSURE_DEFAULT;
-  const strictBenchmarkMode = strictDiscovery ||
-    strictParity ||
-    strictPreloadReadiness ||
-    strictCdcTelemetrySchema ||
-    strictOverloadPolicy ||
-    strictWritePressure;
-  const configuredQuietModeEnabled =
-    configured.quietModeEnabled === true ?
-      true :
-      configured.quietModeEnabled === false ?
-        false :
-        BENCHMARK_QUIET_MODE_ENABLED_DEFAULT;
-  const quietModeEnabled =
-    configuredQuietModeEnabled === null ?
-      strictBenchmarkMode :
-      configuredQuietModeEnabled;
-  const internalSignalThresholds = resolveInternalSignalThresholds(
-    configured.internalSignalThresholds,
-    {strictBenchmarkMode},
-  );
-  const criticalRebalancingSustainedSamples =
-    Number.isInteger(configured.criticalRebalancingSustainedSamples) &&
-      configured.criticalRebalancingSustainedSamples > ZERO ?
-      configured.criticalRebalancingSustainedSamples :
-      BENCHMARK_CRITICAL_REBALANCING_SUSTAINED_SAMPLES_DEFAULT;
-  const explicitRequiredSutLoadNodeCount =
-    Number.isInteger(configured.requiredSutLoadNodeCount) &&
-      configured.requiredSutLoadNodeCount > ZERO ?
-      configured.requiredSutLoadNodeCount :
-      null;
-
-  return {
-    baselineImage: configured.baselineImage ||
-      BENCHMARK_DEFAULTS.baselineImage,
-    user: configured.user || BENCHMARK_DEFAULTS.user,
-    password: configured.password || BENCHMARK_DEFAULTS.password,
-    database: configured.database || BENCHMARK_DEFAULTS.database,
-    port: Number.isInteger(configured.port) ?
-      configured.port :
-      BENCHMARK_DEFAULTS.port,
-    durationSeconds: Number.isInteger(configured.durationSeconds) ?
-      configured.durationSeconds :
-      BENCHMARK_DEFAULTS.durationSeconds,
-    clients: Number.isInteger(configured.clients) ?
-      configured.clients :
-      BENCHMARK_DEFAULTS.clients,
-    jobs: Number.isInteger(configured.jobs) ?
-      configured.jobs :
-      BENCHMARK_DEFAULTS.jobs,
-    loadOpsPerSec: Number.isInteger(configured.loadOpsPerSec) ?
-      configured.loadOpsPerSec :
-      BENCHMARK_DEFAULTS.loadOpsPerSec,
-    loadDuration: configured.loadDuration || BENCHMARK_DEFAULTS.loadDuration,
-    loadMaxInFlight:
-      Number.isInteger(configured.loadMaxInFlight) &&
-        configured.loadMaxInFlight > ZERO ?
-        configured.loadMaxInFlight :
-        BENCHMARK_DEFAULTS.loadMaxInFlight,
-    loadQueryTimeoutMs:
-      Number.isInteger(configured.loadQueryTimeoutMs) &&
-        configured.loadQueryTimeoutMs > ZERO ?
-        configured.loadQueryTimeoutMs :
-        BENCHMARK_DEFAULTS.loadQueryTimeoutMs,
-    loadNodeMaxInFlight:
-      Number.isInteger(configured.loadNodeMaxInFlight) &&
-        configured.loadNodeMaxInFlight > ZERO ?
-        configured.loadNodeMaxInFlight :
-        null,
-    maxPendingQueueDepth:
-      Number.isInteger(configured.maxPendingQueueDepth) &&
-        configured.maxPendingQueueDepth >= ZERO ?
-        configured.maxPendingQueueDepth :
-        null,
-    earlyRejectOnQueueFull: configured.earlyRejectOnQueueFull === true,
-    nodeFailureThreshold:
-      Number.isInteger(configured.nodeFailureThreshold) &&
-        configured.nodeFailureThreshold > ZERO ?
-        configured.nodeFailureThreshold :
-        null,
-    nodeFailureCooldownMs:
-      Number.isInteger(configured.nodeFailureCooldownMs) &&
-        configured.nodeFailureCooldownMs > ZERO ?
-        configured.nodeFailureCooldownMs :
-        null,
-    readyTimeoutMs: Number.isInteger(configured.readyTimeoutMs) ?
-      configured.readyTimeoutMs :
-      BENCHMARK_DEFAULTS.readyTimeoutMs,
-    readyPollIntervalMs: Number.isInteger(configured.readyPollIntervalMs) ?
-      configured.readyPollIntervalMs :
-      BENCHMARK_DEFAULTS.readyPollIntervalMs,
-    tableName,
-    replicationFactor,
-    syncReplicaAcks,
-    baselineLoadNodeCount,
-    strictDiscovery,
-    requiredSutLoadNodeCount:
-      explicitRequiredSutLoadNodeCount ??
-      BENCHMARK_REQUIRED_SUT_LOAD_NODE_COUNT_DEFAULT,
-    hasExplicitRequiredSutLoadNodeCount:
-      explicitRequiredSutLoadNodeCount !== null,
-    strictParity,
-    strictPreloadReadiness,
-    strictCdcTelemetrySchema,
-    strictOverloadPolicy,
-    strictWritePressure,
-    quietModeEnabled,
-    overloadPolicy: resolveOverloadPolicy(configured.overloadPolicy),
-    writePressureThresholds:
-      resolveWritePressureThresholds(configured.writePressureThresholds),
-    preloadRequiredStableMs:
-      Number.isInteger(configured.preloadRequiredStableMs) &&
-        configured.preloadRequiredStableMs >= ZERO ?
-        configured.preloadRequiredStableMs :
-        (Number.isInteger(configured.quiescentStableWindowMs) &&
-          configured.quiescentStableWindowMs >= ZERO ?
-          configured.quiescentStableWindowMs :
-          QUIESCENCE_DEFAULT_STABLE_WINDOW_MS),
-    preloadMaxReplicaOpsInFlight:
-      Number.isInteger(configured.preloadMaxReplicaOpsInFlight) &&
-        configured.preloadMaxReplicaOpsInFlight >= ZERO ?
-        configured.preloadMaxReplicaOpsInFlight :
-        BENCHMARK_PRELOAD_MAX_REPLICA_OPS_IN_FLIGHT_DEFAULT,
-    pinRebalancingDuringLoad:
-      configured.pinRebalancingDuringLoad === true ?
-        true :
-        BENCHMARK_PIN_REBALANCING_DURING_LOAD_DEFAULT,
-    allowLoadRebalancePinningBypass:
-      configured.allowLoadRebalancePinningBypass === true ?
-        true :
-        BENCHMARK_ALLOW_LOAD_REBALANCE_PINNING_BYPASS_DEFAULT,
-    rebalanceHysteresisCooldownMs:
-      Number.isInteger(configured.rebalanceHysteresisCooldownMs) &&
-        configured.rebalanceHysteresisCooldownMs >= ZERO ?
-        configured.rebalanceHysteresisCooldownMs :
-        BENCHMARK_REBALANCE_HYSTERESIS_COOLDOWN_MS_DEFAULT,
-    rebalanceHysteresisMinDelta:
-      Number.isInteger(configured.rebalanceHysteresisMinDelta) &&
-        configured.rebalanceHysteresisMinDelta > ZERO ?
-        configured.rebalanceHysteresisMinDelta :
-        BENCHMARK_REBALANCE_HYSTERESIS_MIN_DELTA_DEFAULT,
-    loadRebalanceMonitorPollIntervalMs:
-      Number.isInteger(configured.loadRebalanceMonitorPollIntervalMs) &&
-        configured.loadRebalanceMonitorPollIntervalMs > ZERO ?
-        configured.loadRebalanceMonitorPollIntervalMs :
-        BENCHMARK_LOAD_REBALANCE_MONITOR_POLL_INTERVAL_MS_DEFAULT,
-    loadRebalanceMaxReplicaOpsInFlight:
-      Number.isInteger(configured.loadRebalanceMaxReplicaOpsInFlight) &&
-        configured.loadRebalanceMaxReplicaOpsInFlight >= ZERO ?
-        configured.loadRebalanceMaxReplicaOpsInFlight :
-        BENCHMARK_LOAD_REBALANCE_MAX_REPLICA_OPS_IN_FLIGHT_DEFAULT,
-    criticalRebalancingSustainedSamples,
-    forceLocalSystemTableReadShortcut:
-      configured.forceLocalSystemTableReadShortcut === true ?
-        true :
-        BENCHMARK_FORCE_LOCAL_SYSTEM_TABLE_READ_SHORTCUT_DEFAULT,
-    internalSignalThresholds,
-    failOnLoadParityMismatch:
-      configured.failOnLoadParityMismatch === true ||
-      configured.failOnParityMismatch === true,
-    cacheBaselineMetrics: configured.cacheBaselineMetrics !== false,
-    refreshBaselineMetrics: configured.refreshBaselineMetrics === true,
-    baselineCacheTtlMs,
-    quiescentTimeoutMs:
-      Number.isInteger(configured.quiescentTimeoutMs) &&
-        configured.quiescentTimeoutMs > ZERO ?
-        configured.quiescentTimeoutMs :
-        (Number.isInteger(configured.readyTimeoutMs) ?
-          configured.readyTimeoutMs :
-          BENCHMARK_DEFAULTS.readyTimeoutMs),
-    quiescentPollIntervalMs:
-      Number.isInteger(configured.quiescentPollIntervalMs) &&
-        configured.quiescentPollIntervalMs > ZERO ?
-        configured.quiescentPollIntervalMs :
-        (Number.isInteger(configured.readyPollIntervalMs) ?
-          configured.readyPollIntervalMs :
-          BENCHMARK_DEFAULTS.readyPollIntervalMs),
-    quiescentStableWindowMs:
-      Number.isInteger(configured.quiescentStableWindowMs) &&
-        configured.quiescentStableWindowMs >= ZERO ?
-        configured.quiescentStableWindowMs :
-        QUIESCENCE_DEFAULT_STABLE_WINDOW_MS,
-    quiescentNoProgressTimeoutMs:
-      Number.isInteger(configured.quiescentNoProgressTimeoutMs) &&
-        configured.quiescentNoProgressTimeoutMs > ZERO ?
-        configured.quiescentNoProgressTimeoutMs :
-        null,
-    postLoadDrainTimeoutMs:
-      Number.isInteger(configured.postLoadDrainTimeoutMs) &&
-        configured.postLoadDrainTimeoutMs > ZERO ?
-        configured.postLoadDrainTimeoutMs :
-        (Number.isInteger(configured.quiescentTimeoutMs) &&
-          configured.quiescentTimeoutMs > ZERO ?
-          configured.quiescentTimeoutMs :
-          (Number.isInteger(configured.readyTimeoutMs) ?
-            configured.readyTimeoutMs :
-            BENCHMARK_DEFAULTS.readyTimeoutMs)),
-    postLoadDrainPollIntervalMs:
-      Number.isInteger(configured.postLoadDrainPollIntervalMs) &&
-        configured.postLoadDrainPollIntervalMs > ZERO ?
-        configured.postLoadDrainPollIntervalMs :
-        (Number.isInteger(configured.quiescentPollIntervalMs) &&
-          configured.quiescentPollIntervalMs > ZERO ?
-          configured.quiescentPollIntervalMs :
-          (Number.isInteger(configured.readyPollIntervalMs) ?
-            configured.readyPollIntervalMs :
-            BENCHMARK_DEFAULTS.readyPollIntervalMs)),
-    postLoadDrainStableWindowMs:
-      Number.isInteger(configured.postLoadDrainStableWindowMs) &&
-        configured.postLoadDrainStableWindowMs >= ZERO ?
-        configured.postLoadDrainStableWindowMs :
-        (Number.isInteger(configured.quiescentStableWindowMs) &&
-          configured.quiescentStableWindowMs >= ZERO ?
-          configured.quiescentStableWindowMs :
-          QUIESCENCE_DEFAULT_STABLE_WINDOW_MS),
-    postLoadDrainNoProgressTimeoutMs:
-      Number.isInteger(configured.postLoadDrainNoProgressTimeoutMs) &&
-        configured.postLoadDrainNoProgressTimeoutMs > ZERO ?
-        configured.postLoadDrainNoProgressTimeoutMs :
-        (Number.isInteger(configured.quiescentNoProgressTimeoutMs) &&
-          configured.quiescentNoProgressTimeoutMs > ZERO ?
-          configured.quiescentNoProgressTimeoutMs :
-          null),
-    consistencyAssertMaxAttempts:
-      Number.isInteger(configured.consistencyAssertMaxAttempts) &&
-        configured.consistencyAssertMaxAttempts > ZERO ?
-        configured.consistencyAssertMaxAttempts :
-        CONSISTENCY_ASSERT_MAX_ATTEMPTS_DEFAULT,
-    consistencyAssertRetryDelayMs:
-      Number.isInteger(configured.consistencyAssertRetryDelayMs) &&
-        configured.consistencyAssertRetryDelayMs >= ZERO ?
-        configured.consistencyAssertRetryDelayMs :
-        CONSISTENCY_ASSERT_RETRY_DELAY_MS_DEFAULT,
-    insufficientEvidencePolicy:
-      configured.insufficientEvidencePolicy === ASSERTION_POLICY.HARD ?
-        ASSERTION_POLICY.HARD :
-        ASSERTION_POLICY.SOFT,
-  };
+  return resolvePostgresBaselineBenchmarkConfig(cluster?._config?.benchmark || {});
 }
 
 function resolvePrimaryProvider(cluster) {
@@ -4238,49 +3889,6 @@ function normalizeLoadMetricNumber(value) {
     return ZERO;
   }
   return parsed;
-}
-
-function resolveOverloadPolicy(configuredPolicy) {
-  const configured = configuredPolicy && typeof configuredPolicy === 'object' ?
-    configuredPolicy :
-    {};
-  const maxRejectedOperations =
-    Number.isInteger(configured.maxRejectedOperations) &&
-      configured.maxRejectedOperations >= ZERO ?
-      configured.maxRejectedOperations :
-      null;
-  const maxQueueDelayP99Ms = Number.isFinite(configured.maxQueueDelayP99Ms) &&
-    configured.maxQueueDelayP99Ms >= ZERO ?
-    Number(configured.maxQueueDelayP99Ms) :
-    null;
-  return {
-    maxRejectedOperations,
-    maxQueueDelayP99Ms,
-  };
-}
-
-function resolveWritePressureThresholds(configuredThresholds) {
-  const configured =
-    configuredThresholds && typeof configuredThresholds === 'object' ?
-      configuredThresholds :
-      {};
-  return {
-    maxAttemptedWrites:
-      Number.isInteger(configured.maxAttemptedWrites) &&
-        configured.maxAttemptedWrites >= ZERO ?
-        configured.maxAttemptedWrites :
-        null,
-    maxFailedWrites:
-      Number.isInteger(configured.maxFailedWrites) &&
-        configured.maxFailedWrites >= ZERO ?
-        configured.maxFailedWrites :
-        null,
-    maxTimedOutWrites:
-      Number.isInteger(configured.maxTimedOutWrites) &&
-        configured.maxTimedOutWrites >= ZERO ?
-        configured.maxTimedOutWrites :
-        null,
-  };
 }
 
 function buildWritePressureCounters(loadMetrics) {
@@ -5361,6 +4969,22 @@ function mapPhaseTimeline(phaseResults) {
   }));
 }
 
+function buildFailedPhaseDiagnostics(phaseResult) {
+  if (!phaseResult || typeof phaseResult !== 'object') {
+    return null;
+  }
+  return {
+    phase: String(phaseResult.phase || 'unknown'),
+    status: String(phaseResult.status || 'unknown'),
+    durationMs: Number(phaseResult.durationMs || ZERO),
+    startedAtMs: Number(phaseResult.startedAtMs || ZERO),
+    endedAtMs: Number(phaseResult.endedAtMs || ZERO),
+    warnings: phaseResult.warnings || [],
+    errors: phaseResult.errors || [],
+    artifacts: phaseResult.artifacts || {},
+  };
+}
+
 function incrementReasonHistogram(reasonHistogram, reason, phase) {
   if (!Object.prototype.hasOwnProperty.call(reasonHistogram, reason)) {
     reasonHistogram[reason] = {
@@ -5485,6 +5109,34 @@ function buildPhaseReasonSummary(phaseResults) {
     dominantWarnings: summarizeReasons(warningHistogram),
     dominantErrors: summarizeReasons(errorHistogram),
   };
+}
+
+function buildVerificationArtifacts(state, options = {}) {
+  const artifacts = {
+    consistencyVerdict: state.consistencyVerdict,
+    coverage: state.consistencyEvaluation.coverage,
+    mismatches: state.consistencyEvaluation.mismatches,
+    evidenceWarnings: state.consistencyEvaluation.evidenceWarnings,
+    internalSignalCounts: state.internalSignalCounts,
+    internalSignalThresholdResult: state.internalSignalThresholdResult,
+    cdcTelemetry: state.cdcTelemetry,
+  };
+  if (options.includeLoadMetrics === true) {
+    artifacts.loadMetrics = state.loadMetrics;
+  }
+  if (typeof state.assertionPolicyResult?.status === 'string' &&
+      state.assertionPolicyResult.status.length > ZERO) {
+    artifacts.assertionStatus = state.assertionPolicyResult.status;
+  }
+  if (options.includeVerificationNodes === true) {
+    artifacts.verificationNodeIds = state.verificationNodeIds;
+    artifacts.verificationExcludedNodeIds = state.verificationExcludedNodeIds;
+  }
+  if (options.includeConsistencyAssertionAttempts === true) {
+    artifacts.consistencyAssertionAttempts =
+      Number(state.consistencyResult?.attempts || ZERO);
+  }
+  return artifacts;
 }
 
 function resolvePhasePolicy(phase, benchmarkConfig) {
@@ -6768,15 +6420,9 @@ async function run(cluster) {
           state.cdcTelemetry.schema.valid !== true) {
         return {
           status: PHASE_STATUS.FAIL,
-          artifacts: {
-            consistencyVerdict: state.consistencyVerdict,
-            coverage: state.consistencyEvaluation.coverage,
-            mismatches: state.consistencyEvaluation.mismatches,
-            evidenceWarnings: state.consistencyEvaluation.evidenceWarnings,
-            internalSignalCounts: state.internalSignalCounts,
-            internalSignalThresholdResult: state.internalSignalThresholdResult,
-            cdcTelemetry: state.cdcTelemetry,
-          },
+          artifacts: buildVerificationArtifacts(state, {
+            includeLoadMetrics: true,
+          }),
           errors: [
             CDC_TELEMETRY_SCHEMA_MISSING_REASON +
               ': ' +
@@ -6788,15 +6434,9 @@ async function run(cluster) {
           state.internalSignalThresholdResult.breached) {
         return {
           status: PHASE_STATUS.FAIL,
-          artifacts: {
-            consistencyVerdict: state.consistencyVerdict,
-            coverage: state.consistencyEvaluation.coverage,
-            mismatches: state.consistencyEvaluation.mismatches,
-            evidenceWarnings: state.consistencyEvaluation.evidenceWarnings,
-            internalSignalCounts: state.internalSignalCounts,
-            internalSignalThresholdResult: state.internalSignalThresholdResult,
-            cdcTelemetry: state.cdcTelemetry,
-          },
+          artifacts: buildVerificationArtifacts(state, {
+            includeLoadMetrics: true,
+          }),
           errors: [
             INTERNAL_SIGNAL_THRESHOLD_BREACH_REASON +
               ': ' +
@@ -6808,15 +6448,9 @@ async function run(cluster) {
       if (state.assertionPolicyResult.passed !== true) {
         return {
           status: PHASE_STATUS.FAIL,
-          artifacts: {
-            consistencyVerdict: state.consistencyVerdict,
-            coverage: state.consistencyEvaluation.coverage,
-            mismatches: state.consistencyEvaluation.mismatches,
-            evidenceWarnings: state.consistencyEvaluation.evidenceWarnings,
-            internalSignalCounts: state.internalSignalCounts,
-            internalSignalThresholdResult: state.internalSignalThresholdResult,
-            cdcTelemetry: state.cdcTelemetry,
-          },
+          artifacts: buildVerificationArtifacts(state, {
+            includeLoadMetrics: true,
+          }),
           errors: state.assertionPolicyResult.hardFailures
             .map((failure) => String(failure?.message || failure)),
         };
@@ -6826,19 +6460,10 @@ async function run(cluster) {
         .map((warning) => String(warning?.message || warning));
       return {
         status: warnings.length > ZERO ? PHASE_STATUS.WARN : PHASE_STATUS.OK,
-        artifacts: {
-          consistencyVerdict: state.consistencyVerdict,
-          coverage: state.consistencyEvaluation.coverage,
-          mismatches: state.consistencyEvaluation.mismatches,
-          evidenceWarnings: state.consistencyEvaluation.evidenceWarnings,
-          verificationNodeIds: state.verificationNodeIds,
-          verificationExcludedNodeIds: state.verificationExcludedNodeIds,
-          consistencyAssertionAttempts: state.consistencyResult.attempts,
-          assertionStatus: state.assertionPolicyResult.status,
-          internalSignalCounts: state.internalSignalCounts,
-          internalSignalThresholdResult: state.internalSignalThresholdResult,
-          cdcTelemetry: state.cdcTelemetry,
-        },
+        artifacts: buildVerificationArtifacts(state, {
+          includeVerificationNodes: true,
+          includeConsistencyAssertionAttempts: true,
+        }),
         warnings,
       };
     },
@@ -6906,6 +6531,8 @@ async function run(cluster) {
       null;
     error.diagnostics = {
       failure: failureArtifact,
+      loadMetrics: state.loadMetrics,
+      failedPhase: buildFailedPhaseDiagnostics(failedPhase),
       rootCauseBundle: buildRootCauseBundle({
         failureArtifact,
         snapshotsByNodeId,

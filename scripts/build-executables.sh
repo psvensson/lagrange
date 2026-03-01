@@ -92,6 +92,15 @@ else
 fi
 
 echo ""
+echo "Step 7: Smoke-testing executables..."
+"$DIST_DIR/ddb-cli" --help > /dev/null
+echo "  ✓ ddb-cli --help"
+"$DIST_DIR/distributed-db" --help > /dev/null
+echo "  ✓ distributed-db --help"
+"$DIST_DIR/distributed-db" --dry-run > /dev/null
+echo "  ✓ distributed-db --dry-run"
+
+echo ""
 echo "=== Build Complete ==="
 echo ""
 echo "Executables created:"

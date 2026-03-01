@@ -1229,6 +1229,114 @@ test('BootstrapAPI - buildSystemTableSnapshots handles empty cache', async (t) =
   await api.shutdown();
 });
 
+test(
+  'BootstrapAPI - buildSystemTableSnapshots prefers authoritative local partition rows',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const staleEndpointRow = {
+      endpoint_id: 'pg-seed',
+      service_id: 'sys-postgres-wire',
+      node_id: 'seed-node-1',
+      protocol: 'tcp',
+      address: 'seed-host',
+      port: 5432,
+      health_status: 'healthy',
+      metadata: '{}',
+      created_at: 1,
+      updated_at: 10,
+    };
+    const authoritativeRows = [
+      staleEndpointRow,
+      {
+        endpoint_id: 'pg-peer',
+        service_id: 'sys-postgres-wire',
+        node_id: 'peer-node-2',
+        protocol: 'tcp',
+        address: 'peer-host',
+        port: 5432,
+        health_status: 'healthy',
+        metadata: '{}',
+        created_at: 2,
+        updated_at: 20,
+      },
+    ];
+    const cacheData = {
+      [TABLES.PARTITIONS]: [
+        {
+          partition_id: 'service_endpoints-p1',
+          table_name: TABLES.SERVICE_ENDPOINTS,
+        },
+      ],
+      [TABLES.SERVICES]: [
+        {
+          service_id: 'service_endpoints-p1-r1',
+          partition_id: 'service_endpoints-p1',
+          service_type: SERVICE_TYPE.PARTITION,
+          raft_role: RAFT_ROLE.LEADER,
+          status: SERVICE_STATUS.ACTIVE,
+          node_id: 'seed-node-1',
+          address: 'seed-node-1/partition/service_endpoints-p1-r1',
+        },
+      ],
+      [TABLES.SERVICE_ENDPOINTS]: [staleEndpointRow],
+    };
+    const mockCache = {
+      get() {
+        return null;
+      },
+      getAll(tableName) {
+        return cacheData[tableName] || [];
+      },
+      filter(tableName, predicate) {
+        return (cacheData[tableName] || []).filter(predicate);
+      },
+      getReadyNodes() {
+        return [];
+      },
+    };
+
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: mockCache,
+      partitionServices: new Map([
+        ['service_endpoints-p1-r1', {
+          partitionId: 'service_endpoints-p1',
+          replicaId: 'service_endpoints-p1-r1',
+          initialized: true,
+          db: {
+            prepare(sql) {
+              t.equal(
+                sql,
+                `SELECT * FROM ${TABLES.SERVICE_ENDPOINTS}`,
+                'bootstrap snapshots should read the local partition directly',
+              );
+              return {
+                all() {
+                  return authoritativeRows;
+                },
+              };
+            },
+          },
+        }],
+      ]),
+    });
+
+    await api.initialize(0, {listen: false});
+
+    const snapshots = api.buildSystemTableSnapshots();
+
+    t.same(
+      snapshots.service_endpoints.map((row) => row.node_id).sort(),
+      ['peer-node-2', 'seed-node-1'],
+      'authoritative local partition rows should replace stale cache snapshots',
+    );
+
+    await api.shutdown();
+  },
+);
+
 test('BootstrapAPI - buildSystemTableSnapshots handles missing cache', async (t) => {
   initializeTestEnvironment();
 

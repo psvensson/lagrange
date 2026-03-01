@@ -40,6 +40,49 @@ function resolveMessageGroupLeaderServiceFromCache(cache, groupId, options = {})
   }) || null;
 }
 
+function resolveMessageGroupForwardServiceFromCache(cache, groupId, options = {}) {
+  const excludeServiceId = options.excludeServiceId || null;
+  const candidates = getActiveMessageGroupServiceCandidates(cache, groupId)
+    .filter((row) => {
+      return !excludeServiceId || row[COLUMN.SERVICE_ID] !== excludeServiceId;
+    });
+
+  if (candidates.length === NUM.ZERO) {
+    return null;
+  }
+
+  const sorted = [...candidates].sort((left, right) => {
+    const leftLeader = left?.[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER;
+    const rightLeader = right?.[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER;
+    if (leftLeader && !rightLeader) {
+      return NUM.NEGATIVE_ONE;
+    }
+    if (!leftLeader && rightLeader) {
+      return NUM.ONE;
+    }
+
+    const leftUpdatedAt = Number(left?.[COLUMN.UPDATED_AT]);
+    const rightUpdatedAt = Number(right?.[COLUMN.UPDATED_AT]);
+    const leftHasUpdatedAt = Number.isFinite(leftUpdatedAt);
+    const rightHasUpdatedAt = Number.isFinite(rightUpdatedAt);
+    if (leftHasUpdatedAt && rightHasUpdatedAt && leftUpdatedAt !== rightUpdatedAt) {
+      return rightUpdatedAt - leftUpdatedAt;
+    }
+    if (leftHasUpdatedAt && !rightHasUpdatedAt) {
+      return NUM.NEGATIVE_ONE;
+    }
+    if (!leftHasUpdatedAt && rightHasUpdatedAt) {
+      return NUM.ONE;
+    }
+
+    const leftServiceId = left?.[COLUMN.SERVICE_ID] || '';
+    const rightServiceId = right?.[COLUMN.SERVICE_ID] || '';
+    return leftServiceId.localeCompare(rightServiceId);
+  });
+
+  return sorted[NUM.ZERO] || null;
+}
+
 function resolveMessageGroupTargetAddressFromCache(cache, groupId, options = {}) {
   const excludeServiceId = options.excludeServiceId || null;
   const seedNodeId = options.seedNodeId || null;
@@ -82,6 +125,7 @@ function resolveMessageGroupTargetAddressFromCache(cache, groupId, options = {})
 }
 
 export {
+  resolveMessageGroupForwardServiceFromCache,
   resolveMessageGroupLeaderServiceFromCache,
   resolveMessageGroupTargetAddressFromCache,
 };

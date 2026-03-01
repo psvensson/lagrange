@@ -226,6 +226,7 @@ function createControlPlaneWriteHealthProvider(owner, options = {}) {
  * @param {Object} options
  * @param {string} options.nodeId
  * @param {Object} options.systemTableCache
+ * @param {Object|null} [options.cacheMutationTarget]
  * @param {Object|null} options.sqlQueryEngine
  * @param {Function|null} options.serviceDiagnosticsProvider
  * @return {{adminAPI: AdminWebSocketAPI, liveQueryWiring: Object}}
@@ -244,6 +245,7 @@ function createAdminAPIWithLiveQuery(options) {
   const adminAPI = new AdminWebSocketAPI({
     nodeId: options.nodeId,
     systemTableCache: options.systemTableCache,
+    cacheMutationTarget: options.cacheMutationTarget || null,
     sqlQueryEngine: options.sqlQueryEngine || null,
     messageRouter: options.messageRouter || null,
     serviceDiagnosticsProvider: options.serviceDiagnosticsProvider || null,
@@ -446,6 +448,15 @@ async function main() {
     hlcTimestamp: hlcClock.now().toString(),
   });
 
+  if (cliArgs.dryRun) {
+    mainLogger.info(ENTRYPOINT_LOG_MSG.DRY_RUN_COMPLETED, {
+      nodeId: config.get(CONFIG_KEY.NODE_ID),
+      dataDir: dataDirectoryManager.getDataDir(),
+      provider: selectedRaftProvider,
+    });
+    return;
+  }
+
   // Check if we're joining an existing cluster or starting as seed node
   const seedNodeAddress = cliArgs.seedNodeAddress ||
     process.env[ENTRYPOINT_ENV.SEED_NODE_ADDRESS];
@@ -554,11 +565,17 @@ async function main() {
 
     // Get system table cache from first message group service
     let systemTableCache = null;
+    let cacheMutationTarget = null;
     for (const mgService of joinResult.messageGroupServices.values()) {
       if (mgService.getReadOnlyCache) {
         systemTableCache = mgService.getReadOnlyCache();
       } else if (mgService.systemTableCache) {
         systemTableCache = mgService.systemTableCache;
+      }
+      if (mgService.getWritableCache) {
+        cacheMutationTarget = mgService.getWritableCache();
+      } else if (mgService.systemTableCache) {
+        cacheMutationTarget = mgService.systemTableCache;
       }
       break;
     }
@@ -604,6 +621,7 @@ async function main() {
     const joinAdminStartup = createAdminAPIWithLiveQuery({
       nodeId: config.get(CONFIG_KEY.NODE_ID),
       systemTableCache,
+      cacheMutationTarget: cacheMutationTarget || systemTableCache,
       sqlQueryEngine,
       messageRouter: joinResult.messageRouter,
       serviceDiagnosticsProvider:
@@ -810,6 +828,7 @@ async function main() {
     const seedAdminStartup = createAdminAPIWithLiveQuery({
       nodeId: config.get(CONFIG_KEY.NODE_ID),
       systemTableCache,
+      cacheMutationTarget: systemTableCache,
       sqlQueryEngine,
       messageRouter: bootstrapResult.messageRouter,
       serviceDiagnosticsProvider:

@@ -86,6 +86,9 @@ class HeartbeatService extends EventEmitter {
     this.cdcIntegrationService = options.cdcIntegrationService || null;
     this.systemTableCache = options.systemTableCache || null;
     this.quietMode = options.quietMode || null;
+    this.nodeStateReporter = typeof options.nodeStateReporter === 'function' ?
+      options.nodeStateReporter :
+      null;
 
     const config = ConfigurationManager.getInstance();
     this.heartbeatIntervalMs =
@@ -176,6 +179,14 @@ class HeartbeatService extends EventEmitter {
       nodeId: this.nodeId,
       heartbeatIntervalMs: this.heartbeatIntervalMs,
     });
+  }
+
+  /**
+   * Set the node-state reporter used for control-plane mediated heartbeats.
+   * @param {Function|null} reporter - Async reporter callback.
+   */
+  setNodeStateReporter(reporter) {
+    this.nodeStateReporter = typeof reporter === 'function' ? reporter : null;
   }
 
   /**
@@ -333,11 +344,7 @@ class HeartbeatService extends EventEmitter {
     }
 
     if (shouldWriteNodeHeartbeat) {
-      await this.cdcIntegrationService.updateSystemTableRow(
-        SystemTableName.NODES,
-        {node_id: this.nodeId},
-        updateRow,
-      );
+      await this.writeNodeHeartbeat(updateRow, capabilities, now);
       this.lastNodeHeartbeatWriteAt = now;
       this.lastNodeHeartbeatWriteSignature =
         this.buildNodeHeartbeatWriteSignature(updateRow);
@@ -361,6 +368,50 @@ class HeartbeatService extends EventEmitter {
       this.lastEndpointUpsertAt = now;
       this.lastEndpointUpsertSignature =
         this.buildEndpointUpsertSignature(endpointRow);
+    }
+  }
+
+  /**
+   * Persist or report the current node heartbeat row.
+   * Joiners can report through the control-plane message path to avoid
+   * routed SQL liveness flaps during membership changes.
+   * @param {Object} updateRow
+   * @param {Array<string>|string|null} capabilities
+   * @param {number} now
+   * @return {Promise<void>}
+   * @private
+   */
+  async writeNodeHeartbeat(updateRow, capabilities, now) {
+    let reporterError = null;
+    if (typeof this.nodeStateReporter === 'function') {
+      try {
+        await this.nodeStateReporter({
+          nodeId: this.nodeId,
+          nodeAddress: updateRow.node_address,
+          state: updateRow.connection_state,
+          capabilities: capabilities ?? updateRow.capabilities,
+          heartbeatAt: now,
+          readyLeaseExpiresAt: updateRow.ready_lease_expires_at,
+          nodeRow: {...updateRow},
+        });
+        return;
+      } catch (error) {
+        reporterError = error;
+      }
+    }
+
+    try {
+      await this.cdcIntegrationService.updateSystemTableRow(
+        SystemTableName.NODES,
+        {node_id: this.nodeId},
+        updateRow,
+      );
+    } catch (error) {
+      if (reporterError) {
+        error.message = `${error.message} (node-state reporter failed: ` +
+          `${reporterError.message})`;
+      }
+      throw error;
     }
   }
 

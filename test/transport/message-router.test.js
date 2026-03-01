@@ -573,6 +573,62 @@ t.test('MessageRouter unit tests', async (t) => {
     await router.shutdown();
   });
 
+  t.test('should preserve no-handler error details on acknowledged self delivery', async (t) => {
+    const router = new MessageRouter({
+      nodeId: 'self-no-handler-test',
+      wsPort: 9887,
+    });
+
+    await router.initialize({startServer: true});
+
+    const result = await router.deliver(
+      'self-no-handler-test/service/missing-handler',
+      {type: 'TEST', data: 'missing'},
+    );
+
+    t.equal(result.acknowledged, true, 'should acknowledge delivery');
+    t.equal(result.noHandler, true, 'should surface noHandler flag');
+    t.match(
+      result.error,
+      /No handler registered for address self-no-handler-test\/service\/missing-handler/,
+      'should preserve no-handler error text on acknowledged ACK',
+    );
+
+    await router.shutdown();
+  });
+
+  t.test('should preserve handler-provided error details on acknowledged self delivery', async (t) => {
+    const router = new MessageRouter({
+      nodeId: 'self-error-detail-test',
+      wsPort: 9888,
+    });
+
+    await router.initialize({startServer: true});
+
+    router.register('self-error-detail-test/service/erroring-service', () => {
+      return {
+        acknowledged: true,
+        status: 'error',
+        error: 'replica assignment rejected',
+      };
+    });
+
+    const result = await router.deliver(
+      'self-error-detail-test/service/erroring-service',
+      {type: 'TEST', data: 'bad'},
+    );
+
+    t.equal(result.acknowledged, true, 'should acknowledge delivery');
+    t.equal(result.status, 'error', 'should preserve handler status');
+    t.equal(
+      result.error,
+      'replica assignment rejected',
+      'should preserve handler error text on acknowledged ACK',
+    );
+
+    await router.shutdown();
+  });
+
   t.test('should emit selfDisconnect event when self-connection is lost', async (t) => {
     const router = new MessageRouter({
       nodeId: 'self-disconnect-test',

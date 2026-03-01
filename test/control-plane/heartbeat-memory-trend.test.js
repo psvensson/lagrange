@@ -283,6 +283,92 @@ test('HeartbeatService forces node heartbeat refresh once max staleness elapses'
     }
   });
 
+test('HeartbeatService prefers node-state reporter for node heartbeats', async (t) => {
+  initEnv();
+
+  let nodeUpdates = 0;
+  let endpointUpserts = 0;
+  let reportedHeartbeat = null;
+  const service = new HeartbeatService({
+    nodeId: 'node-reporter',
+    nodeAddress: '10.0.0.9:8080',
+    cdcIntegrationService: {
+      updateSystemTableRow: async () => {
+        nodeUpdates += 1;
+        return {success: true};
+      },
+      upsertSystemTableRow: async () => {
+        endpointUpserts += 1;
+        return {success: true};
+      },
+    },
+    systemTableCache: createMockCache(),
+    nodeMetadataMinUpdateIntervalMs: 0,
+    nodeMetadataMaxStalenessMs: 5000,
+    nodeStateReporter: async (payload) => {
+      reportedHeartbeat = payload;
+    },
+  });
+
+  try {
+    await service.sendHeartbeat({
+      cpu: {count: 4, usagePercent: 12},
+      memory: {totalBytes: 256 * 1024 * 1024, usagePercent: 34},
+      diskGb: 200,
+      diskUsagePercent: 56,
+    }, ['partition_replica']);
+
+    t.equal(nodeUpdates, 0, 'successful reporter should bypass routed SQL node update');
+    t.equal(endpointUpserts, 1, 'endpoint upsert still runs after reporter heartbeat');
+    t.ok(reportedHeartbeat, 'reporter should receive heartbeat payload');
+    t.equal(reportedHeartbeat.state, 'ready', 'reported heartbeat should keep READY state');
+    t.equal(
+      reportedHeartbeat.nodeRow.cpu_cores,
+      4,
+      'reported node row should include current node metadata',
+    );
+  } finally {
+    ConfigurationManager.resetInstance();
+    LoggingService.resetInstance();
+  }
+});
+
+test('HeartbeatService falls back to routed SQL when node-state reporter fails',
+  async (t) => {
+    initEnv();
+
+    let reporterAttempts = 0;
+    let nodeUpdates = 0;
+    const service = new HeartbeatService({
+      nodeId: 'node-reporter-fallback',
+      nodeAddress: '10.0.0.10:8080',
+      cdcIntegrationService: {
+        updateSystemTableRow: async () => {
+          nodeUpdates += 1;
+          return {success: true};
+        },
+        upsertSystemTableRow: async () => ({success: true}),
+      },
+      systemTableCache: createMockCache(),
+      nodeMetadataMinUpdateIntervalMs: 0,
+      nodeMetadataMaxStalenessMs: 5000,
+      nodeStateReporter: async () => {
+        reporterAttempts += 1;
+        throw new Error('control-plane route unavailable');
+      },
+    });
+
+    try {
+      await service.sendHeartbeat(null, ['partition_replica']);
+
+      t.equal(reporterAttempts, 1, 'reporter should be attempted first');
+      t.equal(nodeUpdates, 1, 'failed reporter should fall back to routed SQL update');
+    } finally {
+      ConfigurationManager.resetInstance();
+      LoggingService.resetInstance();
+    }
+  });
+
 test('HeartbeatService suppresses non-critical heartbeat writes while quiet mode is active',
   async (t) => {
     initEnv();

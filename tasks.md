@@ -181,16 +181,50 @@
 ## Phase 9: Packaging & Deployment
 
 ### 9.1 Single Executable (Req 19)
-- [ ] Node.js SEA packaging for database
-- [ ] Node.js SEA packaging for admin CLI
-- [ ] Linux binary builds
-- [ ] Dependency bundling
+- [x] Node.js SEA packaging for database
+- [x] Node.js SEA packaging for admin CLI
+- [x] Linux binary builds
+- [x] Dependency bundling
 
 ### 9.2 Admin CLI Tool
 - [x] WebSocket connection to nodes
 - [x] Cluster monitoring commands
-- [ ] Node management operations
+- [x] Node management operations
 - [x] Query execution interface
+
+---
+
+## Phase U: Runtime Unification & Modularization
+
+> **Spec**: [docs/runtime-unification-and-modularization-spec.md](docs/runtime-unification-and-modularization-spec.md)
+
+### U1 Shared Replica Lifecycle Closure
+- [x] Move leader-change reconciliation fully into `RaftReplicaBase`
+- [x] Remove duplicated raft lifecycle wiring from partition/message-group services
+- [x] Add shared lifecycle regressions for demotion without follower event
+
+### U2 Shared Authoritative Mutation Helper
+- [x] Introduce one owner-row mutation helper with cache-visibility confirmation
+- [x] Migrate raft role persistence to the shared helper
+- [x] Migrate leader-node persistence to the shared helper
+- [x] Remove per-service retry/cache-gap mutation logic
+
+### U3 Canonical Snapshot & Evaluator Closure
+- [x] Derive canonical leaders from owner rows in control snapshots
+- [x] Separate replica-role inconsistency from canonical leader mismatch
+- [x] Update consistency evaluator to compare canonical leader identity first
+
+### U4 Scenario Config Normalization Closure
+- [x] Create a harness-owned spec for runtime unification and modularization
+- [x] Normalize `postgres-baseline-comparison` benchmark config in the harness config layer
+- [x] Validate preload/post-load timeout budgets before scenario execution
+- [x] Freeze normalized `postgres-baseline-comparison` benchmark config objects
+- [x] Remove remaining scenario-local config reinterpretation from distributed scenarios
+
+### U5 Documentation & Governance Closure
+- [x] Update operator docs to describe canonical owner rows vs read models
+- [x] Document the extension path for new raft-backed runtime services
+- [x] Align contributor guidance with the runtime-unification ownership rules
 
 ---
 

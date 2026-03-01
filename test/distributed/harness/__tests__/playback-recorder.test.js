@@ -413,6 +413,95 @@ test('PlaybackRecorder aggregates service rows across reachable nodes', async ()
   }
 });
 
+test('PlaybackRecorder prefers snapshot lane for topology capture when available',
+  async () => {
+    const outputDir = await mkdtemp(
+      join(tmpdir(), 'playback-recorder-snapshot-lane-'),
+    );
+
+    const calls = [];
+    const node = {
+      id: 'node-1',
+      containerId: 'container-1',
+      _dockerProvider: {
+        async getContainerStats() {
+          return {
+            cpuPercent: 10,
+            memoryUsageBytes: 1024,
+            memoryLimitBytes: 4096,
+            rxBytes: 1,
+            txBytes: 2,
+          };
+        },
+      },
+      async query() {
+        throw new Error('default query path should not be used');
+      },
+      async queryWithTimeout(sql, _params = [], options = {}) {
+        calls.push({sql, options});
+        if (sql.includes('FROM nodes')) {
+          return {
+            rows: [{
+              node_id: 'node-1',
+              status: 'active',
+            }],
+          };
+        }
+        if (sql.includes('FROM partitions')) {
+          return {rows: []};
+        }
+        if (sql.includes('FROM replica_operations')) {
+          return {rows: []};
+        }
+        return {
+          rows: [{
+            service_id: 'svc-1',
+            node_id: 'node-1',
+            partition_id: 'p-1',
+            status: 'active',
+          }],
+        };
+      },
+    };
+
+    const cluster = {
+      getNodes() {
+        return [node];
+      },
+    };
+
+    const recorder = new PlaybackRecorder({
+      outputDir,
+      topologyPollIntervalMs: 60000,
+      resourcePollIntervalMs: 60000,
+    });
+
+    try {
+      await recorder.start({
+        scenarioName: 'snapshot-lane-preferred',
+        cluster,
+      });
+      await recorder.stop({
+        reason: 'snapshot-lane-preferred',
+      });
+
+      assert.equal(
+        calls.length >= 4,
+        true,
+        'topology capture should query all snapshot tables via timeout-aware path',
+      );
+      for (const call of calls) {
+        assert.equal(
+          call.options.lane,
+          'snapshot',
+          'topology capture should isolate control reads onto snapshot lane',
+        );
+      }
+    } finally {
+      await rm(outputDir, {recursive: true, force: true});
+    }
+  });
+
 test('PlaybackRecorder defers topology capture until admin readiness is observed',
   async () => {
     const outputDir = await mkdtemp(

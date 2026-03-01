@@ -2,6 +2,7 @@
  * Tests for RaftReplicaBase - shared Raft replica functionality.
  */
 
+import {EventEmitter} from 'node:events';
 import {test} from '../../src/test-helpers/tap.js';
 import {RaftReplicaBase, RaftRole} from '../../src/raft/raft-replica-base.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -15,6 +16,9 @@ import {
 import {
   RAFT_PROVIDER_CONTROL,
 } from '../../src/raft/raft-provider-control-constants.js';
+import {
+  RAFT_REPLICA_BASE_EVENT,
+} from '../../src/raft/raft-replica-base-constants.js';
 
 function initializeTestEnvironment() {
   ConfigurationManager.resetInstance();
@@ -51,6 +55,8 @@ class TestRaftReplica extends RaftReplicaBase {
     });
     this.flushRoleUpdateCalled = false;
     this.flushLeaderNodeUpdateCalled = false;
+    this.becameFollowerCount = 0;
+    this.leaderChangeCalls = [];
   }
 
   async flushRoleUpdate() {
@@ -59,6 +65,14 @@ class TestRaftReplica extends RaftReplicaBase {
 
   async flushLeaderNodeUpdate() {
     this.flushLeaderNodeUpdateCalled = true;
+  }
+
+  onBecameFollower() {
+    this.becameFollowerCount += 1;
+  }
+
+  onLeaderChanged(leaderId, context) {
+    this.leaderChangeCalls.push({leaderId, context});
   }
 }
 
@@ -201,6 +215,75 @@ test('RaftReplicaBase', async (t) => {
     t.equal(replica.flushLeaderNodeUpdateCalled, true);
     t.equal(replica.pendingLeaderNodeUpdate, 'node-2');
   });
+
+  await t.test(
+    'leader change event demotes local leader when follower event is absent',
+    async (t) => {
+      const replica = new TestRaftReplica({
+        replicaId: 'replica-1',
+        nodeId: 'node-1',
+        cdcIntegrationService: {},
+      });
+      replica.raft = new EventEmitter();
+      replica.wireRaftEvents();
+      replica.role = RaftRole.LEADER;
+      replica.isLeader = true;
+      replica.leaderId = 'replica-1';
+      replica.persistedRole = RaftRole.LEADER;
+      replica.pendingLeaderNodeUpdate = 'node-1';
+      replica.persistedLeaderNodeId = 'node-1';
+
+      replica.raft.emit('leader change', 'replica-2');
+      await Promise.resolve();
+
+      t.equal(replica.role, RaftRole.FOLLOWER);
+      t.equal(replica.isLeader, false);
+      t.equal(replica.leaderId, 'replica-2');
+      t.equal(replica.pendingRoleUpdate, RaftRole.FOLLOWER);
+      t.equal(replica.flushRoleUpdateCalled, true);
+      t.equal(replica.becameFollowerCount, 1);
+      t.equal(replica.pendingLeaderNodeUpdate, null);
+      t.equal(replica.persistedLeaderNodeId, null);
+      t.same(replica.leaderChangeCalls, [{
+        leaderId: 'replica-2',
+        context: {
+          previousLeaderId: 'replica-1',
+          demoted: true,
+        },
+      }]);
+    },
+  );
+
+  await t.test(
+    'handleLeaderChange emits shared leaderChanged event payload',
+    async (t) => {
+      const replica = new TestRaftReplica({
+        replicaId: 'replica-1',
+        nodeId: 'node-1',
+      });
+      const events = [];
+      replica.on(RAFT_REPLICA_BASE_EVENT.LEADER_CHANGED, (event) => {
+        events.push(event);
+      });
+
+      const demoted = replica.handleLeaderChange('replica-2');
+
+      t.equal(demoted, false);
+      t.same(events, [{
+        leaderId: 'replica-2',
+        replicaId: 'replica-1',
+        previousLeaderId: null,
+        demoted: false,
+      }]);
+      t.same(replica.leaderChangeCalls, [{
+        leaderId: 'replica-2',
+        context: {
+          previousLeaderId: null,
+          demoted: false,
+        },
+      }]);
+    },
+  );
 
   await t.test('clearLeaderNodeUpdateState clears state', async (t) => {
     const replica = new TestRaftReplica({

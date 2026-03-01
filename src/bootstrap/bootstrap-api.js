@@ -34,6 +34,9 @@ import {
 } from '../constants/index.js';
 import {CACHE_HYDRATION_TABLES} from '../cache/cache-constants.js';
 import {
+  getSystemCachePrimaryKeyFieldOrFallback,
+} from '../cache/system-cache-key-descriptor.js';
+import {
   getMissingSystemServiceLeaders,
   getMissingSystemServiceLeaderCount,
 } from '../cache/leader-readiness-gate.js';
@@ -2805,10 +2808,13 @@ class BootstrapAPI {
       BOOTSTRAP_API_ERROR.SYSTEM_TABLE_CACHE_REQUIRED,
     );
 
-    // Get snapshots from cache
     const snapshots = {};
     for (const tableName of CACHE_HYDRATION_TABLES) {
-      snapshots[tableName] = systemTableCache.getAll(tableName) || [];
+      const cacheRows = systemTableCache.getAll(tableName) || [];
+      snapshots[tableName] = this.resolveAuthoritativeSystemTableSnapshotRows(
+        tableName,
+        cacheRows,
+      );
     }
 
     // Verify that we have partition leaders in the services table
@@ -2828,6 +2834,163 @@ class BootstrapAPI {
     }
 
     return snapshots;
+  }
+
+  /**
+   * Prefer direct local partition reads over cache snapshots when available.
+   * This keeps bootstrap snapshots authoritative even when cache propagation
+   * briefly lags committed partition state during a multi-node join burst.
+   * @param {string} tableName
+   * @param {Object[]} cacheRows
+   * @return {Object[]}
+   * @private
+   */
+  resolveAuthoritativeSystemTableSnapshotRows(tableName, cacheRows = []) {
+    const localRowSets = this.queryLocalAuthoritativePartitionRowSets(tableName);
+    if (localRowSets.length === NUM.ZERO) {
+      return cacheRows;
+    }
+
+    const mergedRows = this.mergeAuthoritativeSystemTableRowSets(
+      tableName,
+      localRowSets,
+    );
+    if (mergedRows.length !== cacheRows.length) {
+      this.logger.warn(
+        'Bootstrap snapshot diverged from local authoritative partition state',
+        {
+          seedNodeId: this.seedNodeId,
+          tableName,
+          cacheRowCount: cacheRows.length,
+          authoritativeRowCount: mergedRows.length,
+          replicaCount: localRowSets.length,
+        },
+      );
+    }
+
+    return mergedRows;
+  }
+
+  /**
+   * Read one system table directly from local partition replicas.
+   * @param {string} tableName
+   * @return {Object[][]}
+   * @private
+   */
+  queryLocalAuthoritativePartitionRowSets(tableName) {
+    const systemTableCache = assertCritical(
+      this.systemTableCache,
+      BOOTSTRAP_API_ERROR.SYSTEM_TABLE_CACHE_REQUIRED,
+    );
+    if (!this.partitionServices || this.partitionServices.size === NUM.ZERO) {
+      return [];
+    }
+
+    const partitionRows =
+      typeof systemTableCache.filter === TYPEOF.FUNCTION ?
+        systemTableCache.filter(TABLES.PARTITIONS, (row) => {
+          const rowTableName = row?.[COLUMN.TABLE_NAME] || row?.table_name || row?.tableName;
+          const rowTableId = row?.[COLUMN.TABLE_ID] || row?.table_id || row?.tableId;
+          return rowTableName === tableName || rowTableId === tableName;
+        }) :
+        [];
+    const partitionIds = [...new Set(partitionRows
+      .map((row) => row?.[COLUMN.PARTITION_ID] || row?.partition_id || row?.partitionId)
+      .filter((value) => typeof value === TYPEOF.STRING && value.length > NUM.ZERO),
+    )];
+    if (partitionIds.length === NUM.ZERO) {
+      return [];
+    }
+
+    const rowSets = [];
+    const sql = `SELECT * FROM ${tableName}`;
+    for (const partitionId of partitionIds) {
+      for (const service of this.partitionServices.values()) {
+        if (service?.partitionId !== partitionId ||
+            service?.initialized !== true ||
+            typeof service?.db?.prepare !== TYPEOF.FUNCTION) {
+          continue;
+        }
+        try {
+          const rows = service.db.prepare(sql).all();
+          rowSets.push(Array.isArray(rows) ? rows : []);
+        } catch (error) {
+          this.logger.warn(
+            'Failed to read authoritative snapshot rows from local partition',
+            {
+              seedNodeId: this.seedNodeId,
+              tableName,
+              partitionId,
+              replicaId: service?.replicaId || service?.service_id || null,
+              error: error.message,
+            },
+          );
+        }
+      }
+    }
+
+    return rowSets;
+  }
+
+  /**
+   * Merge direct replica row sets by canonical primary key.
+   * @param {string} tableName
+   * @param {Object[][]} rowSets
+   * @return {Object[]}
+   * @private
+   */
+  mergeAuthoritativeSystemTableRowSets(tableName, rowSets) {
+    const keyField = getSystemCachePrimaryKeyFieldOrFallback(tableName, 'id');
+    const mergedRows = new Map();
+
+    for (const rowSet of rowSets) {
+      const rows = Array.isArray(rowSet) ? rowSet : [];
+      for (const row of rows) {
+        const key = row?.[keyField] ?? row?.id;
+        if (typeof key === TYPEOF.UNDEFINED || key === null) {
+          continue;
+        }
+        const existing = mergedRows.get(key);
+        if (!existing || this.isAuthoritativeSnapshotRowNewer(row, existing)) {
+          mergedRows.set(key, row);
+        }
+      }
+    }
+
+    return [...mergedRows.values()];
+  }
+
+  /**
+   * Prefer the freshest row when merging authoritative replica snapshots.
+   * @param {Object} candidate
+   * @param {Object} existing
+   * @return {boolean}
+   * @private
+   */
+  isAuthoritativeSnapshotRowNewer(candidate, existing) {
+    const candidateUpdatedAt =
+      Number(candidate?.[COLUMN.UPDATED_AT] ?? candidate?.updated_at ?? candidate?.updatedAt);
+    const existingUpdatedAt =
+      Number(existing?.[COLUMN.UPDATED_AT] ?? existing?.updated_at ?? existing?.updatedAt);
+    if (Number.isFinite(candidateUpdatedAt) && Number.isFinite(existingUpdatedAt)) {
+      return candidateUpdatedAt > existingUpdatedAt;
+    }
+    if (Number.isFinite(candidateUpdatedAt) && !Number.isFinite(existingUpdatedAt)) {
+      return true;
+    }
+
+    const candidateCreatedAt =
+      Number(candidate?.[COLUMN.CREATED_AT] ?? candidate?.created_at ?? candidate?.createdAt);
+    const existingCreatedAt =
+      Number(existing?.[COLUMN.CREATED_AT] ?? existing?.created_at ?? existing?.createdAt);
+    if (Number.isFinite(candidateCreatedAt) && Number.isFinite(existingCreatedAt)) {
+      return candidateCreatedAt > existingCreatedAt;
+    }
+    if (Number.isFinite(candidateCreatedAt) && !Number.isFinite(existingCreatedAt)) {
+      return true;
+    }
+
+    return JSON.stringify(candidate).length > JSON.stringify(existing).length;
   }
 
   /**

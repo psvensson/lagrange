@@ -106,7 +106,7 @@ class NodeStorageBudgetSetup {
    * @throws {DependencyError} If required dependencies missing.
    */
   static async resolveAndPersist(options) {
-    const {budgetService, nodeRow, nodeId} = options;
+    const {budgetService, nodeRow, nodeId, upsertOptions} = options;
 
     if (!nodeRow) {
       throw new DependencyError(
@@ -127,7 +127,7 @@ class NodeStorageBudgetSetup {
     setupLogger.info(LOG_MSG.RESOLVING, {nodeId});
 
     const outcome =
-      await budgetService.registerNodeBudget({nodeRow});
+      await budgetService.registerNodeBudget({nodeRow, upsertOptions});
 
     // Startup diagnostics (Req 9.4)
     if (outcome.resolution.isValid) {

@@ -83,6 +83,16 @@ test(
     t.equal(upsertCalls[0].tableName, TABLES.MESSAGE_GROUPS);
     t.equal(upsertCalls[0].rowData.group_id, 'mg-self-hosted-1');
     t.equal(upsertCalls[0].rowData.replica_count, 3);
+    t.same(
+      JSON.parse(upsertCalls[0].rowData.policy),
+      {
+        ensureLocalAccess: false,
+        placementConstraints: {
+          spreadAcrossNodes: false,
+        },
+      },
+      'should persist self-hosted policy that disables cluster-wide local access',
+    );
     t.equal(registerCalls.length, 3, 'should register all local replica services');
     t.same(
       registerCalls.map((call) => call.replicaId).sort(),
@@ -107,6 +117,7 @@ test(
       sqlQueryEngine: {
         setSystemCache: () => {},
         setMessageRouter: () => {},
+        executeQuery: async () => ({success: true, rows: []}),
       },
       on: () => {},
       listenerCount: () => 1,

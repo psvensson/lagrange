@@ -164,10 +164,16 @@ class RaftRoleTracker extends EventEmitter {
     }
 
     try {
-      await this.cdcIntegrationService.updateSystemTableRow(TABLES.SERVICES, serviceId, {
+      const updateData = {
         raft_role: role,
         updated_at: Date.now(),
-      });
+      };
+      await this.cdcIntegrationService.updateSystemTableRow(
+        TABLES.SERVICES,
+        serviceId,
+        updateData,
+        {expectedCacheFields: updateData},
+      );
 
       this.logger.info(POLICY_LOG_MSG.UPDATED_SERVICE_ROLE, {
         serviceId,

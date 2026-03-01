@@ -303,6 +303,35 @@ test('registerNodeBudget - persists valid budget', async (t) => {
   t.end();
 });
 
+test('registerNodeBudget - forwards upsert options to CDC writes', async (t) => {
+  setup({node: {storageBudgetBytes: 50 * NUM.BYTES_PER_GIB}});
+  const upsertCalls = [];
+  const mockCdc = {
+    upsertSystemTableRow: async (tableName, rowData, options) => {
+      upsertCalls.push({tableName, rowData, options});
+      return {success: true};
+    },
+  };
+  const service = new NodeStorageBudgetService({
+    nodeId: TEST_NODE_ID,
+    cdcIntegrationService: mockCdc,
+  });
+  service.initialize({
+    nodeId: TEST_NODE_ID,
+    cdcIntegrationService: mockCdc,
+  });
+
+  await service.registerNodeBudget({
+    nodeRow: buildNodeRow(),
+    upsertOptions: {skipCacheWait: true},
+  });
+
+  assert.equal(upsertCalls.length, 1);
+  assert.deepEqual(upsertCalls[0].options, {skipCacheWait: true});
+  teardown();
+  t.end();
+});
+
 test('registerNodeBudget - throws on upsert failure', async (t) => {
   setup({node: {storageBudgetBytes: 50 * NUM.BYTES_PER_GIB}});
   const mockCdc = createMockCdc({success: false, error: 'write failed'});

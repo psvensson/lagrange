@@ -48,3 +48,64 @@ test('PartitionService skips replayed committed entries when entryId is stable',
 
     await partition.shutdown();
   });
+
+test(
+  'PartitionService proposeWrite stamps stable entryId for replay dedupe',
+  async (t) => {
+    const partition = new PartitionService({
+      partitionId: 'test-partition',
+      tableId: 'dedupe_table',
+      tableName: 'dedupe_table',
+      replicaId: 'replica-1',
+      replicaIds: ['replica-1'],
+      schema: {
+        columns: [
+          {name: 'id', type: 'TEXT', primaryKey: true},
+        ],
+      },
+      dbPath: ':memory:',
+    });
+
+    await partition.initialize();
+
+    let capturedEntry = null;
+    partition.role = 'leader';
+    partition.applyWrite = async (entry) => {
+      capturedEntry = {...entry};
+      return {
+        success: true,
+        partitionId: partition.partitionId,
+      };
+    };
+
+    const writeResult = await partition.proposeWrite({
+      type: 'INSERT',
+      sql: 'INSERT INTO dedupe_table (id) VALUES (?)',
+      params: ['row-2'],
+    });
+
+    t.equal(writeResult.success, true, 'leader write should succeed');
+    t.ok(capturedEntry, 'proposeWrite should build a committed entry');
+    t.type(capturedEntry.entryId, 'string',
+      'proposeWrite should stamp a stable entryId');
+
+    partition.applyCommittedEntry(capturedEntry);
+
+    await t.resolves(
+      () => Promise.resolve(partition.applyCommittedEntry({
+        ...capturedEntry,
+        proposedAt: Number(capturedEntry.proposedAt || 0) + 1,
+        timestamp: String(Number(capturedEntry.timestamp || 0) + 1),
+      })),
+      'replayed committed entry should dedupe even if metadata drifts',
+    );
+
+    const rowCount = partition.db
+      .prepare('SELECT COUNT(*) AS count FROM dedupe_table WHERE id = ?')
+      .get('row-2')
+      .count;
+    t.equal(rowCount, 1, 'metadata-drift replay should not insert twice');
+
+    await partition.shutdown();
+  },
+);

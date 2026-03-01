@@ -593,6 +593,7 @@ const CONSISTENCY_VERDICT = Object.freeze({
 const CONSISTENCY_MISMATCH_KIND = Object.freeze({
   LEADER: 'leader_mismatch',
   PARTITION_SET: 'partition_set_mismatch',
+  REPLICA_ROLE: 'replica_role_inconsistency',
   REPLICA_OPERATION: 'replica_operation_mismatch',
 });
 

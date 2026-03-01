@@ -511,9 +511,11 @@ class TablePolicyService extends EventEmitter {
       return cached.policy;
     }
 
-    // Get from SQL engine
-    let group = null;
-    if (this.sqlQueryEngine) {
+    // Prefer the propagated system cache when available. Joining nodes may
+    // observe newly registered self-hosted message-group metadata here before
+    // a routed SQL engine is available.
+    let group = this.lookupCachedMessageGroup(groupId);
+    if (!group && this.sqlQueryEngine) {
       const result = await this.sqlQueryEngine.executeQuery(
         'SELECT * FROM message_groups WHERE group_id = ?',
         [groupId],
@@ -553,6 +555,35 @@ class TablePolicyService extends EventEmitter {
     });
 
     return mergedPolicy;
+  }
+
+  /**
+   * Lookup one message-group row from the local system cache.
+   * @param {string} groupId - Message group ID.
+   * @return {Object|null} Cached row when present.
+   * @private
+   */
+  lookupCachedMessageGroup(groupId) {
+    if (!groupId || !this.systemTableCache) {
+      return null;
+    }
+
+    if (typeof this.systemTableCache.filter === TYPEOF.FUNCTION) {
+      const rows = this.systemTableCache.filter(
+        TABLES.MESSAGE_GROUPS,
+        (group) => group?.group_id === groupId || group?.groupId === groupId,
+      );
+      return rows[0] || null;
+    }
+
+    if (typeof this.systemTableCache.getAll === TYPEOF.FUNCTION) {
+      const rows = this.systemTableCache.getAll(TABLES.MESSAGE_GROUPS) || [];
+      return rows.find((group) =>
+        group?.group_id === groupId || group?.groupId === groupId,
+      ) || null;
+    }
+
+    return null;
   }
 
   /**

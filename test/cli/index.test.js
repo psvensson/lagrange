@@ -1,6 +1,7 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {AdminCLI} from '../../src/cli/index.js';
 import {ADMIN_ERROR_MESSAGE} from '../../src/admin/admin-constants.js';
+import {EventEmitter} from 'events';
 
 test('AdminCLI logs view switching', async (t) => {
   await t.test(
@@ -313,5 +314,74 @@ test('AdminCLI logs since command', async (t) => {
     t.equal(setSinceCalls, 1, 'should update logs live window start');
     t.equal(receivedValue, '-5m', 'should pass since argument through');
     t.equal(refreshCalls, 1, 'should refresh logs view after changing since');
+  });
+});
+
+test('AdminCLI node management commands', async (t) => {
+  await t.test('drain command sends node status update and refreshes', async (t) => {
+    const cli = new AdminCLI();
+    const eventBus = new EventEmitter();
+    let sentQuery = null;
+    let refreshCalls = 0;
+    let lastStatus = null;
+    let shownError = null;
+
+    cli.eventBus = eventBus;
+    cli.connectionManager = {
+      sendQuery: (queryId, sql, params) => {
+        sentQuery = {queryId, sql, params};
+        return true;
+      },
+    };
+    cli.updateStatus = (message) => {
+      lastStatus = message;
+    };
+    cli.forceRefresh = () => {
+      refreshCalls += 1;
+    };
+    cli.showError = (message) => {
+      shownError = message;
+    };
+
+    cli.executeCommand('drain', ['node-1']);
+
+    t.match(sentQuery.sql, /UPDATE nodes SET status = \?1 WHERE node_id = \?2/);
+    t.same(sentQuery.params, ['draining', 'node-1'], 'should send draining update');
+    t.match(lastStatus, /draining node node-1/i, 'should show pending status');
+
+    eventBus.emit('query:result', {
+      queryId: sentQuery.queryId,
+      affectedRows: 1,
+    });
+
+    t.equal(refreshCalls, 1, 'should refresh after successful mutation');
+    t.equal(shownError, null, 'should not show error on success');
+  });
+
+  await t.test('remove-node command is blocked in read-only mode', async (t) => {
+    const cli = new AdminCLI();
+    let shownError = null;
+    let sendCalls = 0;
+
+    cli.readOnlyMode = true;
+    cli.eventBus = new EventEmitter();
+    cli.connectionManager = {
+      sendQuery: () => {
+        sendCalls += 1;
+        return true;
+      },
+    };
+    cli.showError = (message) => {
+      shownError = message;
+    };
+
+    cli.executeCommand('remove-node', ['node-9']);
+
+    t.equal(sendCalls, 0, 'should not send mutation in read-only mode');
+    t.match(
+        shownError,
+        /read-only mode/,
+        'should explain why node management command was rejected',
+    );
   });
 });

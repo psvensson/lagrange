@@ -275,7 +275,7 @@ test('ReplicaHandler', async (t) => {
     t.equal(handler.initialized, true, 'initialized after init');
     t.equal(handler.nodeId, 'test-node', 'node ID set correctly');
 
-    handler.shutdown();
+    await handler.shutdown();
     t.equal(handler.initialized, false, 'not initialized after shutdown');
   });
 
@@ -391,7 +391,45 @@ test('ReplicaHandler', async (t) => {
 
     await created;
 
-    handler.shutdown();
+    await handler.shutdown();
+  });
+
+  t.test('shutdown prevents queued createReplicaAsync work from starting', async (t) => {
+    const cache = createSeededCache();
+    seedReplicaOperation(cache, 'op-shutdown');
+    const mockCDC = createMockCDCService(cache);
+    let createCalls = 0;
+
+    const handler = new ReplicaHandler({
+      nodeId: 'test-node',
+      cdcIntegrationService: mockCDC,
+      systemTableCache: cache,
+      dataDir: tempDir,
+      createPartitionService: async () => {
+        createCalls += 1;
+        return {
+          async shutdown() {},
+          async syncFromLeader() {},
+        };
+      },
+    });
+
+    handler.initialize();
+    await handler.handleCreateReplica({
+      operationId: 'op-shutdown',
+      partitionId: 'partition-1',
+      replicaId: 'replica-shutdown',
+    });
+
+    await handler.shutdown();
+    await new Promise((resolve) => setImmediate(resolve));
+
+    t.equal(createCalls, 0, 'shutdown should block queued replica creation');
+    t.equal(
+      handler.inProgressOperations.size,
+      0,
+      'shutdown should clear queued in-progress operations',
+    );
   });
 
   t.test(
@@ -488,6 +526,251 @@ test('ReplicaHandler', async (t) => {
         capturedOptions.isJoiningExistingGroup,
         false,
         'first replica should bootstrap leadership instead of learner join mode',
+      );
+
+      handler.shutdown();
+    },
+  );
+
+  t.test(
+    'handleCreateReplica - provisional sibling rows without leader should not force learner join mode',
+    async (t) => {
+      const partitionId = 'partition-1';
+      const cache = createMetadataOnlyCache({partitionId});
+      seedReplicaOperation(cache, 'op-1', {partitionId, replicaId: 'replica-1'});
+      const now = Date.now();
+      for (const serviceId of ['replica-1', 'replica-2', 'replica-3']) {
+        cache.applySystemTableChange(SystemTableName.SERVICES, 'INSERT', {
+          service_id: serviceId,
+          service_type: 'partition',
+          partition_id: partitionId,
+          node_id: `node-${serviceId}`,
+          status: ReplicaStatus.CREATING,
+          address: `node-${serviceId}/partition/${serviceId}`,
+          created_at: now,
+          updated_at: now,
+        });
+      }
+
+      const mockCDC = createMockCDCService(cache);
+      let capturedOptions = null;
+
+      const handler = new ReplicaHandler({
+        nodeId: 'test-node',
+        cdcIntegrationService: mockCDC,
+        systemTableCache: cache,
+        dataDir: tempDir,
+        createPartitionService: async (options) => {
+          capturedOptions = options;
+          return {
+            partitionId: options.partitionId,
+            replicaId: options.replicaId,
+            initialized: true,
+            async shutdown() {},
+            async syncFromLeader() {},
+          };
+        },
+      });
+
+      handler.initialize();
+
+      const created = waitForReplicaEvent(
+        handler,
+        'replicaCreated',
+        'replicaCreationFailed',
+      );
+
+      await handler.handleCreateReplica({
+        operationId: 'op-1',
+        partitionId,
+        replicaId: 'replica-1',
+      });
+      await created;
+
+      t.ok(capturedOptions, 'partition factory should receive create options');
+      t.equal(
+        capturedOptions.isJoiningExistingGroup,
+        false,
+        'fresh partition replicas should bootstrap voters until a leader exists',
+      );
+
+      handler.shutdown();
+    },
+  );
+
+  t.test(
+    'handleCreateReplica - active sibling rows without raft roles should not force learner join mode',
+    async (t) => {
+      const partitionId = 'partition-1';
+      const cache = createMetadataOnlyCache({partitionId});
+      seedReplicaOperation(cache, 'op-1', {partitionId, replicaId: 'replica-1'});
+      const now = Date.now();
+      for (const serviceId of ['replica-1', 'replica-2', 'replica-3']) {
+        cache.applySystemTableChange(SystemTableName.SERVICES, 'INSERT', {
+          service_id: serviceId,
+          service_type: 'partition',
+          partition_id: partitionId,
+          node_id: `node-${serviceId}`,
+          status: ReplicaStatus.ACTIVE,
+          raft_role: null,
+          address: `node-${serviceId}/partition/${serviceId}`,
+          created_at: now,
+          updated_at: now,
+        });
+      }
+
+      const mockCDC = createMockCDCService(cache);
+      let capturedOptions = null;
+
+      const handler = new ReplicaHandler({
+        nodeId: 'test-node',
+        cdcIntegrationService: mockCDC,
+        systemTableCache: cache,
+        dataDir: tempDir,
+        createPartitionService: async (options) => {
+          capturedOptions = options;
+          return {
+            partitionId: options.partitionId,
+            replicaId: options.replicaId,
+            initialized: true,
+            async shutdown() {},
+            async syncFromLeader() {},
+          };
+        },
+      });
+
+      handler.initialize();
+
+      const created = waitForReplicaEvent(
+        handler,
+        'replicaCreated',
+        'replicaCreationFailed',
+      );
+
+      await handler.handleCreateReplica({
+        operationId: 'op-1',
+        partitionId,
+        replicaId: 'replica-1',
+      });
+      await created;
+
+      t.ok(capturedOptions, 'partition factory should receive create options');
+      t.equal(
+        capturedOptions.isJoiningExistingGroup,
+        false,
+        'active rows without explicit voter roles should still bootstrap fresh partitions',
+      );
+
+      handler.shutdown();
+    },
+  );
+
+  t.test(
+    'resolveReplicaContext - roleless active rows should not invent a leader or voters',
+    async (t) => {
+      const partitionId = 'partition-1';
+      const cache = createMetadataOnlyCache({partitionId});
+      const now = Date.now();
+      for (const serviceId of ['replica-1', 'replica-2', 'replica-3']) {
+        cache.applySystemTableChange(SystemTableName.SERVICES, 'INSERT', {
+          service_id: serviceId,
+          service_type: 'partition',
+          partition_id: partitionId,
+          node_id: `node-${serviceId}`,
+          status: ReplicaStatus.ACTIVE,
+          address: `node-${serviceId}/partition/${serviceId}`,
+          created_at: now,
+          updated_at: now,
+        });
+      }
+
+      const handler = new ReplicaHandler({
+        nodeId: 'test-node',
+        cdcIntegrationService: createMockCDCService(cache),
+        systemTableCache: cache,
+        dataDir: tempDir,
+        createPartitionService: createMockPartitionServiceFactory(),
+      });
+
+      handler.initialize();
+
+      const context = handler.resolveReplicaContext(partitionId, 'replica-1');
+
+      t.equal(
+        context.leaderAddress,
+        null,
+        'should not infer a leader from missing raft_role metadata',
+      );
+      t.equal(
+        context.existingReplicaCount,
+        0,
+        'should not count roleless active rows as established voters',
+      );
+
+      handler.shutdown();
+    },
+  );
+
+  t.test(
+    'resolveReplicaContext - fresh partition bootstrap should not turn later peers into learners',
+    async (t) => {
+      const partitionId = 'partition-1';
+      const tableId = 'table-1';
+      const cache = createMetadataOnlyCache({partitionId, tableId});
+      const now = Date.now();
+      cache.applySystemTableChange(SystemTableName.PARTITIONS, 'INSERT', {
+        partition_id: partitionId,
+        table_id: tableId,
+        partition_key_start: null,
+        partition_key_end: null,
+        leader_node_id: null,
+        created_at: now,
+        updated_at: now,
+      });
+      cache.applySystemTableChange(SystemTableName.SERVICES, 'INSERT', {
+        service_id: 'replica-2',
+        service_type: 'partition',
+        partition_id: partitionId,
+        node_id: 'node-2',
+        status: ReplicaStatus.ACTIVE,
+        raft_role: RAFT_ROLE.LEADER,
+        address: 'node-2/partition/replica-2',
+        created_at: now,
+        updated_at: now,
+      });
+      cache.applySystemTableChange(SystemTableName.SERVICES, 'INSERT', {
+        service_id: 'replica-3',
+        service_type: 'partition',
+        partition_id: partitionId,
+        node_id: 'node-3',
+        status: ReplicaStatus.PENDING,
+        raft_role: null,
+        address: 'node-3/partition/replica-3',
+        created_at: now,
+        updated_at: now,
+      });
+
+      const handler = new ReplicaHandler({
+        nodeId: 'node-1',
+        cdcIntegrationService: createMockCDCService(cache),
+        systemTableCache: cache,
+        dataDir: tempDir,
+        createPartitionService: createMockPartitionServiceFactory(),
+      });
+
+      handler.initialize();
+
+      const context = handler.resolveReplicaContext(partitionId, 'replica-1');
+
+      t.equal(
+        context.existingReplicaCount,
+        0,
+        'fresh partitions without persisted leader metadata should keep the initial cohort in bootstrap mode',
+      );
+      t.equal(
+        context.leaderAddress,
+        'node-2/partition/replica-2',
+        'live leader address can still be surfaced for catch-up without forcing learner mode',
       );
 
       handler.shutdown();

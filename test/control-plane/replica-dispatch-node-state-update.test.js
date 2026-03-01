@@ -114,3 +114,98 @@ test('ReplicaDispatchService persists NODE_STATE_UPDATE ready heartbeats', async
 
   service.stop();
 });
+
+test('ReplicaDispatchService applies nodeRow payload from NODE_STATE_UPDATE heartbeats',
+  async (t) => {
+    initEnv();
+
+    const now = Date.now();
+    const upserts = [];
+    const cacheNode = {
+      node_id: 'node-3',
+      node_address: 'localhost:8083',
+      cpu_cores: 8,
+      memory_mb: 16384,
+      disk_gb: 500,
+      cpu_usage_percent: 10,
+      memory_usage_percent: 20,
+      disk_usage_percent: 30,
+      status: SERVICE_STATUS.ACTIVE,
+      connection_state: STATE.CONNECTED,
+      capabilities: '[]',
+      last_heartbeat: now - 1000,
+      ready_lease_expires_at: null,
+      created_at: now - 5000,
+    };
+
+    const service = new ReplicaDispatchService({
+      nodeId: 'node-1',
+      messageRouter: {},
+      cdcIntegrationService: {
+        upsertSystemTableRow: async (tableName, row) => {
+          upserts.push({tableName, row});
+          return {success: true};
+        },
+      },
+      systemTableCache: {
+        get: (tableName, nodeId) => {
+          if (tableName !== 'nodes' || nodeId !== 'node-3') {
+            return null;
+          }
+          return cacheNode;
+        },
+      },
+      sqlQueryEngine: {
+        executeQuery: async (sql, params) => {
+          if (sql.includes('FROM nodes') &&
+              params?.[0] === 'node-3') {
+            return {success: true, rows: [cacheNode]};
+          }
+          return {success: true, rows: []};
+        },
+      },
+      rebalanceCoordinator: {
+        executeOperation: async () => ({success: true}),
+      },
+    });
+    service.initialize();
+
+    await service.handleNodeStateUpdate({
+      [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+      [ControlPlaneField.NODE_ID]: 'node-3',
+      [ControlPlaneField.NODE_ADDRESS]: 'localhost:8083',
+      [ControlPlaneField.STATE]: STATE.READY,
+      [ControlPlaneField.CAPABILITIES]: ['partition_replica'],
+      [ControlPlaneField.HEARTBEAT_AT]: now,
+      [ControlPlaneField.NODE_ROW]: {
+        cpu_cores: 16,
+        memory_mb: 32768,
+        disk_gb: 750,
+        cpu_usage_percent: 41,
+        memory_usage_percent: 52,
+        disk_usage_percent: 63,
+      },
+    });
+
+    t.equal(upserts.length, 1, 'persists one nodes row upsert');
+    t.equal(upserts[0].row.cpu_cores, 16, 'should use nodeRow cpu cores');
+    t.equal(upserts[0].row.memory_mb, 32768, 'should use nodeRow memory');
+    t.equal(upserts[0].row.disk_gb, 750, 'should use nodeRow disk size');
+    t.equal(
+      upserts[0].row.cpu_usage_percent,
+      41,
+      'should use nodeRow cpu usage',
+    );
+    t.equal(
+      upserts[0].row.memory_usage_percent,
+      52,
+      'should use nodeRow memory usage',
+    );
+    t.equal(
+      upserts[0].row.disk_usage_percent,
+      63,
+      'should use nodeRow disk usage',
+    );
+
+    service.stop();
+  });

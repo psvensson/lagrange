@@ -8,6 +8,9 @@
 
 import assert from 'node:assert/strict';
 import {CONVERGENCE_DEFAULTS} from '../harness/constants.js';
+import {
+  resolveThreeNodeSeedRebalanceScenarioConfig,
+} from '../harness/scenario-config.js';
 
 const MIN_NODE_COUNT = 3;
 const MIN_NON_SEED_COUNT = 2;
@@ -15,8 +18,6 @@ const MIN_REBALANCED_PARTITIONS = 1;
 const PARTITION_SERVICE_TYPE = 'partition';
 const ACTIVE_STATUS = 'active';
 const REBALANCE_SETTLE_TIMEOUT_MS = 20000;
-const REBALANCE_WAIT_TIMEOUT_MS = 20000;
-const REBALANCE_POLL_INTERVAL_MS = CONVERGENCE_DEFAULTS.sampleIntervalMs;
 const REBALANCE_SAMPLE_LIMIT = 10;
 
 const SQL_SELECT_ACTIVE_PARTITION_SERVICES =
@@ -123,14 +124,10 @@ async function run(cluster, options = {}) {
     targetVoterCount: CONVERGENCE_DEFAULTS.targetVoterCount,
   });
 
-  const rebalanceWaitTimeoutMs =
-    Number.isFinite(options.rebalanceWaitTimeoutMs) ?
-      options.rebalanceWaitTimeoutMs :
-      REBALANCE_WAIT_TIMEOUT_MS;
-  const rebalancePollIntervalMs =
-    Number.isFinite(options.rebalancePollIntervalMs) ?
-      options.rebalancePollIntervalMs :
-      REBALANCE_POLL_INTERVAL_MS;
+  const {
+    rebalanceWaitTimeoutMs,
+    rebalancePollIntervalMs,
+  } = resolveThreeNodeSeedRebalanceScenarioConfig(options);
 
   const rebalanceDeadline = Date.now() + rebalanceWaitTimeoutMs;
   let rebalancedPartitions = [];

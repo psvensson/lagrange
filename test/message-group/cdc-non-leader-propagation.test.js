@@ -505,6 +505,181 @@ test(
 );
 
 test(
+  'applyCDCEvent on non-leader MG forwards to freshest peer when leader role metadata lags',
+  async (t) => {
+    const port = testPortCounter++;
+    const nodeId = `test-node-${port}`;
+    const router = new MessageRouter({nodeId, wsPort: port});
+    await router.initialize({startServer: true});
+
+    let shutdownCalled = false;
+    const cleanup = async () => {
+      if (shutdownCalled) return;
+      shutdownCalled = true;
+      try {
+        if (mg && mg.raft) {
+          await mg.shutdown();
+        }
+      } catch (_e) {
+        // best-effort
+      }
+      await router.shutdown();
+    };
+
+    let mg;
+    try {
+      mg = new MessageGroupService({
+        groupId: 'mg-lagging-leader-metadata',
+        replicaId: 'mg-lagging-leader-metadata-r1',
+        nodeId,
+        transport: router,
+      });
+      await mg.initialize();
+      mg.replicaIds = [
+        'mg-lagging-leader-metadata-r1',
+        'mg-lagging-leader-metadata-r2',
+        'mg-lagging-leader-metadata-r3',
+      ];
+      await mg.subscribeToCDC(TABLES.PARTITIONS);
+
+      mg.isLeader = false;
+      mg.role = 'follower';
+      mg.leaderId = null;
+      if (mg.raft) {
+        Object.defineProperty(mg.raft, 'state', {
+          value: LifeRaft.FOLLOWER,
+          writable: true,
+          configurable: true,
+        });
+      }
+
+      mg.systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, {
+        service_id: 'mg-lagging-leader-metadata-r2',
+        service_type: SERVICE_TYPE.MESSAGE_GROUP,
+        group_id: 'mg-lagging-leader-metadata',
+        replica_id: 'mg-lagging-leader-metadata-r2',
+        node_id: 'remote-node-2',
+        status: SERVICE_STATUS.ACTIVE,
+        raft_role: 'candidate',
+        address: 'remote-node-2/message-group/mg-lagging-leader-metadata-r2',
+        updated_at: 100,
+      });
+      mg.systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, {
+        service_id: 'mg-lagging-leader-metadata-r3',
+        service_type: SERVICE_TYPE.MESSAGE_GROUP,
+        group_id: 'mg-lagging-leader-metadata',
+        replica_id: 'mg-lagging-leader-metadata-r3',
+        node_id: 'remote-node-3',
+        status: SERVICE_STATUS.ACTIVE,
+        raft_role: 'candidate',
+        address: 'remote-node-3/message-group/mg-lagging-leader-metadata-r3',
+        updated_at: 200,
+      });
+
+      const forwardedPayloads = [];
+      router.deliver = async (address, payload, options) => {
+        forwardedPayloads.push({address, payload, options});
+        return {acknowledged: true, success: true};
+      };
+
+      await mg.applyCDCEvent(
+        TABLES.PARTITIONS,
+        'INSERT',
+        {partition_id: 'p-lagging-leader-metadata'},
+        {timestamp: '1234567890:7'},
+      );
+
+      t.equal(forwardedPayloads.length, 1, 'should forward exactly once');
+      t.equal(
+        forwardedPayloads[0]?.address,
+        'remote-node-3/message-group/mg-lagging-leader-metadata-r3',
+        'should prefer the freshest active peer when no leader row is available',
+      );
+    } finally {
+      await cleanup();
+    }
+  },
+);
+
+test(
+  'applyCDCEvent on non-leader MG forwards via bootstrap peer hints when cache has no leader metadata',
+  async (t) => {
+    const port = testPortCounter++;
+    const nodeId = `test-node-${port}`;
+    const router = new MessageRouter({nodeId, wsPort: port});
+    await router.initialize({startServer: true});
+
+    let shutdownCalled = false;
+    const cleanup = async () => {
+      if (shutdownCalled) return;
+      shutdownCalled = true;
+      try {
+        if (mg && mg.raft) {
+          await mg.shutdown();
+        }
+      } catch (_e) {
+        // best-effort
+      }
+      await router.shutdown();
+    };
+
+    let mg;
+    try {
+      mg = new MessageGroupService({
+        groupId: 'mg-bootstrap-peer-forward',
+        replicaId: 'mg-bootstrap-peer-forward-r1',
+        nodeId,
+        transport: router,
+      });
+      await mg.initialize();
+      mg.replicaIds = [
+        'mg-bootstrap-peer-forward-r1',
+        'mg-bootstrap-peer-forward-r2',
+        'mg-bootstrap-peer-forward-r3',
+      ];
+      mg.peerAddresses = [
+        'remote-node-2/message-group/mg-bootstrap-peer-forward-r2',
+        'remote-node-3/message-group/mg-bootstrap-peer-forward-r3',
+      ];
+      await mg.subscribeToCDC(TABLES.PARTITIONS);
+
+      mg.isLeader = false;
+      mg.role = 'follower';
+      mg.leaderId = null;
+      if (mg.raft) {
+        Object.defineProperty(mg.raft, 'state', {
+          value: LifeRaft.FOLLOWER,
+          writable: true,
+          configurable: true,
+        });
+      }
+
+      const forwardedPayloads = [];
+      router.deliver = async (address, payload, options) => {
+        forwardedPayloads.push({address, payload, options});
+        return {acknowledged: true, success: true};
+      };
+
+      await mg.applyCDCEvent(
+        TABLES.PARTITIONS,
+        'INSERT',
+        {partition_id: 'p-bootstrap-peer-forward'},
+        {timestamp: '1234567890:8'},
+      );
+
+      t.equal(forwardedPayloads.length, 1, 'should forward exactly once');
+      t.equal(
+        forwardedPayloads[0]?.address,
+        'remote-node-2/message-group/mg-bootstrap-peer-forward-r2',
+        'should fall back to bootstrap peer hints when cache metadata is absent',
+      );
+    } finally {
+      await cleanup();
+    }
+  },
+);
+
+test(
   'applyCDCEvent on non-leader MG fails closed when leader delivery exhausts retry budget',
   async (t) => {
     const port = testPortCounter++;
@@ -643,7 +818,7 @@ test(
 );
 
 test(
-  'applyCDCEvent on non-leader MG fails when leader stays unknown past retry budget',
+  'applyCDCEvent on non-leader MG fails when no leader route exists past retry budget',
   async (t) => {
     const port = testPortCounter++;
     const nodeId = `test-node-${port}`;
@@ -679,7 +854,6 @@ test(
       mg.isLeader = false;
       mg.role = 'follower';
       mg.leaderId = null;
-      mg.peerAddresses = ['remote-node/message-group/mg-retry-past-budget-r2'];
       mg.retryInitialDelayMs = 20;
       mg.retryBackoffMultiplier = 1;
       mg.retryMaxAttempts = 2;
@@ -697,8 +871,8 @@ test(
           {partition_id: 'p-retry-past-budget'},
           {timestamp: '1234567890:4'},
         ),
-        /retry budget exhausted|leader is unknown/,
-        'should fail closed when leader metadata does not converge in retry budget',
+        /retry budget exhausted|leader address is unavailable/,
+        'should fail closed when no leader route converges in retry budget',
       );
       t.equal(deliverCount, 0, 'should not deliver when leader address stays unresolved');
     } finally {

@@ -31,9 +31,10 @@ test('registerNodeInCluster() - should execute UPSERT writes with correct data',
   // Call registerNodeInCluster
   await service.registerNodeInCluster();
 
-  t.equal(upsertCalls.length, 2, 'should execute two upserts');
+  t.ok(upsertCalls.length >= 2, 'should execute node and endpoint upserts');
 
-  const nodeCall = upsertCalls[0];
+  const nodeCall = upsertCalls.find((call) => call.tableName === TABLES.NODES);
+  t.ok(nodeCall, 'should upsert nodes table');
   t.equal(nodeCall.tableName, TABLES.NODES, 'should upsert nodes table');
   t.equal(nodeCall.rowData.node_id, 'test-node-123', 'should use correct node_id');
   t.equal(nodeCall.rowData.node_address, 'ws://localhost:9000', 'should use correct node_address');
@@ -44,7 +45,9 @@ test('registerNodeInCluster() - should execute UPSERT writes with correct data',
   t.equal(nodeCall.rowData.connection_state, STATE.CONNECTED,
     'should set connection_state to CONNECTED');
 
-  const endpointCall = upsertCalls[1];
+  const endpointCall = upsertCalls.find((call) =>
+    call.tableName === TABLES.NODE_ENDPOINTS);
+  t.ok(endpointCall, 'should upsert node_endpoints table');
   t.equal(
     endpointCall.tableName,
     TABLES.NODE_ENDPOINTS,
@@ -111,3 +114,53 @@ test('registerNodeInCluster() - should throw error if CDC service not available'
     t.ok(error.message.length > 0, 'should throw error');
   }
 });
+
+test('registerNodeInCluster() - should skip cache waits before CDC subscriptions are active',
+  async (t) => {
+    let budgetRegisterOptions = null;
+    const upsertCalls = [];
+    const mockCDCService = {
+      sqlQueryEngine: {},
+      upsertSystemTableRow: async (tableName, rowData, options) => {
+        upsertCalls.push({tableName, rowData, options});
+        return {success: true};
+      },
+    };
+
+    const service = new NodeJoiningService({
+      nodeId: 'test-node-join-cache-wait',
+      nodeAddress: 'ws://localhost:9003',
+      seedNodeAddress: 'ws://seed:8000',
+      wsPort: 9003,
+    });
+    service.cdcIntegrationService = mockCDCService;
+    service.seedJoinTimeCacheRow = () => {};
+    service.getNodeStorageBudgetService = () => ({
+      registerNodeBudget: async ({nodeRow, upsertOptions}) => {
+        budgetRegisterOptions = upsertOptions;
+        return {
+          result: {success: true},
+          budgetRow: nodeRow,
+          resolution: {
+            isValid: true,
+            budgetBytes: 1024,
+            source: 'test',
+            diskBytes: 1024,
+          },
+        };
+      },
+    });
+
+    await service.registerNodeInCluster();
+
+    t.same(
+      budgetRegisterOptions,
+      {skipCacheWait: true},
+      'nodes-table registration should skip cache wait before subscriptions are active',
+    );
+    t.ok(upsertCalls.length > 0, 'should upsert endpoint rows during registration');
+    t.ok(
+      upsertCalls.every((call) => call.options?.skipCacheWait === true),
+      'join-time endpoint upserts should skip cache waits before subscriptions are active',
+    );
+  });

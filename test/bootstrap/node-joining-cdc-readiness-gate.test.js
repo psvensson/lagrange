@@ -23,22 +23,62 @@ const NODE_ADDRESS = 'ws://127.0.0.1:19092';
  */
 const createFullyHydratedCache = () => {
   const listeners = [];
+  const rowsByTable = new Map([
+    [SystemTableName.SERVICES, [{
+      service_id: 'p1', service_type: 'partition',
+      status: 'ACTIVE', raft_role: 'leader',
+      node_id: NODE_ID, address: `${NODE_ID}/partition/p1`,
+    }]],
+    [SystemTableName.NODES, [{node_id: NODE_ID}]],
+  ]);
+  const clone = (value) => JSON.parse(JSON.stringify(value));
+  const getPrimaryKey = (row) =>
+    row?.service_id ??
+    row?.node_id ??
+    row?.endpoint_id ??
+    row?.partition_id ??
+    row?.table_name ??
+    row?.group_id ??
+    row?.operation_id ??
+    row?.id;
+  const getRows = (tableName) => rowsByTable.has(tableName) ?
+    rowsByTable.get(tableName) :
+    [{id: '1'}];
   return {
     getAll: (tableName) => {
-      if (tableName === SystemTableName.SERVICES) {
-        return [{
-          service_id: 'p1', service_type: 'partition',
-          status: 'ACTIVE', raft_role: 'leader',
-          node_id: NODE_ID, address: `${NODE_ID}/partition/p1`,
-        }];
+      return getRows(tableName).map(clone);
+    },
+    get: (tableName, key) =>
+      getRows(tableName).find((row) => getPrimaryKey(row) === key),
+    has: (tableName, key) =>
+      getRows(tableName).some((row) => getPrimaryKey(row) === key),
+    applySystemTableChange: (tableName, _operation, row) => {
+      const key = getPrimaryKey(row);
+      const rows = rowsByTable.has(tableName) ?
+        rowsByTable.get(tableName) :
+        [];
+      if (key === undefined || key === null) {
+        rowsByTable.set(tableName, [...rows, clone(row)]);
+      } else {
+        rowsByTable.set(
+          tableName,
+          [
+            ...rows.filter((existingRow) => getPrimaryKey(existingRow) !== key),
+            clone(row),
+          ],
+        );
       }
-      if (tableName === SystemTableName.NODES) {
-        return [{node_id: NODE_ID}];
+      for (const fn of listeners) {
+        fn(tableName, _operation, clone(row));
       }
-      return [{id: '1'}];
     },
     onCacheChange: (fn) => listeners.push(fn),
-    offCacheChange: () => {},
+    offCacheChange: (fn) => {
+      const index = listeners.indexOf(fn);
+      if (index >= 0) {
+        listeners.splice(index, 1);
+      }
+    },
     _fireChange: () => {
       for (const fn of listeners) fn();
     },
@@ -113,6 +153,13 @@ const applyCommonStubs = (service, systemTableCache) => {
     sqlQueryEngine: {
       setSystemCache: () => {},
       setMessageRouter: () => {},
+      executeQuery: async (sql) => {
+        const match = /^SELECT \* FROM ([A-Za-z0-9_]+)$/.exec(sql.trim());
+        return {
+          success: true,
+          rows: match ? systemTableCache.getAll(match[1]) : [],
+        };
+      },
     },
     setSystemTableCache: () => {},
     setEpochManager: () => {},

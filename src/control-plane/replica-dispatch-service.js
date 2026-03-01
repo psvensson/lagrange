@@ -288,6 +288,11 @@ class ReplicaDispatchService extends EventEmitter {
   async handleNodeStateUpdate(payload) {
     const nodeId = payload[ControlPlaneField.NODE_ID];
     const state = payload[ControlPlaneField.STATE];
+    const payloadNodeRow = payload[ControlPlaneField.NODE_ROW];
+    const nodeRow = payloadNodeRow &&
+      typeof payloadNodeRow === 'object' ?
+      payloadNodeRow :
+      null;
 
     if (!nodeId || !state) {
       return;
@@ -323,21 +328,43 @@ class ReplicaDispatchService extends EventEmitter {
     const baseRow = {
       [COLUMN.NODE_ID]: nodeId,
       [COLUMN.NODE_ADDRESS]: payload[ControlPlaneField.NODE_ADDRESS] ||
+        nodeRow?.[COLUMN.NODE_ADDRESS] ||
         existing[COLUMN.NODE_ADDRESS] ||
         STRING.UNKNOWN,
-      [COLUMN.CPU_CORES]: existing[COLUMN.CPU_CORES] || NUM.ZERO,
-      [COLUMN.MEMORY_MB]: existing[COLUMN.MEMORY_MB] || NUM.ZERO,
-      [COLUMN.DISK_GB]: existing[COLUMN.DISK_GB] || NUM.ZERO,
-      [COLUMN.CPU_USAGE_PERCENT]: existing[COLUMN.CPU_USAGE_PERCENT] || NUM.ZERO,
-      [COLUMN.MEMORY_USAGE_PERCENT]: existing[COLUMN.MEMORY_USAGE_PERCENT] ||
-        NUM.ZERO,
-      [COLUMN.DISK_USAGE_PERCENT]: existing[COLUMN.DISK_USAGE_PERCENT] || NUM.ZERO,
-      [COLUMN.STATUS]: existing[COLUMN.STATUS] || SERVICE_STATUS.ACTIVE,
+      [COLUMN.CPU_CORES]: Number.isFinite(nodeRow?.[COLUMN.CPU_CORES]) ?
+        nodeRow[COLUMN.CPU_CORES] :
+        (existing[COLUMN.CPU_CORES] || NUM.ZERO),
+      [COLUMN.MEMORY_MB]: Number.isFinite(nodeRow?.[COLUMN.MEMORY_MB]) ?
+        nodeRow[COLUMN.MEMORY_MB] :
+        (existing[COLUMN.MEMORY_MB] || NUM.ZERO),
+      [COLUMN.DISK_GB]: Number.isFinite(nodeRow?.[COLUMN.DISK_GB]) ?
+        nodeRow[COLUMN.DISK_GB] :
+        (existing[COLUMN.DISK_GB] || NUM.ZERO),
+      [COLUMN.CPU_USAGE_PERCENT]:
+        Number.isFinite(nodeRow?.[COLUMN.CPU_USAGE_PERCENT]) ?
+          nodeRow[COLUMN.CPU_USAGE_PERCENT] :
+          (existing[COLUMN.CPU_USAGE_PERCENT] || NUM.ZERO),
+      [COLUMN.MEMORY_USAGE_PERCENT]:
+        Number.isFinite(nodeRow?.[COLUMN.MEMORY_USAGE_PERCENT]) ?
+          nodeRow[COLUMN.MEMORY_USAGE_PERCENT] :
+          (existing[COLUMN.MEMORY_USAGE_PERCENT] || NUM.ZERO),
+      [COLUMN.DISK_USAGE_PERCENT]:
+        Number.isFinite(nodeRow?.[COLUMN.DISK_USAGE_PERCENT]) ?
+          nodeRow[COLUMN.DISK_USAGE_PERCENT] :
+          (existing[COLUMN.DISK_USAGE_PERCENT] || NUM.ZERO),
+      [COLUMN.STATUS]:
+        typeof nodeRow?.[COLUMN.STATUS] === TYPEOF.STRING &&
+          nodeRow[COLUMN.STATUS].length > NUM.ZERO ?
+          nodeRow[COLUMN.STATUS] :
+          (existing[COLUMN.STATUS] || SERVICE_STATUS.ACTIVE),
       [COLUMN.CONNECTION_STATE]: state,
       [COLUMN.CAPABILITIES]: capabilities,
       [COLUMN.LAST_HEARTBEAT]: heartbeatAt,
       [COLUMN.READY_LEASE_EXPIRES_AT]: readyLeaseExpiresAt,
-      [COLUMN.CREATED_AT]: existing[COLUMN.CREATED_AT] || heartbeatAt,
+      [COLUMN.CREATED_AT]:
+        Number.isFinite(nodeRow?.[COLUMN.CREATED_AT]) ?
+          nodeRow[COLUMN.CREATED_AT] :
+          (existing[COLUMN.CREATED_AT] || heartbeatAt),
     };
 
     await this.cdcIntegrationService.upsertSystemTableRow(

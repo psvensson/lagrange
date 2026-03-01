@@ -12,6 +12,8 @@ import {
 import {SystemTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {createReadOnlyCache} from '../../src/cache/read-only-system-table-cache.js';
 
 // Initialize configuration and logging for tests
 beforeEach(() => {
@@ -59,6 +61,7 @@ function createMockSqlQueryEngine() {
 function createCacheWaitProbe() {
   const state = {
     present: false,
+    row: null,
     onCacheChangeCalls: 0,
     offCacheChangeCalls: 0,
   };
@@ -67,9 +70,16 @@ function createCacheWaitProbe() {
     has() {
       return state.present;
     },
+    get() {
+      return state.row;
+    },
     onCacheChange(listener) {
       state.onCacheChangeCalls++;
       state.present = true;
+      state.row = {
+        node_id: 'node-1',
+        node_address: 'localhost:8080',
+      };
       listener(SystemTableName.NODES);
       listener(SystemTableName.LOGS);
     },
@@ -280,6 +290,283 @@ test('CDCIntegrationService - updateSystemTableRow', async (t) => {
   );
   t.end();
 });
+
+test('CDCIntegrationService - upsertSystemTableRow skips cache wait when requested',
+  async (t) => {
+    const mockSqlEngine = createMockSqlQueryEngine();
+    const {cache, state} = createCacheWaitProbe();
+    const service = new CDCIntegrationService({
+      nodeId: 'test-node',
+      sqlQueryEngine: mockSqlEngine,
+      systemTableCache: cache,
+    });
+    service.initialize();
+
+    await service.upsertSystemTableRow(
+      SystemTableName.NODES,
+      {
+        node_id: 'node-1',
+        node_address: 'localhost:8080',
+      },
+      {skipCacheWait: true},
+    );
+
+    t.equal(
+      state.onCacheChangeCalls,
+      0,
+      'should not subscribe to cache waits when explicitly skipped',
+    );
+    t.end();
+  },
+);
+
+test(
+  'CDCIntegrationService - updateSystemTableRow rejects when cache row stays stale',
+  async (t) => {
+    const mockSqlEngine = createMockSqlQueryEngine();
+    let listener = null;
+    const cache = {
+      has(tableName, key) {
+        return tableName === SystemTableName.NODES && key === 'node-1';
+      },
+      get(tableName, key) {
+        if (tableName !== SystemTableName.NODES || key !== 'node-1') {
+          return undefined;
+        }
+        return {
+          node_id: 'node-1',
+          status: 'active',
+          updated_at: 100,
+        };
+      },
+      onCacheChange(nextListener) {
+        listener = nextListener;
+      },
+      offCacheChange(nextListener) {
+        if (listener === nextListener) {
+          listener = null;
+        }
+      },
+    };
+    const service = new CDCIntegrationService({
+      nodeId: 'test-node',
+      sqlQueryEngine: mockSqlEngine,
+      systemTableCache: cache,
+    });
+    service.initialize();
+    service.cacheWaitTimeoutMs = 20;
+
+    await t.rejects(
+      service.updateSystemTableRow(
+        SystemTableName.NODES,
+        {node_id: 'node-1'},
+        {status: 'suspected', updated_at: 200},
+        {
+          expectedCacheFields: {
+            status: 'suspected',
+            updated_at: 200,
+          },
+        },
+      ),
+      /cache update/i,
+      'should fail closed when cache never reflects the updated row',
+    );
+    t.equal(listener, null, 'should clean up the cache listener after timeout');
+    t.end();
+  },
+);
+
+test(
+  'CDCIntegrationService - updateSystemTableRow repairs cache from authoritative row after timeout',
+  async (t) => {
+    const cache = new SystemTableCache();
+    const executedQueries = [];
+    const authoritativeRow = {
+      node_id: 'node-1',
+      status: 'suspected',
+      updated_at: 200,
+    };
+    const mockSqlEngine = {
+      executedQueries,
+      async executeQuery(sql, params = []) {
+        executedQueries.push({sql, params});
+        if (sql.startsWith('UPDATE')) {
+          return {
+            success: true,
+            affectedRows: 1,
+          };
+        }
+        if (sql.startsWith('SELECT * FROM nodes')) {
+          return {
+            success: true,
+            rows: [authoritativeRow],
+          };
+        }
+        throw new Error(`Unexpected query: ${sql}`);
+      },
+    };
+    const service = new CDCIntegrationService({
+      nodeId: 'test-node',
+      sqlQueryEngine: mockSqlEngine,
+      systemTableCache: cache,
+    });
+    service.initialize();
+    service.cacheWaitTimeoutMs = 20;
+
+    const result = await service.updateSystemTableRow(
+      SystemTableName.NODES,
+      {node_id: 'node-1'},
+      {status: 'suspected', updated_at: 200},
+      {
+        expectedCacheFields: {
+          status: 'suspected',
+          updated_at: 200,
+        },
+      },
+    );
+
+    t.equal(result.success, true, 'should recover the write after authoritative repair');
+    t.equal(executedQueries.length, 2, 'should issue one authoritative repair query');
+    t.match(
+      executedQueries[1].sql,
+      /SELECT \* FROM nodes WHERE node_id = \?/,
+      'repair should read the authoritative row by primary key',
+    );
+    t.same(
+      cache.get(SystemTableName.NODES, 'node-1'),
+      authoritativeRow,
+      'repair should hydrate the expected row into cache',
+    );
+    t.end();
+  },
+);
+
+test(
+  'CDCIntegrationService - insertSystemTableRow repairs cache from authoritative row after timeout',
+  async (t) => {
+    const cache = new SystemTableCache();
+    const executedQueries = [];
+    const authoritativeRow = {
+      table_id: 'tbl-1',
+      table_name: 'benchmark_events',
+      partition_id: 'benchmark_events-p1',
+      owner_node_id: 'node-1',
+      created_at: 100,
+      updated_at: 100,
+    };
+    const mockSqlEngine = {
+      executedQueries,
+      async executeQuery(sql, params = []) {
+        executedQueries.push({sql, params});
+        if (sql.startsWith('INSERT INTO tables')) {
+          return {
+            success: true,
+            affectedRows: 1,
+          };
+        }
+        if (sql.startsWith('SELECT * FROM tables')) {
+          return {
+            success: true,
+            rows: [authoritativeRow],
+          };
+        }
+        throw new Error(`Unexpected query: ${sql}`);
+      },
+    };
+    const service = new CDCIntegrationService({
+      nodeId: 'test-node',
+      sqlQueryEngine: mockSqlEngine,
+      systemTableCache: cache,
+    });
+    service.initialize();
+    service.cacheWaitTimeoutMs = 20;
+
+    const result = await service.insertSystemTableRow(
+      SystemTableName.TABLES,
+      authoritativeRow,
+    );
+
+    t.equal(result.success, true, 'should recover inserts after authoritative repair');
+    t.equal(executedQueries.length, 2, 'should issue one authoritative read after insert');
+    t.match(
+      executedQueries[1].sql,
+      /SELECT \* FROM tables WHERE table_id = \?/,
+      'repair should read the inserted row by primary key',
+    );
+    t.same(
+      cache.get(SystemTableName.TABLES, 'tbl-1'),
+      authoritativeRow,
+      'repair should hydrate the inserted row into cache',
+    );
+    t.end();
+  },
+);
+
+test(
+  'CDCIntegrationService - authoritative repair writes through explicit writable cache target',
+  async (t) => {
+    const writableCache = new SystemTableCache();
+    const readOnlyCache = createReadOnlyCache(writableCache);
+    const executedQueries = [];
+    const authoritativeRow = {
+      node_id: 'node-1',
+      status: 'suspected',
+      updated_at: 200,
+    };
+    const mockSqlEngine = {
+      executedQueries,
+      async executeQuery(sql, params = []) {
+        executedQueries.push({sql, params});
+        if (sql.startsWith('UPDATE')) {
+          return {
+            success: true,
+            affectedRows: 1,
+          };
+        }
+        if (sql.startsWith('SELECT * FROM nodes')) {
+          return {
+            success: true,
+            rows: [authoritativeRow],
+          };
+        }
+        throw new Error(`Unexpected query: ${sql}`);
+      },
+    };
+    const service = new CDCIntegrationService({
+      nodeId: 'test-node',
+      sqlQueryEngine: mockSqlEngine,
+      systemTableCache: readOnlyCache,
+      cacheMutationTarget: writableCache,
+    });
+    service.initialize();
+    service.cacheWaitTimeoutMs = 20;
+
+    const result = await service.updateSystemTableRow(
+      SystemTableName.NODES,
+      {node_id: 'node-1'},
+      {status: 'suspected', updated_at: 200},
+      {
+        expectedCacheFields: {
+          status: 'suspected',
+          updated_at: 200,
+        },
+      },
+    );
+
+    t.equal(result.success, true, 'should repair through the writable cache target');
+    t.same(
+      writableCache.get(SystemTableName.NODES, 'node-1'),
+      authoritativeRow,
+      'writable cache should receive the authoritative repair row',
+    );
+    t.same(
+      readOnlyCache.get(SystemTableName.NODES, 'node-1'),
+      authoritativeRow,
+      'read-only readers should observe the repaired row',
+    );
+    t.end();
+  },
+);
 
 test('CDCIntegrationService - deleteSystemTableRow', async (t) => {
   const mockSqlEngine = createMockSqlQueryEngine();

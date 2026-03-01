@@ -7,11 +7,12 @@ import {test} from '../../src/test-helpers/tap.js';
 import {AdminWebSocketAPI, MessageType, ErrorCode} from
   '../../src/admin/admin-websocket-api.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {createReadOnlyCache} from '../../src/cache/read-only-system-table-cache.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {createInProcWebSocketPair} from '../../src/test-helpers/inproc-ws.js';
 import {TraceCollector} from '../../src/debug/trace-collector.js';
-import {TABLES} from '../../src/constants/index.js';
+import {COLUMN, TABLES} from '../../src/constants/index.js';
 
 // Initialize services for tests
 ConfigurationManager.getInstance().initialize();
@@ -70,6 +71,37 @@ function createMockQueryEngine() {
       }
 
       return {success: true, rows: [], count: 0};
+    },
+  };
+}
+
+/**
+ * Create a mock query engine that returns authoritative rows per system table.
+ * @param {Object<string, Array<Object>|Function>} rowsByTable
+ * @return {Object}
+ */
+function createSystemTableRepairQueryEngine(rowsByTable = {}) {
+  const fallback = createMockQueryEngine();
+  const executeRequestCalls = [];
+  return {
+    executeRequestCalls,
+    async executeRequest(request) {
+      const statement = String(request?.statement || '').trim();
+      executeRequestCalls.push(statement);
+      const match = statement.match(/^select \* from ([a-z_]+)$/i);
+      if (!match) {
+        return fallback.executeRequest(request);
+      }
+      const tableName = match[1].toLowerCase();
+      const value = rowsByTable[tableName];
+      const rows = typeof value === 'function' ? value(tableName) : value;
+      return {
+        success: true,
+        rows: Array.isArray(rows) ? rows.map((row) => ({...row})) : [],
+        count: Array.isArray(rows) ? rows.length : 0,
+        partitions: [`partition-${tableName}`],
+        tableName,
+      };
     },
   };
 }
@@ -243,6 +275,28 @@ function seedRoutedTableDiscoveryRows(cache) {
     status: 'active',
     raft_role: 'leader',
     address: '10.0.0.1:7001',
+  });
+}
+
+/**
+ * Seed table-scoped discovery rows where a second node hosts a local learner
+ * replica for the benchmark partition. The node remains routable for service
+ * discovery, but benchmark admission must fail closed until the local replica
+ * becomes voter-ready.
+ *
+ * @param {SystemTableCache} cache
+ */
+function seedTableDiscoveryRowsWithLocalLearner(cache) {
+  seedRoutedTableDiscoveryRows(cache);
+
+  cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+    id: 'service-benchmark-events-node-2',
+    service_type: 'partition',
+    partition_id: 'partition-benchmark-events-1',
+    node_id: 'node-2',
+    status: 'active',
+    raft_role: 'learner',
+    address: '10.0.0.2:7001',
   });
 }
 
@@ -1028,6 +1082,9 @@ test('AdminWebSocketAPI - local control snapshot endpoint shape and non-mutation
     t.equal(Array.isArray(payload.nodes), true, 'should include nodes array');
     t.equal(Array.isArray(payload.partitions), true, 'should include partitions array');
     t.equal(typeof payload.leaders, 'object', 'should include leaders map');
+    t.equal(typeof payload.replicaRoles, 'object', 'should include replica-role detail');
+    t.equal(typeof payload.replicaRoleDiagnostics, 'object',
+      'should include replica-role diagnostics');
     t.equal(typeof payload.voterCounts, 'object', 'should include voter-count map');
     t.equal(typeof payload.replicaOperations, 'object',
       'should include replica operation summary');
@@ -1061,6 +1118,67 @@ test('AdminWebSocketAPI - local control snapshot endpoint shape and non-mutation
       'should not mutate services table');
     t.equal(cache.count(TABLES.REPLICA_OPERATIONS), beforeCounts.replicaOperations,
       'should not mutate replica operations table');
+
+    await api.shutdown();
+  });
+
+test('AdminWebSocketAPI - local control snapshot derives canonical leaders ' +
+  'from partition owner rows', async (t) => {
+    const cache = new SystemTableCache();
+    cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
+      [COLUMN.PARTITION_ID]: 'partition-1',
+      [COLUMN.TABLE_ID]: 'table-1',
+      [COLUMN.LEADER_NODE_ID]: 'node-owner',
+    });
+    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+      [COLUMN.SERVICE_ID]: 'partition-1-r1',
+      [COLUMN.SERVICE_TYPE]: 'partition',
+      [COLUMN.PARTITION_ID]: 'partition-1',
+      [COLUMN.REPLICA_ID]: 'partition-1-r1',
+      [COLUMN.NODE_ID]: 'node-stale-a',
+      [COLUMN.RAFT_ROLE]: 'leader',
+      [COLUMN.STATUS]: 'active',
+      [COLUMN.ADDRESS]: 'node-stale-a/partition/partition-1-r1',
+    });
+    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+      [COLUMN.SERVICE_ID]: 'partition-1-r2',
+      [COLUMN.SERVICE_TYPE]: 'partition',
+      [COLUMN.PARTITION_ID]: 'partition-1',
+      [COLUMN.REPLICA_ID]: 'partition-1-r2',
+      [COLUMN.NODE_ID]: 'node-stale-b',
+      [COLUMN.RAFT_ROLE]: 'leader',
+      [COLUMN.STATUS]: 'active',
+      [COLUMN.ADDRESS]: 'node-stale-b/partition/partition-1-r2',
+    });
+
+    const api = new AdminWebSocketAPI({
+      nodeId: 'test-node',
+      systemTableCache: cache,
+      sqlQueryEngine: {
+        executeRequest: async () => ({success: true, rows: []}),
+      },
+    });
+
+    await api.initialize(0, {listen: false});
+
+    const response = await api.getFastify().inject({
+      method: 'GET',
+      url: '/api/admin/control-snapshot?scope=local',
+    });
+    const payload = response.json();
+
+    t.equal(payload.leaders['partition-1'], 'node-owner',
+      'canonical leader should come from partitions.leader_node_id');
+    t.same(payload.replicaRoles['partition-1'], {
+      'partition-1-r1': 'leader',
+      'partition-1-r2': 'leader',
+    }, 'replica-role detail should remain available separately');
+    t.same(payload.replicaRoleDiagnostics['partition-1'], {
+      canonicalLeaderNodeId: 'node-owner',
+      source: 'partitions',
+      inconsistentReplicaRoles: true,
+      replicaLeaderNodeIds: ['node-stale-a', 'node-stale-b'],
+    }, 'snapshot should surface replica-role inconsistency without changing canonical leader');
 
     await api.shutdown();
   });
@@ -1244,6 +1362,92 @@ test('AdminWebSocketAPI - local service discovery query avoids distributed fanou
     await api.shutdown();
   });
 
+test(
+  'AdminWebSocketAPI - stale discovery leadership repairs from authoritative system tables',
+  async (t) => {
+    const staleAppliedAtMs = Date.now() - 10000;
+    const writableCache = createPopulatedCache();
+    seedRoutedTableDiscoveryRows(writableCache);
+
+    writableCache.applySystemTableChange(TABLES.SERVICES, 'UPDATE', {
+      id: 'service-benchmark-events-node-1',
+      service_id: 'service-benchmark-events-node-1',
+      service_type: 'partition',
+      partition_id: 'partition-benchmark-events-1',
+      node_id: 'node-1',
+      status: 'active',
+      raft_role: 'follower',
+      address: '10.0.0.1:7001',
+    });
+    writableCache.lastAppliedAtMsByTableName.set(
+      TABLES.SERVICE_ENDPOINTS,
+      staleAppliedAtMs,
+    );
+    const cache = createReadOnlyCache(writableCache);
+
+    const repairEngine = createSystemTableRepairQueryEngine({
+      [TABLES.NODES]: writableCache.getAll(TABLES.NODES),
+      [TABLES.PARTITIONS]: writableCache.getAll(TABLES.PARTITIONS),
+      [TABLES.TABLES]: writableCache.getAll(TABLES.TABLES),
+      [TABLES.NODE_ENDPOINTS]: writableCache.getAll(TABLES.NODE_ENDPOINTS),
+      [TABLES.SERVICE_DEFINITIONS]: writableCache.getAll(TABLES.SERVICE_DEFINITIONS),
+      [TABLES.SERVICE_ENDPOINTS]: writableCache.getAll(TABLES.SERVICE_ENDPOINTS),
+      [TABLES.REPLICA_OPERATIONS]: writableCache.getAll(TABLES.REPLICA_OPERATIONS),
+      [TABLES.SERVICES]: [
+        {
+          id: 'service-1',
+          service_id: 'service-1',
+          node_id: 'node-1',
+          service_type: 'partition',
+          partition_id: 'partition-1',
+          status: 'active',
+          raft_role: 'leader',
+          address: 'localhost:7000',
+        },
+        {
+          id: 'service-benchmark-events-node-1',
+          service_id: 'service-benchmark-events-node-1',
+          service_type: 'partition',
+          partition_id: 'partition-benchmark-events-1',
+          node_id: 'node-1',
+          status: 'active',
+          raft_role: 'leader',
+          address: '10.0.0.1:7001',
+        },
+      ],
+    });
+    const api = new AdminWebSocketAPI({
+      nodeId: 'test-node',
+      systemTableCache: cache,
+      cacheMutationTarget: writableCache,
+      sqlQueryEngine: repairEngine,
+    });
+
+    const result = await api.buildServiceDiscoveryQueryResult({
+      tableName: 'benchmark_events',
+    });
+    const replicas = result?.rows?.[0]?.services?.[0]?.replicas || [];
+
+    t.equal(
+      replicas.every((replica) => replica?.readiness?.benchmarkReady === true),
+      true,
+      'repair should restore benchmark readiness for all discovery replicas',
+    );
+    t.equal(
+      writableCache.getAll(TABLES.SERVICES).some((row) =>
+        row?.partition_id === 'partition-benchmark-events-1' &&
+        row?.raft_role === 'leader'),
+      true,
+      'repair should update cached services rows from authoritative state',
+    );
+    t.equal(
+      repairEngine.executeRequestCalls.includes(`SELECT * FROM ${TABLES.SERVICES}`),
+      true,
+      'repair should query authoritative services rows',
+    );
+  },
+);
+
 test('AdminWebSocketAPI - table-scoped discovery readiness marks missing schema',
   async (t) => {
     const cache = createPopulatedCache();
@@ -1329,6 +1533,70 @@ test(
         reason.code === 'schema_partition_unavailable'),
       false,
       'node-2 should not be excluded for lacking local partition replica',
+    );
+
+    await api.shutdown();
+  },
+);
+
+test(
+  'AdminWebSocketAPI - table-scoped discovery excludes local learner replicas from benchmark readiness',
+  async (t) => {
+    const cache = createPopulatedCache();
+    seedTableDiscoveryRowsWithLocalLearner(cache);
+    const api = new AdminWebSocketAPI({
+      nodeId: 'test-node',
+      systemTableCache: cache,
+      sqlQueryEngine: createMockQueryEngine(),
+    });
+
+    await api.initialize(0, {listen: false});
+    const response = await api.getFastify().inject({
+      method: 'GET',
+      url: '/api/admin/discovery/services?' +
+        'serviceId=sys-postgres-wire&protocol=postgresql&tableName=benchmark_events',
+    });
+    const payload = response.json();
+
+    t.equal(response.statusCode, 200, 'should return 200');
+    const replicas = Array.isArray(payload?.services?.[0]?.replicas) ?
+      payload.services[0].replicas :
+      [];
+    const readinessByNodeId = new Map(replicas.map((replica) => [
+      String(replica?.nodeId || ''),
+      replica?.readiness || null,
+    ]));
+
+    t.equal(
+      readinessByNodeId.get('node-1')?.benchmarkReady,
+      true,
+      'leader-hosting node should remain benchmark ready',
+    );
+    t.equal(
+      readinessByNodeId.get('node-2')?.routingReady,
+      true,
+      'learner-hosting node should remain routing ready',
+    );
+    t.equal(
+      readinessByNodeId.get('node-2')?.schemaReady,
+      true,
+      'learner-hosting node should remain schema ready via cluster routing',
+    );
+    t.equal(
+      readinessByNodeId.get('node-2')?.topologyReady,
+      false,
+      'local learner replica should block topology readiness',
+    );
+    t.equal(
+      readinessByNodeId.get('node-2')?.benchmarkReady,
+      false,
+      'local learner replica should block benchmark readiness',
+    );
+    t.equal(
+      readinessByNodeId.get('node-2')?.reasons?.some((reason) =>
+        reason.code === 'local_replica_not_voter_ready'),
+      true,
+      'readiness reasons should expose the local learner exclusion',
     );
 
     await api.shutdown();
@@ -1460,6 +1728,53 @@ test(
       cacheFreshness.stalenessMs,
       null,
       'unknown watermark must not coerce staleness to a synthetic value',
+    );
+  },
+);
+
+test(
+  'AdminWebSocketAPI - preflight snapshot repairs stale cache watermark',
+  async (t) => {
+    const writableCache = createPopulatedCache();
+    seedServiceDiscoveryRows(writableCache);
+    writableCache.lastAppliedAtMsByTableName.set(
+      TABLES.SERVICE_ENDPOINTS,
+      Date.now() - 10000,
+    );
+    const cache = createReadOnlyCache(writableCache);
+
+    const repairEngine = createSystemTableRepairQueryEngine({
+      [TABLES.NODES]: writableCache.getAll(TABLES.NODES),
+      [TABLES.PARTITIONS]: writableCache.getAll(TABLES.PARTITIONS),
+      [TABLES.SERVICES]: writableCache.getAll(TABLES.SERVICES),
+      [TABLES.TABLES]: writableCache.getAll(TABLES.TABLES),
+      [TABLES.NODE_ENDPOINTS]: writableCache.getAll(TABLES.NODE_ENDPOINTS),
+      [TABLES.SERVICE_DEFINITIONS]: writableCache.getAll(TABLES.SERVICE_DEFINITIONS),
+      [TABLES.SERVICE_ENDPOINTS]: writableCache.getAll(TABLES.SERVICE_ENDPOINTS),
+      [TABLES.REPLICA_OPERATIONS]: writableCache.getAll(TABLES.REPLICA_OPERATIONS),
+    });
+    const api = new AdminWebSocketAPI({
+      nodeId: 'test-node',
+      systemTableCache: cache,
+      cacheMutationTarget: writableCache,
+      sqlQueryEngine: repairEngine,
+    });
+
+    const result = await api.buildPreflightCriticalPathSnapshotQueryResult();
+    const snapshot = result?.rows?.[0] || null;
+    const stalenessMs = Number(snapshot?.cacheFreshness?.stalenessMs);
+
+    t.equal(
+      Number.isFinite(stalenessMs) && stalenessMs < 5000,
+      true,
+      'preflight repair should refresh stale cache watermark before responding',
+    );
+    t.equal(
+      repairEngine.executeRequestCalls.includes(
+        `SELECT * FROM ${TABLES.SERVICE_ENDPOINTS}`,
+      ),
+      true,
+      'preflight repair should query authoritative service endpoints',
     );
   },
 );

@@ -1812,9 +1812,25 @@ class UnifiedRebalancer extends EventEmitter {
    */
   getNodesWithoutLocalReplica(replicas) {
     const allNodes = this.getAvailableNodes();
+    let localAccessReplicas = replicas;
+
+    if (this.entityType === EntityType.MESSAGE_GROUP &&
+        this.systemTableCache &&
+        typeof this.systemTableCache.filter === 'function') {
+      localAccessReplicas = this.systemTableCache.filter(
+        SystemTableName.SERVICES,
+        (service) => {
+          return service?.service_type === EntityType.MESSAGE_GROUP &&
+            service?.status === ReplicaStatus.ACTIVE &&
+            typeof service?.node_id === 'string' &&
+            service.node_id.length > 0;
+        },
+      );
+    }
+
     // Filter out replicas without node_id (defensive check)
     const nodesWithReplicas = new Set(
-      replicas.filter((r) => r && r.node_id).map((r) => r.node_id),
+      localAccessReplicas.filter((r) => r && r.node_id).map((r) => r.node_id),
     );
 
     return allNodes

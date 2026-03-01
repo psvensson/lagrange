@@ -15,11 +15,14 @@ import {
   LOAD_DEFAULTS,
   DEBUG_TRACE_DEFAULTS,
   LEAK_DEFAULTS,
-  BENCHMARK_DEFAULTS,
   BENCHMARK_GATE_DEFAULTS,
   RAFT_PROVIDER_DEFAULTS,
   DETERMINISTIC_DEBUG_DEFAULTS,
 } from './constants.js';
+import {
+  resolvePostgresBaselineBenchmarkConfig,
+  shouldValidatePostgresBaselineBenchmarkBudgets,
+} from './postgres-baseline-config.js';
 
 /**
  * Merge a partial configuration object with sensible defaults.
@@ -112,28 +115,14 @@ function mergeWithDefaults(partial = {}) {
       heapSnapshotNearLimitCount: LEAK_DEFAULTS.heapSnapshotNearLimitCount,
       ...(partial.memoryLeak || {}),
     },
-    benchmark: {
-      baselineImage: BENCHMARK_DEFAULTS.baselineImage,
-      user: BENCHMARK_DEFAULTS.user,
-      password: BENCHMARK_DEFAULTS.password,
-      database: BENCHMARK_DEFAULTS.database,
-      port: BENCHMARK_DEFAULTS.port,
-      durationSeconds: BENCHMARK_DEFAULTS.durationSeconds,
-      clients: BENCHMARK_DEFAULTS.clients,
-      jobs: BENCHMARK_DEFAULTS.jobs,
-      loadOpsPerSec: BENCHMARK_DEFAULTS.loadOpsPerSec,
-      loadDuration: BENCHMARK_DEFAULTS.loadDuration,
-      loadMaxInFlight: BENCHMARK_DEFAULTS.loadMaxInFlight,
-      readyTimeoutMs: BENCHMARK_DEFAULTS.readyTimeoutMs,
-      readyPollIntervalMs: BENCHMARK_DEFAULTS.readyPollIntervalMs,
-      tableName: BENCHMARK_DEFAULTS.tableName,
-      replicationFactor: BENCHMARK_DEFAULTS.replicationFactor,
-      syncReplicaAcks: BENCHMARK_DEFAULTS.syncReplicaAcks,
-      cacheBaselineMetrics: BENCHMARK_DEFAULTS.cacheBaselineMetrics,
-      refreshBaselineMetrics: BENCHMARK_DEFAULTS.refreshBaselineMetrics,
-      baselineCacheTtlMs: BENCHMARK_DEFAULTS.baselineCacheTtlMs,
-      ...(partial.benchmark || {}),
-    },
+    benchmark: resolvePostgresBaselineBenchmarkConfig(
+      partial.benchmark || {},
+      {
+        validateBudgets: shouldValidatePostgresBaselineBenchmarkBudgets(
+          partial.benchmark || {},
+        ),
+      },
+    ),
     benchmarkGate: {
       enabled: BENCHMARK_GATE_DEFAULTS.enabled,
       maxThroughputRegressionRatio:

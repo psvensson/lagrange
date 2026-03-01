@@ -204,7 +204,7 @@ test('Property 11: Lifecycle Message Delegation', async (t) => {
 
           const result = await handler(message);
 
-          manager.shutdown();
+          await manager.shutdown();
 
           // Invariants:
           // 1. Handler returns acknowledged: true
@@ -295,7 +295,7 @@ test('Property 11: Lifecycle Message Delegation', async (t) => {
 
           const result = await handler(message);
 
-          manager.shutdown();
+          await manager.shutdown();
 
           // Invariants:
           // 1. Handler returns acknowledged: true
@@ -363,7 +363,7 @@ test('Property 11: Lifecycle Message Delegation', async (t) => {
 
           const result = await handler(message);
 
-          manager.shutdown();
+          await manager.shutdown();
 
           // Invariants:
           // 1. Handler returns acknowledged: true
@@ -417,7 +417,7 @@ test('Property 11: Lifecycle Message Delegation', async (t) => {
 
           const result = await handler(message);
 
-          manager.shutdown();
+          await manager.shutdown();
 
           // Invariant: unknown types return acknowledged: false with error
           return result.acknowledged === false &&
@@ -471,7 +471,7 @@ test('Property 11: Lifecycle Message Delegation', async (t) => {
 
           const result = await handler(envelope);
 
-          manager.shutdown();
+          await manager.shutdown();
 
           // Invariant: message is extracted from payload and processed (flat structure)
           return result.acknowledged === true &&

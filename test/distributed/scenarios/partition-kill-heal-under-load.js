@@ -8,15 +8,11 @@
 
 import assert from 'node:assert/strict';
 import {CONVERGENCE_DEFAULTS} from '../harness/constants.js';
+import {
+  resolvePartitionKillHealUnderLoadScenarioConfig,
+} from '../harness/scenario-config.js';
 
 const MIN_NODE_COUNT = 3;
-const DEFAULT_LOAD_OPS_PER_SEC = 50;
-const DEFAULT_LOAD_DURATION = '60s';
-const DEFAULT_PRE_FAULT_DELAY_MS = 5000;
-const DEFAULT_PARTITION_HOLD_MS = 5000;
-const DEFAULT_POST_KILL_DELAY_MS = 1000;
-const DEFAULT_CONVERGENCE_TIMEOUT_MS = 60000;
-const DEFAULT_MIN_SUCCESS_RATE = 0.9;
 const ZERO = 0;
 
 /**
@@ -50,27 +46,15 @@ function splitNodeGroups(nodes) {
  * @return {Promise<Object>}
  */
 async function run(cluster, options = {}) {
-  const loadOpsPerSec = Number.isFinite(options.loadOpsPerSec) ?
-    options.loadOpsPerSec :
-    DEFAULT_LOAD_OPS_PER_SEC;
-  const loadDuration = typeof options.loadDuration === 'string' ?
-    options.loadDuration :
-    DEFAULT_LOAD_DURATION;
-  const preFaultDelayMs = Number.isFinite(options.preFaultDelayMs) ?
-    options.preFaultDelayMs :
-    DEFAULT_PRE_FAULT_DELAY_MS;
-  const partitionHoldMs = Number.isFinite(options.partitionHoldMs) ?
-    options.partitionHoldMs :
-    DEFAULT_PARTITION_HOLD_MS;
-  const postKillDelayMs = Number.isFinite(options.postKillDelayMs) ?
-    options.postKillDelayMs :
-    DEFAULT_POST_KILL_DELAY_MS;
-  const convergenceTimeoutMs = Number.isFinite(options.convergenceTimeoutMs) ?
-    options.convergenceTimeoutMs :
-    DEFAULT_CONVERGENCE_TIMEOUT_MS;
-  const minSuccessRate = Number.isFinite(options.minSuccessRate) ?
-    options.minSuccessRate :
-    DEFAULT_MIN_SUCCESS_RATE;
+  const {
+    loadOpsPerSec,
+    loadDuration,
+    preFaultDelayMs,
+    partitionHoldMs,
+    postKillDelayMs,
+    convergenceTimeoutMs,
+    minSuccessRate,
+  } = resolvePartitionKillHealUnderLoadScenarioConfig(options);
 
   const nodes = cluster.getNodes();
   assert.ok(

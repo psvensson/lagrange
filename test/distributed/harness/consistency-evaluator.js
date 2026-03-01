@@ -30,6 +30,11 @@ function normalizeSnapshot(snapshot, fallbackIndex) {
     leaders: snapshot?.leaders && typeof snapshot.leaders === 'object' ?
       {...snapshot.leaders} :
       {},
+    replicaRoleDiagnostics:
+      snapshot?.replicaRoleDiagnostics &&
+        typeof snapshot.replicaRoleDiagnostics === 'object' ?
+        {...snapshot.replicaRoleDiagnostics} :
+        {},
     replicaOperations: snapshot?.replicaOperations &&
       typeof snapshot.replicaOperations === 'object' ?
       {
@@ -97,6 +102,7 @@ class ConsistencyEvaluatorV2 {
 
     this._collectPartitionSetMismatches(snapshots, mismatches);
     this._collectLeaderMismatches(snapshots, mismatches);
+    this._collectReplicaRoleMismatches(snapshots, mismatches);
     this._collectReplicaOperationMismatches(snapshots, mismatches);
 
     if (mismatches.length > ZERO) {
@@ -175,6 +181,52 @@ class ConsistencyEvaluatorV2 {
       if (distinctLeaders.size > ONE) {
         mismatches.push({
           kind: CONSISTENCY_MISMATCH_KIND.LEADER,
+          partitionId,
+          byNode,
+        });
+      }
+    }
+  }
+
+  _collectReplicaRoleMismatches(snapshots, mismatches) {
+    if (snapshots.length < 2) {
+      return;
+    }
+
+    const partitionIds = new Set();
+    for (const snapshot of snapshots) {
+      for (const partitionId of Object.keys(snapshot.replicaRoleDiagnostics || {})) {
+        partitionIds.add(partitionId);
+      }
+    }
+
+    for (const partitionId of partitionIds) {
+      const byNode = {};
+      let hasInconsistency = false;
+      for (const snapshot of snapshots) {
+        const diagnostic = snapshot.replicaRoleDiagnostics?.[partitionId];
+        const normalizedDiagnostic = {
+          canonicalLeaderNodeId:
+            typeof diagnostic?.canonicalLeaderNodeId === 'string' &&
+              diagnostic.canonicalLeaderNodeId.length > ZERO ?
+              diagnostic.canonicalLeaderNodeId :
+              '',
+          inconsistentReplicaRoles: Boolean(diagnostic?.inconsistentReplicaRoles),
+          replicaLeaderNodeIds: normalizeStringArray(diagnostic?.replicaLeaderNodeIds),
+          source:
+            typeof diagnostic?.source === 'string' && diagnostic.source.length > ZERO ?
+              diagnostic.source :
+              '',
+        };
+        if (normalizedDiagnostic.inconsistentReplicaRoles) {
+          hasInconsistency = true;
+        }
+        byNode[snapshot.nodeId] = normalizedDiagnostic;
+      }
+
+      if (hasInconsistency) {
+        mismatches.push({
+          kind: CONSISTENCY_MISMATCH_KIND.REPLICA_ROLE,
           partitionId,
           byNode,
         });

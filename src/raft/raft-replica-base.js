@@ -18,6 +18,7 @@ import {LiferaftProvider} from './liferaft-provider.js';
 import {
   applyReplicaDemotion,
   clearReplicaLeaderUpdateState,
+  reconcileReplicaLeaderChange,
 } from './replica-leadership-state.js';
 import {
   RAFT_REPLICA_BASE_ADDRESS,
@@ -318,11 +319,7 @@ class RaftReplicaBase extends EventEmitter {
     });
 
     this.raft.on(RAFT_REPLICA_BASE_LIFERAFT_EVENT.LEADER_CHANGE, (to) => {
-      this.leaderId = to;
-      this.logger.debug(RAFT_REPLICA_BASE_LOG_MSG.LEADER_CHANGED, {
-        newLeader: to,
-        replicaId: this.replicaId,
-      });
+      this.handleLeaderChange(to);
     });
 
     this.raft.on(RAFT_REPLICA_BASE_LIFERAFT_EVENT.TERM_CHANGE, (_term) => {
@@ -659,6 +656,16 @@ class RaftReplicaBase extends EventEmitter {
   }
 
   /**
+   * Called when the replica observes a leader change.
+   * @param {string|null} _leaderId - New leader replica ID.
+   * @param {Object} _context - Transition context.
+   * @protected
+   */
+  onLeaderChanged(_leaderId, _context) {
+    // Subclasses can override
+  }
+
+  /**
    * Called when a command is committed.
    * @param {Object} _command - The committed command.
    * @protected
@@ -673,6 +680,42 @@ class RaftReplicaBase extends EventEmitter {
    */
   onTermChange() {
     // Subclasses can override
+  }
+
+  /**
+   * Reconcile a leader-change event through the shared runtime path.
+   * @param {string|null} nextLeaderId - New leader replica ID.
+   * @return {boolean} True when the replica was demoted locally.
+   * @protected
+   */
+  handleLeaderChange(nextLeaderId) {
+    const previousLeaderId = this.leaderId;
+    const demoted = reconcileReplicaLeaderChange(
+      this,
+      nextLeaderId,
+      RaftRole.FOLLOWER,
+    );
+    this.logger.debug(RAFT_REPLICA_BASE_LOG_MSG.LEADER_CHANGED, {
+      newLeader: nextLeaderId,
+      previousLeader: previousLeaderId,
+      replicaId: this.replicaId,
+      demoted,
+    });
+    if (demoted) {
+      this.onBecameFollower();
+    }
+    const leaderId = this.leaderId;
+    const context = {
+      previousLeaderId,
+      demoted,
+    };
+    this.onLeaderChanged(leaderId, context);
+    this.emit(RAFT_REPLICA_BASE_EVENT.LEADER_CHANGED, {
+      leaderId,
+      replicaId: this.replicaId,
+      ...context,
+    });
+    return demoted;
   }
 
   /**

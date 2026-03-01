@@ -153,6 +153,7 @@ test('Unit: mergeWithDefaults fills all fields from empty object', async (t) => 
         config.benchmark.baselineCacheTtlMs,
         BENCHMARK_DEFAULTS.baselineCacheTtlMs,
       );
+      assert.strictEqual(Object.isFrozen(config.benchmark), true);
       assert.strictEqual(
         config.benchmarkGate.enabled,
         BENCHMARK_GATE_DEFAULTS.enabled,
@@ -232,6 +233,7 @@ test('Unit: mergeWithDefaults preserves user overrides', async (t) => {
         baselineImage: 'postgres:15',
         durationSeconds: 45,
         loadMaxInFlight: 256,
+        controlQueryTimeoutMs: 12000,
         clients: 10,
         jobs: 5,
         tableName: 'bench_custom',
@@ -293,6 +295,7 @@ test('Unit: mergeWithDefaults preserves user overrides', async (t) => {
     assert.strictEqual(config.benchmark.baselineImage, 'postgres:15');
     assert.strictEqual(config.benchmark.durationSeconds, 45);
     assert.strictEqual(config.benchmark.loadMaxInFlight, 256);
+    assert.strictEqual(config.benchmark.controlQueryTimeoutMs, 12000);
     assert.strictEqual(config.benchmark.clients, 10);
     assert.strictEqual(config.benchmark.jobs, 5);
     assert.strictEqual(config.benchmark.tableName, 'bench_custom');
@@ -311,7 +314,41 @@ test('Unit: mergeWithDefaults preserves user overrides', async (t) => {
       config.benchmark.loadOpsPerSec,
       BENCHMARK_DEFAULTS.loadOpsPerSec,
     );
+    assert.strictEqual(Object.isFrozen(config.benchmark), true);
   });
+});
+
+test('Unit: mergeWithDefaults validates postgres baseline budgets', async (t) => {
+  await t.test(
+    'rejects quiescent timeout below the preload minimum budget',
+    async () => {
+      assert.throws(
+        () => mergeWithDefaults({
+          benchmark: {
+            preloadRequiredStableMs: 2000,
+            quiescentPollIntervalMs: 500,
+            quiescentTimeoutMs: 1000,
+          },
+        }),
+        /minimum preload budget/i,
+      );
+    },
+  );
+
+  await t.test(
+    'rejects no-progress timeout that exceeds the total quiescent budget',
+    async () => {
+      assert.throws(
+        () => mergeWithDefaults({
+          benchmark: {
+            quiescentTimeoutMs: 40000,
+            quiescentNoProgressTimeoutMs: 40000,
+          },
+        }),
+        /quiescentNoProgressTimeoutMs/i,
+      );
+    },
+  );
 });
 
 test('Unit: mergeWithDefaults handles docker.hosts for remote', async (t) => {

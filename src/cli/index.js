@@ -1563,6 +1563,15 @@ export class AdminCLI {
     case 'connect':
       if (args[0]) this.reconnect(args[0]);
       break;
+    case 'drain':
+      if (args[0]) this.updateNodeStatus(args[0], 'draining');
+      break;
+    case 'activate':
+      if (args[0]) this.updateNodeStatus(args[0], 'active');
+      break;
+    case 'remove-node':
+      if (args[0]) this.removeNode(args[0]);
+      break;
     case 'history':
       if (args[0]) this.showReplicaHistory(args[0]);
       break;
@@ -1570,6 +1579,115 @@ export class AdminCLI {
       if (args[0]) this.applyLogsSince(args[0]);
       break;
     }
+  }
+
+  /**
+   * Execute a node-management SQL mutation over the admin query channel.
+   * @param {Object} options
+   * @param {string} options.sql
+   * @param {Array<*>} options.params
+   * @param {string} options.pendingMessage
+   * @param {string} options.successMessage
+   * @param {string} options.failurePrefix
+   * @param {string} options.notFoundMessage
+   */
+  executeNodeManagementQuery(options) {
+    if (this.readOnlyMode) {
+      this.showError('Node management commands are unavailable in read-only mode');
+      return;
+    }
+
+    if (!this.connectionManager || !this.eventBus) {
+      this.showError('Not connected to server');
+      return;
+    }
+
+    const queryId = `node_mgmt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const timeoutMs = 10000;
+
+    this.updateStatus(options.pendingMessage, 'yellow');
+
+    let timeoutId = null;
+    const cleanup = () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      this.eventBus.off('query:result', wrappedHandler);
+    };
+
+    const resultHandler = (result) => {
+      if (result.queryId !== queryId) {
+        return;
+      }
+      cleanup();
+
+      if (result.error) {
+        this.showError(`${options.failurePrefix}: ${result.error}`);
+        return;
+      }
+
+      const affectedRows = Number(result.affectedRows || 0);
+      if (affectedRows < 1) {
+        this.showError(options.notFoundMessage);
+        return;
+      }
+
+      this.updateStatus(options.successMessage, 'green');
+      this.forceRefresh();
+    };
+
+    const wrappedHandler = (result) => {
+      resultHandler(result);
+    };
+
+    timeoutId = setTimeout(() => {
+      cleanup();
+      this.showError(`${options.failurePrefix}: query timeout`);
+    }, timeoutMs);
+
+    this.eventBus.on('query:result', wrappedHandler);
+
+    const sent = this.connectionManager.sendQuery(
+        queryId,
+        options.sql,
+        options.params,
+    );
+    if (!sent) {
+      cleanup();
+      this.showError('Not connected to server');
+    }
+  }
+
+  /**
+   * Mark a node as active or draining through the admin query channel.
+   * @param {string} nodeId
+   * @param {string} status
+   */
+  updateNodeStatus(nodeId, status) {
+    const verb = status === 'draining' ? 'drain' : 'activate';
+    this.executeNodeManagementQuery({
+      sql: 'UPDATE nodes SET status = ?1 WHERE node_id = ?2',
+      params: [status, nodeId],
+      pendingMessage: `${verb}ing node ${nodeId}...`,
+      successMessage: `Node ${nodeId} marked ${status}`,
+      failurePrefix: `Failed to mark node ${nodeId} as ${status}`,
+      notFoundMessage: `Node ${nodeId} not found`,
+    });
+  }
+
+  /**
+   * Remove a node from cluster metadata through the admin query channel.
+   * @param {string} nodeId
+   */
+  removeNode(nodeId) {
+    this.executeNodeManagementQuery({
+      sql: 'DELETE FROM nodes WHERE node_id = ?1',
+      params: [nodeId],
+      pendingMessage: `Removing node ${nodeId}...`,
+      successMessage: `Node ${nodeId} removed`,
+      failurePrefix: `Failed to remove node ${nodeId}`,
+      notFoundMessage: `Node ${nodeId} not found`,
+    });
   }
 
   /**

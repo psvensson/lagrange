@@ -7,12 +7,9 @@
 
 import assert from 'node:assert/strict';
 import {CONVERGENCE_DEFAULTS} from '../harness/constants.js';
-
-const DEFAULT_LOAD_OPS_PER_SEC = 50;
-const DEFAULT_LOAD_DURATION = '60s';
-const DEFAULT_PRE_RESTART_DELAY_MS = 5000;
-const DEFAULT_CONVERGENCE_TIMEOUT_MS = 60000;
-const DEFAULT_MIN_SUCCESS_RATE = 0.8;
+import {
+  resolveSeedRestartUnderLoadScenarioConfig,
+} from '../harness/scenario-config.js';
 const ZERO = 0;
 
 /**
@@ -34,21 +31,13 @@ function sleep(delayMs) {
  * @return {Promise<Object>}
  */
 async function run(cluster, options = {}) {
-  const loadOpsPerSec = Number.isFinite(options.loadOpsPerSec) ?
-    options.loadOpsPerSec :
-    DEFAULT_LOAD_OPS_PER_SEC;
-  const loadDuration = typeof options.loadDuration === 'string' ?
-    options.loadDuration :
-    DEFAULT_LOAD_DURATION;
-  const preRestartDelayMs = Number.isFinite(options.preRestartDelayMs) ?
-    options.preRestartDelayMs :
-    DEFAULT_PRE_RESTART_DELAY_MS;
-  const convergenceTimeoutMs = Number.isFinite(options.convergenceTimeoutMs) ?
-    options.convergenceTimeoutMs :
-    DEFAULT_CONVERGENCE_TIMEOUT_MS;
-  const minSuccessRate = Number.isFinite(options.minSuccessRate) ?
-    options.minSuccessRate :
-    DEFAULT_MIN_SUCCESS_RATE;
+  const {
+    loadOpsPerSec,
+    loadDuration,
+    preRestartDelayMs,
+    convergenceTimeoutMs,
+    minSuccessRate,
+  } = resolveSeedRestartUnderLoadScenarioConfig(options);
 
   const nodes = cluster.getNodes();
   const seedNode = nodes.find((node) => node.role === 'seed') || nodes[0];

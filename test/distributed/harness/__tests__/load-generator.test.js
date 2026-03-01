@@ -287,6 +287,66 @@ test('load dispatch is spread across nodes', async () => {
   }
 });
 
+test('benchmark workload uses a unique event-id prefix for each run', async () => {
+  const recordedSql = [];
+  const node = {
+    id: 'benchmark-node',
+    async query(sql) {
+      recordedSql.push(sql);
+      return {rows: []};
+    },
+  };
+  const extractEventIds = (statements) => statements
+    .filter((sql) => sql.startsWith('INSERT INTO benchmark_events '))
+    .map((sql) => {
+      const match = sql.match(/VALUES \('([^']+)'/);
+      return match ? match[1] : null;
+    })
+    .filter(Boolean);
+
+  const firstGenerator = new LoadGenerator([node], {
+    opsPerSec: 80,
+    duration: 120,
+    workloadProfile: 'benchmark_events_mixed',
+    maxInFlight: 16,
+    nodeMaxInFlight: 2,
+  });
+  const firstRun = firstGenerator.start();
+  try {
+    await firstRun.waitComplete();
+  } finally {
+    firstRun.cancel();
+  }
+  const firstEventIds = extractEventIds(recordedSql.splice(ZERO));
+
+  const secondGenerator = new LoadGenerator([node], {
+    opsPerSec: 80,
+    duration: 120,
+    workloadProfile: 'benchmark_events_mixed',
+    maxInFlight: 16,
+    nodeMaxInFlight: 2,
+  });
+  const secondRun = secondGenerator.start();
+  try {
+    await secondRun.waitComplete();
+  } finally {
+    secondRun.cancel();
+  }
+  const secondEventIds = extractEventIds(recordedSql.splice(ZERO));
+  const secondEventIdSet = new Set(secondEventIds);
+  const overlappingEventIds = firstEventIds.filter((eventId) =>
+    secondEventIdSet.has(eventId),
+  );
+
+  assert.ok(firstEventIds.length > ZERO, 'expected first run to issue INSERTs');
+  assert.ok(secondEventIds.length > ZERO, 'expected second run to issue INSERTs');
+  assert.deepEqual(
+    overlappingEventIds,
+    [],
+    'benchmark event ids should not be reused across separate load runs',
+  );
+});
+
 test('node failover retries without counting operation-level errors', async () => {
   const failNode = createFailingNode('fail-1');
   const goodNode = createMockNode('good-1');
@@ -307,6 +367,93 @@ test('node failover retries without counting operation-level errors', async () =
       metrics.success > ZERO,
       `expected success > 0, got ${metrics.success}`,
     );
+  } finally {
+    run.cancel();
+  }
+});
+
+test('write timeouts do not fail over to another node', async () => {
+  let timedOutCalls = ZERO;
+  let goodNodeCalls = ZERO;
+  const nodes = [
+    {
+      id: 'slow-writer',
+      async queryWithTimeout() {
+        timedOutCalls++;
+        const error = new Error('query timed out after 2000ms');
+        error.code = 'ETIMEDOUT';
+        throw error;
+      },
+    },
+    {
+      id: 'good-writer',
+      async queryWithTimeout() {
+        goodNodeCalls++;
+        return {rows: []};
+      },
+    },
+  ];
+  const gen = new LoadGenerator(nodes, {
+    opsPerSec: 10,
+    duration: 100,
+    operations: ['INSERT'],
+    queryTimeoutMs: 2000,
+  });
+  const run = gen.start();
+  try {
+    const metrics = await run.waitComplete();
+    assert.ok(timedOutCalls > ZERO, 'expected timed-out writer to be attempted');
+    assert.strictEqual(
+      goodNodeCalls,
+      ZERO,
+      'timed-out INSERT should not be replayed on another node',
+    );
+    assert.ok(metrics.failed > ZERO, 'timed-out INSERT should surface as failed');
+    assert.ok(metrics.errors > ZERO, 'timed-out INSERT should count as an error');
+    assert.ok(
+      metrics.attemptErrors > ZERO,
+      'timed-out INSERT should still contribute attemptErrors',
+    );
+  } finally {
+    run.cancel();
+  }
+});
+
+test('read timeouts still fail over to another node', async () => {
+  let timedOutCalls = ZERO;
+  let goodNodeCalls = ZERO;
+  const nodes = [
+    {
+      id: 'slow-reader',
+      async queryWithTimeout() {
+        timedOutCalls++;
+        const error = new Error('query timed out after 2000ms');
+        error.code = 'ETIMEDOUT';
+        throw error;
+      },
+    },
+    {
+      id: 'good-reader',
+      async queryWithTimeout() {
+        goodNodeCalls++;
+        return {rows: []};
+      },
+    },
+  ];
+  const gen = new LoadGenerator(nodes, {
+    opsPerSec: 10,
+    duration: 100,
+    operations: ['SELECT'],
+    queryTimeoutMs: 2000,
+  });
+  const run = gen.start();
+  try {
+    const metrics = await run.waitComplete();
+    assert.ok(timedOutCalls > ZERO, 'expected timed-out reader to be attempted');
+    assert.ok(goodNodeCalls > ZERO, 'timed-out SELECT should fail over');
+    assert.strictEqual(metrics.failed, ZERO);
+    assert.strictEqual(metrics.errors, ZERO);
+    assert.ok(metrics.success > ZERO);
   } finally {
     run.cancel();
   }

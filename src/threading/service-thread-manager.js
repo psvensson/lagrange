@@ -6,10 +6,12 @@
 
 import {Piscina} from 'piscina';
 import {EventEmitter} from 'events';
-import path from 'path';
-import {fileURLToPath} from 'url';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {LoggingService} from '../logging/logging-service.js';
+import {
+  resolveModuleDirectory,
+  resolvePackagedRuntimeFile,
+} from '../sea/runtime-file-resolution.js';
 import {
   SERVICE_STATUS,
   THREADING_CONFIG_KEY,
@@ -22,8 +24,15 @@ import {
   WORKER_OPERATION,
 } from './threading-constants.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const THREADING_MODULE_DIR = resolveModuleDirectory(resolveModuleDirectory);
+
+function resolveServiceWorkerPath() {
+  return resolvePackagedRuntimeFile({
+    moduleDir: THREADING_MODULE_DIR,
+    sourceFileName: 'service-worker.js',
+    bundledFileName: 'service-worker.bundle.cjs',
+  });
+}
 
 /**
  * ServiceThreadManager manages worker thread pool for service execution.
@@ -101,7 +110,7 @@ class ServiceThreadManager extends EventEmitter {
 
     // Create piscina thread pool
     this.pool = new Piscina({
-      filename: path.join(__dirname, 'service-worker.js'),
+      filename: resolveServiceWorkerPath(),
       minThreads,
       maxThreads,
       idleTimeout: idleTimeoutMs,

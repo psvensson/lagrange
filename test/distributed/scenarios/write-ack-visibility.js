@@ -7,10 +7,10 @@
 
 import assert from 'node:assert/strict';
 import {CONVERGENCE_DEFAULTS} from '../harness/constants.js';
+import {
+  resolveWriteAckVisibilityScenarioConfig,
+} from '../harness/scenario-config.js';
 
-const DEFAULT_WRITE_COUNT = 8;
-const DEFAULT_PROPAGATION_TIMEOUT_MS = 10000;
-const DEFAULT_POLL_INTERVAL_MS = 200;
 const LOG_LEVEL = 'info';
 const LOG_TABLE = 'logs';
 const ZERO = 0;
@@ -155,15 +155,11 @@ function buildInsertSql(logId, now, writerId) {
  * @return {Promise<Object>}
  */
 async function run(cluster, options = {}) {
-  const writeCount = Number.isFinite(options.writeCount) ?
-    options.writeCount :
-    DEFAULT_WRITE_COUNT;
-  const propagationTimeoutMs = Number.isFinite(options.propagationTimeoutMs) ?
-    options.propagationTimeoutMs :
-    DEFAULT_PROPAGATION_TIMEOUT_MS;
-  const pollIntervalMs = Number.isFinite(options.pollIntervalMs) ?
-    options.pollIntervalMs :
-    DEFAULT_POLL_INTERVAL_MS;
+  const {
+    writeCount,
+    propagationTimeoutMs,
+    pollIntervalMs,
+  } = resolveWriteAckVisibilityScenarioConfig(options);
 
   const convergence = await cluster.waitForConvergence({
     settleTimeoutMs: CONVERGENCE_DEFAULTS.settleTimeoutMs,

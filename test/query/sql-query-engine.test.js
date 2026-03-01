@@ -1284,6 +1284,120 @@ test('SQLQueryEngine - provisionInitialTablePartition skips disconnected nodes',
     );
   });
 
+test('SQLQueryEngine - provisionInitialTablePartition includes active-service ' +
+  'nodes despite transient disconnected cache state', async (t) => {
+    const tableId = 'tbl-benchmark';
+    const partitionId = 'tbl-benchmark-p1';
+    const localNodeId = 'node-a';
+    const createdTargetNodeIds = [];
+    const nodes = [
+      {node_id: localNodeId, status: 'active', connection_state: 'ready'},
+      {node_id: 'node-b', status: 'active', connection_state: 'connected'},
+      {node_id: 'node-c', status: 'active', connection_state: 'disconnected'},
+    ];
+    const tables = [{table_id: tableId, table_name: 'benchmark_events'}];
+    const partitions = [{partition_id: partitionId, table_id: tableId}];
+    const services = [{
+      service_id: 'mg-1-r3',
+      service_type: 'message_group',
+      status: 'active',
+      node_id: 'node-c',
+      address: 'node-c/message-group/mg-1-r3',
+    }];
+
+    const cache = {
+      has(type, key) {
+        if (type === TABLES.TABLES) {
+          return tables.some((row) => row.table_id === key);
+        }
+        if (type === TABLES.PARTITIONS) {
+          return partitions.some((row) => row.partition_id === key);
+        }
+        return false;
+      },
+      get(type, key) {
+        if (type !== TABLES.TABLES) {
+          return null;
+        }
+        return tables.find((row) =>
+          row.table_id === key || row.table_name === key,
+        ) || null;
+      },
+      filter(type, predicate) {
+        if (type === TABLES.NODES) {
+          return nodes.filter(predicate);
+        }
+        if (type === TABLES.TABLES) {
+          return tables.filter(predicate);
+        }
+        if (type === TABLES.PARTITIONS) {
+          return partitions.filter(predicate);
+        }
+        if (type === TABLES.SERVICES) {
+          return services.filter(predicate);
+        }
+        return [];
+      },
+      getAll(type) {
+        if (type === TABLES.NODES) {
+          return nodes;
+        }
+        if (type === TABLES.TABLES) {
+          return tables;
+        }
+        if (type === TABLES.PARTITIONS) {
+          return partitions;
+        }
+        if (type === TABLES.SERVICES) {
+          return services;
+        }
+        return [];
+      },
+    };
+
+    const rebalanceCoordinator = {
+      async createOperation(move) {
+        createdTargetNodeIds.push(move.nodeId);
+        return {
+          operationId: `op-${move.nodeId}`,
+          ...move,
+        };
+      },
+      async executeOperation(operation) {
+        const targetNodeId = operation.targetNodeId || operation.nodeId;
+        services.push({
+          partition_id: operation.partitionId,
+          service_type: 'partition',
+          status: 'active',
+          node_id: targetNodeId,
+          address: `${targetNodeId}/partition/${operation.partitionId}`,
+        });
+        return {success: true};
+      },
+    };
+
+    const engine = new SQLQueryEngine({
+      nodeId: localNodeId,
+      systemCache: cache,
+      messageRouter: createMockMessageRouter(),
+      rebalanceCoordinator,
+      tablePartitionProvisioningTimeoutMs: 500,
+      tablePartitionProvisioningPollIntervalMs: 5,
+    });
+
+    await engine.provisionInitialTablePartition({
+      tableId,
+      partitionId,
+      replicaCount: 3,
+    });
+
+    t.same(
+      createdTargetNodeIds,
+      ['node-a', 'node-b', 'node-c'],
+      'provisioning should not silently drop active-service nodes',
+    );
+  });
+
 test('SQLQueryEngine - provisionInitialTablePartition does not block on stale ' +
   'table/partition cache metadata', async (t) => {
   const partitionId = 'tbl-stale-cache-p1';

@@ -15,9 +15,21 @@ import {
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
+import {PartitionService} from '../../src/partition/partition-service.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+import {ReplicaHandlerSetup} from '../../src/bootstrap/shared/replica-handler-setup.js';
 import {WORK_CLASS} from '../../src/runtime/work-class-scheduler.js';
 import {ENTRYPOINT_DEFAULT} from '../../src/constants/entrypoint.js';
+import {
+  CDC_OPERATION,
+  COLUMN,
+  ENDPOINT_STATUS,
+  SERVICE_TYPE,
+  SERVICE_STATUS,
+  TABLES,
+  TRANSPORT_TYPE,
+} from '../../src/constants/index.js';
+import {META_SERVICE_ID} from '../../src/constants/wasm-meta.js';
 import {URL} from 'url';
 
 const DEFAULT_SEED_WS_ADDRESS =
@@ -1053,6 +1065,676 @@ test('NodeJoiningService - canonical join readiness reason classification is det
     );
   });
 
+test('NodeJoiningService - canonical join timeout preserves topology diagnostics',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const errorEvents = [];
+    const service = new NodeJoiningService({
+      nodeId: 'joining-node-join-gate-3',
+      nodeAddress: 'ws://localhost:9090',
+      seedNodeAddress: 'http://localhost:8080',
+      config: {
+        joinReadinessTimeoutMs: 20,
+        joinReadinessPollIntervalMs: 5,
+      },
+    });
+    service.systemCacheHydrated = true;
+    service.logger = {
+      debug() {},
+      info() {},
+      warn() {},
+      error(message, context) {
+        errorEvents.push({message, context});
+      },
+    };
+    service.joinReadinessSnapshotProvider = async () => ({
+      routingReady: true,
+      topologyReady: false,
+      requiredSchemaVersion: '1740589945123:7:seed-1',
+      appliedSchemaVersion: '1740589945123:7:seed-1',
+      missingLeaders: {
+        [TABLES.NODE_ENDPOINTS]: ['seed-node'],
+      },
+      inFlightReplicaOperations: 1,
+      inFlightReplicaOperationDetails: [{
+        operationId: 'op-1',
+        type: 'MOVE_REPLICA',
+        partitionId: 'services-p1',
+        replicaId: 'services-p1-r2',
+        sourceNodeId: 'seed-node',
+        targetNodeId: 'joining-node-join-gate-3',
+        status: 'pending',
+        workflowStep: 'ASSIGNED',
+        completedAt: null,
+      }],
+      missingNodeEndpointNodeIds: ['joining-node-join-gate-3'],
+      missingPostgresWireNodeIds: ['seed-node'],
+    });
+
+    let thrownError = null;
+    try {
+      await service.waitForCanonicalJoinReadinessConvergence();
+    } catch (error) {
+      thrownError = error;
+    }
+
+    t.equal(thrownError?.code, 'JOIN_READINESS_TIMEOUT',
+      'timeout should surface the canonical join readiness error code');
+    t.same(
+      thrownError?.joinReadiness?.missingNodeEndpointNodeIds,
+      ['joining-node-join-gate-3'],
+      'timeout should retain missing websocket endpoint diagnostics',
+    );
+    t.same(
+      thrownError?.joinReadiness?.missingPostgresWireNodeIds,
+      ['seed-node'],
+      'timeout should retain missing postgres-wire diagnostics',
+    );
+    t.equal(
+      thrownError?.joinReadiness?.inFlightReplicaOperations,
+      1,
+      'timeout should retain in-flight replica operation counts',
+    );
+    t.same(
+      thrownError?.joinReadiness?.inFlightReplicaOperationDetails,
+      [{
+        operationId: 'op-1',
+        type: 'MOVE_REPLICA',
+        partitionId: 'services-p1',
+        replicaId: 'services-p1-r2',
+        sourceNodeId: 'seed-node',
+        targetNodeId: 'joining-node-join-gate-3',
+        status: 'pending',
+        workflowStep: 'ASSIGNED',
+        completedAt: null,
+      }],
+      'timeout should retain in-flight replica operation details',
+    );
+    t.same(
+      errorEvents.at(-1)?.context?.missingNodeEndpointNodeIds,
+      ['joining-node-join-gate-3'],
+      'timeout log should include missing websocket endpoint diagnostics',
+    );
+    t.same(
+      errorEvents.at(-1)?.context?.missingPostgresWireNodeIds,
+      ['seed-node'],
+      'timeout log should include missing postgres-wire diagnostics',
+    );
+  });
+
+test('NodeJoiningService - canonical join readiness repairs endpoint visibility',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const service = new NodeJoiningService({
+      nodeId: 'joining-node-join-gate-repair',
+      nodeAddress: 'ws://localhost:9090',
+      seedNodeAddress: 'http://localhost:8080',
+      sleep: async () => {},
+      config: {
+        joinReadinessTimeoutMs: 20,
+        joinReadinessPollIntervalMs: 1,
+      },
+    });
+    const cache = new SystemTableCache();
+    const repairCalls = [];
+
+    service.systemCacheHydrated = true;
+    service.cdcIntegrationService = {sqlQueryEngine: {}};
+    service.getMissingSystemServiceLeaders = () => ({});
+    service.getBlockingSystemServiceLeaders = (missing) => missing;
+    service.joinReadinessSnapshotProvider = async () => {
+      const topology = service.evaluateCanonicalJoinTopologyReadiness(cache);
+      return {
+        routingReady: true,
+        topologyReady: topology.ready,
+        requiredSchemaVersion: '1740589945123:7:seed-1',
+        appliedSchemaVersion: '1740589945123:7:seed-1',
+        missingLeaders: topology.missingLeaders,
+        inFlightReplicaOperations: topology.inFlightReplicaOperations,
+        inFlightReplicaOperationDetails: topology.inFlightReplicaOperationDetails,
+        missingNodeEndpointNodeIds: topology.missingNodeEndpointNodeIds,
+        missingPostgresWireNodeIds: topology.missingPostgresWireNodeIds,
+      };
+    };
+    service.backfillPropagatedCacheTablesFromAuthoritativeState = async (tableNames) => {
+      repairCalls.push(Array.isArray(tableNames) ? [...tableNames] : []);
+      cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, CDC_OPERATION.UPSERT, {
+        [COLUMN.ENDPOINT_ID]: 'sys-postgres-wire-ep-seed-node',
+        [COLUMN.SERVICE_ID]: META_SERVICE_ID.POSTGRES_WIRE,
+        [COLUMN.NODE_ID]: 'seed-node',
+        health_status: 'healthy',
+        [COLUMN.UPDATED_AT]: 3,
+      });
+    };
+
+    cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, {
+      [COLUMN.NODE_ID]: 'seed-node',
+      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+    });
+    cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, {
+      [COLUMN.NODE_ID]: 'joining-node-join-gate-repair',
+      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+    });
+    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, CDC_OPERATION.UPSERT, {
+      [COLUMN.ENDPOINT_ID]: 'ep-seed-node-ws',
+      [COLUMN.NODE_ID]: 'seed-node',
+      [COLUMN.TRANSPORT_TYPE]: TRANSPORT_TYPE.WEBSOCKET,
+      [COLUMN.STATUS]: ENDPOINT_STATUS.ACTIVE,
+      [COLUMN.UPDATED_AT]: 1,
+    });
+    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, CDC_OPERATION.UPSERT, {
+      [COLUMN.ENDPOINT_ID]: 'ep-joining-node-join-gate-repair-ws',
+      [COLUMN.NODE_ID]: 'joining-node-join-gate-repair',
+      [COLUMN.TRANSPORT_TYPE]: TRANSPORT_TYPE.WEBSOCKET,
+      [COLUMN.STATUS]: ENDPOINT_STATUS.ACTIVE,
+      [COLUMN.UPDATED_AT]: 2,
+    });
+    cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, CDC_OPERATION.UPSERT, {
+      [COLUMN.ENDPOINT_ID]:
+        'sys-postgres-wire-ep-joining-node-join-gate-repair',
+      [COLUMN.SERVICE_ID]: META_SERVICE_ID.POSTGRES_WIRE,
+      [COLUMN.NODE_ID]: 'joining-node-join-gate-repair',
+      health_status: 'healthy',
+      [COLUMN.UPDATED_AT]: 2,
+    });
+
+    await service.waitForCanonicalJoinReadinessConvergence();
+
+    t.equal(
+      repairCalls.length,
+      1,
+      'canonical readiness should trigger one authoritative repair backfill',
+    );
+    t.ok(
+      repairCalls[0].includes(TABLES.SERVICE_ENDPOINTS),
+      'repair backfill should refresh service_endpoints visibility',
+    );
+    t.ok(
+      repairCalls[0].includes(TABLES.NODE_ENDPOINTS),
+      'repair backfill should include discovery-critical node endpoints',
+    );
+  });
+
+test('NodeJoiningService - canonical join topology waits for endpoint visibility',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const service = new NodeJoiningService({
+      nodeId: 'joining-node-endpoint-gate',
+      nodeAddress: 'ws://localhost:9090',
+      seedNodeAddress: 'http://localhost:8080',
+    });
+    const cache = new SystemTableCache();
+
+    service.getMissingSystemServiceLeaders = () => ({});
+    service.getBlockingSystemServiceLeaders = (missing) => missing;
+
+    cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, {
+      [COLUMN.NODE_ID]: 'seed-node',
+      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+    });
+    cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, {
+      [COLUMN.NODE_ID]: 'joining-node-endpoint-gate',
+      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+    });
+
+    let topology = service.evaluateCanonicalJoinTopologyReadiness(cache);
+    t.equal(topology.ready, false, 'topology should fail closed without endpoints');
+    t.same(
+      topology.missingNodeEndpointNodeIds.sort(),
+      ['joining-node-endpoint-gate', 'seed-node'],
+      'topology should require websocket node endpoints for all active nodes',
+    );
+    t.same(
+      topology.missingPostgresWireNodeIds.sort(),
+      ['joining-node-endpoint-gate', 'seed-node'],
+      'topology should require postgres-wire endpoints for all active nodes',
+    );
+
+    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, CDC_OPERATION.UPSERT, {
+      [COLUMN.ENDPOINT_ID]: 'ep-seed-node-ws',
+      [COLUMN.NODE_ID]: 'seed-node',
+      [COLUMN.TRANSPORT_TYPE]: TRANSPORT_TYPE.WEBSOCKET,
+      [COLUMN.STATUS]: ENDPOINT_STATUS.ACTIVE,
+    });
+    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, CDC_OPERATION.UPSERT, {
+      [COLUMN.ENDPOINT_ID]: 'ep-joining-node-endpoint-gate-ws',
+      [COLUMN.NODE_ID]: 'joining-node-endpoint-gate',
+      [COLUMN.TRANSPORT_TYPE]: TRANSPORT_TYPE.WEBSOCKET,
+      [COLUMN.STATUS]: ENDPOINT_STATUS.ACTIVE,
+    });
+    cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, CDC_OPERATION.UPSERT, {
+      [COLUMN.ENDPOINT_ID]: 'sys-postgres-wire-ep-seed-node',
+      [COLUMN.SERVICE_ID]: META_SERVICE_ID.POSTGRES_WIRE,
+      [COLUMN.NODE_ID]: 'seed-node',
+      health_status: 'healthy',
+    });
+
+    topology = service.evaluateCanonicalJoinTopologyReadiness(cache);
+    t.equal(topology.ready, false, 'topology should wait for every active postgres endpoint');
+    t.same(
+      topology.missingPostgresWireNodeIds,
+      ['joining-node-endpoint-gate'],
+      'topology should identify nodes missing postgres-wire visibility',
+    );
+
+    cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, CDC_OPERATION.UPSERT, {
+      [COLUMN.ENDPOINT_ID]: 'sys-postgres-wire-ep-joining-node-endpoint-gate',
+      [COLUMN.SERVICE_ID]: META_SERVICE_ID.POSTGRES_WIRE,
+      [COLUMN.NODE_ID]: 'joining-node-endpoint-gate',
+      health_status: 'healthy',
+    });
+
+    topology = service.evaluateCanonicalJoinTopologyReadiness(cache);
+    t.equal(topology.ready, true, 'topology should become ready once endpoint visibility converges');
+  });
+
+test('NodeJoiningService - authoritative cache backfill closes the CDC blind window',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const cache = new SystemTableCache();
+    const originalGetNodeService = NodeService.getInstance;
+    const queriedTables = [];
+
+    try {
+      NodeService.getInstance = () => ({
+        getSystemTableCache() {
+          return cache;
+        },
+      });
+
+      const service = new NodeJoiningService({
+        nodeId: 'joining-node-backfill-gate',
+        nodeAddress: 'ws://localhost:9090',
+        seedNodeAddress: 'http://localhost:8080',
+      });
+      service.getMissingSystemServiceLeaders = () => ({});
+      service.getBlockingSystemServiceLeaders = (missing) => missing;
+
+      cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, {
+        [COLUMN.NODE_ID]: 'seed-node',
+        [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+      });
+      cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, {
+        [COLUMN.NODE_ID]: 'joining-node-backfill-gate',
+        [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+      });
+      cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, CDC_OPERATION.UPSERT, {
+        [COLUMN.ENDPOINT_ID]: 'ep-joining-node-backfill-gate-ws',
+        [COLUMN.NODE_ID]: 'joining-node-backfill-gate',
+        [COLUMN.TRANSPORT_TYPE]: TRANSPORT_TYPE.WEBSOCKET,
+        [COLUMN.STATUS]: ENDPOINT_STATUS.ACTIVE,
+        [COLUMN.UPDATED_AT]: 2,
+      });
+      cache.applySystemTableChange(TABLES.SERVICE_ENDPOINTS, CDC_OPERATION.UPSERT, {
+        [COLUMN.ENDPOINT_ID]: 'sys-postgres-wire-ep-joining-node-backfill-gate',
+        [COLUMN.SERVICE_ID]: META_SERVICE_ID.POSTGRES_WIRE,
+        [COLUMN.NODE_ID]: 'joining-node-backfill-gate',
+        health_status: 'healthy',
+        [COLUMN.UPDATED_AT]: 2,
+      });
+
+      service.cdcIntegrationService = {
+        sqlQueryEngine: {
+          executeQuery: async (sql) => {
+            const tableName = sql.replace(/^SELECT \* FROM /, '');
+            queriedTables.push(tableName);
+            switch (tableName) {
+            case TABLES.NODES:
+              return {
+                success: true,
+                rows: cache.getAll(TABLES.NODES),
+              };
+            case TABLES.NODE_ENDPOINTS:
+              return {
+                success: true,
+                rows: [
+                  ...cache.getAll(TABLES.NODE_ENDPOINTS),
+                  {
+                    [COLUMN.ENDPOINT_ID]: 'ep-seed-node-ws',
+                    [COLUMN.NODE_ID]: 'seed-node',
+                    [COLUMN.TRANSPORT_TYPE]: TRANSPORT_TYPE.WEBSOCKET,
+                    [COLUMN.STATUS]: ENDPOINT_STATUS.ACTIVE,
+                    [COLUMN.UPDATED_AT]: 3,
+                  },
+                ],
+              };
+            case TABLES.SERVICE_ENDPOINTS:
+              return {
+                success: true,
+                rows: [
+                  ...cache.getAll(TABLES.SERVICE_ENDPOINTS),
+                  {
+                    [COLUMN.ENDPOINT_ID]: 'sys-postgres-wire-ep-seed-node',
+                    [COLUMN.SERVICE_ID]: META_SERVICE_ID.POSTGRES_WIRE,
+                    [COLUMN.NODE_ID]: 'seed-node',
+                    health_status: 'healthy',
+                    [COLUMN.UPDATED_AT]: 3,
+                  },
+                ],
+              };
+            default:
+              return {success: true, rows: []};
+            }
+          },
+        },
+      };
+
+      let topology = service.evaluateCanonicalJoinTopologyReadiness(cache);
+      t.equal(topology.ready, false,
+        'topology should fail before authoritative backfill restores missed rows');
+      t.same(
+        topology.missingNodeEndpointNodeIds,
+        ['seed-node'],
+        'seed websocket endpoint should be missing before backfill',
+      );
+      t.same(
+        topology.missingPostgresWireNodeIds,
+        ['seed-node'],
+        'seed postgres-wire endpoint should be missing before backfill',
+      );
+
+      await service.backfillPropagatedCacheTablesFromAuthoritativeState();
+
+      topology = service.evaluateCanonicalJoinTopologyReadiness(cache);
+      t.equal(topology.ready, true,
+        'topology should converge after authoritative backfill restores missed rows');
+      t.ok(
+        queriedTables.includes(TABLES.NODE_ENDPOINTS),
+        'backfill should query node_endpoints authoritatively',
+      );
+      t.ok(
+        queriedTables.includes(TABLES.SERVICE_ENDPOINTS),
+        'backfill should query service_endpoints authoritatively',
+      );
+    } finally {
+      NodeService.getInstance = originalGetNodeService;
+    }
+  });
+
+test('NodeJoiningService - authoritative backfill merges divergent replica snapshots',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const cache = new SystemTableCache();
+    const originalGetNodeService = NodeService.getInstance;
+
+    try {
+      NodeService.getInstance = () => ({
+        getSystemTableCache() {
+          return cache;
+        },
+      });
+
+      const service = new NodeJoiningService({
+        nodeId: 'joining-node-replica-merge',
+        nodeAddress: 'ws://localhost:9090',
+        seedNodeAddress: 'http://localhost:8080',
+      });
+
+      const incompleteSeedRows = [
+        {
+          [COLUMN.ENDPOINT_ID]: 'sys-postgres-wire-ep-joining-node-replica-merge',
+          [COLUMN.SERVICE_ID]: META_SERVICE_ID.POSTGRES_WIRE,
+          [COLUMN.NODE_ID]: 'joining-node-replica-merge',
+          health_status: 'healthy',
+          [COLUMN.UPDATED_AT]: 10,
+        },
+      ];
+      const replicaRowsA = [
+        ...incompleteSeedRows,
+        {
+          [COLUMN.ENDPOINT_ID]: 'sys-postgres-wire-ep-seed-node',
+          [COLUMN.SERVICE_ID]: META_SERVICE_ID.POSTGRES_WIRE,
+          [COLUMN.NODE_ID]: 'seed-node',
+          health_status: 'healthy',
+          [COLUMN.UPDATED_AT]: 11,
+        },
+      ];
+      const replicaRowsB = [
+        ...incompleteSeedRows,
+        {
+          [COLUMN.ENDPOINT_ID]: 'sys-postgres-wire-ep-peer-node',
+          [COLUMN.SERVICE_ID]: META_SERVICE_ID.POSTGRES_WIRE,
+          [COLUMN.NODE_ID]: 'peer-node',
+          health_status: 'healthy',
+          [COLUMN.UPDATED_AT]: 12,
+        },
+      ];
+
+      service.messageRouter = {
+        async deliver(address, payload) {
+          t.equal(payload.type, 'QUERY', 'replica fanout should issue partition queries');
+          t.equal(
+            payload.sql,
+            `SELECT * FROM ${TABLES.SERVICE_ENDPOINTS}`,
+            'replica fanout should query the propagated table directly',
+          );
+          if (address === 'seed/partition/service_endpoints-p1-r1') {
+            return {
+              acknowledged: true,
+              success: true,
+              rows: replicaRowsA,
+            };
+          }
+          if (address === 'seed/partition/service_endpoints-p1-r2') {
+            return {
+              acknowledged: true,
+              success: true,
+              rows: replicaRowsB,
+            };
+          }
+          throw new Error(`unexpected address ${address}`);
+        },
+      };
+
+      service.cdcIntegrationService = {
+        sqlQueryEngine: {
+          async executeQuery(sql) {
+            if (sql === `SELECT * FROM ${TABLES.SERVICE_ENDPOINTS}`) {
+              return {
+                success: true,
+                rows: incompleteSeedRows,
+              };
+            }
+            return {success: true, rows: []};
+          },
+          getTablePartitions(tableName) {
+            if (tableName === TABLES.SERVICE_ENDPOINTS) {
+              return [{partition_id: 'service_endpoints-p1'}];
+            }
+            return [];
+          },
+          queryExecutor: {
+            getRoutablePartitionServices(partitionId) {
+              if (partitionId !== 'service_endpoints-p1') {
+                return [];
+              }
+              return [
+                {
+                  service_id: 'service_endpoints-p1-r1',
+                  partition_id: partitionId,
+                  service_type: SERVICE_TYPE.PARTITION,
+                  status: SERVICE_STATUS.ACTIVE,
+                  address: 'seed/partition/service_endpoints-p1-r1',
+                },
+                {
+                  service_id: 'service_endpoints-p1-r2',
+                  partition_id: partitionId,
+                  service_type: SERVICE_TYPE.PARTITION,
+                  status: SERVICE_STATUS.ACTIVE,
+                  address: 'seed/partition/service_endpoints-p1-r2',
+                },
+              ];
+            },
+          },
+        },
+      };
+
+      await service.backfillPropagatedCacheTablesFromAuthoritativeState();
+
+      const endpointRows = cache.getAll(TABLES.SERVICE_ENDPOINTS);
+      t.same(
+        endpointRows
+          .filter((row) => row.service_id === META_SERVICE_ID.POSTGRES_WIRE)
+          .map((row) => row.node_id)
+          .sort(),
+        ['joining-node-replica-merge', 'peer-node', 'seed-node'],
+        'replica fanout merge should recover rows hidden by a stale routed read',
+      );
+    } finally {
+      NodeService.getInstance = originalGetNodeService;
+    }
+  });
+
+test(
+  'NodeJoiningService - authoritative backfill preserves bootstrap snapshot rows',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const cache = new SystemTableCache();
+    const originalGetNodeService = NodeService.getInstance;
+
+    try {
+      NodeService.getInstance = () => ({
+        getSystemTableCache() {
+          return cache;
+        },
+      });
+
+      const service = new NodeJoiningService({
+        nodeId: 'joining-node-bootstrap-snapshot',
+        nodeAddress: 'ws://localhost:9090',
+        seedNodeAddress: 'http://localhost:8080',
+      });
+
+      const bootstrapSnapshotRows = [
+        {
+          [COLUMN.ENDPOINT_ID]: 'sys-postgres-wire-ep-seed-node',
+          [COLUMN.SERVICE_ID]: META_SERVICE_ID.POSTGRES_WIRE,
+          [COLUMN.NODE_ID]: 'seed-node',
+          health_status: 'healthy',
+          [COLUMN.UPDATED_AT]: 10,
+        },
+        {
+          [COLUMN.ENDPOINT_ID]: 'sys-postgres-wire-ep-peer-node',
+          [COLUMN.SERVICE_ID]: META_SERVICE_ID.POSTGRES_WIRE,
+          [COLUMN.NODE_ID]: 'peer-node',
+          health_status: 'healthy',
+          [COLUMN.UPDATED_AT]: 20,
+        },
+      ];
+      service.bootstrapResponse = {
+        systemTableSnapshots: {
+          [TABLES.SERVICE_ENDPOINTS]: bootstrapSnapshotRows,
+        },
+      };
+      service.cdcIntegrationService = {
+        sqlQueryEngine: {
+          async executeQuery(sql) {
+            if (sql === `SELECT * FROM ${TABLES.SERVICE_ENDPOINTS}`) {
+              return {
+                success: true,
+                rows: [bootstrapSnapshotRows[0]],
+              };
+            }
+            return {success: true, rows: []};
+          },
+          getTablePartitions() {
+            return [];
+          },
+          queryExecutor: {},
+        },
+      };
+
+      await service.backfillPropagatedCacheTablesFromAuthoritativeState();
+
+      const endpointRows = cache.getAll(TABLES.SERVICE_ENDPOINTS);
+      t.same(
+        endpointRows
+          .filter((row) => row.service_id === META_SERVICE_ID.POSTGRES_WIRE)
+          .map((row) => row.node_id)
+          .sort(),
+        ['peer-node', 'seed-node'],
+        'bootstrap snapshot rows should survive a stale routed backfill query',
+      );
+    } finally {
+      NodeService.getInstance = originalGetNodeService;
+    }
+  },
+);
+
+test('NodeJoiningService - registerNodeInCluster seeds local discovery-critical cache rows',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const cache = new SystemTableCache();
+    const originalGetNodeService = NodeService.getInstance;
+
+    try {
+      NodeService.getInstance = () => ({
+        getSystemTableCache() {
+          return cache;
+        },
+      });
+
+      const service = new NodeJoiningService({
+        nodeId: 'join-cache-seed-node',
+        nodeAddress: 'ws://localhost:9090',
+        seedNodeAddress: 'http://localhost:8080',
+        wsPort: 9090,
+      });
+
+      service.cdcIntegrationService = {
+        upsertSystemTableRow: async () => ({success: true}),
+        sqlQueryEngine: {},
+      };
+      service.getNodeStorageBudgetService = () => ({
+        registerNodeBudget: async ({nodeRow}) => ({
+          result: {success: true},
+          budgetRow: {
+            ...nodeRow,
+            [COLUMN.STORAGE_BUDGET_BYTES]: 1024,
+            [COLUMN.STORAGE_BUDGET_SOURCE]: 'test',
+          },
+          resolution: {
+            isValid: true,
+            budgetBytes: 1024,
+            source: 'test',
+            diskBytes: 1024,
+          },
+        }),
+      });
+
+      await service.registerNodeInCluster();
+
+      t.ok(
+        cache.get(TABLES.NODES, 'join-cache-seed-node'),
+        'join should seed the local nodes cache row',
+      );
+      t.ok(
+        cache.get(TABLES.NODE_ENDPOINTS, 'ep-join-cache-seed-node-ws'),
+        'join should seed the local node_endpoints cache row',
+      );
+      t.same(
+        cache.filter(TABLES.SERVICE_ENDPOINTS, (row) =>
+          row[COLUMN.NODE_ID] === 'join-cache-seed-node').map((row) =>
+          row[COLUMN.SERVICE_ID]).sort(),
+        [
+          META_SERVICE_ID.ADMIN_META,
+          META_SERVICE_ID.POSTGRES_WIRE,
+          META_SERVICE_ID.WASM_META,
+        ],
+        'join should seed built-in service_endpoints in the local cache',
+      );
+    } finally {
+      NodeService.getInstance = originalGetNodeService;
+    }
+  });
+
 test('NodeJoiningService - full join with MOVE_REPLICA', async (t) => {
   initializeTestEnvironment();
 
@@ -1351,3 +2033,82 @@ test('NodeJoiningService - emits events', async (t) => {
     await seedApi.shutdown();
   }
 });
+
+test('NodeJoiningService - replica factory should preserve join mode from replica handler',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const service = new NodeJoiningService({
+      nodeId: 'test-node-join-factory',
+      nodeAddress: 'ws://localhost:9090',
+      seedNodeAddress: 'http://localhost:8080',
+    });
+
+    const cache = new SystemTableCache();
+    let capturedCreatePartitionService = null;
+    const originalReplicaHandlerCreate = ReplicaHandlerSetup.create;
+    const originalGetNodeService = NodeService.getInstance;
+    const originalInitialize = PartitionService.prototype.initialize;
+
+    try {
+      service.messageRouter = {registerHandler() {}, unregisterHandler() {}};
+      service.transport = {unregister() {}};
+      service.systemCacheHydrated = true;
+      service.tablePolicyService = {};
+      service.rebalanceCoordinator = {};
+      service.createCdcIntegrationService = () => ({
+        updateSystemTableRow: async () => true,
+        upsertSystemTableRow: async () => true,
+      });
+      service.getLeaderMessageGroupService = () => null;
+
+      NodeService.getInstance = () => ({
+        getSystemTableCache() {
+          return cache;
+        },
+      });
+
+      PartitionService.prototype.initialize = async function() {};
+
+      ReplicaHandlerSetup.create = ({createPartitionService}) => {
+        capturedCreatePartitionService = createPartitionService;
+        return {
+          replicaHandler: {},
+          replicaStateMachine: {},
+        };
+      };
+
+      service.initializeReplicaHandler();
+
+      t.equal(
+        typeof capturedCreatePartitionService,
+        'function',
+        'should build a replica partition factory',
+      );
+
+      const partition = await capturedCreatePartitionService({
+        partitionId: 'partition-1',
+        tableId: 'table-1',
+        tableName: null,
+        schema: {columns: [{name: 'id', type: 'TEXT', primaryKey: true}]},
+        keyRange: {start: null, end: null},
+        replicaId: 'replica-1',
+        replicaIds: ['replica-1'],
+        peerAddresses: [],
+        nodeId: 'test-node-join-factory',
+        isJoiningExistingGroup: false,
+      });
+
+      t.equal(
+        partition.isJoiningExistingGroup,
+        false,
+        'post-join partition creation should honor replica-handler join mode',
+      );
+
+      await partition.shutdown();
+    } finally {
+      ReplicaHandlerSetup.create = originalReplicaHandlerCreate;
+      NodeService.getInstance = originalGetNodeService;
+      PartitionService.prototype.initialize = originalInitialize;
+    }
+  });

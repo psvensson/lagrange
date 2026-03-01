@@ -205,6 +205,126 @@ test('MOVE_REPLICA handoff ownership integration', {timeout: 180000}, async (t) 
     }
   });
 
+  await t.test('handoff does not start target election before source removal',
+    async (t) => {
+      const seedNodeId = '550e8400-e29b-41d4-a716-446655440099';
+      const seedWsPort = getUniquePort();
+      const joiningNodeId = '550e8400-e29b-41d4-a716-446655440100';
+      const joiningWsPort = getUniquePort();
+
+      const bootstrapService = new BootstrapService({
+        nodeId: seedNodeId,
+        nodeAddress: `ws://localhost:${seedWsPort}`,
+        wsPort: seedWsPort,
+        config: TEST_CONFIG.bootstrap,
+      });
+
+      let bootstrapResult = null;
+      let seedApi = null;
+      let joiningService = null;
+
+      try {
+        bootstrapResult = await bootstrapService.bootstrap();
+        t.equal(bootstrapResult.success, true, 'seed bootstrap should succeed');
+
+        const sourceShutdownAtByReplicaId = new Map();
+        for (const [replicaId, service] of bootstrapResult.messageGroupServices.entries()) {
+          const originalShutdown = service.shutdown?.bind(service);
+          service.shutdown = async () => {
+            sourceShutdownAtByReplicaId.set(replicaId, Date.now());
+            if (originalShutdown) {
+              await originalShutdown();
+            }
+          };
+        }
+
+        seedApi = new BootstrapAPI({
+          seedNodeId,
+          seedNodeAddress: `ws://localhost:${seedWsPort}`,
+          seedNodeWsAddress: `ws://localhost:${seedWsPort}`,
+          messageGroupServices: bootstrapResult.messageGroupServices,
+          partitionServices: bootstrapResult.partitionServices,
+          systemTableCache: NodeService.getInstance().getSystemTableCache(),
+          messageRouter: bootstrapResult.messageRouter,
+          epochManager: bootstrapResult.epochManager,
+          bootstrapService: bootstrapService,
+        });
+        await seedApi.initialize(0, {listen: false});
+
+        const seedQueryEngine = new SQLQueryEngine({
+          systemCache: NodeService.getInstance().getSystemTableCache(),
+          messageRouter: bootstrapResult.messageRouter,
+          nodeId: seedNodeId,
+        });
+        seedApi.setSqlQueryEngine(seedQueryEngine);
+
+        joiningService = new NodeJoiningService({
+          nodeId: joiningNodeId,
+          nodeAddress: `ws://localhost:${joiningWsPort}`,
+          seedNodeAddress: 'http://localhost:0',
+          seedNodeWsAddress: `ws://localhost:${seedWsPort}`,
+          wsPort: joiningWsPort,
+          config: {
+            ...TEST_CONFIG.bootstrap,
+            httpTimeoutMs: 5000,
+            leadershipWaitTimeoutMs: 5000,
+          },
+          httpPost: createInProcHttpPost(seedApi),
+        });
+
+        let targetElectionStartedAt = null;
+        const originalStartJoinMessageGroupReplica =
+          joiningService.startJoinMessageGroupReplica.bind(joiningService);
+        joiningService.startJoinMessageGroupReplica = async function(replicaHandle, context) {
+          const serviceId = replicaHandle?.service_id ||
+            replicaHandle?.serviceId ||
+            replicaHandle?.replica_id ||
+            replicaHandle?.replicaId ||
+            null;
+          const movedReplicaId =
+            this.bootstrapResponse?.messageGroupAssignment?.replicaToMove || null;
+          if (serviceId === movedReplicaId) {
+            const options = this.resolveJoinReplicaOptions(
+              serviceId,
+              'message_group',
+            );
+            if (options?.deferElection !== true) {
+              targetElectionStartedAt = Date.now();
+            }
+          }
+          return originalStartJoinMessageGroupReplica(replicaHandle, context);
+        };
+
+        const joinResult = await joiningService.join();
+        t.equal(joinResult.success, true, 'joining node should join successfully');
+
+        const assignment = joiningService.bootstrapResponse?.messageGroupAssignment;
+        t.equal(assignment?.strategy, 'MOVE_REPLICA', 'join should use MOVE_REPLICA');
+        const movedReplicaId = assignment?.replicaToMove;
+        t.ok(movedReplicaId, 'MOVE_REPLICA assignment should include replicaToMove');
+
+        const sourceRemovedAt =
+          sourceShutdownAtByReplicaId.get(movedReplicaId) || null;
+        t.ok(
+          Number.isFinite(targetElectionStartedAt),
+          'moved replica should eventually start election on target',
+        );
+        t.ok(
+          Number.isFinite(sourceRemovedAt),
+          'source owner should be removed during handoff',
+        );
+        t.ok(
+          Number.isFinite(targetElectionStartedAt) &&
+            Number.isFinite(sourceRemovedAt) &&
+            targetElectionStartedAt >= sourceRemovedAt,
+          'target election must not start before source replica removal',
+        );
+      } finally {
+        await gracefulJoiningShutdown(joiningService);
+        await gracefulShutdown(bootstrapService, bootstrapResult, seedApi);
+      }
+    });
+
   await t.test('post-handoff peer resolution converges to target address', async (t) => {
     const seedNodeId = '550e8400-e29b-41d4-a716-446655440093';
     const seedWsPort = getUniquePort();

@@ -16,7 +16,7 @@ import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
 import {SystemTableName} from '../bootstrap/system-table-schemas-constants.js';
 import {STORAGE_DEFAULT} from '../storage/storage-constants.js';
-import {NUM, STATE, WORKFLOW_STEP} from '../constants/index.js';
+import {NUM, WORKFLOW_STEP} from '../constants/index.js';
 import {assertCritical} from '../utils/assert.js';
 import {
   ReplicaStatus,
@@ -61,6 +61,11 @@ const PARTITION_METADATA_MISSING_PREFIX =
   partitionMetadataMissingError('');
 const TABLE_METADATA_MISSING_PREFIX =
   tableMetadataMissingError('');
+const ESTABLISHED_VOTER_ROLES = new Set([
+  RAFT_ROLE.LEADER,
+  RAFT_ROLE.FOLLOWER,
+  RAFT_ROLE.CANDIDATE,
+]);
 const SYSTEM_TABLE_HYDRATION_SQL = Object.freeze({
   PARTITION_BY_ID:
     `SELECT * FROM ${SystemTableName.PARTITIONS} WHERE partition_id = ?`,
@@ -70,6 +75,15 @@ const SYSTEM_TABLE_HYDRATION_SQL = Object.freeze({
     `SELECT * FROM ${SystemTableName.SERVICES} ` +
     'WHERE partition_id = ? AND service_type = ?',
 });
+
+function isFreshPartitionBootstrapWindow(partition) {
+  if (!partition || partition.leader_node_id) {
+    return false;
+  }
+  return Number.isFinite(partition.created_at) &&
+    Number.isFinite(partition.updated_at) &&
+    partition.created_at === partition.updated_at;
+}
 
 /**
  * ReplicaHandler handles replica creation and removal requests on target nodes.
@@ -120,6 +134,9 @@ class ReplicaHandler extends EventEmitter {
 
     // Track in-progress operations by operationId
     this.inProgressOperations = new Map();
+    this.operationTasks = new Set();
+    this.shuttingDown = false;
+    this.shutdownPromise = null;
 
     // Configuration
     const config = ConfigurationManager.getInstance();
@@ -241,6 +258,33 @@ class ReplicaHandler extends EventEmitter {
   clearReplicaCreationProgress(progress) {
     if (progress && progress.replicaId) {
       this.creationProgressByReplica.delete(progress.replicaId);
+    }
+  }
+
+  /**
+   * Track one detached async replica operation so shutdown can await it.
+   * @param {Promise<*>} taskPromise
+   * @return {Promise<*>}
+   * @private
+   */
+  registerOperationTask(taskPromise) {
+    let trackedTask = null;
+    trackedTask = Promise.resolve(taskPromise)
+      .finally(() => {
+        this.operationTasks.delete(trackedTask);
+      });
+    this.operationTasks.add(trackedTask);
+    return trackedTask;
+  }
+
+  /**
+   * Throw when the replica handler is shutting down.
+   * @return {void}
+   * @private
+   */
+  throwIfShuttingDown() {
+    if (this.shuttingDown) {
+      throw new Error(REPLICA_HANDLER_LOG_MSG.SHUTTING_DOWN);
     }
   }
 
@@ -443,20 +487,29 @@ class ReplicaHandler extends EventEmitter {
     });
 
     // Start async creation after ACK has returned.
-    setImmediate(() => {
-      this.createReplicaAsync({
-        operationId,
-        partitionId,
-        replicaId,
-      }).catch((error) => {
-        this.logger.error(REPLICA_HANDLER_LOG_MSG.ASYNC_CREATE_FAILED, {
+    this.registerOperationTask(new Promise((resolve) => {
+      setImmediate(() => {
+        if (this.shuttingDown) {
+          this.inProgressOperations.delete(operationId);
+          this.localServices.delete(replicaId);
+          this.localReplicas.delete(replicaId);
+          resolve();
+          return;
+        }
+        resolve(this.createReplicaAsync({
           operationId,
+          partitionId,
           replicaId,
-          error: error.message,
-          stack: error.stack,
-        });
+        }).catch((error) => {
+          this.logger.error(REPLICA_HANDLER_LOG_MSG.ASYNC_CREATE_FAILED, {
+            operationId,
+            replicaId,
+            error: error.message,
+            stack: error.stack,
+          });
+        }));
       });
-    });
+    }));
 
     return {
       status: ReplicaOperationResponseStatus.INITIATED,
@@ -483,8 +536,10 @@ class ReplicaHandler extends EventEmitter {
       replicaId,
       peerTotal: NUM.ZERO,
     });
+    let partitionService = null;
 
     try {
+      this.throwIfShuttingDown();
       await this.updateReplicaStatus(replicaId, ReplicaStatus.CREATING, {
         partitionId,
       });
@@ -493,6 +548,7 @@ class ReplicaHandler extends EventEmitter {
       });
 
       const context = await this.resolveReplicaContextWithRetry(partitionId, replicaId);
+      this.throwIfShuttingDown();
       const {
         tableName,
         tableId,
@@ -507,9 +563,9 @@ class ReplicaHandler extends EventEmitter {
       // Generate database path
       const dbPath = this.getPartitionDbPath(partitionId, replicaId);
 
-      // Determine if this replica is joining an existing Raft group
-      // If peerAddresses are provided, this is a new replica joining existing peers
-      // It should start as a learner to avoid disrupting existing leadership
+      // Determine if this replica is joining an already-established Raft group.
+      // Provisional sibling service rows alone are not enough; fresh partition
+      // bring-up must bootstrap voters until a leader or active voter exists.
       const isJoiningExistingGroup = existingReplicaCount > 0;
 
       this.updateReplicaCreationProgress(progress, {
@@ -518,7 +574,7 @@ class ReplicaHandler extends EventEmitter {
           NUM.ZERO,
       });
 
-      const partitionService = await this.createPartitionService({
+      partitionService = await this.createPartitionService({
         partitionId,
         tableId,
         tableName,
@@ -535,6 +591,10 @@ class ReplicaHandler extends EventEmitter {
         onInitializationStage: (stageEvent) =>
           this.updateReplicaCreationProgress(progress, stageEvent),
       });
+      if (this.shuttingDown && typeof partitionService.shutdown === REPLICA_HANDLER_TYPEOF.FUNCTION) {
+        await partitionService.shutdown();
+      }
+      this.throwIfShuttingDown();
 
       // Store service reference in localServices
       this.localServices.set(replicaId, partitionService);
@@ -563,6 +623,7 @@ class ReplicaHandler extends EventEmitter {
           await service.syncFromLeader(leaderAddress);
         }
       }
+      this.throwIfShuttingDown();
 
       if (this.shouldGateActivationOnVoterReadiness(
         partitionId,
@@ -603,6 +664,23 @@ class ReplicaHandler extends EventEmitter {
         nodeId: this.nodeId,
       });
     } catch (error) {
+      if (this.shuttingDown) {
+        this.clearReplicaCreationProgress(progress);
+        if (partitionService &&
+            typeof partitionService.shutdown === REPLICA_HANDLER_TYPEOF.FUNCTION) {
+          try {
+            await partitionService.shutdown();
+          } catch {
+            // Best-effort shutdown only.
+          }
+        }
+        if (operationId) {
+          this.inProgressOperations.delete(operationId);
+        }
+        this.localServices.delete(replicaId);
+        this.localReplicas.delete(replicaId);
+        return;
+      }
       this.failReplicaCreationProgress(progress, error);
       this.logger.error(REPLICA_HANDLER_LOG_MSG.CREATE_FAILED, {
         operationId,
@@ -747,21 +825,28 @@ class ReplicaHandler extends EventEmitter {
     });
 
     // Start async removal after ACK has returned.
-    setImmediate(() => {
-      this.removeReplicaAsync({
-        operationId,
-        partitionId,
-        replicaId,
-        reason,
-      }).catch((error) => {
-        this.logger.error(REPLICA_HANDLER_LOG_MSG.ASYNC_REMOVE_FAILED, {
+    this.registerOperationTask(new Promise((resolve) => {
+      setImmediate(() => {
+        if (this.shuttingDown) {
+          this.inProgressOperations.delete(operationId);
+          resolve();
+          return;
+        }
+        resolve(this.removeReplicaAsync({
           operationId,
+          partitionId,
           replicaId,
-          error: error.message,
-          stack: error.stack,
-        });
+          reason,
+        }).catch((error) => {
+          this.logger.error(REPLICA_HANDLER_LOG_MSG.ASYNC_REMOVE_FAILED, {
+            operationId,
+            replicaId,
+            error: error.message,
+            stack: error.stack,
+          });
+        }));
       });
-    });
+    }));
 
     return {
       status: ReplicaOperationResponseStatus.INITIATED,
@@ -781,6 +866,7 @@ class ReplicaHandler extends EventEmitter {
     const {operationId, partitionId, replicaId, reason} = request;
 
     try {
+      this.throwIfShuttingDown();
       // Update status to removing (via CDC)
       await this.updateReplicaStatus(replicaId, ReplicaStatus.REMOVING, {
         partitionId,
@@ -853,6 +939,12 @@ class ReplicaHandler extends EventEmitter {
         nodeId: this.nodeId,
       });
     } catch (error) {
+      if (this.shuttingDown) {
+        if (operationId) {
+          this.inProgressOperations.delete(operationId);
+        }
+        return;
+      }
       this.logger.error(REPLICA_HANDLER_LOG_MSG.REMOVE_FAILED, {
         operationId,
         replicaId,
@@ -1050,8 +1142,10 @@ class ReplicaHandler extends EventEmitter {
       nodeId: this.nodeId,
     });
 
+    this.throwIfShuttingDown();
     const deadline = Date.now() + this.syncTimeoutMs;
     while (Date.now() <= deadline) {
+      this.throwIfShuttingDown();
       if (this.isReplicaVoterReady(replicaId)) {
         this.logger.info(REPLICA_HANDLER_LOG_MSG.VOTER_READY_ACTIVATED, {
           replicaId,
@@ -1211,12 +1305,14 @@ class ReplicaHandler extends EventEmitter {
    * @private
    */
   async resolveReplicaContextWithRetry(partitionId, replicaId) {
+    this.throwIfShuttingDown();
     const deadline = Date.now() + this.syncTimeoutMs;
     let metadataWaitLogged = false;
     let lastError = null;
     let metadataHydrationCount = NUM.ZERO;
 
     while (Date.now() <= deadline) {
+      this.throwIfShuttingDown();
       try {
         return this.resolveReplicaContext(partitionId, replicaId);
       } catch (error) {
@@ -1320,7 +1416,9 @@ class ReplicaHandler extends EventEmitter {
     const replicaIds = [];
     const peerAddresses = [];
     const seenReplicaIds = new Set();
-    const activeExistingReplicaIds = new Set();
+    // Count only established voters from sibling services. Freshly staged
+    // rows in pending/creating/syncing states do not imply an existing group.
+    const establishedExistingReplicaIds = new Set();
 
     for (const service of services) {
       const serviceReplicaId = service.service_id || service.replica_id;
@@ -1331,10 +1429,11 @@ class ReplicaHandler extends EventEmitter {
         seenReplicaIds.add(serviceReplicaId);
         replicaIds.push(serviceReplicaId);
       }
-      if (serviceReplicaId !== replicaId &&
-          service.status !== ReplicaStatus.REMOVED &&
-          service.status !== ReplicaStatus.FAILED) {
-        activeExistingReplicaIds.add(serviceReplicaId);
+      const isEstablishedVoter =
+        service.status === ReplicaStatus.ACTIVE &&
+        ESTABLISHED_VOTER_ROLES.has(service.raft_role);
+      if (serviceReplicaId !== replicaId && isEstablishedVoter) {
+        establishedExistingReplicaIds.add(serviceReplicaId);
       }
 
       const peerAddress = service.address ||
@@ -1359,7 +1458,15 @@ class ReplicaHandler extends EventEmitter {
     }
 
     let leaderAddress = null;
-    const leaderService = services.find((service) => service.raft_role === STATE.LEADER);
+    const leaderService = services.find(
+      (service) => service.raft_role === RAFT_ROLE.LEADER,
+    );
+    const isFreshBootstrapPartition = isFreshPartitionBootstrapWindow(partition);
+    // Fresh CREATE TABLE provisioning dispatches replica creation before the
+    // partition row has a persisted leader_node_id. A single sibling leader
+    // must not force later members of that first cohort into learner mode.
+    const hasKnownLeader = !isFreshBootstrapPartition &&
+      Boolean(leaderService || partition.leader_node_id);
 
     if (leaderService) {
       leaderAddress = leaderService.address ||
@@ -1378,7 +1485,13 @@ class ReplicaHandler extends EventEmitter {
       leaderAddress,
       replicaIds,
       peerAddresses,
-      existingReplicaCount: activeExistingReplicaIds.size,
+      existingReplicaCount: isFreshBootstrapPartition ?
+        NUM.ZERO :
+        (
+          hasKnownLeader ?
+            Math.max(NUM.ONE, establishedExistingReplicaIds.size) :
+            establishedExistingReplicaIds.size
+        ),
     };
   }
 
@@ -1915,26 +2028,57 @@ class ReplicaHandler extends EventEmitter {
   /**
    * Shutdown the replica handler.
    */
-  shutdown() {
-    this.logger.info(REPLICA_HANDLER_LOG_MSG.SHUTTING_DOWN, {
-      nodeId: this.nodeId,
-    });
-
-    for (const progress of this.creationProgressByReplica.values()) {
-      this.creationProgressReporter.fail(
-        progress,
-        REPLICA_HANDLER_LOG_MSG.SHUTTING_DOWN,
-        {stage: ReplicaStatus.FAILED},
-      );
+  async shutdown() {
+    if (this.shutdownPromise) {
+      return this.shutdownPromise;
     }
-    this.creationProgressByReplica.clear();
 
-    this.inProgressOperations.clear();
-    this.localServices.clear();
-    this.localReplicas.clear();
-    this.initialized = false;
+    this.shutdownPromise = (async () => {
+      this.logger.info(REPLICA_HANDLER_LOG_MSG.SHUTTING_DOWN, {
+        nodeId: this.nodeId,
+      });
 
-    this.emit(REPLICA_HANDLER_EVENT.SHUTDOWN, {nodeId: this.nodeId});
+      this.shuttingDown = true;
+      for (const progress of this.creationProgressByReplica.values()) {
+        this.creationProgressReporter.fail(
+          progress,
+          REPLICA_HANDLER_LOG_MSG.SHUTTING_DOWN,
+          {stage: ReplicaStatus.FAILED},
+        );
+      }
+
+      await Promise.allSettled([...this.operationTasks]);
+
+      const servicesToShutdown = new Set([
+        ...this.localServices.values(),
+        ...[...this.localReplicas.values()]
+          .map((replica) => replica?.service)
+          .filter(Boolean),
+      ]);
+
+      for (const service of servicesToShutdown) {
+        try {
+          if (typeof service.shutdown === REPLICA_HANDLER_TYPEOF.FUNCTION) {
+            await service.shutdown();
+          }
+        } catch (error) {
+          this.logger.warn(REPLICA_HANDLER_LOG_MSG.REMOVE_FAILED, {
+            nodeId: this.nodeId,
+            error: error.message,
+          });
+        }
+      }
+
+      this.creationProgressByReplica.clear();
+      this.inProgressOperations.clear();
+      this.localServices.clear();
+      this.localReplicas.clear();
+      this.initialized = false;
+
+      this.emit(REPLICA_HANDLER_EVENT.SHUTDOWN, {nodeId: this.nodeId});
+    })();
+
+    return this.shutdownPromise;
   }
 
   /**

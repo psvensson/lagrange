@@ -6,6 +6,7 @@ const FIELD = Object.freeze({
   CAPABILITIES: 'capabilities',
   HEARTBEAT_AT: 'heartbeatAt',
   READY_LEASE_EXPIRES_AT: 'readyLeaseExpiresAt',
+  NODE_ROW: 'nodeRow',
   OPERATION_ID: 'operationId',
   PARTITION_ID: 'partitionId',
   REPLICA_ID: 'replicaId',

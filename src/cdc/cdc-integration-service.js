@@ -124,6 +124,11 @@ class CDCIntegrationService extends EventEmitter {
     this.sqlQueryEngine = options.sqlQueryEngine || null;
     this.nodeId = options.nodeId || STRING.UNKNOWN;
     this.systemTableCache = options.systemTableCache || null;
+    this.cacheMutationTarget =
+      options.cacheMutationTarget ||
+      (typeof options.systemTableCache?.applySystemTableChange === TYPEOF.FUNCTION ?
+        options.systemTableCache :
+        null);
 
     // Bootstrap mode for seed node direct writes
     this.bootstrapMode = false;
@@ -170,6 +175,18 @@ class CDCIntegrationService extends EventEmitter {
    */
   setSystemTableCache(cache) {
     this.systemTableCache = cache;
+    if (!this.cacheMutationTarget &&
+      typeof cache?.applySystemTableChange === TYPEOF.FUNCTION) {
+      this.cacheMutationTarget = cache;
+    }
+  }
+
+  /**
+   * Set the writable cache target used by authoritative repair paths.
+   * @param {Object} cache - Writable SystemTableCache instance.
+   */
+  setCacheMutationTarget(cache) {
+    this.cacheMutationTarget = cache;
   }
 
   /**
@@ -682,7 +699,12 @@ class CDCIntegrationService extends EventEmitter {
    * @return {Promise<void>}
    * @private
    */
-  async waitForCacheUpdate(tableName, key, expectPresent) {
+  async waitForCacheUpdate(
+    tableName,
+    key,
+    expectPresent,
+    options = {},
+  ) {
     // During seed bootstrap registration, writes intentionally happen before
     // cache hydration. Waiting for cache visibility in this mode causes
     // per-write timeout delays and can stall bootstrap readiness.
@@ -699,24 +721,25 @@ class CDCIntegrationService extends EventEmitter {
       return;
     }
 
-    const hasRecord = () => {
-      if (typeof cache.has === TYPEOF.FUNCTION) {
-        return cache.has(tableName, key);
-      }
-      if (typeof cache.get === TYPEOF.FUNCTION) {
-        return Boolean(cache.get(tableName, key));
-      }
-      return false;
-    };
+    const expectedFields = options?.expectedFields &&
+      typeof options.expectedFields === TYPEOF.OBJECT ?
+      options.expectedFields :
+      null;
 
-    const alreadySatisfied = expectPresent ? hasRecord() : !hasRecord();
-    if (alreadySatisfied) {
+    const isSatisfied = () => this.isCacheExpectationSatisfied(
+      tableName,
+      key,
+      expectPresent,
+      expectedFields,
+    );
+
+    if (isSatisfied()) {
       return;
     }
 
-    await new Promise((resolve) => {
+    await new Promise((resolve, reject) => {
       let settled = false;
-      const cleanup = () => {
+      const cleanup = (error = null) => {
         if (settled) {
           return;
         }
@@ -727,6 +750,10 @@ class CDCIntegrationService extends EventEmitter {
         if (timer) {
           clearTimeout(timer);
         }
+        if (error) {
+          reject(error);
+          return;
+        }
         resolve();
       };
 
@@ -734,18 +761,240 @@ class CDCIntegrationService extends EventEmitter {
         if (changedTable !== tableName) {
           return;
         }
-        const present = hasRecord();
-        if ((expectPresent && present) || (!expectPresent && !present)) {
+        if (isSatisfied()) {
           cleanup();
         }
       };
 
       const timer = setTimeout(() => {
-        cleanup();
+        void (async () => {
+          if (isSatisfied()) {
+            cleanup();
+            return;
+          }
+
+          try {
+            const repaired = await this.repairCacheVisibilityHole(
+              tableName,
+              key,
+              expectPresent,
+              expectedFields,
+            );
+            if (repaired && isSatisfied()) {
+              cleanup();
+              return;
+            }
+          } catch (repairError) {
+            this.logger.warn('Authoritative cache repair failed after cache wait timeout', {
+              tableName,
+              key,
+              expectPresent,
+              error: repairError?.message || String(repairError),
+              nodeId: this.nodeId,
+            });
+          }
+
+          cleanup(new Error(
+            CDC_ERROR_MSG.CACHE_WAIT_TIMEOUT(
+              tableName,
+              key,
+              this.cacheWaitTimeoutMs,
+            ),
+          ));
+        })();
       }, this.cacheWaitTimeoutMs);
 
       cache.onCacheChange(listener);
     });
+  }
+
+  /**
+   * Check whether the local cache currently satisfies a write expectation.
+   * @param {string} tableName
+   * @param {string} key
+   * @param {boolean} expectPresent
+   * @param {Object|null} expectedFields
+   * @return {boolean}
+   * @private
+   */
+  isCacheExpectationSatisfied(tableName, key, expectPresent, expectedFields = null) {
+    const present = this.hasCacheRecord(tableName, key);
+    if (expectPresent && !present) {
+      return false;
+    }
+    if (!expectPresent && !present) {
+      return true;
+    }
+    if (!expectPresent) {
+      return false;
+    }
+    return this.doesCacheRecordMatchExpectedFields(
+      this.getCacheRecord(tableName, key),
+      expectedFields,
+    );
+  }
+
+  /**
+   * Determine whether the local cache has one record.
+   * @param {string} tableName
+   * @param {string} key
+   * @return {boolean}
+   * @private
+   */
+  hasCacheRecord(tableName, key) {
+    const cache = this.systemTableCache;
+    if (!cache) {
+      return false;
+    }
+    if (typeof cache.has === TYPEOF.FUNCTION) {
+      return cache.has(tableName, key);
+    }
+    if (typeof cache.get === TYPEOF.FUNCTION) {
+      return Boolean(cache.get(tableName, key));
+    }
+    return false;
+  }
+
+  /**
+   * Get one record from the local cache when available.
+   * @param {string} tableName
+   * @param {string} key
+   * @return {Object|undefined}
+   * @private
+   */
+  getCacheRecord(tableName, key) {
+    const cache = this.systemTableCache;
+    if (!cache || typeof cache.get !== TYPEOF.FUNCTION) {
+      return undefined;
+    }
+    return cache.get(tableName, key);
+  }
+
+  /**
+   * Perform one bounded authoritative repair for a cache visibility hole.
+   * @param {string} tableName
+   * @param {string} key
+   * @param {boolean} expectPresent
+   * @param {Object|null} expectedFields
+   * @return {Promise<boolean>} True when a repair was applied.
+   * @private
+   */
+  async repairCacheVisibilityHole(
+    tableName,
+    key,
+    expectPresent,
+    expectedFields = null,
+  ) {
+    const cacheMutationTarget = this.cacheMutationTarget;
+    if (!this.shouldWaitForCacheUpdate(tableName) ||
+      !this.sqlQueryEngine ||
+      typeof this.sqlQueryEngine.executeQuery !== TYPEOF.FUNCTION ||
+      !cacheMutationTarget ||
+      typeof cacheMutationTarget.applySystemTableChange !== TYPEOF.FUNCTION) {
+      return false;
+    }
+
+    const primaryKeyField = this.getPrimaryKeyField(tableName);
+    const queryResult = await this.sqlQueryEngine.executeQuery(
+      `SELECT * FROM ${tableName} WHERE ${primaryKeyField} = ?`,
+      [key],
+    );
+    if (!queryResult?.success) {
+      return false;
+    }
+
+    const causeId = `cdc-authoritative-cache-repair:${tableName}:${key}:${Date.now()}`;
+    const rows = Array.isArray(queryResult.rows) ? queryResult.rows : [];
+    if (expectPresent) {
+      if (rows.length === NUM.ZERO) {
+        return false;
+      }
+      for (const row of rows) {
+        cacheMutationTarget.applySystemTableChange(
+          tableName,
+          CDC_OPERATION.UPSERT,
+          row,
+          {causeId},
+        );
+      }
+    } else {
+      if (rows.length > NUM.ZERO) {
+        return false;
+      }
+      const cachedRecord = this.getCacheRecord(tableName, key);
+      if (cachedRecord) {
+        cacheMutationTarget.applySystemTableChange(
+          tableName,
+          CDC_OPERATION.DELETE,
+          cachedRecord,
+          {causeId},
+        );
+      }
+    }
+
+    const repaired = this.isCacheExpectationSatisfied(
+      tableName,
+      key,
+      expectPresent,
+      expectedFields,
+    );
+    if (repaired) {
+      this.logger.warn('Recovered cache visibility gap from authoritative system table read', {
+        tableName,
+        key,
+        expectPresent,
+        nodeId: this.nodeId,
+      });
+    }
+    return repaired;
+  }
+
+  /**
+   * Determine whether one cached row matches the expected post-write fields.
+   * @param {Object|undefined} record
+   * @param {Object|null} expectedFields
+   * @return {boolean}
+   * @private
+   */
+  doesCacheRecordMatchExpectedFields(record, expectedFields) {
+    if (!expectedFields) {
+      return Boolean(record);
+    }
+    if (!record || typeof record !== TYPEOF.OBJECT) {
+      return false;
+    }
+
+    for (const [fieldName, expectedValue] of Object.entries(expectedFields)) {
+      if (!this.areCacheFieldValuesEqual(record[fieldName], expectedValue)) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  /**
+   * Compare one cached field against an expected post-write value.
+   * @param {*} actualValue
+   * @param {*} expectedValue
+   * @return {boolean}
+   * @private
+   */
+  areCacheFieldValuesEqual(actualValue, expectedValue) {
+    if (actualValue === expectedValue) {
+      return true;
+    }
+
+    if ((actualValue === null || typeof actualValue !== TYPEOF.OBJECT) &&
+        (expectedValue === null || typeof expectedValue !== TYPEOF.OBJECT)) {
+      return false;
+    }
+
+    try {
+      return JSON.stringify(actualValue) === JSON.stringify(expectedValue);
+    } catch {
+      return false;
+    }
   }
 
   /**
@@ -1095,7 +1344,7 @@ class CDCIntegrationService extends EventEmitter {
    * @param {Object} data - Data to update.
    * @return {Promise<Object>} Update result.
    */
-  async updateSystemTableRow(tableName, whereClause, data) {
+  async updateSystemTableRow(tableName, whereClause, data, options = {}) {
     this.validateTableName(tableName);
     this.validateData(whereClause, CDC_OPERATION_LABEL.UPDATE_WHERE);
     this.validateData(data, CDC_OPERATION_LABEL.UPDATE_DATA);
@@ -1137,7 +1386,13 @@ class CDCIntegrationService extends EventEmitter {
       const cacheWaitStartMs = Date.now();
       if (typeof result.affectedRows !== TYPEOF.NUMBER ||
         result.affectedRows > NUM.ZERO) {
-        await this.waitForCacheUpdate(tableName, id, true);
+        const expectedCacheFields = options?.expectedCacheFields &&
+          typeof options.expectedCacheFields === TYPEOF.OBJECT ?
+          options.expectedCacheFields :
+          null;
+        await this.waitForCacheUpdate(tableName, id, true, {
+          expectedFields: expectedCacheFields,
+        });
       }
       const cacheWaitDurationMs = Date.now() - cacheWaitStartMs;
 
@@ -1302,7 +1557,7 @@ class CDCIntegrationService extends EventEmitter {
    * @param {Object} data - Row data to upsert (must include primary key).
    * @return {Promise<Object>} Upsert result.
    */
-  async upsertSystemTableRow(tableName, data) {
+  async upsertSystemTableRow(tableName, data, options = {}) {
     this.validateTableName(tableName);
     this.validateData(data, CDC_OPERATION_LABEL.UPSERT);
 
@@ -1334,7 +1589,9 @@ class CDCIntegrationService extends EventEmitter {
         throw new Error(result.error || CDC_ERROR_MSG.UPSERT_FAILED);
       }
 
-      await this.waitForCacheUpdate(tableName, id, true);
+      if (options?.skipCacheWait !== true) {
+        await this.waitForCacheUpdate(tableName, id, true);
+      }
 
       this.stats.updates++;
 

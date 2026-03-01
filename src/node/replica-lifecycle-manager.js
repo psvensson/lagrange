@@ -93,6 +93,7 @@ class ReplicaLifecycleManager extends EventEmitter {
     // Track pending operations by request_id
     this.pendingOperations = new Map();
     this.ownsReplicaHandler = false;
+    this.shutdownPromise = null;
     assertCritical(
       this.replicaHandler || this.createPartitionService,
       REPLICA_LIFECYCLE_ERROR_MSG.REPLICA_HANDLER_REQUIRED,
@@ -770,15 +771,34 @@ class ReplicaLifecycleManager extends EventEmitter {
   /**
    * Shutdown the replica lifecycle manager.
    */
-  shutdown() {
-    this.logger.info(REPLICA_LIFECYCLE_LOG_MSG.SHUTTING_DOWN, {
-      nodeId: this.nodeId,
-    });
+  async shutdown() {
+    if (this.shutdownPromise) {
+      return this.shutdownPromise;
+    }
 
-    this.pendingOperations.clear();
-    this.initialized = false;
+    this.shutdownPromise = (async () => {
+      this.logger.info(REPLICA_LIFECYCLE_LOG_MSG.SHUTTING_DOWN, {
+        nodeId: this.nodeId,
+      });
 
-    this.emit(REPLICA_LIFECYCLE_EVENT.SHUTDOWN, {nodeId: this.nodeId});
+      this.pendingOperations.clear();
+      this.initialized = false;
+
+      if (this.replicaHandler && typeof this.replicaHandler.shutdown === TYPEOF.FUNCTION) {
+        try {
+          await this.replicaHandler.shutdown();
+        } catch (error) {
+          this.logger.warn('Failed to shut down delegated replica handler', {
+            nodeId: this.nodeId,
+            error: error.message,
+          });
+        }
+      }
+
+      this.emit(REPLICA_LIFECYCLE_EVENT.SHUTDOWN, {nodeId: this.nodeId});
+    })();
+
+    return this.shutdownPromise;
   }
 }
 

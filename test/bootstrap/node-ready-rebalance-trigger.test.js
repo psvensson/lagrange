@@ -457,4 +457,54 @@ test('BootstrapService node-ready rebalance trigger ownership', async (t) => {
       t.pass('cache waiter should use lease-based readiness without transport coupling');
     },
   );
+
+  await t.test(
+    'waitForReadyNodeInCache repairs propagated cache tables before timing out',
+    async (t) => {
+      const nodeId = 'node-repaired';
+      const nodeRow = {
+        node_id: nodeId,
+        status: SERVICE_STATUS.ACTIVE,
+        connection_state: STATE.DISCONNECTED,
+        ready_lease_expires_at: Date.now() + LEASE_VALID_MS,
+      };
+      const rowsByNodeId = new Map();
+      let repairCount = 0;
+
+      const bootstrapService = new BootstrapService({
+        nodeId: 'seed-node',
+        nodeAddress: 'localhost:8080',
+        config: {
+          leadershipWaitTimeoutMs: CACHE_WAIT_TIMEOUT_MS,
+          leadershipWaitInitialDelayMs: CACHE_WAIT_DELAY_MS,
+          leadershipWaitMaxDelayMs: CACHE_WAIT_DELAY_MS,
+          leadershipWaitBackoffMultiplier: CACHE_WAIT_DELAY_MS,
+        },
+      });
+      bootstrapService.systemTableCache = {
+        get: (_tableName, lookupNodeId) => {
+          const row = rowsByNodeId.get(lookupNodeId);
+          return row ? {...row} : null;
+        },
+      };
+      bootstrapService.getLeaderMessageGroupService = () => ({
+        applyCDCEvent: async () => {},
+      });
+      bootstrapService.hydrateFromLocalPartitions = async () => {
+        repairCount++;
+        rowsByNodeId.set(nodeId, {...nodeRow});
+        return {
+          success: true,
+          tables: {
+            nodes: {success: true, rowCount: 1},
+          },
+          errors: [],
+        };
+      };
+
+      await bootstrapService.waitForReadyNodeInCache(nodeId);
+      t.equal(repairCount, 1,
+        'cache waiter should repair propagated tables once before failing');
+    },
+  );
 });

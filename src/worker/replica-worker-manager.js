@@ -17,6 +17,10 @@
 import Piscina from 'piscina';
 import {EventEmitter} from 'events';
 import {
+  resolveModuleDirectory,
+  resolvePackagedRuntimeFile,
+} from '../sea/runtime-file-resolution.js';
+import {
   WORKER_OPERATION,
   WORKER_STATUS,
   WORKER_EVENT,
@@ -111,6 +115,16 @@ const REPLICA_CREATE_PROGRESS = Object.freeze({
   STATE_FAILED: 'failed',
 });
 
+const REPLICA_WORKER_MODULE_DIR = resolveModuleDirectory(resolveModuleDirectory);
+
+function resolveReplicaWorkerPath() {
+  return resolvePackagedRuntimeFile({
+    moduleDir: REPLICA_WORKER_MODULE_DIR,
+    sourceFileName: 'replica-worker.js',
+    bundledFileName: 'replica-worker.bundle.cjs',
+  });
+}
+
 /**
  * WorkerReplicaHandle - Handle returned when creating a worker replica.
  * @typedef {Object} WorkerReplicaHandle
@@ -160,7 +174,7 @@ class ReplicaWorkerManager extends EventEmitter {
     this.messageRouter = options.messageRouter;
 
     /** @type {string} Path to worker entry point */
-    this.workerPath = options.workerPath || './replica-worker.js';
+    this.workerPath = options.workerPath || resolveReplicaWorkerPath();
 
     /** @type {Object} Logger instance */
     this.logger = options.logger || console;

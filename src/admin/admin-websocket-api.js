@@ -33,7 +33,14 @@ import Fastify from 'fastify';
 import websocket from '@fastify/websocket';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
-import {COLUMN, ERRNO, NUM, TABLES, TYPEOF} from '../constants/index.js';
+import {
+  CDC_OPERATION,
+  COLUMN,
+  ERRNO,
+  NUM,
+  TABLES,
+  TYPEOF,
+} from '../constants/index.js';
 import {CONNECTION_STATE, TRANSPORT_EVENT} from '../constants/transport.js';
 import {INITIAL_PARTITION_IDS} from
   '../bootstrap/system-table-schemas-constants.js';
@@ -97,6 +104,8 @@ import {
   ADMIN_TEST_ERROR_MSG,
   ADMIN_TEST_STREAM_EVENT,
 } from './admin-constants.js';
+import {getSystemCachePrimaryKeyField} from
+  '../cache/system-cache-key-descriptor.js';
 
 const MessageType = ADMIN_MESSAGE_TYPE;
 const ErrorCode = ADMIN_ERROR_CODE;
@@ -141,6 +150,7 @@ const SERVICE_DISCOVERY_READINESS_REASON = Object.freeze({
   SCHEMA_PARTITION_UNAVAILABLE: 'schema_partition_unavailable',
   REPLICA_OPERATIONS_IN_FLIGHT: 'replica_operations_in_flight',
   LEADERSHIP_UNSTABLE: 'leadership_unstable',
+  LOCAL_REPLICA_NOT_VOTER_READY: 'local_replica_not_voter_ready',
 });
 const SERVICE_DISCOVERY_SCHEMA_VERSION_FIELD_CANDIDATES = Object.freeze([
   'updated_at_hlc',
@@ -155,6 +165,28 @@ const SERVICE_DISCOVERY_SCHEMA_VERSION_FIELD_CANDIDATES = Object.freeze([
 const ADMIN_LOCAL_DISPATCH = Object.freeze({
   TARGET_ADDRESS: 'local/admin-websocket-api',
 });
+const AUTHORITATIVE_DISCOVERY_REPAIR = Object.freeze({
+  COOLDOWN_MS: 1000,
+  QUERY_TIMEOUT_MS: 1500,
+  STALE_THRESHOLD_MS: 5000,
+  TABLES: Object.freeze([
+    TABLES.NODES,
+    TABLES.PARTITIONS,
+    TABLES.SERVICES,
+    TABLES.TABLES,
+    TABLES.NODE_ENDPOINTS,
+    TABLES.SERVICE_DEFINITIONS,
+    TABLES.SERVICE_ENDPOINTS,
+    TABLES.REPLICA_OPERATIONS,
+  ]),
+});
+const AUTHORITATIVE_DISCOVERY_REPAIRABLE_REASON_CODES = new Set([
+  SERVICE_DISCOVERY_READINESS_REASON.SCHEMA_TABLE_MISSING,
+  SERVICE_DISCOVERY_READINESS_REASON.SCHEMA_PARTITION_UNAVAILABLE,
+  SERVICE_DISCOVERY_READINESS_REASON.REPLICA_OPERATIONS_IN_FLIGHT,
+  SERVICE_DISCOVERY_READINESS_REASON.LEADERSHIP_UNSTABLE,
+  SERVICE_DISCOVERY_READINESS_REASON.LOCAL_REPLICA_NOT_VOTER_READY,
+]);
 
 /**
  * Build a typed admin-operation error used for websocket responses.
@@ -216,6 +248,37 @@ function compareSchemaVersionValues(left, right) {
     return leftNumber - rightNumber;
   }
   return String(left).localeCompare(String(right));
+}
+
+function isActiveVoterReadyPartitionReplica(serviceRow) {
+  if (!serviceRow || typeof serviceRow !== TYPEOF.OBJECT) {
+    return false;
+  }
+  const serviceType = firstStringField(
+    serviceRow,
+    COLUMN.SERVICE_TYPE,
+    'service_type',
+    'serviceType',
+    'type',
+  );
+  if (serviceType !== SERVICE_TYPE_PARTITION) {
+    return false;
+  }
+  const status = firstStringField(serviceRow, COLUMN.STATUS, 'status');
+  if (String(status || '').toLowerCase() !== STATUS_ACTIVE) {
+    return false;
+  }
+  const raftRole = firstStringField(
+    serviceRow,
+    COLUMN.RAFT_ROLE,
+    'raft_role',
+    'raftRole',
+  );
+  if (!raftRole || String(raftRole).toLowerCase() === LEARNER_RAFT_ROLE) {
+    return false;
+  }
+  const address = firstStringField(serviceRow, COLUMN.ADDRESS, 'address');
+  return Boolean(address);
 }
 
 function selectNewestSchemaVersion(current, candidate) {
@@ -397,6 +460,7 @@ class AdminWebSocketAPI {
    * Create a new AdminWebSocketAPI.
    * @param {Object} options - Configuration options.
    * @param {Object} options.systemTableCache - System table cache.
+   * @param {Object|null} [options.cacheMutationTarget] - Writable cache target.
    * @param {Object} options.sqlQueryEngine - SQL query engine.
    * @param {Object|null} [options.messageRouter] - MessageRouter instance (optional).
    * @param {string} options.nodeId - Node ID.
@@ -404,6 +468,10 @@ class AdminWebSocketAPI {
    */
   constructor(options = {}) {
     this.systemTableCache = options.systemTableCache || null;
+    this.cacheMutationTarget = options.cacheMutationTarget ||
+      (typeof this.systemTableCache?.applySystemTableChange === TYPEOF.FUNCTION ?
+        this.systemTableCache :
+        null);
     this.sqlQueryEngine = options.sqlQueryEngine || null;
     this.messageRouter = options.messageRouter || null;
     this.nodeId = options.nodeId || ADMIN_DEFAULT.NODE_ID;
@@ -440,6 +508,8 @@ class AdminWebSocketAPI {
 
     // Connected clients
     this.clients = new Set();
+    this.authoritativeDiscoveryRepairPromise = null;
+    this.lastAuthoritativeDiscoveryRepairAtMs = NUM.ZERO;
 
     // Subscribe to cache notifications for CDC forwarding (Requirement 2.2)
     this.subscribeToCacheNotifications();
@@ -2052,7 +2122,7 @@ class AdminWebSocketAPI {
    */
   async handlePreflightCriticalPathSnapshot(reply) {
     try {
-      const snapshot = this.buildLocalPreflightCriticalPathSnapshot();
+      const snapshot = await this.resolvePreflightCriticalPathSnapshot();
       reply.code(HTTP_STATUS.OK).send(snapshot);
     } catch (error) {
       reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE).send({
@@ -2127,7 +2197,7 @@ class AdminWebSocketAPI {
         ENDPOINT_SYNC_UNHEALTHY_POLICY.NOT_READY;
 
     try {
-      const snapshot = this.buildLocalServiceDiscoverySnapshot({
+      const snapshot = await this.resolveServiceDiscoverySnapshot({
         protocolAllowlist,
         serviceIdAllowlist,
         nodeIdAllowlist,
@@ -2223,6 +2293,82 @@ class AdminWebSocketAPI {
   }
 
   /**
+   * Resolve local service discovery snapshot with bounded authoritative repair.
+   * @param {Object} [options={}]
+   * @return {Promise<Object>}
+   * @private
+   */
+  async resolveServiceDiscoverySnapshot(options = {}) {
+    const snapshot = this.buildLocalServiceDiscoverySnapshot(options);
+    if (!this.shouldAttemptAuthoritativeDiscoveryRepair(snapshot)) {
+      return snapshot;
+    }
+    const repair = await this.ensureAuthoritativeDiscoveryCacheRepair({
+      reason: 'service_discovery_snapshot',
+      tableName: options.tableName || null,
+      tableId: options.tableId || null,
+    });
+    if (repair.applied !== true) {
+      return snapshot;
+    }
+    return this.buildLocalServiceDiscoverySnapshot(options);
+  }
+
+  /**
+   * Determine whether discovery snapshot warrants authoritative cache repair.
+   * @param {Object} snapshot
+   * @return {boolean}
+   * @private
+   */
+  shouldAttemptAuthoritativeDiscoveryRepair(snapshot) {
+    if (!this.systemTableCache ||
+        !this.cacheMutationTarget ||
+        typeof this.cacheMutationTarget.applySystemTableChange !== TYPEOF.FUNCTION ||
+        !this.sqlQueryEngine ||
+        typeof this.sqlQueryEngine.executeRequest !== TYPEOF.FUNCTION) {
+      return false;
+    }
+    if (!snapshot || typeof snapshot !== TYPEOF.OBJECT) {
+      return false;
+    }
+    const freshness = this.buildPreflightCacheFreshnessSummary({
+      capturedAtMs: Date.now(),
+    });
+    const stalenessMs = Number(freshness?.stalenessMs);
+    const cacheRepairEligible =
+      !Number.isFinite(stalenessMs) ||
+      stalenessMs >= AUTHORITATIVE_DISCOVERY_REPAIR.STALE_THRESHOLD_MS;
+    if (snapshot.serviceCount === NUM.ZERO || snapshot.replicaCount === NUM.ZERO) {
+      return cacheRepairEligible;
+    }
+
+    const services = Array.isArray(snapshot.services) ? snapshot.services : [];
+    let readyReplicaCount = NUM.ZERO;
+    for (const service of services) {
+      const replicas = Array.isArray(service?.replicas) ? service.replicas : [];
+      for (const replica of replicas) {
+        const readiness = replica?.readiness || null;
+        if (!readiness || typeof readiness !== TYPEOF.OBJECT) {
+          continue;
+        }
+        const reasons = Array.isArray(readiness.reasons) ? readiness.reasons : [];
+        if (readiness.benchmarkReady === true || reasons.length === NUM.ZERO) {
+          readyReplicaCount += NUM.ONE;
+        }
+        for (const reason of reasons) {
+          const code = String(reason?.code || EMPTY_STRING);
+          if (cacheRepairEligible &&
+              AUTHORITATIVE_DISCOVERY_REPAIRABLE_REASON_CODES.has(code)) {
+            return true;
+          }
+        }
+      }
+    }
+
+    return cacheRepairEligible && readyReplicaCount === NUM.ZERO;
+  }
+
+  /**
    * Build per-replica readiness context from local cache state.
    * @param {Object} [options={}]
    * @return {Object}
@@ -2262,6 +2408,11 @@ class AdminWebSocketAPI {
       tablePartitionContext.partitionIds,
       serviceRows,
     );
+    const localTargetReplicaStateByNodeId =
+      this.buildDiscoveryLocalTargetReplicaStateByNodeId(
+        tablePartitionContext.partitionIds,
+        serviceRows,
+      );
     const replicaOperationSummary =
       this.buildControlSnapshotReplicaOperationSummary(replicaOperationRows);
 
@@ -2272,8 +2423,73 @@ class AdminWebSocketAPI {
       activeNodeIds,
       schemaReady,
       leadershipStable,
+      localTargetReplicaStateByNodeId,
       replicaOpsInFlight: replicaOperationSummary.inFlightCount,
     };
+  }
+
+  /**
+   * Build per-node local target-replica readiness for table-scoped discovery.
+   * Nodes without local target replicas are intentionally omitted so routed
+   * benchmark traffic can still use them when cluster routing is otherwise
+   * healthy.
+   *
+   * @param {Set<string>} partitionIds
+   * @param {Array<Object>} serviceRows
+   * @return {Map<string, {nonVoterPartitionIds: Set<string>}>}
+   * @private
+   */
+  buildDiscoveryLocalTargetReplicaStateByNodeId(partitionIds, serviceRows) {
+    const stateByNodeId = new Map();
+    if (!(partitionIds instanceof Set) || partitionIds.size === NUM.ZERO) {
+      return stateByNodeId;
+    }
+
+    for (const serviceRow of serviceRows) {
+      const serviceType = firstStringField(
+        serviceRow,
+        COLUMN.SERVICE_TYPE,
+        'service_type',
+        'serviceType',
+        'type',
+      );
+      if (serviceType !== SERVICE_TYPE_PARTITION) {
+        continue;
+      }
+      const partitionId = firstStringField(
+        serviceRow,
+        COLUMN.PARTITION_ID,
+        'partition_id',
+        'partitionId',
+        'id',
+      );
+      if (!partitionId || !partitionIds.has(partitionId)) {
+        continue;
+      }
+      const status = firstStringField(serviceRow, COLUMN.STATUS, 'status');
+      if (String(status || '').toLowerCase() !== STATUS_ACTIVE) {
+        continue;
+      }
+      const nodeId = firstStringField(
+        serviceRow,
+        COLUMN.NODE_ID,
+        'node_id',
+        'nodeId',
+      );
+      if (!nodeId) {
+        continue;
+      }
+
+      const nodeState = stateByNodeId.get(nodeId) || {
+        nonVoterPartitionIds: new Set(),
+      };
+      if (!isActiveVoterReadyPartitionReplica(serviceRow)) {
+        nodeState.nonVoterPartitionIds.add(partitionId);
+      }
+      stateByNodeId.set(nodeId, nodeState);
+    }
+
+    return stateByNodeId;
   }
 
   /**
@@ -2497,7 +2713,14 @@ class AdminWebSocketAPI {
       (readinessContext.tableFound &&
         readinessContext.schemaReady === true) :
       true;
-    const topologyReady = readinessContext.replicaOpsInFlight === NUM.ZERO &&
+    const localTargetReplicaState =
+      readinessContext.localTargetReplicaStateByNodeId instanceof Map ?
+        readinessContext.localTargetReplicaStateByNodeId.get(nodeId) :
+        null;
+    const localReplicaReady = !localTargetReplicaState ||
+      localTargetReplicaState.nonVoterPartitionIds.size === NUM.ZERO;
+    const topologyReady = localReplicaReady &&
+      readinessContext.replicaOpsInFlight === NUM.ZERO &&
       readinessContext.leadershipStable === true;
     const benchmarkReady = routingReady && schemaReady && topologyReady;
     const workloadReady = benchmarkReady;
@@ -2531,6 +2754,14 @@ class AdminWebSocketAPI {
       reasons.push({
         code: SERVICE_DISCOVERY_READINESS_REASON.LEADERSHIP_UNSTABLE,
         detail: 'leader coverage incomplete for readiness scope',
+      });
+    }
+    if (!localReplicaReady) {
+      reasons.push({
+        code: SERVICE_DISCOVERY_READINESS_REASON.LOCAL_REPLICA_NOT_VOTER_READY,
+        detail: uniqueSorted([
+          ...localTargetReplicaState.nonVoterPartitionIds,
+        ]).join(','),
       });
     }
 
@@ -2579,6 +2810,56 @@ class AdminWebSocketAPI {
       rowCounts,
       discovery,
     };
+  }
+
+  /**
+   * Resolve local preflight critical-path snapshot with bounded authoritative repair.
+   * @return {Promise<Object>}
+   * @private
+   */
+  async resolvePreflightCriticalPathSnapshot() {
+    const snapshot = this.buildLocalPreflightCriticalPathSnapshot();
+    if (!this.shouldAttemptAuthoritativePreflightRepair(snapshot)) {
+      return snapshot;
+    }
+    const repair = await this.ensureAuthoritativeDiscoveryCacheRepair({
+      reason: 'preflight_critical_path_snapshot',
+    });
+    if (repair.applied !== true) {
+      return snapshot;
+    }
+    return this.buildLocalPreflightCriticalPathSnapshot();
+  }
+
+  /**
+   * Determine whether preflight snapshot warrants authoritative cache repair.
+   * @param {Object} snapshot
+   * @return {boolean}
+   * @private
+   */
+  shouldAttemptAuthoritativePreflightRepair(snapshot) {
+    if (!this.systemTableCache ||
+        !this.cacheMutationTarget ||
+        typeof this.cacheMutationTarget.applySystemTableChange !== TYPEOF.FUNCTION ||
+        !this.sqlQueryEngine ||
+        typeof this.sqlQueryEngine.executeRequest !== TYPEOF.FUNCTION) {
+      return false;
+    }
+    const stalenessMs = Number(snapshot?.cacheFreshness?.stalenessMs);
+    if (Number.isFinite(stalenessMs) &&
+        stalenessMs >= AUTHORITATIVE_DISCOVERY_REPAIR.STALE_THRESHOLD_MS) {
+      return true;
+    }
+    const selectedNodeIds = Array.isArray(snapshot?.discovery?.selectedNodeIds) ?
+      snapshot.discovery.selectedNodeIds :
+      ADMIN_CACHE_DUMP.EMPTY;
+    const serviceEndpointsCount = Number(snapshot?.rowCounts?.serviceEndpointsCount);
+    if (selectedNodeIds.length === NUM.ZERO &&
+        Number.isFinite(serviceEndpointsCount) &&
+        Math.floor(serviceEndpointsCount) > NUM.ZERO) {
+      return true;
+    }
+    return false;
   }
 
   /**
@@ -2932,12 +3213,171 @@ class AdminWebSocketAPI {
   }
 
   /**
+   * Perform bounded authoritative cache repair for discovery-critical tables.
+   * @param {Object} [options={}]
+   * @return {Promise<{applied: boolean, skipped: boolean, tableCount: number}>}
+   * @private
+   */
+  async ensureAuthoritativeDiscoveryCacheRepair(options = {}) {
+    if (!this.systemTableCache ||
+        !this.cacheMutationTarget ||
+        typeof this.cacheMutationTarget.applySystemTableChange !== TYPEOF.FUNCTION ||
+        !this.sqlQueryEngine ||
+        typeof this.sqlQueryEngine.executeRequest !== TYPEOF.FUNCTION) {
+      return {
+        applied: false,
+        skipped: true,
+        tableCount: NUM.ZERO,
+      };
+    }
+
+    const now = Date.now();
+    if (this.authoritativeDiscoveryRepairPromise) {
+      return this.authoritativeDiscoveryRepairPromise;
+    }
+    if (now - this.lastAuthoritativeDiscoveryRepairAtMs <
+      AUTHORITATIVE_DISCOVERY_REPAIR.COOLDOWN_MS) {
+      return {
+        applied: false,
+        skipped: true,
+        tableCount: NUM.ZERO,
+      };
+    }
+
+    const runRepair = async () => {
+      const causeId =
+        'admin-authoritative-discovery-repair:' +
+        String(options.reason || 'unknown') +
+        ':' + String(now);
+      const queryResults = await Promise.allSettled(
+        AUTHORITATIVE_DISCOVERY_REPAIR.TABLES.map(async (tableName) => {
+          const queryResult = await this.executeSqlRequestWithTimeout(
+            createSqlRequest({
+              statement: `SELECT * FROM ${tableName}`,
+              parameters: ADMIN_CACHE_DUMP.EMPTY,
+              sessionId:
+                `${String(options.reason || 'repair')}:${tableName}:${now}`,
+              executionMode: EXECUTION_MODE.SQL_STATEMENT,
+            }),
+            AUTHORITATIVE_DISCOVERY_REPAIR.QUERY_TIMEOUT_MS,
+          );
+          if (queryResult?.success === false) {
+            throw new Error(queryResult.error || 'authoritative_query_failed');
+          }
+          return {
+            tableName,
+            rows: Array.isArray(queryResult?.rows) ?
+              queryResult.rows :
+              ADMIN_CACHE_DUMP.EMPTY,
+          };
+        }),
+      );
+
+      let repairedTableCount = NUM.ZERO;
+      let repairedRowCount = NUM.ZERO;
+      const errors = [];
+      for (const result of queryResults) {
+        if (result.status !== 'fulfilled') {
+          errors.push(String(result.reason?.message || result.reason || 'unknown_error'));
+          continue;
+        }
+        repairedRowCount += this.applyAuthoritativeSystemTableRows(
+          result.value.tableName,
+          result.value.rows,
+          causeId,
+        );
+        repairedTableCount += NUM.ONE;
+      }
+
+      this.lastAuthoritativeDiscoveryRepairAtMs = Date.now();
+      if (errors.length > NUM.ZERO) {
+        this.logger.warn('Authoritative discovery cache repair completed with errors', {
+          nodeId: this.nodeId,
+          reason: options.reason || null,
+          tableName: options.tableName || null,
+          tableId: options.tableId || null,
+          repairedTableCount,
+          repairedRowCount,
+          errorCount: errors.length,
+          errors,
+        });
+      } else {
+        this.logger.info('Authoritative discovery cache repair completed', {
+          nodeId: this.nodeId,
+          reason: options.reason || null,
+          tableName: options.tableName || null,
+          tableId: options.tableId || null,
+          repairedTableCount,
+          repairedRowCount,
+        });
+      }
+
+      return {
+        applied: repairedTableCount > NUM.ZERO,
+        skipped: false,
+        tableCount: repairedTableCount,
+      };
+    };
+
+    this.authoritativeDiscoveryRepairPromise = runRepair()
+      .finally(() => {
+        this.authoritativeDiscoveryRepairPromise = null;
+      });
+    return this.authoritativeDiscoveryRepairPromise;
+  }
+
+  /**
+   * Reconcile one cached system table with authoritative query rows.
+   * @param {string} tableName
+   * @param {Array<Object>} rows
+   * @param {string} causeId
+   * @return {number}
+   * @private
+   */
+  applyAuthoritativeSystemTableRows(tableName, rows, causeId) {
+    const authoritativeRows = Array.isArray(rows) ? rows : ADMIN_CACHE_DUMP.EMPTY;
+    const primaryKeyField = getSystemCachePrimaryKeyField(tableName);
+    const cachedRows = this.systemTableCache.getAll(tableName);
+    const authoritativeKeys = new Set();
+
+    for (const row of authoritativeRows) {
+      const key = row?.[primaryKeyField] ?? row?.id;
+      if (typeof key === TYPEOF.UNDEFINED || key === null) {
+        continue;
+      }
+      authoritativeKeys.add(key);
+      this.cacheMutationTarget.applySystemTableChange(
+        tableName,
+        CDC_OPERATION.INSERT,
+        row,
+        {causeId},
+      );
+    }
+
+    for (const row of cachedRows) {
+      const key = row?.[primaryKeyField] ?? row?.id;
+      if (typeof key === TYPEOF.UNDEFINED || key === null ||
+          authoritativeKeys.has(key)) {
+        continue;
+      }
+      this.cacheMutationTarget.applySystemTableChange(
+        tableName,
+        CDC_OPERATION.DELETE,
+        row,
+        {causeId},
+      );
+    }
+
+    return authoritativeRows.length;
+  }
+
+  /**
    * Build canonical query_result payload for preflight critical-path snapshot query.
    * @return {Object}
    * @private
    */
-  buildPreflightCriticalPathSnapshotQueryResult() {
-    const snapshot = this.buildLocalPreflightCriticalPathSnapshot();
+  async buildPreflightCriticalPathSnapshotQueryResult() {
+    const snapshot = await this.resolvePreflightCriticalPathSnapshot();
     return {
       success: true,
       rows: [snapshot],
@@ -2971,7 +3411,10 @@ class AdminWebSocketAPI {
       .map((row) => firstStringField(row, COLUMN.PARTITION_ID, 'id'))
       .filter(Boolean));
 
-    const leaders = this.buildControlSnapshotLeaders(serviceRows);
+    const leaderSummary = this.buildControlSnapshotLeaderSummary(
+      partitionRows,
+      serviceRows,
+    );
     const voterCounts = this.buildControlSnapshotVoterCounts(serviceRows);
     const replicaOperations =
       this.buildControlSnapshotReplicaOperationSummary(replicaOperationRows);
@@ -2982,20 +3425,28 @@ class AdminWebSocketAPI {
       capturedAt: Date.now(),
       nodes: nodeIds,
       partitions: partitionIds,
-      leaders,
+      leaders: leaderSummary.leaders,
+      replicaRoles: leaderSummary.replicaRoles,
+      replicaRoleDiagnostics: leaderSummary.replicaRoleDiagnostics,
       voterCounts,
       replicaOperations,
     };
   }
 
   /**
-   * Build leader map from local services table rows.
+   * Build canonical leader summary from owner rows plus replica-role detail.
+   * Canonical leader identity comes from partitions.leader_node_id.
+   * Replica rows are attached only as supporting diagnostics.
+   * @param {Array<Object>} partitionRows
    * @param {Array<Object>} serviceRows
    * @return {Object}
    * @private
    */
-  buildControlSnapshotLeaders(serviceRows = []) {
+  buildControlSnapshotLeaderSummary(partitionRows = [], serviceRows = []) {
     const leaders = {};
+    const replicaRoles = {};
+    const replicaLeaderNodeIdsByPartition = new Map();
+
     for (const serviceRow of serviceRows) {
       const serviceType = firstStringField(
         serviceRow,
@@ -3004,15 +3455,6 @@ class AdminWebSocketAPI {
         'serviceType',
       );
       if (serviceType !== SERVICE_TYPE_PARTITION) {
-        continue;
-      }
-
-      const raftRole = firstStringField(
-        serviceRow,
-        COLUMN.RAFT_ROLE,
-        'raftRole',
-      );
-      if (String(raftRole || '').toLowerCase() !== LEADER_RAFT_ROLE) {
         continue;
       }
 
@@ -3025,20 +3467,92 @@ class AdminWebSocketAPI {
         continue;
       }
 
-      const leaderAddress = firstStringField(
+      const raftRole = firstStringField(
         serviceRow,
-        COLUMN.ADDRESS,
+        COLUMN.RAFT_ROLE,
+        'raftRole',
+      );
+      const normalizedRaftRole = String(raftRole || '').toLowerCase();
+      if (!normalizedRaftRole) {
+        continue;
+      }
+
+      const replicaId = firstStringField(
+        serviceRow,
+        COLUMN.REPLICA_ID,
+        COLUMN.SERVICE_ID,
+        'replicaId',
+        'id',
+      );
+      if (!replicaId) {
+        continue;
+      }
+      replicaRoles[partitionId] = replicaRoles[partitionId] || {};
+      replicaRoles[partitionId][replicaId] = normalizedRaftRole;
+
+      if (normalizedRaftRole !== LEADER_RAFT_ROLE) {
+        continue;
+      }
+
+      const leaderNodeId = firstStringField(
+        serviceRow,
         COLUMN.LEADER_NODE_ID,
         COLUMN.NODE_ID,
         'nodeId',
       );
-      if (!leaderAddress) {
+      if (!leaderNodeId) {
+        continue;
+      }
+      let partitionLeaderNodeIds = replicaLeaderNodeIdsByPartition.get(partitionId);
+      if (!partitionLeaderNodeIds) {
+        partitionLeaderNodeIds = new Set();
+        replicaLeaderNodeIdsByPartition.set(partitionId, partitionLeaderNodeIds);
+      }
+      partitionLeaderNodeIds.add(leaderNodeId);
+    }
+
+    const replicaRoleDiagnostics = {};
+    for (const partitionRow of partitionRows) {
+      const partitionId = firstStringField(
+        partitionRow,
+        COLUMN.PARTITION_ID,
+        'partitionId',
+        'id',
+      );
+      if (!partitionId) {
         continue;
       }
 
-      leaders[partitionId] = leaderAddress;
+      const canonicalLeaderNodeId = firstStringField(
+        partitionRow,
+        COLUMN.LEADER_NODE_ID,
+        'leaderNodeId',
+      );
+      if (canonicalLeaderNodeId) {
+        leaders[partitionId] = canonicalLeaderNodeId;
+      }
+
+      const replicaLeaderNodeIds = uniqueSorted(Array.from(
+        replicaLeaderNodeIdsByPartition.get(partitionId) || [],
+      ));
+      const inconsistentReplicaRoles = replicaLeaderNodeIds.length > NUM.ONE ||
+        (canonicalLeaderNodeId &&
+          replicaLeaderNodeIds.length > NUM.ZERO &&
+          !replicaLeaderNodeIds.includes(canonicalLeaderNodeId));
+
+      replicaRoleDiagnostics[partitionId] = {
+        canonicalLeaderNodeId: canonicalLeaderNodeId || null,
+        source: TABLES.PARTITIONS,
+        inconsistentReplicaRoles,
+        replicaLeaderNodeIds,
+      };
     }
-    return leaders;
+
+    return {
+      leaders,
+      replicaRoles,
+      replicaRoleDiagnostics,
+    };
   }
 
   /**
@@ -3152,8 +3666,8 @@ class AdminWebSocketAPI {
    * @return {Object}
    * @private
    */
-  buildServiceDiscoveryQueryResult(options = {}) {
-    const snapshot = this.buildLocalServiceDiscoverySnapshot(options);
+  async buildServiceDiscoveryQueryResult(options = {}) {
+    const snapshot = await this.resolveServiceDiscoverySnapshot(options);
     return {
       success: true,
       rows: [snapshot],
@@ -3255,7 +3769,7 @@ class AdminWebSocketAPI {
    * @return {Promise<Object>} Query result.
    * @private
    */
-  async executeSqlRequestWithTimeout(sqlRequest) {
+  async executeSqlRequestWithTimeout(sqlRequest, timeoutMs = this.queryTimeoutMs) {
     if (!this.sqlQueryEngine ||
         typeof this.sqlQueryEngine.executeRequest !== TYPEOF.FUNCTION) {
       throw new Error(ADMIN_ERROR_MESSAGE.QUERY_ENGINE_UNAVAILABLE);
@@ -3265,8 +3779,8 @@ class AdminWebSocketAPI {
     try {
       const timeoutPromise = new Promise((_, reject) => {
         timeoutId = setTimeout(() => {
-          reject(new Error(ADMIN_ERROR_MESSAGE.queryTimeout(this.queryTimeoutMs)));
-        }, this.queryTimeoutMs);
+          reject(new Error(ADMIN_ERROR_MESSAGE.queryTimeout(timeoutMs)));
+        }, timeoutMs);
       });
 
       const queryPromise = this.sqlQueryEngine.executeRequest(sqlRequest);

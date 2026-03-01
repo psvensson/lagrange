@@ -187,6 +187,38 @@ test('MessageGroupService - follower demotion clears stale self leader id', asyn
   }
 });
 
+test('MessageGroupService - leader change demotes stale local leadership without follower event', async (t) => {
+  const {router, nodeId, cleanup} = await createTestTransport();
+  try {
+    const service = new MessageGroupService({
+      groupId: 'mg-leader-change-demotion',
+      replicaId: 'mg-leader-change-demotion-r1',
+      nodeId,
+      transport: router,
+    });
+
+    await service.initialize();
+    t.equal(service.role, RaftRole.LEADER, 'single replica should start as leader');
+    t.equal(service.leaderId, service.replicaId, 'single replica should start as self leader');
+
+    // Regression: liferaft may emit a leader-change notification without a
+    // separate follower event when leadership moves away from the local replica.
+    service.raft.emit(RAFT_EVENT.LEADER_CHANGE, 'mg-leader-change-demotion-r2');
+
+    t.equal(service.role, RaftRole.FOLLOWER, 'leader-change should demote local role');
+    t.equal(service.isLeader, false, 'leader-change should clear leader flag');
+    t.equal(
+      service.leaderId,
+      'mg-leader-change-demotion-r2',
+      'leader-change should update leader id to the new leader',
+    );
+
+    await service.shutdown();
+  } finally {
+    await cleanup();
+  }
+});
+
 test('MessageGroupService - buildPeerAddress follows cache updates after relocation', async (t) => {
   const {router, nodeId, cleanup} = await createTestTransport();
   try {
@@ -287,8 +319,8 @@ test('MessageGroupService - persists raft role updates to services table', async
   const {router, nodeId, cleanup} = await createTestTransport();
   const updates = [];
   const mockCdcIntegrationService = {
-    updateSystemTableRow: async (tableName, whereClause, data) => {
-      updates.push({tableName, whereClause, data});
+    updateSystemTableRow: async (tableName, whereClause, data, options) => {
+      updates.push({tableName, whereClause, data, options});
       return {success: true};
     },
   };
@@ -330,8 +362,70 @@ test('MessageGroupService - persists raft role updates to services table', async
     );
 
     t.ok(roleUpdate, 'raft role update should be persisted via CDC');
+    t.same(
+      roleUpdate?.options?.expectedCacheFields,
+      {raft_role: RaftRole.LEADER},
+      'raft role cache wait should only require the stable role field',
+    );
 
     await service.shutdown();
+  } finally {
+    await cleanup();
+  }
+});
+
+test('MessageGroupService - syncs persisted role from cache before rewriting same role', async (t) => {
+  const {router, nodeId, cleanup} = await createTestTransport();
+  let updateCalls = 0;
+  const mockCdcIntegrationService = {
+    updateSystemTableRow: async () => {
+      updateCalls += 1;
+      return {success: true};
+    },
+  };
+  const systemTableCache = new SystemTableCache();
+  const servicesPartitionId = INITIAL_PARTITION_IDS[SystemTableName.SERVICES];
+  systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDC_OPERATION.INSERT, {
+    [COLUMN.PARTITION_ID]: servicesPartitionId,
+    [COLUMN.TABLE_ID]: SystemTableName.SERVICES,
+  });
+  systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, {
+    [COLUMN.SERVICE_ID]: 'services-leader',
+    [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
+    [COLUMN.PARTITION_ID]: servicesPartitionId,
+    [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
+    [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+    [COLUMN.ADDRESS]: `${nodeId}/partition/services-leader`,
+  });
+  systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, {
+    [COLUMN.SERVICE_ID]: 'mg-1-r1',
+    [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.MESSAGE_GROUP,
+    [COLUMN.GROUP_ID]: 'mg-1',
+    [COLUMN.REPLICA_ID]: 'mg-1-r1',
+    [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
+    [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+    [COLUMN.ADDRESS]: `${nodeId}/message-group/mg-1-r1`,
+    [COLUMN.UPDATED_AT]: Date.now(),
+  });
+
+  try {
+    const service = new MessageGroupService({
+      groupId: 'mg-1',
+      replicaId: 'mg-1-r1',
+      nodeId,
+      transport: router,
+      cdcIntegrationService: mockCdcIntegrationService,
+    });
+
+    service.systemTableCache = systemTableCache;
+    service.pendingRoleUpdate = RaftRole.LEADER;
+    service.persistedRole = null;
+
+    await service.flushRoleUpdate();
+
+    t.equal(updateCalls, 0, 'cache convergence should suppress redundant rewrite attempts');
+    t.equal(service.persistedRole, RaftRole.LEADER, 'persisted role should resync from cache');
+    t.equal(service.pendingRoleUpdate, null, 'pending role should clear once cache matches');
   } finally {
     await cleanup();
   }
@@ -341,8 +435,8 @@ test('MessageGroupService - persists leader node updates to message groups table
   const {router, nodeId, cleanup} = await createTestTransport();
   const updates = [];
   const mockCdcIntegrationService = {
-    updateSystemTableRow: async (tableName, whereClause, data) => {
-      updates.push({tableName, whereClause, data});
+    updateSystemTableRow: async (tableName, whereClause, data, options) => {
+      updates.push({tableName, whereClause, data, options});
       return {success: true};
     },
   };
@@ -384,6 +478,11 @@ test('MessageGroupService - persists leader node updates to message groups table
     );
 
     t.ok(leaderUpdate, 'leader node update should be persisted via CDC');
+    t.same(
+      leaderUpdate?.options?.expectedCacheFields,
+      {[COLUMN.LEADER_NODE_ID]: nodeId},
+      'leader cache wait should only require canonical leader identity',
+    );
 
     await service.shutdown();
   } finally {

@@ -5,6 +5,7 @@
  * Requirements: 6.1, 6.2, 6.3, 6.4, 6.5
  */
 
+import {randomUUID} from 'node:crypto';
 import {LOAD_DEFAULTS} from './constants.js';
 
 const DURATION_SECONDS_SUFFIX = 's';
@@ -35,6 +36,7 @@ const DISPATCH_STOP_REASON_TARGET = 'target';
 const DISPATCH_STOP_REASON_DURATION = 'duration';
 const DISPATCH_STOP_REASON_CANCELLED = 'cancelled';
 const REJECTED_REASON_QUEUE_FULL = 'queueFull';
+const TIMEOUT_ERROR_PATTERN = /timeout|timed out|deadline exceeded|etimedout/i;
 
 const LOAD_TABLE_NAME = 'logs';
 const LOAD_TABLE_BENCHMARK_EVENTS = 'benchmark_events';
@@ -59,6 +61,10 @@ const DEFAULT_OPERATIONS = Object.freeze([
 
 const BENCHMARK_OPERATIONS = Object.freeze([
   INSERT_OP,
+  SELECT_OP,
+]);
+
+const RETRY_SAFE_OPERATIONS = new Set([
   SELECT_OP,
 ]);
 
@@ -109,7 +115,11 @@ function buildSqlStatement(operation, counter, options = {}) {
       LOAD_TABLE_NAME,
   );
   if (workloadProfile === WORKLOAD_PROFILE_BENCHMARK_EVENTS) {
-    const eventId = BENCHMARK_EVENT_ID_PREFIX + counter;
+    const eventIdPrefix = typeof options.eventIdPrefix === 'string' &&
+      options.eventIdPrefix.length > ZERO ?
+      options.eventIdPrefix :
+      BENCHMARK_EVENT_ID_PREFIX;
+    const eventId = eventIdPrefix + counter;
     const payload = counter % BENCHMARK_PAYLOAD_MODULO;
     const timestamp = Date.now();
     switch (operation) {
@@ -153,6 +163,19 @@ function buildSqlStatement(operation, counter, options = {}) {
   default:
     return 'SELECT 1';
   }
+}
+
+function isRetrySafeOperation(operation) {
+  return RETRY_SAFE_OPERATIONS.has(String(operation || '').toUpperCase());
+}
+
+function isTimeoutShapedError(error) {
+  const message = String(error?.message || error || '');
+  if (TIMEOUT_ERROR_PATTERN.test(message)) {
+    return true;
+  }
+  const code = String(error?.code || '').toUpperCase();
+  return code === 'ETIMEDOUT';
 }
 
 /**
@@ -326,6 +349,10 @@ class LoadRun {
     this._tableName = options.tableName || LOAD_TABLE_NAME;
     this._workloadProfile =
       options.workloadProfile || WORKLOAD_PROFILE_DEFAULT;
+    this._eventIdPrefix = typeof options.eventIdPrefix === 'string' &&
+      options.eventIdPrefix.length > ZERO ?
+      options.eventIdPrefix :
+      BENCHMARK_EVENT_ID_PREFIX;
     this._maxInFlight = options.maxInFlight ||
       this._availableNodes.length * IN_FLIGHT_PER_NODE;
     this._nodeFailureThreshold =
@@ -545,12 +572,13 @@ class LoadRun {
       const sql = buildSqlStatement(operation, this._counter, {
         tableName: this._tableName,
         workloadProfile: this._workloadProfile,
+        eventIdPrefix: this._eventIdPrefix,
       });
       this._counter++;
       this._dispatchedOperationCount++;
 
       this._inFlight++;
-      this._executeWithFailover(sql).finally(() => {
+      this._executeWithFailover(sql, operation).finally(() => {
         this._inFlight = Math.max(ZERO, this._inFlight - ONE);
       });
       this._nextDispatchAtMs += this._dispatchIntervalMs;
@@ -658,7 +686,7 @@ class LoadRun {
    * On failure, try the next available node.
    * @param {string} sql
    */
-  async _executeWithFailover(sql) {
+  async _executeWithFailover(sql, operation) {
     if (this._cancelled || this._completedMetrics) {
       return;
     }
@@ -717,6 +745,9 @@ class LoadRun {
           hasNonAdmissionFailures = true;
         }
         this._captureErrorMessage(err);
+        if (this._shouldStopFailoverAfterError(operation, err)) {
+          break;
+        }
       } finally {
         this._releaseNodeSlot(nodeHealthKey);
       }
@@ -738,6 +769,16 @@ class LoadRun {
       });
     }
     return node.query(sql);
+  }
+
+  _shouldStopFailoverAfterError(operation, error) {
+    if (this._isAdmissionSignalError(error)) {
+      return false;
+    }
+    if (isRetrySafeOperation(operation)) {
+      return false;
+    }
+    return isTimeoutShapedError(error);
   }
 
   _hasDispatchCapacity(nowMs, options = {}) {
@@ -1235,12 +1276,17 @@ class LoadGenerator {
    */
   start() {
     const durationMs = parseDuration(this._duration);
+    const eventIdPrefix = this._workloadProfile ===
+      WORKLOAD_PROFILE_BENCHMARK_EVENTS ?
+      BENCHMARK_EVENT_ID_PREFIX + randomUUID() + '-' :
+      BENCHMARK_EVENT_ID_PREFIX;
     const run = new LoadRun(this._nodes, {
       opsPerSec: this._opsPerSec,
       durationMs,
       operations: this._operations,
       tableName: this._tableName,
       workloadProfile: this._workloadProfile,
+      eventIdPrefix,
       nodeFailureThreshold: this._nodeFailureThreshold,
       nodeFailureCooldownMs: this._nodeFailureCooldownMs,
       queryTimeoutMs: this._queryTimeoutMs,

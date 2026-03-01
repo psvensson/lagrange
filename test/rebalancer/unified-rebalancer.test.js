@@ -18,6 +18,7 @@ import {
 import {REBALANCER_LOG_MSG} from '../../src/rebalancer/rebalancer-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {SERVICE_TYPE} from '../../src/constants/service.js';
 
 // Initialize test environment
 function initializeTestEnvironment() {
@@ -267,6 +268,63 @@ test('UnifiedRebalancer - Policy Management', async (t) => {
     t.equal(policy.replicaCount, 5);
     t.equal(policy.minReplicaCount, 3);
   });
+
+  await t.test(
+    'message-group local access is satisfied by any local message-group replica',
+    async (t) => {
+      const rebalancer = createTestRebalancer({
+        entityId: 'mg-1',
+        entityType: EntityType.MESSAGE_GROUP,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+          {node_id: 'node-4', status: NodeStatus.ACTIVE},
+        ],
+        services: [
+          {
+            service_id: 'mg-1-r1',
+            group_id: 'mg-1',
+            node_id: 'node-1',
+            service_type: SERVICE_TYPE.MESSAGE_GROUP,
+            status: ReplicaStatus.ACTIVE,
+          },
+          {
+            service_id: 'mg-1-r2',
+            group_id: 'mg-1',
+            node_id: 'node-2',
+            service_type: SERVICE_TYPE.MESSAGE_GROUP,
+            status: ReplicaStatus.ACTIVE,
+          },
+          {
+            service_id: 'mg-self-hosted-3-r0',
+            group_id: 'mg-self-hosted-3',
+            node_id: 'node-3',
+            service_type: SERVICE_TYPE.MESSAGE_GROUP,
+            status: ReplicaStatus.ACTIVE,
+          },
+          {
+            service_id: 'mg-self-hosted-4-r0',
+            group_id: 'mg-self-hosted-4',
+            node_id: 'node-4',
+            service_type: SERVICE_TYPE.MESSAGE_GROUP,
+            status: ReplicaStatus.ACTIVE,
+          },
+        ],
+      });
+
+      const nodesWithoutReplica = rebalancer.getNodesWithoutLocalReplica(
+        rebalancer.getCurrentReplicas(),
+      );
+
+      t.same(
+        nodesWithoutReplica,
+        [],
+        'other local message-group replicas should satisfy local access',
+      );
+    },
+  );
 });
 
 test('UnifiedRebalancer - Node Management', async (t) => {
