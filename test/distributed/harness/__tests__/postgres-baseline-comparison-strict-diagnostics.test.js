@@ -6,7 +6,7 @@ import {
   rm,
   join,
   tmpdir,
-  run,
+  runWithVirtualScenarioTiming as run,
   resolveBenchmarkConfig,
   buildComparison,
   NODE_CLIENT_CONTROL_SNAPSHOT_SQL,

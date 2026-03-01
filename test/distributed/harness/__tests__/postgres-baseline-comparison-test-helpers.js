@@ -35,6 +35,44 @@ const QUIET_MODE_PHASE_PRE_FLIGHT = SCENARIO_PHASE_SEQUENCE[0];
 const QUIET_MODE_PHASE_TEARDOWN =
   SCENARIO_PHASE_SEQUENCE[SCENARIO_PHASE_SEQUENCE.length - 1];
 
+function createVirtualScenarioTiming(startAtMs = 0) {
+  let nowMs = Number.isFinite(startAtMs) ? Math.floor(startAtMs) : 0;
+  const sleepCalls = [];
+  return {
+    timing: {
+      now: () => nowMs,
+      sleep: async (durationMs) => {
+        const normalizedDurationMs = Number.isFinite(durationMs) ?
+          Math.max(0, Math.floor(durationMs)) :
+          0;
+        sleepCalls.push(normalizedDurationMs);
+        nowMs += normalizedDurationMs;
+      },
+    },
+    now: () => nowMs,
+    getSleepCalls: () => [...sleepCalls],
+  };
+}
+
+function installVirtualScenarioTiming(cluster, options = {}) {
+  const controller = createVirtualScenarioTiming(options.startAtMs);
+  const scenarioOverrides =
+    cluster?._scenarioOverrides?.postgresBaselineComparison || {};
+  cluster._scenarioOverrides = {
+    ...(cluster?._scenarioOverrides || {}),
+    postgresBaselineComparison: {
+      ...scenarioOverrides,
+      timing: controller.timing,
+    },
+  };
+  return controller;
+}
+
+function runWithVirtualScenarioTiming(cluster) {
+  installVirtualScenarioTiming(cluster);
+  return run(cluster);
+}
+
 function isRecord(value) {
   return value !== null && typeof value === 'object';
 }
@@ -555,6 +593,9 @@ export {
   join,
   tmpdir,
   run,
+  runWithVirtualScenarioTiming,
+  createVirtualScenarioTiming,
+  installVirtualScenarioTiming,
   resolveBenchmarkConfig,
   buildComparison,
   NODE_CLIENT_CONTROL_SNAPSHOT_SQL,

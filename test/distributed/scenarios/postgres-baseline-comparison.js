@@ -385,6 +385,24 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+const DEFAULT_SCENARIO_TIMING = Object.freeze({
+  now: () => Date.now(),
+  sleep,
+});
+
+function resolveScenarioTiming(configuredTiming) {
+  return {
+    now:
+      typeof configuredTiming?.now === 'function' ?
+        configuredTiming.now :
+        DEFAULT_SCENARIO_TIMING.now,
+    sleep:
+      typeof configuredTiming?.sleep === 'function' ?
+        configuredTiming.sleep :
+        DEFAULT_SCENARIO_TIMING.sleep,
+  };
+}
+
 function parseDurationToMs(duration) {
   if (typeof duration === 'number' && Number.isFinite(duration)) {
     return Math.max(ZERO, Math.floor(duration));
@@ -953,6 +971,7 @@ function resolveScenarioOverrides(cluster) {
     createPostgresPool,
     createLoadGenerator,
     getCdcTelemetryByNode,
+    timing: resolveScenarioTiming(overrides?.timing),
   };
 }
 
@@ -1029,16 +1048,17 @@ async function waitForSutBenchmarkTableReady(
   tableName,
   options = {},
 ) {
+  const timing = resolveScenarioTiming(options.timing);
   const timeoutMs = Number.isInteger(options.timeoutMs) ?
     options.timeoutMs :
     BENCHMARK_DEFAULTS.readyTimeoutMs;
   const pollIntervalMs = Number.isInteger(options.pollIntervalMs) ?
     options.pollIntervalMs :
     BENCHMARK_DEFAULTS.readyPollIntervalMs;
-  const deadline = Date.now() + timeoutMs;
+  const deadline = timing.now() + timeoutMs;
   let lastError = null;
 
-  while (Date.now() < deadline) {
+  while (timing.now() < deadline) {
     try {
       const tableNameLookup = await queryControlWithNodeFallback(
         nodeClient,
@@ -1078,7 +1098,7 @@ async function waitForSutBenchmarkTableReady(
       }
       lastError = error;
     }
-    await sleep(pollIntervalMs);
+    await timing.sleep(pollIntervalMs);
   }
 
   if (lastError) {
@@ -2557,6 +2577,7 @@ async function fetchControlSnapshotFromCandidates(
 }
 
 async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
+  const timing = resolveScenarioTiming(options.timing);
   const candidates = Array.isArray(nodes) ?
     nodes.filter((node) => isLoadNodeCandidate(node)) :
     [];
@@ -2609,7 +2630,7 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
         {}),
     } :
     NODE_CLIENT_TRANSIENT_CONTEXT;
-  const startedAt = Date.now();
+  const startedAt = timing.now();
   const deadline = startedAt + timeoutMs;
   let attempts = ZERO;
   let lastSourceResults = [];
@@ -2757,7 +2778,7 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
               sourceResults,
               [DISCOVERY_DIAGNOSTICS_FIELD_PROBE_READINESS_BY_NODE_ID]:
                 lastProbeReadinessByNodeId,
-              elapsedMs: Date.now() - startedAt,
+              elapsedMs: timing.now() - startedAt,
             }),
           };
         }
@@ -2781,13 +2802,13 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
               sourceResults: bestSourceResults,
               [DISCOVERY_DIAGNOSTICS_FIELD_PROBE_READINESS_BY_NODE_ID]:
                 bestProbeReadinessByNodeId,
-              elapsedMs: Date.now() - startedAt,
+              elapsedMs: timing.now() - startedAt,
             }),
           };
         }
       }
     }
-    if (Date.now() >= deadline) {
+    if (timing.now() >= deadline) {
       const timedOutNodes = bestReachableCandidates.length > ZERO ?
         bestReachableCandidates :
         [];
@@ -2822,11 +2843,11 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
           sourceResults: timedOutSourceResults,
           [DISCOVERY_DIAGNOSTICS_FIELD_PROBE_READINESS_BY_NODE_ID]:
             timedOutProbeReadinessByNodeId,
-          elapsedMs: Date.now() - startedAt,
+          elapsedMs: timing.now() - startedAt,
         }),
       };
     }
-    await sleep(pollIntervalMs);
+    await timing.sleep(pollIntervalMs);
   }
 }
 
@@ -2846,7 +2867,9 @@ async function waitForSutLoadQuiescence({
   requiredSchemaTableId,
   onConvergenceEvent,
   onBenchmarkMetadataSnapshot,
+  timing: configuredTiming,
 }) {
+  const timing = resolveScenarioTiming(configuredTiming);
   const tableProbeSql = buildSutTableProbeSql(tableName);
   const requireCanonicalReadiness = strictCanonicalReadiness === true;
   const effectiveStableWindowMs = Math.max(
@@ -2864,8 +2887,8 @@ async function waitForSutLoadQuiescence({
       maxReplicaOpsInFlight :
       BENCHMARK_PRELOAD_MAX_REPLICA_OPS_IN_FLIGHT_DEFAULT;
   let lastLeaderSignature = null;
-  let lastLeaderChangeAtMs = Date.now();
-  let lastProgressAtMs = Date.now();
+  let lastLeaderChangeAtMs = timing.now();
+  let lastProgressAtMs = timing.now();
   let lowestInFlightCount = Number.POSITIVE_INFINITY;
   let maxLeaderQuietElapsedMs = ZERO;
   let maxIncludedNodeCount = ZERO;
@@ -2980,7 +3003,7 @@ async function waitForSutLoadQuiescence({
       ...(readinessStateSnapshot ?
         {readinessState: readinessStateSnapshot} :
         {}),
-      timestampMs: Date.now(),
+      timestampMs: timing.now(),
     });
 
     if (!hasPreviousReasonSignature ||
@@ -2992,7 +3015,7 @@ async function waitForSutLoadQuiescence({
         nodeId,
         from: previousReasonSignature,
         to: reasonSignature,
-        timestampMs: Date.now(),
+        timestampMs: timing.now(),
       });
       readinessReasonSignatureByNodeId[nodeId] = reasonSignature;
     }
@@ -3024,7 +3047,10 @@ async function waitForSutLoadQuiescence({
     };
   }
 
-  const gateEngine = new GateEngine();
+  const gateEngine = new GateEngine({
+    now: timing.now,
+    sleep: timing.sleep,
+  });
   const controlSnapshotCandidates = resolveControlSnapshotCandidates(
     seedNode,
     snapshotNodes,
@@ -3291,15 +3317,15 @@ async function waitForSutLoadQuiescence({
         const leaderSignature = JSON.stringify(leaderEntries);
         if (lastLeaderSignature !== null &&
             lastLeaderSignature !== leaderSignature) {
-          lastLeaderChangeAtMs = Date.now();
+          lastLeaderChangeAtMs = timing.now();
         }
         if (lastLeaderSignature === null) {
-          lastLeaderChangeAtMs = Date.now();
+          lastLeaderChangeAtMs = timing.now();
         }
         lastLeaderSignature = leaderSignature;
 
         const leaderCoverageReady = leaderEntries.length > ZERO;
-        const leaderQuietElapsedMs = Date.now() - lastLeaderChangeAtMs;
+        const leaderQuietElapsedMs = timing.now() - lastLeaderChangeAtMs;
         const leadershipStable = leaderCoverageReady &&
           leaderQuietElapsedMs >= effectiveStableWindowMs;
 
@@ -3493,6 +3519,7 @@ async function waitForSutLoadQuiescence({
 }
 
 async function assertClusterConsistencyWithRetry(cluster, options = {}) {
+  const timing = resolveScenarioTiming(options.timing);
   const maxAttempts = Number.isInteger(options.maxAttempts) &&
     options.maxAttempts > ZERO ?
     options.maxAttempts :
@@ -3513,7 +3540,7 @@ async function assertClusterConsistencyWithRetry(cluster, options = {}) {
         break;
       }
       if (retryDelayMs > ZERO) {
-        await sleep(retryDelayMs);
+        await timing.sleep(retryDelayMs);
       }
     }
   }
@@ -5867,6 +5894,7 @@ async function run(cluster) {
         {
           timeoutMs: benchmarkConfig.readyTimeoutMs,
           pollIntervalMs: benchmarkConfig.readyPollIntervalMs,
+          timing: scenarioOverrides.timing,
         },
       );
       const createCommittedNode =
@@ -5894,6 +5922,7 @@ async function run(cluster) {
         {
           timeoutMs: benchmarkConfig.readyTimeoutMs,
           pollIntervalMs: benchmarkConfig.readyPollIntervalMs,
+          timing: scenarioOverrides.timing,
           tableName: benchmarkTableName,
           tableId: state.requiredSchemaTableId,
           minReachableNodeCount: targetSutLoadNodeCount,
@@ -5994,6 +6023,7 @@ async function run(cluster) {
           requiredSchemaTableId: state.requiredSchemaTableId,
           onConvergenceEvent: recordConvergenceEvent,
           onBenchmarkMetadataSnapshot: recordBenchmarkMetadataSnapshot,
+          timing: scenarioOverrides.timing,
         });
       } catch (error) {
         if (benchmarkConfig.strictPreloadReadiness === true) {
@@ -6252,6 +6282,7 @@ async function run(cluster) {
           stableWindowMs: benchmarkConfig.postLoadDrainStableWindowMs,
           noProgressTimeoutMs:
             benchmarkConfig.postLoadDrainNoProgressTimeoutMs,
+          timing: scenarioOverrides.timing,
         });
         state.postLoadDrain = {
           status: POST_LOAD_DRAIN_STATUS_OK,
@@ -6387,6 +6418,7 @@ async function run(cluster) {
       state.consistencyResult = await assertClusterConsistencyWithRetry(cluster, {
         maxAttempts: benchmarkConfig.consistencyAssertMaxAttempts,
         retryDelayMs: benchmarkConfig.consistencyAssertRetryDelayMs,
+        timing: scenarioOverrides.timing,
       });
 
       state.assertionPolicyResult = evaluateAssertionPolicy({

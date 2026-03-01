@@ -220,6 +220,7 @@
 - [x] Validate preload/post-load timeout budgets before scenario execution
 - [x] Freeze normalized `postgres-baseline-comparison` benchmark config objects
 - [x] Remove remaining scenario-local config reinterpretation from distributed scenarios
+- [x] Replace wall-clock waits in split `postgres-baseline-comparison` scenario specs with virtual timing
 
 ### U5 Documentation & Governance Closure
 - [x] Update operator docs to describe canonical owner rows vs read models

@@ -6,7 +6,9 @@ import {
   rm,
   join,
   tmpdir,
-  run,
+  run as scenarioRun,
+  runWithVirtualScenarioTiming as run,
+  installVirtualScenarioTiming,
   resolveBenchmarkConfig,
   buildComparison,
   NODE_CLIENT_CONTROL_SNAPSHOT_SQL,
@@ -2168,7 +2170,8 @@ describe('postgres-baseline-comparison scenario', () => {
         assertConsistency: async () => {},
       };
 
-      await assert.rejects(run(cluster), (error) => {
+      const timing = installVirtualScenarioTiming(cluster);
+      await assert.rejects(scenarioRun(cluster), (error) => {
         assert.match(
           String(error?.message || error),
           /internal_signal_threshold_breach.*critical_rebalancing_state/i,
@@ -2184,6 +2187,10 @@ describe('postgres-baseline-comparison scenario', () => {
         );
         return true;
       });
+      assert.ok(
+        timing.getSleepCalls().length > 0,
+        'critical rebalancing failure path should use virtual poll sleeps instead of wall-clock waiting',
+      );
     });
 
   it('fails strict overload policy when queue and reject contracts are violated',

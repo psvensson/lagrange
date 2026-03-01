@@ -6,7 +6,9 @@ import {
   rm,
   join,
   tmpdir,
-  run,
+  run as scenarioRun,
+  runWithVirtualScenarioTiming as run,
+  installVirtualScenarioTiming,
   resolveBenchmarkConfig,
   buildComparison,
   NODE_CLIENT_CONTROL_SNAPSHOT_SQL,
@@ -1211,14 +1213,19 @@ describe('postgres-baseline-comparison scenario', () => {
         assertConsistency: async () => {},
       };
 
+      const timing = installVirtualScenarioTiming(cluster);
       await assert.rejects(
-        run(cluster),
+        scenarioRun(cluster),
         /insufficient_reachable_nodes/i,
       );
       assert.equal(
         loadCalls.length,
         0,
         'strict discovery failure should abort before load starts',
+      );
+      assert.ok(
+        timing.getSleepCalls().length > 0,
+        'strict discovery timeout path should consume virtual polls instead of waiting on wall clock',
       );
     });
 
