@@ -88,6 +88,41 @@ Source: `src/admin/admin-constants.js`,
 | `runtime_ref is required for this runtime kind` | `src/wasm-service/runtime-descriptor-validator.js` | Missing runtime reference for wasm/oci | Provide runtime_ref compatible with runtime kind |
 | `runtime_ref must contain a digest reference (@sha256:)` | `src/wasm-service/runtime-descriptor-validator.js` | OCI descriptor missing digest pin | Use digest-pinned OCI reference |
 
+## 4.1 Canonical Owner Rows vs Read Models
+
+Operator diagnostics must distinguish between canonical owner rows and
+supporting read models.
+
+Canonical owner rows:
+
+1. `partitions.leader_node_id` owns canonical partition leader identity.
+2. `message_groups.leader_node_id` owns canonical message-group leader identity.
+3. `services` owns per-replica role, status, address, and replica placement
+   detail only.
+
+Read-model rules:
+
+1. Read the owner row first when diagnosing leadership.
+2. Use `services` rows only to answer which replicas exist, what role each
+   replica reports, and whether replica metadata disagrees with the owner row.
+3. Treat a `services.raft_role = leader` row that disagrees with
+   `leader_node_id` as an inconsistency signal, not as alternative truth.
+4. Do not infer canonical leader changes from `services` row iteration order.
+
+Operator query order:
+
+1. Query `partitions` or `message_groups` for `leader_node_id`.
+2. Query `services` for replica rows under the same partition or group.
+3. Escalate when replica rows report multiple leaders or a leader that does
+   not match the owner row.
+
+Expected mismatch interpretation:
+
+1. Owner row set, replica rows agree: steady state.
+2. Owner row set, replica rows disagree: replica-role inconsistency.
+3. Owner row missing, replica rows show a leader: incomplete propagation or
+   ownership bug; do not treat the replica row as canonical.
+
 ## 5. Sign-Off Checklist
 
 1. All V1..V6 checkpoints in
