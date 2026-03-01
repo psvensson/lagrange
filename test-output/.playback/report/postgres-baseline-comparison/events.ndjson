@@ -1,4 +1,0 @@
-{"timestamp":1771679345531,"type":"cluster.start","scope":"cluster","entityId":"cluster","details":{"scenarioName":"postgres-baseline-comparison"}}
-{"timestamp":1771679345531,"type":"cluster.stage","scope":"cluster","entityId":"cluster","details":{"stage":"setup.network.creating","networkName":"ddb-test-net-reuse-local-3"}}
-{"timestamp":1771679345533,"type":"cluster.stage","scope":"cluster","entityId":"cluster","details":{"stage":"setup.network.created","networkName":"ddb-test-net-reuse-local-3","networkId":"0df84e80a2f9d1218abf27c3027dd8cdd6f2436cab607fb02261963e233df47d"}}
-{"timestamp":1771679345533,"type":"cluster.stage","scope":"cluster","entityId":"cluster","details":{"stage":"setup.seed.starting","nodeId":"7493b0ab-a054-5fad-a91b-5e331db29304"}}

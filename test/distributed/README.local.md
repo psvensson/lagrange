@@ -188,6 +188,71 @@ Useful join config knobs in `NodeJoiningService` config:
 
 ## Postgres Baseline Workflow
 
+Treat any timeout, long stall, or discovery delay as a correctness bug. Do not
+start a `3node` or `7node` strict baseline until the targeted checks below are
+green.
+
+### Required Before Any Strict Baseline
+
+1. Shared readiness and guarded-mutation regressions:
+
+```bash
+npm test -- \
+  test/admin/admin-websocket-api.test.js \
+  test/control-plane/lease-sweep-serialization.test.js \
+  test/raft/authoritative-row-mutation-helper.test.js
+```
+
+2. Deterministic convergence regressions:
+
+```bash
+npm test -- \
+  test/convergence/deterministic-convergence-harness.test.js \
+  test/convergence/baseline-discovered-regressions.test.js
+```
+
+3. Benchmark report and gate contract:
+
+```bash
+npm test -- \
+  test/distributed/harness/__tests__/report-writer.test.js \
+  test/distributed/harness/__tests__/run.test.js \
+  test/scripts/compare-latest-baseline-runs.test.js
+```
+
+4. `postgres-baseline-comparison` control-path specs:
+
+```bash
+npm test -- \
+  test/distributed/harness/__tests__/postgres-baseline-comparison-core.test.js \
+  test/distributed/harness/__tests__/postgres-baseline-comparison-discovery.test.js \
+  test/distributed/harness/__tests__/postgres-baseline-comparison-preload-readiness.test.js \
+  test/distributed/harness/__tests__/postgres-baseline-comparison-strict-diagnostics.test.js \
+  test/distributed/harness/__tests__/postgres-baseline-comparison-post-load.test.js
+```
+
+### Additional Gate Before `7node`
+
+1. Run a strict `3node` baseline first and require a passing report before
+   spending time on `7node`.
+2. Re-run the targeted integration checks that have caught recent multi-node
+   correctness bugs:
+
+```bash
+npm test -- \
+  test/integration/convergence-control-snapshot.integration.test.js \
+  test/integration/node-joining-rebalance.integration.test.js \
+  test/integration/three-node-seed-rebalance.integration.test.js
+```
+
+3. Only after the checks above pass should you launch the strict `7node`
+   baseline.
+
+If a strict baseline fails correctness, its observed `loadMetrics` remain
+diagnostic only. Report summaries and the compare script now label those runs
+as `invalid_for_performance`, and they must not be used as throughput
+baselines.
+
 Run baseline-comparison scenario on local benchmark profiles:
 
 ```bash
@@ -210,6 +275,24 @@ Compare latest run against prior run for both `3node` and `7node` profiles:
 
 ```bash
 scripts/compare-latest-baseline-runs.sh --report-dir test-output/reports
+```
+
+To keep local artifact growth under control, prune stale `test-output/`
+artifacts after debugging sessions:
+
+```bash
+npm run test-output:prune:dry
+npm run test-output:prune
+```
+
+Default retention policy:
+- keep pinned names such as `current`, `latest`, `acceptance`, `summary`, and
+  `validation`
+- keep anything newer than 3 days
+- keep at least the latest 40 report JSON files
+- keep at least the latest 24 report playback bundles
+- keep at least the latest 16 legacy playback bundles under `test-output/.playback`
+- keep at least the latest 12 other top-level scenario output directories
 ```
 
 The comparison output includes:

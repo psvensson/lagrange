@@ -69,6 +69,22 @@ export const SCRIPT_TEXT = Object.freeze({
 
 export const GUIDELINE_LLM_PROMPT = Object.freeze({
   INTRO: 'Evaluate this file against the provided SYSTEM GUIDELINES only.',
+  NO_SPECULATION:
+    'Do not speculate. Report a violation only when the file content itself ' +
+    'clearly and directly conflicts with the guidelines.',
+  CONSTANT_OWNER_HINT:
+    'If the file is a canonical constants-owner module, it may define the ' +
+    'literal values it owns once. Do not flag that ownership as a violation.',
+  TEST_CONSTANT_OWNER_HINT:
+    'A test-local constants-owner file may own suite-unique fixture values. ' +
+    'Do not require promotion unless the file itself shows cross-suite reuse.',
+  NO_DUPLICATE_INFERENCE:
+    'Do not infer duplication or non-canonicity from likelihood or style. ' +
+    'Only report duplicate ownership when the file itself shows parallel names ' +
+    'or the guidelines explicitly make the conflict clear.',
+  NO_STRUCTURAL_OVERREACH:
+    'Do not require decomposition into ever-smaller constants unless the file ' +
+    'still embeds raw literals inside composed structures contrary to the guidelines.',
   JSON_SHAPE:
     'Return strict JSON with this exact shape and no extra keys:',
   JSON_SCHEMA:
@@ -79,6 +95,7 @@ export const GUIDELINE_LLM_PROMPT = Object.freeze({
     'If there are no violations, return {"violations":[],"summary":"ok"}.',
   HIGH_CONFIDENCE_ONLY: 'Only report clear, high-confidence violations.',
   FILE_LABEL: 'FILE:',
+  FILE_CLASSIFICATION_LABEL: 'FILE CLASSIFICATION:',
   SYSTEM_GUIDELINES_LABEL: 'SYSTEM GUIDELINES:',
   FILE_CONTENT_LABEL: 'FILE CONTENT:',
   TRUNCATED_MARKER: '[TRUNCATED]',
@@ -90,6 +107,7 @@ export const GUIDELINE_LLM_PATH = Object.freeze({
   FULL_CONTENT_PREFIXES: Object.freeze([
     path.join(...STEERING_DIR) + path.sep,
     'architecture.md',
+    path.join('architecture') + path.sep,
   ]),
   ARCHIVED_SPECS_PREFIX: path.join(...ARCHIVED_SPECS_DIR) + path.sep,
   SELF_TOOLING_PREFIXES: Object.freeze([

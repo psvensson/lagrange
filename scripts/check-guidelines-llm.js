@@ -198,15 +198,22 @@ function buildPrompt(relativePath, fileContent, guidelines) {
     fileContent.length > MAX_FILE_CHARS ?
     `${fileContent.slice(0, MAX_FILE_CHARS)}\n\n${GUIDELINE_LLM_PROMPT.TRUNCATED_MARKER}` :
     fileContent;
+  const fileClassification = buildFileClassification(normalizedRelativePath);
 
   return [
     GUIDELINE_LLM_PROMPT.INTRO,
+    GUIDELINE_LLM_PROMPT.NO_SPECULATION,
+    GUIDELINE_LLM_PROMPT.CONSTANT_OWNER_HINT,
+    GUIDELINE_LLM_PROMPT.TEST_CONSTANT_OWNER_HINT,
+    GUIDELINE_LLM_PROMPT.NO_DUPLICATE_INFERENCE,
+    GUIDELINE_LLM_PROMPT.NO_STRUCTURAL_OVERREACH,
     GUIDELINE_LLM_PROMPT.JSON_SHAPE,
     GUIDELINE_LLM_PROMPT.JSON_SCHEMA,
     GUIDELINE_LLM_PROMPT.NO_VIOLATION_SCHEMA,
     GUIDELINE_LLM_PROMPT.HIGH_CONFIDENCE_ONLY,
     '',
     `${GUIDELINE_LLM_PROMPT.FILE_LABEL} ${relativePath}`,
+    `${GUIDELINE_LLM_PROMPT.FILE_CLASSIFICATION_LABEL} ${fileClassification}`,
     '',
     GUIDELINE_LLM_PROMPT.SYSTEM_GUIDELINES_LABEL,
     guidelines,
@@ -214,6 +221,50 @@ function buildPrompt(relativePath, fileContent, guidelines) {
     GUIDELINE_LLM_PROMPT.FILE_CONTENT_LABEL,
     truncatedContent,
   ].join('\n');
+}
+
+function buildFileClassification(normalizedRelativePath) {
+  const basename = path.basename(normalizedRelativePath);
+  if (normalizedRelativePath.startsWith(path.join('src', 'constants') + path.sep)) {
+    return 'canonical shared constants-owner module';
+  }
+
+  if (
+    normalizedRelativePath.startsWith('test' + path.sep) &&
+    basename.includes('constants')
+  ) {
+    return 'test-local constants-owner module';
+  }
+
+  if (basename.startsWith('check-guidelines-')) {
+    return 'guideline checker implementation';
+  }
+
+  return 'regular source file';
+}
+
+function isSpeculativeText(text) {
+  const normalizedText = String(text || '').toLowerCase();
+  return (
+    normalizedText.includes('likely') ||
+    normalizedText.includes('potential') ||
+    normalizedText.includes('from this file alone') ||
+    normalizedText.includes('if this is') ||
+    normalizedText.includes('if a') ||
+    normalizedText.includes('if an') ||
+    normalizedText.includes('if the codebase') ||
+    normalizedText.includes('search the codebase') ||
+    normalizedText.includes('verify this module') ||
+    normalizedText.includes('possible duplication risk')
+  );
+}
+
+function filterSpeculativeViolations(violations) {
+  return violations.filter((violation) => !(
+    isSpeculativeText(violation.title) ||
+    isSpeculativeText(violation.description) ||
+    isSpeculativeText(violation.suggestedFix)
+  ));
 }
 
 async function checkWithLlm(relativePath, fileContent, guidelines) {
@@ -264,7 +315,7 @@ async function checkWithLlm(relativePath, fileContent, guidelines) {
     }
 
     const violations = Array.isArray(parsed.violations) ? parsed.violations : [];
-    return violations.map((violation) => ({
+    return filterSpeculativeViolations(violations.map((violation) => ({
       title: String(violation.title || GUIDELINE_LLM_MESSAGE.DEFAULT_TITLE),
       description: String(
         violation.description || GUIDELINE_LLM_MESSAGE.DEFAULT_DESCRIPTION,
@@ -278,7 +329,7 @@ async function checkWithLlm(relativePath, fileContent, guidelines) {
       suggestedFix: String(
         violation.suggested_fix || GUIDELINE_LLM_MESSAGE.DEFAULT_SUGGESTED_FIX,
       ),
-    }));
+    })));
   } finally {
     clearTimeout(timeoutId);
   }

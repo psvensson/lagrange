@@ -285,9 +285,25 @@ is a bug.
 - NEVER use string or number literals directly in code ("magic values").
 - ALL scalars must be defined as named constants in dedicated constants files
   and imported where needed.
+- The canonical constants-owner module for a value MAY define that literal once.
+  That is the only place where the scalar may be introduced directly.
+- Constants-owner modules should prefer individually named scalar constants and
+  then compose exported objects/arrays from those named values, rather than
+  embedding raw literals inline inside exported structures.
+- Test-only fixture values that are unique to a single suite may live in a
+  colocated test constants-owner file for that suite. If a value becomes
+  shared across suites or runtime code, promote it into the appropriate shared
+  constants module and import it from there.
+- This test-owner exception includes suite-unique fixture filenames, labels,
+  timestamps, IDs, and timezone values, as long as they are defined once as
+  named constants and the rest of the suite composes from those names.
+- Required language or runtime syntax that cannot be imported from a constants
+  module, such as a Unix shebang line, is exempt from this rule.
 - If a constant does not exist yet, create it in the appropriate constants file.
 - Before creating a new constant, search for an existing one with the same value
   or meaning.
+- Outside the canonical owner module, reuse the exported constant. Do not
+  duplicate the literal under a second name.
 
 ### 4.2 Single Naming
 
@@ -320,14 +336,22 @@ is a bug.
 
 ## 5. Architecture Documentation
 
-- When changes are made to the system, update `architecture.md` to reflect them.
-- The architecture doc is the canonical reference for component ownership and
-  data flow. Keep it accurate.
+- When changes are made to the system, update `architecture.md` to reflect
+  them.
+- `architecture.md` is the canonical root entrypoint for describing the system:
+  component ownership, runtime boundaries, data flow, and architectural rules.
+- Supporting system-description documents may live under the root
+  `architecture/` directory when one file is no longer enough. Those files are
+  internal architecture documents, not end-user docs, and they must be linked
+  from `architecture.md`.
 - The `docs/` directory is for end-user documentation only.
-- End-user documentation updates in `docs/` may be paired with corresponding
-  end-user code/examples in `examples/` when useful.
-- Internal engineering specs, design notes, and implementation planning
-  documents belong in `.kiro/specs/`, not `docs/`.
+- The `examples/` directory is for end-user examples only. Examples may support
+  `docs/`, but they must remain user-facing rather than internal design notes
+  or experiments.
+- `.kiro/specs/` is for specs only: requirements, design, tasks, rollout, and
+  other implementation-planning artifacts for active or archived workstreams.
+- Internal engineering specs and implementation plans belong in `.kiro/specs/`,
+  not `docs/` or `examples/`.
 
 ---
 

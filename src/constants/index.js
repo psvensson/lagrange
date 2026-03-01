@@ -1,7 +1,9 @@
 export {ADDRESS, ENTITY_TYPE} from './addresses.js';
 export {CDC_OPERATION} from './cdc.js';
+export {BOOLEAN_FALSE, BOOLEAN_TRUE} from './booleans.js';
 export {COLUMN} from './columns.js';
 export {ERRORS, ERRNO} from './errors.js';
+export {FILE_TEXT} from './file-text.js';
 export {FIELD} from './fields.js';
 export {HTTP_STATUS} from './http.js';
 export {LOG_MSG} from './logging.js';
@@ -28,6 +30,7 @@ export {STATE} from './states.js';
 export {STRING} from './strings.js';
 export {SUBSYSTEM} from './subsystems.js';
 export {TABLES} from './tables.js';
+export {TEST_OUTPUT_PATH, TEST_OUTPUT_SUFFIX} from './test-output.js';
 export {TIME_MS} from './time.js';
 export {TRANSPORT_TYPE, ENDPOINT_STATUS} from './transport-types.js';
 export {RUNTIME_KIND, ALLOWED_RUNTIME_KINDS, RUNTIME_FIELD,
