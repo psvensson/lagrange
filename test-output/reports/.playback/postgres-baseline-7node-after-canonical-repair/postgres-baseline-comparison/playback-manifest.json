@@ -1,0 +1,73 @@
+{
+  "scenarioName": "postgres-baseline-comparison",
+  "startedAt": 1772285289978,
+  "endedAt": 1772285560765,
+  "durationMs": 270787,
+  "files": {
+    "events": "test-output/reports/.playback/postgres-baseline-7node-after-canonical-repair/postgres-baseline-comparison/events.ndjson",
+    "samples": "test-output/reports/.playback/postgres-baseline-7node-after-canonical-repair/postgres-baseline-comparison/samples.ndjson",
+    "snapshots": "test-output/reports/.playback/postgres-baseline-7node-after-canonical-repair/postgres-baseline-comparison/snapshots.ndjson",
+    "manifest": "test-output/reports/.playback/postgres-baseline-7node-after-canonical-repair/postgres-baseline-comparison/playback-manifest.json",
+    "viewer": "test-output/reports/.playback/postgres-baseline-7node-after-canonical-repair/postgres-baseline-comparison/playback-viewer.html"
+  },
+  "counts": {
+    "events": 60,
+    "samples": 1540,
+    "snapshots": 239
+  },
+  "warnings": [
+    {
+      "code": "service-query-failed-11601fe0-72d6-5853-8590-ec2881853e72",
+      "message": "Failed to query services on node 11601fe0-72d6-5853-8590-ec2881853e72: Admin API query timed out for node 11601fe0-72d6-5853-8590-ec2881853e72 on lane default after 15000ms",
+      "timestamp": 1772285415023,
+      "details": {
+        "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+        "error": "Admin API query timed out for node 11601fe0-72d6-5853-8590-ec2881853e72 on lane default after 15000ms",
+        "reachability": {
+          "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+          "timestamp": 1772285400021,
+          "reachable": true,
+          "adminReady": true,
+          "reachableBy": "admin_health",
+          "bootstrapHealth": {
+            "attempted": true,
+            "ok": true,
+            "statusCode": 200,
+            "error": null,
+            "url": "http://172.19.0.4:8080/health",
+            "endpoint": null,
+            "query": null
+          },
+          "adminHealth": {
+            "attempted": true,
+            "ok": true,
+            "statusCode": 200,
+            "error": null,
+            "url": "http://172.19.0.4:8081/health",
+            "endpoint": null,
+            "query": null
+          },
+          "adminWs": {
+            "attempted": false,
+            "ok": false,
+            "statusCode": null,
+            "error": null,
+            "url": null,
+            "endpoint": "ws://172.19.0.4:8081/api/admin/stream",
+            "query": null
+          },
+          "sqlProbe": {
+            "attempted": false,
+            "ok": false,
+            "statusCode": null,
+            "error": null,
+            "url": null,
+            "endpoint": null,
+            "query": "SELECT node_id FROM nodes LIMIT 1"
+          },
+          "lastError": null
+        }
+      }
+    }
+  ]
+}

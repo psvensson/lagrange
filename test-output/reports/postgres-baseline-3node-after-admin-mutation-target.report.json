@@ -1,0 +1,3705 @@
+{
+  "timestamp": "2026-02-28T12:48:31.029Z",
+  "summary": {
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "duration": 145595
+  },
+  "optimizationSummary": {
+    "totalPriorityItems": 3,
+    "scenariosWithPriorities": 1,
+    "topComponents": [
+      {
+        "component": "replication_write_path",
+        "count": 1,
+        "highestPriority": "critical",
+        "highestScore": 95
+      },
+      {
+        "component": "tail_latency_path",
+        "count": 1,
+        "highestPriority": "critical",
+        "highestScore": 95
+      },
+      {
+        "component": "convergence_control_plane",
+        "count": 1,
+        "highestPriority": "medium",
+        "highestScore": 60
+      }
+    ],
+    "topPartitions": []
+  },
+  "standardSummary": {
+    "historicalReportsConsidered": 20,
+    "scenariosComparedToPrevious": 0,
+    "scenariosComparedToPostgresBaseline": 1,
+    "diagnosticsCoverageSummary": {
+      "scenariosWithCoverage": 0,
+      "scenariosWithoutCoverage": 1,
+      "totalSamples": 0,
+      "coverageRate": 0,
+      "scenarios": [
+        {
+          "scenario": "postgres-baseline-comparison",
+          "status": "unavailable",
+          "reason": "not_reported",
+          "sampleCount": 0
+        }
+      ]
+    },
+    "writePathAttributionSummary": {
+      "scenariosWithDiagnostics": 0,
+      "topPhases": []
+    },
+    "scaleEfficiencySummary": {
+      "observationCount": 1,
+      "comparableGroupCount": 0,
+      "groups": [],
+      "topOpportunities": []
+    },
+    "scenarios": [
+      {
+        "scenario": "postgres-baseline-comparison",
+        "similarityKey": "postgres-baseline-comparison|{\"workload\":\"benchmark_events_mixed\",\"durationSeconds\":30,\"clients\":8,\"jobs\":4,\"replicationFactor\":null}",
+        "current": {
+          "passed": true,
+          "clusterSize": 3,
+          "durationMs": 145595,
+          "opsPerSec": 33.33436888378017,
+          "p99LatencyMs": 2507,
+          "opsPerSecPerNode": 11.11145629459339
+        },
+        "previousSimilarRun": null,
+        "deltaVsPrevious": null,
+        "postgresBaseline": {
+          "engine": "postgres",
+          "throughputRatioSutToBaseline": 0.2777956669117469,
+          "p99LatencyRatioSutToBaselineAvg": 3467.230119093354,
+          "sutOpsPerSec": 33.33436888378017,
+          "baselineTps": 119.99600013332889,
+          "sutP99LatencyMs": 2507,
+          "baselineLatencyAvgMs": 0.7230555555555556,
+          "cache": {
+            "enabled": true,
+            "hit": false,
+            "key": "v3-026134b9a9b0b8b39e63f0e8f015929edc76496fae1bdaf696c43f070566b3ed",
+            "path": "test-output/reports/.playback/postgres-baseline-3node-after-admin-mutation-target/postgres-baseline-cache/v3-026134b9a9b0b8b39e63f0e8f015929edc76496fae1bdaf696c43f070566b3ed.json",
+            "cachedAt": "2026-02-28T12:48:24.648Z",
+            "reason": "cache-stored"
+          }
+        },
+        "parity": {
+          "status": "matched",
+          "reasonCodes": []
+        },
+        "writePathTopPhases": []
+      }
+    ]
+  },
+  "scenarios": [
+    {
+      "scenario": "postgres-baseline-comparison",
+      "passed": true,
+      "duration": 145595,
+      "clusterSize": 3,
+      "startedAt": "2026-02-28T12:46:05.411Z",
+      "convergenceTiming": null,
+      "analysisSummary": null,
+      "error": null,
+      "stackTrace": null,
+      "logs": null,
+      "playback": {
+        "scenarioName": "postgres-baseline-comparison",
+        "startedAt": 1772282765412,
+        "endedAt": 1772282911024,
+        "durationMs": 145612,
+        "files": {
+          "events": "test-output/reports/.playback/postgres-baseline-3node-after-admin-mutation-target/postgres-baseline-comparison/events.ndjson",
+          "samples": "test-output/reports/.playback/postgres-baseline-3node-after-admin-mutation-target/postgres-baseline-comparison/samples.ndjson",
+          "snapshots": "test-output/reports/.playback/postgres-baseline-3node-after-admin-mutation-target/postgres-baseline-comparison/snapshots.ndjson",
+          "manifest": "test-output/reports/.playback/postgres-baseline-3node-after-admin-mutation-target/postgres-baseline-comparison/playback-manifest.json",
+          "viewer": "test-output/reports/.playback/postgres-baseline-3node-after-admin-mutation-target/postgres-baseline-comparison/playback-viewer.html"
+        },
+        "counts": {
+          "events": 35,
+          "samples": 371,
+          "snapshots": 138
+        },
+        "warnings": []
+      },
+      "trace": null,
+      "traceAssertion": null,
+      "memoryLeak": {
+        "enabled": false,
+        "analyzed": false,
+        "leakDetected": false,
+        "sampleCount": 0,
+        "nodeCount": 0,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "nodes": [],
+        "warnings": [],
+        "config": {
+          "enabled": false,
+          "failOnDetection": false,
+          "requireSamples": false,
+          "minSamplesPerNode": 8,
+          "warmupFraction": 0.2,
+          "minWarmupMs": 30000,
+          "minAnalysisWindowMs": 60000,
+          "maxPositiveSlopeBytesPerMin": 1048576,
+          "minGrowthBytes": 16777216,
+          "minPositiveDeltaRatio": 0.65,
+          "captureHeapArtifacts": false,
+          "heapSnapshotNearLimitCount": 2
+        }
+      },
+      "memoryLeakAssertion": null,
+      "performanceDiagnostics": null,
+      "details": {
+        "loadMetrics": {
+          "total": 1073,
+          "success": 1073,
+          "failed": 0,
+          "errors": 0,
+          "latency": {
+            "avg": 173.78191985088537,
+            "p50": 50,
+            "p95": 663,
+            "p99": 2507
+          },
+          "opsPerSec": 33.33436888378017,
+          "queueDelay": {
+            "avg": 7791.571734112885,
+            "p50": 7182.377197265625,
+            "p95": 18771.75,
+            "p99": 19759.753173828125,
+            "max": 20523.087158203125
+          },
+          "targetOperations": 3600,
+          "dispatchedOperations": 1073,
+          "undispatchedOperations": 2527,
+          "undispatchedByReason": {
+            "capacity": 2527,
+            "durationTimeout": 2527,
+            "cancelled": 0
+          },
+          "perNode": {
+            "7493b0ab-a054-5fad-a91b-5e331db29304": {
+              "dispatched": 771,
+              "success": 771,
+              "attemptErrors": 0,
+              "admissionSignals": 0,
+              "queuePressureSignals": 27632,
+              "rejected": 0,
+              "rejectedByReason": {
+                "queueFull": 0
+              }
+            },
+            "35a891b8-c1a0-5064-9c6e-2acfba61c2a7": {
+              "dispatched": 151,
+              "success": 151,
+              "attemptErrors": 0,
+              "admissionSignals": 0,
+              "queuePressureSignals": 28263,
+              "rejected": 0,
+              "rejectedByReason": {
+                "queueFull": 0
+              }
+            },
+            "11601fe0-72d6-5853-8590-ec2881853e72": {
+              "dispatched": 151,
+              "success": 151,
+              "attemptErrors": 0,
+              "admissionSignals": 0,
+              "queuePressureSignals": 28239,
+              "rejected": 0,
+              "rejectedByReason": {
+                "queueFull": 0
+              }
+            }
+          },
+          "rejectedOperations": 0,
+          "rejectedByReason": {
+            "queueFull": 0
+          },
+          "queuePressure": {
+            "samples": 27520,
+            "pendingQueueDepth": {
+              "avg": 1198.367659883721,
+              "p95": 2365,
+              "p99": 2493,
+              "max": 2527
+            }
+          },
+          "attemptErrors": 0
+        },
+        "details": {
+          "benchmark": {
+            "tool": "shared-load-generator",
+            "workload": "benchmark_events_mixed",
+            "durationSeconds": 30,
+            "clients": 8,
+            "baselineLoadNodeCountConfigured": 8,
+            "baselineLoadNodeCountApplied": 3,
+            "sutEligibleLoadNodeCount": 3,
+            "sutLoadNodeCount": 3,
+            "sutExcludedLoadNodeIds": [],
+            "strictMode": true,
+            "strictDiscovery": true,
+            "clusterCandidateLoadNodeCount": 3,
+            "requestedSutLoadNodeCount": 3,
+            "requiredSutLoadNodeCount": 3,
+            "explicitRequiredSutLoadNodeCount": null,
+            "strictFanoutOptOut": false,
+            "strictFanoutOptOutReason": null,
+            "strictParity": true,
+            "strictPreloadReadiness": true,
+            "strictCdcTelemetrySchema": false,
+            "strictOverloadPolicy": false,
+            "strictWritePressure": false,
+            "quietMode": {
+              "schemaVersion": 1,
+              "enabled": true,
+              "status": "inactive",
+              "enteredAtMs": 1772282822969,
+              "exitedAtMs": 1772282910681,
+              "activePhases": [
+                "preflight",
+                "pre_load_gate",
+                "load"
+              ],
+              "activeDuringPhases": [
+                "preflight",
+                "pre_load_gate",
+                "load"
+              ],
+              "lifecycle": [
+                {
+                  "action": "enter",
+                  "phase": "preflight",
+                  "reason": "strict_benchmark_mode",
+                  "timestampMs": 1772282822969
+                },
+                {
+                  "action": "exit",
+                  "phase": "teardown",
+                  "reason": "run_finalize",
+                  "timestampMs": 1772282910681
+                }
+              ]
+            },
+            "overloadPolicy": {
+              "maxRejectedOperations": null,
+              "maxQueueDelayP99Ms": null
+            },
+            "writePressureThresholds": {
+              "maxAttemptedWrites": null,
+              "maxFailedWrites": null,
+              "maxTimedOutWrites": null
+            },
+            "forceLocalSystemTableReadShortcut": false,
+            "systemTableReadPath": {
+              "mode": "canonical_fallback",
+              "candidateNodeIds": [
+                "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "11601fe0-72d6-5853-8590-ec2881853e72"
+              ]
+            },
+            "requiredSchemaVersion": "1772282828109",
+            "requiredSchemaVersionSource": "updated_at",
+            "requiredSchemaVersionMetadataNodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+            "requiredSchemaTableId": "tbl-1110703c-747c-4fbe-9fe4-5bf347854086",
+            "benchmarkMetadataFlow": {
+              "schemaVersion": 1,
+              "tableName": "benchmark_events",
+              "tableId": "tbl-1110703c-747c-4fbe-9fe4-5bf347854086",
+              "requiredSchemaVersion": "1772282828109",
+              "createCommitted": {
+                "stage": "create_committed",
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "capturedAt": 1772282832156,
+                "tableName": "benchmark_events",
+                "tableId": "tbl-1110703c-747c-4fbe-9fe4-5bf347854086",
+                "requiredSchemaVersion": "1772282828109",
+                "observedSchemaVersion": "1772282828109",
+                "readinessState": null,
+                "probeError": null,
+                "queryErrors": {
+                  "tables": null,
+                  "partitions": null,
+                  "services": null
+                },
+                "tables": {
+                  "rowCount": 1,
+                  "tableIds": [
+                    "tbl-1110703c-747c-4fbe-9fe4-5bf347854086"
+                  ],
+                  "schemaVersion": "1772282828109"
+                },
+                "partitions": {
+                  "rowCount": 1,
+                  "tableIds": [
+                    "tbl-1110703c-747c-4fbe-9fe4-5bf347854086"
+                  ],
+                  "partitionIds": [
+                    "tbl-1110703c-747c-4fbe-9fe4-5bf347854086-p1"
+                  ],
+                  "schemaVersion": "1772282828109"
+                },
+                "services": {
+                  "rowCount": 3,
+                  "partitionIds": [
+                    "tbl-1110703c-747c-4fbe-9fe4-5bf347854086-p1"
+                  ],
+                  "activePartitionIds": [
+                    "tbl-1110703c-747c-4fbe-9fe4-5bf347854086-p1"
+                  ],
+                  "leaderPartitionIds": [],
+                  "activeNodeIds": [
+                    "11601fe0-72d6-5853-8590-ec2881853e72"
+                  ],
+                  "leaderNodeIds": [],
+                  "missingActivePartitionIds": [],
+                  "missingLeaderPartitionIds": [
+                    "tbl-1110703c-747c-4fbe-9fe4-5bf347854086-p1"
+                  ]
+                }
+              },
+              "nodeSnapshots": {
+                "7493b0ab-a054-5fad-a91b-5e331db29304": {
+                  "stage": "readiness_poll",
+                  "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                  "capturedAt": 1772282837420,
+                  "tableName": "benchmark_events",
+                  "tableId": "tbl-1110703c-747c-4fbe-9fe4-5bf347854086",
+                  "requiredSchemaVersion": "1772282828109",
+                  "observedSchemaVersion": "1772282834671",
+                  "readinessState": {
+                    "workloadReady": true,
+                    "benchmarkReady": true,
+                    "routingReady": true,
+                    "schemaReady": true,
+                    "topologyReady": true,
+                    "replicaOpsInFlight": 0,
+                    "leadershipStable": true,
+                    "tableName": "benchmark_events",
+                    "discoveryReasons": []
+                  },
+                  "probeError": null,
+                  "queryErrors": {
+                    "tables": null,
+                    "partitions": null,
+                    "services": null
+                  },
+                  "tables": {
+                    "rowCount": 1,
+                    "tableIds": [
+                      "tbl-1110703c-747c-4fbe-9fe4-5bf347854086"
+                    ],
+                    "schemaVersion": "1772282828109"
+                  },
+                  "partitions": {
+                    "rowCount": 1,
+                    "tableIds": [
+                      "tbl-1110703c-747c-4fbe-9fe4-5bf347854086"
+                    ],
+                    "partitionIds": [
+                      "tbl-1110703c-747c-4fbe-9fe4-5bf347854086-p1"
+                    ],
+                    "schemaVersion": "1772282834671"
+                  },
+                  "services": {
+                    "rowCount": 3,
+                    "partitionIds": [
+                      "tbl-1110703c-747c-4fbe-9fe4-5bf347854086-p1"
+                    ],
+                    "activePartitionIds": [
+                      "tbl-1110703c-747c-4fbe-9fe4-5bf347854086-p1"
+                    ],
+                    "leaderPartitionIds": [
+                      "tbl-1110703c-747c-4fbe-9fe4-5bf347854086-p1"
+                    ],
+                    "activeNodeIds": [
+                      "11601fe0-72d6-5853-8590-ec2881853e72",
+                      "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                      "7493b0ab-a054-5fad-a91b-5e331db29304"
+                    ],
+                    "leaderNodeIds": [
+                      "7493b0ab-a054-5fad-a91b-5e331db29304"
+                    ],
+                    "missingActivePartitionIds": [],
+                    "missingLeaderPartitionIds": []
+                  }
+                },
+                "35a891b8-c1a0-5064-9c6e-2acfba61c2a7": {
+                  "stage": "readiness_poll",
+                  "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                  "capturedAt": 1772282837432,
+                  "tableName": "benchmark_events",
+                  "tableId": "tbl-1110703c-747c-4fbe-9fe4-5bf347854086",
+                  "requiredSchemaVersion": "1772282828109",
+                  "observedSchemaVersion": "1772282834671",
+                  "readinessState": {
+                    "workloadReady": true,
+                    "benchmarkReady": true,
+                    "routingReady": true,
+                    "schemaReady": true,
+                    "topologyReady": true,
+                    "replicaOpsInFlight": 0,
+                    "leadershipStable": true,
+                    "tableName": "benchmark_events",
+                    "discoveryReasons": []
+                  },
+                  "probeError": null,
+                  "queryErrors": {
+                    "tables": null,
+                    "partitions": null,
+                    "services": null
+                  },
+                  "tables": {
+                    "rowCount": 1,
+                    "tableIds": [
+                      "tbl-1110703c-747c-4fbe-9fe4-5bf347854086"
+                    ],
+                    "schemaVersion": "1772282828109"
+                  },
+                  "partitions": {
+                    "rowCount": 1,
+                    "tableIds": [
+                      "tbl-1110703c-747c-4fbe-9fe4-5bf347854086"
+                    ],
+                    "partitionIds": [
+                      "tbl-1110703c-747c-4fbe-9fe4-5bf347854086-p1"
+                    ],
+                    "schemaVersion": "1772282834671"
+                  },
+                  "services": {
+                    "rowCount": 3,
+                    "partitionIds": [
+                      "tbl-1110703c-747c-4fbe-9fe4-5bf347854086-p1"
+                    ],
+                    "activePartitionIds": [
+                      "tbl-1110703c-747c-4fbe-9fe4-5bf347854086-p1"
+                    ],
+                    "leaderPartitionIds": [
+                      "tbl-1110703c-747c-4fbe-9fe4-5bf347854086-p1"
+                    ],
+                    "activeNodeIds": [
+                      "11601fe0-72d6-5853-8590-ec2881853e72",
+                      "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                      "7493b0ab-a054-5fad-a91b-5e331db29304"
+                    ],
+                    "leaderNodeIds": [
+                      "7493b0ab-a054-5fad-a91b-5e331db29304"
+                    ],
+                    "missingActivePartitionIds": [],
+                    "missingLeaderPartitionIds": []
+                  }
+                },
+                "11601fe0-72d6-5853-8590-ec2881853e72": {
+                  "stage": "readiness_poll",
+                  "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                  "capturedAt": 1772282835080,
+                  "tableName": "benchmark_events",
+                  "tableId": "tbl-1110703c-747c-4fbe-9fe4-5bf347854086",
+                  "requiredSchemaVersion": "1772282828109",
+                  "observedSchemaVersion": "1772282834671",
+                  "readinessState": {
+                    "workloadReady": true,
+                    "benchmarkReady": true,
+                    "routingReady": true,
+                    "schemaReady": true,
+                    "topologyReady": true,
+                    "replicaOpsInFlight": 0,
+                    "leadershipStable": true,
+                    "tableName": "benchmark_events",
+                    "discoveryReasons": []
+                  },
+                  "probeError": null,
+                  "queryErrors": {
+                    "tables": null,
+                    "partitions": null,
+                    "services": null
+                  },
+                  "tables": {
+                    "rowCount": 1,
+                    "tableIds": [
+                      "tbl-1110703c-747c-4fbe-9fe4-5bf347854086"
+                    ],
+                    "schemaVersion": "1772282828109"
+                  },
+                  "partitions": {
+                    "rowCount": 1,
+                    "tableIds": [
+                      "tbl-1110703c-747c-4fbe-9fe4-5bf347854086"
+                    ],
+                    "partitionIds": [
+                      "tbl-1110703c-747c-4fbe-9fe4-5bf347854086-p1"
+                    ],
+                    "schemaVersion": "1772282834671"
+                  },
+                  "services": {
+                    "rowCount": 3,
+                    "partitionIds": [
+                      "tbl-1110703c-747c-4fbe-9fe4-5bf347854086-p1"
+                    ],
+                    "activePartitionIds": [
+                      "tbl-1110703c-747c-4fbe-9fe4-5bf347854086-p1"
+                    ],
+                    "leaderPartitionIds": [
+                      "tbl-1110703c-747c-4fbe-9fe4-5bf347854086-p1"
+                    ],
+                    "activeNodeIds": [
+                      "11601fe0-72d6-5853-8590-ec2881853e72",
+                      "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                      "7493b0ab-a054-5fad-a91b-5e331db29304"
+                    ],
+                    "leaderNodeIds": [
+                      "7493b0ab-a054-5fad-a91b-5e331db29304"
+                    ],
+                    "missingActivePartitionIds": [],
+                    "missingLeaderPartitionIds": []
+                  }
+                }
+              }
+            },
+            "convergenceTimeline": [
+              {
+                "type": "table_create_committed",
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "tableId": "tbl-1110703c-747c-4fbe-9fe4-5bf347854086",
+                "tableName": "benchmark_events",
+                "requiredSchemaVersion": "1772282828109",
+                "observedSchemaVersion": null,
+                "reasons": [],
+                "ready": false,
+                "timestampMs": 1772282832154
+              },
+              {
+                "type": "cdc_emitted",
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "tableId": "tbl-1110703c-747c-4fbe-9fe4-5bf347854086",
+                "tableName": "benchmark_events",
+                "requiredSchemaVersion": "1772282828109",
+                "observedSchemaVersion": "1772282828109",
+                "reasons": [],
+                "ready": false,
+                "timestampMs": 1772282832154
+              },
+              {
+                "type": "cdc_received",
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "tableId": "tbl-1110703c-747c-4fbe-9fe4-5bf347854086",
+                "tableName": "benchmark_events",
+                "requiredSchemaVersion": "1772282828109",
+                "observedSchemaVersion": "1772282828109",
+                "reasons": [
+                  "topology_not_ready"
+                ],
+                "ready": false,
+                "timestampMs": 1772282832228
+              },
+              {
+                "type": "cache_applied_version",
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "tableId": "tbl-1110703c-747c-4fbe-9fe4-5bf347854086",
+                "tableName": "benchmark_events",
+                "requiredSchemaVersion": "1772282828109",
+                "observedSchemaVersion": "1772282828109",
+                "reasons": [
+                  "topology_not_ready"
+                ],
+                "ready": false,
+                "timestampMs": 1772282832228
+              },
+              {
+                "type": "cdc_received",
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "tableId": "tbl-1110703c-747c-4fbe-9fe4-5bf347854086",
+                "tableName": "benchmark_events",
+                "requiredSchemaVersion": "1772282828109",
+                "observedSchemaVersion": "1772282828109",
+                "reasons": [
+                  "topology_not_ready"
+                ],
+                "ready": false,
+                "timestampMs": 1772282832239
+              },
+              {
+                "type": "cache_applied_version",
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "tableId": "tbl-1110703c-747c-4fbe-9fe4-5bf347854086",
+                "tableName": "benchmark_events",
+                "requiredSchemaVersion": "1772282828109",
+                "observedSchemaVersion": "1772282828109",
+                "reasons": [
+                  "topology_not_ready"
+                ],
+                "ready": false,
+                "timestampMs": 1772282832239
+              },
+              {
+                "type": "cdc_received",
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "tableId": "tbl-1110703c-747c-4fbe-9fe4-5bf347854086",
+                "tableName": "benchmark_events",
+                "requiredSchemaVersion": "1772282828109",
+                "observedSchemaVersion": "1772282828109",
+                "reasons": [
+                  "topology_not_ready"
+                ],
+                "ready": false,
+                "timestampMs": 1772282832246
+              },
+              {
+                "type": "cache_applied_version",
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "tableId": "tbl-1110703c-747c-4fbe-9fe4-5bf347854086",
+                "tableName": "benchmark_events",
+                "requiredSchemaVersion": "1772282828109",
+                "observedSchemaVersion": "1772282828109",
+                "reasons": [
+                  "topology_not_ready"
+                ],
+                "ready": false,
+                "timestampMs": 1772282832246
+              },
+              {
+                "type": "cdc_received",
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "tableId": "tbl-1110703c-747c-4fbe-9fe4-5bf347854086",
+                "tableName": "benchmark_events",
+                "requiredSchemaVersion": "1772282828109",
+                "observedSchemaVersion": "1772282834671",
+                "reasons": [],
+                "ready": true,
+                "timestampMs": 1772282835080
+              },
+              {
+                "type": "cache_applied_version",
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "tableId": "tbl-1110703c-747c-4fbe-9fe4-5bf347854086",
+                "tableName": "benchmark_events",
+                "requiredSchemaVersion": "1772282828109",
+                "observedSchemaVersion": "1772282834671",
+                "reasons": [],
+                "ready": true,
+                "timestampMs": 1772282835080
+              },
+              {
+                "type": "readiness_predicate_pass",
+                "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                "tableId": "tbl-1110703c-747c-4fbe-9fe4-5bf347854086",
+                "tableName": "benchmark_events",
+                "requiredSchemaVersion": "1772282828109",
+                "observedSchemaVersion": "1772282834671",
+                "reasons": [],
+                "ready": true,
+                "timestampMs": 1772282835080
+              },
+              {
+                "type": "cdc_received",
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "tableId": "tbl-1110703c-747c-4fbe-9fe4-5bf347854086",
+                "tableName": "benchmark_events",
+                "requiredSchemaVersion": "1772282828109",
+                "observedSchemaVersion": "1772282834671",
+                "reasons": [],
+                "ready": true,
+                "timestampMs": 1772282837420
+              },
+              {
+                "type": "cache_applied_version",
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "tableId": "tbl-1110703c-747c-4fbe-9fe4-5bf347854086",
+                "tableName": "benchmark_events",
+                "requiredSchemaVersion": "1772282828109",
+                "observedSchemaVersion": "1772282834671",
+                "reasons": [],
+                "ready": true,
+                "timestampMs": 1772282837420
+              },
+              {
+                "type": "readiness_predicate_pass",
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "tableId": "tbl-1110703c-747c-4fbe-9fe4-5bf347854086",
+                "tableName": "benchmark_events",
+                "requiredSchemaVersion": "1772282828109",
+                "observedSchemaVersion": "1772282834671",
+                "reasons": [],
+                "ready": true,
+                "timestampMs": 1772282837420
+              },
+              {
+                "type": "cdc_received",
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "tableId": "tbl-1110703c-747c-4fbe-9fe4-5bf347854086",
+                "tableName": "benchmark_events",
+                "requiredSchemaVersion": "1772282828109",
+                "observedSchemaVersion": "1772282834671",
+                "reasons": [],
+                "ready": true,
+                "timestampMs": 1772282837432
+              },
+              {
+                "type": "cache_applied_version",
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "tableId": "tbl-1110703c-747c-4fbe-9fe4-5bf347854086",
+                "tableName": "benchmark_events",
+                "requiredSchemaVersion": "1772282828109",
+                "observedSchemaVersion": "1772282834671",
+                "reasons": [],
+                "ready": true,
+                "timestampMs": 1772282837432
+              },
+              {
+                "type": "readiness_predicate_pass",
+                "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "tableId": "tbl-1110703c-747c-4fbe-9fe4-5bf347854086",
+                "tableName": "benchmark_events",
+                "requiredSchemaVersion": "1772282828109",
+                "observedSchemaVersion": "1772282834671",
+                "reasons": [],
+                "ready": true,
+                "timestampMs": 1772282837432
+              }
+            ],
+            "strictDiscoveryGate": {
+              "strictMinReachable": true,
+              "requiredReachableNodeCount": 3,
+              "reachableNodeCount": 3,
+              "discoveredNodeCount": 3,
+              "status": "passed",
+              "reason": null
+            },
+            "strictBenchmarkGate": {
+              "discovery": {
+                "strictMinReachable": true,
+                "requiredReachableNodeCount": 3,
+                "reachableNodeCount": 3,
+                "discoveredNodeCount": 3,
+                "status": "passed",
+                "reason": null
+              },
+              "parity": {
+                "strictParity": true,
+                "parityStatus": "matched",
+                "status": "passed",
+                "reason": null,
+                "reasonCodes": []
+              },
+              "overload": {
+                "strictOverloadPolicy": false,
+                "policy": {
+                  "maxRejectedOperations": null,
+                  "maxQueueDelayP99Ms": null
+                },
+                "rejectedOperations": 0,
+                "queueDelayP99Ms": 19759.753173828125,
+                "status": "passed",
+                "violations": []
+              },
+              "writePressure": {
+                "schemaVersion": 1,
+                "strictWritePressure": false,
+                "thresholds": {
+                  "maxAttemptedWrites": null,
+                  "maxFailedWrites": null,
+                  "maxTimedOutWrites": null
+                },
+                "counters": {
+                  "attempted": 0,
+                  "coalesced": 0,
+                  "unchangedSkipped": 0,
+                  "failed": 0,
+                  "timeouts": 0
+                },
+                "breached": false,
+                "status": "passed",
+                "violations": []
+              }
+            },
+            "jobs": 4,
+            "loadTargetOpsPerSec": 120,
+            "loadDuration": "30s",
+            "loadMaxInFlight": 128,
+            "loadQueryTimeoutMs": 4000,
+            "loadNodeMaxInFlight": 2,
+            "maxPendingQueueDepth": null,
+            "earlyRejectOnQueueFull": false,
+            "failOnLoadParityMismatch": false,
+            "internalSignalThresholds": {
+              "failOnThresholdBreach": true,
+              "errorsByClass": {},
+              "warningsByClass": {
+                "critical_rebalancing_state": 1
+              }
+            },
+            "internalSignalCounts": {
+              "errorsByClass": {
+                "operation_failed": 0,
+                "cdc_safe_fallback": 0,
+                "cdc_buffered_without_subscriber": 0,
+                "critical_rebalancing_state": 0
+              },
+              "warningsByClass": {
+                "operation_failed": 0,
+                "cdc_safe_fallback": 0,
+                "cdc_buffered_without_subscriber": 0,
+                "critical_rebalancing_state": 0
+              },
+              "messages": []
+            },
+            "internalSignalThresholdResult": {
+              "failOnThresholdBreach": true,
+              "breached": false,
+              "breaches": []
+            },
+            "cdcTelemetry": {
+              "schemaVersion": 1,
+              "byNode": {},
+              "summary": {
+                "nodeCount": 0,
+                "totalSubscriberCount": 0,
+                "totalBufferedEvents": 0,
+                "maxCatchupLagEvents": 0,
+                "avgCatchupThroughputEventsPerSec": 0,
+                "catchupNodeCount": 0,
+                "steadyNodeCount": 0
+              },
+              "schema": {
+                "strict": false,
+                "valid": false,
+                "errors": [
+                  {
+                    "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                    "missingFields": [
+                      "nodeTelemetry"
+                    ]
+                  },
+                  {
+                    "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                    "missingFields": [
+                      "nodeTelemetry"
+                    ]
+                  },
+                  {
+                    "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                    "missingFields": [
+                      "nodeTelemetry"
+                    ]
+                  }
+                ]
+              }
+            },
+            "overloadPolicyResult": {
+              "strictOverloadPolicy": false,
+              "policy": {
+                "maxRejectedOperations": null,
+                "maxQueueDelayP99Ms": null
+              },
+              "rejectedOperations": 0,
+              "queueDelayP99Ms": 19759.753173828125,
+              "status": "passed",
+              "violations": []
+            },
+            "writePressure": {
+              "schemaVersion": 1,
+              "strictWritePressure": false,
+              "thresholds": {
+                "maxAttemptedWrites": null,
+                "maxFailedWrites": null,
+                "maxTimedOutWrites": null
+              },
+              "counters": {
+                "attempted": 0,
+                "coalesced": 0,
+                "unchangedSkipped": 0,
+                "failed": 0,
+                "timeouts": 0
+              },
+              "breached": false,
+              "status": "passed",
+              "violations": []
+            },
+            "saturation": {
+              "schemaVersion": 1,
+              "cdcForwardTimeoutCount": 0,
+              "systemTableQueryTimeoutCount": 0,
+              "snapshotCollectionErrorCount": 0
+            },
+            "nodeFailureThreshold": 3,
+            "nodeFailureCooldownMs": 1500,
+            "quiescentTimeoutMs": 30000,
+            "quiescentPollIntervalMs": 500,
+            "quiescentStableWindowMs": 2000,
+            "quiescentNoProgressTimeoutMs": null,
+            "preloadRequiredStableMs": 2000,
+            "preloadMaxReplicaOpsInFlight": 0,
+            "pinRebalancingDuringLoad": false,
+            "allowLoadRebalancePinningBypass": false,
+            "rebalanceHysteresisCooldownMs": 2000,
+            "rebalanceHysteresisMinDelta": 2,
+            "loadRebalanceMonitorPollIntervalMs": 250,
+            "loadRebalanceMaxReplicaOpsInFlight": 0,
+            "rebalancingPressure": {
+              "schemaVersion": 1,
+              "preLoadGate": {
+                "mode": "all_ready",
+                "attempts": 14,
+                "stableElapsedMs": 2221,
+                "maxReplicaOpsInFlightThreshold": 0,
+                "inFlightReplicaOps": 0,
+                "partitionGroupInFlight": {},
+                "reasonHistogram": {
+                  "node_probe_error:7493b0ab-a054-5fad-a91b-5e331db29304=discovery_not_ready:topology_not_ready|discovery_reasons=replica_operations_in_flight=2&leadership_unstable=leader coverage incomplete for readiness scope": 9,
+                  "node_probe_error:35a891b8-c1a0-5064-9c6e-2acfba61c2a7=discovery_not_ready:topology_not_ready|discovery_reasons=replica_operations_in_flight=2&leadership_unstable=leader coverage incomplete for readiness scope": 9,
+                  "node_probe_error:11601fe0-72d6-5853-8590-ec2881853e72=discovery_not_ready:topology_not_ready|discovery_reasons=leadership_unstable=leader coverage incomplete for readiness scope": 5
+                }
+              },
+              "load": {
+                "schemaVersion": 1,
+                "monitoredNodeIds": [
+                  "7493b0ab-a054-5fad-a91b-5e331db29304",
+                  "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                  "11601fe0-72d6-5853-8590-ec2881853e72"
+                ],
+                "sampleCount": 68,
+                "maxReplicaOpsInFlight": 0,
+                "totalLeaderChanges": 0,
+                "maxLeaderChangesWithinCooldown": 0,
+                "cooldownMs": 2000,
+                "minLeaderChangeDelta": 2,
+                "pollIntervalMs": 250,
+                "maxReplicaOpsInFlightLimit": 0,
+                "startedAtMs": 1772282839658,
+                "endedAtMs": 1772282871849,
+                "snapshotErrors": [],
+                "samples": [
+                  {
+                    "observedAtMs": 1772282839658,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282839920,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282840170,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282840422,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282840673,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282841051,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282841407,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282841750,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282842071,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282842418,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282842718,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282843017,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282843329,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282844043,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282845979,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282846268,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282846552,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282846833,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282847125,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282847433,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282847728,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282848008,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282848283,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282848582,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282849072,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282850664,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282850959,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282851258,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282851587,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282851890,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282852211,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282852583,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282852855,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282853141,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282853519,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282854073,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282855754,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282856064,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282856445,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282856710,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282856996,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282857294,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282857670,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282858002,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282858313,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282858661,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282859164,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282861123,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282861400,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282861707,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282861995,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282862267,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282862585,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282862875,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282863168,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282863478,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282864093,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282865980,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282866272,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282866558,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282866855,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282867158,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282867575,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282867927,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282868281,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282868695,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282869358,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282871562,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  }
+                ],
+                "pinning": {
+                  "enabled": false,
+                  "bypassed": false,
+                  "violated": false,
+                  "cancelledLoad": false,
+                  "violationReasons": []
+                },
+                "criticalState": {
+                  "schemaVersion": 1,
+                  "sampleCount": 68,
+                  "sustainedSampleThreshold": 3,
+                  "criticalSampleCount": 0,
+                  "maxConsecutiveCriticalSamples": 0,
+                  "sustainedEpisodeCount": 0,
+                  "sustained": false,
+                  "bypassed": false,
+                  "messages": []
+                }
+              },
+              "postLoadDrain": {
+                "status": "ok",
+                "mode": "all_ready",
+                "attempts": 9,
+                "stableElapsedMs": 2188,
+                "maxReplicaOpsInFlightThreshold": 0,
+                "inFlightReplicaOps": 0,
+                "partitionGroupInFlight": {},
+                "reasonHistogram": {
+                  "leadership_unstable:0": 1,
+                  "leadership_unstable:869": 1,
+                  "leadership_unstable:1382": 1,
+                  "leadership_unstable:1891": 1
+                },
+                "error": null
+              }
+            },
+            "consistencyAssertMaxAttempts": 3,
+            "consistencyAssertRetryDelayMs": 2000,
+            "consistencyAssertionAttempts": 1,
+            "sutLoadDiscovery": {
+              "attempts": 1,
+              "timedOut": false,
+              "strictMinReachable": true,
+              "requiredReachableNodeCount": 3,
+              "gateReason": null,
+              "discoveredNodeIds": [
+                "11601fe0-72d6-5853-8590-ec2881853e72",
+                "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "7493b0ab-a054-5fad-a91b-5e331db29304"
+              ],
+              "candidateNodeIds": [
+                "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "11601fe0-72d6-5853-8590-ec2881853e72"
+              ],
+              "reachableNodeIds": [
+                "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "11601fe0-72d6-5853-8590-ec2881853e72"
+              ],
+              "sourceResults": [
+                {
+                  "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                  "status": "discovered",
+                  "discoveredNodeIds": [
+                    "11601fe0-72d6-5853-8590-ec2881853e72",
+                    "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                    "7493b0ab-a054-5fad-a91b-5e331db29304"
+                  ],
+                  "selection": "postgres-wire",
+                  "serviceId": "sys-postgres-wire",
+                  "protocol": "postgresql",
+                  "excludedReadinessByNodeId": {}
+                },
+                {
+                  "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                  "status": "discovered",
+                  "discoveredNodeIds": [
+                    "11601fe0-72d6-5853-8590-ec2881853e72",
+                    "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                    "7493b0ab-a054-5fad-a91b-5e331db29304"
+                  ],
+                  "selection": "postgres-wire",
+                  "serviceId": "sys-postgres-wire",
+                  "protocol": "postgresql",
+                  "excludedReadinessByNodeId": {}
+                },
+                {
+                  "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                  "status": "discovered",
+                  "discoveredNodeIds": [
+                    "11601fe0-72d6-5853-8590-ec2881853e72",
+                    "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                    "7493b0ab-a054-5fad-a91b-5e331db29304"
+                  ],
+                  "selection": "postgres-wire",
+                  "serviceId": "sys-postgres-wire",
+                  "protocol": "postgresql",
+                  "excludedReadinessByNodeId": {}
+                }
+              ],
+              "probeReadinessByNodeId": {},
+              "elapsedMs": 65,
+              "excludedReadinessByNodeId": {},
+              "exclusionReasonCountsByNode": {}
+            },
+            "sutLoadDiscoveryExcludedReadinessByNodeId": {},
+            "insufficientEvidencePolicy": "soft",
+            "postLoadDrainStatus": "ok",
+            "postLoadDrainMode": "all_ready",
+            "postLoadDrainAttempts": 9,
+            "postLoadDrainStableElapsedMs": 2188,
+            "postLoadDrainNoProgressTimeoutMs": null,
+            "postLoadDrainError": null,
+            "postLoadDrainReasonHistogram": {
+              "leadership_unstable:0": 1,
+              "leadership_unstable:869": 1,
+              "leadership_unstable:1382": 1,
+              "leadership_unstable:1891": 1
+            },
+            "postLoadDrainPartitionGroupInFlight": {},
+            "postLoadDrainIncludedNodeIds": [
+              "11601fe0-72d6-5853-8590-ec2881853e72",
+              "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+              "7493b0ab-a054-5fad-a91b-5e331db29304"
+            ],
+            "postLoadDrainExcludedNodeIds": [],
+            "operations": [
+              "INSERT",
+              "SELECT"
+            ],
+            "tableName": "benchmark_events"
+          },
+          "parity": {
+            "status": "matched",
+            "reasons": [],
+            "configured": {
+              "workloadProfile": "benchmark_events_mixed",
+              "operations": [
+                "INSERT",
+                "SELECT"
+              ],
+              "durationSeconds": 30,
+              "targetOpsPerSec": 120,
+              "loadNodeCount": 8,
+              "loadMaxInFlight": 128,
+              "loadNodeMaxInFlight": 2,
+              "tableName": "benchmark_events"
+            },
+            "effective": {
+              "sutLoadNodeCount": 3,
+              "baselineLoadNodeCount": 3,
+              "sutPerNodeBudget": 2,
+              "baselinePerNodeBudget": 2,
+              "tableName": "benchmark_events"
+            }
+          },
+          "strictBenchmarkGate": {
+            "discovery": {
+              "strictMinReachable": true,
+              "requiredReachableNodeCount": 3,
+              "reachableNodeCount": 3,
+              "discoveredNodeCount": 3,
+              "status": "passed",
+              "reason": null
+            },
+            "parity": {
+              "strictParity": true,
+              "parityStatus": "matched",
+              "status": "passed",
+              "reason": null,
+              "reasonCodes": []
+            },
+            "overload": {
+              "strictOverloadPolicy": false,
+              "policy": {
+                "maxRejectedOperations": null,
+                "maxQueueDelayP99Ms": null
+              },
+              "rejectedOperations": 0,
+              "queueDelayP99Ms": 19759.753173828125,
+              "status": "passed",
+              "violations": []
+            },
+            "writePressure": {
+              "schemaVersion": 1,
+              "strictWritePressure": false,
+              "thresholds": {
+                "maxAttemptedWrites": null,
+                "maxFailedWrites": null,
+                "maxTimedOutWrites": null
+              },
+              "counters": {
+                "attempted": 0,
+                "coalesced": 0,
+                "unchangedSkipped": 0,
+                "failed": 0,
+                "timeouts": 0
+              },
+              "breached": false,
+              "status": "passed",
+              "violations": []
+            }
+          },
+          "overloadPolicyResult": {
+            "strictOverloadPolicy": false,
+            "policy": {
+              "maxRejectedOperations": null,
+              "maxQueueDelayP99Ms": null
+            },
+            "rejectedOperations": 0,
+            "queueDelayP99Ms": 19759.753173828125,
+            "status": "passed",
+            "violations": []
+          },
+          "writePressure": {
+            "schemaVersion": 1,
+            "strictWritePressure": false,
+            "thresholds": {
+              "maxAttemptedWrites": null,
+              "maxFailedWrites": null,
+              "maxTimedOutWrites": null
+            },
+            "counters": {
+              "attempted": 0,
+              "coalesced": 0,
+              "unchangedSkipped": 0,
+              "failed": 0,
+              "timeouts": 0
+            },
+            "breached": false,
+            "status": "passed",
+            "violations": []
+          },
+          "saturation": {
+            "schemaVersion": 1,
+            "cdcForwardTimeoutCount": 0,
+            "systemTableQueryTimeoutCount": 0,
+            "snapshotCollectionErrorCount": 0
+          },
+          "effectiveAdmissionPolicy": {
+            "sources": {
+              "benchmark": {
+                "loadNodeMaxInFlight": 2,
+                "loadQueryTimeoutMs": 4000,
+                "nodeFailureThreshold": 3,
+                "nodeFailureCooldownMs": 1500
+              },
+              "channelOverrides": {
+                "loadMaxInFlightPerNode": null,
+                "loadTimeoutMs": null,
+                "loadCircuitBreakerThreshold": null,
+                "loadCooldownMs": null
+              }
+            },
+            "resolved": {
+              "loadMaxInFlightPerNode": 2,
+              "loadTimeoutMs": 4000,
+              "loadCircuitBreakerThreshold": 3,
+              "loadCooldownMs": 1500,
+              "loadRetryBudget": 0
+            },
+            "conflicts": []
+          },
+          "baseline": {
+            "engine": "postgres",
+            "image": "postgres:16",
+            "containerIp": "172.18.0.5",
+            "replicaContainerIps": [
+              "172.18.0.6",
+              "172.18.0.7"
+            ],
+            "replicationFactor": 3,
+            "syncReplicaAcks": 1,
+            "loadNodeCount": 3,
+            "poolMaxConnections": 128,
+            "cache": {
+              "enabled": true,
+              "hit": false,
+              "key": "v3-026134b9a9b0b8b39e63f0e8f015929edc76496fae1bdaf696c43f070566b3ed",
+              "path": "test-output/reports/.playback/postgres-baseline-3node-after-admin-mutation-target/postgres-baseline-cache/v3-026134b9a9b0b8b39e63f0e8f015929edc76496fae1bdaf696c43f070566b3ed.json",
+              "cachedAt": "2026-02-28T12:48:24.648Z",
+              "reason": "cache-stored"
+            },
+            "metrics": {
+              "total": 3600,
+              "success": 3600,
+              "failed": 0,
+              "errors": 0,
+              "latency": {
+                "avg": 0.7230555555555556,
+                "p50": 1,
+                "p95": 2,
+                "p99": 2
+              },
+              "opsPerSec": 119.99600013332889,
+              "queueDelay": {
+                "avg": 0.7819992404513889,
+                "p50": 0.70703125,
+                "p95": 1.822265625,
+                "p99": 1.93359375,
+                "max": 4.0634765625
+              },
+              "targetOperations": 3600,
+              "dispatchedOperations": 3600,
+              "undispatchedOperations": 0,
+              "undispatchedByReason": {
+                "capacity": 0,
+                "durationTimeout": 0,
+                "cancelled": 0
+              },
+              "perNode": {
+                "postgres-baseline-load-node-1": {
+                  "dispatched": 1200,
+                  "success": 1200,
+                  "attemptErrors": 0,
+                  "admissionSignals": 0,
+                  "queuePressureSignals": 0,
+                  "rejected": 0,
+                  "rejectedByReason": {
+                    "queueFull": 0
+                  }
+                },
+                "postgres-baseline-load-node-2": {
+                  "dispatched": 1200,
+                  "success": 1200,
+                  "attemptErrors": 0,
+                  "admissionSignals": 0,
+                  "queuePressureSignals": 0,
+                  "rejected": 0,
+                  "rejectedByReason": {
+                    "queueFull": 0
+                  }
+                },
+                "postgres-baseline-load-node-3": {
+                  "dispatched": 1200,
+                  "success": 1200,
+                  "attemptErrors": 0,
+                  "admissionSignals": 0,
+                  "queuePressureSignals": 0,
+                  "rejected": 0,
+                  "rejectedByReason": {
+                    "queueFull": 0
+                  }
+                }
+              },
+              "rejectedOperations": 0,
+              "rejectedByReason": {
+                "queueFull": 0
+              },
+              "queuePressure": {
+                "samples": 4349,
+                "pendingQueueDepth": {
+                  "avg": 0.8277765003449069,
+                  "p95": 1,
+                  "p99": 1,
+                  "max": 1
+                }
+              }
+            }
+          },
+          "systemUnderTest": {
+            "seedNodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+            "metrics": {
+              "opsPerSec": 33.33436888378017,
+              "latency": {
+                "avg": 173.78191985088537,
+                "p50": 50,
+                "p95": 663,
+                "p99": 2507
+              },
+              "total": 1073,
+              "success": 1073,
+              "failed": 0,
+              "errors": 0,
+              "attemptErrors": 0,
+              "loadTargetOpsPerSec": 120,
+              "loadMaxInFlight": 128
+            }
+          },
+          "comparison": {
+            "sutOpsPerSec": 33.33436888378017,
+            "sutP99LatencyMs": 2507,
+            "baselineTps": 119.99600013332889,
+            "baselineLatencyAvgMs": 0.7230555555555556,
+            "throughputRatioSutToBaseline": 0.2777956669117469,
+            "p99LatencyRatioSutToBaselineAvg": 3467.230119093354
+          },
+          "convergence": {
+            "settledAfterMs": 5120,
+            "leaderChanges": 0,
+            "maxOverTargetMs": 0
+          },
+          "verification": {
+            "verdict": "consistent",
+            "confidence": "high",
+            "hardFailures": [],
+            "softWarnings": [],
+            "coverage": {
+              "reachableNodes": 3,
+              "snapshotNodes": 3
+            },
+            "mismatches": [],
+            "evidenceWarnings": [],
+            "verificationNodeIds": [
+              "7493b0ab-a054-5fad-a91b-5e331db29304",
+              "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+              "11601fe0-72d6-5853-8590-ec2881853e72"
+            ],
+            "verificationExcludedNodeIds": []
+          },
+          "policy": {
+            "insufficientEvidence": "soft",
+            "assertionStatus": "passed"
+          },
+          "diagnosticsCoverage": {
+            "status": "unavailable",
+            "reason": "not_reported",
+            "sampleCount": 0,
+            "writePathSamples": {
+              "raftPropose": 0,
+              "transportDeliver": 0,
+              "sqlite": 0
+            }
+          },
+          "phaseTimeline": [
+            {
+              "phase": "preflight",
+              "status": "ok",
+              "durationMs": 9254,
+              "startedAtMs": 1772282822969,
+              "endedAtMs": 1772282832223,
+              "warnings": [],
+              "errors": []
+            },
+            {
+              "phase": "converge",
+              "status": "ok",
+              "durationMs": 0,
+              "startedAtMs": 1772282832223,
+              "endedAtMs": 1772282832223,
+              "warnings": [],
+              "errors": []
+            },
+            {
+              "phase": "pre_load_gate",
+              "status": "ok",
+              "durationMs": 7432,
+              "startedAtMs": 1772282832223,
+              "endedAtMs": 1772282839655,
+              "warnings": [],
+              "errors": []
+            },
+            {
+              "phase": "load",
+              "status": "ok",
+              "durationMs": 66391,
+              "startedAtMs": 1772282839655,
+              "endedAtMs": 1772282906046,
+              "warnings": [],
+              "errors": []
+            },
+            {
+              "phase": "post_load_drain",
+              "status": "ok",
+              "durationMs": 4589,
+              "startedAtMs": 1772282906046,
+              "endedAtMs": 1772282910635,
+              "warnings": [],
+              "errors": []
+            },
+            {
+              "phase": "verify",
+              "status": "ok",
+              "durationMs": 46,
+              "startedAtMs": 1772282910635,
+              "endedAtMs": 1772282910681,
+              "warnings": [],
+              "errors": []
+            },
+            {
+              "phase": "teardown",
+              "status": "ok",
+              "durationMs": 0,
+              "startedAtMs": 1772282910681,
+              "endedAtMs": 1772282910681,
+              "warnings": [],
+              "errors": []
+            }
+          ],
+          "phaseArtifacts": {
+            "preflight": {
+              "benchmarkTableName": "benchmark_events",
+              "requiredSchemaVersion": "1772282828109",
+              "requiredSchemaVersionSource": "updated_at",
+              "requiredSchemaVersionMetadataNodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+              "requiredSchemaTableId": "tbl-1110703c-747c-4fbe-9fe4-5bf347854086",
+              "benchmarkMetadataFlow": {
+                "schemaVersion": 1,
+                "tableName": "benchmark_events",
+                "tableId": "tbl-1110703c-747c-4fbe-9fe4-5bf347854086",
+                "requiredSchemaVersion": "1772282828109",
+                "createCommitted": {
+                  "stage": "create_committed",
+                  "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                  "capturedAt": 1772282832156,
+                  "tableName": "benchmark_events",
+                  "tableId": "tbl-1110703c-747c-4fbe-9fe4-5bf347854086",
+                  "requiredSchemaVersion": "1772282828109",
+                  "observedSchemaVersion": "1772282828109",
+                  "readinessState": null,
+                  "probeError": null,
+                  "queryErrors": {
+                    "tables": null,
+                    "partitions": null,
+                    "services": null
+                  },
+                  "tables": {
+                    "rowCount": 1,
+                    "tableIds": [
+                      "tbl-1110703c-747c-4fbe-9fe4-5bf347854086"
+                    ],
+                    "schemaVersion": "1772282828109"
+                  },
+                  "partitions": {
+                    "rowCount": 1,
+                    "tableIds": [
+                      "tbl-1110703c-747c-4fbe-9fe4-5bf347854086"
+                    ],
+                    "partitionIds": [
+                      "tbl-1110703c-747c-4fbe-9fe4-5bf347854086-p1"
+                    ],
+                    "schemaVersion": "1772282828109"
+                  },
+                  "services": {
+                    "rowCount": 3,
+                    "partitionIds": [
+                      "tbl-1110703c-747c-4fbe-9fe4-5bf347854086-p1"
+                    ],
+                    "activePartitionIds": [
+                      "tbl-1110703c-747c-4fbe-9fe4-5bf347854086-p1"
+                    ],
+                    "leaderPartitionIds": [],
+                    "activeNodeIds": [
+                      "11601fe0-72d6-5853-8590-ec2881853e72"
+                    ],
+                    "leaderNodeIds": [],
+                    "missingActivePartitionIds": [],
+                    "missingLeaderPartitionIds": [
+                      "tbl-1110703c-747c-4fbe-9fe4-5bf347854086-p1"
+                    ]
+                  }
+                },
+                "nodeSnapshots": {
+                  "7493b0ab-a054-5fad-a91b-5e331db29304": {
+                    "stage": "create_committed",
+                    "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                    "capturedAt": 1772282832156,
+                    "tableName": "benchmark_events",
+                    "tableId": "tbl-1110703c-747c-4fbe-9fe4-5bf347854086",
+                    "requiredSchemaVersion": "1772282828109",
+                    "observedSchemaVersion": "1772282828109",
+                    "readinessState": null,
+                    "probeError": null,
+                    "queryErrors": {
+                      "tables": null,
+                      "partitions": null,
+                      "services": null
+                    },
+                    "tables": {
+                      "rowCount": 1,
+                      "tableIds": [
+                        "tbl-1110703c-747c-4fbe-9fe4-5bf347854086"
+                      ],
+                      "schemaVersion": "1772282828109"
+                    },
+                    "partitions": {
+                      "rowCount": 1,
+                      "tableIds": [
+                        "tbl-1110703c-747c-4fbe-9fe4-5bf347854086"
+                      ],
+                      "partitionIds": [
+                        "tbl-1110703c-747c-4fbe-9fe4-5bf347854086-p1"
+                      ],
+                      "schemaVersion": "1772282828109"
+                    },
+                    "services": {
+                      "rowCount": 3,
+                      "partitionIds": [
+                        "tbl-1110703c-747c-4fbe-9fe4-5bf347854086-p1"
+                      ],
+                      "activePartitionIds": [
+                        "tbl-1110703c-747c-4fbe-9fe4-5bf347854086-p1"
+                      ],
+                      "leaderPartitionIds": [],
+                      "activeNodeIds": [
+                        "11601fe0-72d6-5853-8590-ec2881853e72"
+                      ],
+                      "leaderNodeIds": [],
+                      "missingActivePartitionIds": [],
+                      "missingLeaderPartitionIds": [
+                        "tbl-1110703c-747c-4fbe-9fe4-5bf347854086-p1"
+                      ]
+                    }
+                  }
+                }
+              },
+              "systemTableReadPath": {
+                "mode": "canonical_fallback",
+                "candidateNodeIds": [
+                  "7493b0ab-a054-5fad-a91b-5e331db29304",
+                  "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                  "11601fe0-72d6-5853-8590-ec2881853e72"
+                ]
+              },
+              "sutLoadNodeIds": [
+                "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "11601fe0-72d6-5853-8590-ec2881853e72"
+              ],
+              "sutLoadDiscovery": {
+                "attempts": 1,
+                "timedOut": false,
+                "strictMinReachable": true,
+                "requiredReachableNodeCount": 3,
+                "gateReason": null,
+                "discoveredNodeIds": [
+                  "11601fe0-72d6-5853-8590-ec2881853e72",
+                  "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                  "7493b0ab-a054-5fad-a91b-5e331db29304"
+                ],
+                "candidateNodeIds": [
+                  "7493b0ab-a054-5fad-a91b-5e331db29304",
+                  "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                  "11601fe0-72d6-5853-8590-ec2881853e72"
+                ],
+                "reachableNodeIds": [
+                  "7493b0ab-a054-5fad-a91b-5e331db29304",
+                  "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                  "11601fe0-72d6-5853-8590-ec2881853e72"
+                ],
+                "sourceResults": [
+                  {
+                    "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                    "status": "discovered",
+                    "discoveredNodeIds": [
+                      "11601fe0-72d6-5853-8590-ec2881853e72",
+                      "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                      "7493b0ab-a054-5fad-a91b-5e331db29304"
+                    ],
+                    "selection": "postgres-wire",
+                    "serviceId": "sys-postgres-wire",
+                    "protocol": "postgresql",
+                    "excludedReadinessByNodeId": {}
+                  },
+                  {
+                    "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                    "status": "discovered",
+                    "discoveredNodeIds": [
+                      "11601fe0-72d6-5853-8590-ec2881853e72",
+                      "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                      "7493b0ab-a054-5fad-a91b-5e331db29304"
+                    ],
+                    "selection": "postgres-wire",
+                    "serviceId": "sys-postgres-wire",
+                    "protocol": "postgresql",
+                    "excludedReadinessByNodeId": {}
+                  },
+                  {
+                    "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                    "status": "discovered",
+                    "discoveredNodeIds": [
+                      "11601fe0-72d6-5853-8590-ec2881853e72",
+                      "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                      "7493b0ab-a054-5fad-a91b-5e331db29304"
+                    ],
+                    "selection": "postgres-wire",
+                    "serviceId": "sys-postgres-wire",
+                    "protocol": "postgresql",
+                    "excludedReadinessByNodeId": {}
+                  }
+                ],
+                "probeReadinessByNodeId": {},
+                "elapsedMs": 65,
+                "excludedReadinessByNodeId": {},
+                "exclusionReasonCountsByNode": {}
+              },
+              "strictDiscoveryGate": {
+                "strictMinReachable": true,
+                "requiredReachableNodeCount": 3,
+                "reachableNodeCount": 3,
+                "discoveredNodeCount": 3,
+                "status": "passed",
+                "reason": null
+              },
+              "strictBenchmarkGate": {
+                "discovery": {
+                  "strictMinReachable": true,
+                  "requiredReachableNodeCount": 3,
+                  "reachableNodeCount": 3,
+                  "discoveredNodeCount": 3,
+                  "status": "passed",
+                  "reason": null
+                },
+                "parity": {
+                  "strictParity": true,
+                  "parityStatus": "matched",
+                  "status": "passed",
+                  "reason": null,
+                  "reasonCodes": []
+                },
+                "overload": {
+                  "strictOverloadPolicy": false,
+                  "policy": {
+                    "maxRejectedOperations": null,
+                    "maxQueueDelayP99Ms": null
+                  },
+                  "rejectedOperations": 0,
+                  "queueDelayP99Ms": 19759.753173828125,
+                  "status": "passed",
+                  "violations": []
+                },
+                "writePressure": {
+                  "schemaVersion": 1,
+                  "strictWritePressure": false,
+                  "thresholds": {
+                    "maxAttemptedWrites": null,
+                    "maxFailedWrites": null,
+                    "maxTimedOutWrites": null
+                  },
+                  "counters": {
+                    "attempted": 0,
+                    "coalesced": 0,
+                    "unchangedSkipped": 0,
+                    "failed": 0,
+                    "timeouts": 0
+                  },
+                  "breached": false,
+                  "status": "passed",
+                  "violations": []
+                }
+              },
+              "quietMode": {
+                "schemaVersion": 1,
+                "enabled": true,
+                "status": "active",
+                "enteredAtMs": 1772282822969,
+                "exitedAtMs": null,
+                "activePhases": [
+                  "preflight",
+                  "pre_load_gate",
+                  "load"
+                ],
+                "activeDuringPhases": [
+                  "preflight"
+                ],
+                "lifecycle": [
+                  {
+                    "action": "enter",
+                    "phase": "preflight",
+                    "reason": "strict_benchmark_mode",
+                    "timestampMs": 1772282822969
+                  }
+                ]
+              }
+            },
+            "converge": {
+              "convergence": {
+                "settledAfterMs": 5120,
+                "leaderChanges": 0,
+                "maxOverTargetMs": 0
+              },
+              "diagnosticsCoverage": {
+                "status": "unavailable",
+                "reason": "not_reported",
+                "sampleCount": 0,
+                "writePathSamples": {
+                  "raftPropose": 0,
+                  "transportDeliver": 0,
+                  "sqlite": 0
+                }
+              }
+            },
+            "pre_load_gate": {
+              "mode": "all_ready",
+              "attempts": 14,
+              "stableElapsedMs": 2221,
+              "includedNodeIds": [
+                "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "11601fe0-72d6-5853-8590-ec2881853e72"
+              ],
+              "excludedNodeIds": [],
+              "partitionGroupInFlight": {},
+              "reasonHistogram": {
+                "node_probe_error:7493b0ab-a054-5fad-a91b-5e331db29304=discovery_not_ready:topology_not_ready|discovery_reasons=replica_operations_in_flight=2&leadership_unstable=leader coverage incomplete for readiness scope": 9,
+                "node_probe_error:35a891b8-c1a0-5064-9c6e-2acfba61c2a7=discovery_not_ready:topology_not_ready|discovery_reasons=replica_operations_in_flight=2&leadership_unstable=leader coverage incomplete for readiness scope": 9,
+                "node_probe_error:11601fe0-72d6-5853-8590-ec2881853e72=discovery_not_ready:topology_not_ready|discovery_reasons=leadership_unstable=leader coverage incomplete for readiness scope": 5
+              },
+              "versionConvergence": {
+                "requiredSchemaVersion": "1772282828109",
+                "nodes": {
+                  "7493b0ab-a054-5fad-a91b-5e331db29304": {
+                    "requiredSchemaVersion": "1772282828109",
+                    "observedSchemaVersion": "1772282834671",
+                    "ready": true,
+                    "unmetReasons": [],
+                    "discoveryReasons": [],
+                    "readinessState": {
+                      "workloadReady": true,
+                      "benchmarkReady": true,
+                      "routingReady": true,
+                      "schemaReady": true,
+                      "topologyReady": true,
+                      "replicaOpsInFlight": 0,
+                      "leadershipStable": true,
+                      "tableName": "benchmark_events",
+                      "discoveryReasons": []
+                    }
+                  },
+                  "35a891b8-c1a0-5064-9c6e-2acfba61c2a7": {
+                    "requiredSchemaVersion": "1772282828109",
+                    "observedSchemaVersion": "1772282834671",
+                    "ready": true,
+                    "unmetReasons": [],
+                    "discoveryReasons": [],
+                    "readinessState": {
+                      "workloadReady": true,
+                      "benchmarkReady": true,
+                      "routingReady": true,
+                      "schemaReady": true,
+                      "topologyReady": true,
+                      "replicaOpsInFlight": 0,
+                      "leadershipStable": true,
+                      "tableName": "benchmark_events",
+                      "discoveryReasons": []
+                    }
+                  },
+                  "11601fe0-72d6-5853-8590-ec2881853e72": {
+                    "requiredSchemaVersion": "1772282828109",
+                    "observedSchemaVersion": "1772282834671",
+                    "ready": true,
+                    "unmetReasons": [],
+                    "discoveryReasons": [],
+                    "readinessState": {
+                      "workloadReady": true,
+                      "benchmarkReady": true,
+                      "routingReady": true,
+                      "schemaReady": true,
+                      "topologyReady": true,
+                      "replicaOpsInFlight": 0,
+                      "leadershipStable": true,
+                      "tableName": "benchmark_events",
+                      "discoveryReasons": []
+                    }
+                  }
+                }
+              },
+              "benchmarkMetadataFlow": {
+                "schemaVersion": 1,
+                "tableName": "benchmark_events",
+                "tableId": "tbl-1110703c-747c-4fbe-9fe4-5bf347854086",
+                "requiredSchemaVersion": "1772282828109",
+                "createCommitted": {
+                  "stage": "create_committed",
+                  "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                  "capturedAt": 1772282832156,
+                  "tableName": "benchmark_events",
+                  "tableId": "tbl-1110703c-747c-4fbe-9fe4-5bf347854086",
+                  "requiredSchemaVersion": "1772282828109",
+                  "observedSchemaVersion": "1772282828109",
+                  "readinessState": null,
+                  "probeError": null,
+                  "queryErrors": {
+                    "tables": null,
+                    "partitions": null,
+                    "services": null
+                  },
+                  "tables": {
+                    "rowCount": 1,
+                    "tableIds": [
+                      "tbl-1110703c-747c-4fbe-9fe4-5bf347854086"
+                    ],
+                    "schemaVersion": "1772282828109"
+                  },
+                  "partitions": {
+                    "rowCount": 1,
+                    "tableIds": [
+                      "tbl-1110703c-747c-4fbe-9fe4-5bf347854086"
+                    ],
+                    "partitionIds": [
+                      "tbl-1110703c-747c-4fbe-9fe4-5bf347854086-p1"
+                    ],
+                    "schemaVersion": "1772282828109"
+                  },
+                  "services": {
+                    "rowCount": 3,
+                    "partitionIds": [
+                      "tbl-1110703c-747c-4fbe-9fe4-5bf347854086-p1"
+                    ],
+                    "activePartitionIds": [
+                      "tbl-1110703c-747c-4fbe-9fe4-5bf347854086-p1"
+                    ],
+                    "leaderPartitionIds": [],
+                    "activeNodeIds": [
+                      "11601fe0-72d6-5853-8590-ec2881853e72"
+                    ],
+                    "leaderNodeIds": [],
+                    "missingActivePartitionIds": [],
+                    "missingLeaderPartitionIds": [
+                      "tbl-1110703c-747c-4fbe-9fe4-5bf347854086-p1"
+                    ]
+                  }
+                },
+                "nodeSnapshots": {
+                  "7493b0ab-a054-5fad-a91b-5e331db29304": {
+                    "stage": "readiness_poll",
+                    "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                    "capturedAt": 1772282837420,
+                    "tableName": "benchmark_events",
+                    "tableId": "tbl-1110703c-747c-4fbe-9fe4-5bf347854086",
+                    "requiredSchemaVersion": "1772282828109",
+                    "observedSchemaVersion": "1772282834671",
+                    "readinessState": {
+                      "workloadReady": true,
+                      "benchmarkReady": true,
+                      "routingReady": true,
+                      "schemaReady": true,
+                      "topologyReady": true,
+                      "replicaOpsInFlight": 0,
+                      "leadershipStable": true,
+                      "tableName": "benchmark_events",
+                      "discoveryReasons": []
+                    },
+                    "probeError": null,
+                    "queryErrors": {
+                      "tables": null,
+                      "partitions": null,
+                      "services": null
+                    },
+                    "tables": {
+                      "rowCount": 1,
+                      "tableIds": [
+                        "tbl-1110703c-747c-4fbe-9fe4-5bf347854086"
+                      ],
+                      "schemaVersion": "1772282828109"
+                    },
+                    "partitions": {
+                      "rowCount": 1,
+                      "tableIds": [
+                        "tbl-1110703c-747c-4fbe-9fe4-5bf347854086"
+                      ],
+                      "partitionIds": [
+                        "tbl-1110703c-747c-4fbe-9fe4-5bf347854086-p1"
+                      ],
+                      "schemaVersion": "1772282834671"
+                    },
+                    "services": {
+                      "rowCount": 3,
+                      "partitionIds": [
+                        "tbl-1110703c-747c-4fbe-9fe4-5bf347854086-p1"
+                      ],
+                      "activePartitionIds": [
+                        "tbl-1110703c-747c-4fbe-9fe4-5bf347854086-p1"
+                      ],
+                      "leaderPartitionIds": [
+                        "tbl-1110703c-747c-4fbe-9fe4-5bf347854086-p1"
+                      ],
+                      "activeNodeIds": [
+                        "11601fe0-72d6-5853-8590-ec2881853e72",
+                        "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                        "7493b0ab-a054-5fad-a91b-5e331db29304"
+                      ],
+                      "leaderNodeIds": [
+                        "7493b0ab-a054-5fad-a91b-5e331db29304"
+                      ],
+                      "missingActivePartitionIds": [],
+                      "missingLeaderPartitionIds": []
+                    }
+                  },
+                  "35a891b8-c1a0-5064-9c6e-2acfba61c2a7": {
+                    "stage": "readiness_poll",
+                    "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                    "capturedAt": 1772282837432,
+                    "tableName": "benchmark_events",
+                    "tableId": "tbl-1110703c-747c-4fbe-9fe4-5bf347854086",
+                    "requiredSchemaVersion": "1772282828109",
+                    "observedSchemaVersion": "1772282834671",
+                    "readinessState": {
+                      "workloadReady": true,
+                      "benchmarkReady": true,
+                      "routingReady": true,
+                      "schemaReady": true,
+                      "topologyReady": true,
+                      "replicaOpsInFlight": 0,
+                      "leadershipStable": true,
+                      "tableName": "benchmark_events",
+                      "discoveryReasons": []
+                    },
+                    "probeError": null,
+                    "queryErrors": {
+                      "tables": null,
+                      "partitions": null,
+                      "services": null
+                    },
+                    "tables": {
+                      "rowCount": 1,
+                      "tableIds": [
+                        "tbl-1110703c-747c-4fbe-9fe4-5bf347854086"
+                      ],
+                      "schemaVersion": "1772282828109"
+                    },
+                    "partitions": {
+                      "rowCount": 1,
+                      "tableIds": [
+                        "tbl-1110703c-747c-4fbe-9fe4-5bf347854086"
+                      ],
+                      "partitionIds": [
+                        "tbl-1110703c-747c-4fbe-9fe4-5bf347854086-p1"
+                      ],
+                      "schemaVersion": "1772282834671"
+                    },
+                    "services": {
+                      "rowCount": 3,
+                      "partitionIds": [
+                        "tbl-1110703c-747c-4fbe-9fe4-5bf347854086-p1"
+                      ],
+                      "activePartitionIds": [
+                        "tbl-1110703c-747c-4fbe-9fe4-5bf347854086-p1"
+                      ],
+                      "leaderPartitionIds": [
+                        "tbl-1110703c-747c-4fbe-9fe4-5bf347854086-p1"
+                      ],
+                      "activeNodeIds": [
+                        "11601fe0-72d6-5853-8590-ec2881853e72",
+                        "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                        "7493b0ab-a054-5fad-a91b-5e331db29304"
+                      ],
+                      "leaderNodeIds": [
+                        "7493b0ab-a054-5fad-a91b-5e331db29304"
+                      ],
+                      "missingActivePartitionIds": [],
+                      "missingLeaderPartitionIds": []
+                    }
+                  },
+                  "11601fe0-72d6-5853-8590-ec2881853e72": {
+                    "stage": "readiness_poll",
+                    "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                    "capturedAt": 1772282835080,
+                    "tableName": "benchmark_events",
+                    "tableId": "tbl-1110703c-747c-4fbe-9fe4-5bf347854086",
+                    "requiredSchemaVersion": "1772282828109",
+                    "observedSchemaVersion": "1772282834671",
+                    "readinessState": {
+                      "workloadReady": true,
+                      "benchmarkReady": true,
+                      "routingReady": true,
+                      "schemaReady": true,
+                      "topologyReady": true,
+                      "replicaOpsInFlight": 0,
+                      "leadershipStable": true,
+                      "tableName": "benchmark_events",
+                      "discoveryReasons": []
+                    },
+                    "probeError": null,
+                    "queryErrors": {
+                      "tables": null,
+                      "partitions": null,
+                      "services": null
+                    },
+                    "tables": {
+                      "rowCount": 1,
+                      "tableIds": [
+                        "tbl-1110703c-747c-4fbe-9fe4-5bf347854086"
+                      ],
+                      "schemaVersion": "1772282828109"
+                    },
+                    "partitions": {
+                      "rowCount": 1,
+                      "tableIds": [
+                        "tbl-1110703c-747c-4fbe-9fe4-5bf347854086"
+                      ],
+                      "partitionIds": [
+                        "tbl-1110703c-747c-4fbe-9fe4-5bf347854086-p1"
+                      ],
+                      "schemaVersion": "1772282834671"
+                    },
+                    "services": {
+                      "rowCount": 3,
+                      "partitionIds": [
+                        "tbl-1110703c-747c-4fbe-9fe4-5bf347854086-p1"
+                      ],
+                      "activePartitionIds": [
+                        "tbl-1110703c-747c-4fbe-9fe4-5bf347854086-p1"
+                      ],
+                      "leaderPartitionIds": [
+                        "tbl-1110703c-747c-4fbe-9fe4-5bf347854086-p1"
+                      ],
+                      "activeNodeIds": [
+                        "11601fe0-72d6-5853-8590-ec2881853e72",
+                        "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                        "7493b0ab-a054-5fad-a91b-5e331db29304"
+                      ],
+                      "leaderNodeIds": [
+                        "7493b0ab-a054-5fad-a91b-5e331db29304"
+                      ],
+                      "missingActivePartitionIds": [],
+                      "missingLeaderPartitionIds": []
+                    }
+                  }
+                }
+              },
+              "strictPreloadReadiness": true,
+              "preloadRequiredStableMs": 2000,
+              "preloadMaxReplicaOpsInFlight": 0,
+              "quietMode": {
+                "schemaVersion": 1,
+                "enabled": true,
+                "status": "active",
+                "enteredAtMs": 1772282822969,
+                "exitedAtMs": null,
+                "activePhases": [
+                  "preflight",
+                  "pre_load_gate",
+                  "load"
+                ],
+                "activeDuringPhases": [
+                  "preflight",
+                  "pre_load_gate"
+                ],
+                "lifecycle": [
+                  {
+                    "action": "enter",
+                    "phase": "preflight",
+                    "reason": "strict_benchmark_mode",
+                    "timestampMs": 1772282822969
+                  }
+                ]
+              }
+            },
+            "load": {
+              "sutLoadNodeIds": [
+                "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "11601fe0-72d6-5853-8590-ec2881853e72"
+              ],
+              "loadMetrics": {
+                "total": 1073,
+                "success": 1073,
+                "failed": 0,
+                "errors": 0,
+                "latency": {
+                  "avg": 173.78191985088537,
+                  "p50": 50,
+                  "p95": 663,
+                  "p99": 2507
+                },
+                "opsPerSec": 33.33436888378017,
+                "queueDelay": {
+                  "avg": 7791.571734112885,
+                  "p50": 7182.377197265625,
+                  "p95": 18771.75,
+                  "p99": 19759.753173828125,
+                  "max": 20523.087158203125
+                },
+                "targetOperations": 3600,
+                "dispatchedOperations": 1073,
+                "undispatchedOperations": 2527,
+                "undispatchedByReason": {
+                  "capacity": 2527,
+                  "durationTimeout": 2527,
+                  "cancelled": 0
+                },
+                "perNode": {
+                  "7493b0ab-a054-5fad-a91b-5e331db29304": {
+                    "dispatched": 771,
+                    "success": 771,
+                    "attemptErrors": 0,
+                    "admissionSignals": 0,
+                    "queuePressureSignals": 27632,
+                    "rejected": 0,
+                    "rejectedByReason": {
+                      "queueFull": 0
+                    }
+                  },
+                  "35a891b8-c1a0-5064-9c6e-2acfba61c2a7": {
+                    "dispatched": 151,
+                    "success": 151,
+                    "attemptErrors": 0,
+                    "admissionSignals": 0,
+                    "queuePressureSignals": 28263,
+                    "rejected": 0,
+                    "rejectedByReason": {
+                      "queueFull": 0
+                    }
+                  },
+                  "11601fe0-72d6-5853-8590-ec2881853e72": {
+                    "dispatched": 151,
+                    "success": 151,
+                    "attemptErrors": 0,
+                    "admissionSignals": 0,
+                    "queuePressureSignals": 28239,
+                    "rejected": 0,
+                    "rejectedByReason": {
+                      "queueFull": 0
+                    }
+                  }
+                },
+                "rejectedOperations": 0,
+                "rejectedByReason": {
+                  "queueFull": 0
+                },
+                "queuePressure": {
+                  "samples": 27520,
+                  "pendingQueueDepth": {
+                    "avg": 1198.367659883721,
+                    "p95": 2365,
+                    "p99": 2493,
+                    "max": 2527
+                  }
+                },
+                "attemptErrors": 0
+              },
+              "rebalancingPressure": {
+                "schemaVersion": 1,
+                "monitoredNodeIds": [
+                  "7493b0ab-a054-5fad-a91b-5e331db29304",
+                  "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                  "11601fe0-72d6-5853-8590-ec2881853e72"
+                ],
+                "sampleCount": 68,
+                "maxReplicaOpsInFlight": 0,
+                "totalLeaderChanges": 0,
+                "maxLeaderChangesWithinCooldown": 0,
+                "cooldownMs": 2000,
+                "minLeaderChangeDelta": 2,
+                "pollIntervalMs": 250,
+                "maxReplicaOpsInFlightLimit": 0,
+                "startedAtMs": 1772282839658,
+                "endedAtMs": 1772282871849,
+                "snapshotErrors": [],
+                "samples": [
+                  {
+                    "observedAtMs": 1772282839658,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282839920,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282840170,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282840422,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282840673,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282841051,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282841407,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282841750,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282842071,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282842418,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282842718,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282843017,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282843329,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282844043,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282845979,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282846268,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282846552,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282846833,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282847125,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282847433,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282847728,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282848008,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282848283,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282848582,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282849072,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282850664,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282850959,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282851258,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282851587,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282851890,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282852211,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282852583,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282852855,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282853141,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282853519,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282854073,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282855754,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282856064,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282856445,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282856710,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282856996,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282857294,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282857670,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282858002,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282858313,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282858661,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282859164,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282861123,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282861400,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282861707,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282861995,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282862267,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282862585,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282862875,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282863168,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282863478,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282864093,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282865980,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282866272,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282866558,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282866855,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282867158,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282867575,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282867927,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282868281,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282868695,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282869358,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  },
+                  {
+                    "observedAtMs": 1772282871562,
+                    "inFlightReplicaOps": 0,
+                    "leaderChangesWithinCooldown": 0
+                  }
+                ],
+                "pinning": {
+                  "enabled": false,
+                  "bypassed": false,
+                  "violated": false,
+                  "cancelledLoad": false,
+                  "violationReasons": []
+                },
+                "criticalState": {
+                  "schemaVersion": 1,
+                  "sampleCount": 68,
+                  "sustainedSampleThreshold": 3,
+                  "criticalSampleCount": 0,
+                  "maxConsecutiveCriticalSamples": 0,
+                  "sustainedEpisodeCount": 0,
+                  "sustained": false,
+                  "bypassed": false,
+                  "messages": []
+                }
+              },
+              "loadParity": {
+                "status": "matched",
+                "reasons": [],
+                "configured": {
+                  "workloadProfile": "benchmark_events_mixed",
+                  "operations": [
+                    "INSERT",
+                    "SELECT"
+                  ],
+                  "durationSeconds": 30,
+                  "targetOpsPerSec": 120,
+                  "loadNodeCount": 8,
+                  "loadMaxInFlight": 128,
+                  "loadNodeMaxInFlight": 2,
+                  "tableName": "benchmark_events"
+                },
+                "effective": {
+                  "sutLoadNodeCount": 3,
+                  "baselineLoadNodeCount": 3,
+                  "sutPerNodeBudget": 2,
+                  "baselinePerNodeBudget": 2,
+                  "tableName": "benchmark_events"
+                }
+              },
+              "overloadPolicyResult": {
+                "strictOverloadPolicy": false,
+                "policy": {
+                  "maxRejectedOperations": null,
+                  "maxQueueDelayP99Ms": null
+                },
+                "rejectedOperations": 0,
+                "queueDelayP99Ms": 19759.753173828125,
+                "status": "passed",
+                "violations": []
+              },
+              "writePressure": {
+                "schemaVersion": 1,
+                "strictWritePressure": false,
+                "thresholds": {
+                  "maxAttemptedWrites": null,
+                  "maxFailedWrites": null,
+                  "maxTimedOutWrites": null
+                },
+                "counters": {
+                  "attempted": 0,
+                  "coalesced": 0,
+                  "unchangedSkipped": 0,
+                  "failed": 0,
+                  "timeouts": 0
+                },
+                "breached": false,
+                "status": "passed",
+                "violations": []
+              },
+              "saturation": {
+                "schemaVersion": 1,
+                "cdcForwardTimeoutCount": 0,
+                "systemTableQueryTimeoutCount": 0,
+                "snapshotCollectionErrorCount": 0
+              },
+              "strictBenchmarkGate": {
+                "discovery": {
+                  "strictMinReachable": true,
+                  "requiredReachableNodeCount": 3,
+                  "reachableNodeCount": 3,
+                  "discoveredNodeCount": 3,
+                  "status": "passed",
+                  "reason": null
+                },
+                "parity": {
+                  "strictParity": true,
+                  "parityStatus": "matched",
+                  "status": "passed",
+                  "reason": null,
+                  "reasonCodes": []
+                },
+                "overload": {
+                  "strictOverloadPolicy": false,
+                  "policy": {
+                    "maxRejectedOperations": null,
+                    "maxQueueDelayP99Ms": null
+                  },
+                  "rejectedOperations": 0,
+                  "queueDelayP99Ms": 19759.753173828125,
+                  "status": "passed",
+                  "violations": []
+                },
+                "writePressure": {
+                  "schemaVersion": 1,
+                  "strictWritePressure": false,
+                  "thresholds": {
+                    "maxAttemptedWrites": null,
+                    "maxFailedWrites": null,
+                    "maxTimedOutWrites": null
+                  },
+                  "counters": {
+                    "attempted": 0,
+                    "coalesced": 0,
+                    "unchangedSkipped": 0,
+                    "failed": 0,
+                    "timeouts": 0
+                  },
+                  "breached": false,
+                  "status": "passed",
+                  "violations": []
+                }
+              },
+              "baselineCache": {
+                "enabled": true,
+                "hit": false,
+                "key": "v3-026134b9a9b0b8b39e63f0e8f015929edc76496fae1bdaf696c43f070566b3ed",
+                "path": "test-output/reports/.playback/postgres-baseline-3node-after-admin-mutation-target/postgres-baseline-cache/v3-026134b9a9b0b8b39e63f0e8f015929edc76496fae1bdaf696c43f070566b3ed.json",
+                "cachedAt": "2026-02-28T12:48:24.648Z",
+                "reason": "cache-stored"
+              },
+              "baselineOpsPerSec": 119.99600013332889
+            },
+            "post_load_drain": {
+              "status": "ok",
+              "mode": "all_ready",
+              "attempts": 9,
+              "stableElapsedMs": 2188,
+              "error": null,
+              "reasonHistogram": {
+                "leadership_unstable:0": 1,
+                "leadership_unstable:869": 1,
+                "leadership_unstable:1382": 1,
+                "leadership_unstable:1891": 1
+              },
+              "partitionGroupInFlight": {},
+              "includedNodeIds": [
+                "11601fe0-72d6-5853-8590-ec2881853e72",
+                "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "7493b0ab-a054-5fad-a91b-5e331db29304"
+              ],
+              "excludedNodeIds": [],
+              "rebalancingPressure": {
+                "status": "ok",
+                "mode": "all_ready",
+                "attempts": 9,
+                "stableElapsedMs": 2188,
+                "maxReplicaOpsInFlightThreshold": 0,
+                "inFlightReplicaOps": 0,
+                "partitionGroupInFlight": {},
+                "reasonHistogram": {
+                  "leadership_unstable:0": 1,
+                  "leadership_unstable:869": 1,
+                  "leadership_unstable:1382": 1,
+                  "leadership_unstable:1891": 1
+                },
+                "error": null
+              }
+            },
+            "verify": {
+              "consistencyVerdict": "consistent",
+              "coverage": {
+                "reachableNodes": 3,
+                "snapshotNodes": 3
+              },
+              "mismatches": [],
+              "evidenceWarnings": [],
+              "verificationNodeIds": [
+                "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "11601fe0-72d6-5853-8590-ec2881853e72"
+              ],
+              "verificationExcludedNodeIds": [],
+              "consistencyAssertionAttempts": 1,
+              "assertionStatus": "passed",
+              "internalSignalCounts": {
+                "errorsByClass": {
+                  "operation_failed": 0,
+                  "cdc_safe_fallback": 0,
+                  "cdc_buffered_without_subscriber": 0,
+                  "critical_rebalancing_state": 0
+                },
+                "warningsByClass": {
+                  "operation_failed": 0,
+                  "cdc_safe_fallback": 0,
+                  "cdc_buffered_without_subscriber": 0,
+                  "critical_rebalancing_state": 0
+                },
+                "messages": []
+              },
+              "internalSignalThresholdResult": {
+                "failOnThresholdBreach": true,
+                "breached": false,
+                "breaches": []
+              },
+              "cdcTelemetry": {
+                "schemaVersion": 1,
+                "byNode": {},
+                "summary": {
+                  "nodeCount": 0,
+                  "totalSubscriberCount": 0,
+                  "totalBufferedEvents": 0,
+                  "maxCatchupLagEvents": 0,
+                  "avgCatchupThroughputEventsPerSec": 0,
+                  "catchupNodeCount": 0,
+                  "steadyNodeCount": 0
+                },
+                "schema": {
+                  "strict": false,
+                  "valid": false,
+                  "errors": [
+                    {
+                      "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                      "missingFields": [
+                        "nodeTelemetry"
+                      ]
+                    },
+                    {
+                      "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                      "missingFields": [
+                        "nodeTelemetry"
+                      ]
+                    },
+                    {
+                      "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                      "missingFields": [
+                        "nodeTelemetry"
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            "teardown": {
+              "complete": true,
+              "quietMode": {
+                "schemaVersion": 1,
+                "enabled": true,
+                "status": "inactive",
+                "enteredAtMs": 1772282822969,
+                "exitedAtMs": 1772282910681,
+                "activePhases": [
+                  "preflight",
+                  "pre_load_gate",
+                  "load"
+                ],
+                "activeDuringPhases": [
+                  "preflight",
+                  "pre_load_gate",
+                  "load"
+                ],
+                "lifecycle": [
+                  {
+                    "action": "enter",
+                    "phase": "preflight",
+                    "reason": "strict_benchmark_mode",
+                    "timestampMs": 1772282822969
+                  },
+                  {
+                    "action": "exit",
+                    "phase": "teardown",
+                    "reason": "run_finalize",
+                    "timestampMs": 1772282910681
+                  }
+                ]
+              }
+            }
+          },
+          "phaseReasonSummary": {
+            "dominantWarnings": [],
+            "dominantErrors": []
+          },
+          "phaseDecisions": [
+            {
+              "phase": "preflight",
+              "phaseClass": "startup",
+              "status": "ok",
+              "policy": {},
+              "reasons": [],
+              "reasonClassHistogram": {},
+              "includedNodeIds": [],
+              "excludedNodeIds": []
+            },
+            {
+              "phase": "converge",
+              "phaseClass": "discovery",
+              "status": "ok",
+              "policy": {},
+              "reasons": [],
+              "reasonClassHistogram": {},
+              "includedNodeIds": [],
+              "excludedNodeIds": []
+            },
+            {
+              "phase": "pre_load_gate",
+              "phaseClass": "topology",
+              "status": "ok",
+              "policy": {
+                "timeoutMs": 30000,
+                "pollIntervalMs": 500,
+                "stableWindowMs": 2000
+              },
+              "reasons": [
+                "node_probe_error:7493b0ab-a054-5fad-a91b-5e331db29304=discovery_not_ready:topology_not_ready|discovery_reasons=replica_operations_in_flight=2&leadership_unstable=leader coverage incomplete for readiness scope",
+                "node_probe_error:35a891b8-c1a0-5064-9c6e-2acfba61c2a7=discovery_not_ready:topology_not_ready|discovery_reasons=replica_operations_in_flight=2&leadership_unstable=leader coverage incomplete for readiness scope",
+                "node_probe_error:11601fe0-72d6-5853-8590-ec2881853e72=discovery_not_ready:topology_not_ready|discovery_reasons=leadership_unstable=leader coverage incomplete for readiness scope"
+              ],
+              "reasonClassHistogram": {
+                "discovery": 3
+              },
+              "includedNodeIds": [
+                "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "11601fe0-72d6-5853-8590-ec2881853e72"
+              ],
+              "excludedNodeIds": []
+            },
+            {
+              "phase": "load",
+              "phaseClass": "load",
+              "status": "ok",
+              "policy": {
+                "loadOpsPerSec": 120,
+                "loadDuration": "30s",
+                "loadMaxInFlight": 128,
+                "loadQueryTimeoutMs": 4000,
+                "loadNodeMaxInFlight": 2,
+                "pinRebalancingDuringLoad": false,
+                "allowLoadRebalancePinningBypass": false,
+                "rebalanceHysteresisCooldownMs": 2000,
+                "rebalanceHysteresisMinDelta": 2,
+                "loadRebalanceMonitorPollIntervalMs": 250,
+                "loadRebalanceMaxReplicaOpsInFlight": 0
+              },
+              "reasons": [],
+              "reasonClassHistogram": {},
+              "includedNodeIds": [],
+              "excludedNodeIds": []
+            },
+            {
+              "phase": "post_load_drain",
+              "phaseClass": "topology",
+              "status": "ok",
+              "policy": {
+                "timeoutMs": 30000,
+                "pollIntervalMs": 500,
+                "stableWindowMs": 2000,
+                "insufficientEvidencePolicy": "soft"
+              },
+              "reasons": [
+                "leadership_unstable:0",
+                "leadership_unstable:869",
+                "leadership_unstable:1382",
+                "leadership_unstable:1891"
+              ],
+              "reasonClassHistogram": {
+                "topology": 4
+              },
+              "includedNodeIds": [
+                "11601fe0-72d6-5853-8590-ec2881853e72",
+                "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "7493b0ab-a054-5fad-a91b-5e331db29304"
+              ],
+              "excludedNodeIds": []
+            },
+            {
+              "phase": "verify",
+              "phaseClass": "verify",
+              "status": "ok",
+              "policy": {
+                "consistencyAssertMaxAttempts": 3,
+                "consistencyAssertRetryDelayMs": 2000,
+                "insufficientEvidencePolicy": "soft"
+              },
+              "reasons": [],
+              "reasonClassHistogram": {},
+              "includedNodeIds": [],
+              "excludedNodeIds": []
+            },
+            {
+              "phase": "teardown",
+              "phaseClass": "teardown",
+              "status": "ok",
+              "policy": {},
+              "reasons": [],
+              "reasonClassHistogram": {},
+              "includedNodeIds": [],
+              "excludedNodeIds": []
+            }
+          ],
+          "startupDecisionRecord": {
+            "schemaVersion": 1,
+            "phaseCount": 7,
+            "phaseDecisions": [
+              {
+                "phase": "preflight",
+                "phaseClass": "startup",
+                "status": "ok",
+                "policy": {},
+                "reasons": [],
+                "reasonClassHistogram": {},
+                "includedNodeIds": [],
+                "excludedNodeIds": []
+              },
+              {
+                "phase": "converge",
+                "phaseClass": "discovery",
+                "status": "ok",
+                "policy": {},
+                "reasons": [],
+                "reasonClassHistogram": {},
+                "includedNodeIds": [],
+                "excludedNodeIds": []
+              },
+              {
+                "phase": "pre_load_gate",
+                "phaseClass": "topology",
+                "status": "ok",
+                "policy": {
+                  "timeoutMs": 30000,
+                  "pollIntervalMs": 500,
+                  "stableWindowMs": 2000
+                },
+                "reasons": [
+                  "node_probe_error:7493b0ab-a054-5fad-a91b-5e331db29304=discovery_not_ready:topology_not_ready|discovery_reasons=replica_operations_in_flight=2&leadership_unstable=leader coverage incomplete for readiness scope",
+                  "node_probe_error:35a891b8-c1a0-5064-9c6e-2acfba61c2a7=discovery_not_ready:topology_not_ready|discovery_reasons=replica_operations_in_flight=2&leadership_unstable=leader coverage incomplete for readiness scope",
+                  "node_probe_error:11601fe0-72d6-5853-8590-ec2881853e72=discovery_not_ready:topology_not_ready|discovery_reasons=leadership_unstable=leader coverage incomplete for readiness scope"
+                ],
+                "reasonClassHistogram": {
+                  "discovery": 3
+                },
+                "includedNodeIds": [
+                  "7493b0ab-a054-5fad-a91b-5e331db29304",
+                  "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                  "11601fe0-72d6-5853-8590-ec2881853e72"
+                ],
+                "excludedNodeIds": []
+              },
+              {
+                "phase": "load",
+                "phaseClass": "load",
+                "status": "ok",
+                "policy": {
+                  "loadOpsPerSec": 120,
+                  "loadDuration": "30s",
+                  "loadMaxInFlight": 128,
+                  "loadQueryTimeoutMs": 4000,
+                  "loadNodeMaxInFlight": 2,
+                  "pinRebalancingDuringLoad": false,
+                  "allowLoadRebalancePinningBypass": false,
+                  "rebalanceHysteresisCooldownMs": 2000,
+                  "rebalanceHysteresisMinDelta": 2,
+                  "loadRebalanceMonitorPollIntervalMs": 250,
+                  "loadRebalanceMaxReplicaOpsInFlight": 0
+                },
+                "reasons": [],
+                "reasonClassHistogram": {},
+                "includedNodeIds": [],
+                "excludedNodeIds": []
+              },
+              {
+                "phase": "post_load_drain",
+                "phaseClass": "topology",
+                "status": "ok",
+                "policy": {
+                  "timeoutMs": 30000,
+                  "pollIntervalMs": 500,
+                  "stableWindowMs": 2000,
+                  "insufficientEvidencePolicy": "soft"
+                },
+                "reasons": [
+                  "leadership_unstable:0",
+                  "leadership_unstable:869",
+                  "leadership_unstable:1382",
+                  "leadership_unstable:1891"
+                ],
+                "reasonClassHistogram": {
+                  "topology": 4
+                },
+                "includedNodeIds": [
+                  "11601fe0-72d6-5853-8590-ec2881853e72",
+                  "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                  "7493b0ab-a054-5fad-a91b-5e331db29304"
+                ],
+                "excludedNodeIds": []
+              },
+              {
+                "phase": "verify",
+                "phaseClass": "verify",
+                "status": "ok",
+                "policy": {
+                  "consistencyAssertMaxAttempts": 3,
+                  "consistencyAssertRetryDelayMs": 2000,
+                  "insufficientEvidencePolicy": "soft"
+                },
+                "reasons": [],
+                "reasonClassHistogram": {},
+                "includedNodeIds": [],
+                "excludedNodeIds": []
+              },
+              {
+                "phase": "teardown",
+                "phaseClass": "teardown",
+                "status": "ok",
+                "policy": {},
+                "reasons": [],
+                "reasonClassHistogram": {},
+                "includedNodeIds": [],
+                "excludedNodeIds": []
+              }
+            ],
+            "reasonClassHistogram": {
+              "discovery": 3,
+              "topology": 4
+            }
+          },
+          "phaseEvents": [
+            {
+              "type": "phase.start",
+              "phase": "preflight",
+              "timestampMs": 1772282822969
+            },
+            {
+              "type": "phase.end",
+              "phase": "preflight",
+              "status": "ok",
+              "durationMs": 9254,
+              "timestampMs": 1772282832223
+            },
+            {
+              "type": "phase.start",
+              "phase": "converge",
+              "timestampMs": 1772282832223
+            },
+            {
+              "type": "phase.end",
+              "phase": "converge",
+              "status": "ok",
+              "durationMs": 0,
+              "timestampMs": 1772282832223
+            },
+            {
+              "type": "phase.start",
+              "phase": "pre_load_gate",
+              "timestampMs": 1772282832223
+            },
+            {
+              "type": "phase.end",
+              "phase": "pre_load_gate",
+              "status": "ok",
+              "durationMs": 7432,
+              "timestampMs": 1772282839655
+            },
+            {
+              "type": "phase.start",
+              "phase": "load",
+              "timestampMs": 1772282839655
+            },
+            {
+              "type": "phase.end",
+              "phase": "load",
+              "status": "ok",
+              "durationMs": 66391,
+              "timestampMs": 1772282906046
+            },
+            {
+              "type": "phase.start",
+              "phase": "post_load_drain",
+              "timestampMs": 1772282906046
+            },
+            {
+              "type": "phase.end",
+              "phase": "post_load_drain",
+              "status": "ok",
+              "durationMs": 4589,
+              "timestampMs": 1772282910635
+            },
+            {
+              "type": "phase.start",
+              "phase": "verify",
+              "timestampMs": 1772282910635
+            },
+            {
+              "type": "phase.end",
+              "phase": "verify",
+              "status": "ok",
+              "durationMs": 46,
+              "timestampMs": 1772282910681
+            },
+            {
+              "type": "phase.start",
+              "phase": "teardown",
+              "timestampMs": 1772282910681
+            },
+            {
+              "type": "phase.end",
+              "phase": "teardown",
+              "status": "ok",
+              "durationMs": 0,
+              "timestampMs": 1772282910681
+            }
+          ],
+          "channelMetrics": {
+            "load": {
+              "requests": 1073,
+              "successes": 1073,
+              "errors": 0,
+              "timeouts": 0,
+              "retries": 0,
+              "breakerOpens": 0,
+              "budgetDenials": 0,
+              "timeoutBudgetMismatches": 0,
+              "timedOutInFlight": 0
+            },
+            "control": {
+              "requests": 52,
+              "successes": 52,
+              "errors": 0,
+              "timeouts": 0,
+              "retries": 0,
+              "breakerOpens": 0,
+              "budgetDenials": 0,
+              "timeoutBudgetMismatches": 0,
+              "timedOutInFlight": 0
+            },
+            "probe": {
+              "requests": 3,
+              "successes": 3,
+              "errors": 0,
+              "timeouts": 0,
+              "retries": 0,
+              "breakerOpens": 0,
+              "budgetDenials": 0,
+              "timeoutBudgetMismatches": 0,
+              "timedOutInFlight": 0
+            },
+            "snapshot": {
+              "requests": 128,
+              "successes": 128,
+              "errors": 0,
+              "timeouts": 0,
+              "retries": 0,
+              "breakerOpens": 0,
+              "budgetDenials": 0,
+              "timeoutBudgetMismatches": 0,
+              "timedOutInFlight": 0
+            }
+          }
+        }
+      },
+      "exampleResults": null,
+      "loadMetrics": {
+        "total": 1073,
+        "success": 1073,
+        "failed": 0,
+        "errors": 0,
+        "latency": {
+          "avg": 173.78191985088537,
+          "p50": 50,
+          "p95": 663,
+          "p99": 2507
+        },
+        "opsPerSec": 33.33436888378017,
+        "attemptErrors": 0,
+        "queueDelay": {
+          "avg": 7791.571734112885,
+          "p50": 7182.377197265625,
+          "p95": 18771.75,
+          "p99": 19759.753173828125,
+          "max": 20523.087158203125
+        },
+        "distinctErrors": [],
+        "targetOperations": 3600,
+        "dispatchedOperations": 1073,
+        "undispatchedOperations": 2527,
+        "undispatchedByReason": {
+          "capacity": 2527,
+          "durationTimeout": 2527,
+          "cancelled": 0
+        },
+        "perNode": {
+          "7493b0ab-a054-5fad-a91b-5e331db29304": {
+            "dispatched": 771,
+            "success": 771,
+            "attemptErrors": 0,
+            "admissionSignals": 0
+          },
+          "35a891b8-c1a0-5064-9c6e-2acfba61c2a7": {
+            "dispatched": 151,
+            "success": 151,
+            "attemptErrors": 0,
+            "admissionSignals": 0
+          },
+          "11601fe0-72d6-5853-8590-ec2881853e72": {
+            "dispatched": 151,
+            "success": 151,
+            "attemptErrors": 0,
+            "admissionSignals": 0
+          }
+        },
+        "rejectedOperations": 0,
+        "rejectedByReason": {
+          "queueFull": 0
+        },
+        "queuePressure": {
+          "samples": 27520,
+          "pendingQueueDepth": {
+            "avg": 1198.367659883721,
+            "p95": 2365,
+            "p99": 2493,
+            "max": 2527
+          }
+        }
+      },
+      "partitionHotspots": null,
+      "optimizationPriorities": [
+        {
+          "component": "replication_write_path",
+          "signal": "dispatch_queue_pressure",
+          "priority": "critical",
+          "score": 95,
+          "reason": "Dispatch backlog and queue delay indicate scheduler pressure and insufficient load completion capacity.",
+          "evidence": {
+            "targetOperations": 3600,
+            "undispatchedOperations": 2527,
+            "undispatchedRatio": 0.7019444444444445,
+            "queueDelayP95Ms": 18771.75,
+            "queueDelayP99Ms": 19759.753173828125
+          }
+        },
+        {
+          "component": "tail_latency_path",
+          "signal": "baseline_latency_gap",
+          "priority": "critical",
+          "score": 95,
+          "reason": "Tail latency is significantly higher than baseline and dominates user-visible delays.",
+          "evidence": {
+            "p99LatencyRatioSutToBaselineAvg": 3467.230119093354,
+            "sutP99LatencyMs": 2507,
+            "baselineLatencyAvgMs": 0.7230555555555556
+          }
+        },
+        {
+          "component": "convergence_control_plane",
+          "signal": "convergence_settle_time",
+          "priority": "medium",
+          "score": 60,
+          "reason": "Convergence delay suggests extra work in replica movement, promotion, or membership updates.",
+          "evidence": {
+            "settledAfterMs": 5120,
+            "leaderChanges": 0
+          }
+        }
+      ]
+    }
+  ],
+  "benchmarkRegressionGate": {
+    "enabled": false,
+    "status": "skipped",
+    "reason": "disabled",
+    "settings": {
+      "enabled": false,
+      "maxThroughputRegressionRatio": 0.1,
+      "minimumThroughputRatioSutToBaseline": 0.1,
+      "baselineProvider": "liferaft",
+      "failIfBaselineMissing": false,
+      "approvedMitigationId": null,
+      "parityMismatchPolicy": "warn"
+    },
+    "currentProvider": "liferaft",
+    "baselineProvider": "liferaft",
+    "comparedScenarioCount": 0,
+    "failedScenarioCount": 0,
+    "mitigatedScenarioCount": 0,
+    "missingBaselineScenarios": [],
+    "comparisons": [],
+    "parityMismatchCount": 0,
+    "lowThroughputRatioCount": 0,
+    "warnings": []
+  },
+  "metadata": {
+    "raftProvider": "liferaft",
+    "configPath": "test/distributed/config/local-benchmark-3node.json",
+    "scenarioFilter": "postgres-baseline-comparison"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "scenarioName": "postgres-baseline-comparison",
+  "startedAt": 1772295269345,
+  "endedAt": 1772295400497,
+  "durationMs": 131152,
+  "files": {
+    "events": "test-output/reports/.playback/postgres-baseline-7node-cache-repair-fix2-20260228T1614Z/postgres-baseline-comparison/events.ndjson",
+    "samples": "test-output/reports/.playback/postgres-baseline-7node-cache-repair-fix2-20260228T1614Z/postgres-baseline-comparison/samples.ndjson",
+    "snapshots": "test-output/reports/.playback/postgres-baseline-7node-cache-repair-fix2-20260228T1614Z/postgres-baseline-comparison/snapshots.ndjson",
+    "manifest": "test-output/reports/.playback/postgres-baseline-7node-cache-repair-fix2-20260228T1614Z/postgres-baseline-comparison/playback-manifest.json",
+    "viewer": "test-output/reports/.playback/postgres-baseline-7node-cache-repair-fix2-20260228T1614Z/postgres-baseline-comparison/playback-viewer.html"
+  },
+  "counts": {
+    "events": 50,
+    "samples": 699,
+    "snapshots": 124
+  },
+  "warnings": []
+}

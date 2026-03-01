@@ -1,0 +1,586 @@
+{
+  "timestamp": "2026-02-28T10:02:34.050Z",
+  "summary": {
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "duration": 89157
+  },
+  "optimizationSummary": {
+    "totalPriorityItems": 0,
+    "scenariosWithPriorities": 0,
+    "topComponents": [],
+    "topPartitions": []
+  },
+  "standardSummary": {
+    "historicalReportsConsidered": 20,
+    "scenariosComparedToPrevious": 1,
+    "scenariosComparedToPostgresBaseline": 0,
+    "diagnosticsCoverageSummary": {
+      "scenariosWithCoverage": 0,
+      "scenariosWithoutCoverage": 1,
+      "totalSamples": 0,
+      "coverageRate": 0,
+      "scenarios": [
+        {
+          "scenario": "diag-admin-discovery",
+          "status": "unavailable",
+          "reason": "not_reported",
+          "sampleCount": 0
+        }
+      ]
+    },
+    "writePathAttributionSummary": {
+      "scenariosWithDiagnostics": 0,
+      "topPhases": []
+    },
+    "scaleEfficiencySummary": {
+      "observationCount": 0,
+      "comparableGroupCount": 0,
+      "groups": [],
+      "topOpportunities": []
+    },
+    "scenarios": [
+      {
+        "scenario": "diag-admin-discovery",
+        "similarityKey": "diag-admin-discovery|default",
+        "current": {
+          "passed": true,
+          "clusterSize": 3,
+          "durationMs": 89157,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "previousSimilarRun": {
+          "reportTimestamp": "2026-02-28T08:11:58.434Z",
+          "reportPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test-output/reports/diag-admin-discovery-3node-current-20260228T081028Z.report.json",
+          "passed": true,
+          "clusterSize": 3,
+          "durationMs": 89342,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "deltaVsPrevious": {
+          "passedChanged": false,
+          "clusterSizeChanged": false,
+          "durationMs": -185,
+          "durationRatio": -0.0020706946341026615,
+          "opsPerSec": 0,
+          "opsPerSecRatio": null,
+          "opsPerSecPerNode": 0,
+          "opsPerSecPerNodeRatio": null,
+          "p99LatencyMs": 0,
+          "p99LatencyMsRatio": null
+        },
+        "postgresBaseline": null,
+        "parity": null,
+        "writePathTopPhases": []
+      }
+    ]
+  },
+  "scenarios": [
+    {
+      "scenario": "diag-admin-discovery",
+      "passed": true,
+      "duration": 89157,
+      "clusterSize": 3,
+      "startedAt": "2026-02-28T10:01:04.866Z",
+      "convergenceTiming": null,
+      "analysisSummary": null,
+      "error": null,
+      "stackTrace": null,
+      "logs": null,
+      "playback": {
+        "scenarioName": "diag-admin-discovery",
+        "startedAt": 1772272864867,
+        "endedAt": 1772272954043,
+        "durationMs": 89176,
+        "files": {
+          "events": "test-output/reports/.playback/diag-admin-discovery-3node-20260228T100104Z/diag-admin-discovery/events.ndjson",
+          "samples": "test-output/reports/.playback/diag-admin-discovery-3node-20260228T100104Z/diag-admin-discovery/samples.ndjson",
+          "snapshots": "test-output/reports/.playback/diag-admin-discovery-3node-20260228T100104Z/diag-admin-discovery/snapshots.ndjson",
+          "manifest": "test-output/reports/.playback/diag-admin-discovery-3node-20260228T100104Z/diag-admin-discovery/playback-manifest.json",
+          "viewer": "test-output/reports/.playback/diag-admin-discovery-3node-20260228T100104Z/diag-admin-discovery/playback-viewer.html"
+        },
+        "counts": {
+          "events": 33,
+          "samples": 138,
+          "snapshots": 61
+        },
+        "warnings": []
+      },
+      "trace": null,
+      "traceAssertion": null,
+      "memoryLeak": {
+        "enabled": false,
+        "analyzed": false,
+        "leakDetected": false,
+        "sampleCount": 0,
+        "nodeCount": 0,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "nodes": [],
+        "warnings": [],
+        "config": {
+          "enabled": false,
+          "failOnDetection": false,
+          "requireSamples": false,
+          "minSamplesPerNode": 8,
+          "warmupFraction": 0.2,
+          "minWarmupMs": 30000,
+          "minAnalysisWindowMs": 60000,
+          "maxPositiveSlopeBytesPerMin": 1048576,
+          "minGrowthBytes": 16777216,
+          "minPositiveDeltaRatio": 0.65,
+          "captureHeapArtifacts": false,
+          "heapSnapshotNearLimitCount": 2
+        }
+      },
+      "memoryLeakAssertion": null,
+      "performanceDiagnostics": null,
+      "details": {
+        "nodeCount": 3,
+        "benchmarkTable": "benchmark_events",
+        "postgresServiceId": "sys-postgres-wire",
+        "ddlError": null,
+        "resultsByNodeId": {
+          "7493b0ab-a054-5fad-a91b-5e331db29304": {
+            "role": "seed",
+            "unscoped": {
+              "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+              "capturedAt": 1772272953667,
+              "serviceCount": 3,
+              "postgresWireServiceCount": 1,
+              "postgresWireReplicaCount": 1,
+              "postgresWireReadyNodeIds": [
+                "7493b0ab-a054-5fad-a91b-5e331db29304"
+              ],
+              "postgresWireNotReadyByNodeId": {}
+            },
+            "tableScoped": {
+              "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+              "capturedAt": 1772272953669,
+              "serviceCount": 3,
+              "postgresWireServiceCount": 1,
+              "postgresWireReplicaCount": 1,
+              "postgresWireReadyNodeIds": [],
+              "postgresWireNotReadyByNodeId": {
+                "7493b0ab-a054-5fad-a91b-5e331db29304": [
+                  "schema_partition_unavailable=table \"benchmark_events\" not query-ready on node",
+                  "leadership_unstable=leader coverage incomplete for readiness scope"
+                ]
+              }
+            },
+            "error": null,
+            "tableMetadata": {
+              "partitionRows": [
+                {
+                  "partitionId": "tbl-b7969571-ecf6-4249-a92f-0b4aba28d9dd-p1",
+                  "tableId": "tbl-b7969571-ecf6-4249-a92f-0b4aba28d9dd",
+                  "tableName": "benchmark_events",
+                  "replicaCount": 3
+                }
+              ],
+              "serviceRowsByPartitionId": {
+                "tbl-b7969571-ecf6-4249-a92f-0b4aba28d9dd-p1": [
+                  {
+                    "serviceId": "tbl-b7969571-ecf6-4249-a92f-0b4aba28d9dd-p1-r1",
+                    "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                    "status": "creating",
+                    "raftRole": null,
+                    "address": "7493b0ab-a054-5fad-a91b-5e331db29304/partition/tbl-b7969571-ecf6-4249-a92f-0b4aba28d9dd-p1-r1"
+                  },
+                  {
+                    "serviceId": "tbl-b7969571-ecf6-4249-a92f-0b4aba28d9dd-p1-r2",
+                    "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                    "status": "creating",
+                    "raftRole": null,
+                    "address": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7/partition/tbl-b7969571-ecf6-4249-a92f-0b4aba28d9dd-p1-r2"
+                  }
+                ]
+              }
+            },
+            "endpointMetadata": {
+              "nodeEndpointCount": 3,
+              "serviceEndpointCount": 9,
+              "postgresServiceEndpointCount": 3,
+              "nodeEndpoints": [
+                {
+                  "endpointId": "ep-7493b0ab-a054-5fad-a91b-5e331db29304-ws",
+                  "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                  "transportType": "ws",
+                  "address": "ddb-test-reuse-3-1:8080",
+                  "status": "active",
+                  "updatedAt": 1772272893821
+                },
+                {
+                  "endpointId": "ep-35a891b8-c1a0-5064-9c6e-2acfba61c2a7-ws",
+                  "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                  "transportType": "ws",
+                  "address": "ddb-test-reuse-3-2:8080",
+                  "status": "active",
+                  "updatedAt": 1772272925585
+                },
+                {
+                  "endpointId": "ep-11601fe0-72d6-5853-8590-ec2881853e72-ws",
+                  "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                  "transportType": "ws",
+                  "address": "ddb-test-reuse-3-3:8080",
+                  "status": "active",
+                  "updatedAt": 1772272931425
+                }
+              ],
+              "postgresServiceEndpoints": [
+                {
+                  "endpointId": "sys-postgres-wire-ep-7493b0ab-a054-5fad-a91b-5e331db29304",
+                  "serviceId": "sys-postgres-wire",
+                  "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                  "protocol": "postgresql",
+                  "address": "ddb-test-reuse-3-1",
+                  "port": 5432,
+                  "healthStatus": "healthy",
+                  "updatedAt": 1772272893363
+                },
+                {
+                  "endpointId": "sys-postgres-wire-ep-35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                  "serviceId": "sys-postgres-wire",
+                  "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                  "protocol": "postgresql",
+                  "address": "ddb-test-reuse-3-2",
+                  "port": 5432,
+                  "healthStatus": "healthy",
+                  "updatedAt": 1772272923323
+                },
+                {
+                  "endpointId": "sys-postgres-wire-ep-11601fe0-72d6-5853-8590-ec2881853e72",
+                  "serviceId": "sys-postgres-wire",
+                  "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                  "protocol": "postgresql",
+                  "address": "ddb-test-reuse-3-3",
+                  "port": 5432,
+                  "healthStatus": "healthy",
+                  "updatedAt": 1772272928413
+                }
+              ],
+              "postgresServiceDefinitions": [
+                {
+                  "serviceId": "sys-postgres-wire",
+                  "serviceName": "sys-postgres-wire",
+                  "protocol": "postgresql",
+                  "replicaCount": 3,
+                  "status": "active",
+                  "updatedAt": 1772272893363
+                }
+              ]
+            }
+          },
+          "35a891b8-c1a0-5064-9c6e-2acfba61c2a7": {
+            "role": "joiner",
+            "unscoped": {
+              "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+              "capturedAt": 1772272953682,
+              "serviceCount": 3,
+              "postgresWireServiceCount": 1,
+              "postgresWireReplicaCount": 3,
+              "postgresWireReadyNodeIds": [
+                "11601fe0-72d6-5853-8590-ec2881853e72",
+                "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                "7493b0ab-a054-5fad-a91b-5e331db29304"
+              ],
+              "postgresWireNotReadyByNodeId": {}
+            },
+            "tableScoped": {
+              "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+              "capturedAt": 1772272953683,
+              "serviceCount": 3,
+              "postgresWireServiceCount": 1,
+              "postgresWireReplicaCount": 3,
+              "postgresWireReadyNodeIds": [],
+              "postgresWireNotReadyByNodeId": {
+                "11601fe0-72d6-5853-8590-ec2881853e72": [
+                  "schema_table_missing=table \"benchmark_events\" not found"
+                ],
+                "35a891b8-c1a0-5064-9c6e-2acfba61c2a7": [
+                  "schema_table_missing=table \"benchmark_events\" not found"
+                ],
+                "7493b0ab-a054-5fad-a91b-5e331db29304": [
+                  "schema_table_missing=table \"benchmark_events\" not found"
+                ]
+              }
+            },
+            "error": null,
+            "tableMetadata": {
+              "partitionRows": [
+                {
+                  "partitionId": "tbl-b7969571-ecf6-4249-a92f-0b4aba28d9dd-p1",
+                  "tableId": "tbl-b7969571-ecf6-4249-a92f-0b4aba28d9dd",
+                  "tableName": "benchmark_events",
+                  "replicaCount": 3
+                }
+              ],
+              "serviceRowsByPartitionId": {
+                "tbl-b7969571-ecf6-4249-a92f-0b4aba28d9dd-p1": [
+                  {
+                    "serviceId": "tbl-b7969571-ecf6-4249-a92f-0b4aba28d9dd-p1-r1",
+                    "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                    "status": "creating",
+                    "raftRole": null,
+                    "address": "7493b0ab-a054-5fad-a91b-5e331db29304/partition/tbl-b7969571-ecf6-4249-a92f-0b4aba28d9dd-p1-r1"
+                  },
+                  {
+                    "serviceId": "tbl-b7969571-ecf6-4249-a92f-0b4aba28d9dd-p1-r2",
+                    "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                    "status": "creating",
+                    "raftRole": null,
+                    "address": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7/partition/tbl-b7969571-ecf6-4249-a92f-0b4aba28d9dd-p1-r2"
+                  }
+                ]
+              }
+            },
+            "endpointMetadata": {
+              "nodeEndpointCount": 3,
+              "serviceEndpointCount": 9,
+              "postgresServiceEndpointCount": 3,
+              "nodeEndpoints": [
+                {
+                  "endpointId": "ep-7493b0ab-a054-5fad-a91b-5e331db29304-ws",
+                  "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                  "transportType": "ws",
+                  "address": "ddb-test-reuse-3-1:8080",
+                  "status": "active",
+                  "updatedAt": 1772272893821
+                },
+                {
+                  "endpointId": "ep-35a891b8-c1a0-5064-9c6e-2acfba61c2a7-ws",
+                  "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                  "transportType": "ws",
+                  "address": "ddb-test-reuse-3-2:8080",
+                  "status": "active",
+                  "updatedAt": 1772272925585
+                },
+                {
+                  "endpointId": "ep-11601fe0-72d6-5853-8590-ec2881853e72-ws",
+                  "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                  "transportType": "ws",
+                  "address": "ddb-test-reuse-3-3:8080",
+                  "status": "active",
+                  "updatedAt": 1772272931425
+                }
+              ],
+              "postgresServiceEndpoints": [
+                {
+                  "endpointId": "sys-postgres-wire-ep-7493b0ab-a054-5fad-a91b-5e331db29304",
+                  "serviceId": "sys-postgres-wire",
+                  "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                  "protocol": "postgresql",
+                  "address": "ddb-test-reuse-3-1",
+                  "port": 5432,
+                  "healthStatus": "healthy",
+                  "updatedAt": 1772272893363
+                },
+                {
+                  "endpointId": "sys-postgres-wire-ep-35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                  "serviceId": "sys-postgres-wire",
+                  "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                  "protocol": "postgresql",
+                  "address": "ddb-test-reuse-3-2",
+                  "port": 5432,
+                  "healthStatus": "healthy",
+                  "updatedAt": 1772272923323
+                },
+                {
+                  "endpointId": "sys-postgres-wire-ep-11601fe0-72d6-5853-8590-ec2881853e72",
+                  "serviceId": "sys-postgres-wire",
+                  "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                  "protocol": "postgresql",
+                  "address": "ddb-test-reuse-3-3",
+                  "port": 5432,
+                  "healthStatus": "healthy",
+                  "updatedAt": 1772272928413
+                }
+              ],
+              "postgresServiceDefinitions": [
+                {
+                  "serviceId": "sys-postgres-wire",
+                  "serviceName": "sys-postgres-wire",
+                  "protocol": "postgresql",
+                  "replicaCount": 3,
+                  "status": "active",
+                  "updatedAt": 1772272893363
+                }
+              ]
+            }
+          },
+          "11601fe0-72d6-5853-8590-ec2881853e72": {
+            "role": "joiner",
+            "unscoped": {
+              "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+              "capturedAt": 1772272953695,
+              "serviceCount": 3,
+              "postgresWireServiceCount": 1,
+              "postgresWireReplicaCount": 1,
+              "postgresWireReadyNodeIds": [],
+              "postgresWireNotReadyByNodeId": {
+                "7493b0ab-a054-5fad-a91b-5e331db29304": [
+                  "replica_operations_in_flight=2"
+                ]
+              }
+            },
+            "tableScoped": {
+              "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+              "capturedAt": 1772272953696,
+              "serviceCount": 3,
+              "postgresWireServiceCount": 1,
+              "postgresWireReplicaCount": 1,
+              "postgresWireReadyNodeIds": [],
+              "postgresWireNotReadyByNodeId": {
+                "7493b0ab-a054-5fad-a91b-5e331db29304": [
+                  "schema_partition_unavailable=table \"benchmark_events\" not query-ready on node",
+                  "replica_operations_in_flight=2",
+                  "leadership_unstable=leader coverage incomplete for readiness scope"
+                ]
+              }
+            },
+            "error": null,
+            "tableMetadata": {
+              "partitionRows": [
+                {
+                  "partitionId": "tbl-b7969571-ecf6-4249-a92f-0b4aba28d9dd-p1",
+                  "tableId": "tbl-b7969571-ecf6-4249-a92f-0b4aba28d9dd",
+                  "tableName": "benchmark_events",
+                  "replicaCount": 3
+                }
+              ],
+              "serviceRowsByPartitionId": {
+                "tbl-b7969571-ecf6-4249-a92f-0b4aba28d9dd-p1": [
+                  {
+                    "serviceId": "tbl-b7969571-ecf6-4249-a92f-0b4aba28d9dd-p1-r1",
+                    "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                    "status": "creating",
+                    "raftRole": null,
+                    "address": "7493b0ab-a054-5fad-a91b-5e331db29304/partition/tbl-b7969571-ecf6-4249-a92f-0b4aba28d9dd-p1-r1"
+                  },
+                  {
+                    "serviceId": "tbl-b7969571-ecf6-4249-a92f-0b4aba28d9dd-p1-r2",
+                    "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                    "status": "creating",
+                    "raftRole": null,
+                    "address": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7/partition/tbl-b7969571-ecf6-4249-a92f-0b4aba28d9dd-p1-r2"
+                  }
+                ]
+              }
+            },
+            "endpointMetadata": {
+              "nodeEndpointCount": 3,
+              "serviceEndpointCount": 9,
+              "postgresServiceEndpointCount": 3,
+              "nodeEndpoints": [
+                {
+                  "endpointId": "ep-7493b0ab-a054-5fad-a91b-5e331db29304-ws",
+                  "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                  "transportType": "ws",
+                  "address": "ddb-test-reuse-3-1:8080",
+                  "status": "active",
+                  "updatedAt": 1772272893821
+                },
+                {
+                  "endpointId": "ep-35a891b8-c1a0-5064-9c6e-2acfba61c2a7-ws",
+                  "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                  "transportType": "ws",
+                  "address": "ddb-test-reuse-3-2:8080",
+                  "status": "active",
+                  "updatedAt": 1772272925585
+                },
+                {
+                  "endpointId": "ep-11601fe0-72d6-5853-8590-ec2881853e72-ws",
+                  "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                  "transportType": "ws",
+                  "address": "ddb-test-reuse-3-3:8080",
+                  "status": "active",
+                  "updatedAt": 1772272931425
+                }
+              ],
+              "postgresServiceEndpoints": [
+                {
+                  "endpointId": "sys-postgres-wire-ep-7493b0ab-a054-5fad-a91b-5e331db29304",
+                  "serviceId": "sys-postgres-wire",
+                  "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                  "protocol": "postgresql",
+                  "address": "ddb-test-reuse-3-1",
+                  "port": 5432,
+                  "healthStatus": "healthy",
+                  "updatedAt": 1772272893363
+                },
+                {
+                  "endpointId": "sys-postgres-wire-ep-35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                  "serviceId": "sys-postgres-wire",
+                  "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                  "protocol": "postgresql",
+                  "address": "ddb-test-reuse-3-2",
+                  "port": 5432,
+                  "healthStatus": "healthy",
+                  "updatedAt": 1772272923323
+                },
+                {
+                  "endpointId": "sys-postgres-wire-ep-11601fe0-72d6-5853-8590-ec2881853e72",
+                  "serviceId": "sys-postgres-wire",
+                  "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                  "protocol": "postgresql",
+                  "address": "ddb-test-reuse-3-3",
+                  "port": 5432,
+                  "healthStatus": "healthy",
+                  "updatedAt": 1772272928413
+                }
+              ],
+              "postgresServiceDefinitions": [
+                {
+                  "serviceId": "sys-postgres-wire",
+                  "serviceName": "sys-postgres-wire",
+                  "protocol": "postgresql",
+                  "replicaCount": 3,
+                  "status": "active",
+                  "updatedAt": 1772272893363
+                }
+              ]
+            }
+          }
+        }
+      },
+      "exampleResults": null,
+      "loadMetrics": null,
+      "partitionHotspots": null,
+      "optimizationPriorities": null
+    }
+  ],
+  "benchmarkRegressionGate": {
+    "enabled": false,
+    "status": "skipped",
+    "reason": "disabled",
+    "settings": {
+      "enabled": false,
+      "maxThroughputRegressionRatio": 0.1,
+      "minimumThroughputRatioSutToBaseline": 0.1,
+      "baselineProvider": "liferaft",
+      "failIfBaselineMissing": false,
+      "approvedMitigationId": null,
+      "parityMismatchPolicy": "warn"
+    },
+    "currentProvider": "liferaft",
+    "baselineProvider": "liferaft",
+    "comparedScenarioCount": 0,
+    "failedScenarioCount": 0,
+    "mitigatedScenarioCount": 0,
+    "missingBaselineScenarios": [],
+    "comparisons": [],
+    "parityMismatchCount": 0,
+    "lowThroughputRatioCount": 0,
+    "warnings": []
+  },
+  "metadata": {
+    "raftProvider": "liferaft",
+    "configPath": "test/distributed/config/local-benchmark-3node.json",
+    "scenarioFilter": "diag-admin-discovery"
+  }
+}
