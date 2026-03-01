@@ -8,6 +8,7 @@ import {
   ADMIN_DEFAULT,
   ADMIN_PREFLIGHT_CRITICAL_PATH_SNAPSHOT,
   ADMIN_SERVICE_DISCOVERY,
+  CONSISTENCY_MISMATCH_KIND,
 } from '../../../src/admin/admin-constants.js';
 import {META_SERVICE_ID} from '../../../src/constants/wasm-meta.js';
 import {ENTRYPOINT_DEFAULT} from '../../../src/constants/entrypoint.js';
@@ -588,13 +589,6 @@ const CONSISTENCY_VERDICT = Object.freeze({
   CONSISTENT: CONSISTENCY_VERDICT_CONSISTENT,
   INCONSISTENT: CONSISTENCY_VERDICT_INCONSISTENT,
   INSUFFICIENT_EVIDENCE: CONSISTENCY_VERDICT_INSUFFICIENT_EVIDENCE,
-});
-
-const CONSISTENCY_MISMATCH_KIND = Object.freeze({
-  LEADER: 'leader_mismatch',
-  PARTITION_SET: 'partition_set_mismatch',
-  REPLICA_ROLE: 'replica_role_inconsistency',
-  REPLICA_OPERATION: 'replica_operation_mismatch',
 });
 
 // --- Assertion Policy Defaults ---

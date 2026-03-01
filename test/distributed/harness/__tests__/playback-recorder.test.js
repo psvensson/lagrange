@@ -13,6 +13,30 @@ const EVENT_TYPE_PARTITION_SPLIT = 'partition.split';
 const EVENT_TYPE_PARTITION_MERGE = 'partition.merge';
 const EVENT_TYPE_REPLICA_CREATED = 'replica.created';
 
+function createManualIntervalScheduler() {
+  const callbacks = new Map();
+  let nextId = 1;
+  return {
+    setInterval(callback) {
+      const handle = {id: nextId++};
+      callbacks.set(handle, callback);
+      return handle;
+    },
+    clearInterval(handle) {
+      callbacks.delete(handle);
+    },
+    async tick(handle) {
+      const callback = callbacks.get(handle);
+      if (!callback) {
+        return;
+      }
+      callback();
+      await Promise.resolve();
+      await Promise.resolve();
+    },
+  };
+}
+
 test('diffTopologySnapshots detects replica move', async () => {
   const previous = {
     timestamp: 1,
@@ -593,6 +617,101 @@ test('PlaybackRecorder defers topology capture until admin readiness is observed
         'should not emit unreachable warnings before admin readiness',
       );
     } finally {
+      await rm(outputDir, {recursive: true, force: true});
+    }
+  });
+
+test('PlaybackRecorder does not overlap topology polls while a capture is in flight',
+  async () => {
+    const outputDir = await mkdtemp(
+      join(tmpdir(), 'playback-recorder-no-overlap-'),
+    );
+
+    let topologyQueryCount = 0;
+    let releaseTopologyQuery = null;
+    const topologyBlocked = new Promise((resolve) => {
+      releaseTopologyQuery = resolve;
+    });
+
+    const node = {
+      id: 'node-1',
+      containerId: 'container-1',
+      _dockerProvider: {
+        async getContainerStats() {
+          return {
+            cpuPercent: 7,
+            memoryUsageBytes: 1024,
+            memoryLimitBytes: 4096,
+            rxBytes: 3,
+            txBytes: 5,
+          };
+        },
+      },
+      async getReachabilityDiagnostics() {
+        return {
+          nodeId: 'node-1',
+          reachable: true,
+          adminReady: true,
+          adminHealth: {
+            attempted: true,
+            ok: true,
+            statusCode: 200,
+          },
+        };
+      },
+      async queryWithTimeout(sql) {
+        if (!sql.includes('FROM nodes')) {
+          return {rows: []};
+        }
+        topologyQueryCount++;
+        await topologyBlocked;
+        return {
+          rows: [{
+            node_id: 'node-1',
+            status: 'active',
+          }],
+        };
+      },
+    };
+
+    const cluster = {
+      getNodes() {
+        return [node];
+      },
+    };
+    const scheduler = createManualIntervalScheduler();
+
+    const recorder = new PlaybackRecorder({
+      outputDir,
+      topologyPollIntervalMs: 5,
+      resourcePollIntervalMs: 60000,
+      setIntervalFn: scheduler.setInterval,
+      clearIntervalFn: scheduler.clearInterval,
+    });
+
+    try {
+      await recorder.start({
+        scenarioName: 'no-overlap',
+        cluster,
+        skipInitialCapture: true,
+      });
+
+      await scheduler.tick(recorder._topologyPollTimer);
+      await scheduler.tick(recorder._topologyPollTimer);
+      assert.equal(
+        topologyQueryCount,
+        1,
+        'poller should not start a second topology capture while one is pending',
+      );
+
+      releaseTopologyQuery();
+      await recorder._awaitCapture('_topologyCapturePromise');
+
+      await recorder.stop({
+        reason: 'no-overlap',
+      }, {skipFinalCapture: true});
+    } finally {
+      releaseTopologyQuery();
       await rm(outputDir, {recursive: true, force: true});
     }
   });

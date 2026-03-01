@@ -39,7 +39,7 @@
     "preloadRequiredStableMs": 2000,
     "preloadMaxReplicaOpsInFlight": 0,
     "insufficientEvidencePolicy": "soft",
-    "readyTimeoutMs": 30000,
+    "readyTimeoutMs": 60000,
     "readyPollIntervalMs": 500,
     "tableName": "benchmark_events",
     "replicationFactor": 3,

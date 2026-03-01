@@ -740,6 +740,12 @@ class PlaybackRecorder {
       PLAYBACK.topologyPollIntervalMs;
     this._resourcePollIntervalMs = options.resourcePollIntervalMs ||
       PLAYBACK.resourcePollIntervalMs;
+    this._setInterval = typeof options.setIntervalFn === 'function' ?
+      options.setIntervalFn :
+      setInterval;
+    this._clearInterval = typeof options.clearIntervalFn === 'function' ?
+      options.clearIntervalFn :
+      clearInterval;
 
     this._scenarioName = null;
     this._scenarioDir = null;
@@ -767,6 +773,8 @@ class PlaybackRecorder {
     this._endedAt = null;
     this._topologyPollTimer = null;
     this._resourcePollTimer = null;
+    this._topologyCapturePromise = null;
+    this._resourceCapturePromise = null;
     this._started = false;
     this._adminReadinessObserved = false;
   }
@@ -849,6 +857,8 @@ class PlaybackRecorder {
     this._stopPollers();
     const skipFinalCapture = Boolean(options.skipFinalCapture);
     if (!skipFinalCapture) {
+      await this._awaitCapture('_topologyCapturePromise');
+      await this._awaitCapture('_resourceCapturePromise');
       await this._collectTopologySnapshot();
       await this._collectResourceSamples();
     }
@@ -943,7 +953,7 @@ class PlaybackRecorder {
   }
 
   _startPollers() {
-    this._topologyPollTimer = setInterval(() => {
+    this._topologyPollTimer = this._setInterval(() => {
       this._collectTopologySnapshot().catch((err) => {
         this._captureWarning(
           WARNING_CODE_TOPOLOGY_CAPTURE_FAILED,
@@ -952,7 +962,7 @@ class PlaybackRecorder {
       });
     }, this._topologyPollIntervalMs);
 
-    this._resourcePollTimer = setInterval(() => {
+    this._resourcePollTimer = this._setInterval(() => {
       this._collectResourceSamples().catch((err) => {
         this._captureWarning(
           WARNING_CODE_STATS_CAPTURE_FAILED,
@@ -964,16 +974,23 @@ class PlaybackRecorder {
 
   _stopPollers() {
     if (this._topologyPollTimer !== null) {
-      clearInterval(this._topologyPollTimer);
+      this._clearInterval(this._topologyPollTimer);
       this._topologyPollTimer = null;
     }
     if (this._resourcePollTimer !== null) {
-      clearInterval(this._resourcePollTimer);
+      this._clearInterval(this._resourcePollTimer);
       this._resourcePollTimer = null;
     }
   }
 
   async _collectTopologySnapshot() {
+    return this._runExclusiveCapture(
+      '_topologyCapturePromise',
+      () => this._collectTopologySnapshotOnce(),
+    );
+  }
+
+  async _collectTopologySnapshotOnce() {
     if (!this._cluster) {
       return;
     }
@@ -1074,6 +1091,13 @@ class PlaybackRecorder {
   }
 
   async _collectResourceSamples() {
+    return this._runExclusiveCapture(
+      '_resourceCapturePromise',
+      () => this._collectResourceSamplesOnce(),
+    );
+  }
+
+  async _collectResourceSamplesOnce() {
     if (!this._cluster || !this._samplesStream) {
       return;
     }
@@ -1118,6 +1142,31 @@ class PlaybackRecorder {
       this._appendNdjson(this._samplesStream, sample);
       this._samplesCount++;
     }
+  }
+
+  async _runExclusiveCapture(promiseKey, captureFn) {
+    const existingPromise = this[promiseKey];
+    if (existingPromise) {
+      return existingPromise;
+    }
+
+    const capturePromise = Promise.resolve().then(() => captureFn());
+    this[promiseKey] = capturePromise;
+    try {
+      return await capturePromise;
+    } finally {
+      if (this[promiseKey] === capturePromise) {
+        this[promiseKey] = null;
+      }
+    }
+  }
+
+  async _awaitCapture(promiseKey) {
+    const pendingCapture = this[promiseKey];
+    if (!pendingCapture) {
+      return;
+    }
+    await pendingCapture;
   }
 
   _selectSnapshotNodes() {

@@ -604,6 +604,109 @@ test('node-client breaker ownership disables local load-generator breaker transi
     }
   });
 
+test('node-client circuit-open honors cooldown floor instead of admission-storm retrying',
+  async () => {
+    let nodeClientFailCalls = ZERO;
+    let healthyCalls = ZERO;
+    const nodes = [
+      {
+        id: 'node-client-cooled-breaker',
+        breakerOwner: BREAKER_OWNER_NODE_CLIENT,
+        async query(_sql) {
+          nodeClientFailCalls++;
+          const error = new Error('circuit breaker is open');
+          error.code = NODE_CLIENT_ERROR_CODE_CIRCUIT_OPEN;
+          throw error;
+        },
+      },
+      {
+        id: 'healthy-node',
+        async query(_sql) {
+          healthyCalls++;
+          return {rows: []};
+        },
+      },
+    ];
+
+    const gen = new LoadGenerator(nodes, {
+      opsPerSec: 200,
+      duration: 160,
+      admissionBackoffMs: 5,
+      nodeFailureCooldownMs: 80,
+    });
+    const run = gen.start();
+    try {
+      const metrics = await run.waitComplete();
+      assert.ok(
+        healthyCalls > ZERO,
+        'expected healthy node to continue absorbing load',
+      );
+      assert.ok(
+        nodeClientFailCalls < 10,
+        'expected node-client-owned breaker node to respect cooldown floor ' +
+          `instead of storm retrying; got ${nodeClientFailCalls} admission calls`,
+      );
+      assert.equal(metrics.failed, ZERO);
+      assert.equal(metrics.errors, ZERO);
+    } finally {
+      run.cancel();
+    }
+  });
+
+test('node-client circuit-open rechecks admission block before stale failover attempts',
+  async () => {
+    let nodeClientFailCalls = ZERO;
+    let healthyCalls = ZERO;
+    const nodes = [
+      {
+        id: 'node-client-stale-candidate',
+        breakerOwner: BREAKER_OWNER_NODE_CLIENT,
+        async query(_sql) {
+          nodeClientFailCalls++;
+          const error = new Error('circuit breaker is open');
+          error.code = NODE_CLIENT_ERROR_CODE_CIRCUIT_OPEN;
+          throw error;
+        },
+      },
+      {
+        id: 'slow-healthy-node',
+        async query(_sql) {
+          healthyCalls++;
+          await new Promise((resolve) => setTimeout(resolve, 40));
+          return {rows: []};
+        },
+      },
+    ];
+
+    const gen = new LoadGenerator(nodes, {
+      opsPerSec: 400,
+      duration: 1000,
+      maxInFlight: 20,
+      nodeMaxInFlight: 1,
+      admissionBackoffMs: 5,
+      nodeFailureCooldownMs: 80,
+    });
+    const run = gen.start();
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 160));
+      run.cancel();
+      const metrics = await run.waitComplete();
+      assert.ok(
+        healthyCalls > ZERO,
+        'expected healthy node to keep receiving failover traffic',
+      );
+      assert.ok(
+        nodeClientFailCalls < 20,
+        'expected stale failover candidates to honor refreshed admission block; ' +
+          `got ${nodeClientFailCalls} node-client admission calls`,
+      );
+      assert.equal(metrics.failed, ZERO);
+      assert.equal(metrics.errors, ZERO);
+    } finally {
+      run.cancel();
+    }
+  });
+
 test('admission-control defers dispatch on circuit-open instead of counting operation failures',
   async () => {
     let admissionErrors = ZERO;

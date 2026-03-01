@@ -9,7 +9,7 @@ import {describe, it} from 'node:test';
 import assert from 'node:assert/strict';
 import {relative} from 'node:path';
 import {URL} from 'node:url';
-import {mkdtemp, rm, writeFile} from 'node:fs/promises';
+import {mkdtemp, readFile, rm, writeFile} from 'node:fs/promises';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import * as runModule from '../../run.js';
@@ -580,6 +580,46 @@ describe('benchmark regression gate helpers', () => {
       assert.equal(result.comparisons[0].minimumThroughputRatioSutToBaseline, 0.1);
     });
 
+  it('evaluateBenchmarkRegressionGate ignores failed-run throughput snapshots that are invalid for comparison',
+    () => {
+      const result = evaluateBenchmarkRegressionGate(
+        {
+          standardSummary: {
+            scenarios: [
+              {
+                scenario: 'postgres-baseline-comparison',
+                similarityKey: 'postgres-baseline-comparison|workload-a',
+                current: {
+                  opsPerSec: null,
+                  observedOpsPerSec: 90,
+                  validForPerformanceComparison: false,
+                  performanceInvalidReason: 'correctness_failed',
+                },
+                postgresBaseline: {
+                  validForPerformanceComparison: false,
+                  performanceInvalidReason: 'correctness_failed',
+                  throughputRatioSutToBaseline: null,
+                },
+              },
+            ],
+          },
+        },
+        [],
+        {
+          raftProvider: 'raft_logic',
+          benchmarkGate: {
+            enabled: true,
+            baselineProvider: 'liferaft',
+            minimumThroughputRatioSutToBaseline: 0.1,
+          },
+        },
+      );
+
+      assert.equal(result.status, 'skipped');
+      assert.equal(result.reason, 'no-benchmark-scenarios');
+      assert.equal(result.comparedScenarioCount, 0);
+    });
+
   it('evaluateBenchmarkRegressionGate fails on parity mismatch when parity policy is fail',
     () => {
       const result = evaluateBenchmarkRegressionGate(
@@ -702,6 +742,21 @@ describe('benchmark regression gate helpers', () => {
 });
 
 describe('buildImage', () => {
+  it('keeps the Docker build context on an explicit allowlist', async () => {
+    const dockerignore = await readFile(
+      new URL('../../../../.dockerignore', import.meta.url),
+      'utf8',
+    );
+
+    assert.match(dockerignore, /^\*\*$/m);
+    assert.match(dockerignore, /^!\.dockerignore$/m);
+    assert.match(dockerignore, /^!Dockerfile$/m);
+    assert.match(dockerignore, /^!package\.json$/m);
+    assert.match(dockerignore, /^!package-lock\.json$/m);
+    assert.match(dockerignore, /^!src\/$/m);
+    assert.match(dockerignore, /^!src\/\*\*$/m);
+  });
+
   it('passes positional DockerProvider arguments and commit label', async () => {
     const originalBuildImage = DockerProvider.prototype.buildImage;
     const originalGetImageLabel = DockerProvider.prototype.getImageLabel;

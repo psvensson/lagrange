@@ -816,6 +816,7 @@ describe('postgres-baseline-comparison scenario', () => {
     const loadCalls = [];
     const controlSnapshotCalls = [];
     const tableProbeCalls = [];
+    let serviceDiscoveryCallCount = 0;
     const benchmarkTableProbeSql =
       'SELECT count(*) FROM benchmark_events WHERE 1 = 0';
     const requiredSchemaVersion = typeof options.requiredSchemaVersion === 'string' ?
@@ -908,6 +909,7 @@ describe('postgres-baseline-comparison scenario', () => {
         }
         if (statement === NODE_CLIENT_SERVICE_DISCOVERY_SQL ||
             statement.startsWith(SERVICE_DISCOVERY_SQL_PREFIX)) {
+          serviceDiscoveryCallCount += 1;
           const readiness = {
             workloadReady: true,
             benchmarkReady,
@@ -916,7 +918,7 @@ describe('postgres-baseline-comparison scenario', () => {
             replicaOpsInFlight: 0,
             leadershipStable: true,
             tableName: 'benchmark_events',
-            reasons: readinessReasons,
+            reasons: serviceDiscoveryCallCount > 1 ? readinessReasons : [],
           };
           if (includeTopologyReady) {
             readiness.topologyReady = topologyReady;

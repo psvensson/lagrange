@@ -618,6 +618,9 @@ async function loadHistoricalReports(reportOutputPath) {
 }
 
 function normalizeFiniteNumber(value) {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
   const normalized = Number(value);
   return Number.isFinite(normalized) ? normalized : null;
 }

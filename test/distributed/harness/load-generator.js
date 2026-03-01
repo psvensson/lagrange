@@ -375,11 +375,6 @@ class LoadRun {
       options.queryTimeoutMs > ZERO ?
         options.queryTimeoutMs :
         QUERY_TIMEOUT_MS_DEFAULT;
-    this._admissionBackoffMs =
-      Number.isInteger(options.admissionBackoffMs) &&
-      options.admissionBackoffMs > ZERO ?
-        options.admissionBackoffMs :
-        ADMISSION_BACKOFF_MS_DEFAULT;
     this._dispatchIntervalMs = this._opsPerSec > ZERO ?
       MS_PER_SECOND / this._opsPerSec :
       MS_PER_SECOND;
@@ -719,6 +714,10 @@ class LoadRun {
       const candidate = candidates[candidateIndex];
       const node = candidate.node;
       const nodeHealthKey = candidate.healthKey;
+      const nodeState = this._nodeHealthByKey.get(nodeHealthKey);
+      if (!this._isNodeDispatchReady(nodeState, Date.now())) {
+        continue;
+      }
       if (!this._tryAcquireNodeSlot(nodeHealthKey)) {
         continue;
       }
@@ -912,7 +911,8 @@ class LoadRun {
       return;
     }
     if (this._isAdmissionSignalError(error)) {
-      state.admissionBlockedUntilMs = Date.now() + this._admissionBackoffMs;
+      state.admissionBlockedUntilMs =
+        Date.now() + this._resolveAdmissionBackoffMs(state, error);
     }
     if (state.localBreakerOwner === NODE_BREAKER_OWNER_NODE_CLIENT) {
       return;
@@ -925,10 +925,27 @@ class LoadRun {
     state.openUntilMs = Date.now() + this._nodeFailureCooldownMs;
   }
 
+  _resolveAdmissionBackoffMs(state, error) {
+    if (state?.localBreakerOwner === NODE_BREAKER_OWNER_NODE_CLIENT &&
+        this._isCircuitOpenAdmissionError(error)) {
+      return Math.max(this._admissionBackoffMs, this._nodeFailureCooldownMs);
+    }
+    return this._admissionBackoffMs;
+  }
+
   _isAdmissionSignalError(error) {
     const code = String(error?.code || '').toLowerCase();
     if (code === NODE_CLIENT_ADMISSION_ERROR_CIRCUIT_OPEN ||
         code === NODE_CLIENT_ADMISSION_ERROR_BUDGET_EXHAUSTED) {
+      return true;
+    }
+    const message = String(error?.message || '').toLowerCase();
+    return message.includes('circuit breaker is open');
+  }
+
+  _isCircuitOpenAdmissionError(error) {
+    const code = String(error?.code || '').toLowerCase();
+    if (code === NODE_CLIENT_ADMISSION_ERROR_CIRCUIT_OPEN) {
       return true;
     }
     const message = String(error?.message || '').toLowerCase();
@@ -1246,6 +1263,11 @@ class LoadGenerator {
       options.nodeFailureCooldownMs > ZERO ?
         options.nodeFailureCooldownMs :
         NODE_FAILURE_COOLDOWN_MS_DEFAULT;
+    this._admissionBackoffMs =
+      Number.isInteger(options.admissionBackoffMs) &&
+      options.admissionBackoffMs > ZERO ?
+        options.admissionBackoffMs :
+        ADMISSION_BACKOFF_MS_DEFAULT;
     this._queryTimeoutMs =
       Number.isInteger(options.queryTimeoutMs) &&
       options.queryTimeoutMs > ZERO ?

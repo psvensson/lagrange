@@ -128,3 +128,31 @@ test('assertion policy preserves attempt-level diagnostics as non-hard failures'
     assert.equal(result.verificationConfidence, 'high');
     assert.equal(result.hardFailures.length, 0);
   });
+
+test('assertion policy hard-fails hard invariant breaches', async () => {
+  const result = evaluateAssertionPolicy({
+    consistencyVerdict: 'consistent',
+    invariants: [{
+      invariantId: 'control_plane.partition_leader_discoverable',
+      reasonCode: 'leadership_unknown_control_plane_partition',
+      severity: 'critical',
+      passed: false,
+      entityId: 'seed-1',
+      scope: 'partition',
+      owningSubsystem: 'control-plane',
+      observed: {},
+      details: {},
+    }],
+    loadMetrics: SAMPLE_LOAD_METRICS,
+    policy: {
+      insufficientEvidence: 'soft',
+    },
+  });
+
+  assert.equal(result.passed, false);
+  assert.equal(result.status, 'failed');
+  assert.ok(result.hardFailures.some((entry) =>
+    entry.code === 'hard_invariant_breach',
+  ));
+  assert.equal(result.invariantBreaches.hardCount, 1);
+});

@@ -346,6 +346,7 @@ function buildVersionedStrictReadinessCluster(options = {}) {
   const loadCalls = [];
   const controlSnapshotCalls = [];
   const tableProbeCalls = [];
+  let serviceDiscoveryCallCount = 0;
   const benchmarkTableProbeSql =
     'SELECT count(*) FROM benchmark_events WHERE 1 = 0';
   const requiredSchemaVersion = typeof options.requiredSchemaVersion === 'string' ?
@@ -368,6 +369,11 @@ function buildVersionedStrictReadinessCluster(options = {}) {
     120;
   const readinessReasons = Array.isArray(options.reasons) ? options.reasons : [];
   const includeAppliedSchemaVersion = options.includeAppliedSchemaVersion !== false;
+  const preflightSnapshotOverrides =
+    options.preflightSnapshotOverrides &&
+    typeof options.preflightSnapshotOverrides === 'object' ?
+      options.preflightSnapshotOverrides :
+      {};
   const provider = {
     createContainer: async (_options) => ({
       containerId: 'benchmark-postgres-1',
@@ -424,7 +430,10 @@ function buildVersionedStrictReadinessCluster(options = {}) {
       const statement = String(sql);
       if (statement === PREFLIGHT_CRITICAL_PATH_SNAPSHOT_SQL) {
         return {
-          rows: [buildPreflightCriticalPathSnapshotPayload(this)],
+          rows: [buildPreflightCriticalPathSnapshotPayload(
+            this,
+            preflightSnapshotOverrides,
+          )],
         };
       }
       if (statement === NODE_CLIENT_CONTROL_SNAPSHOT_SQL) {
@@ -438,6 +447,7 @@ function buildVersionedStrictReadinessCluster(options = {}) {
       }
       if (statement === NODE_CLIENT_SERVICE_DISCOVERY_SQL ||
           statement.startsWith(SERVICE_DISCOVERY_SQL_PREFIX)) {
+        serviceDiscoveryCallCount += 1;
         const readiness = {
           workloadReady: true,
           benchmarkReady,
@@ -446,7 +456,7 @@ function buildVersionedStrictReadinessCluster(options = {}) {
           replicaOpsInFlight: 0,
           leadershipStable: true,
           tableName: 'benchmark_events',
-          reasons: readinessReasons,
+          reasons: serviceDiscoveryCallCount > 1 ? readinessReasons : [],
         };
         if (includeTopologyReady) {
           readiness.topologyReady = topologyReady;

@@ -7,6 +7,7 @@
 
 import {writeFile, mkdir} from 'node:fs/promises';
 import {dirname} from 'node:path';
+import {summarizeInvariantBreaches} from './invariant-breaches.js';
 
 /** Indentation for JSON output. */
 const JSON_INDENT = 2;
@@ -26,6 +27,8 @@ const BENCHMARK_DETAILS_KEY_SATURATION = 'saturation';
 const BENCHMARK_DETAILS_KEY_EFFECTIVE_ADMISSION_POLICY =
   'effectiveAdmissionPolicy';
 const BENCHMARK_DETAILS_KEY_DIAGNOSTICS_COVERAGE = 'diagnosticsCoverage';
+const PERFORMANCE_INVALID_REASON_CORRECTNESS_FAILED = 'correctness_failed';
+const PERFORMANCE_INVALID_REASON_METRICS_UNAVAILABLE = 'metrics_unavailable';
 const LOAD_METRICS_FIELD_ATTEMPT_ERRORS = 'attemptErrors';
 const LOAD_METRICS_FIELD_QUEUE_DELAY = 'queueDelay';
 const LOAD_METRICS_FIELD_DISTINCT_ERRORS = 'distinctErrors';
@@ -146,6 +149,7 @@ function buildScenarioEntry(scenarioName, result) {
     memoryLeakAssertion: result.memoryLeakAssertion || null,
     performanceDiagnostics: result.performanceDiagnostics || null,
     details: normalizedDetails,
+    invariantBreaches: resolveScenarioInvariantBreaches(result, normalizedDetails),
   };
 
   if (result.exampleResults) {
@@ -163,6 +167,11 @@ function buildScenarioEntry(scenarioName, result) {
   } else {
     entry.loadMetrics = null;
   }
+
+  entry.performanceMeasurement = buildPerformanceMeasurementEntry(
+    result,
+    entry.loadMetrics,
+  );
 
   entry.partitionHotspots = buildPartitionHotspots(entry);
   entry.optimizationPriorities = buildOptimizationPriorities(entry);
@@ -240,6 +249,93 @@ function normalizeObject(value) {
     return {};
   }
   return {...value};
+}
+
+function resolveScenarioInvariantBreaches(result, normalizedDetails) {
+  const explicitBreaches = result?.invariantBreaches;
+  if (explicitBreaches &&
+      typeof explicitBreaches === 'object' &&
+      Array.isArray(explicitBreaches.failing)) {
+    return {
+      ...explicitBreaches,
+      failing: [...explicitBreaches.failing],
+      hardBreaches: Array.isArray(explicitBreaches.hardBreaches) ?
+        [...explicitBreaches.hardBreaches] :
+        [],
+      softBreaches: Array.isArray(explicitBreaches.softBreaches) ?
+        [...explicitBreaches.softBreaches] :
+        [],
+    };
+  }
+
+  const verificationBreaches = normalizedDetails?.verification?.invariantBreaches;
+  if (verificationBreaches &&
+      typeof verificationBreaches === 'object' &&
+      Array.isArray(verificationBreaches.failing)) {
+    return {
+      ...verificationBreaches,
+      failing: [...verificationBreaches.failing],
+      hardBreaches: Array.isArray(verificationBreaches.hardBreaches) ?
+        [...verificationBreaches.hardBreaches] :
+        [],
+      softBreaches: Array.isArray(verificationBreaches.softBreaches) ?
+        [...verificationBreaches.softBreaches] :
+        [],
+    };
+  }
+
+  return summarizeInvariantBreaches(
+    normalizedDetails?.diagnostics?.rootCauseBundle?.invariants,
+  );
+}
+
+function buildPerformanceMeasurementEntry(result, loadMetrics) {
+  const observedOpsPerSec = normalizeFiniteNumber(loadMetrics?.opsPerSec);
+  const observedP99LatencyMs = normalizeFiniteNumber(loadMetrics?.latency?.p99);
+  const available = observedOpsPerSec !== null || observedP99LatencyMs !== null;
+  const validForComparison = result?.passed === true && available;
+  let invalidReason = null;
+  if (!available) {
+    invalidReason = PERFORMANCE_INVALID_REASON_METRICS_UNAVAILABLE;
+  } else if (result?.passed !== true) {
+    invalidReason = PERFORMANCE_INVALID_REASON_CORRECTNESS_FAILED;
+  }
+  return {
+    available,
+    validForComparison,
+    invalidReason,
+    observedOpsPerSec,
+    observedP99LatencyMs,
+  };
+}
+
+function resolvePerformanceMeasurement(entry) {
+  const measurement = entry?.performanceMeasurement;
+  if (measurement &&
+      typeof measurement === 'object' &&
+      !Array.isArray(measurement)) {
+    return {
+      available: measurement.available === true,
+      validForComparison: measurement.validForComparison === true,
+      invalidReason: measurement.invalidReason || null,
+      observedOpsPerSec: normalizeFiniteNumber(measurement.observedOpsPerSec),
+      observedP99LatencyMs:
+        normalizeFiniteNumber(measurement.observedP99LatencyMs),
+    };
+  }
+
+  const observedOpsPerSec = normalizeFiniteNumber(entry?.loadMetrics?.opsPerSec);
+  const observedP99LatencyMs = normalizeFiniteNumber(entry?.loadMetrics?.latency?.p99);
+  const available = observedOpsPerSec !== null || observedP99LatencyMs !== null;
+  return {
+    available,
+    validForComparison: entry?.passed === true && available,
+    invalidReason: available ?
+      (entry?.passed === true ? null : PERFORMANCE_INVALID_REASON_CORRECTNESS_FAILED) :
+      PERFORMANCE_INVALID_REASON_METRICS_UNAVAILABLE,
+    observedOpsPerSec,
+    observedP99LatencyMs,
+  };
 }
 
 function normalizeParityDetails(parity) {
@@ -1193,12 +1289,22 @@ function buildScenarioSimilarityKey(entry) {
 
 function buildScenarioSnapshot(entry) {
   const clusterSize = normalizeClusterSize(entry?.clusterSize);
-  const opsPerSec = normalizeFiniteNumber(entry?.loadMetrics?.opsPerSec);
-  const p99LatencyMs = normalizeFiniteNumber(entry?.loadMetrics?.latency?.p99);
+  const performanceMeasurement = resolvePerformanceMeasurement(entry);
+  const opsPerSec = performanceMeasurement.validForComparison ?
+    performanceMeasurement.observedOpsPerSec :
+    null;
+  const p99LatencyMs = performanceMeasurement.validForComparison ?
+    performanceMeasurement.observedP99LatencyMs :
+    null;
   return {
     passed: entry?.passed === true,
     clusterSize,
     durationMs: normalizeFiniteNumber(entry?.duration) || ZERO,
+    performanceMetricsAvailable: performanceMeasurement.available,
+    validForPerformanceComparison: performanceMeasurement.validForComparison,
+    performanceInvalidReason: performanceMeasurement.invalidReason,
+    observedOpsPerSec: performanceMeasurement.observedOpsPerSec,
+    observedP99LatencyMs: performanceMeasurement.observedP99LatencyMs,
     opsPerSec,
     p99LatencyMs,
     opsPerSecPerNode: clusterSize && clusterSize > ZERO &&
@@ -1214,6 +1320,7 @@ function buildPostgresBaselineSnapshot(entry) {
   if (!comparison || typeof comparison !== 'object') {
     return null;
   }
+  const performanceMeasurement = resolvePerformanceMeasurement(entry);
 
   const throughputRatioSutToBaseline = normalizeFiniteNumber(
     comparison.throughputRatioSutToBaseline,
@@ -1243,12 +1350,26 @@ function buildPostgresBaselineSnapshot(entry) {
     null;
   return {
     engine: baseline?.engine || STANDARD_SUMMARY_BASELINE_ENGINE,
-    throughputRatioSutToBaseline,
-    p99LatencyRatioSutToBaselineAvg,
-    sutOpsPerSec,
-    baselineTps,
-    sutP99LatencyMs,
-    baselineLatencyAvgMs,
+    validForPerformanceComparison: performanceMeasurement.validForComparison,
+    performanceInvalidReason: performanceMeasurement.invalidReason,
+    throughputRatioSutToBaseline: performanceMeasurement.validForComparison ?
+      throughputRatioSutToBaseline :
+      null,
+    p99LatencyRatioSutToBaselineAvg: performanceMeasurement.validForComparison ?
+      p99LatencyRatioSutToBaselineAvg :
+      null,
+    sutOpsPerSec: performanceMeasurement.validForComparison ?
+      sutOpsPerSec :
+      null,
+    baselineTps: performanceMeasurement.validForComparison ?
+      baselineTps :
+      null,
+    sutP99LatencyMs: performanceMeasurement.validForComparison ?
+      sutP99LatencyMs :
+      null,
+    baselineLatencyAvgMs: performanceMeasurement.validForComparison ?
+      baselineLatencyAvgMs :
+      null,
     cache: baseline?.cache || null,
   };
 }

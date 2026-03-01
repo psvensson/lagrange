@@ -198,6 +198,15 @@ function shouldValidatePostgresBaselineBenchmarkBudgets(configured) {
 
 function assertValidPreloadBudget(benchmarkConfig) {
   const minimumBudgetMs = calculateMinimumPreloadBudgetMs(benchmarkConfig);
+  if (benchmarkConfig.readyTimeoutMs < minimumBudgetMs) {
+    throw new Error(
+      'postgres-baseline benchmark config invalid: readyTimeoutMs=' +
+        benchmarkConfig.readyTimeoutMs +
+        'ms is below the minimum preload budget of ' +
+        minimumBudgetMs +
+        'ms',
+    );
+  }
   if (benchmarkConfig.quiescentTimeoutMs < minimumBudgetMs) {
     throw new Error(
       'postgres-baseline benchmark config invalid: quiescentTimeoutMs=' +

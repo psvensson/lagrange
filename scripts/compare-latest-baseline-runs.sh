@@ -106,6 +106,12 @@ compare_profile() {
       if $old == 0 then "n/a"
       else ((((($new - $old) / $old) * 100) | f2) | tostring) + "%"
       end;
+    def maybe_f2($v):
+      if $v == null then "n/a" else (($v | f2) | tostring) end;
+    def maybe_f3($v):
+      if $v == null then "n/a" else (($v | f3) | tostring) end;
+    def maybe_num($v):
+      if $v == null then "n/a" else ($v | tostring) end;
     def details_root($scenario):
       obj($scenario.details.details // $scenario.details // {});
     def comparison($scenario):
@@ -116,6 +122,40 @@ compare_profile() {
       obj(details_root($scenario).benchmark);
     def channel_metrics($scenario):
       obj(details_root($scenario).channelMetrics);
+    def performance_measurement($scenario):
+      obj($scenario.performanceMeasurement);
+    def performance_available($scenario):
+      if (performance_measurement($scenario) | length) > 0 then
+        (performance_measurement($scenario).available // false)
+      else
+        (($scenario.loadMetrics.opsPerSec // null) != null or
+          ($scenario.loadMetrics.latency.p99 // null) != null)
+      end;
+    def performance_valid($scenario):
+      if (performance_measurement($scenario) | length) > 0 then
+        (performance_measurement($scenario).validForComparison // false)
+      else
+        (($scenario.passed // false) and performance_available($scenario))
+      end;
+    def performance_invalid_reason($scenario):
+      if (performance_measurement($scenario) | length) > 0 then
+        (performance_measurement($scenario).invalidReason //
+          (if performance_valid($scenario) then null
+           elif performance_available($scenario) then "correctness_failed"
+           else "metrics_unavailable"
+           end))
+      else
+        (if performance_valid($scenario) then null
+         elif performance_available($scenario) then "correctness_failed"
+         else "metrics_unavailable"
+         end)
+      end;
+    def observed_ops_per_sec($scenario):
+      (performance_measurement($scenario).observedOpsPerSec //
+        $scenario.loadMetrics.opsPerSec // null);
+    def observed_p99_latency_ms($scenario):
+      (performance_measurement($scenario).observedP99LatencyMs //
+        $scenario.loadMetrics.latency.p99 // null);
     def cdc_telemetry($scenario):
       obj(benchmark($scenario).cdcTelemetry);
     def cdc_summary($scenario):
@@ -134,7 +174,14 @@ compare_profile() {
        | join("|"));
     def sut_vs_pg_line($tag; $scenario):
       comparison($scenario) as $c
-      | if ($c | length) == 0 then
+      | if performance_valid($scenario) != true then
+          "sut_vs_pg[" + $tag + "]: invalid_for_performance=true, reason=" +
+            ((performance_invalid_reason($scenario) // "unknown") | tostring) +
+            ", observed_sut_ops_per_sec=" +
+            maybe_f3(observed_ops_per_sec($scenario)) +
+            ", observed_sut_p99_ms=" +
+            maybe_num(observed_p99_latency_ms($scenario))
+        elif ($c | length) == 0 then
           "sut_vs_pg[" + $tag + "]: unavailable"
         else
           "sut_vs_pg[" + $tag + "]: sut_ops_per_sec=" +
@@ -472,18 +519,33 @@ compare_profile() {
       "  benchmark_gate: previous(enabled=\((($previous_report.benchmarkRegressionGate.enabled // false) | tostring)), status=\(($previous_report.benchmarkRegressionGate.status // "n/a"))); latest(enabled=\((($latest_report.benchmarkRegressionGate.enabled // false) | tostring)), status=\(($latest_report.benchmarkRegressionGate.status // "n/a")))",
       "load (previous -> latest):",
       "  failed/errors: \(num($previous.loadMetrics.failed))/\(num($previous.loadMetrics.errors)) -> \(num($latest.loadMetrics.failed))/\(num($latest.loadMetrics.errors))",
-      "  ops_per_sec: \((num($previous.loadMetrics.opsPerSec) | f3)) -> \((num($latest.loadMetrics.opsPerSec) | f3)) (Δ \(((num($latest.loadMetrics.opsPerSec) - num($previous.loadMetrics.opsPerSec)) | f3 | sgn)), \((pct(num($latest.loadMetrics.opsPerSec); num($previous.loadMetrics.opsPerSec)))))",
+      "  ops_per_sec: " +
+        (if performance_valid($previous) and performance_valid($latest) then
+           "\((num($previous.loadMetrics.opsPerSec) | f3)) -> \((num($latest.loadMetrics.opsPerSec) | f3)) (Δ \(((num($latest.loadMetrics.opsPerSec) - num($previous.loadMetrics.opsPerSec)) | f3 | sgn)), \((pct(num($latest.loadMetrics.opsPerSec); num($previous.loadMetrics.opsPerSec)))))"
+         else
+           "invalid_for_performance previous(reason=\((performance_invalid_reason($previous) // "unknown") | tostring), observed=\(maybe_f3(observed_ops_per_sec($previous)))) -> latest(reason=\((performance_invalid_reason($latest) // "unknown") | tostring), observed=\(maybe_f3(observed_ops_per_sec($latest))))"
+         end),
       "  total_ops: \(num($previous.loadMetrics.total)) -> \(num($latest.loadMetrics.total)) (Δ \(((num($latest.loadMetrics.total) - num($previous.loadMetrics.total)) | sgn)))",
       "  attempt_errors: \(num($previous.loadMetrics.attemptErrors)) -> \(num($latest.loadMetrics.attemptErrors))",
       "  dispatched_ops: \(num($previous.loadMetrics.dispatchedOperations)) -> \(num($latest.loadMetrics.dispatchedOperations))",
       "  undispatched_ops: \(num($previous.loadMetrics.undispatchedOperations)) -> \(num($latest.loadMetrics.undispatchedOperations))",
       "latency (previous -> latest):",
-      "  latency_ms(avg/p50/p95/p99): \((num($previous.loadMetrics.latency.avg) | f2))/\(num($previous.loadMetrics.latency.p50))/\(num($previous.loadMetrics.latency.p95))/\(num($previous.loadMetrics.latency.p99)) -> \((num($latest.loadMetrics.latency.avg) | f2))/\(num($latest.loadMetrics.latency.p50))/\(num($latest.loadMetrics.latency.p95))/\(num($latest.loadMetrics.latency.p99))",
+      "  latency_ms(avg/p50/p95/p99): " +
+        (if performance_valid($previous) and performance_valid($latest) then
+           "\((num($previous.loadMetrics.latency.avg) | f2))/\(num($previous.loadMetrics.latency.p50))/\(num($previous.loadMetrics.latency.p95))/\(num($previous.loadMetrics.latency.p99)) -> \((num($latest.loadMetrics.latency.avg) | f2))/\(num($latest.loadMetrics.latency.p50))/\(num($latest.loadMetrics.latency.p95))/\(num($latest.loadMetrics.latency.p99))"
+         else
+           "invalid_for_performance previous(reason=\((performance_invalid_reason($previous) // "unknown") | tostring), observed_p99=\(maybe_num(observed_p99_latency_ms($previous)))) -> latest(reason=\((performance_invalid_reason($latest) // "unknown") | tostring), observed_p99=\(maybe_num(observed_p99_latency_ms($latest))))"
+         end),
       "  queue_delay_ms(avg/p50/p95/p99/max): \((num($previous.loadMetrics.queueDelay.avg) | f2))/\((num($previous.loadMetrics.queueDelay.p50) | f2))/\((num($previous.loadMetrics.queueDelay.p95) | f2))/\((num($previous.loadMetrics.queueDelay.p99) | f2))/\((num($previous.loadMetrics.queueDelay.max) | f2)) -> \((num($latest.loadMetrics.queueDelay.avg) | f2))/\((num($latest.loadMetrics.queueDelay.p50) | f2))/\((num($latest.loadMetrics.queueDelay.p95) | f2))/\((num($latest.loadMetrics.queueDelay.p99) | f2))/\((num($latest.loadMetrics.queueDelay.max) | f2))",
       "sut_vs_pg (same-run):",
       "  " + sut_vs_pg_line("previous"; $previous),
       "  " + sut_vs_pg_line("latest"; $latest),
-      "  ratio_delta: throughput_ratio=\(((num(comparison($latest).throughputRatioSutToBaseline) - num(comparison($previous).throughputRatioSutToBaseline)) | f3 | sgn)), p99_vs_pg_avg_ratio=\(((num(comparison($latest).p99LatencyRatioSutToBaselineAvg) - num(comparison($previous).p99LatencyRatioSutToBaselineAvg)) | f3 | sgn))",
+      "  ratio_delta: " +
+        (if performance_valid($previous) and performance_valid($latest) then
+           "throughput_ratio=\(((num(comparison($latest).throughputRatioSutToBaseline) - num(comparison($previous).throughputRatioSutToBaseline)) | f3 | sgn)), p99_vs_pg_avg_ratio=\(((num(comparison($latest).p99LatencyRatioSutToBaselineAvg) - num(comparison($previous).p99LatencyRatioSutToBaselineAvg)) | f3 | sgn))"
+         else
+           "invalid_for_performance=true"
+         end),
       "load_parity:",
       "  " + parity_line("previous"; $previous),
       "  " + parity_line("latest"; $latest),

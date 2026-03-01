@@ -320,6 +320,22 @@ test('Unit: mergeWithDefaults preserves user overrides', async (t) => {
 
 test('Unit: mergeWithDefaults validates postgres baseline budgets', async (t) => {
   await t.test(
+    'rejects ready timeout below the preload minimum budget',
+    async () => {
+      assert.throws(
+        () => mergeWithDefaults({
+          benchmark: {
+            preloadRequiredStableMs: 2000,
+            quiescentPollIntervalMs: 500,
+            readyTimeoutMs: 1000,
+          },
+        }),
+        /minimum preload budget/i,
+      );
+    },
+  );
+
+  await t.test(
     'rejects quiescent timeout below the preload minimum budget',
     async () => {
       assert.throws(
@@ -341,6 +357,7 @@ test('Unit: mergeWithDefaults validates postgres baseline budgets', async (t) =>
       assert.throws(
         () => mergeWithDefaults({
           benchmark: {
+            readyTimeoutMs: 40000,
             quiescentTimeoutMs: 40000,
             quiescentNoProgressTimeoutMs: 40000,
           },

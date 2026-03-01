@@ -38,7 +38,7 @@
     "preloadRequiredStableMs": 2000,
     "preloadMaxReplicaOpsInFlight": 0,
     "insufficientEvidencePolicy": "soft",
-    "readyTimeoutMs": 30000,
+    "readyTimeoutMs": 60000,
     "readyPollIntervalMs": 500,
     "quiescentTimeoutMs": 60000,
     "quiescentPollIntervalMs": 500,

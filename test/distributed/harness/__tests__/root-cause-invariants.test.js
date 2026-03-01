@@ -3,6 +3,10 @@ import assert from 'node:assert/strict';
 
 import {buildRootCauseBundle} from '../root-cause-bundle.js';
 import {ROOT_CAUSE_CLASS, ROOT_CAUSE_CODE} from '../root-cause-constants.js';
+import {
+  INVARIANT_ID,
+  INVARIANT_SEVERITY,
+} from '../../../../src/invariants/invariant-catalog.js';
 
 const SNAPSHOT_SCHEMA_VERSION = 1;
 
@@ -111,6 +115,24 @@ describe('root-cause invariant attribution', () => {
         ROOT_CAUSE_CODE.LEADERSHIP_UNKNOWN_CONTROL_PLANE_PARTITION,
         'rootCauseCode should map to dominant invariant code',
       );
+      const leadershipInvariant = bundle.invariants.find((invariant) =>
+        invariant.code === ROOT_CAUSE_CODE.LEADERSHIP_UNKNOWN_CONTROL_PLANE_PARTITION,
+      );
+      assert.equal(
+        leadershipInvariant?.invariantId,
+        INVARIANT_ID.CONTROL_PLANE_PARTITION_LEADER_DISCOVERABLE,
+        'catalog-backed invariant ID should be present',
+      );
+      assert.equal(
+        leadershipInvariant?.severity,
+        INVARIANT_SEVERITY.CRITICAL,
+        'catalog-backed severity should be present',
+      );
+      assert.equal(
+        leadershipInvariant?.owningSubsystem,
+        'control-plane',
+        'catalog-backed owning subsystem should be present',
+      );
     });
 
   it('selects dominant invariant deterministically by precedence when multiple invariants fail',
@@ -168,4 +190,3 @@ describe('root-cause invariant attribution', () => {
       );
     });
 });
-

@@ -50,6 +50,13 @@ function buildScenarioResult(options = {}) {
     scenario: SCENARIO_NAME,
     passed: options.passed === true,
     error: options.error || null,
+    performanceMeasurement: options.performanceMeasurement || {
+      available: true,
+      validForComparison: options.passed === true,
+      invalidReason: options.passed === true ? null : 'correctness_failed',
+      observedOpsPerSec: 25,
+      observedP99LatencyMs: 3,
+    },
     loadMetrics: {
       total: 100,
       failed: 1,
@@ -332,6 +339,67 @@ describe('compare-latest-baseline-runs.sh', () => {
         result.stdout,
         /root_cause_key_deltas: snapshot_missing_nodes=-1, max_cache_staleness_ms=\+6000, max_cdc_retry_count=\+3, sys_postgres_wire_rows=\+4/i,
         'compare output should include compact key signal deltas',
+      );
+    });
+
+  it('labels failed-run throughput as invalid for performance comparison',
+    async () => {
+      const previousFile =
+        'postgres-baseline-' + PROFILE_THREE_NODE + '-prev.report.json';
+      const latestFile =
+        'postgres-baseline-' + PROFILE_THREE_NODE + '-latest.report.json';
+
+      await writeReport(
+        reportDir,
+        previousFile,
+        buildReport(
+          buildScenarioResult({
+            passed: false,
+            error: 'verify failed',
+          }),
+        ),
+      );
+
+      await writeReport(
+        reportDir,
+        latestFile,
+        buildReport(
+          buildScenarioResult({
+            passed: true,
+            performanceMeasurement: {
+              available: true,
+              validForComparison: true,
+              invalidReason: null,
+              observedOpsPerSec: 25,
+              observedP99LatencyMs: 3,
+            },
+          }),
+        ),
+      );
+
+      const result = spawnSync(
+        'bash',
+        [COMPARE_SCRIPT, '--report-dir', reportDir, '--scenario', SCENARIO_NAME],
+        {
+          encoding: 'utf8',
+        },
+      );
+
+      assert.equal(result.status, 0, result.stderr);
+      assert.match(
+        result.stdout,
+        /ops_per_sec: invalid_for_performance previous\(reason=correctness_failed, observed=25\) -> latest\(reason=unknown, observed=25\)/i,
+        'load summary should label failed-run throughput as invalid',
+      );
+      assert.match(
+        result.stdout,
+        /sut_vs_pg\[previous\]: invalid_for_performance=true, reason=correctness_failed, observed_sut_ops_per_sec=25/i,
+        'same-run comparison should label failed-run throughput as invalid',
+      );
+      assert.match(
+        result.stdout,
+        /ratio_delta: invalid_for_performance=true/i,
+        'ratio delta should not compare invalid failed-run throughput',
       );
     });
 

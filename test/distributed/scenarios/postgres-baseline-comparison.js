@@ -51,6 +51,9 @@ import {
   buildRootCauseBundle,
   collectPreflightCriticalPathSnapshots,
 } from '../harness/root-cause-bundle.js';
+import {evaluateRootCauseInvariants} from '../harness/root-cause-invariants.js';
+import {summarizeInvariantBreaches} from '../harness/invariant-breaches.js';
+import {INVARIANT_ID} from '../../../src/invariants/invariant-catalog.js';
 import {
   DISCOVERY_READINESS_REASON_ADMIN_NOT_QUERYABLE,
   DISCOVERY_READINESS_REASON_ROUTING_NOT_READY,
@@ -88,6 +91,11 @@ const BENCHMARK_REPLICA_SUFFIX_PREFIX = '-replica-';
 const LOCALHOST = '127.0.0.1';
 const SHELL_COMMAND = 'sh';
 const SHELL_LOGIN_ARG = '-lc';
+const STRICT_INVARIANT_GATE_IDS = new Set([
+  INVARIANT_ID.CONTROL_PLANE_PARTITION_LEADER_DISCOVERABLE,
+  INVARIANT_ID.CDC_RETRY_BUDGET_HEALTHY,
+  INVARIANT_ID.CACHE_FRESHNESS_WITHIN_WATERMARK,
+]);
 const SYNC_STANDBY_TEMPLATE_PREFIX = 'ANY ';
 const SYNC_STANDBY_TEMPLATE_SUFFIX = ' (*)';
 const PSQL_ON_ERROR_STOP = '-v ON_ERROR_STOP=1';
@@ -319,6 +327,8 @@ const DISCOVERY_READINESS_REASON_BENCHMARK_NOT_READY = 'benchmark_not_ready';
 const DISCOVERY_READINESS_REASON_READINESS_MISSING = 'readiness_missing';
 const DISCOVERY_READINESS_REASON_WORKLOAD_NOT_READY = 'workload_not_ready';
 const DISCOVERY_READINESS_REASON_SCHEMA_NOT_READY = 'schema_not_ready';
+const DISCOVERY_READINESS_REASON_STATE_CONTRADICTION =
+  'readiness_state_contradiction';
 const DISCOVERY_READINESS_REASON_NOT_SELECTED_BY_DISCOVERY =
   'not_selected_by_discovery';
 const STRICT_DOMINANT_REASON_PRECEDENCE = Object.freeze([
@@ -1348,6 +1358,12 @@ function collectAdminQueryTraceByNodeId(nodes) {
   return Object.keys(traceByNodeId).length > ZERO ? traceByNodeId : null;
 }
 
+function uniqueSorted(values) {
+  return [...new Set((Array.isArray(values) ? values : [])
+    .filter((value) => typeof value === 'string' && value.length > ZERO))]
+    .sort();
+}
+
 function summarizeDiscoveryReadinessReasons(readiness, options = {}) {
   const reasons = Array.isArray(readiness?.[DISCOVERY_READINESS_FIELD_REASONS]) ?
     readiness[DISCOVERY_READINESS_FIELD_REASONS] :
@@ -1427,6 +1443,99 @@ function buildCanonicalDiscoveryReadinessState(readiness) {
   };
 }
 
+function detectDiscoveryReadinessContradictions(readinessState) {
+  if (!readinessState || typeof readinessState !== 'object') {
+    return [];
+  }
+
+  const contradictions = [];
+  const discoveryReasons = Array.isArray(readinessState.discoveryReasons) ?
+    readinessState.discoveryReasons :
+    [];
+  const hasTopologyBlocker = discoveryReasons.some((reason) =>
+    typeof reason === 'string' &&
+    (reason.startsWith('local_replica_not_voter_ready') ||
+      reason.startsWith('leadership_unstable') ||
+      reason.startsWith('replica_operations_in_flight')),
+  );
+  const hasRoutingBlocker = discoveryReasons.some((reason) =>
+    typeof reason === 'string' && reason.startsWith('routing_not_ready'),
+  );
+  const hasSchemaBlocker = discoveryReasons.some((reason) =>
+    typeof reason === 'string' &&
+    (reason.startsWith('schema_table_missing') ||
+      reason.startsWith('schema_partition_unavailable')),
+  );
+
+  if (readinessState.benchmarkReady === true &&
+      (readinessState.routingReady !== true ||
+        readinessState.schemaReady !== true ||
+        readinessState.topologyReady !== true ||
+        hasTopologyBlocker ||
+        hasRoutingBlocker ||
+        hasSchemaBlocker)) {
+    contradictions.push(DISCOVERY_READINESS_REASON_STATE_CONTRADICTION);
+  }
+
+  if (readinessState.topologyReady === true &&
+      ((readinessState.replicaOpsInFlight !== null &&
+          readinessState.replicaOpsInFlight > ZERO) ||
+        readinessState.leadershipStable !== true ||
+        hasTopologyBlocker)) {
+    contradictions.push(DISCOVERY_READINESS_REASON_STATE_CONTRADICTION);
+  }
+
+  return contradictions;
+}
+
+function evaluateDiscoveryReplicaReadiness(readiness, options = {}) {
+  const requireCanonicalBenchmarkReadiness =
+    options.requireCanonicalBenchmarkReadiness === true;
+  const allowMissingReadiness = options.allowMissingReadiness === true;
+  if (!readiness || typeof readiness !== 'object') {
+    return {
+      ready: allowMissingReadiness,
+      hasReadiness: false,
+      reasons: [DISCOVERY_READINESS_REASON_READINESS_MISSING],
+      readinessState: null,
+    };
+  }
+
+  const readinessState = buildCanonicalDiscoveryReadinessState(readiness);
+  const contradictions =
+    detectDiscoveryReadinessContradictions(readinessState);
+  if (contradictions.length > ZERO) {
+    return {
+      ready: false,
+      hasReadiness: true,
+      reasons: uniqueSorted([
+        ...contradictions,
+        ...summarizeDiscoverySelectionExclusionReasons(readiness),
+      ]),
+      readinessState,
+    };
+  }
+  const selectionReady =
+    readinessState?.routingReady === true &&
+    readinessState?.schemaReady === true &&
+    readinessState?.topologyReady === true;
+  const ready = requireCanonicalBenchmarkReadiness ?
+    readinessState?.benchmarkReady === true :
+    selectionReady;
+  const reasons = ready ?
+    [] :
+    summarizeDiscoverySelectionExclusionReasons(readiness);
+
+  return {
+    ready,
+    hasReadiness: true,
+    reasons: reasons.length > ZERO ?
+      reasons :
+      [DISCOVERY_READINESS_REASON_BENCHMARK_NOT_READY],
+    readinessState,
+  };
+}
+
 function summarizeReadinessProbeReasons(options = {}) {
   const reasons = [];
   const errorMessage = typeof options.error === 'string' &&
@@ -1495,19 +1604,14 @@ function resolveServiceNodeIdsFromDiscovery(snapshot, serviceId, protocol) {
       }
       seenNodeIds.add(nodeId);
       const readiness = replica?.[DISCOVERY_REPLICA_FIELD_READINESS];
-      let includeNodeId = true;
-      if (!readiness || typeof readiness !== 'object') {
-        excludedReadinessByNodeId[nodeId] =
-          [DISCOVERY_READINESS_REASON_READINESS_MISSING];
-      } else if (readiness[DISCOVERY_READINESS_FIELD_ROUTING_READY] !== true ||
-          readiness[DISCOVERY_READINESS_FIELD_SCHEMA_READY] !== true) {
-        excludedReadinessByNodeId[nodeId] =
-          summarizeDiscoverySelectionExclusionReasons(readiness);
-        includeNodeId = false;
-      }
-      if (includeNodeId) {
+      const readinessEvaluation = evaluateDiscoveryReplicaReadiness(readiness, {
+        allowMissingReadiness: true,
+      });
+      if (readinessEvaluation.ready) {
         discoveredNodeIds.push(nodeId);
+        continue;
       }
+      excludedReadinessByNodeId[nodeId] = readinessEvaluation.reasons;
     }
   }
   return {
@@ -1616,28 +1720,19 @@ function resolveNodeReadinessFromServiceDiscovery(snapshot, nodeId, options = {}
       NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
       nodeId,
     );
-    if (!readiness || typeof readiness !== 'object') {
-      return {
-        ready: false,
-        reasons: [DISCOVERY_READINESS_REASON_READINESS_MISSING],
-      };
-    }
-    const benchmarkReady =
-      readiness[DISCOVERY_READINESS_FIELD_BENCHMARK_READY] === true;
-    const topologyReady =
-      readiness[DISCOVERY_READINESS_FIELD_TOPOLOGY_READY] === true;
-    if (benchmarkReady && topologyReady) {
+    const readinessEvaluation = evaluateDiscoveryReplicaReadiness(readiness, {
+      requireCanonicalBenchmarkReadiness: true,
+    });
+    if (readinessEvaluation.ready &&
+        readinessEvaluation.readinessState?.topologyReady === true) {
       return {
         ready: true,
         reasons: [],
       };
     }
-    const summarizedReasons = summarizeDiscoveryReadinessReasons(readiness);
     return {
       ready: false,
-      reasons: summarizedReasons.length > ZERO ?
-        summarizedReasons :
-        [DISCOVERY_READINESS_REASON_BENCHMARK_NOT_READY],
+      reasons: readinessEvaluation.reasons,
     };
   }
 
@@ -2071,6 +2166,13 @@ function buildStrictParityGate(options = {}) {
     reason,
     reasonCodes,
   };
+}
+
+function selectStrictInvariantGateEntries(invariants) {
+  return (Array.isArray(invariants) ? invariants : [])
+    .filter((invariant) =>
+      STRICT_INVARIANT_GATE_IDS.has(String(invariant?.invariantId || '')),
+    );
 }
 
 function createEmptyInternalSignalClassCounts() {
@@ -5144,6 +5246,7 @@ function buildVerificationArtifacts(state, options = {}) {
     coverage: state.consistencyEvaluation.coverage,
     mismatches: state.consistencyEvaluation.mismatches,
     evidenceWarnings: state.consistencyEvaluation.evidenceWarnings,
+    invariantBreaches: state.assertionPolicyResult?.invariantBreaches || null,
     internalSignalCounts: state.internalSignalCounts,
     internalSignalThresholdResult: state.internalSignalThresholdResult,
     cdcTelemetry: state.cdcTelemetry,
@@ -5659,6 +5762,7 @@ async function run(cluster) {
     strictDiscoveryGate: null,
     strictBenchmarkGate: {
       discovery: null,
+      invariants: null,
       parity: null,
       overload: null,
       writePressure: null,
@@ -5674,6 +5778,12 @@ async function run(cluster) {
     effectiveSutLoadNodes: [],
     excludedSutLoadNodeIds: [],
     quiescenceResult: null,
+    preLoadInvariantEvaluation: {
+      invariants: [],
+      dominantInvariant: null,
+      rootCauseCode: null,
+      rootCauseClass: null,
+    },
     loadMetrics: null,
     baselineMetrics: null,
     baselineCacheMetadata: null,
@@ -5751,6 +5861,7 @@ async function run(cluster) {
     verificationExcludedNodeIds: [],
     assertionPolicyResult: evaluateAssertionPolicy({
       consistencyVerdict: CONSISTENCY_VERDICT.CONSISTENT,
+      invariants: [],
       loadMetrics: {
         total: ONE,
         success: ONE,
@@ -6078,6 +6189,52 @@ async function run(cluster) {
       state.quiescenceResult = quiescenceResult;
       state.effectiveSutLoadNodes = quiescenceResult.readyLoadNodes;
       state.excludedSutLoadNodeIds = quiescenceResult.excludedLoadNodeIds;
+      if (strictBenchmarkMode === true) {
+        const invariantSnapshotNodes =
+          state.effectiveSutLoadNodes.length > ZERO ?
+            state.effectiveSutLoadNodes :
+            state.sutLoadNodes;
+        const preLoadSnapshotsByNodeId = invariantSnapshotNodes.length > ZERO ?
+          await collectPreflightCriticalPathSnapshots({
+            nodeClient,
+            nodes: invariantSnapshotNodes,
+          }) :
+          {};
+        state.preLoadInvariantEvaluation = evaluateRootCauseInvariants({
+          snapshotsByNodeId: preLoadSnapshotsByNodeId,
+        });
+        const strictInvariantBreaches = summarizeInvariantBreaches(
+          selectStrictInvariantGateEntries(
+            state.preLoadInvariantEvaluation.invariants,
+          ),
+        );
+        state.strictBenchmarkGate.invariants = {
+          status: strictInvariantBreaches.hardCount > ZERO ?
+            PHASE_STATUS.FAIL :
+            PHASE_STATUS.OK,
+          totalCount: strictInvariantBreaches.totalCount,
+          hardCount: strictInvariantBreaches.hardCount,
+          softCount: strictInvariantBreaches.softCount,
+          dominantInvariant: state.preLoadInvariantEvaluation.dominantInvariant,
+          breaches: strictInvariantBreaches.failing,
+        };
+        if (strictInvariantBreaches.hardCount > ZERO) {
+          return {
+            status: PHASE_STATUS.FAIL,
+            artifacts: {
+              strictBenchmarkGate: state.strictBenchmarkGate,
+              invariantBreaches: strictInvariantBreaches,
+              quietMode: buildQuietModeDetails(state.quietMode, {
+                defaultActivePhases: QUIET_MODE_ACTIVE_PHASES,
+              }),
+            },
+            errors: strictInvariantBreaches.hardBreaches.map((breach) =>
+              'hard invariant breach: ' +
+                String(breach.reasonCode || breach.invariantId || 'unknown'),
+            ),
+          };
+        }
+      }
       state.postLoadDrain = createInitialPostLoadDrain(
         state.effectiveSutLoadNodes,
         state.excludedSutLoadNodeIds,
@@ -6423,6 +6580,9 @@ async function run(cluster) {
 
       state.assertionPolicyResult = evaluateAssertionPolicy({
         consistencyVerdict: state.consistencyVerdict,
+        invariants: selectStrictInvariantGateEntries(
+          state.preLoadInvariantEvaluation.invariants,
+        ),
         loadMetrics: state.loadMetrics,
         policy: {
           insufficientEvidence: benchmarkConfig.insufficientEvidencePolicy,
@@ -6561,15 +6721,17 @@ async function run(cluster) {
     const adminQueryTraceByNodeId = shouldCapturePreflightSnapshots ?
       collectAdminQueryTraceByNodeId(snapshotNodes) :
       null;
+    const rootCauseBundle = buildRootCauseBundle({
+      failureArtifact,
+      snapshotsByNodeId,
+      adminQueryTraceByNodeId,
+    });
     error.diagnostics = {
       failure: failureArtifact,
       loadMetrics: state.loadMetrics,
       failedPhase: buildFailedPhaseDiagnostics(failedPhase),
-      rootCauseBundle: buildRootCauseBundle({
-        failureArtifact,
-        snapshotsByNodeId,
-        adminQueryTraceByNodeId,
-      }),
+      invariantBreaches: summarizeInvariantBreaches(rootCauseBundle?.invariants),
+      rootCauseBundle,
     };
     throw error;
   }
@@ -6733,6 +6895,7 @@ async function run(cluster) {
         confidence: state.assertionPolicyResult.verificationConfidence,
         hardFailures: state.assertionPolicyResult.hardFailures,
         softWarnings: state.assertionPolicyResult.softWarnings,
+        invariantBreaches: state.assertionPolicyResult.invariantBreaches,
         coverage: state.consistencyEvaluation.coverage,
         mismatches: state.consistencyEvaluation.mismatches,
         evidenceWarnings: state.consistencyEvaluation.evidenceWarnings,

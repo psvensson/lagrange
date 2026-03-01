@@ -26,6 +26,13 @@ describe('local benchmark configs', () => {
         calculateMinimumPreloadBudgetMs(benchmarkConfig);
 
       assert.ok(
+        benchmarkConfig.readyTimeoutMs >= minimumBudgetMs,
+        'expected 3-node ready timeout to exceed learner promotion delay ' +
+          'plus preload stable window and one poll interval; got ' +
+          benchmarkConfig.readyTimeoutMs + 'ms, need at least ' +
+          minimumBudgetMs + 'ms',
+      );
+      assert.ok(
         benchmarkConfig.quiescentTimeoutMs >= minimumBudgetMs,
         'expected 3-node quiescent timeout to exceed learner promotion delay ' +
           'plus preload stable window and one poll interval; got ' +
@@ -51,6 +58,7 @@ describe('local benchmark configs', () => {
       const minimumBudgetMs =
         calculateMinimumPreloadBudgetMs(benchmarkConfig);
 
+      assert.ok(benchmarkConfig.readyTimeoutMs >= minimumBudgetMs);
       assert.ok(benchmarkConfig.quiescentTimeoutMs >= minimumBudgetMs);
       assert.ok(
         Number.isInteger(benchmarkConfig.quiescentNoProgressTimeoutMs) &&

@@ -1,4 +1,8 @@
 import {ROOT_CAUSE_CLASS, ROOT_CAUSE_CODE} from './root-cause-constants.js';
+import {
+  createInvariantRecord,
+  INVARIANT_ID,
+} from '../../../src/invariants/invariant-catalog.js';
 
 const ZERO = 0;
 const MAX_DETAIL_ENTRIES = 25;
@@ -65,6 +69,26 @@ function pickDominantInvariantCode(invariants) {
   return [...failing].sort()[0];
 }
 
+function buildInvariantResult({
+  invariantId,
+  passed,
+  details,
+  entityId = 'preflight',
+}) {
+  const invariant = createInvariantRecord({
+    invariantId,
+    passed,
+    entityId,
+    observed: details,
+    details,
+    timestampMs: ZERO,
+  });
+  return {
+    ...invariant,
+    code: invariant.reasonCode,
+  };
+}
+
 function evaluateSnapshotMissing(entries) {
   const missingNodeIds = [];
   for (const entry of entries) {
@@ -76,14 +100,15 @@ function evaluateSnapshotMissing(entries) {
       missingNodeIds.push(entry.nodeId);
     }
   }
-  return {
-    code: ROOT_CAUSE_CODE.SNAPSHOT_MISSING,
-    passed: missingNodeIds.length === 0,
-    details: {
+  const details = {
       missingCount: missingNodeIds.length,
       missingNodeIds: missingNodeIds.slice(0, MAX_DETAIL_ENTRIES),
-    },
-  };
+    };
+  return buildInvariantResult({
+    invariantId: INVARIANT_ID.CONTROL_PLANE_SNAPSHOT_AVAILABLE,
+    passed: missingNodeIds.length === 0,
+    details,
+  });
 }
 
 function evaluateLeadershipUnknown(entries) {
@@ -117,14 +142,15 @@ function evaluateLeadershipUnknown(entries) {
       }
     }
   }
-  return {
-    code: ROOT_CAUSE_CODE.LEADERSHIP_UNKNOWN_CONTROL_PLANE_PARTITION,
-    passed: violations.length === 0,
-    details: {
+  const details = {
       violationCount: violations.length,
       violations: violations.slice(0, MAX_DETAIL_ENTRIES),
-    },
-  };
+    };
+  return buildInvariantResult({
+    invariantId: INVARIANT_ID.CONTROL_PLANE_PARTITION_LEADER_DISCOVERABLE,
+    passed: violations.length === 0,
+    details,
+  });
 }
 
 function evaluateCdcRetryStorm(entries) {
@@ -143,15 +169,16 @@ function evaluateCdcRetryStorm(entries) {
       }
     }
   }
-  return {
-    code: ROOT_CAUSE_CODE.CDC_RETRY_STORM,
-    passed: violatingNodeIds.length === 0,
-    details: {
+  const details = {
       threshold: CDC_RETRY_STORM_THRESHOLD,
       maxRetryCount,
       violatingNodeIds: violatingNodeIds.slice(0, MAX_DETAIL_ENTRIES),
-    },
-  };
+    };
+  return buildInvariantResult({
+    invariantId: INVARIANT_ID.CDC_RETRY_BUDGET_HEALTHY,
+    passed: violatingNodeIds.length === 0,
+    details,
+  });
 }
 
 function evaluateCacheStaleWatermark(entries) {
@@ -171,15 +198,16 @@ function evaluateCacheStaleWatermark(entries) {
       violatingNodeIds.push(entry.nodeId);
     }
   }
-  return {
-    code: ROOT_CAUSE_CODE.CACHE_STALE_WATERMARK,
-    passed: violatingNodeIds.length === 0,
-    details: {
+  const details = {
       thresholdMs: CACHE_STALE_THRESHOLD_MS,
       maxStalenessMs,
       violatingNodeIds: violatingNodeIds.slice(0, MAX_DETAIL_ENTRIES),
-    },
-  };
+    };
+  return buildInvariantResult({
+    invariantId: INVARIANT_ID.CACHE_FRESHNESS_WITHIN_WATERMARK,
+    passed: violatingNodeIds.length === 0,
+    details,
+  });
 }
 
 function evaluateServicesMissingSysPostgresWire(entries) {
@@ -194,13 +222,14 @@ function evaluateServicesMissingSysPostgresWire(entries) {
       violatingNodeIds.push(entry.nodeId);
     }
   }
-  return {
-    code: ROOT_CAUSE_CODE.SERVICES_MISSING_SYS_POSTGRES_WIRE,
-    passed: violatingNodeIds.length === 0,
-    details: {
+  const details = {
       violatingNodeIds: violatingNodeIds.slice(0, MAX_DETAIL_ENTRIES),
-    },
-  };
+    };
+  return buildInvariantResult({
+    invariantId: INVARIANT_ID.DISCOVERY_SYS_POSTGRES_WIRE_VISIBLE,
+    passed: violatingNodeIds.length === 0,
+    details,
+  });
 }
 
 function evaluateDiscoveryEmptyWithServicesPresent(entries) {
@@ -221,13 +250,14 @@ function evaluateDiscoveryEmptyWithServicesPresent(entries) {
       violatingNodeIds.push(entry.nodeId);
     }
   }
-  return {
-    code: ROOT_CAUSE_CODE.DISCOVERY_EMPTY_WITH_SERVICES_PRESENT,
-    passed: violatingNodeIds.length === 0,
-    details: {
+  const details = {
       violatingNodeIds: violatingNodeIds.slice(0, MAX_DETAIL_ENTRIES),
-    },
-  };
+    };
+  return buildInvariantResult({
+    invariantId: INVARIANT_ID.DISCOVERY_NON_EMPTY_WITH_SERVICES_PRESENT,
+    passed: violatingNodeIds.length === 0,
+    details,
+  });
 }
 
 function evaluateInvariantsFromEntries(entries) {
@@ -257,4 +287,3 @@ export function evaluateRootCauseInvariants({snapshotsByNodeId}) {
     rootCauseClass,
   };
 }
-

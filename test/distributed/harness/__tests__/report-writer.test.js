@@ -86,6 +86,13 @@ describe('ReportWriter', () => {
       assert.equal(entry.traceAssertion, null);
       assert.equal(entry.memoryLeak, null);
       assert.equal(entry.memoryLeakAssertion, null);
+      assert.deepEqual(entry.performanceMeasurement, {
+        available: false,
+        validForComparison: false,
+        invalidReason: 'metrics_unavailable',
+        observedOpsPerSec: null,
+        observedP99LatencyMs: null,
+      });
       assert.equal(entry.partitionHotspots, null);
       assert.ok(Array.isArray(entry.optimizationPriorities));
       assert.ok(entry.optimizationPriorities.length > 0);
@@ -133,6 +140,39 @@ describe('ReportWriter', () => {
         },
         perNode: {},
       });
+      assert.deepEqual(entry.performanceMeasurement, {
+        available: true,
+        validForComparison: true,
+        invalidReason: null,
+        observedOpsPerSec: 166.5,
+        observedP99LatencyMs: 120,
+      });
+    });
+
+    it('marks failed load measurements as invalid for performance comparison',
+      () => {
+        const writer = new ReportWriter(outputPath);
+        writer.addResult('postgres-baseline-comparison', {
+          passed: false,
+          duration: 30000,
+          loadMetrics: {
+            total: 5000,
+            success: 4900,
+            failed: 100,
+            errors: 100,
+            latency: {p50: 12, p95: 45, p99: 120},
+            opsPerSec: 166.5,
+          },
+        });
+
+        const entry = writer.scenarios[0];
+        assert.deepEqual(entry.performanceMeasurement, {
+          available: true,
+          validForComparison: false,
+          invalidReason: 'correctness_failed',
+          observedOpsPerSec: 166.5,
+          observedP99LatencyMs: 120,
+        });
     });
 
     it('defaults required optimization load fields when absent', () => {
@@ -478,6 +518,36 @@ describe('ReportWriter', () => {
         passed: 5,
         failed: 0,
       });
+    });
+
+    it('promotes invariant breaches into a first-class scenario field', () => {
+      const entry = buildScenarioEntry('postgres-baseline-comparison', {
+        passed: false,
+        details: {
+          diagnostics: {
+            rootCauseBundle: {
+              invariants: [{
+                invariantId: 'control_plane.partition_leader_discoverable',
+                reasonCode: 'leadership_unknown_control_plane_partition',
+                severity: 'critical',
+                passed: false,
+                entityId: 'seed-1',
+                scope: 'partition',
+                owningSubsystem: 'control-plane',
+                observed: {leaderKnown: false},
+                details: {violationCount: 1},
+              }],
+            },
+          },
+        },
+      });
+
+      assert.equal(entry.invariantBreaches.hardCount, 1);
+      assert.equal(entry.invariantBreaches.totalCount, 1);
+      assert.equal(
+        entry.invariantBreaches.hardBreaches[0].reasonCode,
+        'leadership_unknown_control_plane_partition',
+      );
     });
 
     it('persists trace artifact summary and assertion metadata', () => {
@@ -922,6 +992,58 @@ describe('ReportWriter', () => {
       assert.equal(summary.scaleEfficiencySummary.groups[0].baselineClusterSize, 3);
       assert.equal(summary.scaleEfficiencySummary.groups[0].targetClusterSize, 5);
     });
+
+    it('suppresses throughput snapshots for failed benchmark scenarios while preserving observed metrics',
+      async () => {
+        const writer = new ReportWriter(outputPath);
+        writer.addResult('postgres-baseline-comparison', {
+          passed: false,
+          duration: 1200,
+          clusterSize: 5,
+          loadMetrics: {
+            opsPerSec: 50,
+            latency: {p99: 25},
+          },
+          details: {
+            details: {
+              benchmark: {
+                workload: 'custom-mixed-insert-select',
+                durationSeconds: 30,
+                clients: 8,
+                jobs: 4,
+              },
+              baseline: {
+                engine: 'postgres',
+                cache: {hit: false},
+              },
+              comparison: {
+                throughputRatioSutToBaseline: 0.025,
+                p99LatencyRatioSutToBaselineAvg: 100,
+                sutOpsPerSec: 50,
+                baselineTps: 2000,
+                sutP99LatencyMs: 25,
+                baselineLatencyAvgMs: 0.25,
+              },
+            },
+          },
+        });
+
+        await writer.write();
+        const report = JSON.parse(await readFile(outputPath, 'utf8'));
+        const entry = report.standardSummary.scenarios[0];
+        assert.equal(entry.current.validForPerformanceComparison, false);
+        assert.equal(entry.current.performanceInvalidReason, 'correctness_failed');
+        assert.equal(entry.current.observedOpsPerSec, 50);
+        assert.equal(entry.current.opsPerSec, null);
+        assert.equal(entry.postgresBaseline.validForPerformanceComparison, false);
+        assert.equal(
+          entry.postgresBaseline.performanceInvalidReason,
+          'correctness_failed',
+        );
+        assert.equal(entry.postgresBaseline.throughputRatioSutToBaseline, null);
+        assert.equal(entry.postgresBaseline.sutOpsPerSec, null);
+        assert.deepEqual(entry.postgresBaseline.cache, {hit: false});
+      });
   });
 
   describe('computeSummary', () => {

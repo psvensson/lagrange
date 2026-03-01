@@ -578,6 +578,63 @@ describe('postgres-baseline-comparison scenario', () => {
     );
   });
 
+  it('fails strict runs on hard pre-load invariant breaches before load starts',
+    async () => {
+      const leaderKnownEntry = {
+        leaderKnown: true,
+        leaderNodeId: 'seed-1',
+        isLeaderLocal: true,
+        lastErrorCode: null,
+      };
+      const {cluster, loadCalls} = buildVersionedStrictReadinessCluster({
+        includeAppliedSchemaVersion: true,
+        quiescentTimeoutMs: 120,
+        preflightSnapshotOverrides: {
+          controlPlanePartitions: {
+            nodes: leaderKnownEntry,
+            services: {
+              leaderKnown: false,
+              leaderNodeId: null,
+              isLeaderLocal: false,
+              lastErrorCode: 'leader_service_missing',
+            },
+            node_endpoints: leaderKnownEntry,
+            service_endpoints: leaderKnownEntry,
+          },
+          rowCounts: {
+            sysPostgresWireServiceCount: 1,
+            nodeEndpointsCount: 1,
+            serviceEndpointsCount: 1,
+          },
+        },
+      });
+
+      await assert.rejects(
+        run(cluster),
+        (error) => {
+          assert.match(error?.message || '', /phase pre_load_gate/i);
+          assert.equal(
+            loadCalls.length,
+            0,
+            'load phase should not start after hard invariant breach',
+          );
+          assert.equal(
+            error?.diagnostics?.invariantBreaches?.hardCount,
+            1,
+            'failure diagnostics should summarize hard invariant breaches',
+          );
+          const failingCodes = (error?.diagnostics?.rootCauseBundle?.invariants || [])
+            .filter((invariant) => invariant?.passed === false)
+            .map((invariant) => invariant?.reasonCode || invariant?.code);
+          assert.ok(
+            failingCodes.includes('leadership_unknown_control_plane_partition'),
+            'rootCauseBundle should retain the failing invariant reason code',
+          );
+          return true;
+        },
+      );
+    });
+
   it('emits root-cause bundle using harness-owned taxonomy constants', async () => {
     const {cluster} = buildVersionedStrictReadinessCluster({
       includeAppliedSchemaVersion: false,

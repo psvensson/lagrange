@@ -4,6 +4,7 @@ import {
   CONSISTENCY_VERDICT,
   VERIFICATION_CONFIDENCE,
 } from './constants.js';
+import {summarizeInvariantBreaches} from './invariant-breaches.js';
 
 const ZERO = 0;
 const POLICY_KEY_INSUFFICIENT_EVIDENCE = 'insufficientEvidence';
@@ -14,6 +15,7 @@ const HARD_FAILURE_CODE_INVALID_LOAD_METRICS = 'invalid_load_metrics';
 const HARD_FAILURE_CODE_ZERO_SUCCESS = 'zero_successful_operations';
 const HARD_FAILURE_CODE_LOAD_FAILED_OPERATIONS = 'load_failed_operations';
 const HARD_FAILURE_CODE_LOAD_OPERATION_ERRORS = 'load_operation_errors';
+const HARD_FAILURE_CODE_INVARIANT_BREACH = 'hard_invariant_breach';
 
 function hasFiniteNumber(value) {
   return Number.isFinite(Number(value));
@@ -38,6 +40,7 @@ function evaluateAssertionPolicy(options = {}) {
   const hardFailures = [];
   const softWarnings = [];
   const loadMetrics = options.loadMetrics || null;
+  const invariantBreaches = summarizeInvariantBreaches(options.invariants);
 
   if (!loadMetrics || typeof loadMetrics !== 'object' ||
       !hasFiniteNumber(loadMetrics.total) ||
@@ -91,6 +94,14 @@ function evaluateAssertionPolicy(options = {}) {
     }
   }
 
+  if (invariantBreaches.hardCount > ZERO) {
+    hardFailures.push({
+      code: HARD_FAILURE_CODE_INVARIANT_BREACH,
+      message: 'hard invariant breaches reported by runtime or harness diagnostics',
+      invariantBreaches: invariantBreaches.hardBreaches,
+    });
+  }
+
   if (hardFailures.length > ZERO) {
     return {
       passed: false,
@@ -100,6 +111,7 @@ function evaluateAssertionPolicy(options = {}) {
       softWarnings,
       policy,
       loadMetrics,
+      invariantBreaches,
     };
   }
 
@@ -112,6 +124,7 @@ function evaluateAssertionPolicy(options = {}) {
       softWarnings,
       policy,
       loadMetrics,
+      invariantBreaches,
     };
   }
 
@@ -123,6 +136,7 @@ function evaluateAssertionPolicy(options = {}) {
     softWarnings,
     policy,
     loadMetrics,
+    invariantBreaches,
   };
 }
 
