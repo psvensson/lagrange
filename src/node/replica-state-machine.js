@@ -8,15 +8,17 @@
 import {EventEmitter} from 'events';
 import {AddressManager} from '../address/address-manager.js';
 import {LoggingService} from '../logging/logging-service.js';
-import {SERVICE_TYPE, TABLES} from '../constants/index.js';
+import {SERVICE_TYPE, TABLES, TYPEOF} from '../constants/index.js';
 import {assertCritical} from '../utils/assert.js';
 import {
   REPLICA_STATE_MACHINE_DEFAULT,
   REPLICA_STATE_MACHINE_DEFAULT_TIMEOUTS,
+  REPLICA_STATE_MACHINE_DIAGNOSTIC_CODE,
   REPLICA_STATE_MACHINE_ERROR_MSG,
   REPLICA_STATE_MACHINE_EVENT,
   REPLICA_STATE_MACHINE_EVENT_TYPE,
   REPLICA_STATE_MACHINE_LOG_MSG,
+  REPLICA_STATE_MACHINE_NOW,
   REPLICA_STATE_MACHINE_NUM,
   REPLICA_STATE_MACHINE_OPERATION,
   REPLICA_STATE_MACHINE_REASON,
@@ -67,8 +69,7 @@ class ReplicaStateMachine extends EventEmitter {
     super();
 
     const loggingService = LoggingService.getInstance();
-    const logger = loggingService.isInitialized() ?
-      loggingService.forSubsystem(REPLICA_STATE_MACHINE_SUBSYSTEM) : console;
+    const logger = loggingService.forSubsystem(REPLICA_STATE_MACHINE_SUBSYSTEM);
 
     this.nodeId = assertCritical(
       options.nodeId,
@@ -80,6 +81,9 @@ class ReplicaStateMachine extends EventEmitter {
       options.cdcIntegrationService,
       REPLICA_STATE_MACHINE_ERROR_MSG.MISSING_CDC_SERVICE,
     );
+    this.now = typeof options.now === TYPEOF.FUNCTION ?
+      options.now :
+      REPLICA_STATE_MACHINE_NOW;
 
     // State tracking: Map<replicaId, ReplicaStateInfo>
     this.replicas = new Map();
@@ -198,6 +202,7 @@ class ReplicaStateMachine extends EventEmitter {
       });
 
       this.emit(REPLICA_STATE_MACHINE_EVENT.TRANSITION_ERROR, {
+        code: REPLICA_STATE_MACHINE_DIAGNOSTIC_CODE.INVALID_TRANSITION,
         replicaId,
         currentState,
         attemptedState: newState,
@@ -208,7 +213,7 @@ class ReplicaStateMachine extends EventEmitter {
       return false;
     }
 
-    const now = Date.now();
+    const now = this.now();
     const previousState = currentState;
     const timeInPreviousState = existingState ?
       now - existingState.stateEnteredAt : REPLICA_STATE_MACHINE_NUM.ZERO;
@@ -284,79 +289,42 @@ class ReplicaStateMachine extends EventEmitter {
       timeInPreviousState,
     });
 
-    // Persist state via CDC
-    return this._persistStateToCdc(replicaState, previousState);
+    if (previousState === null) {
+      return this._createReplicaRowInCdc(replicaState);
+    }
+
+    return this._updateReplicaStateInCdc(replicaState, previousState);
   }
 
   /**
-   * Persist replica state to the services table via CDC.
+   * Create the initial services row for a newly tracked replica.
    * @param {Object} replicaState - The replica state to persist.
-   * @param {string|null} previousState - The previous state.
    * @return {Promise<boolean>} True if persistence succeeded.
    * @private
    */
-  async _persistStateToCdc(replicaState, previousState) {
+  async _createReplicaRowInCdc(replicaState) {
     try {
       const serviceId = replicaState.serviceId || replicaState.replicaId;
-      const cdcData = {
-        status: replicaState.state,
-        state_entered_at: replicaState.stateEnteredAt,
-        previous_state: previousState,
-        trigger_reason: replicaState.triggerReason,
-        updated_at: replicaState.stateEnteredAt,
-      };
+      const insertSystemTableRow = assertCritical(
+        typeof this.cdcIntegrationService.insertSystemTableRow === TYPEOF.FUNCTION ?
+          this.cdcIntegrationService.insertSystemTableRow.bind(
+            this.cdcIntegrationService,
+          ) :
+          null,
+        REPLICA_STATE_MACHINE_ERROR_MSG.MISSING_INSERT_SYSTEM_TABLE_ROW,
+      );
+      const addressManager = AddressManager.getInstance();
+      const serviceType = replicaState.serviceType || SERVICE_TYPE.PARTITION;
+      const address = replicaState.serviceAddress ||
+        addressManager.format(replicaState.nodeId, serviceType, serviceId);
+      const insertData = this._buildCreateCdcData(
+        replicaState,
+        serviceId,
+        serviceType,
+        address,
+      );
 
-      // Include error message if present
-      if (replicaState.errorMessage) {
-        cdcData.error_message = replicaState.errorMessage;
-      }
-
-      if (previousState !== null) {
-        await this.cdcIntegrationService.updateSystemTableRow(
-          TABLES.SERVICES,
-          {service_id: serviceId},
-          cdcData,
-        );
-      } else {
-        const addressManager = AddressManager.getInstance();
-        const serviceType = replicaState.serviceType || SERVICE_TYPE.PARTITION;
-        const address = replicaState.serviceAddress ||
-          addressManager.format(replicaState.nodeId, serviceType, serviceId);
-        const insertData = {
-          ...cdcData,
-          service_id: serviceId,
-          service_type: serviceType,
-          node_id: replicaState.nodeId,
-          partition_id: replicaState.partitionId,
-          replica_id: replicaState.replicaId,
-          address,
-          created_at: replicaState.stateEnteredAt,
-        };
-        if (typeof this.cdcIntegrationService.upsertSystemTableRow ===
-          'function') {
-          await this.cdcIntegrationService.upsertSystemTableRow(
-            TABLES.SERVICES,
-            insertData,
-          );
-        } else {
-          try {
-            await this.cdcIntegrationService.insertSystemTableRow(
-              TABLES.SERVICES,
-              insertData,
-            );
-          } catch (error) {
-            if (!this.isDuplicateServicesInsertError(error)) {
-              throw error;
-            }
-
-            await this.cdcIntegrationService.updateSystemTableRow(
-              TABLES.SERVICES,
-              {service_id: serviceId},
-              cdcData,
-            );
-          }
-        }
-      }
+      await insertSystemTableRow(TABLES.SERVICES, insertData);
 
       this.logger.debug(REPLICA_STATE_MACHINE_LOG_MSG.STATE_PERSISTED, {
         replicaId: replicaState.replicaId,
@@ -384,17 +352,98 @@ class ReplicaStateMachine extends EventEmitter {
   }
 
   /**
-   * Check whether an initial services-row insert raced with an existing row.
-   *
-   * @param {Error} error - Insert error.
-   * @return {boolean} True when the error is a duplicate services row.
+   * Update an existing services row for a tracked replica.
+   * @param {Object} replicaState - The replica state to persist.
+   * @param {string} previousState - The previous state.
+   * @return {Promise<boolean>} True if persistence succeeded.
    * @private
    */
-  isDuplicateServicesInsertError(error) {
-    const message = String(error?.message || '');
-    return error?.code === 'SQLITE_CONSTRAINT_PRIMARYKEY' ||
-      error?.code === 'SQLITE_CONSTRAINT_UNIQUE' ||
-      message.includes('UNIQUE constraint failed: services.service_id');
+  async _updateReplicaStateInCdc(replicaState, previousState) {
+    try {
+      const serviceId = replicaState.serviceId || replicaState.replicaId;
+      const updateSystemTableRow = assertCritical(
+        typeof this.cdcIntegrationService.updateSystemTableRow === TYPEOF.FUNCTION ?
+          this.cdcIntegrationService.updateSystemTableRow.bind(
+            this.cdcIntegrationService,
+          ) :
+          null,
+        REPLICA_STATE_MACHINE_ERROR_MSG.MISSING_UPDATE_SYSTEM_TABLE_ROW,
+      );
+
+      await updateSystemTableRow(
+        TABLES.SERVICES,
+        {service_id: serviceId},
+        this._buildUpdateCdcData(replicaState, previousState),
+      );
+
+      this.logger.debug(REPLICA_STATE_MACHINE_LOG_MSG.STATE_PERSISTED, {
+        replicaId: replicaState.replicaId,
+        state: replicaState.state,
+        nodeId: this.nodeId,
+      });
+
+      return true;
+    } catch (error) {
+      this.logger.error(REPLICA_STATE_MACHINE_LOG_MSG.STATE_PERSIST_FAILED, {
+        replicaId: replicaState.replicaId,
+        state: replicaState.state,
+        error: error.message,
+        nodeId: this.nodeId,
+      });
+
+      this.emit(REPLICA_STATE_MACHINE_EVENT.PERSISTENCE_ERROR, {
+        replicaId: replicaState.replicaId,
+        state: replicaState.state,
+        error: error.message,
+      });
+
+      throw error;
+    }
+  }
+
+  /**
+   * Build CDC payload for updating an existing services row.
+   * @param {Object} replicaState - Replica state snapshot.
+   * @param {string|null} previousState - Previous state value.
+   * @return {Object} Partial services-row update payload.
+   * @private
+   */
+  _buildUpdateCdcData(replicaState, previousState) {
+    const cdcData = {
+      status: replicaState.state,
+      state_entered_at: replicaState.stateEnteredAt,
+      previous_state: previousState,
+      trigger_reason: replicaState.triggerReason,
+      updated_at: replicaState.stateEnteredAt,
+    };
+
+    if (replicaState.errorMessage) {
+      cdcData.error_message = replicaState.errorMessage;
+    }
+
+    return cdcData;
+  }
+
+  /**
+   * Build CDC payload for creating a services row.
+   * @param {Object} replicaState - Replica state snapshot.
+   * @param {string} serviceId - Canonical service identifier.
+   * @param {string} serviceType - Service type for the row.
+   * @param {string} address - Resolved service address.
+   * @return {Object} Full services-row creation payload.
+   * @private
+   */
+  _buildCreateCdcData(replicaState, serviceId, serviceType, address) {
+    return {
+      ...this._buildUpdateCdcData(replicaState, null),
+      service_id: serviceId,
+      service_type: serviceType,
+      node_id: replicaState.nodeId,
+      partition_id: replicaState.partitionId,
+      replica_id: replicaState.replicaId,
+      address,
+      created_at: replicaState.stateEnteredAt,
+    };
   }
 
   /**
@@ -692,7 +741,7 @@ class ReplicaStateMachine extends EventEmitter {
    * @private
    */
   _checkTimeouts() {
-    const now = Date.now();
+    const now = this.now();
     const timedOutReplicas = [];
 
     for (const [replicaId, state] of this.replicas) {
@@ -952,6 +1001,14 @@ class ReplicaStateMachine extends EventEmitter {
         reason: context.reason,
         nodeId: this.nodeId,
       });
+      this.emit(REPLICA_STATE_MACHINE_EVENT.TRANSITION_ERROR, {
+        code: REPLICA_STATE_MACHINE_DIAGNOSTIC_CODE.INVALID_TRANSITION,
+        replicaId,
+        currentState: null,
+        attemptedState: state,
+        reason: context.reason,
+        nodeId: this.nodeId,
+      });
       return false;
     }
 
@@ -978,7 +1035,7 @@ class ReplicaStateMachine extends EventEmitter {
    * @private
    */
   _registerReplicaForRecovery(replicaId, context) {
-    const now = Date.now();
+    const now = this.now();
     const state = context.state;
 
     // Update state counts

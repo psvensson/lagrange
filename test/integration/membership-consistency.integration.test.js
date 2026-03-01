@@ -40,6 +40,15 @@ import {
   TEST_CONFIG,
 } from './helpers/cluster-test-helpers.js';
 
+async function shutdownOrFail(t, promise, label) {
+  try {
+    await promise;
+  } catch (error) {
+    t.comment(`${label}: ${error.message}`);
+    throw error;
+  }
+}
+
 // Test timeouts - using minimum valid values where config validation applies
 // For tests that need faster timing, we bypass config and set values directly
 const TEST_TIMEOUTS = {
@@ -607,7 +616,7 @@ test('Membership Consistency Integration Tests', async (t) => {
 
       rebalancer.shutdown();
     } finally {
-      await bootstrapService.shutdown().catch(() => {});
+      await shutdownOrFail(t, bootstrapService.shutdown(), 'bootstrap shutdown failed');
       await cleanupTestEnvironment();
     }
   });
@@ -702,7 +711,7 @@ test('Membership Consistency Integration Tests', async (t) => {
         'final state should be disconnected or reconciled ready',
       );
     } finally {
-      await bootstrapService.shutdown().catch(() => {});
+      await shutdownOrFail(t, bootstrapService.shutdown(), 'bootstrap shutdown failed');
       await cleanupTestEnvironment();
     }
   });
@@ -817,7 +826,7 @@ test('Membership Consistency Integration Tests', async (t) => {
 
       const leaseSvc = new LeaseService({
         nodeId: 'control-plane-node',
-        cdcIntegrationService: cdcService,
+        nodeLeaseOwner: heartbeatSvc,
         systemTableCache: leaderCache,
         sqlQueryEngine: createCacheSqlQueryEngine(leaderCache),
       });
@@ -973,7 +982,7 @@ test('Membership Consistency Integration Tests', async (t) => {
       rebalancer1.shutdown();
       rebalancer2.shutdown();
     } finally {
-      await bootstrapService.shutdown().catch(() => {});
+      await shutdownOrFail(t, bootstrapService.shutdown(), 'bootstrap shutdown failed');
       await cleanupTestEnvironment();
     }
   });
@@ -1021,7 +1030,7 @@ test('Membership Consistency Integration Tests', async (t) => {
 
       const leaseSvc = new LeaseService({
         nodeId: 'control-plane-node',
-        cdcIntegrationService: cdcService,
+        nodeLeaseOwner: heartbeatSvc,
         systemTableCache: cache,
         sqlQueryEngine: createCacheSqlQueryEngine(cache),
       });
@@ -1227,7 +1236,11 @@ test('Membership Consistency Integration Tests', async (t) => {
     } finally {
       // Cleanup
       if (bootstrapService) {
-        await bootstrapService.shutdown().catch(() => {});
+        await shutdownOrFail(
+          t,
+          bootstrapService.shutdown(),
+          'bootstrap shutdown failed',
+        );
       }
       await cleanupTestEnvironment();
     }
@@ -1324,7 +1337,7 @@ test('Membership Consistency Integration Tests', async (t) => {
 
       detector.shutdown();
     } finally {
-      await bootstrapService.shutdown().catch(() => {});
+      await shutdownOrFail(t, bootstrapService.shutdown(), 'bootstrap shutdown failed');
       await cleanupTestEnvironment();
     }
   });
@@ -1463,7 +1476,7 @@ test('Membership Consistency Integration Tests', async (t) => {
 
       rebalancer.shutdown();
     } finally {
-      await bootstrapService.shutdown().catch(() => {});
+      await shutdownOrFail(t, bootstrapService.shutdown(), 'bootstrap shutdown failed');
       await cleanupTestEnvironment();
     }
   });
@@ -1580,7 +1593,7 @@ test('Membership Consistency Integration Tests', async (t) => {
 
       detector.shutdown();
     } finally {
-      await bootstrapService.shutdown().catch(() => {});
+      await shutdownOrFail(t, bootstrapService.shutdown(), 'bootstrap shutdown failed');
       await cleanupTestEnvironment();
     }
   });
@@ -1616,7 +1629,7 @@ test('Membership Consistency Integration Tests', async (t) => {
 
       const leaseSvc = new LeaseService({
         nodeId: 'follower-node',
-        cdcIntegrationService: cdcService,
+        nodeLeaseOwner: heartbeatSvc,
         systemTableCache: cache,
         sqlQueryEngine: createCacheSqlQueryEngine(cache),
       });

@@ -6,14 +6,17 @@
  * Property: For any cache hydration operation, no CDC events SHALL be emitted
  * to the CDC pipeline or to connected Admin CLI clients.
  *
- * Note: This test verifies that hydration uses direct cache population via
- * applySystemTableChange() rather than going through the partition write path
- * which would generate CDC events. The cache listeners ARE notified (for Admin
- * CLI updates), but no CDC events are generated in the CDC pipeline.
+ * Note: This test verifies that hydration uses the explicit bootstrap-only
+ * cache applier rather than going through the partition write path which
+ * would generate CDC events. The cache listeners ARE notified (for Admin CLI
+ * updates), but no CDC events are generated in the CDC pipeline.
  */
 
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
+import {
+  createBootstrapCacheHydrationApplier,
+} from '../../src/bootstrap/bootstrap-cache-hydration-applier.js';
 import {
   CacheHydrationService,
   SYSTEM_TABLES_TO_HYDRATE,
@@ -124,6 +127,12 @@ function createMockQueryEngine(tableData, tracker) {
   };
 }
 
+function createHydrationService(queryEngine, cache) {
+  return new CacheHydrationService(queryEngine, cache, {
+    cdcEventApplier: createBootstrapCacheHydrationApplier(cache),
+  });
+}
+
 /**
  * Feature: admin-cli-cache-hydration
  * Property 3: Hydration Does Not Generate CDC
@@ -139,10 +148,7 @@ test('Property 3: Hydration does not execute CDC-generating queries', async (t) 
         const cache = new SystemTableCache();
         const tracker = {cdcGeneratingQueries: []};
         const queryEngine = createMockQueryEngine(tableData, tracker);
-        const hydrationService = new CacheHydrationService(
-          queryEngine,
-          cache,
-        );
+        const hydrationService = createHydrationService(queryEngine, cache);
 
         await hydrationService.hydrateCache();
 
@@ -184,10 +190,7 @@ test('Property 3: Hydration only uses SELECT queries', async (t) => {
           },
         };
 
-        const hydrationService = new CacheHydrationService(
-          queryEngine,
-          cache,
-        );
+        const hydrationService = createHydrationService(queryEngine, cache);
 
         await hydrationService.hydrateCache();
 
@@ -243,10 +246,7 @@ test('Property 3: Hydration uses direct cache population', async (t) => {
           },
         };
 
-        const hydrationService = new CacheHydrationService(
-          queryEngine,
-          cache,
-        );
+        const hydrationService = createHydrationService(queryEngine, cache);
 
         await hydrationService.hydrateCache();
 
@@ -310,10 +310,7 @@ test('Property 3: Cache listeners notified without CDC pipeline', async (t) => {
           },
         };
 
-        const hydrationService = new CacheHydrationService(
-          queryEngine,
-          cache,
-        );
+        const hydrationService = createHydrationService(queryEngine, cache);
 
         await hydrationService.hydrateCache();
 

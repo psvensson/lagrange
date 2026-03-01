@@ -25,6 +25,33 @@ import {
 const NodeStatus = NODE_STATUS;
 const ReintegrationStatus = NODE_REINTEGRATION_STATUS;
 
+function buildObservedNodeWhereClause(node) {
+  const whereClause = {
+    node_id: node.node_id,
+  };
+  if (typeof node?.status === 'string' && node.status.length > 0) {
+    whereClause.status = node.status;
+  }
+  if (Number.isFinite(node?.last_heartbeat)) {
+    whereClause.last_heartbeat = node.last_heartbeat;
+  }
+  if (Number.isFinite(node?.failed_at)) {
+    whereClause.failed_at = node.failed_at;
+  }
+  if (Number.isFinite(node?.recovered_at)) {
+    whereClause.recovered_at = node.recovered_at;
+  }
+  return whereClause;
+}
+
+function guardedUpdateApplied(result) {
+  if (result?.success === false) {
+    return false;
+  }
+  const affectedRows = Number(result?.partitionResult?.affectedRows);
+  return !Number.isFinite(affectedRows) || affectedRows > NUM.ZERO;
+}
+
 /**
  * NodeReintegrationService monitors for recovering nodes and reintegrates them.
  * It marks nodes as active after successful reintegration and triggers
@@ -62,8 +89,7 @@ class NodeReintegrationService extends EventEmitter {
 
     // Logging
     const loggingService = LoggingService.getInstance();
-    this.logger = loggingService.isInitialized() ?
-      loggingService.forSubsystem(NODE_REINTEGRATION_SUBSYSTEM) : console;
+    this.logger = loggingService.forSubsystem(NODE_REINTEGRATION_SUBSYSTEM);
 
     // State
     this.checkTimer = null;
@@ -357,15 +383,21 @@ class NodeReintegrationService extends EventEmitter {
 
     // Mark node as active
     try {
-      await this.cdcIntegrationService.updateSystemTableRow(
+      const result = await this.cdcIntegrationService.updateSystemTableRow(
         SystemTableName.NODES,
-        {node_id: nodeId},
+        buildObservedNodeWhereClause(node),
         {
           status: NodeStatus.ACTIVE,
           reintegrated_at: now,
           updated_at: now,
         },
       );
+      if (!guardedUpdateApplied(result)) {
+        this.logger.debug(NODE_REINTEGRATION_LOG_MSG.STALE_COMPLETION_UPDATE, {
+          nodeId,
+        });
+        return;
+      }
     } catch (error) {
       this.logger.error(NODE_REINTEGRATION_LOG_MSG.MARK_NODE_ACTIVE_FAILED, {
         nodeId,
@@ -435,14 +467,20 @@ class NodeReintegrationService extends EventEmitter {
     // Mark node back to failed status if health checks failed
     if (reason === NODE_REINTEGRATION_REASON.HEALTH_CHECK_FAILED) {
       try {
-        await this.cdcIntegrationService.updateSystemTableRow(
+        const result = await this.cdcIntegrationService.updateSystemTableRow(
           SystemTableName.NODES,
-          {node_id: nodeId},
+          buildObservedNodeWhereClause(node),
           {
             status: NodeStatus.FAILED,
             updated_at: Date.now(),
           },
         );
+        if (!guardedUpdateApplied(result)) {
+          this.logger.debug(NODE_REINTEGRATION_LOG_MSG.STALE_FAILURE_UPDATE, {
+            nodeId,
+            reason,
+          });
+        }
       } catch (error) {
         this.logger.error(NODE_REINTEGRATION_LOG_MSG.MARK_NODE_FAILED_FAILED, {
           nodeId,

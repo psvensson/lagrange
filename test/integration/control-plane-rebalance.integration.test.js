@@ -32,6 +32,15 @@ import {
   waitFor,
 } from './helpers/cluster-test-helpers.js';
 
+async function shutdownOrFail(t, promise, label) {
+  try {
+    await promise;
+  } catch (error) {
+    t.comment(`${label}: ${error.message}`);
+    throw error;
+  }
+}
+
 test('Control plane dispatch integration', async (t) => {
   t.beforeEach(() => {
     initializeTestEnvironment();
@@ -96,32 +105,33 @@ test('Control plane dispatch integration', async (t) => {
       const tablePolicyService = bootstrapService.tablePolicyService;
       t.ok(tablePolicyService, 'should have table policy service');
 
-      // Track deliveries by wrapping the real message router's deliver method
-      // Only intercept deliveries to replica-handler, let SQL queries go through normally
+      // Track remote deliveries through one controlled remote-delivery path.
       const deliveries = [];
       const realMessageRouter = bootstrapResult.messageRouter;
-      const originalDeliver = realMessageRouter.deliver.bind(realMessageRouter);
-
-      // Create a wrapper that tracks deliveries to replica-handler
-      // but lets other deliveries (like SQL queries) go through normally
-      realMessageRouter.deliver = async (target, payload, options) => {
-        // Intercept handler deliveries to the fake target node.
-        // This avoids needing a real network connection while preserving
-        // the dispatch logic and payload formatting.
-        if (
-          typeof target === 'string' &&
-          target.startsWith('node-target-dispatch/service/')
-        ) {
-          if (target.includes('/service/replica-handler')) {
-          deliveries.push({target, payload, options});
-          }
-          return {
-            acknowledged: true,
-            status: ReplicaOperationResponseStatus.INITIATED,
-          };
-        }
-        // Let all other deliveries (SQL queries, etc.) go through normally
-        return originalDeliver(target, payload, options);
+      const originalDeliverRemote =
+        realMessageRouter.deliverRemote.bind(realMessageRouter);
+      realMessageRouter.deliverRemote = async (
+        targetAddress,
+        messageId,
+        payload,
+        targetNodeId,
+        correlationId,
+      ) => {
+        deliveries.push({
+          target: targetAddress,
+          payload,
+          options: {
+            targetNodeId,
+            messageId,
+            correlationId,
+          },
+        });
+        return {
+          messageId,
+          correlationId,
+          acknowledged: true,
+          status: ReplicaOperationResponseStatus.INITIATED,
+        };
       };
 
       // Override connection state checks to allow dispatch to the target node
@@ -176,7 +186,7 @@ test('Control plane dispatch integration', async (t) => {
 
       const leaseSvc = new LeaseService({
         nodeId: seedNodeId,
-        cdcIntegrationService,
+        nodeLeaseOwner: heartbeatSvc,
         systemTableCache,
         sqlQueryEngine: cdcIntegrationService.sqlQueryEngine,
       });
@@ -320,8 +330,8 @@ test('Control plane dispatch integration', async (t) => {
         `operation should move to CREATING (got ${updatedOperation?.workflow_step})`,
       );
 
-      // Restore original deliver method before cleanup
-      realMessageRouter.deliver = originalDeliver;
+      // Restore original remote-delivery method before cleanup
+      realMessageRouter.deliverRemote = originalDeliverRemote;
 
       cdcConfirmationTracker.shutdown();
 
@@ -333,10 +343,18 @@ test('Control plane dispatch integration', async (t) => {
       await rebalanceCoordinator.shutdown();
     } finally {
       if (bootstrapService) {
-        await bootstrapService.shutdown().catch(() => {});
+        await shutdownOrFail(
+          t,
+          bootstrapService.shutdown(),
+          'bootstrap shutdown failed',
+        );
       }
       if (bootstrapResult?.messageRouter) {
-        await bootstrapResult.messageRouter.shutdown().catch(() => {});
+        await shutdownOrFail(
+          t,
+          bootstrapResult.messageRouter.shutdown(),
+          'message router shutdown failed',
+        );
       }
     }
   });

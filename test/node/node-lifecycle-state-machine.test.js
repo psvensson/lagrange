@@ -11,6 +11,7 @@ import {
   InvalidTransitionError,
 } from '../../src/node/node-lifecycle-state-machine.js';
 import {NODE_STATE} from '../../src/constants/node-state.js';
+import {NODE_LIFECYCLE_DIAGNOSTIC_CODE} from '../../src/node/node-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 
@@ -295,6 +296,36 @@ test('NodeLifecycleStateMachine - does not emit event on failed transition', asy
   t.equal(events.length, 0, 'should not emit event on failed transition');
   t.end();
 });
+
+test('NodeLifecycleStateMachine - emits transitionError with stable code on failed transition',
+  async (t) => {
+    const sm = new NodeLifecycleStateMachine({nodeId: 'node-1'});
+    const errors = [];
+
+    sm.on('transitionError', (event) => {
+      errors.push(event);
+    });
+
+    const result = sm.transition(NodeState.READY);
+
+    t.equal(result, false, 'invalid transition should fail');
+    t.equal(errors.length, 1, 'should emit one transitionError event');
+    t.equal(
+      errors[0].code,
+      NODE_LIFECYCLE_DIAGNOSTIC_CODE.INVALID_TRANSITION,
+      'transitionError should include stable diagnostic code',
+    );
+    t.equal(errors[0].currentState, NodeState.STARTING,
+      'transitionError should include current state');
+    t.equal(errors[0].attemptedState, NodeState.READY,
+      'transitionError should include attempted state');
+    t.same(
+      errors[0].validTransitions,
+      VALID_TRANSITIONS[NodeState.STARTING],
+      'transitionError should include legal target states',
+    );
+    t.end();
+  });
 
 test('NodeLifecycleStateMachine - multiple transitions emit multiple events', async (t) => {
   const sm = new NodeLifecycleStateMachine();

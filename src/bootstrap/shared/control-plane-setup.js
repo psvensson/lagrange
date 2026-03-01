@@ -135,10 +135,9 @@ class ControlPlaneSetup {
     }
 
     const loggingService = LoggingService.getInstance();
-    const logger = loggingService.isInitialized() ?
-      loggingService.forSubsystem(
-        CONTROL_PLANE_SETUP_SUBSYSTEM,
-      ) : console;
+    const logger = loggingService.forSubsystem(
+      CONTROL_PLANE_SETUP_SUBSYSTEM,
+    );
 
     logger.info(LOG_MSG.CREATING, {
       nodeId,
@@ -175,7 +174,7 @@ class ControlPlaneSetup {
 
     const leaseService = new LeaseService({
       nodeId,
-      cdcIntegrationService,
+      nodeLeaseOwner: heartbeatService,
       systemTableCache,
       sqlQueryEngine: cdcIntegrationService.sqlQueryEngine,
     });
@@ -248,10 +247,9 @@ class ControlPlaneSetup {
     }
 
     const loggingService = LoggingService.getInstance();
-    const logger = loggingService.isInitialized() ?
-      loggingService.forSubsystem(
-        CONTROL_PLANE_SETUP_SUBSYSTEM,
-      ) : console;
+    const logger = loggingService.forSubsystem(
+      CONTROL_PLANE_SETUP_SUBSYSTEM,
+    );
 
     const nodeId = heartbeatService.nodeId;
 

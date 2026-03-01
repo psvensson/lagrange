@@ -1,4 +1,5 @@
 import {NUM, TIME_MS} from '../constants/index.js';
+import {RAFT_ROLE} from '../raft/constants.js';
 
 const REPLICA_STATE_MACHINE_SUBSYSTEM = 'replica-state-machine';
 
@@ -52,6 +53,8 @@ const REPLICA_STATE_MACHINE_DEFAULT = Object.freeze({
   MAX_CONCURRENT_REMOVES: NUM.FIVE,
 });
 
+const REPLICA_STATE_MACHINE_NOW = () => Date.now();
+
 const REPLICA_STATE_MACHINE_OPERATION = Object.freeze({
   ADD: 'add',
   REMOVE: 'remove',
@@ -71,6 +74,10 @@ const REPLICA_STATE_MACHINE_EVENT = Object.freeze({
 
 const REPLICA_STATE_MACHINE_EVENT_TYPE = Object.freeze({
   REPLICA_STATE_TRANSITION: 'replica_state_transition',
+});
+
+const REPLICA_STATE_MACHINE_DIAGNOSTIC_CODE = Object.freeze({
+  INVALID_TRANSITION: 'replica_invalid_transition',
 });
 
 const REPLICA_STATE_MACHINE_REASON = Object.freeze({
@@ -109,6 +116,10 @@ const REPLICA_STATE_MACHINE_ERROR_MSG = Object.freeze({
   MISSING_NODE_ID: 'ReplicaStateMachine requires nodeId',
   MISSING_CDC_SERVICE: 'ReplicaStateMachine requires cdcIntegrationService',
   MISSING_SYSTEM_TABLE_CACHE: 'ReplicaStateMachine requires systemTableCache',
+  MISSING_INSERT_SYSTEM_TABLE_ROW:
+    'ReplicaStateMachine requires cdcIntegrationService.insertSystemTableRow',
+  MISSING_UPDATE_SYSTEM_TABLE_ROW:
+    'ReplicaStateMachine requires cdcIntegrationService.updateSystemTableRow',
   timeoutReason: (state, elapsedMs) =>
     `Timeout in ${state} state after ${elapsedMs}ms`,
   timeoutMessage: (timeoutMs) =>
@@ -122,18 +133,60 @@ const REPLICA_STATE_MACHINE_NUM = Object.freeze({
   ONE: NUM.ONE,
 });
 
+const REPLICA_STATE_MACHINE_LOAD_READY_STATES = Object.freeze([
+  REPLICA_STATE_MACHINE_STATE.ACTIVE,
+]);
+
+const REPLICA_STATE_MACHINE_REPAIR_ONLY_STATES = Object.freeze([
+  REPLICA_STATE_MACHINE_STATE.PENDING,
+  REPLICA_STATE_MACHINE_STATE.CREATING,
+  REPLICA_STATE_MACHINE_STATE.SYNCING,
+  REPLICA_STATE_MACHINE_STATE.REMOVING,
+  REPLICA_STATE_MACHINE_STATE.FAILED,
+]);
+
+const REPLICA_RAFT_ROLE_LOAD_READY_STATES = Object.freeze([
+  RAFT_ROLE.LEADER,
+  RAFT_ROLE.FOLLOWER,
+]);
+
+const REPLICA_RAFT_ROLE_REPAIR_ONLY_STATES = Object.freeze([
+  RAFT_ROLE.CANDIDATE,
+  RAFT_ROLE.LEARNER,
+]);
+
+function isLoadReadyReplicaRaftRole(role) {
+  return REPLICA_RAFT_ROLE_LOAD_READY_STATES.includes(
+    String(role || '').toLowerCase(),
+  );
+}
+
+function isRepairOnlyReplicaRaftRole(role) {
+  return REPLICA_RAFT_ROLE_REPAIR_ONLY_STATES.includes(
+    String(role || '').toLowerCase(),
+  );
+}
+
 export {
   REPLICA_STATE_MACHINE_DEFAULT,
   REPLICA_STATE_MACHINE_DEFAULT_TIMEOUTS,
+  REPLICA_STATE_MACHINE_NOW,
   REPLICA_STATE_MACHINE_ERROR_MSG,
   REPLICA_STATE_MACHINE_EVENT,
   REPLICA_STATE_MACHINE_EVENT_TYPE,
+  REPLICA_STATE_MACHINE_DIAGNOSTIC_CODE,
   REPLICA_STATE_MACHINE_LOG_MSG,
   REPLICA_STATE_MACHINE_NUM,
   REPLICA_STATE_MACHINE_OPERATION,
   REPLICA_STATE_MACHINE_REASON,
+  REPLICA_RAFT_ROLE_LOAD_READY_STATES,
+  REPLICA_RAFT_ROLE_REPAIR_ONLY_STATES,
   REPLICA_STATE_MACHINE_STATE,
+  REPLICA_STATE_MACHINE_LOAD_READY_STATES,
+  REPLICA_STATE_MACHINE_REPAIR_ONLY_STATES,
   REPLICA_STATE_MACHINE_SUBSYSTEM,
   REPLICA_STATE_MACHINE_TRANSITION,
   REPLICA_STATE_MACHINE_VALID_TRANSITIONS,
+  isLoadReadyReplicaRaftRole,
+  isRepairOnlyReplicaRaftRole,
 };

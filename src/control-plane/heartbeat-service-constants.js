@@ -44,6 +44,8 @@ const HEARTBEAT_LOG_MSG = Object.freeze({
   HEARTBEAT_FAILED: 'Heartbeat failed',
   HEARTBEAT_CONSECUTIVE_FAILURES: 'Heartbeat failing repeatedly',
   HEARTBEAT_RECOVERED: 'Heartbeat recovered after failures',
+  LEASE_EXPIRY_DISCONNECT_FAILED:
+    'Failed to disconnect node after lease expiry',
   MEMORY_TREND_WARNING: 'Heartbeat memory trend warning',
 });
 

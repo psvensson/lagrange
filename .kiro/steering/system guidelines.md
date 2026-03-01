@@ -287,6 +287,10 @@ is a bug.
   and imported where needed.
 - The canonical constants-owner module for a value MAY define that literal once.
   That is the only place where the scalar may be introduced directly.
+- A file-local private constant MAY be defined in the module that exclusively
+  owns and uses it when the value is not a shared cross-file concept, public
+  API token, schema contract, or reused domain vocabulary. Do not promote
+  purely local helper values into global constants files just to satisfy style.
 - Constants-owner modules should prefer individually named scalar constants and
   then compose exported objects/arrays from those named values, rather than
   embedding raw literals inline inside exported structures.
@@ -294,9 +298,14 @@ is a bug.
   colocated test constants-owner file for that suite. If a value becomes
   shared across suites or runtime code, promote it into the appropriate shared
   constants module and import it from there.
+- A single test file may also own its suite-local fixture constants directly at
+  top level; a separate sidecar constants file is optional, not mandatory.
 - This test-owner exception includes suite-unique fixture filenames, labels,
   timestamps, IDs, and timezone values, as long as they are defined once as
   named constants and the rest of the suite composes from those names.
+- Test files do not need exhaustive hoisting of one-off fixture literals.
+  Hoist repeated or semantically important suite-local values; do not force a
+  test to turn every single literal into ceremony.
 - Required language or runtime syntax that cannot be imported from a constants
   module, such as a Unix shebang line, is exempt from this rule.
 - If a constant does not exist yet, create it in the appropriate constants file.
@@ -304,6 +313,8 @@ is a bug.
   or meaning.
 - Outside the canonical owner module, reuse the exported constant. Do not
   duplicate the literal under a second name.
+- Do not force purely private, non-exported, file-local helper enums or trace
+  labels into shared constants modules when they are only used inside one file.
 
 ### 4.2 Single Naming
 

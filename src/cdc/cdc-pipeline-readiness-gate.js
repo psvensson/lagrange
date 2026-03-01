@@ -16,36 +16,60 @@
  * @module cdc/cdc-pipeline-readiness-gate
  */
 
+import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
 import {NUM, TYPEOF} from '../constants/index.js';
+import {emitInvariant} from '../invariants/invariant-emitter.js';
+import {INVARIANT_ID} from '../invariants/invariant-catalog.js';
 import {
   CDC_LIFECYCLE_LOG_MSG,
   CDC_PIPELINE_READINESS_CONDITION,
+  CDC_PIPELINE_READINESS_GATE,
+  CDC_PIPELINE_READINESS_NOW,
   CDC_PIPELINE_READINESS_POLL_INTERVAL_MS,
+  CDC_PIPELINE_READINESS_SLEEP,
   CDC_PIPELINE_READINESS_TIMEOUT_MS,
 } from '../constants/cdc-lifecycle-constants.js';
 
-const GATE_SUBSYSTEM = 'cdc-pipeline-readiness';
+function normalizeUnmetConditions(unmetConditions) {
+  return Array.isArray(unmetConditions) ?
+    [...unmetConditions].sort() :
+    [];
+}
+
+function buildUnmetSignature(result) {
+  return JSON.stringify(normalizeUnmetConditions(result?.unmetConditions));
+}
 
 /**
  * CDCPipelineReadinessGate evaluates whether the CDC pipeline is fully
  * wired and capable of propagating events from partition leaders to the
  * SystemTableCache.
  */
-class CDCPipelineReadinessGate {
+class CDCPipelineReadinessGate extends EventEmitter {
   /**
    * @param {Object} options
    * @param {Object} options.systemTableCache — SystemTableCache instance
    * @param {string[]} options.cdcPropagatedTables — from CDC_PROPAGATED_TABLES
    */
-  constructor(options = {}) {
+  constructor(options = CDC_PIPELINE_READINESS_GATE.DEFAULT_OPTIONS) {
+    super();
     this.systemTableCache = options.systemTableCache;
-    this.cdcPropagatedTables = options.cdcPropagatedTables || [];
+    this.cdcPropagatedTables =
+      options.cdcPropagatedTables ||
+      CDC_PIPELINE_READINESS_GATE.EMPTY_PROPAGATED_TABLES;
     this._pipelineProven = false;
+    this._now = typeof options.now === TYPEOF.FUNCTION ?
+      options.now :
+      CDC_PIPELINE_READINESS_NOW;
+    this._sleep = typeof options.sleep === TYPEOF.FUNCTION ?
+      options.sleep :
+      CDC_PIPELINE_READINESS_SLEEP;
 
     const loggingService = LoggingService.getInstance();
-    this.logger = loggingService.isInitialized() ?
-      loggingService.forSubsystem(GATE_SUBSYSTEM) : console;
+    this.logger = loggingService.forSubsystem(
+      CDC_PIPELINE_READINESS_GATE.SUBSYSTEM,
+    );
 
     // If the cache already has data for any CDC-propagated table, the
     // pipeline is already proven (cache was hydrated before the gate
@@ -120,38 +144,74 @@ class CDCPipelineReadinessGate {
   async waitForReady(context, timeoutMs, pollIntervalMs) {
     const timeout = timeoutMs || CDC_PIPELINE_READINESS_TIMEOUT_MS;
     const interval = pollIntervalMs || CDC_PIPELINE_READINESS_POLL_INTERVAL_MS;
-    const deadline = Date.now() + timeout;
+    const startMs = this._now();
+    const deadline = startMs + timeout;
+    let lastProgressAtMs = startMs;
+    let lastSignature = null;
 
-    return new Promise((resolve, reject) => {
-      const poll = () => {
-        const result = this.evaluate(context);
-        if (result.ready) {
-          this.logger.info(CDC_LIFECYCLE_LOG_MSG.PIPELINE_READY);
-          resolve(result);
-          return;
-        }
+    while (true) {
+      const result = this.evaluate(context);
+      if (result.ready) {
+        emitInvariant(this, {
+          invariantId: INVARIANT_ID.CDC_SUBSCRIPTION_PROGRESS_VISIBLE,
+          passed: true,
+          entityId: CDC_PIPELINE_READINESS_GATE.ENTITY_ID,
+          owningSubsystem: CDC_PIPELINE_READINESS_GATE.SUBSYSTEM,
+          observed: {
+            unmetConditions: [],
+          },
+        });
+        this.logger.info(CDC_LIFECYCLE_LOG_MSG.PIPELINE_READY);
+        return result;
+      }
 
-        if (Date.now() >= deadline) {
-          this.logger.warn(
-            CDC_LIFECYCLE_LOG_MSG.PIPELINE_READINESS_TIMEOUT,
-            {unmetConditions: result.unmetConditions, timeoutMs: timeout},
-          );
-          const error = new Error(
-            `${CDC_LIFECYCLE_LOG_MSG.PIPELINE_READINESS_TIMEOUT}: ` +
-            `unmet=[${result.unmetConditions.join(', ')}] ` +
-            `timeout=${timeout}ms`,
-          );
-          error.unmetConditions = result.unmetConditions;
-          error.timeoutMs = timeout;
-          reject(error);
-          return;
-        }
+      const signature = buildUnmetSignature(result);
+      if (signature !== lastSignature) {
+        lastSignature = signature;
+        lastProgressAtMs = this._now();
+      }
 
-        setTimeout(poll, interval);
-      };
+      if (this._now() >= deadline) {
+        const timeoutKind = lastProgressAtMs === startMs ?
+          CDC_PIPELINE_READINESS_GATE.TIMEOUT_KIND.NO_PROGRESS :
+          CDC_PIPELINE_READINESS_GATE.TIMEOUT_KIND.
+            ABSOLUTE_DEADLINE_EXHAUSTED;
+        this.logger.warn(
+          CDC_LIFECYCLE_LOG_MSG.PIPELINE_READINESS_TIMEOUT,
+          {
+            unmetConditions: result.unmetConditions,
+            timeoutMs: timeout,
+            timeoutKind,
+            lastProgressElapsedMs: Math.max(NUM.ZERO, lastProgressAtMs - startMs),
+          },
+        );
+        emitInvariant(this, {
+          invariantId: INVARIANT_ID.CDC_SUBSCRIPTION_PROGRESS_VISIBLE,
+          passed: false,
+          entityId: CDC_PIPELINE_READINESS_GATE.ENTITY_ID,
+          owningSubsystem: CDC_PIPELINE_READINESS_GATE.SUBSYSTEM,
+          observed: {
+            unmetConditions: result.unmetConditions,
+            timeoutMs: timeout,
+            timeoutKind,
+            lastProgressElapsedMs: Math.max(NUM.ZERO, lastProgressAtMs - startMs),
+          },
+        });
+        const error = new Error(
+          `${CDC_LIFECYCLE_LOG_MSG.PIPELINE_READINESS_TIMEOUT}: ` +
+          `unmet=[${result.unmetConditions.join(', ')}] ` +
+          `timeout=${timeout}ms ` +
+          `kind=${timeoutKind}`,
+        );
+        error.unmetConditions = result.unmetConditions;
+        error.timeoutMs = timeout;
+        error.timeoutKind = timeoutKind;
+        error.lastProgressElapsedMs = Math.max(NUM.ZERO, lastProgressAtMs - startMs);
+        throw error;
+      }
 
-      poll();
-    });
+      await this._sleep(interval);
+    }
   }
 
   /**
@@ -249,8 +309,11 @@ class CDCPipelineReadinessGate {
         if (records && records.length > NUM.ZERO) {
           return true;
         }
-      } catch (_err) {
-        // Table may not exist in cache yet — skip
+      } catch (error) {
+        this.logger.debug(CDC_LIFECYCLE_LOG_MSG.PIPELINE_CACHE_PROBE_FAILED, {
+          tableName,
+          error: error.message,
+        });
       }
     }
     return false;

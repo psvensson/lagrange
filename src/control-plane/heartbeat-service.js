@@ -34,6 +34,7 @@ import {
 const ZERO = 0;
 const ONE = 1;
 const MS_PER_MINUTE = 60000;
+const MIN_REGRESSION_SAMPLE_COUNT = 2;
 
 /**
  * Estimate usage-percent slope (percent per minute) with linear regression.
@@ -41,7 +42,8 @@ const MS_PER_MINUTE = 60000;
  * @return {number}
  */
 function calculateUsageSlopePerMinute(samples) {
-  if (!Array.isArray(samples) || samples.length < 2) {
+  if (!Array.isArray(samples) ||
+      samples.length < MIN_REGRESSION_SAMPLE_COUNT) {
     return ZERO;
   }
 
@@ -89,6 +91,15 @@ class HeartbeatService extends EventEmitter {
     this.nodeStateReporter = typeof options.nodeStateReporter === 'function' ?
       options.nodeStateReporter :
       null;
+    this.now = typeof options.now === 'function' ?
+      options.now :
+      () => Date.now();
+    this.setIntervalFn = typeof options.setIntervalFn === 'function' ?
+      options.setIntervalFn :
+      setInterval;
+    this.clearIntervalFn = typeof options.clearIntervalFn === 'function' ?
+      options.clearIntervalFn :
+      clearInterval;
 
     const config = ConfigurationManager.getInstance();
     this.heartbeatIntervalMs =
@@ -129,8 +140,7 @@ class HeartbeatService extends EventEmitter {
     this.quietModeBypassReasonHistogram = {};
 
     const loggingService = LoggingService.getInstance();
-    this.logger = loggingService.isInitialized() ?
-      loggingService.forSubsystem(HEARTBEAT_SUBSYSTEM) : console;
+    this.logger = loggingService.forSubsystem(HEARTBEAT_SUBSYSTEM);
 
     const memoryTrend = options.memoryTrend || {};
     this.memoryTrendWindowMs = Number.isFinite(memoryTrend.windowMs) &&
@@ -138,9 +148,9 @@ class HeartbeatService extends EventEmitter {
       memoryTrend.windowMs :
       HEARTBEAT_MEMORY_TREND.WINDOW_MS;
     this.memoryTrendMinSamples = Number.isFinite(memoryTrend.minSamples) &&
-      memoryTrend.minSamples >= 2 ?
-      Math.floor(memoryTrend.minSamples) :
-      HEARTBEAT_MEMORY_TREND.MIN_SAMPLES;
+      memoryTrend.minSamples >= MIN_REGRESSION_SAMPLE_COUNT ?
+        Math.floor(memoryTrend.minSamples) :
+        HEARTBEAT_MEMORY_TREND.MIN_SAMPLES;
     this.memoryTrendSlopePercentPerMinThreshold =
       Number.isFinite(memoryTrend.slopePercentPerMinThreshold) ?
         memoryTrend.slopePercentPerMinThreshold :
@@ -249,10 +259,12 @@ class HeartbeatService extends EventEmitter {
       }
     };
 
-    this.heartbeatTimer = setInterval(
+    this.heartbeatTimer = this.setIntervalFn(
       sendHeartbeat, this.heartbeatIntervalMs,
     );
-    this.heartbeatTimer.unref();
+    if (typeof this.heartbeatTimer?.unref === 'function') {
+      this.heartbeatTimer.unref();
+    }
     sendHeartbeat();
 
     this.logger.info(HEARTBEAT_LOG_MSG.STARTED, {
@@ -266,7 +278,7 @@ class HeartbeatService extends EventEmitter {
    */
   stop() {
     if (this.heartbeatTimer) {
-      clearInterval(this.heartbeatTimer);
+      this.clearIntervalFn(this.heartbeatTimer);
       this.heartbeatTimer = null;
     }
     this.state = HEARTBEAT_STATE.STOPPED;
@@ -283,7 +295,7 @@ class HeartbeatService extends EventEmitter {
    * @private
    */
   async sendHeartbeat(stats, capabilities) {
-    const now = Date.now();
+    const now = this.now();
     const memoryMb = Number.isFinite(stats?.memory?.totalBytes) ?
       Math.round(stats.memory.totalBytes / NUM.BYTES_PER_MIB) :
       undefined;
@@ -411,6 +423,37 @@ class HeartbeatService extends EventEmitter {
         error.message = `${error.message} (node-state reporter failed: ` +
           `${reporterError.message})`;
       }
+      throw error;
+    }
+  }
+
+  /**
+   * Apply the canonical guarded disconnect for a node whose ready lease expired.
+   * @param {Object} node - Observed node snapshot.
+   * @param {number} now - Current timestamp.
+   * @return {Promise<Object>} CDC mutation result.
+   */
+  async disconnectNodeDueToLeaseExpiry(node, now) {
+    const whereClause = {
+      node_id: node.node_id,
+      ready_lease_expires_at: node.ready_lease_expires_at,
+      last_heartbeat: node.last_heartbeat || now,
+    };
+
+    try {
+      return await this.cdcIntegrationService.updateSystemTableRow(
+        SystemTableName.NODES,
+        whereClause,
+        {
+          connection_state: STATE.DISCONNECTED,
+          ready_lease_expires_at: null,
+        },
+      );
+    } catch (error) {
+      this.logger.error(HEARTBEAT_LOG_MSG.LEASE_EXPIRY_DISCONNECT_FAILED, {
+        nodeId: node.node_id,
+        error: error.message,
+      });
       throw error;
     }
   }

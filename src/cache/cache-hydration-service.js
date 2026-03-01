@@ -5,19 +5,17 @@
  */
 
 import {LoggingService} from '../logging/logging-service.js';
-import {CDC_OPERATION, METRICS_LOG_TAG} from '../constants/index.js';
+import {CDC_OPERATION, METRICS_LOG_TAG, NUM, TYPEOF} from '../constants/index.js';
 import {
   CACHE_HYDRATION_ERROR_MSG,
+  CACHE_HYDRATION_DEFAULT_OPTIONS,
   CACHE_HYDRATION_LOG_MSG,
+  CACHE_HYDRATION_METRICS,
+  CACHE_HYDRATION_NOW,
+  CACHE_HYDRATION_SQL,
   CACHE_HYDRATION_TABLES,
   CACHE_SUBSYSTEM,
 } from './cache-constants.js';
-
-/**
- * System tables to hydrate on startup.
- * These are the core system tables that the Admin CLI needs.
- */
-const SYSTEM_TABLES_TO_HYDRATE = CACHE_HYDRATION_TABLES;
 
 /**
  * CacheHydrationService populates the SystemTableCache with existing data
@@ -32,16 +30,21 @@ class CacheHydrationService {
    * @param {Object} [options.logger] - Optional logger instance.
    * @param {Function} [options.cdcEventApplier] - CDC event applier.
    */
-  constructor(queryEngine, systemTableCache, options = {}) {
+  constructor(
+      queryEngine,
+      systemTableCache,
+      options = CACHE_HYDRATION_DEFAULT_OPTIONS,
+  ) {
     this.queryEngine = queryEngine;
     this.systemTableCache = systemTableCache;
     this.logger = options.logger || this.initLogger();
-    // Bootstrap hydration exception: apply rows directly before CDC catches up.
-    // Tests/bootstrap can inject a custom applier for specialized behavior.
-    // See architecture.md: Sanctioned direct applySystemTableChange call sites.
-    this.cdcEventApplier = options.cdcEventApplier || (async (tableName, op, row) => {
-      this.systemTableCache.applySystemTableChange(tableName, op, row);
-    });
+    this.now = typeof options.now === TYPEOF.FUNCTION ?
+      options.now :
+      CACHE_HYDRATION_NOW;
+    this.cdcEventApplier = options.cdcEventApplier ?? null;
+    if (typeof this.cdcEventApplier !== TYPEOF.FUNCTION) {
+      throw new Error(CACHE_HYDRATION_ERROR_MSG.MISSING_CDC_EVENT_APPLIER);
+    }
   }
 
   /**
@@ -55,10 +58,27 @@ class CacheHydrationService {
       if (loggingService.isInitialized()) {
         return loggingService.forSubsystem(CACHE_SUBSYSTEM.HYDRATION);
       }
-    } catch {
-      // Logging not available
+    } catch (error) {
+      this.reportNonFatalLoggingFailure(
+        CACHE_HYDRATION_LOG_MSG.LOGGER_INIT_UNAVAILABLE,
+        error,
+      );
     }
     return console;
+  }
+
+  /**
+   * Best-effort reporting for non-fatal logger/metrics path failures.
+   *
+   * @param {string} message - Context message.
+   * @param {Error} error - Underlying error.
+   * @private
+   */
+  reportNonFatalLoggingFailure(message, error) {
+    if (typeof console?.debug !== 'function') {
+      return;
+    }
+    console.debug(message, {error: error?.message || null});
   }
 
   /**
@@ -66,7 +86,7 @@ class CacheHydrationService {
    * @return {Array<string>} Array of system table names
    */
   getSystemTables() {
-    return [...SYSTEM_TABLES_TO_HYDRATE];
+    return [...CACHE_HYDRATION_TABLES];
   }
 
   /**
@@ -80,7 +100,7 @@ class CacheHydrationService {
    */
   async hydrateCache() {
     this.logger.info(CACHE_HYDRATION_LOG_MSG.STARTING);
-    const totalStartMs = Date.now();
+    const totalStartMs = this.now();
     let totalRows = 0;
 
     const results = {
@@ -89,7 +109,7 @@ class CacheHydrationService {
       errors: [],
     };
 
-    for (const tableName of SYSTEM_TABLES_TO_HYDRATE) {
+    for (const tableName of CACHE_HYDRATION_TABLES) {
       try {
         const rowCount = await this.hydrateTable(tableName);
         totalRows += rowCount;
@@ -130,12 +150,15 @@ class CacheHydrationService {
 
     try {
       this.logger.info(METRICS_LOG_TAG.HYDRATION_COMPLETE, {
-        tableCount: SYSTEM_TABLES_TO_HYDRATE.length,
-        totalDurationMs: Date.now() - totalStartMs,
+        tableCount: CACHE_HYDRATION_TABLES.length,
+        totalDurationMs: this.now() - totalStartMs,
         totalRows,
       });
-    } catch (_metricsErr) {
-      // Metrics logging must not propagate to callers
+    } catch (error) {
+      this.reportNonFatalLoggingFailure(
+        CACHE_HYDRATION_LOG_MSG.METRICS_LOG_UNAVAILABLE,
+        error,
+      );
     }
 
     return results;
@@ -148,8 +171,8 @@ class CacheHydrationService {
    * @private
    */
   async hydrateTable(tableName) {
-    const startMs = Date.now();
-    const sql = `SELECT * FROM ${tableName}`;
+    const startMs = this.now();
+    const sql = CACHE_HYDRATION_SQL.selectAll(tableName);
     const result = await this.queryEngine.executeQuery(sql);
 
     if (!result.success) {
@@ -165,21 +188,30 @@ class CacheHydrationService {
     }
 
     const rowCount = rows.length;
-    const durationMs = Date.now() - startMs;
+    const durationMs = this.now() - startMs;
     try {
       this.logger.info(METRICS_LOG_TAG.HYDRATION_TABLE, {
         tableName,
         rowCount,
         durationMs,
-        rowsPerSecond: durationMs > 0 ?
-          Math.round(rowCount / (durationMs / 1000)) : 0,
+        rowsPerSecond: durationMs > NUM.ZERO ?
+          Math.round(
+            rowCount / (durationMs / CACHE_HYDRATION_METRICS.MS_PER_SECOND),
+          ) :
+          CACHE_HYDRATION_METRICS.ZERO_ROWS_PER_SECOND,
       });
-    } catch (_metricsErr) {
-      // Metrics logging must not propagate to callers
+    } catch (error) {
+      this.reportNonFatalLoggingFailure(
+        CACHE_HYDRATION_LOG_MSG.METRICS_LOG_UNAVAILABLE,
+        error,
+      );
     }
 
     return rowCount;
   }
 }
 
-export {CacheHydrationService, SYSTEM_TABLES_TO_HYDRATE};
+export {
+  CacheHydrationService,
+  CACHE_HYDRATION_TABLES as SYSTEM_TABLES_TO_HYDRATE,
+};

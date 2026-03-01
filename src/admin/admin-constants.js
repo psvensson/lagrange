@@ -275,6 +275,13 @@ const ADMIN_QUERY_RESULT = Object.freeze({
   AFFECTED_ROWS_DEFAULT: NUM.ZERO,
 });
 
+const CONSISTENCY_MISMATCH_KIND = Object.freeze({
+  LEADER: 'leader_mismatch',
+  PARTITION_SET: 'partition_set_mismatch',
+  REPLICA_ROLE: 'replica_role_inconsistency',
+  REPLICA_OPERATION: 'replica_operation_mismatch',
+});
+
 const ADMIN_CONTROL_SNAPSHOT = Object.freeze({
   QUERY_SQL: 'SELECT * FROM control_snapshot_local()',
   QUERY_SCOPE_KEY: 'scope',
@@ -324,6 +331,7 @@ export {
   ADMIN_MESSAGE_TYPE,
   ADMIN_HEADER,
   ADMIN_QUERY_RESULT,
+  CONSISTENCY_MISMATCH_KIND,
   ADMIN_CONTROL_SNAPSHOT,
   ADMIN_SERVICE_DISCOVERY,
   ADMIN_PREFLIGHT_CRITICAL_PATH_SNAPSHOT,

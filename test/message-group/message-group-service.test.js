@@ -5,10 +5,10 @@
 
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import {
+  MessageGroupOperationLedger,
   MessageGroupService,
   MessageStatus,
   RaftRole,
-  InMemoryRaftStorage,
 } from '../../src/message-group/message-group-service.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -983,8 +983,8 @@ test('MessageGroupService - shutdown cleans up', async (t) => {
   }
 });
 
-test('InMemoryRaftStorage - appendEntry adds entries', async (t) => {
-  const storage = new InMemoryRaftStorage();
+test('MessageGroupOperationLedger - appendEntry adds entries', async (t) => {
+  const storage = new MessageGroupOperationLedger();
 
   const entry1 = storage.appendEntry({type: 'MESSAGE', data: 'test1'});
   const entry2 = storage.appendEntry({type: 'MESSAGE', data: 'test2'});
@@ -994,8 +994,8 @@ test('InMemoryRaftStorage - appendEntry adds entries', async (t) => {
   t.equal(storage.getLogLength(), 2, 'Should have 2 entries');
 });
 
-test('InMemoryRaftStorage - getEntriesFrom returns entries', async (t) => {
-  const storage = new InMemoryRaftStorage();
+test('MessageGroupOperationLedger - getEntriesFrom returns entries', async (t) => {
+  const storage = new MessageGroupOperationLedger();
 
   storage.appendEntry({type: 'MESSAGE', data: 'test1'});
   storage.appendEntry({type: 'MESSAGE', data: 'test2'});
@@ -1009,8 +1009,8 @@ test('InMemoryRaftStorage - getEntriesFrom returns entries', async (t) => {
   t.equal(fromMiddle[0].data.data, 'test2', 'First should be test2');
 });
 
-test('InMemoryRaftStorage - getLastEntry returns last', async (t) => {
-  const storage = new InMemoryRaftStorage();
+test('MessageGroupOperationLedger - getLastEntry returns last', async (t) => {
+  const storage = new MessageGroupOperationLedger();
 
   t.equal(storage.getLastEntry(), null, 'Should return null when empty');
 
@@ -1021,8 +1021,8 @@ test('InMemoryRaftStorage - getLastEntry returns last', async (t) => {
   t.equal(last.data.data, 'test2', 'Should return last entry');
 });
 
-test('InMemoryRaftStorage - truncateFrom removes entries', async (t) => {
-  const storage = new InMemoryRaftStorage();
+test('MessageGroupOperationLedger - truncateFrom removes entries', async (t) => {
+  const storage = new MessageGroupOperationLedger();
 
   storage.appendEntry({type: 'MESSAGE', data: 'test1'});
   storage.appendEntry({type: 'MESSAGE', data: 'test2'});

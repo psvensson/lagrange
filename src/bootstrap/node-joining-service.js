@@ -76,6 +76,7 @@ import {
   isSystemTableWriteReady,
 } from '../cache/leader-readiness-gate.js';
 import {
+  JOIN_BACKFILL_QUERY,
   JOINING_CLEANUP_RESULT,
   JOINING_CLEANUP_STEP,
   JOINING_DEFAULT,
@@ -83,6 +84,11 @@ import {
   JOINING_ERROR_NAME,
   JOINING_HTTP,
   JOINING_LOG_MSG,
+  JOINING_UNIFIED_RECONCILE,
+  JOIN_READINESS_DEFAULT_TABLE,
+  JOIN_READINESS_REASON,
+  JOIN_READINESS_REPAIR,
+  JOIN_READINESS_SCHEMA_FIELDS,
 } from './node-joining-constants.js';
 import {createRuntimeStartupWiring} from '../runtime/runtime-startup-wiring.js';
 import {
@@ -155,36 +161,12 @@ const JOINING_REQUIRED_WRITE_TABLES = Object.freeze([
   TABLES.NODE_ENDPOINTS,
 ]);
 const DEFAULT_CACHE_SYNC_TABLES = new Set(CACHE_HYDRATION_TABLES);
-const JOINING_UNIFIED_RECONCILE = Object.freeze({
-  INFRA_READY_REASON: 'joining_infrastructure_ready',
-  MESSAGE_GROUPS_REASON: 'joining_message_groups',
-  HYDRATION_REASON: 'joining_hydration_handoff',
-  CHECK_INTERVAL_MS: 60 * 60 * 1000,
-  RUNTIME_KIND: RUNTIME_KIND.NATIVE_JS,
-});
-const MOVE_REPLICA_ASSIGNMENT_ID_FIELD = 'assignment_id';
 const CREATE_SELF_HOSTED_MESSAGE_GROUP_POLICY = Object.freeze({
   ensureLocalAccess: false,
   placementConstraints: {
     spreadAcrossNodes: false,
   },
 });
-const JOIN_READINESS_REASON = Object.freeze({
-  ROUTING_NOT_READY: 'routing_not_ready',
-  TOPOLOGY_NOT_READY: 'topology_not_ready',
-  SCHEMA_VERSION_UNKNOWN: 'schema_version_unknown',
-  SCHEMA_VERSION_LAG: 'schema_version_lag',
-});
-const JOIN_READINESS_SCHEMA_FIELDS = Object.freeze([
-  'updated_at_hlc',
-  'updatedAtHlc',
-  'schema_version',
-  'schemaVersion',
-  'updated_at',
-  'updatedAt',
-  'created_at',
-  'createdAt',
-]);
 const JOIN_READINESS_IN_FLIGHT_EXCLUDED_STATUSES = new Set([
   String(SERVICE_STATUS.ACTIVE).toLowerCase(),
   String(ReplicaStatus.REMOVED).toLowerCase(),
@@ -196,21 +178,6 @@ const JOIN_READINESS_REASON_PRECEDENCE = Object.freeze([
   JOIN_READINESS_REASON.SCHEMA_VERSION_LAG,
   JOIN_READINESS_REASON.TOPOLOGY_NOT_READY,
 ]);
-const JOIN_READINESS_DEFAULT_TABLE = TABLES.SERVICES;
-const JOIN_BACKFILL_QUERY_MESSAGE_TYPE = 'QUERY';
-const JOIN_BACKFILL_QUERY_RESPONSE_TYPE = Object.freeze({
-  LEADER_REDIRECT: 'LEADER_REDIRECT',
-});
-const JOIN_READINESS_REPAIR_TABLES = Object.freeze([
-  TABLES.NODES,
-  TABLES.PARTITIONS,
-  TABLES.SERVICES,
-  TABLES.MESSAGE_GROUPS,
-  TABLES.REPLICA_OPERATIONS,
-  TABLES.NODE_ENDPOINTS,
-  TABLES.SERVICE_ENDPOINTS,
-]);
-const JOIN_READINESS_REPAIR_MIN_INTERVAL_MS = TIME_MS.SECOND;
 
 /**
  * Maps each JOINING_PHASE to its index in the cleanup steps array.
@@ -290,6 +257,9 @@ class NodeJoiningService extends EventEmitter {
     this.random = typeof options.random === TYPEOF.FUNCTION ?
       options.random :
       Math.random;
+    this.now = typeof options.now === TYPEOF.FUNCTION ?
+      options.now :
+      () => Date.now();
     this.sleep = typeof options.sleep === TYPEOF.FUNCTION ?
       options.sleep :
       (delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs));
@@ -379,8 +349,7 @@ class NodeJoiningService extends EventEmitter {
 
     // Logging
     const loggingService = LoggingService.getInstance();
-    this.logger = loggingService.isInitialized() ?
-      loggingService.forSubsystem(BOOTSTRAP_SUBSYSTEM.NODE_JOINING) : console;
+    this.logger = loggingService.forSubsystem(BOOTSTRAP_SUBSYSTEM.NODE_JOINING);
     this.logger.debug(JOINING_LOG_MSG.RUNTIME_WIRING_READY, {
       nodeId: this.nodeId,
       owner: 'createRuntimeStartupWiring',
@@ -399,7 +368,7 @@ class NodeJoiningService extends EventEmitter {
    * @return {Promise<Object>} Joining result.
    */
   async join() {
-    this.startTime = Date.now();
+    this.startTime = this.now();
 
     this.logger.info(JOINING_LOG_MSG.STARTING, {
       nodeId: this.nodeId,
@@ -480,7 +449,7 @@ class NodeJoiningService extends EventEmitter {
 
       // Joining complete
       this.phase = JoiningPhase.COMPLETE;
-      const duration = Date.now() - this.startTime;
+      const duration = this.now() - this.startTime;
 
       this.logger.info(JOINING_LOG_MSG.COMPLETED, {
         nodeId: this.nodeId,
@@ -618,12 +587,14 @@ class NodeJoiningService extends EventEmitter {
     }
 
     const pollIntervalMs = this.resolveJoinReadinessPollIntervalMs();
-    const startTime = Date.now();
+    const startTime = this.now();
     let attempts = NUM.ZERO;
     let lastEvaluation = null;
     let lastSnapshotError = null;
+    let lastProgressSignature = null;
+    let lastProgressAtMs = startTime;
 
-    while (Date.now() - startTime < timeoutMs) {
+    while (this.now() - startTime < timeoutMs) {
       attempts += NUM.ONE;
       const snapshotResult = await this.collectCanonicalJoinReadinessSnapshot();
       if (snapshotResult.error) {
@@ -633,11 +604,27 @@ class NodeJoiningService extends EventEmitter {
       lastEvaluation = this.evaluateCanonicalJoinReadinessSnapshot(
         snapshotResult.snapshot,
       );
+      const progressSignature = JSON.stringify({
+        reasons: [...lastEvaluation.reasons].sort(),
+        requiredSchemaVersion: lastEvaluation.requiredSchemaVersion || null,
+        appliedSchemaVersion: lastEvaluation.appliedSchemaVersion || null,
+        missingLeaders: lastEvaluation.missingLeaders || {},
+        inFlightReplicaOperations: lastEvaluation.inFlightReplicaOperations || NUM.ZERO,
+        missingNodeEndpointNodeIds:
+          lastEvaluation.missingNodeEndpointNodeIds || [],
+        missingPostgresWireNodeIds:
+          lastEvaluation.missingPostgresWireNodeIds || [],
+        snapshotError: lastSnapshotError?.message || null,
+      });
+      if (progressSignature !== lastProgressSignature) {
+        lastProgressSignature = progressSignature;
+        lastProgressAtMs = this.now();
+      }
       if (lastEvaluation.ready) {
         this.logger.info('Join canonical readiness converged', {
           nodeId: this.nodeId,
           attempts,
-          elapsedMs: Date.now() - startTime,
+          elapsedMs: this.now() - startTime,
           requiredSchemaVersion: lastEvaluation.requiredSchemaVersion,
           appliedSchemaVersion: lastEvaluation.appliedSchemaVersion,
         });
@@ -677,9 +664,13 @@ class NodeJoiningService extends EventEmitter {
         terminalEvaluation.missingNodeEndpointNodeIds,
       missingPostgresWireNodeIds:
         terminalEvaluation.missingPostgresWireNodeIds,
-      elapsedMs: Date.now() - startTime,
+      elapsedMs: this.now() - startTime,
       attempts,
       snapshotError: lastSnapshotError?.message || null,
+      timeoutKind: lastProgressAtMs === startTime ?
+        'no_progress' :
+        'absolute_deadline_exhausted',
+      lastProgressElapsedMs: Math.max(NUM.ZERO, lastProgressAtMs - startTime),
     };
 
     this.logger.error('Join canonical readiness timed out', {
@@ -698,6 +689,8 @@ class NodeJoiningService extends EventEmitter {
       missingPostgresWireNodeIds:
         terminalEvaluation.missingPostgresWireNodeIds,
       snapshotError: lastSnapshotError?.message || null,
+      timeoutKind: error.joinReadiness.timeoutKind,
+      lastProgressElapsedMs: error.joinReadiness.lastProgressElapsedMs,
     });
     throw error;
   }
@@ -753,10 +746,10 @@ class NodeJoiningService extends EventEmitter {
     }
 
     const minIntervalMs = Math.max(
-      JOIN_READINESS_REPAIR_MIN_INTERVAL_MS,
+      JOIN_READINESS_REPAIR.MIN_INTERVAL_MS,
       Number.isFinite(pollIntervalMs) ? Math.floor(pollIntervalMs) : NUM.ZERO,
     );
-    const now = Date.now();
+    const now = this.now();
     if (this.lastCanonicalJoinRepairAtMs > NUM.ZERO &&
         now - this.lastCanonicalJoinRepairAtMs < minIntervalMs) {
       return;
@@ -765,7 +758,7 @@ class NodeJoiningService extends EventEmitter {
     this.lastCanonicalJoinRepairAtMs = now;
     const repairPromise = this
       .backfillPropagatedCacheTablesFromAuthoritativeState(
-        JOIN_READINESS_REPAIR_TABLES,
+        JOIN_READINESS_REPAIR.TABLES,
       )
       .catch((error) => {
         this.logger.warn('Canonical join readiness repair backfill failed', {
@@ -1087,6 +1080,40 @@ class NodeJoiningService extends EventEmitter {
       activeNodeIds.push(nodeId);
     }
     return activeNodeIds;
+  }
+
+  /**
+   * Resolve node rows used for mesh connectivity.
+   * Prefer the authoritative nodes cache over the initial bootstrap snapshot so
+   * later joiners are not stranded when membership changes after bootstrap.
+   * @return {{source: string, rows: Object[]}}
+   * @private
+   */
+  resolveMeshConnectivityNodeRows() {
+    const systemTableCache = NodeService.getInstance().getSystemTableCache();
+    if (systemTableCache &&
+        typeof systemTableCache.getAll === TYPEOF.FUNCTION) {
+      const cacheRows = (systemTableCache.getAll(TABLES.NODES) || []).filter((row) => {
+        const nodeId = String(
+          row?.[COLUMN.NODE_ID] || row?.node_id || row?.nodeId || '',
+        );
+        return nodeId.length > NUM.ZERO;
+      });
+      if (cacheRows.length > NUM.ZERO) {
+        return {
+          source: 'system_table_cache',
+          rows: cacheRows,
+        };
+      }
+    }
+
+    const snapshotRows = Array.isArray(this.bootstrapResponse?.systemTableSnapshots?.nodes) ?
+      this.bootstrapResponse.systemTableSnapshots.nodes :
+      [];
+    return {
+      source: 'bootstrap_snapshot',
+      rows: snapshotRows,
+    };
   }
 
   /**
@@ -1605,7 +1632,7 @@ class NodeJoiningService extends EventEmitter {
    */
   async executePhase(phaseName, phaseFunction) {
     this.phase = phaseName;
-    this.phaseStartTime = Date.now();
+    this.phaseStartTime = this.now();
 
     this.logger.info(JOINING_LOG_MSG.PHASE_STARTING, {
       nodeId: this.nodeId,
@@ -1622,7 +1649,7 @@ class NodeJoiningService extends EventEmitter {
         await phaseFunction();
       });
 
-      const phaseDuration = Date.now() - this.phaseStartTime;
+      const phaseDuration = this.now() - this.phaseStartTime;
 
       this.logger.info(JOINING_LOG_MSG.PHASE_COMPLETED, {
         nodeId: this.nodeId,
@@ -1636,7 +1663,7 @@ class NodeJoiningService extends EventEmitter {
         duration: phaseDuration,
       });
     } catch (error) {
-      const phaseDuration = Date.now() - this.phaseStartTime;
+      const phaseDuration = this.now() - this.phaseStartTime;
 
       this.logger.error(JOINING_LOG_MSG.PHASE_FAILED, {
         nodeId: this.nodeId,
@@ -1680,7 +1707,7 @@ class NodeJoiningService extends EventEmitter {
     let delayMs = retryPolicy.initialDelayMs;
     const maxDelayMs = retryPolicy.maxDelayMs;
     const backoffMultiplier = retryPolicy.backoffMultiplier;
-    const startTime = Date.now();
+    const startTime = this.now();
     let attempt = 0;
     let lastBootstrapError = null;
     let lastRetryableSeedContactError = null;
@@ -1688,7 +1715,7 @@ class NodeJoiningService extends EventEmitter {
       this.config.httpTimeoutMs,
     );
 
-    while (Date.now() - startTime < retryTimeoutMs) {
+    while (this.now() - startTime < retryTimeoutMs) {
       attempt += 1;
       try {
         const response = await this.httpPostImpl(bootstrapUrl, {
@@ -1720,7 +1747,7 @@ class NodeJoiningService extends EventEmitter {
           retryableTimeoutErrorMessage,
         );
         const parsedError = classification.parsedError;
-        const elapsedMs = Date.now() - startTime;
+        const elapsedMs = this.now() - startTime;
         if (classification.retryable && elapsedMs < retryTimeoutMs) {
           if (classification.retryableCode) {
             lastBootstrapError = parsedError;
@@ -2641,7 +2668,7 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   async registerMessageGroupService(groupId, replicaId, service) {
-    const now = Date.now();
+    const now = this.now();
     const moveReplicaAssignment =
       this.bootstrapResponse?.messageGroupAssignment || null;
     const assignmentId = moveReplicaAssignment &&
@@ -2663,7 +2690,7 @@ class NodeJoiningService extends EventEmitter {
       created_at: now,
       updated_at: now,
       ...(assignmentId ?
-        {[MOVE_REPLICA_ASSIGNMENT_ID_FIELD]: assignmentId} :
+        {[JOIN_BACKFILL_QUERY.ASSIGNMENT_ID_FIELD]: assignmentId} :
         {}),
     };
 
@@ -2686,11 +2713,11 @@ class NodeJoiningService extends EventEmitter {
     const retryableTimeoutErrorMessage = JOINING_ERROR_MSG.httpTimeout(
       this.config.httpTimeoutMs,
     );
-    const startTime = Date.now();
+    const startTime = this.now();
     let attempt = NUM.ZERO;
     let lastError = null;
 
-    while (Date.now() - startTime < retryTimeoutMs) {
+    while (this.now() - startTime < retryTimeoutMs) {
       attempt += 1;
       try {
         const response = await this.httpPostImpl(registerUrl, serviceData);
@@ -2727,7 +2754,7 @@ class NodeJoiningService extends EventEmitter {
         return;
       } catch (error) {
         lastError = error;
-        const elapsedMs = Date.now() - startTime;
+        const elapsedMs = this.now() - startTime;
         const classification = this.classifySeedContactFailure(
           error,
           retryableTimeoutErrorMessage,
@@ -2771,7 +2798,7 @@ class NodeJoiningService extends EventEmitter {
       replicaId,
       groupId,
       attempts: attempt,
-      elapsedMs: Date.now() - startTime,
+      elapsedMs: this.now() - startTime,
       error: error.message,
     });
     throw error;
@@ -2802,7 +2829,7 @@ class NodeJoiningService extends EventEmitter {
       throw new Error(`No local replicas found for CREATE_SELF_HOSTED group ${groupId}`);
     }
 
-    const now = Date.now();
+    const now = this.now();
     const messageGroupRow = {
       group_id: groupId,
       group_name: groupId,
@@ -2835,7 +2862,7 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   async phaseWaitForLeadership() {
-    const startTime = Date.now();
+    const startTime = this.now();
     const timeoutMs = this.config.leadershipWaitTimeoutMs;
     let delay = this.config.leadershipWaitInitialDelayMs;
     const maxDelay = this.config.leadershipWaitMaxDelayMs;
@@ -2848,7 +2875,7 @@ class NodeJoiningService extends EventEmitter {
       messageGroupCount: this.messageGroupServices.size,
     });
 
-    while (Date.now() - startTime < timeoutMs) {
+    while (this.now() - startTime < timeoutMs) {
       const hasCacheLeader = this.hasMessageGroupLeaderInCache(systemTableCache);
 
       // Check if any local replica is leader or has a known leader
@@ -2859,7 +2886,7 @@ class NodeJoiningService extends EventEmitter {
             replicaId,
             isLeader: service.isLeaderReplica(),
             leaderId: service.getLeaderId(),
-            elapsedMs: Date.now() - startTime,
+            elapsedMs: this.now() - startTime,
           });
           return;
         }
@@ -2870,7 +2897,7 @@ class NodeJoiningService extends EventEmitter {
           replicaId: null,
           isLeader: false,
           leaderId: null,
-          elapsedMs: Date.now() - startTime,
+          elapsedMs: this.now() - startTime,
         });
         return;
       }
@@ -2892,7 +2919,7 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   async waitForSystemServiceLeaders(systemTableCache) {
-    const startTime = Date.now();
+    const startTime = this.now();
     const timeoutMs = this.config.leadershipWaitTimeoutMs;
     let delay = this.config.leadershipWaitInitialDelayMs;
     const maxDelay = this.config.leadershipWaitMaxDelayMs;
@@ -2903,7 +2930,7 @@ class NodeJoiningService extends EventEmitter {
       timeoutMs,
     });
 
-    while (Date.now() - startTime < timeoutMs) {
+    while (this.now() - startTime < timeoutMs) {
       const missing = this.getMissingSystemServiceLeaders(systemTableCache);
       const blockingMissing = this.getBlockingSystemServiceLeaders(
         missing,
@@ -3263,6 +3290,18 @@ class NodeJoiningService extends EventEmitter {
       return;
     }
 
+    if (state === STATE.READY && this.messageRouter) {
+      try {
+        await this.connectToClusterNodes();
+      } catch (error) {
+        this.logger.warn('Failed to reconcile cluster mesh before NODE_STATE_UPDATE', {
+          nodeId: this.nodeId,
+          state,
+          error: error.message,
+        });
+      }
+    }
+
     const targetAddress =
       this.resolveControlPlaneTargetAddress({allowBootstrapHints: false}) ||
       this.resolveControlPlaneTargetAddress({allowBootstrapHints: true});
@@ -3437,8 +3476,10 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   async connectToClusterNodes() {
-    const snapshots = this.bootstrapResponse?.systemTableSnapshots;
-    const nodesSnapshot = snapshots?.nodes;
+    const {
+      source: nodeSource,
+      rows: nodesSnapshot,
+    } = this.resolveMeshConnectivityNodeRows();
 
     if (!Array.isArray(nodesSnapshot) || nodesSnapshot.length === NUM.ZERO) {
       return;
@@ -3456,6 +3497,7 @@ class NodeJoiningService extends EventEmitter {
 
     this.logger.info(JOINING_LOG_MSG.CONNECTING_TO_CLUSTER_NODES, {
       nodeId: this.nodeId,
+      nodeSource,
       otherNodeCount: otherNodes.length,
       otherNodeIds: otherNodes.map((n) => n.node_id),
     });
@@ -3833,10 +3875,8 @@ class NodeJoiningService extends EventEmitter {
       // Gate: verify CDC pipeline is fully wired before proceeding.
       // Requirements 2.4, 2.6 — node must not transition to READY with
       // an incomplete CDC pipeline.
-      const cdcReadinessGate = new CDCPipelineReadinessGate({
-        systemTableCache,
-        cdcPropagatedTables: CDC_PROPAGATED_TABLES,
-      });
+      const cdcReadinessGate =
+        this.createCdcPipelineReadinessGate(systemTableCache);
       const cdcReadinessTimeoutMs =
         this.config.cdcPipelineReadinessTimeoutMs ||
         CDC_PIPELINE_READINESS_TIMEOUT_MS;
@@ -3907,7 +3947,7 @@ class NodeJoiningService extends EventEmitter {
     // Use default disk size (this would ideally come from configuration)
     const diskGb = NUM.HUNDRED;
 
-    const now = Date.now();
+    const now = this.now();
     const joinTimeUpsertOptions = this.getJoinTimeUpsertOptions();
 
     const nodeData = {
@@ -4134,14 +4174,7 @@ class NodeJoiningService extends EventEmitter {
       throw error;
     }
 
-    const systemTables = [
-      TABLES.NODES,
-      TABLES.PARTITIONS,
-      TABLES.SERVICES,
-      TABLES.TABLES,
-      TABLES.MESSAGE_GROUPS,
-      TABLES.REPLICA_OPERATIONS,
-    ];
+    const systemTables = CACHE_HYDRATION_TABLES;
 
     this.logger.info(JOINING_LOG_MSG.CDC_INTEGRATION_CREATE, {
       nodeId: this.nodeId,
@@ -4394,11 +4427,11 @@ class NodeJoiningService extends EventEmitter {
   async queryBackfillReplicaAddress(messageRouter, address, sql) {
     try {
       const response = await messageRouter.deliver(address, {
-        type: JOIN_BACKFILL_QUERY_MESSAGE_TYPE,
+        type: JOIN_BACKFILL_QUERY.MESSAGE_TYPE,
         sql,
         params: [],
       });
-      if (response?.redirect === JOIN_BACKFILL_QUERY_RESPONSE_TYPE.LEADER_REDIRECT &&
+      if (response?.redirect === JOIN_BACKFILL_QUERY.RESPONSE_TYPE.LEADER_REDIRECT &&
           response?.leaderAddress) {
         return this.queryBackfillReplicaAddress(
           messageRouter,
@@ -4578,7 +4611,22 @@ class NodeJoiningService extends EventEmitter {
       return null;
     }
 
-    return Math.max(NUM.ZERO, retryAtMs - Date.now());
+    return Math.max(NUM.ZERO, retryAtMs - this.now());
+  }
+
+  /**
+   * Create the shared CDC pipeline readiness gate.
+   * Tests override this to inject manual time instead of wall-clock waits.
+   * @param {Object} systemTableCache
+   * @return {CDCPipelineReadinessGate}
+   */
+  createCdcPipelineReadinessGate(systemTableCache) {
+    return new CDCPipelineReadinessGate({
+      systemTableCache,
+      cdcPropagatedTables: CDC_PROPAGATED_TABLES,
+      now: () => this.now(),
+      sleep: (delayMs) => this.sleep(delayMs),
+    });
   }
 
   /**
@@ -4591,7 +4639,7 @@ class NodeJoiningService extends EventEmitter {
     const failedPhase = this.phase;
     this.phase = JoiningPhase.FAILED;
     this.lastError = error;
-    const duration = Date.now() - this.startTime;
+    const duration = this.now() - this.startTime;
 
     this.logger.error(JOINING_LOG_MSG.JOIN_FAILED, {
       nodeId: this.nodeId,
@@ -5561,7 +5609,7 @@ class NodeJoiningService extends EventEmitter {
       phase: this.phase,
       lifecycleState: this.lifecycleStateMachine.getState(),
       startTime: this.startTime,
-      duration: this.startTime ? Date.now() - this.startTime : NUM.ZERO,
+      duration: this.startTime ? this.now() - this.startTime : NUM.ZERO,
       messageGroupCount: this.messageGroupServices.size,
       lastError: this.lastError?.message || null,
     };

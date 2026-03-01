@@ -8,6 +8,7 @@
  */
 
 import {RaftReplicaBase} from '../raft/raft-replica-base.js';
+import {AuthoritativeRowMutationHelper} from '../raft/authoritative-row-mutation-helper.js';
 import {SERVICE_TYPE} from '../constants/service.js';
 import {COLUMN, TABLES, TYPEOF} from '../constants/index.js';
 import {SystemTableName} from '../bootstrap/system-table-schemas-constants.js';
@@ -98,12 +99,226 @@ class WasmServiceReplica extends RaftReplicaBase {
     this.roleUpdateWriter = options.roleUpdateWriter || null;
     this.leaderNodeUpdateWriter =
       options.leaderNodeUpdateWriter || null;
+    this.roleMutationTransport = this.createRoleMutationTransport();
+    this.leaderNodeMutationTransport = this.createLeaderNodeMutationTransport();
+    this.roleMutationHelper = this.createRoleMutationHelper();
+    this.pendingRoleUpdate = this.role;
+    this.persistedRole = null;
+    this.leaderNodeMutationHelper = this.createLeaderNodeMutationHelper();
+    this.pendingLeaderNodeUpdate = null;
+    this.persistedLeaderNodeId = null;
 
     this._safetyBroadcastTimer = null;
 
     this.logger.info(WASM_SERVICE_LOG_MSG.REPLICA_CREATED, {
       replicaId: this.replicaId,
       serviceDefinitionId: this.serviceDefinitionId,
+    });
+  }
+
+  get systemTableCache() {
+    return this._systemTableCache || null;
+  }
+
+  set systemTableCache(systemTableCache) {
+    this._systemTableCache = systemTableCache;
+    this.roleMutationHelper?.setSystemTableCache(systemTableCache);
+    this.leaderNodeMutationHelper?.setSystemTableCache(systemTableCache);
+  }
+
+  get cdcIntegrationService() {
+    return this._cdcIntegrationService || null;
+  }
+
+  set cdcIntegrationService(cdcIntegrationService) {
+    this._cdcIntegrationService = cdcIntegrationService;
+  }
+
+  get pendingRoleUpdate() {
+    return this.roleMutationHelper?.pendingValue || null;
+  }
+
+  set pendingRoleUpdate(role) {
+    if (this.roleMutationHelper) {
+      this.roleMutationHelper.pendingValue = role;
+    }
+  }
+
+  get persistedRole() {
+    return this.roleMutationHelper?.persistedValue || null;
+  }
+
+  set persistedRole(role) {
+    if (this.roleMutationHelper) {
+      this.roleMutationHelper.persistedValue = role;
+    }
+  }
+
+  get roleUpdateInFlight() {
+    return this.roleMutationHelper?.inFlight || false;
+  }
+
+  set roleUpdateInFlight(inFlight) {
+    if (this.roleMutationHelper) {
+      this.roleMutationHelper.inFlight = inFlight;
+    }
+  }
+
+  get roleUpdateRetryTimer() {
+    return this.roleMutationHelper?.retryTimer || null;
+  }
+
+  set roleUpdateRetryTimer(timer) {
+    if (this.roleMutationHelper) {
+      this.roleMutationHelper.retryTimer = timer;
+    }
+  }
+
+  get pendingLeaderNodeUpdate() {
+    return this.leaderNodeMutationHelper?.pendingValue || null;
+  }
+
+  set pendingLeaderNodeUpdate(leaderNodeId) {
+    if (this.leaderNodeMutationHelper) {
+      this.leaderNodeMutationHelper.pendingValue = leaderNodeId;
+    }
+  }
+
+  get persistedLeaderNodeId() {
+    return this.leaderNodeMutationHelper?.persistedValue || null;
+  }
+
+  set persistedLeaderNodeId(leaderNodeId) {
+    if (this.leaderNodeMutationHelper) {
+      this.leaderNodeMutationHelper.persistedValue = leaderNodeId;
+    }
+  }
+
+  get leaderNodeUpdateInFlight() {
+    return this.leaderNodeMutationHelper?.inFlight || false;
+  }
+
+  set leaderNodeUpdateInFlight(inFlight) {
+    if (this.leaderNodeMutationHelper) {
+      this.leaderNodeMutationHelper.inFlight = inFlight;
+    }
+  }
+
+  get leaderNodeUpdateRetryTimer() {
+    return this.leaderNodeMutationHelper?.retryTimer || null;
+  }
+
+  set leaderNodeUpdateRetryTimer(timer) {
+    if (this.leaderNodeMutationHelper) {
+      this.leaderNodeMutationHelper.retryTimer = timer;
+    }
+  }
+
+  createRoleMutationTransport() {
+    return {
+      updateSystemTableRow: async (_tableName, _whereClause, data, options = {}) =>
+        this.writeRoleUpdate(
+          data?.[COLUMN.RAFT_ROLE],
+          data?.[COLUMN.UPDATED_AT],
+          options,
+        ),
+    };
+  }
+
+  createLeaderNodeMutationTransport() {
+    return {
+      updateSystemTableRow: async (_tableName, _whereClause, data, options = {}) =>
+        this.writeLeaderNodeUpdate(
+          data?.[COLUMN.NODE_ID],
+          data?.[COLUMN.UPDATED_AT],
+          data?.[COLUMN.RAFT_ROLE],
+          options,
+        ),
+    };
+  }
+
+  createRoleMutationHelper() {
+    return new AuthoritativeRowMutationHelper({
+      tableName: SystemTableName.SERVICES,
+      buildWhereClause: (_role, context = {}) => {
+        const whereClause = {[COLUMN.SERVICE_ID]: this.replicaId};
+        const cachedRow = context.cachedRow;
+        if (typeof cachedRow?.[COLUMN.RAFT_ROLE] === 'string' &&
+          cachedRow[COLUMN.RAFT_ROLE].length > 0) {
+          whereClause[COLUMN.RAFT_ROLE] = cachedRow[COLUMN.RAFT_ROLE];
+        }
+        if (Number.isFinite(cachedRow?.[COLUMN.UPDATED_AT])) {
+          whereClause[COLUMN.UPDATED_AT] = cachedRow[COLUMN.UPDATED_AT];
+        }
+        return whereClause;
+      },
+      buildUpdateData: (role, updatedAt) => ({
+        [COLUMN.RAFT_ROLE]: role,
+        [COLUMN.UPDATED_AT]: updatedAt,
+      }),
+      buildExpectedCacheFields: (role) => ({[COLUMN.RAFT_ROLE]: role}),
+      readRowFromCache: (systemTableCache) =>
+        systemTableCache?.get?.(TABLES.SERVICES, this.replicaId) || null,
+      readValueFromCache: (systemTableCache) =>
+        systemTableCache?.get?.(TABLES.SERVICES, this.replicaId)?.[COLUMN.RAFT_ROLE] || null,
+      isWriteReady: () => this.isServicesLeaderAvailable(),
+      retryDelayMs: METADATA_FLUSH_RETRY_DELAY_MS,
+      systemTableCache: this.systemTableCache,
+      cdcIntegrationService: this.roleMutationTransport,
+      onAsyncError: (error, context = {}) => {
+        this.logger.warn(METADATA_FLUSH_LOG_MSG.ROLE_RETRY_FAILED, {
+          replicaId: this.replicaId,
+          role: context.value ?? this.pendingRoleUpdate,
+          error: error.message,
+        });
+      },
+    });
+  }
+
+  createLeaderNodeMutationHelper() {
+    return new AuthoritativeRowMutationHelper({
+      tableName: SystemTableName.SERVICES,
+      buildWhereClause: (_leaderNodeId, context = {}) => {
+        const whereClause = {[COLUMN.SERVICE_ID]: this.replicaId};
+        const cachedRow = context.cachedRow;
+        if (typeof cachedRow?.[COLUMN.NODE_ID] === 'string' &&
+          cachedRow[COLUMN.NODE_ID].length > 0) {
+          whereClause[COLUMN.NODE_ID] = cachedRow[COLUMN.NODE_ID];
+        }
+        if (Number.isFinite(cachedRow?.[COLUMN.UPDATED_AT])) {
+          whereClause[COLUMN.UPDATED_AT] = cachedRow[COLUMN.UPDATED_AT];
+        }
+        return whereClause;
+      },
+      buildUpdateData: (leaderNodeId, updatedAt) => ({
+        [COLUMN.NODE_ID]: leaderNodeId,
+        [COLUMN.RAFT_ROLE]: this.role,
+        [COLUMN.UPDATED_AT]: updatedAt,
+      }),
+      buildExpectedCacheFields: (leaderNodeId) => ({
+        [COLUMN.NODE_ID]: leaderNodeId,
+        [COLUMN.RAFT_ROLE]: this.role,
+      }),
+      readRowFromCache: (systemTableCache) =>
+        systemTableCache?.get?.(TABLES.SERVICES, this.replicaId) || null,
+      readValueFromCache: (systemTableCache) =>
+        systemTableCache?.get?.(TABLES.SERVICES, this.replicaId)?.[COLUMN.NODE_ID] || null,
+      prepareFlush: () => ({
+        skip: !this.isLeader,
+        clearPending: !this.isLeader,
+        reason: !this.isLeader ? 'not-owner' : 'ready',
+      }),
+      isWriteReady: () => this.isServicesLeaderAvailable(),
+      retryDelayMs: METADATA_FLUSH_RETRY_DELAY_MS,
+      systemTableCache: this.systemTableCache,
+      cdcIntegrationService: this.leaderNodeMutationTransport,
+      onAsyncError: (error, context = {}) => {
+        this.logger.warn(METADATA_FLUSH_LOG_MSG.LEADER_RETRY_FAILED, {
+          replicaId: this.replicaId,
+          leaderNodeId: context.value ?? this.pendingLeaderNodeUpdate,
+          error: error.message,
+        });
+      },
     });
   }
 
@@ -348,35 +563,7 @@ class WasmServiceReplica extends RaftReplicaBase {
    * @return {Promise<void>}
    */
   async flushRoleUpdate() {
-    if (this.roleUpdateInFlight) {
-      return;
-    }
-
-    if (!this.pendingRoleUpdate ||
-      this.pendingRoleUpdate === this.persistedRole) {
-      return;
-    }
-
-    if (!this.isServicesLeaderAvailable()) {
-      this.scheduleRoleUpdateRetry();
-      return;
-    }
-
-    this.roleUpdateInFlight = true;
-    const role = this.pendingRoleUpdate;
-
-    try {
-      await this.writeRoleUpdate(role);
-      this.persistedRole = role;
-      if (this.pendingRoleUpdate === role) {
-        this.pendingRoleUpdate = null;
-      }
-    } catch (error) {
-      this.scheduleRoleUpdateRetry();
-      throw error;
-    } finally {
-      this.roleUpdateInFlight = false;
-    }
+    return this.roleMutationHelper.flush();
   }
 
   /**
@@ -385,40 +572,7 @@ class WasmServiceReplica extends RaftReplicaBase {
    * @return {Promise<void>}
    */
   async flushLeaderNodeUpdate() {
-    if (this.leaderNodeUpdateInFlight) {
-      return;
-    }
-
-    if (!this.isLeader) {
-      this.pendingLeaderNodeUpdate = null;
-      return;
-    }
-
-    if (!this.pendingLeaderNodeUpdate ||
-      this.pendingLeaderNodeUpdate === this.persistedLeaderNodeId) {
-      return;
-    }
-
-    if (!this.isServicesLeaderAvailable()) {
-      this.scheduleLeaderNodeUpdateRetry();
-      return;
-    }
-
-    this.leaderNodeUpdateInFlight = true;
-    const leaderNodeId = this.pendingLeaderNodeUpdate;
-
-    try {
-      await this.writeLeaderNodeUpdate(leaderNodeId);
-      this.persistedLeaderNodeId = leaderNodeId;
-      if (this.pendingLeaderNodeUpdate === leaderNodeId) {
-        this.pendingLeaderNodeUpdate = null;
-      }
-    } catch (error) {
-      this.scheduleLeaderNodeUpdateRetry();
-      throw error;
-    } finally {
-      this.leaderNodeUpdateInFlight = false;
-    }
+    return this.leaderNodeMutationHelper.flush();
   }
 
   /**
@@ -427,8 +581,7 @@ class WasmServiceReplica extends RaftReplicaBase {
    * @return {Promise<void>}
    * @private
    */
-  async writeRoleUpdate(role) {
-    const updatedAt = Date.now();
+  async writeRoleUpdate(role, updatedAt = Date.now(), options = {}) {
     const writerPayload = {
       serviceId: this.replicaId,
       serviceDefinitionId: this.serviceDefinitionId,
@@ -440,22 +593,23 @@ class WasmServiceReplica extends RaftReplicaBase {
     if (this.roleUpdateWriter &&
       typeof this.roleUpdateWriter === TYPEOF.FUNCTION) {
       await this.roleUpdateWriter(writerPayload);
-      return;
+      return {success: true};
     }
 
     if (!this.cdcIntegrationService ||
       typeof this.cdcIntegrationService.updateSystemTableRow !==
         TYPEOF.FUNCTION) {
-      return;
+      return {success: true};
     }
 
-    await this.cdcIntegrationService.updateSystemTableRow(
+    return this.cdcIntegrationService.updateSystemTableRow(
       TABLES.SERVICES,
       {[COLUMN.SERVICE_ID]: this.replicaId},
       {
         [COLUMN.RAFT_ROLE]: role,
         [COLUMN.UPDATED_AT]: updatedAt,
       },
+      options,
     );
   }
 
@@ -465,13 +619,17 @@ class WasmServiceReplica extends RaftReplicaBase {
    * @return {Promise<void>}
    * @private
    */
-  async writeLeaderNodeUpdate(leaderNodeId) {
-    const updatedAt = Date.now();
+  async writeLeaderNodeUpdate(
+    leaderNodeId,
+    updatedAt = Date.now(),
+    role = this.role,
+    options = {},
+  ) {
     const writerPayload = {
       serviceId: this.replicaId,
       serviceDefinitionId: this.serviceDefinitionId,
       leaderNodeId,
-      role: this.role,
+      role,
       nodeId: this.nodeId,
       updatedAt,
     };
@@ -479,23 +637,24 @@ class WasmServiceReplica extends RaftReplicaBase {
     if (this.leaderNodeUpdateWriter &&
       typeof this.leaderNodeUpdateWriter === TYPEOF.FUNCTION) {
       await this.leaderNodeUpdateWriter(writerPayload);
-      return;
+      return {success: true};
     }
 
     if (!this.cdcIntegrationService ||
       typeof this.cdcIntegrationService.updateSystemTableRow !==
         TYPEOF.FUNCTION) {
-      return;
+      return {success: true};
     }
 
-    await this.cdcIntegrationService.updateSystemTableRow(
+    return this.cdcIntegrationService.updateSystemTableRow(
       TABLES.SERVICES,
       {[COLUMN.SERVICE_ID]: this.replicaId},
       {
         [COLUMN.NODE_ID]: leaderNodeId,
-        [COLUMN.RAFT_ROLE]: this.role,
+        [COLUMN.RAFT_ROLE]: role,
         [COLUMN.UPDATED_AT]: updatedAt,
       },
+      options,
     );
   }
 
@@ -509,46 +668,6 @@ class WasmServiceReplica extends RaftReplicaBase {
       this.systemTableCache,
       SystemTableName.SERVICES,
     );
-  }
-
-  /**
-   * Schedule retry for pending role update.
-   * @private
-   */
-  scheduleRoleUpdateRetry() {
-    if (this.roleUpdateRetryTimer) {
-      return;
-    }
-
-    this.roleUpdateRetryTimer = setTimeout(() => {
-      this.roleUpdateRetryTimer = null;
-      this.flushRoleUpdate().catch((error) => {
-        this.logger.warn(METADATA_FLUSH_LOG_MSG.ROLE_RETRY_FAILED, {
-          replicaId: this.replicaId,
-          error: error.message,
-        });
-      });
-    }, METADATA_FLUSH_RETRY_DELAY_MS);
-  }
-
-  /**
-   * Schedule retry for pending leader-node update.
-   * @private
-   */
-  scheduleLeaderNodeUpdateRetry() {
-    if (this.leaderNodeUpdateRetryTimer) {
-      return;
-    }
-
-    this.leaderNodeUpdateRetryTimer = setTimeout(() => {
-      this.leaderNodeUpdateRetryTimer = null;
-      this.flushLeaderNodeUpdate().catch((error) => {
-        this.logger.warn(METADATA_FLUSH_LOG_MSG.LEADER_RETRY_FAILED, {
-          replicaId: this.replicaId,
-          error: error.message,
-        });
-      });
-    }, METADATA_FLUSH_RETRY_DELAY_MS);
   }
 
   /**
@@ -593,14 +712,8 @@ class WasmServiceReplica extends RaftReplicaBase {
   async shutdown() {
     this.timerManager.stopAll();
     this._stopSafetyBroadcasts();
-    if (this.roleUpdateRetryTimer) {
-      clearTimeout(this.roleUpdateRetryTimer);
-      this.roleUpdateRetryTimer = null;
-    }
-    if (this.leaderNodeUpdateRetryTimer) {
-      clearTimeout(this.leaderNodeUpdateRetryTimer);
-      this.leaderNodeUpdateRetryTimer = null;
-    }
+    this.roleMutationHelper.shutdown();
+    this.leaderNodeMutationHelper.shutdown();
 
     if (this.kvStore) {
       this.kvStore.close();

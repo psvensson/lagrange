@@ -1,4 +1,4 @@
-import {COLUMN, TABLES} from '../constants/index.js';
+import {COLUMN, NUM, TABLES, TIME_MS} from '../constants/index.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {LATENCY_TOPOLOGY_MESSAGE_TYPE} from '../topology/latency-topology-constants.js';
 
@@ -54,11 +54,40 @@ const MESSAGE_GROUP_CDC_ERROR_MSG = Object.freeze({
   RAFT_PROPOSE_FAILED: 'Raft CDC replication failed',
 });
 
+const MESSAGE_GROUP_SERVICE_DEFAULT = Object.freeze({
+  DELIVERY_TIMEOUT_MS: TIME_MS.SECOND * NUM.FIVE,
+  RETRY_MAX_ATTEMPTS: NUM.THREE,
+  RETRY_INITIAL_DELAY_MS: NUM.HUNDRED,
+  RETRY_BACKOFF_MULTIPLIER: NUM.TWO,
+  RETRY_MAX_DELAY_MS: NUM.TEN_THOUSAND,
+  RETRY_JITTER_FACTOR: NUM.ONE / NUM.TEN,
+});
+
+const MESSAGE_GROUP_SERVICE_ERROR_MSG = Object.freeze({
+  MISSING_GROUP_ID: 'MessageGroupService requires groupId',
+  MISSING_REPLICA_ID: 'MessageGroupService requires replicaId',
+  MISSING_TRANSPORT:
+    'MessageGroupService requires transport - WebSocket transport is mandatory',
+  INVALID_TRANSPORT:
+    'MessageGroupService requires WebSocket-based transport (MessageRouter)',
+});
+
+const MESSAGE_GROUP_OPERATION_LEDGER = Object.freeze({
+  DEFAULT_OPTIONS: Object.freeze({}),
+  DEFAULT_VOTED_FOR: null,
+});
+
+const MESSAGE_GROUP_OPERATION_LEDGER_NOW = () => Date.now();
+
 export {
   MESSAGE_GROUP_APPLICATION_ERROR_MSG,
   MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE,
   MESSAGE_GROUP_APPLICATION_STATUS,
   MESSAGE_GROUP_CDC_ERROR_MSG,
+  MESSAGE_GROUP_OPERATION_LEDGER,
+  MESSAGE_GROUP_OPERATION_LEDGER_NOW,
+  MESSAGE_GROUP_SERVICE_DEFAULT,
+  MESSAGE_GROUP_SERVICE_ERROR_MSG,
   MESSAGE_GROUP_SUBSYSTEM,
   MESSAGE_STATUS,
   MESSAGE_GROUP_METADATA_TABLE,

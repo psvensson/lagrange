@@ -1,6 +1,9 @@
 # Distributed Database System Architecture
 
-This document describes the architecture of the distributed database system. It should be updated as features are added or changed.
+This document describes the architecture of the distributed database system.
+It is the canonical root entrypoint for system description and should be
+updated as features are added or changed. Supporting architecture documents may
+live under `architecture/` and should be linked from here when needed.
 
 ## Overview
 
@@ -28,6 +31,23 @@ A scalable distributed database where:
    directly from the cache for performance-critical paths. No component may
    write to the cache outside the CDC event path (plus bootstrap hydration).
 7. **Single Owner per Concern** - Each concern (state tracking, failure detection, replica state, writes) has exactly one owning component
+
+## Lifecycle Readiness Classification
+
+Load-ready and repair-only states are explicit:
+
+1. Node lifecycle states `ready` and `active` are load-ready.
+2. Node lifecycle states `initializing`, `starting`, `connecting`,
+   `discovering`, `joining`, `syncing`, `suspected`, `failed`,
+   `recovering`, `draining`, and `shutting_down` are repair-only or otherwise
+   non-ready.
+3. Replica raft roles `leader` and `follower` are load-ready.
+4. Replica raft roles `candidate` and `learner` are repair-only or otherwise
+   non-ready.
+5. Replica lifecycle state-machine state `active` is load-ready.
+6. Replica lifecycle state-machine states `pending`, `creating`, `syncing`,
+   `removing`, and `failed` are repair-only; `removed` is terminal and
+   non-serving.
 
 ## Single-Path Contract
 

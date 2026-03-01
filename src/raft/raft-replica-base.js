@@ -10,6 +10,8 @@ import {CONFIG_KEY} from '../config/config-constants.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {NodeService} from '../node/node-service.js';
 import {AddressManager} from '../address/address-manager.js';
+import {emitInvariant} from '../invariants/invariant-emitter.js';
+import {INVARIANT_ID} from '../invariants/invariant-catalog.js';
 import {isRaftPacket} from './raft-packet-utils.js';
 import {NUM, STRING, TABLES} from '../constants/index.js';
 import {ensureLiferaftProviderForRuntime} from './raft-provider-control.js';
@@ -291,6 +293,13 @@ class RaftReplicaBase extends EventEmitter {
         replicaId: this.replicaId,
       });
 
+      this.emitLeadershipInvariant(true, {
+        leaderId: this.replicaId,
+        term,
+      });
+      this.emitReadinessRoleInvariant(true, {
+        role: this.role,
+      });
       this.onBecameLeader();
       this.emit(RAFT_REPLICA_BASE_EVENT.LEADER_ELECTED, {
         leaderId: this.replicaId,
@@ -303,6 +312,9 @@ class RaftReplicaBase extends EventEmitter {
         return;
       }
       applyReplicaDemotion(this, RaftRole.FOLLOWER);
+      this.emitReadinessRoleInvariant(true, {
+        role: this.role,
+      });
       this.onBecameFollower();
     });
 
@@ -311,6 +323,9 @@ class RaftReplicaBase extends EventEmitter {
         return;
       }
       applyReplicaDemotion(this, RaftRole.CANDIDATE);
+      this.emitReadinessRoleInvariant(false, {
+        role: this.role,
+      });
       this.onBecameCandidate();
     });
 
@@ -362,6 +377,13 @@ class RaftReplicaBase extends EventEmitter {
         replicaId: this.replicaId,
       });
 
+      this.emitLeadershipInvariant(true, {
+        leaderId: this.replicaId,
+        singleReplica: true,
+      });
+      this.emitReadinessRoleInvariant(true, {
+        role: this.role,
+      });
       this.onBecameLeader();
       this.emit(RAFT_REPLICA_BASE_EVENT.LEADER_ELECTED, {
         leaderId: this.replicaId,
@@ -709,6 +731,13 @@ class RaftReplicaBase extends EventEmitter {
       previousLeaderId,
       demoted,
     };
+    this.emitLeadershipInvariant(
+      typeof leaderId === 'string' && leaderId.length > 0,
+      {
+        leaderId,
+        ...context,
+      },
+    );
     this.onLeaderChanged(leaderId, context);
     this.emit(RAFT_REPLICA_BASE_EVENT.LEADER_CHANGED, {
       leaderId,
@@ -716,6 +745,34 @@ class RaftReplicaBase extends EventEmitter {
       ...context,
     });
     return demoted;
+  }
+
+  emitLeadershipInvariant(passed, observed = {}) {
+    return emitInvariant(this, {
+      invariantId: INVARIANT_ID.PARTITION_SINGLE_CANONICAL_LEADER,
+      passed,
+      entityId: this.replicaId,
+      owningSubsystem: this.subsystemName,
+      observed: {
+        replicaId: this.replicaId,
+        nodeId: this.nodeId,
+        ...observed,
+      },
+    });
+  }
+
+  emitReadinessRoleInvariant(passed, observed = {}) {
+    return emitInvariant(this, {
+      invariantId: INVARIANT_ID.REPLICA_LOCAL_ROLE_IS_STABLE_FOR_READINESS,
+      passed,
+      entityId: this.replicaId,
+      owningSubsystem: this.subsystemName,
+      observed: {
+        replicaId: this.replicaId,
+        nodeId: this.nodeId,
+        ...observed,
+      },
+    });
   }
 
   /**

@@ -1,4 +1,4 @@
-import {CDC_OPERATION, NUM, TABLES} from '../constants/index.js';
+import {NUM, TABLES, TIME_MS} from '../constants/index.js';
 import {
   SYSTEM_CACHE_KEY_DESCRIPTOR,
 } from './system-cache-key-descriptor.js';
@@ -185,10 +185,25 @@ const CACHE_HYDRATION_LOG_MSG = Object.freeze({
   TABLE_HYDRATED: 'Hydrated system table cache',
   TABLE_FAILED: 'Failed to hydrate system table',
   COMPLETE: 'Cache hydration complete',
+  LOGGER_INIT_UNAVAILABLE: 'Cache hydration logger initialization unavailable',
+  METRICS_LOG_UNAVAILABLE: 'Cache hydration metrics log unavailable',
 });
 
 const CACHE_HYDRATION_ERROR_MSG = Object.freeze({
+  MISSING_CDC_EVENT_APPLIER:
+    'CacheHydrationService requires explicit cdcEventApplier',
   queryFailed: (tableName) => `Failed to query ${tableName}`,
+});
+
+const CACHE_HYDRATION_DEFAULT_OPTIONS = Object.freeze({});
+const CACHE_HYDRATION_NOW = () => Date.now();
+const CACHE_HYDRATION_METRICS = Object.freeze({
+  MS_PER_SECOND: TIME_MS.SECOND,
+  ZERO_ROWS_PER_SECOND: NUM.ZERO,
+});
+
+const CACHE_HYDRATION_SQL = Object.freeze({
+  selectAll: (tableName) => `SELECT * FROM ${tableName}`,
 });
 
 const CACHE_READ_ONLY = Object.freeze({
@@ -208,7 +223,11 @@ export {
   CACHE_DEFAULT,
   CACHE_ERROR_MSG,
   CACHE_HYDRATION_ERROR_MSG,
+  CACHE_HYDRATION_DEFAULT_OPTIONS,
   CACHE_HYDRATION_LOG_MSG,
+  CACHE_HYDRATION_METRICS,
+  CACHE_HYDRATION_NOW,
+  CACHE_HYDRATION_SQL,
   CACHE_HYDRATION_TABLES,
   CACHE_LOG_MSG,
   CACHE_PRIMARY_KEY_FIELDS,

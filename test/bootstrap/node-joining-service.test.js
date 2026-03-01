@@ -16,6 +16,7 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
+import {CACHE_HYDRATION_TABLES} from '../../src/cache/cache-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {ReplicaHandlerSetup} from '../../src/bootstrap/shared/replica-handler-setup.js';
 import {WORK_CLASS} from '../../src/runtime/work-class-scheduler.js';
@@ -740,6 +741,135 @@ test('NodeJoiningService - reconnects disconnected cluster peers during mesh con
     );
   });
 
+test('NodeJoiningService - prefers authoritative cache nodes during mesh connect',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const service = new NodeJoiningService({
+      nodeId: 'joining-node-4',
+      nodeAddress: 'ws://localhost:9093',
+      seedNodeAddress: 'http://localhost:8080',
+    });
+
+    service.bootstrapResponse = {
+      systemTableSnapshots: {
+        nodes: [
+          {node_id: 'joining-node-4', node_address: 'localhost:9093'},
+          {node_id: 'seed-node', node_address: 'localhost:8080'},
+        ],
+      },
+    };
+
+    const nodeService = NodeService.getInstance();
+    const systemTableCache = nodeService.getSystemTableCache();
+    systemTableCache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT, {
+      node_id: 'joining-node-4',
+      node_address: 'localhost:9093',
+      status: 'active',
+    });
+    systemTableCache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT, {
+      node_id: 'seed-node',
+      node_address: 'localhost:8080',
+      status: 'active',
+    });
+    systemTableCache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT, {
+      node_id: 'late-peer',
+      node_address: 'localhost:8084',
+      status: 'active',
+    });
+
+    const connectCalls = [];
+    service.messageRouter = {
+      nodeConnections: new Map([
+        ['seed-node', {state: 'connected'}],
+      ]),
+      getConnectionState(nodeId) {
+        return this.nodeConnections.get(nodeId)?.state || null;
+      },
+      async connectToNode(nodeId, wsAddress) {
+        connectCalls.push({nodeId, wsAddress});
+        this.nodeConnections.set(nodeId, {state: 'connected'});
+      },
+      getConnectedNodes() {
+        return ['seed-node', 'late-peer'];
+      },
+    };
+
+    await service.connectToClusterNodes();
+
+    t.equal(connectCalls.length, 1, 'should connect only the late cache-discovered peer');
+    t.equal(connectCalls[0].nodeId, 'late-peer', 'should target peer missing from bootstrap snapshot');
+    t.equal(connectCalls[0].wsAddress, 'ws://localhost:8086',
+      'should derive websocket address from authoritative cache row');
+  });
+
+test('NodeJoiningService - ready state update reconciles mesh connections first',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const service = new NodeJoiningService({
+      nodeId: 'joining-node-5',
+      nodeAddress: 'ws://localhost:9094',
+      seedNodeAddress: 'http://localhost:8080',
+    });
+
+    service.bootstrapResponse = {
+      systemTableSnapshots: {
+        nodes: [
+          {node_id: 'joining-node-5', node_address: 'localhost:9094'},
+          {node_id: 'seed-node', node_address: 'localhost:8080'},
+        ],
+      },
+    };
+
+    const nodeService = NodeService.getInstance();
+    const systemTableCache = nodeService.getSystemTableCache();
+    systemTableCache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT, {
+      node_id: 'joining-node-5',
+      node_address: 'localhost:9094',
+      status: 'active',
+    });
+    systemTableCache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT, {
+      node_id: 'seed-node',
+      node_address: 'localhost:8080',
+      status: 'active',
+    });
+    systemTableCache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT, {
+      node_id: 'late-peer',
+      node_address: 'localhost:8085',
+      status: 'active',
+    });
+
+    const callOrder = [];
+    service.resolveControlPlaneTargetAddress = () => 'seed-node/message-group/mg-1-r1';
+    service.messageRouter = {
+      nodeConnections: new Map([
+        ['seed-node', {state: 'connected'}],
+      ]),
+      getConnectionState(nodeId) {
+        return this.nodeConnections.get(nodeId)?.state || null;
+      },
+      async connectToNode(nodeId, wsAddress) {
+        callOrder.push(`connect:${nodeId}:${wsAddress}`);
+        this.nodeConnections.set(nodeId, {state: 'connected'});
+      },
+      async deliver(targetAddress, message) {
+        callOrder.push(`deliver:${targetAddress}:${message.state}`);
+        return {acknowledged: true};
+      },
+      getConnectedNodes() {
+        return ['seed-node', 'late-peer'];
+      },
+    };
+
+    await service.sendControlPlaneNodeStateUpdate({state: 'ready'});
+
+    t.same(callOrder, [
+      'connect:late-peer:ws://localhost:8087',
+      'deliver:seed-node/message-group/mg-1-r1:ready',
+    ], 'should repair missing peer connection before sending ready update');
+  });
+
 test('NodeJoiningService - fails without seed node address', async (t) => {
   initializeTestEnvironment();
 
@@ -1069,11 +1199,16 @@ test('NodeJoiningService - canonical join timeout preserves topology diagnostics
   async (t) => {
     initializeTestEnvironment();
 
+    let now = 0;
     const errorEvents = [];
     const service = new NodeJoiningService({
       nodeId: 'joining-node-join-gate-3',
       nodeAddress: 'ws://localhost:9090',
       seedNodeAddress: 'http://localhost:8080',
+      now: () => now,
+      sleep: async (delayMs = 0) => {
+        now += delayMs;
+      },
       config: {
         joinReadinessTimeoutMs: 20,
         joinReadinessPollIntervalMs: 5,
@@ -1136,6 +1271,11 @@ test('NodeJoiningService - canonical join timeout preserves topology diagnostics
       1,
       'timeout should retain in-flight replica operation counts',
     );
+    t.equal(
+      thrownError?.joinReadiness?.timeoutKind,
+      'no_progress',
+      'timeout should classify stagnant readiness as no_progress',
+    );
     t.same(
       thrownError?.joinReadiness?.inFlightReplicaOperationDetails,
       [{
@@ -1160,6 +1300,11 @@ test('NodeJoiningService - canonical join timeout preserves topology diagnostics
       errorEvents.at(-1)?.context?.missingPostgresWireNodeIds,
       ['seed-node'],
       'timeout log should include missing postgres-wire diagnostics',
+    );
+    t.equal(
+      errorEvents.at(-1)?.context?.timeoutKind,
+      'no_progress',
+      'timeout log should classify stagnant readiness explicitly',
     );
   });
 
@@ -2110,5 +2255,127 @@ test('NodeJoiningService - replica factory should preserve join mode from replic
       ReplicaHandlerSetup.create = originalReplicaHandlerCreate;
       NodeService.getInstance = originalGetNodeService;
       PartitionService.prototype.initialize = originalInitialize;
+    }
+  });
+
+test('NodeJoiningService - replica factory subscribes exactly the propagated cache tables',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const service = new NodeJoiningService({
+      nodeId: 'test-node-join-cache-sync',
+      nodeAddress: 'ws://localhost:9090',
+      seedNodeAddress: 'http://localhost:8080',
+    });
+
+    const cache = new SystemTableCache();
+    const subscribedTables = [];
+    const handshakeSubscriberIds = [];
+    let capturedCreatePartitionService = null;
+    const originalReplicaHandlerCreate = ReplicaHandlerSetup.create;
+    const originalGetNodeService = NodeService.getInstance;
+    const originalInitialize = PartitionService.prototype.initialize;
+    const originalSubscribeToCDCWithHandshake =
+      PartitionService.prototype.subscribeToCDCWithHandshake;
+
+    try {
+      service.messageRouter = {registerHandler() {}, unregisterHandler() {}};
+      service.transport = {unregister() {}};
+      service.systemCacheHydrated = true;
+      service.tablePolicyService = {};
+      service.rebalanceCoordinator = {};
+      service.messageGroupServices = new Map([
+        ['mg-1', {
+          groupId: 'mg-1',
+          isLeaderReplica: () => true,
+          getLeaderId: () => null,
+          subscribeToCDC: async (tableName) => {
+            subscribedTables.push(tableName);
+          },
+        }],
+      ]);
+      service.createCdcIntegrationService = () => ({
+        updateSystemTableRow: async () => true,
+        upsertSystemTableRow: async () => true,
+      });
+
+      NodeService.getInstance = () => ({
+        getSystemTableCache() {
+          return cache;
+        },
+      });
+
+      PartitionService.prototype.initialize = async function() {};
+      PartitionService.prototype.subscribeToCDCWithHandshake =
+        async function(_subscriber, options = {}) {
+          handshakeSubscriberIds.push(options.subscriberId);
+          return {
+            subscriberId: options.subscriberId || 'sub-1',
+            subscriptionEpoch: 1,
+            catchup: {
+              mode: 'none',
+              bufferedEventsReplayed: 0,
+            },
+          };
+        };
+
+      ReplicaHandlerSetup.create = ({createPartitionService}) => {
+        capturedCreatePartitionService = createPartitionService;
+        return {
+          replicaHandler: {},
+          replicaStateMachine: {},
+        };
+      };
+
+      service.initializeReplicaHandler();
+
+      for (const tableName of CACHE_HYDRATION_TABLES) {
+        await capturedCreatePartitionService({
+          partitionId: `${tableName}-p1`,
+          tableId: tableName,
+          tableName,
+          schema: {columns: [{name: 'id', type: 'TEXT', primaryKey: true}]},
+          keyRange: {start: null, end: null},
+          replicaId: `${tableName}-r1`,
+          replicaIds: [`${tableName}-r1`],
+          peerAddresses: [],
+          nodeId: 'test-node-join-cache-sync',
+          isJoiningExistingGroup: true,
+        });
+      }
+
+      await capturedCreatePartitionService({
+        partitionId: `${TABLES.LOGS}-p1`,
+        tableId: TABLES.LOGS,
+        tableName: TABLES.LOGS,
+        schema: {columns: [{name: 'id', type: 'TEXT', primaryKey: true}]},
+        keyRange: {start: null, end: null},
+        replicaId: `${TABLES.LOGS}-r1`,
+        replicaIds: [`${TABLES.LOGS}-r1`],
+        peerAddresses: [],
+        nodeId: 'test-node-join-cache-sync',
+        isJoiningExistingGroup: true,
+      });
+
+      t.same(
+        subscribedTables,
+        CACHE_HYDRATION_TABLES,
+        'join-time replica factory should subscribe every propagated cache table once',
+      );
+      t.equal(
+        handshakeSubscriberIds.length,
+        CACHE_HYDRATION_TABLES.length,
+        'join-time replica factory should register one CDC handshake per propagated cache table',
+      );
+      t.notOk(
+        subscribedTables.includes(TABLES.LOGS),
+        'non-propagated tables must not join the default cache-sync subscriptions',
+      );
+    } finally {
+      ReplicaHandlerSetup.create = originalReplicaHandlerCreate;
+      NodeService.getInstance = originalGetNodeService;
+      PartitionService.prototype.initialize = originalInitialize;
+      PartitionService.prototype.subscribeToCDCWithHandshake =
+        originalSubscribeToCDCWithHandshake;
     }
   });

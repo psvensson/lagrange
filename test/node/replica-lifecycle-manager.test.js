@@ -467,6 +467,65 @@ test('ReplicaLifecycleManager', async (t) => {
     manager.shutdown();
   });
 
+  t.test('node recovery - skips stale cleanup when guarded replica update misses',
+    async (t) => {
+      const mockCDC = {
+        operations: [],
+        async updateSystemTableRow(tableName, whereClause, data) {
+          this.operations.push({type: 'update', tableName, whereClause, data});
+          return {
+            success: true,
+            partitionResult: {affectedRows: 0},
+          };
+        },
+        async deleteSystemTableRow() {
+          t.fail('guard miss should not delete stale replica rows');
+        },
+      };
+      const staleService = {
+        service_id: 'replica-1',
+        partition_id: 'partition-1',
+        node_id: 'test-node',
+        service_type: 'partition',
+        status: ReplicaStatus.STARTING,
+        updated_at: 12345,
+      };
+      const mockCache = createMockCache({
+        services: [staleService],
+      });
+
+      const manager = new ReplicaLifecycleManager({
+        nodeId: 'test-node',
+        systemTableCache: mockCache,
+        cdcIntegrationService: mockCDC,
+        createPartitionService: createMockPartitionServiceFactory(),
+        dataDir: tempDir,
+      });
+      manager.initialize();
+
+      let cleanupCalls = 0;
+      manager.cleanupReplicaResources = async () => {
+        cleanupCalls += 1;
+      };
+
+      await manager.handleNodeRecovery();
+
+      t.equal(cleanupCalls, 0,
+        'guard miss should not clean up potentially fresh replica resources');
+      t.same(
+        mockCDC.operations[0]?.whereClause,
+        {
+          service_id: 'replica-1',
+          node_id: 'test-node',
+          status: ReplicaStatus.STARTING,
+          updated_at: 12345,
+        },
+        'recovery guard should target the observed replica snapshot',
+      );
+
+      manager.shutdown();
+    });
+
   t.test('getStats returns correct statistics', async (t) => {
     const mockCDC = createMockCDCService();
 

@@ -7,36 +7,54 @@
 import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
-import {SystemTableName} from '../bootstrap/system-table-schemas-constants.js';
-import {NUM, SERVICE_STATUS, STATE, STRING} from '../constants/index.js';
+import {NUM, SERVICE_STATUS, STATE, STRING, TYPEOF} from '../constants/index.js';
+import {emitInvariant} from '../invariants/invariant-emitter.js';
+import {INVARIANT_ID} from '../invariants/invariant-catalog.js';
 import {assertCritical} from '../utils/assert.js';
 import {
   LEASE_CONFIG_KEY,
+  LEASE_DEFAULT_OPTIONS,
+  LEASE_EMPTY_QUERY_PARAMS,
   LEASE_DEFAULT,
   LEASE_ERROR_MSG,
   LEASE_EVENT,
   LEASE_LOG_MSG,
+  LEASE_NOW,
+  LEASE_SQL,
   LEASE_STATE,
   LEASE_SUBSYSTEM,
 } from './lease-service-constants.js';
+
+const createDefaultMessageGroupServices = () => new Set();
 
 class LeaseService extends EventEmitter {
   /**
    * @param {Object} options - Configuration options.
    * @param {string} options.nodeId - Local node ID.
-   * @param {Object} options.cdcIntegrationService - CDC service.
+   * @param {Object} options.nodeLeaseOwner - Canonical owner for node lease
+   *   state mutations.
    * @param {Object} options.systemTableCache - System table cache.
    * @param {Object} options.sqlQueryEngine - SQL query engine.
    * @param {Array<Object>} [options.messageGroupServices] - MG services.
    */
-  constructor(options = {}) {
+  constructor(options = LEASE_DEFAULT_OPTIONS) {
     super();
 
-    this.nodeId = options.nodeId || null;
-    this.cdcIntegrationService = options.cdcIntegrationService || null;
-    this.systemTableCache = options.systemTableCache || null;
-    this.sqlQueryEngine = options.sqlQueryEngine || null;
-    this.messageGroupServices = options.messageGroupServices || new Set();
+    this.nodeId = options.nodeId;
+    this.nodeLeaseOwner = options.nodeLeaseOwner || null;
+    this.systemTableCache = options.systemTableCache;
+    this.sqlQueryEngine = options.sqlQueryEngine;
+    this.messageGroupServices =
+      options.messageGroupServices ?? createDefaultMessageGroupServices();
+    this.now = typeof options.now === TYPEOF.FUNCTION ?
+      options.now :
+      LEASE_NOW;
+    this.setIntervalFn = typeof options.setIntervalFn === TYPEOF.FUNCTION ?
+      options.setIntervalFn :
+      setInterval;
+    this.clearIntervalFn = typeof options.clearIntervalFn === TYPEOF.FUNCTION ?
+      options.clearIntervalFn :
+      clearInterval;
 
     const config = ConfigurationManager.getInstance();
     this.readyLeaseMs =
@@ -51,8 +69,7 @@ class LeaseService extends EventEmitter {
     this.state = LEASE_STATE.CREATED;
 
     const loggingService = LoggingService.getInstance();
-    this.logger = loggingService.isInitialized() ?
-      loggingService.forSubsystem(LEASE_SUBSYSTEM) : console;
+    this.logger = loggingService.forSubsystem(LEASE_SUBSYSTEM);
   }
 
   /**
@@ -62,7 +79,7 @@ class LeaseService extends EventEmitter {
   initialize() {
     assertCritical(this.nodeId, LEASE_ERROR_MSG.MISSING_NODE_ID);
     assertCritical(
-      this.cdcIntegrationService, LEASE_ERROR_MSG.MISSING_CDC,
+      this.nodeLeaseOwner, LEASE_ERROR_MSG.MISSING_NODE_LEASE_OWNER,
     );
     assertCritical(
       this.systemTableCache, LEASE_ERROR_MSG.MISSING_CACHE,
@@ -89,7 +106,7 @@ class LeaseService extends EventEmitter {
 
     this.state = LEASE_STATE.RUNNING;
 
-    this.sweepTimer = setInterval(() => {
+    this.sweepTimer = this.setIntervalFn(() => {
       if (this.state !== LEASE_STATE.RUNNING || this.sweepInFlight) {
         return;
       }
@@ -99,11 +116,17 @@ class LeaseService extends EventEmitter {
         this.logger.error(LEASE_LOG_MSG.SWEEP_FAILED, {
           error: error.message,
         });
+        this.emit(LEASE_EVENT.SWEEP_ERROR, {
+          nodeId: this.nodeId,
+          error,
+        });
       }).finally(() => {
         this.sweepInFlight = false;
       });
     }, this.sweepIntervalMs);
-    this.sweepTimer.unref();
+    if (typeof this.sweepTimer?.unref === TYPEOF.FUNCTION) {
+      this.sweepTimer.unref();
+    }
 
     this.logger.info(LEASE_LOG_MSG.STARTED, {nodeId: this.nodeId});
   }
@@ -114,7 +137,7 @@ class LeaseService extends EventEmitter {
    */
   stop() {
     if (this.sweepTimer) {
-      clearInterval(this.sweepTimer);
+      this.clearIntervalFn(this.sweepTimer);
       this.sweepTimer = null;
     }
     this.sweepInFlight = false;
@@ -134,11 +157,12 @@ class LeaseService extends EventEmitter {
       return [];
     }
 
-    const now = Date.now();
+    const now = this.now();
     let nodes = [];
     if (this.sqlQueryEngine) {
       const result = await this.sqlQueryEngine.executeQuery(
-        'SELECT * FROM nodes', [],
+        LEASE_SQL.SELECT_ALL_NODES,
+        LEASE_EMPTY_QUERY_PARAMS,
       );
       nodes = result.rows || [];
     }
@@ -150,28 +174,40 @@ class LeaseService extends EventEmitter {
 
     const expiredIds = [];
     for (const node of expired) {
-      const baseRow = {
-        node_id: node.node_id,
-        node_address: node.node_address || STRING.UNKNOWN,
-        cpu_cores: node.cpu_cores || NUM.ZERO,
-        memory_mb: node.memory_mb || NUM.ZERO,
-        disk_gb: node.disk_gb || NUM.ZERO,
-        cpu_usage_percent: node.cpu_usage_percent || NUM.ZERO,
-        memory_usage_percent: node.memory_usage_percent || NUM.ZERO,
-        disk_usage_percent: node.disk_usage_percent || NUM.ZERO,
-        status: node.status || SERVICE_STATUS.ACTIVE,
-        connection_state: STATE.DISCONNECTED,
-        capabilities: node.capabilities || STRING.EMPTY_JSON_ARRAY,
-        last_heartbeat: node.last_heartbeat || now,
-        ready_lease_expires_at: null,
-        created_at: node.created_at || now,
-      };
-
-      await this.cdcIntegrationService.upsertSystemTableRow(
-        SystemTableName.NODES, baseRow,
+      const updateResult =
+        await this.nodeLeaseOwner.disconnectNodeDueToLeaseExpiry(
+          node,
+          now,
       );
+      const affectedRows = Number(updateResult?.partitionResult?.affectedRows);
+      if (!(affectedRows > NUM.ZERO)) {
+        emitInvariant(this, {
+          invariantId: INVARIANT_ID.NODE_LEASE_STATE_NOT_REGRESSED,
+          passed: true,
+          entityId: node.node_id,
+          owningSubsystem: LEASE_SUBSYSTEM,
+          observed: {
+            guardedWriteApplied: false,
+            readyLeaseExpiresAt: node.ready_lease_expires_at ?? null,
+            lastHeartbeat: node.last_heartbeat ?? null,
+          },
+        });
+        continue;
+      }
 
       expiredIds.push(node.node_id);
+      emitInvariant(this, {
+        invariantId: INVARIANT_ID.NODE_LEASE_STATE_NOT_REGRESSED,
+        passed: true,
+        entityId: node.node_id,
+        owningSubsystem: LEASE_SUBSYSTEM,
+        observed: {
+          guardedWriteApplied: true,
+          readyLeaseExpiresAt: node.ready_lease_expires_at ?? null,
+          lastHeartbeat: node.last_heartbeat ?? null,
+          nextConnectionState: STATE.DISCONNECTED,
+        },
+      });
       this.emit(LEASE_EVENT.LEASE_EXPIRED, {nodeId: node.node_id});
     }
 

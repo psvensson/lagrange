@@ -10,6 +10,8 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {AddressManager} from '../../src/address/address-manager.js';
 import {ENTITY_TYPE} from '../../src/constants/index.js';
+import {INVARIANT_EVENT} from '../../src/invariants/invariant-emitter.js';
+import {INVARIANT_ID} from '../../src/invariants/invariant-catalog.js';
 import {
   resetProcessRaftProviderForTests,
 } from '../../src/raft/raft-provider-control.js';
@@ -282,6 +284,56 @@ test('RaftReplicaBase', async (t) => {
           demoted: false,
         },
       }]);
+    },
+  );
+
+  await t.test(
+    'candidate transition emits readiness instability invariant',
+    async (t) => {
+      const replica = new TestRaftReplica({
+        replicaId: 'replica-1',
+        nodeId: 'node-1',
+      });
+      replica.raft = new EventEmitter();
+      replica.wireRaftEvents();
+      const invariantEvents = [];
+      replica.on(INVARIANT_EVENT.RUNTIME, (event) => {
+        invariantEvents.push(event);
+      });
+
+      replica.raft.emit('candidate');
+
+      t.equal(invariantEvents.length, 1);
+      t.equal(
+        invariantEvents[0].invariantId,
+        INVARIANT_ID.REPLICA_LOCAL_ROLE_IS_STABLE_FOR_READINESS,
+      );
+      t.equal(invariantEvents[0].passed, false);
+      t.equal(invariantEvents[0].observed.role, RaftRole.CANDIDATE);
+    },
+  );
+
+  await t.test(
+    'leader loss emits leadership invariant failure',
+    async (t) => {
+      const replica = new TestRaftReplica({
+        replicaId: 'replica-1',
+        nodeId: 'node-1',
+      });
+      const invariantEvents = [];
+      replica.on(INVARIANT_EVENT.RUNTIME, (event) => {
+        invariantEvents.push(event);
+      });
+
+      replica.handleLeaderChange(null);
+
+      t.equal(invariantEvents.length, 1);
+      t.equal(
+        invariantEvents[0].invariantId,
+        INVARIANT_ID.PARTITION_SINGLE_CANONICAL_LEADER,
+      );
+      t.equal(invariantEvents[0].passed, false);
+      t.equal(invariantEvents[0].observed.leaderId, null);
     },
   );
 

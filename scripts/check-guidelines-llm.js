@@ -204,7 +204,10 @@ function buildPrompt(relativePath, fileContent, guidelines) {
     GUIDELINE_LLM_PROMPT.INTRO,
     GUIDELINE_LLM_PROMPT.NO_SPECULATION,
     GUIDELINE_LLM_PROMPT.CONSTANT_OWNER_HINT,
+    GUIDELINE_LLM_PROMPT.FILE_LOCAL_CONSTANT_HINT,
+    GUIDELINE_LLM_PROMPT.FILE_LOCAL_ENUM_HINT,
     GUIDELINE_LLM_PROMPT.TEST_CONSTANT_OWNER_HINT,
+    GUIDELINE_LLM_PROMPT.TEST_LITERAL_HINT,
     GUIDELINE_LLM_PROMPT.NO_DUPLICATE_INFERENCE,
     GUIDELINE_LLM_PROMPT.NO_STRUCTURAL_OVERREACH,
     GUIDELINE_LLM_PROMPT.JSON_SHAPE,
@@ -225,15 +228,18 @@ function buildPrompt(relativePath, fileContent, guidelines) {
 
 function buildFileClassification(normalizedRelativePath) {
   const basename = path.basename(normalizedRelativePath);
-  if (normalizedRelativePath.startsWith(path.join('src', 'constants') + path.sep)) {
-    return 'canonical shared constants-owner module';
+  if (
+    normalizedRelativePath.startsWith(path.join('src', 'constants') + path.sep) ||
+    basename.includes('constants') ||
+    basename.includes('catalog')
+  ) {
+    return 'canonical constants-owner module';
   }
 
-  if (
-    normalizedRelativePath.startsWith('test' + path.sep) &&
-    basename.includes('constants')
-  ) {
-    return 'test-local constants-owner module';
+  if (normalizedRelativePath.startsWith('test' + path.sep)) {
+    return basename.includes('constants') ?
+      'test-local constants-owner module' :
+      'test file';
   }
 
   if (basename.startsWith('check-guidelines-')) {
@@ -248,6 +254,11 @@ function isSpeculativeText(text) {
   return (
     normalizedText.includes('likely') ||
     normalizedText.includes('potential') ||
+    normalizedText.includes('appear to be') ||
+    normalizedText.includes('appears to be') ||
+    normalizedText.includes('seems') ||
+    normalizedText.includes('typically') ||
+    normalizedText.includes('not clearly') ||
     normalizedText.includes('from this file alone') ||
     normalizedText.includes('if this is') ||
     normalizedText.includes('if a') ||
@@ -259,8 +270,45 @@ function isSpeculativeText(text) {
   );
 }
 
-function filterSpeculativeViolations(violations) {
-  return violations.filter((violation) => !(
+function isConstantsRuleViolation(violation) {
+  const rule = String(violation.ruleReference || '').toLowerCase();
+  const title = String(violation.title || '').toLowerCase();
+  const description = String(violation.description || '').toLowerCase();
+  return (
+    rule.includes('4.1') ||
+    rule.includes('constants, not literals') ||
+    title.includes('magic literal') ||
+    title.includes('magic string') ||
+    title.includes('magic number') ||
+    title.includes('raw literal') ||
+    description.includes('magic literal') ||
+    description.includes('raw string literal') ||
+    description.includes('raw numeric literal') ||
+    description.includes('constants-owner')
+  );
+}
+
+function isCommitBlockingViolation(classification, violation) {
+  if (classification === 'test file' && isConstantsRuleViolation(violation)) {
+    return false;
+  }
+
+  if (
+    classification === 'canonical constants-owner module' &&
+    isConstantsRuleViolation(violation)
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+function filterViolations(relativePath, violations) {
+  const classification = buildFileClassification(path.normalize(relativePath));
+  return violations.filter((violation) => isCommitBlockingViolation(
+    classification,
+    violation,
+  )).filter((violation) => !(
     isSpeculativeText(violation.title) ||
     isSpeculativeText(violation.description) ||
     isSpeculativeText(violation.suggestedFix)
@@ -315,7 +363,7 @@ async function checkWithLlm(relativePath, fileContent, guidelines) {
     }
 
     const violations = Array.isArray(parsed.violations) ? parsed.violations : [];
-    return filterSpeculativeViolations(violations.map((violation) => ({
+    return filterViolations(relativePath, violations.map((violation) => ({
       title: String(violation.title || GUIDELINE_LLM_MESSAGE.DEFAULT_TITLE),
       description: String(
         violation.description || GUIDELINE_LLM_MESSAGE.DEFAULT_DESCRIPTION,

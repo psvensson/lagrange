@@ -7,6 +7,9 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {
+  createBootstrapCacheHydrationApplier,
+} from '../../src/bootstrap/bootstrap-cache-hydration-applier.js';
+import {
   CacheHydrationService, SYSTEM_TABLES_TO_HYDRATE,
 } from '../../src/cache/cache-hydration-service.js';
 import {METRICS_LOG_TAG} from '../../src/constants/index.js';
@@ -44,6 +47,13 @@ function createSpyLogger() {
   };
 }
 
+function createHydrationOptions(cache, options = {}) {
+  return {
+    ...options,
+    cdcEventApplier: createBootstrapCacheHydrationApplier(cache),
+  };
+}
+
 // =============================================================
 // hydrateTable — per-table metrics
 // =============================================================
@@ -55,7 +65,9 @@ test('hydrateTable emits metrics.hydration.table with correct fields',
     const cache = createMockCache();
     const logger = createSpyLogger();
 
-    const service = new CacheHydrationService(engine, cache, {logger});
+    const service = new CacheHydrationService(
+      engine, cache, createHydrationOptions(cache, {logger}),
+    );
     await service.hydrateTable('nodes');
 
     const metric = logger.calls.find(
@@ -77,7 +89,9 @@ test('hydrateTable reports zero rowsPerSecond when durationMs is 0',
     const cache = createMockCache();
     const logger = createSpyLogger();
 
-    const service = new CacheHydrationService(engine, cache, {logger});
+    const service = new CacheHydrationService(
+      engine, cache, createHydrationOptions(cache, {logger}),
+    );
     await service.hydrateTable('nodes');
 
     const metric = logger.calls.find(
@@ -98,7 +112,9 @@ test('hydrateTable emits metric with rowCount 0 for empty table',
     const cache = createMockCache();
     const logger = createSpyLogger();
 
-    const service = new CacheHydrationService(engine, cache, {logger});
+    const service = new CacheHydrationService(
+      engine, cache, createHydrationOptions(cache, {logger}),
+    );
     await service.hydrateTable('config');
 
     const metric = logger.calls.find(
@@ -124,7 +140,9 @@ test('hydrateCache emits metrics.hydration.complete with correct fields',
     const cache = createMockCache();
     const logger = createSpyLogger();
 
-    const service = new CacheHydrationService(engine, cache, {logger});
+    const service = new CacheHydrationService(
+      engine, cache, createHydrationOptions(cache, {logger}),
+    );
     await service.hydrateCache();
 
     const metric = logger.calls.find(
@@ -149,7 +167,9 @@ test('hydrateCache emits per-table metrics for each table',
     const cache = createMockCache();
     const logger = createSpyLogger();
 
-    const service = new CacheHydrationService(engine, cache, {logger});
+    const service = new CacheHydrationService(
+      engine, cache, createHydrationOptions(cache, {logger}),
+    );
     await service.hydrateCache();
 
     const tableMetrics = logger.calls.filter(
@@ -175,7 +195,9 @@ test('hydrateCache uses info level not debug for metrics',
       debugCalls.push({tag, data});
     };
 
-    const service = new CacheHydrationService(engine, cache, {logger});
+    const service = new CacheHydrationService(
+      engine, cache, createHydrationOptions(cache, {logger}),
+    );
     await service.hydrateCache();
 
     const infoComplete = logger.calls.find(
@@ -208,7 +230,9 @@ test('hydrateCache still completes when table query fails',
     const cache = createMockCache();
     const logger = createSpyLogger();
 
-    const service = new CacheHydrationService(engine, cache, {logger});
+    const service = new CacheHydrationService(
+      engine, cache, createHydrationOptions(cache, {logger}),
+    );
     const result = await service.hydrateCache();
 
     t.equal(result.success, false);

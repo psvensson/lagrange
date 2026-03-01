@@ -77,6 +77,7 @@ import {
 import {
   DEBUG_SESSION_STATUS as DEBUG_METADATA_SESSION_STATUS,
 } from '../debug-runtime/debug-metadata-constants.js';
+import {isLoadReadyReplicaRaftRole} from '../node/replica-state-machine-constants.js';
 import {
   ADMIN_CACHE_DUMP,
   ADMIN_CONTROL_SNAPSHOT,
@@ -103,6 +104,7 @@ import {
   ADMIN_TEST_DEFAULT,
   ADMIN_TEST_ERROR_MSG,
   ADMIN_TEST_STREAM_EVENT,
+  CONSISTENCY_MISMATCH_KIND,
 } from './admin-constants.js';
 import {getSystemCachePrimaryKeyField} from
   '../cache/system-cache-key-descriptor.js';
@@ -133,7 +135,6 @@ const SSE_FRAME_SUFFIX = '\n\n';
 const EMPTY_STRING = '';
 const SQL_NORMALIZE_WHITESPACE_PATTERN = /\s+/g;
 const SQL_TRAILING_SEMICOLON_PATTERN = /;\s*$/;
-const LEARNER_RAFT_ROLE = 'learner';
 const LEADER_RAFT_ROLE = 'leader';
 const SERVICE_TYPE_PARTITION = 'partition';
 const STATUS_ACTIVE = 'active';
@@ -274,7 +275,7 @@ function isActiveVoterReadyPartitionReplica(serviceRow) {
     'raft_role',
     'raftRole',
   );
-  if (!raftRole || String(raftRole).toLowerCase() === LEARNER_RAFT_ROLE) {
+  if (!isLoadReadyReplicaRaftRole(raftRole)) {
     return false;
   }
   const address = firstStringField(serviceRow, COLUMN.ADDRESS, 'address');
@@ -2414,7 +2415,9 @@ class AdminWebSocketAPI {
         serviceRows,
       );
     const replicaOperationSummary =
-      this.buildControlSnapshotReplicaOperationSummary(replicaOperationRows);
+      this.buildControlSnapshotReplicaOperationSummary(replicaOperationRows, {
+        partitionIds: tablePartitionContext.partitionIds,
+      });
 
     return {
       tableName,
@@ -3545,6 +3548,9 @@ class AdminWebSocketAPI {
         source: TABLES.PARTITIONS,
         inconsistentReplicaRoles,
         replicaLeaderNodeIds,
+        issues: inconsistentReplicaRoles ?
+          [CONSISTENCY_MISMATCH_KIND.REPLICA_ROLE] :
+          [],
       };
     }
 
@@ -3581,7 +3587,7 @@ class AdminWebSocketAPI {
 
       const raftRole = firstStringField(serviceRow, COLUMN.RAFT_ROLE, 'raftRole');
       const normalizedRaftRole = String(raftRole || '').toLowerCase();
-      if (!normalizedRaftRole || normalizedRaftRole === LEARNER_RAFT_ROLE) {
+      if (!normalizedRaftRole || !isLoadReadyReplicaRaftRole(normalizedRaftRole)) {
         continue;
       }
 
@@ -3611,27 +3617,35 @@ class AdminWebSocketAPI {
   /**
    * Build replica operation in-flight summary.
    * @param {Array<Object>} replicaOperationRows
+   * @param {Object} [options={}]
    * @return {Object}
    * @private
    */
-  buildControlSnapshotReplicaOperationSummary(replicaOperationRows = []) {
+  buildControlSnapshotReplicaOperationSummary(replicaOperationRows = [], options = {}) {
+    const scopedPartitionIds =
+      options.partitionIds instanceof Set && options.partitionIds.size > NUM.ZERO ?
+        options.partitionIds :
+        null;
     const statusHistogram = {};
     let inFlightCount = NUM.ZERO;
     const partitionGroupInFlight = {};
     for (const row of replicaOperationRows) {
+      const partitionGroupId = firstStringField(
+        row,
+        COLUMN.PARTITION_ID,
+        'partition_id',
+        'partitionId',
+        'entity_id',
+        'entityId',
+      ) || STATUS_UNKNOWN;
+      if (scopedPartitionIds && !scopedPartitionIds.has(partitionGroupId)) {
+        continue;
+      }
       const status = firstStringField(row, COLUMN.STATUS, 'status') ||
         STATUS_UNKNOWN;
       statusHistogram[status] = (statusHistogram[status] || NUM.ZERO) + NUM.ONE;
       if (!ADMIN_CONTROL_SNAPSHOT.IN_FLIGHT_EXCLUDED_STATUSES.includes(status)) {
         inFlightCount += NUM.ONE;
-        const partitionGroupId = firstStringField(
-          row,
-          COLUMN.PARTITION_ID,
-          'partition_id',
-          'partitionId',
-          'entity_id',
-          'entityId',
-        ) || STATUS_UNKNOWN;
         partitionGroupInFlight[partitionGroupId] =
           (partitionGroupInFlight[partitionGroupId] || NUM.ZERO) + NUM.ONE;
       }

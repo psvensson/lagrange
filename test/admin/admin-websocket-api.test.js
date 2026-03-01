@@ -6,6 +6,7 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {AdminWebSocketAPI, MessageType, ErrorCode} from
   '../../src/admin/admin-websocket-api.js';
+import {CONSISTENCY_MISMATCH_KIND} from '../../src/admin/admin-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {createReadOnlyCache} from '../../src/cache/read-only-system-table-cache.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -296,6 +297,28 @@ function seedTableDiscoveryRowsWithLocalLearner(cache) {
     node_id: 'node-2',
     status: 'active',
     raft_role: 'learner',
+    address: '10.0.0.2:7001',
+  });
+}
+
+/**
+ * Seed table-scoped discovery rows where a second node hosts a local candidate
+ * replica for the benchmark partition. The node remains routable for service
+ * discovery, but benchmark admission must fail closed until the local replica
+ * converges to a stable voter role.
+ *
+ * @param {SystemTableCache} cache
+ */
+function seedTableDiscoveryRowsWithLocalCandidate(cache) {
+  seedRoutedTableDiscoveryRows(cache);
+
+  cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+    id: 'service-benchmark-events-node-2',
+    service_type: 'partition',
+    partition_id: 'partition-benchmark-events-1',
+    node_id: 'node-2',
+    status: 'active',
+    raft_role: 'candidate',
     address: '10.0.0.2:7001',
   });
 }
@@ -1178,6 +1201,7 @@ test('AdminWebSocketAPI - local control snapshot derives canonical leaders ' +
       source: 'partitions',
       inconsistentReplicaRoles: true,
       replicaLeaderNodeIds: ['node-stale-a', 'node-stale-b'],
+      issues: [CONSISTENCY_MISMATCH_KIND.REPLICA_ROLE],
     }, 'snapshot should surface replica-role inconsistency without changing canonical leader');
 
     await api.shutdown();
@@ -1597,6 +1621,130 @@ test(
         reason.code === 'local_replica_not_voter_ready'),
       true,
       'readiness reasons should expose the local learner exclusion',
+    );
+
+    await api.shutdown();
+  },
+);
+
+test(
+  'AdminWebSocketAPI - table-scoped discovery excludes local candidate replicas from benchmark readiness',
+  async (t) => {
+    const cache = createPopulatedCache();
+    seedTableDiscoveryRowsWithLocalCandidate(cache);
+    const api = new AdminWebSocketAPI({
+      nodeId: 'test-node',
+      systemTableCache: cache,
+      sqlQueryEngine: createMockQueryEngine(),
+    });
+
+    await api.initialize(0, {listen: false});
+    const response = await api.getFastify().inject({
+      method: 'GET',
+      url: '/api/admin/discovery/services?' +
+        'serviceId=sys-postgres-wire&protocol=postgresql&tableName=benchmark_events',
+    });
+    const payload = response.json();
+
+    t.equal(response.statusCode, 200, 'should return 200');
+    const replicas = Array.isArray(payload?.services?.[0]?.replicas) ?
+      payload.services[0].replicas :
+      [];
+    const readinessByNodeId = new Map(replicas.map((replica) => [
+      String(replica?.nodeId || ''),
+      replica?.readiness || null,
+    ]));
+
+    t.equal(
+      readinessByNodeId.get('node-1')?.benchmarkReady,
+      true,
+      'leader-hosting node should remain benchmark ready',
+    );
+    t.equal(
+      readinessByNodeId.get('node-2')?.routingReady,
+      true,
+      'candidate-hosting node should remain routing ready',
+    );
+    t.equal(
+      readinessByNodeId.get('node-2')?.schemaReady,
+      true,
+      'candidate-hosting node should remain schema ready via cluster routing',
+    );
+    t.equal(
+      readinessByNodeId.get('node-2')?.topologyReady,
+      false,
+      'local candidate replica should block topology readiness',
+    );
+    t.equal(
+      readinessByNodeId.get('node-2')?.benchmarkReady,
+      false,
+      'local candidate replica should block benchmark readiness',
+    );
+    t.equal(
+      readinessByNodeId.get('node-2')?.reasons?.some((reason) =>
+        reason.code === 'local_replica_not_voter_ready'),
+      true,
+      'readiness reasons should expose the local candidate exclusion',
+    );
+
+    await api.shutdown();
+  },
+);
+
+test(
+  'AdminWebSocketAPI - table-scoped discovery ignores unrelated replica operations',
+  async (t) => {
+    const cache = createPopulatedCache();
+    seedRoutedTableDiscoveryRows(cache);
+    cache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'INSERT', {
+      operation_id: 'op-unrelated',
+      partition_id: 'partition-unrelated-1',
+      entity_id: 'partition-unrelated-1',
+      status: 'creating',
+    });
+    const api = new AdminWebSocketAPI({
+      nodeId: 'test-node',
+      systemTableCache: cache,
+      sqlQueryEngine: createMockQueryEngine(),
+    });
+
+    await api.initialize(0, {listen: false});
+    const response = await api.getFastify().inject({
+      method: 'GET',
+      url: '/api/admin/discovery/services?' +
+        'serviceId=sys-postgres-wire&protocol=postgresql&tableName=benchmark_events',
+    });
+    const payload = response.json();
+
+    t.equal(response.statusCode, 200, 'should return 200');
+    const replicas = Array.isArray(payload?.services?.[0]?.replicas) ?
+      payload.services[0].replicas :
+      [];
+    const readinessByNodeId = new Map(replicas.map((replica) => [
+      String(replica?.nodeId || ''),
+      replica?.readiness || null,
+    ]));
+
+    t.equal(
+      readinessByNodeId.get('node-1')?.topologyReady,
+      true,
+      'unrelated replica operations should not block target-partition topology',
+    );
+    t.equal(
+      readinessByNodeId.get('node-1')?.benchmarkReady,
+      true,
+      'leader-hosting node should stay benchmark ready when only unrelated ops exist',
+    );
+    t.equal(
+      readinessByNodeId.get('node-2')?.benchmarkReady,
+      true,
+      'routed peer should stay benchmark ready when unrelated ops are in flight',
+    );
+    t.equal(
+      readinessByNodeId.get('node-1')?.reasons?.some((reason) =>
+        reason.code === 'replica_operations_in_flight'),
+      false,
+      'readiness should not report unrelated replica operation pressure',
     );
 
     await api.shutdown();

@@ -518,6 +518,10 @@ describe('WasmServiceReplica', () => {
         assert.deepEqual(updateArgs[0], TABLES.SERVICES);
         assert.deepEqual(updateArgs[1], {[COLUMN.SERVICE_ID]: 'wsr-1'});
         assert.equal(updateArgs[2][COLUMN.RAFT_ROLE], RAFT_ROLE.LEADER);
+        assert.deepEqual(
+          updateArgs[3]?.expectedCacheFields,
+          {[COLUMN.RAFT_ROLE]: RAFT_ROLE.LEADER},
+        );
         assert.equal(replica.persistedRole, RAFT_ROLE.LEADER);
         assert.equal(replica.pendingRoleUpdate, null);
         replica.kvStore.close();
@@ -570,6 +574,13 @@ describe('WasmServiceReplica', () => {
         assert.deepEqual(updateArgs[1], {[COLUMN.SERVICE_ID]: 'wsr-1'});
         assert.equal(updateArgs[2][COLUMN.NODE_ID], 'node-2');
         assert.equal(updateArgs[2][COLUMN.RAFT_ROLE], RAFT_ROLE.LEADER);
+        assert.deepEqual(
+          updateArgs[3]?.expectedCacheFields,
+          {
+            [COLUMN.NODE_ID]: 'node-2',
+            [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEADER,
+          },
+        );
         assert.equal(replica.persistedLeaderNodeId, 'node-2');
         assert.equal(replica.pendingLeaderNodeUpdate, null);
         replica.kvStore.close();

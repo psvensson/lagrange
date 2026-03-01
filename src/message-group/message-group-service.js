@@ -47,6 +47,9 @@ import {
   MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE,
   MESSAGE_GROUP_APPLICATION_STATUS,
   MESSAGE_GROUP_CDC_ERROR_MSG,
+  MESSAGE_GROUP_OPERATION_LEDGER_NOW,
+  MESSAGE_GROUP_SERVICE_DEFAULT,
+  MESSAGE_GROUP_SERVICE_ERROR_MSG,
   MESSAGE_GROUP_SUBSYSTEM,
   MESSAGE_STATUS as MessageStatus,
   RAFT_ROLE as RaftRole,
@@ -57,106 +60,10 @@ import {
 } from './message-group-target-resolver.js';
 import {CDCHandler} from './cdc-handler.js';
 import {getOrCreateCauseId, normalizeCauseId} from '../utils/cause-id.js';
+import {MessageGroupOperationLedger} from './message-group-operation-ledger.js';
 
 // Note: isRaftPacket and RAFT_PACKET_TYPES are imported from shared module
 // src/raft/raft-packet-utils.js - Requirements: 9.1, 9.2, 9.3, 9.4
-
-/**
- * In-memory Raft log entry (kept for backward compatibility).
- */
-class RaftLogEntry {
-  /**
-   * Create a new Raft log entry.
-   * @param {number} term - Raft term.
-   * @param {number} index - Log index.
-   * @param {Object} data - Entry data.
-   */
-  constructor(term, index, data) {
-    this.term = term;
-    this.index = index;
-    this.data = data;
-    this.timestamp = Date.now();
-  }
-}
-
-
-/**
- * In-memory Raft storage for message groups (kept for backward compatibility).
- */
-class InMemoryRaftStorage {
-  /**
-   * Create a new in-memory Raft storage.
-   */
-  constructor() {
-    this.log = [];
-    this.currentTerm = 0;
-    this.votedFor = null;
-    this.commitIndex = 0;
-    this.lastApplied = 0;
-  }
-
-  /**
-   * Append an entry to the log.
-   * @param {Object} data - Entry data.
-   * @return {RaftLogEntry} The appended entry.
-   */
-  appendEntry(data) {
-    const index = this.log.length + 1;
-    const entry = new RaftLogEntry(this.currentTerm, index, data);
-    this.log.push(entry);
-    return entry;
-  }
-
-  /**
-   * Get entries from a starting index.
-   * @param {number} startIndex - Starting index (1-based).
-   * @return {Array<RaftLogEntry>} Log entries.
-   */
-  getEntriesFrom(startIndex) {
-    if (startIndex < 1) {
-      return [...this.log];
-    }
-    return this.log.slice(startIndex - 1);
-  }
-
-  /**
-   * Get the last log entry.
-   * @return {RaftLogEntry|null} Last entry or null.
-   */
-  getLastEntry() {
-    return this.log.length > 0 ? this.log[this.log.length - 1] : null;
-  }
-
-  /**
-   * Get entry at a specific index.
-   * @param {number} index - Log index (1-based).
-   * @return {RaftLogEntry|null} Entry or null.
-   */
-  getEntry(index) {
-    if (index < 1 || index > this.log.length) {
-      return null;
-    }
-    return this.log[index - 1];
-  }
-
-  /**
-   * Truncate log from a specific index.
-   * @param {number} fromIndex - Index to truncate from (1-based).
-   */
-  truncateFrom(fromIndex) {
-    if (fromIndex >= 1 && fromIndex <= this.log.length) {
-      this.log = this.log.slice(0, fromIndex - 1);
-    }
-  }
-
-  /**
-   * Get the log length.
-   * @return {number} Number of entries.
-   */
-  getLogLength() {
-    return this.log.length;
-  }
-}
 
 
 /**
@@ -177,28 +84,27 @@ class MessageGroupService extends EventEmitter {
     super();
 
     if (!options.groupId) {
-      throw new Error('MessageGroupService requires groupId');
+      throw new Error(MESSAGE_GROUP_SERVICE_ERROR_MSG.MISSING_GROUP_ID);
     }
     if (!options.replicaId) {
-      throw new Error('MessageGroupService requires replicaId');
+      throw new Error(MESSAGE_GROUP_SERVICE_ERROR_MSG.MISSING_REPLICA_ID);
     }
 
     // Transport is now required - WebSocket transport is mandatory
     if (!options.transport) {
-      throw new Error(
-        'MessageGroupService requires transport - WebSocket transport is mandatory',
-      );
+      throw new Error(MESSAGE_GROUP_SERVICE_ERROR_MSG.MISSING_TRANSPORT);
     }
 
     // Validate transport is WebSocket-based (MessageRouter)
     if (!this.isWebSocketBasedTransport(options.transport)) {
-      throw new Error(
-        'MessageGroupService requires WebSocket-based transport (MessageRouter)',
-      );
+      throw new Error(MESSAGE_GROUP_SERVICE_ERROR_MSG.INVALID_TRANSPORT);
     }
 
     this.groupId = options.groupId;
     this.replicaId = options.replicaId;
+    this.now = typeof options.now === TYPEOF.FUNCTION ?
+      options.now :
+      MESSAGE_GROUP_OPERATION_LEDGER_NOW;
     this.nodeId = options.nodeId || STRING.UNKNOWN;
     this.replicaIds = options.replicaIds || [this.replicaId];
     this.transport = options.transport;
@@ -225,13 +131,24 @@ class MessageGroupService extends EventEmitter {
 
     // Configuration
     const config = ConfigurationManager.getInstance();
-    this.deliveryTimeoutMs = config.get(CONFIG_KEY.MESSAGE_GROUP_DELIVERY_TIMEOUT_MS) || 5000;
-    this.retryMaxAttempts = config.get(CONFIG_KEY.MESSAGE_GROUP_RETRY_MAX_ATTEMPTS) || 3;
-    this.retryInitialDelayMs = config.get(CONFIG_KEY.MESSAGE_GROUP_RETRY_INITIAL_DELAY_MS) || 100;
+    this.deliveryTimeoutMs =
+      config.get(CONFIG_KEY.MESSAGE_GROUP_DELIVERY_TIMEOUT_MS) ??
+      MESSAGE_GROUP_SERVICE_DEFAULT.DELIVERY_TIMEOUT_MS;
+    this.retryMaxAttempts =
+      config.get(CONFIG_KEY.MESSAGE_GROUP_RETRY_MAX_ATTEMPTS) ??
+      MESSAGE_GROUP_SERVICE_DEFAULT.RETRY_MAX_ATTEMPTS;
+    this.retryInitialDelayMs =
+      config.get(CONFIG_KEY.MESSAGE_GROUP_RETRY_INITIAL_DELAY_MS) ??
+      MESSAGE_GROUP_SERVICE_DEFAULT.RETRY_INITIAL_DELAY_MS;
     this.retryBackoffMultiplier =
-      config.get(CONFIG_KEY.MESSAGE_GROUP_RETRY_BACKOFF_MULTIPLIER) || 2;
-    this.retryMaxDelayMs = config.get(CONFIG_KEY.MESSAGE_GROUP_RETRY_MAX_DELAY_MS) || 10000;
-    this.retryJitterFactor = config.get(CONFIG_KEY.MESSAGE_GROUP_RETRY_JITTER_FACTOR) || 0.1;
+      config.get(CONFIG_KEY.MESSAGE_GROUP_RETRY_BACKOFF_MULTIPLIER) ??
+      MESSAGE_GROUP_SERVICE_DEFAULT.RETRY_BACKOFF_MULTIPLIER;
+    this.retryMaxDelayMs =
+      config.get(CONFIG_KEY.MESSAGE_GROUP_RETRY_MAX_DELAY_MS) ??
+      MESSAGE_GROUP_SERVICE_DEFAULT.RETRY_MAX_DELAY_MS;
+    this.retryJitterFactor =
+      config.get(CONFIG_KEY.MESSAGE_GROUP_RETRY_JITTER_FACTOR) ??
+      MESSAGE_GROUP_SERVICE_DEFAULT.RETRY_JITTER_FACTOR;
 
     // Raft state - using liferaft library
     // Requirements: 5.1, 5.2, 5.3, 5.4, 5.5
@@ -240,7 +157,7 @@ class MessageGroupService extends EventEmitter {
     // Note: transportAdapter removed - RaftNode.write() now calls messageRouter directly
     // Requirements: 3.1, 3.2, 3.3, 3.4, 4.1, 4.2, 4.3, 4.4
 
-    this.storage = new InMemoryRaftStorage();
+    this.operationLedger = new MessageGroupOperationLedger({now: this.now});
     this.role = RaftRole.FOLLOWER;
     this.leaderId = null;
     this.cdcIntegrationService = options.cdcIntegrationService || null;
@@ -264,13 +181,10 @@ class MessageGroupService extends EventEmitter {
 
     // Single-owner CDC handler for subscriptions and cache application.
     this.cdcHandler = new CDCHandler(this.systemTableCache);
-    // Backward-compatible alias retained for status/read-only access.
-    this.cdcSubscriptions = this.cdcHandler.subscriptions;
 
     // Logging
     const loggingService = LoggingService.getInstance();
-    this.logger = loggingService.isInitialized() ?
-      loggingService.forSubsystem(MESSAGE_GROUP_SUBSYSTEM.NAME) : console;
+    this.logger = loggingService.forSubsystem(MESSAGE_GROUP_SUBSYSTEM.NAME);
 
     this.roleMutationHelper = this.createRoleMutationHelper();
     this.pendingRoleUpdate = this.role;
@@ -376,12 +290,24 @@ class MessageGroupService extends EventEmitter {
   createRoleMutationHelper() {
     return new AuthoritativeRowMutationHelper({
       tableName: SystemTableName.SERVICES,
-      buildWhereClause: () => ({service_id: this.replicaId}),
+      buildWhereClause: (_role, context = {}) => {
+        const whereClause = {service_id: this.replicaId};
+        const cachedRow = context.cachedRow;
+        if (typeof cachedRow?.raft_role === 'string' && cachedRow.raft_role.length > 0) {
+          whereClause.raft_role = cachedRow.raft_role;
+        }
+        if (Number.isFinite(cachedRow?.updated_at)) {
+          whereClause.updated_at = cachedRow.updated_at;
+        }
+        return whereClause;
+      },
       buildUpdateData: (role, updatedAt) => ({
         raft_role: role,
         updated_at: updatedAt,
       }),
       buildExpectedCacheFields: (role) => ({raft_role: role}),
+      readRowFromCache: (systemTableCache) =>
+        systemTableCache?.get?.(TABLES.SERVICES, this.replicaId) || null,
       readValueFromCache: (systemTableCache) => {
         const cached = systemTableCache?.get?.(TABLES.SERVICES, this.replicaId);
         return cached?.raft_role || null;
@@ -403,7 +329,18 @@ class MessageGroupService extends EventEmitter {
   createLeaderNodeMutationHelper() {
     return new AuthoritativeRowMutationHelper({
       tableName: SystemTableName.MESSAGE_GROUPS,
-      buildWhereClause: () => ({[COLUMN.GROUP_ID]: this.groupId}),
+      buildWhereClause: (_leaderNodeId, context = {}) => {
+        const whereClause = {[COLUMN.GROUP_ID]: this.groupId};
+        const cachedRow = context.cachedRow;
+        if (typeof cachedRow?.[COLUMN.LEADER_NODE_ID] === 'string' &&
+            cachedRow[COLUMN.LEADER_NODE_ID].length > 0) {
+          whereClause[COLUMN.LEADER_NODE_ID] = cachedRow[COLUMN.LEADER_NODE_ID];
+        }
+        if (Number.isFinite(cachedRow?.[COLUMN.UPDATED_AT])) {
+          whereClause[COLUMN.UPDATED_AT] = cachedRow[COLUMN.UPDATED_AT];
+        }
+        return whereClause;
+      },
       buildUpdateData: (leaderNodeId, updatedAt) => ({
         [COLUMN.LEADER_NODE_ID]: leaderNodeId,
         [COLUMN.UPDATED_AT]: updatedAt,
@@ -411,6 +348,8 @@ class MessageGroupService extends EventEmitter {
       buildExpectedCacheFields: (leaderNodeId) => ({
         [COLUMN.LEADER_NODE_ID]: leaderNodeId,
       }),
+      readRowFromCache: (systemTableCache) =>
+        systemTableCache?.get?.(TABLES.MESSAGE_GROUPS, this.groupId) || null,
       readValueFromCache: (systemTableCache) => {
         const cached = systemTableCache?.get?.(TABLES.MESSAGE_GROUPS, this.groupId);
         return cached?.[COLUMN.LEADER_NODE_ID] || null;
@@ -762,7 +701,7 @@ class MessageGroupService extends EventEmitter {
       getCurrentTerm: () => this.raftProvider.getCurrentTerm(this.raft),
       onLeader: ({term}) => {
         this.updateRebalancerLeadership();
-        this.storage.currentTerm = term;
+        this.operationLedger.currentTerm = term;
 
         this.logger.info('Became leader', {
           term,
@@ -778,11 +717,11 @@ class MessageGroupService extends EventEmitter {
       },
       onFollower: ({term}) => {
         this.updateRebalancerLeadership();
-        this.storage.currentTerm = term;
+        this.operationLedger.currentTerm = term;
       },
       onCandidate: ({term}) => {
         this.updateRebalancerLeadership();
-        this.storage.currentTerm = term;
+        this.operationLedger.currentTerm = term;
       },
       onCommit: (command) => {
         this.applyCommittedEntry(command);
@@ -794,7 +733,7 @@ class MessageGroupService extends EventEmitter {
         });
       },
       onTermChange: ({term}) => {
-        this.storage.currentTerm = term;
+        this.operationLedger.currentTerm = term;
       },
     });
   }
@@ -1040,7 +979,7 @@ class MessageGroupService extends EventEmitter {
       timestamp: timestamp.toString(),
       status: MessageStatus.PENDING,
       attempts: 0,
-      createdAt: Date.now(),
+      createdAt: this.now(),
     };
 
 
@@ -1182,7 +1121,7 @@ class MessageGroupService extends EventEmitter {
    * @private
    */
   async persistToRaftLog(messageEnvelope) {
-    const entry = this.storage.appendEntry({
+    const entry = this.operationLedger.appendEntry({
       type: 'MESSAGE',
       message: messageEnvelope,
     });
@@ -1440,7 +1379,7 @@ class MessageGroupService extends EventEmitter {
     }
 
     // Persist acknowledgment to Raft log
-    const entry = this.storage.appendEntry({
+    const entry = this.operationLedger.appendEntry({
       type: 'ACK',
       messageId,
       timestamp: this.hlcClock.now().toString(),
@@ -1488,7 +1427,7 @@ class MessageGroupService extends EventEmitter {
    * @return {Promise<void>}
    */
   async applyCDCEvent(tableName, operation, data, options = {}) {
-    const applyStartMs = Date.now();
+    const applyStartMs = this.now();
     const skipSubscriptionCheck =
       options.skipSubscriptionCheck === true;
     const skipReplication =
@@ -1527,7 +1466,7 @@ class MessageGroupService extends EventEmitter {
       };
 
       // Persist CDC event to Raft log for replication
-      const entry = this.storage.appendEntry({
+      const entry = this.operationLedger.appendEntry({
         ...cdcCommand,
       });
       // Replicate via Raft so all message group replicas (and their
@@ -1536,7 +1475,7 @@ class MessageGroupService extends EventEmitter {
       await this.proposeCDCCommand(cdcCommand);
 
       try {
-        const handlerDurationMs = Date.now() - applyStartMs;
+        const handlerDurationMs = this.now() - applyStartMs;
         const metricsData = {
           tableName,
           operation,
@@ -1545,7 +1484,7 @@ class MessageGroupService extends EventEmitter {
         };
         if (options.timestamp != null) {
           metricsData.eventAgeMs =
-            Date.now() - options.timestamp;
+            this.now() - options.timestamp;
         }
         this.logger.info(
           METRICS_LOG_TAG.CDC_PROPAGATION, metricsData,
@@ -1582,7 +1521,7 @@ class MessageGroupService extends EventEmitter {
     }
 
     if (!skipReplication) {
-      const entry = this.storage.appendEntry({
+      const entry = this.operationLedger.appendEntry({
         type: 'CDC',
         tableName,
         operation,
@@ -1591,7 +1530,7 @@ class MessageGroupService extends EventEmitter {
       });
 
       try {
-        const handlerDurationMs = Date.now() - applyStartMs;
+        const handlerDurationMs = this.now() - applyStartMs;
         const metricsData = {
           tableName,
           operation,
@@ -1600,7 +1539,7 @@ class MessageGroupService extends EventEmitter {
         };
         if (options.timestamp != null) {
           metricsData.eventAgeMs =
-            Date.now() - options.timestamp;
+            this.now() - options.timestamp;
         }
         this.logger.info(
           METRICS_LOG_TAG.CDC_PROPAGATION, metricsData,
@@ -1617,7 +1556,7 @@ class MessageGroupService extends EventEmitter {
     }
 
     try {
-      const handlerDurationMs = Date.now() - applyStartMs;
+      const handlerDurationMs = this.now() - applyStartMs;
       const metricsData = {
         tableName,
         operation,
@@ -1626,7 +1565,7 @@ class MessageGroupService extends EventEmitter {
       };
       if (options.timestamp != null) {
         metricsData.eventAgeMs =
-          Date.now() - options.timestamp;
+          this.now() - options.timestamp;
       }
       this.logger.info(
         METRICS_LOG_TAG.CDC_PROPAGATION, metricsData,
@@ -1851,7 +1790,7 @@ class MessageGroupService extends EventEmitter {
         continue;
       }
 
-      const forwardStartMs = Date.now();
+      const forwardStartMs = this.now();
       try {
         const deliveryResult = await this.transport.deliver(leaderAddress, payload);
         const deliveryAcked = deliveryResult?.acknowledged === true;
@@ -1869,7 +1808,7 @@ class MessageGroupService extends EventEmitter {
             operation,
             relayDepth,
             causeId,
-            durationMs: Date.now() - forwardStartMs,
+            durationMs: this.now() - forwardStartMs,
             acknowledged: deliveryResult?.acknowledged === true,
             success: deliveryResult?.success !== false,
             noHandler: deliveryResult?.noHandler === true,
@@ -2186,7 +2125,7 @@ class MessageGroupService extends EventEmitter {
   getCurrentTerm() {
     return this.raft ?
       this.raftProvider.getCurrentTerm(this.raft) :
-      this.storage.currentTerm;
+      this.operationLedger.currentTerm;
   }
 
   /**
@@ -2212,8 +2151,8 @@ class MessageGroupService extends EventEmitter {
       leaderId: this.leaderId,
       term: this.raft ?
         this.raftProvider.getCurrentTerm(this.raft) :
-        this.storage.currentTerm,
-      logLength: this.storage.getLogLength(),
+        this.operationLedger.currentTerm,
+      logLength: this.operationLedger.getLogLength(),
       pendingMessages: this.pendingMessages.size,
       acknowledgedMessages: this.acknowledgedMessages.size,
       cdcSubscriptions: this.cdcHandler.getSubscriptions(),
@@ -2273,11 +2212,10 @@ class MessageGroupService extends EventEmitter {
 }
 
 export {
+  MessageGroupOperationLedger,
   MessageGroupService,
   MessageStatus,
   RaftRole,
-  RaftLogEntry,
-  InMemoryRaftStorage,
   isRaftPacket,
   RAFT_PACKET_TYPES,
 };

@@ -192,6 +192,50 @@ test(
   },
 );
 
+test('PartitionService - leader mutation helper guards owner writes with observed row state',
+  async (t) => {
+    const systemTableCache = new SystemTableCache();
+    systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
+      [COLUMN.PARTITION_ID]: 'guarded-partition-1',
+      [COLUMN.TABLE_ID]: 'guarded_table',
+      [COLUMN.LEADER_NODE_ID]: 'node-1',
+      [COLUMN.UPDATED_AT]: 77,
+    });
+
+    let capturedWhereClause = null;
+    const partition = new PartitionService({
+      partitionId: 'guarded-partition-1',
+      tableId: 'guarded_table',
+      tableName: 'guarded_table',
+      replicaId: 'guarded-partition-1-r1',
+      replicaIds: ['guarded-partition-1-r1'],
+      nodeId: 'node-1',
+      dbPath: ':memory:',
+      suppressLifecycleLogs: true,
+      systemTableCache,
+      cdcIntegrationService: {
+        updateSystemTableRow: async (_tableName, whereClause) => {
+          capturedWhereClause = whereClause;
+          return {success: true};
+        },
+      },
+    });
+
+    partition.isLeader = true;
+    partition.isPartitionsLeaderAvailable = () => true;
+    partition.leaderNodeMutationHelper.pendingValue = 'node-2';
+
+    await partition.leaderNodeMutationHelper.flush();
+
+    t.same(capturedWhereClause, {
+      [COLUMN.PARTITION_ID]: 'guarded-partition-1',
+      [COLUMN.LEADER_NODE_ID]: 'node-1',
+      [COLUMN.UPDATED_AT]: 77,
+    }, 'leader owner writes should include the observed owner-row guard fields');
+
+    await partition.shutdown();
+  });
+
 
 test('PartitionService - creates table from schema', async (t) => {
   const schema = {
@@ -1755,15 +1799,19 @@ test('PartitionService - learner promotion deferred until leader is known', asyn
         const services = [
           {
             service_id: 'replica-1',
+            replica_id: 'replica-1',
             partition_id: 'test-partition',
             service_type: SERVICE_TYPE.PARTITION,
+            node_id: 'node-1',
             status: SERVICE_STATUS.ACTIVE,
-            raft_role: 'leader',
+            raft_role: 'follower',
           },
           {
             service_id: 'replica-2',
+            replica_id: 'replica-2',
             partition_id: 'test-partition',
             service_type: SERVICE_TYPE.PARTITION,
+            node_id: 'node-2',
             status: SERVICE_STATUS.ACTIVE,
             raft_role: 'follower',
           },
@@ -1793,7 +1841,7 @@ test('PartitionService - learner promotion deferred until leader is known', asyn
   t.equal(
     partition.role,
     RaftRole.LEARNER,
-    'Should remain learner until a leader is discovered',
+    'Should remain learner until canonical leader metadata is discovered',
   );
   t.ok(partition.learnerPromotionTimer, 'Should reschedule promotion check');
 
@@ -1869,6 +1917,95 @@ test(
       partition.role,
       RaftRole.FOLLOWER,
       'learner should promote once leader identity is known and voter count stays odd',
+    );
+    t.equal(electionStarted, true, 'promotion should start elections as a voter');
+
+    if (partition.learnerPromotionTimer) {
+      clearTimeout(partition.learnerPromotionTimer);
+      partition.learnerPromotionTimer = null;
+    }
+  },
+);
+
+test(
+  'PartitionService - learner promotion resolves leader from canonical metadata when hint is absent',
+  async (t) => {
+    const mockCache = {
+      get: () => null,
+      filter: (tableName, predicate) => {
+        if (tableName === TABLES.PARTITIONS) {
+          return [
+            {
+              partition_id: 'test-partition',
+              leader_node_id: 'node-1',
+            },
+          ].filter(predicate);
+        }
+        if (tableName === TABLES.SERVICES) {
+          const services = [
+            {
+              service_id: 'replica-1',
+              replica_id: 'replica-1',
+              partition_id: 'test-partition',
+              service_type: SERVICE_TYPE.PARTITION,
+              node_id: 'node-1',
+              status: SERVICE_STATUS.ACTIVE,
+              raft_role: 'follower',
+            },
+            {
+              service_id: 'replica-2',
+              replica_id: 'replica-2',
+              partition_id: 'test-partition',
+              service_type: SERVICE_TYPE.PARTITION,
+              node_id: 'node-2',
+              status: SERVICE_STATUS.ACTIVE,
+              raft_role: 'learner',
+            },
+            {
+              service_id: 'replica-3',
+              replica_id: 'replica-3',
+              partition_id: 'test-partition',
+              service_type: SERVICE_TYPE.PARTITION,
+              node_id: 'node-3',
+              status: SERVICE_STATUS.ACTIVE,
+              raft_role: 'learner',
+            },
+          ];
+          return services.filter(predicate);
+        }
+        return [];
+      },
+    };
+
+    const partition = new PartitionService({
+      partitionId: 'test-partition',
+      tableId: 'test-table',
+      replicaId: 'replica-3',
+      replicaIds: ['replica-1', 'replica-2', 'replica-3'],
+      nodeId: 'node-3',
+      dbPath: ':memory:',
+      isJoiningExistingGroup: true,
+      systemTableCache: mockCache,
+    });
+
+    partition.role = RaftRole.LEARNER;
+    partition.leaderId = null;
+    let electionStarted = false;
+    partition.startElection = () => {
+      electionStarted = true;
+    };
+
+    partition.checkLearnerPromotion();
+
+    t.equal(
+      partition.leaderId,
+      'replica-1',
+      'canonical partition leader_node_id should resolve the leader replica',
+    );
+    t.equal(
+      partition.role,
+      RaftRole.FOLLOWER,
+      'learner should promote once canonical metadata identifies the leader',
     );
     t.equal(electionStarted, true, 'promotion should start elections as a voter');
 

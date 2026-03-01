@@ -7,9 +7,24 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {CDCPipelineReadinessGate} from
   '../../src/cdc/cdc-pipeline-readiness-gate.js';
+import {INVARIANT_EVENT} from '../../src/invariants/invariant-emitter.js';
+import {INVARIANT_ID} from '../../src/invariants/invariant-catalog.js';
 import {
   CDC_PIPELINE_READINESS_CONDITION,
 } from '../../src/constants/cdc-lifecycle-constants.js';
+
+function createManualClock(startMs = 0) {
+  let nowMs = startMs;
+  return {
+    now: () => nowMs,
+    sleep: async (delayMs = 0, afterSleep) => {
+      nowMs += delayMs;
+      if (typeof afterSleep === 'function') {
+        afterSleep(nowMs);
+      }
+    },
+  };
+}
 
 /**
  * Minimal SystemTableCache stub with onCacheChange/offCacheChange.
@@ -318,6 +333,10 @@ test('CDCPipelineReadinessGate — waitForReady resolves when ready',
       systemTableCache: cache,
       cdcPropagatedTables: ['nodes'],
     });
+    const invariantEvents = [];
+    gate.on(INVARIANT_EVENT.RUNTIME, (event) => {
+      invariantEvents.push(event);
+    });
 
     cache.fire('nodes', 'INSERT', {node_id: 'n1'});
 
@@ -335,15 +354,30 @@ test('CDCPipelineReadinessGate — waitForReady resolves when ready',
     const result = await gate.waitForReady(context, 1000, 10);
     t.equal(result.ready, true);
     t.equal(result.unmetConditions.length, 0);
+    t.equal(invariantEvents.length, 1);
+    t.equal(
+      invariantEvents[0].invariantId,
+      INVARIANT_ID.CDC_SUBSCRIPTION_PROGRESS_VISIBLE,
+    );
+    t.equal(invariantEvents[0].passed, true);
     t.end();
   });
 
 test('CDCPipelineReadinessGate — waitForReady rejects on timeout',
   async (t) => {
     const cache = createCacheStub();
+    let now = 0;
     const gate = new CDCPipelineReadinessGate({
       systemTableCache: cache,
       cdcPropagatedTables: ['nodes'],
+      now: () => now,
+      sleep: async (intervalMs) => {
+        now += intervalMs;
+      },
+    });
+    const invariantEvents = [];
+    gate.on(INVARIANT_EVENT.RUNTIME, (event) => {
+      invariantEvents.push(event);
     });
 
     // No cache fire, no partitions, no message groups — never ready
@@ -360,6 +394,13 @@ test('CDCPipelineReadinessGate — waitForReady rejects on timeout',
       t.ok(Array.isArray(err.unmetConditions));
       t.equal(err.unmetConditions.length, 3);
       t.equal(err.timeoutMs, 50);
+      t.equal(err.timeoutKind, 'no_progress');
+      t.equal(invariantEvents.length, 1);
+      t.equal(
+        invariantEvents[0].invariantId,
+        INVARIANT_ID.CDC_SUBSCRIPTION_PROGRESS_VISIBLE,
+      );
+      t.equal(invariantEvents[0].passed, false);
     }
     t.end();
   });
@@ -367,9 +408,20 @@ test('CDCPipelineReadinessGate — waitForReady rejects on timeout',
 test('CDCPipelineReadinessGate — waitForReady polls until conditions met',
   async (t) => {
     const cache = createCacheStub();
+    const clock = createManualClock();
     const gate = new CDCPipelineReadinessGate({
       systemTableCache: cache,
       cdcPropagatedTables: ['nodes'],
+      now: clock.now,
+      sleep: async (intervalMs) => {
+        await clock.sleep(intervalMs, (nowMs) => {
+          if (nowMs >= 30) {
+            partitions.set('p1', createPartitionStub('nodes', 1));
+            messageGroups.set('mg1', createMessageGroupStub(true));
+            cache.fire('nodes', 'INSERT', {node_id: 'n1'});
+          }
+        });
+      },
     });
 
     const partitions = new Map();
@@ -380,17 +432,7 @@ test('CDCPipelineReadinessGate — waitForReady polls until conditions met',
       messageGroupServices: messageGroups,
     };
 
-    // Start waiting — conditions not yet met
-    const promise = gate.waitForReady(context, 1000, 10);
-
-    // Satisfy conditions after a short delay
-    setTimeout(() => {
-      partitions.set('p1', createPartitionStub('nodes', 1));
-      messageGroups.set('mg1', createMessageGroupStub(true));
-      cache.fire('nodes', 'INSERT', {node_id: 'n1'});
-    }, 30);
-
-    const result = await promise;
+    const result = await gate.waitForReady(context, 1000, 10);
     t.equal(result.ready, true);
     t.end();
   });
@@ -398,9 +440,14 @@ test('CDCPipelineReadinessGate — waitForReady polls until conditions met',
 test('CDCPipelineReadinessGate — timeout error includes unmet conditions',
   async (t) => {
     const cache = createCacheStub();
+    const clock = createManualClock();
     const gate = new CDCPipelineReadinessGate({
       systemTableCache: cache,
       cdcPropagatedTables: ['nodes'],
+      now: clock.now,
+      sleep: async (intervalMs) => {
+        await clock.sleep(intervalMs);
+      },
     });
 
     // Only satisfy the leader condition
@@ -430,6 +477,45 @@ test('CDCPipelineReadinessGate — timeout error includes unmet conditions',
       ));
     }
     t.end();
+  });
+
+test('CDCPipelineReadinessGate — timeout distinguishes progress from absolute deadline exhaustion',
+  async (t) => {
+    const cache = createCacheStub();
+    let now = 0;
+    let sleeps = 0;
+    const partitions = new Map();
+    const messageGroups = new Map();
+    const gate = new CDCPipelineReadinessGate({
+      systemTableCache: cache,
+      cdcPropagatedTables: ['nodes'],
+      now: () => now,
+      sleep: async (intervalMs) => {
+        sleeps += 1;
+        now += intervalMs;
+        if (sleeps === 1) {
+          partitions.set('p1', createPartitionStub('nodes', 1));
+        }
+      },
+    });
+
+    try {
+      await gate.waitForReady({
+        partitionServices: partitions,
+        messageGroupServices: messageGroups,
+      }, 50, 10);
+      t.fail('should have rejected');
+    } catch (err) {
+      t.equal(err.timeoutKind, 'absolute_deadline_exhausted');
+      t.ok(err.lastProgressElapsedMs > 0, 'timeout should retain last-progress timing');
+      t.same(
+        err.unmetConditions.sort(),
+        [
+          CDC_PIPELINE_READINESS_CONDITION.PIPELINE_PROVEN,
+          CDC_PIPELINE_READINESS_CONDITION.PROPAGATION_LEADER,
+        ],
+      );
+    }
   });
 
 test('CDCPipelineReadinessGate — empty propagated tables list', (t) => {

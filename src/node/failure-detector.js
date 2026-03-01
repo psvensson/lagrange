@@ -34,6 +34,49 @@ import {
  */
 const NodeStatus = NODE_STATUS;
 
+function buildObservedNodeWhereClause(node) {
+  const whereClause = {
+    node_id: node.node_id,
+  };
+  if (typeof node?.status === 'string' && node.status.length > 0) {
+    whereClause.status = node.status;
+  }
+  if (Number.isFinite(node?.last_heartbeat)) {
+    whereClause.last_heartbeat = node.last_heartbeat;
+  }
+  if (Number.isFinite(node?.failed_at)) {
+    whereClause.failed_at = node.failed_at;
+  }
+  if (Number.isFinite(node?.recovered_at)) {
+    whereClause.recovered_at = node.recovered_at;
+  }
+  return whereClause;
+}
+
+function buildObservedReplicaWhereClause(replica) {
+  const whereClause = {
+    service_id: replica.service_id,
+  };
+  if (typeof replica?.node_id === 'string' && replica.node_id.length > 0) {
+    whereClause.node_id = replica.node_id;
+  }
+  if (typeof replica?.status === 'string' && replica.status.length > 0) {
+    whereClause.status = replica.status;
+  }
+  if (Number.isFinite(replica?.updated_at)) {
+    whereClause.updated_at = replica.updated_at;
+  }
+  return whereClause;
+}
+
+function guardedUpdateApplied(result) {
+  if (result?.success === false) {
+    return false;
+  }
+  const affectedRows = Number(result?.partitionResult?.affectedRows);
+  return !Number.isFinite(affectedRows) || affectedRows > NUM.ZERO;
+}
+
 class FailureDetector extends EventEmitter {
   /**
    * Create a new FailureDetector.
@@ -76,16 +119,13 @@ class FailureDetector extends EventEmitter {
 
     // Logging
     const loggingService = LoggingService.getInstance();
-    this.logger = loggingService.isInitialized() ?
-      loggingService.forSubsystem(FAILURE_DETECTOR_SUBSYSTEM) : console;
+    this.logger = loggingService.forSubsystem(FAILURE_DETECTOR_SUBSYSTEM);
 
     // State
     this.checkTimer = null;
     this.adaptiveResetTimer = null;
     this.recentFailures = new Map(); // nodeId -> failure timestamps
     this.currentFailureThreshold = this.failureThresholdMs;
-    this._usingCacheBackedFacade = false;
-
     this.initialized = false;
   }
 
@@ -110,8 +150,8 @@ class FailureDetector extends EventEmitter {
     if (!this.nodeId) {
       throw new Error(FAILURE_DETECTOR_ERROR_MSG.MISSING_NODE_ID);
     }
-    if (!this.sqlQueryEngine && this.systemTableCache) {
-      this.sqlQueryEngine = this.createCacheBackedSqlQueryEngine();
+    if (!this.sqlQueryEngine && this.cdcIntegrationService?.sqlQueryEngine) {
+      this.sqlQueryEngine = this.cdcIntegrationService.sqlQueryEngine;
     }
     this.sqlQueryEngine = assertCritical(
       this.sqlQueryEngine,
@@ -133,57 +173,13 @@ class FailureDetector extends EventEmitter {
   }
 
   /**
-   * Build a minimal SQL-query-engine facade backed by SystemTableCache.
-   * This keeps legacy tests/services working while preserving the
-   * sqlQueryEngine access pattern used by FailureDetector.
-   * @return {{executeQuery: Function}} Cache-backed executeQuery facade.
-   * @private
-   */
-  createCacheBackedSqlQueryEngine() {
-    this._usingCacheBackedFacade = true;
-    return {
-      executeQuery: async (sql, params = []) => {
-        const normalized = String(sql || '')
-          .replace(/\s+/g, ' ')
-          .trim()
-          .toUpperCase();
-
-        if (normalized === FAILURE_DETECTOR_SQL.SELECT_ALL_NODES.toUpperCase()) {
-          return {
-            success: true,
-            rows: this.systemTableCache.getAll(SystemTableName.NODES) || [],
-          };
-        }
-
-        if (normalized ===
-          FAILURE_DETECTOR_SQL.SELECT_SERVICES_BY_NODE_AND_TYPE.toUpperCase()) {
-          const [nodeId, serviceType] = params;
-          const rows = (this.systemTableCache.getAll(SystemTableName.SERVICES) || [])
-            .filter((service) =>
-              service.node_id === nodeId && service.service_type === serviceType,
-            );
-          return {success: true, rows};
-        }
-
-        return {
-          success: false,
-          rows: [],
-          error: `Unsupported cache-backed query: ${sql}`,
-        };
-      },
-    };
-  }
-
-  /**
-   * Upgrade from the cache-backed SQL facade to the real SQL engine.
-   * Called once the real SQL engine becomes available after bootstrap.
+   * Replace the active SQL query engine with a newer canonical engine.
    * No-op if called with null/undefined.
    * @param {Object} sqlQueryEngine - The real SQL query engine.
    */
   upgradeSqlQueryEngine(sqlQueryEngine) {
     if (!sqlQueryEngine) return;
     this.sqlQueryEngine = sqlQueryEngine;
-    this._usingCacheBackedFacade = false;
   }
 
   /**
@@ -315,14 +311,21 @@ class FailureDetector extends EventEmitter {
     });
 
     try {
-      await this.cdcIntegrationService.updateSystemTableRow(
+      const result = await this.cdcIntegrationService.updateSystemTableRow(
         SystemTableName.NODES,
-        {node_id: node.node_id},
+        buildObservedNodeWhereClause(node),
         {
           status: NODE_STATUS.SUSPECTED,
           updated_at: now,
         },
       );
+      if (!guardedUpdateApplied(result)) {
+        this.logger.debug(FAILURE_DETECTOR_LOG_MSG.STALE_NODE_SUSPICION_UPDATE, {
+          nodeId: node.node_id,
+          timeSinceHeartbeat,
+        });
+        return;
+      }
     } catch (error) {
       this.logger.error(FAILURE_DETECTOR_LOG_MSG.MARK_NODE_SUSPECTED_FAILED, {
         nodeId: node.node_id,
@@ -356,15 +359,21 @@ class FailureDetector extends EventEmitter {
 
     // Mark node as failed
     try {
-      await this.cdcIntegrationService.updateSystemTableRow(
+      const result = await this.cdcIntegrationService.updateSystemTableRow(
         SystemTableName.NODES,
-        {node_id: node.node_id},
+        buildObservedNodeWhereClause(node),
         {
           status: NODE_STATUS.FAILED,
           failed_at: now,
           updated_at: now,
         },
       );
+      if (!guardedUpdateApplied(result)) {
+        this.logger.debug(FAILURE_DETECTOR_LOG_MSG.STALE_NODE_FAILURE_UPDATE, {
+          nodeId: node.node_id,
+        });
+        return;
+      }
     } catch (error) {
       this.logger.error(FAILURE_DETECTOR_LOG_MSG.MARK_NODE_FAILED_FAILED, {
         nodeId: node.node_id,
@@ -398,15 +407,21 @@ class FailureDetector extends EventEmitter {
     });
 
     try {
-      await this.cdcIntegrationService.updateSystemTableRow(
+      const result = await this.cdcIntegrationService.updateSystemTableRow(
         SystemTableName.NODES,
-        {node_id: node.node_id},
+        buildObservedNodeWhereClause(node),
         {
           status: NODE_STATUS.RECOVERING,
           recovered_at: now,
           updated_at: now,
         },
       );
+      if (!guardedUpdateApplied(result)) {
+        this.logger.debug(FAILURE_DETECTOR_LOG_MSG.STALE_NODE_RECOVERY_UPDATE, {
+          nodeId: node.node_id,
+        });
+        return;
+      }
     } catch (error) {
       this.logger.error(FAILURE_DETECTOR_LOG_MSG.MARK_NODE_RECOVERING_FAILED, {
         nodeId: node.node_id,
@@ -460,14 +475,24 @@ class FailureDetector extends EventEmitter {
    */
   async markReplicaAsFailed(replica, nodeId, now) {
     try {
-      await this.cdcIntegrationService.updateSystemTableRow(
+      const result = await this.cdcIntegrationService.updateSystemTableRow(
         SystemTableName.SERVICES,
-        {service_id: replica.service_id},
+        buildObservedReplicaWhereClause(replica),
         {
           status: ReplicaStatus.FAILED,
           updated_at: now,
         },
       );
+      if (!guardedUpdateApplied(result)) {
+        this.logger.debug(
+          FAILURE_DETECTOR_LOG_MSG.STALE_PARTITION_REPLICA_FAILURE_UPDATE,
+          {
+          serviceId: replica.service_id,
+          nodeId,
+          },
+        );
+        return;
+      }
 
       this.logger.warn(FAILURE_DETECTOR_LOG_MSG.MARK_PARTITION_REPLICA_FAILED, {
         serviceId: replica.service_id,
@@ -503,14 +528,24 @@ class FailureDetector extends EventEmitter {
    */
   async markMessageGroupReplicaAsFailed(replica, nodeId, now) {
     try {
-      await this.cdcIntegrationService.updateSystemTableRow(
+      const result = await this.cdcIntegrationService.updateSystemTableRow(
         SystemTableName.SERVICES,
-        {service_id: replica.service_id},
+        buildObservedReplicaWhereClause(replica),
         {
           status: ReplicaStatus.FAILED,
           updated_at: now,
         },
       );
+      if (!guardedUpdateApplied(result)) {
+        this.logger.debug(
+          FAILURE_DETECTOR_LOG_MSG.STALE_MESSAGE_GROUP_REPLICA_FAILURE_UPDATE,
+          {
+          serviceId: replica.service_id,
+          nodeId,
+          },
+        );
+        return;
+      }
 
       this.logger.warn(
         FAILURE_DETECTOR_LOG_MSG.MARK_MESSAGE_GROUP_REPLICA_FAILED,

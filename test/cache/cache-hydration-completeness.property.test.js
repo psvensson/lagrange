@@ -11,6 +11,9 @@
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {
+  createBootstrapCacheHydrationApplier,
+} from '../../src/bootstrap/bootstrap-cache-hydration-applier.js';
+import {
   CacheHydrationService,
   SYSTEM_TABLES_TO_HYDRATE,
 } from '../../src/cache/cache-hydration-service.js';
@@ -111,6 +114,12 @@ function createMockQueryEngine(tableData) {
   };
 }
 
+function createHydrationService(queryEngine, cache) {
+  return new CacheHydrationService(queryEngine, cache, {
+    cdcEventApplier: createBootstrapCacheHydrationApplier(cache),
+  });
+}
+
 /**
  * Feature: admin-cli-cache-hydration
  * Property 1: Cache Hydration Completeness
@@ -125,10 +134,7 @@ test('Property 1: Cache contains all rows after hydration', async (t) => {
       async (tableData) => {
         const cache = new SystemTableCache();
         const queryEngine = createMockQueryEngine(tableData);
-        const hydrationService = new CacheHydrationService(
-          queryEngine,
-          cache,
-        );
+        const hydrationService = createHydrationService(queryEngine, cache);
 
         // Perform hydration
         const result = await hydrationService.hydrateCache();
@@ -188,10 +194,7 @@ test('Property 1: All system tables are queried', async (t) => {
           },
         };
 
-        const hydrationService = new CacheHydrationService(
-          queryEngine,
-          cache,
-        );
+        const hydrationService = createHydrationService(queryEngine, cache);
 
         await hydrationService.hydrateCache();
 
@@ -221,10 +224,7 @@ test('Property 1: Hydration result contains correct row counts', async (t) => {
       async (tableData) => {
         const cache = new SystemTableCache();
         const queryEngine = createMockQueryEngine(tableData);
-        const hydrationService = new CacheHydrationService(
-          queryEngine,
-          cache,
-        );
+        const hydrationService = createHydrationService(queryEngine, cache);
 
         const result = await hydrationService.hydrateCache();
 
@@ -257,10 +257,7 @@ test('Property 1: Cache data matches source data', async (t) => {
       async (tableData) => {
         const cache = new SystemTableCache();
         const queryEngine = createMockQueryEngine(tableData);
-        const hydrationService = new CacheHydrationService(
-          queryEngine,
-          cache,
-        );
+        const hydrationService = createHydrationService(queryEngine, cache);
 
         await hydrationService.hydrateCache();
 

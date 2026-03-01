@@ -356,6 +356,66 @@ test('NodeReintegrationService - fails reintegration on stale heartbeat', async 
   t.end();
 });
 
+test('NodeReintegrationService - skips stale reintegration completion overwrite',
+  async (t) => {
+    const now = Date.now();
+    let attemptedWhereClause = null;
+    const mockCDC = {
+      operations: [],
+      async updateSystemTableRow(tableName, whereClause, data) {
+        attemptedWhereClause = whereClause;
+        this.operations.push({type: 'update', tableName, whereClause, data});
+        return {
+          success: true,
+          partitionResult: {affectedRows: 0},
+        };
+      },
+    };
+    const mockCache = createMockCache();
+    const service = new NodeReintegrationService({
+      nodeId: 'test-node',
+      systemTableCache: mockCache,
+      cdcIntegrationService: mockCDC,
+    });
+    service.initialize();
+
+    const node = {
+      node_id: 'node-1',
+      status: NodeStatus.RECOVERING,
+      last_heartbeat: now - 1000,
+      recovered_at: now - 5000,
+    };
+    service.pendingReintegrations.set('node-1', {
+      status: ReintegrationStatus.IN_PROGRESS,
+      startedAt: now - 1000,
+    });
+    const events = [];
+    service.on('nodeReintegrated', (event) => events.push(event));
+
+    await service.completeReintegration(node);
+
+    t.same(
+      attemptedWhereClause,
+      {
+        node_id: 'node-1',
+        status: NodeStatus.RECOVERING,
+        last_heartbeat: node.last_heartbeat,
+        recovered_at: node.recovered_at,
+      },
+      'reintegration guard should target the observed recovering node snapshot',
+    );
+    t.equal(events.length, 0, 'guard miss should suppress reintegration event');
+    t.equal(service.reintegrationCount, 0, 'guard miss should not increment reintegration count');
+    t.equal(
+      service.pendingReintegrations.get('node-1')?.status,
+      ReintegrationStatus.IN_PROGRESS,
+      'guard miss should keep pending reintegration in progress',
+    );
+
+    service.shutdown();
+    t.end();
+  });
+
 test('NodeReintegrationService - getStats', async (t) => {
   const mockCache = createMockCache();
   const mockCDC = createMockCDCService();

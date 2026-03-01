@@ -16,6 +16,12 @@ import {ConfigurationManager} from
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {STATE} from '../../src/constants/index.js';
 
+function createNodeLeaseOwner(disconnectNodeDueToLeaseExpiry) {
+  return {
+    disconnectNodeDueToLeaseExpiry,
+  };
+}
+
 /**
  * Initialize test singletons.
  */
@@ -94,9 +100,17 @@ test('Property 14: Lease sweep removes expired leases',
           };
 
           const mockCdc = {
-            upsertSystemTableRow: async (_table, row) => {
-              updatedNodes.set(row.node_id, row);
-              return {success: true};
+            updateSystemTableRow: async (_table, whereClause, data) => {
+              updatedNodes.set(whereClause.node_id, {
+                node_id: whereClause.node_id,
+                ...data,
+              });
+              return {
+                success: true,
+                partitionResult: {
+                  affectedRows: 1,
+                },
+              };
             },
           };
 
@@ -113,7 +127,11 @@ test('Property 14: Lease sweep removes expired leases',
 
           const service = new LeaseService({
             nodeId: 'local-node',
-            cdcIntegrationService: mockCdc,
+            nodeLeaseOwner: createNodeLeaseOwner(async (observedNode) =>
+              mockCdc.updateSystemTableRow(null, observedNode, {
+                connection_state: STATE.DISCONNECTED,
+                ready_lease_expires_at: null,
+              })),
             systemTableCache: mockCache,
             sqlQueryEngine: mockSqlQueryEngine,
             messageGroupServices: new Set([mockMgService]),

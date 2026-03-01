@@ -10,11 +10,23 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
+import {CDCPipelineReadinessGate} from
+  '../../src/cdc/cdc-pipeline-readiness-gate.js';
 import {SystemTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {CACHE_HYDRATION_TABLES} from '../../src/cache/cache-constants.js';
 
 const NODE_ID = 'readiness-gate-test-node';
 const NODE_ADDRESS = 'ws://127.0.0.1:19091';
+
+const createManualClock = (startMs = 0) => {
+  let nowMs = startMs;
+  return {
+    now: () => nowMs,
+    sleep: async (delayMs = 0) => {
+      nowMs += delayMs;
+    },
+  };
+};
 
 /**
  * Build a hydration result that passes verifyCacheHydration.
@@ -139,11 +151,7 @@ test('phaseCacheHydration succeeds when CDC pipeline is ready',
     service.partitionServices = createPartitionServicesWithSubscribers();
     service.messageGroupServices = createMessageGroupServicesWithLeader();
 
-    service.subscribeToInitialSystemTableCDC = async () => {
-      // Fire cache change asynchronously so the readiness gate's
-      // one-shot listener (registered after this call) can observe it.
-      setTimeout(() => systemTableCache._fireChange(), 5);
-    };
+    service.subscribeToInitialSystemTableCDC = async () => {};
 
     await service.phaseCacheHydration();
     t.pass('phaseCacheHydration completed with ready CDC pipeline');
@@ -166,11 +174,19 @@ test('phaseCacheHydration fails on CDC readiness gate timeout',
     const systemTableCache = createFullyHydratedCache();
     const hydrationResult = createCompleteHydrationResult();
     applyCommonStubs(service, systemTableCache, hydrationResult);
+    const clock = createManualClock();
 
     // Empty services — no subscribers, no leader → gate never passes.
     service.partitionServices = new Map();
     service.messageGroupServices = new Map();
     service.subscribeToInitialSystemTableCDC = async () => {};
+    service.createCdcPipelineReadinessGate = (cache) =>
+      new CDCPipelineReadinessGate({
+        systemTableCache: cache,
+        cdcPropagatedTables: CACHE_HYDRATION_TABLES,
+        now: clock.now,
+        sleep: clock.sleep,
+      });
 
     await t.rejects(
       service.phaseCacheHydration(),
@@ -196,11 +212,19 @@ test('phaseCacheHydration timeout error lists unmet conditions',
     const systemTableCache = createFullyHydratedCache();
     const hydrationResult = createCompleteHydrationResult();
     applyCommonStubs(service, systemTableCache, hydrationResult);
+    const clock = createManualClock();
 
     // No partition services or message groups → all conditions unmet.
     service.partitionServices = new Map();
     service.messageGroupServices = new Map();
     service.subscribeToInitialSystemTableCDC = async () => {};
+    service.createCdcPipelineReadinessGate = (cache) =>
+      new CDCPipelineReadinessGate({
+        systemTableCache: cache,
+        cdcPropagatedTables: CACHE_HYDRATION_TABLES,
+        now: clock.now,
+        sleep: clock.sleep,
+      });
 
     try {
       await service.phaseCacheHydration();

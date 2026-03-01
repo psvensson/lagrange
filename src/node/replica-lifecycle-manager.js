@@ -56,6 +56,31 @@ const MessageType = REPLICA_LIFECYCLE_MESSAGE_TYPE;
  */
 const AckStatus = REPLICA_LIFECYCLE_ACK_STATUS;
 
+function guardedMutationApplied(result) {
+  if (result?.success === false) {
+    return false;
+  }
+  const affectedRows = Number(result?.partitionResult?.affectedRows);
+  return !Number.isFinite(affectedRows) ||
+    affectedRows > REPLICA_LIFECYCLE_NUM.ZERO;
+}
+
+function buildObservedReplicaWhereClause(service) {
+  const whereClause = {
+    service_id: service.service_id,
+  };
+  if (typeof service?.node_id === 'string' && service.node_id.length > 0) {
+    whereClause.node_id = service.node_id;
+  }
+  if (typeof service?.status === 'string' && service.status.length > 0) {
+    whereClause.status = service.status;
+  }
+  if (Number.isFinite(service?.updated_at)) {
+    whereClause.updated_at = service.updated_at;
+  }
+  return whereClause;
+}
+
 
 /**
  * ReplicaLifecycleManager handles CREATE_REPLICA and REMOVE_REPLICA messages.
@@ -585,14 +610,23 @@ class ReplicaLifecycleManager extends EventEmitter {
       try {
         if (status === ReplicaStatus.STARTING || status === ReplicaStatus.SYNCING) {
           // Mark 'starting'/'syncing' replicas as 'failed'
-          await this.cdcIntegrationService.updateSystemTableRow(
+          const failResult = await this.cdcIntegrationService.updateSystemTableRow(
             SystemTableName.SERVICES,
-            {service_id: serviceId},
+            buildObservedReplicaWhereClause(service),
             {
               status: ReplicaStatus.FAILED,
               error_message: REPLICA_LIFECYCLE_ERROR_MSG.RECOVERY_CLEANUP_ERROR,
             },
           );
+          if (!guardedMutationApplied(failResult)) {
+            this.logger.debug('Skipped stale replica recovery failure update', {
+              replicaId: serviceId,
+              partitionId,
+              status,
+              nodeId: this.nodeId,
+            });
+            continue;
+          }
 
           // Clean up local resources
           await this.cleanupReplicaResources(partitionId, serviceId);
@@ -604,15 +638,26 @@ class ReplicaLifecycleManager extends EventEmitter {
           });
         } else if (status === ReplicaStatus.STOPPING) {
           // Complete removal for 'stopping' replicas
-          await this.cdcIntegrationService.updateSystemTableRow(
+          const stopResult = await this.cdcIntegrationService.updateSystemTableRow(
             SystemTableName.SERVICES,
-            {service_id: serviceId},
+            buildObservedReplicaWhereClause(service),
             {status: ReplicaStatus.STOPPED},
           );
+          if (!guardedMutationApplied(stopResult)) {
+            this.logger.debug('Skipped stale replica recovery stop update', {
+              replicaId: serviceId,
+              partitionId,
+              nodeId: this.nodeId,
+            });
+            continue;
+          }
 
           await this.cdcIntegrationService.deleteSystemTableRow(
             SystemTableName.SERVICES,
-            {service_id: serviceId},
+            {
+              service_id: serviceId,
+              status: ReplicaStatus.STOPPED,
+            },
           );
 
           // Clean up local resources

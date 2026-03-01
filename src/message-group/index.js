@@ -4,8 +4,7 @@
 
 export {
   MessageGroupService,
-  RaftLogEntry,
-  InMemoryRaftStorage,
+  MessageGroupOperationLedger,
 } from './message-group-service.js';
 
 export {

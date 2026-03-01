@@ -130,6 +130,83 @@ test('HeartbeatService does not emit warning below usage threshold', async (t) =
   LoggingService.resetInstance();
 });
 
+test('HeartbeatService start and stop use injected interval scheduler', async (t) => {
+  initEnv();
+
+  const scheduled = [];
+  const cleared = [];
+  const service = new HeartbeatService({
+    nodeId: 'node-timer',
+    nodeAddress: '10.0.0.9:8080',
+    cdcIntegrationService: createMockCdc(),
+    systemTableCache: createMockCache(),
+    setIntervalFn: (callback, intervalMs) => {
+      const handle = {
+        callback,
+        intervalMs,
+        unrefCalled: false,
+        unref() {
+          this.unrefCalled = true;
+        },
+      };
+      scheduled.push(handle);
+      return handle;
+    },
+    clearIntervalFn: (handle) => {
+      cleared.push(handle);
+    },
+  });
+
+  service.initialize();
+  service.start();
+
+  t.equal(scheduled.length, 1, 'start should schedule one heartbeat interval');
+  t.equal(
+    scheduled[0].intervalMs,
+    service.heartbeatIntervalMs,
+    'injected scheduler should receive the configured interval',
+  );
+  t.equal(scheduled[0].unrefCalled, true, 'heartbeat timer should be unrefed when supported');
+
+  service.stop();
+  t.same(cleared, [scheduled[0]], 'stop should clear the injected interval handle');
+
+  ConfigurationManager.resetInstance();
+  LoggingService.resetInstance();
+});
+
+test('HeartbeatService sendHeartbeat uses injected clock', async (t) => {
+  initEnv();
+
+  let capturedUpdate = null;
+  const now = 12345;
+  const service = new HeartbeatService({
+    nodeId: 'node-clock',
+    nodeAddress: '10.0.0.10:8080',
+    cdcIntegrationService: {
+      updateSystemTableRow: async (_table, _whereClause, updateRow) => {
+        capturedUpdate = updateRow;
+        return {success: true};
+      },
+      upsertSystemTableRow: async () => ({success: true}),
+    },
+    systemTableCache: createMockCache(),
+    now: () => now,
+  });
+
+  await service.sendHeartbeat(null, null);
+
+  t.equal(capturedUpdate.last_heartbeat, now, 'heartbeat timestamp should come from injected clock');
+  t.equal(
+    capturedUpdate.ready_lease_expires_at,
+    now + service.readyLeaseMs,
+    'ready lease expiry should come from injected clock',
+  );
+
+  ConfigurationManager.resetInstance();
+  LoggingService.resetInstance();
+});
+
 test('HeartbeatService throttles endpoint upserts but refreshes after interval', async (t) => {
   initEnv();
 

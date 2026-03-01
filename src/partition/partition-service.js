@@ -598,12 +598,24 @@ class PartitionService extends EventEmitter {
   createRoleMutationHelper() {
     return new AuthoritativeRowMutationHelper({
       tableName: SystemTableName.SERVICES,
-      buildWhereClause: () => ({service_id: this.replicaId}),
+      buildWhereClause: (_role, context = {}) => {
+        const whereClause = {service_id: this.replicaId};
+        const cachedRow = context.cachedRow;
+        if (typeof cachedRow?.raft_role === 'string' && cachedRow.raft_role.length > 0) {
+          whereClause.raft_role = cachedRow.raft_role;
+        }
+        if (Number.isFinite(cachedRow?.updated_at)) {
+          whereClause.updated_at = cachedRow.updated_at;
+        }
+        return whereClause;
+      },
       buildUpdateData: (role, updatedAt) => ({
         raft_role: role,
         updated_at: updatedAt,
       }),
       buildExpectedCacheFields: (role) => ({raft_role: role}),
+      readRowFromCache: (systemTableCache) =>
+        systemTableCache?.get?.(TABLES.SERVICES, this.replicaId) || null,
       readValueFromCache: (systemTableCache) => {
         const cached = systemTableCache?.get?.(TABLES.SERVICES, this.replicaId);
         return cached?.raft_role || null;
@@ -625,7 +637,18 @@ class PartitionService extends EventEmitter {
   createLeaderNodeMutationHelper() {
     return new AuthoritativeRowMutationHelper({
       tableName: SystemTableName.PARTITIONS,
-      buildWhereClause: () => ({[COLUMN.PARTITION_ID]: this.partitionId}),
+      buildWhereClause: (_leaderNodeId, context = {}) => {
+        const whereClause = {[COLUMN.PARTITION_ID]: this.partitionId};
+        const cachedRow = context.cachedRow;
+        if (typeof cachedRow?.[COLUMN.LEADER_NODE_ID] === 'string' &&
+            cachedRow[COLUMN.LEADER_NODE_ID].length > 0) {
+          whereClause[COLUMN.LEADER_NODE_ID] = cachedRow[COLUMN.LEADER_NODE_ID];
+        }
+        if (Number.isFinite(cachedRow?.[COLUMN.UPDATED_AT])) {
+          whereClause[COLUMN.UPDATED_AT] = cachedRow[COLUMN.UPDATED_AT];
+        }
+        return whereClause;
+      },
       buildUpdateData: (leaderNodeId, updatedAt) => ({
         [COLUMN.LEADER_NODE_ID]: leaderNodeId,
         [COLUMN.UPDATED_AT]: updatedAt,
@@ -633,6 +656,8 @@ class PartitionService extends EventEmitter {
       buildExpectedCacheFields: (leaderNodeId) => ({
         [COLUMN.LEADER_NODE_ID]: leaderNodeId,
       }),
+      readRowFromCache: (systemTableCache) =>
+        systemTableCache?.get?.(TABLES.PARTITIONS, this.partitionId) || null,
       readValueFromCache: (systemTableCache) => {
         const cached = systemTableCache?.get?.(TABLES.PARTITIONS, this.partitionId);
         return cached?.[COLUMN.LEADER_NODE_ID] || null;
@@ -759,6 +784,101 @@ class PartitionService extends EventEmitter {
     }
 
     return this.buildPeerAddress(this.leaderId);
+  }
+
+  /**
+   * Read one system table row from the local cache when present.
+   * @param {string} tableName
+   * @param {Function} predicate
+   * @return {Object|null}
+   * @private
+   */
+  getCachedSystemTableRow(tableName, predicate) {
+    if (!this.systemTableCache || typeof predicate !== 'function') {
+      return null;
+    }
+
+    if (typeof this.systemTableCache.filter === 'function') {
+      const rows = this.systemTableCache.filter(tableName, predicate);
+      return rows[NUM.ZERO] || null;
+    }
+
+    if (typeof this.systemTableCache.getAll === 'function') {
+      const rows = this.systemTableCache.getAll(tableName) || [];
+      return rows.find(predicate) || null;
+    }
+
+    return null;
+  }
+
+  /**
+   * Read matching system table rows from the local cache when present.
+   * @param {string} tableName
+   * @param {Function} predicate
+   * @return {Array<Object>}
+   * @private
+   */
+  getCachedSystemTableRows(tableName, predicate) {
+    if (!this.systemTableCache || typeof predicate !== 'function') {
+      return [];
+    }
+
+    if (typeof this.systemTableCache.filter === 'function') {
+      return this.systemTableCache.filter(tableName, predicate);
+    }
+
+    if (typeof this.systemTableCache.getAll === 'function') {
+      const rows = this.systemTableCache.getAll(tableName) || [];
+      return rows.filter(predicate);
+    }
+
+    return [];
+  }
+
+  /**
+   * Resolve the current leader replica from canonical owner-row metadata.
+   * Owner rows outrank derived services roles; if leader_node_id is present,
+   * prefer the replica on that node before falling back to services.raft_role.
+   * @return {string|null}
+   * @private
+   */
+  resolveLeaderIdFromMetadata() {
+    const serviceRows = this.getCachedSystemTableRows(TABLES.SERVICES, (service) =>
+      service?.[COLUMN.PARTITION_ID] === this.partitionId &&
+      service?.[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.PARTITION &&
+      service?.[COLUMN.STATUS] !== ReplicaStatus.FAILED &&
+      service?.[COLUMN.STATUS] !== ReplicaStatus.REMOVED,
+    );
+    if (serviceRows.length === NUM.ZERO) {
+      return null;
+    }
+
+    const partitionRow = this.getCachedSystemTableRow(TABLES.PARTITIONS, (partition) =>
+      partition?.[COLUMN.PARTITION_ID] === this.partitionId,
+    );
+    const leaderNodeId = partitionRow?.[COLUMN.LEADER_NODE_ID] || null;
+    if (typeof leaderNodeId === 'string' && leaderNodeId.length > NUM.ZERO) {
+      const leaderReplica = serviceRows.find((service) =>
+        service?.[COLUMN.NODE_ID] === leaderNodeId,
+      );
+      const leaderReplicaId = leaderReplica?.[COLUMN.REPLICA_ID] ||
+        leaderReplica?.[COLUMN.SERVICE_ID] ||
+        null;
+      if (typeof leaderReplicaId === 'string' && leaderReplicaId.length > NUM.ZERO) {
+        return leaderReplicaId;
+      }
+    }
+
+    const leaderService = serviceRows.find((service) =>
+      String(service?.[COLUMN.RAFT_ROLE] || '').toLowerCase() ===
+        PARTITION_RAFT_ROLE.LEADER,
+    );
+    const leaderServiceId = leaderService?.[COLUMN.REPLICA_ID] ||
+      leaderService?.[COLUMN.SERVICE_ID] ||
+      null;
+    return typeof leaderServiceId === 'string' && leaderServiceId.length > NUM.ZERO ?
+      leaderServiceId :
+      null;
   }
 
   /**
@@ -4438,7 +4558,9 @@ class PartitionService extends EventEmitter {
     // Do not promote until we know who the current leader is.
     // Promoting without an observed leader can trigger election storms.
     if (!this.leaderId) {
-      this.leaderId = this.resolveLeaderIdFromHint() || null;
+      this.leaderId = this.resolveLeaderIdFromMetadata() ||
+        this.resolveLeaderIdFromHint() ||
+        null;
     }
     if (!this.leaderId) {
       this.logger.info(PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_DEFERRED, {

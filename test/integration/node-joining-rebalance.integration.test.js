@@ -32,6 +32,15 @@ import {
   waitFor,
 } from './helpers/cluster-test-helpers.js';
 
+async function shutdownOrFail(t, promise, label) {
+  try {
+    await promise;
+  } catch (error) {
+    t.comment(`${label}: ${error.message}`);
+    throw error;
+  }
+}
+
 /**
  * Wait until replica operations are quiescent for deterministic move assertions.
  * @param {Object} systemTableCache - System table cache.
@@ -237,10 +246,18 @@ test('Node joining rebalancing integration', async (t) => {
       await rebalanceCoordinator.shutdown();
     } finally {
       if (bootstrapService) {
-        await bootstrapService.shutdown().catch(() => {});
+        await shutdownOrFail(
+          t,
+          bootstrapService.shutdown(),
+          'bootstrap shutdown failed',
+        );
       }
       if (bootstrapResult?.messageRouter) {
-        await bootstrapResult.messageRouter.shutdown().catch(() => {});
+        await shutdownOrFail(
+          t,
+          bootstrapResult.messageRouter.shutdown(),
+          'message router shutdown failed',
+        );
       }
     }
   });
@@ -328,13 +345,21 @@ test('Node joining rebalancing integration', async (t) => {
         'new node should NOT be registered from HTTP bootstrap');
 
       // Cleanup API
-      await api.shutdown().catch(() => {});
+      await shutdownOrFail(t, api.shutdown(), 'bootstrap api shutdown failed');
     } finally {
       if (bootstrapService) {
-        await bootstrapService.shutdown().catch(() => {});
+        await shutdownOrFail(
+          t,
+          bootstrapService.shutdown(),
+          'bootstrap shutdown failed',
+        );
       }
       if (bootstrapResult?.messageRouter) {
-        await bootstrapResult.messageRouter.shutdown().catch(() => {});
+        await shutdownOrFail(
+          t,
+          bootstrapResult.messageRouter.shutdown(),
+          'message router shutdown failed',
+        );
       }
     }
   });
@@ -485,10 +510,18 @@ test('Node joining rebalancing integration', async (t) => {
       await rebalanceCoordinator.shutdown();
     } finally {
       if (bootstrapService) {
-        await bootstrapService.shutdown().catch(() => {});
+        await shutdownOrFail(
+          t,
+          bootstrapService.shutdown(),
+          'bootstrap shutdown failed',
+        );
       }
       if (bootstrapResult?.messageRouter) {
-        await bootstrapResult.messageRouter.shutdown().catch(() => {});
+        await shutdownOrFail(
+          t,
+          bootstrapResult.messageRouter.shutdown(),
+          'message router shutdown failed',
+        );
       }
     }
   });
@@ -559,7 +592,7 @@ test('Node joining rebalancing integration', async (t) => {
 
       const leaseSvc = new LeaseService({
         nodeId: seedNodeId,
-        cdcIntegrationService,
+        nodeLeaseOwner: heartbeatSvc,
         systemTableCache,
         sqlQueryEngine: cdcIntegrationService.sqlQueryEngine,
       });
@@ -677,10 +710,18 @@ test('Node joining rebalancing integration', async (t) => {
       dispatchSvc.stop();
     } finally {
       if (bootstrapService) {
-        await bootstrapService.shutdown().catch(() => {});
+        await shutdownOrFail(
+          t,
+          bootstrapService.shutdown(),
+          'bootstrap shutdown failed',
+        );
       }
       if (bootstrapResult?.messageRouter) {
-        await bootstrapResult.messageRouter.shutdown().catch(() => {});
+        await shutdownOrFail(
+          t,
+          bootstrapResult.messageRouter.shutdown(),
+          'message router shutdown failed',
+        );
       }
     }
   });

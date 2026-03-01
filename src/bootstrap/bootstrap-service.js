@@ -39,6 +39,7 @@ import {PartitionService} from '../partition/partition-service.js';
 import {
   BOOTSTRAP_CLEANUP_STEP,
   BOOTSTRAP_DEFAULT,
+  BOOTSTRAP_EPOCH,
   BOOTSTRAP_ERROR,
   BOOTSTRAP_EVENT,
   BOOTSTRAP_LOG_MSG,
@@ -48,9 +49,12 @@ import {
   BOOTSTRAP_READY_MESSAGE,
   BOOTSTRAP_REBALANCE_DELAY_MS,
   BOOTSTRAP_REBALANCE_REASON,
+  BOOTSTRAP_REPLICA_PROGRESS,
   BOOTSTRAP_REPLICA_REGISTRATION_REASON,
+  BOOTSTRAP_REPLICA_REGISTRATION_TRACE,
   BOOTSTRAP_SQL,
   BOOTSTRAP_SUBSYSTEM,
+  BOOTSTRAP_UNIFIED_RECONCILE,
 } from './bootstrap-constants.js';
 import {
   SystemTableName,
@@ -165,37 +169,9 @@ const routerInitFailed = bootstrapError.routerInitFailed;
 const messageGroupLeadershipTimeout = bootstrapError.messageGroupLeadershipTimeout;
 const partitionLeadershipTimeout = bootstrapError.partitionLeadershipTimeout;
 const DEFAULT_BOOTSTRAP_CONFIG = BOOTSTRAP_DEFAULT;
-const EPOCH_CONFIG_DESCRIPTION = 'Authoritative cluster assignment epoch';
-const BOOTSTRAP_REPLICA_PROGRESS = Object.freeze({
-  PREFIX: '[replica-create]',
-  TYPE_PARTITION: 'partition',
-  SPINNER_IDLE: '|',
-});
-const BOOTSTRAP_UNIFIED_RECONCILE = Object.freeze({
-  INFRA_READY_REASON: 'bootstrap_infrastructure_ready',
-  MESSAGE_GROUPS_REASON: 'bootstrap_message_groups',
-  PARTITIONS_REASON: 'bootstrap_partitions',
-  CHECK_INTERVAL_MS: 60 * 60 * 1000,
-  RUNTIME_KIND: RUNTIME_KIND.NATIVE_JS,
-});
 const DEFAULT_CACHE_SYNC_TABLES = new Set(CACHE_HYDRATION_TABLES);
 const BOOTSTRAP_REPLICA_REGISTRATION_PROGRESS_INTERVAL = 10;
 const BOOTSTRAP_REPLICA_STATE_TRANSITIONS_PER_REPLICA = 4;
-const BOOTSTRAP_REPLICA_REGISTRATION_TRACE = Object.freeze({
-  PREFIX: '[bootstrap replica registration]',
-  SCOPE_PARTITION: 'partition',
-  SCOPE_STATE: 'state',
-  EVENT_START: 'start',
-  EVENT_CALL_BEGIN: 'call_begin',
-  EVENT_CALL_END: 'call_end',
-  EVENT_ATTEMPT: 'attempt',
-  EVENT_TRANSITION_BEGIN: 'transition_begin',
-  EVENT_TRANSITION_END: 'transition_end',
-  EVENT_SUCCESS: 'success',
-  EVENT_ERROR: 'error',
-  EVENT_COMPLETE: 'complete',
-  EVENT_SKIP_MISSING_PARTITION: 'skip_missing_partition',
-});
 
 /**
  * Maps BOOTSTRAP_PHASE values to BOOTSTRAP_SUB_PHASE values
@@ -360,8 +336,7 @@ class BootstrapService extends EventEmitter {
 
     // Logging
     const loggingService = LoggingService.getInstance();
-    this.logger = loggingService.isInitialized() ?
-      loggingService.forSubsystem(BOOTSTRAP_SUBSYSTEM.SERVICE) : console;
+    this.logger = loggingService.forSubsystem(BOOTSTRAP_SUBSYSTEM.SERVICE);
     this.logger.debug(BootstrapLog.RUNTIME_WIRING_READY, {
       nodeId: this.nodeId,
       owner: 'createRuntimeStartupWiring',
@@ -2810,7 +2785,7 @@ class BootstrapService extends EventEmitter {
       [COLUMN.CONFIG_VALUE]: serializedEpoch,
       [COLUMN.VALUE_TYPE]: CONFIG_VALUE_TYPE.JSON,
       [COLUMN.REQUIRES_RESTART]: NUM.ZERO,
-      [COLUMN.DESCRIPTION]: EPOCH_CONFIG_DESCRIPTION,
+      [COLUMN.DESCRIPTION]: BOOTSTRAP_EPOCH.CONFIG_DESCRIPTION,
       [COLUMN.DEFAULT_VALUE]: serializedEpoch,
       [COLUMN.UPDATED_BY]: this.nodeId,
       [COLUMN.UPDATED_AT]: now,
@@ -2911,10 +2886,8 @@ class BootstrapService extends EventEmitter {
     // Gate: verify CDC pipeline is fully wired before proceeding.
     // Requirements 2.4, 2.5 — node must not transition to READY with
     // an incomplete CDC pipeline.
-    const cdcReadinessGate = new CDCPipelineReadinessGate({
-      systemTableCache,
-      cdcPropagatedTables: CDC_PROPAGATED_TABLES,
-    });
+    const cdcReadinessGate =
+      this.createCdcPipelineReadinessGate(systemTableCache);
     const cdcReadinessTimeoutMs = this.config.cdcPipelineReadinessTimeoutMs ||
       CDC_PIPELINE_READINESS_TIMEOUT_MS;
     const readinessStartedAt = Date.now();
@@ -4907,6 +4880,21 @@ class BootstrapService extends EventEmitter {
   }
 
   /**
+   * Create the shared CDC pipeline readiness gate.
+   * Tests override this to inject manual time instead of wall-clock waits.
+   * @param {Object} systemTableCache
+   * @return {CDCPipelineReadinessGate}
+   */
+  createCdcPipelineReadinessGate(systemTableCache) {
+    return new CDCPipelineReadinessGate({
+      systemTableCache,
+      cdcPropagatedTables: CDC_PROPAGATED_TABLES,
+      now: () => Date.now(),
+      sleep: (delayMs) => this.sleep(delayMs),
+    });
+  }
+
+  /**
    * Shutdown the bootstrap service and all managed services.
    * @return {Promise<void>}
    */
@@ -4942,8 +4930,7 @@ class BootstrapService extends EventEmitter {
 
     if (!result.success) {
       const loggingService = LoggingService.getInstance();
-      const logger = loggingService.isInitialized() ?
-        loggingService.forSubsystem(BOOTSTRAP_SUBSYSTEM.SERVICE) : console;
+      const logger = loggingService.forSubsystem(BOOTSTRAP_SUBSYSTEM.SERVICE);
 
       logger.error(BootstrapLog.BOOTSTRAP_EXIT_FAILED, {
         nodeId: result.nodeId,

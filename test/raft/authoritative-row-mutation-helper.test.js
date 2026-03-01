@@ -134,6 +134,235 @@ test('AuthoritativeRowMutationHelper - flush schedules retry when owner row is n
     t.equal(helper.persistedValue, 'leader', 'successful retry should persist the pending value');
   });
 
+test('AuthoritativeRowMutationHelper - flushes newer pending value after in-flight write',
+  async (t) => {
+    const updates = [];
+    let now = 100;
+    let releaseFirstWrite = null;
+    let signalFirstWriteStarted = null;
+    let resolveSecondWrite = null;
+    const firstWriteStarted = new Promise((resolve) => {
+      signalFirstWriteStarted = resolve;
+    });
+    const firstWriteReleased = new Promise((resolve) => {
+      releaseFirstWrite = resolve;
+    });
+    const secondWriteCompleted = new Promise((resolve) => {
+      resolveSecondWrite = resolve;
+    });
+    let updateCallCount = 0;
+    const helper = new AuthoritativeRowMutationHelper({
+      tableName: 'services',
+      buildWhereClause: () => ({service_id: 'replica-1'}),
+      buildUpdateData: (value, updatedAt) => ({
+        raft_role: value,
+        updated_at: updatedAt,
+      }),
+      buildExpectedCacheFields: (value) => ({raft_role: value}),
+      readValueFromCache: () => null,
+      cdcIntegrationService: {
+        updateSystemTableRow: async (tableName, whereClause, data, options) => {
+          updateCallCount += 1;
+          updates.push({tableName, whereClause, data, options});
+          if (updateCallCount === 1) {
+            signalFirstWriteStarted();
+            await firstWriteReleased;
+          } else {
+            resolveSecondWrite();
+          }
+          return {success: true, call: updateCallCount};
+        },
+      },
+      now: () => now++,
+    });
+
+    helper.pendingValue = 'candidate';
+    const initialFlush = helper.flush();
+    await firstWriteStarted;
+
+    helper.queue('leader');
+    releaseFirstWrite();
+
+    await initialFlush;
+    await secondWriteCompleted;
+
+    t.equal(updates.length, 2, 'should perform a follow-up authoritative write');
+    t.same(updates.map((update) => update.data), [
+      {raft_role: 'candidate', updated_at: 100},
+      {raft_role: 'leader', updated_at: 101},
+    ], 'should persist both the in-flight value and the newer pending value in order');
+    t.equal(helper.persistedValue, 'leader', 'should track the latest persisted value');
+    t.equal(helper.pendingValue, null, 'should clear the newer pending value after follow-up flush');
+  });
+
+test('AuthoritativeRowMutationHelper - guarded owner write miss preserves pending state and retries',
+  async (t) => {
+    const scheduled = [];
+    let capturedWhereClause = null;
+    let updateCallCount = 0;
+    const cachedRow = {
+      partition_id: 'p1',
+      leader_node_id: 'node-a',
+      updated_at: 7,
+    };
+    const helper = new AuthoritativeRowMutationHelper({
+      tableName: 'partitions',
+      buildWhereClause: (_value, context = {}) => ({
+        partition_id: 'p1',
+        leader_node_id: context.cachedRow?.leader_node_id,
+        updated_at: context.cachedRow?.updated_at,
+      }),
+      buildUpdateData: (value, now) => ({
+        leader_node_id: value,
+        updated_at: now,
+      }),
+      readRowFromCache: () => cachedRow,
+      readValueFromCache: () => cachedRow.leader_node_id,
+      cdcIntegrationService: {
+        updateSystemTableRow: async (_tableName, whereClause) => {
+          updateCallCount += 1;
+          capturedWhereClause = whereClause;
+          return {
+            success: true,
+            partitionResult: {affectedRows: 0},
+          };
+        },
+      },
+      setTimeoutFn: (callback) => {
+        scheduled.push(callback);
+        return callback;
+      },
+      clearTimeoutFn: () => {},
+      now: () => 11,
+    });
+
+    helper.pendingValue = 'node-b';
+    helper.persistedValue = 'node-a';
+
+    const result = await helper.flush();
+
+    t.same(
+      capturedWhereClause,
+      {
+        partition_id: 'p1',
+        leader_node_id: 'node-a',
+        updated_at: 7,
+      },
+      'guarded owner write should target the observed owner row snapshot',
+    );
+    t.equal(result.reason, 'observed-state-changed',
+      'guard miss should classify observed-state changes explicitly');
+    t.equal(helper.pendingValue, 'node-b',
+      'guard miss should preserve the pending owner update for reconciliation');
+    t.equal(helper.persistedValue, 'node-a',
+      'guard miss should keep the last known persisted owner value');
+    t.equal(scheduled.length, 1, 'guard miss should schedule one retry');
+
+    await Promise.resolve();
+    await Promise.resolve();
+
+    t.equal(updateCallCount, 1,
+      'guard miss must not spin immediate follow-up microtasks before the retry budget');
+  });
+
+test('AuthoritativeRowMutationHelper - queued owner update is not stranded behind a retry timer',
+  async (t) => {
+    const scheduled = [];
+    const writes = [];
+    const cachedRow = {
+      partition_id: 'p1',
+      leader_node_id: 'node-a',
+      updated_at: 7,
+    };
+    let updateCallCount = 0;
+    let now = 11;
+    const helper = new AuthoritativeRowMutationHelper({
+      tableName: 'partitions',
+      buildWhereClause: (_value, context = {}) => ({
+        partition_id: 'p1',
+        leader_node_id: context.cachedRow?.leader_node_id,
+        updated_at: context.cachedRow?.updated_at,
+      }),
+      buildUpdateData: (value, updatedAt) => ({
+        leader_node_id: value,
+        updated_at: updatedAt,
+      }),
+      readRowFromCache: () => cachedRow,
+      readValueFromCache: () => cachedRow.leader_node_id,
+      cdcIntegrationService: {
+        updateSystemTableRow: async (_tableName, whereClause, data) => {
+          updateCallCount += 1;
+          writes.push({whereClause, data});
+          if (updateCallCount === 1) {
+            return {
+              success: true,
+              partitionResult: {affectedRows: 0},
+            };
+          }
+          return {
+            success: true,
+            partitionResult: {affectedRows: 1},
+          };
+        },
+      },
+      setTimeoutFn: (callback) => {
+        scheduled.push(callback);
+        return callback;
+      },
+      clearTimeoutFn: () => {},
+      now: () => now++,
+    });
+
+    helper.pendingValue = 'node-b';
+    helper.persistedValue = 'node-a';
+
+    const firstResult = await helper.flush();
+
+    t.equal(firstResult.reason, 'observed-state-changed',
+      'initial guarded miss should schedule reconciliation');
+    t.equal(scheduled.length, 1, 'guard miss should arm one retry timer');
+
+    cachedRow.leader_node_id = 'node-b';
+    cachedRow.updated_at = 8;
+    helper.queue('node-c');
+    await Promise.resolve();
+
+    t.equal(updateCallCount, 2,
+      'a newer queued owner update should converge before the retry timer fires');
+    t.same(writes, [
+      {
+        whereClause: {
+          partition_id: 'p1',
+          leader_node_id: 'node-a',
+          updated_at: 7,
+        },
+        data: {
+          leader_node_id: 'node-b',
+          updated_at: 11,
+        },
+      },
+      {
+        whereClause: {
+          partition_id: 'p1',
+          leader_node_id: 'node-b',
+          updated_at: 8,
+        },
+        data: {
+          leader_node_id: 'node-c',
+          updated_at: 12,
+        },
+      },
+    ], 'follow-up writes should eventually advance to the latest observed owner row');
+
+    cachedRow.leader_node_id = 'node-c';
+    cachedRow.updated_at = 9;
+    await scheduled[0]();
+
+    t.equal(updateCallCount, 2, 'stale retry timer should no-op once the latest value is persisted');
+    t.equal(helper.persistedValue, 'node-c', 'latest queued owner update should persist');
+    t.equal(helper.pendingValue, null, 'latest queued owner update should clear pending state');
+  });
+
 test('AuthoritativeRowMutationHelper - classifies cache visibility failures', async (t) => {
   t.equal(
     classifyMutationFailure(new Error('Cache update not observed for services:replica-1')),

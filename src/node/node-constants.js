@@ -6,6 +6,11 @@ const NODE_LIFECYCLE_SUBSYSTEM = 'node-lifecycle-state-machine';
 const NODE_LIFECYCLE_EVENT = Object.freeze({
   STATE_CHANGE: 'stateChange',
   SUB_PHASE_CHANGE: 'subPhaseChange',
+  TRANSITION_ERROR: 'transitionError',
+});
+
+const NODE_LIFECYCLE_DIAGNOSTIC_CODE = Object.freeze({
+  INVALID_TRANSITION: 'node_invalid_transition',
 });
 
 const NODE_SERVICE_SUBSYSTEM = 'node-service';
@@ -172,6 +177,13 @@ const FAILURE_DETECTOR_LOG_MSG = Object.freeze({
   MARK_NODE_RECOVERING_FAILED: 'Failed to mark node as recovering',
   MARK_PARTITION_REPLICA_FAILED_FAILED: 'Failed to mark partition replica as failed',
   MARK_MESSAGE_GROUP_REPLICA_FAILED_FAILED: 'Failed to mark message group replica as failed',
+  STALE_NODE_SUSPICION_UPDATE: 'Skipped stale node suspicion update',
+  STALE_NODE_FAILURE_UPDATE: 'Skipped stale node failure update',
+  STALE_NODE_RECOVERY_UPDATE: 'Skipped stale node recovery update',
+  STALE_PARTITION_REPLICA_FAILURE_UPDATE:
+    'Skipped stale partition replica failure update',
+  STALE_MESSAGE_GROUP_REPLICA_FAILURE_UPDATE:
+    'Skipped stale message-group replica failure update',
   NODE_FLAPPING_DETECTED: 'Node flapping detected',
   RESET_ADAPTIVE_THRESHOLD: 'Reset adaptive threshold for stable node',
   SHUTDOWN: 'Failure detector shutdown',
@@ -241,6 +253,9 @@ const NODE_REINTEGRATION_LOG_MSG = Object.freeze({
   REINTEGRATION_COMPLETED: 'Node reintegration completed',
   REINTEGRATION_FAILED: 'Node reintegration failed',
   MARK_NODE_FAILED_FAILED: 'Failed to mark node as failed',
+  STALE_COMPLETION_UPDATE:
+    'Skipped stale node reintegration completion update',
+  STALE_FAILURE_UPDATE: 'Skipped stale node reintegration failure update',
   REBALANCER_NOTICE: 'Rebalancer will gradually restore replicas to this node',
   SHUTDOWN: 'Node reintegration service shutdown',
 });
@@ -283,6 +298,7 @@ const JOINING_SUB_PHASE = Object.freeze({
 export {
   NODE_LIFECYCLE_SUBSYSTEM,
   NODE_LIFECYCLE_EVENT,
+  NODE_LIFECYCLE_DIAGNOSTIC_CODE,
   NODE_LIFECYCLE_LOG_MSG,
   NODE_LIFECYCLE_ERROR_NAME,
   NODE_LIFECYCLE_ERROR_MSG,

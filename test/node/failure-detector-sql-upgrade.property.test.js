@@ -1,20 +1,19 @@
 /**
- * Property Test: FailureDetector SQL engine upgrade
+ * Property Test: FailureDetector SQL engine replacement
  * Feature: guideline-violations-cleanup,
- *   Property 3: FailureDetector SQL engine upgrade
+ *   Property 3: FailureDetector SQL engine replacement
  *
  * **Validates: Requirements 6.2, 6.3**
  *
  * *For any* query executed by the FailureDetector after
- * `upgradeSqlQueryEngine()` has been called with a real engine,
- * the real SQL engine's `executeQuery` method should be invoked
- * (not the cache-backed facade).
+ * `upgradeSqlQueryEngine()` has been called with a replacement engine,
+ * the replacement engine's `executeQuery` method should be invoked
+ * instead of the previously active engine.
  */
 
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {FailureDetector} from '../../src/node/failure-detector.js';
-import {FAILURE_DETECTOR_SQL} from '../../src/node/node-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 
@@ -35,12 +34,18 @@ afterEach(() => {
 });
 
 /**
- * Create a mock system table cache with minimal data.
- * @return {Object} Mock system table cache.
+ * Create a mock SQL query engine.
+ * @param {Function} onCall - Optional callback on execute.
+ * @return {{executeQuery: Function}} Mock SQL engine.
  */
-function createMockSystemTableCache() {
+function createMockSqlQueryEngine(onCall = null) {
   return {
-    getAll: () => [],
+    executeQuery: async (...args) => {
+      if (onCall) {
+        onCall(...args);
+      }
+      return {success: true, rows: []};
+    },
   };
 }
 
@@ -58,69 +63,51 @@ function createMockCDCService() {
 
 /**
  * Feature: guideline-violations-cleanup
- * Property 3: FailureDetector SQL engine upgrade
+ * Property 3: FailureDetector SQL engine replacement
  */
-test('Property 3: FailureDetector SQL engine upgrade', async (t) => {
+test('Property 3: FailureDetector SQL engine replacement', async (t) => {
   /**
    * After upgradeSqlQueryEngine() is called with a real engine,
-   * all subsequent queries go through the real engine, not the
-   * cache-backed facade.
+   * all subsequent queries go through the replacement engine, not the
+   * previously active engine.
    */
   t.test('queries route to real engine after upgrade', async (t) => {
-    const sqlArb = fc.constantFrom(
-      FAILURE_DETECTOR_SQL.SELECT_ALL_NODES,
-      FAILURE_DETECTOR_SQL.SELECT_SERVICES_BY_NODE_AND_TYPE,
-    );
-
     await fc.assert(
       fc.asyncProperty(
-        sqlArb,
+        fc.string(),
         fc.array(fc.string(), {minLength: 0, maxLength: 2}),
         async (sql, params) => {
           let realEngineCalled = false;
-          let facadeCalled = false;
-
-          const mockCache = createMockSystemTableCache();
+          let initialEngineCalled = false;
           const mockCDC = createMockCDCService();
+          const initialEngine = createMockSqlQueryEngine(() => {
+            initialEngineCalled = true;
+          });
 
-          // Create detector with cache but no SQL engine
-          // so it creates the cache-backed facade
           const detector = new FailureDetector({
             nodeId: 'test-node',
-            systemTableCache: mockCache,
+            sqlQueryEngine: initialEngine,
             cdcIntegrationService: mockCDC,
           });
           detector.initialize();
 
-          // Spy on the facade by wrapping the current engine
-          const facade = detector.sqlQueryEngine;
-          const originalFacadeExecute = facade.executeQuery;
-          facade.executeQuery = async (...args) => {
-            facadeCalled = true;
-            return originalFacadeExecute(...args);
-          };
-
-          // Create a real engine that tracks calls
           const realEngine = {
-            executeQuery: async () => {
+            executeQuery: async (...executeArgs) => {
               realEngineCalled = true;
-              return {success: true, rows: []};
+              return {success: true, rows: executeArgs};
             },
           };
 
-          // Upgrade to the real engine
           detector.upgradeSqlQueryEngine(realEngine);
 
-          // Execute a query after upgrade
           await detector.sqlQueryEngine.executeQuery(sql, params);
 
-          // The real engine should have been called
-          return realEngineCalled === true && facadeCalled === false;
+          return realEngineCalled === true && initialEngineCalled === false;
         },
       ),
       {numRuns: 10},
     );
-    t.pass('all queries routed to real engine after upgrade');
+    t.pass('all queries routed to replacement engine after upgrade');
     t.end();
   });
 });

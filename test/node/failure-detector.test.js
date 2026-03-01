@@ -217,6 +217,60 @@ test('FailureDetector - detects node suspicion', async (t) => {
   t.end();
 });
 
+test('FailureDetector - skips stale suspicion overwrite when heartbeat advanced after snapshot',
+  async (t) => {
+    const now = Date.now();
+    const observedNode = {
+      node_id: 'node-1',
+      status: NodeStatus.ACTIVE,
+      last_heartbeat: now - 12000,
+    };
+    let attemptedWhereClause = null;
+    const mockCDC = {
+      operations: [],
+      async updateSystemTableRow(tableName, whereClause, data) {
+        attemptedWhereClause = whereClause;
+        this.operations.push({type: 'update', tableName, whereClause, data});
+        return {
+          success: true,
+          partitionResult: {affectedRows: 0},
+        };
+      },
+      async deleteSystemTableRow() {
+        t.fail('stale suspicion guard miss should not delete rows');
+      },
+    };
+
+    const mockEngine = createMockSqlEngine({
+      nodes: [observedNode],
+    });
+
+    const detector = new FailureDetector({
+      nodeId: 'test-node',
+      sqlQueryEngine: mockEngine,
+      cdcIntegrationService: mockCDC,
+    });
+    detector.initialize();
+
+    const events = [];
+    detector.on('nodeSuspected', (event) => events.push(event));
+
+    await detector.checkNodeHealth();
+
+    t.same(
+      attemptedWhereClause,
+      {
+        node_id: 'node-1',
+        status: NodeStatus.ACTIVE,
+        last_heartbeat: observedNode.last_heartbeat,
+      },
+      'suspicion guard should target the observed node snapshot',
+    );
+    t.equal(events.length, 0, 'guard miss should suppress stale suspicion event');
+    t.equal(mockCDC.operations.length, 1, 'should attempt one guarded update');
+    t.end();
+  });
+
 test('FailureDetector - detects node failure', async (t) => {
   const mockCDC = createMockCDCService();
   const now = Date.now();

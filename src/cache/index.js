@@ -15,7 +15,6 @@ export {
 
 export {
   CacheHydrationService,
-  SYSTEM_TABLES_TO_HYDRATE,
 } from './cache-hydration-service.js';
 
 export {

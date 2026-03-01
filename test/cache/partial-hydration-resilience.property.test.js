@@ -10,6 +10,9 @@
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {
+  createBootstrapCacheHydrationApplier,
+} from '../../src/bootstrap/bootstrap-cache-hydration-applier.js';
+import {
   CacheHydrationService,
   SYSTEM_TABLES_TO_HYDRATE,
 } from '../../src/cache/cache-hydration-service.js';
@@ -122,6 +125,12 @@ function createFailingQueryEngine(tableData, failingTables) {
   };
 }
 
+function createHydrationService(queryEngine, cache) {
+  return new CacheHydrationService(queryEngine, cache, {
+    cdcEventApplier: createBootstrapCacheHydrationApplier(cache),
+  });
+}
+
 /**
  * Feature: admin-cli-cache-hydration
  * Property 2: Partial Hydration Resilience
@@ -137,10 +146,7 @@ test('Property 2: Successful tables are hydrated despite failures', async (t) =>
       async (tableData, failingTables) => {
         const cache = new SystemTableCache();
         const queryEngine = createFailingQueryEngine(tableData, failingTables);
-        const hydrationService = new CacheHydrationService(
-          queryEngine,
-          cache,
-        );
+        const hydrationService = createHydrationService(queryEngine, cache);
 
         const result = await hydrationService.hydrateCache();
 
@@ -184,10 +190,7 @@ test('Property 2: Failed tables are reported in errors', async (t) => {
       async (tableData, failingTables) => {
         const cache = new SystemTableCache();
         const queryEngine = createFailingQueryEngine(tableData, failingTables);
-        const hydrationService = new CacheHydrationService(
-          queryEngine,
-          cache,
-        );
+        const hydrationService = createHydrationService(queryEngine, cache);
 
         const result = await hydrationService.hydrateCache();
 
@@ -229,10 +232,7 @@ test('Property 2: Failed tables have empty cache', async (t) => {
       async (tableData, failingTables) => {
         const cache = new SystemTableCache();
         const queryEngine = createFailingQueryEngine(tableData, failingTables);
-        const hydrationService = new CacheHydrationService(
-          queryEngine,
-          cache,
-        );
+        const hydrationService = createHydrationService(queryEngine, cache);
 
         await hydrationService.hydrateCache();
 
@@ -288,10 +288,7 @@ test('Property 2: Hydration continues after failure', async (t) => {
           },
         };
 
-        const hydrationService = new CacheHydrationService(
-          queryEngine,
-          cache,
-        );
+        const hydrationService = createHydrationService(queryEngine, cache);
 
         await hydrationService.hydrateCache();
 

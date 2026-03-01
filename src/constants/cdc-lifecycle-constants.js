@@ -1,3 +1,7 @@
+import {NUM} from './numbers.js';
+import {TIME_MS} from './time.js';
+import {TYPEOF} from './types.js';
+
 // ---------------------------------------------------------------------------
 // CDC Lifecycle Constants
 // ---------------------------------------------------------------------------
@@ -9,11 +13,11 @@
 
 // --- Timeouts and capacities ---
 
-const CDC_CONFIRMATION_DEFAULT_TIMEOUT_MS = 5000;
-const CDC_EVENT_BUFFER_CAPACITY = 1000;
-const CDC_PIPELINE_READINESS_POLL_INTERVAL_MS = 100;
-const CDC_PIPELINE_READINESS_TIMEOUT_MS = 30000;
-const CLUSTER_READINESS_TIMEOUT_MS = 30000;
+const CDC_CONFIRMATION_DEFAULT_TIMEOUT_MS = TIME_MS.SECOND * NUM.FIVE;
+const CDC_EVENT_BUFFER_CAPACITY = NUM.THOUSAND;
+const CDC_PIPELINE_READINESS_POLL_INTERVAL_MS = NUM.HUNDRED;
+const CDC_PIPELINE_READINESS_TIMEOUT_MS = TIME_MS.SECOND * NUM.THIRTY;
+const CLUSTER_READINESS_TIMEOUT_MS = TIME_MS.SECOND * NUM.THIRTY;
 
 // --- Error type names ---
 
@@ -35,6 +39,7 @@ const CDC_LIFECYCLE_LOG_MSG = Object.freeze({
   PIPELINE_NOT_READY: 'CDC pipeline readiness conditions not met',
   PIPELINE_READY: 'CDC pipeline readiness confirmed',
   PIPELINE_READINESS_TIMEOUT: 'CDC pipeline readiness gate timed out',
+  PIPELINE_CACHE_PROBE_FAILED: 'CDC pipeline cache hydration probe failed',
   CLUSTER_NOT_READY: 'Cluster readiness conditions not met',
   CLUSTER_READY: 'Cluster readiness confirmed',
   CLUSTER_READINESS_TIMEOUT:
@@ -64,6 +69,24 @@ const CDC_PIPELINE_READINESS_CONDITION = Object.freeze({
   PIPELINE_PROVEN: 'pipelineProven',
 });
 
+const CDC_PIPELINE_READINESS_GATE = Object.freeze({
+  DEFAULT_OPTIONS: Object.freeze({}),
+  EMPTY_PROPAGATED_TABLES: Object.freeze([]),
+  ENTITY_ID: 'cdc-pipeline',
+  SUBSYSTEM: 'cdc-pipeline-readiness',
+  TIMEOUT_KIND: Object.freeze({
+    NO_PROGRESS: 'no_progress',
+    ABSOLUTE_DEADLINE_EXHAUSTED: 'absolute_deadline_exhausted',
+  }),
+});
+
+const CDC_PIPELINE_READINESS_NOW = () => Date.now();
+
+const CDC_PIPELINE_READINESS_SLEEP = (delayMs) =>
+  typeof delayMs === TYPEOF.NUMBER ?
+    new Promise((resolve) => setTimeout(resolve, delayMs)) :
+    new Promise((resolve) => setTimeout(resolve, NUM.ZERO));
+
 // --- Cluster readiness condition names ---
 
 const CLUSTER_READINESS_CONDITION = Object.freeze({
@@ -79,7 +102,10 @@ export {
   CDC_LIFECYCLE_LOG_MSG,
   CDC_PIPELINE_METRIC,
   CDC_PIPELINE_READINESS_CONDITION,
+  CDC_PIPELINE_READINESS_GATE,
+  CDC_PIPELINE_READINESS_NOW,
   CDC_PIPELINE_READINESS_POLL_INTERVAL_MS,
+  CDC_PIPELINE_READINESS_SLEEP,
   CDC_PIPELINE_READINESS_TIMEOUT_MS,
   CLUSTER_READINESS_CONDITION,
   CLUSTER_READINESS_TIMEOUT_MS,

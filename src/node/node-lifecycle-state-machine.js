@@ -6,94 +6,36 @@
 
 import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
-import {NODE_STATE, STRING} from '../constants/index.js';
+import {STRING, TYPEOF} from '../constants/index.js';
 import {
-  BOOTSTRAP_SUB_PHASE,
-  JOINING_SUB_PHASE,
+  NODE_LIFECYCLE_DIAGNOSTIC_CODE,
   NODE_LIFECYCLE_SUBSYSTEM,
   NODE_LIFECYCLE_EVENT,
   NODE_LIFECYCLE_LOG_MSG,
   NODE_LIFECYCLE_ERROR_NAME,
   NODE_LIFECYCLE_ERROR_MSG,
 } from './node-constants.js';
+import {
+  NODE_LIFECYCLE_DEFAULT_OPTIONS,
+  NODE_LIFECYCLE_NO_SUB_PHASE,
+  NODE_LIFECYCLE_NOW,
+  NODE_LIFECYCLE_STATE,
+  NODE_LIFECYCLE_TERMINAL_SUB_PHASE_ADVANCE,
+  NODE_LIFECYCLE_SUB_PHASE_ROOT,
+  NODE_LIFECYCLE_VALID_SUB_PHASES,
+  NODE_LIFECYCLE_VALID_SUB_PHASE_TRANSITIONS,
+  NODE_LIFECYCLE_VALID_TRANSITIONS,
+} from './node-lifecycle-state-machine-constants.js';
+
+const NodeState = NODE_LIFECYCLE_STATE;
+const VALID_TRANSITIONS = NODE_LIFECYCLE_VALID_TRANSITIONS;
+const VALID_SUB_PHASES = NODE_LIFECYCLE_VALID_SUB_PHASES;
+const VALID_SUB_PHASE_TRANSITIONS = NODE_LIFECYCLE_VALID_SUB_PHASE_TRANSITIONS;
+const TERMINAL_SUB_PHASE_ADVANCE = NODE_LIFECYCLE_TERMINAL_SUB_PHASE_ADVANCE;
 
 /**
- * Valid state transitions map.
- * Key: current state
- * Value: array of valid next states
+ * @typedef {Record<string, number>} NodeLifecycleSubPhaseDurations
  */
-const NodeState = NODE_STATE;
-
-const VALID_TRANSITIONS = {
-  [NodeState.STARTING]: [NodeState.CONNECTING, NodeState.STOPPED],
-  [NodeState.CONNECTING]: [NodeState.DISCOVERING, NodeState.STOPPED],
-  [NodeState.DISCOVERING]: [NodeState.JOINING, NodeState.STOPPED],
-  [NodeState.JOINING]: [NodeState.SYNCING, NodeState.READY, NodeState.STOPPED],
-  [NodeState.SYNCING]: [NodeState.READY, NodeState.STOPPED],
-  [NodeState.READY]: [NodeState.DRAINING],
-  [NodeState.DRAINING]: [NodeState.STOPPED],
-  [NodeState.STOPPED]: [],
-};
-
-const VALID_SUB_PHASES = Object.freeze({
-  [NodeState.STARTING]: Object.freeze([
-    BOOTSTRAP_SUB_PHASE.INFRASTRUCTURE,
-    BOOTSTRAP_SUB_PHASE.MESSAGE_GROUPS,
-    BOOTSTRAP_SUB_PHASE.PARTITIONS,
-    BOOTSTRAP_SUB_PHASE.REGISTRATION,
-    BOOTSTRAP_SUB_PHASE.CACHE_HYDRATION,
-  ]),
-  [NodeState.JOINING]: Object.freeze([
-    JOINING_SUB_PHASE.CONTACTING_SEED,
-    JOINING_SUB_PHASE.CONNECTING_WEBSOCKET,
-    JOINING_SUB_PHASE.CREATING_MESSAGE_GROUP,
-    JOINING_SUB_PHASE.JOINING_MESSAGE_GROUP,
-    JOINING_SUB_PHASE.WAITING_LEADERSHIP,
-    JOINING_SUB_PHASE.QUERYING_STATE,
-  ]),
-});
-
-const VALID_SUB_PHASE_TRANSITIONS = Object.freeze({
-  null: Object.freeze([
-    BOOTSTRAP_SUB_PHASE.INFRASTRUCTURE,
-    JOINING_SUB_PHASE.CONTACTING_SEED,
-  ]),
-  [BOOTSTRAP_SUB_PHASE.INFRASTRUCTURE]: Object.freeze([
-    BOOTSTRAP_SUB_PHASE.MESSAGE_GROUPS,
-  ]),
-  [BOOTSTRAP_SUB_PHASE.MESSAGE_GROUPS]: Object.freeze([
-    BOOTSTRAP_SUB_PHASE.PARTITIONS,
-  ]),
-  [BOOTSTRAP_SUB_PHASE.PARTITIONS]: Object.freeze([
-    BOOTSTRAP_SUB_PHASE.REGISTRATION,
-  ]),
-  [BOOTSTRAP_SUB_PHASE.REGISTRATION]: Object.freeze([
-    BOOTSTRAP_SUB_PHASE.CACHE_HYDRATION,
-  ]),
-  [BOOTSTRAP_SUB_PHASE.CACHE_HYDRATION]: Object.freeze([]),
-  [JOINING_SUB_PHASE.CONTACTING_SEED]: Object.freeze([
-    JOINING_SUB_PHASE.CONNECTING_WEBSOCKET,
-  ]),
-  [JOINING_SUB_PHASE.CONNECTING_WEBSOCKET]: Object.freeze([
-    JOINING_SUB_PHASE.CREATING_MESSAGE_GROUP,
-    JOINING_SUB_PHASE.JOINING_MESSAGE_GROUP,
-  ]),
-  [JOINING_SUB_PHASE.CREATING_MESSAGE_GROUP]: Object.freeze([
-    JOINING_SUB_PHASE.WAITING_LEADERSHIP,
-  ]),
-  [JOINING_SUB_PHASE.JOINING_MESSAGE_GROUP]: Object.freeze([
-    JOINING_SUB_PHASE.WAITING_LEADERSHIP,
-  ]),
-  [JOINING_SUB_PHASE.WAITING_LEADERSHIP]: Object.freeze([
-    JOINING_SUB_PHASE.QUERYING_STATE,
-  ]),
-  [JOINING_SUB_PHASE.QUERYING_STATE]: Object.freeze([]),
-});
-
-const TERMINAL_SUB_PHASE_ADVANCE = Object.freeze({
-  [BOOTSTRAP_SUB_PHASE.CACHE_HYDRATION]: NodeState.CONNECTING,
-  [JOINING_SUB_PHASE.QUERYING_STATE]: NodeState.READY,
-});
 
 /**
  * Error thrown when an invalid state transition is attempted.
@@ -131,14 +73,17 @@ class NodeLifecycleStateMachine extends EventEmitter {
    * @param {string} [options.nodeId] - Node ID for logging context.
    * @param {string} [options.initialState] - Initial state (defaults to STARTING).
    */
-  constructor(options = {}) {
+  constructor(options = NODE_LIFECYCLE_DEFAULT_OPTIONS) {
     super();
 
     this.nodeId = options.nodeId || STRING.UNKNOWN;
+    this.now = typeof options.now === TYPEOF.FUNCTION ?
+      options.now :
+      NODE_LIFECYCLE_NOW;
 
     // Initialize state to STARTING by default
     this.state = options.initialState || NodeState.STARTING;
-    this.subPhase = null;
+    this.subPhase = NODE_LIFECYCLE_NO_SUB_PHASE;
 
     // Sub-phase duration tracking
     this._subPhaseDurations = new Map();
@@ -146,8 +91,7 @@ class NodeLifecycleStateMachine extends EventEmitter {
 
     // Set up subsystem logger
     const loggingService = LoggingService.getInstance();
-    this.logger = loggingService.isInitialized() ?
-      loggingService.forSubsystem(NODE_LIFECYCLE_SUBSYSTEM) : console;
+    this.logger = loggingService.forSubsystem(NODE_LIFECYCLE_SUBSYSTEM);
   }
 
   /**
@@ -178,7 +122,7 @@ class NodeLifecycleStateMachine extends EventEmitter {
 
   /**
    * Get all completed sub-phase durations.
-   * @return {Object} Map of sub-phase names to durations in ms.
+   * @return {NodeLifecycleSubPhaseDurations} Map of sub-phase names to durations in ms.
    */
   getAllSubPhaseDurations() {
     const durations = {};
@@ -209,7 +153,7 @@ class NodeLifecycleStateMachine extends EventEmitter {
    * Attempt to transition to a new state.
    * @param {string} newState - Target state.
    * @return {boolean} True if transition succeeded.
-   * @emits 'stateChange' with {from, to, timestamp}
+   * @emits NODE_LIFECYCLE_EVENT.STATE_CHANGE with {from, to, timestamp}
    */
   transition(newState) {
     const currentState = this.state;
@@ -225,15 +169,23 @@ class NodeLifecycleStateMachine extends EventEmitter {
         validTransitions,
       });
 
+      this.emit(NODE_LIFECYCLE_EVENT.TRANSITION_ERROR, {
+        code: NODE_LIFECYCLE_DIAGNOSTIC_CODE.INVALID_TRANSITION,
+        nodeId: this.nodeId,
+        currentState,
+        attemptedState: newState,
+        validTransitions,
+      });
+
       return false;
     }
 
-    const timestamp = Date.now();
+    const timestamp = this.now();
     const previousState = currentState;
 
     // Update state
     this.state = newState;
-    this.subPhase = null;
+    this.subPhase = NODE_LIFECYCLE_NO_SUB_PHASE;
 
     this.logger.info(NODE_LIFECYCLE_LOG_MSG.STATE_TRANSITION, {
       nodeId: this.nodeId,
@@ -267,18 +219,20 @@ class NodeLifecycleStateMachine extends EventEmitter {
     }
 
     const fromSubPhase = this.subPhase;
-    const fromKey = fromSubPhase === null ? 'null' : fromSubPhase;
+    const fromKey = fromSubPhase === NODE_LIFECYCLE_NO_SUB_PHASE ?
+      NODE_LIFECYCLE_SUB_PHASE_ROOT :
+      fromSubPhase;
     const validNextSubPhases = VALID_SUB_PHASE_TRANSITIONS[fromKey] || [];
     if (!validNextSubPhases.includes(newSubPhase)) {
       return false;
     }
 
     // Record duration for the sub-phase we're leaving
-    if (fromSubPhase !== null) {
+    if (fromSubPhase !== NODE_LIFECYCLE_NO_SUB_PHASE) {
       const startTime = this._subPhaseStartTimes.get(fromSubPhase);
       if (startTime !== undefined) {
         this._subPhaseDurations.set(
-          fromSubPhase, Date.now() - startTime,
+          fromSubPhase, this.now() - startTime,
         );
       }
     }
@@ -286,13 +240,13 @@ class NodeLifecycleStateMachine extends EventEmitter {
     this.subPhase = newSubPhase;
 
     // Record start time for the new sub-phase
-    this._subPhaseStartTimes.set(newSubPhase, Date.now());
+    this._subPhaseStartTimes.set(newSubPhase, this.now());
 
     this.emit(NODE_LIFECYCLE_EVENT.SUB_PHASE_CHANGE, {
       parentState,
       from: fromSubPhase,
       to: newSubPhase,
-      timestamp: Date.now(),
+      timestamp: this.now(),
     });
 
     const nextState = TERMINAL_SUB_PHASE_ADVANCE[newSubPhase];
@@ -304,7 +258,7 @@ class NodeLifecycleStateMachine extends EventEmitter {
     const terminalStart = this._subPhaseStartTimes.get(newSubPhase);
     if (terminalStart !== undefined) {
       this._subPhaseDurations.set(
-        newSubPhase, Date.now() - terminalStart,
+        newSubPhase, this.now() - terminalStart,
       );
     }
 
@@ -324,8 +278,8 @@ class NodeLifecycleStateMachine extends EventEmitter {
    */
   forceTransition(nextState, fromState) {
     this.state = nextState;
-    this.subPhase = null;
-    const timestamp = Date.now();
+    this.subPhase = NODE_LIFECYCLE_NO_SUB_PHASE;
+    const timestamp = this.now();
 
     this.logger.info(NODE_LIFECYCLE_LOG_MSG.STATE_TRANSITION, {
       nodeId: this.nodeId,

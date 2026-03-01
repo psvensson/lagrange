@@ -75,9 +75,21 @@ export const GUIDELINE_LLM_PROMPT = Object.freeze({
   CONSTANT_OWNER_HINT:
     'If the file is a canonical constants-owner module, it may define the ' +
     'literal values it owns once. Do not flag that ownership as a violation.',
+  FILE_LOCAL_CONSTANT_HINT:
+    'A regular source file may define file-local private constants when the ' +
+    'value is only used inside that file and is not a shared cross-file concept ' +
+    'or public API token. Do not require promotion of purely local helper values.',
+  FILE_LOCAL_ENUM_HINT:
+    'Do not flag a private, non-exported file-local enum/object solely because ' +
+    'it groups literals used only inside that file.',
   TEST_CONSTANT_OWNER_HINT:
-    'A test-local constants-owner file may own suite-unique fixture values. ' +
-    'Do not require promotion unless the file itself shows cross-suite reuse.',
+    'A test-local constants-owner file or the test file itself may own ' +
+    'suite-unique fixture values. Do not require a separate sidecar constants ' +
+    'file unless the file itself shows cross-suite reuse.',
+  TEST_LITERAL_HINT:
+    'For tests, do not require exhaustive hoisting of one-off fixture literals. ' +
+    'Report constants issues only for repeated or semantically important values ' +
+    'that should clearly be named and reused.',
   NO_DUPLICATE_INFERENCE:
     'Do not infer duplication or non-canonicity from likelihood or style. ' +
     'Only report duplicate ownership when the file itself shows parallel names ' +

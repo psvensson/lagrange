@@ -1,11 +1,10 @@
 /**
- * Unit tests for FailureDetector cache-backed facade creation and upgrade.
+ * Unit tests for FailureDetector SQL engine ownership and replacement.
  * Requirements: 6.1, 6.2, 6.3
  */
 
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import {FailureDetector} from '../../src/node/failure-detector.js';
-import {FAILURE_DETECTOR_SQL} from '../../src/node/node-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 
@@ -26,12 +25,12 @@ afterEach(() => {
 });
 
 /**
- * Create a mock system table cache with minimal data.
- * @return {Object} Mock system table cache.
+ * Create a mock SQL query engine.
+ * @return {{executeQuery: Function}} Mock SQL engine.
  */
-function createMockSystemTableCache() {
+function createMockSqlQueryEngine() {
   return {
-    getAll: () => [],
+    executeQuery: async () => ({success: true, rows: []}),
   };
 }
 
@@ -47,43 +46,49 @@ function createMockCDCService() {
   };
 }
 
-test('FailureDetector - creates cache-backed facade when no SQL engine', async (t) => {
-  const mockCache = createMockSystemTableCache();
+test('FailureDetector - initialize requires a real SQL engine', async (t) => {
   const mockCDC = createMockCDCService();
 
   const detector = new FailureDetector({
     nodeId: 'test-node',
-    systemTableCache: mockCache,
     cdcIntegrationService: mockCDC,
   });
-  detector.initialize();
 
-  t.equal(detector._usingCacheBackedFacade, true,
-    'should set _usingCacheBackedFacade to true');
-  t.ok(detector.sqlQueryEngine, 'should have a sqlQueryEngine');
-  t.equal(typeof detector.sqlQueryEngine.executeQuery, 'function',
-    'facade should have executeQuery method');
-
-  const result = await detector.sqlQueryEngine.executeQuery(
-    FAILURE_DETECTOR_SQL.SELECT_ALL_NODES,
+  t.throws(
+    () => detector.initialize(),
+    /requires sqlQueryEngine/,
+    'initialize should reject missing canonical SQL engine',
   );
-  t.equal(result.success, true, 'facade should return successful results');
   t.end();
 });
 
-test('FailureDetector - upgrade replaces facade with real engine', async (t) => {
-  const mockCache = createMockSystemTableCache();
+test('FailureDetector - initialize accepts the SQL engine exposed by CDC service',
+  async (t) => {
+    const mockCDC = createMockCDCService();
+    const mockEngine = createMockSqlQueryEngine();
+    mockCDC.sqlQueryEngine = mockEngine;
+
+    const detector = new FailureDetector({
+      nodeId: 'test-node',
+      cdcIntegrationService: mockCDC,
+    });
+    detector.initialize();
+
+    t.equal(detector.sqlQueryEngine, mockEngine,
+      'initialize should adopt the canonical CDC SQL engine');
+    t.end();
+  });
+
+test('FailureDetector - upgrade replaces the current SQL engine', async (t) => {
   const mockCDC = createMockCDCService();
+  const initialEngine = createMockSqlQueryEngine();
 
   const detector = new FailureDetector({
     nodeId: 'test-node',
-    systemTableCache: mockCache,
+    sqlQueryEngine: initialEngine,
     cdcIntegrationService: mockCDC,
   });
   detector.initialize();
-
-  t.equal(detector._usingCacheBackedFacade, true,
-    'should start with cache-backed facade');
 
   const realEngine = {
     executeQuery: async () => ({success: true, rows: [{id: 'real'}]}),
@@ -91,56 +96,36 @@ test('FailureDetector - upgrade replaces facade with real engine', async (t) => 
 
   detector.upgradeSqlQueryEngine(realEngine);
 
-  t.equal(detector._usingCacheBackedFacade, false,
-    'should set _usingCacheBackedFacade to false after upgrade');
   t.equal(detector.sqlQueryEngine, realEngine,
     'should replace sqlQueryEngine with real engine');
 
-  const result = await detector.sqlQueryEngine.executeQuery(
-    FAILURE_DETECTOR_SQL.SELECT_ALL_NODES,
-  );
+  const result = await detector.sqlQueryEngine.executeQuery();
   t.equal(result.rows[0].id, 'real',
     'queries should go through real engine');
   t.end();
 });
 
 test('FailureDetector - upgrade with null is no-op', async (t) => {
-  const mockCache = createMockSystemTableCache();
   const mockCDC = createMockCDCService();
+  const initialEngine = createMockSqlQueryEngine();
 
   const detector = new FailureDetector({
     nodeId: 'test-node',
-    systemTableCache: mockCache,
+    sqlQueryEngine: initialEngine,
     cdcIntegrationService: mockCDC,
   });
   detector.initialize();
 
-  const facadeEngine = detector.sqlQueryEngine;
-  t.equal(detector._usingCacheBackedFacade, true,
-    'should start with cache-backed facade');
+  const activeEngine = detector.sqlQueryEngine;
 
   detector.upgradeSqlQueryEngine(null);
 
-  t.equal(detector._usingCacheBackedFacade, true,
-    'should remain using cache-backed facade after null upgrade');
-  t.equal(detector.sqlQueryEngine, facadeEngine,
-    'should keep the same facade engine');
+  t.equal(detector.sqlQueryEngine, activeEngine,
+    'should keep the same engine after null upgrade');
 
   detector.upgradeSqlQueryEngine(undefined);
 
-  t.equal(detector._usingCacheBackedFacade, true,
-    'should remain using cache-backed facade after undefined upgrade');
-  t.equal(detector.sqlQueryEngine, facadeEngine,
-    'should keep the same facade engine after undefined');
-  t.end();
-});
-
-test('FailureDetector - _usingCacheBackedFacade is false by default', async (t) => {
-  const detector = new FailureDetector({
-    nodeId: 'test-node',
-  });
-
-  t.equal(detector._usingCacheBackedFacade, false,
-    'should default to false in constructor');
+  t.equal(detector.sqlQueryEngine, activeEngine,
+    'should keep the same engine after undefined');
   t.end();
 });
