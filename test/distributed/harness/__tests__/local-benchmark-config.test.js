@@ -15,6 +15,10 @@ const LOCAL_BENCHMARK_7NODE_CONFIG = resolve(
   REPO_ROOT,
   'test/distributed/config/local-benchmark-7node.json',
 );
+const LOCAL_BENCHMARK_7NODE_PARTITION_SPLIT_CONFIG = resolve(
+  REPO_ROOT,
+  'test/distributed/config/local-benchmark-7node-partition-split.json',
+);
 
 describe('local benchmark configs', () => {
   it(
@@ -65,6 +69,25 @@ describe('local benchmark configs', () => {
           benchmarkConfig.quiescentNoProgressTimeoutMs > 0 &&
           benchmarkConfig.quiescentNoProgressTimeoutMs <
             benchmarkConfig.quiescentTimeoutMs,
+      );
+    },
+  );
+
+  it(
+    '7-node partition split benchmark config sets startup partition overrides',
+    async () => {
+      const parsedConfig = await parseConfig(
+        LOCAL_BENCHMARK_7NODE_PARTITION_SPLIT_CONFIG,
+      );
+
+      assert.deepEqual(parsedConfig.partition, {
+        evaluationIntervalMs: 60000,
+      });
+      assert.equal(parsedConfig.benchmark.clients, 7);
+      assert.equal(parsedConfig.benchmark.loadDuration, '150s');
+      assert.equal(
+        parsedConfig.benchmark.tableName,
+        'benchmark_partition_split_events',
       );
     },
   );

@@ -58,10 +58,11 @@ Common configs:
 5. `test/distributed/config/local-benchmark-3node.json`
 6. `test/distributed/config/local-benchmark-5node.json`
 7. `test/distributed/config/local-benchmark-7node.json`
-8. `test/distributed/config/local-benchmark-3node-timeout180.json`
-9. `test/distributed/config/local-benchmark-3node-timeout600.json`
-10. `test/distributed/config/gcp-small.json`
-11. `test/distributed/config/gcp-large.json`
+8. `test/distributed/config/local-benchmark-7node-partition-split.json`
+9. `test/distributed/config/local-benchmark-3node-timeout180.json`
+10. `test/distributed/config/local-benchmark-3node-timeout600.json`
+11. `test/distributed/config/gcp-small.json`
+12. `test/distributed/config/gcp-large.json`
 
 ## Scenario Names
 
@@ -77,12 +78,13 @@ Use these values with `--scenario`:
 8. `rolling-restart`
 9. `seed-restart-under-load`
 10. `seven-node-load-during-partitioning`
-11. `seven-node-read-write-load-distribution`
-12. `seven-node-table-partition-distribution`
-13. `sustained-write-throughput`
-14. `three-node-seed-rebalance`
-15. `wasm-service-failover`
-16. `write-ack-visibility`
+11. `seven-node-postgres-baseline-partition-split`
+12. `seven-node-read-write-load-distribution`
+13. `seven-node-table-partition-distribution`
+14. `sustained-write-throughput`
+15. `three-node-seed-rebalance`
+16. `wasm-service-failover`
+17. `write-ack-visibility`
 
 ## Benchmark And Migration Pipelines
 
@@ -284,6 +286,13 @@ node test/distributed/run.js \
   --config test/distributed/config/local-benchmark-7node.json \
   --scenario postgres-baseline-comparison \
   --output "test-output/reports/postgres-baseline-7node-${TS}.report.json" \
+  --verbose
+
+TS="$(date -u +%Y%m%dT%H%M%SZ)"
+node test/distributed/run.js \
+  --config test/distributed/config/local-benchmark-7node-partition-split.json \
+  --scenario seven-node-postgres-baseline-partition-split \
+  --output "test-output/reports/postgres-baseline-7node-partition-split-${TS}.report.json" \
   --verbose
 ```
 

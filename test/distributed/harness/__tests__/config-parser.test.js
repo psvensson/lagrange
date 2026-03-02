@@ -327,6 +327,24 @@ test('Unit: mergeWithDefaults preserves user overrides', async (t) => {
   });
 });
 
+test('Unit: mergeWithDefaults preserves partition startup overrides', async (t) => {
+  await t.test('partition config keeps supported numeric overrides', async () => {
+    const config = mergeWithDefaults({
+      partition: {
+        splitThresholdQpm: 120,
+        mergeThresholdQpm: 30,
+        evaluationIntervalMs: 60000,
+      },
+    });
+
+    assert.deepStrictEqual(config.partition, {
+      splitThresholdQpm: 120,
+      mergeThresholdQpm: 30,
+      evaluationIntervalMs: 60000,
+    });
+  });
+});
+
 test('Unit: mergeWithDefaults validates postgres baseline budgets', async (t) => {
   await t.test(
     'rejects ready timeout below the preload minimum budget',

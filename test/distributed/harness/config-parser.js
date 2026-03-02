@@ -24,6 +24,48 @@ import {
   shouldValidatePostgresBaselineBenchmarkBudgets,
 } from './postgres-baseline-config.js';
 
+const ZERO = 0;
+
+function normalizePositiveInteger(value) {
+  return Number.isInteger(value) && value > ZERO ? value : null;
+}
+
+function resolvePartitionStartupConfig(partial = {}) {
+  if (!partial || typeof partial !== 'object') {
+    return null;
+  }
+
+  const normalized = {};
+  const splitThresholdBytes =
+    normalizePositiveInteger(partial.splitThresholdBytes);
+  const splitThresholdQpm =
+    normalizePositiveInteger(partial.splitThresholdQpm);
+  const mergeThresholdBytes =
+    normalizePositiveInteger(partial.mergeThresholdBytes);
+  const mergeThresholdQpm =
+    normalizePositiveInteger(partial.mergeThresholdQpm);
+  const evaluationIntervalMs =
+    normalizePositiveInteger(partial.evaluationIntervalMs);
+
+  if (splitThresholdBytes !== null) {
+    normalized.splitThresholdBytes = splitThresholdBytes;
+  }
+  if (splitThresholdQpm !== null) {
+    normalized.splitThresholdQpm = splitThresholdQpm;
+  }
+  if (mergeThresholdBytes !== null) {
+    normalized.mergeThresholdBytes = mergeThresholdBytes;
+  }
+  if (mergeThresholdQpm !== null) {
+    normalized.mergeThresholdQpm = mergeThresholdQpm;
+  }
+  if (evaluationIntervalMs !== null) {
+    normalized.evaluationIntervalMs = evaluationIntervalMs;
+  }
+
+  return Object.keys(normalized).length > ZERO ? normalized : null;
+}
+
 /**
  * Merge a partial configuration object with sensible defaults.
  * Missing fields are filled from constants.js.
@@ -33,6 +75,7 @@ import {
  */
 function mergeWithDefaults(partial = {}) {
   const docker = partial.docker || {};
+  const partition = resolvePartitionStartupConfig(partial.partition);
   const parsedDockerBinds = Array.isArray(docker.binds) ?
     docker.binds.filter((entry) =>
       typeof entry === 'string' && entry.length > 0) :
@@ -141,6 +184,7 @@ function mergeWithDefaults(partial = {}) {
         DETERMINISTIC_DEBUG_DEFAULTS.preflightSampleIntervalMs,
       ...(partial.deterministicDebug || {}),
     },
+    ...(partition ? {partition} : {}),
     raftProvider:
       partial.raftProvider || RAFT_PROVIDER_DEFAULTS.provider,
     ...(partial.outputDir ? {outputDir: partial.outputDir} : {}),

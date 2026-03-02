@@ -118,9 +118,6 @@ const BASELINE_CACHE_DISABLED_REASON = 'cache-disabled';
 const BASELINE_CACHE_REFRESH_REASON = 'cache-refresh-requested';
 const BASELINE_CACHE_MISS_REASON = 'cache-miss';
 const BASELINE_CACHE_STALE_REASON = 'cache-stale';
-const BENCHMARK_TABLE_POLICY_JSON = JSON.stringify({
-  externalCdcAllowed: false,
-});
 const BASELINE_CACHE_INVALID_REASON = 'cache-invalid';
 const BASELINE_CACHE_STORE_REASON = 'cache-stored';
 const BENCHMARK_WORKLOAD_PROFILE = 'benchmark_events_mixed';
@@ -359,8 +356,6 @@ const DISCOVERY_READINESS_REASON_WORKLOAD_NOT_READY = 'workload_not_ready';
 const DISCOVERY_READINESS_REASON_SCHEMA_NOT_READY = 'schema_not_ready';
 const DISCOVERY_READINESS_REASON_STATE_CONTRADICTION =
   'readiness_state_contradiction';
-const DISCOVERY_READINESS_REASON_BENCHMARK_ADMISSION_MISSING =
-  'benchmark_admission_missing';
 const DISCOVERY_READINESS_REASON_NOT_SELECTED_BY_DISCOVERY =
   'not_selected_by_discovery';
 const STRICT_DOMINANT_REASON_PRECEDENCE = Object.freeze([
@@ -519,9 +514,9 @@ function buildBenchmarkPartitionRepairSql(tableName, tableId) {
     '\'';
 }
 
-function buildBenchmarkTablePolicySql(tableId) {
+function buildBenchmarkTablePolicySql(tableId, benchmarkTablePolicies = {}) {
   return 'UPDATE tables SET table_policies = \'' +
-    escapeSqlLiteral(BENCHMARK_TABLE_POLICY_JSON) +
+    escapeSqlLiteral(JSON.stringify(benchmarkTablePolicies)) +
     '\' WHERE table_id = \'' +
     escapeSqlLiteral(tableId) +
     '\'';
@@ -1035,7 +1030,12 @@ function resolveNodeClientChannelPolicyOverrides(cluster) {
   return channelPolicies;
 }
 
-async function ensureSutBenchmarkTable(nodeClient, systemTableReadNodes, tableName) {
+async function ensureSutBenchmarkTable(
+  nodeClient,
+  systemTableReadNodes,
+  tableName,
+  benchmarkTablePolicies,
+) {
   const createResult = await queryControlOnCanonicalSystemTableWriteNode(
     nodeClient,
     systemTableReadNodes,
@@ -1058,7 +1058,7 @@ async function ensureSutBenchmarkTable(nodeClient, systemTableReadNodes, tableNa
   const policyResult = await queryControlOnCanonicalSystemTableWriteNode(
     nodeClient,
     systemTableReadNodes,
-    buildBenchmarkTablePolicySql(tableId),
+    buildBenchmarkTablePolicySql(tableId, benchmarkTablePolicies),
     [],
     NODE_CLIENT_MUTATING_CONTEXT,
   );
@@ -3239,10 +3239,10 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
               const loadLaneReadiness =
                 localReadiness?.requiresConfirmation === true &&
                 localReadiness?.evaluation?.ready === true ?
-                await probeLoadLaneReadiness(nodeClient, node, {
-                  tableProbeSql: loadLaneTableProbeSql,
-                }) :
-                {ready: false, reasons: []};
+                  await probeLoadLaneReadiness(nodeClient, node, {
+                    tableProbeSql: loadLaneTableProbeSql,
+                  }) :
+                  {ready: false, reasons: []};
               return {
                 node,
                 diagnostics,
@@ -4075,11 +4075,11 @@ async function assertClusterConsistencyWithRetry(cluster, options = {}) {
   const maxAttempts = Number.isInteger(options.maxAttempts) &&
     options.maxAttempts > ZERO ?
     options.maxAttempts :
-    CONSISTENCY_ASSERT_MAX_ATTEMPTS_DEFAULT;
+    BENCHMARK_DEFAULTS.consistencyAssertMaxAttempts;
   const retryDelayMs = Number.isInteger(options.retryDelayMs) &&
     options.retryDelayMs >= ZERO ?
     options.retryDelayMs :
-    CONSISTENCY_ASSERT_RETRY_DELAY_MS_DEFAULT;
+    BENCHMARK_DEFAULTS.consistencyAssertRetryDelayMs;
   let lastError = null;
 
   for (let attempt = ONE; attempt <= maxAttempts; attempt++) {
@@ -6628,6 +6628,7 @@ async function run(cluster) {
         nodeClient,
         systemTableReadPath.nodes,
         benchmarkTableName,
+        benchmarkConfig.benchmarkTablePolicies,
       );
       state.requiredSchemaVersion = tableMetadata?.requiredSchemaVersion || null;
       state.requiredSchemaVersionSource =
@@ -7642,6 +7643,7 @@ async function run(cluster) {
         postLoadDrainExcludedNodeIds: state.postLoadDrain.excludedNodeIds,
         operations: BENCHMARK_WORKLOAD_OPERATIONS,
         tableName: benchmarkTableName,
+        tablePolicies: benchmarkConfig.benchmarkTablePolicies,
       },
       parity: state.loadParity,
       strictBenchmarkGate: state.strictBenchmarkGate,

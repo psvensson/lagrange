@@ -26,6 +26,7 @@ import {
   TIMEOUTS,
   LABELS,
   CONTAINER_ENV_KEYS,
+  PARTITION_ENV_KEYS,
   NETWORK,
   NODE_ROLES,
   PLAYBACK_EVENT_TYPE,
@@ -1775,6 +1776,10 @@ class Cluster {
 
   _buildNodeEnv(nodeId, containerName, seedIp) {
     const env = {};
+    const partitionConfig =
+      this._config?.partition && typeof this._config.partition === 'object' ?
+        this._config.partition :
+        null;
     env[CONTAINER_ENV_KEYS.NODE_ID] = nodeId;
     env[CONTAINER_ENV_KEYS.DATA_DIR] = DATA_DIR_PATH;
     env[CONTAINER_ENV_KEYS.NODE_ADDRESS] =
@@ -1815,6 +1820,32 @@ class Cluster {
           JOINING_LEADERSHIP_WAIT_TIMEOUT_DEFAULT_MS,
         ),
       );
+    }
+
+    if (Number.isInteger(partitionConfig?.splitThresholdBytes) &&
+        partitionConfig.splitThresholdBytes > ZERO) {
+      env[PARTITION_ENV_KEYS.SPLIT_THRESHOLD_BYTES] =
+        String(partitionConfig.splitThresholdBytes);
+    }
+    if (Number.isInteger(partitionConfig?.splitThresholdQpm) &&
+        partitionConfig.splitThresholdQpm > ZERO) {
+      env[PARTITION_ENV_KEYS.SPLIT_THRESHOLD_QPM] =
+        String(partitionConfig.splitThresholdQpm);
+    }
+    if (Number.isInteger(partitionConfig?.mergeThresholdBytes) &&
+        partitionConfig.mergeThresholdBytes > ZERO) {
+      env[PARTITION_ENV_KEYS.MERGE_THRESHOLD_BYTES] =
+        String(partitionConfig.mergeThresholdBytes);
+    }
+    if (Number.isInteger(partitionConfig?.mergeThresholdQpm) &&
+        partitionConfig.mergeThresholdQpm > ZERO) {
+      env[PARTITION_ENV_KEYS.MERGE_THRESHOLD_QPM] =
+        String(partitionConfig.mergeThresholdQpm);
+    }
+    if (Number.isInteger(partitionConfig?.evaluationIntervalMs) &&
+        partitionConfig.evaluationIntervalMs > ZERO) {
+      env[PARTITION_ENV_KEYS.EVALUATION_INTERVAL_MS] =
+        String(partitionConfig.evaluationIntervalMs);
     }
     return env;
   }

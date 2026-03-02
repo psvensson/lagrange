@@ -41,6 +41,9 @@ const INTERNAL_SIGNAL_CLASSES = Object.freeze([
   INTERNAL_SIGNAL_CLASS_CDC_BUFFERED_WITHOUT_SUBSCRIBER,
   INTERNAL_SIGNAL_CLASS_CRITICAL_REBALANCING_STATE,
 ]);
+const BENCHMARK_TABLE_POLICY_DEFAULT = Object.freeze({
+  externalCdcAllowed: false,
+});
 
 function deepFreeze(value) {
   if (!value || typeof value !== 'object' || Object.isFrozen(value)) {
@@ -146,6 +149,21 @@ function resolveWritePressureThresholds(configuredThresholds) {
         configured.maxTimedOutWrites >= ZERO ?
         configured.maxTimedOutWrites :
         null,
+  };
+}
+
+function normalizeBenchmarkTablePolicies(configuredPolicies) {
+  const configured =
+    configuredPolicies && typeof configuredPolicies === 'object' ?
+      configuredPolicies :
+      null;
+  if (!configured) {
+    return {...BENCHMARK_TABLE_POLICY_DEFAULT};
+  }
+
+  return {
+    ...BENCHMARK_TABLE_POLICY_DEFAULT,
+    ...configured,
   };
 }
 
@@ -485,6 +503,8 @@ function resolvePostgresBaselineBenchmarkConfig(configured = {}, options = {}) {
     overloadPolicy: resolveOverloadPolicy(configured.overloadPolicy),
     writePressureThresholds:
       resolveWritePressureThresholds(configured.writePressureThresholds),
+    benchmarkTablePolicies:
+      normalizeBenchmarkTablePolicies(configured.benchmarkTablePolicies),
     preloadRequiredStableMs,
     preloadMaxReplicaOpsInFlight:
       Number.isInteger(configured.preloadMaxReplicaOpsInFlight) &&
