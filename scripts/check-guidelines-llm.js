@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
@@ -31,8 +32,13 @@ let BASE_URL;
 let API_KEY;
 let REQUEST_TIMEOUT_MS;
 let MAX_FILE_CHARS;
+let REQUEST_CONCURRENCY;
 const AbortController = globalThis.AbortController;
 const FULL_CONTENT_PREFIXES = GUIDELINE_LLM_PATH.FULL_CONTENT_PREFIXES;
+const CACHE_FILE_PATH = path.join(
+  WORKSPACE_ROOT,
+  GUIDELINE_LLM_PATH.CACHE_FILE,
+);
 
 function parseEnvLine(line) {
   const trimmed = line.trim();
@@ -103,6 +109,10 @@ async function initializeConfig() {
   MAX_FILE_CHARS = Number(
     process.env[GUIDELINE_LLM_ENV_KEY.MAX_FILE_CHARS] ||
     GUIDELINE_LLM_DEFAULT.MAX_FILE_CHARS,
+  );
+  REQUEST_CONCURRENCY = Number(
+    process.env[GUIDELINE_LLM_ENV_KEY.CONCURRENCY] ||
+    GUIDELINE_LLM_DEFAULT.CONCURRENCY,
   );
 }
 
@@ -179,6 +189,49 @@ function extractJsonObject(rawText) {
 
 async function readGuidelines() {
   return fs.readFile(GUIDELINES_PATH, SCRIPT_TEXT.ENCODING_UTF8);
+}
+
+function hashText(value) {
+  return crypto.createHash('sha256').update(String(value || '')).digest('hex');
+}
+
+async function readCacheFile() {
+  try {
+    const raw = await fs.readFile(CACHE_FILE_PATH, SCRIPT_TEXT.ENCODING_UTF8);
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') {
+      return {entries: {}};
+    }
+    const entries = parsed.entries && typeof parsed.entries === 'object' ?
+      parsed.entries :
+      {};
+    return {entries};
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return {entries: {}};
+    }
+    return {entries: {}};
+  }
+}
+
+async function writeCacheFile(cache) {
+  const directory = path.dirname(CACHE_FILE_PATH);
+  await fs.mkdir(directory, {recursive: true});
+  await fs.writeFile(
+    CACHE_FILE_PATH,
+    JSON.stringify(cache, null, 2) + SCRIPT_TEXT.NEWLINE,
+    SCRIPT_TEXT.ENCODING_UTF8,
+  );
+}
+
+function buildCacheKey(relativePath, fileContent, guidelines) {
+  return [
+    `v${GUIDELINE_LLM_DEFAULT.CACHE_SCHEMA_VERSION}`,
+    DEFAULT_MODEL,
+    hashText(guidelines),
+    relativePath,
+    hashText(fileContent),
+  ].join(':');
 }
 
 async function readFileSafe(absolutePath) {
@@ -411,8 +464,10 @@ async function main() {
   }
 
   const guidelines = await readGuidelines();
-
+  const cache = await readCacheFile();
   let hasViolations = false;
+
+  const pendingChecks = [];
   for (const argPath of fileArgs) {
     const absolutePath = normalizePath(argPath);
     if (shouldSkipPath(absolutePath)) {
@@ -435,20 +490,90 @@ async function main() {
       continue;
     }
 
-    try {
-      const violations = await checkWithLlm(relativePath, fileContent, guidelines);
-      if (violations.length > 0) {
-        hasViolations = true;
-        printViolations(relativePath, violations);
+    const cacheKey = buildCacheKey(relativePath, fileContent, guidelines);
+    const cachedEntry = cache.entries[cacheKey];
+    if (cachedEntry && Array.isArray(cachedEntry.violations)) {
+      pendingChecks.push({
+        relativePath,
+        cached: true,
+        violations: cachedEntry.violations,
+      });
+      continue;
+    }
+
+    pendingChecks.push({
+      relativePath,
+      cached: false,
+      cacheKey,
+      fileContent,
+    });
+  }
+
+  const results = new Array(pendingChecks.length);
+  const effectiveConcurrency = Math.max(1, Number.isFinite(REQUEST_CONCURRENCY) ?
+    Math.floor(REQUEST_CONCURRENCY) :
+    GUIDELINE_LLM_DEFAULT.CONCURRENCY);
+  let nextIndex = 0;
+
+  async function worker() {
+    while (nextIndex < pendingChecks.length) {
+      const currentIndex = nextIndex;
+      nextIndex += 1;
+      const pending = pendingChecks[currentIndex];
+      if (pending.cached) {
+        results[currentIndex] = pending;
+        continue;
       }
-    } catch (error) {
-      hasViolations = true;
-      console.error(
-        `${formatGuidelineLocation(relativePath)}: error [SYS-GUIDELINE] ` +
-        `${GUIDELINE_LLM_MESSAGE.CHECK_FAILED_PREFIX}${error.message}`,
-      );
+
+      try {
+        const violations = await checkWithLlm(
+          pending.relativePath,
+          pending.fileContent,
+          guidelines,
+        );
+        cache.entries[pending.cacheKey] = {violations};
+        results[currentIndex] = {
+          relativePath: pending.relativePath,
+          cached: false,
+          violations,
+        };
+      } catch (error) {
+        results[currentIndex] = {
+          relativePath: pending.relativePath,
+          error,
+        };
+      }
     }
   }
+
+  await Promise.all(
+    Array.from(
+      {length: Math.min(effectiveConcurrency, Math.max(1, pendingChecks.length))},
+      () => worker(),
+    ),
+  );
+
+  for (const result of results) {
+    if (!result) {
+      continue;
+    }
+
+    if (result.error) {
+      hasViolations = true;
+      console.error(
+        `${formatGuidelineLocation(result.relativePath)}: error [SYS-GUIDELINE] ` +
+        `${GUIDELINE_LLM_MESSAGE.CHECK_FAILED_PREFIX}${result.error.message}`,
+      );
+      continue;
+    }
+
+    if (result.violations.length > 0) {
+      hasViolations = true;
+      printViolations(result.relativePath, result.violations);
+    }
+  }
+
+  await writeCacheFile(cache);
 
   if (hasViolations) {
     process.exitCode = EXIT_CODE.FAILURE;

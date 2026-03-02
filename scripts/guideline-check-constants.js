@@ -24,6 +24,8 @@ export const GUIDELINE_LLM_DEFAULT = Object.freeze({
   BASE_URL: 'https://api.openai.com/v1',
   TIMEOUT_MS: 30000,
   MAX_FILE_CHARS: 14000,
+  CONCURRENCY: 4,
+  CACHE_SCHEMA_VERSION: 2,
   API_PATH: '/chat/completions',
 });
 
@@ -34,6 +36,7 @@ export const GUIDELINE_LLM_ENV_KEY = Object.freeze({
   OPENAI_API_KEY: 'OPENAI_API_KEY',
   TIMEOUT_MS: 'GUIDELINE_LLM_TIMEOUT_MS',
   MAX_FILE_CHARS: 'GUIDELINE_LLM_MAX_FILE_CHARS',
+  CONCURRENCY: 'GUIDELINE_LLM_CONCURRENCY',
 });
 
 export const GUIDELINE_LLM_HEADER = Object.freeze({
@@ -116,6 +119,7 @@ export const GUIDELINE_LLM_PROMPT = Object.freeze({
 
 export const GUIDELINE_LLM_PATH = Object.freeze({
   GUIDELINES_FILE: 'system guidelines.md',
+  CACHE_FILE: path.join('.git', 'guideline-llm-cache.json'),
   FULL_CONTENT_PREFIXES: Object.freeze([
     path.join(...STEERING_DIR) + path.sep,
     'architecture.md',
