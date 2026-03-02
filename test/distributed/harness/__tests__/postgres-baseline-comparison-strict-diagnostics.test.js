@@ -1667,7 +1667,7 @@ describe('postgres-baseline-comparison scenario', () => {
       );
     });
 
-  it('fails pre-load gate when no discovered node reaches table visibility',
+  it('fails preflight when no discovered node reaches table visibility',
     async () => {
       const loadCalls = [];
       const benchmarkTableProbeSql =
@@ -1822,7 +1822,24 @@ describe('postgres-baseline-comparison scenario', () => {
 
       await assert.rejects(
         run(cluster),
-        /SUT load nodes did not reach quiescent state/i,
+        (error) => {
+          assert.match(
+            error?.message || '',
+            /No discovered admin-ready load service nodes available for benchmark load/i,
+          );
+          assert.equal(
+            error?.diagnostics?.failedPhase?.phase,
+            'preflight',
+            'table-visibility admission failures should stop in preflight',
+          );
+          assert.equal(
+            error?.diagnostics?.failedPhase?.artifacts?.phaseProgress?.
+              lastProgressEvent?.details?.reachableNodeCount,
+            0,
+            'failure diagnostics should retain the zero reachable-node admission snapshot',
+          );
+          return true;
+        },
       );
       assert.equal(
         loadCalls.length,
@@ -2164,7 +2181,25 @@ describe('postgres-baseline-comparison scenario', () => {
 
     await assert.rejects(
       run(cluster),
-      /gate aborted due to stalled progress/i,
+      (error) => {
+        assert.match(error?.message || '', /gate aborted due to stalled progress/i);
+        assert.equal(
+          error?.diagnostics?.noProgress?.reasonCode,
+          'stalled_no_progress',
+          'no-progress failures should carry dedicated diagnostics',
+        );
+        assert.equal(
+          error?.diagnostics?.noProgress?.phase,
+          'pre_load_gate',
+          'no-progress diagnostics should identify the failed phase',
+        );
+        assert.equal(
+          error?.diagnostics?.noProgress?.failedNoProgress?.details?.budgetMs,
+          20,
+          'no-progress diagnostics should include the active budget',
+        );
+        return true;
+      },
     );
     assert.ok(
       inFlightProbeCount >= 2,

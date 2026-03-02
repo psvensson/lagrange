@@ -22,6 +22,7 @@ import {
   CDC_GROUP_PROPAGATION_REASON,
   CDC_GROUP_PROPAGATION_RETRY,
   CDC_GROUP_PROPAGATION_STATE,
+  CDC_GROUP_PROPAGATION_STRATEGY,
   CDC_GROUP_PROPAGATION_STATUS,
   CDC_GROUP_PROPAGATION_SUBSYSTEM,
 } from './cdc-group-propagation-constants.js';
@@ -63,6 +64,7 @@ class CDCGroupPropagationService extends EventEmitter {
       safeCount: NUM.ZERO,
       fallbackCount: NUM.ZERO,
       groupedDeliveryFailureCount: NUM.ZERO,
+      lastStrategy: null,
       lastMode: null,
       lastFallbackReason: null,
       lastPropagationAt: null,
@@ -214,6 +216,8 @@ class CDCGroupPropagationService extends EventEmitter {
 
     const timestamp = this.now();
     this.stats.groupedCount += NUM.ONE;
+    this.stats.lastStrategy =
+      CDC_GROUP_PROPAGATION_STRATEGY.GROUP_COORDINATOR;
     this.stats.lastMode = CDC_GROUP_PROPAGATION_STATUS.GROUPED;
     this.stats.lastFallbackReason = null;
     this.stats.lastPropagationAt = timestamp;
@@ -231,6 +235,7 @@ class CDCGroupPropagationService extends EventEmitter {
 
     const result = {
       success: deliveryFailures.length === NUM.ZERO,
+      strategy: CDC_GROUP_PROPAGATION_STRATEGY.GROUP_COORDINATOR,
       mode: CDC_GROUP_PROPAGATION_STATUS.GROUPED,
       status: CDC_GROUP_PROPAGATION_MESSAGE.STATUS_DELIVERED,
       sourceGroupId: groupedContext.sourceGroupId,
@@ -243,6 +248,7 @@ class CDCGroupPropagationService extends EventEmitter {
       nodeId: this.nodeId,
       tableName,
       operation,
+      strategy: CDC_GROUP_PROPAGATION_STRATEGY.GROUP_COORDINATOR,
       sourceGroupId: groupedContext.sourceGroupId,
       targetGroupCount: groupedContext.targets.length,
       deliveryFailureCount: deliveryFailures.length,
@@ -277,6 +283,8 @@ class CDCGroupPropagationService extends EventEmitter {
 
     const timestamp = this.now();
     this.stats.safeCount += NUM.ONE;
+    this.stats.lastStrategy =
+      CDC_GROUP_PROPAGATION_STRATEGY.DIRECT_FANOUT;
     this.stats.lastMode = CDC_GROUP_PROPAGATION_STATUS.SAFE;
     this.stats.lastFallbackReason = options.fallbackReason || null;
     this.stats.lastPropagationAt = timestamp;
@@ -293,6 +301,7 @@ class CDCGroupPropagationService extends EventEmitter {
         nodeId: this.nodeId,
         tableName: options.tableName,
         operation: options.operation,
+        strategy: CDC_GROUP_PROPAGATION_STRATEGY.DIRECT_FANOUT,
         reason: options.fallbackReason,
       };
       if (options.fallbackReason === CDC_GROUP_PROPAGATION_REASON.CONFIG_SAFE_MODE) {
@@ -306,10 +315,12 @@ class CDCGroupPropagationService extends EventEmitter {
       nodeId: this.nodeId,
       tableName: options.tableName,
       operation: options.operation,
+      strategy: CDC_GROUP_PROPAGATION_STRATEGY.DIRECT_FANOUT,
     });
 
     return {
       success: deliveryFailures.length === NUM.ZERO,
+      strategy: CDC_GROUP_PROPAGATION_STRATEGY.DIRECT_FANOUT,
       mode: CDC_GROUP_PROPAGATION_STATUS.SAFE,
       status: CDC_GROUP_PROPAGATION_MESSAGE.STATUS_DELIVERED,
       sourceGroupId,

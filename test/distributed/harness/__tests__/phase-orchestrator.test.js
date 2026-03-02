@@ -115,6 +115,89 @@ test('PhaseOrchestrator emits phase start and end events with timestamps', async
   );
 });
 
+test('PhaseOrchestrator emits phase progress events and records phase progress artifacts',
+  async () => {
+    const events = [];
+    const orchestrator = new PhaseOrchestrator({
+      onEvent: (event) => {
+        events.push(event);
+      },
+    });
+
+    const result = await orchestrator.run({
+      preflight: async (phaseContext) => {
+        phaseContext.emitPhaseProgress({
+          message: 'seed node reachable',
+          details: {nodeId: 'seed-1'},
+        });
+        phaseContext.emitPhaseLastMeaningfulChange({
+          message: 'benchmark table created',
+          details: {tableName: 'benchmark_events'},
+        });
+        return {status: 'ok'};
+      },
+      teardown: async () => ({status: 'ok'}),
+    });
+
+    const progressEvents = events.filter((event) => event.type === 'phase.progress');
+    const meaningfulEvents = events.filter((event) =>
+      event.type === 'phase.last_meaningful_change',
+    );
+    assert.equal(progressEvents.length, 1);
+    assert.equal(meaningfulEvents.length, 1);
+    assert.equal(progressEvents[0].message, 'seed node reachable');
+    assert.deepEqual(progressEvents[0].details, {nodeId: 'seed-1'});
+    assert.equal(meaningfulEvents[0].message, 'benchmark table created');
+
+    const preflightResult = result.phases.find((phase) => phase.phase === 'preflight');
+    assert.ok(preflightResult, 'preflight result should exist');
+    assert.equal(preflightResult.artifacts.phaseProgress.heartbeatCount, 1);
+    assert.equal(
+      preflightResult.artifacts.phaseProgress.lastMeaningfulChange.message,
+      'benchmark table created',
+    );
+    assert.equal(
+      preflightResult.artifacts.phaseProgress.lastProgressEvent.message,
+      'benchmark table created',
+    );
+  });
+
+test('PhaseOrchestrator records no-progress warnings and failures in phase artifacts',
+  async () => {
+    const orchestrator = new PhaseOrchestrator();
+
+    const result = await orchestrator.run({
+      preflight: async (phaseContext) => {
+        phaseContext.emitPhaseNoProgressWarning({
+          message: 'quiescence heartbeat stalled',
+          details: {stalledMs: 15},
+        });
+        phaseContext.emitPhaseFailedNoProgress({
+          message: 'quiescence aborted for no progress',
+          details: {stalledMs: 20, budgetMs: 20},
+        });
+        return {
+          status: 'fail',
+          errors: ['stalled_no_progress:20'],
+        };
+      },
+      teardown: async () => ({status: 'ok'}),
+    });
+
+    const preflightResult = result.phases.find((phase) => phase.phase === 'preflight');
+    assert.ok(preflightResult, 'preflight result should exist');
+    assert.equal(preflightResult.status, 'fail');
+    assert.equal(preflightResult.artifacts.phaseProgress.noProgressWarningCount, 1);
+    assert.equal(
+      preflightResult.artifacts.phaseProgress.noProgressWarnings[0].message,
+      'quiescence heartbeat stalled',
+    );
+    assert.equal(
+      preflightResult.artifacts.phaseProgress.failedNoProgress.details.budgetMs,
+      20,
+    );
+  });
+
 test('PhaseOrchestrator runs teardown after failure and skips remaining phases',
   async () => {
     const callOrder = [];

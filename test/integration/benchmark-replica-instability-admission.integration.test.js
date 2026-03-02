@@ -1,0 +1,151 @@
+/**
+ * Deterministic integration coverage for benchmark admission under replica instability.
+ *
+ * Covers failed movement and pending promotion using the in-process discovery
+ * fixture layer instead of a Docker cluster.
+ */
+
+import {test} from '../../src/test-helpers/tap.js';
+import {
+  createBenchmarkDiscoveryApi,
+  findReplica,
+} from './helpers/benchmark-readiness-fixtures.js';
+
+const TABLE_NAME = 'benchmark_events';
+
+test('benchmark admission degrades failed replica replacement deterministically',
+  async (t) => {
+    const {api} = await createBenchmarkDiscoveryApi({
+      nodeId: 'node-2',
+      replicaOperations: [{
+        operation_id: 'op-replace-failed',
+        partition_id: 'partition-benchmark-events-1',
+        type: 'REPLACE',
+        source_node_id: 'node-1',
+        target_node_id: 'node-2',
+        status: 'failed',
+        workflow_step: 'FAILED',
+      }],
+    });
+
+    try {
+      const snapshot = await api.resolveServiceDiscoverySnapshot({
+        tableName: TABLE_NAME,
+      });
+      const replica = findReplica(snapshot, 'node-2');
+      const admission = replica?.benchmarkAdmission || null;
+
+      t.equal(admission?.state, 'blocked');
+      t.equal(admission?.degradationState, 'move_failed');
+      t.same(admission?.degradedByOperationIds, ['op-replace-failed']);
+      t.equal(
+        admission?.reasons?.some((reason) => reason?.code === 'replica_operation_failed'),
+        true,
+      );
+    } finally {
+      await api.shutdown();
+    }
+  });
+
+test('benchmark admission blocks pending promotion deterministically',
+  async (t) => {
+    const {api} = await createBenchmarkDiscoveryApi({
+      nodeId: 'node-2',
+      replicaOperations: [{
+        operation_id: 'op-add-pending',
+        partition_id: 'partition-benchmark-events-1',
+        type: 'ADD',
+        target_node_id: 'node-2',
+        status: 'creating',
+        workflow_step: 'CREATING',
+      }],
+    });
+
+    try {
+      const snapshot = await api.resolveServiceDiscoverySnapshot({
+        tableName: TABLE_NAME,
+      });
+      const replica = findReplica(snapshot, 'node-2');
+      const admission = replica?.benchmarkAdmission || null;
+
+      t.equal(admission?.state, 'blocked');
+      t.equal(admission?.degradationState, 'promotion_pending');
+      t.same(admission?.degradedByOperationIds, ['op-add-pending']);
+      t.equal(
+        admission?.reasons?.some((reason) => reason?.code === 'replica_operation_in_flight'),
+        true,
+      );
+    } finally {
+      await api.shutdown();
+    }
+  });
+
+test('benchmark admission ignores completed promotion deterministically',
+  async (t) => {
+    const {api} = await createBenchmarkDiscoveryApi({
+      nodeId: 'node-2',
+      replicaOperations: [{
+        operation_id: 'op-add-complete',
+        partition_id: 'partition-benchmark-events-1',
+        type: 'ADD',
+        target_node_id: 'node-2',
+        status: 'active',
+        workflow_step: 'ACTIVE',
+        completed_at: 1741000000000,
+      }],
+    });
+
+    try {
+      const snapshot = await api.resolveServiceDiscoverySnapshot({
+        tableName: TABLE_NAME,
+      });
+      const replica = findReplica(snapshot, 'node-2');
+      const admission = replica?.benchmarkAdmission || null;
+
+      t.equal(admission?.state, 'ready');
+      t.equal(admission?.degradationState, 'healthy');
+      t.same(admission?.degradedByOperationIds, []);
+      t.equal(
+        admission?.reasons?.some((reason) => reason?.code === 'replica_operation_in_flight'),
+        false,
+      );
+    } finally {
+      await api.shutdown();
+    }
+  });
+
+test('benchmark admission ignores unrelated failed movement deterministically',
+  async (t) => {
+    const {api} = await createBenchmarkDiscoveryApi({
+      nodeId: 'node-2',
+      replicaOperations: [{
+        operation_id: 'op-unrelated-failed',
+        partition_id: 'partition-unrelated-1',
+        entity_type: 'message_group',
+        entity_id: 'partition-unrelated-1',
+        type: 'REPLACE',
+        source_node_id: 'node-1',
+        target_node_id: 'node-2',
+        status: 'failed',
+        workflow_step: 'FAILED',
+      }],
+    });
+
+    try {
+      const snapshot = await api.resolveServiceDiscoverySnapshot({
+        tableName: TABLE_NAME,
+      });
+      const replica = findReplica(snapshot, 'node-2');
+      const admission = replica?.benchmarkAdmission || null;
+
+      t.equal(admission?.state, 'ready');
+      t.equal(admission?.degradationState, 'healthy');
+      t.same(admission?.degradedByOperationIds, []);
+      t.equal(
+        admission?.reasons?.some((reason) => reason?.code === 'replica_operation_failed'),
+        false,
+      );
+    } finally {
+      await api.shutdown();
+    }
+  });

@@ -324,6 +324,26 @@ function seedTableDiscoveryRowsWithLocalCandidate(cache) {
 }
 
 /**
+ * Seed table-scoped discovery rows where a second node hosts a stable local
+ * follower replica for the benchmark partition.
+ *
+ * @param {SystemTableCache} cache
+ */
+function seedTableDiscoveryRowsWithLocalFollower(cache) {
+  seedRoutedTableDiscoveryRows(cache);
+
+  cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+    id: 'service-benchmark-events-node-2',
+    service_type: 'partition',
+    partition_id: 'partition-benchmark-events-1',
+    node_id: 'node-2',
+    status: 'active',
+    raft_role: 'follower',
+    address: '10.0.0.2:7001',
+  });
+}
+
+/**
  * Seed table-scoped discovery rows without a local TABLES row.
  * This verifies applied schema watermark fallback from partition metadata.
  *
@@ -1109,6 +1129,9 @@ test('AdminWebSocketAPI - local control snapshot endpoint shape and non-mutation
     t.equal(typeof payload.replicaRoleDiagnostics, 'object',
       'should include replica-role diagnostics');
     t.equal(typeof payload.voterCounts, 'object', 'should include voter-count map');
+    t.equal(typeof payload.cdcTelemetry, 'object', 'should include cdc telemetry');
+    t.equal(typeof payload.cdcTelemetry.authoritativeFallback, 'object',
+      'should include authoritative fallback telemetry');
     t.equal(typeof payload.replicaOperations, 'object',
       'should include replica operation summary');
     t.equal(
@@ -1141,6 +1164,54 @@ test('AdminWebSocketAPI - local control snapshot endpoint shape and non-mutation
       'should not mutate services table');
     t.equal(cache.count(TABLES.REPLICA_OPERATIONS), beforeCounts.replicaOperations,
       'should not mutate replica operations table');
+
+    await api.shutdown();
+  });
+
+test('AdminWebSocketAPI - local control snapshot exports authoritative fallback telemetry',
+  async (t) => {
+    const cache = createPopulatedCache();
+    const api = new AdminWebSocketAPI({
+      nodeId: 'test-node',
+      systemTableCache: cache,
+      cdcIntegrationService: {
+        getAuthoritativeFallbackDiagnostics: () => ({
+          schemaVersion: 1,
+          nodeId: 'test-node',
+          windowMs: 60000,
+          totalCount: 3,
+          windowCount: 2,
+          windowRatePerMinute: 2,
+          phases: {
+            bootstrap: {windowCount: 0, totalCount: 0},
+            recovery: {windowCount: 0, totalCount: 0},
+            steady_state: {windowCount: 2, totalCount: 3},
+          },
+          outcomes: {
+            recovered: {windowCount: 2, totalCount: 3},
+            failed: {windowCount: 0, totalCount: 0},
+          },
+          byTable: {
+            nodes: {windowCount: 2, totalCount: 3, lastRecordedAt: Date.now()},
+          },
+          recentEvents: [],
+        }),
+      },
+    });
+
+    await api.initialize(0, {listen: false});
+
+    const response = await api.getFastify().inject({
+      method: 'GET',
+      url: '/api/admin/control-snapshot?scope=local',
+    });
+    const payload = response.json();
+
+    t.equal(response.statusCode, 200, 'should return 200 for local snapshot');
+    t.equal(payload.cdcTelemetry.authoritativeFallback.totalCount, 3,
+      'should export fallback totals');
+    t.equal(payload.cdcTelemetry.authoritativeFallback.phases.steady_state.windowCount, 2,
+      'should export steady-state fallback window counts');
 
     await api.shutdown();
   });
@@ -1472,6 +1543,145 @@ test(
   },
 );
 
+test(
+  'AdminWebSocketAPI - table-scoped discovery repairs empty fresh cache from authoritative system tables',
+  async (t) => {
+    const writableCache = createPopulatedCache();
+    writableCache.applySystemTableChange(TABLES.NODES, 'INSERT', {
+      id: 'node-2',
+      address: 'localhost:8081',
+      status: 'active',
+    });
+    writableCache.applySystemTableChange(TABLES.TABLES, 'INSERT', {
+      id: 'table-benchmark-events',
+      table_id: 'table-benchmark-events',
+      name: 'benchmark_events',
+      table_name: 'benchmark_events',
+    });
+    writableCache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
+      id: 'partition-benchmark-events-1',
+      partition_id: 'partition-benchmark-events-1',
+      table_id: 'table-benchmark-events',
+      table_name: 'benchmark_events',
+      keyStart: null,
+      keyEnd: null,
+    });
+    writableCache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+      id: 'service-benchmark-events-node-1',
+      service_type: 'partition',
+      partition_id: 'partition-benchmark-events-1',
+      node_id: 'node-1',
+      status: 'active',
+      raft_role: 'leader',
+      address: '10.0.0.1:7001',
+    });
+    writableCache.lastAppliedAtMsByTableName.set(
+      TABLES.SERVICE_ENDPOINTS,
+      Date.now(),
+    );
+    writableCache.lastAppliedAtMsByTableName.set(
+      TABLES.SERVICE_DEFINITIONS,
+      Date.now(),
+    );
+
+    const authoritativeCache = createPopulatedCache();
+    seedRoutedTableDiscoveryRows(authoritativeCache);
+    const repairEngine = createSystemTableRepairQueryEngine({
+      [TABLES.NODES]: authoritativeCache.getAll(TABLES.NODES),
+      [TABLES.PARTITIONS]: authoritativeCache.getAll(TABLES.PARTITIONS),
+      [TABLES.TABLES]: authoritativeCache.getAll(TABLES.TABLES),
+      [TABLES.NODE_ENDPOINTS]: authoritativeCache.getAll(TABLES.NODE_ENDPOINTS),
+      [TABLES.SERVICE_DEFINITIONS]: authoritativeCache.getAll(TABLES.SERVICE_DEFINITIONS),
+      [TABLES.SERVICE_ENDPOINTS]: authoritativeCache.getAll(TABLES.SERVICE_ENDPOINTS),
+      [TABLES.REPLICA_OPERATIONS]: authoritativeCache.getAll(TABLES.REPLICA_OPERATIONS),
+      [TABLES.SERVICES]: authoritativeCache.getAll(TABLES.SERVICES),
+    });
+    const api = new AdminWebSocketAPI({
+      nodeId: 'test-node',
+      systemTableCache: createReadOnlyCache(writableCache),
+      cacheMutationTarget: writableCache,
+      sqlQueryEngine: repairEngine,
+    });
+
+    const result = await api.buildServiceDiscoveryQueryResult({
+      tableName: 'benchmark_events',
+      tableId: 'table-benchmark-events',
+    });
+    const snapshot = result?.rows?.[0] || null;
+    const replicas = snapshot?.services?.[0]?.replicas || [];
+
+    t.equal(
+      snapshot?.serviceCount,
+      1,
+      'table-scoped discovery should repair an empty fresh cache before responding',
+    );
+    t.equal(
+      replicas.length,
+      2,
+      'repaired discovery snapshot should include authoritative postgres-wire replicas',
+    );
+    t.equal(
+      repairEngine.executeRequestCalls.includes(
+        `SELECT * FROM ${TABLES.SERVICE_ENDPOINTS}`,
+      ),
+      true,
+      'repair should query authoritative service endpoints even when cache freshness is recent',
+    );
+  },
+);
+
+test(
+  'AdminWebSocketAPI - table-scoped discovery does not repair learner readiness gaps',
+  async (t) => {
+    const staleAppliedAtMs = Date.now() - 10000;
+    const writableCache = createPopulatedCache();
+    seedTableDiscoveryRowsWithLocalCandidate(writableCache);
+    writableCache.lastAppliedAtMsByTableName.set(
+      TABLES.SERVICE_ENDPOINTS,
+      staleAppliedAtMs,
+    );
+    writableCache.lastAppliedAtMsByTableName.set(
+      TABLES.SERVICE_DEFINITIONS,
+      staleAppliedAtMs,
+    );
+
+    const repairEngine = createSystemTableRepairQueryEngine({
+      [TABLES.NODES]: writableCache.getAll(TABLES.NODES),
+      [TABLES.PARTITIONS]: writableCache.getAll(TABLES.PARTITIONS),
+      [TABLES.TABLES]: writableCache.getAll(TABLES.TABLES),
+      [TABLES.NODE_ENDPOINTS]: writableCache.getAll(TABLES.NODE_ENDPOINTS),
+      [TABLES.SERVICE_DEFINITIONS]: writableCache.getAll(TABLES.SERVICE_DEFINITIONS),
+      [TABLES.SERVICE_ENDPOINTS]: writableCache.getAll(TABLES.SERVICE_ENDPOINTS),
+      [TABLES.REPLICA_OPERATIONS]: writableCache.getAll(TABLES.REPLICA_OPERATIONS),
+      [TABLES.SERVICES]: writableCache.getAll(TABLES.SERVICES),
+    });
+    const api = new AdminWebSocketAPI({
+      nodeId: 'test-node',
+      systemTableCache: createReadOnlyCache(writableCache),
+      cacheMutationTarget: writableCache,
+      sqlQueryEngine: repairEngine,
+    });
+
+    const result = await api.buildServiceDiscoveryQueryResult({
+      tableName: 'benchmark_events',
+      tableId: 'table-benchmark-events',
+    });
+    const replicas = result?.rows?.[0]?.services?.[0]?.replicas || [];
+    const candidateReplica = replicas.find((replica) => replica?.nodeId === 'node-2');
+
+    t.equal(
+      candidateReplica?.readiness?.benchmarkReady,
+      false,
+      'candidate readiness should remain blocked without forcing repair',
+    );
+    t.same(
+      repairEngine.executeRequestCalls,
+      [],
+      'non-cache-gap readiness blockers should not trigger authoritative repair',
+    );
+  },
+);
+
 test('AdminWebSocketAPI - table-scoped discovery readiness marks missing schema',
   async (t) => {
     const cache = createPopulatedCache();
@@ -1686,7 +1896,514 @@ test(
       true,
       'readiness reasons should expose the local candidate exclusion',
     );
+    t.equal(
+      replicas.find((replica) => replica?.nodeId === 'node-2')?.benchmarkAdmission?.state,
+      'blocked',
+      'candidate-hosting node should publish blocked benchmark admission state',
+    );
+    t.equal(
+      replicas.find((replica) => replica?.nodeId === 'node-2')
+        ?.benchmarkAdmission?.reasons?.some((reason) =>
+          reason.code === 'local_replica_not_voter_ready'),
+      true,
+      'benchmark admission should expose stable local replica blocker reasons',
+    );
 
+    await api.shutdown();
+  },
+);
+
+test(
+  'AdminWebSocketAPI - table-scoped discovery degrades failed replace movements with operation ids',
+  async (t) => {
+    const cache = createPopulatedCache();
+    seedTableDiscoveryRowsWithLocalFollower(cache);
+    cache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'INSERT', {
+      operation_id: 'op-replace-failed',
+      type: 'REPLACE',
+      partition_id: 'partition-benchmark-events-1',
+      entity_type: 'partition',
+      entity_id: 'partition-benchmark-events-1',
+      source_node_id: 'node-1',
+      target_node_id: 'node-2',
+      status: 'failed',
+      workflow_step: 'FAILED',
+      error_message: 'replica.moved failed',
+    });
+    const api = new AdminWebSocketAPI({
+      nodeId: 'test-node',
+      systemTableCache: cache,
+      sqlQueryEngine: createMockQueryEngine(),
+    });
+
+    await api.initialize(0, {listen: false});
+    const response = await api.getFastify().inject({
+      method: 'GET',
+      url: '/api/admin/discovery/services?' +
+        'serviceId=sys-postgres-wire&protocol=postgresql&tableName=benchmark_events',
+    });
+    const payload = response.json();
+
+    t.equal(response.statusCode, 200, 'should return 200');
+    const replicas = Array.isArray(payload?.services?.[0]?.replicas) ?
+      payload.services[0].replicas :
+      [];
+    const admissionByNodeId = new Map(replicas.map((replica) => [
+      String(replica?.nodeId || ''),
+      replica?.benchmarkAdmission || null,
+    ]));
+
+    t.equal(
+      admissionByNodeId.get('node-2')?.state,
+      'blocked',
+      'failed replace target should be blocked for benchmark admission',
+    );
+    t.equal(
+      admissionByNodeId.get('node-2')?.degradationState,
+      'move_failed',
+      'failed replace should classify benchmark admission as move_failed',
+    );
+    t.same(
+      admissionByNodeId.get('node-2')?.degradedByOperationIds,
+      ['op-replace-failed'],
+      'failed replace should expose owning operation id',
+    );
+    t.equal(
+      admissionByNodeId.get('node-2')?.reasons?.some((reason) =>
+        reason.code === 'replica_operation_failed'),
+      true,
+      'failed replace should surface replica_operation_failed reason',
+    );
+
+    await api.shutdown();
+  },
+);
+
+test(
+  'AdminWebSocketAPI - table-scoped discovery degrades pending promotion outcomes',
+  async (t) => {
+    const cache = createPopulatedCache();
+    seedTableDiscoveryRowsWithLocalFollower(cache);
+    cache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'INSERT', {
+      operation_id: 'op-add-pending',
+      type: 'ADD',
+      partition_id: 'partition-benchmark-events-1',
+      entity_type: 'partition',
+      entity_id: 'partition-benchmark-events-1',
+      target_node_id: 'node-2',
+      status: 'creating',
+      workflow_step: 'CREATING',
+    });
+    const api = new AdminWebSocketAPI({
+      nodeId: 'test-node',
+      systemTableCache: cache,
+      sqlQueryEngine: createMockQueryEngine(),
+    });
+
+    await api.initialize(0, {listen: false});
+    const response = await api.getFastify().inject({
+      method: 'GET',
+      url: '/api/admin/discovery/services?' +
+        'serviceId=sys-postgres-wire&protocol=postgresql&tableName=benchmark_events',
+    });
+    const payload = response.json();
+
+    t.equal(response.statusCode, 200, 'should return 200');
+    const replicas = Array.isArray(payload?.services?.[0]?.replicas) ?
+      payload.services[0].replicas :
+      [];
+    const admissionByNodeId = new Map(replicas.map((replica) => [
+      String(replica?.nodeId || ''),
+      replica?.benchmarkAdmission || null,
+    ]));
+
+    t.equal(
+      admissionByNodeId.get('node-2')?.state,
+      'blocked',
+      'pending promotion target should be blocked for benchmark admission',
+    );
+    t.equal(
+      admissionByNodeId.get('node-2')?.degradationState,
+      'promotion_pending',
+      'ADD creating should classify benchmark admission as promotion_pending',
+    );
+    t.same(
+      admissionByNodeId.get('node-2')?.degradedByOperationIds,
+      ['op-add-pending'],
+      'pending promotion should expose owning operation id',
+    );
+    t.equal(
+      admissionByNodeId.get('node-2')?.reasons?.some((reason) =>
+        reason.code === 'replica_operation_in_flight'),
+      true,
+      'pending promotion should surface in-flight replica operation reason',
+    );
+
+    await api.shutdown();
+  },
+);
+
+test(
+  'AdminWebSocketAPI - table-scoped discovery ignores completed promotion rows',
+  async (t) => {
+    const cache = createPopulatedCache();
+    seedTableDiscoveryRowsWithLocalFollower(cache);
+    cache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'INSERT', {
+      operation_id: 'op-add-complete',
+      type: 'ADD',
+      partition_id: 'partition-benchmark-events-1',
+      entity_type: 'partition',
+      entity_id: 'partition-benchmark-events-1',
+      target_node_id: 'node-2',
+      status: 'active',
+      workflow_step: 'ACTIVE',
+      completed_at: 1741000000000,
+    });
+    const api = new AdminWebSocketAPI({
+      nodeId: 'test-node',
+      systemTableCache: cache,
+      sqlQueryEngine: createMockQueryEngine(),
+    });
+
+    await api.initialize(0, {listen: false});
+    const response = await api.getFastify().inject({
+      method: 'GET',
+      url: '/api/admin/discovery/services?' +
+        'serviceId=sys-postgres-wire&protocol=postgresql&tableName=benchmark_events',
+    });
+    const payload = response.json();
+
+    t.equal(response.statusCode, 200, 'should return 200');
+    const replicas = Array.isArray(payload?.services?.[0]?.replicas) ?
+      payload.services[0].replicas :
+      [];
+    const admissionByNodeId = new Map(replicas.map((replica) => [
+      String(replica?.nodeId || ''),
+      replica?.benchmarkAdmission || null,
+    ]));
+
+    t.equal(
+      admissionByNodeId.get('node-2')?.state,
+      'ready',
+      'completed promotion target should not stay blocked for benchmark admission',
+    );
+    t.equal(
+      admissionByNodeId.get('node-2')?.degradationState,
+      'healthy',
+      'completed ADD rows should not classify benchmark admission as promotion_pending',
+    );
+    t.same(
+      admissionByNodeId.get('node-2')?.degradedByOperationIds,
+      [],
+      'completed promotion should not expose stale operation ids',
+    );
+    t.equal(
+      admissionByNodeId.get('node-2')?.reasons?.some((reason) =>
+        reason.code === 'replica_operation_in_flight'),
+      false,
+      'completed promotion should not surface in-flight replica operation reason',
+    );
+
+    await api.shutdown();
+  },
+);
+
+test(
+  'AdminWebSocketAPI - table-scoped discovery clears degradation only when blocking operation rows disappear',
+  async (t) => {
+    const cache = createPopulatedCache();
+    seedTableDiscoveryRowsWithLocalFollower(cache);
+    const failedOperationRow = {
+      operation_id: 'op-replace-failed',
+      type: 'REPLACE',
+      partition_id: 'partition-benchmark-events-1',
+      entity_type: 'partition',
+      entity_id: 'partition-benchmark-events-1',
+      source_node_id: 'node-1',
+      target_node_id: 'node-2',
+      status: 'failed',
+      workflow_step: 'FAILED',
+    };
+    cache.applySystemTableChange(
+      TABLES.REPLICA_OPERATIONS,
+      'INSERT',
+      failedOperationRow,
+    );
+    const api = new AdminWebSocketAPI({
+      nodeId: 'test-node',
+      systemTableCache: cache,
+      sqlQueryEngine: createMockQueryEngine(),
+    });
+
+    await api.initialize(0, {listen: false});
+    const firstResponse = await api.getFastify().inject({
+      method: 'GET',
+      url: '/api/admin/discovery/services?' +
+        'serviceId=sys-postgres-wire&protocol=postgresql&tableName=benchmark_events',
+    });
+    const firstReplicas = firstResponse.json().services[0].replicas;
+    const blockedAdmission = firstReplicas.find((replica) =>
+      replica?.nodeId === 'node-2')?.benchmarkAdmission;
+    t.equal(blockedAdmission?.state, 'blocked', 'failed operation should block initially');
+
+    cache.applySystemTableChange(
+      TABLES.REPLICA_OPERATIONS,
+      'DELETE',
+      {operation_id: 'op-replace-failed'},
+    );
+    cache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'INSERT', {
+      operation_id: 'op-unrelated-failed',
+      type: 'REPLACE',
+      partition_id: 'partition-unrelated-1',
+      entity_type: 'partition',
+      entity_id: 'partition-unrelated-1',
+      source_node_id: 'node-3',
+      target_node_id: 'node-4',
+      status: 'failed',
+      workflow_step: 'FAILED',
+    });
+
+    const secondResponse = await api.getFastify().inject({
+      method: 'GET',
+      url: '/api/admin/discovery/services?' +
+        'serviceId=sys-postgres-wire&protocol=postgresql&tableName=benchmark_events',
+    });
+    const secondReplicas = secondResponse.json().services[0].replicas;
+    const clearedAdmission = secondReplicas.find((replica) =>
+      replica?.nodeId === 'node-2')?.benchmarkAdmission;
+
+    t.equal(
+      clearedAdmission?.state,
+      'ready',
+      'degradation should clear once the blocking node operation disappears',
+    );
+    t.equal(
+      clearedAdmission?.degradationState,
+      'healthy',
+      'cleared admission should return to healthy degradation state',
+    );
+    t.same(
+      clearedAdmission?.degradedByOperationIds,
+      [],
+      'unrelated failed operations should not keep stale degradation ids',
+    );
+
+    await api.shutdown();
+  },
+);
+
+test(
+  'AdminWebSocketAPI - table-scoped discovery ignores unrelated failed operations on same node',
+  async (t) => {
+    const cache = createPopulatedCache();
+    seedTableDiscoveryRowsWithLocalFollower(cache);
+    cache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'INSERT', {
+      operation_id: 'op-unrelated-failed',
+      type: 'REPLACE',
+      partition_id: 'partition-unrelated-1',
+      entity_type: 'message_group',
+      entity_id: 'partition-unrelated-1',
+      source_node_id: 'node-1',
+      target_node_id: 'node-2',
+      status: 'failed',
+      workflow_step: 'FAILED',
+    });
+    const api = new AdminWebSocketAPI({
+      nodeId: 'test-node',
+      systemTableCache: cache,
+      sqlQueryEngine: createMockQueryEngine(),
+    });
+
+    await api.initialize(0, {listen: false});
+    const response = await api.getFastify().inject({
+      method: 'GET',
+      url: '/api/admin/discovery/services?' +
+        'serviceId=sys-postgres-wire&protocol=postgresql&tableName=benchmark_events',
+    });
+    const payload = response.json();
+
+    t.equal(response.statusCode, 200, 'should return 200');
+    const replicas = Array.isArray(payload?.services?.[0]?.replicas) ?
+      payload.services[0].replicas :
+      [];
+    const admission = replicas.find((replica) =>
+      replica?.nodeId === 'node-2')?.benchmarkAdmission || null;
+
+    t.equal(
+      admission?.state,
+      'ready',
+      'unrelated failed operations should not block benchmark admission',
+    );
+    t.equal(
+      admission?.degradationState,
+      'healthy',
+      'unrelated failed operations should not set move_failed',
+    );
+    t.same(
+      admission?.degradedByOperationIds,
+      [],
+      'unrelated failed operations should not leak operation ids',
+    );
+    t.equal(
+      admission?.reasons?.some((reason) =>
+        reason.code === 'replica_operation_failed'),
+      false,
+      'unrelated failed operations should not add replica-operation failure reasons',
+    );
+
+    await api.shutdown();
+  },
+);
+
+test(
+  'AdminWebSocketAPI - local discovery does not require CDC subscribers for user tables',
+  async (t) => {
+    const cache = createPopulatedCache();
+    seedTableDiscoveryRowsWithLocalFollower(cache);
+    const api = new AdminWebSocketAPI({
+      nodeId: 'node-2',
+      systemTableCache: cache,
+      sqlQueryEngine: createMockQueryEngine(),
+      partitionServices: new Map([
+        ['partition-benchmark-events-1', {
+          partitionId: 'partition-benchmark-events-1',
+          getCDCSubscriptionDiagnostics() {
+            return {
+              subscriberCount: 0,
+              bufferedEvents: 0,
+              bufferReplayInFlight: false,
+            };
+          },
+        }],
+      ]),
+    });
+
+    await api.initialize(0, {listen: false});
+    const {ws} = await connectAndReceive(api);
+
+    ws.send(JSON.stringify({
+      type: MessageType.QUERY,
+      queryId: 'q-local-cdc-subscriber-missing',
+      sql: 'SELECT * FROM service_discovery_local(\'benchmark_events\')',
+    }));
+    const response = await waitForMessage(ws);
+
+    t.equal(response.type, MessageType.QUERY_RESULT, 'should return query_result');
+    const replicas = Array.isArray(response?.results?.[0]?.services?.[0]?.replicas) ?
+      response.results[0].services[0].replicas :
+      [];
+    const readinessByNodeId = new Map(replicas.map((replica) => [
+      String(replica?.nodeId || ''),
+      replica?.readiness || null,
+    ]));
+
+    t.equal(
+      readinessByNodeId.get('node-1')?.benchmarkReady,
+      true,
+      'remote leader should remain benchmark ready',
+    );
+    t.equal(
+      readinessByNodeId.get('node-2')?.routingReady,
+      true,
+      'local follower should remain routing ready',
+    );
+    t.equal(
+      readinessByNodeId.get('node-2')?.schemaReady,
+      true,
+      'local follower should remain schema ready',
+    );
+    t.equal(
+      readinessByNodeId.get('node-2')?.topologyReady,
+      true,
+      'user-table local followers should remain topology ready without system CDC subscribers',
+    );
+    t.equal(
+      readinessByNodeId.get('node-2')?.benchmarkReady,
+      true,
+      'user-table local followers should remain benchmark ready without system CDC subscribers',
+    );
+    t.equal(
+      readinessByNodeId.get('node-2')?.reasons?.some((reason) =>
+        reason.code === 'local_cdc_subscriber_missing'),
+      false,
+      'user-table readiness should not report missing system CDC subscribers',
+    );
+
+    ws.close();
+    await api.shutdown();
+  },
+);
+
+test(
+  'AdminWebSocketAPI - local discovery ignores buffered CDC state for user tables',
+  async (t) => {
+    const cache = createPopulatedCache();
+    seedTableDiscoveryRowsWithLocalFollower(cache);
+    const api = new AdminWebSocketAPI({
+      nodeId: 'node-2',
+      systemTableCache: cache,
+      sqlQueryEngine: createMockQueryEngine(),
+      partitionServices: new Map([
+        ['partition-benchmark-events-1', {
+          partitionId: 'partition-benchmark-events-1',
+          getCDCSubscriptionDiagnostics() {
+            return {
+              subscriberCount: 1,
+              bufferedEvents: 3,
+              bufferReplayInFlight: true,
+            };
+          },
+        }],
+      ]),
+    });
+
+    await api.initialize(0, {listen: false});
+    const {ws} = await connectAndReceive(api);
+
+    ws.send(JSON.stringify({
+      type: MessageType.QUERY,
+      queryId: 'q-local-cdc-buffered',
+      sql: 'SELECT * FROM service_discovery_local(\'benchmark_events\')',
+    }));
+    const response = await waitForMessage(ws);
+
+    t.equal(response.type, MessageType.QUERY_RESULT, 'should return query_result');
+    const replicas = Array.isArray(response?.results?.[0]?.services?.[0]?.replicas) ?
+      response.results[0].services[0].replicas :
+      [];
+    const readinessByNodeId = new Map(replicas.map((replica) => [
+      String(replica?.nodeId || ''),
+      replica?.readiness || null,
+    ]));
+
+    t.equal(
+      readinessByNodeId.get('node-2')?.topologyReady,
+      true,
+      'user-table local followers should ignore system CDC buffer state',
+    );
+    t.equal(
+      readinessByNodeId.get('node-2')?.benchmarkReady,
+      true,
+      'user-table local followers should remain benchmark ready despite system CDC buffer state',
+    );
+    t.equal(
+      readinessByNodeId.get('node-2')?.reasons?.some((reason) =>
+        reason.code === 'local_cdc_buffer_not_drained'),
+      false,
+      'user-table readiness should not report system CDC buffer state',
+    );
+    t.equal(
+      replicas.find((replica) => replica?.nodeId === 'node-2')?.benchmarkAdmission?.state,
+      'ready',
+      'user-table local follower should publish ready benchmark admission state',
+    );
+    t.same(
+      replicas.find((replica) => replica?.nodeId === 'node-2')?.benchmarkAdmission?.reasons,
+      [],
+      'ready benchmark admission should not carry blocker reasons',
+    );
+
+    ws.close();
     await api.shutdown();
   },
 );

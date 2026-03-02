@@ -88,7 +88,7 @@ function createMockCache(options = {}) {
  */
 function createMockCdcService() {
   return {
-    insertSystemTableRow: async () => ({success: true}),
+    upsertSystemTableRow: async () => ({success: true}),
     updateSystemTableRow: async () => ({success: true}),
   };
 }
@@ -109,8 +109,8 @@ function createMockPolicyService(options = {}) {
       if (!table || !table.table_policies) return {...DEFAULT_TABLE_POLICY};
       try {
         return {...DEFAULT_TABLE_POLICY, ...JSON.parse(table.table_policies)};
-      } catch (_e) {
-        return {...DEFAULT_TABLE_POLICY};
+      } catch (error) {
+        throw error;
       }
     },
     getMessageGroupPolicy: async () => ({...DEFAULT_MESSAGE_GROUP_POLICY}),

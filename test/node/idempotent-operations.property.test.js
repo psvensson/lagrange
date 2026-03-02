@@ -31,8 +31,8 @@ function createMockCDCService() {
 
   return {
     operations,
-    async insertSystemTableRow(tableName, data) {
-      operations.push({type: 'insert', tableName, data});
+    async upsertSystemTableRow(tableName, data) {
+      operations.push({type: 'upsert', tableName, data});
       return {success: true};
     },
     async updateSystemTableRow(tableName, whereClause, data) {
@@ -78,7 +78,6 @@ function createMockSystemTableCache() {
   return {
     filter: (_tableName, _predicate) => [],
     get: (_tableName, _key) => null,
-    set: (_tableName, _key, _value) => {},
   };
 }
 

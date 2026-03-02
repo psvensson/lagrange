@@ -16,6 +16,7 @@ import {
 } from '../../src/topology/latency-topology-constants.js';
 import {
   CDC_GROUP_PROPAGATION_REASON,
+  CDC_GROUP_PROPAGATION_STRATEGY,
   CDC_GROUP_PROPAGATION_STATUS,
 } from '../../src/topology/cdc-group-propagation-constants.js';
 import {
@@ -190,6 +191,7 @@ test('CDCGroupPropagationService uses safe mode when configured', async (t) => {
   });
 
   assert.equal(result.mode, CDC_GROUP_PROPAGATION_STATUS.SAFE);
+  assert.equal(result.strategy, CDC_GROUP_PROPAGATION_STRATEGY.DIRECT_FANOUT);
   assert.equal(
     result.fallbackReason,
     CDC_GROUP_PROPAGATION_REASON.CONFIG_SAFE_MODE,
@@ -200,7 +202,8 @@ test('CDCGroupPropagationService uses safe mode when configured', async (t) => {
   assert.equal(service.getStats().fallbackCount, 1);
   assert.equal(warnLogs.length, 0, 'config safe mode fallback should not warn');
   assert.ok(
-    debugLogs.some((entry) => entry.message === 'Falling back to safe CDC propagation mode'),
+    debugLogs.some((entry) =>
+      entry.message === 'Falling back to direct-fanout CDC propagation strategy'),
     'config safe mode fallback should emit debug diagnostic',
   );
 
@@ -263,6 +266,10 @@ test('CDCGroupPropagationService fans out by group coordinators in grouped mode'
     });
 
     assert.equal(result.mode, CDC_GROUP_PROPAGATION_STATUS.GROUPED);
+    assert.equal(
+      result.strategy,
+      CDC_GROUP_PROPAGATION_STRATEGY.GROUP_COORDINATOR,
+    );
     assert.equal(result.success, true);
     assert.equal(result.targetGroupCount, 2);
     assert.equal(source.calls.length, 1);
@@ -329,6 +336,7 @@ test('CDCGroupPropagationService falls back when coordinator address is missing'
     });
 
     assert.equal(result.mode, CDC_GROUP_PROPAGATION_STATUS.SAFE);
+    assert.equal(result.strategy, CDC_GROUP_PROPAGATION_STRATEGY.DIRECT_FANOUT);
     assert.equal(
       result.fallbackReason,
       CDC_GROUP_PROPAGATION_REASON.MISSING_COORDINATOR_ADDRESS,
@@ -338,7 +346,8 @@ test('CDCGroupPropagationService falls back when coordinator address is missing'
     assert.equal(fallbackEvents.length, 1);
     assert.equal(fallbackEvents[0].reason, result.fallbackReason);
     assert.ok(
-      warnLogs.some((entry) => entry.message === 'Falling back to safe CDC propagation mode'),
+      warnLogs.some((entry) =>
+        entry.message === 'Falling back to direct-fanout CDC propagation strategy'),
       'non-config fallback reasons should remain warnings',
     );
 
@@ -401,6 +410,10 @@ test('CDCGroupPropagationService reports grouped delivery failures', async (t) =
   });
 
   assert.equal(result.mode, CDC_GROUP_PROPAGATION_STATUS.GROUPED);
+  assert.equal(
+    result.strategy,
+    CDC_GROUP_PROPAGATION_STRATEGY.GROUP_COORDINATOR,
+  );
   assert.equal(result.success, false);
   assert.equal(result.deliveryFailures.length, 1);
   assert.equal(result.deliveryFailures[0].targetGroupId, 'g-2');
@@ -457,6 +470,7 @@ test('CDCGroupPropagationService safe fallback still fans out to active group le
     });
 
     assert.equal(result.mode, CDC_GROUP_PROPAGATION_STATUS.SAFE);
+    assert.equal(result.strategy, CDC_GROUP_PROPAGATION_STRATEGY.DIRECT_FANOUT);
     assert.equal(
       result.fallbackReason,
       CDC_GROUP_PROPAGATION_REASON.MISSING_COORDINATOR_ADDRESS,
@@ -527,6 +541,7 @@ test('CDCGroupPropagationService treats thrown delivery errors as failures witho
 
     assert.ok(result);
     assert.equal(result.mode, CDC_GROUP_PROPAGATION_STATUS.SAFE);
+    assert.equal(result.strategy, CDC_GROUP_PROPAGATION_STRATEGY.DIRECT_FANOUT);
     assert.equal(result.success, false);
     assert.equal(result.deliveryFailures.length, 1);
     assert.equal(result.deliveryFailures[0].targetGroupId, 'g-2');
@@ -590,6 +605,7 @@ test('CDCGroupPropagationService retries transient safe-mode delivery failure',
     });
 
     assert.equal(result.mode, CDC_GROUP_PROPAGATION_STATUS.SAFE);
+    assert.equal(result.strategy, CDC_GROUP_PROPAGATION_STRATEGY.DIRECT_FANOUT);
     assert.equal(result.success, true);
     assert.equal(result.deliveryFailures.length, 0);
     assert.equal(router.calls.length, 2);
@@ -653,6 +669,7 @@ test('CDCGroupPropagationService continues retries in background after retry bud
     });
 
     assert.equal(result.mode, CDC_GROUP_PROPAGATION_STATUS.SAFE);
+    assert.equal(result.strategy, CDC_GROUP_PROPAGATION_STRATEGY.DIRECT_FANOUT);
     assert.equal(result.success, false);
     assert.equal(
       result.deliveryFailures.length,

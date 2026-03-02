@@ -4,13 +4,13 @@
  * This component extracts the common CDC integration service setup logic used by
  * both BootstrapService and NodeJoiningService. It handles:
  * - Creating the CDCIntegrationService instance
- * - Configuring bootstrap mode for seed node direct writes
- * - Setting up SQL query engine for normal operation
+ * - Configuring bootstrap-phase direct writes for seed-node registration
+ * - Setting up SQL query engine for steady-state routed operation
  * - Configuring message router for mesh connectivity
  *
- * Two modes of operation:
- * 1. Bootstrap mode (seed node): Direct writes to local partitions without cache
- * 2. Normal mode (joining node): Routes through SQL engine to partition leaders
+ * Two write-routing phases:
+ * 1. Bootstrap-direct phase (seed node): Direct writes to local partitions
+ * 2. Sql-routed phase (joining node / post-hydration): Route through SQL engine
  *
  * Requirements: 3.4 - Shared CDC_Integration_Setup component
  *
@@ -18,6 +18,7 @@
  */
 
 import {CDCIntegrationService} from '../../cdc/cdc-integration-service.js';
+import {WRITE_ROUTER_MODE} from '../../cdc/write-router/index.js';
 import {LoggingService} from '../../logging/logging-service.js';
 import {DependencyError} from '../bootstrap-errors.js';
 import {SUBSYSTEM} from '../../constants/index.js';
@@ -31,11 +32,17 @@ const CDC_INTEGRATION_SETUP_SUBSYSTEM = SUBSYSTEM.CDC_INTEGRATION_SETUP;
  * Log messages for CDCIntegrationSetup.
  */
 const LOG_MSG = Object.freeze({
-  CREATING_BOOTSTRAP: 'Creating CDCIntegrationService in bootstrap mode',
-  CREATING_NORMAL: 'Creating CDCIntegrationService in normal mode',
+  CREATING_BOOTSTRAP:
+    'Creating CDCIntegrationService in bootstrap-direct write phase',
+  CREATING_NORMAL:
+    'Creating CDCIntegrationService in sql-routed write phase',
   CREATED: 'CDCIntegrationService created successfully',
-  BOOTSTRAP_MODE_ENABLED: 'Bootstrap mode enabled for direct partition writes',
+  BOOTSTRAP_MODE_ENABLED:
+    'Bootstrap-direct write phase enabled for direct partition writes',
   MESSAGE_ROUTER_SET: 'Message router configured for mesh connectivity',
+  UPGRADING:
+    'Upgrading CDCIntegrationService from bootstrap-direct to sql-routed write phase',
+  UPGRADED: 'CDCIntegrationService upgraded to sql-routed write phase',
 });
 
 /**
@@ -54,20 +61,21 @@ const ERROR_MSG = Object.freeze({
  */
 class CDCIntegrationSetup {
   /**
-   * Create CDCIntegrationService for bootstrap mode (seed node).
+   * Create CDCIntegrationService for the bootstrap-direct write phase.
    *
-   * Bootstrap mode is used during seed node registration phase when:
+   * The bootstrap-direct phase is used during seed node registration when:
    * - System cache is not yet populated
    * - Writes must go directly to local partitions
    * - SQL query engine is not yet available
    *
-   * After cache hydration, the service should be upgraded to normal mode
+   * After cache hydration, the service should be upgraded to the sql-routed phase
    * using the upgrade() method or by creating a new service with createNormal().
    *
    * @param {Object} options - Configuration options.
    * @param {string} options.nodeId - Node ID (required).
    * @param {Object} options.messageRouter - Message router for mesh connectivity (optional).
-   * @return {CDCIntegrationService} Configured CDC integration service in bootstrap mode.
+   * @return {CDCIntegrationService} Configured CDC integration service in the
+   * bootstrap-direct write phase.
    * @throws {DependencyError} If nodeId is not provided.
    */
   static createForBootstrap({nodeId, messageRouter}) {
@@ -86,7 +94,7 @@ class CDCIntegrationSetup {
     });
 
     // Create CDCIntegrationService WITHOUT SQLQueryEngine during bootstrap.
-    // In bootstrap mode, writes go directly to local partitions via
+    // In the bootstrap-direct phase, writes go directly to local partitions via
     // setBootstrapMode(), bypassing the SQL query engine.
     const cdcIntegrationService = new CDCIntegrationService({
       nodeId,
@@ -101,7 +109,7 @@ class CDCIntegrationSetup {
 
     logger.info(LOG_MSG.CREATED, {
       nodeId,
-      mode: 'bootstrap',
+      writeRoutingPhase: WRITE_ROUTER_MODE.BOOTSTRAP_DIRECT,
       hasMessageRouter: !!messageRouter,
     });
 
@@ -109,9 +117,9 @@ class CDCIntegrationSetup {
   }
 
   /**
-   * Create CDCIntegrationService for normal mode (joining node or post-hydration).
+   * Create CDCIntegrationService for the sql-routed write phase.
    *
-   * Normal mode is used when:
+   * The sql-routed phase is used when:
    * - System cache is populated and available
    * - SQL query engine can route to partition leaders
    * - All writes should go through SQL for cache consistency
@@ -121,7 +129,8 @@ class CDCIntegrationSetup {
    * @param {Object} options.sqlQueryEngine - SQL query engine for routing (required).
    * @param {Object} options.systemTableCache - System table cache (required).
    * @param {Object} options.messageRouter - Message router for mesh connectivity (required).
-   * @return {CDCIntegrationService} Configured CDC integration service in normal mode.
+   * @return {CDCIntegrationService} Configured CDC integration service in the
+   * sql-routed write phase.
    * @throws {DependencyError} If required dependencies are not provided.
    */
   static createForNormal({
@@ -171,7 +180,7 @@ class CDCIntegrationSetup {
 
     logger.info(LOG_MSG.CREATED, {
       nodeId,
-      mode: 'normal',
+      writeRoutingPhase: WRITE_ROUTER_MODE.SQL_ROUTED,
       hasSqlQueryEngine: true,
       hasSystemTableCache: true,
       hasMessageRouter: true,
@@ -181,10 +190,10 @@ class CDCIntegrationSetup {
   }
 
   /**
-   * Upgrade an existing bootstrap-mode CDCIntegrationService to normal mode.
+   * Upgrade an existing bootstrap-direct service to the sql-routed phase.
    *
    * This is used after cache hydration when the seed node transitions from
-   * bootstrap mode (direct partition writes) to normal mode (SQL routing).
+   * bootstrap-direct writes to sql-routed writes.
    *
    * @param {Object} options - Configuration options.
    * @param {Object} options.cdcIntegrationService - Existing service to upgrade (required).
@@ -216,12 +225,10 @@ class CDCIntegrationSetup {
 
     const nodeId = cdcIntegrationService.nodeId;
 
-    logger.info('Upgrading CDCIntegrationService from bootstrap to normal mode', {
-      nodeId,
-    });
+    logger.info(LOG_MSG.UPGRADING, {nodeId});
 
     // Update the service to use cache-based routing
-    cdcIntegrationService.sqlQueryEngine = sqlQueryEngine;
+    cdcIntegrationService.setSqlQueryEngine(sqlQueryEngine);
     cdcIntegrationService.setSystemTableCache(systemTableCache);
     if (cacheMutationTarget) {
       cdcIntegrationService.setCacheMutationTarget(cacheMutationTarget);
@@ -232,8 +239,9 @@ class CDCIntegrationSetup {
       cdcIntegrationService.setMessageRouter(messageRouter);
     }
 
-    logger.info('CDCIntegrationService upgraded to normal mode', {
+    logger.info(LOG_MSG.UPGRADED, {
       nodeId,
+      writeRoutingPhase: WRITE_ROUTER_MODE.SQL_ROUTED,
       hasSqlQueryEngine: true,
       hasSystemTableCache: true,
       hasMessageRouter: !!cdcIntegrationService.messageRouter,

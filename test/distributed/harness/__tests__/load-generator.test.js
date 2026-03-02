@@ -813,8 +813,63 @@ test('dispatch accounting balances target, dispatched, and undispatched operatio
       );
     } finally {
       run.cancel();
-    }
+  }
+});
+
+test('dispatched operations only count work that reached a node attempt', async () => {
+  let breakerCalls = ZERO;
+  let slowNodeCalls = ZERO;
+  const nodes = [
+    {
+      id: 'node-client-breaker',
+      breakerOwner: BREAKER_OWNER_NODE_CLIENT,
+      async query(_sql) {
+        breakerCalls++;
+        const error = new Error('circuit breaker is open');
+        error.code = NODE_CLIENT_ERROR_CODE_CIRCUIT_OPEN;
+        throw error;
+      },
+    },
+    {
+      id: 'slow-node',
+      async query(_sql) {
+        slowNodeCalls++;
+        await new Promise((resolve) => setTimeout(resolve, 40));
+        return {rows: []};
+      },
+    },
+  ];
+
+  const gen = new LoadGenerator(nodes, {
+    opsPerSec: 400,
+    duration: 220,
+    maxInFlight: 20,
+    nodeMaxInFlight: ONE,
+    admissionBackoffMs: ADMISSION_BACKOFF_MS,
   });
+  const run = gen.start();
+  try {
+    await new Promise((resolve) => setTimeout(resolve, 160));
+    run.cancel();
+    const metrics = await run.waitComplete();
+    const attemptedNodeDispatches = Object.values(metrics.perNode || {})
+      .reduce((sum, nodeMetrics) => sum + Number(nodeMetrics?.dispatched || ZERO), ZERO);
+    assert.ok(
+      attemptedNodeDispatches > ZERO,
+      'expected at least one real node dispatch attempt',
+    );
+    assert.ok(
+      metrics.dispatchedOperations <= attemptedNodeDispatches,
+      'expected dispatched operation accounting to reflect only real node attempts',
+    );
+    assert.ok(
+      breakerCalls > ZERO || slowNodeCalls > ZERO,
+      'expected the scenario to exercise node dispatch paths',
+    );
+  } finally {
+    run.cancel();
+  }
+});
 
 test('undispatched reason classes are populated when dispatch falls behind',
   async () => {

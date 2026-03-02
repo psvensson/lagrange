@@ -68,9 +68,9 @@ function createTrackingCdcService() {
       });
       return {success: true};
     },
-    insertSystemTableRow: async (tableName, data) => {
+    upsertSystemTableRow: async (tableName, data) => {
       calls.push({
-        operation: 'insert',
+        operation: 'upsert',
         tableName,
         data,
       });

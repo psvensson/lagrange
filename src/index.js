@@ -247,8 +247,13 @@ function createAdminAPIWithLiveQuery(options) {
     systemTableCache: options.systemTableCache,
     cacheMutationTarget: options.cacheMutationTarget || null,
     sqlQueryEngine: options.sqlQueryEngine || null,
+    cdcIntegrationService: options.cdcIntegrationService || null,
     messageRouter: options.messageRouter || null,
     serviceDiagnosticsProvider: options.serviceDiagnosticsProvider || null,
+    partitionServicesProvider:
+      typeof options.partitionServicesProvider === 'function' ?
+        options.partitionServicesProvider :
+        null,
     liveQueryManager,
   });
 
@@ -316,7 +321,7 @@ function startLogsTablePersistence(
     connectedService = service;
     return service;
   }).catch((error) => {
-    logger.warn('Background logs table persistence setup failed', {
+    logger.warn(ENTRYPOINT_LOG_MSG.LOGS_TABLE_BACKGROUND_CONNECT_FAILED, {
       error: error.message,
     });
     return null;
@@ -623,9 +628,11 @@ async function main() {
       systemTableCache,
       cacheMutationTarget: cacheMutationTarget || systemTableCache,
       sqlQueryEngine,
+      cdcIntegrationService: nodeJoiningService.cdcIntegrationService,
       messageRouter: joinResult.messageRouter,
       serviceDiagnosticsProvider:
         createServiceDiagnosticsProvider(nodeJoiningService),
+      partitionServicesProvider: () => joinResult.partitionServices,
     });
     const adminAPI = joinAdminStartup.adminAPI;
     const liveQueryWiring = joinAdminStartup.liveQueryWiring;
@@ -830,9 +837,11 @@ async function main() {
       systemTableCache,
       cacheMutationTarget: systemTableCache,
       sqlQueryEngine,
+      cdcIntegrationService: bootstrapService.cdcIntegrationService,
       messageRouter: bootstrapResult.messageRouter,
       serviceDiagnosticsProvider:
         createServiceDiagnosticsProvider(bootstrapService),
+      partitionServicesProvider: () => bootstrapResult.partitionServices,
     });
     const adminAPI = seedAdminStartup.adminAPI;
     const liveQueryWiring = seedAdminStartup.liveQueryWiring;

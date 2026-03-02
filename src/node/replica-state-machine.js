@@ -305,13 +305,13 @@ class ReplicaStateMachine extends EventEmitter {
   async _createReplicaRowInCdc(replicaState) {
     try {
       const serviceId = replicaState.serviceId || replicaState.replicaId;
-      const insertSystemTableRow = assertCritical(
-        typeof this.cdcIntegrationService.insertSystemTableRow === TYPEOF.FUNCTION ?
-          this.cdcIntegrationService.insertSystemTableRow.bind(
+      const upsertSystemTableRow = assertCritical(
+        typeof this.cdcIntegrationService.upsertSystemTableRow === TYPEOF.FUNCTION ?
+          this.cdcIntegrationService.upsertSystemTableRow.bind(
             this.cdcIntegrationService,
           ) :
           null,
-        REPLICA_STATE_MACHINE_ERROR_MSG.MISSING_INSERT_SYSTEM_TABLE_ROW,
+        REPLICA_STATE_MACHINE_ERROR_MSG.MISSING_UPSERT_SYSTEM_TABLE_ROW,
       );
       const addressManager = AddressManager.getInstance();
       const serviceType = replicaState.serviceType || SERVICE_TYPE.PARTITION;
@@ -324,7 +324,7 @@ class ReplicaStateMachine extends EventEmitter {
         address,
       );
 
-      await insertSystemTableRow(TABLES.SERVICES, insertData);
+      await upsertSystemTableRow(TABLES.SERVICES, insertData);
 
       this.logger.debug(REPLICA_STATE_MACHINE_LOG_MSG.STATE_PERSISTED, {
         replicaId: replicaState.replicaId,

@@ -51,7 +51,6 @@ function createMockCache(nodeId, services = []) {
 function createMockCDCService() {
   return {
     updateSystemTableRow: async () => ({success: true}),
-    insertSystemTableRow: async () => ({success: true}),
   };
 }
 

@@ -1,7 +1,11 @@
-import {NUM, TABLES, TIME_MS} from '../constants/index.js';
+import {CDC_OPERATION, NUM, TIME_MS} from '../constants/index.js';
 import {
   SYSTEM_CACHE_KEY_DESCRIPTOR,
 } from './system-cache-key-descriptor.js';
+import {
+  CDC_NON_PROPAGATED_TABLES,
+  CDC_PROPAGATED_TABLES,
+} from './cdc-table-policy.js';
 
 const CACHE_SUBSYSTEM = Object.freeze({
   CACHE: 'cache',
@@ -83,81 +87,10 @@ const CACHE_DEFAULT = Object.freeze({
 //   c. It can be queried on demand from its owning partition without
 //      affecting routing, placement, or cluster-health decisions.
 //
-// Any new system table MUST be classified here. Tables not listed in
-// CDC_PROPAGATED_TABLES are non-propagated by default and will not be
-// included in cache hydration snapshots or CDC subscriptions.
+// Any new system table MUST be classified in src/cache/cdc-table-policy.js.
+// Tables without internal propagation stay out of cache hydration snapshots
+// and steady-state cache CDC fanout.
 // ---------------------------------------------------------------------------
-
-/**
- * Tables whose CDC events propagate to every node's SystemTableCache.
- * These define cluster topology, routing, placement, and configuration.
- */
-const CDC_PROPAGATED_TABLES = Object.freeze([
-  // Membership
-  TABLES.NODES, // node registry and state
-  TABLES.PARTITIONS, // partition key ranges and replica counts
-  TABLES.SERVICES, // replica locations and raft roles
-  TABLES.MESSAGE_GROUPS, // message group membership
-  TABLES.TABLES, // table schemas and policies
-  TABLES.INDICES, // secondary index definitions
-
-  // Routing and endpoints
-  TABLES.NODE_ENDPOINTS, // node transport endpoints
-  TABLES.SERVICE_DEFINITIONS, // service runtime definitions
-  TABLES.SERVICE_ENDPOINTS, // replicated service endpoints
-
-  // Placement and rebalancing
-  TABLES.REPLICA_OPERATIONS, // in-flight rebalancing operations
-  TABLES.STORAGE_RESERVATIONS, // in-flight storage reservations
-
-  // Cluster-wide configuration
-  TABLES.CONFIG, // epoch, budgets, feature flags
-
-  // Distributed SQL transaction coordination/recovery
-  TABLES.SQL_TRANSACTIONS, // transaction state machine rows
-  TABLES.SQL_TRANSACTION_PARTICIPANTS, // participant partition status
-  TABLES.SQL_WRITE_OPERATIONS, // idempotent write operation envelope
-
-  // Debug session control plane state
-  TABLES.DEBUG_SESSIONS, // trace session activation + lineage scope
-
-  // Network topology
-  TABLES.LATENCY_GROUPS, // latency group assignments
-  TABLES.INTER_GROUP_LATENCIES, // inter-group RTT measurements
-]);
-
-/**
- * Tables that are NOT CDC-propagated. They remain queryable from their
- * owning partition via SQL but are not cached on every node.
- *
- * Rationale per table:
- *   logs                     — high cardinality, append-only
- *   contexts                 — per-execution, transient
- *   code                     — stored procedures, query on demand
- *   live_queries             — per-session subscriptions
- *   service_timers           — WASM service-scoped timers
- *   module_manifests         — WASM module metadata, query on demand
- *   package_registry_mappings — namespace mappings, query on demand
- *   package_registry_overrides — per-package overrides, query on demand
- *   module_dependency_locks  — immutable locks, query on demand
- *   wasm_operations          — async workflow journal, transient
- *   debug_breakpoints        — debug breakpoint state, transient
- *   debug_snapshots          — debug snapshot state, transient
- */
-const CDC_NON_PROPAGATED_TABLES = Object.freeze([
-  TABLES.LOGS,
-  TABLES.CONTEXTS,
-  TABLES.CODE,
-  TABLES.LIVE_QUERIES,
-  TABLES.SERVICE_TIMERS,
-  TABLES.MODULE_MANIFESTS,
-  TABLES.PACKAGE_REGISTRY_MAPPINGS,
-  TABLES.PACKAGE_REGISTRY_OVERRIDES,
-  TABLES.MODULE_DEPENDENCY_LOCKS,
-  TABLES.WASM_OPERATIONS,
-  TABLES.DEBUG_BREAKPOINTS,
-  TABLES.DEBUG_SNAPSHOTS,
-]);
 
 /**
  * Complete list of all system tables (propagated + non-propagated).

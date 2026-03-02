@@ -20,7 +20,7 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 function createMockCDCService() {
   return {
     updateSystemTableRow: async () => ({success: true}),
-    insertSystemTableRow: async () => ({success: true}),
+    upsertSystemTableRow: async () => ({success: true}),
   };
 }
 

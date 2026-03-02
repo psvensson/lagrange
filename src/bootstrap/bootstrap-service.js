@@ -170,8 +170,12 @@ const messageGroupLeadershipTimeout = bootstrapError.messageGroupLeadershipTimeo
 const partitionLeadershipTimeout = bootstrapError.partitionLeadershipTimeout;
 const DEFAULT_BOOTSTRAP_CONFIG = BOOTSTRAP_DEFAULT;
 const DEFAULT_CACHE_SYNC_TABLES = new Set(CACHE_HYDRATION_TABLES);
-const BOOTSTRAP_REPLICA_REGISTRATION_PROGRESS_INTERVAL = 10;
-const BOOTSTRAP_REPLICA_STATE_TRANSITIONS_PER_REPLICA = 4;
+const BOOTSTRAP_REPLICA_REGISTRATION_PROGRESS_INTERVAL = NUM.TEN;
+const BOOTSTRAP_REPLICA_STATE_TRANSITIONS_PER_REPLICA = NUM.FOUR;
+
+function shouldAttachPartitionCdcPropagation(tableName) {
+  return DEFAULT_CACHE_SYNC_TABLES.has(tableName);
+}
 
 /**
  * Maps BOOTSTRAP_PHASE values to BOOTSTRAP_SUB_PHASE values
@@ -246,8 +250,9 @@ class BootstrapService extends EventEmitter {
     ) ?
       Math.max(NUM.ONE, Math.floor(this.config.maxConcurrentServiceActions)) :
       BOOTSTRAP_DEFAULT.maxConcurrentServiceActions;
-    this.config.replicaRegistrationTraceEnabled =
-      this.config.replicaRegistrationTraceEnabled === true;
+    this.config.replicaRegistrationTraceEnabled = Boolean(
+      this.config.replicaRegistrationTraceEnabled,
+    );
     this.nodeReadyRebalanceDelayMs = Number.isFinite(
       this.config.nodeReadyRebalanceDelayMs,
     ) ?
@@ -3261,7 +3266,7 @@ class BootstrapService extends EventEmitter {
       if (
         tableName &&
         messageGroupService &&
-        DEFAULT_CACHE_SYNC_TABLES.has(tableName)
+        shouldAttachPartitionCdcPropagation(tableName)
       ) {
         await messageGroupService.subscribeToCDC(tableName);
 

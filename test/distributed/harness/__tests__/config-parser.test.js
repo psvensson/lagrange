@@ -239,6 +239,10 @@ test('Unit: mergeWithDefaults preserves user overrides', async (t) => {
         tableName: 'bench_custom',
         replicationFactor: 5,
         syncReplicaAcks: 2,
+        strictAuthoritativeFallback: true,
+        authoritativeFallbackThresholds: {
+          maxSteadyStateWindowCount: 2,
+        },
         cacheBaselineMetrics: false,
         refreshBaselineMetrics: true,
         baselineCacheTtlMs: 60000,
@@ -301,6 +305,11 @@ test('Unit: mergeWithDefaults preserves user overrides', async (t) => {
     assert.strictEqual(config.benchmark.tableName, 'bench_custom');
     assert.strictEqual(config.benchmark.replicationFactor, 5);
     assert.strictEqual(config.benchmark.syncReplicaAcks, 2);
+    assert.strictEqual(config.benchmark.strictAuthoritativeFallback, true);
+    assert.strictEqual(
+      config.benchmark.authoritativeFallbackThresholds.maxSteadyStateWindowCount,
+      2,
+    );
     assert.strictEqual(config.benchmark.cacheBaselineMetrics, false);
     assert.strictEqual(config.benchmark.refreshBaselineMetrics, true);
     assert.strictEqual(config.benchmark.baselineCacheTtlMs, 60000);

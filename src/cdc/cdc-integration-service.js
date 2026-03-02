@@ -2,13 +2,13 @@
  * CDC Integration Service - Routes all system table writes through SQL.
  * Ensures cache consistency by making CDC the single source of truth.
  *
- * Bootstrap Mode Architecture:
- * - Seed node uses bootstrap mode during initial setup
- * - Bootstrap mode enables direct writes to local partitions
+ * Bootstrap-Direct Write Phase:
+ * - Seed node uses a bootstrap-direct phase during initial setup
+ * - The bootstrap-direct phase enables direct writes to local partitions
  * - Required because system cache is empty during seed node bootstrap
- * - After bootstrap, mode is disabled and all writes route through SQL
+ * - After bootstrap, the service switches to sql-routed steady state
  *
- * Normal Mode Architecture:
+ * Sql-Routed Steady State:
  * - All writes route through SQL query engine
  * - SQL engine uses system cache to find partition leaders
  * - Writes go to partition leader via message router
@@ -36,7 +36,7 @@ import {
 import {
   getSystemCachePrimaryKeyFieldOrFallback,
 } from '../cache/system-cache-key-descriptor.js';
-import {CDC_PROPAGATED_TABLES} from '../cache/cache-constants.js';
+import {isTableInternalCachePropagationEnabled} from '../cache/cdc-table-policy.js';
 import {CDCEventHandler} from './cdc-event-handler.js';
 import {
   CDC_CONFIG_KEY,
@@ -92,6 +92,33 @@ const TABLE_WRITE_METRIC_SUPPRESSED_TABLES = new Set([
 const TABLE_WRITE_FAILURE_LOG_SUPPRESSED_TABLES = new Set([
   SystemTableName.LOGS,
 ]);
+const AUTHORITATIVE_FALLBACK_PHASE = Object.freeze({
+  BOOTSTRAP: 'bootstrap',
+  RECOVERY: 'recovery',
+  STEADY_STATE: 'steady_state',
+});
+const AUTHORITATIVE_FALLBACK_OUTCOME = Object.freeze({
+  RECOVERED: 'recovered',
+  FAILED: 'failed',
+});
+const AUTHORITATIVE_FALLBACK_WINDOW_MS = 60 * 1000;
+const AUTHORITATIVE_FALLBACK_RECENT_LIMIT = 10;
+
+function normalizeAuthoritativeFallbackPhase(value) {
+  if (value === AUTHORITATIVE_FALLBACK_PHASE.BOOTSTRAP) {
+    return AUTHORITATIVE_FALLBACK_PHASE.BOOTSTRAP;
+  }
+  if (value === AUTHORITATIVE_FALLBACK_PHASE.RECOVERY) {
+    return AUTHORITATIVE_FALLBACK_PHASE.RECOVERY;
+  }
+  return AUTHORITATIVE_FALLBACK_PHASE.STEADY_STATE;
+}
+
+function normalizeAuthoritativeFallbackOutcome(value) {
+  return value === AUTHORITATIVE_FALLBACK_OUTCOME.FAILED ?
+    AUTHORITATIVE_FALLBACK_OUTCOME.FAILED :
+    AUTHORITATIVE_FALLBACK_OUTCOME.RECOVERED;
+}
 
 function shouldEmitTableWriteMetric(tableName) {
   return !TABLE_WRITE_METRIC_SUPPRESSED_TABLES.has(tableName);
@@ -165,6 +192,9 @@ class CDCIntegrationService extends EventEmitter {
 
     // Statistics
     this.stats = {...CDC_STATS_DEFAULT};
+    this.authoritativeFallbackHistory = [];
+    this.authoritativeFallbackTotals = new Map();
+    this.authoritativeFallbackWindowMs = AUTHORITATIVE_FALLBACK_WINDOW_MS;
 
     this.initialized = false;
   }
@@ -687,7 +717,7 @@ class CDCIntegrationService extends EventEmitter {
    * @private
    */
   shouldWaitForCacheUpdate(tableName) {
-    return CDC_PROPAGATED_TABLES.includes(tableName);
+    return isTableInternalCachePropagationEnabled(tableName);
   }
 
   /**
@@ -725,6 +755,9 @@ class CDCIntegrationService extends EventEmitter {
       typeof options.expectedFields === TYPEOF.OBJECT ?
       options.expectedFields :
       null;
+    const fallbackPhase = this.resolveAuthoritativeFallbackPhase(
+      options?.fallbackPhase,
+    );
 
     const isSatisfied = () => this.isCacheExpectationSatisfied(
       tableName,
@@ -779,12 +812,27 @@ class CDCIntegrationService extends EventEmitter {
               key,
               expectPresent,
               expectedFields,
+              {fallbackPhase},
             );
             if (repaired && isSatisfied()) {
               cleanup();
               return;
             }
+            this.recordAuthoritativeFallbackSignal({
+              tableName,
+              key,
+              expectPresent,
+              phase: fallbackPhase,
+              outcome: AUTHORITATIVE_FALLBACK_OUTCOME.FAILED,
+            });
           } catch (repairError) {
+            this.recordAuthoritativeFallbackSignal({
+              tableName,
+              key,
+              expectPresent,
+              phase: fallbackPhase,
+              outcome: AUTHORITATIVE_FALLBACK_OUTCOME.FAILED,
+            });
             this.logger.warn('Authoritative cache repair failed after cache wait timeout', {
               tableName,
               key,
@@ -884,6 +932,7 @@ class CDCIntegrationService extends EventEmitter {
     key,
     expectPresent,
     expectedFields = null,
+    options = {},
   ) {
     const cacheMutationTarget = this.cacheMutationTarget;
     if (!this.shouldWaitForCacheUpdate(tableName) ||
@@ -939,14 +988,182 @@ class CDCIntegrationService extends EventEmitter {
       expectedFields,
     );
     if (repaired) {
+      const fallbackSignal = this.recordAuthoritativeFallbackSignal({
+        tableName,
+        key,
+        expectPresent,
+        phase: this.resolveAuthoritativeFallbackPhase(options?.fallbackPhase),
+        outcome: AUTHORITATIVE_FALLBACK_OUTCOME.RECOVERED,
+      });
       this.logger.warn('Recovered cache visibility gap from authoritative system table read', {
         tableName,
         key,
         expectPresent,
         nodeId: this.nodeId,
+        phase: fallbackSignal.phase,
+        windowCount: fallbackSignal.windowCount,
+        windowRatePerMinute: fallbackSignal.windowRatePerMinute,
       });
     }
     return repaired;
+  }
+
+  /**
+   * Resolve authoritative fallback phase from optional runtime context.
+   * @param {string|undefined|null} phase
+   * @return {string}
+   * @private
+   */
+  resolveAuthoritativeFallbackPhase(phase) {
+    if (typeof phase === TYPEOF.STRING && phase.length > NUM.ZERO) {
+      return normalizeAuthoritativeFallbackPhase(phase);
+    }
+    if (this.bootstrapMode) {
+      return AUTHORITATIVE_FALLBACK_PHASE.BOOTSTRAP;
+    }
+    return AUTHORITATIVE_FALLBACK_PHASE.STEADY_STATE;
+  }
+
+  /**
+   * Remove authoritative fallback samples that are older than the active window.
+   * @param {number} nowMs
+   * @private
+   */
+  pruneAuthoritativeFallbackHistory(nowMs) {
+    const threshold = nowMs - this.authoritativeFallbackWindowMs;
+    this.authoritativeFallbackHistory = this.authoritativeFallbackHistory.filter(
+      (entry) => entry.recordedAt >= threshold,
+    );
+  }
+
+  /**
+   * Record one authoritative fallback signal for diagnostics and strict gating.
+   * @param {Object} options
+   * @return {Object}
+   * @private
+   */
+  recordAuthoritativeFallbackSignal(options = {}) {
+    const nowMs = Date.now();
+    const tableName = String(options.tableName || '');
+    const rowKey = String(options.key || '');
+    const phase = this.resolveAuthoritativeFallbackPhase(options.phase);
+    const outcome = normalizeAuthoritativeFallbackOutcome(options.outcome);
+    const identity = `${tableName}:${rowKey}:${phase}:${outcome}`;
+    const totalEntry = this.authoritativeFallbackTotals.get(identity) || {
+      tableName,
+      rowKey,
+      phase,
+      outcome,
+      totalCount: NUM.ZERO,
+      lastRecordedAt: NUM.ZERO,
+    };
+    totalEntry.totalCount += NUM.ONE;
+    totalEntry.lastRecordedAt = nowMs;
+    this.authoritativeFallbackTotals.set(identity, totalEntry);
+
+    this.authoritativeFallbackHistory.push({
+      tableName,
+      rowKey,
+      nodeId: this.nodeId,
+      expectPresent: options.expectPresent === true,
+      phase,
+      outcome,
+      recordedAt: nowMs,
+    });
+    this.pruneAuthoritativeFallbackHistory(nowMs);
+
+    let windowCount = NUM.ZERO;
+    for (const entry of this.authoritativeFallbackHistory) {
+      if (entry.tableName === tableName &&
+          entry.rowKey === rowKey &&
+          entry.phase === phase &&
+          entry.outcome === outcome) {
+        windowCount += NUM.ONE;
+      }
+    }
+
+    return {
+      tableName,
+      rowKey,
+      nodeId: this.nodeId,
+      expectPresent: options.expectPresent === true,
+      phase,
+      outcome,
+      windowCount,
+      windowRatePerMinute:
+        (windowCount / this.authoritativeFallbackWindowMs) * 60 * 1000,
+      recordedAt: nowMs,
+    };
+  }
+
+  /**
+   * Summarize authoritative fallback diagnostics for local runtime export.
+   * @return {Object}
+   */
+  getAuthoritativeFallbackDiagnostics() {
+    const nowMs = Date.now();
+    this.pruneAuthoritativeFallbackHistory(nowMs);
+
+    const phases = {
+      [AUTHORITATIVE_FALLBACK_PHASE.BOOTSTRAP]: {windowCount: NUM.ZERO, totalCount: NUM.ZERO},
+      [AUTHORITATIVE_FALLBACK_PHASE.RECOVERY]: {windowCount: NUM.ZERO, totalCount: NUM.ZERO},
+      [AUTHORITATIVE_FALLBACK_PHASE.STEADY_STATE]: {windowCount: NUM.ZERO, totalCount: NUM.ZERO},
+    };
+    const outcomes = {
+      [AUTHORITATIVE_FALLBACK_OUTCOME.RECOVERED]: {windowCount: NUM.ZERO, totalCount: NUM.ZERO},
+      [AUTHORITATIVE_FALLBACK_OUTCOME.FAILED]: {windowCount: NUM.ZERO, totalCount: NUM.ZERO},
+    };
+    const byTable = {};
+    let totalCount = NUM.ZERO;
+    for (const totalEntry of this.authoritativeFallbackTotals.values()) {
+      totalCount += totalEntry.totalCount;
+      phases[totalEntry.phase].totalCount += totalEntry.totalCount;
+      outcomes[totalEntry.outcome].totalCount += totalEntry.totalCount;
+      const tableEntry = byTable[totalEntry.tableName] || {
+        totalCount: NUM.ZERO,
+        windowCount: NUM.ZERO,
+        lastRecordedAt: NUM.ZERO,
+      };
+      tableEntry.totalCount += totalEntry.totalCount;
+      tableEntry.lastRecordedAt = Math.max(
+        tableEntry.lastRecordedAt,
+        totalEntry.lastRecordedAt,
+      );
+      byTable[totalEntry.tableName] = tableEntry;
+    }
+
+    for (const entry of this.authoritativeFallbackHistory) {
+      phases[entry.phase].windowCount += NUM.ONE;
+      outcomes[entry.outcome].windowCount += NUM.ONE;
+      const tableEntry = byTable[entry.tableName] || {
+        totalCount: NUM.ZERO,
+        windowCount: NUM.ZERO,
+        lastRecordedAt: NUM.ZERO,
+      };
+      tableEntry.windowCount += NUM.ONE;
+      tableEntry.lastRecordedAt = Math.max(tableEntry.lastRecordedAt, entry.recordedAt);
+      byTable[entry.tableName] = tableEntry;
+    }
+
+    const recentEvents = this.authoritativeFallbackHistory
+      .slice(-AUTHORITATIVE_FALLBACK_RECENT_LIMIT)
+      .map((entry) => ({...entry}));
+
+    return {
+      schemaVersion: NUM.ONE,
+      nodeId: this.nodeId,
+      windowMs: this.authoritativeFallbackWindowMs,
+      totalCount,
+      windowCount: this.authoritativeFallbackHistory.length,
+      windowRatePerMinute:
+        (this.authoritativeFallbackHistory.length / this.authoritativeFallbackWindowMs) *
+        60 *
+        1000,
+      phases,
+      outcomes,
+      byTable,
+      recentEvents,
+    };
   }
 
   /**

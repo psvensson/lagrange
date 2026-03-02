@@ -22,10 +22,15 @@ import {
 } from './harness/scenario-discovery.js';
 import {createCluster} from './harness/cluster.js';
 import {DockerProvider} from './harness/docker-provider.js';
-import {ReportWriter, computeStandardSummary} from './harness/report-writer.js';
+import {
+  ReportWriter,
+  computeSummary,
+  computeStandardSummary,
+} from './harness/report-writer.js';
 import {formatLogEntry} from './harness/log-collector.js';
 import {analyzeMemoryLeakFromPlayback} from './harness/memory-leak-analyzer.js';
 import {buildPerformanceDiagnostics} from './harness/performance-diagnostics.js';
+import {writeFailureBundlesForReport} from './harness/failure-bundle.js';
 import {
   CLI,
   EXIT_CODES,
@@ -1775,6 +1780,7 @@ async function main() {
   );
 
   const reportPreview = {
+    summary: computeSummary(report.scenarios),
     standardSummary: computeStandardSummary(
       report.scenarios,
       historicalReports,
@@ -1785,8 +1791,17 @@ async function main() {
     historicalReports,
     runConfig,
   );
+  const failureBundle = await writeFailureBundlesForReport({
+    scenarios: report.scenarios,
+    reportOutputPath: args.output,
+    outputDir: runConfig.outputDir,
+    reportSummary: reportPreview.summary,
+    standardSummary: reportPreview.standardSummary,
+    benchmarkRegressionGate,
+  });
   await report.write({
     benchmarkRegressionGate,
+    ...(failureBundle.runBundle ? {failureBundle: failureBundle.runBundle} : {}),
   });
 
   if (args.verbose) {
@@ -1834,6 +1849,7 @@ export {
   buildImage,
   loadScenarioModule,
   shouldPrintLiveLogEntry,
+  writeFailureBundlesForReport,
   resolveFastLocalMode,
   resolveDeterministicDebugConfig,
   applyDeterministicDebugConfig,

@@ -71,37 +71,6 @@ async function runWithCleanupTimeout(task, label, t) {
   }
 }
 
-function forceReleaseActiveHandles() {
-  // Best-effort fallback for rare teardown leaks from network/timer handles.
-  for (const handle of process._getActiveHandles()) {
-    if (
-      handle === process.stdin ||
-      handle === process.stdout ||
-      handle === process.stderr
-    ) {
-      continue;
-    }
-
-    try {
-      if (typeof handle.unref === 'function') {
-        handle.unref();
-      }
-    } catch {
-      // Best-effort cleanup only.
-    }
-
-    try {
-      if (typeof handle.close === 'function') {
-        handle.close();
-      } else if (typeof handle.destroy === 'function') {
-        handle.destroy();
-      }
-    } catch {
-      // Best-effort cleanup only.
-    }
-  }
-}
-
 /**
  * Collect partition service rows from the system cache.
  *
@@ -342,7 +311,6 @@ test('Three-node seed rebalance', {timeout: TEST_TIMEOUT_MS}, async (t) => {
         'cluster graceful shutdown',
         t,
       );
-      forceReleaseActiveHandles();
     }
     },
   );

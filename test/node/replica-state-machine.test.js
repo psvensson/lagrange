@@ -8,7 +8,7 @@ import {
 import {REPLICA_STATE_MACHINE_DIAGNOSTIC_CODE} from
   '../../src/node/replica-state-machine-constants.js';
 
-test('ReplicaStateMachine uses insert for initial services persistence when upsert is unavailable',
+test('ReplicaStateMachine uses upsert for initial services persistence',
   async (t) => {
     ConfigurationManager.resetInstance();
     LoggingService.resetInstance();
@@ -19,14 +19,14 @@ test('ReplicaStateMachine uses insert for initial services persistence when upse
     const logging = LoggingService.getInstance();
     logging.initialize({level: 'error'});
 
-    let insertCalls = 0;
+    let upsertCalls = 0;
     const cdcIntegrationService = {
-      async insertSystemTableRow(tableName, data) {
-        insertCalls++;
-        t.equal(tableName, 'services', 'initial persistence should insert services');
-        t.equal(data.service_id, 'svc-1', 'insert should target the service row');
+      async upsertSystemTableRow(tableName, data) {
+        upsertCalls++;
+        t.equal(tableName, 'services', 'initial persistence should upsert services');
+        t.equal(data.service_id, 'svc-1', 'upsert should target the service row');
         t.equal(data.status, ReplicaState.PENDING,
-          'insert should preserve the pending state');
+          'upsert should preserve the pending state');
         return {success: true};
       },
     };
@@ -44,8 +44,8 @@ test('ReplicaStateMachine uses insert for initial services persistence when upse
       serviceAddress: 'node-1/partition/svc-1',
     });
 
-    t.equal(result, true, 'transition should succeed through the insert path');
-    t.equal(insertCalls, 1, 'initial insert should be attempted once');
+    t.equal(result, true, 'transition should succeed through the upsert path');
+    t.equal(upsertCalls, 1, 'initial upsert should be attempted once');
 
     stateMachine.clear();
     ConfigurationManager.resetInstance();
@@ -66,8 +66,8 @@ test('ReplicaStateMachine uses injected clock for create and update persistence'
     const persisted = [];
     const nowValues = [1234, 2345];
     const cdcIntegrationService = {
-      async insertSystemTableRow(tableName, data) {
-        persisted.push({type: 'insert', tableName, data});
+      async upsertSystemTableRow(tableName, data) {
+        persisted.push({type: 'upsert', tableName, data});
         return {success: true};
       },
       async updateSystemTableRow(tableName, whereClause, data) {
@@ -107,7 +107,7 @@ test('ReplicaStateMachine uses injected clock for create and update persistence'
     t.equal(createResult, true, 'initial transition should succeed');
     t.equal(updateResult, true, 'follow-up transition should succeed');
     t.equal(persisted.length, 2, 'should persist one create and one update');
-    t.equal(persisted[0].type, 'insert', 'initial persistence should use insert');
+    t.equal(persisted[0].type, 'upsert', 'initial persistence should use upsert');
     t.equal(persisted[0].tableName, 'services', 'create should target services');
     t.equal(persisted[0].data.created_at, 1234,
       'create should use injected time for created_at');
@@ -129,7 +129,7 @@ test('ReplicaStateMachine uses injected clock for create and update persistence'
     LoggingService.resetInstance();
   });
 
-test('ReplicaStateMachine requires insertSystemTableRow for initial persistence',
+test('ReplicaStateMachine requires upsertSystemTableRow for initial persistence',
   async (t) => {
     ConfigurationManager.resetInstance();
     LoggingService.resetInstance();
@@ -143,7 +143,7 @@ test('ReplicaStateMachine requires insertSystemTableRow for initial persistence'
     const stateMachine = new ReplicaStateMachine({
       nodeId: 'node-1',
       cdcIntegrationService: {
-        async upsertSystemTableRow() {
+        async insertSystemTableRow() {
           return {success: true};
         },
       },
@@ -157,8 +157,8 @@ test('ReplicaStateMachine requires insertSystemTableRow for initial persistence'
       serviceId: 'svc-2',
       serviceAddress: 'node-1/partition/svc-2',
       }),
-      /insertSystemTableRow/,
-      'initial persistence should fail loudly without canonical insert support',
+      /upsertSystemTableRow/,
+      'initial persistence should fail loudly without canonical upsert support',
     );
 
     stateMachine.clear();
@@ -180,7 +180,7 @@ test('ReplicaStateMachine emits transitionError with stable code on invalid tran
     const stateMachine = new ReplicaStateMachine({
       nodeId: 'node-1',
       cdcIntegrationService: {
-        async insertSystemTableRow() {
+        async upsertSystemTableRow() {
           return {success: true};
         },
       },

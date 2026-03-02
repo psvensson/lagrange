@@ -870,6 +870,71 @@ test('NodeJoiningService - ready state update reconciles mesh connections first'
     ], 'should repair missing peer connection before sending ready update');
   });
 
+test('NodeJoiningService - steady ready heartbeats skip redundant mesh reconciliation',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const service = new NodeJoiningService({
+      nodeId: 'joining-node-6',
+      nodeAddress: 'ws://localhost:9095',
+      seedNodeAddress: 'http://localhost:8080',
+    });
+
+    const nodeService = NodeService.getInstance();
+    const systemTableCache = nodeService.getSystemTableCache();
+    for (const row of [
+      {
+        node_id: 'joining-node-6',
+        node_address: 'localhost:9095',
+        status: 'active',
+      },
+      {
+        node_id: 'seed-node',
+        node_address: 'localhost:8080',
+        status: 'active',
+      },
+      {
+        node_id: 'late-peer',
+        node_address: 'localhost:8085',
+        status: 'active',
+      },
+    ]) {
+      systemTableCache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT, row);
+    }
+
+    const callOrder = [];
+    service.resolveControlPlaneTargetAddress = () => 'seed-node/message-group/mg-1-r1';
+    service.messageRouter = {
+      nodeConnections: new Map([
+        ['seed-node', {state: 'connected'}],
+        ['late-peer', {state: 'connected'}],
+      ]),
+      getConnectionState(nodeId) {
+        return this.nodeConnections.get(nodeId)?.state || null;
+      },
+      async connectToNode(nodeId, wsAddress) {
+        callOrder.push(`connect:${nodeId}:${wsAddress}`);
+        this.nodeConnections.set(nodeId, {state: 'connected'});
+      },
+      async deliver(targetAddress, message) {
+        callOrder.push(`deliver:${targetAddress}:${message.state}`);
+        return {acknowledged: true};
+      },
+      getConnectedNodes() {
+        return ['seed-node', 'late-peer'];
+      },
+    };
+
+    await service.connectToClusterNodes();
+    callOrder.length = 0;
+
+    await service.sendControlPlaneNodeStateUpdate({state: 'ready'});
+
+    t.same(callOrder, [
+      'deliver:seed-node/message-group/mg-1-r1:ready',
+    ], 'should skip mesh reconciliation when the ready heartbeat sees the same connected mesh');
+  });
+
 test('NodeJoiningService - fails without seed node address', async (t) => {
   initializeTestEnvironment();
 
@@ -1033,6 +1098,12 @@ test('NodeJoiningService - signals readiness after querying state', async (t) =>
   });
 
   const order = [];
+  const reporterAssignments = [];
+  service.heartbeatService = {
+    setNodeStateReporter(reporter) {
+      reporterAssignments.push(reporter);
+    },
+  };
 
   // Mock getLeaderMessageGroupService to return a mock service
   service.getLeaderMessageGroupService = () => ({
@@ -1088,6 +1159,11 @@ test('NodeJoiningService - signals readiness after querying state', async (t) =>
   t.equal(order.includes('ready'), true, 'should signal readiness');
   t.equal(order.indexOf('query') < order.indexOf('ready'), true,
     'should signal readiness after state query');
+  t.same(
+    reporterAssignments,
+    [null],
+    'should disable bootstrap-only control-plane reporter after initial ready signal',
+  );
 });
 
 test(

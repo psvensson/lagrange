@@ -155,6 +155,15 @@ test('NodeClient fetchControlSnapshot uses local snapshot query path only', asyn
     nodes: ['node-local'],
     partitions: [],
     leaders: {},
+    cdcTelemetry: {
+      subscriberCount: 2,
+      bufferedEvents: 0,
+      catchupLagEvents: 0,
+      authoritativeFallback: {
+        totalCount: 3,
+        windowCount: 1,
+      },
+    },
     replicaOperations: {
       inFlightCount: 0,
       statusHistogram: {},

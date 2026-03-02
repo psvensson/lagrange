@@ -116,8 +116,8 @@ const REPLICA_STATE_MACHINE_ERROR_MSG = Object.freeze({
   MISSING_NODE_ID: 'ReplicaStateMachine requires nodeId',
   MISSING_CDC_SERVICE: 'ReplicaStateMachine requires cdcIntegrationService',
   MISSING_SYSTEM_TABLE_CACHE: 'ReplicaStateMachine requires systemTableCache',
-  MISSING_INSERT_SYSTEM_TABLE_ROW:
-    'ReplicaStateMachine requires cdcIntegrationService.insertSystemTableRow',
+  MISSING_UPSERT_SYSTEM_TABLE_ROW:
+    'ReplicaStateMachine requires cdcIntegrationService.upsertSystemTableRow',
   MISSING_UPDATE_SYSTEM_TABLE_ROW:
     'ReplicaStateMachine requires cdcIntegrationService.updateSystemTableRow',
   timeoutReason: (state, elapsedMs) =>

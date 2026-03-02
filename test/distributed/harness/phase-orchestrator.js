@@ -10,6 +10,12 @@ const ONE = 1;
 const EMPTY_OBJECT = Object.freeze({});
 const EMPTY_ARRAY = Object.freeze([]);
 const SKIPPED_PHASE_ERROR = 'skipped_due_to_previous_failure';
+const PHASE_PROGRESS_ARTIFACT_FIELD = 'phaseProgress';
+const PHASE_PROGRESS_EVENT_FIELDS = Object.freeze([
+  'message',
+  'details',
+  'timestampMs',
+]);
 
 function normalizeErrorMessage(error) {
   if (typeof error?.message === 'string' && error.message.length > ZERO) {
@@ -55,6 +61,77 @@ function normalizePhaseResult(phase, result, startedAtMs, endedAtMs) {
     errors: normalizeStringArray(candidate.errors || EMPTY_ARRAY),
     startedAtMs,
     endedAtMs,
+  };
+}
+
+function cloneEventPayload(event) {
+  return {
+    ...(typeof event?.message === 'string' && event.message.length > ZERO ?
+      {message: event.message} :
+      {}),
+    ...(event?.details && typeof event.details === 'object' &&
+      !Array.isArray(event.details) ?
+      {details: {...event.details}} :
+      {}),
+    timestampMs: Number.isFinite(event?.timestampMs) ?
+      event.timestampMs :
+      Date.now(),
+  };
+}
+
+function createPhaseProgressTelemetry() {
+  return {
+    heartbeatCount: ZERO,
+    lastProgressEvent: null,
+    lastMeaningfulChange: null,
+    noProgressWarnings: [],
+    failedNoProgress: null,
+  };
+}
+
+function buildPhaseProgressArtifact(telemetry) {
+  const heartbeatCount = Number(telemetry?.heartbeatCount || ZERO);
+  const noProgressWarnings = Array.isArray(telemetry?.noProgressWarnings) ?
+    telemetry.noProgressWarnings.map((event) => cloneEventPayload(event)) :
+    [];
+  const artifact = {
+    heartbeatCount,
+    noProgressWarningCount: noProgressWarnings.length,
+  };
+  if (telemetry?.lastProgressEvent) {
+    artifact.lastProgressEvent = cloneEventPayload(telemetry.lastProgressEvent);
+  }
+  if (telemetry?.lastMeaningfulChange) {
+    artifact.lastMeaningfulChange = cloneEventPayload(
+      telemetry.lastMeaningfulChange,
+    );
+  }
+  if (noProgressWarnings.length > ZERO) {
+    artifact.noProgressWarnings = noProgressWarnings;
+  }
+  if (telemetry?.failedNoProgress) {
+    artifact.failedNoProgress = cloneEventPayload(telemetry.failedNoProgress);
+  }
+  return artifact;
+}
+
+function mergePhaseArtifacts(candidateArtifacts, phaseProgressArtifact) {
+  const normalizedArtifacts =
+    candidateArtifacts && typeof candidateArtifacts === 'object' ?
+      candidateArtifacts :
+      EMPTY_OBJECT;
+  const hasPhaseProgressArtifact =
+    phaseProgressArtifact.heartbeatCount > ZERO ||
+    phaseProgressArtifact.noProgressWarningCount > ZERO ||
+    phaseProgressArtifact.lastProgressEvent !== undefined ||
+    phaseProgressArtifact.lastMeaningfulChange !== undefined ||
+    phaseProgressArtifact.failedNoProgress !== undefined;
+  if (!hasPhaseProgressArtifact) {
+    return normalizedArtifacts;
+  }
+  return {
+    ...normalizedArtifacts,
+    [PHASE_PROGRESS_ARTIFACT_FIELD]: phaseProgressArtifact,
   };
 }
 
@@ -156,6 +233,7 @@ class PhaseOrchestrator {
 
   async _runOnePhase(phase, phaseHandlers, context) {
     const startedAtMs = Date.now();
+    const phaseProgressTelemetry = createPhaseProgressTelemetry();
     this._emitEvent({
       type: PHASE_EVENT_TYPE.START,
       phase,
@@ -164,7 +242,12 @@ class PhaseOrchestrator {
 
     let rawResult;
     try {
-      rawResult = await this._invokePhaseHandler(phase, phaseHandlers, context);
+      rawResult = await this._invokePhaseHandler(
+        phase,
+        phaseHandlers,
+        context,
+        phaseProgressTelemetry,
+      );
     } catch (error) {
       rawResult = {
         status: PHASE_STATUS.FAIL,
@@ -179,6 +262,10 @@ class PhaseOrchestrator {
       startedAtMs,
       endedAtMs,
     );
+    normalizedResult.artifacts = mergePhaseArtifacts(
+      normalizedResult.artifacts,
+      buildPhaseProgressArtifact(phaseProgressTelemetry),
+    );
 
     this._emitEvent({
       type: PHASE_EVENT_TYPE.END,
@@ -191,7 +278,7 @@ class PhaseOrchestrator {
     return normalizedResult;
   }
 
-  async _invokePhaseHandler(phase, phaseHandlers, context) {
+  async _invokePhaseHandler(phase, phaseHandlers, context, phaseProgressTelemetry) {
     if (!phaseHandlers || typeof phaseHandlers !== 'object') {
       return {
         status: PHASE_STATUS.OK,
@@ -203,7 +290,39 @@ class PhaseOrchestrator {
         status: PHASE_STATUS.OK,
       };
     }
-    return handler(context);
+    const phaseContext = {
+      ...(context && typeof context === 'object' ? context : EMPTY_OBJECT),
+      phase,
+      emitPhaseProgress: (event = EMPTY_OBJECT) =>
+        this._recordPhaseEvent(
+          phase,
+          PHASE_EVENT_TYPE.PROGRESS,
+          event,
+          phaseProgressTelemetry,
+        ),
+      emitPhaseLastMeaningfulChange: (event = EMPTY_OBJECT) =>
+        this._recordPhaseEvent(
+          phase,
+          PHASE_EVENT_TYPE.LAST_MEANINGFUL_CHANGE,
+          event,
+          phaseProgressTelemetry,
+        ),
+      emitPhaseNoProgressWarning: (event = EMPTY_OBJECT) =>
+        this._recordPhaseEvent(
+          phase,
+          PHASE_EVENT_TYPE.NO_PROGRESS_WARNING,
+          event,
+          phaseProgressTelemetry,
+        ),
+      emitPhaseFailedNoProgress: (event = EMPTY_OBJECT) =>
+        this._recordPhaseEvent(
+          phase,
+          PHASE_EVENT_TYPE.FAILED_NO_PROGRESS,
+          event,
+          phaseProgressTelemetry,
+        ),
+    };
+    return handler(phaseContext);
   }
 
   _emitEvent(event) {
@@ -211,6 +330,47 @@ class PhaseOrchestrator {
       return;
     }
     this._onEvent(event);
+  }
+
+  _recordPhaseEvent(phase, type, event, phaseProgressTelemetry) {
+    const timestampMs = Number.isFinite(event?.timestampMs) ?
+      event.timestampMs :
+      Date.now();
+    const payload = {
+      type,
+      phase,
+      timestampMs,
+    };
+    for (const field of PHASE_PROGRESS_EVENT_FIELDS) {
+      if (field === 'timestampMs') {
+        continue;
+      }
+      if (field === 'details' &&
+          event?.details &&
+          typeof event.details === 'object' &&
+          !Array.isArray(event.details)) {
+        payload.details = {...event.details};
+        continue;
+      }
+      if (typeof event?.[field] === 'string' && event[field].length > ZERO) {
+        payload[field] = event[field];
+      }
+    }
+
+    if (type === PHASE_EVENT_TYPE.PROGRESS) {
+      phaseProgressTelemetry.heartbeatCount += ONE;
+      phaseProgressTelemetry.lastProgressEvent = payload;
+    } else if (type === PHASE_EVENT_TYPE.LAST_MEANINGFUL_CHANGE) {
+      phaseProgressTelemetry.lastMeaningfulChange = payload;
+      phaseProgressTelemetry.lastProgressEvent = payload;
+    } else if (type === PHASE_EVENT_TYPE.NO_PROGRESS_WARNING) {
+      phaseProgressTelemetry.noProgressWarnings.push(payload);
+    } else if (type === PHASE_EVENT_TYPE.FAILED_NO_PROGRESS) {
+      phaseProgressTelemetry.failedNoProgress = payload;
+    }
+
+    this._emitEvent(payload);
+    return payload;
   }
 }
 

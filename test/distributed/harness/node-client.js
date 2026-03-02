@@ -52,6 +52,7 @@ const SNAPSHOT_FIELD_CAPTURED_AT = 'capturedAt';
 const SNAPSHOT_FIELD_NODES = 'nodes';
 const SNAPSHOT_FIELD_PARTITIONS = 'partitions';
 const SNAPSHOT_FIELD_LEADERS = 'leaders';
+const SNAPSHOT_FIELD_CDC_TELEMETRY = 'cdcTelemetry';
 const SNAPSHOT_FIELD_REPLICA_OPERATIONS = 'replicaOperations';
 const SNAPSHOT_FIELD_IN_FLIGHT_COUNT = 'inFlightCount';
 const SNAPSHOT_FIELD_STATUS_HISTOGRAM = 'statusHistogram';
@@ -958,6 +959,15 @@ class NodeClient {
       [SNAPSHOT_FIELD_LEADERS]: {
         ...snapshot[SNAPSHOT_FIELD_LEADERS],
       },
+      ...(snapshot[SNAPSHOT_FIELD_CDC_TELEMETRY] &&
+        typeof snapshot[SNAPSHOT_FIELD_CDC_TELEMETRY] === 'object' &&
+        !Array.isArray(snapshot[SNAPSHOT_FIELD_CDC_TELEMETRY]) ?
+        {
+          [SNAPSHOT_FIELD_CDC_TELEMETRY]: {
+            ...snapshot[SNAPSHOT_FIELD_CDC_TELEMETRY],
+          },
+        } :
+        {}),
       [SNAPSHOT_FIELD_REPLICA_OPERATIONS]: {
         [SNAPSHOT_FIELD_IN_FLIGHT_COUNT]:
           replicaOperations[SNAPSHOT_FIELD_IN_FLIGHT_COUNT],

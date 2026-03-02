@@ -165,6 +165,27 @@ When running tests during task execution:
 3. **Run failing tests first** - When fixing issues, run only the specific failing test(s)
 4. **Use test filtering** - Use patterns like `npm test -- --grep "pattern"` or similar to filter tests
 
+## Baseline-Discovered Bug Closure Policy
+
+Distributed baseline runs are allowed to discover bugs, but they are not
+allowed to be the only place those bugs remain reproducible.
+
+For any correctness bug first discovered in a `3node`, `5node`, or `7node`
+distributed baseline:
+
+1. Add a targeted reproduction before closure.
+2. Prefer the deterministic integration layer under `test/integration/` over a
+   full Docker baseline rerun when the bug can be isolated there.
+3. Use the smallest fixture layer that still preserves the failure contract:
+   replica creation, promotion delay, failed move, degraded admission,
+   fallback visibility, or other control-plane instability.
+4. Do not mark the bug closed just because the baseline rerun happens to pass.
+   Closure requires a stable targeted regression in the normal development
+   loop.
+5. If a baseline failure cannot yet be reproduced below the full harness,
+   record that gap explicitly and keep the issue open until the deterministic
+   layer exists.
+
 ## Node Join Convergence SLO Strategy
 
 All cluster join changes must include or update a convergence SLO integration

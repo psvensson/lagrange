@@ -9,6 +9,7 @@ const BENCHMARK_STRICT_DISCOVERY_DEFAULT = false;
 const BENCHMARK_STRICT_PARITY_DEFAULT = false;
 const BENCHMARK_STRICT_PRELOAD_READINESS_DEFAULT = false;
 const BENCHMARK_STRICT_CDC_TELEMETRY_SCHEMA_DEFAULT = false;
+const BENCHMARK_STRICT_AUTHORITATIVE_FALLBACK_DEFAULT = false;
 const BENCHMARK_STRICT_OVERLOAD_POLICY_DEFAULT = false;
 const BENCHMARK_STRICT_WRITE_PRESSURE_DEFAULT = false;
 const BENCHMARK_QUIET_MODE_ENABLED_DEFAULT = null;
@@ -145,6 +146,25 @@ function resolveWritePressureThresholds(configuredThresholds) {
         configured.maxTimedOutWrites >= ZERO ?
         configured.maxTimedOutWrites :
         null,
+  };
+}
+
+function resolveAuthoritativeFallbackThresholds(
+  configuredThresholds,
+  options = {},
+) {
+  const configured =
+    configuredThresholds && typeof configuredThresholds === 'object' ?
+      configuredThresholds :
+      {};
+  const strictAuthoritativeFallback =
+    options.strictAuthoritativeFallback === true;
+  return {
+    maxSteadyStateWindowCount:
+      Number.isInteger(configured.maxSteadyStateWindowCount) &&
+        configured.maxSteadyStateWindowCount >= ZERO ?
+        configured.maxSteadyStateWindowCount :
+        (strictAuthoritativeFallback ? ONE : null),
   };
 }
 
@@ -285,6 +305,10 @@ function resolvePostgresBaselineBenchmarkConfig(configured = {}, options = {}) {
     configured.strictCdcTelemetrySchema === true ?
       true :
       BENCHMARK_STRICT_CDC_TELEMETRY_SCHEMA_DEFAULT;
+  const strictAuthoritativeFallback =
+    configured.strictAuthoritativeFallback === true ?
+      true :
+      BENCHMARK_STRICT_AUTHORITATIVE_FALLBACK_DEFAULT;
   const strictOverloadPolicy =
     configured.strictOverloadPolicy === true ?
       true :
@@ -297,6 +321,7 @@ function resolvePostgresBaselineBenchmarkConfig(configured = {}, options = {}) {
     strictParity ||
     strictPreloadReadiness ||
     strictCdcTelemetrySchema ||
+    strictAuthoritativeFallback ||
     strictOverloadPolicy ||
     strictWritePressure;
   const configuredQuietModeEnabled =
@@ -448,9 +473,15 @@ function resolvePostgresBaselineBenchmarkConfig(configured = {}, options = {}) {
     strictParity,
     strictPreloadReadiness,
     strictCdcTelemetrySchema,
+    strictAuthoritativeFallback,
     strictOverloadPolicy,
     strictWritePressure,
     quietModeEnabled,
+    authoritativeFallbackThresholds:
+      resolveAuthoritativeFallbackThresholds(
+        configured.authoritativeFallbackThresholds,
+        {strictAuthoritativeFallback},
+      ),
     overloadPolicy: resolveOverloadPolicy(configured.overloadPolicy),
     writePressureThresholds:
       resolveWritePressureThresholds(configured.writePressureThresholds),
@@ -533,6 +564,7 @@ function resolvePostgresBaselineBenchmarkConfig(configured = {}, options = {}) {
 export {
   calculateMinimumPreloadBudgetMs,
   normalizeTableName,
+  resolveAuthoritativeFallbackThresholds,
   resolveInternalSignalThresholds,
   resolveOverloadPolicy,
   resolvePostgresBaselineBenchmarkConfig,

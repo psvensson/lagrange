@@ -1,7 +1,7 @@
 /**
  * Admin WebSocket API — node-local compatibility adapter.
  *
- * This class is a THIN ROUTING ADAPTER on fixed port 8081.
+ * This class is a THIN ROUTING ADAPTER on the configured admin WebSocket port.
  * It exists solely to preserve backward compatibility with
  * existing CLI clients. Its responsibilities are:
  *
@@ -78,6 +78,7 @@ import {
   DEBUG_SESSION_STATUS as DEBUG_METADATA_SESSION_STATUS,
 } from '../debug-runtime/debug-metadata-constants.js';
 import {isLoadReadyReplicaRaftRole} from '../node/replica-state-machine-constants.js';
+import {isTerminalStep as isTerminalReplicaOperationStep} from '../rebalancer/replica-status.js';
 import {
   ADMIN_CACHE_DUMP,
   ADMIN_CONTROL_SNAPSHOT,
@@ -108,6 +109,7 @@ import {
 } from './admin-constants.js';
 import {getSystemCachePrimaryKeyField} from
   '../cache/system-cache-key-descriptor.js';
+import {isTableCdcReadinessRelevant} from '../cache/cdc-table-policy.js';
 
 const MessageType = ADMIN_MESSAGE_TYPE;
 const ErrorCode = ADMIN_ERROR_CODE;
@@ -141,6 +143,10 @@ const STATUS_ACTIVE = 'active';
 const STATUS_UNKNOWN = 'unknown';
 const IDENTIFIER_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const SERVICE_DISCOVERY_TABLE_ID_PATTERN = /^[A-Za-z0-9_-]+$/;
+const CDC_TELEMETRY_MODE = Object.freeze({
+  STEADY: 'steady',
+  CATCHUP: 'catchup',
+});
 const SERVICE_DISCOVERY_SQL_WITH_TABLE_PATTERN =
   /^select \* from service_discovery_local\(\s*'([a-z_][a-z0-9_]*)'\s*\)$/;
 const SERVICE_DISCOVERY_SQL_WITH_TABLE_AND_ID_PATTERN =
@@ -150,8 +156,38 @@ const SERVICE_DISCOVERY_READINESS_REASON = Object.freeze({
   SCHEMA_TABLE_MISSING: 'schema_table_missing',
   SCHEMA_PARTITION_UNAVAILABLE: 'schema_partition_unavailable',
   REPLICA_OPERATIONS_IN_FLIGHT: 'replica_operations_in_flight',
+  REPLICA_OPERATION_IN_FLIGHT: 'replica_operation_in_flight',
+  REPLICA_OPERATION_FAILED: 'replica_operation_failed',
   LEADERSHIP_UNSTABLE: 'leadership_unstable',
   LOCAL_REPLICA_NOT_VOTER_READY: 'local_replica_not_voter_ready',
+  LOCAL_CDC_DIAGNOSTICS_UNAVAILABLE: 'local_cdc_diagnostics_unavailable',
+  LOCAL_CDC_SUBSCRIBER_MISSING: 'local_cdc_subscriber_missing',
+  LOCAL_CDC_BUFFER_NOT_DRAINED: 'local_cdc_buffer_not_drained',
+});
+const BENCHMARK_ADMISSION_STATE = Object.freeze({
+  READY: 'ready',
+  BLOCKED: 'blocked',
+});
+const BENCHMARK_DEGRADATION_STATE = Object.freeze({
+  HEALTHY: 'healthy',
+  MOVE_PENDING: 'move_pending',
+  MOVE_FAILED: 'move_failed',
+  PROMOTION_PENDING: 'promotion_pending',
+  PROMOTION_FAILED: 'promotion_failed',
+  DRAIN_BLOCKED: 'drain_blocked',
+});
+const BENCHMARK_DEGRADATION_PRIORITY = Object.freeze({
+  [BENCHMARK_DEGRADATION_STATE.HEALTHY]: NUM.ZERO,
+  [BENCHMARK_DEGRADATION_STATE.PROMOTION_PENDING]: NUM.ONE,
+  [BENCHMARK_DEGRADATION_STATE.MOVE_PENDING]: NUM.TWO,
+  [BENCHMARK_DEGRADATION_STATE.DRAIN_BLOCKED]: 3,
+  [BENCHMARK_DEGRADATION_STATE.PROMOTION_FAILED]: 4,
+  [BENCHMARK_DEGRADATION_STATE.MOVE_FAILED]: 5,
+});
+const REPLICA_OPERATION_TYPE = Object.freeze({
+  ADD: 'ADD',
+  REMOVE: 'REMOVE',
+  REPLACE: 'REPLACE',
 });
 const SERVICE_DISCOVERY_SCHEMA_VERSION_FIELD_CANDIDATES = Object.freeze([
   'updated_at_hlc',
@@ -181,12 +217,10 @@ const AUTHORITATIVE_DISCOVERY_REPAIR = Object.freeze({
     TABLES.REPLICA_OPERATIONS,
   ]),
 });
-const AUTHORITATIVE_DISCOVERY_REPAIRABLE_REASON_CODES = new Set([
+const AUTHORITATIVE_DISCOVERY_CACHE_GAP_REASON_CODES = new Set([
   SERVICE_DISCOVERY_READINESS_REASON.SCHEMA_TABLE_MISSING,
   SERVICE_DISCOVERY_READINESS_REASON.SCHEMA_PARTITION_UNAVAILABLE,
-  SERVICE_DISCOVERY_READINESS_REASON.REPLICA_OPERATIONS_IN_FLIGHT,
   SERVICE_DISCOVERY_READINESS_REASON.LEADERSHIP_UNSTABLE,
-  SERVICE_DISCOVERY_READINESS_REASON.LOCAL_REPLICA_NOT_VOTER_READY,
 ]);
 
 /**
@@ -223,6 +257,43 @@ function firstStringField(record, ...keys) {
     }
   }
   return null;
+}
+
+function hasMeaningfulField(record, ...keys) {
+  for (const key of keys) {
+    const value = record?.[key];
+    if (value !== null && value !== undefined && value !== EMPTY_STRING) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function normalizeReplicaOperationWorkflowStep(row) {
+  return String(firstStringField(
+    row,
+    'workflow_step',
+    'workflowStep',
+  ) || EMPTY_STRING).toUpperCase();
+}
+
+function isReplicaOperationTerminalSuccess(type, status, workflowStep, hasCompletedAt) {
+  if (!type || !status) {
+    return false;
+  }
+  if (status === 'failed' || workflowStep === 'FAILED') {
+    return false;
+  }
+  if (workflowStep && isTerminalReplicaOperationStep(type, workflowStep)) {
+    return true;
+  }
+  if (!hasCompletedAt) {
+    return false;
+  }
+  if (type === REPLICA_OPERATION_TYPE.ADD) {
+    return status === 'active';
+  }
+  return status === 'removed';
 }
 
 function normalizeSchemaVersionValue(value) {
@@ -450,7 +521,7 @@ function parseServiceDiscoverySqlQuery(sql) {
 
 /**
  * AdminWebSocketAPI — node-local compatibility adapter for
- * administrative SQL/cache operations on fixed port 8081.
+ * administrative SQL/cache operations on the configured admin WebSocket port.
  *
  * All query execution routes through SqlQueryEngine (SqlCore).
  * All cache reads use the read-only SystemTableCache interface.
@@ -488,7 +559,16 @@ class AdminWebSocketAPI {
     this.serviceDispatcher =
       options.serviceDispatcher || this.createLocalServiceDispatcher();
     this.serviceDiagnosticsProvider = options.serviceDiagnosticsProvider || null;
+    this.partitionServicesProvider =
+      typeof options.partitionServicesProvider === TYPEOF.FUNCTION ?
+        options.partitionServicesProvider :
+        null;
+    this.partitionServices =
+      options.partitionServices instanceof Map ?
+        options.partitionServices :
+        null;
     this.liveQueryManager = options.liveQueryManager || null;
+    this.cdcIntegrationService = options.cdcIntegrationService || null;
     this.enableAdminStream = options.enableAdminStream !== false;
 
     // Configuration
@@ -2272,13 +2352,21 @@ class AdminWebSocketAPI {
     });
     const services = discoveredServices.map((service) => ({
       ...service,
-      replicas: service.replicas.map((replica) => ({
-        ...replica,
-        readiness: this.buildServiceDiscoveryReplicaReadiness(
+      replicas: service.replicas.map((replica) => {
+        const readiness = this.buildServiceDiscoveryReplicaReadiness(
           replica,
           readinessContext,
-        ),
-      })),
+        );
+        return {
+          ...replica,
+          readiness,
+          benchmarkAdmission: this.buildServiceDiscoveryReplicaBenchmarkAdmission(
+            replica,
+            readinessContext,
+            readiness,
+          ),
+        };
+      }),
     }));
     const replicaCount = services.reduce((count, service) =>
       count + service.observedReplicaCount, NUM.ZERO);
@@ -2301,7 +2389,7 @@ class AdminWebSocketAPI {
    */
   async resolveServiceDiscoverySnapshot(options = {}) {
     const snapshot = this.buildLocalServiceDiscoverySnapshot(options);
-    if (!this.shouldAttemptAuthoritativeDiscoveryRepair(snapshot)) {
+    if (!this.shouldAttemptAuthoritativeDiscoveryRepair(snapshot, options)) {
       return snapshot;
     }
     const repair = await this.ensureAuthoritativeDiscoveryCacheRepair({
@@ -2321,7 +2409,7 @@ class AdminWebSocketAPI {
    * @return {boolean}
    * @private
    */
-  shouldAttemptAuthoritativeDiscoveryRepair(snapshot) {
+  shouldAttemptAuthoritativeDiscoveryRepair(snapshot, options = {}) {
     if (!this.systemTableCache ||
         !this.cacheMutationTarget ||
         typeof this.cacheMutationTarget.applySystemTableChange !== TYPEOF.FUNCTION ||
@@ -2339,7 +2427,13 @@ class AdminWebSocketAPI {
     const cacheRepairEligible =
       !Number.isFinite(stalenessMs) ||
       stalenessMs >= AUTHORITATIVE_DISCOVERY_REPAIR.STALE_THRESHOLD_MS;
+    const scopedDiscoveryQuery =
+      normalizeIdentifier(options.tableName) !== null ||
+      normalizeDiscoveryTableId(options.tableId) !== null;
     if (snapshot.serviceCount === NUM.ZERO || snapshot.replicaCount === NUM.ZERO) {
+      if (scopedDiscoveryQuery) {
+        return true;
+      }
       return cacheRepairEligible;
     }
 
@@ -2359,11 +2453,15 @@ class AdminWebSocketAPI {
         for (const reason of reasons) {
           const code = String(reason?.code || EMPTY_STRING);
           if (cacheRepairEligible &&
-              AUTHORITATIVE_DISCOVERY_REPAIRABLE_REASON_CODES.has(code)) {
+              AUTHORITATIVE_DISCOVERY_CACHE_GAP_REASON_CODES.has(code)) {
             return true;
           }
         }
       }
+    }
+
+    if (scopedDiscoveryQuery) {
+      return false;
     }
 
     return cacheRepairEligible && readyReplicaCount === NUM.ZERO;
@@ -2414,10 +2512,26 @@ class AdminWebSocketAPI {
         tablePartitionContext.partitionIds,
         serviceRows,
       );
+    const localTargetPartitionIds = this.buildDiscoveryLocalTargetPartitionIds(
+      tablePartitionContext.partitionIds,
+      serviceRows,
+    );
+    const localPartitionCdcState = this.buildDiscoveryLocalPartitionCdcState({
+      localTargetPartitionIds,
+      tableName,
+      cdcReadinessApplies: tablePartitionContext.cdcReadinessApplies,
+    });
     const replicaOperationSummary =
       this.buildControlSnapshotReplicaOperationSummary(replicaOperationRows, {
         partitionIds: tablePartitionContext.partitionIds,
       });
+    const replicaOperationDegradationByNodeId =
+      this.buildDiscoveryReplicaOperationDegradationByNodeId(
+        replicaOperationRows,
+        {
+          partitionIds: tablePartitionContext.partitionIds,
+        },
+      );
 
     return {
       tableName,
@@ -2427,8 +2541,175 @@ class AdminWebSocketAPI {
       schemaReady,
       leadershipStable,
       localTargetReplicaStateByNodeId,
+      localPartitionCdcState,
       replicaOpsInFlight: replicaOperationSummary.inFlightCount,
+      replicaOperationDegradationByNodeId,
     };
+  }
+
+  /**
+   * Resolve local active target partition IDs for table-scoped discovery.
+   * @param {Set<string>} partitionIds
+   * @param {Array<Object>} serviceRows
+   * @return {Set<string>}
+   * @private
+   */
+  buildDiscoveryLocalTargetPartitionIds(partitionIds, serviceRows) {
+    const localPartitionIds = new Set();
+    if (!(partitionIds instanceof Set) || partitionIds.size === NUM.ZERO) {
+      return localPartitionIds;
+    }
+
+    for (const serviceRow of serviceRows) {
+      const serviceType = firstStringField(
+        serviceRow,
+        COLUMN.SERVICE_TYPE,
+        'service_type',
+        'serviceType',
+        'type',
+      );
+      if (serviceType !== SERVICE_TYPE_PARTITION) {
+        continue;
+      }
+      const partitionId = firstStringField(
+        serviceRow,
+        COLUMN.PARTITION_ID,
+        'partition_id',
+        'partitionId',
+        'id',
+      );
+      if (!partitionId || !partitionIds.has(partitionId)) {
+        continue;
+      }
+      const nodeId = firstStringField(
+        serviceRow,
+        COLUMN.NODE_ID,
+        'node_id',
+        'nodeId',
+      );
+      if (nodeId !== this.nodeId) {
+        continue;
+      }
+      const status = firstStringField(serviceRow, COLUMN.STATUS, 'status');
+      if (String(status || '').toLowerCase() !== STATUS_ACTIVE) {
+        continue;
+      }
+      localPartitionIds.add(partitionId);
+    }
+    return localPartitionIds;
+  }
+
+  /**
+   * Resolve one node-local partition-services registry.
+   * @return {Map<string, Object>|null}
+   * @private
+   */
+  resolveLocalPartitionServices() {
+    if (this.partitionServicesProvider) {
+      const provided = this.partitionServicesProvider();
+      return provided instanceof Map ? provided : null;
+    }
+    return this.partitionServices instanceof Map ?
+      this.partitionServices :
+      null;
+  }
+
+  /**
+   * Resolve one local partition service by partition ID.
+   * @param {Map<string, Object>|null} partitionServices
+   * @param {string} partitionId
+   * @return {Object|null}
+   * @private
+   */
+  resolveLocalPartitionService(partitionServices, partitionId) {
+    if (!(partitionServices instanceof Map) || !partitionId) {
+      return null;
+    }
+    if (partitionServices.has(partitionId)) {
+      return partitionServices.get(partitionId) || null;
+    }
+    for (const partitionService of partitionServices.values()) {
+      if (partitionService?.partitionId === partitionId) {
+        return partitionService;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Build node-local CDC readiness state for active propagated system-table partitions.
+   * @param {Object} options
+   * @return {Object}
+   * @private
+   */
+  buildDiscoveryLocalPartitionCdcState(options = {}) {
+    const state = {
+      applies: false,
+      ready: true,
+      diagnosticsAvailable: true,
+      missingDiagnosticsPartitionIds: [],
+      noSubscriberPartitionIds: [],
+      bufferedPartitionIds: [],
+    };
+    const localTargetPartitionIds = options.localTargetPartitionIds;
+    const tableName = String(options.tableName || '');
+    if (options.cdcReadinessApplies !== true ||
+        !isTableCdcReadinessRelevant(tableName) ||
+        !(localTargetPartitionIds instanceof Set) ||
+        localTargetPartitionIds.size === NUM.ZERO) {
+      return state;
+    }
+
+    const partitionServices = this.resolveLocalPartitionServices();
+    if (!(partitionServices instanceof Map)) {
+      return state;
+    }
+
+    state.applies = true;
+    for (const partitionId of localTargetPartitionIds) {
+      const partitionService = this.resolveLocalPartitionService(
+        partitionServices,
+        partitionId,
+      );
+      if (!partitionService ||
+          typeof partitionService.getCDCSubscriptionDiagnostics !== TYPEOF.FUNCTION) {
+        state.ready = false;
+        state.diagnosticsAvailable = false;
+        state.missingDiagnosticsPartitionIds.push(partitionId);
+        continue;
+      }
+
+      const diagnostics = partitionService.getCDCSubscriptionDiagnostics();
+      if (!diagnostics || typeof diagnostics !== TYPEOF.OBJECT) {
+        state.ready = false;
+        state.diagnosticsAvailable = false;
+        state.missingDiagnosticsPartitionIds.push(partitionId);
+        continue;
+      }
+
+      const subscriberCount = Number(diagnostics.subscriberCount || NUM.ZERO);
+      const bufferedEvents = Number(diagnostics.bufferedEvents || NUM.ZERO);
+      const replayInFlight = diagnostics.bufferReplayInFlight === true;
+      if (subscriberCount <= NUM.ZERO) {
+        state.ready = false;
+        state.noSubscriberPartitionIds.push(partitionId);
+      }
+      if (bufferedEvents > NUM.ZERO || replayInFlight) {
+        state.ready = false;
+        state.bufferedPartitionIds.push(partitionId);
+      }
+    }
+
+    state.missingDiagnosticsPartitionIds = uniqueSorted(
+      state.missingDiagnosticsPartitionIds,
+    );
+    state.noSubscriberPartitionIds = uniqueSorted(
+      state.noSubscriberPartitionIds,
+    );
+    state.bufferedPartitionIds = uniqueSorted(
+      state.bufferedPartitionIds,
+    );
+    return state;
   }
 
   /**
@@ -2485,7 +2766,17 @@ class AdminWebSocketAPI {
 
       const nodeState = stateByNodeId.get(nodeId) || {
         nonVoterPartitionIds: new Set(),
+        replicaRoles: new Set(),
       };
+      const raftRole = String(firstStringField(
+        serviceRow,
+        COLUMN.RAFT_ROLE,
+        'raft_role',
+        'raftRole',
+      ) || EMPTY_STRING).toLowerCase();
+      if (raftRole.length > NUM.ZERO) {
+        nodeState.replicaRoles.add(raftRole);
+      }
       if (!isActiveVoterReadyPartitionReplica(serviceRow)) {
         nodeState.nonVoterPartitionIds.add(partitionId);
       }
@@ -2501,7 +2792,7 @@ class AdminWebSocketAPI {
    * @param {string|null} tableId
    * @param {Array<Object>} partitionRows
    * @param {Array<Object>} tableRows
-   * @return {{tableFound: boolean, partitionIds: Set<string>, appliedSchemaVersion: string|null}}
+   * @return {{tableFound: boolean, partitionIds: Set<string>, appliedSchemaVersion: string|null, cdcReadinessApplies: boolean}}
    * @private
    */
   resolveDiscoveryTablePartitionContext(tableName, tableId, partitionRows, tableRows) {
@@ -2510,11 +2801,13 @@ class AdminWebSocketAPI {
         tableFound: true,
         partitionIds: new Set(),
         appliedSchemaVersion: null,
+        cdcReadinessApplies: false,
       };
     }
 
     const tableIds = new Set();
     let appliedSchemaVersion = null;
+    let cdcReadinessApplies = false;
     for (const tableRow of tableRows) {
       const rowTableName = firstStringField(
         tableRow,
@@ -2537,6 +2830,9 @@ class AdminWebSocketAPI {
       }
       if (rowTableId) {
         tableIds.add(rowTableId);
+      }
+      if (isTableCdcReadinessRelevant(rowTableName)) {
+        cdcReadinessApplies = true;
       }
       const rowSchemaVersion = extractSchemaVersionFromRecord(tableRow);
       appliedSchemaVersion = selectNewestSchemaVersion(
@@ -2589,6 +2885,7 @@ class AdminWebSocketAPI {
       tableFound: partitionIds.size > NUM.ZERO,
       partitionIds,
       appliedSchemaVersion,
+      cdcReadinessApplies,
     };
   }
 
@@ -2722,7 +3019,26 @@ class AdminWebSocketAPI {
         null;
     const localReplicaReady = !localTargetReplicaState ||
       localTargetReplicaState.nonVoterPartitionIds.size === NUM.ZERO;
+    const localPartitionCdcState =
+      nodeId === this.nodeId &&
+      readinessContext.localPartitionCdcState &&
+      typeof readinessContext.localPartitionCdcState === TYPEOF.OBJECT ?
+        readinessContext.localPartitionCdcState :
+        null;
+    const localCdcReady = !localPartitionCdcState ||
+      localPartitionCdcState.applies !== true ||
+      localPartitionCdcState.ready === true;
+    const operationDegradation =
+      readinessContext.replicaOperationDegradationByNodeId instanceof Map ?
+        readinessContext.replicaOperationDegradationByNodeId.get(nodeId) :
+        null;
+    const operationDegraded =
+      operationDegradation?.degradationState &&
+      operationDegradation.degradationState !==
+        BENCHMARK_DEGRADATION_STATE.HEALTHY;
     const topologyReady = localReplicaReady &&
+      localCdcReady &&
+      !operationDegraded &&
       readinessContext.replicaOpsInFlight === NUM.ZERO &&
       readinessContext.leadershipStable === true;
     const benchmarkReady = routingReady && schemaReady && topologyReady;
@@ -2753,6 +3069,15 @@ class AdminWebSocketAPI {
         detail: String(readinessContext.replicaOpsInFlight),
       });
     }
+    if (operationDegraded &&
+        Array.isArray(operationDegradation?.reasons)) {
+      for (const reason of operationDegradation.reasons) {
+        reasons.push({
+          code: reason.code,
+          detail: reason.detail,
+        });
+      }
+    }
     if (!readinessContext.leadershipStable) {
       reasons.push({
         code: SERVICE_DISCOVERY_READINESS_REASON.LEADERSHIP_UNSTABLE,
@@ -2765,6 +3090,28 @@ class AdminWebSocketAPI {
         detail: uniqueSorted([
           ...localTargetReplicaState.nonVoterPartitionIds,
         ]).join(','),
+      });
+    }
+    if (localPartitionCdcState?.applies === true &&
+        localPartitionCdcState.diagnosticsAvailable === false &&
+        localPartitionCdcState.missingDiagnosticsPartitionIds.length > NUM.ZERO) {
+      reasons.push({
+        code: SERVICE_DISCOVERY_READINESS_REASON.LOCAL_CDC_DIAGNOSTICS_UNAVAILABLE,
+        detail: localPartitionCdcState.missingDiagnosticsPartitionIds.join(','),
+      });
+    }
+    if (localPartitionCdcState?.applies === true &&
+        localPartitionCdcState.noSubscriberPartitionIds.length > NUM.ZERO) {
+      reasons.push({
+        code: SERVICE_DISCOVERY_READINESS_REASON.LOCAL_CDC_SUBSCRIBER_MISSING,
+        detail: localPartitionCdcState.noSubscriberPartitionIds.join(','),
+      });
+    }
+    if (localPartitionCdcState?.applies === true &&
+        localPartitionCdcState.bufferedPartitionIds.length > NUM.ZERO) {
+      reasons.push({
+        code: SERVICE_DISCOVERY_READINESS_REASON.LOCAL_CDC_BUFFER_NOT_DRAINED,
+        detail: localPartitionCdcState.bufferedPartitionIds.join(','),
       });
     }
 
@@ -2782,6 +3129,215 @@ class AdminWebSocketAPI {
       tableName: readinessContext.tableName,
       reasons,
     };
+  }
+
+  /**
+   * Build canonical benchmark-admission block for one discovery replica.
+   * @param {Object} replica
+   * @param {Object} readinessContext
+   * @param {Object} readiness
+   * @return {Object}
+   * @private
+   */
+  buildServiceDiscoveryReplicaBenchmarkAdmission(
+    replica,
+    readinessContext,
+    readiness,
+  ) {
+    const nodeId = String(replica?.nodeId || EMPTY_STRING);
+    const operationDegradation =
+      readinessContext.replicaOperationDegradationByNodeId instanceof Map ?
+        readinessContext.replicaOperationDegradationByNodeId.get(nodeId) :
+        null;
+    const localTargetReplicaState =
+      readinessContext.localTargetReplicaStateByNodeId instanceof Map ?
+        readinessContext.localTargetReplicaStateByNodeId.get(nodeId) :
+        null;
+    let localReplicaRole = null;
+    if (localTargetReplicaState?.replicaRoles instanceof Set &&
+        localTargetReplicaState.replicaRoles.size === NUM.ONE) {
+      localReplicaRole = [...localTargetReplicaState.replicaRoles][NUM.ZERO];
+    } else if (localTargetReplicaState?.replicaRoles instanceof Set &&
+        localTargetReplicaState.replicaRoles.size > NUM.ONE) {
+      localReplicaRole = 'mixed';
+    }
+
+    const reasons = Array.isArray(readiness?.reasons) ?
+      readiness.reasons.map((reason) => ({
+        code: String(reason?.code || EMPTY_STRING),
+        detail:
+          typeof reason?.detail === TYPEOF.STRING && reason.detail.length > NUM.ZERO ?
+            reason.detail :
+            null,
+      })) :
+      [];
+
+    return {
+      tableName: readiness?.tableName || null,
+      nodeId,
+      state: readiness?.benchmarkReady === true ?
+        BENCHMARK_ADMISSION_STATE.READY :
+        BENCHMARK_ADMISSION_STATE.BLOCKED,
+      degradationState:
+        operationDegradation?.degradationState ||
+        BENCHMARK_DEGRADATION_STATE.HEALTHY,
+      routingReady: readiness?.routingReady === true,
+      schemaReady: readiness?.schemaReady === true,
+      topologyReady: readiness?.topologyReady === true,
+      localReplicaRole,
+      degradedByOperationIds:
+        Array.isArray(operationDegradation?.operationIds) ?
+          [...operationDegradation.operationIds] :
+          [],
+      reasons,
+    };
+  }
+
+  /**
+   * Build per-node replica-operation degradation state for benchmark admission.
+   * @param {Array<Object>} replicaOperationRows
+   * @return {Map<string, Object>}
+   * @private
+   */
+  buildDiscoveryReplicaOperationDegradationByNodeId(
+    replicaOperationRows = [],
+    options = {},
+  ) {
+    const degradationByNodeId = new Map();
+    const scopedPartitionIds = options.partitionIds instanceof Set ?
+      options.partitionIds :
+      null;
+    for (const row of replicaOperationRows) {
+      if (!this.isReplicaOperationRelevantToDiscoveryScope(
+        row,
+        scopedPartitionIds,
+      )) {
+        continue;
+      }
+      const operationId = firstStringField(
+        row,
+        COLUMN.OPERATION_ID,
+        'operation_id',
+        'operationId',
+      );
+      const status = String(firstStringField(
+        row,
+        COLUMN.STATUS,
+        'status',
+      ) || EMPTY_STRING).toLowerCase();
+      const type = String(firstStringField(
+        row,
+        'type',
+        'operation_type',
+        'operationType',
+      ) || EMPTY_STRING).toUpperCase();
+      const workflowStep = normalizeReplicaOperationWorkflowStep(row);
+      const hasCompletedAt = hasMeaningfulField(
+        row,
+        'completed_at',
+        'completedAt',
+      );
+      const nodeIds = uniqueSorted([
+        firstStringField(row, 'source_node_id', 'sourceNodeId'),
+        firstStringField(row, COLUMN.TARGET_NODE_ID, 'target_node_id', 'targetNodeId'),
+      ]);
+      if (!operationId || nodeIds.length === NUM.ZERO) {
+        continue;
+      }
+      if (isReplicaOperationTerminalSuccess(type, status, workflowStep, hasCompletedAt)) {
+        continue;
+      }
+
+      const degradationState = this.resolveReplicaOperationDegradationState(
+        type,
+        status,
+      );
+      if (degradationState === BENCHMARK_DEGRADATION_STATE.HEALTHY) {
+        continue;
+      }
+      const reasonCode =
+        status === 'failed' ?
+          SERVICE_DISCOVERY_READINESS_REASON.REPLICA_OPERATION_FAILED :
+          SERVICE_DISCOVERY_READINESS_REASON.REPLICA_OPERATION_IN_FLIGHT;
+      const reasonDetail = `${operationId}:${type}:${status}`;
+
+      for (const nodeId of nodeIds) {
+        const existing = degradationByNodeId.get(nodeId) || {
+          degradationState: BENCHMARK_DEGRADATION_STATE.HEALTHY,
+          operationIds: [],
+          reasons: [],
+        };
+        if ((BENCHMARK_DEGRADATION_PRIORITY[degradationState] || NUM.ZERO) >
+            (BENCHMARK_DEGRADATION_PRIORITY[existing.degradationState] || NUM.ZERO)) {
+          existing.degradationState = degradationState;
+        }
+        existing.operationIds = uniqueSorted([
+          ...existing.operationIds,
+          operationId,
+        ]);
+        if (!existing.reasons.some((reason) =>
+          reason.code === reasonCode && reason.detail === reasonDetail)) {
+          existing.reasons.push({
+            code: reasonCode,
+            detail: reasonDetail,
+          });
+        }
+        degradationByNodeId.set(nodeId, existing);
+      }
+    }
+    return degradationByNodeId;
+  }
+
+  /**
+   * Determine whether one replica operation applies to the discovered scope.
+   * Table-scoped discovery should only degrade nodes for operations that touch
+   * the discovered table's target partitions.
+   * @param {Object} row
+   * @param {Set<string>|null} scopedPartitionIds
+   * @return {boolean}
+   * @private
+   */
+  isReplicaOperationRelevantToDiscoveryScope(row, scopedPartitionIds) {
+    if (!(scopedPartitionIds instanceof Set) || scopedPartitionIds.size === NUM.ZERO) {
+      return true;
+    }
+    const partitionId = firstStringField(
+      row,
+      COLUMN.PARTITION_ID,
+      'partition_id',
+      'partitionId',
+      'entity_id',
+      'entityId',
+    );
+    return Boolean(partitionId) && scopedPartitionIds.has(partitionId);
+  }
+
+  /**
+   * Resolve one benchmark degradation state from replica-operation type/status.
+   * @param {string} type
+   * @param {string} status
+   * @return {string}
+   * @private
+   */
+  resolveReplicaOperationDegradationState(type, status) {
+    if (!type || !status) {
+      return BENCHMARK_DEGRADATION_STATE.HEALTHY;
+    }
+    const isFailed = status === 'failed';
+    if (type === REPLICA_OPERATION_TYPE.REPLACE) {
+      return isFailed ?
+        BENCHMARK_DEGRADATION_STATE.MOVE_FAILED :
+        BENCHMARK_DEGRADATION_STATE.MOVE_PENDING;
+    }
+    if (type === REPLICA_OPERATION_TYPE.ADD) {
+      return isFailed ?
+        BENCHMARK_DEGRADATION_STATE.PROMOTION_FAILED :
+        BENCHMARK_DEGRADATION_STATE.PROMOTION_PENDING;
+    }
+    if (type === REPLICA_OPERATION_TYPE.REMOVE) {
+      return BENCHMARK_DEGRADATION_STATE.DRAIN_BLOCKED;
+    }
+    return BENCHMARK_DEGRADATION_STATE.HEALTHY;
   }
 
   /**
@@ -3146,8 +3702,9 @@ class AdminWebSocketAPI {
       };
     }
 
-    const serviceRows = this.systemTableCache.getAll(TABLES.SERVICES);
-    const sysPostgresWireServiceCount = serviceRows.filter((row) =>
+    const serviceDefinitionRows =
+      this.systemTableCache.getAll(TABLES.SERVICE_DEFINITIONS);
+    const sysPostgresWireServiceCount = serviceDefinitionRows.filter((row) =>
       row?.[COLUMN.SERVICE_ID] === META_SERVICE_ID.POSTGRES_WIRE,
     ).length;
 
@@ -3428,6 +3985,7 @@ class AdminWebSocketAPI {
       capturedAt: Date.now(),
       nodes: nodeIds,
       partitions: partitionIds,
+      cdcTelemetry: this.buildLocalCdcTelemetry(),
       leaders: leaderSummary.leaders,
       replicaRoles: leaderSummary.replicaRoles,
       replicaRoleDiagnostics: leaderSummary.replicaRoleDiagnostics,
@@ -3655,6 +4213,77 @@ class AdminWebSocketAPI {
       inFlightCount,
       statusHistogram,
       partitionGroupInFlight,
+    };
+  }
+
+  /**
+   * Build node-local CDC telemetry with authoritative fallback diagnostics.
+   * @return {Object}
+   * @private
+   */
+  buildLocalCdcTelemetry() {
+    const partitionServices = this.resolveLocalPartitionServices();
+    let subscriberCount = NUM.ZERO;
+    let bufferedEvents = NUM.ZERO;
+    let catchupLagEvents = NUM.ZERO;
+    let catchupThroughputEventsPerSec = NUM.ZERO;
+    let catchupDetected = false;
+
+    if (partitionServices instanceof Map) {
+      for (const partitionService of partitionServices.values()) {
+        if (!partitionService ||
+            typeof partitionService.getCDCSubscriptionDiagnostics !== TYPEOF.FUNCTION) {
+          continue;
+        }
+        const diagnostics = partitionService.getCDCSubscriptionDiagnostics();
+        if (!diagnostics || typeof diagnostics !== TYPEOF.OBJECT) {
+          continue;
+        }
+        const partitionSubscriberCount = Number(diagnostics.subscriberCount || NUM.ZERO);
+        const partitionBufferedEvents = Number(diagnostics.bufferedEvents || NUM.ZERO);
+        subscriberCount += partitionSubscriberCount;
+        bufferedEvents += partitionBufferedEvents;
+        catchupLagEvents = Math.max(catchupLagEvents, partitionBufferedEvents);
+        if (partitionBufferedEvents > NUM.ZERO ||
+            diagnostics.bufferReplayInFlight === true) {
+          catchupDetected = true;
+        }
+      }
+    }
+
+    const authoritativeFallback =
+      typeof this.cdcIntegrationService?.getAuthoritativeFallbackDiagnostics ===
+        TYPEOF.FUNCTION ?
+        this.cdcIntegrationService.getAuthoritativeFallbackDiagnostics() :
+        {
+          schemaVersion: NUM.ONE,
+          nodeId: this.nodeId,
+          windowMs: 60 * 1000,
+          totalCount: NUM.ZERO,
+          windowCount: NUM.ZERO,
+          windowRatePerMinute: NUM.ZERO,
+          phases: {
+            bootstrap: {windowCount: NUM.ZERO, totalCount: NUM.ZERO},
+            recovery: {windowCount: NUM.ZERO, totalCount: NUM.ZERO},
+            steady_state: {windowCount: NUM.ZERO, totalCount: NUM.ZERO},
+          },
+          outcomes: {
+            recovered: {windowCount: NUM.ZERO, totalCount: NUM.ZERO},
+            failed: {windowCount: NUM.ZERO, totalCount: NUM.ZERO},
+          },
+          byTable: {},
+          recentEvents: ADMIN_CACHE_DUMP.EMPTY,
+        };
+
+    return {
+      subscriberCount,
+      bufferedEvents,
+      catchupLagEvents,
+      catchupThroughputEventsPerSec,
+      mode: catchupDetected ?
+        CDC_TELEMETRY_MODE.CATCHUP :
+        CDC_TELEMETRY_MODE.STEADY,
+      authoritativeFallback,
     };
   }
 

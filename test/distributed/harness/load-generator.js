@@ -570,7 +570,6 @@ class LoadRun {
         eventIdPrefix: this._eventIdPrefix,
       });
       this._counter++;
-      this._dispatchedOperationCount++;
 
       this._inFlight++;
       this._executeWithFailover(sql, operation).finally(() => {
@@ -704,6 +703,7 @@ class LoadRun {
     this._nextNodeIndex =
       (this._nextNodeIndex + ONE) % nodeCount;
     let attemptedNodes = false;
+    let operationDispatched = false;
     let hasNonAdmissionFailures = false;
 
     for (let attempt = ZERO; attempt < candidates.length; attempt++) {
@@ -720,6 +720,10 @@ class LoadRun {
       }
       if (!this._tryAcquireNodeSlot(nodeHealthKey)) {
         continue;
+      }
+      if (!operationDispatched) {
+        this._markOperationDispatched();
+        operationDispatched = true;
       }
       this._recordNodeDispatchAttempt(nodeHealthKey);
       attemptedNodes = true;
@@ -759,6 +763,10 @@ class LoadRun {
       this._failedCount++;
       this._operationErrorCount++;
     }
+  }
+
+  _markOperationDispatched() {
+    this._dispatchedOperationCount += ONE;
   }
 
   _queryNode(node, sql) {

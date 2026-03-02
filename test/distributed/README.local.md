@@ -248,6 +248,22 @@ npm test -- \
 3. Only after the checks above pass should you launch the strict `7node`
    baseline.
 
+### Baseline Closure Rule
+
+If a distributed baseline run finds a correctness bug, do not close that bug on
+the strength of a later passing baseline alone.
+
+Required closure steps:
+
+1. Capture the failure in a targeted regression first.
+2. Prefer the deterministic integration layer under `test/integration/` for
+   replica instability, degraded admission, strict readiness, or fallback-path
+   bugs.
+3. Keep the bug open if it is still reproducible only in the full baseline
+   harness.
+4. Treat the next passing baseline as confirmation, not as the primary proof of
+   closure.
+
 If a strict baseline fails correctness, its observed `loadMetrics` remain
 diagnostic only. Report summaries and the compare script now label those runs
 as `invalid_for_performance`, and they must not be used as throughput

@@ -14,6 +14,16 @@ import {
   CDC_PROPAGATED_TABLES,
   CDC_NON_PROPAGATED_TABLES,
 } from '../../src/cache/cache-constants.js';
+import {
+  CDC_AUTHORITY_CLASS,
+  CDC_BOOTSTRAP_HYDRATION_MODE,
+  CDC_POLICY_CLASS,
+  getSystemTableCdcPolicy,
+  getTableCdcPolicy,
+  isExternalCdcAllowedForTable,
+  isTableCdcReadinessRelevant,
+  isTableInternalCachePropagationEnabled,
+} from '../../src/cache/cdc-table-policy.js';
 import {TABLES} from '../../src/constants/index.js';
 
 // --- structural invariants ---
@@ -92,6 +102,7 @@ test('high-cardinality and service-scoped tables are non-propagated',
       TABLES.CONTEXTS,
       TABLES.CODE,
       TABLES.LIVE_QUERIES,
+      TABLES.SQL_WRITE_OPERATIONS,
       TABLES.SERVICE_TIMERS,
       TABLES.MODULE_MANIFESTS,
       TABLES.PACKAGE_REGISTRY_MAPPINGS,
@@ -118,4 +129,140 @@ test('high-cardinality and service-scoped tables are non-propagated',
 test('logs remains a recognized system table for explicit queries',
   async (t) => {
     t.ok(CACHE_SYSTEM_TABLES.includes(TABLES.LOGS));
+  });
+
+test('system-table CDC policy registry classifies control-plane tables explicitly',
+  async (t) => {
+    const servicesPolicy = getSystemTableCdcPolicy(TABLES.SERVICES);
+    t.equal(
+      servicesPolicy?.policyClass,
+      CDC_POLICY_CLASS.CONTROL_INTERNAL_PROPAGATION,
+      'services should use control internal propagation policy',
+    );
+    t.equal(
+      servicesPolicy?.authorityClass,
+      CDC_AUTHORITY_CLASS.CONTROL,
+      'services should remain control-plane metadata',
+    );
+    t.equal(
+      servicesPolicy?.internalCachePropagation,
+      true,
+      'services should propagate into the system cache',
+    );
+    t.equal(
+      servicesPolicy?.readinessRelevant,
+      true,
+      'services should participate in readiness logic',
+    );
+    t.equal(
+      servicesPolicy?.bootstrapHydrationMode,
+      CDC_BOOTSTRAP_HYDRATION_MODE.BOOTSTRAP_ONLY,
+      'services should only hydrate through bootstrap snapshot flow',
+    );
+    t.equal(
+      isExternalCdcAllowedForTable(TABLES.SERVICES),
+      false,
+      'system services metadata should not be treated as client CDC by default',
+    );
+  });
+
+test('system-table CDC policy registry classifies control tables without propagation',
+  async (t) => {
+    const logsPolicy = getSystemTableCdcPolicy(TABLES.LOGS);
+    t.equal(
+      logsPolicy?.policyClass,
+      CDC_POLICY_CLASS.CONTROL_NO_INTERNAL_PROPAGATION,
+      'logs should stay control metadata without internal propagation',
+    );
+    t.equal(
+      logsPolicy?.internalCachePropagation,
+      false,
+      'logs should not hydrate into every node cache',
+    );
+    t.equal(
+      logsPolicy?.readinessRelevant,
+      false,
+      'logs should not influence discovery readiness',
+    );
+    t.equal(
+      logsPolicy?.bootstrapHydrationMode,
+      CDC_BOOTSTRAP_HYDRATION_MODE.NONE,
+      'logs should not participate in bootstrap hydration snapshots',
+    );
+  });
+
+test('sql_write_operations stays out of internal propagation and readiness',
+  async (t) => {
+    const writeOperationsPolicy = getSystemTableCdcPolicy(
+      TABLES.SQL_WRITE_OPERATIONS,
+    );
+    t.equal(
+      writeOperationsPolicy?.policyClass,
+      CDC_POLICY_CLASS.CONTROL_NO_INTERNAL_PROPAGATION,
+      'sql_write_operations should remain a non-propagated control table',
+    );
+    t.equal(
+      writeOperationsPolicy?.internalCachePropagation,
+      false,
+      'sql_write_operations should not hydrate into every node cache',
+    );
+    t.equal(
+      writeOperationsPolicy?.readinessRelevant,
+      false,
+      'sql_write_operations should not influence discovery readiness',
+    );
+    t.equal(
+      writeOperationsPolicy?.bootstrapHydrationMode,
+      CDC_BOOTSTRAP_HYDRATION_MODE.NONE,
+      'sql_write_operations should not participate in bootstrap hydration',
+    );
+    t.equal(
+      isTableInternalCachePropagationEnabled(TABLES.SQL_WRITE_OPERATIONS),
+      false,
+      'sql_write_operations should skip internal cache propagation',
+    );
+    t.equal(
+      isTableCdcReadinessRelevant(TABLES.SQL_WRITE_OPERATIONS),
+      false,
+      'sql_write_operations should stay out of CDC readiness checks',
+    );
+    t.notOk(
+      CACHE_HYDRATION_TABLES.includes(TABLES.SQL_WRITE_OPERATIONS),
+      'sql_write_operations should be absent from hydration tables',
+    );
+  });
+
+test('user tables default to user CDC policy without control-plane readiness',
+  async (t) => {
+    const benchmarkPolicy = getTableCdcPolicy('benchmark_events');
+    t.equal(
+      benchmarkPolicy?.policyClass,
+      CDC_POLICY_CLASS.USER_EXTERNAL_CDC,
+      'benchmark_events should default to user CDC policy',
+    );
+    t.equal(
+      benchmarkPolicy?.authorityClass,
+      CDC_AUTHORITY_CLASS.USER,
+      'benchmark_events should be classified as user data',
+    );
+    t.equal(
+      benchmarkPolicy?.internalCachePropagation,
+      false,
+      'user tables should not enter internal cache propagation by default',
+    );
+    t.equal(
+      isTableCdcReadinessRelevant('benchmark_events'),
+      false,
+      'user tables should not affect control-plane readiness by default',
+    );
+    t.equal(
+      isTableInternalCachePropagationEnabled('benchmark_events'),
+      false,
+      'user tables should not hydrate into the system cache by default',
+    );
+    t.equal(
+      isExternalCdcAllowedForTable('benchmark_events'),
+      true,
+      'user tables should remain eligible for shared CDC delivery',
+    );
   });

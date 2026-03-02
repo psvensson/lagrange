@@ -97,6 +97,7 @@ class AuthoritativeRowMutationHelper {
     this.inFlight = false;
     this.retryTimer = null;
     this.followUpFlushScheduled = false;
+    this.shuttingDown = false;
   }
 
   setSystemTableCache(systemTableCache) {
@@ -108,6 +109,9 @@ class AuthoritativeRowMutationHelper {
   }
 
   queue(value) {
+    if (this.shuttingDown) {
+      return;
+    }
     if (!value || value === this.persistedValue) {
       return;
     }
@@ -141,6 +145,12 @@ class AuthoritativeRowMutationHelper {
   }
 
   async flush() {
+    if (this.shuttingDown) {
+      return this.buildResult({
+        cacheVisible: this.pendingValue === null,
+        reason: AUTHORITATIVE_ROW_MUTATION_REASON.SKIPPED,
+      });
+    }
     if (this.inFlight) {
       return this.buildResult({
         reason: AUTHORITATIVE_ROW_MUTATION_REASON.IN_FLIGHT,
@@ -239,11 +249,14 @@ class AuthoritativeRowMutationHelper {
         reason,
       });
       error.mutationResult = mutationResult;
-      this.scheduleRetry();
+      if (!this.shuttingDown) {
+        this.scheduleRetry();
+      }
       throw error;
     } finally {
       this.inFlight = false;
-      if (writeSucceeded &&
+      if (!this.shuttingDown &&
+        writeSucceeded &&
         this.pendingValue &&
         this.pendingValue !== this.persistedValue) {
         this.scheduleFollowUpFlush();
@@ -252,7 +265,7 @@ class AuthoritativeRowMutationHelper {
   }
 
   scheduleRetry() {
-    if (this.retryTimer) {
+    if (this.shuttingDown || this.retryTimer) {
       return;
     }
 
@@ -265,13 +278,17 @@ class AuthoritativeRowMutationHelper {
   }
 
   scheduleFollowUpFlush() {
-    if (this.followUpFlushScheduled || !this.cdcIntegrationService) {
+    if (this.shuttingDown ||
+      this.followUpFlushScheduled || !this.cdcIntegrationService) {
       return;
     }
 
     this.followUpFlushScheduled = true;
     queueMicrotask(() => {
       this.followUpFlushScheduled = false;
+      if (this.shuttingDown) {
+        return;
+      }
       if (this.inFlight || !this.pendingValue ||
         this.pendingValue === this.persistedValue) {
         return;
@@ -283,13 +300,16 @@ class AuthoritativeRowMutationHelper {
   }
 
   shutdown() {
+    this.shuttingDown = true;
     if (!this.retryTimer) {
       this.followUpFlushScheduled = false;
+      this.pendingValue = null;
       return;
     }
     this.clearTimeoutFn(this.retryTimer);
     this.retryTimer = null;
     this.followUpFlushScheduled = false;
+    this.pendingValue = null;
   }
 
   buildResult(overrides = {}) {

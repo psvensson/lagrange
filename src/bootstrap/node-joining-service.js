@@ -167,6 +167,9 @@ const CREATE_SELF_HOSTED_MESSAGE_GROUP_POLICY = Object.freeze({
     spreadAcrossNodes: false,
   },
 });
+function shouldAttachPartitionCdcPropagation(tableName) {
+  return DEFAULT_CACHE_SYNC_TABLES.has(tableName);
+}
 const JOIN_READINESS_IN_FLIGHT_EXCLUDED_STATUSES = new Set([
   String(SERVICE_STATUS.ACTIVE).toLowerCase(),
   String(ReplicaStatus.REMOVED).toLowerCase(),
@@ -328,6 +331,7 @@ class NodeJoiningService extends EventEmitter {
     this.cdcSubscriptionsActive = false;
     this.lastCanonicalJoinRepairAtMs = NUM.ZERO;
     this.canonicalJoinRepairPromise = null;
+    this.lastClusterMeshSignature = null;
 
     // Control plane target address for control messages
     this.controlPlaneTargetAddress = null;
@@ -440,6 +444,7 @@ class NodeJoiningService extends EventEmitter {
 
       await this.waitForCanonicalJoinReadinessConvergence();
       await this.signalReadyForReplicas();
+      this.disableSteadyStateControlPlaneReporter();
 
       // Transition to READY state
       // Requirements: 2.10 - READY state for accepting traffic
@@ -568,6 +573,19 @@ class NodeJoiningService extends EventEmitter {
       error: lastError?.message || STRING.UNKNOWN,
     });
     throw lastError;
+  }
+
+  /**
+   * Restrict control-plane heartbeat reporting to bootstrap readiness only.
+   * Steady-state heartbeats must return to the canonical direct CDC path.
+   * @return {void}
+   * @private
+   */
+  disableSteadyStateControlPlaneReporter() {
+    if (typeof this.heartbeatService?.setNodeStateReporter !== TYPEOF.FUNCTION) {
+      return;
+    }
+    this.heartbeatService.setNodeStateReporter(null);
   }
 
   /**
@@ -1114,6 +1132,75 @@ class NodeJoiningService extends EventEmitter {
       source: 'bootstrap_snapshot',
       rows: snapshotRows,
     };
+  }
+
+  /**
+   * Build a stable mesh-membership signature for connection reconciliation.
+   * @param {Array<Object>} nodeRows
+   * @return {string}
+   * @private
+   */
+  buildClusterMeshSignature(nodeRows) {
+    if (!Array.isArray(nodeRows) || nodeRows.length === NUM.ZERO) {
+      return STRING.EMPTY;
+    }
+
+    const members = nodeRows
+      .map((row) => {
+        const nodeId = String(
+          row?.[COLUMN.NODE_ID] || row?.node_id || row?.nodeId || '',
+        );
+        if (nodeId.length === NUM.ZERO || nodeId === this.nodeId) {
+          return null;
+        }
+        const nodeAddress = String(
+          row?.[COLUMN.NODE_ADDRESS] || row?.node_address || row?.nodeAddress || '',
+        );
+        const status = String(
+          row?.[COLUMN.STATUS] || row?.status || '',
+        ).toLowerCase();
+        return `${nodeId}|${nodeAddress}|${status}`;
+      })
+      .filter(Boolean)
+      .sort();
+
+    return members.join(',');
+  }
+
+  /**
+   * Determine whether steady-state READY heartbeats need mesh reconciliation.
+   * @return {boolean}
+   * @private
+   */
+  shouldReconnectClusterMesh() {
+    if (!this.messageRouter) {
+      return false;
+    }
+
+    const {rows: nodesSnapshot} = this.resolveMeshConnectivityNodeRows();
+    if (!Array.isArray(nodesSnapshot) || nodesSnapshot.length === NUM.ZERO) {
+      return false;
+    }
+
+    const signature = this.buildClusterMeshSignature(nodesSnapshot);
+    if (signature !== this.lastClusterMeshSignature) {
+      return true;
+    }
+
+    const hasConnectionState =
+      typeof this.messageRouter.getConnectionState === TYPEOF.FUNCTION;
+    if (!hasConnectionState) {
+      return false;
+    }
+
+    return nodesSnapshot.some((node) => {
+      const nodeId = String(
+        node?.[COLUMN.NODE_ID] || node?.node_id || node?.nodeId || '',
+      );
+      return nodeId.length > NUM.ZERO &&
+        nodeId !== this.nodeId &&
+        this.messageRouter.getConnectionState(nodeId) !== STATE.CONNECTED;
+    });
   }
 
   /**
@@ -3290,7 +3377,9 @@ class NodeJoiningService extends EventEmitter {
       return;
     }
 
-    if (state === STATE.READY && this.messageRouter) {
+    if (state === STATE.READY &&
+        this.messageRouter &&
+        this.shouldReconnectClusterMesh()) {
       try {
         await this.connectToClusterNodes();
       } catch (error) {
@@ -3484,6 +3573,9 @@ class NodeJoiningService extends EventEmitter {
     if (!Array.isArray(nodesSnapshot) || nodesSnapshot.length === NUM.ZERO) {
       return;
     }
+
+    this.lastClusterMeshSignature =
+      this.buildClusterMeshSignature(nodesSnapshot);
 
     // Filter to nodes that are not this node
     const otherNodes = nodesSnapshot.filter((node) => {
@@ -5195,7 +5287,7 @@ class NodeJoiningService extends EventEmitter {
       if (
         tableName &&
         messageGroupService &&
-        DEFAULT_CACHE_SYNC_TABLES.has(tableName)
+        shouldAttachPartitionCdcPropagation(tableName)
       ) {
         await messageGroupService.subscribeToCDC(tableName);
 

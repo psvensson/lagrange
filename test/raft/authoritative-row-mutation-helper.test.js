@@ -413,3 +413,44 @@ test('AuthoritativeRowMutationHelper - prepareFlush can clear pending owner upda
       reason: 'not-owner',
     }, 'skip path should report structured ownership metadata');
   });
+
+test('AuthoritativeRowMutationHelper - shutdown prevents retries from an in-flight failed write',
+  async (t) => {
+    const scheduled = [];
+    let releaseWrite;
+    const writeStarted = new Promise((resolve) => {
+      releaseWrite = resolve;
+    });
+    const helper = new AuthoritativeRowMutationHelper({
+      tableName: 'services',
+      buildWhereClause: () => ({service_id: 'replica-1'}),
+      buildUpdateData: (value, now) => ({
+        raft_role: value,
+        updated_at: now,
+      }),
+      readValueFromCache: () => null,
+      cdcIntegrationService: {
+        updateSystemTableRow: async () => {
+          await writeStarted;
+          throw new Error('distributed operation failed');
+        },
+      },
+      setTimeoutFn: (callback) => {
+        scheduled.push(callback);
+        return callback;
+      },
+      clearTimeoutFn: () => {},
+    });
+
+    helper.pendingValue = 'leader';
+    const flushPromise = helper.flush();
+    helper.shutdown();
+    releaseWrite();
+
+    await t.rejects(flushPromise, /distributed operation failed/,
+      'in-flight failure should still reach the caller');
+    t.equal(scheduled.length, 0,
+      'shutdown should suppress any retry timer armed by the late failure');
+    t.equal(helper.pendingValue, null,
+      'shutdown should discard pending state once the helper is terminal');
+  });

@@ -54,6 +54,8 @@ const ENTRYPOINT_LOG_MSG = Object.freeze({
   LOGS_TABLE_CONNECTED: 'Connected logging persistence to logs table',
   LOGS_TABLE_CONNECT_SKIPPED: 'Skipping logs table persistence (CDC unavailable)',
   LOGS_TABLE_CONNECT_FAILED: 'Failed to connect logs table persistence',
+  LOGS_TABLE_BACKGROUND_CONNECT_FAILED:
+    'Background logs table persistence setup failed',
   LOGS_TABLE_SHUTDOWN_FAILED: 'Failed to shutdown logs table persistence',
   DYNAMIC_CONFIG_WIRING_FAILED: 'Failed to initialize runtime dynamic config wiring',
   DYNAMIC_CONFIG_WIRING_SHUTDOWN_FAILED: 'Failed to shutdown dynamic config wiring',

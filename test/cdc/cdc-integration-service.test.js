@@ -260,6 +260,74 @@ test('CDCIntegrationService - waitForCacheUpdate skips in bootstrap mode', async
   t.end();
 });
 
+test('CDCIntegrationService - authoritative fallback diagnostics track phase windows',
+  async (t) => {
+    const mockSqlEngine = {
+      async executeQuery() {
+        return {
+          success: true,
+          rows: [{
+            node_id: 'node-1',
+            node_address: 'localhost:8080',
+          }],
+        };
+      },
+    };
+    const cacheState = {
+      row: undefined,
+    };
+    const cache = {
+      has(_tableName, key) {
+        return key === 'node-1' && Boolean(cacheState.row);
+      },
+      get(_tableName, key) {
+        return key === 'node-1' ? cacheState.row : undefined;
+      },
+    };
+    const cacheMutationTarget = {
+      applySystemTableChange(_tableName, _operation, record) {
+        cacheState.row = {...record};
+      },
+    };
+    const service = new CDCIntegrationService({
+      nodeId: 'test-node',
+      sqlQueryEngine: mockSqlEngine,
+      systemTableCache: cache,
+      cacheMutationTarget,
+    });
+    service.initialize();
+
+    await service.repairCacheVisibilityHole(
+      SystemTableName.NODES,
+      'node-1',
+      true,
+      null,
+      {fallbackPhase: 'steady_state'},
+    );
+    await service.repairCacheVisibilityHole(
+      SystemTableName.NODES,
+      'node-1',
+      true,
+      null,
+      {fallbackPhase: 'recovery'},
+    );
+
+    const diagnostics = service.getAuthoritativeFallbackDiagnostics();
+
+    t.equal(diagnostics.totalCount, 2, 'should track total fallback repairs');
+    t.equal(diagnostics.windowCount, 2, 'should track windowed fallback repairs');
+    t.equal(diagnostics.phases.steady_state.totalCount, 1,
+      'should classify steady-state fallback separately');
+    t.equal(diagnostics.phases.recovery.totalCount, 1,
+      'should classify recovery fallback separately');
+    t.equal(diagnostics.byTable.nodes.totalCount, 2,
+      'should group fallback diagnostics by table');
+    t.equal(diagnostics.recentEvents.length, 2,
+      'should keep recent fallback events for diagnostics');
+    t.end();
+  },
+);
+
 test('CDCIntegrationService - updateSystemTableRow', async (t) => {
   const mockSqlEngine = createMockSqlQueryEngine();
   const service = new CDCIntegrationService({

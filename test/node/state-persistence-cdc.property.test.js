@@ -45,9 +45,9 @@ function createMockCdcService() {
       });
       return {success: true};
     },
-    insertSystemTableRow: async (tableName, data) => {
+    upsertSystemTableRow: async (tableName, data) => {
       calls.push({
-        type: 'insert',
+        type: 'upsert',
         tableName,
         data,
         timestamp: Date.now(),
@@ -190,7 +190,7 @@ test('Property 6: State Persistence via CDC', async (t) => {
               cdcCompleted = true;
               return {success: true};
             },
-            insertSystemTableRow: async () => {
+            upsertSystemTableRow: async () => {
               cdcCompleted = true;
               return {success: true};
             },
