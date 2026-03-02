@@ -46,6 +46,7 @@ import {isSystemTableWriteReady} from '../cache/leader-readiness-gate.js';
 import {
   getSystemCachePrimaryKeyFieldOrFallback,
 } from '../cache/system-cache-key-descriptor.js';
+import {getTableCdcPolicy} from '../cache/cdc-table-policy.js';
 import {
   COLUMN,
   CDC_OPERATION,
@@ -126,8 +127,30 @@ function shouldEmitCdcRowFetchInfoLog(tableName) {
   return !CDC_ROW_FETCH_LOG_SUPPRESSED_TABLES.has(tableName);
 }
 
-function shouldBufferCdcWithoutSubscribers(tableName) {
-  return !CDC_NO_SUBSCRIBER_BUFFER_SUPPRESSED_TABLES.has(tableName);
+function parseExternalCdcAllowedOverride(rawPolicy) {
+  if (!rawPolicy) {
+    return null;
+  }
+
+  let policy = rawPolicy;
+  if (typeof policy === 'string') {
+    try {
+      policy = JSON.parse(policy);
+    } catch {
+      return null;
+    }
+  }
+
+  if (!policy || typeof policy !== 'object') {
+    return null;
+  }
+  if (typeof policy.externalCdcAllowed === 'boolean') {
+    return policy.externalCdcAllowed;
+  }
+  if (typeof policy.changeDataCapture?.externalCdcAllowed === 'boolean') {
+    return policy.changeDataCapture.externalCdcAllowed;
+  }
+  return null;
 }
 
 function isCDCSubscriber(subscriber) {
@@ -360,6 +383,10 @@ class PartitionService extends EventEmitter {
     this.partitionId = options.partitionId;
     this.tableId = options.tableId;
     this.tableName = options.tableName || options.tableId;
+    this.externalCdcAllowed =
+      typeof options.externalCdcAllowed === 'boolean' ?
+        options.externalCdcAllowed :
+        null;
     this.schema = options.schema || null;
     this.keyRange = options.keyRange || {
       start: PARTITION_SERVICE_DEFAULT.KEY_RANGE_START,
@@ -2857,6 +2884,28 @@ class PartitionService extends EventEmitter {
       return; // No CDC for other operations
     }
 
+    // For raw SQL queries, extract table name and data from SQL
+    let tableName = entry.tableName || this.tableName;
+    if (entry.type === PARTITION_SERVICE_OPERATION.QUERY && entry.sql) {
+      // Extract table name from SQL
+      const tableMatch = entry.sql.match(
+        /(?:UPDATE|INSERT\s+(?:OR\s+(?:REPLACE|IGNORE)\s+)?INTO|DELETE\s+FROM)\s+(\w+)/i,
+      );
+      if (tableMatch) {
+        tableName = tableMatch[NUM.ONE];
+        this.logger.debug(PARTITION_SERVICE_LOG_MSG.EXTRACTED_TABLE_NAME, {tableName});
+      }
+    }
+
+    if (this.cdcSubscribers.size === NUM.ZERO &&
+      !this.shouldBufferCdcWithoutSubscribers(tableName)) {
+      this.logger.debug(PARTITION_SERVICE_LOG_MSG.NO_CDC_SUBSCRIBERS, {
+        partitionId: this.partitionId,
+        tableName,
+      });
+      return;
+    }
+
     // For UPDATE operations, merge whereClause (contains primary key) with data
     // This ensures CDC events always include the primary key field
     // For DELETE operations, use whereClause as the data (contains primary key)
@@ -2869,18 +2918,7 @@ class PartitionService extends EventEmitter {
       cdcData = {...entry.whereClause};
     }
 
-    // For raw SQL queries, extract table name and data from SQL
-    let tableName = entry.tableName || this.tableName;
     if (entry.type === PARTITION_SERVICE_OPERATION.QUERY && entry.sql) {
-      // Extract table name from SQL
-      const tableMatch = entry.sql.match(
-        /(?:UPDATE|INSERT\s+(?:OR\s+(?:REPLACE|IGNORE)\s+)?INTO|DELETE\s+FROM)\s+(\w+)/i,
-      );
-      if (tableMatch) {
-        tableName = tableMatch[NUM.ONE];
-        this.logger.debug(PARTITION_SERVICE_LOG_MSG.EXTRACTED_TABLE_NAME, {tableName});
-      }
-
       // For parameterized queries (SQL with ? placeholders), build data from params
       const hasParams = entry.params && entry.params.length > NUM.ZERO;
       const hasPlaceholders = entry.sql.includes(
@@ -2933,7 +2971,7 @@ class PartitionService extends EventEmitter {
 
     // Buffer the event when no subscribers are registered
     if (this.cdcSubscribers.size === NUM.ZERO) {
-      if (!shouldBufferCdcWithoutSubscribers(tableName)) {
+      if (!this.shouldBufferCdcWithoutSubscribers(tableName)) {
         return;
       }
       const buffered = this.cdcEventBuffer.buffer(cdcEvent);
@@ -3441,6 +3479,50 @@ class PartitionService extends EventEmitter {
   }
 
   /**
+   * Resolve whether late-subscriber external CDC is enabled for a table.
+   * Control-plane propagation tables remain driven by the canonical CDC
+   * policy matrix; user tables may override external CDC via tables.table_policies.
+   * @param {string} tableName - Table name.
+   * @return {boolean} True when external CDC buffering should remain enabled.
+   * @private
+   */
+  isExternalCdcAllowedForTable(tableName) {
+    if (!tableName || tableName !== this.tableName) {
+      return getTableCdcPolicy(tableName)?.externalCdcAllowed === true;
+    }
+    if (typeof this.externalCdcAllowed === 'boolean') {
+      return this.externalCdcAllowed;
+    }
+    const tableRow = this.systemTableCache?.get?.(TABLES.TABLES, this.tableId) || null;
+    const policyOverride = parseExternalCdcAllowedOverride(
+      tableRow?.table_policies || null,
+    );
+    if (typeof policyOverride === 'boolean') {
+      return policyOverride;
+    }
+    return getTableCdcPolicy(tableName)?.externalCdcAllowed === true;
+  }
+
+  /**
+   * Determine whether CDC events should be buffered when there are no
+   * subscribers yet. Buffering is reserved for tables that either participate
+   * in internal cache propagation or explicitly allow external CDC catch-up.
+   * @param {string} tableName - Table name.
+   * @return {boolean} True when buffering should stay enabled.
+   * @private
+   */
+  shouldBufferCdcWithoutSubscribers(tableName) {
+    if (CDC_NO_SUBSCRIBER_BUFFER_SUPPRESSED_TABLES.has(tableName)) {
+      return false;
+    }
+    const policy = getTableCdcPolicy(tableName, {
+      externalCdcAllowed: this.isExternalCdcAllowedForTable(tableName),
+    });
+    return policy.internalCachePropagation === true ||
+      policy.externalCdcAllowed === true;
+  }
+
+  /**
    * Allocate next CDC event sequence number.
    * @return {number} Monotonic sequence number.
    * @private
@@ -3458,7 +3540,7 @@ class PartitionService extends EventEmitter {
    * @private
    */
   bufferCDCEventForRetry(cdcEvent, reason) {
-    if (!shouldBufferCdcWithoutSubscribers(cdcEvent.tableName)) {
+    if (!this.shouldBufferCdcWithoutSubscribers(cdcEvent.tableName)) {
       return false;
     }
 

@@ -118,6 +118,9 @@ const BASELINE_CACHE_DISABLED_REASON = 'cache-disabled';
 const BASELINE_CACHE_REFRESH_REASON = 'cache-refresh-requested';
 const BASELINE_CACHE_MISS_REASON = 'cache-miss';
 const BASELINE_CACHE_STALE_REASON = 'cache-stale';
+const BENCHMARK_TABLE_POLICY_JSON = JSON.stringify({
+  externalCdcAllowed: false,
+});
 const BASELINE_CACHE_INVALID_REASON = 'cache-invalid';
 const BASELINE_CACHE_STORE_REASON = 'cache-stored';
 const BENCHMARK_WORKLOAD_PROFILE = 'benchmark_events_mixed';
@@ -133,6 +136,7 @@ const QUIESCENCE_IN_FLIGHT_ERROR_PREFIX = 'inFlightQueryError=';
 const QUIESCENCE_IN_FLIGHT_COUNT_PREFIX = 'inFlightReplicaOperations=';
 const QUIESCENCE_READY_NODE_COUNT_PREFIX = 'readyLoadNodes=';
 const QUIESCENCE_STALL_PREFIX = 'progressStall=';
+const PHASE_PROGRESS_ARTIFACT_KEY = 'phaseProgress';
 const QUIESCENCE_REASON_IN_FLIGHT_NOT_DRAINED_PREFIX =
   'in_flight_replica_operations:';
 const QUIESCENCE_REASON_IN_FLIGHT_QUERY_ERROR_PREFIX =
@@ -142,6 +146,7 @@ const QUIESCENCE_REASON_LEADERSHIP_UNSTABLE_PREFIX =
   'leadership_unstable:';
 const QUIESCENCE_REASON_STALLED_NO_PROGRESS_PREFIX =
   'stalled_no_progress:';
+const NO_PROGRESS_REASON_CODE = 'stalled_no_progress';
 const QUIESCENCE_REASON_SNAPSHOT_QUERY_ERROR_PREFIX =
   'control_snapshot_query_error:';
 const QUIESCENCE_REASON_NO_SNAPSHOT_CANDIDATE =
@@ -240,6 +245,13 @@ const CDC_TELEMETRY_NODE_FIELD_CATCHUP_LAG_EVENTS = 'catchupLagEvents';
 const CDC_TELEMETRY_NODE_FIELD_CATCHUP_THROUGHPUT_EVENTS_PER_SEC =
   'catchupThroughputEventsPerSec';
 const CDC_TELEMETRY_NODE_FIELD_MODE = 'mode';
+const CDC_TELEMETRY_NODE_FIELD_AUTHORITATIVE_FALLBACK = 'authoritativeFallback';
+const CDC_TELEMETRY_FALLBACK_PHASE_BOOTSTRAP = 'bootstrap';
+const CDC_TELEMETRY_FALLBACK_PHASE_RECOVERY = 'recovery';
+const CDC_TELEMETRY_FALLBACK_PHASE_STEADY_STATE = 'steady_state';
+const AUTHORITATIVE_FALLBACK_POLICY_SCHEMA_VERSION = 1;
+const AUTHORITATIVE_FALLBACK_THRESHOLD_EXCEEDED_REASON =
+  'authoritative_fallback_threshold_exceeded';
 const CDC_TELEMETRY_REQUIRED_FIELDS = Object.freeze([
   CDC_TELEMETRY_NODE_FIELD_SUBSCRIBER_COUNT,
   CDC_TELEMETRY_NODE_FIELD_BUFFERED_EVENTS,
@@ -312,6 +324,7 @@ const DISCOVERY_SERVICE_FIELD_SERVICE_IDS = 'serviceIds';
 const DISCOVERY_SERVICE_FIELD_REPLICAS = 'replicas';
 const DISCOVERY_REPLICA_FIELD_NODE_ID = 'nodeId';
 const DISCOVERY_REPLICA_FIELD_READINESS = 'readiness';
+const DISCOVERY_REPLICA_FIELD_BENCHMARK_ADMISSION = 'benchmarkAdmission';
 const DISCOVERY_READINESS_FIELD_WORKLOAD_READY = 'workloadReady';
 const DISCOVERY_READINESS_FIELD_BENCHMARK_READY = 'benchmarkReady';
 const DISCOVERY_READINESS_FIELD_ROUTING_READY = 'routingReady';
@@ -323,12 +336,31 @@ const DISCOVERY_READINESS_FIELD_TABLE_NAME = 'tableName';
 const DISCOVERY_READINESS_FIELD_REASONS = 'reasons';
 const DISCOVERY_READINESS_REASON_FIELD_CODE = 'code';
 const DISCOVERY_READINESS_REASON_FIELD_DETAIL = 'detail';
+const DISCOVERY_BENCHMARK_ADMISSION_FIELD_STATE = 'state';
+const DISCOVERY_BENCHMARK_ADMISSION_FIELD_REASONS = 'reasons';
+const DISCOVERY_BENCHMARK_ADMISSION_FIELD_TABLE_NAME = 'tableName';
+const DISCOVERY_BENCHMARK_ADMISSION_FIELD_ROUTING_READY = 'routingReady';
+const DISCOVERY_BENCHMARK_ADMISSION_FIELD_SCHEMA_READY = 'schemaReady';
+const DISCOVERY_BENCHMARK_ADMISSION_FIELD_TOPOLOGY_READY = 'topologyReady';
+const DISCOVERY_BENCHMARK_ADMISSION_FIELD_LOCAL_REPLICA_ROLE =
+  'localReplicaRole';
+const DISCOVERY_BENCHMARK_ADMISSION_FIELD_DEGRADED_OPERATION_IDS =
+  'degradedByOperationIds';
+const DISCOVERY_BENCHMARK_ADMISSION_STATE_READY = 'ready';
+const DISCOVERY_BENCHMARK_ADMISSION_STATE_BLOCKED = 'blocked';
+const DISCOVERY_ADMISSION_SOURCE = Object.freeze({
+  RUNTIME: 'benchmark_admission',
+  LEGACY: 'legacy_readiness',
+  MISSING: 'missing',
+});
 const DISCOVERY_READINESS_REASON_BENCHMARK_NOT_READY = 'benchmark_not_ready';
 const DISCOVERY_READINESS_REASON_READINESS_MISSING = 'readiness_missing';
 const DISCOVERY_READINESS_REASON_WORKLOAD_NOT_READY = 'workload_not_ready';
 const DISCOVERY_READINESS_REASON_SCHEMA_NOT_READY = 'schema_not_ready';
 const DISCOVERY_READINESS_REASON_STATE_CONTRADICTION =
   'readiness_state_contradiction';
+const DISCOVERY_READINESS_REASON_BENCHMARK_ADMISSION_MISSING =
+  'benchmark_admission_missing';
 const DISCOVERY_READINESS_REASON_NOT_SELECTED_BY_DISCOVERY =
   'not_selected_by_discovery';
 const STRICT_DOMINANT_REASON_PRECEDENCE = Object.freeze([
@@ -343,9 +375,11 @@ const DISCOVERY_DIAGNOSTICS_FIELD_PROBE_READINESS_BY_NODE_ID =
   'probeReadinessByNodeId';
 const DISCOVERY_DIAGNOSTIC_PREFIX_PROBES = 'probes=';
 const DISCOVERY_PROBE_REASON_ADMIN_NOT_READY = 'admin_not_ready';
+const DISCOVERY_PROBE_REASON_LOAD_PROBE_FAILED = 'load_probe_failed';
 const DISCOVERY_PROBE_REASON_REACHABLE_BY_PREFIX = 'reachable_by=';
 const DISCOVERY_PROBE_REASON_LAST_ERROR_PREFIX = 'last_error=';
 const DISCOVERY_PROBE_REASON_PROBE_ERROR_PREFIX = 'probe_error=';
+const DISCOVERY_PROBE_REASON_SELF_DISCOVERY_PREFIX = 'self_discovery=';
 const DISCOVERY_SOURCE_STATUS_DISCOVERED = 'discovered';
 const DISCOVERY_SOURCE_STATUS_EMPTY = 'empty';
 const DISCOVERY_SOURCE_STATUS_ERROR = 'error';
@@ -480,6 +514,14 @@ function buildBenchmarkPartitionLookupByTableIdSql(tableId) {
 function buildBenchmarkPartitionRepairSql(tableName, tableId) {
   return 'UPDATE partitions SET table_name = \'' +
     escapeSqlLiteral(tableName) +
+    '\' WHERE table_id = \'' +
+    escapeSqlLiteral(tableId) +
+    '\'';
+}
+
+function buildBenchmarkTablePolicySql(tableId) {
+  return 'UPDATE tables SET table_policies = \'' +
+    escapeSqlLiteral(BENCHMARK_TABLE_POLICY_JSON) +
     '\' WHERE table_id = \'' +
     escapeSqlLiteral(tableId) +
     '\'';
@@ -1013,6 +1055,13 @@ async function ensureSutBenchmarkTable(nodeClient, systemTableReadNodes, tableNa
       writeNodeId: createResult.nodeId,
     };
   }
+  const policyResult = await queryControlOnCanonicalSystemTableWriteNode(
+    nodeClient,
+    systemTableReadNodes,
+    buildBenchmarkTablePolicySql(tableId),
+    [],
+    NODE_CLIENT_MUTATING_CONTEXT,
+  );
   const repairResult = await queryControlOnCanonicalSystemTableWriteNode(
     nodeClient,
     systemTableReadNodes,
@@ -1023,6 +1072,7 @@ async function ensureSutBenchmarkTable(nodeClient, systemTableReadNodes, tableNa
   return {
     ...tableMetadata,
     writeNodeId: createResult.nodeId,
+    policyNodeId: policyResult.nodeId,
     repairNodeId: repairResult.nodeId,
   };
 }
@@ -1414,6 +1464,113 @@ function summarizeDiscoverySelectionExclusionReasons(readiness) {
     [DISCOVERY_READINESS_REASON_READINESS_MISSING];
 }
 
+function summarizeBenchmarkAdmissionReasons(admission, options = {}) {
+  const reasons = Array.isArray(
+    admission?.[DISCOVERY_BENCHMARK_ADMISSION_FIELD_REASONS],
+  ) ?
+    admission[DISCOVERY_BENCHMARK_ADMISSION_FIELD_REASONS] :
+    [];
+  const fallbackReason = Object.prototype.hasOwnProperty.call(
+    options,
+    'fallbackReason',
+  ) ?
+    options.fallbackReason :
+    DISCOVERY_READINESS_REASON_BENCHMARK_NOT_READY;
+  if (reasons.length === ZERO) {
+    if (typeof fallbackReason === 'string' && fallbackReason.length > ZERO) {
+      return [fallbackReason];
+    }
+    return [];
+  }
+  const summarized = [];
+  for (const reason of reasons) {
+    const code = typeof reason?.[DISCOVERY_READINESS_REASON_FIELD_CODE] === 'string' &&
+      reason[DISCOVERY_READINESS_REASON_FIELD_CODE].length > ZERO ?
+      reason[DISCOVERY_READINESS_REASON_FIELD_CODE] :
+      'unknown_reason';
+    const detail = typeof reason?.[DISCOVERY_READINESS_REASON_FIELD_DETAIL] === 'string' &&
+      reason[DISCOVERY_READINESS_REASON_FIELD_DETAIL].length > ZERO ?
+      reason[DISCOVERY_READINESS_REASON_FIELD_DETAIL] :
+      null;
+    summarized.push(detail ? code + '=' + detail : code);
+  }
+  return summarized;
+}
+
+function buildCanonicalBenchmarkAdmissionState(admission) {
+  if (!admission || typeof admission !== 'object') {
+    return null;
+  }
+  return {
+    state:
+      admission[DISCOVERY_BENCHMARK_ADMISSION_FIELD_STATE] ===
+      DISCOVERY_BENCHMARK_ADMISSION_STATE_READY ?
+        DISCOVERY_BENCHMARK_ADMISSION_STATE_READY :
+        DISCOVERY_BENCHMARK_ADMISSION_STATE_BLOCKED,
+    routingReady:
+      admission[DISCOVERY_BENCHMARK_ADMISSION_FIELD_ROUTING_READY] === true,
+    schemaReady:
+      admission[DISCOVERY_BENCHMARK_ADMISSION_FIELD_SCHEMA_READY] === true,
+    topologyReady:
+      admission[DISCOVERY_BENCHMARK_ADMISSION_FIELD_TOPOLOGY_READY] === true,
+    tableName:
+      typeof admission[DISCOVERY_BENCHMARK_ADMISSION_FIELD_TABLE_NAME] === 'string' &&
+        admission[DISCOVERY_BENCHMARK_ADMISSION_FIELD_TABLE_NAME].length > ZERO ?
+        admission[DISCOVERY_BENCHMARK_ADMISSION_FIELD_TABLE_NAME] :
+        null,
+    localReplicaRole:
+      typeof admission[DISCOVERY_BENCHMARK_ADMISSION_FIELD_LOCAL_REPLICA_ROLE] === 'string' &&
+        admission[DISCOVERY_BENCHMARK_ADMISSION_FIELD_LOCAL_REPLICA_ROLE].length > ZERO ?
+        admission[DISCOVERY_BENCHMARK_ADMISSION_FIELD_LOCAL_REPLICA_ROLE] :
+        null,
+    degradedByOperationIds: uniqueSorted(
+      admission[DISCOVERY_BENCHMARK_ADMISSION_FIELD_DEGRADED_OPERATION_IDS],
+    ),
+    admissionReasons: summarizeBenchmarkAdmissionReasons(admission, {
+      fallbackReason: null,
+    }),
+  };
+}
+
+function evaluateDiscoveryReplicaBenchmarkAdmission(admission) {
+  if (!admission || typeof admission !== 'object') {
+    return null;
+  }
+  const admissionState = buildCanonicalBenchmarkAdmissionState(admission);
+  const contradictions = [];
+  if (admissionState.state === DISCOVERY_BENCHMARK_ADMISSION_STATE_READY &&
+      (admissionState.routingReady !== true ||
+        admissionState.schemaReady !== true ||
+        admissionState.topologyReady !== true ||
+        admissionState.admissionReasons.length > ZERO)) {
+    contradictions.push(DISCOVERY_READINESS_REASON_STATE_CONTRADICTION);
+  }
+  if (contradictions.length > ZERO) {
+    return {
+      ready: false,
+      hasAdmission: true,
+      reasons: uniqueSorted([
+        ...contradictions,
+        ...summarizeBenchmarkAdmissionReasons(admission),
+      ]),
+      admissionState,
+    };
+  }
+  const ready =
+    admissionState.state === DISCOVERY_BENCHMARK_ADMISSION_STATE_READY;
+  const reasons = ready ?
+    [] :
+    summarizeBenchmarkAdmissionReasons(admission);
+  return {
+    ready,
+    hasAdmission: true,
+    reasons: reasons.length > ZERO ?
+      reasons :
+      [DISCOVERY_READINESS_REASON_BENCHMARK_NOT_READY],
+    admissionState,
+  };
+}
+
 function buildCanonicalDiscoveryReadinessState(readiness) {
   if (!readiness || typeof readiness !== 'object') {
     return null;
@@ -1571,7 +1728,103 @@ function summarizeReadinessProbeReasons(options = {}) {
   return reasons;
 }
 
-function resolveServiceNodeIdsFromDiscovery(snapshot, serviceId, protocol) {
+async function fetchLocalServiceDiscoverySnapshot(nodeClient, node, options = {}) {
+  try {
+    return await nodeClient.fetchServiceDiscovery(node, options.context);
+  } catch (_error) {
+    return null;
+  }
+}
+
+function extractLocalReplicaReadiness(snapshot, nodeId, options = {}) {
+  const services = Array.isArray(snapshot?.services) ? snapshot.services : [];
+  for (const service of services) {
+    const replicas = Array.isArray(service?.replicas) ? service.replicas : [];
+    for (const replica of replicas) {
+      if (String(replica?.nodeId || '') !== String(nodeId || '')) {
+        continue;
+      }
+      const hasReadiness =
+        replica?.readiness && typeof replica.readiness === 'object';
+      const admissionEvaluation = evaluateDiscoveryReplicaBenchmarkAdmission(
+        replica?.[DISCOVERY_REPLICA_FIELD_BENCHMARK_ADMISSION],
+      );
+      recordAdmissionRuntimeOwnership(
+        options.admissionRuntimeOwnership,
+        'localReplicaConfirmation',
+        String(nodeId || ''),
+        admissionEvaluation?.hasAdmission === true ?
+          DISCOVERY_ADMISSION_SOURCE.RUNTIME :
+          (hasReadiness ?
+            DISCOVERY_ADMISSION_SOURCE.LEGACY :
+            DISCOVERY_ADMISSION_SOURCE.MISSING),
+      );
+      return {
+        hasLocalReplica: true,
+        requiresConfirmation:
+          admissionEvaluation?.hasAdmission === true || hasReadiness,
+        evaluation:
+          admissionEvaluation ||
+          evaluateDiscoveryReplicaReadiness(replica?.readiness, {
+            requireCanonicalBenchmarkReadiness: true,
+            allowMissingReadiness: true,
+          }),
+      };
+    }
+  }
+  recordAdmissionRuntimeOwnership(
+    options.admissionRuntimeOwnership,
+    'localReplicaConfirmation',
+    String(nodeId || ''),
+    DISCOVERY_ADMISSION_SOURCE.MISSING,
+  );
+  return {
+    hasLocalReplica: false,
+    requiresConfirmation: true,
+    evaluation: {
+      ready: false,
+      hasReadiness: false,
+      reasons: ['self_discovery_missing'],
+      readinessState: null,
+    },
+  };
+}
+
+async function probeLoadLaneReadiness(nodeClient, node, options = {}) {
+  try {
+    await nodeClient.queryLoad(
+      node,
+      'SELECT 1',
+      [],
+      NODE_CLIENT_TRANSIENT_CONTEXT,
+    );
+    const tableProbeSql = typeof options.tableProbeSql === 'string' ?
+      options.tableProbeSql :
+      '';
+    if (tableProbeSql.length > ZERO) {
+      await nodeClient.queryLoad(
+        node,
+        tableProbeSql,
+        [],
+        NODE_CLIENT_TRANSIENT_CONTEXT,
+      );
+    }
+    return {
+      ready: true,
+      reasons: [],
+    };
+  } catch (error) {
+    return {
+      ready: false,
+      reasons: [
+        DISCOVERY_PROBE_REASON_LOAD_PROBE_FAILED + ':' +
+          truncateDiscoveryErrorMessage(String(error?.message || error)),
+      ],
+    };
+  }
+}
+
+function resolveServiceNodeIdsFromDiscovery(snapshot, serviceId, protocol, options = {}) {
   const services = Array.isArray(snapshot?.[DISCOVERY_FIELD_SERVICES]) ?
     snapshot[DISCOVERY_FIELD_SERVICES] :
     [];
@@ -1603,10 +1856,27 @@ function resolveServiceNodeIdsFromDiscovery(snapshot, serviceId, protocol) {
         continue;
       }
       seenNodeIds.add(nodeId);
-      const readiness = replica?.[DISCOVERY_REPLICA_FIELD_READINESS];
-      const readinessEvaluation = evaluateDiscoveryReplicaReadiness(readiness, {
-        allowMissingReadiness: true,
-      });
+      const admissionEvaluation = evaluateDiscoveryReplicaBenchmarkAdmission(
+        replica?.[DISCOVERY_REPLICA_FIELD_BENCHMARK_ADMISSION],
+      );
+      recordAdmissionRuntimeOwnership(
+        options.admissionRuntimeOwnership,
+        'selection',
+        nodeId,
+        admissionEvaluation?.hasAdmission === true ?
+          DISCOVERY_ADMISSION_SOURCE.RUNTIME :
+          (replica?.[DISCOVERY_REPLICA_FIELD_READINESS] &&
+            typeof replica[DISCOVERY_REPLICA_FIELD_READINESS] === 'object' ?
+            DISCOVERY_ADMISSION_SOURCE.LEGACY :
+            DISCOVERY_ADMISSION_SOURCE.MISSING),
+      );
+      const readinessEvaluation = admissionEvaluation ||
+        evaluateDiscoveryReplicaReadiness(
+          replica?.[DISCOVERY_REPLICA_FIELD_READINESS],
+          {
+            allowMissingReadiness: true,
+          },
+        );
       if (readinessEvaluation.ready) {
         discoveredNodeIds.push(nodeId);
         continue;
@@ -1620,11 +1890,12 @@ function resolveServiceNodeIdsFromDiscovery(snapshot, serviceId, protocol) {
   };
 }
 
-function resolveSutLoadNodeSelectionFromDiscovery(snapshot) {
+function resolveSutLoadNodeSelectionFromDiscovery(snapshot, options = {}) {
   const postgresWireSelection = resolveServiceNodeIdsFromDiscovery(
     snapshot,
     NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE,
     NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
+    options,
   );
   if (postgresWireSelection.nodeIds.length > ZERO) {
     return {
@@ -1679,6 +1950,40 @@ function findServiceReplicaReadinessFromDiscovery(
   return null;
 }
 
+function findServiceReplicaBenchmarkAdmissionFromDiscovery(
+  snapshot,
+  serviceId,
+  protocol,
+  nodeId,
+) {
+  const services = Array.isArray(snapshot?.[DISCOVERY_FIELD_SERVICES]) ?
+    snapshot[DISCOVERY_FIELD_SERVICES] :
+    [];
+  for (const service of services) {
+    if (!service || typeof service !== 'object') {
+      continue;
+    }
+    if (service[DISCOVERY_SERVICE_FIELD_PROTOCOL] !== protocol) {
+      continue;
+    }
+    const serviceIds = Array.isArray(service[DISCOVERY_SERVICE_FIELD_SERVICE_IDS]) ?
+      service[DISCOVERY_SERVICE_FIELD_SERVICE_IDS] :
+      [];
+    if (!serviceIds.includes(serviceId)) {
+      continue;
+    }
+    const serviceReplicas = Array.isArray(service[DISCOVERY_SERVICE_FIELD_REPLICAS]) ?
+      service[DISCOVERY_SERVICE_FIELD_REPLICAS] :
+      [];
+    for (const replica of serviceReplicas) {
+      if (replica?.[DISCOVERY_REPLICA_FIELD_NODE_ID] === nodeId) {
+        return replica?.[DISCOVERY_REPLICA_FIELD_BENCHMARK_ADMISSION] || null;
+      }
+    }
+  }
+  return null;
+}
+
 function resolveNodeReadinessFromServiceDiscovery(snapshot, nodeId, options = {}) {
   const enforceCanonicalVersionedReadiness =
     options.enforceCanonicalVersionedReadiness === true;
@@ -1714,11 +2019,45 @@ function resolveNodeReadinessFromServiceDiscovery(snapshot, nodeId, options = {}
   const enforceBenchmarkReadiness =
     options.enforceBenchmarkReadiness === true;
   if (enforceBenchmarkReadiness) {
+    const benchmarkAdmission = findServiceReplicaBenchmarkAdmissionFromDiscovery(
+      snapshot,
+      NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE,
+      NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
+      nodeId,
+    );
+    const admissionEvaluation = evaluateDiscoveryReplicaBenchmarkAdmission(
+      benchmarkAdmission,
+    );
+    if (admissionEvaluation) {
+      recordAdmissionRuntimeOwnership(
+        options.admissionRuntimeOwnership,
+        'readinessGate',
+        String(nodeId || ''),
+        DISCOVERY_ADMISSION_SOURCE.RUNTIME,
+      );
+      return admissionEvaluation.ready ?
+        {
+          ready: true,
+          reasons: [],
+        } :
+        {
+          ready: false,
+          reasons: admissionEvaluation.reasons,
+        };
+    }
     const readiness = findServiceReplicaReadinessFromDiscovery(
       snapshot,
       NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE,
       NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
       nodeId,
+    );
+    recordAdmissionRuntimeOwnership(
+      options.admissionRuntimeOwnership,
+      'readinessGate',
+      String(nodeId || ''),
+      readiness && typeof readiness === 'object' ?
+        DISCOVERY_ADMISSION_SOURCE.LEGACY :
+        DISCOVERY_ADMISSION_SOURCE.MISSING,
     );
     const readinessEvaluation = evaluateDiscoveryReplicaReadiness(readiness, {
       requireCanonicalBenchmarkReadiness: true,
@@ -2392,6 +2731,40 @@ function normalizeCdcTelemetryMode(value) {
     CDC_TELEMETRY_MODE_STEADY;
 }
 
+function normalizeAuthoritativeFallbackPhaseCounts(value) {
+  const source = value && typeof value === 'object' ? value : {};
+  return {
+    windowCount: normalizeNonNegativeInteger(source.windowCount),
+    totalCount: normalizeNonNegativeInteger(source.totalCount),
+  };
+}
+
+function normalizeAuthoritativeFallbackTelemetry(value) {
+  const source = value && typeof value === 'object' ? value : {};
+  return {
+    schemaVersion: normalizeNonNegativeInteger(source.schemaVersion) || ONE,
+    nodeId: typeof source.nodeId === 'string' ? source.nodeId : null,
+    windowMs: normalizeNonNegativeInteger(source.windowMs),
+    totalCount: normalizeNonNegativeInteger(source.totalCount),
+    windowCount: normalizeNonNegativeInteger(source.windowCount),
+    windowRatePerMinute: normalizeNonNegativeNumber(source.windowRatePerMinute),
+    phases: {
+      [CDC_TELEMETRY_FALLBACK_PHASE_BOOTSTRAP]:
+        normalizeAuthoritativeFallbackPhaseCounts(
+          source.phases?.[CDC_TELEMETRY_FALLBACK_PHASE_BOOTSTRAP],
+        ),
+      [CDC_TELEMETRY_FALLBACK_PHASE_RECOVERY]:
+        normalizeAuthoritativeFallbackPhaseCounts(
+          source.phases?.[CDC_TELEMETRY_FALLBACK_PHASE_RECOVERY],
+        ),
+      [CDC_TELEMETRY_FALLBACK_PHASE_STEADY_STATE]:
+        normalizeAuthoritativeFallbackPhaseCounts(
+          source.phases?.[CDC_TELEMETRY_FALLBACK_PHASE_STEADY_STATE],
+        ),
+    },
+  };
+}
+
 function normalizeCdcTelemetryNodeSample(nodeId, sample) {
   const source = sample && typeof sample === 'object' ? sample : {};
   const missingFields = [];
@@ -2409,6 +2782,10 @@ function normalizeCdcTelemetryNodeSample(nodeId, sample) {
       ),
     [CDC_TELEMETRY_NODE_FIELD_MODE]:
       normalizeCdcTelemetryMode(source[CDC_TELEMETRY_NODE_FIELD_MODE]),
+    [CDC_TELEMETRY_NODE_FIELD_AUTHORITATIVE_FALLBACK]:
+      normalizeAuthoritativeFallbackTelemetry(
+        source[CDC_TELEMETRY_NODE_FIELD_AUTHORITATIVE_FALLBACK],
+      ),
   };
 
   for (const requiredField of CDC_TELEMETRY_REQUIRED_FIELDS) {
@@ -2430,6 +2807,9 @@ function buildCdcTelemetrySummary(normalizedByNode) {
   let maxCatchupLagEvents = ZERO;
   let totalCatchupThroughputEventsPerSec = ZERO;
   let catchupNodeCount = ZERO;
+  let totalAuthoritativeFallbackCount = ZERO;
+  let totalAuthoritativeFallbackWindowCount = ZERO;
+  let steadyStateAuthoritativeFallbackWindowCount = ZERO;
 
   for (const sample of samples) {
     totalSubscriberCount += normalizeNonNegativeInteger(
@@ -2444,6 +2824,17 @@ function buildCdcTelemetrySummary(normalizedByNode) {
     maxCatchupLagEvents = Math.max(maxCatchupLagEvents, catchupLagEvents);
     totalCatchupThroughputEventsPerSec += normalizeNonNegativeNumber(
       sample?.[CDC_TELEMETRY_NODE_FIELD_CATCHUP_THROUGHPUT_EVENTS_PER_SEC],
+    );
+    const authoritativeFallback =
+      sample?.[CDC_TELEMETRY_NODE_FIELD_AUTHORITATIVE_FALLBACK];
+    totalAuthoritativeFallbackCount += normalizeNonNegativeInteger(
+      authoritativeFallback?.totalCount,
+    );
+    totalAuthoritativeFallbackWindowCount += normalizeNonNegativeInteger(
+      authoritativeFallback?.windowCount,
+    );
+    steadyStateAuthoritativeFallbackWindowCount += normalizeNonNegativeInteger(
+      authoritativeFallback?.phases?.[CDC_TELEMETRY_FALLBACK_PHASE_STEADY_STATE]?.windowCount,
     );
     if (sample?.[CDC_TELEMETRY_NODE_FIELD_MODE] === CDC_TELEMETRY_MODE_CATCHUP) {
       catchupNodeCount += ONE;
@@ -2464,6 +2855,11 @@ function buildCdcTelemetrySummary(normalizedByNode) {
         ZERO,
     catchupNodeCount,
     steadyNodeCount,
+    authoritativeFallback: {
+      totalCount: totalAuthoritativeFallbackCount,
+      windowCount: totalAuthoritativeFallbackWindowCount,
+      steadyStateWindowCount: steadyStateAuthoritativeFallbackWindowCount,
+    },
   };
 }
 
@@ -2721,6 +3117,9 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
     BENCHMARK_DEFAULTS.readyPollIntervalMs;
   const discoveryTableName = normalizeTableName(options.tableName, '');
   const discoveryTableId = normalizeTableId(options.tableId, '');
+  const loadLaneTableProbeSql = discoveryTableName.length > ZERO ?
+    buildSutTableProbeSql(discoveryTableName) :
+    '';
   const discoveryContext = discoveryTableName.length > ZERO ?
     {
       ...NODE_CLIENT_TRANSIENT_CONTEXT,
@@ -2772,7 +3171,9 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
           discoveryContext,
         );
         const discoverySelection =
-          resolveSutLoadNodeSelectionFromDiscovery(snapshot);
+          resolveSutLoadNodeSelectionFromDiscovery(snapshot, {
+            admissionRuntimeOwnership: options.admissionRuntimeOwnership,
+          });
         const snapshotNodeIds = discoverySelection.nodeIds;
         if (snapshotNodeIds.length > ZERO) {
           sourceResults.push({
@@ -2823,11 +3224,32 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
           discoveredCandidates.map(async (node) => {
             try {
               const diagnostics = await nodeClient.probeReadiness(node);
+              const localSnapshot = await fetchLocalServiceDiscoverySnapshot(
+                nodeClient,
+                node,
+                {context: discoveryContext},
+              );
+              const localReadiness = extractLocalReplicaReadiness(
+                localSnapshot,
+                node.id,
+                {
+                  admissionRuntimeOwnership: options.admissionRuntimeOwnership,
+                },
+              );
+              const loadLaneReadiness =
+                localReadiness?.requiresConfirmation === true &&
+                localReadiness?.evaluation?.ready === true ?
+                await probeLoadLaneReadiness(nodeClient, node, {
+                  tableProbeSql: loadLaneTableProbeSql,
+                }) :
+                {ready: false, reasons: []};
               return {
                 node,
                 diagnostics,
                 error: null,
                 adminReady: isNodeAdminReady(diagnostics),
+                localReadiness,
+                loadLaneReadiness,
               };
             } catch (_error) {
               return {
@@ -2835,6 +3257,8 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
                 diagnostics: null,
                 error: summarizeDiscoverySourceError(_error),
                 adminReady: false,
+                localReadiness: null,
+                loadLaneReadiness: null,
               };
             }
           }),
@@ -2843,14 +3267,35 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
         const probeReadinessByNodeId = {};
         for (const probeResult of readinessProbeResults) {
           const nodeId = String(probeResult?.node?.id || DISCOVERY_UNKNOWN_NODE_ID);
-          if (probeResult?.adminReady === true) {
+          const exclusionReasons = [];
+          if (probeResult?.adminReady !== true) {
+            exclusionReasons.push(...summarizeReadinessProbeReasons({
+              diagnostics: probeResult?.diagnostics,
+              error: probeResult?.error,
+            }));
+          }
+          if (probeResult?.localReadiness?.requiresConfirmation === true &&
+              probeResult?.localReadiness?.evaluation?.ready !== true) {
+            const localReasons =
+              Array.isArray(probeResult?.localReadiness?.evaluation?.reasons) &&
+                probeResult.localReadiness.evaluation.reasons.length > ZERO ?
+                probeResult.localReadiness.evaluation.reasons :
+                ['self_discovery_missing'];
+            for (const reason of localReasons) {
+              exclusionReasons.push(
+                DISCOVERY_PROBE_REASON_SELF_DISCOVERY_PREFIX + String(reason),
+              );
+            }
+          }
+          if (probeResult?.loadLaneReadiness?.ready !== true &&
+              Array.isArray(probeResult?.loadLaneReadiness?.reasons)) {
+            exclusionReasons.push(...probeResult.loadLaneReadiness.reasons);
+          }
+          if (exclusionReasons.length === ZERO) {
             reachableCandidates.push(probeResult.node);
             continue;
           }
-          probeReadinessByNodeId[nodeId] = summarizeReadinessProbeReasons({
-            diagnostics: probeResult?.diagnostics,
-            error: probeResult?.error,
-          });
+          probeReadinessByNodeId[nodeId] = uniqueSorted(exclusionReasons);
         }
         lastProbeReadinessByNodeId = probeReadinessByNodeId;
         lastReachableNodeIds = reachableCandidates.map((node) => node.id);
@@ -2969,6 +3414,7 @@ async function waitForSutLoadQuiescence({
   requiredSchemaTableId,
   onConvergenceEvent,
   onBenchmarkMetadataSnapshot,
+  runtimeAdmissionOwnership,
   timing: configuredTiming,
 }) {
   const timing = resolveScenarioTiming(configuredTiming);
@@ -3193,6 +3639,7 @@ async function waitForSutLoadQuiescence({
               enforceCanonicalVersionedReadiness: true,
               adminQueryable: true,
               requiredSchemaVersion,
+              admissionRuntimeOwnership: runtimeAdmissionOwnership,
             },
           );
           await maybeCaptureBenchmarkMetadataSnapshot(
@@ -3337,6 +3784,9 @@ async function waitForSutLoadQuiescence({
             const discoveryReadiness = resolveNodeReadinessFromServiceDiscovery(
               discoverySnapshot,
               nodeId,
+              {
+                admissionRuntimeOwnership: runtimeAdmissionOwnership,
+              },
             );
             if (discoveryReadiness.ready) {
               // Discovery readiness is diagnostic-only here. A node is considered
@@ -4088,6 +4538,67 @@ function evaluateWritePressure(loadMetrics, options = {}) {
 function formatWritePressureViolations(writePressureResult) {
   const violations = Array.isArray(writePressureResult?.violations) ?
     writePressureResult.violations :
+    [];
+  return violations
+    .map((violation) =>
+      String(violation.metric) +
+        '=' +
+        String(violation.observed) +
+        '>' +
+      String(violation.threshold))
+    .join('|');
+}
+
+function evaluateAuthoritativeFallbackPolicy(cdcTelemetry, options = {}) {
+  const strictAuthoritativeFallback =
+    options.strictAuthoritativeFallback === true;
+  const thresholds =
+    options.authoritativeFallbackThresholds &&
+      typeof options.authoritativeFallbackThresholds === 'object' ?
+      options.authoritativeFallbackThresholds :
+      {maxSteadyStateWindowCount: null};
+  const summary = cdcTelemetry?.summary?.authoritativeFallback &&
+    typeof cdcTelemetry.summary.authoritativeFallback === 'object' ?
+    cdcTelemetry.summary.authoritativeFallback :
+    {};
+  const steadyStateWindowCount = normalizeNonNegativeInteger(
+    summary.steadyStateWindowCount,
+  );
+  const windowCount = normalizeNonNegativeInteger(summary.windowCount);
+  const totalCount = normalizeNonNegativeInteger(summary.totalCount);
+  const violations = [];
+
+  if (Number.isInteger(thresholds.maxSteadyStateWindowCount) &&
+      thresholds.maxSteadyStateWindowCount >= ZERO &&
+      steadyStateWindowCount > thresholds.maxSteadyStateWindowCount) {
+    violations.push({
+      metric: 'steadyStateWindowCount',
+      observed: steadyStateWindowCount,
+      threshold: thresholds.maxSteadyStateWindowCount,
+      reason: 'steady_state_window_count',
+    });
+  }
+
+  return {
+    schemaVersion: AUTHORITATIVE_FALLBACK_POLICY_SCHEMA_VERSION,
+    strictAuthoritativeFallback,
+    thresholds,
+    observed: {
+      totalCount,
+      windowCount,
+      steadyStateWindowCount,
+    },
+    breached: violations.length > ZERO,
+    status: violations.length > ZERO ?
+      DISCOVERY_GATE_STATUS_FAILED :
+      DISCOVERY_GATE_STATUS_PASSED,
+    violations,
+  };
+}
+
+function formatAuthoritativeFallbackViolations(authoritativeFallbackResult) {
+  const violations = Array.isArray(authoritativeFallbackResult?.violations) ?
+    authoritativeFallbackResult.violations :
     [];
   return violations
     .map((violation) =>
@@ -5114,6 +5625,135 @@ function buildFailedPhaseDiagnostics(phaseResult) {
   };
 }
 
+function emitPhaseProgress(phaseContext, message, details = null) {
+  if (typeof phaseContext?.emitPhaseProgress !== 'function') {
+    return;
+  }
+  phaseContext.emitPhaseProgress({
+    message,
+    ...(details && typeof details === 'object' ? {details} : {}),
+  });
+}
+
+function emitPhaseMeaningfulChange(phaseContext, message, details = null) {
+  if (typeof phaseContext?.emitPhaseLastMeaningfulChange !== 'function') {
+    return;
+  }
+  phaseContext.emitPhaseLastMeaningfulChange({
+    message,
+    ...(details && typeof details === 'object' ? {details} : {}),
+  });
+}
+
+function emitPhaseNoProgressFailure(phaseContext, message, details = null) {
+  if (typeof phaseContext?.emitPhaseFailedNoProgress !== 'function') {
+    return;
+  }
+  phaseContext.emitPhaseFailedNoProgress({
+    message,
+    ...(details && typeof details === 'object' ? {details} : {}),
+  });
+}
+
+function buildNoProgressDiagnostics(phaseResult) {
+  const phaseProgress = phaseResult?.artifacts?.[PHASE_PROGRESS_ARTIFACT_KEY];
+  if (!phaseProgress || typeof phaseProgress !== 'object') {
+    return null;
+  }
+  const failedNoProgress =
+    phaseProgress.failedNoProgress &&
+    typeof phaseProgress.failedNoProgress === 'object' ?
+      phaseProgress.failedNoProgress :
+      null;
+  const reasonHistogram =
+    phaseResult?.artifacts?.reasonHistogram &&
+    typeof phaseResult.artifacts.reasonHistogram === 'object' ?
+      phaseResult.artifacts.reasonHistogram :
+      {};
+  const stalledReason = Object.keys(reasonHistogram).find((reason) =>
+    String(reason || '').includes(NO_PROGRESS_REASON_CODE),
+  ) || null;
+  if (!failedNoProgress && !stalledReason) {
+    return null;
+  }
+  return {
+    reasonCode: NO_PROGRESS_REASON_CODE,
+    phase: String(phaseResult?.phase || 'unknown'),
+    stalledReason,
+    lastProgressEvent: phaseProgress.lastProgressEvent || null,
+    lastMeaningfulChange: phaseProgress.lastMeaningfulChange || null,
+    heartbeatCount: Number(phaseProgress.heartbeatCount || ZERO),
+    warningCount: Number(phaseProgress.noProgressWarningCount || ZERO),
+    failedNoProgress,
+  };
+}
+
+function createAdmissionRuntimeOwnershipAudit() {
+  return {
+    selection: {byNodeId: {}},
+    localReplicaConfirmation: {byNodeId: {}},
+    readinessGate: {byNodeId: {}},
+  };
+}
+
+function recordAdmissionRuntimeOwnership(audit, stage, nodeId, source) {
+  if (!audit || typeof audit !== 'object') {
+    return;
+  }
+  if (typeof nodeId !== 'string' || nodeId.length === ZERO) {
+    return;
+  }
+  if (!Object.prototype.hasOwnProperty.call(audit, stage)) {
+    return;
+  }
+  if (!Object.values(DISCOVERY_ADMISSION_SOURCE).includes(source)) {
+    return;
+  }
+  audit[stage].byNodeId[nodeId] = source;
+}
+
+function buildAdmissionRuntimeOwnershipStageSummary(stage = {}) {
+  const byNodeId = stage?.byNodeId && typeof stage.byNodeId === 'object' ?
+    stage.byNodeId :
+    {};
+  const counts = {
+    [DISCOVERY_ADMISSION_SOURCE.RUNTIME]: ZERO,
+    [DISCOVERY_ADMISSION_SOURCE.LEGACY]: ZERO,
+    [DISCOVERY_ADMISSION_SOURCE.MISSING]: ZERO,
+  };
+  const legacyFallbackNodeIds = [];
+  const missingAdmissionNodeIds = [];
+  for (const [nodeId, source] of Object.entries(byNodeId)) {
+    if (!Object.prototype.hasOwnProperty.call(counts, source)) {
+      continue;
+    }
+    counts[source] += ONE;
+    if (source === DISCOVERY_ADMISSION_SOURCE.LEGACY) {
+      legacyFallbackNodeIds.push(nodeId);
+    } else if (source === DISCOVERY_ADMISSION_SOURCE.MISSING) {
+      missingAdmissionNodeIds.push(nodeId);
+    }
+  }
+  return {
+    byNodeId: {...byNodeId},
+    counts,
+    legacyFallbackNodeIds: legacyFallbackNodeIds.sort(),
+    missingAdmissionNodeIds: missingAdmissionNodeIds.sort(),
+  };
+}
+
+function buildAdmissionRuntimeOwnershipSummary(audit) {
+  return {
+    selection: buildAdmissionRuntimeOwnershipStageSummary(audit?.selection),
+    localReplicaConfirmation: buildAdmissionRuntimeOwnershipStageSummary(
+      audit?.localReplicaConfirmation,
+    ),
+    readinessGate: buildAdmissionRuntimeOwnershipStageSummary(
+      audit?.readinessGate,
+    ),
+  };
+}
+
 function incrementReasonHistogram(reasonHistogram, reason, phase) {
   if (!Object.prototype.hasOwnProperty.call(reasonHistogram, reason)) {
     reasonHistogram[reason] = {
@@ -5183,6 +5823,7 @@ function classifyReason(reason) {
     return REASON_CLASS_LOAD;
   }
   if (normalizedReason.includes('consistency') ||
+      normalizedReason.includes('fallback') ||
       normalizedReason.includes('verification')) {
     return REASON_CLASS_VERIFY;
   }
@@ -5250,6 +5891,7 @@ function buildVerificationArtifacts(state, options = {}) {
     internalSignalCounts: state.internalSignalCounts,
     internalSignalThresholdResult: state.internalSignalThresholdResult,
     cdcTelemetry: state.cdcTelemetry,
+    authoritativeFallbackResult: state.authoritativeFallbackResult,
   };
   if (options.includeLoadMetrics === true) {
     artifacts.loadMetrics = state.loadMetrics;
@@ -5598,6 +6240,7 @@ function isStrictBenchmarkMode(benchmarkConfig) {
     benchmarkConfig?.strictPreloadReadiness === true ||
     benchmarkConfig?.strictParity === true ||
     benchmarkConfig?.strictCdcTelemetrySchema === true ||
+    benchmarkConfig?.strictAuthoritativeFallback === true ||
     benchmarkConfig?.strictOverloadPolicy === true ||
     benchmarkConfig?.strictWritePressure === true;
 }
@@ -5764,6 +6407,7 @@ async function run(cluster) {
       discovery: null,
       invariants: null,
       parity: null,
+      authoritativeFallback: null,
       overload: null,
       writePressure: null,
     },
@@ -5800,6 +6444,12 @@ async function run(cluster) {
       status: DISCOVERY_GATE_STATUS_PASSED,
       violations: [],
     },
+    authoritativeFallbackResult: evaluateAuthoritativeFallbackPolicy(null, {
+      strictAuthoritativeFallback:
+        benchmarkConfig.strictAuthoritativeFallback === true,
+      authoritativeFallbackThresholds:
+        benchmarkConfig.authoritativeFallbackThresholds,
+    }),
     writePressureResult: evaluateWritePressure(null, {
       strictWritePressure: benchmarkConfig.strictWritePressure === true,
       writePressureThresholds: benchmarkConfig.writePressureThresholds,
@@ -5827,6 +6477,11 @@ async function run(cluster) {
         avgCatchupThroughputEventsPerSec: ZERO,
         catchupNodeCount: ZERO,
         steadyNodeCount: ZERO,
+        authoritativeFallback: {
+          totalCount: ZERO,
+          windowCount: ZERO,
+          steadyStateWindowCount: ZERO,
+        },
       },
       schema: {
         strict: benchmarkConfig.strictCdcTelemetrySchema === true,
@@ -5846,6 +6501,7 @@ async function run(cluster) {
       nodeClientPolicySnapshot,
       nodeClientChannelPolicyOverrides,
     }),
+    runtimeAdmissionOwnership: createAdmissionRuntimeOwnershipAudit(),
     postLoadDrain: createInitialPostLoadDrain([], []),
     consistencyVerdict: CONSISTENCY_VERDICT.CONSISTENT,
     consistencyResult: {attempts: ZERO},
@@ -5947,13 +6603,19 @@ async function run(cluster) {
   });
 
   const phaseHandlers = {
-    [SCENARIO_PHASE.PRE_FLIGHT]: async () => {
+    [SCENARIO_PHASE.PRE_FLIGHT]: async (phaseContext) => {
       enterQuietMode(
         state.quietMode,
         SCENARIO_PHASE.PRE_FLIGHT,
         QUIET_MODE_REASON_STRICT_BENCHMARK_MODE,
       );
+      emitPhaseProgress(phaseContext, 'waiting for cluster convergence', {
+        tableName: benchmarkTableName,
+      });
       await ensureConvergenceResolved();
+      emitPhaseMeaningfulChange(phaseContext, 'cluster convergence resolved', {
+        diagnosticsCoverage: state.diagnosticsCoverage?.status || null,
+      });
       const systemTableReadPath = resolveSystemTableReadPath(
         seedNode,
         nodes,
@@ -5973,6 +6635,11 @@ async function run(cluster) {
       state.requiredSchemaVersionMetadataNodeId =
         tableMetadata?.metadataNodeId || null;
       state.requiredSchemaTableId = tableMetadata?.tableId || null;
+      emitPhaseMeaningfulChange(phaseContext, 'benchmark table metadata resolved', {
+        tableName: benchmarkTableName,
+        tableId: state.requiredSchemaTableId,
+        requiredSchemaVersion: state.requiredSchemaVersion,
+      });
       if (state.requiredSchemaVersion) {
         recordConvergenceEvent({
           type: 'table_create_committed',
@@ -6008,6 +6675,10 @@ async function run(cluster) {
           timing: scenarioOverrides.timing,
         },
       );
+      emitPhaseMeaningfulChange(phaseContext, 'benchmark table ready on system-under-test', {
+        tableName: benchmarkTableName,
+        requiredSchemaVersion: state.requiredSchemaVersion,
+      });
       const createCommittedNode =
         systemTableReadPath.nodes.find(
           (node) =>
@@ -6038,6 +6709,7 @@ async function run(cluster) {
           tableId: state.requiredSchemaTableId,
           minReachableNodeCount: targetSutLoadNodeCount,
           strictMinReachable: benchmarkConfig.strictDiscovery === true,
+          admissionRuntimeOwnership: state.runtimeAdmissionOwnership,
         },
       );
       const sutLoadNodes = sutLoadResolution.nodes;
@@ -6052,6 +6724,10 @@ async function run(cluster) {
       const discoveryDiagnostics = formatSutLoadDiscoveryDiagnostics(
         state.sutLoadDiscovery,
       );
+      emitPhaseProgress(phaseContext, 'discovered benchmark load candidates', {
+        reachableNodeCount: sutLoadNodes.length,
+        requiredNodeCount: targetSutLoadNodeCount,
+      });
       if (benchmarkConfig.strictDiscovery === true) {
         const strictDiscoveryErrorDetail =
           DISCOVERY_GATE_REASON_INSUFFICIENT_REACHABLE_NODES +
@@ -6076,6 +6752,9 @@ async function run(cluster) {
         );
       }
       state.sutLoadNodes = sutLoadNodes;
+      emitPhaseMeaningfulChange(phaseContext, 'benchmark load candidates admitted', {
+        admittedNodeIds: sutLoadNodes.map((node) => node.id),
+      });
       return {
         status: PHASE_STATUS.OK,
         artifacts: {
@@ -6094,14 +6773,22 @@ async function run(cluster) {
           sutLoadDiscovery: state.sutLoadDiscovery,
           strictDiscoveryGate: state.strictDiscoveryGate,
           strictBenchmarkGate: state.strictBenchmarkGate,
+          runtimeAdmissionOwnership:
+            buildAdmissionRuntimeOwnershipSummary(
+              state.runtimeAdmissionOwnership,
+            ),
           quietMode: buildQuietModeDetails(state.quietMode, {
             defaultActivePhases: QUIET_MODE_ACTIVE_PHASES,
           }),
         },
       };
     },
-    [SCENARIO_PHASE.CONVERGE]: async () => {
+    [SCENARIO_PHASE.CONVERGE]: async (phaseContext) => {
+      emitPhaseProgress(phaseContext, 'confirming converged control plane');
       await ensureConvergenceResolved();
+      emitPhaseMeaningfulChange(phaseContext, 'convergence confirmation complete', {
+        diagnosticsCoverage: state.diagnosticsCoverage?.status || null,
+      });
       return {
         status: PHASE_STATUS.OK,
         artifacts: {
@@ -6110,8 +6797,11 @@ async function run(cluster) {
         },
       };
     },
-    [SCENARIO_PHASE.PRE_LOAD_GATE]: async () => {
+    [SCENARIO_PHASE.PRE_LOAD_GATE]: async (phaseContext) => {
       markQuietModePhase(state.quietMode, SCENARIO_PHASE.PRE_LOAD_GATE);
+      emitPhaseProgress(phaseContext, 'waiting for quiescent benchmark topology', {
+        candidateNodeCount: state.sutLoadNodes.length,
+      });
       const preLoadStableWindowMs = benchmarkConfig.strictPreloadReadiness === true ?
         benchmarkConfig.preloadRequiredStableMs :
         benchmarkConfig.quiescentStableWindowMs;
@@ -6134,11 +6824,27 @@ async function run(cluster) {
           requiredSchemaTableId: state.requiredSchemaTableId,
           onConvergenceEvent: recordConvergenceEvent,
           onBenchmarkMetadataSnapshot: recordBenchmarkMetadataSnapshot,
+          runtimeAdmissionOwnership: state.runtimeAdmissionOwnership,
           timing: scenarioOverrides.timing,
         });
       } catch (error) {
+        const gateResult = error?.gateResult || {};
+        const stalledReason = Object.keys(gateResult.reasonHistogram || {}).find(
+          (reason) => String(reason || '').includes(NO_PROGRESS_REASON_CODE),
+        ) || null;
+        if (stalledReason) {
+          emitPhaseNoProgressFailure(
+            phaseContext,
+            'pre-load gate aborted for no progress',
+            {
+              reason: stalledReason,
+              attempts: Number(gateResult.attempts || ZERO),
+              stableElapsedMs: Number(gateResult.stableElapsedMs || ZERO),
+              budgetMs: benchmarkConfig.quiescentNoProgressTimeoutMs,
+            },
+          );
+        }
         if (benchmarkConfig.strictPreloadReadiness === true) {
-          const gateResult = error?.gateResult || {};
           const nodeReasonsByNodeId = extractNodeProbeReasonsByNodeId(gateResult);
           const formattedNodeReasons = formatNodeProbeReasons(nodeReasonsByNodeId);
           const saturation = buildSaturationCounters({
@@ -6189,6 +6895,10 @@ async function run(cluster) {
       state.quiescenceResult = quiescenceResult;
       state.effectiveSutLoadNodes = quiescenceResult.readyLoadNodes;
       state.excludedSutLoadNodeIds = quiescenceResult.excludedLoadNodeIds;
+      emitPhaseMeaningfulChange(phaseContext, 'pre-load topology quiescent', {
+        includedNodeIds: state.effectiveSutLoadNodes.map((node) => node.id),
+        excludedNodeIds: state.excludedSutLoadNodeIds,
+      });
       if (strictBenchmarkMode === true) {
         const invariantSnapshotNodes =
           state.effectiveSutLoadNodes.length > ZERO ?
@@ -6272,8 +6982,12 @@ async function run(cluster) {
         },
       };
     },
-    [SCENARIO_PHASE.LOAD]: async () => {
+    [SCENARIO_PHASE.LOAD]: async (phaseContext) => {
       markQuietModePhase(state.quietMode, SCENARIO_PHASE.LOAD);
+      emitPhaseProgress(phaseContext, 'starting system-under-test load run', {
+        admittedNodeIds: state.effectiveSutLoadNodes.map((node) => node.id),
+        loadOpsPerSec: benchmarkConfig.loadOpsPerSec,
+      });
       const sutLoadResult = await runSutSharedLoad({
         nodeClient,
         seedNode,
@@ -6301,6 +7015,11 @@ async function run(cluster) {
       state.saturation = buildSaturationCounters({
         loadMetrics: state.loadMetrics,
         internalSignalMessages: state.runtimeInternalSignalMessages,
+      });
+      emitPhaseMeaningfulChange(phaseContext, 'system-under-test load completed', {
+        total: state.loadMetrics.total,
+        failed: state.loadMetrics.failed,
+        attemptErrors: Number(state.loadMetrics.attemptErrors || ZERO),
       });
       const loadPinning = state.rebalancingPressure?.load?.pinning || {};
       if (loadPinning.enabled === true &&
@@ -6373,6 +7092,9 @@ async function run(cluster) {
       state.baselineReplicaContainerIps = baseline.baselineReplicaContainerIps;
       state.baselineLoadNodeCount = baseline.baselineLoadNodeCount;
       state.baselinePoolMaxConnections = baseline.baselinePoolMaxConnections;
+      emitPhaseMeaningfulChange(phaseContext, 'baseline load comparison ready', {
+        baselineOpsPerSec: Number(state.baselineMetrics?.opsPerSec || ZERO),
+      });
       state.loadParity = buildLoadParity({
         benchmarkConfig,
         benchmarkTableName,
@@ -6426,7 +7148,10 @@ async function run(cluster) {
         },
       };
     },
-    [SCENARIO_PHASE.POST_LOAD_DRAIN]: async () => {
+    [SCENARIO_PHASE.POST_LOAD_DRAIN]: async (phaseContext) => {
+      emitPhaseProgress(phaseContext, 'waiting for post-load drain', {
+        admittedNodeIds: state.effectiveSutLoadNodes.map((node) => node.id),
+      });
       try {
         const postLoadDrainResult = await waitForSutLoadQuiescence({
           nodeClient,
@@ -6439,6 +7164,7 @@ async function run(cluster) {
           stableWindowMs: benchmarkConfig.postLoadDrainStableWindowMs,
           noProgressTimeoutMs:
             benchmarkConfig.postLoadDrainNoProgressTimeoutMs,
+          runtimeAdmissionOwnership: state.runtimeAdmissionOwnership,
           timing: scenarioOverrides.timing,
         });
         state.postLoadDrain = {
@@ -6460,6 +7186,10 @@ async function run(cluster) {
             state.postLoadDrain,
             benchmarkConfig,
           );
+        emitPhaseMeaningfulChange(phaseContext, 'post-load drain complete', {
+          includedNodeIds: state.postLoadDrain.includedNodeIds,
+          excludedNodeIds: state.postLoadDrain.excludedNodeIds,
+        });
         return {
           status: PHASE_STATUS.OK,
           artifacts: {
@@ -6469,6 +7199,21 @@ async function run(cluster) {
         };
       } catch (error) {
         const gateResult = error?.gateResult || {};
+        const stalledReason = Object.keys(gateResult.reasonHistogram || {}).find(
+          (reason) => String(reason || '').includes(NO_PROGRESS_REASON_CODE),
+        ) || null;
+        if (stalledReason) {
+          emitPhaseNoProgressFailure(
+            phaseContext,
+            'post-load drain aborted for no progress',
+            {
+              reason: stalledReason,
+              attempts: Number(gateResult.attempts || ZERO),
+              stableElapsedMs: Number(gateResult.stableElapsedMs || ZERO),
+              budgetMs: benchmarkConfig.postLoadDrainNoProgressTimeoutMs,
+            },
+          );
+        }
         state.postLoadDrain = {
           status: POST_LOAD_DRAIN_STATUS_FAILED,
           mode: gateResult.mode || POST_LOAD_DRAIN_MODE_FAILED,
@@ -6511,7 +7256,10 @@ async function run(cluster) {
         };
       }
     },
-    [SCENARIO_PHASE.VERIFY]: async () => {
+    [SCENARIO_PHASE.VERIFY]: async (phaseContext) => {
+      emitPhaseProgress(phaseContext, 'collecting verification snapshots', {
+        verificationCandidateCount: state.effectiveSutLoadNodes.length,
+      });
       const verificationNodes = selectVerificationNodes(
         state.effectiveSutLoadNodes,
         state.postLoadDrain,
@@ -6577,6 +7325,10 @@ async function run(cluster) {
         retryDelayMs: benchmarkConfig.consistencyAssertRetryDelayMs,
         timing: scenarioOverrides.timing,
       });
+      emitPhaseMeaningfulChange(phaseContext, 'verification consistency evaluated', {
+        verdict: state.consistencyVerdict,
+        snapshotCount: snapshots.length,
+      });
 
       state.assertionPolicyResult = evaluateAssertionPolicy({
         consistencyVerdict: state.consistencyVerdict,
@@ -6608,6 +7360,17 @@ async function run(cluster) {
         requiredNodeIds: state.verificationNodeIds,
         strict: benchmarkConfig.strictCdcTelemetrySchema === true,
       });
+      state.authoritativeFallbackResult = evaluateAuthoritativeFallbackPolicy(
+        state.cdcTelemetry,
+        {
+          strictAuthoritativeFallback:
+            benchmarkConfig.strictAuthoritativeFallback === true,
+          authoritativeFallbackThresholds:
+            benchmarkConfig.authoritativeFallbackThresholds,
+        },
+      );
+      state.strictBenchmarkGate.authoritativeFallback =
+        state.authoritativeFallbackResult;
       if (benchmarkConfig.strictCdcTelemetrySchema === true &&
           state.cdcTelemetry.schema.valid !== true) {
         return {
@@ -6619,6 +7382,23 @@ async function run(cluster) {
             CDC_TELEMETRY_SCHEMA_MISSING_REASON +
               ': ' +
               formatCdcTelemetrySchemaErrors(state.cdcTelemetry),
+          ],
+        };
+      }
+      if (benchmarkConfig.strictAuthoritativeFallback === true &&
+          state.authoritativeFallbackResult.status ===
+            DISCOVERY_GATE_STATUS_FAILED) {
+        return {
+          status: PHASE_STATUS.FAIL,
+          artifacts: buildVerificationArtifacts(state, {
+            includeLoadMetrics: true,
+          }),
+          errors: [
+            AUTHORITATIVE_FALLBACK_THRESHOLD_EXCEEDED_REASON +
+              ': ' +
+              formatAuthoritativeFallbackViolations(
+                state.authoritativeFallbackResult,
+              ),
           ],
         };
       }
@@ -6726,10 +7506,12 @@ async function run(cluster) {
       snapshotsByNodeId,
       adminQueryTraceByNodeId,
     });
+    const noProgressDiagnostics = buildNoProgressDiagnostics(failedPhase);
     error.diagnostics = {
       failure: failureArtifact,
       loadMetrics: state.loadMetrics,
       failedPhase: buildFailedPhaseDiagnostics(failedPhase),
+      noProgress: noProgressDiagnostics,
       invariantBreaches: summarizeInvariantBreaches(rootCauseBundle?.invariants),
       rootCauseBundle,
     };
@@ -6770,6 +7552,8 @@ async function run(cluster) {
         strictPreloadReadiness: benchmarkConfig.strictPreloadReadiness === true,
         strictCdcTelemetrySchema:
           benchmarkConfig.strictCdcTelemetrySchema === true,
+        strictAuthoritativeFallback:
+          benchmarkConfig.strictAuthoritativeFallback === true,
         strictOverloadPolicy:
           benchmarkConfig.strictOverloadPolicy === true,
         strictWritePressure:
@@ -6777,6 +7561,8 @@ async function run(cluster) {
         quietMode: buildQuietModeDetails(state.quietMode, {
           defaultActivePhases: QUIET_MODE_ACTIVE_PHASES,
         }),
+        authoritativeFallbackThresholds:
+          benchmarkConfig.authoritativeFallbackThresholds,
         overloadPolicy: benchmarkConfig.overloadPolicy,
         writePressureThresholds: benchmarkConfig.writePressureThresholds,
         forceLocalSystemTableReadShortcut:
@@ -6807,6 +7593,7 @@ async function run(cluster) {
         internalSignalCounts: state.internalSignalCounts,
         internalSignalThresholdResult: state.internalSignalThresholdResult,
         cdcTelemetry: state.cdcTelemetry,
+        authoritativeFallbackResult: state.authoritativeFallbackResult,
         overloadPolicyResult: state.overloadPolicyResult,
         writePressure: state.writePressureResult,
         saturation: state.saturation,
@@ -6907,6 +7694,9 @@ async function run(cluster) {
         assertionStatus: state.assertionPolicyResult.status,
       },
       diagnosticsCoverage: state.diagnosticsCoverage,
+      runtimeAdmissionOwnership: buildAdmissionRuntimeOwnershipSummary(
+        state.runtimeAdmissionOwnership,
+      ),
       phaseTimeline: mapPhaseTimeline(orchestrationResult.phases),
       phaseArtifacts: mapPhaseArtifacts(orchestrationResult.phases),
       phaseReasonSummary: buildPhaseReasonSummary(orchestrationResult.phases),

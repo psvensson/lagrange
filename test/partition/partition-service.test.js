@@ -429,6 +429,103 @@ test('PartitionService - generates CDC events on insert', async (t) => {
   await partition.shutdown();
 });
 
+test('PartitionService - skips no-subscriber CDC buffering when user table external CDC is disabled',
+  async (t) => {
+    const schema = {
+      columns: [
+        {name: 'event_id', type: 'TEXT', primaryKey: true},
+        {name: 'payload', type: 'INTEGER'},
+      ],
+    };
+    const warnings = [];
+    const partition = new PartitionService({
+      partitionId: 'test-partition-cdc-disabled',
+      tableId: 'tbl-benchmark',
+      tableName: 'benchmark_events',
+      replicaId: 'replica-1',
+      replicaIds: ['replica-1'],
+      schema,
+      dbPath: ':memory:',
+      systemTableCache: {
+        get: (tableName, key) => {
+          if (tableName === TABLES.TABLES && key === 'tbl-benchmark') {
+            return {
+              table_id: 'tbl-benchmark',
+              table_name: 'benchmark_events',
+              table_policies: JSON.stringify({externalCdcAllowed: false}),
+            };
+          }
+          return null;
+        },
+      },
+    });
+    partition.logger = {
+      info: () => {},
+      debug: () => {},
+      warn: (message) => warnings.push(message),
+      error: () => {},
+    };
+
+    await partition.initialize();
+    await partition.insertData('benchmark_events', {event_id: 'evt-1', payload: 1});
+
+    t.equal(
+      partition.cdcEventBuffer.size(),
+      0,
+      'user-table writes without opted-in CDC should not accumulate buffered events',
+    );
+    t.notOk(
+      warnings.includes('CDC event buffered while no subscribers registered'),
+      'disabled user-table CDC should not emit no-subscriber buffering warnings',
+    );
+
+    await partition.shutdown();
+  });
+
+test('PartitionService - skips no-subscriber CDC buffering for non-propagated control tables',
+  async (t) => {
+    const schema = {
+      columns: [
+        {name: 'operation_id', type: 'TEXT', primaryKey: true},
+        {name: 'sql_text', type: 'TEXT'},
+      ],
+    };
+    const warnings = [];
+    const partition = new PartitionService({
+      partitionId: 'sql-write-operations-p1',
+      tableId: TABLES.SQL_WRITE_OPERATIONS,
+      tableName: TABLES.SQL_WRITE_OPERATIONS,
+      replicaId: 'sql-write-operations-p1-r1',
+      replicaIds: ['sql-write-operations-p1-r1'],
+      schema,
+      dbPath: ':memory:',
+    });
+    partition.logger = {
+      info: () => {},
+      debug: () => {},
+      warn: (message) => warnings.push(message),
+      error: () => {},
+    };
+
+    await partition.initialize();
+    await partition.insertData(TABLES.SQL_WRITE_OPERATIONS, {
+      operation_id: 'op-1',
+      sql_text: 'INSERT INTO benchmark_events VALUES (...)',
+    });
+
+    t.equal(
+      partition.cdcEventBuffer.size(),
+      0,
+      'non-propagated control tables should not buffer CDC without subscribers',
+    );
+    t.notOk(
+      warnings.includes('CDC event buffered while no subscribers registered'),
+      'non-propagated control tables should not emit no-subscriber buffering warnings',
+    );
+
+    await partition.shutdown();
+  });
+
 test('PartitionService - generates CDC events on update', async (t) => {
   const schema = {
     columns: [
