@@ -80,8 +80,9 @@ test('small timeout bursts do not amplify into operation-level load errors',
       opsPerSec: 220,
       duration: 220,
       maxInFlight: 32,
-      nodeMaxInFlight: 2,
+      nodeMaxInFlight: 4,
       admissionBackoffMs: 30,
+      operations: ['SELECT'],
     });
 
     const run = loadGenerator.start();

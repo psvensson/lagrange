@@ -91,7 +91,8 @@ test('Property 9: Message Delivery Reliability - messages are persisted', async 
 
         // Property: If status is PENDING, message is persisted in Raft log
         // (We verify this by checking the log length increased)
-        const logLength = messageGroup.storage.getLogLength();
+        const logLength =
+          messageGroup.operationLedger.getLogLength();
         t.ok(logLength > 0, 'Raft log should contain entries');
 
         return true;
@@ -121,14 +122,16 @@ test('Property 9: Message Delivery Reliability - Raft log persistence', async (t
         {minLength: 1, maxLength: 5},
       ),
       async (messages) => {
-        const initialLogLength = messageGroup.storage.getLogLength();
+        const initialLogLength =
+          messageGroup.operationLedger.getLogLength();
 
         // Send all messages
         for (const msg of messages) {
           await messageGroup.sendMessage(msg.target, msg.payload);
         }
 
-        const finalLogLength = messageGroup.storage.getLogLength();
+        const finalLogLength =
+          messageGroup.operationLedger.getLogLength();
 
         // Property: Log length should increase by at least the number of messages
         // (may be more due to other operations)

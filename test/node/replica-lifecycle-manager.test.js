@@ -32,6 +32,10 @@ function createMockCDCService() {
       operations.push({type: 'insert', tableName, data});
       return {success: true, operation: 'INSERT', tableName, data};
     },
+    async upsertSystemTableRow(tableName, data) {
+      operations.push({type: 'upsert', tableName, data});
+      return {success: true, operation: 'UPSERT', tableName, data};
+    },
     async updateSystemTableRow(tableName, whereClause, data) {
       operations.push({type: 'update', tableName, whereClause, data});
       return {success: true, operation: 'UPDATE', tableName, whereClause, data};

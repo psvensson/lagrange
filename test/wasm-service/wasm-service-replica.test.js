@@ -224,8 +224,9 @@ describe('WasmServiceReplica', () => {
     it('should call raft.command with the entry', async () => {
       const replica = new WasmServiceReplica(defaultOpts());
       let receivedEntry = null;
-      replica.raft = {
-        command(entry, cb) {
+      replica.raft = {};
+      replica.raftProvider = {
+        propose(_raft, entry, cb) {
           receivedEntry = entry;
           cb(null);
         },
@@ -239,8 +240,9 @@ describe('WasmServiceReplica', () => {
     it('should reject when raft.command returns error',
       async () => {
         const replica = new WasmServiceReplica(defaultOpts());
-        replica.raft = {
-          command(_entry, cb) {
+        replica.raft = {};
+        replica.raftProvider = {
+          propose(_raft, _entry, cb) {
             cb(new Error('raft error'));
           },
         };

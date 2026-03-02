@@ -118,6 +118,7 @@ describe('postgres-baseline-comparison scenario', () => {
           return {rows: []};
         },
       };
+      let laggingTableProbeCount = 0;
       const laggingNode = {
         id: 'joiner-2',
         role: 'joiner',
@@ -127,9 +128,16 @@ describe('postgres-baseline-comparison scenario', () => {
             return {rows: [{value: 1}]};
           }
           if (statement === benchmarkTableProbeSql) {
-            throw new Error('table probe timed out');
+            laggingTableProbeCount += 1;
+            if (laggingTableProbeCount > 1) {
+              throw new Error('table probe timed out');
+            }
+            return {rows: [{count: 0}]};
           }
           return {rows: []};
+        },
+        queryWithTimeout: async function(sql, params = [], _options = {}) {
+          return this.query(String(sql), params);
         },
       };
 

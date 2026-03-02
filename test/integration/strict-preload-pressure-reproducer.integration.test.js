@@ -20,7 +20,6 @@ const TABLE_NAME = 'benchmark_events';
 const REQUIRED_SCHEMA_VERSION = '1740589945123:7:seed-1';
 const NODE_IDS = ['seed-1', 'join-2', 'join-3', 'join-4'];
 const SERVICE_DISCOVERY_SQL_PREFIX = 'SELECT * FROM service_discovery_local(';
-const DISCOVERY_WARMUP_CALLS = NODE_IDS.length;
 
 function createProviderStub() {
   return {
@@ -134,7 +133,7 @@ function createLoadGeneratorFactory() {
 
 function createPressureCluster(options = {}) {
   const quietModeEnabled = options.quietModeEnabled === true;
-  let serviceDiscoveryCallCount = ZERO;
+  let preflightAdmitted = false;
 
   function createNodeHandle(nodeId, role) {
     return {
@@ -146,6 +145,9 @@ function createPressureCluster(options = {}) {
           return {rows: [{value: 1}]};
         }
         if (statement === 'SELECT count(*) FROM benchmark_events WHERE 1 = 0') {
+          if (!preflightAdmitted) {
+            preflightAdmitted = true;
+          }
           return {rows: [{count: 0}]};
         }
         if (statement.includes('FROM replica_operations') &&
@@ -178,8 +180,7 @@ function createPressureCluster(options = {}) {
         }
         if (statement === NODE_CLIENT_SERVICE_DISCOVERY_SQL ||
             statement.startsWith(SERVICE_DISCOVERY_SQL_PREFIX)) {
-          serviceDiscoveryCallCount += 1;
-          if (serviceDiscoveryCallCount <= DISCOVERY_WARMUP_CALLS) {
+          if (!preflightAdmitted) {
             return {
               rows: [buildServiceDiscoverySnapshot(this.id)],
             };

@@ -117,6 +117,9 @@ test('LatencyTopologySetup usage is constrained to bootstrap/joining owners',
     const allowedFiles = new Set([
       'bootstrap/bootstrap-service.js',
       'bootstrap/node-joining-service.js',
+      'bootstrap/join-cleanup-handler.js',
+      'bootstrap/phases/seed-cache-hydration-phase.js',
+      'bootstrap/phases/seed-cleanup-handler.js',
     ]);
     const violations = calls.filter((match) => !allowedFiles.has(match.file));
 

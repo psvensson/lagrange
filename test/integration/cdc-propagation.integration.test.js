@@ -149,15 +149,18 @@ test('CDC propagation integration', {timeout: 30000}, async (t) => {
       // =====================================================================
       // PHASE 5: Write data through SQL (goes through Raft consensus)
       // =====================================================================
-      const testCpuUsage = 42;
+      // Use storage_budget_bytes because the heartbeat service does not
+      // overwrite it, avoiding a race between the test assertion and the
+      // periodic heartbeat that rewrites cpu/memory/disk usage columns.
+      const testBudgetBytes = 123456;
       const cdcConfirmationTracker = createCdcConfirmationTracker(systemTableCache);
       const confirmation = cdcConfirmationTracker.awaitConfirmation(
         TABLES.NODES,
         seedNodeId,
       );
       const updateResult = await sqlQueryEngine.executeQuery(
-        'UPDATE nodes SET cpu_usage_percent = ? WHERE node_id = ?',
-        [testCpuUsage, seedNodeId],
+        'UPDATE nodes SET storage_budget_bytes = ? WHERE node_id = ?',
+        [testBudgetBytes, seedNodeId],
       );
 
       t.equal(updateResult.success, true, 'SQL UPDATE should succeed through Raft');
@@ -172,9 +175,9 @@ test('CDC propagation integration', {timeout: 30000}, async (t) => {
 
       t.ok(updatedNode, 'updated node should appear in cache after CDC propagation');
       t.equal(
-        updatedNode[COLUMN.CPU_USAGE_PERCENT],
-        testCpuUsage,
-        'cached cpu_usage_percent should match updated value',
+        updatedNode[COLUMN.STORAGE_BUDGET_BYTES],
+        testBudgetBytes,
+        'cached storage_budget_bytes should match updated value',
       );
 
       t.comment('CDC propagation verified - UPDATE reflected in cache');
@@ -241,9 +244,10 @@ test('CDC propagation integration', {timeout: 30000}, async (t) => {
       });
 
       // =====================================================================
-      // PHASE 3: Update the seed node's memory usage through SQL
+      // PHASE 3: Update the seed node through SQL using a column the
+      // heartbeat service does not overwrite.
       // =====================================================================
-      const testMemoryUsage = 55.5;
+      const testBudgetSource = 'test-update-source';
 
       const cdcConfirmationTracker = createCdcConfirmationTracker(systemTableCache);
       const confirmation = cdcConfirmationTracker.awaitConfirmation(
@@ -252,8 +256,8 @@ test('CDC propagation integration', {timeout: 30000}, async (t) => {
       );
 
       const updateResult = await sqlQueryEngine.executeQuery(
-        'UPDATE nodes SET memory_usage_percent = ? WHERE node_id = ?',
-        [testMemoryUsage, seedNodeId],
+        'UPDATE nodes SET storage_budget_source = ? WHERE node_id = ?',
+        [testBudgetSource, seedNodeId],
       );
 
       t.equal(updateResult.success, true, 'UPDATE should succeed');
@@ -268,9 +272,9 @@ test('CDC propagation integration', {timeout: 30000}, async (t) => {
 
       t.ok(updatedNode, 'updated node should appear in cache after CDC propagation');
       t.equal(
-        updatedNode[COLUMN.MEMORY_USAGE_PERCENT],
-        testMemoryUsage,
-        'cached memory_usage_percent should match',
+        updatedNode[COLUMN.STORAGE_BUDGET_SOURCE],
+        testBudgetSource,
+        'cached storage_budget_source should match',
       );
 
       t.comment('CDC propagation verified - UPDATE reflected in cache');
@@ -337,22 +341,26 @@ test('CDC propagation integration', {timeout: 30000}, async (t) => {
       });
 
       // =====================================================================
-      // PHASE 3: Perform multiple sequential writes
+      // PHASE 3: Perform multiple sequential writes using a column the
+      // heartbeat service does not overwrite.
       // =====================================================================
-      const cpuValues = [10, 25, 50, 75, 100];
+      const budgetValues = [1000, 2500, 5000, 7500, 10000];
 
       const cdcConfirmationTracker = createCdcConfirmationTracker(systemTableCache);
 
-      for (const cpuValue of cpuValues) {
+      for (const budgetValue of budgetValues) {
         const confirmation = cdcConfirmationTracker.awaitConfirmation(
           TABLES.NODES,
           seedNodeId,
         );
         const updateResult = await sqlQueryEngine.executeQuery(
-          'UPDATE nodes SET cpu_usage_percent = ? WHERE node_id = ?',
-          [cpuValue, seedNodeId],
+          'UPDATE nodes SET storage_budget_bytes = ? WHERE node_id = ?',
+          [budgetValue, seedNodeId],
         );
-        t.equal(updateResult.success, true, `UPDATE to ${cpuValue} should succeed`);
+        t.equal(
+          updateResult.success, true,
+          `UPDATE to ${budgetValue} should succeed`,
+        );
         await confirmation;
       }
 
@@ -361,14 +369,14 @@ test('CDC propagation integration', {timeout: 30000}, async (t) => {
       // =====================================================================
       // PHASE 4: Verify final value propagated to cache
       // =====================================================================
-      const finalCpuValue = cpuValues[cpuValues.length - 1];
+      const finalBudgetValue = budgetValues[budgetValues.length - 1];
       const finalNode = systemTableCache.get(TABLES.NODES, seedNodeId);
 
       t.ok(finalNode, 'final update should appear in cache');
       t.equal(
-        finalNode[COLUMN.CPU_USAGE_PERCENT],
-        finalCpuValue,
-        'cached cpu_usage_percent should match final value',
+        finalNode[COLUMN.STORAGE_BUDGET_BYTES],
+        finalBudgetValue,
+        'cached storage_budget_bytes should match final value',
       );
 
       t.comment('CDC propagation verified - multiple writes reflected in cache');
@@ -431,7 +439,7 @@ test('CDC propagation integration', {timeout: 30000}, async (t) => {
       // =====================================================================
       const systemTableCache = NodeService.getInstance().getSystemTableCache();
 
-      const testCpuUsage = 77;
+      const testBudgetBytes = 77777;
       const isTargetNodesUpdateEvent = (e) => (
         e.tableName === TABLES.NODES &&
         (e.operation === 'UPDATE' || e.operation === 'UPSERT')
@@ -454,7 +462,8 @@ test('CDC propagation integration', {timeout: 30000}, async (t) => {
       cdcEventsReceived.length = 0;
 
       // =====================================================================
-      // PHASE 3: Write data through SQL
+      // PHASE 3: Write data through SQL using a column the heartbeat
+      // service does not overwrite.
       // =====================================================================
       const cdcConfirmationTracker = createCdcConfirmationTracker(systemTableCache);
       const confirmation = cdcConfirmationTracker.awaitConfirmation(
@@ -462,8 +471,8 @@ test('CDC propagation integration', {timeout: 30000}, async (t) => {
         seedNodeId,
       );
       const updateResult = await sqlQueryEngine.executeQuery(
-        'UPDATE nodes SET cpu_usage_percent = ? WHERE node_id = ?',
-        [testCpuUsage, seedNodeId],
+        'UPDATE nodes SET storage_budget_bytes = ? WHERE node_id = ?',
+        [testBudgetBytes, seedNodeId],
       );
 
       t.equal(updateResult.success, true, 'SQL UPDATE should succeed');
@@ -477,14 +486,16 @@ test('CDC propagation integration', {timeout: 30000}, async (t) => {
       // =====================================================================
       // PHASE 4: Wait for CDC event to be received by listener
       // =====================================================================
-      const nodesEvent = cdcEventsReceived.find((e) => isTargetNodesUpdateEvent(e));
+      const nodesEvent = cdcEventsReceived.find(
+        (e) => isTargetNodesUpdateEvent(e),
+      );
       t.ok(nodesEvent, 'should observe cache listener event for update');
 
       const updatedNode = systemTableCache.get(TABLES.NODES, seedNodeId);
       t.equal(
-        Number(updatedNode?.[COLUMN.CPU_USAGE_PERCENT]),
-        testCpuUsage,
-        'cache should reflect updated cpu_usage_percent',
+        Number(updatedNode?.[COLUMN.STORAGE_BUDGET_BYTES]),
+        testBudgetBytes,
+        'cache should reflect updated storage_budget_bytes',
       );
 
       // =====================================================================
