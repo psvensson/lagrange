@@ -21,7 +21,7 @@ import {
 import {SERVICE_PROFILE} from '../../src/constants/service.js';
 import {
   SERVICE_DEFINITIONS_SCHEMA,
-  ColumnType,
+  COLUMN_TYPE,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 
 
@@ -107,19 +107,19 @@ describe('service_definitions schema runtime columns', () => {
   it('should include runtime_kind column as TEXT', () => {
     const col = colByName(RUNTIME_FIELD.RUNTIME_KIND);
     assert.ok(col, 'runtime_kind column must exist');
-    assert.equal(col.type, ColumnType.TEXT);
+    assert.equal(col.type, COLUMN_TYPE.TEXT);
   });
 
   it('should include runtime_ref column as TEXT', () => {
     const col = colByName(RUNTIME_FIELD.RUNTIME_REF);
     assert.ok(col, 'runtime_ref column must exist');
-    assert.equal(col.type, ColumnType.TEXT);
+    assert.equal(col.type, COLUMN_TYPE.TEXT);
   });
 
   it('should include runtime_config column as TEXT', () => {
     const col = colByName(RUNTIME_FIELD.RUNTIME_CONFIG);
     assert.ok(col, 'runtime_config column must exist');
-    assert.equal(col.type, ColumnType.TEXT);
+    assert.equal(col.type, COLUMN_TYPE.TEXT);
   });
 
   it('should allow null for runtime_kind (backward compat)', () => {

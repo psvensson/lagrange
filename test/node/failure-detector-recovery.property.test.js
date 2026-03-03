@@ -14,7 +14,7 @@ import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {FailureDetector} from '../../src/node/failure-detector.js';
 import {NODE_STATE} from '../../src/constants/index.js';
-import {SystemTableName} from
+import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {
   FAILURE_DETECTOR_DEFAULT,
@@ -127,7 +127,7 @@ test('Property 8: Failure detector recovery detection',
 
               // Filter CDC writes to the nodes table
               const nodeWrites = mockCDC.operations.filter(
-                (op) => op.tableName === SystemTableName.NODES,
+                (op) => op.tableName === SYSTEM_TABLE_NAME.NODES,
               );
 
               // Exactly one CDC write per recovering node
@@ -259,7 +259,7 @@ test('Property 8: Failure detector recovery detection',
 
               // Only recovering nodes should have CDC writes
               const nodeWrites = mockCDC.operations.filter(
-                (op) => op.tableName === SystemTableName.NODES,
+                (op) => op.tableName === SYSTEM_TABLE_NAME.NODES,
               );
 
               if (nodeWrites.length !== recoveringCount) {

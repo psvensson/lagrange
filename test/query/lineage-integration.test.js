@@ -15,7 +15,7 @@ import {
 } from '../../src/query/lineage-tracker.js';
 import {
   CallbackStageExecutor,
-} from '../../src/query/callback-stage-executor.js';
+} from '../../src/query/callback/callback-stage-executor.js';
 import {
   ShuffleBuffer,
 } from '../../src/query/emit-primitive.js';
@@ -31,7 +31,12 @@ import {
 } from '../../src/query/guardrail-constants.js';
 import {
   LOOKUP_ACCESS_PATH,
-} from '../../src/query/distributed-context-constants.js';
+  PRIMITIVE_TYPE,
+} from '../../src/query/distributed/distributed-context-constants.js';
+import {
+  STAGE_ARTIFACT_TYPE,
+  STAGE_BATCH_ARTIFACT_TYPE,
+} from '../../src/query/callback/callback-stage-constants.js';
 
 // --- CallbackStageExecutor lineage ---
 
@@ -49,7 +54,7 @@ test('stage executor attaches lineage to stage result',
       {partitionId: 'p1', rows: [{v: 1}], rowCount: 1},
     ]);
 
-    const expected = ['q-stage-1', '2', 'stage', '0']
+    const expected = ['q-stage-1', '2', STAGE_ARTIFACT_TYPE, '0']
       .join(SEP);
     t.equal(result[GF.LINEAGE_ID], expected);
     t.end();
@@ -74,11 +79,11 @@ test('stage executor attaches lineage to partition results',
     const pr1 = result.partitionResults[1];
     t.equal(
       pr0[GF.LINEAGE_ID],
-      ['q-stage-2', '0', 'stage_batch', '0'].join(SEP),
+      ['q-stage-2', '0', STAGE_BATCH_ARTIFACT_TYPE, '0'].join(SEP),
     );
     t.equal(
       pr1[GF.LINEAGE_ID],
-      ['q-stage-2', '0', 'stage_batch', '1'].join(SEP),
+      ['q-stage-2', '0', STAGE_BATCH_ARTIFACT_TYPE, '1'].join(SEP),
     );
     t.end();
   });
@@ -102,7 +107,7 @@ test('stage executor attaches lineage to failed partitions',
     const pr = result.partitionResults[0];
     t.equal(
       pr[GF.LINEAGE_ID],
-      ['q-stage-3', '1', 'stage_batch', '0'].join(SEP),
+      ['q-stage-3', '1', STAGE_BATCH_ARTIFACT_TYPE, '0'].join(SEP),
     );
     t.end();
   });
@@ -142,11 +147,11 @@ test('emit attaches lineage to records', async (t) => {
   const records = buf.drain();
   t.equal(
     records[0][GF.LINEAGE_ID],
-    ['q-emit-1', '3', 'emit', '0'].join(SEP),
+    ['q-emit-1', '3', PRIMITIVE_TYPE.EMIT, '0'].join(SEP),
   );
   t.equal(
     records[1][GF.LINEAGE_ID],
-    ['q-emit-1', '3', 'emit', '1'].join(SEP),
+    ['q-emit-1', '3', PRIMITIVE_TYPE.EMIT, '1'].join(SEP),
   );
   t.end();
 });
@@ -182,7 +187,7 @@ test('lookup attaches lineage to result', async (t) => {
 
   t.equal(
     result[GF.LINEAGE_ID],
-    ['q-lookup-1', '5', 'lookup', '2'].join(SEP),
+    ['q-lookup-1', '5', PRIMITIVE_TYPE.LOOKUP, '2'].join(SEP),
   );
   t.end();
 });
@@ -220,11 +225,11 @@ test('broadcast attaches lineage to descriptor',
 
     t.equal(
       view1[GF.LINEAGE_ID],
-      ['q-bcast-1', '4', 'broadcast', '0'].join(SEP),
+      ['q-bcast-1', '4', PRIMITIVE_TYPE.BROADCAST, '0'].join(SEP),
     );
     t.equal(
       view2[GF.LINEAGE_ID],
-      ['q-bcast-1', '4', 'broadcast', '1'].join(SEP),
+      ['q-bcast-1', '4', PRIMITIVE_TYPE.BROADCAST, '1'].join(SEP),
     );
     t.end();
   });

@@ -15,7 +15,7 @@ import {
   WasmComponentCallbackDriver,
   OciContainerCallbackDriver,
   createCallbackDriverRegistry,
-} from '../../src/query/callback-runtime-driver-registry.js';
+} from '../../src/query/callback/callback-runtime-driver-registry.js';
 import {
   ADAPTER_ERROR_MSG,
   CALLBACK_RUNTIME_KIND,

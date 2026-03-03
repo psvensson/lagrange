@@ -108,6 +108,8 @@ const JOINING_LOG_MSG = Object.freeze({
   MESSAGE_GROUP_REPLICA_CREATED: 'Message group replica created',
   MESSAGE_GROUP_ELECTIONS_START: 'Starting elections for message group replicas',
   SELF_HOSTED_CREATED: 'Self-hosted message group created',
+  SELF_HOSTED_METADATA_REGISTERED:
+    'Registered CREATE_SELF_HOSTED metadata',
   JOIN_ASSIGNMENT_RECEIVED: '[JOIN-DEBUG] phaseJoinExistingMessageGroup - received assignment',
   JOIN_CREATING_WITH_PEERS: '[JOIN-DEBUG] Creating MessageGroupService with peers',
   JOIN_MESSAGE_RECEIVED: '[JOIN-DEBUG] Message received at joining node',
@@ -217,6 +219,12 @@ const JOINING_ERROR_MSG = Object.freeze({
     `Seed bootstrap not ready${phase ? ` (phase: ${phase})` : ''}`,
   registerServiceTimeout: (serviceId, timeoutMs) =>
     `Register-service timed out for ${serviceId} after ${timeoutMs}ms`,
+  SELF_HOSTED_MISSING_GROUP_ID:
+    'CREATE_SELF_HOSTED assignment missing groupId',
+  selfHostedNoLocalReplicas: (groupId) =>
+    `No local replicas found for CREATE_SELF_HOSTED group ${groupId}`,
+  selfHostedMetadataUpsertFailed: (groupId) =>
+    `Failed to upsert message group metadata for ${groupId}`,
   READY_SIGNAL_NOT_ACK: 'Control plane did not acknowledge ready signal',
   controlPlaneMessageFailed: (message) => `Control plane message failed: ${message}`,
   controlPlaneCdcSubscribeFailed: (tableName, message) =>
@@ -253,8 +261,15 @@ const JOINING_HTTP = Object.freeze({
   CONNECTION_CLOSE: 'close',
 });
 
+const JOIN_REPLICA_DEFAULT = Object.freeze({
+  DEFER_ELECTION: false,
+  LOG_ENVELOPE: true,
+  LOG_REGISTRATION: true,
+});
+
 export {
   JOIN_BACKFILL_QUERY,
+  JOIN_REPLICA_DEFAULT,
   JOINING_CLEANUP_RESULT,
   JOINING_CLEANUP_STEP,
   JOINING_DEFAULT,

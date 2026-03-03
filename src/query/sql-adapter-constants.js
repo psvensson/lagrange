@@ -180,6 +180,11 @@ const ADAPTER_LOG_MSG = Object.freeze({
     'Runtime driver resolved for callback invocation',
   REGISTRY_OCI_REJECTED:
     'oci_container callback rejected by feature gate',
+  LOGGING_INIT_FAILED: 'initLogger failed',
+  CALLBACK_HOST_INIT_LOGGER_FAILED:
+    'Callback_Execution_Host initLogger failed',
+  CALLBACK_HOST_METRICS_FAILED:
+    'Callback_Execution_Host metrics logging failed',
 });
 
 /**

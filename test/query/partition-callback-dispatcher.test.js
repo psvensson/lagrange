@@ -10,7 +10,7 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {PartitionCallbackDispatcher} from
-  '../../src/query/partition-callback-dispatcher.js';
+  '../../src/query/callback/partition-callback-dispatcher.js';
 import {ADAPTER_ERROR_MSG} from
   '../../src/query/sql-adapter-constants.js';
 

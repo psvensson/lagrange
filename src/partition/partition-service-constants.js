@@ -20,6 +20,7 @@ const PARTITION_SERVICE_DEFAULT = Object.freeze({
   // This prevents new replicas from disrupting existing leadership
   LEARNER_PROMOTION_DELAY_MS: TIME_MS.SECOND * 30, // Min time before promotion (30s for stability)
   LEARNER_CATCH_UP_CHECK_INTERVAL_MS: TIME_MS.SECOND, // How often to check catch-up
+  MAX_TRACKED_APPLIED_ENTRIES: NUM.THOUSAND * NUM.FIVE,
 });
 
 const PARTITION_SERVICE_SQL = Object.freeze({
@@ -182,6 +183,7 @@ const PARTITION_SERVICE_CDC = Object.freeze({
   STREAM_MODE_CATCHUP: 'catchup',
   STREAM_MODE_STEADY: 'steady',
   SUBSCRIBER_ID_PREFIX: 'cdc-subscriber',
+  REPLAY_REASON_BUFFERED_REMAINING: 'buffered_events_remaining',
 });
 
 const PARTITION_SERVICE_INIT_STAGE = Object.freeze({

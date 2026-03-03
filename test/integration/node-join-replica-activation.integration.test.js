@@ -12,7 +12,7 @@ import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
-import {SystemTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
@@ -104,7 +104,7 @@ async function waitForServiceLeaderRow(
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     const rows = systemTableCache.filter?.(
-      SystemTableName.SERVICES,
+      SYSTEM_TABLE_NAME.SERVICES,
       (row) =>
         row.partition_id === partitionId &&
         row.service_type === 'partition' &&
@@ -314,18 +314,18 @@ test('Node join replica activation', {timeout: 180000}, async (t) => {
       // CLEANUP
       // =========================================================================
       if (joiningService) {
-        await joiningService.cleanup().catch(() => {});
+        await joiningService.cleanup().catch((err) => t.comment(String(err)));
       }
       if (seedApi) {
-        await seedApi.shutdown().catch(() => {});
+        await seedApi.shutdown().catch((err) => t.comment(String(err)));
       }
       if (bootstrapService && bootstrapService.shutdown) {
-        await bootstrapService.shutdown().catch(() => {});
+        await bootstrapService.shutdown().catch((err) => t.comment(String(err)));
       }
 
       // Shutdown message routers
       if (bootstrapResult?.messageRouter) {
-        await bootstrapResult.messageRouter.shutdown().catch(() => {});
+        await bootstrapResult.messageRouter.shutdown().catch((err) => t.comment(String(err)));
       }
     }
   });
@@ -426,16 +426,16 @@ test('Node join replica activation', {timeout: 180000}, async (t) => {
       );
     } finally {
       if (joiningService) {
-        await joiningService.cleanup().catch(() => {});
+        await joiningService.cleanup().catch((err) => t.comment(String(err)));
       }
       if (seedApi) {
-        await seedApi.shutdown().catch(() => {});
+        await seedApi.shutdown().catch((err) => t.comment(String(err)));
       }
       if (bootstrapService && bootstrapService.shutdown) {
-        await bootstrapService.shutdown().catch(() => {});
+        await bootstrapService.shutdown().catch((err) => t.comment(String(err)));
       }
       if (bootstrapResult?.messageRouter) {
-        await bootstrapResult.messageRouter.shutdown().catch(() => {});
+        await bootstrapResult.messageRouter.shutdown().catch((err) => t.comment(String(err)));
       }
     }
   });
@@ -471,7 +471,7 @@ test('Node join replica activation', {timeout: 180000}, async (t) => {
         'system cache should support filter');
 
       const servicesReady = await waitFor(() => {
-        const rows = systemTableCache.filter(SystemTableName.SERVICES, (service) =>
+        const rows = systemTableCache.filter(SYSTEM_TABLE_NAME.SERVICES, (service) =>
           service.partition_id === 'services-p1' &&
           service.service_type === 'partition' &&
           service.status !== 'removed' &&
@@ -481,7 +481,7 @@ test('Node join replica activation', {timeout: 180000}, async (t) => {
       }, 8000);
       t.ok(servicesReady, 'services partition should expose replicas in cache');
 
-      const services = systemTableCache.filter(SystemTableName.SERVICES, (service) =>
+      const services = systemTableCache.filter(SYSTEM_TABLE_NAME.SERVICES, (service) =>
         service.partition_id === 'services-p1' &&
         service.service_type === 'partition' &&
         service.status !== 'removed' &&
@@ -503,7 +503,7 @@ test('Node join replica activation', {timeout: 180000}, async (t) => {
         getAll: (...args) => systemTableCache.getAll?.(...args),
         filter: (tableName, predicate) => {
           const rows = systemTableCache.filter(tableName, predicate) || [];
-          if (tableName !== SystemTableName.SERVICES) {
+          if (tableName !== SYSTEM_TABLE_NAME.SERVICES) {
             return rows;
           }
 
@@ -549,10 +549,10 @@ test('Node join replica activation', {timeout: 180000}, async (t) => {
       );
     } finally {
       if (bootstrapService && bootstrapService.shutdown) {
-        await bootstrapService.shutdown().catch(() => {});
+        await bootstrapService.shutdown().catch((err) => t.comment(String(err)));
       }
       if (bootstrapResult?.messageRouter) {
-        await bootstrapResult.messageRouter.shutdown().catch(() => {});
+        await bootstrapResult.messageRouter.shutdown().catch((err) => t.comment(String(err)));
       }
     }
   });
@@ -588,7 +588,7 @@ test('Node join replica activation', {timeout: 180000}, async (t) => {
       const operationId = 'op-550e8400-e29b-41d4-a716-446655440013';
 
       const insertResult = await cdcIntegrationService.insertSystemTableRow(
-        SystemTableName.REPLICA_OPERATIONS,
+        SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
         {
           operation_id: operationId,
           type: OperationType.ADD,
@@ -627,10 +627,10 @@ test('Node join replica activation', {timeout: 180000}, async (t) => {
       );
     } finally {
       if (bootstrapService && bootstrapService.shutdown) {
-        await bootstrapService.shutdown().catch(() => {});
+        await bootstrapService.shutdown().catch((err) => t.comment(String(err)));
       }
       if (bootstrapResult?.messageRouter) {
-        await bootstrapResult.messageRouter.shutdown().catch(() => {});
+        await bootstrapResult.messageRouter.shutdown().catch((err) => t.comment(String(err)));
       }
     }
   });
@@ -791,19 +791,19 @@ test('Node join replica activation', {timeout: 180000}, async (t) => {
       // CLEANUP
       // =========================================================================
       if (joiningService3) {
-        await joiningService3.cleanup().catch(() => {});
+        await joiningService3.cleanup().catch((err) => t.comment(String(err)));
       }
       if (joiningService2) {
-        await joiningService2.cleanup().catch(() => {});
+        await joiningService2.cleanup().catch((err) => t.comment(String(err)));
       }
       if (seedApi) {
-        await seedApi.shutdown().catch(() => {});
+        await seedApi.shutdown().catch((err) => t.comment(String(err)));
       }
       if (bootstrapService && bootstrapService.shutdown) {
-        await bootstrapService.shutdown().catch(() => {});
+        await bootstrapService.shutdown().catch((err) => t.comment(String(err)));
       }
       if (bootstrapResult?.messageRouter) {
-        await bootstrapResult.messageRouter.shutdown().catch(() => {});
+        await bootstrapResult.messageRouter.shutdown().catch((err) => t.comment(String(err)));
       }
     }
   });

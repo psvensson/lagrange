@@ -8,13 +8,12 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
-import {ParallelQueryCoordinator} from '../../src/query/parallel-query-coordinator.js';
+import {ParallelQueryCoordinator} from '../../src/query/distributed/parallel-query-coordinator.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 
-// Initialize configuration
-const config = ConfigurationManager.getInstance();
-if (!config.isInitialized()) {
-  config.initialize();
+// Initialize configuration (required for ParallelQueryCoordinator)
+if (!ConfigurationManager.getInstance().isInitialized()) {
+  ConfigurationManager.getInstance().initialize();
 }
 
 /**

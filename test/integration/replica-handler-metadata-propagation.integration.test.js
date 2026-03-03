@@ -13,7 +13,7 @@ import {ReplicaHandler} from '../../src/node/replica-handler.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
-import {SystemTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {ReplicaOperationResponseStatus} from
   '../../src/rebalancer/replica-operation-constants.js';
 import {
@@ -47,7 +47,7 @@ function createMockCDCService(cache) {
 
 function seedReplicaOperation(cache, operationId, partitionId, replicaId, targetNodeId) {
   const now = Date.now();
-  cache.applySystemTableChange(SystemTableName.REPLICA_OPERATIONS, 'INSERT', {
+  cache.applySystemTableChange(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS, 'INSERT', {
     operation_id: operationId,
     type: 'ADD',
     partition_id: partitionId,
@@ -63,14 +63,14 @@ function seedReplicaOperation(cache, operationId, partitionId, replicaId, target
 }
 
 function seedTablePartitionMetadata(cache, tableId, tableName, partitionId) {
-  cache.applySystemTableChange(SystemTableName.TABLES, 'INSERT', {
+  cache.applySystemTableChange(SYSTEM_TABLE_NAME.TABLES, 'INSERT', {
     table_id: tableId,
     table_name: tableName,
     schema_definition: JSON.stringify({
       columns: [{name: 'id', type: 'TEXT', primaryKey: true}],
     }),
   });
-  cache.applySystemTableChange(SystemTableName.PARTITIONS, 'INSERT', {
+  cache.applySystemTableChange(SYSTEM_TABLE_NAME.PARTITIONS, 'INSERT', {
     partition_id: partitionId,
     table_id: tableId,
     partition_key_start: null,
@@ -168,13 +168,13 @@ test('ReplicaHandler metadata propagation integration', {timeout: 30000}, async 
 
     const failedOperationUpdates = cdcIntegrationService.operations.filter((operation) =>
       operation.type === 'update' &&
-      operation.tableName === SystemTableName.REPLICA_OPERATIONS &&
+      operation.tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS &&
       operation.data?.workflow_step === 'FAILED',
     );
     t.equal(failedOperationUpdates.length, 0,
       'operation should not transition to FAILED during metadata propagation');
 
-    const serviceRow = cache.get(SystemTableName.SERVICES, replicaId);
+    const serviceRow = cache.get(SYSTEM_TABLE_NAME.SERVICES, replicaId);
     t.equal(serviceRow?.status, ReplicaStatus.ACTIVE,
       'replica should become ACTIVE after metadata appears in cache');
 

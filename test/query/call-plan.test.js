@@ -31,7 +31,7 @@ import {
 } from '../../src/query/runtime-constants.js';
 import {
   ExchangeManager,
-} from '../../src/query/exchange-manager.js';
+} from '../../src/query/distributed/exchange-manager.js';
 
 /**
  * Helper: create a minimal ExecutionContext for testing.
@@ -364,23 +364,18 @@ describe('property: Plan_Mode dispatch', () => {
                 async () => {} :
                 undefined;
 
-            // Should not throw validation errors
-            try {
-              await executePlan({
+            // Must not throw validation errors for supported kinds.
+            await assert.doesNotReject(
+              () => executePlan({
                 plan,
                 params: [],
                 handler,
                 queryExecutor: async () => ({rows: []}),
                 cancellationToken: token,
                 executionContext: ctx,
-              });
-              return true;
-            } catch (e) {
-              // Only validation errors are failures
-              return !e.message.startsWith(
-                ERR.PLAN_UNSUPPORTED_KIND,
-              ) && e.message !== ERR.PLAN_MISSING_KIND;
-            }
+              }),
+            );
+            return true;
           },
         ),
         {numRuns: 10},
@@ -410,19 +405,18 @@ describe('property: Plan_Mode dispatch', () => {
             cancellationToken: token,
           });
 
-          try {
-            await executePlan({
+          await assert.rejects(
+            () => executePlan({
               plan: {kind},
               params: [],
               queryExecutor: async () => ({rows: []}),
               cancellationToken: token,
               executionContext: ctx,
-            });
-            return false;
-          } catch (e) {
-            return e.message ===
-              ERR.PLAN_UNSUPPORTED_KIND + kind;
-          }
+            }),
+            (err) => err.message ===
+              ERR.PLAN_UNSUPPORTED_KIND + kind,
+          );
+          return true;
         },
       ),
       {numRuns: 10},

@@ -23,13 +23,13 @@ import {v4 as uuidv4} from 'uuid';
 import {LoggingService} from '../logging/logging-service.js';
 import {
   CDC_OPERATION, COLUMN, ERRORS, METRICS_LOG_TAG, NUM, SERVICE_STATUS, SQL, STATE,
-  STRING, TYPEOF, ADDRESS, PROTOCOL,
+  STRING, TIME_MS, TYPEOF, ADDRESS, PROTOCOL,
 } from '../constants/index.js';
 import {ENTRYPOINT_DEFAULT} from '../constants/entrypoint.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {HLCClockService} from '../hlc/hlc-clock-service.js';
 import {
-  SystemTableName,
+  SYSTEM_TABLE_NAME,
   INITIAL_PARTITION_IDS,
   getSchemaByTableName,
 } from '../bootstrap/system-table-schemas-constants.js';
@@ -48,6 +48,7 @@ import {
   CDC_OPERATION_LABEL,
   CDC_PRIMARY_KEY,
   CDC_RETRY,
+  CDC_SKIP_REASON,
   CDC_SOURCE,
   CDC_SQL,
   CDC_STATS_DEFAULT,
@@ -62,7 +63,7 @@ import {
 /**
  * Valid system table names for CDC operations.
  */
-const VALID_SYSTEM_TABLES = Object.values(SystemTableName);
+const VALID_SYSTEM_TABLES = Object.values(SYSTEM_TABLE_NAME);
 
 /**
  * CDC operation types.
@@ -85,12 +86,12 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
  * @return {boolean}
  */
 const TABLE_WRITE_METRIC_SUPPRESSED_TABLES = new Set([
-  SystemTableName.LOGS,
-  SystemTableName.NODES,
-  SystemTableName.NODE_ENDPOINTS,
+  SYSTEM_TABLE_NAME.LOGS,
+  SYSTEM_TABLE_NAME.NODES,
+  SYSTEM_TABLE_NAME.NODE_ENDPOINTS,
 ]);
 const TABLE_WRITE_FAILURE_LOG_SUPPRESSED_TABLES = new Set([
-  SystemTableName.LOGS,
+  SYSTEM_TABLE_NAME.LOGS,
 ]);
 const AUTHORITATIVE_FALLBACK_PHASE = Object.freeze({
   BOOTSTRAP: 'bootstrap',
@@ -101,8 +102,8 @@ const AUTHORITATIVE_FALLBACK_OUTCOME = Object.freeze({
   RECOVERED: 'recovered',
   FAILED: 'failed',
 });
-const AUTHORITATIVE_FALLBACK_WINDOW_MS = 60 * 1000;
-const AUTHORITATIVE_FALLBACK_RECENT_LIMIT = 10;
+const AUTHORITATIVE_FALLBACK_WINDOW_MS = TIME_MS.MINUTE;
+const AUTHORITATIVE_FALLBACK_RECENT_LIMIT = NUM.TEN;
 
 function normalizeAuthoritativeFallbackPhase(value) {
   if (value === AUTHORITATIVE_FALLBACK_PHASE.BOOTSTRAP) {
@@ -159,6 +160,7 @@ class CDCIntegrationService extends EventEmitter {
 
     // Bootstrap mode for seed node direct writes
     this.bootstrapMode = false;
+    this.bootstrapCompleted = false;
     this.localPartitionServices = null;
     this.writeRouter = this.createSqlWriteRouter();
 
@@ -351,23 +353,32 @@ class CDCIntegrationService extends EventEmitter {
    */
   setBootstrapMode(enabled, partitionServices) {
     if (enabled) {
+      if (this.bootstrapCompleted) {
+        throw new Error(CDC_ERROR_MSG.BOOTSTRAP_REENTRY_FORBIDDEN);
+      }
       if (!partitionServices || !(partitionServices instanceof Map)) {
-        throw new Error('Bootstrap mode requires a Map of local partition services');
+        throw new Error(
+          CDC_LOG_MSG.BOOTSTRAP_MODE_REQUIRES_PARTITION_MAP,
+        );
       }
       this.bootstrapMode = true;
       this.localPartitionServices = partitionServices;
       this.setWriteRouter(this.createBootstrapDirectWriteRouter());
-      this.logger.info('Bootstrap mode enabled - writes will go directly to local partitions', {
-        nodeId: this.nodeId,
-        partitionCount: partitionServices.size,
-      });
+      this.logger.info(
+        CDC_LOG_MSG.BOOTSTRAP_MODE_ENABLED,
+        {nodeId: this.nodeId, partitionCount: partitionServices.size},
+      );
     } else {
+      if (this.bootstrapMode) {
+        this.bootstrapCompleted = true;
+      }
       this.bootstrapMode = false;
       this.localPartitionServices = null;
       this.setWriteRouter(this.createSqlWriteRouter());
-      this.logger.info('Bootstrap mode disabled - writes will route through SQL engine', {
-        nodeId: this.nodeId,
-      });
+      this.logger.info(
+        CDC_LOG_MSG.BOOTSTRAP_MODE_DISABLED,
+        {nodeId: this.nodeId},
+      );
     }
   }
 
@@ -431,7 +442,7 @@ class CDCIntegrationService extends EventEmitter {
   async executeSQLDirectToLocalPartition(sql, params = []) {
     if (!this.bootstrapMode || !this.localPartitionServices) {
       throw new Error(
-        'executeSQLDirectToLocalPartition can only be called in bootstrap mode',
+        CDC_LOG_MSG.BOOTSTRAP_MODE_REQUIRED_FOR_DIRECT_SQL,
       );
     }
 
@@ -1209,7 +1220,7 @@ class CDCIntegrationService extends EventEmitter {
 
     try {
       return JSON.stringify(actualValue) === JSON.stringify(expectedValue);
-    } catch {
+    } catch (_parseErr) {
       return false;
     }
   }
@@ -1336,7 +1347,7 @@ class CDCIntegrationService extends EventEmitter {
    */
   applyTableInsertDefaults(tableName, _schema, rowData) {
     const now = Date.now();
-    if (tableName !== SystemTableName.NODES) {
+    if (tableName !== SYSTEM_TABLE_NAME.NODES) {
       return;
     }
 
@@ -2005,7 +2016,7 @@ class CDCIntegrationService extends EventEmitter {
 
     // Check if this is a nodes table INSERT event
     const tableName = cdcEvent.tableName;
-    if (tableName !== SystemTableName.NODES) {
+    if (tableName !== SYSTEM_TABLE_NAME.NODES) {
       return {
         processed: false,
         error: `${CDC_ERROR_MSG.NOT_NODES_TABLE_PREFIX}'${tableName}'`,
@@ -2017,7 +2028,7 @@ class CDCIntegrationService extends EventEmitter {
     if (operation !== CDC_OPERATION.INSERT) {
       return {
         processed: false,
-        error: 'Not an INSERT operation',
+        error: CDC_ERROR_MSG.NOT_INSERT_OPERATION,
       };
     }
 
@@ -2043,7 +2054,7 @@ class CDCIntegrationService extends EventEmitter {
         nodeId: targetNodeId,
         connected: false,
         skipped: true,
-        reason: 'self',
+        reason: CDC_SKIP_REASON.SELF,
       };
     }
 
@@ -2051,7 +2062,7 @@ class CDCIntegrationService extends EventEmitter {
     if (!this.messageRouter) {
       return {
         processed: false,
-        error: 'Message router not set',
+        error: CDC_ERROR_MSG.MESSAGE_ROUTER_NOT_SET,
       };
     }
 
@@ -2069,7 +2080,7 @@ class CDCIntegrationService extends EventEmitter {
         nodeId: targetNodeId,
         connected: false,
         skipped: true,
-        reason: 'already_connected',
+        reason: CDC_SKIP_REASON.ALREADY_CONNECTED,
       };
     }
 

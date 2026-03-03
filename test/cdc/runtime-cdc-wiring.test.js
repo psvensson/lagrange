@@ -6,7 +6,7 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
-import {SystemTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 
 test('CDCIntegrationService - runtime event handler is instantiated on initialize',
   async (t) => {
@@ -50,7 +50,7 @@ test('CDCIntegrationService - handleNodeStateCDC delegates to runtime handler pa
     };
 
     const result = service.handleNodeStateCDC({
-      tableName: SystemTableName.NODES,
+      tableName: SYSTEM_TABLE_NAME.NODES,
       data: {
         node_id: 'other-node',
         status: 'ready',

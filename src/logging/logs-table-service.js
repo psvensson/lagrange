@@ -8,7 +8,7 @@ import {EventEmitter} from 'events';
 import {LoggingService} from './logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
-import {SystemTableName} from '../bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {METRICS_LOG_PREFIX} from '../constants/metrics-constants.js';
 import {
   LOGGING_ERROR_MSG,
@@ -25,15 +25,34 @@ import {
   assertRequiredControlPlaneRollout,
 } from '../runtime/control-plane-rollout-controls.js';
 
+const LOGGING_METRIC_PREFIX = 'metrics.logging.';
+const LOGS_TABLE_METRIC_PREFIX = 'metrics.logs_table.';
+const LOG_RETENTION_METRIC_PREFIX = 'metrics.log_retention.';
+const LOG_QUERY_METRIC_PREFIX = 'metrics.log_query.';
+
 const LOGGING_PIPELINE_METRIC_PREFIX = Object.freeze({
-  LOGGING: 'metrics.logging.',
-  LOGS_TABLE: 'metrics.logs_table.',
-  LOG_RETENTION: 'metrics.log_retention.',
-  LOG_QUERY: 'metrics.log_query.',
+  LOGGING: LOGGING_METRIC_PREFIX,
+  LOGS_TABLE: LOGS_TABLE_METRIC_PREFIX,
+  LOG_RETENTION: LOG_RETENTION_METRIC_PREFIX,
+  LOG_QUERY: LOG_QUERY_METRIC_PREFIX,
 });
 const LOGGING_PIPELINE_METRIC_PREFIXES = Object.freeze(
   Object.values(LOGGING_PIPELINE_METRIC_PREFIX),
 );
+
+const LOGS_TABLE_CONNECTED_EVENT = 'connected';
+const LOGS_TABLE_FLUSHED_EVENT = 'flushed';
+const LOGS_TABLE_EVENT = Object.freeze({
+  CONNECTED: LOGS_TABLE_CONNECTED_EVENT,
+  FLUSHED: LOGS_TABLE_FLUSHED_EVENT,
+});
+const LOGS_TABLE_FLUSH_MODE = 'background';
+const LOGS_TABLE_CONNECT_METRIC =
+  'metrics.logging.logs_table_connect.start';
+const LOGS_TABLE_OWNER = 'LogsTableService';
+const MIN_CHUNK_SIZE = 1;
+const MIN_YIELD_MS = 0;
+const MIN_SLEEP_MS = 1;
 
 /**
  * LogsTableService manages writing log entries to the logs system table.
@@ -51,7 +70,7 @@ class LogsTableService extends EventEmitter {
     super();
 
     this.rolloutControls = assertRequiredControlPlaneRollout({
-      owner: 'LogsTableService',
+      owner: LOGS_TABLE_OWNER,
       controls: options.rolloutControls,
       required: CONTROL_PLANE_ROLLOUT_REQUIRED.LOGS_TABLE_SERVICE,
     });
@@ -173,19 +192,19 @@ class LogsTableService extends EventEmitter {
     }
 
     const backgroundChunkSize = Math.max(
-      1,
+      MIN_CHUNK_SIZE,
       Math.min(
         this.batchSize,
         LOGS_TABLE_DEFAULT.BACKGROUND_FLUSH_CHUNK_SIZE,
       ),
     );
     const backgroundYieldMs = Math.max(
-      0,
+      MIN_YIELD_MS,
       LOGS_TABLE_DEFAULT.BACKGROUND_FLUSH_YIELD_MS,
     );
-    this.logger.log('metrics.logging.logs_table_connect.start', {
+    this.logger.log(LOGS_TABLE_CONNECT_METRIC, {
       bufferedEntries: loggingService.getBufferSize(),
-      flushMode: 'background',
+      flushMode: LOGS_TABLE_FLUSH_MODE,
       chunkSize: backgroundChunkSize,
       yieldMs: backgroundYieldMs,
     });
@@ -194,14 +213,14 @@ class LogsTableService extends EventEmitter {
     const flushedCount = await loggingService.onLogsTableReady(
       (entry) => this.writeLogEntry(entry),
       {
-        flushMode: 'background',
+        flushMode: LOGS_TABLE_FLUSH_MODE,
         chunkSize: backgroundChunkSize,
         yieldMs: backgroundYieldMs,
       },
     );
 
     this.logger.log(LOGGING_LOG_MSG.connectedLoggingService(flushedCount));
-    this.emit('connected', {flushedCount});
+    this.emit(LOGS_TABLE_EVENT.CONNECTED, {flushedCount});
 
     return flushedCount;
   }
@@ -305,13 +324,14 @@ class LogsTableService extends EventEmitter {
           } else {
             this.errorCount++;
           }
-        } catch (_writeError) {
+        } catch (writeError) {
           this.errorCount++;
+          console.warn(LOGGING_ERROR_MSG.WRITE_ENTRY_FAILED, writeError);
         }
       }
 
       if (writtenCount > 0) {
-        this.emit('flushed', {count: writtenCount});
+        this.emit(LOGS_TABLE_EVENT.FLUSHED, {count: writtenCount});
       }
     } finally {
       this.isWriting = false;
@@ -392,10 +412,12 @@ class LogsTableService extends EventEmitter {
       created_at: entry.createdAt || Date.now(),
     };
 
-    // Use UPSERT so duplicate log_id replays remain idempotent.
+    // Log rows are append-only (write-once, never updated). UPSERT is used
+    // solely for idempotent replay of duplicate log_id values; it effectively
+    // acts as INSERT since no fields are ever mutated after creation.
     if (this.cdcIntegrationService) {
       await this.cdcIntegrationService.upsertSystemTableRow(
-        SystemTableName.LOGS,
+        SYSTEM_TABLE_NAME.LOGS,
         row,
       );
       return;
@@ -403,7 +425,7 @@ class LogsTableService extends EventEmitter {
 
     // Fall back to direct partition write
     if (this.partitionService) {
-      await this.partitionService.insertData(SystemTableName.LOGS, row);
+      await this.partitionService.insertData(SYSTEM_TABLE_NAME.LOGS, row);
       return;
     }
 
@@ -556,7 +578,7 @@ class LogsTableService extends EventEmitter {
     // Use direct flush mode so shutdown does not depend on class-C scheduling.
     while (this.pendingWrites.length > 0 || this.isWriting) {
       if (this.isWriting) {
-        await this.sleep(Math.max(1, this.flushYieldMs));
+        await this.sleep(Math.max(MIN_SLEEP_MS, this.flushYieldMs));
         continue;
       }
       await this.flush({

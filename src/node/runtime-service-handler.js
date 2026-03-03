@@ -11,7 +11,7 @@
 
 import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
-import {SystemTableName} from '../bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
   UNIFIED_SERVICE_TYPE,
   WORKFLOW_STEP,
@@ -277,7 +277,12 @@ class RuntimeServiceHandler extends EventEmitter {
       await this.updateOperationStep(
         operationId, WORKFLOW_STEP.FAILED,
         {replicaId, errorMessage: error.message},
-      ).catch(() => {});
+      ).catch((stepErr) => {
+        this.logger.warn(
+          RUNTIME_SERVICE_HANDLER_LOG_MSG.UPDATE_STATUS_FAILED,
+          {operationId, replicaId, error: stepErr.message},
+        );
+      });
 
       this.logger.error(
         RUNTIME_SERVICE_HANDLER_LOG_MSG.CREATE_FAILED,
@@ -454,7 +459,12 @@ class RuntimeServiceHandler extends EventEmitter {
       await this.updateOperationStep(
         operationId, WORKFLOW_STEP.FAILED,
         {replicaId, errorMessage: error.message},
-      ).catch(() => {});
+      ).catch((stepErr) => {
+        this.logger.warn(
+          RUNTIME_SERVICE_HANDLER_LOG_MSG.UPDATE_STATUS_FAILED,
+          {operationId, replicaId, error: stepErr.message},
+        );
+      });
 
       this.logger.error(
         RUNTIME_SERVICE_HANDLER_LOG_MSG.REMOVE_FAILED,
@@ -479,7 +489,7 @@ class RuntimeServiceHandler extends EventEmitter {
       return null;
     }
     const row = this.systemTableCache.get(
-      SystemTableName.SERVICE_DEFINITIONS, entityId,
+      SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS, entityId,
     );
     if (!row) {
       this.logger.warn(
@@ -504,7 +514,7 @@ class RuntimeServiceHandler extends EventEmitter {
     }
 
     const existing = this.systemTableCache.get(
-      SystemTableName.REPLICA_OPERATIONS, operationId,
+      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS, operationId,
     );
 
     if (!existing && !options.replicaId) {
@@ -559,7 +569,7 @@ class RuntimeServiceHandler extends EventEmitter {
 
     try {
       await this.cdcIntegrationService.updateSystemTableRow(
-        SystemTableName.REPLICA_OPERATIONS,
+        SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
         {operation_id: operationId},
         updateData,
       );

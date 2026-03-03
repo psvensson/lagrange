@@ -15,7 +15,7 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {
-  SystemTableName,
+  SYSTEM_TABLE_NAME,
   INITIAL_PARTITION_IDS,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
@@ -325,10 +325,10 @@ test('MessageGroupService - persists raft role updates to services table', async
     },
   };
   const systemTableCache = new SystemTableCache();
-  const servicesPartitionId = INITIAL_PARTITION_IDS[SystemTableName.SERVICES];
+  const servicesPartitionId = INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SERVICES];
   systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDC_OPERATION.INSERT, {
     [COLUMN.PARTITION_ID]: servicesPartitionId,
-    [COLUMN.TABLE_ID]: SystemTableName.SERVICES,
+    [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.SERVICES,
   });
   systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, {
     [COLUMN.SERVICE_ID]: 'services-leader',
@@ -356,7 +356,7 @@ test('MessageGroupService - persists raft role updates to services table', async
 
     const roleUpdate = updates.find(
       (update) =>
-        update.tableName === SystemTableName.SERVICES &&
+        update.tableName === SYSTEM_TABLE_NAME.SERVICES &&
         update.whereClause?.service_id === 'mg-1-r1' &&
         update.data?.raft_role === RaftRole.LEADER,
     );
@@ -384,10 +384,10 @@ test('MessageGroupService - syncs persisted role from cache before rewriting sam
     },
   };
   const systemTableCache = new SystemTableCache();
-  const servicesPartitionId = INITIAL_PARTITION_IDS[SystemTableName.SERVICES];
+  const servicesPartitionId = INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SERVICES];
   systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDC_OPERATION.INSERT, {
     [COLUMN.PARTITION_ID]: servicesPartitionId,
-    [COLUMN.TABLE_ID]: SystemTableName.SERVICES,
+    [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.SERVICES,
   });
   systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, {
     [COLUMN.SERVICE_ID]: 'services-leader',
@@ -441,10 +441,10 @@ test('MessageGroupService - persists leader node updates to message groups table
     },
   };
   const systemTableCache = new SystemTableCache();
-  const messageGroupsPartitionId = INITIAL_PARTITION_IDS[SystemTableName.MESSAGE_GROUPS];
+  const messageGroupsPartitionId = INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.MESSAGE_GROUPS];
   systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDC_OPERATION.INSERT, {
     [COLUMN.PARTITION_ID]: messageGroupsPartitionId,
-    [COLUMN.TABLE_ID]: SystemTableName.MESSAGE_GROUPS,
+    [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.MESSAGE_GROUPS,
   });
   systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, {
     [COLUMN.SERVICE_ID]: 'message-groups-leader',
@@ -472,7 +472,7 @@ test('MessageGroupService - persists leader node updates to message groups table
 
     const leaderUpdate = updates.find(
       (update) =>
-        update.tableName === SystemTableName.MESSAGE_GROUPS &&
+        update.tableName === SYSTEM_TABLE_NAME.MESSAGE_GROUPS &&
         update.whereClause?.[COLUMN.GROUP_ID] === 'mg-1' &&
         update.data?.[COLUMN.LEADER_NODE_ID] === nodeId,
     );

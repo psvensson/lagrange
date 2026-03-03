@@ -1,7 +1,7 @@
 import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {DistributedWriteCoordinator}
-  from '../../src/query/distributed-write-coordinator.js';
+  from '../../src/query/distributed/distributed-write-coordinator.js';
 import {QUERY_AST_TYPE} from '../../src/query/query-constants.js';
 
 /**

@@ -6,7 +6,7 @@ import {describe, it} from 'node:test';
 import assert from 'node:assert/strict';
 import {TABLES} from '../../src/constants/tables.js';
 import {
-  SystemTableName,
+  SYSTEM_TABLE_NAME,
   SYSTEM_TABLE_SCHEMAS,
   INITIAL_PARTITION_IDS,
   INITIAL_REPLICA_IDS,
@@ -39,9 +39,9 @@ describe('debug metadata table constants', () => {
   });
 
   for (const tableName of DEBUG_TABLES) {
-    it(`registers ${tableName} in SystemTableName`, () => {
-      const key = Object.keys(SystemTableName).find(
-        (name) => SystemTableName[name] === tableName,
+    it(`registers ${tableName} in SYSTEM_TABLE_NAME`, () => {
+      const key = Object.keys(SYSTEM_TABLE_NAME).find(
+        (name) => SYSTEM_TABLE_NAME[name] === tableName,
       );
       assert.ok(key);
     });

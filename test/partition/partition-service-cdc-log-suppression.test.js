@@ -8,7 +8,7 @@ import {PartitionService} from '../../src/partition/partition-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {
-  SystemTableName,
+  SYSTEM_TABLE_NAME,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 
 function createTestPartitionService() {
@@ -69,7 +69,7 @@ test('PartitionService does not emit insert row-fetch info logs for logs table',
     const row = partition.extractInsertDataFromSQL(
       'INSERT INTO logs (log_id, timestamp, level, node_id, message, created_at) ' +
       'VALUES (\'log-1\', 1, \'INFO\', \'node-1\', \'hello\', 1)',
-      SystemTableName.LOGS,
+      SYSTEM_TABLE_NAME.LOGS,
     );
 
     t.equal(row.log_id, 'log-1', 'should still return fetched row');
@@ -101,7 +101,7 @@ test('PartitionService skips no-subscriber CDC buffering for logs table writes',
 
     await partition.generateCDCEvent({
       type: 'INSERT',
-      tableName: SystemTableName.LOGS,
+      tableName: SYSTEM_TABLE_NAME.LOGS,
       data: {
         log_id: 'log-loop-1',
         message: 'loop check',
@@ -149,7 +149,7 @@ test('PartitionService does not emit update row-fetch info logs for logs table',
 
     const row = partition.extractUpdateDataFromSQL(
       'UPDATE logs SET message = \'after\' WHERE log_id = \'log-2\'',
-      SystemTableName.LOGS,
+      SYSTEM_TABLE_NAME.LOGS,
     );
 
     t.equal(row.log_id, 'log-2', 'should still return fetched row');
@@ -212,7 +212,7 @@ test('PartitionService does not emit update row-fetch info logs for nodes table'
 
     const row = partition.extractUpdateDataFromSQL(
       'UPDATE nodes SET status = \'ready\' WHERE node_id = \'node-1\'',
-      SystemTableName.NODES,
+      SYSTEM_TABLE_NAME.NODES,
     );
 
     t.equal(row.node_id, 'node-1', 'should still return fetched row');
@@ -246,7 +246,7 @@ test('PartitionService does not emit insert row-fetch info logs for node_endpoin
 
     const row = partition.extractInsertDataFromSQL(
       'INSERT INTO node_endpoints (endpoint_id, node_id) VALUES (\'ep-1\', \'node-1\')',
-      SystemTableName.NODE_ENDPOINTS,
+      SYSTEM_TABLE_NAME.NODE_ENDPOINTS,
     );
 
     t.equal(row.endpoint_id, 'ep-1', 'should still return fetched row');

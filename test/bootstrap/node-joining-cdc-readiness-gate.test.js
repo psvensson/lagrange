@@ -13,7 +13,7 @@ import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {CDCPipelineReadinessGate} from
   '../../src/cdc/cdc-pipeline-readiness-gate.js';
-import {SystemTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {CACHE_HYDRATION_TABLES} from '../../src/cache/cache-constants.js';
 
 const NODE_ID = 'readiness-gate-join-test-node';
@@ -36,12 +36,12 @@ const createManualClock = (startMs = 0) => {
 const createFullyHydratedCache = () => {
   const listeners = [];
   const rowsByTable = new Map([
-    [SystemTableName.SERVICES, [{
+    [SYSTEM_TABLE_NAME.SERVICES, [{
       service_id: 'p1', service_type: 'partition',
       status: 'ACTIVE', raft_role: 'leader',
       node_id: NODE_ID, address: `${NODE_ID}/partition/p1`,
     }]],
-    [SystemTableName.NODES, [{node_id: NODE_ID}]],
+    [SYSTEM_TABLE_NAME.NODES, [{node_id: NODE_ID}]],
   ]);
   const clone = (value) => JSON.parse(JSON.stringify(value));
   const getPrimaryKey = (row) =>

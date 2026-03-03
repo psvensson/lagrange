@@ -3227,7 +3227,7 @@ test('AdminWebSocketAPI - debug trace stream route wiring and filtering', async 
     'should register debug trace websocket route');
 
   const {clientSocket, serverSocket} = createInProcWebSocketPair();
-  api.handleDebugTraceConnection(serverSocket, {
+  api.debugHandlers.handleDebugTraceConnection(serverSocket, {
     query: {lineagePrefix: 'lineage-allow'},
   });
 

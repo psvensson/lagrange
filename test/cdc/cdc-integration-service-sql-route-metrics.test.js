@@ -8,7 +8,7 @@ import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import {
   CDCIntegrationService,
 } from '../../src/cdc/cdc-integration-service.js';
-import {SystemTableName} from
+import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {METRICS_LOG_TAG} from '../../src/constants/index.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -59,14 +59,14 @@ test('executeSQL emits metrics.cdc.sql_route on success', async (t) => {
   const service = createService();
   const infoCalls = collectInfoCalls(service);
 
-  const sql = `INSERT INTO ${SystemTableName.SERVICES} (service_id) VALUES (?)`;
+  const sql = `INSERT INTO ${SYSTEM_TABLE_NAME.SERVICES} (service_id) VALUES (?)`;
   await service.executeSQL(sql, ['svc-1']);
 
   const metric = infoCalls.find(
     (c) => c.tag === METRICS_LOG_TAG.CDC_SQL_ROUTE,
   );
   t.ok(metric, 'metrics.cdc.sql_route log emitted');
-  t.equal(metric.data.tableName, SystemTableName.SERVICES);
+  t.equal(metric.data.tableName, SYSTEM_TABLE_NAME.SERVICES);
   t.equal(typeof metric.data.durationMs, 'number');
   t.ok(metric.data.durationMs >= 0, 'durationMs non-negative');
   t.equal(metric.data.attempt, 1);
@@ -80,7 +80,7 @@ test('executeSQL sql_route metric has correct structured fields',
     const service = createService();
     const infoCalls = collectInfoCalls(service);
 
-    const sql = `UPDATE ${SystemTableName.SERVICES} SET status = ?`;
+    const sql = `UPDATE ${SYSTEM_TABLE_NAME.SERVICES} SET status = ?`;
     await service.executeSQL(sql, ['active']);
 
     const metric = infoCalls.find(
@@ -133,7 +133,7 @@ test('executeSQL sql_route metric uses info level, not debug',
       return originalDebug(tag, data);
     };
 
-    const sql = `INSERT INTO ${SystemTableName.SERVICES} (service_id) VALUES (?)`;
+    const sql = `INSERT INTO ${SYSTEM_TABLE_NAME.SERVICES} (service_id) VALUES (?)`;
     await service.executeSQL(sql, ['svc-1']);
 
     const debugMetric = debugCalls.find(
@@ -154,7 +154,7 @@ test('executeSQL does not break on logger failure for sql_route',
       return originalInfo(...args);
     };
 
-    const sql = `INSERT INTO ${SystemTableName.SERVICES} (service_id) VALUES (?)`;
+    const sql = `INSERT INTO ${SYSTEM_TABLE_NAME.SERVICES} (service_id) VALUES (?)`;
     const result = await service.executeSQL(sql, ['svc-1']);
     t.ok(result.success, 'executeSQL succeeds despite logger failure');
     t.end();
@@ -179,7 +179,7 @@ test('executeSQL sql_route metric reflects retry attempt on transient',
     service.retryDelayMs = 1;
     const infoCalls = collectInfoCalls(service);
 
-    const sql = `INSERT INTO ${SystemTableName.SERVICES} (service_id) VALUES (?)`;
+    const sql = `INSERT INTO ${SYSTEM_TABLE_NAME.SERVICES} (service_id) VALUES (?)`;
     await service.executeSQL(sql, ['svc-1']);
 
     const metric = infoCalls.find(
@@ -196,7 +196,7 @@ test('executeSQL does not emit sql_route metric for logs table writes',
     const infoCalls = collectInfoCalls(service);
 
     const sql =
-      `INSERT INTO ${SystemTableName.LOGS} ` +
+      `INSERT INTO ${SYSTEM_TABLE_NAME.LOGS} ` +
       '(log_id, timestamp, level, node_id, message, created_at) ' +
       'VALUES (?, ?, ?, ?, ?, ?)';
     await service.executeSQL(sql, [
@@ -220,7 +220,7 @@ test('executeSQL does not emit sql_route metric for nodes table writes',
     const service = createService();
     const infoCalls = collectInfoCalls(service);
 
-    const sql = `UPDATE ${SystemTableName.NODES} SET status = ? WHERE node_id = ?`;
+    const sql = `UPDATE ${SYSTEM_TABLE_NAME.NODES} SET status = ? WHERE node_id = ?`;
     await service.executeSQL(sql, ['active', 'node-1']);
 
     const metric = infoCalls.find(
@@ -236,7 +236,7 @@ test('executeSQL does not emit sql_route metric for node_endpoints table writes'
     const infoCalls = collectInfoCalls(service);
 
     const sql =
-      `INSERT OR REPLACE INTO ${SystemTableName.NODE_ENDPOINTS} ` +
+      `INSERT OR REPLACE INTO ${SYSTEM_TABLE_NAME.NODE_ENDPOINTS} ` +
       '(endpoint_id, node_id) VALUES (?, ?)';
     await service.executeSQL(sql, ['ep-1', 'node-1']);
 

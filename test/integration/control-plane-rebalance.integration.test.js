@@ -15,7 +15,7 @@ import {ReplicaDispatchService} from
   '../../src/control-plane/replica-dispatch-service.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {ClusterReadinessSignal} from '../../src/rebalancer/cluster-readiness-signal.js';
-import {SystemTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {ReplicaOperationResponseStatus} from
   '../../src/rebalancer/replica-operation-constants.js';
 import {NodeService} from '../../src/node/node-service.js';
@@ -223,7 +223,7 @@ test('Control plane dispatch integration', async (t) => {
 
       // Ensure the target node exists in SQL (ReplicaDispatchService uses SQLQueryEngine
       // to validate handler registration).
-      await cdcIntegrationService.upsertSystemTableRow(SystemTableName.NODES, {
+      await cdcIntegrationService.upsertSystemTableRow(SYSTEM_TABLE_NAME.NODES, {
         node_id: targetNodeId,
         node_address: 'ws://node-target-dispatch:9001',
         cpu_cores: 4,
@@ -243,14 +243,14 @@ test('Control plane dispatch integration', async (t) => {
 
       // Get a partition ID from the bootstrapped partitions
       const systemPartitionReady = await waitFor(() => {
-        const partitions = systemTableCache.getAll(SystemTableName.PARTITIONS) || [];
+        const partitions = systemTableCache.getAll(SYSTEM_TABLE_NAME.PARTITIONS) || [];
         return partitions.some(
           (p) => typeof p?.partition_id === 'string' && p.partition_id.endsWith('-p1'),
         );
       }, 3000, 25);
       t.ok(systemPartitionReady, 'should have at least one system-table partition (*-p1)');
 
-      const partitions = systemTableCache.getAll(SystemTableName.PARTITIONS) || [];
+      const partitions = systemTableCache.getAll(SYSTEM_TABLE_NAME.PARTITIONS) || [];
       const selectedPartition = partitions.find(
         (p) => typeof p?.partition_id === 'string' && p.partition_id.endsWith('-p1'),
       );
@@ -259,7 +259,7 @@ test('Control plane dispatch integration', async (t) => {
 
       // Add a service entry for the target node so the handler
       // registration check in dispatchOperationRow passes.
-      await cdcIntegrationService.upsertSystemTableRow(SystemTableName.SERVICES, {
+      await cdcIntegrationService.upsertSystemTableRow(SYSTEM_TABLE_NAME.SERVICES, {
         service_id: `replica-${targetNodeId}-${partitionId}`,
         node_id: targetNodeId,
         partition_id: partitionId,
@@ -297,7 +297,7 @@ test('Control plane dispatch integration', async (t) => {
       // Wait for the CDC event to be processed and the operation to be dispatched
       // The real flow is asynchronous: create -> persist -> CDC -> dispatch
       await cdcConfirmationTracker.awaitConfirmation(
-        SystemTableName.REPLICA_OPERATIONS,
+        SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
         operation.operationId,
         5000,
       );
@@ -316,13 +316,13 @@ test('Control plane dispatch integration', async (t) => {
       // Verify the operation moves from SENDING to CREATING after dispatch ACK.
       const movedToCreating = await waitFor(() => {
         const current = systemTableCache.get(
-          SystemTableName.REPLICA_OPERATIONS,
+          SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
           operation.operationId,
         );
         return current?.workflow_step === 'CREATING';
       }, 1500, 25);
       const updatedOperation = systemTableCache.get(
-        SystemTableName.REPLICA_OPERATIONS,
+        SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
         operation.operationId,
       );
       t.ok(

@@ -11,7 +11,7 @@ import {
   CDCOperationType,
   VALID_SYSTEM_TABLES,
 } from '../../src/cdc/cdc-integration-service.js';
-import {SystemTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -57,7 +57,7 @@ function createMockSqlQueryEngine() {
 
 test('node_endpoints is in VALID_SYSTEM_TABLES', async (t) => {
   t.ok(
-    VALID_SYSTEM_TABLES.includes(SystemTableName.NODE_ENDPOINTS),
+    VALID_SYSTEM_TABLES.includes(SYSTEM_TABLE_NAME.NODE_ENDPOINTS),
     'VALID_SYSTEM_TABLES should include node_endpoints',
   );
   t.ok(
@@ -67,16 +67,16 @@ test('node_endpoints is in VALID_SYSTEM_TABLES', async (t) => {
   t.end();
 });
 
-test('SystemTableName includes NODE_ENDPOINTS', async (t) => {
+test('SYSTEM_TABLE_NAME includes NODE_ENDPOINTS', async (t) => {
   t.equal(
-    SystemTableName.NODE_ENDPOINTS,
+    SYSTEM_TABLE_NAME.NODE_ENDPOINTS,
     TABLES.NODE_ENDPOINTS,
-    'SystemTableName.NODE_ENDPOINTS should equal TABLES.NODE_ENDPOINTS',
+    'SYSTEM_TABLE_NAME.NODE_ENDPOINTS should equal TABLES.NODE_ENDPOINTS',
   );
   t.equal(
-    SystemTableName.NODE_ENDPOINTS,
+    SYSTEM_TABLE_NAME.NODE_ENDPOINTS,
     'node_endpoints',
-    'SystemTableName.NODE_ENDPOINTS should be "node_endpoints"',
+    'SYSTEM_TABLE_NAME.NODE_ENDPOINTS should be "node_endpoints"',
   );
   t.end();
 });
@@ -102,11 +102,11 @@ test('CDCIntegrationService - insertSystemTableRow for node_endpoints', async (t
     updated_at: now,
   };
 
-  const result = await service.insertSystemTableRow(SystemTableName.NODE_ENDPOINTS, data);
+  const result = await service.insertSystemTableRow(SYSTEM_TABLE_NAME.NODE_ENDPOINTS, data);
 
   t.equal(result.success, true, 'should succeed');
   t.equal(result.operation, CDCOperationType.INSERT, 'should be INSERT operation');
-  t.equal(result.tableName, SystemTableName.NODE_ENDPOINTS, 'should have correct table name');
+  t.equal(result.tableName, SYSTEM_TABLE_NAME.NODE_ENDPOINTS, 'should have correct table name');
   t.equal(mockSqlEngine.executedQueries.length, 1, 'should execute one query');
   t.ok(
     mockSqlEngine.executedQueries[0].sql.includes('INSERT INTO'),
@@ -138,7 +138,7 @@ test('CDCIntegrationService - insertSystemTableRow generates endpoint_id', async
     updated_at: now,
   };
 
-  const result = await service.insertSystemTableRow(SystemTableName.NODE_ENDPOINTS, data);
+  const result = await service.insertSystemTableRow(SYSTEM_TABLE_NAME.NODE_ENDPOINTS, data);
 
   t.equal(result.success, true, 'should succeed');
   t.ok(result.data.endpoint_id, 'should generate endpoint_id');
@@ -160,14 +160,14 @@ test('CDCIntegrationService - updateSystemTableRow for node_endpoints', async (t
   };
 
   const result = await service.updateSystemTableRow(
-    SystemTableName.NODE_ENDPOINTS,
+    SYSTEM_TABLE_NAME.NODE_ENDPOINTS,
     whereClause,
     data,
   );
 
   t.equal(result.success, true, 'should succeed');
   t.equal(result.operation, CDCOperationType.UPDATE, 'should be UPDATE operation');
-  t.equal(result.tableName, SystemTableName.NODE_ENDPOINTS, 'should have correct table name');
+  t.equal(result.tableName, SYSTEM_TABLE_NAME.NODE_ENDPOINTS, 'should have correct table name');
   t.equal(mockSqlEngine.executedQueries.length, 1, 'should execute one query');
   t.ok(
     mockSqlEngine.executedQueries[0].sql.includes('UPDATE'),
@@ -191,13 +191,13 @@ test('CDCIntegrationService - deleteSystemTableRow for node_endpoints', async (t
   const whereClause = {endpoint_id: 'ep-1'};
 
   const result = await service.deleteSystemTableRow(
-    SystemTableName.NODE_ENDPOINTS,
+    SYSTEM_TABLE_NAME.NODE_ENDPOINTS,
     whereClause,
   );
 
   t.equal(result.success, true, 'should succeed');
   t.equal(result.operation, CDCOperationType.DELETE, 'should be DELETE operation');
-  t.equal(result.tableName, SystemTableName.NODE_ENDPOINTS, 'should have correct table name');
+  t.equal(result.tableName, SYSTEM_TABLE_NAME.NODE_ENDPOINTS, 'should have correct table name');
   t.equal(mockSqlEngine.executedQueries.length, 1, 'should execute one query');
   t.ok(
     mockSqlEngine.executedQueries[0].sql.includes('DELETE'),
@@ -224,7 +224,7 @@ test('CDCIntegrationService - emits events for node_endpoints operations', async
   service.on('delete', (e) => events.push({type: 'delete', ...e}));
 
   const now = Date.now();
-  await service.insertSystemTableRow(SystemTableName.NODE_ENDPOINTS, {
+  await service.insertSystemTableRow(SYSTEM_TABLE_NAME.NODE_ENDPOINTS, {
     endpoint_id: 'ep-1',
     node_id: 'node-1',
     transport_type: TRANSPORT_TYPE.WEBSOCKET,
@@ -236,23 +236,23 @@ test('CDCIntegrationService - emits events for node_endpoints operations', async
   });
 
   await service.updateSystemTableRow(
-    SystemTableName.NODE_ENDPOINTS,
+    SYSTEM_TABLE_NAME.NODE_ENDPOINTS,
     {endpoint_id: 'ep-1'},
     {status: ENDPOINT_STATUS.INACTIVE},
   );
 
   await service.deleteSystemTableRow(
-    SystemTableName.NODE_ENDPOINTS,
+    SYSTEM_TABLE_NAME.NODE_ENDPOINTS,
     {endpoint_id: 'ep-1'},
   );
 
   t.equal(events.length, 3, 'should emit 3 events');
   t.equal(events[0].type, 'insert', 'should emit insert event');
-  t.equal(events[0].tableName, SystemTableName.NODE_ENDPOINTS, 'insert event has correct table');
+  t.equal(events[0].tableName, SYSTEM_TABLE_NAME.NODE_ENDPOINTS, 'insert event has correct table');
   t.equal(events[1].type, 'update', 'should emit update event');
-  t.equal(events[1].tableName, SystemTableName.NODE_ENDPOINTS, 'update event has correct table');
+  t.equal(events[1].tableName, SYSTEM_TABLE_NAME.NODE_ENDPOINTS, 'update event has correct table');
   t.equal(events[2].type, 'delete', 'should emit delete event');
-  t.equal(events[2].tableName, SystemTableName.NODE_ENDPOINTS, 'delete event has correct table');
+  t.equal(events[2].tableName, SYSTEM_TABLE_NAME.NODE_ENDPOINTS, 'delete event has correct table');
   t.end();
 });
 
@@ -448,7 +448,7 @@ test('CDCIntegrationService - requires endpoint_id for update', async (t) => {
 
   try {
     await service.updateSystemTableRow(
-      SystemTableName.NODE_ENDPOINTS,
+      SYSTEM_TABLE_NAME.NODE_ENDPOINTS,
       {status: ENDPOINT_STATUS.ACTIVE}, // Missing endpoint_id
       {status: ENDPOINT_STATUS.INACTIVE},
     );
@@ -469,7 +469,7 @@ test('CDCIntegrationService - requires endpoint_id for delete', async (t) => {
 
   try {
     await service.deleteSystemTableRow(
-      SystemTableName.NODE_ENDPOINTS,
+      SYSTEM_TABLE_NAME.NODE_ENDPOINTS,
       {status: ENDPOINT_STATUS.ACTIVE}, // Missing endpoint_id
     );
     t.fail('should throw error for missing primary key');
@@ -499,11 +499,11 @@ test('CDCIntegrationService - upsertSystemTableRow for node_endpoints', async (t
     updated_at: now,
   };
 
-  const result = await service.upsertSystemTableRow(SystemTableName.NODE_ENDPOINTS, data);
+  const result = await service.upsertSystemTableRow(SYSTEM_TABLE_NAME.NODE_ENDPOINTS, data);
 
   t.equal(result.success, true, 'should succeed');
   t.equal(result.operation, CDCOperationType.UPSERT, 'should be UPSERT operation');
-  t.equal(result.tableName, SystemTableName.NODE_ENDPOINTS, 'should have correct table name');
+  t.equal(result.tableName, SYSTEM_TABLE_NAME.NODE_ENDPOINTS, 'should have correct table name');
   t.ok(
     mockSqlEngine.executedQueries[0].sql.includes('INSERT OR REPLACE'),
     'should be INSERT OR REPLACE query',

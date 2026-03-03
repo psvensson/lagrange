@@ -16,7 +16,7 @@ import {
   CDCIntegrationService,
 } from '../../src/cdc/cdc-integration-service.js';
 import {
-  SystemTableName,
+  SYSTEM_TABLE_NAME,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
   getSystemCachePrimaryKeyFieldOrFallback,
@@ -28,7 +28,7 @@ import {LoggingService} from '../../src/logging/logging-service.js';
  * System table names that support write operations.
  * @type {string[]}
  */
-const WRITABLE_TABLES = Object.values(SystemTableName);
+const WRITABLE_TABLES = Object.values(SYSTEM_TABLE_NAME);
 
 /**
  * Write operation types exercised by the property tests.
@@ -108,25 +108,25 @@ function buildPartitionServicesMap() {
 function getValidUpdateData(tableName) {
   // Use columns that actually exist on each table
   switch (tableName) {
-  case SystemTableName.NODES:
+  case SYSTEM_TABLE_NAME.NODES:
     return {status: 'active'};
-  case SystemTableName.LIVE_QUERIES:
+  case SYSTEM_TABLE_NAME.LIVE_QUERIES:
     return {last_activity_at: Date.now()};
-  case SystemTableName.INDICES:
+  case SYSTEM_TABLE_NAME.INDICES:
     return {created_at: Date.now()};
-  case SystemTableName.LOGS:
+  case SYSTEM_TABLE_NAME.LOGS:
     return {created_at: Date.now()};
-  case SystemTableName.MODULE_MANIFESTS:
+  case SYSTEM_TABLE_NAME.MODULE_MANIFESTS:
     return {digest: 'sha256:updated'};
-  case SystemTableName.PACKAGE_REGISTRY_OVERRIDES:
+  case SYSTEM_TABLE_NAME.PACKAGE_REGISTRY_OVERRIDES:
     return {registry_url: 'https://updated.example.com'};
-  case SystemTableName.MODULE_DEPENDENCY_LOCKS:
+  case SYSTEM_TABLE_NAME.MODULE_DEPENDENCY_LOCKS:
     return {target_service_id: 'svc-updated'};
-  case SystemTableName.DEBUG_SESSIONS:
+  case SYSTEM_TABLE_NAME.DEBUG_SESSIONS:
     return {status: 'active'};
-  case SystemTableName.DEBUG_BREAKPOINTS:
+  case SYSTEM_TABLE_NAME.DEBUG_BREAKPOINTS:
     return {resolved: 1};
-  case SystemTableName.DEBUG_SNAPSHOTS:
+  case SYSTEM_TABLE_NAME.DEBUG_SNAPSHOTS:
     return {host_call_count: 2};
   default:
     return {updated_at: Date.now()};
@@ -145,52 +145,52 @@ async function executeWrite(cdc, operation, tableName, primaryKey) {
   const pkField = getSystemCachePrimaryKeyFieldOrFallback(tableName);
   const data = {[pkField]: primaryKey};
 
-  if (tableName === SystemTableName.NODES) {
+  if (tableName === SYSTEM_TABLE_NAME.NODES) {
     data.node_address = 'ws://localhost:8080';
     data.status = 'active';
-  } else if (tableName === SystemTableName.SERVICE_DEFINITIONS) {
+  } else if (tableName === SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS) {
     data.service_name = `svc-${primaryKey.slice(0, 8)}`;
     data.handler_function_id = 'handler-1';
-  } else if (tableName === SystemTableName.SERVICE_ENDPOINTS) {
+  } else if (tableName === SYSTEM_TABLE_NAME.SERVICE_ENDPOINTS) {
     data.service_id = 'svc-1';
     data.node_id = 'node-1';
     data.protocol = 'websocket';
     data.address = 'ws://localhost:9090';
     data.port = 9090;
-  } else if (tableName === SystemTableName.SERVICE_TIMERS) {
+  } else if (tableName === SYSTEM_TABLE_NAME.SERVICE_TIMERS) {
     data.service_id = 'svc-1';
     data.delay_ms = 1000;
     data.fire_at = Date.now() + 1000;
-  } else if (tableName === SystemTableName.MODULE_MANIFESTS) {
+  } else if (tableName === SYSTEM_TABLE_NAME.MODULE_MANIFESTS) {
     data.namespace = `ns-${primaryKey.slice(0, 8)}`;
     data.name = `mod-${primaryKey.slice(0, 8)}`;
     data.version = '1.0.0';
     data.digest = `sha256:${primaryKey.replace(/-/g, '')}`;
     data.run_export = 'run';
-  } else if (tableName === SystemTableName.PACKAGE_REGISTRY_MAPPINGS) {
+  } else if (tableName === SYSTEM_TABLE_NAME.PACKAGE_REGISTRY_MAPPINGS) {
     data.namespace = `ns-${primaryKey.slice(0, 8)}`;
     data.registry_url = 'https://registry.example.com';
-  } else if (tableName === SystemTableName.PACKAGE_REGISTRY_OVERRIDES) {
+  } else if (tableName === SYSTEM_TABLE_NAME.PACKAGE_REGISTRY_OVERRIDES) {
     data.namespace = `ns-${primaryKey.slice(0, 8)}`;
     data.name = `pkg-${primaryKey.slice(0, 8)}`;
     data.registry_url = 'https://override.example.com';
-  } else if (tableName === SystemTableName.MODULE_DEPENDENCY_LOCKS) {
+  } else if (tableName === SYSTEM_TABLE_NAME.MODULE_DEPENDENCY_LOCKS) {
     data.lock_id = primaryKey;
     data.target_module_namespace = 'ns';
     data.target_module_name = 'mod';
     data.target_module_version = '1.0.0';
-  } else if (tableName === SystemTableName.WASM_OPERATIONS) {
+  } else if (tableName === SYSTEM_TABLE_NAME.WASM_OPERATIONS) {
     data.operation_id = primaryKey;
     data.tenant_id = 'tenant-1';
     data.command = 'publishModule';
-  } else if (tableName === SystemTableName.DEBUG_SESSIONS) {
+  } else if (tableName === SYSTEM_TABLE_NAME.DEBUG_SESSIONS) {
     data.session_id = primaryKey;
     data.tenant_id = 'tenant-1';
     data.service_name = 'svc-debug';
     data.status = 'active';
     data.created_at = Date.now();
     data.updated_at = Date.now();
-  } else if (tableName === SystemTableName.DEBUG_BREAKPOINTS) {
+  } else if (tableName === SYSTEM_TABLE_NAME.DEBUG_BREAKPOINTS) {
     data.breakpoint_id = primaryKey;
     data.session_id = 'session-1';
     data.tenant_id = 'tenant-1';
@@ -201,7 +201,7 @@ async function executeWrite(cdc, operation, tableName, primaryKey) {
     data.resolved = 1;
     data.created_at = Date.now();
     data.updated_at = Date.now();
-  } else if (tableName === SystemTableName.DEBUG_SNAPSHOTS) {
+  } else if (tableName === SYSTEM_TABLE_NAME.DEBUG_SNAPSHOTS) {
     data.snapshot_id = primaryKey;
     data.session_id = 'session-1';
     data.tenant_id = 'tenant-1';

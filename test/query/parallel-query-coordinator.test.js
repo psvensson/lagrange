@@ -1,5 +1,5 @@
 import {test} from '../../src/test-helpers/tap.js';
-import {ParallelQueryCoordinator} from '../../src/query/parallel-query-coordinator.js';
+import {ParallelQueryCoordinator} from '../../src/query/distributed/parallel-query-coordinator.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 
 const config = ConfigurationManager.getInstance();

@@ -11,7 +11,7 @@
 import {describe, it} from 'node:test';
 import assert from 'node:assert/strict';
 import {buildCallbackContext} from
-  '../../src/query/callback-context.js';
+  '../../src/query/callback/callback-context.js';
 import {ExecutionContext} from
   '../../src/query/execution-context.js';
 import {BudgetEnforcer} from

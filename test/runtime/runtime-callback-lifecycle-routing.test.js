@@ -28,10 +28,10 @@ import {
 } from '../../src/runtime/runtime-driver-errors.js';
 import {
   CallbackExecutionHost,
-} from '../../src/query/callback-execution-host.js';
+} from '../../src/query/callback/callback-execution-host.js';
 import {
   CallbackRuntimeDriverRegistry,
-} from '../../src/query/callback-runtime-driver-registry.js';
+} from '../../src/query/callback/callback-runtime-driver-registry.js';
 import {
   RUNTIME_KIND,
   LIFECYCLE_EVENT,

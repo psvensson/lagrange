@@ -6,7 +6,7 @@
 
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import {CDCEventHandler} from '../../src/cdc/cdc-event-handler.js';
-import {SystemTableName} from
+import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {
   CDC_OPERATION, METRICS_LOG_TAG,
@@ -167,7 +167,7 @@ test('handleNodeStateCDC emits metrics.cdc.propagation on state change',
     const infoCalls = collectInfoCalls(handler);
 
     handler.handleNodeStateCDC({
-      tableName: SystemTableName.NODES,
+      tableName: SYSTEM_TABLE_NAME.NODES,
       operation: CDC_OPERATION.UPDATE,
       data: {
         node_id: 'node-1',
@@ -179,7 +179,7 @@ test('handleNodeStateCDC emits metrics.cdc.propagation on state change',
       (c) => c.tag === METRICS_LOG_TAG.CDC_PROPAGATION,
     );
     t.ok(metric, 'metrics.cdc.propagation log emitted');
-    t.equal(metric.data.tableName, SystemTableName.NODES);
+    t.equal(metric.data.tableName, SYSTEM_TABLE_NAME.NODES);
     t.equal(metric.data.operation, CDC_OPERATION.UPDATE);
     t.equal(typeof metric.data.handlerDurationMs, 'number');
     t.ok(
@@ -203,7 +203,7 @@ test('handleNodeStateCDC includes eventAgeMs when timestamp present',
     const infoCalls = collectInfoCalls(handler);
 
     handler.handleNodeStateCDC({
-      tableName: SystemTableName.NODES,
+      tableName: SYSTEM_TABLE_NAME.NODES,
       operation: CDC_OPERATION.UPDATE,
       timestamp: Date.now() - 30,
       data: {
@@ -240,7 +240,7 @@ test('handleNodeStateCDC uses info level not debug for metrics',
     const infoCalls = collectInfoCalls(handler);
 
     handler.handleNodeStateCDC({
-      tableName: SystemTableName.NODES,
+      tableName: SYSTEM_TABLE_NAME.NODES,
       operation: CDC_OPERATION.UPDATE,
       data: {
         node_id: 'node-1',

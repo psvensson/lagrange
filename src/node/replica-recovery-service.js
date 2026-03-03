@@ -9,7 +9,7 @@ import {v4 as uuidv4} from 'uuid';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
-import {SystemTableName} from '../bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {NUM, SERVICE_TYPE} from '../constants/index.js';
 import {assertCritical} from '../utils/assert.js';
 import {
@@ -504,7 +504,7 @@ class ReplicaRecoveryService extends EventEmitter {
 
     try {
       await this.cdcIntegrationService.insertSystemTableRow(
-        SystemTableName.SERVICES,
+        SYSTEM_TABLE_NAME.SERVICES,
         {
           service_id: serviceId,
           node_id: nodeId,
@@ -560,7 +560,7 @@ class ReplicaRecoveryService extends EventEmitter {
 
     try {
       await this.cdcIntegrationService.insertSystemTableRow(
-        SystemTableName.SERVICES,
+        SYSTEM_TABLE_NAME.SERVICES,
         {
           service_id: serviceId,
           node_id: nodeId,
@@ -608,7 +608,7 @@ class ReplicaRecoveryService extends EventEmitter {
       REPLICA_RECOVERY_ERROR_MSG.MISSING_SYSTEM_TABLE_CACHE,
     );
 
-    return this.systemTableCache.getAll(SystemTableName.PARTITIONS);
+    return this.systemTableCache.getAll(SYSTEM_TABLE_NAME.PARTITIONS);
   }
 
   /**
@@ -622,7 +622,7 @@ class ReplicaRecoveryService extends EventEmitter {
       REPLICA_RECOVERY_ERROR_MSG.MISSING_SYSTEM_TABLE_CACHE,
     );
 
-    return this.systemTableCache.getAll(SystemTableName.MESSAGE_GROUPS);
+    return this.systemTableCache.getAll(SYSTEM_TABLE_NAME.MESSAGE_GROUPS);
   }
 
   /**
@@ -637,7 +637,7 @@ class ReplicaRecoveryService extends EventEmitter {
       REPLICA_RECOVERY_ERROR_MSG.MISSING_SYSTEM_TABLE_CACHE,
     );
 
-    const services = this.systemTableCache.filter(SystemTableName.SERVICES, (service) => {
+    const services = this.systemTableCache.filter(SYSTEM_TABLE_NAME.SERVICES, (service) => {
       return service.partition_id === partitionId &&
         service.service_type === ServiceType.PARTITION_REPLICA &&
         service.status === ReplicaStatus.ACTIVE;
@@ -662,7 +662,7 @@ class ReplicaRecoveryService extends EventEmitter {
       REPLICA_RECOVERY_ERROR_MSG.MISSING_SYSTEM_TABLE_CACHE,
     );
 
-    const services = this.systemTableCache.filter(SystemTableName.SERVICES, (service) => {
+    const services = this.systemTableCache.filter(SYSTEM_TABLE_NAME.SERVICES, (service) => {
       return service.group_id === groupId &&
         service.service_type === ServiceType.MESSAGE_GROUP_REPLICA &&
         service.status === ReplicaStatus.ACTIVE;
@@ -686,7 +686,7 @@ class ReplicaRecoveryService extends EventEmitter {
       REPLICA_RECOVERY_ERROR_MSG.MISSING_SYSTEM_TABLE_CACHE,
     );
 
-    return this.systemTableCache.filter(SystemTableName.NODES, (node) => {
+    return this.systemTableCache.filter(SYSTEM_TABLE_NAME.NODES, (node) => {
       return node.status === NodeStatus.ACTIVE;
     });
   }
@@ -703,7 +703,7 @@ class ReplicaRecoveryService extends EventEmitter {
       REPLICA_RECOVERY_ERROR_MSG.MISSING_SYSTEM_TABLE_CACHE,
     );
 
-    const nodes = this.systemTableCache.filter(SystemTableName.NODES, (node) => {
+    const nodes = this.systemTableCache.filter(SYSTEM_TABLE_NAME.NODES, (node) => {
       return node.node_id === nodeId;
     });
     return nodes[NUM.ZERO] || null;

@@ -20,13 +20,13 @@ import {
   STAGE_STATE,
   CALLBACK_TELEMETRY_EVENT,
   STAGE_RESULT_FIELD as SF,
-} from '../../src/query/callback-stage-constants.js';
+} from '../../src/query/callback/callback-stage-constants.js';
 import {
   CallbackExecutionHost,
-} from '../../src/query/callback-execution-host.js';
+} from '../../src/query/callback/callback-execution-host.js';
 import {
   createCallbackDriverRegistry,
-} from '../../src/query/callback-runtime-driver-registry.js';
+} from '../../src/query/callback/callback-runtime-driver-registry.js';
 import {RuntimeDriverRegistry} from
   '../../src/runtime/runtime-driver-registry.js';
 import {createRuntimeStartupWiring} from

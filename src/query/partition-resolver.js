@@ -14,7 +14,7 @@ import {
   QUERY_SUBSYSTEM,
 } from './query-constants.js';
 import {DISTRIBUTED_PREDICATE_SHAPE as PREDICATE_SHAPE} from
-  './distributed-query-plan-constants.js';
+  './distributed/distributed-query-plan-constants.js';
 
 const KEY_CONDITION_TYPE = Object.freeze({
   EQUALS: 'equals',
@@ -49,8 +49,8 @@ class PartitionResolver {
       if (loggingService.isInitialized()) {
         return loggingService.forSubsystem(QUERY_SUBSYSTEM.PARTITION_RESOLVER);
       }
-    } catch {
-      // Logging not available
+    } catch (_logErr) {
+      // Logging not available — fall through to console
     }
     return console;
   }
@@ -275,7 +275,7 @@ class PartitionResolver {
           table.tableId === tableName,
         ) || null;
       }
-    } catch {
+    } catch (_cacheErr) {
       // Cache not available
     }
     return null;

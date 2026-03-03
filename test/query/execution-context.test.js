@@ -40,14 +40,14 @@ import {
 } from '../../src/query/guardrail-constants.js';
 import {
   ExchangeManager,
-} from '../../src/query/exchange-manager.js';
+} from '../../src/query/distributed/exchange-manager.js';
 import {
   DedupeRegistry,
 } from '../../src/query/dedupe-registry.js';
 import {
   BROADCAST_FIELD,
   PRIMITIVE_ERROR_MSG,
-} from '../../src/query/distributed-context-constants.js';
+} from '../../src/query/distributed/distributed-context-constants.js';
 
 /**
  * Create a minimal ExecutionContext for testing.

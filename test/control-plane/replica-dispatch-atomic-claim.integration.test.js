@@ -10,7 +10,7 @@ import {ReplicaDispatchService} from
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
-import {SystemTableName} from
+import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {ControlPlaneField} from
   '../../src/control-plane/control-plane-constants.js';
@@ -92,7 +92,7 @@ test(
       },
       systemTableCache: {
         get: (tableName, key) => {
-          if (tableName === SystemTableName.NODES && key === 'node-2') {
+          if (tableName === SYSTEM_TABLE_NAME.NODES && key === 'node-2') {
             return {
               node_id: 'node-2',
               status: SERVICE_STATUS.ACTIVE,
@@ -100,14 +100,14 @@ test(
               ready_lease_expires_at: Date.now() + 30000,
             };
           }
-          if (tableName === SystemTableName.REPLICA_OPERATIONS &&
+          if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS &&
               key === operationRow.operation_id) {
             return operationRow;
           }
           return null;
         },
         getAll: (tableName) => {
-          if (tableName === SystemTableName.SERVICES) {
+          if (tableName === SYSTEM_TABLE_NAME.SERVICES) {
             return [{
               [COLUMN.NODE_ID]: 'node-2',
               [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
@@ -132,7 +132,7 @@ test(
 
     try {
       await service.handleCdcApplied(leaderMessageGroup, {
-        tableName: SystemTableName.REPLICA_OPERATIONS,
+        tableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
         data: operationRow,
       });
       await service.handleReplicaOperationDispatch({
@@ -215,7 +215,7 @@ test(
       },
       systemTableCache: {
         get: (tableName, key) => {
-          if (tableName === SystemTableName.NODES && key === 'node-2') {
+          if (tableName === SYSTEM_TABLE_NAME.NODES && key === 'node-2') {
             return {
               node_id: 'node-2',
               status: SERVICE_STATUS.ACTIVE,
@@ -309,7 +309,7 @@ test(
       },
       systemTableCache: {
         get: (tableName, key) => {
-          if (tableName === SystemTableName.NODES && key === 'node-2') {
+          if (tableName === SYSTEM_TABLE_NAME.NODES && key === 'node-2') {
             return {
               node_id: 'node-2',
               status: SERVICE_STATUS.ACTIVE,
@@ -317,14 +317,14 @@ test(
               ready_lease_expires_at: Date.now() + 30000,
             };
           }
-          if (tableName === SystemTableName.REPLICA_OPERATIONS &&
+          if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS &&
               key === operationRow.operation_id) {
             return operationRow;
           }
           return null;
         },
         getAll: (tableName) => {
-          if (tableName === SystemTableName.SERVICES) {
+          if (tableName === SYSTEM_TABLE_NAME.SERVICES) {
             return [{
               [COLUMN.NODE_ID]: 'node-2',
               [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
@@ -349,7 +349,7 @@ test(
 
     try {
       await service.handleCdcApplied(followerMessageGroup, {
-        tableName: SystemTableName.REPLICA_OPERATIONS,
+        tableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
         data: operationRow,
       });
 
@@ -436,10 +436,10 @@ test(
       },
       systemTableCache: {
         get: (tableName, key) => {
-          if (tableName === SystemTableName.NODES) {
+          if (tableName === SYSTEM_TABLE_NAME.NODES) {
             return nodeStore.get(key) || null;
           }
-          if (tableName === SystemTableName.REPLICA_OPERATIONS &&
+          if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS &&
               key === operationRow.operation_id) {
             return operationRow;
           }
@@ -575,7 +575,7 @@ test(
       },
       systemTableCache: {
         get: (tableName, key) => {
-          if (tableName === SystemTableName.NODES && key === 'node-2') {
+          if (tableName === SYSTEM_TABLE_NAME.NODES && key === 'node-2') {
             return {
               node_id: 'node-2',
               status: SERVICE_STATUS.ACTIVE,
@@ -583,14 +583,14 @@ test(
               ready_lease_expires_at: Date.now() + 30000,
             };
           }
-          if (tableName === SystemTableName.REPLICA_OPERATIONS &&
+          if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS &&
               key === operationRow.operation_id) {
             return operationRow;
           }
           return null;
         },
         getAll: (tableName) => {
-          if (tableName === SystemTableName.SERVICES) {
+          if (tableName === SYSTEM_TABLE_NAME.SERVICES) {
             return [{
               [COLUMN.NODE_ID]: 'node-2',
               [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
@@ -707,10 +707,10 @@ test(
       },
       systemTableCache: {
         get: (tableName, key) => {
-          if (tableName === SystemTableName.NODES) {
+          if (tableName === SYSTEM_TABLE_NAME.NODES) {
             return nodeStore.get(key) || null;
           }
-          if (tableName === SystemTableName.REPLICA_OPERATIONS &&
+          if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS &&
               key === operationRow.operation_id) {
             return operationRow;
           }
@@ -763,7 +763,7 @@ test(
       nodeStore.set('node-2', readyNodeRow);
 
       await service.handleCdcApplied(leaderMessageGroup, {
-        tableName: SystemTableName.NODES,
+        tableName: SYSTEM_TABLE_NAME.NODES,
         data: readyNodeRow,
       });
 
@@ -825,10 +825,10 @@ test(
         return false;
       },
       get: (tableName, key) => {
-        if (tableName === SystemTableName.NODES) {
+        if (tableName === SYSTEM_TABLE_NAME.NODES) {
           return nodeStore.get(key) || null;
         }
-        if (tableName === SystemTableName.REPLICA_OPERATIONS &&
+        if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS &&
             key === operationRow.operation_id) {
           return operationRow;
         }
@@ -909,7 +909,7 @@ test(
       };
       nodeStore.set('node-2', readyNodeRow);
 
-      cacheListener(SystemTableName.NODES, 'UPDATE', readyNodeRow);
+      cacheListener(SYSTEM_TABLE_NAME.NODES, 'UPDATE', readyNodeRow);
       await new Promise((resolve) => setTimeout(resolve, 5));
 
       t.equal(

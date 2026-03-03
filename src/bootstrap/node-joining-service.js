@@ -19,13 +19,11 @@
  * Requirements: 4.1, 4.6, 4.7, 7.8, 7.10, 7.11, 7.14
  */
 
-import os from 'os';
 import {EventEmitter} from 'events';
 import {v4 as uuidv4} from 'uuid';
 import {LoggingService} from '../logging/logging-service.js';
 import {assertCritical} from '../utils/assert.js';
 import {NodeService} from '../node/node-service.js';
-import {MessageGroupService} from '../message-group/message-group-service.js';
 import {
   resolveMessageGroupTargetAddressFromCache,
 } from '../message-group/message-group-target-resolver.js';
@@ -33,7 +31,6 @@ import {
   MESSAGE_GROUP_ASSIGNMENT_STRATEGY as AssignmentStrategy,
 } from './message-group-assignment.js';
 import {ReplicaHandlerSetup} from './shared/replica-handler-setup.js';
-import {MessageRouterSetup} from './shared/message-router-setup.js';
 import {CDCIntegrationSetup} from './shared/cdc-integration-setup.js';
 import {ControlPlaneSetup} from './shared/control-plane-setup.js';
 import {LatencyTopologySetup} from './shared/latency-topology-setup.js';
@@ -51,7 +48,6 @@ import {
   CDCPipelineReadinessGate,
 } from '../cdc/cdc-pipeline-readiness-gate.js';
 import {
-  CDC_PIPELINE_READINESS_TIMEOUT_MS,
   CDC_LIFECYCLE_LOG_MSG,
 } from '../constants/cdc-lifecycle-constants.js';
 import {
@@ -59,36 +55,21 @@ import {
 } from '../cache/system-cache-key-descriptor.js';
 import {SQLQueryEngine} from '../query/sql-query-engine.js';
 import {TablePolicyService} from '../policy/table-policy-service.js';
-import {ReplicaStatus} from '../rebalancer/replica-status.js';
 import {NodeStorageBudgetSetup} from './shared/node-storage-budget-setup.js';
 import {
   BOOTSTRAP_EVENT,
   BOOTSTRAP_SUBSYSTEM,
-  BOOTSTRAP_PIPELINE_ERROR_CODE,
   JOINING_PHASE,
 } from './bootstrap-constants.js';
 import {
-  INITIAL_PARTITION_IDS,
-} from './system-table-schemas-constants.js';
-import {
-  getMissingSystemServiceLeaders,
-  getMissingSystemServiceLeaderCount,
-  isSystemTableWriteReady,
-} from '../cache/leader-readiness-gate.js';
-import {
   JOIN_BACKFILL_QUERY,
-  JOINING_CLEANUP_RESULT,
-  JOINING_CLEANUP_STEP,
   JOINING_DEFAULT,
   JOINING_ERROR_MSG,
   JOINING_ERROR_NAME,
   JOINING_HTTP,
   JOINING_LOG_MSG,
   JOINING_UNIFIED_RECONCILE,
-  JOIN_READINESS_DEFAULT_TABLE,
-  JOIN_READINESS_REASON,
-  JOIN_READINESS_REPAIR,
-  JOIN_READINESS_SCHEMA_FIELDS,
+
 } from './node-joining-constants.js';
 import {createRuntimeStartupWiring} from '../runtime/runtime-startup-wiring.js';
 import {
@@ -96,8 +77,33 @@ import {
   WorkClassScheduler,
 } from '../runtime/work-class-scheduler.js';
 import {
-  ENDPOINT_SYNC_HEALTH,
-} from '../runtime/endpoint-sync-constants.js';
+  JoinReadinessEvaluator,
+} from './join-readiness-evaluator.js';
+import {
+  JoinCleanupHandler,
+} from './join-cleanup-handler.js';
+import {
+  ContactSeedPhase,
+  parseBootstrapError as _parseBootstrapError,
+  formatLeaderMetadataDetails as _formatLeaderMetadataDetails,
+  resolveSeedContactRetryAfterMs as _resolveSeedContactRetryAfterMs,
+} from './phases/contact-seed-phase.js';
+import {
+  ConnectWebSocketPhase,
+  deriveWsAddressFromNodeAddress as _deriveWsAddressFromNodeAddress,
+} from './phases/connect-websocket-phase.js';
+import {
+  QuerySystemStatePhase,
+} from './phases/query-system-state-phase.js';
+import {
+  WaitForLeadershipPhase,
+} from './phases/wait-for-leadership-phase.js';
+import {
+  CreateMessageGroupPhase,
+} from './phases/create-message-group-phase.js';
+import {
+  JoinMessageGroupPhase,
+} from './phases/join-message-group-phase.js';
 import {
   CONTROL_PLANE_ROLLOUT_REQUIRED,
   assertRequiredControlPlaneRollout,
@@ -110,30 +116,20 @@ import {
 } from '../control-plane/control-plane-constants.js';
 import {STORAGE_DEFAULT} from '../storage/storage-constants.js';
 import {
-  ADDRESS,
-  CDC_OPERATION,
   COLUMN,
-  ENTITY_TYPE,
-  ENDPOINT_STATUS,
-  HTTP_STATUS,
   NUM,
-  PROTOCOL,
-  RUNTIME_KIND,
   SERVICE_DESCRIPTOR_FIELD,
-  SERVICE_LIFECYCLE_STATE,
   SERVICE_STATUS,
   SERVICE_TYPE,
   STATE,
   STRING,
   TABLES,
-  TRANSPORT_TYPE,
   TYPEOF,
   TIME_MS,
   UNIFIED_SERVICE_TYPE,
 } from '../constants/index.js';
 import {RAFT_ROLE} from '../raft/constants.js';
-import {ENTRYPOINT_DEFAULT} from '../constants/entrypoint.js';
-import {META_SERVICE_ID} from '../constants/wasm-meta.js';
+
 import {CDC_EVENT} from '../cdc/cdc-constants.js';
 import {createJoiningPhaseOwners} from './owners/join-phase-owners.js';
 import {StartupPipelineRunner} from './pipeline/startup-pipeline-runner.js';
@@ -145,8 +141,18 @@ import {
   RuntimeServiceHandlerSetup,
 } from './shared/runtime-service-handler-setup.js';
 import {
-  registerBuiltInMetaServiceEndpoints,
-} from './shared/meta-service-definition-registration.js';
+  resolveCanonicalRequiredSchemaVersion as _resolveCanonicalRequiredSchemaVersion,
+  resolveCanonicalAppliedSchemaVersion as _resolveCanonicalAppliedSchemaVersion,
+  extractCanonicalSnapshotSchemaVersion as _extractCanonicalSnapshotSchemaVersion,
+  extractCanonicalCacheSchemaVersion as _extractCanonicalCacheSchemaVersion,
+  extractCanonicalTableMetadataSchemaVersion
+  as _extractCanonicalTableMetadataSchemaVersion,
+  extractJoinSchemaVersionFromRecord as _extractJoinSchemaVersionFromRecord,
+  selectNewestJoinSchemaVersion as _selectNewestJoinSchemaVersion,
+  normalizeJoinSchemaVersion as _normalizeJoinSchemaVersion,
+  compareJoinSchemaVersions as _compareJoinSchemaVersions,
+  tryParseJoinSchemaHlc as _tryParseJoinSchemaHlc,
+} from './join-schema-version-resolver.js';
 import {
   MessageGroupServiceAdapter,
   RuntimeServiceAdapter,
@@ -156,58 +162,10 @@ import {
 
 const JoiningPhase = JOINING_PHASE;
 const JoiningEvent = BOOTSTRAP_EVENT;
-const JOINING_REQUIRED_WRITE_TABLES = Object.freeze([
-  TABLES.NODES,
-  TABLES.NODE_ENDPOINTS,
-]);
-const DEFAULT_CACHE_SYNC_TABLES = new Set(CACHE_HYDRATION_TABLES);
-const CREATE_SELF_HOSTED_MESSAGE_GROUP_POLICY = Object.freeze({
-  ensureLocalAccess: false,
-  placementConstraints: {
-    spreadAcrossNodes: false,
-  },
-});
-function shouldAttachPartitionCdcPropagation(tableName) {
-  return DEFAULT_CACHE_SYNC_TABLES.has(tableName);
-}
-const JOIN_READINESS_IN_FLIGHT_EXCLUDED_STATUSES = new Set([
-  String(SERVICE_STATUS.ACTIVE).toLowerCase(),
-  String(ReplicaStatus.REMOVED).toLowerCase(),
-  String(ReplicaStatus.FAILED).toLowerCase(),
-]);
-const JOIN_READINESS_REASON_PRECEDENCE = Object.freeze([
-  JOIN_READINESS_REASON.ROUTING_NOT_READY,
-  JOIN_READINESS_REASON.SCHEMA_VERSION_UNKNOWN,
-  JOIN_READINESS_REASON.SCHEMA_VERSION_LAG,
-  JOIN_READINESS_REASON.TOPOLOGY_NOT_READY,
-]);
+import {
+  shouldAttachPartitionCdcPropagation,
+} from './shared/cdc-propagation-filter.js';
 
-/**
- * Maps each JOINING_PHASE to its index in the cleanup steps array.
- * Phases that completed before the failed phase need cleanup.
- * The failed phase itself also gets cleanup.
- * @type {Object<string, number>}
- */
-const JOINING_PHASE_TO_CLEANUP_INDEX = Object.freeze({
-  [JoiningPhase.QUERYING_STATE]: NUM.ZERO,
-  [JoiningPhase.WAITING_LEADERSHIP]: NUM.ONE,
-  [JoiningPhase.CREATING_MESSAGE_GROUP]: NUM.TWO,
-  [JoiningPhase.JOINING_MESSAGE_GROUP]: NUM.TWO,
-  [JoiningPhase.CONNECTING_WEBSOCKET]: NUM.THREE,
-  [JoiningPhase.CONTACTING_SEED]: NUM.FOUR,
-});
-
-/**
- * Cleanup steps in reverse phase order.
- * Each step undoes the work of the corresponding join phase.
- * @type {string[]}
- */
-const JOINING_CLEANUP_STEPS_REVERSE = Object.freeze([
-  JOINING_CLEANUP_STEP.QUERYING_STATE,
-  JOINING_CLEANUP_STEP.WAITING_LEADERSHIP,
-  JOINING_CLEANUP_STEP.MESSAGE_GROUP,
-  JOINING_CLEANUP_STEP.CONNECTING_WEBSOCKET,
-]);
 
 /**
  * NodeJoiningService handles the process of a new node joining an existing cluster.
@@ -329,10 +287,6 @@ class NodeJoiningService extends EventEmitter {
     this.systemCacheHydrated = false;
     // Track CDC subscription status
     this.cdcSubscriptionsActive = false;
-    this.lastCanonicalJoinRepairAtMs = NUM.ZERO;
-    this.canonicalJoinRepairPromise = null;
-    this.lastClusterMeshSignature = null;
-
     // Control plane target address for control messages
     this.controlPlaneTargetAddress = null;
 
@@ -361,6 +315,339 @@ class NodeJoiningService extends EventEmitter {
       ociFeatureGateEnabled: Boolean(options.ociFeatureGateEnabled),
     });
     this.joiningPhaseOwners = createJoiningPhaseOwners(this);
+
+    // Join readiness evaluator (extracted helper)
+    this.joinReadinessEvaluator = new JoinReadinessEvaluator({
+      nodeId: this.nodeId,
+      now: this.now,
+      sleep: this.sleep,
+      delegates: {
+        resolveControlPlaneTargetAddress: (opts) =>
+          this.resolveControlPlaneTargetAddress(opts),
+        getMissingSystemServiceLeaders: (cache) =>
+          this.getMissingSystemServiceLeaders(cache),
+        getBlockingSystemServiceLeaders: (missing, cache) =>
+          this.getBlockingSystemServiceLeaders(missing, cache),
+        backfillPropagatedCacheTables: (tables) =>
+          this.backfillPropagatedCacheTablesFromAuthoritativeState(
+            tables,
+          ),
+        getMessageRouter: () => this.messageRouter,
+        getBootstrapResponse: () => this.bootstrapResponse,
+        getSystemCacheHydrated: () => this.systemCacheHydrated,
+        getJoinReadinessSnapshotProvider: () =>
+          this.joinReadinessSnapshotProvider,
+        getCdcIntegrationService: () => this.cdcIntegrationService,
+        getLogger: () => this.logger,
+        getConfig: () => this.config,
+      },
+    });
+
+    // Contact seed phase (extracted helper)
+    this.contactSeedPhase = new ContactSeedPhase({
+      nodeId: this.nodeId,
+      delegates: {
+        getSeedNodeAddress: () => this.seedNodeAddress,
+        getNodeAddress: () => this.nodeAddress,
+        getLogger: () => this.logger,
+        getConfig: () => this.config,
+        getNow: () => this.now,
+        getSleep: () => this.sleep,
+        getRandom: () => this.random,
+        getHttpPostImpl: () => this.httpPostImpl,
+        getBootstrapResponse: () => this.bootstrapResponse,
+        setBootstrapResponse: (v) => {
+          this.bootstrapResponse = v;
+        },
+        getSeedNodeId: () => this.seedNodeId,
+        setSeedNodeId: (v) => {
+          this.seedNodeId = v;
+        },
+        getSeedNodeWsAddress: () => this.seedNodeWsAddress,
+        setSeedNodeWsAddress: (v) => {
+          this.seedNodeWsAddress = v;
+        },
+      },
+    });
+
+    // Connect WebSocket phase (extracted helper)
+    this.connectWebSocketPhase = new ConnectWebSocketPhase({
+      nodeId: this.nodeId,
+      delegates: {
+        getWsPort: () => this.wsPort ?? this.config.wsPort,
+        getNodeAddress: () => this.nodeAddress,
+        getLogger: () => this.logger,
+        getIdentifyPayload: () =>
+          this.getIdentifyBootstrapPayload(),
+        getMessageRouter: () => this.messageRouter,
+        setMessageRouter: (v) => {
+          this.messageRouter = v;
+        },
+        setTransport: (v) => {
+          this.transport = v;
+        },
+        getLeaderMessageGroupService: () =>
+          this.getLeaderMessageGroupService(),
+        initializeJoiningLifecycleOwners: () =>
+          this.initializeJoiningLifecycleOwners(),
+        triggerJoinReconciler: (reason) =>
+          this.triggerJoinReconciler(reason),
+        getSeedNodeWsAddress: () => this.seedNodeWsAddress,
+        getSeedNodeId: () => this.seedNodeId,
+        sendControlPlaneNodeStateUpdate: (opts) =>
+          this.sendControlPlaneNodeStateUpdate(opts),
+        getNodeCapabilities: () =>
+          this.getNodeCapabilities(),
+        resolveMeshConnectivityNodeRows: () =>
+          this.resolveMeshConnectivityNodeRows(),
+        buildClusterMeshSignature: (rows) =>
+          this.buildClusterMeshSignature(rows),
+        setLastClusterMeshSignature: (sig) => {
+          this.joinReadinessEvaluator
+            .lastClusterMeshSignature = sig;
+        },
+      },
+    });
+
+    // Join cleanup handler (extracted helper)
+    this.joinCleanupHandler = new JoinCleanupHandler({
+      nodeId: this.nodeId,
+      delegates: {
+        getLogger: () => this.logger,
+        getNow: () => this.now,
+        getPhase: () => this.phase,
+        setPhase: (p) => {
+          this.phase = p;
+        },
+        getLastError: () => this.lastError,
+        setLastError: (e) => {
+          this.lastError = e;
+        },
+        getStartTime: () => this.startTime,
+        getBootstrapResponse: () => this.bootstrapResponse,
+        getMessageGroupServices: () => this.messageGroupServices,
+        getPartitionServices: () => this.partitionServices,
+        getTransport: () => this.transport,
+        setTransport: (v) => {
+          this.transport = v;
+        },
+        getMessageRouter: () => this.messageRouter,
+        setMessageRouter: (v) => {
+          this.messageRouter = v;
+        },
+        getCdcIntegrationService: () =>
+          this.cdcIntegrationService,
+        setCdcIntegrationService: (v) => {
+          this.cdcIntegrationService = v;
+        },
+        getLifecycleStateMachine: () =>
+          this.lifecycleStateMachine,
+        getRebalanceCoordinator: () =>
+          this.rebalanceCoordinator,
+        setRebalanceCoordinator: (v) => {
+          this.rebalanceCoordinator = v;
+        },
+        getLatencyTopology: () => this.latencyTopology,
+        setLatencyTopology: (v) => {
+          this.latencyTopology = v;
+        },
+        getReplicaStateMachine: () => this.replicaStateMachine,
+        setReplicaStateMachine: (v) => {
+          this.replicaStateMachine = v;
+        },
+        getRpcClient: () => this.rpcClient,
+        setRpcClient: (v) => {
+          this.rpcClient = v;
+        },
+        getHeartbeatService: () => this.heartbeatService,
+        setHeartbeatService: (v) => {
+          this.heartbeatService = v;
+        },
+        getLeaseService: () => this.leaseService,
+        setLeaseService: (v) => {
+          this.leaseService = v;
+        },
+        getEndpointService: () => this.endpointService,
+        setEndpointService: (v) => {
+          this.endpointService = v;
+        },
+        getDispatchService: () => this.dispatchService,
+        setDispatchService: (v) => {
+          this.dispatchService = v;
+        },
+        getReplicaHandler: () => this.replicaHandler,
+        setReplicaHandler: (v) => {
+          this.replicaHandler = v;
+        },
+        stopJoiningLifecycleOwners: () =>
+          this.stopJoiningLifecycleOwners(),
+        emit: (event, data) => this.emit(event, data),
+      },
+    });
+
+    // Query system state phase (extracted helper)
+    this.querySystemStatePhase = new QuerySystemStatePhase({
+      nodeId: this.nodeId,
+      nodeAddress: this.nodeAddress,
+      delegates: {
+        getLogger: () => this.logger,
+        getConfig: () => this.config,
+        getNow: () => this.now,
+        getWsPort: () => this.wsPort ?? this.config.wsPort,
+        getBootstrapResponse: () => this.bootstrapResponse,
+        getLifecycleStateMachine: () =>
+          this.lifecycleStateMachine,
+        getMessageRouter: () => this.messageRouter,
+        getCdcIntegrationService: () =>
+          this.cdcIntegrationService,
+        getSystemCacheHydrated: () =>
+          this.systemCacheHydrated,
+        setSystemCacheHydrated: (v) => {
+          this.systemCacheHydrated = v;
+        },
+        getCdcSubscriptionsActive: () =>
+          this.cdcSubscriptionsActive,
+        getPartitionServices: () => this.partitionServices,
+        getMessageGroupServices: () =>
+          this.messageGroupServices,
+        getNodeStorageBudgetService: () =>
+          this.getNodeStorageBudgetService(),
+        ensureLatencyTopologyOwners: () =>
+          this.ensureLatencyTopologyOwners(),
+        ensureTablePolicyService: (cache) => {
+          if (!this.tablePolicyService) {
+            this.tablePolicyService = new TablePolicyService({
+              systemTableCache: cache,
+              cdcIntegrationService:
+                this.cdcIntegrationService,
+            });
+            this.tablePolicyService.initialize();
+          }
+        },
+        applySystemCacheToPartitions: (cache) => {
+          for (const partition of
+            this.partitionServices.values()) {
+            partition.setSystemTableCache(cache);
+            partition.setTablePolicyService(
+              this.tablePolicyService,
+            );
+          }
+        },
+        waitForSystemServiceLeaders: (cache) =>
+          this.waitForSystemServiceLeaders(cache),
+        registerCreateSelfHostedMetadata: () =>
+          this.registerCreateSelfHostedMetadata(),
+        registerNodeInCluster: () =>
+          this.registerNodeInCluster(),
+        subscribeToCDCEvents: () =>
+          this.subscribeToCDCEvents(),
+        createCdcPipelineReadinessGate: (cache) =>
+          this.createCdcPipelineReadinessGate(cache),
+        backfillPropagatedCacheTablesFromAuthoritativeState:
+          () => this
+            .backfillPropagatedCacheTablesFromAuthoritativeState(),
+        triggerJoinReconciler: (reason) =>
+          this.triggerJoinReconciler(reason),
+        stopJoiningLifecycleOwners: () =>
+          this.stopJoiningLifecycleOwners(),
+      },
+    });
+
+    // Wait for leadership phase (extracted helper)
+    this.waitForLeadershipPhase = new WaitForLeadershipPhase({
+      nodeId: this.nodeId,
+      delegates: {
+        getLogger: () => this.logger,
+        getConfig: () => this.config,
+        getNow: () => this.now,
+        getSleep: () => this.sleep,
+        getSystemTableCache: () =>
+          NodeService.getInstance().getSystemTableCache(),
+        getMessageGroupServicesSize: () =>
+          this.messageGroupServices.size,
+        getMessageGroupServices: () =>
+          this.messageGroupServices,
+        hasMessageGroupLeaderInCache: (cache) =>
+          this.hasMessageGroupLeaderInCache(cache),
+        getBootstrapResponse: () => this.bootstrapResponse,
+      },
+    });
+
+    // Create message group phase (extracted helper)
+    this.createMessageGroupPhase =
+      new CreateMessageGroupPhase({
+        nodeId: this.nodeId,
+        delegates: {
+          getLogger: () => this.logger,
+          getConfig: () => this.config,
+          getNow: () => this.now,
+          getSleep: () => this.sleep,
+          getMessageRouter: () => this.messageRouter,
+          getMessageGroupServices: () =>
+            this.messageGroupServices,
+          getJoinMessageGroupReplicas: () =>
+            this.joinMessageGroupReplicas,
+          pushJoinMessageGroupReplica: (replica) => {
+            this.joinMessageGroupReplicas.push(replica);
+          },
+          removeJoinMessageGroupReplica: (replica) => {
+            this.joinMessageGroupReplicas =
+              this.joinMessageGroupReplicas.filter(
+                (s) => s !== replica,
+              );
+          },
+          resetJoinMessageGroupReplicas: () => {
+            this.joinMessageGroupReplicas = [];
+          },
+          resolveJoinReplicaOptions: (id, type) =>
+            this.resolveJoinReplicaOptions(id, type),
+          assertReplicaStartupOwnership: (id) =>
+            this.assertReplicaStartupOwnership(id),
+          queueJoinServiceReplica: (desc, opts) =>
+            this.queueJoinServiceReplica(desc, opts),
+          createJoinServiceDescriptor: (type, id) =>
+            this.createJoinServiceDescriptor(type, id),
+          triggerJoinReconciler: (reason) =>
+            this.triggerJoinReconciler(reason),
+          getBootstrapResponse: () =>
+            this.bootstrapResponse,
+          getSeedNodeAddress: () =>
+            this.seedNodeAddress,
+          getHttpPostImpl: () => this.httpPostImpl,
+          resolveJoinRetryPolicy: () =>
+            this.resolveJoinRetryPolicy(),
+          classifySeedContactFailure: (err, msg) =>
+            this.classifySeedContactFailure(err, msg),
+          computeSeedContactRetryDelayMs: (opts) =>
+            this.computeSeedContactRetryDelayMs(opts),
+          upsertSystemTableRow: (table, data) =>
+            this.upsertSystemTableRow(table, data),
+          registerMessageGroupService: (gId, rId, svc) =>
+            this.registerMessageGroupService(gId, rId, svc),
+        },
+      });
+
+    // Join message group phase (extracted helper)
+    this.joinMessageGroupPhase =
+      new JoinMessageGroupPhase({
+        nodeId: this.nodeId,
+        delegates: {
+          getLogger: () => this.logger,
+          getMessageRouter: () => this.messageRouter,
+          getMessageGroupServices: () =>
+            this.messageGroupServices,
+          getBootstrapResponse: () =>
+            this.bootstrapResponse,
+          queueJoinServiceReplica: (desc, opts) =>
+            this.queueJoinServiceReplica(desc, opts),
+          createJoinServiceDescriptor: (type, id) =>
+            this.createJoinServiceDescriptor(type, id),
+          triggerJoinReconciler: (reason) =>
+            this.triggerJoinReconciler(reason),
+          registerMessageGroupService: (gId, rId, svc) =>
+            this.registerMessageGroupService(gId, rId, svc),
+        },
+      });
 
     // Error tracking
     this.lastError = null;
@@ -590,127 +877,12 @@ class NodeJoiningService extends EventEmitter {
 
   /**
    * Wait for canonical join readiness convergence before transitioning READY.
-   * The gate is snapshot-only and mirrors strict pre-load semantics.
    * @return {Promise<void>}
    * @private
    */
   async waitForCanonicalJoinReadinessConvergence() {
-    if (this.systemCacheHydrated !== true) {
-      return;
-    }
-
-    const timeoutMs = this.resolveJoinReadinessTimeoutMs();
-    if (!Number.isFinite(timeoutMs) || timeoutMs <= NUM.ZERO) {
-      return;
-    }
-
-    const pollIntervalMs = this.resolveJoinReadinessPollIntervalMs();
-    const startTime = this.now();
-    let attempts = NUM.ZERO;
-    let lastEvaluation = null;
-    let lastSnapshotError = null;
-    let lastProgressSignature = null;
-    let lastProgressAtMs = startTime;
-
-    while (this.now() - startTime < timeoutMs) {
-      attempts += NUM.ONE;
-      const snapshotResult = await this.collectCanonicalJoinReadinessSnapshot();
-      if (snapshotResult.error) {
-        lastSnapshotError = snapshotResult.error;
-      }
-
-      lastEvaluation = this.evaluateCanonicalJoinReadinessSnapshot(
-        snapshotResult.snapshot,
-      );
-      const progressSignature = JSON.stringify({
-        reasons: [...lastEvaluation.reasons].sort(),
-        requiredSchemaVersion: lastEvaluation.requiredSchemaVersion || null,
-        appliedSchemaVersion: lastEvaluation.appliedSchemaVersion || null,
-        missingLeaders: lastEvaluation.missingLeaders || {},
-        inFlightReplicaOperations: lastEvaluation.inFlightReplicaOperations || NUM.ZERO,
-        missingNodeEndpointNodeIds:
-          lastEvaluation.missingNodeEndpointNodeIds || [],
-        missingPostgresWireNodeIds:
-          lastEvaluation.missingPostgresWireNodeIds || [],
-        snapshotError: lastSnapshotError?.message || null,
-      });
-      if (progressSignature !== lastProgressSignature) {
-        lastProgressSignature = progressSignature;
-        lastProgressAtMs = this.now();
-      }
-      if (lastEvaluation.ready) {
-        this.logger.info('Join canonical readiness converged', {
-          nodeId: this.nodeId,
-          attempts,
-          elapsedMs: this.now() - startTime,
-          requiredSchemaVersion: lastEvaluation.requiredSchemaVersion,
-          appliedSchemaVersion: lastEvaluation.appliedSchemaVersion,
-        });
-        return;
-      }
-
-      await this.repairCanonicalJoinReadinessIfNeeded(
-        lastEvaluation,
-        pollIntervalMs,
-      );
-      await this.sleep(pollIntervalMs);
-    }
-
-    const fallbackEvaluation = this.evaluateCanonicalJoinReadinessSnapshot({
-      routingReady: false,
-      topologyReady: false,
-      requiredSchemaVersion: null,
-      appliedSchemaVersion: null,
-    });
-    const terminalEvaluation = lastEvaluation || fallbackEvaluation;
-    const reasonText = terminalEvaluation.reasons.join(', ');
-    const error = new Error(
-      `join_readiness_timeout: ${reasonText} after ${timeoutMs}ms`,
-    );
-    error.code = 'JOIN_READINESS_TIMEOUT';
-    error.joinReadiness = {
-      reasons: terminalEvaluation.reasons,
-      requiredSchemaVersion: terminalEvaluation.requiredSchemaVersion,
-      appliedSchemaVersion: terminalEvaluation.appliedSchemaVersion,
-      requiredVsObservedByNode:
-        this.buildJoinSchemaDiagnosticsByNode(terminalEvaluation),
-      missingLeaders: terminalEvaluation.missingLeaders,
-      inFlightReplicaOperations: terminalEvaluation.inFlightReplicaOperations,
-      inFlightReplicaOperationDetails:
-        terminalEvaluation.inFlightReplicaOperationDetails,
-      missingNodeEndpointNodeIds:
-        terminalEvaluation.missingNodeEndpointNodeIds,
-      missingPostgresWireNodeIds:
-        terminalEvaluation.missingPostgresWireNodeIds,
-      elapsedMs: this.now() - startTime,
-      attempts,
-      snapshotError: lastSnapshotError?.message || null,
-      timeoutKind: lastProgressAtMs === startTime ?
-        'no_progress' :
-        'absolute_deadline_exhausted',
-      lastProgressElapsedMs: Math.max(NUM.ZERO, lastProgressAtMs - startTime),
-    };
-
-    this.logger.error('Join canonical readiness timed out', {
-      nodeId: this.nodeId,
-      timeoutMs,
-      attempts,
-      reasons: terminalEvaluation.reasons,
-      requiredSchemaVersion: terminalEvaluation.requiredSchemaVersion,
-      appliedSchemaVersion: terminalEvaluation.appliedSchemaVersion,
-      missingLeaders: terminalEvaluation.missingLeaders,
-      inFlightReplicaOperations: terminalEvaluation.inFlightReplicaOperations,
-      inFlightReplicaOperationDetails:
-        terminalEvaluation.inFlightReplicaOperationDetails,
-      missingNodeEndpointNodeIds:
-        terminalEvaluation.missingNodeEndpointNodeIds,
-      missingPostgresWireNodeIds:
-        terminalEvaluation.missingPostgresWireNodeIds,
-      snapshotError: lastSnapshotError?.message || null,
-      timeoutKind: error.joinReadiness.timeoutKind,
-      lastProgressElapsedMs: error.joinReadiness.lastProgressElapsedMs,
-    });
-    throw error;
+    return this.joinReadinessEvaluator
+      .waitForCanonicalJoinReadinessConvergence();
   }
 
   /**
@@ -719,10 +891,7 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   resolveJoinReadinessTimeoutMs() {
-    if (Number.isFinite(this.config.joinReadinessTimeoutMs)) {
-      return Math.max(NUM.ZERO, Math.floor(this.config.joinReadinessTimeoutMs));
-    }
-    return this.config.leadershipWaitTimeoutMs;
+    return this.joinReadinessEvaluator.resolveJoinReadinessTimeoutMs();
   }
 
   /**
@@ -731,13 +900,8 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   resolveJoinReadinessPollIntervalMs() {
-    if (Number.isFinite(this.config.joinReadinessPollIntervalMs)) {
-      return Math.max(NUM.ONE, Math.floor(this.config.joinReadinessPollIntervalMs));
-    }
-    return Math.max(
-      NUM.ONE,
-      Math.floor(this.config.leadershipWaitInitialDelayMs),
-    );
+    return this.joinReadinessEvaluator
+      .resolveJoinReadinessPollIntervalMs();
   }
 
   /**
@@ -748,52 +912,12 @@ class NodeJoiningService extends EventEmitter {
    * @return {Promise<void>}
    * @private
    */
-  async repairCanonicalJoinReadinessIfNeeded(evaluation, pollIntervalMs) {
-    if (!evaluation ||
-        !Array.isArray(evaluation.reasons) ||
-        !evaluation.reasons.includes(JOIN_READINESS_REASON.TOPOLOGY_NOT_READY)) {
-      return;
-    }
-
-    if (!this.cdcIntegrationService?.sqlQueryEngine) {
-      return;
-    }
-
-    if (this.canonicalJoinRepairPromise) {
-      return;
-    }
-
-    const minIntervalMs = Math.max(
-      JOIN_READINESS_REPAIR.MIN_INTERVAL_MS,
-      Number.isFinite(pollIntervalMs) ? Math.floor(pollIntervalMs) : NUM.ZERO,
-    );
-    const now = this.now();
-    if (this.lastCanonicalJoinRepairAtMs > NUM.ZERO &&
-        now - this.lastCanonicalJoinRepairAtMs < minIntervalMs) {
-      return;
-    }
-
-    this.lastCanonicalJoinRepairAtMs = now;
-    const repairPromise = this
-      .backfillPropagatedCacheTablesFromAuthoritativeState(
-        JOIN_READINESS_REPAIR.TABLES,
-      )
-      .catch((error) => {
-        this.logger.warn('Canonical join readiness repair backfill failed', {
-          nodeId: this.nodeId,
-          error: error.message,
-          missingNodeEndpointNodeIds: evaluation.missingNodeEndpointNodeIds,
-          missingPostgresWireNodeIds: evaluation.missingPostgresWireNodeIds,
-        });
-      })
-      .finally(() => {
-        if (this.canonicalJoinRepairPromise === repairPromise) {
-          this.canonicalJoinRepairPromise = null;
-        }
-      });
-
-    this.canonicalJoinRepairPromise = repairPromise;
-    await repairPromise;
+  async repairCanonicalJoinReadinessIfNeeded(
+    evaluation,
+    pollIntervalMs,
+  ) {
+    return this.joinReadinessEvaluator
+      .repairCanonicalJoinReadinessIfNeeded(evaluation, pollIntervalMs);
   }
 
   /**
@@ -802,51 +926,17 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   resolveJoinReadinessTableName() {
-    if (typeof this.config.joinReadinessTableName === TYPEOF.STRING) {
-      const normalized = this.config.joinReadinessTableName.trim().toLowerCase();
-      if (normalized.length > NUM.ZERO) {
-        return normalized;
-      }
-    }
-    return JOIN_READINESS_DEFAULT_TABLE;
+    return this.joinReadinessEvaluator.resolveJoinReadinessTableName();
   }
 
   /**
    * Collect one canonical join-readiness snapshot.
-   * Provider errors are folded into a fail-closed snapshot.
    * @return {Promise<{snapshot: Object, error: Error|null}>}
    * @private
    */
   async collectCanonicalJoinReadinessSnapshot() {
-    const context = {
-      nodeId: this.nodeId,
-      tableName: this.resolveJoinReadinessTableName(),
-      bootstrapResponse: this.bootstrapResponse,
-      systemTableCache: NodeService.getInstance().getSystemTableCache(),
-      messageRouter: this.messageRouter,
-    };
-
-    try {
-      const snapshot = this.joinReadinessSnapshotProvider ?
-        await this.joinReadinessSnapshotProvider(context) :
-        this.buildCanonicalJoinReadinessSnapshot(context);
-      return {
-        snapshot,
-        error: null,
-      };
-    } catch (error) {
-      return {
-        snapshot: {
-          nodeId: this.nodeId,
-          tableName: context.tableName,
-          routingReady: false,
-          topologyReady: false,
-          requiredSchemaVersion: null,
-          appliedSchemaVersion: null,
-        },
-        error,
-      };
-    }
+    return this.joinReadinessEvaluator
+      .collectCanonicalJoinReadinessSnapshot();
   }
 
   /**
@@ -856,37 +946,8 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   buildCanonicalJoinReadinessSnapshot(context = {}) {
-    const systemTableCache = context.systemTableCache ||
-      NodeService.getInstance().getSystemTableCache();
-    const tableName = context.tableName || this.resolveJoinReadinessTableName();
-    const targetAddress =
-      this.resolveControlPlaneTargetAddress({allowBootstrapHints: false}) ||
-      this.resolveControlPlaneTargetAddress({allowBootstrapHints: true});
-    const routingReady = this.isControlPlaneAddressReachable(targetAddress);
-    const topology = this.evaluateCanonicalJoinTopologyReadiness(systemTableCache);
-    const requiredSchemaVersion = this.resolveCanonicalRequiredSchemaVersion(
-      tableName,
-      systemTableCache,
-    );
-    const appliedSchemaVersion = this.resolveCanonicalAppliedSchemaVersion(
-      tableName,
-      systemTableCache,
-    );
-
-    return {
-      nodeId: this.nodeId,
-      tableName,
-      routingReady,
-      topologyReady: topology.ready,
-      requiredSchemaVersion,
-      appliedSchemaVersion,
-      requiredNodeIds: this.resolveJoinReadinessRequiredNodeIds(systemTableCache),
-      missingLeaders: topology.missingLeaders,
-      inFlightReplicaOperations: topology.inFlightReplicaOperations,
-      inFlightReplicaOperationDetails: topology.inFlightReplicaOperationDetails,
-      missingNodeEndpointNodeIds: topology.missingNodeEndpointNodeIds,
-      missingPostgresWireNodeIds: topology.missingPostgresWireNodeIds,
-    };
+    return this.joinReadinessEvaluator
+      .buildCanonicalJoinReadinessSnapshot(context);
   }
 
   /**
@@ -896,176 +957,30 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   isControlPlaneAddressReachable(targetAddress) {
-    if (typeof targetAddress !== TYPEOF.STRING ||
-        targetAddress.length === NUM.ZERO) {
-      return false;
-    }
-
-    const match = targetAddress.match(/^([^/]+)\//);
-    const targetNodeId = match ? match[NUM.ONE] : null;
-    if (!targetNodeId) {
-      return false;
-    }
-    if (targetNodeId === this.nodeId) {
-      return true;
-    }
-
-    if (typeof this.messageRouter?.getConnectionState !== TYPEOF.FUNCTION) {
-      return true;
-    }
-    return this.messageRouter.getConnectionState(targetNodeId) === STATE.CONNECTED;
+    return this.joinReadinessEvaluator
+      .isControlPlaneAddressReachable(targetAddress);
   }
 
   /**
    * Evaluate topology readiness for canonical join convergence.
    * @param {Object|null} systemTableCache
-   * @return {{
-   *   ready: boolean,
-   *   missingLeaders: Object|null,
-   *   inFlightReplicaOperations: number,
-   *   inFlightReplicaOperationDetails: Array<Object>,
-   *   missingNodeEndpointNodeIds: string[],
-   *   missingPostgresWireNodeIds: string[],
-   * }}
+   * @return {Object}
    * @private
    */
   evaluateCanonicalJoinTopologyReadiness(systemTableCache) {
-    if (!systemTableCache) {
-      return {
-        ready: false,
-        missingLeaders: null,
-        inFlightReplicaOperations: NUM.ZERO,
-        inFlightReplicaOperationDetails: [],
-        missingNodeEndpointNodeIds: [],
-        missingPostgresWireNodeIds: [],
-      };
-    }
-
-    let missingLeaders = null;
-    let missingCount = Number.POSITIVE_INFINITY;
-    try {
-      const missing = this.getMissingSystemServiceLeaders(systemTableCache);
-      missingLeaders = this.getBlockingSystemServiceLeaders(
-        missing,
-        systemTableCache,
-      );
-      missingCount = getMissingSystemServiceLeaderCount(missingLeaders);
-    } catch {
-      missingLeaders = null;
-      missingCount = Number.POSITIVE_INFINITY;
-    }
-
-    const inFlightReplicaOperationDetails =
-      this.collectCanonicalInFlightReplicaOperationDetails(systemTableCache);
-    const inFlightReplicaOperations = inFlightReplicaOperationDetails.length;
-    const endpointVisibility =
-      this.evaluateCanonicalJoinEndpointVisibility(systemTableCache);
-
-    return {
-      ready: missingCount === NUM.ZERO &&
-        inFlightReplicaOperations === NUM.ZERO &&
-        endpointVisibility.ready === true,
-      missingLeaders,
-      inFlightReplicaOperations,
-      inFlightReplicaOperationDetails,
-      missingNodeEndpointNodeIds: endpointVisibility.missingNodeEndpointNodeIds,
-      missingPostgresWireNodeIds: endpointVisibility.missingPostgresWireNodeIds,
-    };
+    return this.joinReadinessEvaluator
+      .evaluateCanonicalJoinTopologyReadiness(systemTableCache);
   }
 
   /**
    * Ensure local discovery-critical endpoint rows cover every ACTIVE node.
    * @param {Object|null} systemTableCache
-   * @return {{
-   *   ready: boolean,
-   *   missingNodeEndpointNodeIds: string[],
-   *   missingPostgresWireNodeIds: string[],
-   * }}
+   * @return {Object}
    * @private
    */
   evaluateCanonicalJoinEndpointVisibility(systemTableCache) {
-    if (!systemTableCache ||
-        typeof systemTableCache.getAll !== TYPEOF.FUNCTION) {
-      return {
-        ready: false,
-        missingNodeEndpointNodeIds: [],
-        missingPostgresWireNodeIds: [],
-      };
-    }
-
-    const activeNodeIds = this.getCanonicalJoinActiveNodeIds(systemTableCache);
-    if (activeNodeIds.length === NUM.ZERO) {
-      return {
-        ready: false,
-        missingNodeEndpointNodeIds: [],
-        missingPostgresWireNodeIds: [],
-      };
-    }
-
-    const nodeEndpointRows = systemTableCache.getAll(TABLES.NODE_ENDPOINTS) || [];
-    const serviceEndpointRows =
-      systemTableCache.getAll(TABLES.SERVICE_ENDPOINTS) || [];
-    const visibleNodeEndpointNodeIds = new Set();
-    const visiblePostgresWireNodeIds = new Set();
-
-    for (const row of nodeEndpointRows) {
-      const nodeId = String(
-        row?.[COLUMN.NODE_ID] || row?.node_id || row?.nodeId || '',
-      );
-      const transportType = String(
-        row?.[COLUMN.TRANSPORT_TYPE] ||
-          row?.transport_type ||
-          row?.transportType ||
-          '',
-      ).toLowerCase();
-      const status = String(
-        row?.[COLUMN.STATUS] || row?.status || '',
-      ).toLowerCase();
-      if (nodeId.length === NUM.ZERO) {
-        continue;
-      }
-      if (status !== String(ENDPOINT_STATUS.ACTIVE).toLowerCase()) {
-        continue;
-      }
-      if (transportType !== String(TRANSPORT_TYPE.WEBSOCKET).toLowerCase()) {
-        continue;
-      }
-      visibleNodeEndpointNodeIds.add(nodeId);
-    }
-
-    for (const row of serviceEndpointRows) {
-      const nodeId = String(
-        row?.[COLUMN.NODE_ID] || row?.node_id || row?.nodeId || '',
-      );
-      const serviceId = String(
-        row?.[COLUMN.SERVICE_ID] || row?.service_id || row?.serviceId || '',
-      );
-      const healthStatus = String(
-        row?.health_status || row?.healthStatus || '',
-      ).toLowerCase();
-      if (nodeId.length === NUM.ZERO) {
-        continue;
-      }
-      if (serviceId !== META_SERVICE_ID.POSTGRES_WIRE) {
-        continue;
-      }
-      if (healthStatus !== String(ENDPOINT_SYNC_HEALTH.HEALTHY).toLowerCase()) {
-        continue;
-      }
-      visiblePostgresWireNodeIds.add(nodeId);
-    }
-
-    const missingNodeEndpointNodeIds = activeNodeIds.filter((nodeId) =>
-      !visibleNodeEndpointNodeIds.has(nodeId));
-    const missingPostgresWireNodeIds = activeNodeIds.filter((nodeId) =>
-      !visiblePostgresWireNodeIds.has(nodeId));
-
-    return {
-      ready: missingNodeEndpointNodeIds.length === NUM.ZERO &&
-        missingPostgresWireNodeIds.length === NUM.ZERO,
-      missingNodeEndpointNodeIds,
-      missingPostgresWireNodeIds,
-    };
+    return this.joinReadinessEvaluator
+      .evaluateCanonicalJoinEndpointVisibility(systemTableCache);
   }
 
   /**
@@ -1075,132 +990,40 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   getCanonicalJoinActiveNodeIds(systemTableCache) {
-    if (!systemTableCache ||
-        typeof systemTableCache.getAll !== TYPEOF.FUNCTION) {
-      return [];
-    }
-
-    const nodeRows = systemTableCache.getAll(TABLES.NODES) || [];
-    const activeNodeIds = [];
-    for (const row of nodeRows) {
-      const nodeId = String(
-        row?.[COLUMN.NODE_ID] || row?.node_id || row?.nodeId || '',
-      );
-      const status = String(
-        row?.[COLUMN.STATUS] || row?.status || '',
-      ).toLowerCase();
-      if (nodeId.length === NUM.ZERO) {
-        continue;
-      }
-      if (status !== String(SERVICE_STATUS.ACTIVE).toLowerCase()) {
-        continue;
-      }
-      activeNodeIds.push(nodeId);
-    }
-    return activeNodeIds;
+    return this.joinReadinessEvaluator
+      .getCanonicalJoinActiveNodeIds(systemTableCache);
   }
 
   /**
    * Resolve node rows used for mesh connectivity.
-   * Prefer the authoritative nodes cache over the initial bootstrap snapshot so
-   * later joiners are not stranded when membership changes after bootstrap.
    * @return {{source: string, rows: Object[]}}
    * @private
    */
   resolveMeshConnectivityNodeRows() {
-    const systemTableCache = NodeService.getInstance().getSystemTableCache();
-    if (systemTableCache &&
-        typeof systemTableCache.getAll === TYPEOF.FUNCTION) {
-      const cacheRows = (systemTableCache.getAll(TABLES.NODES) || []).filter((row) => {
-        const nodeId = String(
-          row?.[COLUMN.NODE_ID] || row?.node_id || row?.nodeId || '',
-        );
-        return nodeId.length > NUM.ZERO;
-      });
-      if (cacheRows.length > NUM.ZERO) {
-        return {
-          source: 'system_table_cache',
-          rows: cacheRows,
-        };
-      }
-    }
-
-    const snapshotRows = Array.isArray(this.bootstrapResponse?.systemTableSnapshots?.nodes) ?
-      this.bootstrapResponse.systemTableSnapshots.nodes :
-      [];
-    return {
-      source: 'bootstrap_snapshot',
-      rows: snapshotRows,
-    };
+    return this.joinReadinessEvaluator
+      .resolveMeshConnectivityNodeRows();
   }
 
   /**
-   * Build a stable mesh-membership signature for connection reconciliation.
+   * Build a stable mesh-membership signature for connection
+   * reconciliation.
    * @param {Array<Object>} nodeRows
    * @return {string}
    * @private
    */
   buildClusterMeshSignature(nodeRows) {
-    if (!Array.isArray(nodeRows) || nodeRows.length === NUM.ZERO) {
-      return STRING.EMPTY;
-    }
-
-    const members = nodeRows
-      .map((row) => {
-        const nodeId = String(
-          row?.[COLUMN.NODE_ID] || row?.node_id || row?.nodeId || '',
-        );
-        if (nodeId.length === NUM.ZERO || nodeId === this.nodeId) {
-          return null;
-        }
-        const nodeAddress = String(
-          row?.[COLUMN.NODE_ADDRESS] || row?.node_address || row?.nodeAddress || '',
-        );
-        const status = String(
-          row?.[COLUMN.STATUS] || row?.status || '',
-        ).toLowerCase();
-        return `${nodeId}|${nodeAddress}|${status}`;
-      })
-      .filter(Boolean)
-      .sort();
-
-    return members.join(',');
+    return this.joinReadinessEvaluator
+      .buildClusterMeshSignature(nodeRows);
   }
 
   /**
-   * Determine whether steady-state READY heartbeats need mesh reconciliation.
+   * Determine whether steady-state READY heartbeats need mesh
+   * reconciliation.
    * @return {boolean}
    * @private
    */
   shouldReconnectClusterMesh() {
-    if (!this.messageRouter) {
-      return false;
-    }
-
-    const {rows: nodesSnapshot} = this.resolveMeshConnectivityNodeRows();
-    if (!Array.isArray(nodesSnapshot) || nodesSnapshot.length === NUM.ZERO) {
-      return false;
-    }
-
-    const signature = this.buildClusterMeshSignature(nodesSnapshot);
-    if (signature !== this.lastClusterMeshSignature) {
-      return true;
-    }
-
-    const hasConnectionState =
-      typeof this.messageRouter.getConnectionState === TYPEOF.FUNCTION;
-    if (!hasConnectionState) {
-      return false;
-    }
-
-    return nodesSnapshot.some((node) => {
-      const nodeId = String(
-        node?.[COLUMN.NODE_ID] || node?.node_id || node?.nodeId || '',
-      );
-      return nodeId.length > NUM.ZERO &&
-        nodeId !== this.nodeId &&
-        this.messageRouter.getConnectionState(nodeId) !== STATE.CONNECTED;
-    });
+    return this.joinReadinessEvaluator.shouldReconnectClusterMesh();
   }
 
   /**
@@ -1210,36 +1033,75 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   collectCanonicalInFlightReplicaOperationDetails(systemTableCache) {
-    if (!systemTableCache ||
-        typeof systemTableCache.getAll !== TYPEOF.FUNCTION) {
-      return [];
-    }
+    return this.joinReadinessEvaluator
+      .collectCanonicalInFlightReplicaOperationDetails(
+        systemTableCache,
+      );
+  }
 
-    const rows = systemTableCache.getAll(TABLES.REPLICA_OPERATIONS) || [];
-    const inFlightOperations = [];
-    for (const row of rows) {
-      const status = String(row?.status || '').toLowerCase();
-      if (!status || !JOIN_READINESS_IN_FLIGHT_EXCLUDED_STATUSES.has(status)) {
-        inFlightOperations.push({
-          operationId: String(row?.operation_id || row?.operationId || ''),
-          type: String(row?.type || ''),
-          partitionId: String(row?.partition_id || row?.partitionId || ''),
-          replicaId: String(row?.replica_id || row?.replicaId || ''),
-          sourceNodeId: String(
-            row?.source_node_id || row?.sourceNodeId || '',
-          ),
-          targetNodeId: String(
-            row?.target_node_id || row?.targetNodeId || '',
-          ),
-          status,
-          workflowStep: String(
-            row?.workflow_step || row?.workflowStep || '',
-          ),
-          completedAt: row?.completed_at || row?.completedAt || null,
-        });
-      }
-    }
-    return inFlightOperations;
+  /**
+   * Resolve node IDs required for join-readiness diagnostics.
+   * @param {Object|null} systemTableCache
+   * @return {Array<string>}
+   * @private
+   */
+  resolveJoinReadinessRequiredNodeIds(systemTableCache) {
+    return this.joinReadinessEvaluator
+      .resolveJoinReadinessRequiredNodeIds(systemTableCache);
+  }
+
+  /**
+   * Evaluate one canonical join-readiness snapshot.
+   * @param {Object} snapshot
+   * @return {Object}
+   * @private
+   */
+  evaluateCanonicalJoinReadinessSnapshot(snapshot) {
+    return this.joinReadinessEvaluator
+      .evaluateCanonicalJoinReadinessSnapshot(snapshot);
+  }
+
+  /**
+   * Classify canonical join-readiness reasons with stable precedence.
+   * @param {Object} snapshot
+   * @return {Array<string>}
+   */
+  classifyCanonicalJoinReadinessReasons(snapshot) {
+    return this.joinReadinessEvaluator
+      .classifyCanonicalJoinReadinessReasons(snapshot);
+  }
+
+  /**
+   * Normalize one canonical join-readiness snapshot.
+   * @param {Object} snapshot
+   * @return {Object}
+   * @private
+   */
+  normalizeCanonicalJoinReadinessSnapshot(snapshot) {
+    return this.joinReadinessEvaluator
+      .normalizeCanonicalJoinReadinessSnapshot(snapshot);
+  }
+
+  /**
+   * Build per-node schema diagnostics for join timeout reporting.
+   * @param {Object} evaluation
+   * @return {Object}
+   * @private
+   */
+  buildJoinSchemaDiagnosticsByNode(evaluation) {
+    return this.joinReadinessEvaluator
+      .buildJoinSchemaDiagnosticsByNode(evaluation);
+  }
+
+  /**
+   * Rank one join-readiness reason according to stable precedence.
+   * @param {string} reason
+   * @return {number}
+   * @private
+   */
+  getJoinReadinessReasonRank(reason) {
+    return this.joinReadinessEvaluator
+      .getJoinReadinessReasonRank(reason);
   }
 
   /**
@@ -1250,20 +1112,11 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   resolveCanonicalRequiredSchemaVersion(tableName, systemTableCache) {
-    let requiredSchemaVersion = null;
-    requiredSchemaVersion = this.selectNewestJoinSchemaVersion(
-      requiredSchemaVersion,
-      this.extractCanonicalSnapshotSchemaVersion(tableName),
+    return _resolveCanonicalRequiredSchemaVersion(
+      tableName,
+      systemTableCache,
+      this.bootstrapResponse?.systemTableSnapshots,
     );
-    requiredSchemaVersion = this.selectNewestJoinSchemaVersion(
-      requiredSchemaVersion,
-      this.extractCanonicalCacheSchemaVersion(systemTableCache, tableName),
-    );
-    requiredSchemaVersion = this.selectNewestJoinSchemaVersion(
-      requiredSchemaVersion,
-      this.extractCanonicalTableMetadataSchemaVersion(systemTableCache, tableName),
-    );
-    return requiredSchemaVersion;
   }
 
   /**
@@ -1274,16 +1127,10 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   resolveCanonicalAppliedSchemaVersion(tableName, systemTableCache) {
-    let appliedSchemaVersion = null;
-    appliedSchemaVersion = this.selectNewestJoinSchemaVersion(
-      appliedSchemaVersion,
-      this.extractCanonicalCacheSchemaVersion(systemTableCache, tableName),
+    return _resolveCanonicalAppliedSchemaVersion(
+      tableName,
+      systemTableCache,
     );
-    appliedSchemaVersion = this.selectNewestJoinSchemaVersion(
-      appliedSchemaVersion,
-      this.extractCanonicalTableMetadataSchemaVersion(systemTableCache, tableName),
-    );
-    return appliedSchemaVersion;
   }
 
   /**
@@ -1293,37 +1140,10 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   extractCanonicalSnapshotSchemaVersion(tableName) {
-    const snapshots = this.bootstrapResponse?.systemTableSnapshots;
-    if (!snapshots || typeof snapshots !== TYPEOF.OBJECT) {
-      return null;
-    }
-
-    let version = null;
-    const tableSnapshotRows = Array.isArray(snapshots[tableName]) ?
-      snapshots[tableName] :
-      [];
-    for (const row of tableSnapshotRows) {
-      version = this.selectNewestJoinSchemaVersion(
-        version,
-        this.extractJoinSchemaVersionFromRecord(row),
-      );
-    }
-
-    const tableMetadataRows = Array.isArray(snapshots[TABLES.TABLES]) ?
-      snapshots[TABLES.TABLES] :
-      [];
-    for (const row of tableMetadataRows) {
-      const rowTableName = row?.table_name || row?.tableName || null;
-      if (rowTableName !== tableName) {
-        continue;
-      }
-      version = this.selectNewestJoinSchemaVersion(
-        version,
-        this.extractJoinSchemaVersionFromRecord(row),
-      );
-    }
-
-    return version;
+    return _extractCanonicalSnapshotSchemaVersion(
+      this.bootstrapResponse?.systemTableSnapshots,
+      tableName,
+    );
   }
 
   /**
@@ -1334,21 +1154,10 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   extractCanonicalCacheSchemaVersion(systemTableCache, tableName) {
-    if (!systemTableCache ||
-        typeof systemTableCache.getAll !== TYPEOF.FUNCTION) {
-      return null;
-    }
-
-    let version = null;
-    const tableRows = systemTableCache.getAll(tableName) || [];
-    for (const row of tableRows) {
-      version = this.selectNewestJoinSchemaVersion(
-        version,
-        this.extractJoinSchemaVersionFromRecord(row),
-      );
-    }
-
-    return version;
+    return _extractCanonicalCacheSchemaVersion(
+      systemTableCache,
+      tableName,
+    );
   }
 
   /**
@@ -1358,204 +1167,14 @@ class NodeJoiningService extends EventEmitter {
    * @return {string|null}
    * @private
    */
-  extractCanonicalTableMetadataSchemaVersion(systemTableCache, tableName) {
-    if (!systemTableCache ||
-        typeof systemTableCache.filter !== TYPEOF.FUNCTION) {
-      return null;
-    }
-
-    let version = null;
-    const rows = systemTableCache.filter(TABLES.TABLES, (row) => {
-      const rowTableName = row?.table_name || row?.tableName || null;
-      return rowTableName === tableName;
-    });
-    for (const row of rows) {
-      version = this.selectNewestJoinSchemaVersion(
-        version,
-        this.extractJoinSchemaVersionFromRecord(row),
-      );
-    }
-    return version;
-  }
-
-  /**
-   * Resolve node IDs required for join-readiness diagnostics.
-   * @param {Object|null} systemTableCache
-   * @return {Array<string>}
-   * @private
-   */
-  resolveJoinReadinessRequiredNodeIds(systemTableCache) {
-    if (!systemTableCache ||
-        typeof systemTableCache.filter !== TYPEOF.FUNCTION) {
-      return [this.nodeId];
-    }
-
-    const activeNodes = systemTableCache.filter(TABLES.NODES, (row) => {
-      const status = String(row?.status || '').toLowerCase();
-      return status === SERVICE_STATUS.ACTIVE;
-    });
-
-    const nodeIds = [...new Set(activeNodes
-      .map((row) => row?.node_id || row?.nodeId)
-      .filter((value) => typeof value === TYPEOF.STRING && value.length > NUM.ZERO),
-    )];
-
-    if (!nodeIds.includes(this.nodeId)) {
-      nodeIds.push(this.nodeId);
-    }
-    return nodeIds;
-  }
-
-  /**
-   * Evaluate one canonical join-readiness snapshot.
-   * @param {Object} snapshot
-   * @return {Object}
-   * @private
-   */
-  evaluateCanonicalJoinReadinessSnapshot(snapshot) {
-    const normalized = this.normalizeCanonicalJoinReadinessSnapshot(snapshot);
-    const reasons = this.classifyCanonicalJoinReadinessReasons(normalized);
-    return {
-      ...normalized,
-      reasons,
-      ready: reasons.length === NUM.ZERO,
-    };
-  }
-
-  /**
-   * Classify canonical join-readiness reasons with stable precedence.
-   * @param {Object} snapshot
-   * @return {Array<string>}
-   */
-  classifyCanonicalJoinReadinessReasons(snapshot) {
-    const reasons = [];
-    if (snapshot?.routingReady !== true) {
-      reasons.push(JOIN_READINESS_REASON.ROUTING_NOT_READY);
-    }
-
-    const requiredSchemaVersion = this.normalizeJoinSchemaVersion(
-      snapshot?.requiredSchemaVersion,
+  extractCanonicalTableMetadataSchemaVersion(
+    systemTableCache,
+    tableName,
+  ) {
+    return _extractCanonicalTableMetadataSchemaVersion(
+      systemTableCache,
+      tableName,
     );
-    const appliedSchemaVersion = this.normalizeJoinSchemaVersion(
-      snapshot?.appliedSchemaVersion,
-    );
-    if (!requiredSchemaVersion || !appliedSchemaVersion) {
-      reasons.push(JOIN_READINESS_REASON.SCHEMA_VERSION_UNKNOWN);
-    } else if (this.compareJoinSchemaVersions(
-      appliedSchemaVersion,
-      requiredSchemaVersion,
-    ) < NUM.ZERO) {
-      reasons.push(JOIN_READINESS_REASON.SCHEMA_VERSION_LAG);
-    }
-
-    if (snapshot?.topologyReady !== true) {
-      reasons.push(JOIN_READINESS_REASON.TOPOLOGY_NOT_READY);
-    }
-
-    return reasons.sort((left, right) => {
-      const leftRank = this.getJoinReadinessReasonRank(left);
-      const rightRank = this.getJoinReadinessReasonRank(right);
-      if (leftRank !== rightRank) {
-        return leftRank - rightRank;
-      }
-      return String(left).localeCompare(String(right));
-    });
-  }
-
-  /**
-   * Normalize one canonical join-readiness snapshot.
-   * @param {Object} snapshot
-   * @return {Object}
-   * @private
-   */
-  normalizeCanonicalJoinReadinessSnapshot(snapshot) {
-    const source = snapshot && typeof snapshot === TYPEOF.OBJECT ?
-      snapshot :
-      {};
-    const requiredSchemaVersion = this.normalizeJoinSchemaVersion(
-      source.requiredSchemaVersion,
-    );
-    const appliedSchemaVersion = this.normalizeJoinSchemaVersion(
-      source.appliedSchemaVersion,
-    );
-    const requiredNodeIds = Array.isArray(source.requiredNodeIds) ?
-      source.requiredNodeIds.filter((value) =>
-        typeof value === TYPEOF.STRING && value.length > NUM.ZERO,
-      ) :
-      [this.nodeId];
-
-    return {
-      nodeId: source.nodeId || this.nodeId,
-      tableName: source.tableName || this.resolveJoinReadinessTableName(),
-      routingReady: source.routingReady === true,
-      topologyReady: source.topologyReady === true,
-      requiredSchemaVersion,
-      appliedSchemaVersion,
-      requiredNodeIds,
-      missingLeaders:
-        source.missingLeaders && typeof source.missingLeaders === TYPEOF.OBJECT ?
-          source.missingLeaders :
-          null,
-      inFlightReplicaOperations: Number.isFinite(source.inFlightReplicaOperations) ?
-        Math.max(NUM.ZERO, Math.floor(source.inFlightReplicaOperations)) :
-        NUM.ZERO,
-      inFlightReplicaOperationDetails:
-        Array.isArray(source.inFlightReplicaOperationDetails) ?
-          source.inFlightReplicaOperationDetails :
-          [],
-      missingNodeEndpointNodeIds:
-        Array.isArray(source.missingNodeEndpointNodeIds) ?
-          source.missingNodeEndpointNodeIds.filter((value) =>
-            typeof value === TYPEOF.STRING && value.length > NUM.ZERO,
-          ) :
-          [],
-      missingPostgresWireNodeIds:
-        Array.isArray(source.missingPostgresWireNodeIds) ?
-          source.missingPostgresWireNodeIds.filter((value) =>
-            typeof value === TYPEOF.STRING && value.length > NUM.ZERO,
-          ) :
-          [],
-      observedSchemaByNodeId:
-        source.observedSchemaByNodeId &&
-        typeof source.observedSchemaByNodeId === TYPEOF.OBJECT ?
-          source.observedSchemaByNodeId :
-          null,
-    };
-  }
-
-  /**
-   * Build per-node schema diagnostics for join timeout reporting.
-   * @param {Object} evaluation
-   * @return {Object}
-   * @private
-   */
-  buildJoinSchemaDiagnosticsByNode(evaluation) {
-    const requiredSchemaVersion = evaluation?.requiredSchemaVersion || null;
-    const observedSchemaVersion = evaluation?.appliedSchemaVersion || null;
-    const reasons = Array.isArray(evaluation?.reasons) ?
-      evaluation.reasons :
-      [];
-    const requiredNodeIds = Array.isArray(evaluation?.requiredNodeIds) &&
-      evaluation.requiredNodeIds.length > NUM.ZERO ?
-      evaluation.requiredNodeIds :
-      [this.nodeId];
-    const observedByNodeId =
-      evaluation?.observedSchemaByNodeId &&
-      typeof evaluation.observedSchemaByNodeId === TYPEOF.OBJECT ?
-        evaluation.observedSchemaByNodeId :
-        {};
-
-    const diagnostics = {};
-    for (const nodeId of requiredNodeIds) {
-      diagnostics[nodeId] = {
-        requiredSchemaVersion,
-        observedSchemaVersion:
-          this.normalizeJoinSchemaVersion(observedByNodeId[nodeId]) ||
-          observedSchemaVersion,
-        unmetReasons: reasons,
-      };
-    }
-    return diagnostics;
   }
 
   /**
@@ -1565,16 +1184,7 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   extractJoinSchemaVersionFromRecord(record) {
-    if (!record || typeof record !== TYPEOF.OBJECT) {
-      return null;
-    }
-    for (const fieldName of JOIN_READINESS_SCHEMA_FIELDS) {
-      const normalized = this.normalizeJoinSchemaVersion(record[fieldName]);
-      if (normalized) {
-        return normalized;
-      }
-    }
-    return null;
+    return _extractJoinSchemaVersionFromRecord(record);
   }
 
   /**
@@ -1585,15 +1195,7 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   selectNewestJoinSchemaVersion(current, candidate) {
-    if (!candidate) {
-      return current;
-    }
-    if (!current) {
-      return candidate;
-    }
-    return this.compareJoinSchemaVersions(candidate, current) >= NUM.ZERO ?
-      candidate :
-      current;
+    return _selectNewestJoinSchemaVersion(current, candidate);
   }
 
   /**
@@ -1603,17 +1205,7 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   normalizeJoinSchemaVersion(value) {
-    if (typeof value === TYPEOF.STRING) {
-      const normalized = value.trim();
-      return normalized.length > NUM.ZERO ? normalized : null;
-    }
-    if (typeof value === TYPEOF.NUMBER && Number.isFinite(value)) {
-      return String(value);
-    }
-    if (typeof value === 'bigint') {
-      return String(value);
-    }
-    return null;
+    return _normalizeJoinSchemaVersion(value);
   }
 
   /**
@@ -1624,29 +1216,7 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   compareJoinSchemaVersions(left, right) {
-    if (left === right) {
-      return NUM.ZERO;
-    }
-
-    const leftHlc = this.tryParseJoinSchemaHlc(left);
-    const rightHlc = this.tryParseJoinSchemaHlc(right);
-    if (leftHlc && rightHlc) {
-      if (leftHlc.physical !== rightHlc.physical) {
-        return leftHlc.physical - rightHlc.physical;
-      }
-      if (leftHlc.logical !== rightHlc.logical) {
-        return leftHlc.logical - rightHlc.logical;
-      }
-      return leftHlc.nodeId.localeCompare(rightHlc.nodeId);
-    }
-
-    const leftNumber = Number(left);
-    const rightNumber = Number(right);
-    if (Number.isFinite(leftNumber) && Number.isFinite(rightNumber)) {
-      return leftNumber - rightNumber;
-    }
-
-    return String(left).localeCompare(String(right));
+    return _compareJoinSchemaVersions(left, right);
   }
 
   /**
@@ -1656,33 +1226,7 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   tryParseJoinSchemaHlc(value) {
-    const parts = String(value || '').split(':');
-    if (parts.length < NUM.THREE) {
-      return null;
-    }
-    const physical = Number.parseInt(parts[NUM.ZERO], 10);
-    const logical = Number.parseInt(parts[NUM.ONE], 10);
-    if (!Number.isFinite(physical) || !Number.isFinite(logical)) {
-      return null;
-    }
-    return {
-      physical,
-      logical,
-      nodeId: parts.slice(NUM.TWO).join(':'),
-    };
-  }
-
-  /**
-   * Rank one join-readiness reason according to stable precedence.
-   * @param {string} reason
-   * @return {number}
-   * @private
-   */
-  getJoinReadinessReasonRank(reason) {
-    const index = JOIN_READINESS_REASON_PRECEDENCE.indexOf(reason);
-    return index >= NUM.ZERO ?
-      index :
-      JOIN_READINESS_REASON_PRECEDENCE.length;
+    return _tryParseJoinSchemaHlc(value);
   }
 
   /**
@@ -1777,159 +1321,7 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   async phaseContactSeed() {
-    if (!this.seedNodeAddress) {
-      throw new Error(JOINING_ERROR_MSG.SEED_NODE_ADDRESS_REQUIRED);
-    }
-    assertCritical(this.nodeAddress, JOINING_ERROR_MSG.NODE_ADDRESS_REQUIRED);
-
-    const bootstrapUrl = `${this.seedNodeAddress}${JOINING_HTTP.BOOTSTRAP_PATH}`;
-
-    this.logger.debug(JOINING_LOG_MSG.SEED_CONTACTING, {
-      nodeId: this.nodeId,
-      bootstrapUrl,
-    });
-
-    const retryPolicy = this.resolveJoinRetryPolicy();
-    const retryTimeoutMs = retryPolicy.retryTimeoutMs;
-    let delayMs = retryPolicy.initialDelayMs;
-    const maxDelayMs = retryPolicy.maxDelayMs;
-    const backoffMultiplier = retryPolicy.backoffMultiplier;
-    const startTime = this.now();
-    let attempt = 0;
-    let lastBootstrapError = null;
-    let lastRetryableSeedContactError = null;
-    const retryableTimeoutErrorMessage = JOINING_ERROR_MSG.httpTimeout(
-      this.config.httpTimeoutMs,
-    );
-
-    while (this.now() - startTime < retryTimeoutMs) {
-      attempt += 1;
-      try {
-        const response = await this.httpPostImpl(bootstrapUrl, {
-          nodeId: this.nodeId,
-          nodeAddress: this.nodeAddress,
-        });
-
-        if (!response.success) {
-          const bootstrapError = new Error(this.buildBootstrapFailureError(response));
-          bootstrapError.bootstrapResponse = response;
-          throw bootstrapError;
-        }
-
-        this.bootstrapResponse = response;
-        this.seedNodeId = response.seedNodeId || null;
-        if (!this.seedNodeWsAddress && response.seedNodeWsAddress) {
-          this.seedNodeWsAddress = response.seedNodeWsAddress;
-        }
-
-        this.logger.debug(JOINING_LOG_MSG.BOOTSTRAP_RESPONSE_RECEIVED, {
-          nodeId: this.nodeId,
-          seedNodeId: response.seedNodeId,
-          strategy: response.messageGroupAssignment?.strategy,
-        });
-        return;
-      } catch (error) {
-        const classification = this.classifySeedContactFailure(
-          error,
-          retryableTimeoutErrorMessage,
-        );
-        const parsedError = classification.parsedError;
-        const elapsedMs = this.now() - startTime;
-        if (classification.retryable && elapsedMs < retryTimeoutMs) {
-          if (classification.retryableCode) {
-            lastBootstrapError = parsedError;
-          }
-          if (classification.retryableTimeout) {
-            lastRetryableSeedContactError = error.message;
-          }
-          const nextDelayMs = this.computeSeedContactRetryDelayMs({
-            baseDelayMs: delayMs,
-            maxDelayMs,
-            retryAfterMs: classification.retryAfterMs,
-          });
-          this.logger.debug(JOINING_LOG_MSG.SEED_CONTACT_RETRYING, {
-            nodeId: this.nodeId,
-            bootstrapUrl,
-            attempt,
-            elapsedMs,
-            lastCode: classification.code,
-            lastStatusCode: classification.statusCode,
-            retryAfterMs: classification.retryAfterMs,
-            nextDelayMs,
-            retryTimeoutMs,
-          });
-          await this.sleep(nextDelayMs);
-          delayMs = Math.min(
-            Math.floor(delayMs * backoffMultiplier),
-            maxDelayMs,
-          );
-          continue;
-        }
-
-        if (classification.terminalValidationOrConflict) {
-          this.logger.warn(JOINING_LOG_MSG.SEED_CONTACT_TERMINAL, {
-            nodeId: this.nodeId,
-            bootstrapUrl,
-            attempt,
-            elapsedMs,
-            statusCode: classification.statusCode,
-            code: classification.code,
-            error: error.message,
-          });
-        }
-
-        if (parsedError) {
-          if (parsedError.code ===
-              BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE) {
-            throw new Error(
-              JOINING_ERROR_MSG.leaderMetadataIncomplete(
-                this.formatLeaderMetadataDetails(parsedError),
-              ),
-            );
-          }
-
-          if (parsedError.code ===
-              BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY) {
-            throw new Error(
-              JOINING_ERROR_MSG.bootstrapNotReady(parsedError.phase),
-            );
-          }
-        }
-
-        this.logger.error(JOINING_LOG_MSG.SEED_CONTACT_FAILED, {
-          nodeId: this.nodeId,
-          bootstrapUrl,
-          error: error.message,
-        });
-        throw new Error(JOINING_ERROR_MSG.contactSeedFailed(error.message));
-      }
-    }
-
-    if (lastBootstrapError?.code ===
-        BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE) {
-      throw new Error(
-        JOINING_ERROR_MSG.leaderMetadataIncomplete(
-          this.formatLeaderMetadataDetails(lastBootstrapError),
-        ),
-      );
-    }
-
-    if (lastBootstrapError?.code ===
-        BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY) {
-      throw new Error(
-        JOINING_ERROR_MSG.bootstrapNotReady(lastBootstrapError.phase),
-      );
-    }
-
-    if (lastRetryableSeedContactError) {
-      throw new Error(
-        JOINING_ERROR_MSG.contactSeedFailed(lastRetryableSeedContactError),
-      );
-    }
-
-    throw new Error(JOINING_ERROR_MSG.contactSeedFailed(
-      `seed readiness timeout after ${retryTimeoutMs}ms`,
-    ));
+    return this.contactSeedPhase.phaseContactSeed();
   }
 
   /**
@@ -1938,25 +1330,7 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   resolveJoinRetryPolicy() {
-    const retryTimeoutMs = Number.isFinite(this.config.leadershipWaitTimeoutMs) ?
-      Math.max(this.config.leadershipWaitTimeoutMs, this.config.httpTimeoutMs) :
-      this.config.httpTimeoutMs;
-    const initialDelayMs = Number.isFinite(this.config.leadershipWaitInitialDelayMs) ?
-      Math.max(NUM.TEN, this.config.leadershipWaitInitialDelayMs) :
-      NUM.HUNDRED;
-    const maxDelayMs = Number.isFinite(this.config.leadershipWaitMaxDelayMs) ?
-      Math.max(initialDelayMs, this.config.leadershipWaitMaxDelayMs) :
-      initialDelayMs;
-    const backoffMultiplier = Number.isFinite(this.config.leadershipWaitBackoffMultiplier) &&
-      this.config.leadershipWaitBackoffMultiplier > NUM.ONE ?
-      this.config.leadershipWaitBackoffMultiplier :
-      NUM.TWO;
-    return {
-      retryTimeoutMs,
-      initialDelayMs,
-      maxDelayMs,
-      backoffMultiplier,
-    };
+    return this.contactSeedPhase.resolveJoinRetryPolicy();
   }
 
   /**
@@ -1967,36 +1341,8 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   classifySeedContactFailure(error, retryableTimeoutErrorMessage) {
-    const parsedError = error.bootstrapResponse || this.parseBootstrapError(error);
-    const statusCode = Number.isFinite(error?.statusCode) ?
-      Math.floor(error.statusCode) :
-      (Number.isFinite(parsedError?.statusCode) ?
-        Math.floor(parsedError.statusCode) :
-        null);
-    const code = typeof parsedError?.code === TYPEOF.STRING ?
-      parsedError.code :
-      null;
-    const retryableCode =
-      code === BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE ||
-      code === BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY ||
-      code === BOOTSTRAP_PIPELINE_ERROR_CODE
-        .SERVICE_REGISTRATION_CACHE_VISIBILITY_TIMEOUT;
-    const retryableTimeout = error?.message === retryableTimeoutErrorMessage;
-    const retryableStatus = statusCode === HTTP_STATUS.SERVICE_UNAVAILABLE;
-    const terminalValidationOrConflict = statusCode === HTTP_STATUS.BAD_REQUEST ||
-      statusCode === HTTP_STATUS.CONFLICT;
-
-    return {
-      parsedError,
-      statusCode,
-      code,
-      retryAfterMs: this.resolveSeedContactRetryAfterMs(error, parsedError),
-      retryableCode,
-      retryableTimeout,
-      retryableStatus,
-      retryable: retryableCode || retryableTimeout || retryableStatus,
-      terminalValidationOrConflict,
-    };
+    return this.contactSeedPhase
+      .classifySeedContactFailure(error, retryableTimeoutErrorMessage);
   }
 
   /**
@@ -2009,22 +1355,8 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   computeSeedContactRetryDelayMs(options = {}) {
-    const baseDelayMs = Math.max(NUM.ONE, Number(options.baseDelayMs) || NUM.ZERO);
-    const maxDelayMs = Math.max(baseDelayMs, Number(options.maxDelayMs) || baseDelayMs);
-    const retryAfterMs = Number.isFinite(options.retryAfterMs) ?
-      Math.max(NUM.ZERO, Math.floor(options.retryAfterMs)) :
-      null;
-    const candidateDelayMs = retryAfterMs === null ?
-      baseDelayMs :
-      Math.min(maxDelayMs, Math.max(baseDelayMs, retryAfterMs));
-    const jitteredDelayMs = this.applySeedContactRetryJitter(
-      candidateDelayMs,
-      maxDelayMs,
-    );
-    if (retryAfterMs === null) {
-      return jitteredDelayMs;
-    }
-    return Math.max(retryAfterMs, jitteredDelayMs);
+    return this.contactSeedPhase
+      .computeSeedContactRetryDelayMs(options);
   }
 
   /**
@@ -2035,20 +1367,8 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   applySeedContactRetryJitter(delayMs, maxDelayMs) {
-    const jitterRatio = Number.isFinite(this.config.leadershipWaitJitterRatio) ?
-      this.config.leadershipWaitJitterRatio :
-      JOINING_DEFAULT.leadershipWaitJitterRatio;
-    if (jitterRatio <= NUM.ZERO) {
-      return Math.min(maxDelayMs, Math.max(NUM.ONE, Math.floor(delayMs)));
-    }
-
-    const jitterRangeMs = delayMs * jitterRatio;
-    const centeredRandom = (this.random() * NUM.TWO) - NUM.ONE;
-    const jitterOffsetMs = Math.round(centeredRandom * jitterRangeMs);
-    return Math.min(
-      maxDelayMs,
-      Math.max(NUM.ONE, Math.floor(delayMs + jitterOffsetMs)),
-    );
+    return this.contactSeedPhase
+      .applySeedContactRetryJitter(delayMs, maxDelayMs);
   }
 
   /**
@@ -2059,18 +1379,7 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   resolveSeedContactRetryAfterMs(error, parsedError) {
-    const hintCandidates = [
-      error?.retryAfterMs,
-      parsedError?.retryAfterMs,
-      parsedError?.retry_after_ms,
-    ];
-    for (const hint of hintCandidates) {
-      if (!Number.isFinite(hint)) {
-        continue;
-      }
-      return Math.max(NUM.ZERO, Math.floor(hint));
-    }
-    return null;
+    return _resolveSeedContactRetryAfterMs(error, parsedError);
   }
 
   /**
@@ -2080,47 +1389,7 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   parseBootstrapError(error) {
-    if (!error) {
-      return null;
-    }
-
-    if (error.responseJson &&
-        typeof error.responseJson === TYPEOF.OBJECT) {
-      const parsedFromJson = {...error.responseJson};
-      if (Number.isFinite(error.statusCode) &&
-          !Number.isFinite(parsedFromJson.statusCode)) {
-        parsedFromJson.statusCode = Math.floor(error.statusCode);
-      }
-      if (Number.isFinite(error.retryAfterMs) &&
-          !Number.isFinite(parsedFromJson.retryAfterMs)) {
-        parsedFromJson.retryAfterMs = Math.floor(error.retryAfterMs);
-      }
-      return parsedFromJson;
-    }
-
-    if (typeof error.message !== TYPEOF.STRING) {
-      return null;
-    }
-
-    const match = error.message.match(/^HTTP (\d+):\s*(.*)$/s);
-    if (!match) {
-      return null;
-    }
-
-    const statusCode = Number.parseInt(match[1], 10);
-    try {
-      const parsed = JSON.parse(match[2]);
-      if (Number.isFinite(statusCode) &&
-          !Number.isFinite(parsed.statusCode)) {
-        parsed.statusCode = statusCode;
-      }
-      return parsed;
-    } catch (_parseError) {
-      if (!Number.isFinite(statusCode)) {
-        return null;
-      }
-      return {statusCode};
-    }
+    return _parseBootstrapError(error);
   }
 
   /**
@@ -2130,18 +1399,8 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   buildBootstrapFailureError(response) {
-    if (response?.code ===
-        BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE) {
-      return JOINING_ERROR_MSG.leaderMetadataIncomplete(
-        this.formatLeaderMetadataDetails(response),
-      );
-    }
-
-    if (response?.code === BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY) {
-      return JOINING_ERROR_MSG.bootstrapNotReady(response.phase);
-    }
-
-    return response?.error || JOINING_ERROR_MSG.BOOTSTRAP_REQUEST_FAILED;
+    return this.contactSeedPhase
+      .buildBootstrapFailureError(response);
   }
 
   /**
@@ -2151,31 +1410,7 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   formatLeaderMetadataDetails(details) {
-    const parts = [];
-    if (Array.isArray(details.missingPartitionLeaders) &&
-        details.missingPartitionLeaders.length > NUM.ZERO) {
-      parts.push(`missingPartitionLeaders=${details.missingPartitionLeaders.join(',')}`);
-    }
-    if (Array.isArray(details.missingMessageGroupLeaders) &&
-        details.missingMessageGroupLeaders.length > NUM.ZERO) {
-      parts.push(
-        `missingMessageGroupLeaders=${details.missingMessageGroupLeaders.join(',')}`,
-      );
-    }
-    if (Array.isArray(details.missingPartitionLeaderNodes) &&
-        details.missingPartitionLeaderNodes.length > NUM.ZERO) {
-      parts.push(
-        `missingPartitionLeaderNodes=${details.missingPartitionLeaderNodes.join(',')}`,
-      );
-    }
-    if (Array.isArray(details.missingMessageGroupLeaderNodes) &&
-        details.missingMessageGroupLeaderNodes.length > NUM.ZERO) {
-      parts.push(
-        `missingMessageGroupLeaderNodes=${details.missingMessageGroupLeaderNodes.join(',')}`,
-      );
-    }
-
-    return parts.length > NUM.ZERO ? parts.join(' ') : STRING.UNKNOWN;
+    return _formatLeaderMetadataDetails(details);
   }
 
   /**
@@ -2330,63 +1565,8 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   async createJoinMessageGroupReplica(context) {
-    const definition = context?.definition || {};
-    const serviceId = definition[SERVICE_DESCRIPTOR_FIELD.SERVICE_ID];
-    const options = this.resolveJoinReplicaOptions(
-      serviceId,
-      UNIFIED_SERVICE_TYPE.MESSAGE_GROUP,
-    );
-
-    if (this.messageGroupServices.has(options.replicaId)) {
-      return {status: SERVICE_LIFECYCLE_STATE.CREATED};
-    }
-
-    if (options.createDelayMs > NUM.ZERO) {
-      await this.sleep(options.createDelayMs);
-    }
-
-    const messageGroup = new MessageGroupService({
-      groupId: options.groupId,
-      replicaId: options.replicaId,
-      nodeId: this.nodeId,
-      replicaIds: options.replicaIds,
-      transport: this.messageRouter,
-      peerAddresses: options.peerAddresses,
-      deferElection: Boolean(options.deferElection),
-    });
-
-    const unifiedAddress = `${this.nodeId}${ADDRESS.SEPARATOR}` +
-      `${ENTITY_TYPE.MESSAGE_GROUP}${ADDRESS.SEPARATOR}${options.replicaId}`;
-    this.messageRouter.register(unifiedAddress, (envelope) => {
-      if (options.logEnvelope) {
-        this.logger.debug(JOINING_LOG_MSG.JOIN_MESSAGE_RECEIVED, {
-          address: unifiedAddress,
-          envelopeType: envelope?.type || envelope?.payload?.type,
-          from: envelope?.from || envelope?.payload?.address,
-        });
-      }
-      return messageGroup.receiveMessage(envelope);
-    });
-
-    if (options.logRegistration) {
-      this.logger.info(JOINING_LOG_MSG.JOIN_HANDLER_REGISTERED, {
-        unifiedAddress,
-        nodeId: this.nodeId,
-      });
-    }
-
-    await messageGroup.initialize();
-    this.messageGroupServices.set(options.replicaId, messageGroup);
-    this.joinMessageGroupReplicas.push(messageGroup);
-
-    this.logger.debug(JOINING_LOG_MSG.MESSAGE_GROUP_REPLICA_CREATED, {
-      groupId: options.groupId,
-      replicaId: options.replicaId,
-      replicaIndex: options.replicaIndex,
-      nodeId: this.nodeId,
-    });
-
-    return {status: SERVICE_LIFECYCLE_STATE.CREATED};
+    return this.createMessageGroupPhase
+      .createJoinMessageGroupReplica(context);
   }
 
   /**
@@ -2397,27 +1577,11 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   async startJoinMessageGroupReplica(replicaHandle, _context) {
-    const serviceId = replicaHandle[SERVICE_DESCRIPTOR_FIELD.SERVICE_ID] ||
-      replicaHandle[SERVICE_DESCRIPTOR_FIELD.REPLICA_ID];
-    const options = this.resolveJoinReplicaOptions(
-      serviceId,
-      UNIFIED_SERVICE_TYPE.MESSAGE_GROUP,
-    );
-    const messageGroup = this.messageGroupServices.get(options.replicaId);
-
-    assertCritical(
-      messageGroup,
-      `Join message-group replica ${options.replicaId} missing at start`,
-    );
-
-    if (!options.deferElection) {
-      messageGroup.startElection();
-    }
-
-    return {
-      status: SERVICE_LIFECYCLE_STATE.RUNNING,
-      deferred: Boolean(options.deferElection),
-    };
+    return this.createMessageGroupPhase
+      .startJoinMessageGroupReplica(
+        replicaHandle,
+        _context,
+      );
   }
 
   /**
@@ -2428,50 +1592,23 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   async stopJoinMessageGroupReplica(replicaHandle, _context) {
-    const serviceId = replicaHandle[SERVICE_DESCRIPTOR_FIELD.SERVICE_ID] ||
-      replicaHandle[SERVICE_DESCRIPTOR_FIELD.REPLICA_ID];
-    const options = this.resolveJoinReplicaOptions(
-      serviceId,
-      UNIFIED_SERVICE_TYPE.MESSAGE_GROUP,
-    );
-    const messageGroup = this.messageGroupServices.get(options.replicaId);
-    if (!messageGroup) {
-      return {status: SERVICE_LIFECYCLE_STATE.STOPPED};
-    }
-
-    if (messageGroup.shutdown) {
-      await messageGroup.shutdown();
-    }
-
-    const unifiedAddress = `${this.nodeId}${ADDRESS.SEPARATOR}` +
-      `${ENTITY_TYPE.MESSAGE_GROUP}${ADDRESS.SEPARATOR}${options.replicaId}`;
-    if (this.messageRouter) {
-      this.messageRouter.unregister(unifiedAddress);
-    }
-
-    this.messageGroupServices.delete(options.replicaId);
-    this.joinMessageGroupReplicas = this.joinMessageGroupReplicas.filter(
-      (service) => service !== messageGroup,
-    );
-
-    return {status: SERVICE_LIFECYCLE_STATE.STOPPED};
+    return this.createMessageGroupPhase
+      .stopJoinMessageGroupReplica(
+        replicaHandle,
+        _context,
+      );
   }
 
   /**
    * Compatibility shim for deferred self-hosted join elections.
    * Replica create/start ownership remains in unified lifecycle adapters.
+   * @param {string} groupId - Message group ID.
    * @return {void}
    * @private
    */
   startDeferredJoinMessageGroupElections(groupId) {
-    this.logger.debug(JOINING_LOG_MSG.MESSAGE_GROUP_ELECTIONS_START, {
-      groupId,
-      replicaCount: this.joinMessageGroupReplicas.length,
-    });
-
-    for (const messageGroup of this.joinMessageGroupReplicas) {
-      messageGroup.startElection();
-    }
+    return this.createMessageGroupPhase
+      .startDeferredJoinMessageGroupElections(groupId);
   }
 
   /**
@@ -2482,71 +1619,8 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   async phaseCreateSelfHostedMessageGroup(assignment) {
-    const groupId = assignment.groupId;
-    const replicaCount = assignment.replicaCount || NUM.THREE;
-
-    this.logger.debug(JOINING_LOG_MSG.SELF_HOSTED_CREATING, {
-      nodeId: this.nodeId,
-      groupId,
-      replicaCount,
-    });
-
-    // Requirements: 8.3 - MessageRouter should already be initialized in phaseConnectWebSocket
-    if (!this.messageRouter) {
-      throw new Error(JOINING_ERROR_MSG.MESSAGE_ROUTER_REQUIRED);
-    }
-
-    const replicaStaggerDelayMs = this.config.replicaStaggerDelayMs;
-
-    const replicaIds = [];
-    for (let i = NUM.ZERO; i < replicaCount; i++) {
-      replicaIds.push(`${groupId}-r${i}`);
-    }
-
-    const peerAddresses = replicaIds.map(
-      (replicaId) =>
-        `${this.nodeId}${ADDRESS.SEPARATOR}` +
-        `${ENTITY_TYPE.MESSAGE_GROUP}${ADDRESS.SEPARATOR}${replicaId}`,
-    );
-
-    this.joinMessageGroupReplicas = [];
-    for (let index = NUM.ZERO; index < replicaIds.length; index++) {
-      const replicaId = replicaIds[index];
-      this.assertReplicaStartupOwnership(replicaId);
-      this.queueJoinServiceReplica(
-        this.createJoinServiceDescriptor(
-          UNIFIED_SERVICE_TYPE.MESSAGE_GROUP,
-          replicaId,
-        ),
-        {
-          serviceType: UNIFIED_SERVICE_TYPE.MESSAGE_GROUP,
-          groupId,
-          replicaId,
-          replicaIds,
-          replicaIndex: index,
-          peerAddresses,
-          deferElection: true,
-          createDelayMs: index > NUM.ZERO ?
-            index * replicaStaggerDelayMs :
-            NUM.ZERO,
-          logEnvelope: false,
-          logRegistration: false,
-        },
-      );
-    }
-
-    await this.triggerJoinReconciler(
-      JOINING_UNIFIED_RECONCILE.MESSAGE_GROUPS_REASON,
-    );
-
-    this.startDeferredJoinMessageGroupElections(groupId);
-
-    this.logger.info(JOINING_LOG_MSG.SELF_HOSTED_CREATED, {
-      nodeId: this.nodeId,
-      groupId,
-      replicaCount: this.messageGroupServices.size,
-      hasMessageRouter: !!this.messageRouter,
-    });
+    return this.createMessageGroupPhase
+      .phaseCreateSelfHostedMessageGroup(assignment);
   }
 
   /**
@@ -2602,46 +1676,8 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   assertReplicaStartupOwnership(replicaId) {
-    const systemTableCache = NodeService.getInstance().getSystemTableCache();
-    if (!systemTableCache || typeof systemTableCache.get !== TYPEOF.FUNCTION) {
-      return;
-    }
-
-    const existingService = systemTableCache.get(TABLES.SERVICES, replicaId);
-    if (!existingService) {
-      return;
-    }
-    if (existingService[COLUMN.SERVICE_TYPE] !== SERVICE_TYPE.MESSAGE_GROUP) {
-      return;
-    }
-
-    const existingNodeId = existingService[COLUMN.NODE_ID] || null;
-    const existingStatus = String(existingService[COLUMN.STATUS] || STRING.UNKNOWN)
-      .toLowerCase();
-    if (!existingNodeId ||
-        existingNodeId === this.nodeId ||
-        existingStatus !== SERVICE_STATUS.ACTIVE) {
-      return;
-    }
-
-    const assignment = this.bootstrapResponse?.messageGroupAssignment;
-    const authorizedMoveReplicaStartup = assignment &&
-      assignment.strategy === AssignmentStrategy.MOVE_REPLICA &&
-      assignment.replicaToMove === replicaId &&
-      assignment.sourceNodeId === existingNodeId &&
-      typeof assignment.assignmentId === TYPEOF.STRING &&
-      assignment.assignmentId.length > NUM.ZERO;
-    if (authorizedMoveReplicaStartup) {
-      return;
-    }
-
-    throw new Error(
-      JOINING_ERROR_MSG.replicaOwnerConflict(
-        replicaId,
-        existingNodeId,
-        this.nodeId,
-      ),
-    );
+    return this.joinMessageGroupPhase
+      .assertReplicaStartupOwnership(replicaId);
   }
 
   /**
@@ -2652,97 +1688,8 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   async phaseJoinExistingMessageGroup(assignment) {
-    const {groupId, peerAddresses, existingPeerIds, replicaAddresses} = assignment;
-
-    this.logger.info(JOINING_LOG_MSG.JOIN_ASSIGNMENT_RECEIVED, {
-      nodeId: this.nodeId,
-      groupId,
-      strategy: assignment.strategy,
-      existingPeerIds: existingPeerIds,
-      peerAddresses: peerAddresses,
-      replicaAddresses: replicaAddresses,
-      sourceNodeId: assignment.sourceNodeId,
-      replicaToMove: assignment.replicaToMove,
-    });
-
-    // Requirements: 8.3 - MessageRouter should already be initialized in phaseConnectWebSocket
-    if (!this.messageRouter) {
-      throw new Error(JOINING_ERROR_MSG.MESSAGE_ROUTER_REQUIRED);
-    }
-
-    // MOVE_REPLICA strategy: Take over the existing replica ID from the source node
-    // This is critical - we don't create a new replica, we take over an existing one
-    // The services table entry will be UPDATED to point to this node
-    const replicaId = assignment.replicaToMove;
-    if (!replicaId) {
-      throw new Error(JOINING_ERROR_MSG.MOVE_REPLICA_MISSING);
-    }
-    this.assertReplicaStartupOwnership(replicaId);
-
-    // The replica IDs stay the same - we're just moving one replica to a different node
-    // existingPeerIds already contains all replica IDs including the one being moved
-    const allReplicaIds = existingPeerIds || [];
-
-    this.logger.info(JOINING_LOG_MSG.JOIN_CREATING_WITH_PEERS, {
-      nodeId: this.nodeId,
-      groupId,
-      replicaId,
-      allReplicaIds,
-      peerAddresses: peerAddresses || [],
-      hasMessageRouter: !!this.messageRouter,
-      messageRouterConnections: this.messageRouter?.getConnectedNodes?.() ||
-        STRING.NOT_AVAILABLE,
-    });
-
-    this.queueJoinServiceReplica(
-      this.createJoinServiceDescriptor(
-        UNIFIED_SERVICE_TYPE.MESSAGE_GROUP,
-        replicaId,
-      ),
-      {
-        serviceType: UNIFIED_SERVICE_TYPE.MESSAGE_GROUP,
-        groupId,
-        replicaId,
-        replicaIds: allReplicaIds,
-        replicaIndex: NUM.ZERO,
-        peerAddresses: peerAddresses || [],
-        deferElection: false,
-        createDelayMs: NUM.ZERO,
-        logEnvelope: true,
-        logRegistration: true,
-      },
-    );
-    await this.triggerJoinReconciler(
-      JOINING_UNIFIED_RECONCILE.MESSAGE_GROUPS_REASON,
-    );
-
-    const messageGroup = assertCritical(
-      this.messageGroupServices.get(replicaId),
-      JOINING_ERROR_MSG.MESSAGE_GROUP_LEADER_REQUIRED,
-    );
-
-    this.logger.info(JOINING_LOG_MSG.JOIN_SERVICE_INITIALIZED, {
-      nodeId: this.nodeId,
-      groupId,
-      replicaId,
-      role: messageGroup.role,
-      isLeader: messageGroup.isLeader,
-      leaderId: messageGroup.leaderId,
-      raftState: messageGroup.raft?.state,
-      raftTerm: messageGroup.raft?.term,
-    });
-
-    // Update the services table to point this replica to the new node
-    // This is an UPDATE, not INSERT - the replica ID already exists
-    await this.registerMessageGroupService(groupId, replicaId, messageGroup);
-
-    this.logger.info(JOINING_LOG_MSG.JOINED_EXISTING_GROUP, {
-      nodeId: this.nodeId,
-      groupId,
-      replicaId,
-      hasMessageRouter: !!this.messageRouter,
-      peerAddressCount: peerAddresses?.length || NUM.ZERO,
-    });
+    return this.joinMessageGroupPhase
+      .phaseJoinExistingMessageGroup(assignment);
   }
 
   /**
@@ -2755,140 +1702,12 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   async registerMessageGroupService(groupId, replicaId, service) {
-    const now = this.now();
-    const moveReplicaAssignment =
-      this.bootstrapResponse?.messageGroupAssignment || null;
-    const assignmentId = moveReplicaAssignment &&
-      moveReplicaAssignment.strategy === AssignmentStrategy.MOVE_REPLICA &&
-      moveReplicaAssignment.replicaToMove === replicaId ?
-      moveReplicaAssignment.assignmentId || null :
-      null;
-    const serviceData = {
-      service_id: replicaId,
-      service_type: SERVICE_TYPE.MESSAGE_GROUP,
-      node_id: this.nodeId,
-      partition_id: null,
-      group_id: groupId,
-      replica_id: replicaId,
-      raft_role: service.getRole ? service.getRole() : service.role,
-      status: SERVICE_STATUS.ACTIVE,
-      address: `${this.nodeId}${ADDRESS.SEPARATOR}` +
-        `${ENTITY_TYPE.MESSAGE_GROUP}${ADDRESS.SEPARATOR}${replicaId}`,
-      created_at: now,
-      updated_at: now,
-      ...(assignmentId ?
-        {[JOIN_BACKFILL_QUERY.ASSIGNMENT_ID_FIELD]: assignmentId} :
-        {}),
-    };
-
-    // Register via HTTP POST to seed node's register-service endpoint
-    const registerUrl = `${this.seedNodeAddress}${JOINING_HTTP.REGISTER_SERVICE_PATH}`;
-
-    this.logger.debug(JOINING_LOG_MSG.REGISTERING_MESSAGE_GROUP_SERVICE, {
-      nodeId: this.nodeId,
-      replicaId,
-      groupId,
-      assignmentId,
-      registerUrl,
-    });
-
-    const retryPolicy = this.resolveJoinRetryPolicy();
-    const retryTimeoutMs = retryPolicy.retryTimeoutMs;
-    let delayMs = retryPolicy.initialDelayMs;
-    const maxDelayMs = retryPolicy.maxDelayMs;
-    const backoffMultiplier = retryPolicy.backoffMultiplier;
-    const retryableTimeoutErrorMessage = JOINING_ERROR_MSG.httpTimeout(
-      this.config.httpTimeoutMs,
-    );
-    const startTime = this.now();
-    let attempt = NUM.ZERO;
-    let lastError = null;
-
-    while (this.now() - startTime < retryTimeoutMs) {
-      attempt += 1;
-      try {
-        const response = await this.httpPostImpl(registerUrl, serviceData);
-
-        if (!response.success) {
-          this.logger.error(JOINING_LOG_MSG.MESSAGE_GROUP_REGISTER_NON_SUCCESS, {
-            nodeId: this.nodeId,
-            replicaId,
-            error: response.error,
-          });
-          throw new Error(response.error || JOINING_ERROR_MSG.BOOTSTRAP_REQUEST_FAILED);
-        }
-
-        const systemTableCache = NodeService.getInstance().getSystemTableCache();
-        if (systemTableCache) {
-          // Bootstrap timing exception: local cache seeding is required here because
-          // join-time CDC subscriptions are activated later in phaseQuerySystemState().
-          // Control-plane address resolution and readiness checks may consult the
-          // local services cache before CDC fanout reaches this node.
-          // See architecture.md: Sanctioned direct applySystemTableChange call sites.
-          systemTableCache.applySystemTableChange(
-            TABLES.SERVICES,
-            CDC_OPERATION.UPSERT,
-            serviceData,
-          );
-        }
-
-        this.logger.info(JOINING_LOG_MSG.MESSAGE_GROUP_REGISTERED, {
-          nodeId: this.nodeId,
-          replicaId,
-          groupId,
-          attempt,
-        });
-        return;
-      } catch (error) {
-        lastError = error;
-        const elapsedMs = this.now() - startTime;
-        const classification = this.classifySeedContactFailure(
-          error,
-          retryableTimeoutErrorMessage,
-        );
-        if (classification.retryable && elapsedMs < retryTimeoutMs) {
-          const nextDelayMs = this.computeSeedContactRetryDelayMs({
-            baseDelayMs: delayMs,
-            maxDelayMs,
-            retryAfterMs: classification.retryAfterMs,
-          });
-          this.logger.warn(JOINING_LOG_MSG.MESSAGE_GROUP_REGISTER_RETRYING, {
-            nodeId: this.nodeId,
-            replicaId,
-            groupId,
-            attempt,
-            elapsedMs,
-            error: error.message,
-            lastCode: classification.code,
-            lastStatusCode: classification.statusCode,
-            retryAfterMs: classification.retryAfterMs,
-            lastErrorDetails: classification.parsedError?.details || null,
-            nextDelayMs,
-            retryTimeoutMs,
-          });
-          await this.sleep(nextDelayMs);
-          delayMs = Math.min(
-            Math.floor(delayMs * backoffMultiplier),
-            maxDelayMs,
-          );
-          continue;
-        }
-        break;
-      }
-    }
-
-    const error = lastError || new Error(
-      JOINING_ERROR_MSG.registerServiceTimeout(replicaId, retryTimeoutMs),
-    );
-    this.logger.error(JOINING_LOG_MSG.MESSAGE_GROUP_REGISTER_FAILED, {
-      nodeId: this.nodeId,
-      replicaId,
-      groupId,
-      attempts: attempt,
-      elapsedMs: this.now() - startTime,
-      error: error.message,
-    });
-    throw error;
+    return this.createMessageGroupPhase
+      .registerMessageGroupService(
+        groupId,
+        replicaId,
+        service,
+      );
   }
 
   /**
@@ -2899,48 +1718,8 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   async registerCreateSelfHostedMetadata() {
-    const assignment = this.bootstrapResponse?.messageGroupAssignment;
-    if (!assignment || assignment.strategy !== AssignmentStrategy.CREATE_SELF_HOSTED) {
-      return;
-    }
-
-    const groupId = assignment.groupId;
-    if (!groupId) {
-      throw new Error('CREATE_SELF_HOSTED assignment missing groupId');
-    }
-
-    const replicas = Array.from(this.messageGroupServices.entries())
-      .filter(([_replicaId, service]) => service?.groupId === groupId);
-
-    if (replicas.length === NUM.ZERO) {
-      throw new Error(`No local replicas found for CREATE_SELF_HOSTED group ${groupId}`);
-    }
-
-    const now = this.now();
-    const messageGroupRow = {
-      group_id: groupId,
-      group_name: groupId,
-      replica_count: replicas.length,
-      leader_node_id: this.nodeId,
-      policy: JSON.stringify(CREATE_SELF_HOSTED_MESSAGE_GROUP_POLICY),
-      created_at: now,
-      updated_at: now,
-    };
-
-    const groupResult = await this.upsertSystemTableRow(TABLES.MESSAGE_GROUPS, messageGroupRow);
-    if (!groupResult?.success) {
-      throw new Error(`Failed to upsert message group metadata for ${groupId}`);
-    }
-
-    for (const [replicaId, service] of replicas) {
-      await this.registerMessageGroupService(groupId, replicaId, service);
-    }
-
-    this.logger.info('Registered CREATE_SELF_HOSTED metadata', {
-      nodeId: this.nodeId,
-      groupId,
-      replicaCount: replicas.length,
-    });
+    return this.createMessageGroupPhase
+      .registerCreateSelfHostedMetadata();
   }
 
   /**
@@ -2949,247 +1728,82 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   async phaseWaitForLeadership() {
-    const startTime = this.now();
-    const timeoutMs = this.config.leadershipWaitTimeoutMs;
-    let delay = this.config.leadershipWaitInitialDelayMs;
-    const maxDelay = this.config.leadershipWaitMaxDelayMs;
-    const backoffMultiplier = this.config.leadershipWaitBackoffMultiplier;
-    const systemTableCache = NodeService.getInstance().getSystemTableCache();
-
-    this.logger.debug(JOINING_LOG_MSG.WAITING_LEADERSHIP, {
-      nodeId: this.nodeId,
-      timeoutMs,
-      messageGroupCount: this.messageGroupServices.size,
-    });
-
-    while (this.now() - startTime < timeoutMs) {
-      const hasCacheLeader = this.hasMessageGroupLeaderInCache(systemTableCache);
-
-      // Check if any local replica is leader or has a known leader
-      for (const [replicaId, service] of this.messageGroupServices) {
-        if (service.isLeaderReplica() || service.getLeaderId()) {
-          this.logger.debug(JOINING_LOG_MSG.LEADERSHIP_ESTABLISHED, {
-            nodeId: this.nodeId,
-            replicaId,
-            isLeader: service.isLeaderReplica(),
-            leaderId: service.getLeaderId(),
-            elapsedMs: this.now() - startTime,
-          });
-          return;
-        }
-      }
-      if (hasCacheLeader) {
-        this.logger.debug(JOINING_LOG_MSG.LEADERSHIP_ESTABLISHED, {
-          nodeId: this.nodeId,
-          replicaId: null,
-          isLeader: false,
-          leaderId: null,
-          elapsedMs: this.now() - startTime,
-        });
-        return;
-      }
-
-      // Wait with exponential backoff
-      await this.sleep(delay);
-      delay = Math.min(delay * backoffMultiplier, maxDelay);
-    }
-
-    // Timeout - fail joining
-    const leadershipTimeout = JOINING_ERROR_MSG.leadershipTimeout;
-    throw new Error(leadershipTimeout(timeoutMs));
+    return this.waitForLeadershipPhase
+      .phaseWaitForLeadership();
   }
 
   /**
    * Wait for system table leaders to be present in cache before seeding writes.
+   * Delegates to WaitForLeadershipPhase.
    * @param {Object} systemTableCache - System table cache.
    * @return {Promise<void>}
    * @private
    */
   async waitForSystemServiceLeaders(systemTableCache) {
-    const startTime = this.now();
-    const timeoutMs = this.config.leadershipWaitTimeoutMs;
-    let delay = this.config.leadershipWaitInitialDelayMs;
-    const maxDelay = this.config.leadershipWaitMaxDelayMs;
-    const backoffMultiplier = this.config.leadershipWaitBackoffMultiplier;
-
-    this.logger.debug(JOINING_LOG_MSG.WAITING_LEADERSHIP, {
-      nodeId: this.nodeId,
-      timeoutMs,
-    });
-
-    while (this.now() - startTime < timeoutMs) {
-      const missing = this.getMissingSystemServiceLeaders(systemTableCache);
-      const blockingMissing = this.getBlockingSystemServiceLeaders(
-        missing,
-        systemTableCache,
-      );
-      const missingCount = getMissingSystemServiceLeaderCount(blockingMissing);
-
-      if (missingCount === NUM.ZERO) {
-        return;
-      }
-
-      await this.sleep(delay);
-      delay = Math.min(delay * backoffMultiplier, maxDelay);
-    }
-
-    const missing = this.getMissingSystemServiceLeaders(systemTableCache);
-    const blockingMissing = this.getBlockingSystemServiceLeaders(
-      missing,
-      systemTableCache,
-    );
-    const leadershipTimeout = JOINING_ERROR_MSG.leadershipTimeout;
-    const error = new Error(leadershipTimeout(timeoutMs));
-    error.missingLeaders = blockingMissing;
-    error.missingCount = getMissingSystemServiceLeaderCount(blockingMissing);
-    error.nonBlockingMissingLeaders = {
-      missingMessageGroupLeaders: missing.missingMessageGroupLeaders,
-      missingMessageGroupLeaderNodes: missing.missingMessageGroupLeaderNodes,
-      missingMessageGroupLeaderAddresses: missing.missingMessageGroupLeaderAddresses,
-    };
-    error.timeoutMs = timeoutMs;
-    throw error;
+    return this.waitForLeadershipPhase
+      .waitForSystemServiceLeaders(systemTableCache);
   }
 
   /**
    * Get the system tables that must be write-routable before state-query writes.
+   * Delegates to WaitForLeadershipPhase.
    * @return {Array<string>} Required system table names.
    * @private
    */
   getRequiredSystemWriteTables() {
-    const requiredTables = [...JOINING_REQUIRED_WRITE_TABLES];
-    const strategy = this.bootstrapResponse?.messageGroupAssignment?.strategy;
-
-    if (strategy === AssignmentStrategy.CREATE_SELF_HOSTED) {
-      requiredTables.push(TABLES.MESSAGE_GROUPS);
-    }
-
-    return requiredTables;
+    return this.waitForLeadershipPhase
+      .getRequiredSystemWriteTables();
   }
 
   /**
    * Check whether a system table is currently write-routable for join workflow.
-   * Allows follower-routed writes when leader metadata is temporarily stale.
+   * Delegates to WaitForLeadershipPhase.
    * @param {Object} systemTableCache - System table cache.
    * @param {string} tableName - System table name.
    * @return {boolean} True when writes can be routed.
    * @private
    */
   isSystemTableWriteRoutable(systemTableCache, tableName) {
-    if (isSystemTableWriteReady(systemTableCache, tableName)) {
-      return true;
-    }
-
-    const partitionId = INITIAL_PARTITION_IDS[tableName];
-    if (!partitionId || typeof systemTableCache?.filter !== TYPEOF.FUNCTION) {
-      return false;
-    }
-
-    const routableServices = systemTableCache.filter(TABLES.SERVICES, (service) =>
-      service?.[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.PARTITION &&
-      service?.[COLUMN.PARTITION_ID] === partitionId &&
-      service?.[COLUMN.STATUS] !== ReplicaStatus.FAILED &&
-      service?.[COLUMN.STATUS] !== ReplicaStatus.REMOVED &&
-      typeof service?.[COLUMN.ADDRESS] === TYPEOF.STRING &&
-      service[COLUMN.ADDRESS].length > NUM.ZERO,
-    );
-
-    return routableServices.length > NUM.ZERO;
+    return this.waitForLeadershipPhase
+      .isSystemTableWriteRoutable(systemTableCache, tableName);
   }
 
   /**
    * Check whether the cache currently includes a partition row for a table.
-   * Minimal synthetic caches in tests may omit unrelated system partitions.
+   * Delegates to WaitForLeadershipPhase.
    * @param {Object} systemTableCache - System table cache.
    * @param {string} tableName - System table name.
    * @return {boolean} True when table partition is present in cache.
    * @private
    */
   hasSystemTablePartition(systemTableCache, tableName) {
-    const partitionId = INITIAL_PARTITION_IDS[tableName];
-    if (!partitionId) {
-      return false;
-    }
-
-    if (typeof systemTableCache?.filter === TYPEOF.FUNCTION) {
-      const partitions = systemTableCache.filter(TABLES.PARTITIONS, (partition) =>
-        partition?.[COLUMN.PARTITION_ID] === partitionId,
-      );
-      return partitions.length > NUM.ZERO;
-    }
-
-    if (typeof systemTableCache?.getAll === TYPEOF.FUNCTION) {
-      const partitions = systemTableCache.getAll(TABLES.PARTITIONS) || [];
-      return partitions.some((partition) => partition?.[COLUMN.PARTITION_ID] === partitionId);
-    }
-
-    return false;
+    return this.waitForLeadershipPhase
+      .hasSystemTablePartition(systemTableCache, tableName);
   }
 
   /**
    * Find missing service leaders using system table cache.
+   * Delegates to WaitForLeadershipPhase.
    * @param {Object} systemTableCache - System table cache.
    * @return {Object} Missing leader lists.
    * @private
    */
   getMissingSystemServiceLeaders(systemTableCache) {
-    return getMissingSystemServiceLeaders(systemTableCache, {
-      // leader_node_id in partitions/message_groups is asynchronously propagated.
-      // Join readiness only requires routable leader services (address + node_id).
-      requireLeaderNodeId: false,
-    });
+    return this.waitForLeadershipPhase
+      .getMissingSystemServiceLeaders(systemTableCache);
   }
 
   /**
    * Keep join-time readiness gates focused on system-table write routing.
-   * Message-group leader rows can legitimately lag during MOVE_REPLICA handoffs.
+   * Delegates to WaitForLeadershipPhase.
    * @param {Object} missing - Missing leader diagnostics.
    * @param {Object} systemTableCache - System table cache.
    * @return {Object} Blocking subset for state-query readiness.
    * @private
    */
   getBlockingSystemServiceLeaders(missing, systemTableCache) {
-    const requiredTables = this.getRequiredSystemWriteTables();
-    const missingPartitionLeaders = [];
-    const missingPartitionLeaderNodes = [];
-    const missingPartitionLeaderAddresses = [];
-    const missingRequiredTables = [];
-
-    for (const tableName of requiredTables) {
-      if (!this.hasSystemTablePartition(systemTableCache, tableName)) {
-        continue;
-      }
-
-      if (this.isSystemTableWriteRoutable(systemTableCache, tableName)) {
-        continue;
-      }
-
-      missingRequiredTables.push(tableName);
-
-      const partitionId = INITIAL_PARTITION_IDS[tableName];
-      if (!partitionId) {
-        continue;
-      }
-      missingPartitionLeaders.push(partitionId);
-
-      if (missing.missingPartitionLeaderNodes?.includes(partitionId)) {
-        missingPartitionLeaderNodes.push(partitionId);
-      }
-      if (missing.missingPartitionLeaderAddresses?.includes(partitionId)) {
-        missingPartitionLeaderAddresses.push(partitionId);
-      }
-    }
-
-    return {
-      ...missing,
-      missingPartitionLeaders,
-      missingPartitionLeaderNodes,
-      missingPartitionLeaderAddresses,
-      missingMessageGroupLeaders: [],
-      missingMessageGroupLeaderNodes: [],
-      missingMessageGroupLeaderAddresses: [],
-      missingRequiredTables,
-    };
+    return this.waitForLeadershipPhase
+      .getBlockingSystemServiceLeaders(missing, systemTableCache);
   }
 
   /**
@@ -3465,96 +2079,7 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   async phaseConnectWebSocket() {
-    // Determine WebSocket port from config or options
-    const wsPort = this.wsPort ?? this.config.wsPort;
-    const identifyPayload = this.getIdentifyBootstrapPayload();
-
-    // Route message-router setup through the shared owner.
-    try {
-      this.messageRouter = await MessageRouterSetup.create({
-        nodeId: this.nodeId,
-        nodeAddress: this.nodeAddress,
-        wsPort: wsPort,
-        identifyPayload,
-      });
-    } catch (error) {
-      this.logger.error(JOINING_LOG_MSG.ROUTER_INIT_FAILED, {
-        nodeId: this.nodeId,
-        wsPort: wsPort,
-        error: error.message,
-        stack: error.stack,
-      });
-      const routerInitFailed = JOINING_ERROR_MSG.ROUTER_INIT_FAILED;
-      throw new Error(routerInitFailed(error.message));
-    }
-
-    // Use MessageRouter directly for all services
-    // MessageRouter handles both local and remote message delivery
-    if (typeof this.messageRouter.setQueryMessageGroupServiceResolver === 'function') {
-      this.messageRouter.setQueryMessageGroupServiceResolver(() =>
-        this.getLeaderMessageGroupService(),
-      );
-    }
-    this.transport = this.messageRouter;
-    await this.initializeJoiningLifecycleOwners();
-    await this.triggerJoinReconciler(
-      JOINING_UNIFIED_RECONCILE.INFRA_READY_REASON,
-    );
-
-    // Get seed node WebSocket address from bootstrap response or options
-    const seedWsAddress = assertCritical(
-      this.seedNodeWsAddress,
-      JOINING_ERROR_MSG.SEED_WS_ADDRESS_REQUIRED,
-    );
-    const seedNodeId = assertCritical(
-      this.seedNodeId,
-      JOINING_ERROR_MSG.SEED_NODE_ID_REQUIRED,
-    );
-
-    this.logger.info(JOINING_LOG_MSG.SEED_WS_CONNECTING, {
-      nodeId: this.nodeId,
-      seedWsAddress,
-      seedNodeId,
-    });
-
-    try {
-      await this.messageRouter.connectToNode(seedNodeId, seedWsAddress);
-
-      this.logger.info(JOINING_LOG_MSG.SEED_WS_CONNECTED, {
-        nodeId: this.nodeId,
-        seedNodeId,
-        seedWsAddress,
-        connectedNodes: this.messageRouter.getConnectedNodes?.() ||
-          Array.from(this.messageRouter.nodeConnections?.keys() || []),
-      });
-    } catch (error) {
-      this.logger.error(JOINING_LOG_MSG.SEED_WS_CONNECT_FAILED, {
-        nodeId: this.nodeId,
-        seedWsAddress,
-        seedNodeId,
-        error: error.message,
-        stack: error.stack,
-      });
-      throw error;
-    }
-
-    // Connect to all cluster nodes for full mesh connectivity
-    // This ensures Raft messages can flow between all nodes
-    await this.connectToClusterNodes();
-
-    await this.sendControlPlaneNodeStateUpdate({
-      state: STATE.CONNECTED,
-      capabilities: this.getNodeCapabilities(),
-    });
-
-    this.logger.debug(JOINING_LOG_MSG.WS_INFRA_READY, {
-      nodeId: this.nodeId,
-      nodeAddress: this.nodeAddress,
-      wsPort: wsPort,
-      hasMessageRouter: !!this.messageRouter,
-      hasSelfConnection: wsPort ? this.messageRouter.hasSelfConnection() : false,
-      owner: 'MessageRouterSetup',
-    });
+    return this.connectWebSocketPhase.phaseConnectWebSocket();
   }
 
   /**
@@ -3565,98 +2090,7 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   async connectToClusterNodes() {
-    const {
-      source: nodeSource,
-      rows: nodesSnapshot,
-    } = this.resolveMeshConnectivityNodeRows();
-
-    if (!Array.isArray(nodesSnapshot) || nodesSnapshot.length === NUM.ZERO) {
-      return;
-    }
-
-    this.lastClusterMeshSignature =
-      this.buildClusterMeshSignature(nodesSnapshot);
-
-    // Filter to nodes that are not this node
-    const otherNodes = nodesSnapshot.filter((node) => {
-      const nodeId = node?.node_id;
-      return nodeId && nodeId !== this.nodeId;
-    });
-
-    if (otherNodes.length === NUM.ZERO) {
-      return;
-    }
-
-    this.logger.info(JOINING_LOG_MSG.CONNECTING_TO_CLUSTER_NODES, {
-      nodeId: this.nodeId,
-      nodeSource,
-      otherNodeCount: otherNodes.length,
-      otherNodeIds: otherNodes.map((n) => n.node_id),
-    });
-
-    // Connect to each node in parallel, skipping already-connected nodes
-    const connectionPromises = otherNodes.map(async (node) => {
-      const targetNodeId = node.node_id;
-      const nodeAddress = node.node_address;
-
-      const connectionState =
-        typeof this.messageRouter.getConnectionState === TYPEOF.FUNCTION ?
-          this.messageRouter.getConnectionState(targetNodeId) :
-          this.messageRouter.nodeConnections?.get(targetNodeId)?.state || null;
-
-      if (connectionState === STATE.CONNECTED) {
-        return;
-      }
-
-      if (!nodeAddress) {
-        this.logger.warn(JOINING_LOG_MSG.CLUSTER_NODE_CONNECT_FAILED, {
-          nodeId: this.nodeId,
-          targetNodeId,
-          error: 'Missing node_address',
-        });
-        return;
-      }
-
-      // Derive WebSocket address from node address
-      // node_address format: "hostname:port" (e.g., "localhost:8082")
-      // WebSocket port = REST port + WS_PORT_OFFSET (2)
-      const wsAddress = this.deriveWsAddressFromNodeAddress(nodeAddress);
-      if (!wsAddress) {
-        this.logger.warn(JOINING_LOG_MSG.CLUSTER_NODE_CONNECT_FAILED, {
-          nodeId: this.nodeId,
-          targetNodeId,
-          nodeAddress,
-          error: 'Could not derive WebSocket address',
-        });
-        return;
-      }
-
-      try {
-        await this.messageRouter.connectToNode(targetNodeId, wsAddress);
-        this.logger.info(JOINING_LOG_MSG.CLUSTER_NODE_CONNECTED, {
-          nodeId: this.nodeId,
-          targetNodeId,
-          wsAddress,
-        });
-      } catch (error) {
-        // Log but don't fail - the node might be temporarily unavailable
-        // Raft will handle retries and leader election
-        this.logger.warn(JOINING_LOG_MSG.CLUSTER_NODE_CONNECT_FAILED, {
-          nodeId: this.nodeId,
-          targetNodeId,
-          wsAddress,
-          error: error.message,
-        });
-      }
-    });
-
-    await Promise.all(connectionPromises);
-
-    this.logger.info(JOINING_LOG_MSG.CLUSTER_CONNECTIONS_COMPLETE, {
-      nodeId: this.nodeId,
-      connectedNodes: this.messageRouter.getConnectedNodes?.() ||
-        Array.from(this.messageRouter.nodeConnections?.keys() || []),
-    });
+    return this.connectWebSocketPhase.connectToClusterNodes();
   }
 
   /**
@@ -3666,165 +2100,23 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   deriveWsAddressFromNodeAddress(nodeAddress) {
-    if (!nodeAddress || typeof nodeAddress !== TYPEOF.STRING) {
-      return null;
-    }
-
-    let hostname;
-    let restPort;
-
-    // Check if address is already a full WebSocket URL (ws:// or wss://)
-    if (nodeAddress.startsWith(PROTOCOL.WS) || nodeAddress.startsWith(PROTOCOL.WSS)) {
-      // Parse URL format: ws://hostname:port or wss://hostname:port
-      const isSecure = nodeAddress.startsWith(PROTOCOL.WSS);
-      const protocolPrefix = isSecure ? PROTOCOL.WSS : PROTOCOL.WS;
-      const withoutProtocol = nodeAddress.substring(protocolPrefix.length);
-
-      const colonIndex = withoutProtocol.lastIndexOf(ADDRESS.PORT_SEPARATOR);
-      if (colonIndex === NUM.NEGATIVE_ONE || colonIndex === NUM.ZERO) {
-        return null;
-      }
-
-      hostname = withoutProtocol.substring(NUM.ZERO, colonIndex);
-      const portStr = withoutProtocol.substring(colonIndex + NUM.ONE);
-      restPort = parseInt(portStr, NUM.TEN);
-
-      if (!hostname || hostname.length === NUM.ZERO) {
-        return null;
-      }
-
-      if (!Number.isFinite(restPort) || restPort <= NUM.ZERO) {
-        return null;
-      }
-
-      // For WebSocket URLs, the port is already the WS port, return as-is
-      return nodeAddress;
-    }
-
-    // Parse hostname:port format (REST API address)
-    const colonIndex = nodeAddress.lastIndexOf(ADDRESS.PORT_SEPARATOR);
-    if (colonIndex === NUM.NEGATIVE_ONE || colonIndex === NUM.ZERO) {
-      // No colon found or colon at start (empty hostname)
-      return null;
-    }
-
-    hostname = nodeAddress.substring(NUM.ZERO, colonIndex);
-    if (!hostname || hostname.length === NUM.ZERO) {
-      return null;
-    }
-
-    const portStr = nodeAddress.substring(colonIndex + NUM.ONE);
-    restPort = parseInt(portStr, NUM.TEN);
-
-    if (!Number.isFinite(restPort) || restPort <= NUM.ZERO) {
-      return null;
-    }
-
-    // WebSocket port = REST port + WS_PORT_OFFSET
-    const wsPort = restPort + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET;
-    return `${PROTOCOL.WS}${hostname}${ADDRESS.PORT_SEPARATOR}${wsPort}`;
+    return _deriveWsAddressFromNodeAddress(nodeAddress);
   }
 
   /**
    * Hydrate system cache from bootstrap response snapshots.
-   *
-   * System Cache Hydration Process:
-   * - Extracts complete system table snapshots from bootstrap response
-   * - Populates local system cache with all cluster state:
-   *   * nodes - All registered nodes
-   *   * partitions - All partition metadata
-   *   * services - All service addresses and Raft roles
-   *   * tables - All table schemas
-   *   * message_groups - All message group configurations
-   *   * replica_operations - Pending operations
-   *   * indices, config, live_queries, contexts, code - additional system metadata
-   *   * logs is intentionally excluded from default cache hydration
-   * - After hydration, node can immediately read and write to system tables
-   * - System cache becomes the single source of truth for query routing
-   * - No bootstrap directories needed after hydration
-   *
-   * Requirements: 2.1, 2.2, 2.3 - System cache hydration from bootstrap response
+   * Delegates to QuerySystemStatePhase.
    * @return {Promise<void>}
    * @private
    */
   async hydrateSystemCacheFromBootstrap() {
-    const snapshots = this.bootstrapResponse?.systemTableSnapshots;
-
-    if (!snapshots) {
-      this.logger.warn('Bootstrap response missing systemTableSnapshots', {
-        nodeId: this.nodeId,
-        hasBootstrapResponse: !!this.bootstrapResponse,
-      });
-      return;
-    }
-
-    // Initialize node service to get system table cache
-    const nodeService = NodeService.getInstance();
-    if (!nodeService.isInitialized()) {
-      nodeService.initialize({
-        nodeId: this.nodeId,
-        nodeAddress: this.nodeAddress,
-        lifecycleStateMachine: this.lifecycleStateMachine,
-        autoTransitionLifecycle: false,
-      });
-    }
-
-    const systemTableCache = assertCritical(
-      nodeService.getSystemTableCache(),
-      JOINING_ERROR_MSG.STATE_QUERY_CACHE_REQUIRED,
-    );
-
-    // Hydrate each system table from snapshots
-    const systemTables = CACHE_HYDRATION_TABLES;
-
-    let totalRecords = NUM.ZERO;
-
-    for (const tableName of systemTables) {
-      const records = snapshots[tableName];
-
-      if (!Array.isArray(records)) {
-        this.logger.debug('Snapshot missing or invalid for table', {
-          tableName,
-          nodeId: this.nodeId,
-        });
-        continue;
-      }
-
-      for (const record of records) {
-        const operation = this.getSnapshotHydrationOperation(
-          systemTableCache,
-          tableName,
-          record,
-        );
-        if (!operation) {
-          continue;
-        }
-        // Bootstrap hydration exception: joining nodes must hydrate local cache
-        // from bootstrap snapshots before CDC subscriptions are active.
-        // See architecture.md: Sanctioned direct applySystemTableChange call sites.
-        systemTableCache.applySystemTableChange(tableName, operation, record);
-        totalRecords++;
-      }
-
-      this.logger.debug('Hydrated table from snapshot', {
-        tableName,
-        recordCount: records.length,
-        nodeId: this.nodeId,
-      });
-    }
-
-    this.logger.info('System cache hydrated from bootstrap response', {
-      nodeId: this.nodeId,
-      totalRecords,
-      tablesHydrated: systemTables.filter((t) =>
-        Array.isArray(snapshots[t]) && snapshots[t].length > NUM.ZERO,
-      ).length,
-    });
+    return this.querySystemStatePhase
+      .hydrateSystemCacheFromBootstrap();
   }
 
   /**
    * Resolve the cache operation for a bootstrap snapshot record.
-   * Skip stale snapshot rows when cache already has an equal/newer update.
+   * Delegates to QuerySystemStatePhase.
    * @param {Object} systemTableCache - System table cache.
    * @param {string} tableName - System table name.
    * @param {Object} record - Snapshot row.
@@ -3832,416 +2124,92 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   getSnapshotHydrationOperation(systemTableCache, tableName, record) {
-    const pkField = getSystemCachePrimaryKeyFieldOrFallback(
-      tableName,
-      CACHE_DEFAULT.PRIMARY_KEY_FALLBACK,
-    );
-    const key = record?.[pkField] ?? record?.[CACHE_DEFAULT.PRIMARY_KEY_FALLBACK];
-
-    // Let cache validation handle malformed rows that have no key.
-    if (typeof key === TYPEOF.UNDEFINED || key === null) {
-      return CDC_OPERATION.INSERT;
-    }
-
-    if (!systemTableCache.has(tableName, key)) {
-      return CDC_OPERATION.INSERT;
-    }
-
-    const existing = systemTableCache.get(tableName, key);
-    const existingUpdatedAt = Number(existing?.[COLUMN.UPDATED_AT]);
-    const incomingUpdatedAt = Number(record?.[COLUMN.UPDATED_AT]);
-    const hasExistingUpdatedAt = Number.isFinite(existingUpdatedAt) && existingUpdatedAt > NUM.ZERO;
-    const hasIncomingUpdatedAt = Number.isFinite(incomingUpdatedAt) && incomingUpdatedAt > NUM.ZERO;
-
-    if (hasExistingUpdatedAt && (!hasIncomingUpdatedAt || existingUpdatedAt >= incomingUpdatedAt)) {
-      this.logger.debug('Skipping stale snapshot row during cache hydration', {
-        nodeId: this.nodeId,
+    return this.querySystemStatePhase
+      .getSnapshotHydrationOperation(
+        systemTableCache,
         tableName,
-        key,
-        existingUpdatedAt,
-        incomingUpdatedAt: hasIncomingUpdatedAt ? incomingUpdatedAt : null,
-      });
-      return null;
-    }
-
-    return CDC_OPERATION.UPSERT;
+        record,
+      );
   }
 
   /**
    * Phase 5: Query system partitions for cluster state and register this node.
+   * Delegates to QuerySystemStatePhase.
    * @return {Promise<void>}
    * @private
    */
   async phaseQuerySystemState() {
-    this.logger.debug(JOINING_LOG_MSG.STATE_QUERY_START, {
-      nodeId: this.nodeId,
-    });
-
-    // Initialize node service
-    const nodeService = NodeService.getInstance();
-    if (!nodeService.isInitialized()) {
-      nodeService.initialize({
-        nodeId: this.nodeId,
-        nodeAddress: this.nodeAddress,
-        lifecycleStateMachine: this.lifecycleStateMachine,
-        autoTransitionLifecycle: false,
-      });
-    }
-
-    const systemTableCache = assertCritical(
-      nodeService.getSystemTableCache(),
-      JOINING_ERROR_MSG.STATE_QUERY_CACHE_REQUIRED,
-    );
-    const queryEngine = assertCritical(
-      this.cdcIntegrationService?.sqlQueryEngine,
-      JOINING_ERROR_MSG.STATE_QUERY_ENGINE_REQUIRED,
-    );
-    assertCritical(this.messageRouter, JOINING_ERROR_MSG.MESSAGE_ROUTER_REQUIRED);
-    this.ensureLatencyTopologyOwners();
-
-    try {
-      // Hydrate system cache from bootstrap response snapshots if not already done
-      if (!this.systemCacheHydrated) {
-        this.logger.info(JOINING_LOG_MSG.STATE_QUERY_HYDRATING_CACHE, {
-          nodeId: this.nodeId,
-        });
-
-        await this.hydrateSystemCacheFromBootstrap();
-        this.systemCacheHydrated = true;
-      }
-
-      // Log cache population status
-      const systemTables = [
-        TABLES.NODES,
-        TABLES.PARTITIONS,
-        TABLES.TABLES,
-        TABLES.SERVICES,
-        TABLES.REPLICA_OPERATIONS,
-        TABLES.MESSAGE_GROUPS,
-      ];
-
-      let totalCachedRecords = NUM.ZERO;
-      for (const tableName of systemTables) {
-        const records = systemTableCache.getAll(tableName) || [];
-        totalCachedRecords += records.length;
-      }
-
-      this.logger.info('System cache populated from bootstrap response', {
-        nodeId: this.nodeId,
-        totalRecords: totalCachedRecords,
-      });
-
-      // Set up query engine with system cache and message router
-      queryEngine.setSystemCache(systemTableCache);
-      queryEngine.setMessageRouter(this.messageRouter);
-
-      this.logger.info(JOINING_LOG_MSG.STATE_QUERY_HYDRATION_COMPLETE, {
-        nodeId: this.nodeId,
-        totalRecords: totalCachedRecords,
-      });
-
-      if (!this.tablePolicyService) {
-        this.tablePolicyService = new TablePolicyService({
-          systemTableCache: systemTableCache,
-          cdcIntegrationService: this.cdcIntegrationService,
-        });
-        this.tablePolicyService.initialize();
-      }
-
-      for (const partition of this.partitionServices.values()) {
-        partition.setSystemTableCache(systemTableCache);
-        partition.setTablePolicyService(this.tablePolicyService);
-      }
-
-      await this.waitForSystemServiceLeaders(systemTableCache);
-
-      // Register this node in the cluster's nodes table
-      await this.registerNodeInCluster();
-
-      // Persist CREATE_SELF_HOSTED message-group metadata as part of join.
-      await this.registerCreateSelfHostedMetadata();
-
-      // Subscribe to CDC events to keep cache updated
-      await this.subscribeToCDCEvents();
-
-      // Gate: verify CDC pipeline is fully wired before proceeding.
-      // Requirements 2.4, 2.6 — node must not transition to READY with
-      // an incomplete CDC pipeline.
-      const cdcReadinessGate =
-        this.createCdcPipelineReadinessGate(systemTableCache);
-      const cdcReadinessTimeoutMs =
-        this.config.cdcPipelineReadinessTimeoutMs ||
-        CDC_PIPELINE_READINESS_TIMEOUT_MS;
-      await cdcReadinessGate.waitForReady(
-        {
-          partitionServices: this.partitionServices,
-          messageGroupServices: this.messageGroupServices,
-          cdcSubscriptionsActive: this.cdcSubscriptionsActive === true,
-          // Join-time leader rows can lag while replica placement settles.
-          // Keep this gate focused on subscription/pipeline wiring.
-          requirePropagationLeader: false,
-        },
-        cdcReadinessTimeoutMs,
-      );
-      await this.backfillPropagatedCacheTablesFromAuthoritativeState();
-
-      // Hand hydrated desired/actual state to unified reconciler once.
-      await this.triggerJoinReconciler(
-        JOINING_UNIFIED_RECONCILE.HYDRATION_REASON,
-      );
-      this.stopJoiningLifecycleOwners();
-    } catch (error) {
-      const errorContext = {
-        nodeId: this.nodeId,
-        error: error.message,
-      };
-      if (error?.missingLeaders) {
-        errorContext.missingLeaders = error.missingLeaders;
-        errorContext.missingCount = error.missingCount;
-        errorContext.timeoutMs = error.timeoutMs;
-      }
-      this.logger.error(JOINING_LOG_MSG.STATE_QUERY_HYDRATION_FAILED, errorContext);
-      throw error;
-    }
-
-    this.logger.info(JOINING_LOG_MSG.STATE_QUERY_COMPLETE, {
-      nodeId: this.nodeId,
-    });
+    return this.querySystemStatePhase.phaseQuerySystemState();
   }
 
   /**
    * Register this node in the cluster's nodes table.
-   * Uses SQL query engine to INSERT into nodes table.
-   * Query routes through message router to partition leader.
-   * Also registers the WebSocket endpoint in node_endpoints table.
-   * Requirements: 2.1 - Joining node registers itself in cluster.
-   * Requirements: 8.2 - Node registration creates endpoint in node_endpoints table.
+   * Delegates to QuerySystemStatePhase.
    * @return {Promise<void>}
    * @private
    */
   async registerNodeInCluster() {
-    this.logger.info('Registering node in cluster', {
-      nodeId: this.nodeId,
-      nodeAddress: this.nodeAddress,
-    });
-
-    assertCritical(
-      this.cdcIntegrationService?.sqlQueryEngine,
-      JOINING_ERROR_MSG.STATE_QUERY_ENGINE_REQUIRED,
-    );
-
-    // Get system information
-    const cpus = os.cpus();
-    const totalMemoryBytes = os.totalmem();
-    const totalMemoryMb = Math.floor(totalMemoryBytes / (NUM.THOUSAND * NUM.THOUSAND));
-    const cpuCores = cpus.length;
-
-    // Use default disk size (this would ideally come from configuration)
-    const diskGb = NUM.HUNDRED;
-
-    const now = this.now();
-    const joinTimeUpsertOptions = this.getJoinTimeUpsertOptions();
-
-    const nodeData = {
-      [COLUMN.NODE_ID]: this.nodeId,
-      [COLUMN.NODE_ADDRESS]: this.nodeAddress,
-      [COLUMN.CPU_CORES]: cpuCores,
-      [COLUMN.MEMORY_MB]: totalMemoryMb,
-      [COLUMN.DISK_GB]: diskGb,
-      [COLUMN.CPU_USAGE_PERCENT]: NUM.ZERO,
-      [COLUMN.MEMORY_USAGE_PERCENT]: NUM.ZERO,
-      [COLUMN.DISK_USAGE_PERCENT]: NUM.ZERO,
-      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-      [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
-      [COLUMN.CAPABILITIES]: JSON.stringify([]),
-      [COLUMN.LAST_HEARTBEAT]: now,
-      [COLUMN.READY_LEASE_EXPIRES_AT]:
-        now + TIME_MS.CONTROL_PLANE_READY_LEASE,
-      [COLUMN.CREATED_AT]: now,
-    };
-
-    try {
-      const budgetService = this.getNodeStorageBudgetService();
-      const {budgetRow, resolution} = await NodeStorageBudgetSetup.resolveAndPersist({
-        budgetService,
-        nodeRow: nodeData,
-        nodeId: this.nodeId,
-        upsertOptions: joinTimeUpsertOptions,
-      });
-      this.seedJoinTimeCacheRow(TABLES.NODES, budgetRow);
-
-      this.logger.info('Node registered in cluster', {
-        nodeId: this.nodeId,
-        nodeAddress: this.nodeAddress,
-        cpuCores,
-        memoryMb: totalMemoryMb,
-        diskGb,
-        budgetBytes: resolution?.budgetBytes || null,
-        budgetSource: resolution?.source || null,
-      });
-
-      // Register WebSocket endpoint in node_endpoints table
-      // Requirements: 8.2 - Node registration creates endpoint
-      const endpointRow = await this.registerNodeEndpoint(now);
-      this.seedJoinTimeCacheRow(TABLES.NODE_ENDPOINTS, endpointRow);
-      const metaEndpointRows = await this.registerMetaServiceEndpoints();
-      for (const metaEndpointRow of metaEndpointRows) {
-        this.seedJoinTimeCacheRow(TABLES.SERVICE_ENDPOINTS, metaEndpointRow);
-      }
-    } catch (error) {
-      const wrappedError = new Error(`Failed to register node: ${error.message}`);
-      this.logger.error('Failed to register node in cluster', {
-        nodeId: this.nodeId,
-        error: wrappedError.message,
-      });
-      throw wrappedError;
-    }
+    return this.querySystemStatePhase.registerNodeInCluster();
   }
 
   /**
-   * Register the WebSocket endpoint for this node in the node_endpoints table.
-   * Requirements: 8.2 - Node registration creates endpoint in node_endpoints table.
+   * Register the WebSocket endpoint for this node.
+   * Delegates to QuerySystemStatePhase.
    * @param {number} now - Current timestamp.
    * @return {Promise<Object>}
    * @private
    */
   async registerNodeEndpoint(now) {
-    this.logger.info(JOINING_LOG_MSG.ENDPOINT_REGISTERING, {
-      nodeId: this.nodeId,
-      nodeAddress: this.nodeAddress,
-    });
-
-    const endpointId = `ep-${this.nodeId}-ws`;
-
-    const endpointData = {
-      [COLUMN.ENDPOINT_ID]: endpointId,
-      [COLUMN.NODE_ID]: this.nodeId,
-      [COLUMN.TRANSPORT_TYPE]: TRANSPORT_TYPE.WEBSOCKET,
-      [COLUMN.ADDRESS]: this.nodeAddress,
-      [COLUMN.PRIORITY]: NUM.ZERO,
-      [COLUMN.METADATA]: JSON.stringify({}),
-      [COLUMN.STATUS]: ENDPOINT_STATUS.ACTIVE,
-      [COLUMN.CREATED_AT]: now,
-      [COLUMN.UPDATED_AT]: now,
-    };
-
-    try {
-      const endpointResult = await this.upsertSystemTableRow(
-        TABLES.NODE_ENDPOINTS,
-        endpointData,
-      );
-
-      if (!endpointResult.success) {
-        throw new Error(`Failed to register endpoint: ${endpointResult.error}`);
-      }
-
-      this.logger.info(JOINING_LOG_MSG.ENDPOINT_REGISTERED, {
-        nodeId: this.nodeId,
-        endpointId,
-        transportType: TRANSPORT_TYPE.WEBSOCKET,
-        address: this.nodeAddress,
-      });
-      return endpointData;
-    } catch (error) {
-      this.logger.error(JOINING_LOG_MSG.ENDPOINT_REGISTER_FAILED, {
-        nodeId: this.nodeId,
-        error: error.message,
-      });
-      throw error;
-    }
+    return this.querySystemStatePhase
+      .registerNodeEndpoint(now);
   }
 
   /**
    * Register built-in meta service endpoints for this joining node.
-   * Ensures canonical discovery includes websocket and postgres-wire
-   * endpoints for every joined participant.
+   * Delegates to QuerySystemStatePhase.
    * @return {Promise<Array<Object>>}
    * @private
    */
   async registerMetaServiceEndpoints() {
-    try {
-      const endpointRows = [];
-      await registerBuiltInMetaServiceEndpoints({
-        upsertRow: async (tableName, row) => {
-          endpointRows.push(row);
-          return this.upsertSystemTableRow(tableName, row);
-        },
-        nodeId: this.nodeId,
-        nodeAddress: this.nodeAddress,
-        wsPort: this.wsPort,
-      });
-      return endpointRows;
-    } catch (error) {
-      this.logger.error('Failed to register built-in meta service endpoints', {
-        nodeId: this.nodeId,
-        error: error.message,
-      });
-      throw error;
-    }
+    return this.querySystemStatePhase
+      .registerMetaServiceEndpoints();
   }
 
   /**
    * Upsert a system-table row through CDC integration service.
-   * Falls back to SQL execution for test doubles that only mock sqlQueryEngine.
+   * Delegates to QuerySystemStatePhase.
    * @param {string} tableName - System table name.
    * @param {Object} rowData - Row payload.
    * @return {Promise<Object>} Upsert result.
    * @private
    */
   async upsertSystemTableRow(tableName, rowData) {
-    const upsertOptions = this.getJoinTimeUpsertOptions();
-    if (typeof this.cdcIntegrationService?.upsertSystemTableRow === 'function') {
-      return this.cdcIntegrationService.upsertSystemTableRow(
-        tableName,
-        rowData,
-        upsertOptions,
-      );
-    }
-
-    const columns = Object.keys(rowData);
-    const placeholders = columns.map(() => '?').join(', ');
-    const sql = `INSERT INTO ${tableName} (${columns.join(', ')}) VALUES (${placeholders})`;
-    const params = columns.map((column) => rowData[column]);
-    return this.cdcIntegrationService.sqlQueryEngine.executeQuery(sql, params);
+    return this.querySystemStatePhase
+      .upsertSystemTableRow(tableName, rowData);
   }
 
   /**
    * Determine whether join-time upserts can require local cache visibility.
-   * Before CDC subscriptions are active, successful writes are seeded into the
-   * local cache explicitly and cannot rely on event-driven confirmation.
+   * Delegates to QuerySystemStatePhase.
    * @return {Object|undefined}
    * @private
    */
   getJoinTimeUpsertOptions() {
-    return this.cdcSubscriptionsActive === true ?
-      undefined :
-      {skipCacheWait: true};
+    return this.querySystemStatePhase
+      .getJoinTimeUpsertOptions();
   }
 
   /**
    * Seed successful join-time control-plane writes into the local cache.
-   * This closes the gap before steady-state CDC visibility converges.
+   * Delegates to QuerySystemStatePhase.
    * @param {string} tableName
    * @param {Object|null} rowData
    * @return {void}
    * @private
    */
   seedJoinTimeCacheRow(tableName, rowData) {
-    if (!rowData || typeof rowData !== TYPEOF.OBJECT) {
-      return;
-    }
-
-    const systemTableCache = NodeService.getInstance().getSystemTableCache();
-    if (!systemTableCache ||
-        typeof systemTableCache.applySystemTableChange !== TYPEOF.FUNCTION) {
-      return;
-    }
-
-    systemTableCache.applySystemTableChange(
-      tableName,
-      CDC_OPERATION.UPSERT,
-      rowData,
-    );
+    return this.querySystemStatePhase
+      .seedJoinTimeCacheRow(tableName, rowData);
   }
 
   /**
@@ -4728,47 +2696,7 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   async handleJoiningFailure(error) {
-    const failedPhase = this.phase;
-    this.phase = JoiningPhase.FAILED;
-    this.lastError = error;
-    const duration = this.now() - this.startTime;
-
-    this.logger.error(JOINING_LOG_MSG.JOIN_FAILED, {
-      nodeId: this.nodeId,
-      phase: failedPhase,
-      duration,
-      error: error.message,
-      stack: error.stack,
-    });
-
-    // Execute structured reverse-order cleanup before generic cleanup
-    const cleanupContext = {
-      registeredNodeId: this.nodeId,
-      createdServiceIds: Array.from(this.messageGroupServices.keys()),
-      createdMessageGroupIds: this.bootstrapResponse
-        ?.messageGroupAssignment?.groupId ?
-        [this.bootstrapResponse.messageGroupAssignment.groupId] :
-        [],
-    };
-    await this.cleanupFailedJoin(failedPhase, cleanupContext);
-
-    // Clean up partially initialized services
-    await this.cleanup();
-
-    this.emit(JoiningEvent.FAILED, {
-      nodeId: this.nodeId,
-      phase: this.phase,
-      duration,
-      error: error.message,
-    });
-
-    return {
-      success: false,
-      nodeId: this.nodeId,
-      duration,
-      error: error.message,
-      phase: this.phase,
-    };
+    return this.joinCleanupHandler.handleJoiningFailure(error);
   }
 
   /**
@@ -4786,49 +2714,8 @@ class NodeJoiningService extends EventEmitter {
    * @return {Promise<void>}
    */
   async cleanupFailedJoin(failedPhase, cleanupContext) {
-    this.logger.info(JOINING_LOG_MSG.FAILED_JOIN_CLEANUP_START, {
-      nodeId: this.nodeId,
-      failedPhase,
-      createdServiceIds: cleanupContext.createdServiceIds.length,
-      createdMessageGroupIds:
-        cleanupContext.createdMessageGroupIds.length,
-    });
-
-    const startIndex =
-      JOINING_PHASE_TO_CLEANUP_INDEX[failedPhase];
-    const effectiveStart = startIndex !== undefined ?
-      startIndex :
-      NUM.ZERO;
-
-    const stepsToRun =
-      JOINING_CLEANUP_STEPS_REVERSE.slice(effectiveStart);
-
-    const stepResults = {};
-
-    for (const step of stepsToRun) {
-      stepResults[step] =
-        await this._executeJoinCleanupStep(step, cleanupContext);
-    }
-
-    // Transition lifecycle state machine to STOPPED
-    const currentState = this.lifecycleStateMachine.getState();
-    if (currentState !== NodeState.STOPPED) {
-      try {
-        this.lifecycleStateMachine.transition(NodeState.STOPPED);
-      } catch (err) {
-        this.logger.warn(
-          JOINING_LOG_MSG.FAILED_JOIN_CLEANUP_COMPLETE, {
-            nodeId: this.nodeId,
-            transitionError: err.message,
-          });
-      }
-    }
-
-    this.logger.info(JOINING_LOG_MSG.FAILED_JOIN_CLEANUP_SUMMARY, {
-      nodeId: this.nodeId,
-      failedPhase,
-      stepResults,
-    });
+    return this.joinCleanupHandler
+      .cleanupFailedJoin(failedPhase, cleanupContext);
   }
 
   /**
@@ -4840,18 +2727,8 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   async _executeJoinCleanupStep(step, cleanupContext) {
-    switch (step) {
-    case JOINING_CLEANUP_STEP.QUERYING_STATE:
-      return this._cleanupQueryingState(cleanupContext);
-    case JOINING_CLEANUP_STEP.WAITING_LEADERSHIP:
-      return this._cleanupWaitingLeadership();
-    case JOINING_CLEANUP_STEP.MESSAGE_GROUP:
-      return this._cleanupMessageGroup(cleanupContext);
-    case JOINING_CLEANUP_STEP.CONNECTING_WEBSOCKET:
-      return this._cleanupConnectingWebSocket();
-    default:
-      return JOINING_CLEANUP_RESULT.SKIPPED;
-    }
+    return this.joinCleanupHandler
+      ._executeJoinCleanupStep(step, cleanupContext);
   }
 
   /**
@@ -4862,76 +2739,8 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   async _cleanupQueryingState(cleanupContext) {
-    try {
-      this.logger.info(
-        JOINING_LOG_MSG.FAILED_JOIN_CLEANUP_QUERYING_STATE, {
-          nodeId: this.nodeId,
-          registeredNodeId: cleanupContext.registeredNodeId,
-          serviceCount: cleanupContext.createdServiceIds.length,
-        });
-
-      // Remove self from nodes table
-      if (
-        cleanupContext.registeredNodeId &&
-        this.cdcIntegrationService &&
-        typeof this.cdcIntegrationService
-          .deleteSystemTableRow === TYPEOF.FUNCTION
-      ) {
-        try {
-          await this.cdcIntegrationService.deleteSystemTableRow(
-            TABLES.NODES,
-            {[COLUMN.NODE_ID]: cleanupContext.registeredNodeId},
-          );
-        } catch (nodeErr) {
-          this.logger.warn(
-            JOINING_LOG_MSG.FAILED_JOIN_CLEANUP_QUERYING_STATE_ERROR,
-            {
-              nodeId: this.nodeId,
-              detail: 'node removal',
-              error: nodeErr.message,
-            });
-        }
-      }
-
-      // Remove service entries created during join
-      for (const serviceId of cleanupContext.createdServiceIds) {
-        try {
-          if (
-            this.cdcIntegrationService &&
-            typeof this.cdcIntegrationService
-              .deleteSystemTableRow === TYPEOF.FUNCTION
-          ) {
-            await this.cdcIntegrationService.deleteSystemTableRow(
-              TABLES.SERVICES,
-              {[COLUMN.SERVICE_ID]: serviceId},
-            );
-          }
-        } catch (svcErr) {
-          this.logger.warn(
-            JOINING_LOG_MSG.FAILED_JOIN_CLEANUP_QUERYING_STATE_ERROR,
-            {
-              nodeId: this.nodeId,
-              detail: 'service removal',
-              serviceId,
-              error: svcErr.message,
-            });
-        }
-      }
-
-      this.logger.info(
-        JOINING_LOG_MSG.FAILED_JOIN_CLEANUP_QUERYING_STATE_DONE, {
-          nodeId: this.nodeId,
-        });
-      return JOINING_CLEANUP_RESULT.SUCCESS;
-    } catch (err) {
-      this.logger.warn(
-        JOINING_LOG_MSG.FAILED_JOIN_CLEANUP_QUERYING_STATE_ERROR, {
-          nodeId: this.nodeId,
-          error: err.message,
-          stack: err.stack,
-        });
-      return JOINING_CLEANUP_RESULT.ERROR;
-    }
+    return this.joinCleanupHandler
+      ._cleanupQueryingState(cleanupContext);
   }
 
   /**
@@ -4941,46 +2750,8 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   async _cleanupWaitingLeadership() {
-    try {
-      this.logger.info(
-        JOINING_LOG_MSG.FAILED_JOIN_CLEANUP_WAITING_LEADERSHIP, {
-          nodeId: this.nodeId,
-          messageGroupCount: this.messageGroupServices.size,
-        });
-
-      for (const [replicaId, messageGroup] of
-        this.messageGroupServices) {
-        try {
-          if (messageGroup.shutdown) {
-            await messageGroup.shutdown();
-          }
-        } catch (mgErr) {
-          this.logger.warn(
-            JOINING_LOG_MSG
-              .FAILED_JOIN_CLEANUP_WAITING_LEADERSHIP_ERROR, {
-              nodeId: this.nodeId,
-              replicaId,
-              error: mgErr.message,
-            });
-        }
-      }
-
-      this.logger.info(
-        JOINING_LOG_MSG
-          .FAILED_JOIN_CLEANUP_WAITING_LEADERSHIP_DONE, {
-          nodeId: this.nodeId,
-        });
-      return JOINING_CLEANUP_RESULT.SUCCESS;
-    } catch (err) {
-      this.logger.warn(
-        JOINING_LOG_MSG
-          .FAILED_JOIN_CLEANUP_WAITING_LEADERSHIP_ERROR, {
-          nodeId: this.nodeId,
-          error: err.message,
-          stack: err.stack,
-        });
-      return JOINING_CLEANUP_RESULT.ERROR;
-    }
+    return this.joinCleanupHandler
+      ._cleanupWaitingLeadership();
   }
 
   /**
@@ -4991,81 +2762,8 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   async _cleanupMessageGroup(cleanupContext) {
-    try {
-      this.logger.info(
-        JOINING_LOG_MSG.FAILED_JOIN_CLEANUP_MESSAGE_GROUP, {
-          nodeId: this.nodeId,
-          messageGroupCount: this.messageGroupServices.size,
-          serviceCount: cleanupContext.createdServiceIds.length,
-        });
-
-      // Stop message group replicas
-      for (const [replicaId, messageGroup] of
-        this.messageGroupServices) {
-        try {
-          if (messageGroup.shutdown) {
-            await messageGroup.shutdown();
-          }
-        } catch (mgErr) {
-          this.logger.warn(
-            JOINING_LOG_MSG
-              .FAILED_JOIN_CLEANUP_MESSAGE_GROUP_ERROR, {
-              nodeId: this.nodeId,
-              replicaId,
-              error: mgErr.message,
-            });
-        }
-      }
-
-      // Unregister from message router
-      if (this.messageRouter) {
-        for (const [replicaId] of this.messageGroupServices) {
-          const address =
-            `${this.nodeId}${ADDRESS.SEPARATOR}` +
-            `${ENTITY_TYPE.MESSAGE_GROUP}` +
-            `${ADDRESS.SEPARATOR}${replicaId}`;
-          this.messageRouter.unregister(address);
-        }
-      }
-
-      // Remove service entries for message group replicas
-      for (const serviceId of cleanupContext.createdServiceIds) {
-        try {
-          if (
-            this.cdcIntegrationService &&
-            typeof this.cdcIntegrationService
-              .deleteSystemTableRow === TYPEOF.FUNCTION
-          ) {
-            await this.cdcIntegrationService.deleteSystemTableRow(
-              TABLES.SERVICES,
-              {[COLUMN.SERVICE_ID]: serviceId},
-            );
-          }
-        } catch (svcErr) {
-          this.logger.warn(
-            JOINING_LOG_MSG
-              .FAILED_JOIN_CLEANUP_MESSAGE_GROUP_ERROR, {
-              nodeId: this.nodeId,
-              serviceId,
-              error: svcErr.message,
-            });
-        }
-      }
-
-      this.logger.info(
-        JOINING_LOG_MSG.FAILED_JOIN_CLEANUP_MESSAGE_GROUP_DONE, {
-          nodeId: this.nodeId,
-        });
-      return JOINING_CLEANUP_RESULT.SUCCESS;
-    } catch (err) {
-      this.logger.warn(
-        JOINING_LOG_MSG.FAILED_JOIN_CLEANUP_MESSAGE_GROUP_ERROR, {
-          nodeId: this.nodeId,
-          error: err.message,
-          stack: err.stack,
-        });
-      return JOINING_CLEANUP_RESULT.ERROR;
-    }
+    return this.joinCleanupHandler
+      ._cleanupMessageGroup(cleanupContext);
   }
 
   /**
@@ -5075,41 +2773,8 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   async _cleanupConnectingWebSocket() {
-    try {
-      this.logger.info(
-        JOINING_LOG_MSG.FAILED_JOIN_CLEANUP_WEBSOCKET, {
-          nodeId: this.nodeId,
-          hasRouter: !!this.messageRouter,
-        });
-
-      this.stopJoiningLifecycleOwners();
-
-      if (this.messageRouter && this.messageRouter.shutdown) {
-        await this.messageRouter.shutdown();
-      }
-
-      if (
-        this.transport &&
-        this.transport.shutdown &&
-        this.transport !== this.messageRouter
-      ) {
-        await this.transport.shutdown();
-      }
-
-      this.logger.info(
-        JOINING_LOG_MSG.FAILED_JOIN_CLEANUP_WEBSOCKET_DONE, {
-          nodeId: this.nodeId,
-        });
-      return JOINING_CLEANUP_RESULT.SUCCESS;
-    } catch (err) {
-      this.logger.warn(
-        JOINING_LOG_MSG.FAILED_JOIN_CLEANUP_WEBSOCKET_ERROR, {
-          nodeId: this.nodeId,
-          error: err.message,
-          stack: err.stack,
-        });
-      return JOINING_CLEANUP_RESULT.ERROR;
-    }
+    return this.joinCleanupHandler
+      ._cleanupConnectingWebSocket();
   }
 
   /**
@@ -5118,116 +2783,7 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   async cleanup() {
-    this.logger.info(JOINING_LOG_MSG.CLEANUP_START, {
-      nodeId: this.nodeId,
-      messageGroupServices: this.messageGroupServices.size,
-      partitionServices: this.partitionServices.size,
-    });
-    this.stopJoiningLifecycleOwners();
-    if (this.rebalanceCoordinator) {
-      try {
-        await this.rebalanceCoordinator.shutdown();
-      } catch (error) {
-        this.logger.warn('Node joining cleanup step failed', {
-          nodeId: this.nodeId,
-          step: 'rebalanceCoordinator.shutdown',
-          error: error.message,
-        });
-      }
-      this.rebalanceCoordinator = null;
-    }
-    LatencyTopologySetup.stop(this.latencyTopology);
-    this.latencyTopology = null;
-
-    // Shutdown replica state machine
-    if (this.replicaStateMachine) {
-      this.replicaStateMachine.stopTimeoutChecker();
-      this.replicaStateMachine.clear();
-      this.replicaStateMachine = null;
-    }
-
-    // Shutdown RPC client to cancel pending requests
-    if (this.rpcClient) {
-      await this.rpcClient.shutdown();
-      this.rpcClient = null;
-    }
-
-    // Shutdown control plane services
-    if (this.heartbeatService) {
-      this.heartbeatService.stop();
-      this.heartbeatService = null;
-    }
-    if (this.leaseService) {
-      this.leaseService.stop();
-      this.leaseService = null;
-    }
-    if (this.endpointService) {
-      this.endpointService.stop();
-      this.endpointService = null;
-    }
-    if (this.dispatchService) {
-      this.dispatchService.stop();
-      this.dispatchService = null;
-    }
-
-    // Shutdown replica handler
-    if (this.replicaHandler) {
-      this.replicaHandler.unregisterFromRouter(this.messageRouter);
-      await this.replicaHandler.shutdown();
-      this.replicaHandler = null;
-    }
-
-    // Shutdown partition services
-    for (const [replicaId, partition] of this.partitionServices) {
-      try {
-        if (partition.shutdown) {
-          await partition.shutdown();
-        }
-        this.logger.debug(JOINING_LOG_MSG.PARTITION_CLEANED, {replicaId});
-      } catch (err) {
-        this.logger.warn(JOINING_LOG_MSG.PARTITION_CLEAN_FAILED, {
-          replicaId,
-          error: err.message,
-        });
-        // Continue best-effort cleanup to avoid leaving services running.
-      }
-    }
-    this.partitionServices.clear();
-
-    // Shutdown message group services
-    for (const [replicaId, messageGroup] of this.messageGroupServices) {
-      try {
-        if (messageGroup.shutdown) {
-          await messageGroup.shutdown();
-        }
-        this.logger.debug(JOINING_LOG_MSG.MESSAGE_GROUP_CLEANED, {replicaId});
-      } catch (err) {
-        this.logger.warn(JOINING_LOG_MSG.MESSAGE_GROUP_CLEAN_FAILED, {
-          replicaId,
-          error: err.message,
-        });
-        // Continue best-effort cleanup to avoid leaving services running.
-      }
-    }
-    this.messageGroupServices.clear();
-
-    // Clear transport
-    if (this.transport && this.transport.shutdown && this.transport !== this.messageRouter) {
-      await this.transport.shutdown();
-    }
-    this.transport = null;
-
-    // Clear messageRouter
-    if (this.messageRouter) {
-      if (this.messageRouter.shutdown) {
-        await this.messageRouter.shutdown();
-      }
-      this.messageRouter = null;
-    }
-
-    this.cdcIntegrationService = null;
-
-    this.logger.info(JOINING_LOG_MSG.CLEANUP_COMPLETE, {nodeId: this.nodeId});
+    return this.joinCleanupHandler.cleanup();
   }
 
   /**

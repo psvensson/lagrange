@@ -12,7 +12,7 @@ import fc from 'fast-check';
 import {
   SYSTEM_TABLE_SCHEMAS,
   NODE_ENDPOINTS_SCHEMA,
-  SystemTableName,
+  SYSTEM_TABLE_NAME,
   INITIAL_PARTITION_IDS,
   INITIAL_REPLICA_IDS,
   generateCreateTableSQL,
@@ -220,7 +220,7 @@ test('Property 10: node_endpoints has initial partition ID for bootstrap', async
       fc.constant(null),
       (_input) => {
         // Verify node_endpoints has an initial partition ID
-        const partitionId = INITIAL_PARTITION_IDS[SystemTableName.NODE_ENDPOINTS];
+        const partitionId = INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.NODE_ENDPOINTS];
         if (!partitionId) {
           return false;
         }
@@ -251,7 +251,7 @@ test('Property 10: node_endpoints has initial replica IDs for bootstrap', async 
       fc.constant(null),
       (_input) => {
         // Verify node_endpoints has initial replica IDs
-        const replicaIds = INITIAL_REPLICA_IDS[SystemTableName.NODE_ENDPOINTS];
+        const replicaIds = INITIAL_REPLICA_IDS[SYSTEM_TABLE_NAME.NODE_ENDPOINTS];
         if (!replicaIds || !Array.isArray(replicaIds)) {
           return false;
         }

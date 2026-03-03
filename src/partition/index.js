@@ -8,7 +8,7 @@ export {
   RaftRole,
   CDCOperation,
   PartitionRaftLogEntry,
-  SQLiteRaftStorage,
+  PartitionRaftStorage,
 } from './partition-service.js';
 
 export {

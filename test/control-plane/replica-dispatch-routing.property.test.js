@@ -23,7 +23,7 @@ import {
   STATE,
   WORKFLOW_STEP,
 } from '../../src/constants/index.js';
-import {SystemTableName} from
+import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 
 /**
@@ -96,7 +96,7 @@ test('Property 16: Replica dispatch forwards to correct leader',
               return null;
             },
             getAll: (table) => {
-              if (table === SystemTableName.SERVICES) {
+              if (table === SYSTEM_TABLE_NAME.SERVICES) {
                 return [{
                   [COLUMN.NODE_ID]: opRow.target_node_id,
                   [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,

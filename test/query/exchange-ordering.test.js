@@ -8,7 +8,7 @@ import {describe, it} from 'node:test';
 import assert from 'node:assert/strict';
 import {
   ExchangeManager,
-} from '../../src/query/exchange-manager.js';
+} from '../../src/query/distributed/exchange-manager.js';
 import {
   EXCHANGE_MODE,
   EXCHANGE_FIELD,

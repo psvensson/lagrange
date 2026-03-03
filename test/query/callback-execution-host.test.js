@@ -14,11 +14,11 @@ import {test} from '../../src/test-helpers/tap.js';
 import {
   CallbackExecutionHost,
   validateDescriptor,
-} from '../../src/query/callback-execution-host.js';
+} from '../../src/query/callback/callback-execution-host.js';
 import {ADAPTER_ERROR_MSG, CALLBACK_RUNTIME_KIND} from
   '../../src/query/sql-adapter-constants.js';
 import {STAGE_STATE} from
-  '../../src/query/callback-stage-constants.js';
+  '../../src/query/callback/callback-stage-constants.js';
 import {LineageTracker} from
   '../../src/query/lineage-tracker.js';
 import {DedupeRegistry} from
@@ -26,9 +26,20 @@ import {DedupeRegistry} from
 import {CancellationToken} from
   '../../src/query/cancellation-token.js';
 import {createCallbackDriverRegistry} from
-  '../../src/query/callback-runtime-driver-registry.js';
+  '../../src/query/callback/callback-runtime-driver-registry.js';
 import {createRuntimeStartupWiring} from
   '../../src/runtime/runtime-startup-wiring.js';
+import {BudgetEnforcer} from
+  '../../src/query/budget-enforcer.js';
+import {ExecutionContext} from
+  '../../src/query/execution-context.js';
+import {
+  NESTED_CALL_ERROR_MSG,
+} from '../../src/query/runtime-constants.js';
+import {
+  CALLBACK_TELEMETRY_EVENT as CTE,
+  CALLBACK_TELEMETRY_FIELD as CTF,
+} from '../../src/query/callback/callback-stage-constants.js';
 
 // --- Helpers ---
 
@@ -489,14 +500,6 @@ test('execute - fails when no registry provided',
 
 // --- Callback context wiring (Requirement 14.4) ---
 
-import {BudgetEnforcer} from
-  '../../src/query/budget-enforcer.js';
-import {ExecutionContext} from
-  '../../src/query/execution-context.js';
-import {
-  NESTED_CALL_ERROR_MSG,
-} from '../../src/query/runtime-constants.js';
-
 function makeExecContext() {
   return new ExecutionContext({
     session: 'test-session',
@@ -607,11 +610,6 @@ test('execute - no callback context when no executionContext',
   });
 
 // --- Telemetry emission (Requirement 13.3, 14.5) ---
-
-import {
-  CALLBACK_TELEMETRY_EVENT as CTE,
-  CALLBACK_TELEMETRY_FIELD as CTF,
-} from '../../src/query/callback-stage-constants.js';
 
 test('execute - emits per-batch and aggregate telemetry',
   async (t) => {

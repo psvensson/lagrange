@@ -14,13 +14,14 @@ import {ADDRESS, COLUMN, NUM, PROTOCOL, CDC_OPERATION, STATE, TYPEOF} from
 import {METRICS_LOG_TAG} from '../constants/index.js';
 import {ENTRYPOINT_DEFAULT} from '../constants/entrypoint.js';
 import {LoggingService} from '../logging/logging-service.js';
-import {SystemTableName} from '../bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {AssignmentEpoch} from '../rebalancer/assignment-epoch.js';
 import {
   CDC_EPOCH_CONFIG_KEY,
   CDC_ERROR_MSG,
   CDC_EVENT,
   CDC_LOG_MSG,
+  CDC_SKIP_REASON,
   CDC_SOURCE,
   CDC_SUBSYSTEM,
 } from './cdc-constants.js';
@@ -55,6 +56,11 @@ import {
  *
  * const result = handler.handleEpochChangeCDC(cdcEvent);
  */
+const CONSTRUCTOR_ERROR_NODE_ID =
+  'CDCEventHandler requires nodeId';
+const CONSTRUCTOR_ERROR_EVENT_CONTEXT =
+  'CDCEventHandler requires eventContext';
+
 class CDCEventHandler {
   /**
    * Create a new CDCEventHandler instance.
@@ -64,10 +70,10 @@ class CDCEventHandler {
    */
   constructor(options = {}) {
     if (!options.nodeId) {
-      throw new Error('CDCEventHandler requires nodeId');
+      throw new Error(CONSTRUCTOR_ERROR_NODE_ID);
     }
     if (!options.eventContext) {
-      throw new Error('CDCEventHandler requires eventContext');
+      throw new Error(CONSTRUCTOR_ERROR_EVENT_CONTEXT);
     }
 
     this.nodeId = options.nodeId;
@@ -206,8 +212,10 @@ class CDCEventHandler {
         metricsData.eventAgeMs = Date.now() - cdcEvent.timestamp;
       }
       this.logger.info(METRICS_LOG_TAG.CDC_PROPAGATION, metricsData);
-    } catch (_metricsErr) {
-      // Metrics logging must not propagate to callers
+    } catch (metricsErr) {
+      this.logger.debug(CDC_LOG_MSG.METRICS_LOG_FAILED, {
+        error: metricsErr.message,
+      });
     }
 
     if (applied) {
@@ -252,7 +260,7 @@ class CDCEventHandler {
 
     // Check if this is a nodes table event
     const tableName = cdcEvent.tableName;
-    if (tableName !== SystemTableName.NODES) {
+    if (tableName !== SYSTEM_TABLE_NAME.NODES) {
       return {
         processed: false,
         error: `${CDC_ERROR_MSG.NOT_NODES_TABLE_PREFIX}'${tableName}'`,
@@ -385,8 +393,10 @@ class CDCEventHandler {
       this.logger.info(
         METRICS_LOG_TAG.CDC_PROPAGATION, metricsData,
       );
-    } catch (_metricsErr) {
-      // Metrics logging must not propagate to callers
+    } catch (metricsErr) {
+      this.logger.debug(CDC_LOG_MSG.METRICS_LOG_FAILED, {
+        error: metricsErr.message,
+      });
     }
 
     return {
@@ -424,7 +434,7 @@ class CDCEventHandler {
 
     // Check if this is a nodes table INSERT event
     const tableName = cdcEvent.tableName;
-    if (tableName !== SystemTableName.NODES) {
+    if (tableName !== SYSTEM_TABLE_NAME.NODES) {
       return {
         processed: false,
         error: `${CDC_ERROR_MSG.NOT_NODES_TABLE_PREFIX}'${tableName}'`,
@@ -436,7 +446,7 @@ class CDCEventHandler {
     if (operation !== CDC_OPERATION.INSERT) {
       return {
         processed: false,
-        error: 'Not an INSERT operation',
+        error: CDC_ERROR_MSG.NOT_INSERT_OPERATION,
       };
     }
 
@@ -462,7 +472,7 @@ class CDCEventHandler {
         nodeId: targetNodeId,
         connected: false,
         skipped: true,
-        reason: 'self',
+        reason: CDC_SKIP_REASON.SELF,
       };
     }
 
@@ -471,7 +481,7 @@ class CDCEventHandler {
     if (!messageRouter) {
       return {
         processed: false,
-        error: 'Message router not set',
+        error: CDC_ERROR_MSG.MESSAGE_ROUTER_NOT_SET,
       };
     }
 
@@ -489,7 +499,7 @@ class CDCEventHandler {
         nodeId: targetNodeId,
         connected: false,
         skipped: true,
-        reason: 'already_connected',
+        reason: CDC_SKIP_REASON.ALREADY_CONNECTED,
       };
     }
 

@@ -18,15 +18,15 @@ import {
   LOOKUP_KEY_FIELD,
   LOOKUP_RESULT_FIELD as LRF,
   PRIMITIVE_ERROR_MSG,
-} from './distributed-context-constants.js';
-import {
-  GUARDRAIL_FIELD as GF,
-} from './guardrail-constants.js';
+  PRIMITIVE_TYPE,
+} from './distributed/distributed-context-constants.js';
 
 /**
  * Set of allowed access path values for fast membership check.
  * @type {Set<string>}
  */
+const KEY_SERIALIZATION_DELIMITER = '\0';
+
 const ALLOWED_ACCESS_PATHS = new Set([
   LOOKUP_ACCESS_PATH.PRIMARY_KEY,
   LOOKUP_ACCESS_PATH.UNIQUE_INDEX,
@@ -112,7 +112,8 @@ function deduplicateKeys(keys) {
   const uniqueKeys = [];
 
   for (const key of keys) {
-    const serialized = key[LOOKUP_KEY_FIELD.COLUMN] + '\0' +
+    const serialized = key[LOOKUP_KEY_FIELD.COLUMN] +
+      KEY_SERIALIZATION_DELIMITER +
       String(key[LOOKUP_KEY_FIELD.VALUE]);
     if (!seen.has(serialized)) {
       seen.add(serialized);
@@ -258,7 +259,7 @@ async function executeLookup(options) {
 
   if (lineageTracker) {
     lineageTracker.attachLineage(
-      result, stageIndex ?? NUM.ZERO, 'lookup',
+      result, stageIndex ?? NUM.ZERO, PRIMITIVE_TYPE.LOOKUP,
       sequenceNum ?? NUM.ZERO,
     );
   }
@@ -266,7 +267,7 @@ async function executeLookup(options) {
   // Report telemetry
   if (typeof onTelemetry === TYPEOF.FUNCTION) {
     onTelemetry({
-      primitive: 'lookup',
+      primitive: PRIMITIVE_TYPE.LOOKUP,
       table,
       keyCount: deduped.originalCount,
       dedupedKeyCount: deduped.dedupedCount,

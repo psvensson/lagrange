@@ -18,7 +18,7 @@ import {
   ReplicaLifecycleManager,
   ReplicaStatus,
 } from '../../src/node/replica-lifecycle-manager.js';
-import {SystemTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 
@@ -39,8 +39,8 @@ function ensurePartitionDir(partitionId) {
 function cleanupTestDirs() {
   try {
     fs.rmSync(TEST_DATA_DIR, {recursive: true, force: true});
-  } catch (_e) {
-    // Ignore cleanup errors
+  } catch (cleanupErr) {
+    console.warn('cleanup failed for %s', TEST_DATA_DIR, cleanupErr);
   }
 }
 
@@ -105,19 +105,19 @@ function createMockPartitionServiceFactory() {
 function createMockCache(nodeId, services = []) {
   return {
     filter(tableName, predicate) {
-      if (tableName === SystemTableName.SERVICES) {
+      if (tableName === SYSTEM_TABLE_NAME.SERVICES) {
         return services.filter(predicate);
       }
       return [];
     },
     get(tableName, id) {
-      if (tableName === SystemTableName.SERVICES) {
+      if (tableName === SYSTEM_TABLE_NAME.SERVICES) {
         return services.find((s) => s.service_id === id);
       }
       return null;
     },
     getAll(tableName) {
-      if (tableName === SystemTableName.SERVICES) {
+      if (tableName === SYSTEM_TABLE_NAME.SERVICES) {
         return services;
       }
       return [];

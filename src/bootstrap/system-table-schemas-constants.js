@@ -17,7 +17,7 @@ import {
 /**
  * Column type definitions for schema.
  */
-const ColumnType = {
+const COLUMN_TYPE = {
   TEXT: 'TEXT',
   INTEGER: 'INTEGER',
   REAL: 'REAL',
@@ -27,7 +27,7 @@ const ColumnType = {
 /**
  * System table names.
  */
-const SystemTableName = {
+const SYSTEM_TABLE_NAME = {
   TABLES: TABLES.TABLES,
   PARTITIONS: TABLES.PARTITIONS,
   INDICES: TABLES.INDICES,
@@ -65,16 +65,16 @@ const SystemTableName = {
  * Stores metadata about all tables in the system.
  */
 const TABLES_SCHEMA = {
-  tableName: SystemTableName.TABLES,
+  tableName: SYSTEM_TABLE_NAME.TABLES,
   columns: [
-    {name: 'table_id', type: ColumnType.TEXT, primaryKey: true},
-    {name: 'table_name', type: ColumnType.TEXT, notNull: true, unique: true},
-    {name: 'schema_definition', type: ColumnType.TEXT, notNull: true},
-    {name: 'partition_key', type: ColumnType.TEXT, notNull: true},
-    {name: 'table_policies', type: ColumnType.TEXT, notNull: true, defaultValue: '\'{}\''},
-    {name: 'partition_count', type: ColumnType.INTEGER, notNull: true, defaultValue: 1},
-    {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
-    {name: 'updated_at', type: ColumnType.INTEGER, notNull: true},
+    {name: 'table_id', type: COLUMN_TYPE.TEXT, primaryKey: true},
+    {name: 'table_name', type: COLUMN_TYPE.TEXT, notNull: true, unique: true},
+    {name: 'schema_definition', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'partition_key', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'table_policies', type: COLUMN_TYPE.TEXT, notNull: true, defaultValue: '\'{}\''},
+    {name: 'partition_count', type: COLUMN_TYPE.INTEGER, notNull: true, defaultValue: 1},
+    {name: 'created_at', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'updated_at', type: COLUMN_TYPE.INTEGER, notNull: true},
   ],
   indices: [
     {name: 'idx_tables_name', columns: ['table_name']},
@@ -86,19 +86,19 @@ const TABLES_SCHEMA = {
  * Stores metadata about all partitions in the system.
  */
 const PARTITIONS_SCHEMA = {
-  tableName: SystemTableName.PARTITIONS,
+  tableName: SYSTEM_TABLE_NAME.PARTITIONS,
   columns: [
-    {name: 'partition_id', type: ColumnType.TEXT, primaryKey: true},
-    {name: 'table_id', type: ColumnType.TEXT, notNull: true},
-    {name: 'table_name', type: ColumnType.TEXT},
-    {name: 'partition_key_start', type: ColumnType.TEXT},
-    {name: 'partition_key_end', type: ColumnType.TEXT},
-    {name: 'replica_count', type: ColumnType.INTEGER, notNull: true, defaultValue: 3},
-    {name: 'size_bytes', type: ColumnType.INTEGER, notNull: true, defaultValue: 0},
-    {name: 'leader_node_id', type: ColumnType.TEXT},
-    {name: 'state', type: ColumnType.TEXT, notNull: true, defaultValue: '\'NORMAL\''},
-    {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
-    {name: 'updated_at', type: ColumnType.INTEGER, notNull: true},
+    {name: 'partition_id', type: COLUMN_TYPE.TEXT, primaryKey: true},
+    {name: 'table_id', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'table_name', type: COLUMN_TYPE.TEXT},
+    {name: 'partition_key_start', type: COLUMN_TYPE.TEXT},
+    {name: 'partition_key_end', type: COLUMN_TYPE.TEXT},
+    {name: 'replica_count', type: COLUMN_TYPE.INTEGER, notNull: true, defaultValue: 3},
+    {name: 'size_bytes', type: COLUMN_TYPE.INTEGER, notNull: true, defaultValue: 0},
+    {name: 'leader_node_id', type: COLUMN_TYPE.TEXT},
+    {name: 'state', type: COLUMN_TYPE.TEXT, notNull: true, defaultValue: '\'NORMAL\''},
+    {name: 'created_at', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'updated_at', type: COLUMN_TYPE.INTEGER, notNull: true},
   ],
   indices: [
     {name: 'idx_partitions_table', columns: ['table_id']},
@@ -111,14 +111,14 @@ const PARTITIONS_SCHEMA = {
  * Stores metadata about all indices in the system.
  */
 const INDICES_SCHEMA = {
-  tableName: SystemTableName.INDICES,
+  tableName: SYSTEM_TABLE_NAME.INDICES,
   columns: [
-    {name: 'index_id', type: ColumnType.TEXT, primaryKey: true},
-    {name: 'table_id', type: ColumnType.TEXT, notNull: true},
-    {name: 'index_name', type: ColumnType.TEXT, notNull: true},
-    {name: 'column_names', type: ColumnType.TEXT, notNull: true}, // JSON array
-    {name: 'index_type', type: ColumnType.TEXT, notNull: true, defaultValue: '\'btree\''},
-    {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
+    {name: 'index_id', type: COLUMN_TYPE.TEXT, primaryKey: true},
+    {name: 'table_id', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'index_name', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'column_names', type: COLUMN_TYPE.TEXT, notNull: true}, // JSON array
+    {name: 'index_type', type: COLUMN_TYPE.TEXT, notNull: true, defaultValue: '\'btree\''},
+    {name: 'created_at', type: COLUMN_TYPE.INTEGER, notNull: true},
   ],
   indices: [
     {name: 'idx_indices_table', columns: ['table_id']},
@@ -130,15 +130,15 @@ const INDICES_SCHEMA = {
  * Stores metadata about all message groups in the system.
  */
 const MESSAGE_GROUPS_SCHEMA = {
-  tableName: SystemTableName.MESSAGE_GROUPS,
+  tableName: SYSTEM_TABLE_NAME.MESSAGE_GROUPS,
   columns: [
-    {name: 'group_id', type: ColumnType.TEXT, primaryKey: true},
-    {name: 'group_name', type: ColumnType.TEXT, notNull: true, unique: true},
-    {name: 'replica_count', type: ColumnType.INTEGER, notNull: true, defaultValue: 3},
-    {name: 'leader_node_id', type: ColumnType.TEXT},
-    {name: 'policy', type: ColumnType.TEXT, notNull: true, defaultValue: '\'{}\''},
-    {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
-    {name: 'updated_at', type: ColumnType.INTEGER, notNull: true},
+    {name: 'group_id', type: COLUMN_TYPE.TEXT, primaryKey: true},
+    {name: 'group_name', type: COLUMN_TYPE.TEXT, notNull: true, unique: true},
+    {name: 'replica_count', type: COLUMN_TYPE.INTEGER, notNull: true, defaultValue: 3},
+    {name: 'leader_node_id', type: COLUMN_TYPE.TEXT},
+    {name: 'policy', type: COLUMN_TYPE.TEXT, notNull: true, defaultValue: '\'{}\''},
+    {name: 'created_at', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'updated_at', type: COLUMN_TYPE.INTEGER, notNull: true},
   ],
   indices: [
     {name: 'idx_message_groups_name', columns: ['group_name']},
@@ -150,38 +150,38 @@ const MESSAGE_GROUPS_SCHEMA = {
  * Stores metadata about all nodes in the cluster.
  */
 const NODES_SCHEMA = {
-  tableName: SystemTableName.NODES,
+  tableName: SYSTEM_TABLE_NAME.NODES,
   columns: [
-    {name: 'node_id', type: ColumnType.TEXT, primaryKey: true},
-    {name: 'node_address', type: ColumnType.TEXT, notNull: true, unique: true},
-    {name: 'cpu_cores', type: ColumnType.INTEGER, notNull: true},
-    {name: 'memory_mb', type: ColumnType.INTEGER, notNull: true},
-    {name: 'disk_gb', type: ColumnType.INTEGER, notNull: true},
-    {name: 'cpu_usage_percent', type: ColumnType.REAL, defaultValue: 0},
-    {name: 'memory_usage_percent', type: ColumnType.REAL, defaultValue: 0},
-    {name: 'disk_usage_percent', type: ColumnType.REAL, defaultValue: 0},
-    {name: 'status', type: ColumnType.TEXT, notNull: true, defaultValue: '\'active\''},
+    {name: 'node_id', type: COLUMN_TYPE.TEXT, primaryKey: true},
+    {name: 'node_address', type: COLUMN_TYPE.TEXT, notNull: true, unique: true},
+    {name: 'cpu_cores', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'memory_mb', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'disk_gb', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'cpu_usage_percent', type: COLUMN_TYPE.REAL, defaultValue: 0},
+    {name: 'memory_usage_percent', type: COLUMN_TYPE.REAL, defaultValue: 0},
+    {name: 'disk_usage_percent', type: COLUMN_TYPE.REAL, defaultValue: 0},
+    {name: 'status', type: COLUMN_TYPE.TEXT, notNull: true, defaultValue: '\'active\''},
     {
       name: 'connection_state',
-      type: ColumnType.TEXT,
+      type: COLUMN_TYPE.TEXT,
       notNull: true,
       defaultValue: '\'disconnected\'',
     },
-    {name: 'capabilities', type: ColumnType.TEXT, defaultValue: '\'[]\''},
-    {name: 'last_heartbeat', type: ColumnType.INTEGER, notNull: true},
-    {name: 'ready_lease_expires_at', type: ColumnType.INTEGER},
-    {name: 'storage_budget_bytes', type: ColumnType.INTEGER},
-    {name: 'storage_budget_source', type: ColumnType.TEXT},
-    {name: 'storage_budget_updated_at', type: ColumnType.INTEGER},
-    {name: 'latency_group_id', type: ColumnType.TEXT},
-    {name: 'last_latency_check_at', type: ColumnType.INTEGER},
+    {name: 'capabilities', type: COLUMN_TYPE.TEXT, defaultValue: '\'[]\''},
+    {name: 'last_heartbeat', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'ready_lease_expires_at', type: COLUMN_TYPE.INTEGER},
+    {name: 'storage_budget_bytes', type: COLUMN_TYPE.INTEGER},
+    {name: 'storage_budget_source', type: COLUMN_TYPE.TEXT},
+    {name: 'storage_budget_updated_at', type: COLUMN_TYPE.INTEGER},
+    {name: 'latency_group_id', type: COLUMN_TYPE.TEXT},
+    {name: 'last_latency_check_at', type: COLUMN_TYPE.INTEGER},
     {
       name: 'latency_assignment_state',
-      type: ColumnType.TEXT,
+      type: COLUMN_TYPE.TEXT,
       notNull: true,
       defaultValue: `'${LATENCY_ASSIGNMENT_STATE.UNASSIGNED}'`,
     },
-    {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
+    {name: 'created_at', type: COLUMN_TYPE.INTEGER, notNull: true},
   ],
   indices: [
     {name: 'idx_nodes_address', columns: ['node_address']},
@@ -195,19 +195,19 @@ const NODES_SCHEMA = {
  * Stores persisted metadata for latency-group membership ownership.
  */
 const LATENCY_GROUPS_SCHEMA = {
-  tableName: SystemTableName.LATENCY_GROUPS,
+  tableName: SYSTEM_TABLE_NAME.LATENCY_GROUPS,
   columns: [
-    {name: 'group_id', type: ColumnType.TEXT, primaryKey: true},
-    {name: 'representative_node_id', type: ColumnType.TEXT},
-    {name: 'coordinator_node_id', type: ColumnType.TEXT},
+    {name: 'group_id', type: COLUMN_TYPE.TEXT, primaryKey: true},
+    {name: 'representative_node_id', type: COLUMN_TYPE.TEXT},
+    {name: 'coordinator_node_id', type: COLUMN_TYPE.TEXT},
     {
       name: 'state',
-      type: ColumnType.TEXT,
+      type: COLUMN_TYPE.TEXT,
       notNull: true,
       defaultValue: `'${LATENCY_GROUP_STATE.ACTIVE}'`,
     },
-    {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
-    {name: 'updated_at', type: ColumnType.INTEGER, notNull: true},
+    {name: 'created_at', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'updated_at', type: COLUMN_TYPE.INTEGER, notNull: true},
   ],
   indices: [
     {name: 'idx_latency_groups_rep_node', columns: ['representative_node_id']},
@@ -221,17 +221,17 @@ const LATENCY_GROUPS_SCHEMA = {
  * Stores RTT sample aggregates between latency-group representatives.
  */
 const INTER_GROUP_LATENCIES_SCHEMA = {
-  tableName: SystemTableName.INTER_GROUP_LATENCIES,
+  tableName: SYSTEM_TABLE_NAME.INTER_GROUP_LATENCIES,
   columns: [
-    {name: 'latency_edge_id', type: ColumnType.TEXT, primaryKey: true},
-    {name: 'source_group_id', type: ColumnType.TEXT, notNull: true},
-    {name: 'target_group_id', type: ColumnType.TEXT, notNull: true},
-    {name: 'latency_ms', type: ColumnType.REAL, notNull: true},
-    {name: 'sample_count', type: ColumnType.INTEGER, notNull: true, defaultValue: 1},
-    {name: 'sample_quality', type: ColumnType.TEXT, notNull: true, defaultValue: '\'good\''},
-    {name: 'last_measured_at', type: ColumnType.INTEGER, notNull: true},
-    {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
-    {name: 'updated_at', type: ColumnType.INTEGER, notNull: true},
+    {name: 'latency_edge_id', type: COLUMN_TYPE.TEXT, primaryKey: true},
+    {name: 'source_group_id', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'target_group_id', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'latency_ms', type: COLUMN_TYPE.REAL, notNull: true},
+    {name: 'sample_count', type: COLUMN_TYPE.INTEGER, notNull: true, defaultValue: 1},
+    {name: 'sample_quality', type: COLUMN_TYPE.TEXT, notNull: true, defaultValue: '\'good\''},
+    {name: 'last_measured_at', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'created_at', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'updated_at', type: COLUMN_TYPE.INTEGER, notNull: true},
   ],
   indices: [
     {
@@ -249,24 +249,24 @@ const INTER_GROUP_LATENCIES_SCHEMA = {
  * Includes state machine tracking columns (Req 4.1).
  */
 const SERVICES_SCHEMA = {
-  tableName: SystemTableName.SERVICES,
+  tableName: SYSTEM_TABLE_NAME.SERVICES,
   columns: [
-    {name: 'service_id', type: ColumnType.TEXT, primaryKey: true},
-    {name: 'service_type', type: ColumnType.TEXT, notNull: true},
-    {name: 'node_id', type: ColumnType.TEXT, notNull: true},
-    {name: 'partition_id', type: ColumnType.TEXT},
-    {name: 'group_id', type: ColumnType.TEXT},
-    {name: 'replica_id', type: ColumnType.TEXT},
-    {name: 'raft_role', type: ColumnType.TEXT}, // leader, follower, candidate
-    {name: 'status', type: ColumnType.TEXT, notNull: true, defaultValue: '\'active\''},
+    {name: 'service_id', type: COLUMN_TYPE.TEXT, primaryKey: true},
+    {name: 'service_type', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'node_id', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'partition_id', type: COLUMN_TYPE.TEXT},
+    {name: 'group_id', type: COLUMN_TYPE.TEXT},
+    {name: 'replica_id', type: COLUMN_TYPE.TEXT},
+    {name: 'raft_role', type: COLUMN_TYPE.TEXT}, // leader, follower, candidate
+    {name: 'status', type: COLUMN_TYPE.TEXT, notNull: true, defaultValue: '\'active\''},
     // Timestamp when current state was entered
-    {name: 'state_entered_at', type: ColumnType.INTEGER},
-    {name: 'previous_state', type: ColumnType.TEXT}, // Previous state for debugging
-    {name: 'trigger_reason', type: ColumnType.TEXT}, // What triggered current state
-    {name: 'error_message', type: ColumnType.TEXT}, // Error if in failed state
-    {name: 'address', type: ColumnType.TEXT},
-    {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
-    {name: 'updated_at', type: ColumnType.INTEGER, notNull: true},
+    {name: 'state_entered_at', type: COLUMN_TYPE.INTEGER},
+    {name: 'previous_state', type: COLUMN_TYPE.TEXT}, // Previous state for debugging
+    {name: 'trigger_reason', type: COLUMN_TYPE.TEXT}, // What triggered current state
+    {name: 'error_message', type: COLUMN_TYPE.TEXT}, // Error if in failed state
+    {name: 'address', type: COLUMN_TYPE.TEXT},
+    {name: 'created_at', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'updated_at', type: COLUMN_TYPE.INTEGER, notNull: true},
   ],
   indices: [
     {name: 'idx_services_node', columns: ['node_id']},
@@ -283,18 +283,18 @@ const SERVICES_SCHEMA = {
  * Stores structured log entries.
  */
 const LOGS_SCHEMA = {
-  tableName: SystemTableName.LOGS,
+  tableName: SYSTEM_TABLE_NAME.LOGS,
   columns: [
-    {name: 'log_id', type: ColumnType.TEXT, primaryKey: true},
-    {name: 'timestamp', type: ColumnType.INTEGER, notNull: true},
-    {name: 'level', type: ColumnType.TEXT, notNull: true},
-    {name: 'node_id', type: ColumnType.TEXT, notNull: true},
-    {name: 'service_id', type: ColumnType.TEXT},
-    {name: 'service_type', type: ColumnType.TEXT},
-    {name: 'message', type: ColumnType.TEXT, notNull: true},
-    {name: 'trace_id', type: ColumnType.TEXT},
-    {name: 'metadata', type: ColumnType.TEXT}, // JSON
-    {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
+    {name: 'log_id', type: COLUMN_TYPE.TEXT, primaryKey: true},
+    {name: 'timestamp', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'level', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'node_id', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'service_id', type: COLUMN_TYPE.TEXT},
+    {name: 'service_type', type: COLUMN_TYPE.TEXT},
+    {name: 'message', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'trace_id', type: COLUMN_TYPE.TEXT},
+    {name: 'metadata', type: COLUMN_TYPE.TEXT}, // JSON
+    {name: 'created_at', type: COLUMN_TYPE.INTEGER, notNull: true},
   ],
   indices: [
     {name: 'idx_logs_timestamp', columns: ['timestamp']},
@@ -309,17 +309,17 @@ const LOGS_SCHEMA = {
  * Stores dynamic configuration key-value pairs.
  */
 const CONFIG_SCHEMA = {
-  tableName: SystemTableName.CONFIG,
+  tableName: SYSTEM_TABLE_NAME.CONFIG,
   columns: [
-    {name: 'config_key', type: ColumnType.TEXT, primaryKey: true},
-    {name: 'config_value', type: ColumnType.TEXT, notNull: true},
-    {name: 'value_type', type: ColumnType.TEXT, notNull: true},
-    {name: 'requires_restart', type: ColumnType.INTEGER, notNull: true, defaultValue: 0},
-    {name: 'description', type: ColumnType.TEXT},
-    {name: 'default_value', type: ColumnType.TEXT, notNull: true},
-    {name: 'updated_by', type: ColumnType.TEXT},
-    {name: 'updated_at', type: ColumnType.INTEGER},
-    {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
+    {name: 'config_key', type: COLUMN_TYPE.TEXT, primaryKey: true},
+    {name: 'config_value', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'value_type', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'requires_restart', type: COLUMN_TYPE.INTEGER, notNull: true, defaultValue: 0},
+    {name: 'description', type: COLUMN_TYPE.TEXT},
+    {name: 'default_value', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'updated_by', type: COLUMN_TYPE.TEXT},
+    {name: 'updated_at', type: COLUMN_TYPE.INTEGER},
+    {name: 'created_at', type: COLUMN_TYPE.INTEGER, notNull: true},
   ],
   indices: [
     {name: 'idx_config_requires_restart', columns: ['requires_restart']},
@@ -332,17 +332,17 @@ const CONFIG_SCHEMA = {
  * Requirements: 33.18, 33.20
  */
 const LIVE_QUERIES_SCHEMA = {
-  tableName: SystemTableName.LIVE_QUERIES,
+  tableName: SYSTEM_TABLE_NAME.LIVE_QUERIES,
   columns: [
-    {name: 'query_id', type: ColumnType.TEXT, primaryKey: true},
-    {name: 'table_name', type: ColumnType.TEXT, notNull: true},
-    {name: 'predicate_hash', type: ColumnType.TEXT, notNull: true},
-    {name: 'predicate_sql', type: ColumnType.TEXT, notNull: true},
-    {name: 'partition_key_value', type: ColumnType.TEXT},
-    {name: 'client_count', type: ColumnType.INTEGER, notNull: true, defaultValue: 0},
-    {name: 'node_id', type: ColumnType.TEXT, notNull: true},
-    {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
-    {name: 'last_activity_at', type: ColumnType.INTEGER, notNull: true},
+    {name: 'query_id', type: COLUMN_TYPE.TEXT, primaryKey: true},
+    {name: 'table_name', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'predicate_hash', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'predicate_sql', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'partition_key_value', type: COLUMN_TYPE.TEXT},
+    {name: 'client_count', type: COLUMN_TYPE.INTEGER, notNull: true, defaultValue: 0},
+    {name: 'node_id', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'created_at', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'last_activity_at', type: COLUMN_TYPE.INTEGER, notNull: true},
   ],
   indices: [
     {name: 'idx_live_queries_table', columns: ['table_name']},
@@ -357,15 +357,15 @@ const LIVE_QUERIES_SCHEMA = {
  * Requirements: 34.1, 34.2, 34.3
  */
 const CONTEXTS_SCHEMA = {
-  tableName: SystemTableName.CONTEXTS,
+  tableName: SYSTEM_TABLE_NAME.CONTEXTS,
   columns: [
-    {name: 'context_id', type: ColumnType.TEXT, primaryKey: true},
-    {name: 'context_type', type: ColumnType.TEXT, notNull: true},
-    {name: 'context_name', type: ColumnType.TEXT, notNull: true},
-    {name: 'context_data', type: ColumnType.TEXT, notNull: true},
-    {name: 'owner_id', type: ColumnType.TEXT},
-    {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
-    {name: 'updated_at', type: ColumnType.INTEGER, notNull: true},
+    {name: 'context_id', type: COLUMN_TYPE.TEXT, primaryKey: true},
+    {name: 'context_type', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'context_name', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'context_data', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'owner_id', type: COLUMN_TYPE.TEXT},
+    {name: 'created_at', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'updated_at', type: COLUMN_TYPE.INTEGER, notNull: true},
   ],
   indices: [
     {name: 'idx_contexts_type', columns: ['context_type']},
@@ -380,17 +380,17 @@ const CONTEXTS_SCHEMA = {
  * Requirements: 34.4, 34.5, 34.18
  */
 const CODE_SCHEMA = {
-  tableName: SystemTableName.CODE,
+  tableName: SYSTEM_TABLE_NAME.CODE,
   columns: [
-    {name: 'function_id', type: ColumnType.TEXT, primaryKey: true},
-    {name: 'function_name', type: ColumnType.TEXT, notNull: true, unique: true},
-    {name: 'version', type: ColumnType.INTEGER, notNull: true, defaultValue: 1},
-    {name: 'executor_type', type: ColumnType.TEXT, notNull: true, defaultValue: '\'wasm\''},
-    {name: 'code_blob', type: ColumnType.TEXT, notNull: true},
-    {name: 'signature', type: ColumnType.TEXT, notNull: true},
-    {name: 'permissions', type: ColumnType.TEXT, notNull: true, defaultValue: '\'[]\''},
-    {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
-    {name: 'updated_at', type: ColumnType.INTEGER, notNull: true},
+    {name: 'function_id', type: COLUMN_TYPE.TEXT, primaryKey: true},
+    {name: 'function_name', type: COLUMN_TYPE.TEXT, notNull: true, unique: true},
+    {name: 'version', type: COLUMN_TYPE.INTEGER, notNull: true, defaultValue: 1},
+    {name: 'executor_type', type: COLUMN_TYPE.TEXT, notNull: true, defaultValue: '\'wasm\''},
+    {name: 'code_blob', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'signature', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'permissions', type: COLUMN_TYPE.TEXT, notNull: true, defaultValue: '\'[]\''},
+    {name: 'created_at', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'updated_at', type: COLUMN_TYPE.INTEGER, notNull: true},
   ],
   indices: [
     {name: 'idx_code_name', columns: ['function_name']},
@@ -404,23 +404,23 @@ const CODE_SCHEMA = {
  * Requirements: 9.1, 9.2
  */
 const REPLICA_OPERATIONS_SCHEMA = {
-  tableName: SystemTableName.REPLICA_OPERATIONS,
+  tableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
   columns: [
-    {name: 'operation_id', type: ColumnType.TEXT, primaryKey: true},
-    {name: 'type', type: ColumnType.TEXT, notNull: true}, // 'ADD' or 'REMOVE'
-    {name: 'partition_id', type: ColumnType.TEXT, notNull: true},
-    {name: 'entity_type', type: ColumnType.TEXT, notNull: true},
-    {name: 'entity_id', type: ColumnType.TEXT, notNull: true},
-    {name: 'replica_id', type: ColumnType.TEXT},
-    {name: 'source_node_id', type: ColumnType.TEXT, notNull: true},
-    {name: 'target_node_id', type: ColumnType.TEXT, notNull: true},
-    {name: 'status', type: ColumnType.TEXT, notNull: true}, // ReplicaStatus value
-    {name: 'workflow_step', type: ColumnType.TEXT, notNull: true},
-    {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
-    {name: 'updated_at', type: ColumnType.INTEGER, notNull: true},
-    {name: 'completed_at', type: ColumnType.INTEGER},
-    {name: 'error_message', type: ColumnType.TEXT},
-    {name: 'steps_history', type: ColumnType.TEXT, notNull: true}, // JSON array
+    {name: 'operation_id', type: COLUMN_TYPE.TEXT, primaryKey: true},
+    {name: 'type', type: COLUMN_TYPE.TEXT, notNull: true}, // 'ADD' or 'REMOVE'
+    {name: 'partition_id', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'entity_type', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'entity_id', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'replica_id', type: COLUMN_TYPE.TEXT},
+    {name: 'source_node_id', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'target_node_id', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'status', type: COLUMN_TYPE.TEXT, notNull: true}, // ReplicaStatus value
+    {name: 'workflow_step', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'created_at', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'updated_at', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'completed_at', type: COLUMN_TYPE.INTEGER},
+    {name: 'error_message', type: COLUMN_TYPE.TEXT},
+    {name: 'steps_history', type: COLUMN_TYPE.TEXT, notNull: true}, // JSON array
   ],
   indices: [
     {name: 'idx_replica_ops_status', columns: ['status']},
@@ -436,17 +436,17 @@ const REPLICA_OPERATIONS_SCHEMA = {
  * Requirements: 6.1, 6.2, 6.3, 6.4, 6.5
  */
 const NODE_ENDPOINTS_SCHEMA = {
-  tableName: SystemTableName.NODE_ENDPOINTS,
+  tableName: SYSTEM_TABLE_NAME.NODE_ENDPOINTS,
   columns: [
-    {name: 'endpoint_id', type: ColumnType.TEXT, primaryKey: true},
-    {name: 'node_id', type: ColumnType.TEXT, notNull: true},
-    {name: 'transport_type', type: ColumnType.TEXT, notNull: true},
-    {name: 'address', type: ColumnType.TEXT, notNull: true},
-    {name: 'priority', type: ColumnType.INTEGER, notNull: true, defaultValue: 0},
-    {name: 'metadata', type: ColumnType.TEXT},
-    {name: 'status', type: ColumnType.TEXT, notNull: true, defaultValue: '\'active\''},
-    {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
-    {name: 'updated_at', type: ColumnType.INTEGER, notNull: true},
+    {name: 'endpoint_id', type: COLUMN_TYPE.TEXT, primaryKey: true},
+    {name: 'node_id', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'transport_type', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'address', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'priority', type: COLUMN_TYPE.INTEGER, notNull: true, defaultValue: 0},
+    {name: 'metadata', type: COLUMN_TYPE.TEXT},
+    {name: 'status', type: COLUMN_TYPE.TEXT, notNull: true, defaultValue: '\'active\''},
+    {name: 'created_at', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'updated_at', type: COLUMN_TYPE.INTEGER, notNull: true},
   ],
   indices: [
     {name: 'idx_node_endpoints_node', columns: ['node_id']},
@@ -463,66 +463,66 @@ const NODE_ENDPOINTS_SCHEMA = {
  */
 const SERVICE_DEFINITION_COLUMN_SPEC = Object.freeze({
   [SD_COL.SERVICE_ID]: Object.freeze({
-    type: ColumnType.TEXT,
+    type: COLUMN_TYPE.TEXT,
     primaryKey: true,
   }),
   [SD_COL.SERVICE_NAME]: Object.freeze({
-    type: ColumnType.TEXT,
+    type: COLUMN_TYPE.TEXT,
     notNull: true,
     unique: true,
   }),
   [SD_COL.SERVICE_PROFILE]: Object.freeze({
-    type: ColumnType.TEXT,
+    type: COLUMN_TYPE.TEXT,
     notNull: true,
     defaultValue: '\'default\'',
   }),
   [SD_COL.HANDLER_FUNCTION_ID]: Object.freeze({
-    type: ColumnType.TEXT,
+    type: COLUMN_TYPE.TEXT,
   }),
   [SD_COL.READ_CONSISTENCY]: Object.freeze({
-    type: ColumnType.TEXT,
+    type: COLUMN_TYPE.TEXT,
     notNull: true,
     defaultValue: '\'strong\'',
   }),
   [SD_COL.WRITE_CONSISTENCY]: Object.freeze({
-    type: ColumnType.TEXT,
+    type: COLUMN_TYPE.TEXT,
     notNull: true,
     defaultValue: '\'strong\'',
   }),
   [SD_COL.REPLICA_COUNT]: Object.freeze({
-    type: ColumnType.INTEGER,
+    type: COLUMN_TYPE.INTEGER,
     notNull: true,
     defaultValue: 3,
   }),
   [SD_COL.PROTOCOL]: Object.freeze({
-    type: ColumnType.TEXT,
+    type: COLUMN_TYPE.TEXT,
     notNull: true,
     defaultValue: '\'websocket\'',
   }),
   [SD_COL.RESOURCE_BUDGET]: Object.freeze({
-    type: ColumnType.TEXT,
+    type: COLUMN_TYPE.TEXT,
     notNull: true,
     defaultValue: '\'{}\'',
   }),
   [SD_COL.SAFETY_INTERVAL_MS]: Object.freeze({
-    type: ColumnType.INTEGER,
+    type: COLUMN_TYPE.INTEGER,
     notNull: true,
     defaultValue: 500,
   }),
-  [SD_COL.RUNTIME_KIND]: Object.freeze({type: ColumnType.TEXT}),
-  [SD_COL.RUNTIME_REF]: Object.freeze({type: ColumnType.TEXT}),
-  [SD_COL.RUNTIME_CONFIG]: Object.freeze({type: ColumnType.TEXT}),
+  [SD_COL.RUNTIME_KIND]: Object.freeze({type: COLUMN_TYPE.TEXT}),
+  [SD_COL.RUNTIME_REF]: Object.freeze({type: COLUMN_TYPE.TEXT}),
+  [SD_COL.RUNTIME_CONFIG]: Object.freeze({type: COLUMN_TYPE.TEXT}),
   [SD_COL.STATUS]: Object.freeze({
-    type: ColumnType.TEXT,
+    type: COLUMN_TYPE.TEXT,
     notNull: true,
     defaultValue: '\'active\'',
   }),
   [SD_COL.CREATED_AT]: Object.freeze({
-    type: ColumnType.INTEGER,
+    type: COLUMN_TYPE.INTEGER,
     notNull: true,
   }),
   [SD_COL.UPDATED_AT]: Object.freeze({
-    type: ColumnType.INTEGER,
+    type: COLUMN_TYPE.INTEGER,
     notNull: true,
   }),
 });
@@ -548,7 +548,7 @@ function createServiceDefinitionColumns() {
 }
 
 const SERVICE_DEFINITIONS_SCHEMA = {
-  tableName: SystemTableName.SERVICE_DEFINITIONS,
+  tableName: SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS,
   columns: createServiceDefinitionColumns(),
   indices: [
     {name: 'idx_svc_def_name', columns: [SD_COL.SERVICE_NAME]},
@@ -564,23 +564,23 @@ const SERVICE_DEFINITIONS_SCHEMA = {
  * Requirements: 12.3, 12.4, 12.5
  */
 const SERVICE_ENDPOINTS_SCHEMA = {
-  tableName: SystemTableName.SERVICE_ENDPOINTS,
+  tableName: SYSTEM_TABLE_NAME.SERVICE_ENDPOINTS,
   columns: [
-    {name: 'endpoint_id', type: ColumnType.TEXT, primaryKey: true},
-    {name: 'service_id', type: ColumnType.TEXT, notNull: true},
-    {name: 'node_id', type: ColumnType.TEXT, notNull: true},
-    {name: 'protocol', type: ColumnType.TEXT, notNull: true},
-    {name: 'address', type: ColumnType.TEXT, notNull: true},
-    {name: 'port', type: ColumnType.INTEGER, notNull: true},
+    {name: 'endpoint_id', type: COLUMN_TYPE.TEXT, primaryKey: true},
+    {name: 'service_id', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'node_id', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'protocol', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'address', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'port', type: COLUMN_TYPE.INTEGER, notNull: true},
     {
       name: 'health_status',
-      type: ColumnType.TEXT,
+      type: COLUMN_TYPE.TEXT,
       notNull: true,
       defaultValue: '\'healthy\'',
     },
-    {name: 'metadata', type: ColumnType.TEXT, notNull: true, defaultValue: '\'{}\''},
-    {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
-    {name: 'updated_at', type: ColumnType.INTEGER, notNull: true},
+    {name: 'metadata', type: COLUMN_TYPE.TEXT, notNull: true, defaultValue: '\'{}\''},
+    {name: 'created_at', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'updated_at', type: COLUMN_TYPE.INTEGER, notNull: true},
   ],
   indices: [
     {name: 'idx_svc_ep_service', columns: ['service_id']},
@@ -595,16 +595,16 @@ const SERVICE_ENDPOINTS_SCHEMA = {
  * Requirements: 12.3, 12.4, 12.5
  */
 const SERVICE_TIMERS_SCHEMA = {
-  tableName: SystemTableName.SERVICE_TIMERS,
+  tableName: SYSTEM_TABLE_NAME.SERVICE_TIMERS,
   columns: [
-    {name: 'timer_id', type: ColumnType.TEXT, primaryKey: true},
-    {name: 'service_id', type: ColumnType.TEXT, notNull: true},
-    {name: 'delay_ms', type: ColumnType.INTEGER, notNull: true},
-    {name: 'fire_at', type: ColumnType.INTEGER, notNull: true},
-    {name: 'payload', type: ColumnType.TEXT, notNull: true, defaultValue: '\'{}\''},
-    {name: 'status', type: ColumnType.TEXT, notNull: true, defaultValue: '\'active\''},
-    {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
-    {name: 'updated_at', type: ColumnType.INTEGER, notNull: true},
+    {name: 'timer_id', type: COLUMN_TYPE.TEXT, primaryKey: true},
+    {name: 'service_id', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'delay_ms', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'fire_at', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'payload', type: COLUMN_TYPE.TEXT, notNull: true, defaultValue: '\'{}\''},
+    {name: 'status', type: COLUMN_TYPE.TEXT, notNull: true, defaultValue: '\'active\''},
+    {name: 'created_at', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'updated_at', type: COLUMN_TYPE.INTEGER, notNull: true},
   ],
   indices: [
     {name: 'idx_svc_timer_service', columns: ['service_id']},
@@ -619,34 +619,34 @@ const SERVICE_TIMERS_SCHEMA = {
  * Requirements: 3.2, 5.2, 10.1, 10.2
  */
 const MODULE_MANIFESTS_SCHEMA = {
-  tableName: SystemTableName.MODULE_MANIFESTS,
+  tableName: SYSTEM_TABLE_NAME.MODULE_MANIFESTS,
   columns: [
-    {name: 'namespace', type: ColumnType.TEXT, notNull: true},
-    {name: 'name', type: ColumnType.TEXT, notNull: true},
-    {name: 'version', type: ColumnType.TEXT, notNull: true},
-    {name: 'digest', type: ColumnType.TEXT, notNull: true},
-    {name: 'run_export', type: ColumnType.TEXT, notNull: true},
+    {name: 'namespace', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'name', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'version', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'digest', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'run_export', type: COLUMN_TYPE.TEXT, notNull: true},
     {
       name: 'exports',
-      type: ColumnType.TEXT,
+      type: COLUMN_TYPE.TEXT,
       notNull: true,
       defaultValue: '\'[]\'',
     },
     {
       name: 'dependencies',
-      type: ColumnType.TEXT,
+      type: COLUMN_TYPE.TEXT,
       notNull: true,
       defaultValue: '\'[]\'',
     },
     {
       name: 'capabilities',
-      type: ColumnType.TEXT,
+      type: COLUMN_TYPE.TEXT,
       notNull: true,
       defaultValue: '\'[]\'',
     },
-    {name: 'source_reference', type: ColumnType.TEXT},
-    {name: 'artifact_pointer', type: ColumnType.TEXT},
-    {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
+    {name: 'source_reference', type: COLUMN_TYPE.TEXT},
+    {name: 'artifact_pointer', type: COLUMN_TYPE.TEXT},
+    {name: 'created_at', type: COLUMN_TYPE.INTEGER, notNull: true},
   ],
   primaryKey: ['namespace', 'name', 'version'],
   indices: [
@@ -667,18 +667,18 @@ const MODULE_MANIFESTS_SCHEMA = {
  * Requirements: 4.1, 10.1, 10.2
  */
 const PACKAGE_REGISTRY_MAPPINGS_SCHEMA = {
-  tableName: SystemTableName.PACKAGE_REGISTRY_MAPPINGS,
+  tableName: SYSTEM_TABLE_NAME.PACKAGE_REGISTRY_MAPPINGS,
   columns: [
-    {name: 'namespace', type: ColumnType.TEXT, primaryKey: true},
-    {name: 'registry_url', type: ColumnType.TEXT, notNull: true},
+    {name: 'namespace', type: COLUMN_TYPE.TEXT, primaryKey: true},
+    {name: 'registry_url', type: COLUMN_TYPE.TEXT, notNull: true},
     {
       name: 'policy_metadata',
-      type: ColumnType.TEXT,
+      type: COLUMN_TYPE.TEXT,
       notNull: true,
       defaultValue: '\'{}\'',
     },
-    {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
-    {name: 'updated_at', type: ColumnType.INTEGER, notNull: true},
+    {name: 'created_at', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'updated_at', type: COLUMN_TYPE.INTEGER, notNull: true},
   ],
   indices: [],
 };
@@ -689,19 +689,19 @@ const PACKAGE_REGISTRY_MAPPINGS_SCHEMA = {
  * Requirements: 4.2, 10.1, 10.2
  */
 const PACKAGE_REGISTRY_OVERRIDES_SCHEMA = {
-  tableName: SystemTableName.PACKAGE_REGISTRY_OVERRIDES,
+  tableName: SYSTEM_TABLE_NAME.PACKAGE_REGISTRY_OVERRIDES,
   columns: [
-    {name: 'namespace', type: ColumnType.TEXT, notNull: true},
-    {name: 'name', type: ColumnType.TEXT, notNull: true},
-    {name: 'registry_url', type: ColumnType.TEXT, notNull: true},
+    {name: 'namespace', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'name', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'registry_url', type: COLUMN_TYPE.TEXT, notNull: true},
     {
       name: 'policy_metadata',
-      type: ColumnType.TEXT,
+      type: COLUMN_TYPE.TEXT,
       notNull: true,
       defaultValue: '\'{}\'',
     },
-    {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
-    {name: 'updated_at', type: ColumnType.INTEGER, notNull: true},
+    {name: 'created_at', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'updated_at', type: COLUMN_TYPE.INTEGER, notNull: true},
   ],
   primaryKey: ['namespace', 'name'],
   indices: [],
@@ -713,32 +713,32 @@ const PACKAGE_REGISTRY_OVERRIDES_SCHEMA = {
  * Requirements: 5.2, 10.1, 10.2
  */
 const MODULE_DEPENDENCY_LOCKS_SCHEMA = {
-  tableName: SystemTableName.MODULE_DEPENDENCY_LOCKS,
+  tableName: SYSTEM_TABLE_NAME.MODULE_DEPENDENCY_LOCKS,
   columns: [
-    {name: 'lock_id', type: ColumnType.TEXT, primaryKey: true},
+    {name: 'lock_id', type: COLUMN_TYPE.TEXT, primaryKey: true},
     {
       name: 'target_module_namespace',
-      type: ColumnType.TEXT,
+      type: COLUMN_TYPE.TEXT,
       notNull: true,
     },
     {
       name: 'target_module_name',
-      type: ColumnType.TEXT,
+      type: COLUMN_TYPE.TEXT,
       notNull: true,
     },
     {
       name: 'target_module_version',
-      type: ColumnType.TEXT,
+      type: COLUMN_TYPE.TEXT,
       notNull: true,
     },
-    {name: 'target_service_id', type: ColumnType.TEXT},
+    {name: 'target_service_id', type: COLUMN_TYPE.TEXT},
     {
       name: 'resolved_dependencies',
-      type: ColumnType.TEXT,
+      type: COLUMN_TYPE.TEXT,
       notNull: true,
       defaultValue: '\'[]\'',
     },
-    {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
+    {name: 'created_at', type: COLUMN_TYPE.INTEGER, notNull: true},
   ],
   indices: [
     {
@@ -762,32 +762,32 @@ const MODULE_DEPENDENCY_LOCKS_SCHEMA = {
  * Requirements: 8.1, 8.3, 10.1, 10.2
  */
 const WASM_OPERATIONS_SCHEMA = {
-  tableName: SystemTableName.WASM_OPERATIONS,
+  tableName: SYSTEM_TABLE_NAME.WASM_OPERATIONS,
   columns: [
-    {name: 'operation_id', type: ColumnType.TEXT, primaryKey: true},
-    {name: 'tenant_id', type: ColumnType.TEXT, notNull: true},
-    {name: 'command', type: ColumnType.TEXT, notNull: true},
-    {name: 'idempotency_key', type: ColumnType.TEXT},
+    {name: 'operation_id', type: COLUMN_TYPE.TEXT, primaryKey: true},
+    {name: 'tenant_id', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'command', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'idempotency_key', type: COLUMN_TYPE.TEXT},
     {
       name: 'state',
-      type: ColumnType.TEXT,
+      type: COLUMN_TYPE.TEXT,
       notNull: true,
       defaultValue: '\'pending\'',
     },
     {
       name: 'result',
-      type: ColumnType.TEXT,
+      type: COLUMN_TYPE.TEXT,
       notNull: true,
       defaultValue: '\'{}\'',
     },
     {
       name: 'error',
-      type: ColumnType.TEXT,
+      type: COLUMN_TYPE.TEXT,
       notNull: true,
       defaultValue: '\'{}\'',
     },
-    {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
-    {name: 'updated_at', type: ColumnType.INTEGER, notNull: true},
+    {name: 'created_at', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'updated_at', type: COLUMN_TYPE.INTEGER, notNull: true},
   ],
   indices: [
     {
@@ -810,13 +810,13 @@ const WASM_OPERATIONS_SCHEMA = {
  * Stores distributed transaction coordinator state for restart recovery.
  */
 const SQL_TRANSACTIONS_SCHEMA = {
-  tableName: SystemTableName.SQL_TRANSACTIONS,
+  tableName: SYSTEM_TABLE_NAME.SQL_TRANSACTIONS,
   columns: [
-    {name: 'transaction_id', type: ColumnType.TEXT, primaryKey: true},
-    {name: 'session_id', type: ColumnType.TEXT, notNull: true},
-    {name: 'status', type: ColumnType.TEXT, notNull: true},
-    {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
-    {name: 'updated_at', type: ColumnType.INTEGER, notNull: true},
+    {name: 'transaction_id', type: COLUMN_TYPE.TEXT, primaryKey: true},
+    {name: 'session_id', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'status', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'created_at', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'updated_at', type: COLUMN_TYPE.INTEGER, notNull: true},
   ],
   indices: [
     {name: 'idx_sql_transactions_session', columns: ['session_id']},
@@ -829,15 +829,15 @@ const SQL_TRANSACTIONS_SCHEMA = {
  * Stores participant partition state for distributed transactions.
  */
 const SQL_TRANSACTION_PARTICIPANTS_SCHEMA = {
-  tableName: SystemTableName.SQL_TRANSACTION_PARTICIPANTS,
+  tableName: SYSTEM_TABLE_NAME.SQL_TRANSACTION_PARTICIPANTS,
   columns: [
-    {name: 'participant_id', type: ColumnType.TEXT, primaryKey: true},
-    {name: 'transaction_id', type: ColumnType.TEXT, notNull: true},
-    {name: 'partition_id', type: ColumnType.TEXT, notNull: true},
-    {name: 'status', type: ColumnType.TEXT, notNull: true},
-    {name: 'last_error', type: ColumnType.TEXT},
-    {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
-    {name: 'updated_at', type: ColumnType.INTEGER, notNull: true},
+    {name: 'participant_id', type: COLUMN_TYPE.TEXT, primaryKey: true},
+    {name: 'transaction_id', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'partition_id', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'status', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'last_error', type: COLUMN_TYPE.TEXT},
+    {name: 'created_at', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'updated_at', type: COLUMN_TYPE.INTEGER, notNull: true},
   ],
   indices: [
     {
@@ -860,24 +860,24 @@ const SQL_TRANSACTION_PARTICIPANTS_SCHEMA = {
  * Stores idempotent distributed write operation state.
  */
 const SQL_WRITE_OPERATIONS_SCHEMA = {
-  tableName: SystemTableName.SQL_WRITE_OPERATIONS,
+  tableName: SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS,
   columns: [
-    {name: 'operation_id', type: ColumnType.TEXT, primaryKey: true},
-    {name: 'transaction_id', type: ColumnType.TEXT},
-    {name: 'statement_type', type: ColumnType.TEXT, notNull: true},
-    {name: 'status', type: ColumnType.TEXT, notNull: true},
-    {name: 'idempotency_key', type: ColumnType.TEXT, notNull: true},
-    {name: 'payload_hash', type: ColumnType.TEXT, notNull: true},
+    {name: 'operation_id', type: COLUMN_TYPE.TEXT, primaryKey: true},
+    {name: 'transaction_id', type: COLUMN_TYPE.TEXT},
+    {name: 'statement_type', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'status', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'idempotency_key', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'payload_hash', type: COLUMN_TYPE.TEXT, notNull: true},
     {
       name: 'partition_ids',
-      type: ColumnType.TEXT,
+      type: COLUMN_TYPE.TEXT,
       notNull: true,
       defaultValue: '\'[]\'',
     },
-    {name: 'retry_count', type: ColumnType.INTEGER, notNull: true, defaultValue: 0},
-    {name: 'last_error', type: ColumnType.TEXT},
-    {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
-    {name: 'updated_at', type: ColumnType.INTEGER, notNull: true},
+    {name: 'retry_count', type: COLUMN_TYPE.INTEGER, notNull: true, defaultValue: 0},
+    {name: 'last_error', type: COLUMN_TYPE.TEXT},
+    {name: 'created_at', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'updated_at', type: COLUMN_TYPE.INTEGER, notNull: true},
   ],
   indices: [
     {name: 'idx_sql_write_ops_tx', columns: ['transaction_id']},
@@ -894,23 +894,23 @@ const SQL_WRITE_OPERATIONS_SCHEMA = {
  * Stores tenant-scoped distributed debug session metadata.
  */
 const DEBUG_SESSIONS_SCHEMA = {
-  tableName: SystemTableName.DEBUG_SESSIONS,
+  tableName: SYSTEM_TABLE_NAME.DEBUG_SESSIONS,
   columns: [
-    {name: 'session_id', type: ColumnType.TEXT, primaryKey: true},
-    {name: 'tenant_id', type: ColumnType.TEXT, notNull: true},
-    {name: 'service_name', type: ColumnType.TEXT, notNull: true},
-    {name: 'lineage_id', type: ColumnType.TEXT},
-    {name: 'stage_id', type: ColumnType.INTEGER},
-    {name: 'node_id', type: ColumnType.TEXT},
-    {name: 'endpoint', type: ColumnType.TEXT},
+    {name: 'session_id', type: COLUMN_TYPE.TEXT, primaryKey: true},
+    {name: 'tenant_id', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'service_name', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'lineage_id', type: COLUMN_TYPE.TEXT},
+    {name: 'stage_id', type: COLUMN_TYPE.INTEGER},
+    {name: 'node_id', type: COLUMN_TYPE.TEXT},
+    {name: 'endpoint', type: COLUMN_TYPE.TEXT},
     {
       name: 'status',
-      type: ColumnType.TEXT,
+      type: COLUMN_TYPE.TEXT,
       notNull: true,
       defaultValue: '\'active\'',
     },
-    {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
-    {name: 'updated_at', type: ColumnType.INTEGER, notNull: true},
+    {name: 'created_at', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'updated_at', type: COLUMN_TYPE.INTEGER, notNull: true},
   ],
   indices: [
     {
@@ -933,29 +933,29 @@ const DEBUG_SESSIONS_SCHEMA = {
  * Stores resolved source breakpoints for a debug session.
  */
 const DEBUG_BREAKPOINTS_SCHEMA = {
-  tableName: SystemTableName.DEBUG_BREAKPOINTS,
+  tableName: SYSTEM_TABLE_NAME.DEBUG_BREAKPOINTS,
   columns: [
-    {name: 'breakpoint_id', type: ColumnType.TEXT, primaryKey: true},
-    {name: 'session_id', type: ColumnType.TEXT, notNull: true},
-    {name: 'tenant_id', type: ColumnType.TEXT, notNull: true},
-    {name: 'module_ref', type: ColumnType.TEXT, notNull: true},
-    {name: 'source_file_url', type: ColumnType.TEXT, notNull: true},
-    {name: 'line_number', type: ColumnType.INTEGER, notNull: true},
+    {name: 'breakpoint_id', type: COLUMN_TYPE.TEXT, primaryKey: true},
+    {name: 'session_id', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'tenant_id', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'module_ref', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'source_file_url', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'line_number', type: COLUMN_TYPE.INTEGER, notNull: true},
     {
       name: 'column_number',
-      type: ColumnType.INTEGER,
+      type: COLUMN_TYPE.INTEGER,
       notNull: true,
       defaultValue: 0,
     },
-    {name: 'condition', type: ColumnType.TEXT},
+    {name: 'condition', type: COLUMN_TYPE.TEXT},
     {
       name: 'resolved',
-      type: ColumnType.INTEGER,
+      type: COLUMN_TYPE.INTEGER,
       notNull: true,
       defaultValue: 0,
     },
-    {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
-    {name: 'updated_at', type: ColumnType.INTEGER, notNull: true},
+    {name: 'created_at', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'updated_at', type: COLUMN_TYPE.INTEGER, notNull: true},
   ],
   indices: [
     {
@@ -978,26 +978,26 @@ const DEBUG_BREAKPOINTS_SCHEMA = {
  * Stores serialized deterministic snapshot artifacts.
  */
 const DEBUG_SNAPSHOTS_SCHEMA = {
-  tableName: SystemTableName.DEBUG_SNAPSHOTS,
+  tableName: SYSTEM_TABLE_NAME.DEBUG_SNAPSHOTS,
   columns: [
-    {name: 'snapshot_id', type: ColumnType.TEXT, primaryKey: true},
-    {name: 'session_id', type: ColumnType.TEXT, notNull: true},
-    {name: 'tenant_id', type: ColumnType.TEXT, notNull: true},
-    {name: 'module_ref', type: ColumnType.TEXT, notNull: true},
-    {name: 'module_digest', type: ColumnType.TEXT, notNull: true},
-    {name: 'captured_at', type: ColumnType.INTEGER, notNull: true},
-    {name: 'format_version', type: ColumnType.INTEGER, notNull: true},
+    {name: 'snapshot_id', type: COLUMN_TYPE.TEXT, primaryKey: true},
+    {name: 'session_id', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'tenant_id', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'module_ref', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'module_digest', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'captured_at', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'format_version', type: COLUMN_TYPE.INTEGER, notNull: true},
     {
       name: 'snapshot_bytes_base64',
-      type: ColumnType.TEXT,
+      type: COLUMN_TYPE.TEXT,
       notNull: true,
     },
-    {name: 'manifest_json', type: ColumnType.TEXT, notNull: true},
-    {name: 'total_bytes', type: ColumnType.INTEGER, notNull: true},
-    {name: 'frame_count', type: ColumnType.INTEGER, notNull: true},
-    {name: 'host_call_count', type: ColumnType.INTEGER, notNull: true},
-    {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
-    {name: 'updated_at', type: ColumnType.INTEGER, notNull: true},
+    {name: 'manifest_json', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'total_bytes', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'frame_count', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'host_call_count', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'created_at', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'updated_at', type: COLUMN_TYPE.INTEGER, notNull: true},
   ],
   indices: [
     {
@@ -1021,32 +1021,32 @@ const DEBUG_SNAPSHOTS_SCHEMA = {
  * Requirements: 1.2, 2.1, 12.1
  */
 const STORAGE_RESERVATIONS_SCHEMA = {
-  tableName: SystemTableName.STORAGE_RESERVATIONS,
+  tableName: SYSTEM_TABLE_NAME.STORAGE_RESERVATIONS,
   columns: [
-    {name: 'reservation_id', type: ColumnType.TEXT, primaryKey: true},
-    {name: 'operation_id', type: ColumnType.TEXT, notNull: true},
-    {name: 'entity_type', type: ColumnType.TEXT, notNull: true},
-    {name: 'entity_id', type: ColumnType.TEXT, notNull: true},
-    {name: 'partition_id', type: ColumnType.TEXT, notNull: true},
-    {name: 'target_node_id', type: ColumnType.TEXT, notNull: true},
-    {name: 'estimated_bytes', type: ColumnType.INTEGER, notNull: true},
+    {name: 'reservation_id', type: COLUMN_TYPE.TEXT, primaryKey: true},
+    {name: 'operation_id', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'entity_type', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'entity_id', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'partition_id', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'target_node_id', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'estimated_bytes', type: COLUMN_TYPE.INTEGER, notNull: true},
     {
       name: 'amplification_factor',
-      type: ColumnType.REAL,
+      type: COLUMN_TYPE.REAL,
       notNull: true,
       defaultValue: 1,
     },
     {
       name: 'status',
-      type: ColumnType.TEXT,
+      type: COLUMN_TYPE.TEXT,
       notNull: true,
       defaultValue: '\'active\'',
     },
-    {name: 'reason_code', type: ColumnType.TEXT},
-    {name: 'created_at', type: ColumnType.INTEGER, notNull: true},
-    {name: 'updated_at', type: ColumnType.INTEGER, notNull: true},
-    {name: 'expires_at', type: ColumnType.INTEGER, notNull: true},
-    {name: 'released_at', type: ColumnType.INTEGER},
+    {name: 'reason_code', type: COLUMN_TYPE.TEXT},
+    {name: 'created_at', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'updated_at', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'expires_at', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'released_at', type: COLUMN_TYPE.INTEGER},
   ],
   indices: [
     {
@@ -1107,40 +1107,40 @@ const SYSTEM_TABLE_SCHEMAS = [
  * These avoid circular dependencies during bootstrap.
  */
 const INITIAL_PARTITION_IDS = {
-  [SystemTableName.TABLES]: 'tables-p1',
-  [SystemTableName.PARTITIONS]: 'partitions-p1',
-  [SystemTableName.INDICES]: 'indices-p1',
-  [SystemTableName.MESSAGE_GROUPS]: 'message_groups-p1',
-  [SystemTableName.NODES]: 'nodes-p1',
-  [SystemTableName.SERVICES]: 'services-p1',
-  [SystemTableName.LOGS]: 'logs-p1',
-  [SystemTableName.CONFIG]: 'config-p1',
-  [SystemTableName.LIVE_QUERIES]: 'live_queries-p1',
-  [SystemTableName.CONTEXTS]: 'contexts-p1',
-  [SystemTableName.CODE]: 'code-p1',
-  [SystemTableName.REPLICA_OPERATIONS]: 'replica_operations-p1',
-  [SystemTableName.NODE_ENDPOINTS]: 'node_endpoints-p1',
-  [SystemTableName.SERVICE_DEFINITIONS]: 'service_definitions-p1',
-  [SystemTableName.SERVICE_ENDPOINTS]: 'service_endpoints-p1',
-  [SystemTableName.SERVICE_TIMERS]: 'service_timers-p1',
-  [SystemTableName.MODULE_MANIFESTS]: 'module_manifests-p1',
-  [SystemTableName.PACKAGE_REGISTRY_MAPPINGS]:
+  [SYSTEM_TABLE_NAME.TABLES]: 'tables-p1',
+  [SYSTEM_TABLE_NAME.PARTITIONS]: 'partitions-p1',
+  [SYSTEM_TABLE_NAME.INDICES]: 'indices-p1',
+  [SYSTEM_TABLE_NAME.MESSAGE_GROUPS]: 'message_groups-p1',
+  [SYSTEM_TABLE_NAME.NODES]: 'nodes-p1',
+  [SYSTEM_TABLE_NAME.SERVICES]: 'services-p1',
+  [SYSTEM_TABLE_NAME.LOGS]: 'logs-p1',
+  [SYSTEM_TABLE_NAME.CONFIG]: 'config-p1',
+  [SYSTEM_TABLE_NAME.LIVE_QUERIES]: 'live_queries-p1',
+  [SYSTEM_TABLE_NAME.CONTEXTS]: 'contexts-p1',
+  [SYSTEM_TABLE_NAME.CODE]: 'code-p1',
+  [SYSTEM_TABLE_NAME.REPLICA_OPERATIONS]: 'replica_operations-p1',
+  [SYSTEM_TABLE_NAME.NODE_ENDPOINTS]: 'node_endpoints-p1',
+  [SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS]: 'service_definitions-p1',
+  [SYSTEM_TABLE_NAME.SERVICE_ENDPOINTS]: 'service_endpoints-p1',
+  [SYSTEM_TABLE_NAME.SERVICE_TIMERS]: 'service_timers-p1',
+  [SYSTEM_TABLE_NAME.MODULE_MANIFESTS]: 'module_manifests-p1',
+  [SYSTEM_TABLE_NAME.PACKAGE_REGISTRY_MAPPINGS]:
     'package_registry_mappings-p1',
-  [SystemTableName.PACKAGE_REGISTRY_OVERRIDES]:
+  [SYSTEM_TABLE_NAME.PACKAGE_REGISTRY_OVERRIDES]:
     'package_registry_overrides-p1',
-  [SystemTableName.MODULE_DEPENDENCY_LOCKS]:
+  [SYSTEM_TABLE_NAME.MODULE_DEPENDENCY_LOCKS]:
     'module_dependency_locks-p1',
-  [SystemTableName.WASM_OPERATIONS]: 'wasm_operations-p1',
-  [SystemTableName.SQL_TRANSACTIONS]: 'sql_transactions-p1',
-  [SystemTableName.SQL_TRANSACTION_PARTICIPANTS]:
+  [SYSTEM_TABLE_NAME.WASM_OPERATIONS]: 'wasm_operations-p1',
+  [SYSTEM_TABLE_NAME.SQL_TRANSACTIONS]: 'sql_transactions-p1',
+  [SYSTEM_TABLE_NAME.SQL_TRANSACTION_PARTICIPANTS]:
     'sql_transaction_participants-p1',
-  [SystemTableName.SQL_WRITE_OPERATIONS]: 'sql_write_operations-p1',
-  [SystemTableName.DEBUG_SESSIONS]: 'debug_sessions-p1',
-  [SystemTableName.DEBUG_BREAKPOINTS]: 'debug_breakpoints-p1',
-  [SystemTableName.DEBUG_SNAPSHOTS]: 'debug_snapshots-p1',
-  [SystemTableName.STORAGE_RESERVATIONS]: 'storage_reservations-p1',
-  [SystemTableName.LATENCY_GROUPS]: 'latency_groups-p1',
-  [SystemTableName.INTER_GROUP_LATENCIES]: 'inter_group_latencies-p1',
+  [SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS]: 'sql_write_operations-p1',
+  [SYSTEM_TABLE_NAME.DEBUG_SESSIONS]: 'debug_sessions-p1',
+  [SYSTEM_TABLE_NAME.DEBUG_BREAKPOINTS]: 'debug_breakpoints-p1',
+  [SYSTEM_TABLE_NAME.DEBUG_SNAPSHOTS]: 'debug_snapshots-p1',
+  [SYSTEM_TABLE_NAME.STORAGE_RESERVATIONS]: 'storage_reservations-p1',
+  [SYSTEM_TABLE_NAME.LATENCY_GROUPS]: 'latency_groups-p1',
+  [SYSTEM_TABLE_NAME.INTER_GROUP_LATENCIES]: 'inter_group_latencies-p1',
 };
 
 /**
@@ -1148,102 +1148,102 @@ const INITIAL_PARTITION_IDS = {
  * Each partition has 3 replicas on the seed node.
  */
 const INITIAL_REPLICA_IDS = {
-  [SystemTableName.TABLES]: ['tables-p1-r1', 'tables-p1-r2', 'tables-p1-r3'],
-  [SystemTableName.PARTITIONS]: ['partitions-p1-r1', 'partitions-p1-r2', 'partitions-p1-r3'],
-  [SystemTableName.INDICES]: ['indices-p1-r1', 'indices-p1-r2', 'indices-p1-r3'],
-  [SystemTableName.MESSAGE_GROUPS]: [
+  [SYSTEM_TABLE_NAME.TABLES]: ['tables-p1-r1', 'tables-p1-r2', 'tables-p1-r3'],
+  [SYSTEM_TABLE_NAME.PARTITIONS]: ['partitions-p1-r1', 'partitions-p1-r2', 'partitions-p1-r3'],
+  [SYSTEM_TABLE_NAME.INDICES]: ['indices-p1-r1', 'indices-p1-r2', 'indices-p1-r3'],
+  [SYSTEM_TABLE_NAME.MESSAGE_GROUPS]: [
     'message_groups-p1-r1', 'message_groups-p1-r2', 'message_groups-p1-r3',
   ],
-  [SystemTableName.NODES]: ['nodes-p1-r1', 'nodes-p1-r2', 'nodes-p1-r3'],
-  [SystemTableName.SERVICES]: ['services-p1-r1', 'services-p1-r2', 'services-p1-r3'],
-  [SystemTableName.LOGS]: ['logs-p1-r1', 'logs-p1-r2', 'logs-p1-r3'],
-  [SystemTableName.CONFIG]: ['config-p1-r1', 'config-p1-r2', 'config-p1-r3'],
-  [SystemTableName.LIVE_QUERIES]: [
+  [SYSTEM_TABLE_NAME.NODES]: ['nodes-p1-r1', 'nodes-p1-r2', 'nodes-p1-r3'],
+  [SYSTEM_TABLE_NAME.SERVICES]: ['services-p1-r1', 'services-p1-r2', 'services-p1-r3'],
+  [SYSTEM_TABLE_NAME.LOGS]: ['logs-p1-r1', 'logs-p1-r2', 'logs-p1-r3'],
+  [SYSTEM_TABLE_NAME.CONFIG]: ['config-p1-r1', 'config-p1-r2', 'config-p1-r3'],
+  [SYSTEM_TABLE_NAME.LIVE_QUERIES]: [
     'live_queries-p1-r1', 'live_queries-p1-r2', 'live_queries-p1-r3',
   ],
-  [SystemTableName.CONTEXTS]: ['contexts-p1-r1', 'contexts-p1-r2', 'contexts-p1-r3'],
-  [SystemTableName.CODE]: ['code-p1-r1', 'code-p1-r2', 'code-p1-r3'],
-  [SystemTableName.REPLICA_OPERATIONS]: [
+  [SYSTEM_TABLE_NAME.CONTEXTS]: ['contexts-p1-r1', 'contexts-p1-r2', 'contexts-p1-r3'],
+  [SYSTEM_TABLE_NAME.CODE]: ['code-p1-r1', 'code-p1-r2', 'code-p1-r3'],
+  [SYSTEM_TABLE_NAME.REPLICA_OPERATIONS]: [
     'replica_operations-p1-r1', 'replica_operations-p1-r2', 'replica_operations-p1-r3',
   ],
-  [SystemTableName.NODE_ENDPOINTS]: [
+  [SYSTEM_TABLE_NAME.NODE_ENDPOINTS]: [
     'node_endpoints-p1-r1', 'node_endpoints-p1-r2', 'node_endpoints-p1-r3',
   ],
-  [SystemTableName.SERVICE_DEFINITIONS]: [
+  [SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS]: [
     'service_definitions-p1-r1', 'service_definitions-p1-r2', 'service_definitions-p1-r3',
   ],
-  [SystemTableName.SERVICE_ENDPOINTS]: [
+  [SYSTEM_TABLE_NAME.SERVICE_ENDPOINTS]: [
     'service_endpoints-p1-r1', 'service_endpoints-p1-r2', 'service_endpoints-p1-r3',
   ],
-  [SystemTableName.SERVICE_TIMERS]: [
+  [SYSTEM_TABLE_NAME.SERVICE_TIMERS]: [
     'service_timers-p1-r1', 'service_timers-p1-r2', 'service_timers-p1-r3',
   ],
-  [SystemTableName.MODULE_MANIFESTS]: [
+  [SYSTEM_TABLE_NAME.MODULE_MANIFESTS]: [
     'module_manifests-p1-r1',
     'module_manifests-p1-r2',
     'module_manifests-p1-r3',
   ],
-  [SystemTableName.PACKAGE_REGISTRY_MAPPINGS]: [
+  [SYSTEM_TABLE_NAME.PACKAGE_REGISTRY_MAPPINGS]: [
     'package_registry_mappings-p1-r1',
     'package_registry_mappings-p1-r2',
     'package_registry_mappings-p1-r3',
   ],
-  [SystemTableName.PACKAGE_REGISTRY_OVERRIDES]: [
+  [SYSTEM_TABLE_NAME.PACKAGE_REGISTRY_OVERRIDES]: [
     'package_registry_overrides-p1-r1',
     'package_registry_overrides-p1-r2',
     'package_registry_overrides-p1-r3',
   ],
-  [SystemTableName.MODULE_DEPENDENCY_LOCKS]: [
+  [SYSTEM_TABLE_NAME.MODULE_DEPENDENCY_LOCKS]: [
     'module_dependency_locks-p1-r1',
     'module_dependency_locks-p1-r2',
     'module_dependency_locks-p1-r3',
   ],
-  [SystemTableName.WASM_OPERATIONS]: [
+  [SYSTEM_TABLE_NAME.WASM_OPERATIONS]: [
     'wasm_operations-p1-r1',
     'wasm_operations-p1-r2',
     'wasm_operations-p1-r3',
   ],
-  [SystemTableName.SQL_TRANSACTIONS]: [
+  [SYSTEM_TABLE_NAME.SQL_TRANSACTIONS]: [
     'sql_transactions-p1-r1',
     'sql_transactions-p1-r2',
     'sql_transactions-p1-r3',
   ],
-  [SystemTableName.SQL_TRANSACTION_PARTICIPANTS]: [
+  [SYSTEM_TABLE_NAME.SQL_TRANSACTION_PARTICIPANTS]: [
     'sql_transaction_participants-p1-r1',
     'sql_transaction_participants-p1-r2',
     'sql_transaction_participants-p1-r3',
   ],
-  [SystemTableName.SQL_WRITE_OPERATIONS]: [
+  [SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS]: [
     'sql_write_operations-p1-r1',
     'sql_write_operations-p1-r2',
     'sql_write_operations-p1-r3',
   ],
-  [SystemTableName.DEBUG_SESSIONS]: [
+  [SYSTEM_TABLE_NAME.DEBUG_SESSIONS]: [
     'debug_sessions-p1-r1',
     'debug_sessions-p1-r2',
     'debug_sessions-p1-r3',
   ],
-  [SystemTableName.DEBUG_BREAKPOINTS]: [
+  [SYSTEM_TABLE_NAME.DEBUG_BREAKPOINTS]: [
     'debug_breakpoints-p1-r1',
     'debug_breakpoints-p1-r2',
     'debug_breakpoints-p1-r3',
   ],
-  [SystemTableName.DEBUG_SNAPSHOTS]: [
+  [SYSTEM_TABLE_NAME.DEBUG_SNAPSHOTS]: [
     'debug_snapshots-p1-r1',
     'debug_snapshots-p1-r2',
     'debug_snapshots-p1-r3',
   ],
-  [SystemTableName.STORAGE_RESERVATIONS]: [
+  [SYSTEM_TABLE_NAME.STORAGE_RESERVATIONS]: [
     'storage_reservations-p1-r1',
     'storage_reservations-p1-r2',
     'storage_reservations-p1-r3',
   ],
-  [SystemTableName.LATENCY_GROUPS]: [
+  [SYSTEM_TABLE_NAME.LATENCY_GROUPS]: [
     'latency_groups-p1-r1',
     'latency_groups-p1-r2',
     'latency_groups-p1-r3',
   ],
-  [SystemTableName.INTER_GROUP_LATENCIES]: [
+  [SYSTEM_TABLE_NAME.INTER_GROUP_LATENCIES]: [
     'inter_group_latencies-p1-r1',
     'inter_group_latencies-p1-r2',
     'inter_group_latencies-p1-r3',
@@ -1338,8 +1338,8 @@ function getInitialReplicaIds(tableName) {
 }
 
 export {
-  ColumnType,
-  SystemTableName,
+  COLUMN_TYPE,
+  SYSTEM_TABLE_NAME,
   TABLES_SCHEMA,
   PARTITIONS_SCHEMA,
   INDICES_SCHEMA,

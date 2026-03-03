@@ -12,10 +12,10 @@ import {
   validateCallbackAgainstManifest,
   validateCallback,
   isAsyncFunction,
-} from '../../src/query/callback-validator.js';
+} from '../../src/query/callback/callback-validator.js';
 import {
   CALLBACK_ERROR_MSG,
-} from '../../src/query/callback-constants.js';
+} from '../../src/query/callback/callback-constants.js';
 
 // --- isAsyncFunction ---
 

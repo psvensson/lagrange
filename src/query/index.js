@@ -9,7 +9,7 @@ export {SQLQueryEngine} from './sql-query-engine.js';
 export {PartitionResolver} from './partition-resolver.js';
 export {QueryExecutor} from './query-executor.js';
 export {TableCreationService} from './table-creation-service.js';
-export {DistributedQueryPlanner} from './distributed-query-planner.js';
+export {DistributedQueryPlanner} from './distributed/distributed-query-planner.js';
 export {
   DISTRIBUTED_EXECUTION_POLICY,
   DISTRIBUTED_JOIN_STRATEGY,
@@ -20,27 +20,27 @@ export {
   DISTRIBUTED_QUERY_ERROR_MSG,
   DISTRIBUTED_ROLE_HINT,
   DISTRIBUTED_STATEMENT_TYPE,
-} from './distributed-query-plan-constants.js';
+} from './distributed/distributed-query-plan-constants.js';
 export {
   ParallelQueryCoordinator,
   PartitionQueryMetrics,
   QueryExecutionMetrics,
-} from './parallel-query-coordinator.js';
-export {StragglerDetector, SpeculativeExecutor} from './straggler-detector.js';
+} from './distributed/parallel-query-coordinator.js';
+export {StragglerDetector, SpeculativeExecutor} from './distributed/straggler-detector.js';
 export {StreamingAggregator} from './streaming-aggregator.js';
-export {DistributedMergeEngine} from './distributed-merge-engine.js';
-export {DistributedWriteCoordinator} from './distributed-write-coordinator.js';
+export {DistributedMergeEngine} from './distributed/distributed-merge-engine.js';
+export {DistributedWriteCoordinator} from './distributed/distributed-write-coordinator.js';
 export {
   DistributedTransactionCoordinator,
   TRANSACTION_STATUS,
-} from './distributed-transaction-coordinator.js';
+} from './distributed/distributed-transaction-coordinator.js';
 export {createSqlRequest, isSqlRequest} from './sql-request.js';
 export {InternalSqlAdapter} from './internal-sql-adapter.js';
 export {
   PostgresWireAdapter,
   PG_SESSION_STATE,
   PG_WIRE_ERROR_MSG,
-} from './postgres-wire-adapter.js';
+} from './pg/postgres-wire-adapter.js';
 export {WasmCallAdapter} from './wasm-call-adapter.js';
 export {
   registerSqlCore,

@@ -13,7 +13,7 @@ import {ServiceThreadManager} from '../../src/threading/service-thread-manager.j
 import {MessageGroupService} from '../../src/message-group/message-group-service.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
-import {SystemTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {ReplicaLifecycleManager} from '../../src/node/replica-lifecycle-manager.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
 
@@ -36,9 +36,18 @@ function initEnv() {
 }
 
 async function cleanEnv() {
-  await NodeService.getInstance().shutdown().catch(() => {});
-  await ServiceThreadManager.getInstance().shutdown().catch(() => {});
-  await LoggingService.getInstance().shutdown().catch(() => {});
+  await NodeService.getInstance().shutdown()
+    .catch((err) => {
+      console.warn('shutdown failed', err);
+    });
+  await ServiceThreadManager.getInstance().shutdown()
+    .catch((err) => {
+      console.warn('shutdown failed', err);
+    });
+  await LoggingService.getInstance().shutdown()
+    .catch((err) => {
+      console.warn('shutdown failed', err);
+    });
   NodeService.resetInstance();
   ServiceThreadManager.resetInstance();
   ConfigurationManager.resetInstance();
@@ -119,19 +128,19 @@ test('ACK delivery via real WebSocket', {timeout: 5000}, async (t) => {
     const systemTableCache = new SystemTableCache();
     const cdcIntegrationService = createMockCDCService(systemTableCache);
     const now = Date.now();
-    systemTableCache.applySystemTableChange(SystemTableName.TABLES, 'INSERT', {
+    systemTableCache.applySystemTableChange(SYSTEM_TABLE_NAME.TABLES, 'INSERT', {
       table_id: 't1',
       table_name: 't1',
       schema_definition: JSON.stringify(schema('t1')),
     });
-    systemTableCache.applySystemTableChange(SystemTableName.PARTITIONS, 'INSERT', {
+    systemTableCache.applySystemTableChange(SYSTEM_TABLE_NAME.PARTITIONS, 'INSERT', {
       partition_id: 'p1',
       table_id: 't1',
       partition_key_start: null,
       partition_key_end: null,
       leader_node_id: nodeId,
     });
-    systemTableCache.applySystemTableChange(SystemTableName.SERVICES, 'INSERT', {
+    systemTableCache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
       service_id: 'p1-r1',
       service_type: 'partition',
       partition_id: 'p1',
@@ -195,10 +204,17 @@ test('ACK delivery via real WebSocket', {timeout: 5000}, async (t) => {
     if (res.lc) res.lc.shutdown();
     if (res.part) {
       res.part.rebalancer?.cancelScheduledCheck();
-      await res.part.shutdown().catch(() => {});
+      await res.part.shutdown()
+        .catch((err) => console.warn('partition shutdown failed', err.message));
     }
-    if (res.mg) await res.mg.shutdown().catch(() => {});
-    if (res.router) await res.router.shutdown().catch(() => {});
+    if (res.mg) {
+      await res.mg.shutdown()
+        .catch((err) => console.warn('mg shutdown failed', err.message));
+    }
+    if (res.router) {
+      await res.router.shutdown()
+        .catch((err) => console.warn('router shutdown failed', err.message));
+    }
     await cleanEnv();
   }
 });

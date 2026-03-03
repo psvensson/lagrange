@@ -9,7 +9,7 @@ import fc from 'fast-check';
 import {
   ExchangeManager,
   hashKey,
-} from '../../src/query/exchange-manager.js';
+} from '../../src/query/distributed/exchange-manager.js';
 import {
   EXCHANGE_MODE,
   EXCHANGE_ERROR_MSG,

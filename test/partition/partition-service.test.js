@@ -18,7 +18,7 @@ import {
   PARTITION_SERVICE_LOG_MSG,
 } from '../../src/partition/partition-service-constants.js';
 import {
-  SystemTableName,
+  SYSTEM_TABLE_NAME,
   INITIAL_PARTITION_IDS,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
@@ -1356,10 +1356,10 @@ test('PartitionService - persists raft role updates to services table', async (t
     },
   };
   const systemTableCache = new SystemTableCache();
-  const servicesPartitionId = INITIAL_PARTITION_IDS[SystemTableName.SERVICES];
+  const servicesPartitionId = INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SERVICES];
   systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
     [COLUMN.PARTITION_ID]: servicesPartitionId,
-    [COLUMN.TABLE_ID]: SystemTableName.SERVICES,
+    [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.SERVICES,
   });
   systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
     [COLUMN.SERVICE_ID]: 'services-leader',
@@ -1389,7 +1389,7 @@ test('PartitionService - persists raft role updates to services table', async (t
 
   const roleUpdate = updates.find(
     (update) =>
-      update.tableName === SystemTableName.SERVICES &&
+      update.tableName === SYSTEM_TABLE_NAME.SERVICES &&
       update.whereClause?.service_id === 'replica-1' &&
       update.data?.raft_role === RaftRole.LEADER,
   );
@@ -1417,10 +1417,10 @@ test('PartitionService - retries raft role persistence after cache visibility fa
       },
     };
     const systemTableCache = new SystemTableCache();
-    const servicesPartitionId = INITIAL_PARTITION_IDS[SystemTableName.SERVICES];
+    const servicesPartitionId = INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SERVICES];
     systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
       [COLUMN.PARTITION_ID]: servicesPartitionId,
-      [COLUMN.TABLE_ID]: SystemTableName.SERVICES,
+      [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.SERVICES,
     });
     systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
       [COLUMN.SERVICE_ID]: 'services-leader',
@@ -1478,10 +1478,10 @@ test('PartitionService - persists initial follower role for multi-replica startu
       },
     };
     const systemTableCache = new SystemTableCache();
-    const servicesPartitionId = INITIAL_PARTITION_IDS[SystemTableName.SERVICES];
+    const servicesPartitionId = INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SERVICES];
     systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
       [COLUMN.PARTITION_ID]: servicesPartitionId,
-      [COLUMN.TABLE_ID]: SystemTableName.SERVICES,
+      [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.SERVICES,
     });
     systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
       [COLUMN.SERVICE_ID]: 'services-leader',
@@ -1514,7 +1514,7 @@ test('PartitionService - persists initial follower role for multi-replica startu
 
     const roleUpdate = updates.find(
       (update) =>
-        update.tableName === SystemTableName.SERVICES &&
+        update.tableName === SYSTEM_TABLE_NAME.SERVICES &&
         update.whereClause?.service_id === 'replica-2' &&
         update.data?.raft_role === RaftRole.FOLLOWER,
     );
@@ -1534,10 +1534,10 @@ test('PartitionService - persists leader node updates to partitions table', asyn
   };
 
   const systemTableCache = new SystemTableCache();
-  const partitionsPartitionId = INITIAL_PARTITION_IDS[SystemTableName.PARTITIONS];
+  const partitionsPartitionId = INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.PARTITIONS];
   systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
     [COLUMN.PARTITION_ID]: partitionsPartitionId,
-    [COLUMN.TABLE_ID]: SystemTableName.PARTITIONS,
+    [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.PARTITIONS,
   });
   systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
     [COLUMN.SERVICE_ID]: 'partitions-leader',
@@ -1567,7 +1567,7 @@ test('PartitionService - persists leader node updates to partitions table', asyn
 
   const leaderUpdate = updates.find(
     (update) =>
-      update.tableName === SystemTableName.PARTITIONS &&
+      update.tableName === SYSTEM_TABLE_NAME.PARTITIONS &&
       update.whereClause?.[COLUMN.PARTITION_ID] === 'test-partition-23' &&
       update.data?.[COLUMN.LEADER_NODE_ID] === 'seed-node',
   );
@@ -1598,10 +1598,10 @@ test('PartitionService - retries leader node persistence after cache visibility 
     };
 
     const systemTableCache = new SystemTableCache();
-    const partitionsPartitionId = INITIAL_PARTITION_IDS[SystemTableName.PARTITIONS];
+    const partitionsPartitionId = INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.PARTITIONS];
     systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
       [COLUMN.PARTITION_ID]: partitionsPartitionId,
-      [COLUMN.TABLE_ID]: SystemTableName.PARTITIONS,
+      [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.PARTITIONS,
     });
     systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
       [COLUMN.SERVICE_ID]: 'partitions-leader',
@@ -2121,28 +2121,28 @@ test('PartitionService - critical partition defers learner on even voter count',
         const services = [
           {
             service_id: 'replica-1',
-            partition_id: `${SystemTableName.CONFIG}-p1`,
+            partition_id: `${SYSTEM_TABLE_NAME.CONFIG}-p1`,
             service_type: SERVICE_TYPE.PARTITION,
             status: SERVICE_STATUS.ACTIVE,
             raft_role: 'leader',
           },
           {
             service_id: 'replica-2',
-            partition_id: `${SystemTableName.CONFIG}-p1`,
+            partition_id: `${SYSTEM_TABLE_NAME.CONFIG}-p1`,
             service_type: SERVICE_TYPE.PARTITION,
             status: SERVICE_STATUS.ACTIVE,
             raft_role: 'follower',
           },
           {
             service_id: 'replica-3',
-            partition_id: `${SystemTableName.CONFIG}-p1`,
+            partition_id: `${SYSTEM_TABLE_NAME.CONFIG}-p1`,
             service_type: SERVICE_TYPE.PARTITION,
             status: SERVICE_STATUS.ACTIVE,
             raft_role: 'follower',
           },
           {
             service_id: 'replica-4',
-            partition_id: `${SystemTableName.CONFIG}-p1`,
+            partition_id: `${SYSTEM_TABLE_NAME.CONFIG}-p1`,
             service_type: SERVICE_TYPE.PARTITION,
             status: SERVICE_STATUS.ACTIVE,
             raft_role: 'learner',
@@ -2155,8 +2155,8 @@ test('PartitionService - critical partition defers learner on even voter count',
   };
 
   const partition = new PartitionService({
-    partitionId: `${SystemTableName.CONFIG}-p1`,
-    tableId: SystemTableName.CONFIG,
+    partitionId: `${SYSTEM_TABLE_NAME.CONFIG}-p1`,
+    tableId: SYSTEM_TABLE_NAME.CONFIG,
     replicaId: 'replica-4',
     replicaIds: ['replica-4'],
     nodeId: 'node-2',

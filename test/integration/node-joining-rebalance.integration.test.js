@@ -6,7 +6,7 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
-import {SystemTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {HeartbeatService} from '../../src/control-plane/heartbeat-service.js';
 import {LeaseService} from '../../src/control-plane/lease-service.js';
 import {EndpointService} from '../../src/control-plane/endpoint-service.js';
@@ -50,7 +50,7 @@ async function shutdownOrFail(t, promise, label) {
 async function waitForReplicaOperationsToSettle(systemTableCache, timeoutMs = 5000) {
   return waitFor(() => {
     const inFlight = systemTableCache.filter(
-      SystemTableName.REPLICA_OPERATIONS,
+      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
       (operation) => !TERMINAL_STATUSES.includes(operation.status),
     ) || [];
     return inFlight.length === 0;
@@ -67,14 +67,14 @@ async function waitForReplicaOperationsToSettle(systemTableCache, timeoutMs = 50
  */
 function promoteReplicasToActive(systemTableCache, partitionId) {
   const services = systemTableCache.filter(
-    SystemTableName.SERVICES,
+    SYSTEM_TABLE_NAME.SERVICES,
     (s) => s.service_type === EntityType.PARTITION &&
       s.partition_id === partitionId,
   ) || [];
   for (const svc of services) {
     if (svc.status !== ReplicaStatus.ACTIVE) {
       systemTableCache.applySystemTableChange(
-        SystemTableName.SERVICES, 'UPDATE', {
+        SYSTEM_TABLE_NAME.SERVICES, 'UPDATE', {
           ...svc,
           status: ReplicaStatus.ACTIVE,
         },
@@ -92,14 +92,14 @@ function promoteReplicasToActive(systemTableCache, partitionId) {
 async function waitForStablePartitionId(systemTableCache, timeoutMs = 5000) {
   let selectedPartitionId = null;
   const found = await waitFor(() => {
-    const partitions = systemTableCache.getAll(SystemTableName.PARTITIONS) || [];
+    const partitions = systemTableCache.getAll(SYSTEM_TABLE_NAME.PARTITIONS) || [];
     for (const partition of partitions) {
       const partitionId = partition?.partition_id;
       if (!partitionId) {
         continue;
       }
       const services = systemTableCache.filter(
-        SystemTableName.SERVICES,
+        SYSTEM_TABLE_NAME.SERVICES,
         (service) =>
           service.service_type === EntityType.PARTITION &&
           service.partition_id === partitionId,
@@ -422,7 +422,7 @@ test('Node joining rebalancing integration', async (t) => {
       // Add a second node to the cache so the rebalancer has somewhere to place replicas
       const now = Date.now();
       const targetNodeId = 'node-target-1';
-      systemTableCache.applySystemTableChange(SystemTableName.NODES, 'INSERT', {
+      systemTableCache.applySystemTableChange(SYSTEM_TABLE_NAME.NODES, 'INSERT', {
         node_id: targetNodeId,
         node_address: 'ws://node-target-1:9001',
         cpu_cores: 4,
@@ -629,7 +629,7 @@ test('Node joining rebalancing integration', async (t) => {
       // This test verifies that operations are created and scheduled correctly.
       const now = Date.now();
       const joiningNodeId = 'node-joining-2';
-      systemTableCache.applySystemTableChange(SystemTableName.NODES, 'INSERT', {
+      systemTableCache.applySystemTableChange(SYSTEM_TABLE_NAME.NODES, 'INSERT', {
         node_id: joiningNodeId,
         node_address: 'ws://node-joining-2:9001',
         cpu_cores: 4,

@@ -9,7 +9,7 @@ import {
   NodeStatus,
   ReintegrationStatus,
 } from '../../src/node/node-reintegration-service.js';
-import {SystemTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 
@@ -233,7 +233,7 @@ test('NodeReintegrationService - reintegrates recovering node', async (t) => {
 
   // Check CDC operation
   const updateOps = mockCDC.operations.filter((op) =>
-    op.type === 'update' && op.tableName === SystemTableName.NODES,
+    op.type === 'update' && op.tableName === SYSTEM_TABLE_NAME.NODES,
   );
   t.ok(updateOps.length > 0, 'should have update operation');
   t.ok(updateOps.some((op) => op.data.status === NodeStatus.ACTIVE),
@@ -346,7 +346,7 @@ test('NodeReintegrationService - fails reintegration on stale heartbeat', async 
   // Check that node was marked as failed
   const updateOps = mockCDC.operations.filter((op) =>
     op.type === 'update' &&
-    op.tableName === SystemTableName.NODES &&
+    op.tableName === SYSTEM_TABLE_NAME.NODES &&
     op.data.status === NodeStatus.FAILED,
   );
   t.ok(updateOps.length > 0, 'should mark node as failed');

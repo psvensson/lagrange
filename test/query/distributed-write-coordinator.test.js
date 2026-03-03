@@ -1,5 +1,5 @@
 import {test} from '../../src/test-helpers/tap.js';
-import {DistributedWriteCoordinator} from '../../src/query/distributed-write-coordinator.js';
+import {DistributedWriteCoordinator} from '../../src/query/distributed/distributed-write-coordinator.js';
 import {SQLParser} from '../../src/query/sql-parser.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 

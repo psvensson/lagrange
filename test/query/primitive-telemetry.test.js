@@ -17,7 +17,7 @@ import {
 } from '../../src/query/primitive-telemetry.js';
 import {
   PRIMITIVE_TYPE,
-} from '../../src/query/distributed-context-constants.js';
+} from '../../src/query/distributed/distributed-context-constants.js';
 
 // --- PrimitiveCounter ---
 

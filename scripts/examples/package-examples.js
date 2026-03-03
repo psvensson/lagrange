@@ -1,7 +1,7 @@
 import {createHash} from 'node:crypto';
 import {readdir, readFile} from 'node:fs/promises';
 import {basename, join, resolve} from 'node:path';
-import {buildJsWasmComponentArtifact} from '../../src/query/callback-module-artifact.js';
+import {buildJsWasmComponentArtifact} from '../../src/query/callback/callback-module-artifact.js';
 import {
   CODE_EXECUTOR_TYPE,
   DEFAULT_EXAMPLES_DIR,
@@ -23,6 +23,11 @@ import {
  * @param {string} version
  * @return {string}
  */
+const FUNCTION_ID_PREFIX = 'example-';
+const FUNCTION_NAME_PREFIX = 'examples.';
+const HASH_ALGORITHM_SHA256 = 'sha256';
+const DIGEST_ENCODING_HEX = 'hex';
+
 function normalizeVersion(version) {
   return String(version || EXAMPLE_DEFAULT.VERSION)
     .replace(VERSION_SANITIZE_REGEX, '_');
@@ -35,7 +40,8 @@ function normalizeVersion(version) {
  * @return {string}
  */
 function buildFunctionId(manifest) {
-  return `example-${manifest.id}-v${normalizeVersion(manifest.version)}`;
+  const normalized = normalizeVersion(manifest.version);
+  return `${FUNCTION_ID_PREFIX}${manifest.id}-v${normalized}`;
 }
 
 /**
@@ -45,7 +51,7 @@ function buildFunctionId(manifest) {
  * @return {string}
  */
 function buildFunctionName(manifest) {
-  return `examples.${manifest.id}`;
+  return `${FUNCTION_NAME_PREFIX}${manifest.id}`;
 }
 
 /**
@@ -55,9 +61,9 @@ function buildFunctionName(manifest) {
  * @return {string}
  */
 function computeDigest(content) {
-  const hash = createHash('sha256');
+  const hash = createHash(HASH_ALGORITHM_SHA256);
   hash.update(content);
-  return HEX_DIGEST_PREFIX + hash.digest('hex');
+  return HEX_DIGEST_PREFIX + hash.digest(DIGEST_ENCODING_HEX);
 }
 
 /**

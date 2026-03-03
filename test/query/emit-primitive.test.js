@@ -17,7 +17,7 @@ import {
   EMIT_FIELD,
   EMIT_QUEUE_STATE,
   PRIMITIVE_ERROR_MSG,
-} from '../../src/query/distributed-context-constants.js';
+} from '../../src/query/distributed/distributed-context-constants.js';
 
 // --- validateEmitArgs ---
 

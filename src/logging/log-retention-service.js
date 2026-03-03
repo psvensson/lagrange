@@ -7,12 +7,15 @@
 import {EventEmitter} from 'events';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
-import {SystemTableName} from '../bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
   LOG_RETENTION_DEFAULT,
   LOG_RETENTION_ERROR_MSG,
   LOG_RETENTION_LOG_MSG,
 } from './logging-constants.js';
+
+const INITIAL_CLEANUP_DELAY_MS = 5000;
+const CLEANUP_EVENT_NAME = 'cleanup';
 
 const DEFAULT_CONFIG = Object.freeze({
   retentionPeriodMs: LOG_RETENTION_DEFAULT.RETENTION_PERIOD_MS,
@@ -134,7 +137,7 @@ class LogRetentionService extends EventEmitter {
       this.runCleanup().catch((error) => {
         this.logger.error(LOG_RETENTION_ERROR_MSG.INITIAL_CLEANUP_FAILED, error.message);
       });
-    }, 5000);
+    }, INITIAL_CLEANUP_DELAY_MS);
 
     // Schedule periodic cleanup
     this.cleanupTimer = setInterval(() => {
@@ -206,7 +209,7 @@ class LogRetentionService extends EventEmitter {
         retentionLogMessages.cleanupCompleted(totalDeleted, duration),
       );
 
-      this.emit('cleanup', {
+      this.emit(CLEANUP_EVENT_NAME, {
         deleted: totalDeleted,
         duration,
         cutoffTime,
@@ -239,29 +242,34 @@ class LogRetentionService extends EventEmitter {
     }
 
     // First, get the IDs of logs to delete
-    const selectSQL = `
-      SELECT log_id FROM ${SystemTableName.LOGS}
-      WHERE timestamp < ${cutoffTime}
-      ORDER BY timestamp ASC
-      LIMIT ${limit}
-    `.trim();
+    const selectSQL =
+      `SELECT log_id FROM ${SYSTEM_TABLE_NAME.LOGS}` +
+      ' WHERE timestamp < ? ORDER BY timestamp ASC LIMIT ?';
 
-    const selectResult = await this.sqlQueryEngine.executeQuery(selectSQL);
+    const selectResult = await this.sqlQueryEngine.executeQuery(
+      selectSQL, [cutoffTime, limit],
+    );
 
-    if (!selectResult.success || !selectResult.results || selectResult.results.length === 0) {
+    if (!selectResult.success ||
+        !selectResult.results ||
+        selectResult.results.length === 0) {
       return 0;
     }
 
     // Delete the selected logs
-    const logIds = selectResult.results.map((r) => `'${r.log_id}'`).join(', ');
-    const deleteSQL = `
-      DELETE FROM ${SystemTableName.LOGS}
-      WHERE log_id IN (${logIds})
-    `.trim();
+    const placeholders = selectResult.results
+      .map(() => '?').join(', ');
+    const logIds = selectResult.results.map((r) => r.log_id);
+    const deleteSQL =
+      `DELETE FROM ${SYSTEM_TABLE_NAME.LOGS}` +
+      ` WHERE log_id IN (${placeholders})`;
 
-    const deleteResult = await this.sqlQueryEngine.executeQuery(deleteSQL);
+    const deleteResult = await this.sqlQueryEngine.executeQuery(
+      deleteSQL, logIds,
+    );
 
-    return deleteResult.affectedRows || selectResult.results.length;
+    return deleteResult.affectedRows ||
+      selectResult.results.length;
   }
 
   /**
@@ -274,13 +282,15 @@ class LogRetentionService extends EventEmitter {
       try {
         const policy =
           await this.tablePolicyService.getTablePolicy(
-            SystemTableName.LOGS,
+            SYSTEM_TABLE_NAME.LOGS,
           );
         if (policy && policy.retentionPeriodMs) {
           return policy.retentionPeriodMs;
         }
-      } catch {
-        // Policy service not available
+      } catch (policyErr) {
+        this.logger.warn(
+          LOG_RETENTION_ERROR_MSG.CLEANUP_FAILED, policyErr.message,
+        );
       }
     }
 

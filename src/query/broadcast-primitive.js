@@ -16,7 +16,8 @@ import {
 import {
   BROADCAST_FIELD,
   PRIMITIVE_ERROR_MSG,
-} from './distributed-context-constants.js';
+  PRIMITIVE_TYPE,
+} from './distributed/distributed-context-constants.js';
 import {
   GUARDRAIL_FIELD as GF,
 } from './guardrail-constants.js';
@@ -163,7 +164,7 @@ class BroadcastStore {
 
     if (this.lineageTracker) {
       this.lineageTracker.attachLineage(
-        descriptor, this.stageIndex, 'broadcast',
+        descriptor, this.stageIndex, PRIMITIVE_TYPE.BROADCAST,
         this._broadcastSeq,
       );
       this._broadcastSeq += NUM.ONE;
@@ -173,7 +174,7 @@ class BroadcastStore {
 
     if (typeof this.onTelemetry === TYPEOF.FUNCTION) {
       this.onTelemetry({
-        primitive: 'broadcast',
+        primitive: PRIMITIVE_TYPE.BROADCAST,
         ref,
         version: dataset[BROADCAST_FIELD.VERSION],
         byteCount,
@@ -210,7 +211,7 @@ class BroadcastStore {
 
     if (typeof this.onTelemetry === TYPEOF.FUNCTION) {
       this.onTelemetry({
-        primitive: 'useBroadcast',
+        primitive: PRIMITIVE_TYPE.USE_BROADCAST,
         ref,
         version: descriptor[BROADCAST_FIELD.VERSION],
         byteCount: descriptor[BROADCAST_FIELD.BYTE_COUNT],

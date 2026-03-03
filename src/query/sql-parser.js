@@ -9,15 +9,27 @@ import nodeSqlParser from 'node-sql-parser';
 const {Parser} = nodeSqlParser;
 import {LoggingService} from '../logging/logging-service.js';
 import {AST_TYPE, EXPR_TYPE} from './parser-constants.js';
-import {PARSER_DIALECT, PG_EXPR_TYPE} from './pg-compat-constants.js';
+import {PARSER_DIALECT, PG_EXPR_TYPE} from './pg/pg-compat-constants.js';
+import {QUERY_ERROR_MSG} from './query-constants.js';
 import {
   translateBooleanLiteral,
   translatePositionalParam,
   translateTypeCast,
   translateIlike,
   translateOnConflict,
-} from './pg-translate.js';
-import {translateFunctionCall} from './pg-function-registry.js';
+} from './pg/pg-translate.js';
+import {translateFunctionCall} from './pg/pg-function-registry.js';
+
+/**
+ * Parser-specific error message constants.
+ */
+const PARSER_ERROR_MSG = Object.freeze({
+  SQL_PARSE_ERROR_PREFIX: 'SQL Parse Error: ',
+  EMPTY_SQL_STATEMENT: 'Empty SQL statement',
+  UNSUPPORTED_CREATE_TYPE_PREFIX: 'Unsupported CREATE type: ',
+  UNSUPPORTED_DROP_TYPE_PREFIX: 'Unsupported DROP type: ',
+  UNKNOWN_EXPRESSION_TYPE_PREFIX: 'Unknown expression type: ',
+});
 
 const PARSER_CONFIG = Object.freeze({
   DATABASE: 'sqlite',
@@ -63,6 +75,43 @@ const EXTERNAL_TYPE = Object.freeze({
   DROP: 'drop',
 });
 
+/**
+ * node-sql-parser expression-level AST type identifiers.
+ * These are the raw type strings the external parser produces.
+ */
+const EXT_EXPR_TYPE = Object.freeze({
+  BINARY_EXPR: 'binary_expr',
+  UNARY_EXPR: 'unary_expr',
+  COLUMN_REF: 'column_ref',
+  NUMBER: 'number',
+  SINGLE_QUOTE_STRING: 'single_quote_string',
+  DOUBLE_QUOTE_STRING: 'double_quote_string',
+  STRING: 'string',
+  BOOL: 'bool',
+  NULL: 'null',
+  ORIGIN: 'origin',
+  AGGR_FUNC: 'aggr_func',
+  STAR: 'star',
+  EXPR_LIST: 'expr_list',
+});
+
+/**
+ * Star wildcard value used in SELECT * and aggregate(*) nodes.
+ */
+const STAR_VALUE = '*';
+
+/**
+ * Parameter placeholder in origin nodes.
+ */
+const ORIGIN_PARAM = '?';
+
+const SQL_KEYWORD = Object.freeze({
+  BEGIN: 'BEGIN',
+  BEGIN_PREFIX: 'BEGIN ',
+  COMMIT: 'COMMIT',
+  ROLLBACK: 'ROLLBACK',
+});
+
 class SQLParser {
   constructor(sql, options = {}) {
     this.sql = sql;
@@ -79,8 +128,9 @@ class SQLParser {
       if (loggingService.isInitialized()) {
         return loggingService.forSubsystem(PARSER_CONFIG.SUBSYSTEM);
       }
-    } catch {
-      // Logging not available
+    } catch (logErr) {
+      console.warn(PARSER_ERROR_MSG.SQL_PARSE_ERROR_PREFIX,
+        logErr.message);
     }
     return console;
   }
@@ -89,13 +139,14 @@ class SQLParser {
     this.positionalParams = [];
     this.parameterCounter = 0;
     const trimmedSql = this.sql.trim().toUpperCase();
-    if (trimmedSql === 'BEGIN' || trimmedSql.startsWith('BEGIN ')) {
+    if (trimmedSql === SQL_KEYWORD.BEGIN ||
+        trimmedSql.startsWith(SQL_KEYWORD.BEGIN_PREFIX)) {
       return {type: AST_TYPE.BEGIN_TRANSACTION};
     }
-    if (trimmedSql === 'COMMIT') {
+    if (trimmedSql === SQL_KEYWORD.COMMIT) {
       return {type: AST_TYPE.COMMIT};
     }
-    if (trimmedSql === 'ROLLBACK') {
+    if (trimmedSql === SQL_KEYWORD.ROLLBACK) {
       return {type: AST_TYPE.ROLLBACK};
     }
 
@@ -111,7 +162,8 @@ class SQLParser {
       }
       return ast;
     } catch (error) {
-      const errorMsg = 'SQL Parse Error: ' + error.message;
+      const errorMsg =
+        PARSER_ERROR_MSG.SQL_PARSE_ERROR_PREFIX + error.message;
       this.logger.error(errorMsg, {sql: this.sql});
       throw new Error(errorMsg);
     }
@@ -133,7 +185,7 @@ class SQLParser {
     // Handle array result (e.g., when SQL ends with semicolon)
     if (Array.isArray(ast)) {
       if (ast.length === 0) {
-        throw new Error('Empty SQL statement');
+        throw new Error(PARSER_ERROR_MSG.EMPTY_SQL_STATEMENT);
       }
       return this.convertAst(ast[0]);
     }
@@ -152,7 +204,9 @@ class SQLParser {
     case EXTERNAL_TYPE.DROP:
       return this.convertDrop(ast);
     default:
-      throw new Error('Unsupported statement type: ' + ast.type);
+      throw new Error(
+        QUERY_ERROR_MSG.UNSUPPORTED_STATEMENT_PREFIX + ast.type,
+      );
     }
   }
   convertSelect(ast) {
@@ -323,15 +377,15 @@ class SQLParser {
     const columns = returning.columns;
     // Check for RETURNING * — column is the string '*' in both modes
     if (columns.length === 1 && columns[0].expr &&
-        columns[0].expr.type === 'column_ref' &&
-        columns[0].expr.column === '*') {
-      return '*';
+        columns[0].expr.type === EXT_EXPR_TYPE.COLUMN_REF &&
+        columns[0].expr.column === STAR_VALUE) {
+      return STAR_VALUE;
     }
     // Extract column names — handle both PG and SQLite AST shapes
     const names = [];
     for (const col of columns) {
       const expr = col.expr;
-      if (expr && expr.type === 'column_ref') {
+      if (expr && expr.type === EXT_EXPR_TYPE.COLUMN_REF) {
         const colRef = expr.column;
         if (typeof colRef === 'string') {
           // SQLite mode: column is a plain string
@@ -352,7 +406,9 @@ class SQLParser {
     if (ast.keyword === 'index') {
       return this.convertCreateIndex(ast);
     }
-    throw new Error('Unsupported CREATE type: ' + ast.keyword);
+    throw new Error(
+      PARSER_ERROR_MSG.UNSUPPORTED_CREATE_TYPE_PREFIX + ast.keyword,
+    );
   }
 
   convertCreateTable(ast) {
@@ -430,13 +486,16 @@ class SQLParser {
         ifExists: !!ast.if_exists,
       };
     }
-    throw new Error('Unsupported DROP type: ' + ast.keyword);
+    throw new Error(
+      PARSER_ERROR_MSG.UNSUPPORTED_DROP_TYPE_PREFIX + ast.keyword,
+    );
   }
 
   convertColumns(columns) {
     return columns.map((col) => {
-      if (col.expr.type === 'star' || col.expr.column === '*') {
-        return {type: EXPR_TYPE.STAR, value: '*'};
+      if (col.expr.type === EXT_EXPR_TYPE.STAR ||
+          col.expr.column === STAR_VALUE) {
+        return {type: EXPR_TYPE.STAR, value: STAR_VALUE};
       }
       return {
         type: EXPR_TYPE.COLUMN,
@@ -560,38 +619,40 @@ class SQLParser {
     }
 
     switch (expr.type) {
-    case 'binary_expr':
+    case EXT_EXPR_TYPE.BINARY_EXPR:
       return this.convertBinaryExpr(expr);
-    case 'unary_expr':
+    case EXT_EXPR_TYPE.UNARY_EXPR:
       return this.convertUnaryExpr(expr);
-    case 'column_ref':
+    case EXT_EXPR_TYPE.COLUMN_REF:
       return this.convertColumnRef(expr);
-    case 'number':
+    case EXT_EXPR_TYPE.NUMBER:
       return {type: EXPR_TYPE.LITERAL, value: expr.value};
-    case 'single_quote_string':
-    case 'double_quote_string':
-    case 'string':
+    case EXT_EXPR_TYPE.SINGLE_QUOTE_STRING:
+    case EXT_EXPR_TYPE.DOUBLE_QUOTE_STRING:
+    case EXT_EXPR_TYPE.STRING:
       return {type: EXPR_TYPE.LITERAL, value: expr.value};
-    case 'bool':
+    case EXT_EXPR_TYPE.BOOL:
       return {type: EXPR_TYPE.LITERAL, value: expr.value};
-    case 'null':
+    case EXT_EXPR_TYPE.NULL:
       return {type: EXPR_TYPE.LITERAL, value: null};
-    case 'origin':
-      if (expr.value === '?') {
+    case EXT_EXPR_TYPE.ORIGIN:
+      if (expr.value === ORIGIN_PARAM) {
         return this.createParameterNode();
       }
       return {type: EXPR_TYPE.LITERAL, value: expr.value};
-    case 'aggr_func':
+    case EXT_EXPR_TYPE.AGGR_FUNC:
       return this.convertAggregate(expr);
-    case 'star':
-      return {type: EXPR_TYPE.STAR, value: '*'};
-    case 'expr_list':
+    case EXT_EXPR_TYPE.STAR:
+      return {type: EXPR_TYPE.STAR, value: STAR_VALUE};
+    case EXT_EXPR_TYPE.EXPR_LIST:
       return expr.value.map((v) => this.convertExpression(v));
     default:
       if (expr.value !== undefined) {
         return {type: EXPR_TYPE.LITERAL, value: expr.value};
       }
-      throw new Error('Unknown expression type: ' + expr.type);
+      throw new Error(
+        PARSER_ERROR_MSG.UNKNOWN_EXPRESSION_TYPE_PREFIX + expr.type,
+      );
     }
   }
 
@@ -630,7 +691,7 @@ class SQLParser {
     case PG_NODE_TYPE.EXTRACT:
       return this.convertPgExtract(expr);
 
-    case 'bool':
+    case EXT_EXPR_TYPE.BOOL:
       return translateBooleanLiteral(expr);
 
     default:
@@ -704,7 +765,7 @@ class SQLParser {
     const source = expr.args?.source;
     const convertExprFn = this.convertExpression.bind(this);
     return translateFunctionCall(
-      'extract', [{value: field}, source], convertExprFn,
+      PG_NODE_TYPE.EXTRACT, [{value: field}, source], convertExprFn,
     );
   }
 
@@ -806,12 +867,12 @@ class SQLParser {
 
   convertAggregate(expr) {
     let argument;
-    if (expr.args?.expr?.type === 'star') {
-      argument = {type: EXPR_TYPE.STAR, value: '*'};
+    if (expr.args?.expr?.type === EXT_EXPR_TYPE.STAR) {
+      argument = {type: EXPR_TYPE.STAR, value: STAR_VALUE};
     } else if (expr.args?.expr) {
       argument = this.convertExpression(expr.args.expr);
     } else {
-      argument = {type: EXPR_TYPE.STAR, value: '*'};
+      argument = {type: EXPR_TYPE.STAR, value: STAR_VALUE};
     }
     return {
       type: EXPR_TYPE.AGGREGATE,
@@ -834,24 +895,24 @@ class SQLParser {
         );
         return this.createParameterNode();
       }
-      if (val.type === 'bool') {
+      if (val.type === EXT_EXPR_TYPE.BOOL) {
         return translateBooleanLiteral(val);
       }
     }
 
     switch (val.type) {
-    case 'number':
+    case EXT_EXPR_TYPE.NUMBER:
       return {type: EXPR_TYPE.LITERAL, value: val.value};
-    case 'single_quote_string':
-    case 'double_quote_string':
-    case 'string':
+    case EXT_EXPR_TYPE.SINGLE_QUOTE_STRING:
+    case EXT_EXPR_TYPE.DOUBLE_QUOTE_STRING:
+    case EXT_EXPR_TYPE.STRING:
       return {type: EXPR_TYPE.LITERAL, value: val.value};
-    case 'bool':
+    case EXT_EXPR_TYPE.BOOL:
       return {type: EXPR_TYPE.LITERAL, value: val.value};
-    case 'null':
+    case EXT_EXPR_TYPE.NULL:
       return {type: EXPR_TYPE.LITERAL, value: null};
-    case 'origin':
-      if (val.value === '?') {
+    case EXT_EXPR_TYPE.ORIGIN:
+      if (val.value === ORIGIN_PARAM) {
         return this.createParameterNode();
       }
       return {type: EXPR_TYPE.LITERAL, value: val.value};

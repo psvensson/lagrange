@@ -10,7 +10,7 @@
  */
 
 import {NUM, TYPEOF} from '../constants/index.js';
-import {LOOKUP_ACCESS_PATH} from './distributed-context-constants.js';
+import {LOOKUP_ACCESS_PATH} from './distributed/distributed-context-constants.js';
 import {
   STRATEGY,
   STRATEGY_REASON,

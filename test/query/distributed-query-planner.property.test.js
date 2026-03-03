@@ -1,6 +1,6 @@
 import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
-import {DistributedQueryPlanner} from '../../src/query/distributed-query-planner.js';
+import {DistributedQueryPlanner} from '../../src/query/distributed/distributed-query-planner.js';
 import {PartitionResolver} from '../../src/query/partition-resolver.js';
 import {SQLParser} from '../../src/query/sql-parser.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';

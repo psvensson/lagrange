@@ -27,10 +27,10 @@ import {LineageTracker} from
 import {DedupeRegistry} from
   '../../src/query/dedupe-registry.js';
 import {ExchangeManager} from
-  '../../src/query/exchange-manager.js';
+  '../../src/query/distributed/exchange-manager.js';
 import {
   CallbackStageExecutor,
-} from '../../src/query/callback-stage-executor.js';
+} from '../../src/query/callback/callback-stage-executor.js';
 import {
   executeReduceByKey,
   buildGroupedBatches,
@@ -46,7 +46,7 @@ import {
 import {
   STAGE_STATE,
   STAGE_RESULT_FIELD as SF,
-} from '../../src/query/callback-stage-constants.js';
+} from '../../src/query/callback/callback-stage-constants.js';
 
 /**
  * Build a minimal ExecutionContext for testing.

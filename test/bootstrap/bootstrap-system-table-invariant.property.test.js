@@ -15,7 +15,7 @@ import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {
-  SystemTableName,
+  SYSTEM_TABLE_NAME,
   SYSTEM_TABLE_SCHEMAS,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -29,12 +29,12 @@ import {CACHE_SYSTEM_TABLES} from '../../src/cache/cache-constants.js';
  * These are the core tables specified in the design document.
  */
 const REQUIRED_BOOTSTRAP_TABLES = Object.freeze([
-  SystemTableName.NODES,
-  SystemTableName.SERVICES,
-  SystemTableName.PARTITIONS,
-  SystemTableName.TABLES,
-  SystemTableName.MESSAGE_GROUPS,
-  SystemTableName.REPLICA_OPERATIONS,
+  SYSTEM_TABLE_NAME.NODES,
+  SYSTEM_TABLE_NAME.SERVICES,
+  SYSTEM_TABLE_NAME.PARTITIONS,
+  SYSTEM_TABLE_NAME.TABLES,
+  SYSTEM_TABLE_NAME.MESSAGE_GROUPS,
+  SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
 ]);
 
 /**

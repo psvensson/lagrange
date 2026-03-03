@@ -21,6 +21,15 @@ import {ReplicaStatus} from '../rebalancer/replica-status.js';
 import {assertCritical} from '../utils/assert.js';
 import {PendingRequestTracker} from './pending-request-tracker.js';
 import {CDCEventBuffer} from './cdc-event-buffer.js';
+import {
+  extractInsertDataFromSQL as extractInsertDataFromSQLImpl,
+  extractUpdateDataFromSQL as extractUpdateDataFromSQLImpl,
+  extractDeleteDataFromSQL as extractDeleteDataFromSQLImpl,
+  extractDataFromParameterizedSQL as extractDataFromParameterizedSQLImpl,
+  parseValuesFromSQL as parseValuesFromSQLImpl,
+  parseValue as parseValueImpl,
+} from './partition-sql-parser.js';
+import {PartitionCDCDelivery} from './partition-cdc-delivery.js';
 import {CDCPipelineMetrics} from '../cdc/cdc-pipeline-metrics.js';
 import {
   CDC_PIPELINE_METRIC,
@@ -39,14 +48,13 @@ import {
   computeReplicaElectionTimeouts,
 } from '../raft/raft-timing-utils.js';
 import {
-  SystemTableName,
+  SYSTEM_TABLE_NAME,
 } from '../bootstrap/system-table-schemas-constants.js';
 import {AddressManager} from '../address/address-manager.js';
 import {isSystemTableWriteReady} from '../cache/leader-readiness-gate.js';
 import {
   getSystemCachePrimaryKeyFieldOrFallback,
 } from '../cache/system-cache-key-descriptor.js';
-import {getTableCdcPolicy} from '../cache/cdc-table-policy.js';
 import {
   COLUMN,
   CDC_OPERATION,
@@ -58,11 +66,9 @@ import {
   SERVICE_TYPE,
   STRING,
   TABLES,
-  TIME_MS,
 } from '../constants/index.js';
 import {PARTITION_RAFT_ROLE, PARTITION_STATE, PARTITION_SUBSYSTEM} from './partition-constants.js';
 import {
-  PARTITION_SERVICE_CDC,
   PARTITION_SERVICE_ADDRESS,
   PARTITION_SERVICE_COLUMN,
   PARTITION_SERVICE_COLUMN_SQL,
@@ -80,11 +86,14 @@ import {
   PARTITION_SERVICE_ROLE,
   PARTITION_SERVICE_SQL,
   PARTITION_SERVICE_SQL_FRAGMENT,
-  PARTITION_SERVICE_STATE_KEY,
   PARTITION_SERVICE_STATUS,
   PARTITION_SERVICE_TYPE,
   PARTITION_SERVICE_VALUE,
 } from './partition-service-constants.js';
+import {
+  PartitionRaftStorage,
+  PartitionRaftLogEntry,
+} from './partition-raft-storage.js';
 
 /**
  * Partition state enumeration.
@@ -100,16 +109,7 @@ const RaftRole = PARTITION_RAFT_ROLE;
  * CDC operation types.
  */
 const CDCOperation = CDC_OPERATION;
-const PartitionServiceCDC = PARTITION_SERVICE_CDC;
 
-const CDC_ROW_FETCH_LOG_SUPPRESSED_TABLES = new Set([
-  SystemTableName.LOGS,
-  SystemTableName.NODES,
-  SystemTableName.NODE_ENDPOINTS,
-]);
-const CDC_NO_SUBSCRIBER_BUFFER_SUPPRESSED_TABLES = new Set([
-  SystemTableName.LOGS,
-]);
 const ACTIVE_VOTER_ROLES = new Set([
   PARTITION_RAFT_ROLE.LEADER,
   PARTITION_RAFT_ROLE.FOLLOWER,
@@ -122,229 +122,6 @@ const WRITE_PHASE_FIELD_RAFT_COMMAND_DISPATCH_MS = 'raftCommandDispatchMs';
 const WRITE_PHASE_FIELD_FORWARD_DELIVER_MS = 'forwardDeliverMs';
 const WRITE_PHASE_FIELD_APPLY_WRITE_MS = 'applyWriteMs';
 const WRITE_PHASE_FIELD_TOTAL_MS = 'totalMs';
-
-function shouldEmitCdcRowFetchInfoLog(tableName) {
-  return !CDC_ROW_FETCH_LOG_SUPPRESSED_TABLES.has(tableName);
-}
-
-function parseExternalCdcAllowedOverride(rawPolicy) {
-  if (!rawPolicy) {
-    return null;
-  }
-
-  let policy = rawPolicy;
-  if (typeof policy === 'string') {
-    try {
-      policy = JSON.parse(policy);
-    } catch {
-      return null;
-    }
-  }
-
-  if (!policy || typeof policy !== 'object') {
-    return null;
-  }
-  if (typeof policy.externalCdcAllowed === 'boolean') {
-    return policy.externalCdcAllowed;
-  }
-  if (typeof policy.changeDataCapture?.externalCdcAllowed === 'boolean') {
-    return policy.changeDataCapture.externalCdcAllowed;
-  }
-  return null;
-}
-
-function isCDCSubscriber(subscriber) {
-  if (typeof subscriber === PARTITION_SERVICE_TYPE.FUNCTION) {
-    return true;
-  }
-  return Boolean(
-    subscriber &&
-    typeof subscriber.handleCDCEvent === PARTITION_SERVICE_TYPE.FUNCTION,
-  );
-}
-
-/**
- * Raft log entry for partition operations.
- */
-class PartitionRaftLogEntry {
-  /**
-   * Create a new Raft log entry.
-   * @param {number} term - Raft term.
-   * @param {number} index - Log index.
-   * @param {Object} data - Entry data.
-   */
-  constructor(term, index, data) {
-    this.term = term;
-    this.index = index;
-    this.data = data;
-    this.timestamp = Date.now();
-  }
-}
-
-
-/**
- * SQLite-backed Raft storage for partitions.
- */
-class SQLiteRaftStorage {
-  /**
-   * Create a new SQLite Raft storage.
-   * @param {Database} db - SQLite database instance.
-   * @param {string} partitionId - Partition ID.
-   */
-  constructor(db, partitionId) {
-    this.db = db;
-    this.partitionId = partitionId;
-    this.currentTerm = NUM.ZERO;
-    this.votedFor = null;
-    this.commitIndex = NUM.ZERO;
-    this.lastApplied = NUM.ZERO;
-
-    // In-memory log for Raft entries
-    this.log = [];
-
-    this.initializeRaftTables();
-  }
-
-  /**
-   * Initialize Raft metadata tables.
-   * @private
-   */
-  initializeRaftTables() {
-    // Create Raft state table
-    this.db.exec(PARTITION_SERVICE_SQL.CREATE_RAFT_STATE_TABLE);
-
-    // Create Raft log table
-    this.db.exec(PARTITION_SERVICE_SQL.CREATE_RAFT_LOG_TABLE);
-
-    // Load persisted state
-    this.loadPersistedState();
-  }
-
-  /**
-   * Load persisted Raft state from SQLite.
-   * @private
-   */
-  loadPersistedState() {
-    const termRow = this.db.prepare(
-      PARTITION_SERVICE_SQL.SELECT_RAFT_STATE_VALUE,
-    ).get(PARTITION_SERVICE_STATE_KEY.CURRENT_TERM);
-    if (termRow) {
-      this.currentTerm = parseInt(termRow.value, NUM.TEN);
-    }
-
-    const votedRow = this.db.prepare(
-      PARTITION_SERVICE_SQL.SELECT_RAFT_STATE_VALUE,
-    ).get(PARTITION_SERVICE_STATE_KEY.VOTED_FOR);
-    if (votedRow) {
-      this.votedFor = votedRow.value;
-    }
-
-    // Load log entries
-    const entries = this.db.prepare(
-      PARTITION_SERVICE_SQL.SELECT_RAFT_LOGS,
-    ).all();
-
-    this.log = entries.map((row) => new PartitionRaftLogEntry(
-      row.term,
-      row.log_index,
-      JSON.parse(row.command),
-    ));
-
-    if (this.log.length > NUM.ZERO) {
-      this.commitIndex = this.log[this.log.length - NUM.ONE].index;
-      this.lastApplied = this.commitIndex;
-    }
-  }
-
-  /**
-   * Persist current term to SQLite.
-   */
-  persistTerm() {
-    this.db.prepare(
-      PARTITION_SERVICE_SQL.UPSERT_RAFT_STATE,
-    ).run(PARTITION_SERVICE_STATE_KEY.CURRENT_TERM, String(this.currentTerm));
-  }
-
-  /**
-   * Persist voted for to SQLite.
-   */
-  persistVotedFor() {
-    this.db.prepare(
-      PARTITION_SERVICE_SQL.UPSERT_RAFT_STATE,
-    ).run(PARTITION_SERVICE_STATE_KEY.VOTED_FOR, this.votedFor || STRING.EMPTY);
-  }
-
-  /**
-   * Append an entry to the log.
-   * @param {Object} data - Entry data.
-   * @return {PartitionRaftLogEntry} The appended entry.
-   */
-  appendEntry(data) {
-    const index = this.log.length + NUM.ONE;
-    const entry = new PartitionRaftLogEntry(this.currentTerm, index, data);
-    this.log.push(entry);
-
-    // Persist to SQLite - use INSERT OR REPLACE to handle edge cases gracefully
-    this.db.prepare(
-      PARTITION_SERVICE_SQL.UPSERT_RAFT_LOG,
-    ).run(entry.index, entry.term, JSON.stringify(entry.data), entry.timestamp);
-
-    return entry;
-  }
-
-  /**
-   * Get entries from a starting index.
-   * @param {number} startIndex - Starting index (1-based).
-   * @return {Array<PartitionRaftLogEntry>} Log entries.
-   */
-  getEntriesFrom(startIndex) {
-    if (startIndex < NUM.ONE) {
-      return [...this.log];
-    }
-    return this.log.slice(startIndex - NUM.ONE);
-  }
-
-  /**
-   * Get the last log entry.
-   * @return {PartitionRaftLogEntry|null} Last entry or null.
-   */
-  getLastEntry() {
-    return this.log.length > NUM.ZERO ? this.log[this.log.length - NUM.ONE] : null;
-  }
-
-  /**
-   * Get entry at a specific index.
-   * @param {number} index - Log index (1-based).
-   * @return {PartitionRaftLogEntry|null} Entry or null.
-   */
-  getEntry(index) {
-    if (index < NUM.ONE || index > this.log.length) {
-      return null;
-    }
-    return this.log[index - NUM.ONE];
-  }
-
-  /**
-   * Truncate log from a specific index.
-   * @param {number} fromIndex - Index to truncate from (1-based).
-   */
-  truncateFrom(fromIndex) {
-    if (fromIndex >= NUM.ONE && fromIndex <= this.log.length) {
-      this.log = this.log.slice(NUM.ZERO, fromIndex - NUM.ONE);
-
-      // Truncate in SQLite
-      this.db.prepare(PARTITION_SERVICE_SQL.DELETE_RAFT_LOG_FROM).run(fromIndex);
-    }
-  }
-
-  /**
-   * Get the log length.
-   * @return {number} Number of entries.
-   */
-  getLogLength() {
-    return this.log.length;
-  }
-}
 
 
 /**
@@ -456,10 +233,14 @@ class PartitionService extends EventEmitter {
       new CDCPipelineMetrics();
     // Optional CDC confirmation tracker for awaitable CDC delivery
     this.cdcConfirmationTracker = options.cdcConfirmationTracker || null;
+
+    // CDC delivery helper (subscriber management, buffering, replay)
+    this.cdcDelivery = new PartitionCDCDelivery(this);
     // Recently-applied write keys for idempotent Raft replay handling.
     this.recentlyAppliedEntryKeys = new Set();
     this.recentlyAppliedEntryOrder = [];
-    this.maxTrackedAppliedEntries = 5000;
+    this.maxTrackedAppliedEntries =
+      PARTITION_SERVICE_DEFAULT.MAX_TRACKED_APPLIED_ENTRIES;
 
     // HLC clock for ordering
     this.hlcClock = new HLCClockService(this.replicaId);
@@ -624,7 +405,7 @@ class PartitionService extends EventEmitter {
 
   createRoleMutationHelper() {
     return new AuthoritativeRowMutationHelper({
-      tableName: SystemTableName.SERVICES,
+      tableName: SYSTEM_TABLE_NAME.SERVICES,
       buildWhereClause: (_role, context = {}) => {
         const whereClause = {service_id: this.replicaId};
         const cachedRow = context.cachedRow;
@@ -663,7 +444,7 @@ class PartitionService extends EventEmitter {
 
   createLeaderNodeMutationHelper() {
     return new AuthoritativeRowMutationHelper({
-      tableName: SystemTableName.PARTITIONS,
+      tableName: SYSTEM_TABLE_NAME.PARTITIONS,
       buildWhereClause: (_leaderNodeId, context = {}) => {
         const whereClause = {[COLUMN.PARTITION_ID]: this.partitionId};
         const cachedRow = context.cachedRow;
@@ -925,7 +706,7 @@ class PartitionService extends EventEmitter {
       return parsed.serviceType === ENTITY_TYPE.PARTITION ?
         parsed.serviceId :
         null;
-    } catch {
+    } catch (_parseErr) {
       return null;
     }
   }
@@ -1006,7 +787,7 @@ class PartitionService extends EventEmitter {
     this.db.pragma(PARTITION_SERVICE_DB.PRAGMA_SYNCHRONOUS);
 
     // Initialize Raft storage
-    this.storage = new SQLiteRaftStorage(this.db, this.partitionId);
+    this.storage = new PartitionRaftStorage(this.db, this.partitionId);
 
     // Create table if schema provided
     if (this.schema) {
@@ -1494,7 +1275,7 @@ class PartitionService extends EventEmitter {
    * @private
    */
   ensureNodesTableColumns() {
-    if (this.tableName !== SystemTableName.NODES) {
+    if (this.tableName !== SYSTEM_TABLE_NAME.NODES) {
       return;
     }
 
@@ -1571,7 +1352,7 @@ class PartitionService extends EventEmitter {
    * @private
    */
   ensureMessageGroupsTableColumns() {
-    if (this.tableName !== SystemTableName.MESSAGE_GROUPS) {
+    if (this.tableName !== SYSTEM_TABLE_NAME.MESSAGE_GROUPS) {
       return;
     }
 
@@ -1598,7 +1379,7 @@ class PartitionService extends EventEmitter {
    * @private
    */
   ensurePartitionsTableColumns() {
-    if (this.tableName !== SystemTableName.PARTITIONS) {
+    if (this.tableName !== SYSTEM_TABLE_NAME.PARTITIONS) {
       return;
     }
 
@@ -2075,7 +1856,7 @@ class PartitionService extends EventEmitter {
       // Rollback on failure
       try {
         this.db.exec(PARTITION_SERVICE_SQL.ROLLBACK);
-      } catch {
+      } catch (_rollbackErr) {
         // Ignore rollback errors
       }
 
@@ -3086,163 +2867,46 @@ class PartitionService extends EventEmitter {
 
   /**
    * Extract data from INSERT SQL by querying the inserted row.
+   * Delegates to partition-sql-parser.js.
    * @param {string} sql - INSERT SQL statement.
    * @param {string} tableName - Table name.
    * @return {Object} Extracted data or empty object.
    * @private
    */
   extractInsertDataFromSQL(sql, tableName) {
-    // Parse INSERT INTO table (col1, col2) VALUES ('val1', 'val2')
-    // or INSERT OR REPLACE/IGNORE INTO table (col1, col2) VALUES ('val1', 'val2')
-    const columnsMatch = sql.match(
-      /INSERT\s+(?:OR\s+(?:REPLACE|IGNORE)\s+)?INTO\s+\w+\s*\(([^)]+)\)/i,
+    return extractInsertDataFromSQLImpl(
+      sql, tableName, this.db, this.logger,
     );
-    const valuesMatch = sql.match(/VALUES\s*\(([^)]+)\)/i);
-
-    if (!columnsMatch || !valuesMatch) {
-      this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_PARSE_INSERT_FAILED, {
-        sql: sql.substring(
-          NUM.ZERO,
-          PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT,
-        ),
-      });
-      return {};
-    }
-
-    const columns = columnsMatch[NUM.ONE].split(
-      PARTITION_SERVICE_SQL_FRAGMENT.COMMA,
-    ).map((c) => c.trim());
-    const valuesStr = valuesMatch[NUM.ONE];
-
-    // Parse values - handle quoted strings and numbers
-    const values = this.parseValuesFromSQL(valuesStr);
-
-    if (columns.length !== values.length) {
-      this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_INSERT_MISMATCH, {
-        columns: columns.length,
-        values: values.length,
-      });
-      return {};
-    }
-
-    // Build data object
-    const data = {};
-    for (let i = NUM.ZERO; i < columns.length; i++) {
-      data[columns[i]] = values[i];
-    }
-
-    // Try to fetch the full row from DB to get any default values
-    // Find the primary key column (usually first column or 'id')
-    const pkColumn = columns[NUM.ZERO];
-    const pkValue = values[NUM.ZERO];
-
-    if (pkValue !== null && pkValue !== undefined) {
-      try {
-        const stmt = this.db.prepare(`SELECT * FROM ${tableName} WHERE ${pkColumn} = ?`);
-        const row = stmt.get(pkValue);
-        if (row) {
-          if (shouldEmitCdcRowFetchInfoLog(tableName)) {
-            this.logger.info(PARTITION_SERVICE_LOG_MSG.FETCHED_INSERT_ROW, {
-              tableName,
-              rowKeys: Object.keys(row),
-            });
-          }
-          return row;
-        }
-      } catch (err) {
-        this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_FETCH_INSERT_FAILED, {
-          tableName,
-          error: err.message,
-        });
-        throw err;
-      }
-    }
-
-    return data;
   }
 
   /**
    * Extract data from UPDATE SQL by querying the updated row.
+   * Delegates to partition-sql-parser.js.
    * @param {string} sql - UPDATE SQL statement.
    * @param {string} tableName - Table name.
    * @return {Object} Extracted data or empty object.
    * @private
    */
   extractUpdateDataFromSQL(sql, tableName) {
-    // Match WHERE clause with optional parentheses: WHERE (col = 'val') or WHERE col = 'val'
-    const whereMatch = sql.match(/WHERE\s*\(?(\w+)\s*=\s*'([^']+)'/i);
-    if (whereMatch) {
-      const keyColumn = whereMatch[NUM.ONE];
-      const keyValue = whereMatch[NUM.TWO];
-      if (shouldEmitCdcRowFetchInfoLog(tableName)) {
-        this.logger.info(PARTITION_SERVICE_LOG_MSG.FETCHING_UPDATE_ROW, {
-          tableName,
-          keyColumn,
-          keyValue,
-        });
-      }
-      // Query the updated row to get full data for CDC
-      try {
-        const stmt = this.db.prepare(`SELECT * FROM ${tableName} WHERE ${keyColumn} = ?`);
-        const row = stmt.get(keyValue);
-        if (row) {
-          if (shouldEmitCdcRowFetchInfoLog(tableName)) {
-            this.logger.info(PARTITION_SERVICE_LOG_MSG.FETCHED_UPDATE_ROW, {
-              tableName,
-              rowKeys: Object.keys(row),
-            });
-          }
-          return row;
-        } else {
-          this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_NO_ROW_UPDATE, {
-            tableName,
-            keyColumn,
-            keyValue,
-          });
-        }
-      } catch (err) {
-        this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_FETCH_UPDATE_FAILED, {
-          tableName,
-          error: err.message,
-        });
-        throw err;
-      }
-    } else {
-      this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_EXTRACT_UPDATE_WHERE_FAILED, {
-        sql: sql.substring(
-          NUM.ZERO,
-          PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT,
-        ),
-      });
-    }
-    return {};
+    return extractUpdateDataFromSQLImpl(
+      sql, tableName, this.db, this.logger,
+    );
   }
 
   /**
    * Extract data from DELETE SQL.
+   * Delegates to partition-sql-parser.js.
    * @param {string} sql - DELETE SQL statement.
    * @return {Object} Extracted data or empty object.
    * @private
    */
   extractDeleteDataFromSQL(sql) {
-    // Match WHERE clause: WHERE col = 'val'
-    const whereMatch = sql.match(/WHERE\s*\(?(\w+)\s*=\s*'([^']+)'/i);
-    if (whereMatch) {
-      const keyColumn = whereMatch[NUM.ONE];
-      const keyValue = whereMatch[NUM.TWO];
-      return {[keyColumn]: keyValue};
-    }
-    this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_EXTRACT_DELETE_WHERE_FAILED, {
-      sql: sql.substring(
-        NUM.ZERO,
-        PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT,
-      ),
-    });
-    return {};
+    return extractDeleteDataFromSQLImpl(sql, this.logger);
   }
 
   /**
-   * Extract data from parameterized SQL (SQL with ? placeholders and params array).
+   * Extract data from parameterized SQL.
+   * Delegates to partition-sql-parser.js.
    * @param {string} sql - SQL statement with ? placeholders.
    * @param {Array} params - Parameter values.
    * @param {string} tableName - Table name.
@@ -3251,231 +2915,31 @@ class PartitionService extends EventEmitter {
    * @private
    */
   extractDataFromParameterizedSQL(sql, params, tableName, operationType) {
-    if (!params || params.length === NUM.ZERO) {
-      return {};
-    }
-
-    if (operationType === PARTITION_SERVICE_OPERATION.INSERT ||
-      operationType === PARTITION_SERVICE_OPERATION.UPSERT) {
-      // Parse INSERT INTO table (col1, col2, ...) VALUES (?, ?, ...)
-      const columnsMatch = sql.match(
-        /INSERT\s+(?:OR\s+(?:REPLACE|IGNORE)\s+)?INTO\s+\w+\s*\(([^)]+)\)/i,
-      );
-      if (!columnsMatch) {
-        this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_PARSE_PARAM_INSERT_COLUMNS_FAILED, {
-          sql: sql.substring(
-            NUM.ZERO,
-            PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT,
-          ),
-        });
-        return {};
-      }
-
-      const columns = columnsMatch[NUM.ONE].split(
-        PARTITION_SERVICE_SQL_FRAGMENT.COMMA,
-      ).map((c) => c.trim());
-      if (columns.length !== params.length) {
-        this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_PARAM_INSERT_MISMATCH, {
-          columns: columns.length,
-          params: params.length,
-        });
-        return {};
-      }
-
-      // Build data object from columns and params
-      const data = {};
-      for (let i = NUM.ZERO; i < columns.length; i++) {
-        data[columns[i]] = params[i];
-      }
-
-      this.logger.debug(PARTITION_SERVICE_LOG_MSG.EXTRACTED_PARAM_INSERT, {
-        tableName,
-        dataKeys: Object.keys(data),
-      });
-
-      return data;
-    }
-
-    if (operationType === PARTITION_SERVICE_OPERATION.UPDATE) {
-      // Parse UPDATE table SET col1 = ?, col2 = ? WHERE pk = ?
-      const setMatch = sql.match(/SET\s+(.+?)\s+WHERE/i);
-      const whereMatch = sql.match(/WHERE\s+(.+)$/i);
-
-      if (!setMatch) {
-        this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_PARSE_PARAM_UPDATE_SET_FAILED, {
-          sql: sql.substring(
-            NUM.ZERO,
-            PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT,
-          ),
-        });
-        return {};
-      }
-
-      // Extract column names from SET clause
-      const setColumns = setMatch[NUM.ONE].split(
-        PARTITION_SERVICE_SQL_FRAGMENT.COMMA,
-      ).map((part) => {
-        const match = part.trim().match(/^(\w+)\s*=/);
-        return match ? match[NUM.ONE] : null;
-      }).filter(Boolean);
-
-      // Extract column names from WHERE clause
-      // Handle parentheses around the WHERE clause: WHERE (col = ?)
-      const whereColumns = [];
-      if (whereMatch) {
-        // Strip outer parentheses if present
-        let whereContent = whereMatch[NUM.ONE].trim();
-        if (whereContent.startsWith(PARTITION_SERVICE_SQL_FRAGMENT.OPEN_PAREN) &&
-          whereContent.endsWith(PARTITION_SERVICE_SQL_FRAGMENT.CLOSE_PAREN)) {
-          whereContent = whereContent.slice(NUM.ONE, -NUM.ONE).trim();
-        }
-        const whereParts = whereContent.split(/\s+AND\s+/i);
-        for (const part of whereParts) {
-          // Strip any remaining parentheses from individual parts
-          const cleanPart = part.trim().replace(/^\(+|\)+$/g, STRING.EMPTY);
-          const match = cleanPart.match(/^(\w+)\s*=/);
-          if (match) whereColumns.push(match[NUM.ONE]);
-        }
-      }
-
-      const allColumns = [...setColumns, ...whereColumns];
-      if (allColumns.length !== params.length) {
-        this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_PARAM_UPDATE_MISMATCH, {
-          columns: allColumns.length,
-          params: params.length,
-        });
-        return {};
-      }
-
-      // Build data object
-      const data = {};
-      for (let i = NUM.ZERO; i < allColumns.length; i++) {
-        data[allColumns[i]] = params[i];
-      }
-
-      this.logger.debug(PARTITION_SERVICE_LOG_MSG.EXTRACTED_PARAM_UPDATE, {
-        tableName,
-        dataKeys: Object.keys(data),
-      });
-
-      return data;
-    }
-
-    if (operationType === PARTITION_SERVICE_OPERATION.DELETE) {
-      // Parse DELETE FROM table WHERE pk = ? or WHERE (pk = ?)
-      const whereMatch = sql.match(/WHERE\s+\(?(.+?)\)?$/i);
-      if (!whereMatch) {
-        this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_PARSE_PARAM_DELETE_WHERE_FAILED, {
-          sql: sql.substring(
-            NUM.ZERO,
-            PARTITION_SERVICE_VALUE.CDC_PARSE_LIMIT,
-          ),
-        });
-        return {};
-      }
-
-      const whereColumns = [];
-      // Handle both "col = ?" and "(col = ?)" formats
-      const whereContent = whereMatch[NUM.ONE].replace(/^\(|\)$/g, STRING.EMPTY).trim();
-      const whereParts = whereContent.split(/\s+AND\s+/i);
-      for (const part of whereParts) {
-        const match = part.trim().match(/^(\w+)\s*=/);
-        if (match) whereColumns.push(match[NUM.ONE]);
-      }
-
-      if (whereColumns.length !== params.length) {
-        this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_PARAM_DELETE_MISMATCH, {
-          columns: whereColumns.length,
-          params: params.length,
-          whereContent,
-        });
-        return {};
-      }
-
-      const data = {};
-      for (let i = NUM.ZERO; i < whereColumns.length; i++) {
-        data[whereColumns[i]] = params[i];
-      }
-
-      this.logger.debug(PARTITION_SERVICE_LOG_MSG.EXTRACTED_PARAM_DELETE, {
-        tableName,
-        dataKeys: Object.keys(data),
-      });
-
-      return data;
-    }
-
-    return {};
+    return extractDataFromParameterizedSQLImpl(
+      sql, params, tableName, operationType, this.logger,
+    );
   }
 
   /**
    * Parse values from SQL VALUES clause.
-   * @param {string} valuesStr - Values string like "'val1', 123, NULL".
+   * Delegates to partition-sql-parser.js.
+   * @param {string} valuesStr - Values string.
    * @return {Array} Parsed values.
    * @private
    */
   parseValuesFromSQL(valuesStr) {
-    const values = [];
-    let current = STRING.EMPTY;
-    let inQuote = false;
-    let quoteChar = null;
-
-    for (let i = NUM.ZERO; i < valuesStr.length; i++) {
-      const char = valuesStr[i];
-
-      if (!inQuote && (char === PARTITION_SERVICE_SQL_FRAGMENT.SINGLE_QUOTE ||
-        char === PARTITION_SERVICE_SQL_FRAGMENT.DOUBLE_QUOTE)) {
-        inQuote = true;
-        quoteChar = char;
-      } else if (inQuote && char === quoteChar) {
-        // Check for escaped quote
-        if (i + NUM.ONE < valuesStr.length &&
-          valuesStr[i + NUM.ONE] === quoteChar) {
-          current += char;
-          i += NUM.ONE; // Skip next quote
-        } else {
-          inQuote = false;
-          quoteChar = null;
-        }
-      } else if (!inQuote && char === PARTITION_SERVICE_SQL_FRAGMENT.COMMA) {
-        values.push(this.parseValue(current.trim()));
-        current = STRING.EMPTY;
-      } else {
-        current += char;
-      }
-    }
-
-    // Don't forget the last value
-    if (current.trim()) {
-      values.push(this.parseValue(current.trim()));
-    }
-
-    return values;
+    return parseValuesFromSQLImpl(valuesStr);
   }
 
   /**
    * Parse a single value from SQL.
+   * Delegates to partition-sql-parser.js.
    * @param {string} val - Value string.
    * @return {*} Parsed value.
    * @private
    */
   parseValue(val) {
-    if (val.toUpperCase() === PARTITION_SERVICE_SQL_FRAGMENT.NULL_VALUE) {
-      return null;
-    }
-    // Remove quotes
-    if ((val.startsWith(PARTITION_SERVICE_SQL_FRAGMENT.SINGLE_QUOTE) &&
-      val.endsWith(PARTITION_SERVICE_SQL_FRAGMENT.SINGLE_QUOTE)) ||
-        (val.startsWith(PARTITION_SERVICE_SQL_FRAGMENT.DOUBLE_QUOTE) &&
-        val.endsWith(PARTITION_SERVICE_SQL_FRAGMENT.DOUBLE_QUOTE))) {
-      return val.slice(NUM.ONE, -NUM.ONE);
-    }
-    // Try to parse as number
-    const num = Number(val);
-    if (!isNaN(num)) {
-      return num;
-    }
-    return val;
+    return parseValueImpl(val);
   }
 
   /**
@@ -3486,460 +2950,150 @@ class PartitionService extends EventEmitter {
    * @return {boolean} True when external CDC buffering should remain enabled.
    * @private
    */
+  /**
+   * Resolve whether late-subscriber external CDC is enabled for a table.
+   * Delegates to partition-cdc-delivery.js.
+   * @param {string} tableName - Table name.
+   * @return {boolean} True when external CDC buffering should remain enabled.
+   * @private
+   */
   isExternalCdcAllowedForTable(tableName) {
-    if (!tableName || tableName !== this.tableName) {
-      return getTableCdcPolicy(tableName)?.externalCdcAllowed === true;
-    }
-    if (typeof this.externalCdcAllowed === 'boolean') {
-      return this.externalCdcAllowed;
-    }
-    const tableRow = this.systemTableCache?.get?.(TABLES.TABLES, this.tableId) || null;
-    const policyOverride = parseExternalCdcAllowedOverride(
-      tableRow?.table_policies || null,
-    );
-    if (typeof policyOverride === 'boolean') {
-      return policyOverride;
-    }
-    return getTableCdcPolicy(tableName)?.externalCdcAllowed === true;
+    return this.cdcDelivery.isExternalCdcAllowedForTable(tableName);
   }
 
   /**
    * Determine whether CDC events should be buffered when there are no
-   * subscribers yet. Buffering is reserved for tables that either participate
-   * in internal cache propagation or explicitly allow external CDC catch-up.
+   * subscribers yet. Delegates to partition-cdc-delivery.js.
    * @param {string} tableName - Table name.
    * @return {boolean} True when buffering should stay enabled.
    * @private
    */
   shouldBufferCdcWithoutSubscribers(tableName) {
-    if (CDC_NO_SUBSCRIBER_BUFFER_SUPPRESSED_TABLES.has(tableName)) {
-      return false;
-    }
-    const policy = getTableCdcPolicy(tableName, {
-      externalCdcAllowed: this.isExternalCdcAllowedForTable(tableName),
-    });
-    return policy.internalCachePropagation === true ||
-      policy.externalCdcAllowed === true;
+    return this.cdcDelivery.shouldBufferCdcWithoutSubscribers(tableName);
   }
 
   /**
    * Allocate next CDC event sequence number.
+   * Delegates to partition-cdc-delivery.js.
    * @return {number} Monotonic sequence number.
    * @private
    */
   nextCDCEventSequenceNumber() {
-    this.cdcEventSequenceNumber += NUM.ONE;
-    return this.cdcEventSequenceNumber;
+    return this.cdcDelivery.nextCDCEventSequenceNumber();
   }
 
   /**
    * Buffer one CDC event for retry and schedule replay when possible.
+   * Delegates to partition-cdc-delivery.js.
    * @param {Object} cdcEvent - Event payload.
    * @param {string} reason - Buffering reason.
    * @return {boolean} True when buffered, false when dropped.
    * @private
    */
   bufferCDCEventForRetry(cdcEvent, reason) {
-    if (!this.shouldBufferCdcWithoutSubscribers(cdcEvent.tableName)) {
-      return false;
-    }
-
-    const buffered = this.cdcEventBuffer.buffer(cdcEvent);
-    if (buffered) {
-      this.cdcPipelineMetrics.increment(CDC_PIPELINE_METRIC.EVENTS_BUFFERED);
-      this.logger.warn(PARTITION_SERVICE_LOG_MSG.CDC_DELIVERY_BUFFERED_FOR_RETRY, {
-        partitionId: this.partitionId,
-        tableName: cdcEvent.tableName,
-        operation: cdcEvent.operation,
-        reason,
-        bufferedEvents: this.cdcEventBuffer.size(),
-      });
-      this.scheduleBufferedCDCReplay(reason);
-      return true;
-    }
-
-    this.cdcPipelineMetrics.increment(CDC_PIPELINE_METRIC.EVENTS_DROPPED);
-    this.logger.warn(CDC_LIFECYCLE_LOG_MSG.EVENT_DROPPED_OVERFLOW, {
-      partitionId: this.partitionId,
-      tableName: cdcEvent.tableName,
-      operation: cdcEvent.operation,
-      reason,
-      bufferedEvents: this.cdcEventBuffer.size(),
-      bufferCapacity: this.cdcEventBuffer.capacity,
-    });
-    return false;
+    return this.cdcDelivery.bufferCDCEventForRetry(cdcEvent, reason);
   }
 
   /**
    * Schedule buffered CDC replay with bounded backoff.
+   * Delegates to partition-cdc-delivery.js.
    * @param {string} reason - Trigger reason.
    * @private
    */
   scheduleBufferedCDCReplay(reason) {
-    if (this.cdcBufferReplayTimer || this.cdcBufferReplayInFlight) {
-      return;
-    }
-    if (this.cdcSubscribers.size === NUM.ZERO || !this.cdcEventBuffer.hasEvents()) {
-      return;
-    }
-
-    const retryDelayMs = Math.max(
-      NUM.ONE,
-      Math.floor(this.cdcBufferReplayDelayMs),
-    );
-    this.logger.debug(PARTITION_SERVICE_LOG_MSG.CDC_BUFFER_REPLAY_SCHEDULED, {
-      partitionId: this.partitionId,
-      reason,
-      retryDelayMs,
-      bufferedEvents: this.cdcEventBuffer.size(),
-      subscriberCount: this.cdcSubscribers.size,
-    });
-
-    this.cdcBufferReplayTimer = setTimeout(() => {
-      this.cdcBufferReplayTimer = null;
-      this.flushBufferedCDCEvents(reason).catch((error) => {
-        this.logger.warn(PARTITION_SERVICE_LOG_MSG.CDC_BUFFER_REPLAY_FAILED, {
-          partitionId: this.partitionId,
-          reason,
-          error: error.message,
-        });
-      });
-    }, retryDelayMs);
+    this.cdcDelivery.scheduleBufferedCDCReplay(reason);
   }
 
   /**
    * Replay buffered CDC events to current subscribers.
+   * Delegates to partition-cdc-delivery.js.
    * @param {string} reason - Trigger reason.
    * @return {Promise<void>}
    * @private
    */
   async flushBufferedCDCEvents(reason) {
-    if (this.cdcBufferReplayInFlight) {
-      return;
-    }
-    if (this.cdcSubscribers.size === NUM.ZERO || !this.cdcEventBuffer.hasEvents()) {
-      return;
-    }
-
-    this.cdcBufferReplayInFlight = true;
-    let replayedEvents = NUM.ZERO;
-    try {
-      while (this.cdcSubscribers.size > NUM.ZERO && this.cdcEventBuffer.hasEvents()) {
-        const replayedCount = await this.cdcEventBuffer.replay(async (cdcEvent) => {
-          for (const subscriber of this.cdcSubscribers) {
-            await this.deliverCDCEventToSubscriber(subscriber, cdcEvent);
-          }
-          this.cdcPipelineMetrics.increment(CDC_PIPELINE_METRIC.EVENTS_DELIVERED);
-          this.emit(PARTITION_SERVICE_EVENT.CDC_EVENT, cdcEvent);
-        });
-        replayedEvents += replayedCount;
-        if (replayedCount === NUM.ZERO) {
-          break;
-        }
-      }
-
-      this.cdcBufferReplayDelayMs =
-        PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
-      this.logger.debug(PARTITION_SERVICE_LOG_MSG.CDC_BUFFER_REPLAY_COMPLETE, {
-        partitionId: this.partitionId,
-        reason,
-        replayedEvents,
-        bufferedEvents: this.cdcEventBuffer.size(),
-      });
-    } catch (error) {
-      this.cdcPipelineMetrics.increment(CDC_PIPELINE_METRIC.DELIVERY_FAILURES);
-      this.cdcBufferReplayDelayMs = Math.min(
-        PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_MAX_DELAY_MS,
-        this.cdcBufferReplayDelayMs * NUM.TWO,
-      );
-      this.logger.warn(PARTITION_SERVICE_LOG_MSG.CDC_BUFFER_REPLAY_FAILED, {
-        partitionId: this.partitionId,
-        reason,
-        error: error.message,
-        retryDelayMs: this.cdcBufferReplayDelayMs,
-        bufferedEvents: this.cdcEventBuffer.size(),
-      });
-    } finally {
-      this.cdcBufferReplayInFlight = false;
-    }
-
-    if (this.cdcSubscribers.size > NUM.ZERO && this.cdcEventBuffer.hasEvents()) {
-      this.scheduleBufferedCDCReplay('buffered_events_remaining');
-    }
+    return this.cdcDelivery.flushBufferedCDCEvents(reason);
   }
 
   /**
    * Resolve a stable subscriber identifier.
+   * Delegates to partition-cdc-delivery.js.
    * @param {Function|Object} subscriber - Subscriber.
    * @param {Object} options - Subscription options.
    * @return {string} Stable subscriber identifier.
    * @private
    */
   resolveCDCSubscriberId(subscriber, options = {}) {
-    const candidateId = options.subscriberId;
-    if (typeof candidateId === 'string' && candidateId.length > NUM.ZERO) {
-      return candidateId;
-    }
-
-    const existingState = this.cdcSubscriberStates.get(subscriber);
-    if (existingState?.subscriberId) {
-      return existingState.subscriberId;
-    }
-
-    const fallbackOrdinal = this.cdcSubscriberStates.size + NUM.ONE;
-    return `${PartitionServiceCDC.SUBSCRIBER_ID_PREFIX}-${fallbackOrdinal}`;
+    return this.cdcDelivery.resolveCDCSubscriberId(subscriber, options);
   }
 
   /**
    * Deliver one CDC event to a subscriber callback/object.
+   * Delegates to partition-cdc-delivery.js.
    * @param {Function|Object} subscriber - Subscriber callback/object.
    * @param {Object} cdcEvent - Event payload.
    * @return {Promise<void>}
    * @private
    */
   async deliverCDCEventToSubscriber(subscriber, cdcEvent) {
-    if (typeof subscriber === PARTITION_SERVICE_TYPE.FUNCTION) {
-      await subscriber(cdcEvent);
-      return;
-    }
-    await subscriber.handleCDCEvent(cdcEvent);
+    return this.cdcDelivery.deliverCDCEventToSubscriber(
+      subscriber, cdcEvent,
+    );
   }
 
   /**
    * Create a wrapper that enriches stream metadata for one subscriber.
+   * Delegates to partition-cdc-delivery.js.
    * @param {Function|Object} subscriber - Target subscriber.
    * @param {Object} subscriptionState - Mutable state for this subscriber.
    * @return {Function} Wrapper callback.
    * @private
    */
   buildCDCSubscriberWrapper(subscriber, subscriptionState) {
-    return async (cdcEvent) => {
-      const sequencedEvent = Number.isFinite(cdcEvent.sequenceNumber) ?
-        cdcEvent :
-        {
-          ...cdcEvent,
-          sequenceNumber: this.nextCDCEventSequenceNumber(),
-        };
-
-      const decoratedEvent = {
-        ...sequencedEvent,
-        streamMode: subscriptionState.streamMode,
-        subscriberId: subscriptionState.subscriberId,
-        subscriptionEpoch: subscriptionState.subscriptionEpoch,
-      };
-
-      await this.deliverCDCEventToSubscriber(subscriber, decoratedEvent);
-      subscriptionState.lastDeliveredSequenceNumber =
-        decoratedEvent.sequenceNumber;
-      subscriptionState.lastDeliveredAt = Date.now();
-    };
+    return this.cdcDelivery.buildCDCSubscriberWrapper(
+      subscriber, subscriptionState,
+    );
   }
 
   /**
    * Subscribe to CDC with explicit handshake acknowledgment and catch-up.
+   * Delegates to partition-cdc-delivery.js.
    * @param {Function|Object} subscriber - Subscriber function or object.
    * @param {Object} [options] - Handshake options.
    * @param {string} [options.subscriberId] - Stable subscriber identifier.
    * @return {Promise<Object>} Handshake acknowledgment.
    */
   async subscribeToCDCWithHandshake(subscriber, options = {}) {
-    if (!isCDCSubscriber(subscriber)) {
-      throw new Error(PARTITION_SERVICE_ERROR_MSG.CDC_INVALID_SUBSCRIBER);
-    }
-
-    const existingWrapper = this.cdcSubscriberWrappers.get(subscriber);
-    const status = existingWrapper ?
-      PartitionServiceCDC.HANDSHAKE_STATUS_ALREADY_SUBSCRIBED :
-      PartitionServiceCDC.HANDSHAKE_STATUS_OK;
-
-    const subscriptionEpoch = this.cdcSubscriptionEpoch + NUM.ONE;
-    this.cdcSubscriptionEpoch = subscriptionEpoch;
-    const handshakeStartSequence = this.cdcEventSequenceNumber;
-    const subscriberId = this.resolveCDCSubscriberId(subscriber, options);
-
-    let subscriptionState = this.cdcSubscriberStates.get(subscriber);
-    if (!subscriptionState) {
-      subscriptionState = {
-        subscriberId,
-        subscriptionEpoch,
-        streamMode: PartitionServiceCDC.STREAM_MODE_STEADY,
-        lastDeliveredSequenceNumber: null,
-        lastDeliveredAt: null,
-        catchupCompletedAt: null,
-      };
-      this.cdcSubscriberStates.set(subscriber, subscriptionState);
-    } else {
-      subscriptionState.subscriberId = subscriberId;
-      subscriptionState.subscriptionEpoch = subscriptionEpoch;
-      subscriptionState.catchupCompletedAt = null;
-    }
-
-    let wrapper = existingWrapper;
-    if (!wrapper) {
-      wrapper = this.buildCDCSubscriberWrapper(subscriber, subscriptionState);
-      this.cdcSubscriberWrappers.set(subscriber, wrapper);
-      this.cdcSubscribers.add(wrapper);
-      this.logger.debug(PARTITION_SERVICE_LOG_MSG.CDC_SUBSCRIBER_ADDED, {
-        partitionId: this.partitionId,
-        subscriberId,
-        subscriberCount: this.cdcSubscribers.size,
-      });
-    }
-
-    const bufferedEventsAtHandshake = this.cdcEventBuffer.size();
-    const catchupMode = bufferedEventsAtHandshake > NUM.ZERO ?
-      PartitionServiceCDC.CATCHUP_MODE_BACKFILL :
-      PartitionServiceCDC.CATCHUP_MODE_NONE;
-    let bufferedEventsReplayed = NUM.ZERO;
-    let catchupCompletedAt = Date.now();
-
-    if (catchupMode === PartitionServiceCDC.CATCHUP_MODE_BACKFILL) {
-      subscriptionState.streamMode = PartitionServiceCDC.STREAM_MODE_CATCHUP;
-      this.emit(PARTITION_SERVICE_EVENT.CDC_CATCHUP_STARTED, {
-        partitionId: this.partitionId,
-        subscriberId,
-        subscriptionEpoch,
-        bufferedEventsAtHandshake,
-      });
-      this.logger.debug(PARTITION_SERVICE_LOG_MSG.CDC_CATCHUP_STARTED, {
-        partitionId: this.partitionId,
-        subscriberId,
-        subscriptionEpoch,
-        bufferedEventsAtHandshake,
-      });
-
-      try {
-        bufferedEventsReplayed = await this.cdcEventBuffer.replay(wrapper);
-      } catch (error) {
-        this.cdcPipelineMetrics.increment(CDC_PIPELINE_METRIC.DELIVERY_FAILURES);
-        this.cdcBufferReplayDelayMs = Math.min(
-          PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_MAX_DELAY_MS,
-          this.cdcBufferReplayDelayMs * NUM.TWO,
-        );
-        this.logger.warn(PARTITION_SERVICE_LOG_MSG.CDC_BUFFER_REPLAY_FAILED, {
-          partitionId: this.partitionId,
-          subscriberId,
-          reason: 'handshake_catchup_replay_failed',
-          error: error.message,
-          retryDelayMs: this.cdcBufferReplayDelayMs,
-          bufferedEvents: this.cdcEventBuffer.size(),
-        });
-      }
-      catchupCompletedAt = Date.now();
-      subscriptionState.catchupCompletedAt = catchupCompletedAt;
-      this.emit(PARTITION_SERVICE_EVENT.CDC_CATCHUP_COMPLETED, {
-        partitionId: this.partitionId,
-        subscriberId,
-        subscriptionEpoch,
-        bufferedEventsReplayed,
-        bufferedEventsRemaining: this.cdcEventBuffer.size(),
-      });
-      this.logger.debug(PARTITION_SERVICE_LOG_MSG.CDC_CATCHUP_COMPLETED, {
-        partitionId: this.partitionId,
-        subscriberId,
-        subscriptionEpoch,
-        bufferedEventsReplayed,
-        bufferedEventsRemaining: this.cdcEventBuffer.size(),
-      });
-    }
-
-    subscriptionState.streamMode = PartitionServiceCDC.STREAM_MODE_STEADY;
-    subscriptionState.subscriptionEpoch = subscriptionEpoch;
-
-    const handshake = {
-      status,
-      subscriberId,
-      subscriptionEpoch,
-      versionContext: {
-        streamVersion: this.cdcEventSequenceNumber,
-        handshakeStartSequence,
-      },
-      catchup: {
-        mode: catchupMode,
-        bufferedEventsAtHandshake,
-        bufferedEventsReplayed,
-        completed: this.cdcEventBuffer.size() === NUM.ZERO,
-        completedAt: catchupCompletedAt,
-      },
-      streamMode: subscriptionState.streamMode,
-    };
-
-    this.logger.debug(PARTITION_SERVICE_LOG_MSG.CDC_SUBSCRIPTION_HANDSHAKE_ACK, {
-      partitionId: this.partitionId,
-      subscriberId,
-      subscriptionEpoch,
-      status: handshake.status,
-      catchupMode: handshake.catchup.mode,
-      bufferedEventsAtHandshake,
-      bufferedEventsReplayed,
-      streamVersion: handshake.versionContext.streamVersion,
-    });
-
-    this.scheduleBufferedCDCReplay('post_subscription_handshake');
-
-    return handshake;
+    return this.cdcDelivery.subscribeToCDCWithHandshake(
+      subscriber, options,
+    );
   }
 
   /**
    * Subscribe to CDC events from this partition.
+   * Delegates to partition-cdc-delivery.js.
    * @param {Function|Object} subscriber - Subscriber function or object.
    */
   subscribeToCDC(subscriber) {
-    this.subscribeToCDCWithHandshake(subscriber).catch((error) => {
-      this.logger.error(PARTITION_SERVICE_ERROR_MSG.CDC_SUBSCRIPTION_FAILED, {
-        partitionId: this.partitionId,
-        error: error.message,
-      });
-    });
+    this.cdcDelivery.subscribeToCDC(subscriber);
   }
 
   /**
    * Unsubscribe from CDC events.
+   * Delegates to partition-cdc-delivery.js.
    * @param {Function|Object} subscriber - Subscriber to remove.
    */
   unsubscribeFromCDC(subscriber) {
-    const wrapper = this.cdcSubscriberWrappers.get(subscriber);
-    const subscriberToDelete = wrapper || subscriber;
-    this.cdcSubscribers.delete(subscriberToDelete);
-    this.cdcSubscriberWrappers.delete(subscriber);
-    this.cdcSubscriberStates.delete(subscriber);
-    if (this.cdcSubscribers.size === NUM.ZERO && this.cdcBufferReplayTimer) {
-      clearTimeout(this.cdcBufferReplayTimer);
-      this.cdcBufferReplayTimer = null;
-    }
-    this.logger.debug(PARTITION_SERVICE_LOG_MSG.CDC_SUBSCRIBER_REMOVED, {
-      partitionId: this.partitionId,
-      subscriberCount: this.cdcSubscribers.size,
-    });
+    this.cdcDelivery.unsubscribeFromCDC(subscriber);
   }
 
   /**
    * Get CDC subscription diagnostics for this partition.
+   * Delegates to partition-cdc-delivery.js.
    * @return {Object} CDC subscription diagnostics.
    */
   getCDCSubscriptionDiagnostics() {
-    const subscriptions = [];
-    for (const state of this.cdcSubscriberStates.values()) {
-      subscriptions.push({
-        subscriberId: state.subscriberId,
-        subscriptionEpoch: state.subscriptionEpoch,
-        streamMode: state.streamMode,
-        lastDeliveredSequenceNumber: state.lastDeliveredSequenceNumber,
-        lastDeliveredAt: state.lastDeliveredAt,
-        catchupCompletedAt: state.catchupCompletedAt,
-      });
-    }
-
-    return {
-      partitionId: this.partitionId,
-      subscriptionEpoch: this.cdcSubscriptionEpoch,
-      streamVersion: this.cdcEventSequenceNumber,
-      subscriberCount: this.cdcSubscribers.size,
-      bufferedEvents: this.cdcEventBuffer.size(),
-      bufferReplayInFlight: this.cdcBufferReplayInFlight,
-      bufferReplayDelayMs: this.cdcBufferReplayDelayMs,
-      subscriptions,
-    };
+    return this.cdcDelivery.getCDCSubscriptionDiagnostics();
   }
 
 
@@ -4433,7 +3587,7 @@ class PartitionService extends EventEmitter {
    * @private
    */
   isPartitionsLeaderAvailable() {
-    return isSystemTableWriteReady(this.systemTableCache, SystemTableName.PARTITIONS);
+    return isSystemTableWriteReady(this.systemTableCache, SYSTEM_TABLE_NAME.PARTITIONS);
   }
 
   /**
@@ -4442,7 +3596,7 @@ class PartitionService extends EventEmitter {
    * @private
    */
   isServicesLeaderAvailable() {
-    return isSystemTableWriteReady(this.systemTableCache, SystemTableName.SERVICES);
+    return isSystemTableWriteReady(this.systemTableCache, SYSTEM_TABLE_NAME.SERVICES);
   }
 
   /**
@@ -4953,5 +4107,5 @@ export {
   RaftRole,
   CDCOperation,
   PartitionRaftLogEntry,
-  SQLiteRaftStorage,
+  PartitionRaftStorage,
 };

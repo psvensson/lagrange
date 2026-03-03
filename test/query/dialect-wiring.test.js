@@ -10,9 +10,9 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {
   PostgresWireAdapter,
-} from '../../src/query/postgres-wire-adapter.js';
+} from '../../src/query/pg/postgres-wire-adapter.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
-import {PARSER_DIALECT} from '../../src/query/pg-compat-constants.js';
+import {PARSER_DIALECT} from '../../src/query/pg/pg-compat-constants.js';
 import {EXECUTION_MODE} from '../../src/query/sql-adapter-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 

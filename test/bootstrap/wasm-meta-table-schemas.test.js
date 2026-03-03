@@ -14,7 +14,7 @@ import assert from 'node:assert/strict';
 import {TABLES} from '../../src/constants/tables.js';
 import {COLUMN} from '../../src/constants/columns.js';
 import {
-  SystemTableName,
+  SYSTEM_TABLE_NAME,
   SYSTEM_TABLE_SCHEMAS,
   INITIAL_PARTITION_IDS,
   INITIAL_REPLICA_IDS,
@@ -75,13 +75,13 @@ describe('WASM meta table constants in TABLES', () => {
   });
 });
 
-describe('SystemTableName entries', () => {
+describe('SYSTEM_TABLE_NAME entries', () => {
   for (const table of NEW_TABLES) {
-    it(`should include ${table} in SystemTableName`, () => {
-      const key = Object.keys(SystemTableName).find(
-        (k) => SystemTableName[k] === table,
+    it(`should include ${table} in SYSTEM_TABLE_NAME`, () => {
+      const key = Object.keys(SYSTEM_TABLE_NAME).find(
+        (k) => SYSTEM_TABLE_NAME[k] === table,
       );
-      assert.ok(key, `${table} missing from SystemTableName`);
+      assert.ok(key, `${table} missing from SYSTEM_TABLE_NAME`);
     });
   }
 });

@@ -2,7 +2,7 @@ import {test} from '../../src/test-helpers/tap.js';
 import {
   DistributedTransactionCoordinator,
   TRANSACTION_STATUS,
-} from '../../src/query/distributed-transaction-coordinator.js';
+} from '../../src/query/distributed/distributed-transaction-coordinator.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 
 const config = ConfigurationManager.getInstance();

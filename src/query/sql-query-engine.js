@@ -22,16 +22,16 @@
 
 import {createHash} from 'node:crypto';
 import {SQLParser} from './sql-parser.js';
-import {SystemTableName} from '../bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {PartitionResolver} from './partition-resolver.js';
 import {QueryExecutor} from './query-executor.js';
 import {TableCreationService} from './table-creation-service.js';
-import {DistributedQueryPlanner} from './distributed-query-planner.js';
-import {DistributedWriteCoordinator} from './distributed-write-coordinator.js';
+import {DistributedQueryPlanner} from './distributed/distributed-query-planner.js';
+import {DistributedWriteCoordinator} from './distributed/distributed-write-coordinator.js';
 import {
   DistributedTransactionCoordinator,
   WRITE_OPERATION_STATUS,
-} from './distributed-transaction-coordinator.js';
+} from './distributed/distributed-transaction-coordinator.js';
 import {OperationType} from '../rebalancer/replica-status.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
@@ -56,11 +56,11 @@ import {
 } from './query-constants.js';
 import {isSqlRequest} from './sql-request.js';
 import {PartitionCallbackDispatcher} from
-  './partition-callback-dispatcher.js';
+  './callback/partition-callback-dispatcher.js';
 import {CallbackExecutionHost} from
-  './callback-execution-host.js';
+  './callback/callback-execution-host.js';
 import {createCallbackDriverRegistry} from
-  './callback-runtime-driver-registry.js';
+  './callback/callback-runtime-driver-registry.js';
 import {executeStage} from './call-stage.js';
 import {executePlan} from './call-plan.js';
 import {ExecutionContext} from './execution-context.js';
@@ -74,8 +74,8 @@ import {
   ADAPTER_LOG_MSG,
   CALLBACK_RUNTIME_KIND,
 } from './sql-adapter-constants.js';
-import {parseCallbackModuleArtifact} from './callback-module-artifact.js';
-import {reorderParams} from './pg-translate.js';
+import {parseCallbackModuleArtifact} from './callback/callback-module-artifact.js';
+import {reorderParams} from './pg/pg-translate.js';
 import {SqlParseCache} from './sql-parse-cache.js';
 
 const CODE_LOOKUP_BY_FUNCTION_ID_SQL =
@@ -232,8 +232,8 @@ class SQLQueryEngine {
       if (loggingService.isInitialized()) {
         return loggingService.forSubsystem(QUERY_SUBSYSTEM.SQL_QUERY_ENGINE);
       }
-    } catch {
-      // Logging not available
+    } catch (logErr) {
+      console.warn(QUERY_LOG_MSG.INIT_LOGGER_FAILED, logErr);
     }
     return console;
   }
@@ -594,7 +594,7 @@ class SQLQueryEngine {
         sqlRequest.sessionId || QUERY_SESSION.DEFAULT,
         executionContext,
       );
-    } catch {
+    } catch (_parseErr) {
       return null;
     }
   }
@@ -746,7 +746,7 @@ class SQLQueryEngine {
       return Array.isArray(parsed) ?
         parsed.filter((entry) => typeof entry === 'string') :
         fallback;
-    } catch {
+    } catch (_parseErr) {
       return fallback;
     }
   }
@@ -2616,7 +2616,7 @@ class SQLQueryEngine {
           table.tableId === tableName,
         ) || null;
       }
-    } catch {
+    } catch (_cacheErr) {
       // Cache not available
     }
 
@@ -2630,7 +2630,7 @@ class SQLQueryEngine {
    * @private
    */
   isSystemTable(tableName) {
-    return Object.values(SystemTableName).includes(tableName);
+    return Object.values(SYSTEM_TABLE_NAME).includes(tableName);
   }
 
   /**

@@ -8,7 +8,7 @@ import {FailureDetector} from '../../src/node/failure-detector.js';
 import {NODE_STATUS as NodeStatus} from '../../src/node/node-constants.js';
 import {FAILURE_DETECTOR_SQL} from '../../src/node/node-constants.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
-import {SystemTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 
@@ -363,7 +363,7 @@ test('FailureDetector - marks replicas as failed on node failure', async (t) => 
 
   // Check CDC operations for replica updates
   const replicaUpdates = mockCDC.operations.filter((op) =>
-    op.tableName === SystemTableName.SERVICES &&
+    op.tableName === SYSTEM_TABLE_NAME.SERVICES &&
     op.data.status === ReplicaStatus.FAILED,
   );
   t.equal(replicaUpdates.length, 2, 'should have 2 replica status updates');

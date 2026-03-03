@@ -16,7 +16,7 @@ import fc from 'fast-check';
 import {FailureDetector} from '../../src/node/failure-detector.js';
 import {NODE_STATE, SERVICE_TYPE} from '../../src/constants/index.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
-import {SystemTableName} from
+import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {
   FAILURE_DETECTOR_DEFAULT,
@@ -176,7 +176,7 @@ test('Property 7: Failure detector single CDC write per status change',
 
               // Filter CDC writes to the nodes table
               const nodeWrites = mockCDC.operations.filter(
-                (op) => op.tableName === SystemTableName.NODES,
+                (op) => op.tableName === SYSTEM_TABLE_NAME.NODES,
               );
 
               // Exactly one CDC write per node
@@ -246,7 +246,7 @@ test('Property 7: Failure detector single CDC write per status change',
               // Filter CDC writes to the nodes table
               const nodeWrites = mockCDC.operations.filter(
                 (op) =>
-                  op.tableName === SystemTableName.NODES &&
+                  op.tableName === SYSTEM_TABLE_NAME.NODES &&
                   op.data.status === NODE_STATE.FAILED,
               );
 
@@ -319,7 +319,7 @@ test('Property 7: Failure detector single CDC write per status change',
               // Filter CDC writes to the services table
               const replicaWrites = mockCDC.operations.filter(
                 (op) =>
-                  op.tableName === SystemTableName.SERVICES &&
+                  op.tableName === SYSTEM_TABLE_NAME.SERVICES &&
                   op.data.status === ReplicaStatus.FAILED,
               );
 

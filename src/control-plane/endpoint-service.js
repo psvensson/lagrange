@@ -6,7 +6,7 @@
 
 import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
-import {SystemTableName} from '../bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
   COLUMN,
   ENDPOINT_STATUS,
@@ -21,6 +21,9 @@ import {
   ENDPOINT_SVC_LOG_MSG,
   ENDPOINT_SVC_STATE,
 } from './endpoint-service-constants.js';
+
+const SQL_SELECT_ENDPOINT_BY_ID =
+  'SELECT * FROM node_endpoints WHERE endpoint_id = ?';
 
 class EndpointService extends EventEmitter {
   /**
@@ -83,35 +86,56 @@ class EndpointService extends EventEmitter {
     const now = Date.now();
     let existing = null;
     if (this.sqlQueryEngine) {
-      const result = await this.sqlQueryEngine.executeQuery(
-        'SELECT * FROM node_endpoints WHERE endpoint_id = ?',
+      const queryResult = await this.sqlQueryEngine.executeQuery(
+        SQL_SELECT_ENDPOINT_BY_ID,
         [endpointData.endpointId],
       );
-      existing = result.rows?.[0] || null;
+      existing = queryResult.rows?.[0] || null;
     }
 
-    const row = {
-      [COLUMN.ENDPOINT_ID]: endpointData.endpointId,
-      [COLUMN.NODE_ID]: endpointData.nodeId || this.nodeId,
-      [COLUMN.TRANSPORT_TYPE]: endpointData.transportType ||
-        TRANSPORT_TYPE.WEBSOCKET,
-      [COLUMN.ADDRESS]: endpointData.address,
-      [COLUMN.PRIORITY]: endpointData.priority ?? NUM.ZERO,
-      [COLUMN.METADATA]: endpointData.metadata ?
-        JSON.stringify(endpointData.metadata) :
-        (existing?.[COLUMN.METADATA] || JSON.stringify({})),
-      [COLUMN.STATUS]: ENDPOINT_STATUS.ACTIVE,
-      [COLUMN.CREATED_AT]: existing?.[COLUMN.CREATED_AT] || now,
-      [COLUMN.UPDATED_AT]: now,
-    };
-
-    const result = await this.cdcIntegrationService.upsertSystemTableRow(
-      SystemTableName.NODE_ENDPOINTS, row,
-    );
+    let result;
+    if (existing) {
+      // Update only mutable fields — do not reconstruct identity fields.
+      const updates = {
+        [COLUMN.ADDRESS]: endpointData.address,
+        [COLUMN.TRANSPORT_TYPE]: endpointData.transportType ||
+          TRANSPORT_TYPE.WEBSOCKET,
+        [COLUMN.PRIORITY]: endpointData.priority ?? NUM.ZERO,
+        [COLUMN.STATUS]: ENDPOINT_STATUS.ACTIVE,
+        [COLUMN.UPDATED_AT]: now,
+      };
+      if (endpointData.metadata) {
+        updates[COLUMN.METADATA] = JSON.stringify(endpointData.metadata);
+      }
+      result = await this.cdcIntegrationService.updateSystemTableRow(
+        SYSTEM_TABLE_NAME.NODE_ENDPOINTS,
+        {[COLUMN.ENDPOINT_ID]: endpointData.endpointId},
+        updates,
+      );
+    } else {
+      // Insert full canonical row shape for new endpoints.
+      const row = {
+        [COLUMN.ENDPOINT_ID]: endpointData.endpointId,
+        [COLUMN.NODE_ID]: endpointData.nodeId || this.nodeId,
+        [COLUMN.TRANSPORT_TYPE]: endpointData.transportType ||
+          TRANSPORT_TYPE.WEBSOCKET,
+        [COLUMN.ADDRESS]: endpointData.address,
+        [COLUMN.PRIORITY]: endpointData.priority ?? NUM.ZERO,
+        [COLUMN.METADATA]: endpointData.metadata ?
+          JSON.stringify(endpointData.metadata) :
+          JSON.stringify({}),
+        [COLUMN.STATUS]: ENDPOINT_STATUS.ACTIVE,
+        [COLUMN.CREATED_AT]: now,
+        [COLUMN.UPDATED_AT]: now,
+      };
+      result = await this.cdcIntegrationService.insertSystemTableRow(
+        SYSTEM_TABLE_NAME.NODE_ENDPOINTS, row,
+      );
+    }
 
     this.logger.debug(ENDPOINT_SVC_LOG_MSG.REGISTERED, {
       endpointId: endpointData.endpointId,
-      nodeId: row[COLUMN.NODE_ID],
+      nodeId: endpointData.nodeId || this.nodeId,
     });
 
     this.emit(ENDPOINT_SVC_EVENT.REGISTERED, {
@@ -130,7 +154,7 @@ class EndpointService extends EventEmitter {
     assertCritical(endpointId, ENDPOINT_SVC_ERROR_MSG.MISSING_ENDPOINT_ID);
 
     const result = await this.cdcIntegrationService.deleteSystemTableRow(
-      SystemTableName.NODE_ENDPOINTS,
+      SYSTEM_TABLE_NAME.NODE_ENDPOINTS,
       {[COLUMN.ENDPOINT_ID]: endpointId},
     );
 
@@ -150,7 +174,7 @@ class EndpointService extends EventEmitter {
   async getEndpoint(endpointId) {
     if (this.sqlQueryEngine) {
       const result = await this.sqlQueryEngine.executeQuery(
-        'SELECT * FROM node_endpoints WHERE endpoint_id = ?',
+        SQL_SELECT_ENDPOINT_BY_ID,
         [endpointId],
       );
       return result.rows?.[0] || null;

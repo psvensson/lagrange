@@ -6,10 +6,10 @@ import {
 } from '../../src/query/sql-adapter-constants.js';
 import {
   CallbackExecutionHost,
-} from '../../src/query/callback-execution-host.js';
+} from '../../src/query/callback/callback-execution-host.js';
 import {
   createCallbackDriverRegistry,
-} from '../../src/query/callback-runtime-driver-registry.js';
+} from '../../src/query/callback/callback-runtime-driver-registry.js';
 import {WasmExecutor} from '../../src/wasm-service/wasm-executor.js';
 import {
   InProcessWasmRuntimeAdapter,

@@ -37,10 +37,10 @@ import {
   QUERY_SQL,
   QUERY_SUBSYSTEM,
 } from './query-constants.js';
-import {PG_EXPR_TYPE} from './pg-compat-constants.js';
-import {DistributedMergeEngine} from './distributed-merge-engine.js';
-import {ParallelQueryCoordinator} from './parallel-query-coordinator.js';
-import {DISTRIBUTED_JOIN_STRATEGY} from './distributed-query-plan-constants.js';
+import {PG_EXPR_TYPE} from './pg/pg-compat-constants.js';
+import {DistributedMergeEngine} from './distributed/distributed-merge-engine.js';
+import {ParallelQueryCoordinator} from './distributed/parallel-query-coordinator.js';
+import {DISTRIBUTED_JOIN_STRATEGY} from './distributed/distributed-query-plan-constants.js';
 
 /**
  * QueryExecutor handles parallel query execution across partitions
@@ -109,8 +109,8 @@ class QueryExecutor {
       if (loggingService.isInitialized()) {
         return loggingService.forSubsystem(QUERY_SUBSYSTEM.QUERY_EXECUTOR);
       }
-    } catch {
-      // Logging not available
+    } catch (_logErr) {
+      // Logging not available — fall through to console
     }
     return console;
   }
@@ -195,7 +195,7 @@ class QueryExecutor {
         failedPartitions: [],
         partitionErrors: [{
           partitionId: null,
-          error: 'Missing canonical join partition plan',
+          error: QUERY_ERROR_MSG.MISSING_JOIN_PLAN,
         }],
         partitions: partitionIds,
       };

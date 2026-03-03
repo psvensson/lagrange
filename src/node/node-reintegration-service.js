@@ -8,7 +8,7 @@ import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
-import {SystemTableName} from '../bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {NUM} from '../constants/index.js';
 import {assertCritical} from '../utils/assert.js';
 import {
@@ -337,7 +337,7 @@ class NodeReintegrationService extends EventEmitter {
       const lastHeartbeat = currentNode.last_heartbeat || NUM.ZERO;
       const timeSinceHeartbeat = now - lastHeartbeat;
 
-      // Consider healthy if heartbeat within last 10 seconds
+      // Consider healthy if heartbeat within HEALTHY_HEARTBEAT_WINDOW_MS
       if (timeSinceHeartbeat < NODE_REINTEGRATION_DEFAULT.HEALTHY_HEARTBEAT_WINDOW_MS) {
         successfulChecks += NUM.ONE;
         this.logger.debug(NODE_REINTEGRATION_LOG_MSG.HEALTH_CHECK_PASSED, {
@@ -384,7 +384,7 @@ class NodeReintegrationService extends EventEmitter {
     // Mark node as active
     try {
       const result = await this.cdcIntegrationService.updateSystemTableRow(
-        SystemTableName.NODES,
+        SYSTEM_TABLE_NAME.NODES,
         buildObservedNodeWhereClause(node),
         {
           status: NodeStatus.ACTIVE,
@@ -468,7 +468,7 @@ class NodeReintegrationService extends EventEmitter {
     if (reason === NODE_REINTEGRATION_REASON.HEALTH_CHECK_FAILED) {
       try {
         const result = await this.cdcIntegrationService.updateSystemTableRow(
-          SystemTableName.NODES,
+          SYSTEM_TABLE_NAME.NODES,
           buildObservedNodeWhereClause(node),
           {
             status: NodeStatus.FAILED,
@@ -514,7 +514,7 @@ class NodeReintegrationService extends EventEmitter {
       NODE_REINTEGRATION_ERROR_MSG.MISSING_SYSTEM_TABLE_CACHE,
     );
 
-    return this.systemTableCache.getAll(SystemTableName.NODES);
+    return this.systemTableCache.getAll(SYSTEM_TABLE_NAME.NODES);
   }
 
   /**
@@ -529,7 +529,7 @@ class NodeReintegrationService extends EventEmitter {
       NODE_REINTEGRATION_ERROR_MSG.MISSING_SYSTEM_TABLE_CACHE,
     );
 
-    const nodes = this.systemTableCache.filter(SystemTableName.NODES, (node) => {
+    const nodes = this.systemTableCache.filter(SYSTEM_TABLE_NAME.NODES, (node) => {
       return node.node_id === nodeId;
     });
     return nodes[NUM.ZERO] || null;

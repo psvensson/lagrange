@@ -6,7 +6,7 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
-import {SystemTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {WRITE_ROUTER_MODE} from '../../src/cdc/write-router/index.js';
 
 // Use hardcoded partition IDs matching the constants file
@@ -336,7 +336,7 @@ test('Bootstrap mode - routes to direct partition when enabled', async (t) => {
   mockPartitionServices.set(NODES_PARTITION_ID, mockPartitionService);
   service.setBootstrapMode(true, mockPartitionServices);
 
-  const result = await service.insertSystemTableRow(SystemTableName.NODES, {
+  const result = await service.insertSystemTableRow(SYSTEM_TABLE_NAME.NODES, {
     node_id: 'node-1',
     node_address: 'localhost:8080',
   });
@@ -360,7 +360,7 @@ test('Bootstrap mode - routes to SQL engine when disabled', async (t) => {
     return {success: true, affectedRows: 1};
   };
 
-  const result = await service.insertSystemTableRow(SystemTableName.NODES, {
+  const result = await service.insertSystemTableRow(SYSTEM_TABLE_NAME.NODES, {
     node_id: 'node-1',
     node_address: 'localhost:8080',
   });
@@ -401,7 +401,7 @@ test('Bootstrap mode - switches from bootstrap to normal mode', async (t) => {
 
   // Phase 1: Bootstrap mode enabled
   service.setBootstrapMode(true, mockPartitionServices);
-  await service.insertSystemTableRow(SystemTableName.NODES, {
+  await service.insertSystemTableRow(SYSTEM_TABLE_NAME.NODES, {
     node_id: 'node-1',
     node_address: 'localhost:8080',
   });
@@ -411,7 +411,7 @@ test('Bootstrap mode - switches from bootstrap to normal mode', async (t) => {
 
   // Phase 2: Bootstrap mode disabled
   service.clearBootstrapMode();
-  await service.insertSystemTableRow(SystemTableName.NODES, {
+  await service.insertSystemTableRow(SYSTEM_TABLE_NAME.NODES, {
     node_id: 'node-2',
     node_address: 'localhost:8081',
   });
@@ -426,7 +426,7 @@ test('Bootstrap mode - throws when SQL engine missing in normal mode', async (t)
   service.initialize();
 
   try {
-    await service.insertSystemTableRow(SystemTableName.NODES, {
+    await service.insertSystemTableRow(SYSTEM_TABLE_NAME.NODES, {
       node_id: 'node-1',
       node_address: 'localhost:8080',
     });

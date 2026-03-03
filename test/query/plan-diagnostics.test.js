@@ -23,10 +23,10 @@ import {
 } from '../../src/query/strategy-constants.js';
 import {
   PRIMITIVE_TYPE,
-} from '../../src/query/distributed-context-constants.js';
+} from '../../src/query/distributed/distributed-context-constants.js';
 import {
   LOOKUP_ACCESS_PATH,
-} from '../../src/query/distributed-context-constants.js';
+} from '../../src/query/distributed/distributed-context-constants.js';
 
 // ─── Constructor ─────────────────────────────────────────────
 

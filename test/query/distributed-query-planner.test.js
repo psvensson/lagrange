@@ -1,5 +1,5 @@
 import {test} from '../../src/test-helpers/tap.js';
-import {DistributedQueryPlanner} from '../../src/query/distributed-query-planner.js';
+import {DistributedQueryPlanner} from '../../src/query/distributed/distributed-query-planner.js';
 import {PartitionResolver} from '../../src/query/partition-resolver.js';
 import {SQLParser} from '../../src/query/sql-parser.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -263,8 +263,7 @@ test('DistributedQueryPlanner - consumes updated partition map after split-style
     });
     const planner = new DistributedQueryPlanner({
       partitionResolver: resolver,
-      getTablePartitions: (tableName) =>
-        partitions.filter((partition) => partition.table_name === tableName),
+      getTablePartitions: getTablePartitionsFactory(partitions),
     });
     const ast = new SQLParser('SELECT * FROM users').parse();
 

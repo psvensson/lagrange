@@ -18,7 +18,7 @@ import {
   ReplicaDispatchService,
 } from '../../src/control-plane/replica-dispatch-service.js';
 import {
-  SystemTableName,
+  SYSTEM_TABLE_NAME,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
   COLUMN,
@@ -154,13 +154,13 @@ function createMockDispatchService(options = {}) {
 
   const mockCache = {
     get: (tableName, id) => {
-      if (tableName === SystemTableName.NODES) {
+      if (tableName === SYSTEM_TABLE_NAME.NODES) {
         return nodeRows.get(id) || null;
       }
       return null;
     },
     getAll: (tableName) => {
-      if (tableName === SystemTableName.SERVICES) {
+      if (tableName === SYSTEM_TABLE_NAME.SERVICES) {
         return serviceEntries;
       }
       return [];

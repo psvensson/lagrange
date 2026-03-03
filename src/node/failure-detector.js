@@ -8,8 +8,8 @@ import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
-import {SystemTableName} from '../bootstrap/system-table-schemas-constants.js';
-import {NUM, SERVICE_TYPE} from '../constants/index.js';
+import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
+import {NUM, SERVICE_TYPE, TYPEOF} from '../constants/index.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
 import {assertCritical} from '../utils/assert.js';
 import {
@@ -38,7 +38,7 @@ function buildObservedNodeWhereClause(node) {
   const whereClause = {
     node_id: node.node_id,
   };
-  if (typeof node?.status === 'string' && node.status.length > 0) {
+  if (typeof node?.status === TYPEOF.STRING && node.status.length > 0) {
     whereClause.status = node.status;
   }
   if (Number.isFinite(node?.last_heartbeat)) {
@@ -57,10 +57,10 @@ function buildObservedReplicaWhereClause(replica) {
   const whereClause = {
     service_id: replica.service_id,
   };
-  if (typeof replica?.node_id === 'string' && replica.node_id.length > 0) {
+  if (typeof replica?.node_id === TYPEOF.STRING && replica.node_id.length > 0) {
     whereClause.node_id = replica.node_id;
   }
-  if (typeof replica?.status === 'string' && replica.status.length > 0) {
+  if (typeof replica?.status === TYPEOF.STRING && replica.status.length > 0) {
     whereClause.status = replica.status;
   }
   if (Number.isFinite(replica?.updated_at)) {
@@ -312,7 +312,7 @@ class FailureDetector extends EventEmitter {
 
     try {
       const result = await this.cdcIntegrationService.updateSystemTableRow(
-        SystemTableName.NODES,
+        SYSTEM_TABLE_NAME.NODES,
         buildObservedNodeWhereClause(node),
         {
           status: NODE_STATUS.SUSPECTED,
@@ -360,7 +360,7 @@ class FailureDetector extends EventEmitter {
     // Mark node as failed
     try {
       const result = await this.cdcIntegrationService.updateSystemTableRow(
-        SystemTableName.NODES,
+        SYSTEM_TABLE_NAME.NODES,
         buildObservedNodeWhereClause(node),
         {
           status: NODE_STATUS.FAILED,
@@ -408,7 +408,7 @@ class FailureDetector extends EventEmitter {
 
     try {
       const result = await this.cdcIntegrationService.updateSystemTableRow(
-        SystemTableName.NODES,
+        SYSTEM_TABLE_NAME.NODES,
         buildObservedNodeWhereClause(node),
         {
           status: NODE_STATUS.RECOVERING,
@@ -476,7 +476,7 @@ class FailureDetector extends EventEmitter {
   async markReplicaAsFailed(replica, nodeId, now) {
     try {
       const result = await this.cdcIntegrationService.updateSystemTableRow(
-        SystemTableName.SERVICES,
+        SYSTEM_TABLE_NAME.SERVICES,
         buildObservedReplicaWhereClause(replica),
         {
           status: ReplicaStatus.FAILED,
@@ -529,7 +529,7 @@ class FailureDetector extends EventEmitter {
   async markMessageGroupReplicaAsFailed(replica, nodeId, now) {
     try {
       const result = await this.cdcIntegrationService.updateSystemTableRow(
-        SystemTableName.SERVICES,
+        SYSTEM_TABLE_NAME.SERVICES,
         buildObservedReplicaWhereClause(replica),
         {
           status: ReplicaStatus.FAILED,

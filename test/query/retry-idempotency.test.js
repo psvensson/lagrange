@@ -19,7 +19,7 @@ import {BudgetEnforcer} from '../../src/query/budget-enforcer.js';
 import {CancellationToken} from '../../src/query/cancellation-token.js';
 import {LineageTracker} from '../../src/query/lineage-tracker.js';
 import {DedupeRegistry} from '../../src/query/dedupe-registry.js';
-import {ExchangeManager} from '../../src/query/exchange-manager.js';
+import {ExchangeManager} from '../../src/query/distributed/exchange-manager.js';
 import {executeStage} from '../../src/query/call-stage.js';
 import {executeReduceByKey} from '../../src/query/call-plan.js';
 import {

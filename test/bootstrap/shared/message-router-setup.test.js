@@ -17,7 +17,6 @@ describe('MessageRouterSetup', () => {
   let createdRouters = [];
 
   beforeEach(() => {
-    ports.reset();
     createdRouters = [];
   });
 
@@ -26,8 +25,8 @@ describe('MessageRouterSetup', () => {
     for (const router of createdRouters) {
       try {
         await router.shutdown();
-      } catch (_err) {
-        // Ignore cleanup errors
+      } catch (err) {
+        console.warn('router.shutdown failed', err);
       }
     }
     createdRouters = [];

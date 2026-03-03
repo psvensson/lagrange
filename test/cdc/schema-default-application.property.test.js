@@ -15,7 +15,7 @@ import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
 import {
-  SystemTableName,
+  SYSTEM_TABLE_NAME,
   SYSTEM_TABLE_SCHEMAS,
   getSchemaByTableName,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
@@ -259,7 +259,7 @@ test('Property: prepareInsertData preserves provided values over defaults', asyn
  * **Validates: Requirements 4.6**
  */
 test('Property: prepareInsertData generates primary key when missing', async (t) => {
-  const allTables = Object.values(SystemTableName);
+  const allTables = Object.values(SYSTEM_TABLE_NAME);
 
   fc.assert(
     fc.property(
@@ -302,7 +302,7 @@ test('Property: prepareInsertData generates primary key when missing', async (t)
  * **Validates: Requirements 4.6**
  */
 test('Property: prepareInsertData only returns valid schema columns', async (t) => {
-  const allTables = Object.values(SystemTableName);
+  const allTables = Object.values(SYSTEM_TABLE_NAME);
 
   fc.assert(
     fc.property(

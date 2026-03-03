@@ -11,8 +11,8 @@ import {SQLParser, EXPR_TYPE} from '../../src/query/sql-parser.js';
 import {
   PARSER_DIALECT,
   PG_EXPR_TYPE,
-} from '../../src/query/pg-compat-constants.js';
-import {validateParamMapping} from '../../src/query/pg-translate.js';
+} from '../../src/query/pg/pg-compat-constants.js';
+import {validateParamMapping} from '../../src/query/pg/pg-translate.js';
 
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 const config = ConfigurationManager.getInstance();

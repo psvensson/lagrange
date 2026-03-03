@@ -37,6 +37,11 @@ const CDC_SOURCE = Object.freeze({
   CDC: 'cdc',
 });
 
+const CDC_SKIP_REASON = Object.freeze({
+  SELF: 'self',
+  ALREADY_CONNECTED: 'already_connected',
+});
+
 const CDC_RETRY = Object.freeze({
   MIN_ATTEMPTS: NUM.ONE,
   MIN_DELAY_MS: NUM.ZERO,
@@ -103,6 +108,15 @@ const CDC_LOG_MSG = Object.freeze({
   REBALANCER_NOTIFY_FAILED: 'Failed to notify rebalancer of node state change',
   REBALANCER_NOT_SET: 'No rebalancer set, skipping rebalancer notification',
   MESSAGE_ROUTER_SET: 'Message router set for CDC mesh connectivity',
+  METRICS_LOG_FAILED: 'CDC metrics logging failed',
+  BOOTSTRAP_MODE_REQUIRES_PARTITION_MAP:
+    'Bootstrap mode requires a Map of local partition services',
+  BOOTSTRAP_MODE_ENABLED:
+    'Bootstrap mode enabled - writes go directly to local partitions',
+  BOOTSTRAP_MODE_DISABLED:
+    'Bootstrap mode disabled - writes will route through SQL engine',
+  BOOTSTRAP_MODE_REQUIRED_FOR_DIRECT_SQL:
+    'executeSQLDirectToLocalPartition can only be called in bootstrap mode',
   NEW_NODE_DETECTED: 'New node detected via CDC, establishing connection',
   NEW_NODE_CONNECTED: 'Connected to new node via CDC event',
   NEW_NODE_CONNECT_FAILED: 'Failed to connect to new node via CDC event',
@@ -146,6 +160,10 @@ const CDC_ERROR_MSG = Object.freeze({
   NODE_ID_MISSING: 'Missing node_id in CDC event data',
   NODE_STATUS_MISSING: 'Missing status in CDC event data',
   MESSAGE_ROUTER_REQUIRED: 'messageRouter is required',
+  NOT_INSERT_OPERATION: 'Not an INSERT operation',
+  MESSAGE_ROUTER_NOT_SET: 'Message router not set',
+  BOOTSTRAP_REENTRY_FORBIDDEN:
+    'Cannot re-enable bootstrap mode after it has been cleared',
 });
 
 export {
@@ -158,6 +176,7 @@ export {
   CDC_OPERATION_LABEL,
   CDC_PRIMARY_KEY,
   CDC_RETRY,
+  CDC_SKIP_REASON,
   CDC_SOURCE,
   CDC_SQL,
   CDC_STATS_DEFAULT,

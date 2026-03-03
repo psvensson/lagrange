@@ -8,14 +8,14 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {
   CallbackExecutionHost,
-} from '../../src/query/callback-execution-host.js';
+} from '../../src/query/callback/callback-execution-host.js';
 import {CALLBACK_RUNTIME_KIND} from
   '../../src/query/sql-adapter-constants.js';
 import {STAGE_STATE} from
-  '../../src/query/callback-stage-constants.js';
+  '../../src/query/callback/callback-stage-constants.js';
 import {METRICS_LOG_TAG} from '../../src/constants/index.js';
 import {createCallbackDriverRegistry} from
-  '../../src/query/callback-runtime-driver-registry.js';
+  '../../src/query/callback/callback-runtime-driver-registry.js';
 import {createRuntimeStartupWiring} from
   '../../src/runtime/runtime-startup-wiring.js';
 
@@ -47,13 +47,17 @@ function makeRegistry() {
 
 function createSpyLogger() {
   const infoCalls = [];
+  const errorCalls = [];
   return {
     calls: infoCalls,
+    errors: errorCalls,
     info(tag, data) {
       infoCalls.push({tag, data});
     },
     debug() {},
-    error() {},
+    error(tag, data) {
+      errorCalls.push({tag, data});
+    },
   };
 }
 

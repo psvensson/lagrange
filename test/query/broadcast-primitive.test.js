@@ -18,7 +18,7 @@ import {
 import {
   BROADCAST_FIELD,
   PRIMITIVE_ERROR_MSG,
-} from '../../src/query/distributed-context-constants.js';
+} from '../../src/query/distributed/distributed-context-constants.js';
 
 // --- validateBroadcastArgs ---
 

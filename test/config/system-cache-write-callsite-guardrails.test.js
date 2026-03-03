@@ -9,9 +9,14 @@ const __dirname = path.dirname(__filename);
 const srcRoot = path.join(__dirname, '..', '..', 'src');
 
 const SANCTIONED_APPLY_CALL_COUNTS = Object.freeze({
-  'bootstrap/node-joining-service.js': 2,
-  'cache/cache-hydration-service.js': 1,
+  'admin/admin-service-discovery.js': 2,
+  'bootstrap/bootstrap-cache-hydration-applier.js': 1,
+  'bootstrap/node-joining-service.js': 1,
+  'bootstrap/phases/create-message-group-phase.js': 1,
+  'bootstrap/phases/query-system-state-phase.js': 2,
+  'cdc/cdc-integration-service.js': 2,
   'message-group/cdc-handler.js': 1,
+  'node/replica-handler.js': 1,
 });
 
 /**
@@ -101,16 +106,36 @@ describe('system cache write callsite guardrails', () => {
   });
 
   it('documents node-joining bootstrap exceptions near sanctioned writes', () => {
-    const nodeJoiningPath = path.join(srcRoot, 'bootstrap', 'node-joining-service.js');
-    const source = fs.readFileSync(nodeJoiningPath, 'utf8');
+    const createMsgGroupPhasePath = path.join(
+      srcRoot,
+      'bootstrap',
+      'phases',
+      'create-message-group-phase.js',
+    );
+    const phaseSource = fs.readFileSync(
+      createMsgGroupPhasePath,
+      'utf8',
+    );
 
     assert.match(
-      source,
+      phaseSource,
       /Bootstrap timing exception:/,
       'registerMessageGroupService callsite should document bootstrap timing exception',
     );
+
+    const queryStatePhasePath = path.join(
+      srcRoot,
+      'bootstrap',
+      'phases',
+      'query-system-state-phase.js',
+    );
+    const querySource = fs.readFileSync(
+      queryStatePhasePath,
+      'utf8',
+    );
+
     assert.match(
-      source,
+      querySource,
       /Bootstrap hydration exception:/,
       'hydrateSystemCacheFromSnapshots callsite should document bootstrap hydration exception',
     );

@@ -14,7 +14,7 @@ import {WasmCallAdapter} from '../../src/query/wasm-call-adapter.js';
 import {
   CallbackStageExecutor,
   groupRowsByPartition,
-} from '../../src/query/callback-stage-executor.js';
+} from '../../src/query/callback/callback-stage-executor.js';
 import {executeLookup} from '../../src/query/lookup-primitive.js';
 import {ShuffleBuffer} from '../../src/query/emit-primitive.js';
 import {BroadcastStore} from '../../src/query/broadcast-primitive.js';
@@ -30,13 +30,13 @@ import {
   STAGE_STATE,
   STAGE_RESULT_FIELD as SF,
   PARTITION_BATCH_FIELD as PBF,
-} from '../../src/query/callback-stage-constants.js';
+} from '../../src/query/callback/callback-stage-constants.js';
 import {
   LOOKUP_ACCESS_PATH,
   LOOKUP_KEY_FIELD,
   LOOKUP_RESULT_FIELD as LRF,
   BROADCAST_FIELD,
-} from '../../src/query/distributed-context-constants.js';
+} from '../../src/query/distributed/distributed-context-constants.js';
 import {
   STRATEGY,
 } from '../../src/query/strategy-constants.js';

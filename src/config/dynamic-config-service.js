@@ -7,7 +7,7 @@
 import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
 import {CDC_OPERATION, NUM, STRING, TYPEOF} from '../constants/index.js';
-import {SystemTableName} from '../bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
   CONFIG_DEFINITIONS,
   CONFIG_ENV,
@@ -21,12 +21,16 @@ import {
   CONFIG_LOG_MSG,
   CONFIG_SEPARATOR,
   CONFIG_SEED_SOURCE,
+  CONFIG_SQL,
   CONFIG_STATS_DEFAULT,
   CONFIG_SUBSYSTEM,
   CONFIG_TABLE_COLUMN,
   CONFIG_VALUE_DEFAULT,
   CONFIG_VALUE_TYPE,
 } from './config-constants.js';
+
+const CONFIG_SELECT_ALL_SQL = CONFIG_SQL.SELECT_ALL;
+const CONFIG_SELECT_BY_KEY_SQL = CONFIG_SQL.SELECT_BY_KEY;
 
 const ConfigValueType = CONFIG_VALUE_TYPE;
 
@@ -127,7 +131,7 @@ class DynamicConfigService extends EventEmitter {
 
       // Insert into config table
       await this.cdcIntegrationService.insertSystemTableRow(
-        SystemTableName.CONFIG,
+        SYSTEM_TABLE_NAME.CONFIG,
         {
           [CONFIG_TABLE_COLUMN.KEY]: key,
           [CONFIG_TABLE_COLUMN.VALUE]: this.serializeValue(
@@ -218,8 +222,8 @@ class DynamicConfigService extends EventEmitter {
     if (existing) {
       // Update existing
       await this.cdcIntegrationService.updateSystemTableRow(
-        SystemTableName.CONFIG,
-        {config_key: key},
+        SYSTEM_TABLE_NAME.CONFIG,
+        {[CONFIG_TABLE_COLUMN.KEY]: key},
         {
           [CONFIG_TABLE_COLUMN.VALUE]: this.serializeValue(value, valueType),
           [CONFIG_TABLE_COLUMN.UPDATED_BY]: updatedBy,
@@ -229,7 +233,7 @@ class DynamicConfigService extends EventEmitter {
     } else {
       // Insert new
       await this.cdcIntegrationService.insertSystemTableRow(
-        SystemTableName.CONFIG,
+        SYSTEM_TABLE_NAME.CONFIG,
         {
           [CONFIG_TABLE_COLUMN.KEY]: key,
           [CONFIG_TABLE_COLUMN.VALUE]: this.serializeValue(value, valueType),
@@ -275,7 +279,7 @@ class DynamicConfigService extends EventEmitter {
 
     if (this.sqlQueryEngine) {
       const queryResult = await this.sqlQueryEngine.executeQuery(
-        'SELECT * FROM config', [],
+        CONFIG_SELECT_ALL_SQL, [],
       );
       const configs = queryResult.rows || [];
       for (const config of configs) {
@@ -519,7 +523,7 @@ class DynamicConfigService extends EventEmitter {
   async getConfigFromTable(key) {
     if (this.sqlQueryEngine) {
       const result = await this.sqlQueryEngine.executeQuery(
-        'SELECT * FROM config WHERE config_key = ?', [key],
+        CONFIG_SELECT_BY_KEY_SQL, [key],
       );
       return result.rows?.[0] || null;
     }
@@ -560,7 +564,7 @@ class DynamicConfigService extends EventEmitter {
     case ConfigValueType.JSON:
       try {
         return JSON.parse(serialized);
-      } catch {
+      } catch (_parseErr) {
         return CONFIG_VALUE_DEFAULT.EMPTY_OBJECT;
       }
     default:
@@ -597,7 +601,7 @@ class DynamicConfigService extends EventEmitter {
     case ConfigValueType.JSON:
       try {
         return JSON.parse(value);
-      } catch {
+      } catch (_parseErr) {
         return CONFIG_VALUE_DEFAULT.EMPTY_OBJECT;
       }
     default:

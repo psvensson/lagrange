@@ -23,7 +23,7 @@ import {UnifiedRebalancer, EntityType} from '../../src/rebalancer/unified-rebala
 import {ReplicaLifecycleManager} from '../../src/node/replica-lifecycle-manager.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {DEFAULT_TABLE_POLICY} from '../../src/policy/policy-constants.js';
-import {SystemTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 
 // Port counter for unique ports per test
 let integrationPortCounter = 25000;
@@ -64,9 +64,16 @@ function initializeTestEnvironment() {
  * Clean up test environment.
  */
 async function cleanupTestEnvironment() {
-  await NodeService.getInstance().shutdown().catch(() => {});
-  await ServiceThreadManager.getInstance().shutdown().catch(() => {});
-  await LoggingService.getInstance().shutdown().catch(() => {});
+  await NodeService.getInstance().shutdown()
+    .catch((err) => {
+      console.warn('shutdown failed', err);
+    });
+  await ServiceThreadManager.getInstance().shutdown()
+    .catch((err) => {
+      console.warn('shutdown failed', err);
+    });
+  await LoggingService.getInstance().shutdown()
+    .catch((err) => console.warn('shutdown failed', err.message));
   NodeService.resetInstance();
   ServiceThreadManager.resetInstance();
   ConfigurationManager.resetInstance();
@@ -464,19 +471,19 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
         }
         if (resources.seedPartition) {
           resources.seedPartition.rebalancer?.cancelScheduledCheck();
-          await resources.seedPartition.shutdown().catch(() => {});
+          await resources.seedPartition.shutdown().catch((err) => console.warn('shutdown failed', err.message));
         }
         if (resources.messageGroup) {
-          await resources.messageGroup.shutdown().catch(() => {});
+          await resources.messageGroup.shutdown().catch((err) => console.warn('shutdown failed', err.message));
         }
         if (resources.seedRouter) {
-          await resources.seedRouter.shutdown().catch(() => {});
+          await resources.seedRouter.shutdown().catch((err) => console.warn('shutdown failed', err.message));
         }
         if (resources.secondNodeRouter) {
-          await resources.secondNodeRouter.shutdown().catch(() => {});
+          await resources.secondNodeRouter.shutdown().catch((err) => console.warn('shutdown failed', err.message));
         }
         if (resources.bootstrapRouter) {
-          await resources.bootstrapRouter.shutdown().catch(() => {});
+          await resources.bootstrapRouter.shutdown().catch((err) => console.warn('shutdown failed', err.message));
         }
       }
     });
@@ -566,10 +573,10 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
       );
     } finally {
       if (resources.messageGroup) {
-        await resources.messageGroup.shutdown().catch(() => {});
+        await resources.messageGroup.shutdown().catch((err) => console.warn('shutdown failed', err.message));
       }
       if (resources.router) {
-        await resources.router.shutdown().catch(() => {});
+        await resources.router.shutdown().catch((err) => console.warn('shutdown failed', err.message));
       }
     }
   });
@@ -675,19 +682,19 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
     const createdReplicas = [];
     const lifecycleCache = new SystemTableCache();
     const now = Date.now();
-    lifecycleCache.applySystemTableChange(SystemTableName.TABLES, 'INSERT', {
+    lifecycleCache.applySystemTableChange(SYSTEM_TABLE_NAME.TABLES, 'INSERT', {
       table_id: 'test_table',
       table_name: 'test_table',
       schema_definition: JSON.stringify(createTestSchema('test_table')),
     });
-    lifecycleCache.applySystemTableChange(SystemTableName.PARTITIONS, 'INSERT', {
+    lifecycleCache.applySystemTableChange(SYSTEM_TABLE_NAME.PARTITIONS, 'INSERT', {
       partition_id: 'test-partition',
       table_id: 'test_table',
       partition_key_start: null,
       partition_key_end: null,
       leader_node_id: nodeId,
     });
-    lifecycleCache.applySystemTableChange(SystemTableName.SERVICES, 'INSERT', {
+    lifecycleCache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
       service_id: 'test-partition-r1',
       service_type: 'partition',
       partition_id: 'test-partition',

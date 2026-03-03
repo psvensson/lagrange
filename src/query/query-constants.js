@@ -123,6 +123,8 @@ const QUERY_ERROR_MSG = Object.freeze({
     'Timed out waiting for routable partition service for partition ',
   TABLE_PARTITION_PROVISION_DISPATCH_FAILED:
     'Failed to dispatch initial table partition replica creation',
+  MISSING_JOIN_PLAN:
+    'Missing canonical join partition plan',
 });
 
 const QUERY_ROUTER_ERROR_MSG = Object.freeze({
@@ -182,6 +184,7 @@ const QUERY_LOG_MSG = Object.freeze({
   FOLLOWING_LEADER_REDIRECT: 'Following leader redirect',
   WRITE_OP_PERSIST_FAILED:
     'Non-transactional write operation persistence failed',
+  INIT_LOGGER_FAILED: 'initLogger failed',
 });
 
 const QUERY_ROUTER_LOG_MSG = Object.freeze({

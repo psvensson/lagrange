@@ -16,7 +16,7 @@ import path from 'path';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
-import {SystemTableName} from '../bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {SERVICE_TYPE, TYPEOF} from '../constants/index.js';
 import {STORAGE_DEFAULT} from '../storage/storage-constants.js';
 import {assertCritical} from '../utils/assert.js';
@@ -69,10 +69,10 @@ function buildObservedReplicaWhereClause(service) {
   const whereClause = {
     service_id: service.service_id,
   };
-  if (typeof service?.node_id === 'string' && service.node_id.length > 0) {
+  if (typeof service?.node_id === TYPEOF.STRING && service.node_id.length > 0) {
     whereClause.node_id = service.node_id;
   }
-  if (typeof service?.status === 'string' && service.status.length > 0) {
+  if (typeof service?.status === TYPEOF.STRING && service.status.length > 0) {
     whereClause.status = service.status;
   }
   if (Number.isFinite(service?.updated_at)) {
@@ -283,7 +283,7 @@ class ReplicaLifecycleManager extends EventEmitter {
     // and lose fields like partition_id, raft_role, created_at, etc.
     if (this.cdcIntegrationService) {
       const result = await this.cdcIntegrationService.updateSystemTableRow(
-        SystemTableName.SERVICES,
+        SYSTEM_TABLE_NAME.SERVICES,
         {service_id: replicaId},
         {
           status: newStatus,
@@ -581,7 +581,7 @@ class ReplicaLifecycleManager extends EventEmitter {
 
     // Query services table for replicas on this node in transitional states
     const services = this.systemTableCache.filter(
-      SystemTableName.SERVICES,
+      SYSTEM_TABLE_NAME.SERVICES,
       (service) =>
         service.node_id === this.nodeId &&
         service.service_type === SERVICE_TYPE.PARTITION &&
@@ -611,7 +611,7 @@ class ReplicaLifecycleManager extends EventEmitter {
         if (status === ReplicaStatus.STARTING || status === ReplicaStatus.SYNCING) {
           // Mark 'starting'/'syncing' replicas as 'failed'
           const failResult = await this.cdcIntegrationService.updateSystemTableRow(
-            SystemTableName.SERVICES,
+            SYSTEM_TABLE_NAME.SERVICES,
             buildObservedReplicaWhereClause(service),
             {
               status: ReplicaStatus.FAILED,
@@ -639,7 +639,7 @@ class ReplicaLifecycleManager extends EventEmitter {
         } else if (status === ReplicaStatus.STOPPING) {
           // Complete removal for 'stopping' replicas
           const stopResult = await this.cdcIntegrationService.updateSystemTableRow(
-            SystemTableName.SERVICES,
+            SYSTEM_TABLE_NAME.SERVICES,
             buildObservedReplicaWhereClause(service),
             {status: ReplicaStatus.STOPPED},
           );
@@ -653,7 +653,7 @@ class ReplicaLifecycleManager extends EventEmitter {
           }
 
           await this.cdcIntegrationService.deleteSystemTableRow(
-            SystemTableName.SERVICES,
+            SYSTEM_TABLE_NAME.SERVICES,
             {
               service_id: serviceId,
               status: ReplicaStatus.STOPPED,

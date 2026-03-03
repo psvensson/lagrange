@@ -3,7 +3,7 @@ import {
   ARTIFACT_FORMAT,
   buildJsWasmComponentArtifact,
   parseCallbackModuleArtifact,
-} from '../../src/query/callback-module-artifact.js';
+} from '../../src/query/callback/callback-module-artifact.js';
 
 test('callback module artifact - build and parse js_wasm_component_v1', async (t) => {
   const source = '\'use strict\';\nmodule.exports.run = async () => [];';

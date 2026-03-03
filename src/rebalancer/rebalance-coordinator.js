@@ -14,7 +14,7 @@ import {EventEmitter} from 'events';
 import {v4 as uuidv4} from 'uuid';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
-import {SystemTableName} from '../bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {isNodeRecordReady} from '../node/node-readiness-policy.js';
 import {
   WORKFLOW_STEP, NUM, ERRORS, TIME_MS, METRICS_LOG_TAG,
@@ -99,7 +99,7 @@ const SQL = Object.freeze({
     SET status = ?, updated_at = ?, released_at = ?
     WHERE operation_id = ? AND status = ?`,
   SELECT_ACTIVE_RESERVATIONS:
-    'SELECT * FROM storage_reservations WHERE status = \'active\'',
+    'SELECT * FROM storage_reservations WHERE status = ?',
   EXPIRE_STALE_RESERVATIONS: `UPDATE storage_reservations
     SET status = ?, updated_at = ?, released_at = ?
     WHERE status = ? AND expires_at <= ?`,
@@ -116,7 +116,7 @@ const OPERATION_HANDLER = Object.freeze({
 });
 
 const CRITICAL_SYSTEM_PARTITION_IDS = new Set(
-  Object.values(SystemTableName).map((tableName) => `${tableName}-p1`),
+  Object.values(SYSTEM_TABLE_NAME).map((tableName) => `${tableName}-p1`),
 );
 
 const DEFAULT_MIN_REPLICA_COUNT = NUM.THREE;
@@ -497,7 +497,7 @@ class RebalanceCoordinator extends EventEmitter {
       return [];
     }
 
-    return this.systemTableCache.filter(SystemTableName.SERVICES, (row) => {
+    return this.systemTableCache.filter(SYSTEM_TABLE_NAME.SERVICES, (row) => {
       if (!row || row.service_type !== entityType) {
         return false;
       }
@@ -529,7 +529,7 @@ class RebalanceCoordinator extends EventEmitter {
     }
 
     return this.systemTableCache.filter(
-      SystemTableName.REPLICA_OPERATIONS,
+      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
       (row) => {
         if (!row || TERMINAL_STATUSES.includes(row.status)) {
           return false;
@@ -1227,7 +1227,7 @@ class RebalanceCoordinator extends EventEmitter {
     // 2. Release orphan reservations (operation is terminal)
     const activeResult = await this.sqlQueryEngine.executeQuery(
       SQL.SELECT_ACTIVE_RESERVATIONS,
-      [],
+      [RESERVATION_STATUS.ACTIVE],
     );
 
     if (activeResult.success && activeResult.rows) {
@@ -1623,7 +1623,7 @@ class RebalanceCoordinator extends EventEmitter {
     }
 
     const criticalReplicaRows = this.systemTableCache.filter(
-      SystemTableName.SERVICES,
+      SYSTEM_TABLE_NAME.SERVICES,
       (row) =>
         row.partition_id === operation.partitionId &&
         row.service_type === SERVICE_TYPE.PARTITION,
@@ -1810,7 +1810,7 @@ class RebalanceCoordinator extends EventEmitter {
       return false;
     }
 
-    const nodeRow = this.systemTableCache.get(SystemTableName.NODES, nodeId);
+    const nodeRow = this.systemTableCache.get(SYSTEM_TABLE_NAME.NODES, nodeId);
     if (!nodeRow) {
       return false;
     }

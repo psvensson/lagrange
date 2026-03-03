@@ -13,7 +13,7 @@ import {test} from '../../src/test-helpers/tap.js';
 import {
   PostgresWireAdapter,
   PG_SESSION_STATE,
-} from '../../src/query/postgres-wire-adapter.js';
+} from '../../src/query/pg/postgres-wire-adapter.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {

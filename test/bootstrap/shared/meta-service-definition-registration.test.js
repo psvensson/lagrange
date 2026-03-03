@@ -7,7 +7,7 @@ import {
 import {META_SERVICE_ID} from '../../../src/constants/index.js';
 import {RUNTIME_KIND} from '../../../src/constants/runtime.js';
 import {
-  SystemTableName,
+  SYSTEM_TABLE_NAME,
 } from '../../../src/bootstrap/system-table-schemas-constants.js';
 import {
   WASM_SERVICE_PROTOCOL,
@@ -45,7 +45,7 @@ describe('registerBuiltInMetaServiceDefinitions', () => {
 
     assert.equal(rows.length, 3);
     for (const {tableName} of rows) {
-      assert.equal(tableName, SystemTableName.SERVICE_DEFINITIONS);
+      assert.equal(tableName, SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS);
     }
   });
 

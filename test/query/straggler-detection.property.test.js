@@ -8,7 +8,7 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
-import {StragglerDetector} from '../../src/query/straggler-detector.js';
+import {StragglerDetector} from '../../src/query/distributed/straggler-detector.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 
 // Initialize configuration

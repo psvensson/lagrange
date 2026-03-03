@@ -6,13 +6,23 @@ const CUTOVER_GUARD_FILE = Object.freeze({
   BOOTSTRAP_SERVICE: 'src/bootstrap/bootstrap-service.js',
   NODE_JOINING_SERVICE: 'src/bootstrap/node-joining-service.js',
   ADMIN_WEBSOCKET_API: 'src/admin/admin-websocket-api.js',
+  CREATE_MESSAGE_GROUP_PHASE:
+    'src/bootstrap/phases/create-message-group-phase.js',
+  JOIN_MESSAGE_GROUP_PHASE:
+    'src/bootstrap/phases/join-message-group-phase.js',
+  SEED_MESSAGE_GROUPS_PHASE:
+    'src/bootstrap/phases/seed-message-groups-phase.js',
+  SEED_PARTITIONS_PHASE:
+    'src/bootstrap/phases/seed-partitions-phase.js',
 });
 
 const CUTOVER_GUARD_METHOD = Object.freeze({
   BOOTSTRAP_MESSAGE_GROUPS: 'async phaseMessageGroups() {',
   BOOTSTRAP_PARTITIONS: 'async phasePartitions() {',
-  JOIN_SELF_HOSTED: 'async phaseCreateSelfHostedMessageGroup(assignment) {',
-  JOIN_EXISTING: 'async phaseJoinExistingMessageGroup(assignment) {',
+  JOIN_SELF_HOSTED:
+    'async phaseCreateSelfHostedMessageGroup(assignment) {',
+  JOIN_EXISTING:
+    'async phaseJoinExistingMessageGroup(assignment) {',
   ADMIN_HANDLE_MESSAGE: 'handleMessage(clientInfo, data) {',
   ADMIN_HANDLE_DISPATCHABLE: 'async handleDispatchableAdminMessage(clientInfo, message) {',
 });
@@ -64,13 +74,18 @@ function extractMethodBody(source, signature) {
 
 describe('Unified service lifecycle hard-cutover guardrails', () => {
   it('keeps bootstrap phase entrypoints free of direct service startup', () => {
-    const bootstrapSource = readFile(CUTOVER_GUARD_FILE.BOOTSTRAP_SERVICE);
+    const messageGroupSource = readFile(
+      CUTOVER_GUARD_FILE.SEED_MESSAGE_GROUPS_PHASE,
+    );
+    const partitionSource = readFile(
+      CUTOVER_GUARD_FILE.SEED_PARTITIONS_PHASE,
+    );
     const messageGroupPhaseBody = extractMethodBody(
-      bootstrapSource,
+      messageGroupSource,
       CUTOVER_GUARD_METHOD.BOOTSTRAP_MESSAGE_GROUPS,
     );
     const partitionPhaseBody = extractMethodBody(
-      bootstrapSource,
+      partitionSource,
       CUTOVER_GUARD_METHOD.BOOTSTRAP_PARTITIONS,
     );
 
@@ -119,13 +134,18 @@ describe('Unified service lifecycle hard-cutover guardrails', () => {
   });
 
   it('keeps join phase entrypoints free of direct message-group startup', () => {
-    const joinSource = readFile(CUTOVER_GUARD_FILE.NODE_JOINING_SERVICE);
+    const selfHostedSource = readFile(
+      CUTOVER_GUARD_FILE.CREATE_MESSAGE_GROUP_PHASE,
+    );
+    const joinExistingSource = readFile(
+      CUTOVER_GUARD_FILE.JOIN_MESSAGE_GROUP_PHASE,
+    );
     const selfHostedBody = extractMethodBody(
-      joinSource,
+      selfHostedSource,
       CUTOVER_GUARD_METHOD.JOIN_SELF_HOSTED,
     );
     const joinExistingBody = extractMethodBody(
-      joinSource,
+      joinExistingSource,
       CUTOVER_GUARD_METHOD.JOIN_EXISTING,
     );
 

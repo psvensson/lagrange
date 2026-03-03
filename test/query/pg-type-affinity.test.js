@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import {
   PG_TYPE_AFFINITY_MAP,
   resolveAffinity,
-} from '../../src/query/pg-type-affinity.js';
+} from '../../src/query/pg/pg-type-affinity.js';
 
 describe('PG_TYPE_AFFINITY_MAP', () => {
   it('is frozen', () => {

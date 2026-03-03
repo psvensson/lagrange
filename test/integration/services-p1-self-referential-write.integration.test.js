@@ -21,7 +21,7 @@ import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {COLUMN, SERVICE_STATUS, SERVICE_TYPE, TABLES} from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
-import {SystemTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
   INTEGRATION_TEST_TIMEOUT_MS,
   TEST_LEADERSHIP_WAIT_MS,
@@ -227,9 +227,11 @@ async function bootstrapSeedNodeWithRetry(seedNodeId, maxAttempts = 3) {
     }
 
     if (bootstrapResult?.messageRouter?.shutdown) {
-      await bootstrapResult.messageRouter.shutdown().catch(() => {});
+      await bootstrapResult.messageRouter.shutdown()
+        .catch((err) => console.warn('shutdown failed', err.message));
     }
-    await bootstrapService.shutdown().catch(() => {});
+    await bootstrapService.shutdown()
+      .catch((err) => console.warn('shutdown failed', err.message));
   }
 
   throw lastAddressInUseError ||
@@ -321,7 +323,7 @@ test('Services-P1 self-referential write integration', {timeout: INTEGRATION_TES
 
         // Perform the self-referential write
         const writePromise = cdcIntegrationService.insertSystemTableRow(
-          SystemTableName.SERVICES,
+          SYSTEM_TABLE_NAME.SERVICES,
           {
             service_id: testServiceId,
             service_type: SERVICE_TYPE.PARTITION,
@@ -381,10 +383,10 @@ test('Services-P1 self-referential write integration', {timeout: INTEGRATION_TES
         // CLEANUP
         // =========================================================================
         if (bootstrapService?.shutdown) {
-          await bootstrapService.shutdown().catch(() => {});
+          await bootstrapService.shutdown().catch((_shutdownErr) => {});
         }
         if (bootstrapResult?.messageRouter) {
-          await bootstrapResult.messageRouter.shutdown().catch(() => {});
+          await bootstrapResult.messageRouter.shutdown().catch((_shutdownErr) => {});
         }
       }
     });
@@ -402,12 +404,11 @@ test('Services-P1 self-referential write integration', {timeout: INTEGRATION_TES
       // PHASE 1: Bootstrap seed node
       // =========================================================================
       const seedNodeId = '550e8400-e29b-41d4-a716-446655440202';
-      let seedWsPort;
       let bootstrapService;
       let bootstrapResult;
 
       try {
-        ({seedWsPort, bootstrapService, bootstrapResult} =
+        ({bootstrapService, bootstrapResult} =
           await bootstrapSeedNodeWithRetry(seedNodeId));
         t.equal(bootstrapResult.success, true, 'seed node bootstrap should succeed');
 
@@ -453,7 +454,7 @@ test('Services-P1 self-referential write integration', {timeout: INTEGRATION_TES
         });
 
         const updatePromise = cdcIntegrationService.updateSystemTableRow(
-          SystemTableName.SERVICES,
+          SYSTEM_TABLE_NAME.SERVICES,
           {service_id: serviceIdToUpdate},
           {updated_at: Date.now()},
         );
@@ -497,10 +498,10 @@ test('Services-P1 self-referential write integration', {timeout: INTEGRATION_TES
         // CLEANUP
         // =========================================================================
         if (bootstrapService?.shutdown) {
-          await bootstrapService.shutdown().catch(() => {});
+          await bootstrapService.shutdown().catch((_shutdownErr) => {});
         }
         if (bootstrapResult?.messageRouter) {
-          await bootstrapResult.messageRouter.shutdown().catch(() => {});
+          await bootstrapResult.messageRouter.shutdown().catch((_shutdownErr) => {});
         }
       }
     });
@@ -553,7 +554,7 @@ test('Services-P1 self-referential write integration', {timeout: INTEGRATION_TES
           testServiceIds.push(testServiceId);
 
           const writePromise = cdcIntegrationService.insertSystemTableRow(
-            SystemTableName.SERVICES,
+            SYSTEM_TABLE_NAME.SERVICES,
             {
               service_id: testServiceId,
               service_type: SERVICE_TYPE.PARTITION,
@@ -626,10 +627,10 @@ test('Services-P1 self-referential write integration', {timeout: INTEGRATION_TES
         // CLEANUP
         // =========================================================================
         if (bootstrapService?.shutdown) {
-          await bootstrapService.shutdown().catch(() => {});
+          await bootstrapService.shutdown().catch((_shutdownErr) => {});
         }
         if (bootstrapResult?.messageRouter) {
-          await bootstrapResult.messageRouter.shutdown().catch(() => {});
+          await bootstrapResult.messageRouter.shutdown().catch((_shutdownErr) => {});
         }
       }
     });

@@ -10,7 +10,7 @@ import path from 'path';
 import os from 'os';
 import {ReplicaHandler} from '../../src/node/replica-handler.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
-import {SystemTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -103,13 +103,13 @@ function createSeededCache(options = {}) {
     columns: [{name: 'id', type: 'TEXT', primaryKey: true}],
   };
 
-  cache.applySystemTableChange(SystemTableName.TABLES, 'INSERT', {
+  cache.applySystemTableChange(SYSTEM_TABLE_NAME.TABLES, 'INSERT', {
     table_id: tableId,
     table_name: tableName,
     schema_definition: JSON.stringify(schema),
   });
 
-  cache.applySystemTableChange(SystemTableName.PARTITIONS, 'INSERT', {
+  cache.applySystemTableChange(SYSTEM_TABLE_NAME.PARTITIONS, 'INSERT', {
     partition_id: partitionId,
     table_id: tableId,
     partition_key_start: null,
@@ -117,7 +117,7 @@ function createSeededCache(options = {}) {
     leader_node_id: leaderNodeId,
   });
 
-  cache.applySystemTableChange(SystemTableName.SERVICES, 'INSERT', {
+  cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
     service_id: leaderReplicaId,
     service_type: 'partition',
     partition_id: partitionId,
@@ -146,13 +146,13 @@ function createMetadataOnlyCache(options = {}) {
     columns: [{name: 'id', type: 'TEXT', primaryKey: true}],
   };
 
-  cache.applySystemTableChange(SystemTableName.TABLES, 'INSERT', {
+  cache.applySystemTableChange(SYSTEM_TABLE_NAME.TABLES, 'INSERT', {
     table_id: tableId,
     table_name: tableName,
     schema_definition: JSON.stringify(schema),
   });
 
-  cache.applySystemTableChange(SystemTableName.PARTITIONS, 'INSERT', {
+  cache.applySystemTableChange(SYSTEM_TABLE_NAME.PARTITIONS, 'INSERT', {
     partition_id: partitionId,
     table_id: tableId,
     partition_key_start: null,
@@ -174,7 +174,7 @@ function createServiceOnlyCache(options = {}) {
   const leaderNodeId = options.leaderNodeId || 'leader-node';
   const leaderReplicaId = options.leaderReplicaId || 'leader-replica';
 
-  cache.applySystemTableChange(SystemTableName.SERVICES, 'INSERT', {
+  cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
     service_id: leaderReplicaId,
     service_type: 'partition',
     partition_id: partitionId,
@@ -197,7 +197,7 @@ function createServiceOnlyCache(options = {}) {
  */
 function seedReplicaOperation(cache, operationId, overrides = {}) {
   const now = Date.now();
-  cache.applySystemTableChange(SystemTableName.REPLICA_OPERATIONS, 'INSERT', {
+  cache.applySystemTableChange(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS, 'INSERT', {
     operation_id: operationId,
     type: overrides.type || 'ADD',
     partition_id: overrides.partitionId || 'partition-1',
@@ -540,7 +540,7 @@ test('ReplicaHandler', async (t) => {
       seedReplicaOperation(cache, 'op-1', {partitionId, replicaId: 'replica-1'});
       const now = Date.now();
       for (const serviceId of ['replica-1', 'replica-2', 'replica-3']) {
-        cache.applySystemTableChange(SystemTableName.SERVICES, 'INSERT', {
+        cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
           service_id: serviceId,
           service_type: 'partition',
           partition_id: partitionId,
@@ -606,7 +606,7 @@ test('ReplicaHandler', async (t) => {
       seedReplicaOperation(cache, 'op-1', {partitionId, replicaId: 'replica-1'});
       const now = Date.now();
       for (const serviceId of ['replica-1', 'replica-2', 'replica-3']) {
-        cache.applySystemTableChange(SystemTableName.SERVICES, 'INSERT', {
+        cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
           service_id: serviceId,
           service_type: 'partition',
           partition_id: partitionId,
@@ -672,7 +672,7 @@ test('ReplicaHandler', async (t) => {
       const cache = createMetadataOnlyCache({partitionId});
       const now = Date.now();
       for (const serviceId of ['replica-1', 'replica-2', 'replica-3']) {
-        cache.applySystemTableChange(SystemTableName.SERVICES, 'INSERT', {
+        cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
           service_id: serviceId,
           service_type: 'partition',
           partition_id: partitionId,
@@ -718,7 +718,7 @@ test('ReplicaHandler', async (t) => {
       const tableId = 'table-1';
       const cache = createMetadataOnlyCache({partitionId, tableId});
       const now = Date.now();
-      cache.applySystemTableChange(SystemTableName.PARTITIONS, 'INSERT', {
+      cache.applySystemTableChange(SYSTEM_TABLE_NAME.PARTITIONS, 'INSERT', {
         partition_id: partitionId,
         table_id: tableId,
         partition_key_start: null,
@@ -727,7 +727,7 @@ test('ReplicaHandler', async (t) => {
         created_at: now,
         updated_at: now,
       });
-      cache.applySystemTableChange(SystemTableName.SERVICES, 'INSERT', {
+      cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
         service_id: 'replica-2',
         service_type: 'partition',
         partition_id: partitionId,
@@ -738,7 +738,7 @@ test('ReplicaHandler', async (t) => {
         created_at: now,
         updated_at: now,
       });
-      cache.applySystemTableChange(SystemTableName.SERVICES, 'INSERT', {
+      cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
         service_id: 'replica-3',
         service_type: 'partition',
         partition_id: partitionId,
@@ -915,14 +915,14 @@ test('ReplicaHandler', async (t) => {
       );
 
       const delayedMetadataSeedTimer = setTimeout(() => {
-        cache.applySystemTableChange(SystemTableName.TABLES, 'INSERT', {
+        cache.applySystemTableChange(SYSTEM_TABLE_NAME.TABLES, 'INSERT', {
           table_id: tableId,
           table_name: tableName,
           schema_definition: JSON.stringify({
             columns: [{name: 'id', type: 'TEXT', primaryKey: true}],
           }),
         });
-        cache.applySystemTableChange(SystemTableName.PARTITIONS, 'INSERT', {
+        cache.applySystemTableChange(SYSTEM_TABLE_NAME.PARTITIONS, 'INSERT', {
           partition_id: partitionId,
           table_id: tableId,
           partition_key_start: null,
@@ -944,13 +944,13 @@ test('ReplicaHandler', async (t) => {
 
       const failedOperationUpdates = mockCDC.operations.filter((operation) =>
         operation.type === 'update' &&
-        operation.tableName === SystemTableName.REPLICA_OPERATIONS &&
+        operation.tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS &&
         operation.data?.workflow_step === 'FAILED',
       );
       t.equal(failedOperationUpdates.length, 0,
         'replica operation should not fail during transient metadata lag');
 
-      const serviceRow = cache.get(SystemTableName.SERVICES, replicaId);
+      const serviceRow = cache.get(SYSTEM_TABLE_NAME.SERVICES, replicaId);
       t.equal(serviceRow?.status, ReplicaStatus.ACTIVE,
         'replica should become ACTIVE after delayed metadata propagation');
 
@@ -1042,13 +1042,13 @@ test('ReplicaHandler', async (t) => {
 
       await created;
 
-      const tableRow = cache.get(SystemTableName.TABLES, tableId);
+      const tableRow = cache.get(SYSTEM_TABLE_NAME.TABLES, tableId);
       t.ok(tableRow, 'table metadata should be hydrated into local cache');
-      const partitionRow = cache.get(SystemTableName.PARTITIONS, partitionId);
+      const partitionRow = cache.get(SYSTEM_TABLE_NAME.PARTITIONS, partitionId);
       t.equal(partitionRow?.table_id, tableId,
         'partition metadata should be hydrated into local cache');
 
-      const serviceRow = cache.get(SystemTableName.SERVICES, replicaId);
+      const serviceRow = cache.get(SYSTEM_TABLE_NAME.SERVICES, replicaId);
       t.equal(serviceRow?.status, ReplicaStatus.ACTIVE,
         'replica should become ACTIVE after metadata hydration');
 
@@ -1461,7 +1461,7 @@ test('ReplicaHandler', async (t) => {
   t.test('status update does not overwrite raft role owned by partition service',
     async (t) => {
       const cache = createMetadataOnlyCache({partitionId: 'partition-1'});
-      cache.applySystemTableChange(SystemTableName.SERVICES, 'INSERT', {
+      cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
         service_id: 'replica-1',
         service_type: 'partition',
         partition_id: 'partition-1',
@@ -1562,7 +1562,7 @@ test('ReplicaHandler', async (t) => {
   t.test('async removal updates status via CDC', async (t) => {
     const cache = createSeededCache();
     seedReplicaOperation(cache, 'op-1', {type: 'REMOVE'});
-    cache.applySystemTableChange(SystemTableName.SERVICES, 'INSERT', {
+    cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
       service_id: 'replica-1',
       service_type: 'partition',
       partition_id: 'partition-1',
@@ -1628,7 +1628,7 @@ test('ReplicaHandler', async (t) => {
     t.ok(removedUpdate, 'removed status update via CDC');
 
     const deleteOp = mockCDC.operations.find(
-      (op) => op.type === 'delete' && op.tableName === SystemTableName.SERVICES,
+      (op) => op.type === 'delete' && op.tableName === SYSTEM_TABLE_NAME.SERVICES,
     );
     t.ok(deleteOp, 'service row deleted via CDC');
 

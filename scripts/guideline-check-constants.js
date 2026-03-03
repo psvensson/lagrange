@@ -100,6 +100,21 @@ export const GUIDELINE_LLM_PROMPT = Object.freeze({
   NO_STRUCTURAL_OVERREACH:
     'Do not require decomposition into ever-smaller constants unless the file ' +
     'still embeds raw literals inside composed structures contrary to the guidelines.',
+  NO_LANGUAGE_PRIMITIVES:
+    'Do not flag language primitives or built-in API calls as magic literals. ' +
+    'Date.now(), true, false, null, undefined, Infinity, NaN, and parseInt ' +
+    'radix arguments are idiomatic JavaScript, not magic values.',
+  NO_COMMENT_LITERALS:
+    'Do not flag numbers or strings that appear only inside comments. ' +
+    'Comments are documentation, not executable code.',
+  NO_EPHEMERAL_STATE_FLAG:
+    'Do not flag in-memory Maps or objects used for request-scoped, ' +
+    'session-scoped, or ephemeral coordination state as system-cache ' +
+    'violations. Rule 2.2 applies only to caches of system topology ' +
+    'and cluster metadata, not to transient operational state.',
+  NO_TRUNCATION_FLAG:
+    'If the file content ends with [TRUNCATED], that is a tooling artifact. ' +
+    'Do not report the truncation itself as a violation.',
   JSON_SHAPE:
     'Return strict JSON with this exact shape and no extra keys:',
   JSON_SCHEMA:

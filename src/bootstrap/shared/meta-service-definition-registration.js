@@ -7,7 +7,7 @@
 
 import {URL} from 'node:url';
 import {TYPEOF} from '../../constants/index.js';
-import {SystemTableName} from '../system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME} from '../system-table-schemas-constants.js';
 import {
   createAdminMetaDefinition,
   createWasmMetaDefinition,
@@ -47,7 +47,7 @@ async function registerBuiltInMetaServiceDefinitions(options = {}) {
 
   for (const definition of definitions) {
     const row = serializeServiceDefinition(definition);
-    await upsertRow(SystemTableName.SERVICE_DEFINITIONS, row);
+    await upsertRow(SYSTEM_TABLE_NAME.SERVICE_DEFINITIONS, row);
   }
 
   return definitions.map((definition) => definition.serviceId);
@@ -96,7 +96,7 @@ async function registerBuiltInMetaServiceEndpoints(options = {}) {
 
   const endpoints = [wasmMetaEndpoint, adminMetaEndpoint, postgresWireEndpoint];
   for (const endpoint of endpoints) {
-    await upsertRow(SystemTableName.SERVICE_ENDPOINTS, endpoint);
+    await upsertRow(SYSTEM_TABLE_NAME.SERVICE_ENDPOINTS, endpoint);
   }
 
   return endpoints.map((endpoint) => endpoint.endpoint_id);

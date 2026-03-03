@@ -11,13 +11,13 @@ import fc from 'fast-check';
 import {
   translateFunctionCall,
   PG_FUNCTION_MAP,
-} from '../../src/query/pg-function-registry.js';
+} from '../../src/query/pg/pg-function-registry.js';
 import {EXPR_TYPE} from '../../src/query/sql-parser.js';
 import {
   PG_EXPR_TYPE,
   PG_EXTRACT_FORMAT,
   PG_DATE_TRUNC_FORMAT,
-} from '../../src/query/pg-compat-constants.js';
+} from '../../src/query/pg/pg-compat-constants.js';
 
 /** Identity converter — returns the node as-is. */
 const identity = (e) => e;

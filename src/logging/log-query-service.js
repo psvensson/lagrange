@@ -8,7 +8,7 @@ import {EventEmitter} from 'events';
 // LoggingService imported for type reference only
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
-import {SystemTableName} from '../bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
   LOG_LEVEL_ORDER,
   LOG_QUERY_DEFAULT,
@@ -16,6 +16,27 @@ import {
   LOG_QUERY_ERROR_MSG,
   LOG_QUERY_LOG_MSG,
 } from './logging-constants.js';
+
+const DEFAULT_RECENT_MINUTES = 60;
+const MINUTES_TO_MS = 60 * 1000;
+const DEFAULT_BUCKET_SIZE_MS = 60000;
+const ERROR_LEVEL = 'ERROR';
+const ORDER_ASC = 'ASC';
+const ORDER_DESC = 'DESC';
+const DEFAULT_ORDER_COLUMN = 'timestamp';
+const VALID_ORDER_COLUMNS = Object.freeze([
+  'log_id', 'timestamp', 'level', 'node_id',
+  'service_id', 'service_type', 'message', 'created_at',
+]);
+
+// Repeated SQL fragments used across aggregate queries
+const SQL_COUNT_ALIAS = 'COUNT(*) as count';
+const SQL_ORDER_BY_COUNT_DESC = 'ORDER BY count DESC';
+const SQL_SELECT_COLUMNS = [
+  'log_id', 'timestamp', 'level', 'node_id',
+  'service_id', 'service_type', 'message', 'trace_id',
+  'metadata', 'created_at',
+].join(', ');
 
 const DEFAULT_CONFIG = Object.freeze({
   defaultLimit: LOG_QUERY_DEFAULT.DEFAULT_LIMIT,
@@ -143,9 +164,9 @@ class LogQueryService extends EventEmitter {
    * @param {Object} options - Additional filter options.
    * @return {Promise<Object>} Query result.
    */
-  async getRecentLogs(minutes = 60, options = {}) {
+  async getRecentLogs(minutes = DEFAULT_RECENT_MINUTES, options = {}) {
     const endTime = Date.now();
-    const startTime = endTime - (minutes * 60 * 1000);
+    const startTime = endTime - (minutes * MINUTES_TO_MS);
     return this.getLogsByTimeRange(startTime, endTime, options);
   }
 
@@ -157,7 +178,7 @@ class LogQueryService extends EventEmitter {
   async getErrorLogs(options = {}) {
     return this.queryLogs({
       ...options,
-      level: 'ERROR',
+      level: ERROR_LEVEL,
     });
   }
 
@@ -197,7 +218,7 @@ class LogQueryService extends EventEmitter {
     return this.queryLogs({
       ...options,
       traceId,
-      orderDir: 'ASC', // Chronological order for traces
+      orderDir: ORDER_ASC, // Chronological order for traces
     });
   }
 
@@ -209,11 +230,11 @@ class LogQueryService extends EventEmitter {
    */
   async countByLevel(startTime, endTime) {
     const sql = `
-      SELECT level, COUNT(*) as count
-      FROM ${SystemTableName.LOGS}
+      SELECT level, ${SQL_COUNT_ALIAS}
+      FROM ${SYSTEM_TABLE_NAME.LOGS}
       WHERE timestamp >= ${startTime} AND timestamp < ${endTime}
       GROUP BY level
-      ORDER BY count DESC
+      ${SQL_ORDER_BY_COUNT_DESC}
     `.trim();
 
     return this.executeSQL(sql);
@@ -227,11 +248,11 @@ class LogQueryService extends EventEmitter {
    */
   async countByNode(startTime, endTime) {
     const sql = `
-      SELECT node_id, COUNT(*) as count
-      FROM ${SystemTableName.LOGS}
+      SELECT node_id, ${SQL_COUNT_ALIAS}
+      FROM ${SYSTEM_TABLE_NAME.LOGS}
       WHERE timestamp >= ${startTime} AND timestamp < ${endTime}
       GROUP BY node_id
-      ORDER BY count DESC
+      ${SQL_ORDER_BY_COUNT_DESC}
     `.trim();
 
     return this.executeSQL(sql);
@@ -245,11 +266,11 @@ class LogQueryService extends EventEmitter {
    */
   async countByServiceType(startTime, endTime) {
     const sql = `
-      SELECT service_type, COUNT(*) as count
-      FROM ${SystemTableName.LOGS}
+      SELECT service_type, ${SQL_COUNT_ALIAS}
+      FROM ${SYSTEM_TABLE_NAME.LOGS}
       WHERE timestamp >= ${startTime} AND timestamp < ${endTime}
       GROUP BY service_type
-      ORDER BY count DESC
+      ${SQL_ORDER_BY_COUNT_DESC}
     `.trim();
 
     return this.executeSQL(sql);
@@ -263,7 +284,10 @@ class LogQueryService extends EventEmitter {
    * @param {string} level - Optional level filter.
    * @return {Promise<Object>} Time series result.
    */
-  async getLogCountTimeSeries(startTime, endTime, bucketSizeMs = 60000, level = null) {
+  async getLogCountTimeSeries(
+    startTime, endTime, bucketSizeMs = DEFAULT_BUCKET_SIZE_MS,
+    level = null,
+  ) {
     let whereClause = `timestamp >= ${startTime} AND timestamp < ${endTime}`;
     if (level) {
       whereClause += ` AND level = '${this.escapeString(level)}'`;
@@ -272,11 +296,11 @@ class LogQueryService extends EventEmitter {
     const sql = `
       SELECT 
         (timestamp / ${bucketSizeMs}) * ${bucketSizeMs} as time_bucket,
-        COUNT(*) as count
-      FROM ${SystemTableName.LOGS}
+        ${SQL_COUNT_ALIAS}
+      FROM ${SYSTEM_TABLE_NAME.LOGS}
       WHERE ${whereClause}
       GROUP BY time_bucket
-      ORDER BY time_bucket ASC
+      ORDER BY time_bucket ${ORDER_ASC}
     `.trim();
 
     return this.executeSQL(sql);
@@ -289,8 +313,12 @@ class LogQueryService extends EventEmitter {
    * @param {number} bucketSizeMs - Bucket size in milliseconds.
    * @return {Promise<Object>} Time series result with error counts.
    */
-  async getErrorRateTimeSeries(startTime, endTime, bucketSizeMs = 60000) {
-    return this.getLogCountTimeSeries(startTime, endTime, bucketSizeMs, 'ERROR');
+  async getErrorRateTimeSeries(
+    startTime, endTime, bucketSizeMs = DEFAULT_BUCKET_SIZE_MS,
+  ) {
+    return this.getLogCountTimeSeries(
+      startTime, endTime, bucketSizeMs, ERROR_LEVEL,
+    );
   }
 
   /**
@@ -325,8 +353,8 @@ class LogQueryService extends EventEmitter {
       endTime,
       limit = this.defaultLimit,
       offset = 0,
-      orderBy = 'timestamp',
-      orderDir = 'DESC',
+      orderBy = DEFAULT_ORDER_COLUMN,
+      orderDir = ORDER_DESC,
     } = options;
 
     // Level filter (includes specified level and above)
@@ -377,15 +405,11 @@ class LogQueryService extends EventEmitter {
       `WHERE ${conditions.join(' AND ')}` : '';
 
     // Validate order
-    const validColumns = [
-      'log_id', 'timestamp', 'level', 'node_id',
-      'service_id', 'service_type', 'message', 'created_at',
-    ];
-    if (!validColumns.includes(orderBy)) {
+    if (!VALID_ORDER_COLUMNS.includes(orderBy)) {
       throw new Error(LOG_QUERY_ERROR_MSG.invalidOrderBy(orderBy));
     }
     const normalizedDir = orderDir.toUpperCase();
-    if (normalizedDir !== 'ASC' && normalizedDir !== 'DESC') {
+    if (normalizedDir !== ORDER_ASC && normalizedDir !== ORDER_DESC) {
       throw new Error(LOG_QUERY_ERROR_MSG.invalidOrderDir(orderDir));
     }
     const safeOrderBy = orderBy;
@@ -396,9 +420,8 @@ class LogQueryService extends EventEmitter {
 
     // Build SQL
     const sql = `
-      SELECT log_id, timestamp, level, node_id, service_id, service_type, 
-             message, trace_id, metadata, created_at
-      FROM ${SystemTableName.LOGS}
+      SELECT ${SQL_SELECT_COLUMNS}
+      FROM ${SYSTEM_TABLE_NAME.LOGS}
       ${whereClause}
       ORDER BY ${safeOrderBy} ${safeOrderDir}
       LIMIT ${safeLimit}
@@ -427,6 +450,9 @@ class LogQueryService extends EventEmitter {
       const result = await this.sqlQueryEngine.executeQuery(sql);
       return result;
     } catch (error) {
+      this.logger.warn(LOG_QUERY_LOG_MSG.QUERY_EXECUTION_FAILED, {
+        error: error.message,
+      });
       return {
         success: false,
         error: error.message,

@@ -5,13 +5,17 @@
 
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import {CDCEventHandler} from '../../src/cdc/cdc-event-handler.js';
-import {SystemTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {AssignmentEpochManager} from '../../src/rebalancer/assignment-epoch-manager.js';
 import {AssignmentEpoch} from '../../src/rebalancer/assignment-epoch.js';
 import {NodeState} from '../../src/node/node-lifecycle-state-machine.js';
-import {CDC_EPOCH_CONFIG_KEY} from '../../src/cdc/cdc-constants.js';
+import {
+  CDC_EPOCH_CONFIG_KEY,
+  CDC_ERROR_MSG,
+  CDC_SKIP_REASON,
+} from '../../src/cdc/cdc-constants.js';
 import {ENTRYPOINT_DEFAULT} from '../../src/constants/entrypoint.js';
 import {CDC_OPERATION} from '../../src/constants/index.js';
 
@@ -184,7 +188,7 @@ test('handleEpochChangeCDC - applies valid epoch event (Req 3.1)', async (t) => 
   });
 
   const cdcEvent = {
-    tableName: SystemTableName.CONFIG,
+    tableName: SYSTEM_TABLE_NAME.CONFIG,
     operation: CDC_OPERATION.UPDATE,
     data: {
       config_key: CDC_EPOCH_CONFIG_KEY,
@@ -214,7 +218,7 @@ test('handleEpochChangeCDC - handles config_value as object', async (t) => {
   });
 
   const cdcEvent = {
-    tableName: SystemTableName.CONFIG,
+    tableName: SYSTEM_TABLE_NAME.CONFIG,
     operation: CDC_OPERATION.UPDATE,
     data: {
       config_key: CDC_EPOCH_CONFIG_KEY,
@@ -246,7 +250,7 @@ test('handleEpochChangeCDC - returns error for invalid JSON (Req 3.2)', async (t
   });
 
   const cdcEvent = {
-    tableName: SystemTableName.CONFIG,
+    tableName: SYSTEM_TABLE_NAME.CONFIG,
     operation: CDC_OPERATION.UPDATE,
     data: {
       config_key: CDC_EPOCH_CONFIG_KEY,
@@ -273,7 +277,7 @@ test('handleEpochChangeCDC - returns error for non-epoch config key (Req 3.3)', 
   });
 
   const cdcEvent = {
-    tableName: SystemTableName.CONFIG,
+    tableName: SYSTEM_TABLE_NAME.CONFIG,
     operation: CDC_OPERATION.UPDATE,
     data: {
       config_key: 'some_other_config',
@@ -296,7 +300,7 @@ test('handleEpochChangeCDC - returns error without epoch manager (Req 3.9)', asy
   });
 
   const cdcEvent = {
-    tableName: SystemTableName.CONFIG,
+    tableName: SYSTEM_TABLE_NAME.CONFIG,
     operation: CDC_OPERATION.UPDATE,
     data: {
       config_key: CDC_EPOCH_CONFIG_KEY,
@@ -345,7 +349,7 @@ test('handleEpochChangeCDC - returns error for invalid epoch data', async (t) =>
   });
 
   const cdcEvent = {
-    tableName: SystemTableName.CONFIG,
+    tableName: SYSTEM_TABLE_NAME.CONFIG,
     operation: CDC_OPERATION.UPDATE,
     data: {
       config_key: CDC_EPOCH_CONFIG_KEY,
@@ -389,7 +393,7 @@ test('handleEpochChangeCDC - rejects stale epoch', async (t) => {
   });
 
   const cdcEvent = {
-    tableName: SystemTableName.CONFIG,
+    tableName: SYSTEM_TABLE_NAME.CONFIG,
     operation: CDC_OPERATION.UPDATE,
     data: {
       config_key: CDC_EPOCH_CONFIG_KEY,
@@ -424,7 +428,7 @@ test('handleNodeStateCDC - processes valid state change (Req 3.4)', async (t) =>
   });
 
   const cdcEvent = {
-    tableName: SystemTableName.NODES,
+    tableName: SYSTEM_TABLE_NAME.NODES,
     operation: CDC_OPERATION.UPDATE,
     data: {
       node_id: 'node-1',
@@ -455,7 +459,7 @@ test('handleNodeStateCDC - tracks state transitions', async (t) => {
 
   // First state change: null -> JOINING
   const event1 = {
-    tableName: SystemTableName.NODES,
+    tableName: SYSTEM_TABLE_NAME.NODES,
     operation: CDC_OPERATION.INSERT,
     data: {
       node_id: 'node-1',
@@ -468,7 +472,7 @@ test('handleNodeStateCDC - tracks state transitions', async (t) => {
 
   // Second state change: JOINING -> READY
   const event2 = {
-    tableName: SystemTableName.NODES,
+    tableName: SYSTEM_TABLE_NAME.NODES,
     operation: CDC_OPERATION.UPDATE,
     data: {
       node_id: 'node-1',
@@ -495,7 +499,7 @@ test('handleNodeStateCDC - ignores stale state events by updated_at ordering', a
   });
 
   const latestEvent = {
-    tableName: SystemTableName.NODES,
+    tableName: SYSTEM_TABLE_NAME.NODES,
     operation: CDC_OPERATION.UPDATE,
     data: {
       node_id: 'node-1',
@@ -506,7 +510,7 @@ test('handleNodeStateCDC - ignores stale state events by updated_at ordering', a
   handler.handleNodeStateCDC(latestEvent);
 
   const staleEvent = {
-    tableName: SystemTableName.NODES,
+    tableName: SYSTEM_TABLE_NAME.NODES,
     operation: CDC_OPERATION.UPDATE,
     data: {
       node_id: 'node-1',
@@ -539,7 +543,7 @@ test('handleNodeStateCDC - uses last_heartbeat ordering when updated_at missing'
   });
 
   handler.handleNodeStateCDC({
-    tableName: SystemTableName.NODES,
+    tableName: SYSTEM_TABLE_NAME.NODES,
     operation: CDC_OPERATION.UPDATE,
     data: {
       node_id: 'node-1',
@@ -549,7 +553,7 @@ test('handleNodeStateCDC - uses last_heartbeat ordering when updated_at missing'
   });
 
   const stale = handler.handleNodeStateCDC({
-    tableName: SystemTableName.NODES,
+    tableName: SYSTEM_TABLE_NAME.NODES,
     operation: CDC_OPERATION.UPDATE,
     data: {
       node_id: 'node-1',
@@ -559,7 +563,7 @@ test('handleNodeStateCDC - uses last_heartbeat ordering when updated_at missing'
   });
 
   const newer = handler.handleNodeStateCDC({
-    tableName: SystemTableName.NODES,
+    tableName: SYSTEM_TABLE_NAME.NODES,
     operation: CDC_OPERATION.UPDATE,
     data: {
       node_id: 'node-1',
@@ -588,7 +592,7 @@ test('handleNodeStateCDC - skips unchanged state (Req 3.5)', async (t) => {
 
   // First event sets state to READY
   const event1 = {
-    tableName: SystemTableName.NODES,
+    tableName: SYSTEM_TABLE_NAME.NODES,
     operation: CDC_OPERATION.UPDATE,
     data: {
       node_id: 'node-1',
@@ -599,7 +603,7 @@ test('handleNodeStateCDC - skips unchanged state (Req 3.5)', async (t) => {
 
   // Second event with same state
   const event2 = {
-    tableName: SystemTableName.NODES,
+    tableName: SYSTEM_TABLE_NAME.NODES,
     operation: CDC_OPERATION.UPDATE,
     data: {
       node_id: 'node-1',
@@ -622,7 +626,7 @@ test('handleNodeStateCDC - works without rebalancer', async (t) => {
   });
 
   const cdcEvent = {
-    tableName: SystemTableName.NODES,
+    tableName: SYSTEM_TABLE_NAME.NODES,
     operation: CDC_OPERATION.UPDATE,
     data: {
       node_id: 'node-1',
@@ -645,7 +649,7 @@ test('handleNodeStateCDC - rejects non-nodes table', async (t) => {
   });
 
   const cdcEvent = {
-    tableName: SystemTableName.CONFIG,
+    tableName: SYSTEM_TABLE_NAME.CONFIG,
     operation: CDC_OPERATION.UPDATE,
     data: {
       config_key: 'some_key',
@@ -683,7 +687,7 @@ test('handleNodeStateCDC - rejects missing node_id', async (t) => {
   });
 
   const cdcEvent = {
-    tableName: SystemTableName.NODES,
+    tableName: SYSTEM_TABLE_NAME.NODES,
     operation: CDC_OPERATION.UPDATE,
     data: {
       status: NodeState.READY,
@@ -705,7 +709,7 @@ test('handleNodeStateCDC - rejects missing status', async (t) => {
   });
 
   const cdcEvent = {
-    tableName: SystemTableName.NODES,
+    tableName: SYSTEM_TABLE_NAME.NODES,
     operation: CDC_OPERATION.UPDATE,
     data: {
       node_id: 'node-1',
@@ -733,7 +737,7 @@ test('handleNodeJoinedCDC - connects to new node (Req 3.6)', async (t) => {
   });
 
   const cdcEvent = {
-    tableName: SystemTableName.NODES,
+    tableName: SYSTEM_TABLE_NAME.NODES,
     operation: CDC_OPERATION.INSERT,
     data: {
       node_id: 'new-node',
@@ -764,7 +768,7 @@ test('handleNodeJoinedCDC - skips self node (Req 3.7)', async (t) => {
   });
 
   const cdcEvent = {
-    tableName: SystemTableName.NODES,
+    tableName: SYSTEM_TABLE_NAME.NODES,
     operation: CDC_OPERATION.INSERT,
     data: {
       node_id: 'test-node', // Same as handler's nodeId
@@ -776,7 +780,9 @@ test('handleNodeJoinedCDC - skips self node (Req 3.7)', async (t) => {
 
   t.equal(result.processed, true, 'should process event');
   t.equal(result.skipped, true, 'should indicate skipped');
-  t.equal(result.reason, 'self', 'should have self reason');
+  t.equal(
+    result.reason, CDC_SKIP_REASON.SELF, 'should have self reason',
+  );
   t.equal(result.connected, false, 'should not connect');
   t.equal(messageRouter.connections.length, 0, 'should not make connections');
   t.end();
@@ -792,7 +798,7 @@ test('handleNodeJoinedCDC - skips already connected node', async (t) => {
   });
 
   const cdcEvent = {
-    tableName: SystemTableName.NODES,
+    tableName: SYSTEM_TABLE_NAME.NODES,
     operation: CDC_OPERATION.INSERT,
     data: {
       node_id: 'existing-node',
@@ -821,7 +827,7 @@ test('handleNodeJoinedCDC - reconnects when existing entry is disconnected', asy
   });
 
   const cdcEvent = {
-    tableName: SystemTableName.NODES,
+    tableName: SYSTEM_TABLE_NAME.NODES,
     operation: CDC_OPERATION.INSERT,
     data: {
       node_id: 'existing-node',
@@ -847,7 +853,7 @@ test('handleNodeJoinedCDC - returns error without message router (Req 3.10)', as
   });
 
   const cdcEvent = {
-    tableName: SystemTableName.NODES,
+    tableName: SYSTEM_TABLE_NAME.NODES,
     operation: CDC_OPERATION.INSERT,
     data: {
       node_id: 'new-node',
@@ -858,7 +864,10 @@ test('handleNodeJoinedCDC - returns error without message router (Req 3.10)', as
   const result = await handler.handleNodeJoinedCDC(cdcEvent);
 
   t.equal(result.processed, false, 'should not process');
-  t.ok(result.error.includes('Message router not set'), 'should have error message');
+  t.ok(
+    result.error.includes(CDC_ERROR_MSG.MESSAGE_ROUTER_NOT_SET),
+    'should have error message',
+  );
   t.end();
 });
 
@@ -873,7 +882,7 @@ test('handleNodeJoinedCDC - rejects non-INSERT operation', async (t) => {
   });
 
   const cdcEvent = {
-    tableName: SystemTableName.NODES,
+    tableName: SYSTEM_TABLE_NAME.NODES,
     operation: CDC_OPERATION.UPDATE, // Not INSERT
     data: {
       node_id: 'new-node',
@@ -884,7 +893,10 @@ test('handleNodeJoinedCDC - rejects non-INSERT operation', async (t) => {
   const result = await handler.handleNodeJoinedCDC(cdcEvent);
 
   t.equal(result.processed, false, 'should not process UPDATE');
-  t.ok(result.error.includes('Not an INSERT operation'), 'should have error message');
+  t.ok(
+    result.error.includes(CDC_ERROR_MSG.NOT_INSERT_OPERATION),
+    'should have error message',
+  );
   t.end();
 });
 
@@ -898,7 +910,7 @@ test('handleNodeJoinedCDC - rejects non-nodes table', async (t) => {
   });
 
   const cdcEvent = {
-    tableName: SystemTableName.CONFIG,
+    tableName: SYSTEM_TABLE_NAME.CONFIG,
     operation: CDC_OPERATION.INSERT,
     data: {
       config_key: 'some_key',
@@ -939,7 +951,7 @@ test('handleNodeJoinedCDC - rejects missing node_id', async (t) => {
   });
 
   const cdcEvent = {
-    tableName: SystemTableName.NODES,
+    tableName: SYSTEM_TABLE_NAME.NODES,
     operation: CDC_OPERATION.INSERT,
     data: {
       node_address: 'localhost:8080',
@@ -964,7 +976,7 @@ test('handleNodeJoinedCDC - rejects missing node_address', async (t) => {
   });
 
   const cdcEvent = {
-    tableName: SystemTableName.NODES,
+    tableName: SYSTEM_TABLE_NAME.NODES,
     operation: CDC_OPERATION.INSERT,
     data: {
       node_id: 'new-node',
@@ -991,7 +1003,7 @@ test('handleNodeJoinedCDC - handles connection failure gracefully', async (t) =>
   });
 
   const cdcEvent = {
-    tableName: SystemTableName.NODES,
+    tableName: SYSTEM_TABLE_NAME.NODES,
     operation: CDC_OPERATION.INSERT,
     data: {
       node_id: 'new-node',
@@ -1103,13 +1115,13 @@ test('getNodeStates - returns tracked states', async (t) => {
 
   // Process some state changes
   handler.handleNodeStateCDC({
-    tableName: SystemTableName.NODES,
+    tableName: SYSTEM_TABLE_NAME.NODES,
     operation: CDC_OPERATION.UPDATE,
     data: {node_id: 'node-1', status: NodeState.READY},
   });
 
   handler.handleNodeStateCDC({
-    tableName: SystemTableName.NODES,
+    tableName: SYSTEM_TABLE_NAME.NODES,
     operation: CDC_OPERATION.UPDATE,
     data: {node_id: 'node-2', status: NodeState.JOINING},
   });
@@ -1150,7 +1162,7 @@ test('setNodeState - affects subsequent state change detection', async (t) => {
 
   // Process event with same state
   const result = handler.handleNodeStateCDC({
-    tableName: SystemTableName.NODES,
+    tableName: SYSTEM_TABLE_NAME.NODES,
     operation: CDC_OPERATION.UPDATE,
     data: {node_id: 'node-1', status: NodeState.READY},
   });

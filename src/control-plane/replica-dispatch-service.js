@@ -7,7 +7,7 @@
 import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
-import {SystemTableName} from '../bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {isNodeRecordReady} from '../node/node-readiness-policy.js';
 import {OperationType} from '../rebalancer/replica-status.js';
 import {REBALANCE_COORDINATOR_EVENT} from '../rebalancer/rebalancer-constants.js';
@@ -217,7 +217,7 @@ class ReplicaDispatchService extends EventEmitter {
    * @private
    */
   async handleCdcApplied(mgService, event) {
-    if (event?.tableName === SystemTableName.NODES) {
+    if (event?.tableName === SYSTEM_TABLE_NAME.NODES) {
       const nodeRow = event?.data;
       const nodeId =
         nodeRow?.[COLUMN.NODE_ID] ||
@@ -231,7 +231,7 @@ class ReplicaDispatchService extends EventEmitter {
       return;
     }
 
-    if (event?.tableName !== SystemTableName.REPLICA_OPERATIONS) {
+    if (event?.tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
       return;
     }
 
@@ -290,7 +290,7 @@ class ReplicaDispatchService extends EventEmitter {
     const state = payload[ControlPlaneField.STATE];
     const payloadNodeRow = payload[ControlPlaneField.NODE_ROW];
     const nodeRow = payloadNodeRow &&
-      typeof payloadNodeRow === 'object' ?
+      typeof payloadNodeRow === TYPEOF.OBJECT ?
       payloadNodeRow :
       null;
 
@@ -368,7 +368,7 @@ class ReplicaDispatchService extends EventEmitter {
     };
 
     await this.cdcIntegrationService.upsertSystemTableRow(
-      SystemTableName.NODES,
+      SYSTEM_TABLE_NAME.NODES,
       baseRow,
     );
 
@@ -508,7 +508,7 @@ class ReplicaDispatchService extends EventEmitter {
    * @private
    */
   handleCacheNodeChange(tableName, record) {
-    if (tableName !== SystemTableName.NODES) {
+    if (tableName !== SYSTEM_TABLE_NAME.NODES) {
       return;
     }
     const nodeId =
@@ -543,7 +543,7 @@ class ReplicaDispatchService extends EventEmitter {
     }
 
     const claimResult = await this.cdcIntegrationService.updateSystemTableRow(
-      SystemTableName.REPLICA_OPERATIONS,
+      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
       {
         [COLUMN.OPERATION_ID]: operationId,
         workflow_step: WORKFLOW_STEP.PENDING,
@@ -647,7 +647,7 @@ class ReplicaDispatchService extends EventEmitter {
       return false;
     }
 
-    const nodeRow = this.systemTableCache.get(SystemTableName.NODES, nodeId);
+    const nodeRow = this.systemTableCache.get(SYSTEM_TABLE_NAME.NODES, nodeId);
     return isNodeRecordReady(nodeRow, {
       requireActiveStatus: true,
     });

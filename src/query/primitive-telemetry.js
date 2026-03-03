@@ -8,7 +8,9 @@
  */
 
 import {NUM, TYPEOF} from '../constants/index.js';
-import {PRIMITIVE_TYPE} from './distributed-context-constants.js';
+import {PRIMITIVE_TYPE} from './distributed/distributed-context-constants.js';
+
+const INITIAL_MIN_DURATION_MS = Infinity;
 
 /**
  * Telemetry field names for counter snapshots.
@@ -56,7 +58,7 @@ class PrimitiveCounter {
     this.requestCount = NUM.ZERO;
     this.totalBytes = NUM.ZERO;
     this.totalDurationMs = NUM.ZERO;
-    this.minDurationMs = Infinity;
+    this.minDurationMs = INITIAL_MIN_DURATION_MS;
     this.maxDurationMs = NUM.ZERO;
   }
 

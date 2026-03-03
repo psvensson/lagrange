@@ -12,7 +12,7 @@ import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
-import {SystemTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {OperationType, ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {
@@ -27,7 +27,7 @@ import {
 } from './helpers/cluster-test-helpers.js';
 
 const SYSTEM_PARTITION_IDS = new Set(
-  Object.values(SystemTableName).map((tableName) => `${tableName}-p1`),
+  Object.values(SYSTEM_TABLE_NAME).map((tableName) => `${tableName}-p1`),
 );
 
 function isVoterReadyReplica(row) {
@@ -42,7 +42,7 @@ function isVoterReadyReplica(row) {
 
 function findUnsafeSystemPartitionReplacement(systemTableCache, sourceNodeId, nodeId) {
   const sourceRows = systemTableCache.filter(
-    SystemTableName.SERVICES,
+    SYSTEM_TABLE_NAME.SERVICES,
     (row) =>
       row.service_type === 'partition' &&
       row.node_id === sourceNodeId &&
@@ -59,7 +59,7 @@ function findUnsafeSystemPartitionReplacement(systemTableCache, sourceNodeId, no
     visited.add(partitionId);
 
     const joiningRows = systemTableCache.filter(
-      SystemTableName.SERVICES,
+      SYSTEM_TABLE_NAME.SERVICES,
       (row) =>
         row.partition_id === partitionId &&
         row.service_type === 'partition' &&
@@ -81,7 +81,7 @@ function findUnsafeSystemPartitionReplacement(systemTableCache, sourceNodeId, no
 
 function findCriticalSystemPartitionPair(systemTableCache, sourceNodeId, nodeId) {
   const sourceRows = systemTableCache.filter(
-    SystemTableName.SERVICES,
+    SYSTEM_TABLE_NAME.SERVICES,
     (row) =>
       row.service_type === 'partition' &&
       row.node_id === sourceNodeId &&
@@ -98,7 +98,7 @@ function findCriticalSystemPartitionPair(systemTableCache, sourceNodeId, nodeId)
     visited.add(partitionId);
 
     const joiningRows = systemTableCache.filter(
-      SystemTableName.SERVICES,
+      SYSTEM_TABLE_NAME.SERVICES,
       (row) =>
         row.partition_id === partitionId &&
         row.service_type === 'partition' &&
@@ -226,7 +226,7 @@ test('Critical partition learner safety', {timeout: 120000}, async (t) => {
           const forcedUpdatedAt = Date.now() + 10000;
           for (const joiningRow of candidate.joiningRows) {
             systemTableCache.applySystemTableChange(
-              SystemTableName.SERVICES,
+              SYSTEM_TABLE_NAME.SERVICES,
               'UPDATE',
               {
                 ...joiningRow,
@@ -253,7 +253,7 @@ test('Critical partition learner safety', {timeout: 120000}, async (t) => {
       t.ok(criticalPartitionId, 'replacement replica should include partition id');
 
       const voterReadyReplacement = systemTableCache.filter(
-        SystemTableName.SERVICES,
+        SYSTEM_TABLE_NAME.SERVICES,
         (row) =>
           row.partition_id === criticalPartitionId &&
           row.service_type === 'partition' &&
@@ -291,7 +291,7 @@ test('Critical partition learner safety', {timeout: 120000}, async (t) => {
       );
 
       const updatedOperation = systemTableCache.get(
-        SystemTableName.REPLICA_OPERATIONS,
+        SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
         removeOperation.operationId,
       );
       t.not(
@@ -305,7 +305,7 @@ test('Critical partition learner safety', {timeout: 120000}, async (t) => {
       if (execution.success) {
         await waitFor(async () => {
           const row = systemTableCache.get(
-            SystemTableName.REPLICA_OPERATIONS,
+            SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
             removeOperation.operationId,
           );
           return row?.workflow_step === WORKFLOW_STEP.REMOVED ||

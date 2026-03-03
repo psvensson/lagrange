@@ -13,7 +13,7 @@ import {
   NodeLifecycleService,
   NodeLifecycleStatus,
 } from '../../src/node/node-lifecycle-service.js';
-import {SystemTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 
@@ -137,7 +137,7 @@ test('NodeLifecycleService - registerNode', async (t) => {
   t.equal(mockCDC.operations[0].type, 'insert', 'should be insert');
   t.equal(
     mockCDC.operations[0].tableName,
-    SystemTableName.NODES,
+    SYSTEM_TABLE_NAME.NODES,
     'should insert to nodes table',
   );
   t.equal(
@@ -171,7 +171,7 @@ test('NodeLifecycleService - updateHeartbeat', async (t) => {
   t.equal(mockCDC.operations[0].type, 'update', 'should be update');
   t.equal(
     mockCDC.operations[0].tableName,
-    SystemTableName.NODES,
+    SYSTEM_TABLE_NAME.NODES,
     'should update nodes table',
   );
   t.same(

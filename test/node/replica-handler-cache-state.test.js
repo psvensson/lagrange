@@ -10,7 +10,7 @@ import path from 'path';
 import os from 'os';
 import {ReplicaHandler} from '../../src/node/replica-handler.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
-import {SystemTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -78,13 +78,13 @@ function createSeededCache(options = {}) {
     columns: [{name: 'id', type: 'TEXT', primaryKey: true}],
   };
 
-  cache.applySystemTableChange(SystemTableName.TABLES, 'INSERT', {
+  cache.applySystemTableChange(SYSTEM_TABLE_NAME.TABLES, 'INSERT', {
     table_id: tableId,
     table_name: tableName,
     schema_definition: JSON.stringify(schema),
   });
 
-  cache.applySystemTableChange(SystemTableName.PARTITIONS, 'INSERT', {
+  cache.applySystemTableChange(SYSTEM_TABLE_NAME.PARTITIONS, 'INSERT', {
     partition_id: partitionId,
     table_id: tableId,
     partition_key_start: null,
@@ -92,7 +92,7 @@ function createSeededCache(options = {}) {
     leader_node_id: leaderNodeId,
   });
 
-  cache.applySystemTableChange(SystemTableName.SERVICES, 'INSERT', {
+  cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
     service_id: leaderReplicaId,
     service_type: 'partition',
     partition_id: partitionId,
@@ -138,7 +138,7 @@ test('ReplicaHandler cache-based state access', async (t) => {
     const nodeId = 'test-node';
 
     // Seed cache with a replica on this node
-    cache.applySystemTableChange(SystemTableName.SERVICES, 'INSERT', {
+    cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
       service_id: 'replica-1',
       service_type: 'partition',
       partition_id: 'partition-1',
@@ -196,7 +196,7 @@ test('ReplicaHandler cache-based state access', async (t) => {
     const mockCDC = createMockCDCService(cache);
 
     // Seed cache with a replica on a DIFFERENT node
-    cache.applySystemTableChange(SystemTableName.SERVICES, 'INSERT', {
+    cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
       service_id: 'replica-1',
       service_type: 'partition',
       partition_id: 'partition-1',
@@ -267,7 +267,7 @@ test('ReplicaHandler cache-based state access', async (t) => {
     const nodeId = 'test-node';
 
     // Seed cache with ACTIVE replica
-    cache.applySystemTableChange(SystemTableName.SERVICES, 'INSERT', {
+    cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
       service_id: 'replica-1',
       service_type: 'partition',
       partition_id: 'partition-1',
@@ -309,7 +309,7 @@ test('ReplicaHandler cache-based state access', async (t) => {
     const nodeId = 'test-node';
 
     // Seed cache with CREATING replica
-    cache.applySystemTableChange(SystemTableName.SERVICES, 'INSERT', {
+    cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
       service_id: 'replica-1',
       service_type: 'partition',
       partition_id: 'partition-1',
@@ -351,7 +351,7 @@ test('ReplicaHandler cache-based state access', async (t) => {
     const nodeId = 'test-node';
 
     // Seed cache with SYNCING replica
-    cache.applySystemTableChange(SystemTableName.SERVICES, 'INSERT', {
+    cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
       service_id: 'replica-1',
       service_type: 'partition',
       partition_id: 'partition-1',
@@ -393,7 +393,7 @@ test('ReplicaHandler cache-based state access', async (t) => {
     const nodeId = 'test-node';
 
     // Seed cache with multiple replicas on this node
-    cache.applySystemTableChange(SystemTableName.SERVICES, 'INSERT', {
+    cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
       service_id: 'replica-1',
       service_type: 'partition',
       partition_id: 'partition-1',
@@ -405,7 +405,7 @@ test('ReplicaHandler cache-based state access', async (t) => {
       updated_at: Date.now(),
     });
 
-    cache.applySystemTableChange(SystemTableName.SERVICES, 'INSERT', {
+    cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
       service_id: 'replica-2',
       service_type: 'partition',
       partition_id: 'partition-2',
@@ -418,7 +418,7 @@ test('ReplicaHandler cache-based state access', async (t) => {
     });
 
     // Add a replica on a different node (should not be included)
-    cache.applySystemTableChange(SystemTableName.SERVICES, 'INSERT', {
+    cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
       service_id: 'replica-3',
       service_type: 'partition',
       partition_id: 'partition-3',

@@ -1,5 +1,5 @@
 import {test} from '../../src/test-helpers/tap.js';
-import {DistributedMergeEngine} from '../../src/query/distributed-merge-engine.js';
+import {DistributedMergeEngine} from '../../src/query/distributed/distributed-merge-engine.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
 import {SQLParser} from '../../src/query/sql-parser.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';

@@ -13,11 +13,11 @@ import {
   groupRowsByPartition,
   validateBatches,
   createDefaultContext,
-} from '../../src/query/callback-stage-executor.js';
+} from '../../src/query/callback/callback-stage-executor.js';
 import {
   STAGE_STATE,
   STAGE_ERROR_MSG,
-} from '../../src/query/callback-stage-constants.js';
+} from '../../src/query/callback/callback-stage-constants.js';
 import {
   CancellationToken,
 } from '../../src/query/cancellation-token.js';

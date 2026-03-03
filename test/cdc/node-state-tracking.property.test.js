@@ -15,7 +15,7 @@
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {CDCEventHandler} from '../../src/cdc/cdc-event-handler.js';
-import {SystemTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeState} from '../../src/node/node-lifecycle-state-machine.js';
@@ -113,7 +113,7 @@ const nodeStateEventSequenceArb = fc.record({
  */
 function createNodeStateCDCEvent(nodeId, state) {
   return {
-    tableName: SystemTableName.NODES,
+    tableName: SYSTEM_TABLE_NAME.NODES,
     operation: CDC_OPERATION.UPDATE,
     data: {
       node_id: nodeId,

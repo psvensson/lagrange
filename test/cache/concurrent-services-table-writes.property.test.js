@@ -26,7 +26,7 @@ import {COLUMN, SERVICE_STATUS, SERVICE_TYPE, TABLES} from '../../src/constants/
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {
   INITIAL_PARTITION_IDS,
-  SystemTableName,
+  SYSTEM_TABLE_NAME,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 
 // ============================================================================
@@ -129,14 +129,14 @@ function createPartitionLeaderService(partitionId, options = {}) {
  * @return {fc.Arbitrary<string>} Arbitrary for system table names.
  */
 const systemTableNameArb = fc.constantFrom(
-  SystemTableName.TABLES,
-  SystemTableName.PARTITIONS,
-  SystemTableName.INDICES,
-  SystemTableName.MESSAGE_GROUPS,
-  SystemTableName.NODES,
-  SystemTableName.SERVICES,
-  SystemTableName.LOGS,
-  SystemTableName.CONFIG,
+  SYSTEM_TABLE_NAME.TABLES,
+  SYSTEM_TABLE_NAME.PARTITIONS,
+  SYSTEM_TABLE_NAME.INDICES,
+  SYSTEM_TABLE_NAME.MESSAGE_GROUPS,
+  SYSTEM_TABLE_NAME.NODES,
+  SYSTEM_TABLE_NAME.SERVICES,
+  SYSTEM_TABLE_NAME.LOGS,
+  SYSTEM_TABLE_NAME.CONFIG,
 );
 
 /**
@@ -396,10 +396,10 @@ t.test('Concurrent Services Table Writes Property Tests', async (t) => {
      * **Validates: Requirements 1.3**
      */
     const nonServicesTableArb = fc.constantFrom(
-      SystemTableName.TABLES,
-      SystemTableName.PARTITIONS,
-      SystemTableName.NODES,
-      SystemTableName.MESSAGE_GROUPS,
+      SYSTEM_TABLE_NAME.TABLES,
+      SYSTEM_TABLE_NAME.PARTITIONS,
+      SYSTEM_TABLE_NAME.NODES,
+      SYSTEM_TABLE_NAME.MESSAGE_GROUPS,
     );
 
     fc.assert(
@@ -496,7 +496,7 @@ t.test('Concurrent Services Table Writes Property Tests', async (t) => {
      * **Validates: Requirements 1.3**
      */
     const unknownTableArb = fc.string({minLength: 1, maxLength: 20})
-      .filter((s) => !Object.values(SystemTableName).includes(s))
+      .filter((s) => !Object.values(SYSTEM_TABLE_NAME).includes(s))
       .map((s) => `unknown_${s}`);
 
     fc.assert(

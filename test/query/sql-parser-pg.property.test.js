@@ -9,8 +9,8 @@ import {describe, it} from 'node:test';
 import assert from 'node:assert/strict';
 import fc from 'fast-check';
 import {SQLParser, EXPR_TYPE} from '../../src/query/sql-parser.js';
-import {PARSER_DIALECT, PG_EXPR_TYPE} from '../../src/query/pg-compat-constants.js';
-import {PG_TYPE_AFFINITY_MAP} from '../../src/query/pg-type-affinity.js';
+import {PARSER_DIALECT, PG_EXPR_TYPE} from '../../src/query/pg/pg-compat-constants.js';
+import {PG_TYPE_AFFINITY_MAP} from '../../src/query/pg/pg-type-affinity.js';
 
 // Initialize configuration for tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';

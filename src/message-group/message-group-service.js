@@ -24,7 +24,7 @@ import {LoggingService} from '../logging/logging-service.js';
 import {NodeService} from '../node/node-service.js';
 import {HLCClockService} from '../hlc/hlc-clock-service.js';
 import {HLCTimestamp} from '../hlc/hlc-timestamp.js';
-import {SystemTableName} from '../bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {isSystemTableWriteReady} from '../cache/leader-readiness-gate.js';
 import {InMemoryLogAdapter} from '../raft/in-memory-log-adapter.js';
 import {isRaftPacket, RAFT_PACKET_TYPES} from '../raft/raft-packet-utils.js';
@@ -65,6 +65,12 @@ import {MessageGroupOperationLedger} from './message-group-operation-ledger.js';
 // Note: isRaftPacket and RAFT_PACKET_TYPES are imported from shared module
 // src/raft/raft-packet-utils.js - Requirements: 9.1, 9.2, 9.3, 9.4
 
+const ROLE_PERSIST_ERROR_MSG =
+  'Failed to persist raft role update';
+const LEADER_NODE_PERSIST_ERROR_MSG =
+  'Failed to persist message group leader update';
+const FLUSH_SKIP_NOT_OWNER = 'not-owner';
+const FLUSH_SKIP_READY = 'ready';
 
 /**
  * MessageGroupService provides reliable inter-service communication.
@@ -289,9 +295,9 @@ class MessageGroupService extends EventEmitter {
 
   createRoleMutationHelper() {
     return new AuthoritativeRowMutationHelper({
-      tableName: SystemTableName.SERVICES,
+      tableName: SYSTEM_TABLE_NAME.SERVICES,
       buildWhereClause: (_role, context = {}) => {
-        const whereClause = {service_id: this.replicaId};
+        const whereClause = {[COLUMN.SERVICE_ID]: this.replicaId};
         const cachedRow = context.cachedRow;
         if (typeof cachedRow?.raft_role === 'string' && cachedRow.raft_role.length > 0) {
           whereClause.raft_role = cachedRow.raft_role;
@@ -316,7 +322,7 @@ class MessageGroupService extends EventEmitter {
       systemTableCache: this.systemTableCache,
       cdcIntegrationService: this.cdcIntegrationService,
       onAsyncError: (error, context = {}) => {
-        this.logger.warn('Failed to persist raft role update', {
+        this.logger.warn(ROLE_PERSIST_ERROR_MSG, {
           groupId: this.groupId,
           replicaId: this.replicaId,
           role: context.value ?? this.pendingRoleUpdate,
@@ -328,7 +334,7 @@ class MessageGroupService extends EventEmitter {
 
   createLeaderNodeMutationHelper() {
     return new AuthoritativeRowMutationHelper({
-      tableName: SystemTableName.MESSAGE_GROUPS,
+      tableName: SYSTEM_TABLE_NAME.MESSAGE_GROUPS,
       buildWhereClause: (_leaderNodeId, context = {}) => {
         const whereClause = {[COLUMN.GROUP_ID]: this.groupId};
         const cachedRow = context.cachedRow;
@@ -357,13 +363,13 @@ class MessageGroupService extends EventEmitter {
       prepareFlush: () => ({
         skip: !this.isLeader,
         clearPending: !this.isLeader,
-        reason: !this.isLeader ? 'not-owner' : 'ready',
+        reason: !this.isLeader ? FLUSH_SKIP_NOT_OWNER : FLUSH_SKIP_READY,
       }),
       isWriteReady: () => this.isMessageGroupsLeaderAvailable(),
       systemTableCache: this.systemTableCache,
       cdcIntegrationService: this.cdcIntegrationService,
       onAsyncError: (error, context = {}) => {
-        this.logger.warn('Failed to persist message group leader update', {
+        this.logger.warn(LEADER_NODE_PERSIST_ERROR_MSG, {
           groupId: this.groupId,
           replicaId: this.replicaId,
           leaderNodeId: context.value ?? this.pendingLeaderNodeUpdate,
@@ -2079,7 +2085,7 @@ class MessageGroupService extends EventEmitter {
    * @private
    */
   isMessageGroupsLeaderAvailable() {
-    return isSystemTableWriteReady(this.systemTableCache, SystemTableName.MESSAGE_GROUPS);
+    return isSystemTableWriteReady(this.systemTableCache, SYSTEM_TABLE_NAME.MESSAGE_GROUPS);
   }
 
   /**
@@ -2088,7 +2094,7 @@ class MessageGroupService extends EventEmitter {
    * @private
    */
   isServicesLeaderAvailable() {
-    return isSystemTableWriteReady(this.systemTableCache, SystemTableName.SERVICES);
+    return isSystemTableWriteReady(this.systemTableCache, SYSTEM_TABLE_NAME.SERVICES);
   }
 
   /**

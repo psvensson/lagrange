@@ -34,14 +34,14 @@ import {
   estimateRowBytes,
 } from './result-stream.js';
 import {BudgetLimitError} from './budget-limit-error.js';
-import {ExchangeManager} from './exchange-manager.js';
+import {ExchangeManager} from './distributed/exchange-manager.js';
 import {executeLookup} from './lookup-primitive.js';
 import {BroadcastStore} from './broadcast-primitive.js';
 import {
   LOOKUP_ACCESS_PATH,
   LOOKUP_KEY_FIELD,
   PRIMITIVE_ERROR_MSG,
-} from './distributed-context-constants.js';
+} from './distributed/distributed-context-constants.js';
 
 const LOOKUP_PARTITION_SINGLE = 'single-partition';
 const SAFE_SQL_IDENTIFIER = /^[a-zA-Z_][a-zA-Z0-9_]*$/;

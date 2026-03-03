@@ -16,12 +16,10 @@ import {
   EMIT_FIELD,
   EMIT_QUEUE_STATE,
   PRIMITIVE_ERROR_MSG,
+  PRIMITIVE_TYPE,
   EMIT_QUEUE_HIGH_WATER_MARK,
   EMIT_SPILL_THRESHOLD_BYTES,
-} from './distributed-context-constants.js';
-import {
-  GUARDRAIL_FIELD as GF,
-} from './guardrail-constants.js';
+} from './distributed/distributed-context-constants.js';
 
 /**
  * Validate emit arguments.
@@ -142,7 +140,7 @@ class ShuffleBuffer {
 
     if (this.lineageTracker) {
       this.lineageTracker.attachLineage(
-        record, this.stageIndex, 'emit',
+        record, this.stageIndex, PRIMITIVE_TYPE.EMIT,
         this.totalRecords,
       );
     }
@@ -167,7 +165,7 @@ class ShuffleBuffer {
     // Report telemetry
     if (typeof this.onTelemetry === TYPEOF.FUNCTION) {
       this.onTelemetry({
-        primitive: 'emit',
+        primitive: PRIMITIVE_TYPE.EMIT,
         recordBytes,
         totalBytes: this.totalBytes,
         totalRecords: this.totalRecords,

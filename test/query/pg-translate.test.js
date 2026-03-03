@@ -14,9 +14,9 @@ import {
   translateOnConflict,
   reorderParams,
   validateParamMapping,
-} from '../../src/query/pg-translate.js';
+} from '../../src/query/pg/pg-translate.js';
 import {EXPR_TYPE} from '../../src/query/sql-parser.js';
-import {PG_EXPR_TYPE} from '../../src/query/pg-compat-constants.js';
+import {PG_EXPR_TYPE} from '../../src/query/pg/pg-compat-constants.js';
 
 describe('translateBooleanLiteral', () => {
   it('translates TRUE to integer 1', () => {

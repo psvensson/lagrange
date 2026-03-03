@@ -43,6 +43,7 @@ const NODE_LIFECYCLE_SERVICE_SUBSYSTEM = 'node-lifecycle';
 const NODE_LIFECYCLE_SERVICE_EVENT = Object.freeze({
   NODE_REGISTERED: 'nodeRegistered',
   HEARTBEAT_UPDATED: 'heartbeatUpdated',
+  HEARTBEAT_ERROR: 'heartbeatError',
   NODE_STATUS_CHANGED: 'nodeStatusChanged',
   NODE_FAILED: 'nodeFailed',
   NODE_SUSPECTED: 'nodeSuspected',

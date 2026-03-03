@@ -23,7 +23,7 @@ import {
 } from '../../src/query/sql-adapter-constants.js';
 import {
   STAGE_STATE,
-} from '../../src/query/callback-stage-constants.js';
+} from '../../src/query/callback/callback-stage-constants.js';
 import {BudgetEnforcer} from
   '../../src/query/budget-enforcer.js';
 import {LineageTracker} from

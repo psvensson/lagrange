@@ -34,17 +34,12 @@ import websocket from '@fastify/websocket';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {
-  CDC_OPERATION,
-  COLUMN,
   ERRNO,
+  HTTP_STATUS,
   NUM,
-  TABLES,
   TYPEOF,
 } from '../constants/index.js';
-import {CONNECTION_STATE, TRANSPORT_EVENT} from '../constants/transport.js';
-import {INITIAL_PARTITION_IDS} from
-  '../bootstrap/system-table-schemas-constants.js';
-import {META_SERVICE_ID} from '../constants/wasm-meta.js';
+import {TRANSPORT_EVENT} from '../constants/transport.js';
 import {createSqlRequest} from '../query/sql-request.js';
 import {EXECUTION_MODE} from '../query/sql-adapter-constants.js';
 import {guardedAdaptAdminAction} from './admin-api-adapter.js';
@@ -64,35 +59,21 @@ import {AdminTestRunService} from './admin-test-run-service.js';
 import {DebugMetadataStore} from '../debug-runtime/debug-metadata-service.js';
 import {TraceCollector} from '../debug/trace-collector.js';
 import {
-  ENDPOINT_SYNC_HEALTH,
-  ENDPOINT_SYNC_BOOLEAN,
   ENDPOINT_SYNC_UNHEALTHY_POLICY,
 } from '../runtime/endpoint-sync-constants.js';
-import {buildServiceDiscoveryCatalog} from
-  '../runtime/service-discovery-catalog.js';
-import {
-  DEBUG_METADATA_ERROR_CODE as DEBUG_METADATA_CODE,
-  DEBUG_METADATA_ERROR_MSG as DEBUG_METADATA_ERR,
-} from '../debug-runtime/debug-metadata-service-constants.js';
-import {
-  DEBUG_SESSION_STATUS as DEBUG_METADATA_SESSION_STATUS,
-} from '../debug-runtime/debug-metadata-constants.js';
-import {isLoadReadyReplicaRaftRole} from '../node/replica-state-machine-constants.js';
-import {isTerminalStep as isTerminalReplicaOperationStep} from '../rebalancer/replica-status.js';
+
 import {
   ADMIN_CACHE_DUMP,
   ADMIN_CONTROL_SNAPSHOT,
   ADMIN_CLIENT,
   ADMIN_CONTENT_TYPE,
   ADMIN_CONFIG_KEY,
-  ADMIN_DEBUG_ERROR_MSG,
   ADMIN_DEFAULT,
   ADMIN_ENFORCEMENT_MODE,
   ADMIN_ERROR_CODE,
   ADMIN_ERROR_HINT,
   ADMIN_ERROR_MATCH,
   ADMIN_ERROR_MESSAGE,
-  ADMIN_HEADER,
   ADMIN_LIMIT,
   ADMIN_LOG_MSG,
   ADMIN_MESSAGE_TYPE,
@@ -105,23 +86,23 @@ import {
   ADMIN_TEST_DEFAULT,
   ADMIN_TEST_ERROR_MSG,
   ADMIN_TEST_STREAM_EVENT,
-  CONSISTENCY_MISMATCH_KIND,
 } from './admin-constants.js';
-import {getSystemCachePrimaryKeyField} from
-  '../cache/system-cache-key-descriptor.js';
-import {isTableCdcReadinessRelevant} from '../cache/cdc-table-policy.js';
+import {
+  normalizeIdentifier,
+  normalizeSql,
+} from './admin-helpers.js';
+import {
+  AdminServiceDiscovery,
+  parseDiscoveryBooleanQuery,
+  parseDiscoveryListQuery,
+  parseServiceDiscoverySqlQuery,
+} from './admin-service-discovery.js';
+import {AdminPreflightSnapshot} from './admin-preflight-snapshot.js';
+import {AdminControlSnapshot} from './admin-control-snapshot.js';
+import {AdminDebugHandlers} from './admin-debug-handlers.js';
 
 const MessageType = ADMIN_MESSAGE_TYPE;
 const ErrorCode = ADMIN_ERROR_CODE;
-const HTTP_STATUS = Object.freeze({
-  OK: 200,
-  BAD_REQUEST: 400,
-  UNAUTHORIZED: 401,
-  FORBIDDEN: 403,
-  NOT_FOUND: 404,
-  SERVICE_UNAVAILABLE: 503,
-  INTERNAL_ERROR: 500,
-});
 const HTTP_HEADER = Object.freeze({
   CACHE_CONTROL: 'Cache-Control',
   CONNECTION: 'Connection',
@@ -135,93 +116,11 @@ const HTTP_HEADER_VALUE = Object.freeze({
 const SSE_FRAME_PREFIX = 'data: ';
 const SSE_FRAME_SUFFIX = '\n\n';
 const EMPTY_STRING = '';
-const SQL_NORMALIZE_WHITESPACE_PATTERN = /\s+/g;
-const SQL_TRAILING_SEMICOLON_PATTERN = /;\s*$/;
-const LEADER_RAFT_ROLE = 'leader';
-const SERVICE_TYPE_PARTITION = 'partition';
-const STATUS_ACTIVE = 'active';
-const STATUS_UNKNOWN = 'unknown';
-const IDENTIFIER_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
-const SERVICE_DISCOVERY_TABLE_ID_PATTERN = /^[A-Za-z0-9_-]+$/;
-const CDC_TELEMETRY_MODE = Object.freeze({
-  STEADY: 'steady',
-  CATCHUP: 'catchup',
-});
-const SERVICE_DISCOVERY_SQL_WITH_TABLE_PATTERN =
-  /^select \* from service_discovery_local\(\s*'([a-z_][a-z0-9_]*)'\s*\)$/;
-const SERVICE_DISCOVERY_SQL_WITH_TABLE_AND_ID_PATTERN =
-  /^select \* from service_discovery_local\(\s*'([a-z_][a-z0-9_]*)'\s*,\s*'([a-z0-9_-]+)'\s*\)$/;
-const SERVICE_DISCOVERY_READINESS_REASON = Object.freeze({
-  ROUTING_NOT_READY: 'routing_not_ready',
-  SCHEMA_TABLE_MISSING: 'schema_table_missing',
-  SCHEMA_PARTITION_UNAVAILABLE: 'schema_partition_unavailable',
-  REPLICA_OPERATIONS_IN_FLIGHT: 'replica_operations_in_flight',
-  REPLICA_OPERATION_IN_FLIGHT: 'replica_operation_in_flight',
-  REPLICA_OPERATION_FAILED: 'replica_operation_failed',
-  LEADERSHIP_UNSTABLE: 'leadership_unstable',
-  LOCAL_REPLICA_NOT_VOTER_READY: 'local_replica_not_voter_ready',
-  LOCAL_CDC_DIAGNOSTICS_UNAVAILABLE: 'local_cdc_diagnostics_unavailable',
-  LOCAL_CDC_SUBSCRIBER_MISSING: 'local_cdc_subscriber_missing',
-  LOCAL_CDC_BUFFER_NOT_DRAINED: 'local_cdc_buffer_not_drained',
-});
-const BENCHMARK_ADMISSION_STATE = Object.freeze({
-  READY: 'ready',
-  BLOCKED: 'blocked',
-});
-const BENCHMARK_DEGRADATION_STATE = Object.freeze({
-  HEALTHY: 'healthy',
-  MOVE_PENDING: 'move_pending',
-  MOVE_FAILED: 'move_failed',
-  PROMOTION_PENDING: 'promotion_pending',
-  PROMOTION_FAILED: 'promotion_failed',
-  DRAIN_BLOCKED: 'drain_blocked',
-});
-const BENCHMARK_DEGRADATION_PRIORITY = Object.freeze({
-  [BENCHMARK_DEGRADATION_STATE.HEALTHY]: NUM.ZERO,
-  [BENCHMARK_DEGRADATION_STATE.PROMOTION_PENDING]: NUM.ONE,
-  [BENCHMARK_DEGRADATION_STATE.MOVE_PENDING]: NUM.TWO,
-  [BENCHMARK_DEGRADATION_STATE.DRAIN_BLOCKED]: 3,
-  [BENCHMARK_DEGRADATION_STATE.PROMOTION_FAILED]: 4,
-  [BENCHMARK_DEGRADATION_STATE.MOVE_FAILED]: 5,
-});
-const REPLICA_OPERATION_TYPE = Object.freeze({
-  ADD: 'ADD',
-  REMOVE: 'REMOVE',
-  REPLACE: 'REPLACE',
-});
-const SERVICE_DISCOVERY_SCHEMA_VERSION_FIELD_CANDIDATES = Object.freeze([
-  'updated_at_hlc',
-  'updatedAtHlc',
-  'schema_version',
-  'schemaVersion',
-  'updated_at',
-  'updatedAt',
-  'created_at',
-  'createdAt',
-]);
+
 const ADMIN_LOCAL_DISPATCH = Object.freeze({
   TARGET_ADDRESS: 'local/admin-websocket-api',
 });
-const AUTHORITATIVE_DISCOVERY_REPAIR = Object.freeze({
-  COOLDOWN_MS: 1000,
-  QUERY_TIMEOUT_MS: 1500,
-  STALE_THRESHOLD_MS: 5000,
-  TABLES: Object.freeze([
-    TABLES.NODES,
-    TABLES.PARTITIONS,
-    TABLES.SERVICES,
-    TABLES.TABLES,
-    TABLES.NODE_ENDPOINTS,
-    TABLES.SERVICE_DEFINITIONS,
-    TABLES.SERVICE_ENDPOINTS,
-    TABLES.REPLICA_OPERATIONS,
-  ]),
-});
-const AUTHORITATIVE_DISCOVERY_CACHE_GAP_REASON_CODES = new Set([
-  SERVICE_DISCOVERY_READINESS_REASON.SCHEMA_TABLE_MISSING,
-  SERVICE_DISCOVERY_READINESS_REASON.SCHEMA_PARTITION_UNAVAILABLE,
-  SERVICE_DISCOVERY_READINESS_REASON.LEADERSHIP_UNSTABLE,
-]);
+
 
 /**
  * Build a typed admin-operation error used for websocket responses.
@@ -237,290 +136,8 @@ function createAdminOperationError(errorCode, message, hint = null) {
   return error;
 }
 
-function normalizeSql(sql) {
-  return String(sql || EMPTY_STRING)
-    .trim()
-    .replace(SQL_TRAILING_SEMICOLON_PATTERN, EMPTY_STRING)
-    .replace(SQL_NORMALIZE_WHITESPACE_PATTERN, ' ')
-    .toLowerCase();
-}
-
-function uniqueSorted(values) {
-  return [...new Set(values)].sort();
-}
-
-function firstStringField(record, ...keys) {
-  for (const key of keys) {
-    const value = record?.[key];
-    if (typeof value === TYPEOF.STRING && value.length > NUM.ZERO) {
-      return value;
-    }
-  }
-  return null;
-}
-
-function hasMeaningfulField(record, ...keys) {
-  for (const key of keys) {
-    const value = record?.[key];
-    if (value !== null && value !== undefined && value !== EMPTY_STRING) {
-      return true;
-    }
-  }
-  return false;
-}
-
-function normalizeReplicaOperationWorkflowStep(row) {
-  return String(firstStringField(
-    row,
-    'workflow_step',
-    'workflowStep',
-  ) || EMPTY_STRING).toUpperCase();
-}
-
-function isReplicaOperationTerminalSuccess(type, status, workflowStep, hasCompletedAt) {
-  if (!type || !status) {
-    return false;
-  }
-  if (status === 'failed' || workflowStep === 'FAILED') {
-    return false;
-  }
-  if (workflowStep && isTerminalReplicaOperationStep(type, workflowStep)) {
-    return true;
-  }
-  if (!hasCompletedAt) {
-    return false;
-  }
-  if (type === REPLICA_OPERATION_TYPE.ADD) {
-    return status === 'active';
-  }
-  return status === 'removed';
-}
-
-function normalizeSchemaVersionValue(value) {
-  if (typeof value === TYPEOF.STRING) {
-    const normalized = value.trim();
-    return normalized.length > NUM.ZERO ? normalized : null;
-  }
-  if (typeof value === TYPEOF.NUMBER && Number.isFinite(value)) {
-    return String(value);
-  }
-  if (typeof value === 'bigint') {
-    return String(value);
-  }
-  return null;
-}
-
-function compareSchemaVersionValues(left, right) {
-  if (left === right) {
-    return NUM.ZERO;
-  }
-  const leftNumber = Number(left);
-  const rightNumber = Number(right);
-  if (Number.isFinite(leftNumber) && Number.isFinite(rightNumber)) {
-    return leftNumber - rightNumber;
-  }
-  return String(left).localeCompare(String(right));
-}
-
-function isActiveVoterReadyPartitionReplica(serviceRow) {
-  if (!serviceRow || typeof serviceRow !== TYPEOF.OBJECT) {
-    return false;
-  }
-  const serviceType = firstStringField(
-    serviceRow,
-    COLUMN.SERVICE_TYPE,
-    'service_type',
-    'serviceType',
-    'type',
-  );
-  if (serviceType !== SERVICE_TYPE_PARTITION) {
-    return false;
-  }
-  const status = firstStringField(serviceRow, COLUMN.STATUS, 'status');
-  if (String(status || '').toLowerCase() !== STATUS_ACTIVE) {
-    return false;
-  }
-  const raftRole = firstStringField(
-    serviceRow,
-    COLUMN.RAFT_ROLE,
-    'raft_role',
-    'raftRole',
-  );
-  if (!isLoadReadyReplicaRaftRole(raftRole)) {
-    return false;
-  }
-  const address = firstStringField(serviceRow, COLUMN.ADDRESS, 'address');
-  return Boolean(address);
-}
-
-function selectNewestSchemaVersion(current, candidate) {
-  if (!candidate) {
-    return current;
-  }
-  if (!current) {
-    return candidate;
-  }
-  return compareSchemaVersionValues(candidate, current) >= NUM.ZERO ?
-    candidate :
-    current;
-}
-
-function extractSchemaVersionFromRecord(record) {
-  if (!record || typeof record !== TYPEOF.OBJECT) {
-    return null;
-  }
-  for (const fieldName of SERVICE_DISCOVERY_SCHEMA_VERSION_FIELD_CANDIDATES) {
-    const normalized = normalizeSchemaVersionValue(record[fieldName]);
-    if (normalized) {
-      return normalized;
-    }
-  }
-  return null;
-}
-
 /**
- * Parse one comma-separated query parameter into sorted unique values.
- *
- * @param {*} rawValue
- * @return {Array<string>}
- */
-function parseDiscoveryListQuery(rawValue) {
-  const values = [];
-
-  const collectValues = (inputValue) => {
-    if (Array.isArray(inputValue)) {
-      for (const item of inputValue) {
-        collectValues(item);
-      }
-      return;
-    }
-    if (typeof inputValue !== TYPEOF.STRING) {
-      return;
-    }
-
-    for (const value of inputValue.split(',')) {
-      const trimmedValue = value.trim();
-      if (trimmedValue.length > NUM.ZERO) {
-        values.push(trimmedValue);
-      }
-    }
-  };
-
-  collectValues(rawValue);
-  return uniqueSorted(values);
-}
-
-/**
- * Parse optional boolean query value with fallback.
- *
- * @param {*} rawValue
- * @param {boolean} fallback
- * @return {boolean}
- */
-function parseDiscoveryBooleanQuery(rawValue, fallback) {
-  if (typeof rawValue === TYPEOF.BOOLEAN) {
-    return rawValue;
-  }
-  if (typeof rawValue !== TYPEOF.STRING) {
-    return fallback;
-  }
-
-  const normalizedValue = rawValue.trim().toLowerCase();
-  if (normalizedValue === ENDPOINT_SYNC_BOOLEAN.TRUE ||
-    normalizedValue === ENDPOINT_SYNC_BOOLEAN.ONE) {
-    return true;
-  }
-  if (normalizedValue === ENDPOINT_SYNC_BOOLEAN.FALSE ||
-    normalizedValue === ENDPOINT_SYNC_BOOLEAN.ZERO) {
-    return false;
-  }
-  return fallback;
-}
-
-/**
- * Normalize identifier-like values used in discovery scope.
- *
- * @param {*} value
- * @return {string|null}
- */
-function normalizeIdentifier(value) {
-  if (typeof value !== TYPEOF.STRING) {
-    return null;
-  }
-  const trimmedValue = value.trim();
-  if (trimmedValue.length === NUM.ZERO) {
-    return null;
-  }
-  if (!IDENTIFIER_PATTERN.test(trimmedValue)) {
-    return null;
-  }
-  return trimmedValue;
-}
-
-/**
- * Normalize optional table-id discovery scope value.
- *
- * @param {*} value
- * @return {string|null}
- */
-function normalizeDiscoveryTableId(value) {
-  if (typeof value !== TYPEOF.STRING) {
-    return null;
-  }
-  const trimmedValue = value.trim();
-  if (trimmedValue.length === NUM.ZERO) {
-    return null;
-  }
-  if (!SERVICE_DISCOVERY_TABLE_ID_PATTERN.test(trimmedValue)) {
-    return null;
-  }
-  return trimmedValue;
-}
-
-/**
- * Parse local service-discovery SQL with optional tableName and tableId args.
- *
- * @param {string} sql
- * @return {{isQuery: boolean, tableName: (string|null), tableId: (string|null)}}
- */
-function parseServiceDiscoverySqlQuery(sql) {
-  const normalizedSql = normalizeSql(sql);
-  if (normalizedSql === normalizeSql(ADMIN_SERVICE_DISCOVERY.QUERY_SQL)) {
-    return {
-      isQuery: true,
-      tableName: null,
-      tableId: null,
-    };
-  }
-
-  const tableAndIdMatch =
-    normalizedSql.match(SERVICE_DISCOVERY_SQL_WITH_TABLE_AND_ID_PATTERN);
-  if (tableAndIdMatch) {
-    return {
-      isQuery: true,
-      tableName: normalizeIdentifier(tableAndIdMatch[1]),
-      tableId: normalizeDiscoveryTableId(tableAndIdMatch[2]),
-    };
-  }
-
-  const match = normalizedSql.match(SERVICE_DISCOVERY_SQL_WITH_TABLE_PATTERN);
-  if (!match) {
-    return {
-      isQuery: false,
-      tableName: null,
-      tableId: null,
-    };
-  }
-
-  return {
-    isQuery: true,
-    tableName: normalizeIdentifier(match[1]),
-    tableId: null,
-  };
-}
-
-/**
- * AdminWebSocketAPI — node-local compatibility adapter for
+ * Build a typed admin-operation error used for websocket responses.
  * administrative SQL/cache operations on the configured admin WebSocket port.
  *
  * All query execution routes through SqlQueryEngine (SqlCore).
@@ -540,10 +157,7 @@ class AdminWebSocketAPI {
    */
   constructor(options = {}) {
     this.systemTableCache = options.systemTableCache || null;
-    this.cacheMutationTarget = options.cacheMutationTarget ||
-      (typeof this.systemTableCache?.applySystemTableChange === TYPEOF.FUNCTION ?
-        this.systemTableCache :
-        null);
+    this.cacheMutationTarget = options.cacheMutationTarget || null;
     this.sqlQueryEngine = options.sqlQueryEngine || null;
     this.messageRouter = options.messageRouter || null;
     this.nodeId = options.nodeId || ADMIN_DEFAULT.NODE_ID;
@@ -589,8 +203,60 @@ class AdminWebSocketAPI {
 
     // Connected clients
     this.clients = new Set();
-    this.authoritativeDiscoveryRepairPromise = null;
-    this.lastAuthoritativeDiscoveryRepairAtMs = NUM.ZERO;
+
+    // Service discovery delegate
+    this.serviceDiscovery = new AdminServiceDiscovery({
+      systemTableCache: this.systemTableCache,
+      nodeId: this.nodeId,
+      logger: this.logger,
+      cacheMutationTarget: this.cacheMutationTarget,
+      cdcIntegrationService: this.cdcIntegrationService,
+      partitionServicesProvider: this.partitionServicesProvider,
+      partitionServices: this.partitionServices,
+      sqlQueryEngine: this.sqlQueryEngine,
+      buildPreflightCacheFreshnessSummary: (opts) =>
+        this.preflightSnapshot.buildPreflightCacheFreshnessSummary(
+          opts,
+        ),
+      buildControlSnapshotReplicaOperationSummary: (rows, opts) =>
+        this.controlSnapshot
+          .buildControlSnapshotReplicaOperationSummary(rows, opts),
+      executeSqlRequestWithTimeout: (req, timeout) =>
+        this.executeSqlRequestWithTimeout(req, timeout),
+    });
+
+    // Preflight critical path snapshot delegate
+    this.preflightSnapshot = new AdminPreflightSnapshot({
+      systemTableCache: this.systemTableCache,
+      nodeId: this.nodeId,
+      messageRouter: this.messageRouter,
+      cacheMutationTarget: this.cacheMutationTarget,
+      sqlQueryEngine: this.sqlQueryEngine,
+      buildLocalServiceDiscoverySnapshot: (opts) =>
+        this.serviceDiscovery
+          .buildLocalServiceDiscoverySnapshot(opts),
+      ensureAuthoritativeDiscoveryCacheRepair: (opts) =>
+        this.serviceDiscovery
+          .ensureAuthoritativeDiscoveryCacheRepair(opts),
+    });
+
+    // Control snapshot delegate
+    this.controlSnapshot = new AdminControlSnapshot({
+      systemTableCache: this.systemTableCache,
+      nodeId: this.nodeId,
+      cdcIntegrationService: this.cdcIntegrationService,
+      resolveLocalPartitionServices: () =>
+        this.serviceDiscovery.resolveLocalPartitionServices(),
+    });
+
+    // Debug handlers delegate
+    this.debugHandlers = new AdminDebugHandlers({
+      debugMetadataStore: this.debugMetadataStore,
+      debugDapRouter: this.debugDapRouter,
+      traceCollector: this.traceCollector,
+      logger: this.logger,
+      testRunService: this.testRunService,
+    });
 
     // Subscribe to cache notifications for CDC forwarding (Requirement 2.2)
     this.subscribeToCacheNotifications();
@@ -623,8 +289,8 @@ class AdminWebSocketAPI {
       if (loggingService.isInitialized()) {
         return loggingService.forSubsystem(ADMIN_SUBSYSTEM.WEBSOCKET_API);
       }
-    } catch {
-      // Logging not available
+    } catch (_logErr) {
+      // Logging not available — fall through to console
     }
     return console;
   }
@@ -744,53 +410,78 @@ class AdminWebSocketAPI {
       return this.handleRunStream(request, reply);
     });
     this.fastify.post(ADMIN_ROUTE.DEBUG_SESSIONS, async (request, reply) => {
-      return this.handleCreateDebugSession(request, reply);
+      return this.debugHandlers
+        .handleCreateDebugSession(request, reply);
     });
-    this.fastify.get(ADMIN_ROUTE.DEBUG_SESSION_BY_ID, async (request, reply) => {
-      return this.handleGetDebugSession(request, reply);
-    });
-    this.fastify.patch(ADMIN_ROUTE.DEBUG_SESSION_BY_ID, async (request, reply) => {
-      return this.handleUpdateDebugSession(request, reply);
-    });
-    this.fastify.post(ADMIN_ROUTE.DEBUG_SESSION_ATTACH, async (request, reply) => {
-      return this.handleAttachDebugSession(request, reply);
-    });
+    this.fastify.get(
+      ADMIN_ROUTE.DEBUG_SESSION_BY_ID,
+      async (request, reply) => {
+        return this.debugHandlers
+          .handleGetDebugSession(request, reply);
+      },
+    );
+    this.fastify.patch(
+      ADMIN_ROUTE.DEBUG_SESSION_BY_ID,
+      async (request, reply) => {
+        return this.debugHandlers
+          .handleUpdateDebugSession(request, reply);
+      },
+    );
+    this.fastify.post(
+      ADMIN_ROUTE.DEBUG_SESSION_ATTACH,
+      async (request, reply) => {
+        return this.debugHandlers
+          .handleAttachDebugSession(request, reply);
+      },
+    );
     this.fastify.post(
       ADMIN_ROUTE.DEBUG_SESSION_BREAKPOINTS,
       async (request, reply) => {
-        return this.handleWriteDebugBreakpoints(request, reply);
+        return this.debugHandlers
+          .handleWriteDebugBreakpoints(request, reply);
       },
     );
     this.fastify.get(
       ADMIN_ROUTE.DEBUG_SESSION_BREAKPOINTS,
       async (request, reply) => {
-        return this.handleListDebugBreakpoints(request, reply);
+        return this.debugHandlers
+          .handleListDebugBreakpoints(request, reply);
       },
     );
     this.fastify.post(
       ADMIN_ROUTE.DEBUG_SESSION_SNAPSHOTS,
       async (request, reply) => {
-        return this.handleWriteDebugSnapshot(request, reply);
+        return this.debugHandlers
+          .handleWriteDebugSnapshot(request, reply);
       },
     );
     this.fastify.get(
       ADMIN_ROUTE.DEBUG_SESSION_SNAPSHOTS,
       async (request, reply) => {
-        return this.handleListDebugSnapshots(request, reply);
+        return this.debugHandlers
+          .handleListDebugSnapshots(request, reply);
       },
     );
-    this.fastify.get(ADMIN_ROUTE.DEBUG_SNAPSHOT_BY_ID, async (request, reply) => {
-      return this.handleGetDebugSnapshot(request, reply);
-    });
-    this.fastify.post(ADMIN_ROUTE.DEBUG_DAP_REQUEST, async (request, reply) => {
-      return this.handleDebugDapRequest(request, reply);
-    });
+    this.fastify.get(
+      ADMIN_ROUTE.DEBUG_SNAPSHOT_BY_ID,
+      async (request, reply) => {
+        return this.debugHandlers
+          .handleGetDebugSnapshot(request, reply);
+      },
+    );
+    this.fastify.post(
+      ADMIN_ROUTE.DEBUG_DAP_REQUEST,
+      async (request, reply) => {
+        return this.debugHandlers
+          .handleDebugDapRequest(request, reply);
+      },
+    );
 
     this.fastify.get(ADMIN_ROUTE.PLAYBACK_VIEWER, async (_request, reply) => {
-      return this.handlePlaybackViewerPage(reply);
+      return this.debugHandlers.handlePlaybackViewerPage(reply);
     });
     this.fastify.get(ADMIN_ROUTE.OUTPUT_FILES, async (request, reply) => {
-      return this.handleOutputFile(request, reply);
+      return this.debugHandlers.handleOutputFile(request, reply);
     });
 
     if (this.enableAdminStream) {
@@ -804,7 +495,8 @@ class AdminWebSocketAPI {
           ADMIN_ROUTE.DEBUG_TRACE_STREAM,
           {websocket: true},
           (socket, request) => {
-            this.handleDebugTraceConnection(socket, request);
+            this.debugHandlers
+              .handleDebugTraceConnection(socket, request);
           },
         );
       });
@@ -854,7 +546,7 @@ class AdminWebSocketAPI {
       });
     } catch (error) {
       reply
-        .code(HTTP_STATUS.INTERNAL_ERROR)
+        .code(HTTP_STATUS.INTERNAL_SERVER_ERROR)
         .send({error: error.message});
     }
   }
@@ -871,7 +563,7 @@ class AdminWebSocketAPI {
       reply.code(HTTP_STATUS.OK).send({runs});
     } catch (error) {
       reply
-        .code(HTTP_STATUS.INTERNAL_ERROR)
+        .code(HTTP_STATUS.INTERNAL_SERVER_ERROR)
         .send({error: error.message});
     }
   }
@@ -989,7 +681,7 @@ class AdminWebSocketAPI {
         const frame =
           `${SSE_FRAME_PREFIX}${JSON.stringify(eventPayload)}${SSE_FRAME_SUFFIX}`;
         reply.raw.write(frame);
-      } catch {
+      } catch (_streamErr) {
         // Stream errors are handled by close listener cleanup.
       }
     };
@@ -1056,377 +748,6 @@ class AdminWebSocketAPI {
   }
 
   /**
-   * Create debug session metadata.
-   * @param {Object} request
-   * @param {Object} reply
-   * @return {Promise<void>}
-   * @private
-   */
-  async handleCreateDebugSession(request, reply) {
-    const securityContext = this.resolveDebugSecurityContext(request, reply);
-    const store = this.requireDebugMetadataStore(reply);
-    if (!securityContext || !store) {
-      return;
-    }
-
-    try {
-      const session = await store.createSession({
-        securityContext,
-        ...(request.body || {}),
-      });
-      reply.code(HTTP_STATUS.OK).send({session});
-    } catch (error) {
-      reply.code(this.resolveDebugApiErrorStatus(error)).send({
-        error: error.message,
-        code: error.code || null,
-      });
-    }
-  }
-
-  /**
-   * Get one debug session by ID.
-   * @param {Object} request
-   * @param {Object} reply
-   * @return {Promise<void>}
-   * @private
-   */
-  async handleGetDebugSession(request, reply) {
-    const securityContext = this.resolveDebugSecurityContext(request, reply);
-    const store = this.requireDebugMetadataStore(reply);
-    if (!securityContext || !store) {
-      return;
-    }
-
-    try {
-      const session = await store.getSession({
-        securityContext,
-        sessionId: request.params.sessionId,
-      });
-      if (!session) {
-        reply.code(HTTP_STATUS.NOT_FOUND).send({
-          error: DEBUG_METADATA_ERR.SESSION_NOT_FOUND,
-        });
-        return;
-      }
-      reply.code(HTTP_STATUS.OK).send({session});
-    } catch (error) {
-      reply.code(this.resolveDebugApiErrorStatus(error)).send({
-        error: error.message,
-        code: error.code || null,
-      });
-    }
-  }
-
-  /**
-   * Update or detach an existing debug session.
-   * @param {Object} request
-   * @param {Object} reply
-   * @return {Promise<void>}
-   * @private
-   */
-  async handleUpdateDebugSession(request, reply) {
-    const securityContext = this.resolveDebugSecurityContext(request, reply);
-    const store = this.requireDebugMetadataStore(reply);
-    if (!securityContext || !store) {
-      return;
-    }
-
-    const body = request.body || {};
-    const isDetachRequest = body.detach === true ||
-      body.status === DEBUG_METADATA_SESSION_STATUS.DETACHED;
-
-    try {
-      const session = isDetachRequest ?
-        await store.detachSession({
-          securityContext,
-          sessionId: request.params.sessionId,
-          ...body,
-        }) :
-        await store.updateSession({
-          securityContext,
-          sessionId: request.params.sessionId,
-          ...body,
-        });
-      reply.code(HTTP_STATUS.OK).send({session});
-    } catch (error) {
-      reply.code(this.resolveDebugApiErrorStatus(error)).send({
-        error: error.message,
-        code: error.code || null,
-      });
-    }
-  }
-
-  /**
-   * Attach a debugger to an existing session.
-   * @param {Object} request
-   * @param {Object} reply
-   * @return {Promise<void>}
-   * @private
-   */
-  async handleAttachDebugSession(request, reply) {
-    const securityContext = this.resolveDebugSecurityContext(request, reply);
-    const store = this.requireDebugMetadataStore(reply);
-    if (!securityContext || !store) {
-      return;
-    }
-
-    try {
-      const session = await store.attachSession({
-        securityContext,
-        sessionId: request.params.sessionId,
-      });
-      reply.code(HTTP_STATUS.OK).send({session});
-    } catch (error) {
-      reply.code(this.resolveDebugApiErrorStatus(error)).send({
-        error: error.message,
-        code: error.code || null,
-      });
-    }
-  }
-
-  /**
-   * Persist breakpoints for a debug session.
-   * @param {Object} request
-   * @param {Object} reply
-   * @return {Promise<void>}
-   * @private
-   */
-  async handleWriteDebugBreakpoints(request, reply) {
-    const securityContext = this.resolveDebugSecurityContext(request, reply);
-    const store = this.requireDebugMetadataStore(reply);
-    if (!securityContext || !store) {
-      return;
-    }
-
-    try {
-      const breakpoints = await store.writeBreakpoints({
-        securityContext,
-        sessionId: request.params.sessionId,
-        ...(request.body || {}),
-      });
-      reply.code(HTTP_STATUS.OK).send({breakpoints});
-    } catch (error) {
-      reply.code(this.resolveDebugApiErrorStatus(error)).send({
-        error: error.message,
-        code: error.code || null,
-      });
-    }
-  }
-
-  /**
-   * List breakpoints for a debug session.
-   * @param {Object} request
-   * @param {Object} reply
-   * @return {Promise<void>}
-   * @private
-   */
-  async handleListDebugBreakpoints(request, reply) {
-    const securityContext = this.resolveDebugSecurityContext(request, reply);
-    const store = this.requireDebugMetadataStore(reply);
-    if (!securityContext || !store) {
-      return;
-    }
-
-    try {
-      const breakpoints = await store.listBreakpoints({
-        securityContext,
-        sessionId: request.params.sessionId,
-        limit: parseRequestLimit(request.query?.limit),
-      });
-      reply.code(HTTP_STATUS.OK).send({breakpoints});
-    } catch (error) {
-      reply.code(this.resolveDebugApiErrorStatus(error)).send({
-        error: error.message,
-        code: error.code || null,
-      });
-    }
-  }
-
-  /**
-   * Persist one snapshot artifact for a debug session.
-   * @param {Object} request
-   * @param {Object} reply
-   * @return {Promise<void>}
-   * @private
-   */
-  async handleWriteDebugSnapshot(request, reply) {
-    const securityContext = this.resolveDebugSecurityContext(request, reply);
-    const store = this.requireDebugMetadataStore(reply);
-    if (!securityContext || !store) {
-      return;
-    }
-
-    try {
-      const snapshot = await store.writeSnapshot({
-        securityContext,
-        sessionId: request.params.sessionId,
-        ...(request.body || {}),
-      });
-      reply.code(HTTP_STATUS.OK).send({
-        snapshot: normalizeSnapshotApiPayload(snapshot),
-      });
-    } catch (error) {
-      reply.code(this.resolveDebugApiErrorStatus(error)).send({
-        error: error.message,
-        code: error.code || null,
-      });
-    }
-  }
-
-  /**
-   * List snapshots for a debug session.
-   * @param {Object} request
-   * @param {Object} reply
-   * @return {Promise<void>}
-   * @private
-   */
-  async handleListDebugSnapshots(request, reply) {
-    const securityContext = this.resolveDebugSecurityContext(request, reply);
-    const store = this.requireDebugMetadataStore(reply);
-    if (!securityContext || !store) {
-      return;
-    }
-
-    try {
-      const snapshots = await store.listSnapshots({
-        securityContext,
-        sessionId: request.params.sessionId,
-        limit: parseRequestLimit(request.query?.limit),
-      });
-      reply.code(HTTP_STATUS.OK).send({
-        snapshots: snapshots.map((snapshot) =>
-          normalizeSnapshotApiPayload(snapshot),
-        ),
-      });
-    } catch (error) {
-      reply.code(this.resolveDebugApiErrorStatus(error)).send({
-        error: error.message,
-        code: error.code || null,
-      });
-    }
-  }
-
-  /**
-   * Fetch one snapshot by snapshotId.
-   * @param {Object} request
-   * @param {Object} reply
-   * @return {Promise<void>}
-   * @private
-   */
-  async handleGetDebugSnapshot(request, reply) {
-    const securityContext = this.resolveDebugSecurityContext(request, reply);
-    const store = this.requireDebugMetadataStore(reply);
-    if (!securityContext || !store) {
-      return;
-    }
-
-    try {
-      const snapshot = await store.getSnapshot({
-        securityContext,
-        snapshotId: request.params.snapshotId,
-        sessionId: request.query?.sessionId || null,
-        includeEnvelope: request.query?.includeEnvelope !== 'false',
-      });
-      if (!snapshot) {
-        reply.code(HTTP_STATUS.NOT_FOUND).send({
-          error: DEBUG_METADATA_ERR.SNAPSHOT_NOT_FOUND,
-        });
-        return;
-      }
-      reply.code(HTTP_STATUS.OK).send({
-        snapshot: normalizeSnapshotApiPayload(snapshot),
-      });
-    } catch (error) {
-      reply.code(this.resolveDebugApiErrorStatus(error)).send({
-        error: error.message,
-        code: error.code || null,
-      });
-    }
-  }
-
-  /**
-   * Route one DAP request through admin ingress ownership.
-   * @param {Object} request
-   * @param {Object} reply
-   * @return {Promise<void>}
-   * @private
-   */
-  async handleDebugDapRequest(request, reply) {
-    const securityContext = this.resolveDebugSecurityContext(request, reply);
-    if (!securityContext) {
-      return;
-    }
-
-    if (!this.debugDapRouter ||
-      typeof this.debugDapRouter.handleRequest !== TYPEOF.FUNCTION) {
-      reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE).send({
-        error: ADMIN_DEBUG_ERROR_MSG.DAP_UNAVAILABLE,
-      });
-      return;
-    }
-
-    try {
-      const response = await this.debugDapRouter.handleRequest({
-        securityContext,
-        ...(request.body || {}),
-      });
-      reply.code(HTTP_STATUS.OK).send({response});
-    } catch (error) {
-      reply.code(this.resolveDebugApiErrorStatus(error)).send({
-        error: error.message,
-        code: error.code || null,
-      });
-    }
-  }
-
-  /**
-   * Serve shared playback viewer page.
-   * @param {Object} reply
-   * @return {Promise<void>}
-   * @private
-   */
-  async handlePlaybackViewerPage(reply) {
-    try {
-      const page = await this.testRunService.readPlaybackViewer();
-      reply
-        .code(HTTP_STATUS.OK)
-        .header(HTTP_HEADER.CACHE_CONTROL, HTTP_HEADER_VALUE.NO_STORE)
-        .type(ADMIN_CONTENT_TYPE.HTML)
-        .send(page);
-    } catch (error) {
-      reply
-        .code(HTTP_STATUS.NOT_FOUND)
-        .send({
-          error: ADMIN_TEST_ERROR_MSG.PLAYBACK_VIEWER_NOT_FOUND,
-          details: error.message,
-        });
-    }
-  }
-
-  /**
-   * Serve files under test-output for report/playback assets.
-   * @param {Object} request
-   * @param {Object} reply
-   * @return {Promise<void>}
-   * @private
-   */
-  async handleOutputFile(request, reply) {
-    const wildcardPath = request.params['*'];
-    const filePayload = await this.testRunService.readOutputAsset(wildcardPath);
-    if (!filePayload) {
-      reply
-        .code(HTTP_STATUS.NOT_FOUND)
-        .send({error: ADMIN_TEST_ERROR_MSG.OUTPUT_PATH_INVALID});
-      return;
-    }
-
-    reply
-      .code(HTTP_STATUS.OK)
-      .type(filePayload.contentType)
-      .send(filePayload.body);
-  }
-
-  /**
    * Resolve status code for admin test API errors.
    * @param {Error} error
    * @return {number}
@@ -1445,102 +766,7 @@ class AdminWebSocketAPI {
         message === ADMIN_TEST_ERROR_MSG.CONFIG_NOT_FOUND) {
       return HTTP_STATUS.NOT_FOUND;
     }
-    return HTTP_STATUS.INTERNAL_ERROR;
-  }
-
-  /**
-   * Resolve security context from debug route headers.
-   * @param {Object} request
-   * @param {Object} reply
-   * @return {Object|null}
-   * @private
-   */
-  resolveDebugSecurityContext(request, reply) {
-    const tenantId = request.headers[ADMIN_HEADER.TENANT_ID];
-    const principal = request.headers[ADMIN_HEADER.PRINCIPAL];
-    if (!tenantId || !principal) {
-      reply.code(HTTP_STATUS.UNAUTHORIZED).send({
-        error: ADMIN_DEBUG_ERROR_MSG.SECURITY_CONTEXT_REQUIRED,
-      });
-      return null;
-    }
-
-    const rolesHeader = request.headers[ADMIN_HEADER.ROLES];
-    return {
-      tenantId,
-      principal,
-      roles: parseHeaderRoles(rolesHeader),
-    };
-  }
-
-  /**
-   * @param {Object} reply
-   * @return {DebugMetadataStore|null}
-   * @private
-   */
-  requireDebugMetadataStore(reply) {
-    if (!this.debugMetadataStore) {
-      reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE).send({
-        error: ADMIN_DEBUG_ERROR_MSG.SERVICE_UNAVAILABLE,
-      });
-      return null;
-    }
-    return this.debugMetadataStore;
-  }
-
-  /**
-   * Resolve debug API HTTP status from error code.
-   * @param {Error} error
-   * @return {number}
-   * @private
-   */
-  resolveDebugApiErrorStatus(error) {
-    switch (error?.code) {
-    case DEBUG_METADATA_CODE.INVALID_CONTEXT:
-      return HTTP_STATUS.UNAUTHORIZED;
-    case DEBUG_METADATA_CODE.UNAUTHORIZED:
-      return HTTP_STATUS.FORBIDDEN;
-    case DEBUG_METADATA_CODE.ENGINE_REQUIRED:
-      return HTTP_STATUS.SERVICE_UNAVAILABLE;
-    case DEBUG_METADATA_CODE.INVALID_REQUEST:
-    case DEBUG_METADATA_CODE.BREAKPOINTS_REQUIRED:
-      return HTTP_STATUS.BAD_REQUEST;
-    case DEBUG_METADATA_CODE.SESSION_NOT_FOUND:
-    case DEBUG_METADATA_CODE.SNAPSHOT_NOT_FOUND:
-      return HTTP_STATUS.NOT_FOUND;
-    default:
-      return HTTP_STATUS.INTERNAL_ERROR;
-    }
-  }
-
-  /**
-   * Handle one trace-stream websocket connection.
-   * @param {Object} socket - WebSocket connection.
-   * @param {Object} request - Fastify request.
-   */
-  handleDebugTraceConnection(socket, request) {
-    const filter = buildTraceStreamFilter(request?.query || {});
-    const subscription = this.traceCollector.subscribe(socket, filter);
-    let closed = false;
-
-    this.logger.info(ADMIN_LOG_MSG.TRACE_STREAM_SUBSCRIBED, {
-      subscriberId: subscription.subscriberId,
-      filter,
-    });
-
-    const cleanup = () => {
-      if (closed) {
-        return;
-      }
-      closed = true;
-      subscription.unsubscribe();
-      this.logger.info(ADMIN_LOG_MSG.TRACE_STREAM_UNSUBSCRIBED, {
-        subscriberId: subscription.subscriberId,
-      });
-    };
-
-    socket.on(TRANSPORT_EVENT.CLOSE, cleanup);
-    socket.on(TRANSPORT_EVENT.ERROR, cleanup);
+    return HTTP_STATUS.INTERNAL_SERVER_ERROR;
   }
 
   /**
@@ -1677,7 +903,7 @@ class AdminWebSocketAPI {
     for (const tableName of targetTables) {
       try {
         dump[tableName] = this.systemTableCache.getAll(tableName);
-      } catch {
+      } catch (_cacheErr) {
         dump[tableName] = ADMIN_CACHE_DUMP.EMPTY;
       }
     }
@@ -1775,10 +1001,11 @@ class AdminWebSocketAPI {
     }
     const serviceDiscoveryQuery = parseServiceDiscoverySqlQuery(sql);
     if (serviceDiscoveryQuery.isQuery) {
-      return this.buildServiceDiscoveryQueryResult({
-        tableName: serviceDiscoveryQuery.tableName,
-        tableId: serviceDiscoveryQuery.tableId,
-      });
+      return this.serviceDiscovery
+        .buildServiceDiscoveryQueryResult({
+          tableName: serviceDiscoveryQuery.tableName,
+          tableId: serviceDiscoveryQuery.tableId,
+        });
     }
 
     const routed = guardedAdaptAdminAction(
@@ -2278,14 +1505,15 @@ class AdminWebSocketAPI {
         ENDPOINT_SYNC_UNHEALTHY_POLICY.NOT_READY;
 
     try {
-      const snapshot = await this.resolveServiceDiscoverySnapshot({
-        protocolAllowlist,
-        serviceIdAllowlist,
-        nodeIdAllowlist,
-        tableName,
-        healthyOnly,
-        unhealthyPolicy: resolvedUnhealthyPolicy,
-      });
+      const snapshot = await this.serviceDiscovery
+        .resolveServiceDiscoverySnapshot({
+          protocolAllowlist,
+          serviceIdAllowlist,
+          nodeIdAllowlist,
+          tableName,
+          healthyOnly,
+          unhealthyPolicy: resolvedUnhealthyPolicy,
+        });
       reply.code(HTTP_STATUS.OK).send(snapshot);
     } catch (error) {
       reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE).send({
@@ -2327,1997 +1555,139 @@ class AdminWebSocketAPI {
   }
 
   /**
-   * Build local service-discovery snapshot from system cache only.
-   * @param {Object} [options={}]
-   * @return {Object}
-   * @private
-   */
-  buildLocalServiceDiscoverySnapshot(options = {}) {
-    if (!this.systemTableCache ||
-      typeof this.systemTableCache.getAll !== TYPEOF.FUNCTION) {
-      throw new Error(ADMIN_ERROR_MESSAGE.SERVICE_DISCOVERY_UNAVAILABLE);
-    }
-
-    const endpointRows = this.systemTableCache.getAll(TABLES.SERVICE_ENDPOINTS);
-    const definitionRows =
-      this.systemTableCache.getAll(TABLES.SERVICE_DEFINITIONS);
-    const readinessContext = this.buildServiceDiscoveryReadinessContext(options);
-    const discoveredServices = buildServiceDiscoveryCatalog(endpointRows, {
-      protocolAllowlist: options.protocolAllowlist || ADMIN_CACHE_DUMP.EMPTY,
-      serviceIdAllowlist: options.serviceIdAllowlist || ADMIN_CACHE_DUMP.EMPTY,
-      nodeIdAllowlist: options.nodeIdAllowlist || ADMIN_CACHE_DUMP.EMPTY,
-      healthyOnly: options.healthyOnly === true,
-      unhealthyPolicy: options.unhealthyPolicy,
-      definitionRows,
-    });
-    const services = discoveredServices.map((service) => ({
-      ...service,
-      replicas: service.replicas.map((replica) => {
-        const readiness = this.buildServiceDiscoveryReplicaReadiness(
-          replica,
-          readinessContext,
-        );
-        return {
-          ...replica,
-          readiness,
-          benchmarkAdmission: this.buildServiceDiscoveryReplicaBenchmarkAdmission(
-            replica,
-            readinessContext,
-            readiness,
-          ),
-        };
-      }),
-    }));
-    const replicaCount = services.reduce((count, service) =>
-      count + service.observedReplicaCount, NUM.ZERO);
-
-    return {
-      schemaVersion: ADMIN_SERVICE_DISCOVERY.SCHEMA_VERSION,
-      nodeId: this.nodeId,
-      capturedAt: Date.now(),
-      serviceCount: services.length,
-      replicaCount,
-      services,
-    };
-  }
-
-  /**
-   * Resolve local service discovery snapshot with bounded authoritative repair.
+   * Delegate: build service discovery query result.
    * @param {Object} [options={}]
    * @return {Promise<Object>}
-   * @private
-   */
-  async resolveServiceDiscoverySnapshot(options = {}) {
-    const snapshot = this.buildLocalServiceDiscoverySnapshot(options);
-    if (!this.shouldAttemptAuthoritativeDiscoveryRepair(snapshot, options)) {
-      return snapshot;
-    }
-    const repair = await this.ensureAuthoritativeDiscoveryCacheRepair({
-      reason: 'service_discovery_snapshot',
-      tableName: options.tableName || null,
-      tableId: options.tableId || null,
-    });
-    if (repair.applied !== true) {
-      return snapshot;
-    }
-    return this.buildLocalServiceDiscoverySnapshot(options);
-  }
-
-  /**
-   * Determine whether discovery snapshot warrants authoritative cache repair.
-   * @param {Object} snapshot
-   * @return {boolean}
-   * @private
-   */
-  shouldAttemptAuthoritativeDiscoveryRepair(snapshot, options = {}) {
-    if (!this.systemTableCache ||
-        !this.cacheMutationTarget ||
-        typeof this.cacheMutationTarget.applySystemTableChange !== TYPEOF.FUNCTION ||
-        !this.sqlQueryEngine ||
-        typeof this.sqlQueryEngine.executeRequest !== TYPEOF.FUNCTION) {
-      return false;
-    }
-    if (!snapshot || typeof snapshot !== TYPEOF.OBJECT) {
-      return false;
-    }
-    const freshness = this.buildPreflightCacheFreshnessSummary({
-      capturedAtMs: Date.now(),
-    });
-    const stalenessMs = Number(freshness?.stalenessMs);
-    const cacheRepairEligible =
-      !Number.isFinite(stalenessMs) ||
-      stalenessMs >= AUTHORITATIVE_DISCOVERY_REPAIR.STALE_THRESHOLD_MS;
-    const scopedDiscoveryQuery =
-      normalizeIdentifier(options.tableName) !== null ||
-      normalizeDiscoveryTableId(options.tableId) !== null;
-    if (snapshot.serviceCount === NUM.ZERO || snapshot.replicaCount === NUM.ZERO) {
-      if (scopedDiscoveryQuery) {
-        return true;
-      }
-      return cacheRepairEligible;
-    }
-
-    const services = Array.isArray(snapshot.services) ? snapshot.services : [];
-    let readyReplicaCount = NUM.ZERO;
-    for (const service of services) {
-      const replicas = Array.isArray(service?.replicas) ? service.replicas : [];
-      for (const replica of replicas) {
-        const readiness = replica?.readiness || null;
-        if (!readiness || typeof readiness !== TYPEOF.OBJECT) {
-          continue;
-        }
-        const reasons = Array.isArray(readiness.reasons) ? readiness.reasons : [];
-        if (readiness.benchmarkReady === true || reasons.length === NUM.ZERO) {
-          readyReplicaCount += NUM.ONE;
-        }
-        for (const reason of reasons) {
-          const code = String(reason?.code || EMPTY_STRING);
-          if (cacheRepairEligible &&
-              AUTHORITATIVE_DISCOVERY_CACHE_GAP_REASON_CODES.has(code)) {
-            return true;
-          }
-        }
-      }
-    }
-
-    if (scopedDiscoveryQuery) {
-      return false;
-    }
-
-    return cacheRepairEligible && readyReplicaCount === NUM.ZERO;
-  }
-
-  /**
-   * Build per-replica readiness context from local cache state.
-   * @param {Object} [options={}]
-   * @return {Object}
-   * @private
-   */
-  buildServiceDiscoveryReadinessContext(options = {}) {
-    const tableName = normalizeIdentifier(options.tableName);
-    const tableId = normalizeDiscoveryTableId(options.tableId);
-    const nodeRows = this.systemTableCache.getAll(TABLES.NODES);
-    const serviceRows = this.systemTableCache.getAll(TABLES.SERVICES);
-    const partitionRows = this.systemTableCache.getAll(TABLES.PARTITIONS);
-    const tableRows = this.systemTableCache.getAll(TABLES.TABLES);
-    const replicaOperationRows =
-      this.systemTableCache.getAll(TABLES.REPLICA_OPERATIONS);
-
-    const activeNodeIds = new Set(nodeRows
-      .map((row) => ({
-        nodeId: firstStringField(row, COLUMN.NODE_ID, 'node_id', 'nodeId', 'id'),
-        status: firstStringField(row, COLUMN.STATUS, 'status'),
-      }))
-      .filter((entry) =>
-        entry.nodeId &&
-        String(entry.status || '').toLowerCase() === STATUS_ACTIVE)
-      .map((entry) => entry.nodeId));
-
-    const tablePartitionContext = this.resolveDiscoveryTablePartitionContext(
-      tableName,
-      tableId,
-      partitionRows,
-      tableRows,
-    );
-    const schemaReady = this.resolveDiscoverySchemaReady(
-      tablePartitionContext.partitionIds,
-      serviceRows,
-    );
-    const leadershipStable = this.resolveDiscoveryLeadershipStable(
-      tablePartitionContext.partitionIds,
-      serviceRows,
-    );
-    const localTargetReplicaStateByNodeId =
-      this.buildDiscoveryLocalTargetReplicaStateByNodeId(
-        tablePartitionContext.partitionIds,
-        serviceRows,
-      );
-    const localTargetPartitionIds = this.buildDiscoveryLocalTargetPartitionIds(
-      tablePartitionContext.partitionIds,
-      serviceRows,
-    );
-    const localPartitionCdcState = this.buildDiscoveryLocalPartitionCdcState({
-      localTargetPartitionIds,
-      tableName,
-      cdcReadinessApplies: tablePartitionContext.cdcReadinessApplies,
-    });
-    const replicaOperationSummary =
-      this.buildControlSnapshotReplicaOperationSummary(replicaOperationRows, {
-        partitionIds: tablePartitionContext.partitionIds,
-      });
-    const replicaOperationDegradationByNodeId =
-      this.buildDiscoveryReplicaOperationDegradationByNodeId(
-        replicaOperationRows,
-        {
-          partitionIds: tablePartitionContext.partitionIds,
-        },
-      );
-
-    return {
-      tableName,
-      tableFound: tablePartitionContext.tableFound,
-      appliedSchemaVersion: tablePartitionContext.appliedSchemaVersion,
-      activeNodeIds,
-      schemaReady,
-      leadershipStable,
-      localTargetReplicaStateByNodeId,
-      localPartitionCdcState,
-      replicaOpsInFlight: replicaOperationSummary.inFlightCount,
-      replicaOperationDegradationByNodeId,
-    };
-  }
-
-  /**
-   * Resolve local active target partition IDs for table-scoped discovery.
-   * @param {Set<string>} partitionIds
-   * @param {Array<Object>} serviceRows
-   * @return {Set<string>}
-   * @private
-   */
-  buildDiscoveryLocalTargetPartitionIds(partitionIds, serviceRows) {
-    const localPartitionIds = new Set();
-    if (!(partitionIds instanceof Set) || partitionIds.size === NUM.ZERO) {
-      return localPartitionIds;
-    }
-
-    for (const serviceRow of serviceRows) {
-      const serviceType = firstStringField(
-        serviceRow,
-        COLUMN.SERVICE_TYPE,
-        'service_type',
-        'serviceType',
-        'type',
-      );
-      if (serviceType !== SERVICE_TYPE_PARTITION) {
-        continue;
-      }
-      const partitionId = firstStringField(
-        serviceRow,
-        COLUMN.PARTITION_ID,
-        'partition_id',
-        'partitionId',
-        'id',
-      );
-      if (!partitionId || !partitionIds.has(partitionId)) {
-        continue;
-      }
-      const nodeId = firstStringField(
-        serviceRow,
-        COLUMN.NODE_ID,
-        'node_id',
-        'nodeId',
-      );
-      if (nodeId !== this.nodeId) {
-        continue;
-      }
-      const status = firstStringField(serviceRow, COLUMN.STATUS, 'status');
-      if (String(status || '').toLowerCase() !== STATUS_ACTIVE) {
-        continue;
-      }
-      localPartitionIds.add(partitionId);
-    }
-    return localPartitionIds;
-  }
-
-  /**
-   * Resolve one node-local partition-services registry.
-   * @return {Map<string, Object>|null}
-   * @private
-   */
-  resolveLocalPartitionServices() {
-    if (this.partitionServicesProvider) {
-      const provided = this.partitionServicesProvider();
-      return provided instanceof Map ? provided : null;
-    }
-    return this.partitionServices instanceof Map ?
-      this.partitionServices :
-      null;
-  }
-
-  /**
-   * Resolve one local partition service by partition ID.
-   * @param {Map<string, Object>|null} partitionServices
-   * @param {string} partitionId
-   * @return {Object|null}
-   * @private
-   */
-  resolveLocalPartitionService(partitionServices, partitionId) {
-    if (!(partitionServices instanceof Map) || !partitionId) {
-      return null;
-    }
-    if (partitionServices.has(partitionId)) {
-      return partitionServices.get(partitionId) || null;
-    }
-    for (const partitionService of partitionServices.values()) {
-      if (partitionService?.partitionId === partitionId) {
-        return partitionService;
-      }
-    }
-    return null;
-  }
-
-  /**
-   * Build node-local CDC readiness state for active propagated system-table partitions.
-   * @param {Object} options
-   * @return {Object}
-   * @private
-   */
-  buildDiscoveryLocalPartitionCdcState(options = {}) {
-    const state = {
-      applies: false,
-      ready: true,
-      diagnosticsAvailable: true,
-      missingDiagnosticsPartitionIds: [],
-      noSubscriberPartitionIds: [],
-      bufferedPartitionIds: [],
-    };
-    const localTargetPartitionIds = options.localTargetPartitionIds;
-    const tableName = String(options.tableName || '');
-    if (options.cdcReadinessApplies !== true ||
-        !isTableCdcReadinessRelevant(tableName) ||
-        !(localTargetPartitionIds instanceof Set) ||
-        localTargetPartitionIds.size === NUM.ZERO) {
-      return state;
-    }
-
-    const partitionServices = this.resolveLocalPartitionServices();
-    if (!(partitionServices instanceof Map)) {
-      return state;
-    }
-
-    state.applies = true;
-    for (const partitionId of localTargetPartitionIds) {
-      const partitionService = this.resolveLocalPartitionService(
-        partitionServices,
-        partitionId,
-      );
-      if (!partitionService ||
-          typeof partitionService.getCDCSubscriptionDiagnostics !== TYPEOF.FUNCTION) {
-        state.ready = false;
-        state.diagnosticsAvailable = false;
-        state.missingDiagnosticsPartitionIds.push(partitionId);
-        continue;
-      }
-
-      const diagnostics = partitionService.getCDCSubscriptionDiagnostics();
-      if (!diagnostics || typeof diagnostics !== TYPEOF.OBJECT) {
-        state.ready = false;
-        state.diagnosticsAvailable = false;
-        state.missingDiagnosticsPartitionIds.push(partitionId);
-        continue;
-      }
-
-      const subscriberCount = Number(diagnostics.subscriberCount || NUM.ZERO);
-      const bufferedEvents = Number(diagnostics.bufferedEvents || NUM.ZERO);
-      const replayInFlight = diagnostics.bufferReplayInFlight === true;
-      if (subscriberCount <= NUM.ZERO) {
-        state.ready = false;
-        state.noSubscriberPartitionIds.push(partitionId);
-      }
-      if (bufferedEvents > NUM.ZERO || replayInFlight) {
-        state.ready = false;
-        state.bufferedPartitionIds.push(partitionId);
-      }
-    }
-
-    state.missingDiagnosticsPartitionIds = uniqueSorted(
-      state.missingDiagnosticsPartitionIds,
-    );
-    state.noSubscriberPartitionIds = uniqueSorted(
-      state.noSubscriberPartitionIds,
-    );
-    state.bufferedPartitionIds = uniqueSorted(
-      state.bufferedPartitionIds,
-    );
-    return state;
-  }
-
-  /**
-   * Build per-node local target-replica readiness for table-scoped discovery.
-   * Nodes without local target replicas are intentionally omitted so routed
-   * benchmark traffic can still use them when cluster routing is otherwise
-   * healthy.
-   *
-   * @param {Set<string>} partitionIds
-   * @param {Array<Object>} serviceRows
-   * @return {Map<string, {nonVoterPartitionIds: Set<string>}>}
-   * @private
-   */
-  buildDiscoveryLocalTargetReplicaStateByNodeId(partitionIds, serviceRows) {
-    const stateByNodeId = new Map();
-    if (!(partitionIds instanceof Set) || partitionIds.size === NUM.ZERO) {
-      return stateByNodeId;
-    }
-
-    for (const serviceRow of serviceRows) {
-      const serviceType = firstStringField(
-        serviceRow,
-        COLUMN.SERVICE_TYPE,
-        'service_type',
-        'serviceType',
-        'type',
-      );
-      if (serviceType !== SERVICE_TYPE_PARTITION) {
-        continue;
-      }
-      const partitionId = firstStringField(
-        serviceRow,
-        COLUMN.PARTITION_ID,
-        'partition_id',
-        'partitionId',
-        'id',
-      );
-      if (!partitionId || !partitionIds.has(partitionId)) {
-        continue;
-      }
-      const status = firstStringField(serviceRow, COLUMN.STATUS, 'status');
-      if (String(status || '').toLowerCase() !== STATUS_ACTIVE) {
-        continue;
-      }
-      const nodeId = firstStringField(
-        serviceRow,
-        COLUMN.NODE_ID,
-        'node_id',
-        'nodeId',
-      );
-      if (!nodeId) {
-        continue;
-      }
-
-      const nodeState = stateByNodeId.get(nodeId) || {
-        nonVoterPartitionIds: new Set(),
-        replicaRoles: new Set(),
-      };
-      const raftRole = String(firstStringField(
-        serviceRow,
-        COLUMN.RAFT_ROLE,
-        'raft_role',
-        'raftRole',
-      ) || EMPTY_STRING).toLowerCase();
-      if (raftRole.length > NUM.ZERO) {
-        nodeState.replicaRoles.add(raftRole);
-      }
-      if (!isActiveVoterReadyPartitionReplica(serviceRow)) {
-        nodeState.nonVoterPartitionIds.add(partitionId);
-      }
-      stateByNodeId.set(nodeId, nodeState);
-    }
-
-    return stateByNodeId;
-  }
-
-  /**
-   * Resolve partition context for optional table-scoped readiness.
-   * @param {string|null} tableName
-   * @param {string|null} tableId
-   * @param {Array<Object>} partitionRows
-   * @param {Array<Object>} tableRows
-   * @return {{tableFound: boolean, partitionIds: Set<string>, appliedSchemaVersion: string|null, cdcReadinessApplies: boolean}}
-   * @private
-   */
-  resolveDiscoveryTablePartitionContext(tableName, tableId, partitionRows, tableRows) {
-    if (!tableName && !tableId) {
-      return {
-        tableFound: true,
-        partitionIds: new Set(),
-        appliedSchemaVersion: null,
-        cdcReadinessApplies: false,
-      };
-    }
-
-    const tableIds = new Set();
-    let appliedSchemaVersion = null;
-    let cdcReadinessApplies = false;
-    for (const tableRow of tableRows) {
-      const rowTableName = firstStringField(
-        tableRow,
-        COLUMN.TABLE_NAME,
-        'table_name',
-        'tableName',
-        'name',
-      );
-      const rowTableId = firstStringField(
-        tableRow,
-        COLUMN.TABLE_ID,
-        'table_id',
-        'tableId',
-        'id',
-      );
-      const matchesTableName = tableName && rowTableName === tableName;
-      const matchesTableId = tableId && rowTableId === tableId;
-      if (!matchesTableName && !matchesTableId) {
-        continue;
-      }
-      if (rowTableId) {
-        tableIds.add(rowTableId);
-      }
-      if (isTableCdcReadinessRelevant(rowTableName)) {
-        cdcReadinessApplies = true;
-      }
-      const rowSchemaVersion = extractSchemaVersionFromRecord(tableRow);
-      appliedSchemaVersion = selectNewestSchemaVersion(
-        appliedSchemaVersion,
-        rowSchemaVersion,
-      );
-    }
-    if (tableId) {
-      tableIds.add(tableId);
-    }
-
-    const partitionIds = new Set();
-    for (const partitionRow of partitionRows) {
-      const partitionId = firstStringField(
-        partitionRow,
-        COLUMN.PARTITION_ID,
-        'partition_id',
-        'partitionId',
-        'id',
-      );
-      if (!partitionId) {
-        continue;
-      }
-      const rowTableName = firstStringField(
-        partitionRow,
-        COLUMN.TABLE_NAME,
-        'table_name',
-        'tableName',
-        'name',
-      );
-      const rowTableId = firstStringField(
-        partitionRow,
-        COLUMN.TABLE_ID,
-        'table_id',
-        'tableId',
-      );
-      const matchesTableName = tableName && rowTableName === tableName;
-      const matchesTableId = rowTableId && tableIds.has(rowTableId);
-      if (matchesTableName || matchesTableId) {
-        partitionIds.add(partitionId);
-        const rowSchemaVersion = extractSchemaVersionFromRecord(partitionRow);
-        appliedSchemaVersion = selectNewestSchemaVersion(
-          appliedSchemaVersion,
-          rowSchemaVersion,
-        );
-      }
-    }
-
-    return {
-      tableFound: partitionIds.size > NUM.ZERO,
-      partitionIds,
-      appliedSchemaVersion,
-      cdcReadinessApplies,
-    };
-  }
-
-  /**
-   * Resolve table-scope schema readiness from active partition coverage.
-   * @param {Set<string>} partitionIds
-   * @param {Array<Object>} serviceRows
-   * @return {boolean}
-   * @private
-   */
-  resolveDiscoverySchemaReady(partitionIds, serviceRows) {
-    if (!(partitionIds instanceof Set) || partitionIds.size === NUM.ZERO) {
-      return false;
-    }
-
-    const readyPartitionIds = new Set();
-    for (const serviceRow of serviceRows) {
-      const serviceType = firstStringField(
-        serviceRow,
-        COLUMN.SERVICE_TYPE,
-        'service_type',
-        'serviceType',
-        'type',
-      );
-      if (serviceType !== SERVICE_TYPE_PARTITION) {
-        continue;
-      }
-      const partitionId = firstStringField(
-        serviceRow,
-        COLUMN.PARTITION_ID,
-        'partition_id',
-        'partitionId',
-        'id',
-      );
-      if (!partitionId || !partitionIds.has(partitionId)) {
-        continue;
-      }
-      const status = firstStringField(serviceRow, COLUMN.STATUS, 'status');
-      if (String(status || '').toLowerCase() !== STATUS_ACTIVE) {
-        continue;
-      }
-      const nodeId = firstStringField(
-        serviceRow,
-        COLUMN.NODE_ID,
-        'node_id',
-        'nodeId',
-      );
-      if (!nodeId) {
-        continue;
-      }
-      readyPartitionIds.add(partitionId);
-    }
-
-    return readyPartitionIds.size === partitionIds.size;
-  }
-
-  /**
-   * Resolve leader-coverage stability for target partitions.
-   * @param {Set<string>} partitionIds
-   * @param {Array<Object>} serviceRows
-   * @return {boolean}
-   * @private
-   */
-  resolveDiscoveryLeadershipStable(partitionIds, serviceRows) {
-    if (!(partitionIds instanceof Set) || partitionIds.size === NUM.ZERO) {
-      return true;
-    }
-
-    const partitionsWithLeaders = new Set();
-    for (const serviceRow of serviceRows) {
-      const serviceType = firstStringField(
-        serviceRow,
-        COLUMN.SERVICE_TYPE,
-        'service_type',
-        'serviceType',
-        'type',
-      );
-      if (serviceType !== SERVICE_TYPE_PARTITION) {
-        continue;
-      }
-      const partitionId = firstStringField(
-        serviceRow,
-        COLUMN.PARTITION_ID,
-        'partition_id',
-        'partitionId',
-        'id',
-      );
-      if (!partitionId || !partitionIds.has(partitionId)) {
-        continue;
-      }
-      const status = firstStringField(serviceRow, COLUMN.STATUS, 'status');
-      if (String(status || '').toLowerCase() !== STATUS_ACTIVE) {
-        continue;
-      }
-      const raftRole = firstStringField(
-        serviceRow,
-        COLUMN.RAFT_ROLE,
-        'raft_role',
-        'raftRole',
-      );
-      if (String(raftRole || '').toLowerCase() !== LEADER_RAFT_ROLE) {
-        continue;
-      }
-      partitionsWithLeaders.add(partitionId);
-    }
-
-    return partitionsWithLeaders.size === partitionIds.size;
-  }
-
-  /**
-   * Build additive canonical readiness block for one discovery replica.
-   * @param {Object} replica
-   * @param {Object} readinessContext
-   * @return {Object}
-   * @private
-   */
-  buildServiceDiscoveryReplicaReadiness(replica, readinessContext) {
-    const nodeId = String(replica?.nodeId || '');
-    const healthyEndpoint =
-      String(replica?.healthStatus || '').toLowerCase() ===
-      ENDPOINT_SYNC_HEALTH.HEALTHY;
-    const routingReady = healthyEndpoint &&
-      readinessContext.activeNodeIds.has(nodeId);
-    const schemaReady = readinessContext.tableName ?
-      (readinessContext.tableFound &&
-        readinessContext.schemaReady === true) :
-      true;
-    const localTargetReplicaState =
-      readinessContext.localTargetReplicaStateByNodeId instanceof Map ?
-        readinessContext.localTargetReplicaStateByNodeId.get(nodeId) :
-        null;
-    const localReplicaReady = !localTargetReplicaState ||
-      localTargetReplicaState.nonVoterPartitionIds.size === NUM.ZERO;
-    const localPartitionCdcState =
-      nodeId === this.nodeId &&
-      readinessContext.localPartitionCdcState &&
-      typeof readinessContext.localPartitionCdcState === TYPEOF.OBJECT ?
-        readinessContext.localPartitionCdcState :
-        null;
-    const localCdcReady = !localPartitionCdcState ||
-      localPartitionCdcState.applies !== true ||
-      localPartitionCdcState.ready === true;
-    const operationDegradation =
-      readinessContext.replicaOperationDegradationByNodeId instanceof Map ?
-        readinessContext.replicaOperationDegradationByNodeId.get(nodeId) :
-        null;
-    const operationDegraded =
-      operationDegradation?.degradationState &&
-      operationDegradation.degradationState !==
-        BENCHMARK_DEGRADATION_STATE.HEALTHY;
-    const topologyReady = localReplicaReady &&
-      localCdcReady &&
-      !operationDegraded &&
-      readinessContext.replicaOpsInFlight === NUM.ZERO &&
-      readinessContext.leadershipStable === true;
-    const benchmarkReady = routingReady && schemaReady && topologyReady;
-    const workloadReady = benchmarkReady;
-    const reasons = [];
-
-    if (!routingReady) {
-      reasons.push({
-        code: SERVICE_DISCOVERY_READINESS_REASON.ROUTING_NOT_READY,
-        detail: 'endpoint unhealthy or node not ACTIVE',
-      });
-    }
-    if (readinessContext.tableName && !readinessContext.tableFound) {
-      reasons.push({
-        code: SERVICE_DISCOVERY_READINESS_REASON.SCHEMA_TABLE_MISSING,
-        detail: 'table "' + readinessContext.tableName + '" not found',
-      });
-    } else if (readinessContext.tableName && !schemaReady) {
-      reasons.push({
-        code: SERVICE_DISCOVERY_READINESS_REASON.SCHEMA_PARTITION_UNAVAILABLE,
-        detail: 'table "' + readinessContext.tableName +
-          '" not query-ready on node',
-      });
-    }
-    if (readinessContext.replicaOpsInFlight > NUM.ZERO) {
-      reasons.push({
-        code: SERVICE_DISCOVERY_READINESS_REASON.REPLICA_OPERATIONS_IN_FLIGHT,
-        detail: String(readinessContext.replicaOpsInFlight),
-      });
-    }
-    if (operationDegraded &&
-        Array.isArray(operationDegradation?.reasons)) {
-      for (const reason of operationDegradation.reasons) {
-        reasons.push({
-          code: reason.code,
-          detail: reason.detail,
-        });
-      }
-    }
-    if (!readinessContext.leadershipStable) {
-      reasons.push({
-        code: SERVICE_DISCOVERY_READINESS_REASON.LEADERSHIP_UNSTABLE,
-        detail: 'leader coverage incomplete for readiness scope',
-      });
-    }
-    if (!localReplicaReady) {
-      reasons.push({
-        code: SERVICE_DISCOVERY_READINESS_REASON.LOCAL_REPLICA_NOT_VOTER_READY,
-        detail: uniqueSorted([
-          ...localTargetReplicaState.nonVoterPartitionIds,
-        ]).join(','),
-      });
-    }
-    if (localPartitionCdcState?.applies === true &&
-        localPartitionCdcState.diagnosticsAvailable === false &&
-        localPartitionCdcState.missingDiagnosticsPartitionIds.length > NUM.ZERO) {
-      reasons.push({
-        code: SERVICE_DISCOVERY_READINESS_REASON.LOCAL_CDC_DIAGNOSTICS_UNAVAILABLE,
-        detail: localPartitionCdcState.missingDiagnosticsPartitionIds.join(','),
-      });
-    }
-    if (localPartitionCdcState?.applies === true &&
-        localPartitionCdcState.noSubscriberPartitionIds.length > NUM.ZERO) {
-      reasons.push({
-        code: SERVICE_DISCOVERY_READINESS_REASON.LOCAL_CDC_SUBSCRIBER_MISSING,
-        detail: localPartitionCdcState.noSubscriberPartitionIds.join(','),
-      });
-    }
-    if (localPartitionCdcState?.applies === true &&
-        localPartitionCdcState.bufferedPartitionIds.length > NUM.ZERO) {
-      reasons.push({
-        code: SERVICE_DISCOVERY_READINESS_REASON.LOCAL_CDC_BUFFER_NOT_DRAINED,
-        detail: localPartitionCdcState.bufferedPartitionIds.join(','),
-      });
-    }
-
-    return {
-      workloadReady,
-      benchmarkReady,
-      routingReady,
-      schemaReady,
-      topologyReady,
-      appliedSchemaVersion: readinessContext.tableName ?
-        readinessContext.appliedSchemaVersion :
-        null,
-      replicaOpsInFlight: readinessContext.replicaOpsInFlight,
-      leadershipStable: readinessContext.leadershipStable,
-      tableName: readinessContext.tableName,
-      reasons,
-    };
-  }
-
-  /**
-   * Build canonical benchmark-admission block for one discovery replica.
-   * @param {Object} replica
-   * @param {Object} readinessContext
-   * @param {Object} readiness
-   * @return {Object}
-   * @private
-   */
-  buildServiceDiscoveryReplicaBenchmarkAdmission(
-    replica,
-    readinessContext,
-    readiness,
-  ) {
-    const nodeId = String(replica?.nodeId || EMPTY_STRING);
-    const operationDegradation =
-      readinessContext.replicaOperationDegradationByNodeId instanceof Map ?
-        readinessContext.replicaOperationDegradationByNodeId.get(nodeId) :
-        null;
-    const localTargetReplicaState =
-      readinessContext.localTargetReplicaStateByNodeId instanceof Map ?
-        readinessContext.localTargetReplicaStateByNodeId.get(nodeId) :
-        null;
-    let localReplicaRole = null;
-    if (localTargetReplicaState?.replicaRoles instanceof Set &&
-        localTargetReplicaState.replicaRoles.size === NUM.ONE) {
-      localReplicaRole = [...localTargetReplicaState.replicaRoles][NUM.ZERO];
-    } else if (localTargetReplicaState?.replicaRoles instanceof Set &&
-        localTargetReplicaState.replicaRoles.size > NUM.ONE) {
-      localReplicaRole = 'mixed';
-    }
-
-    const reasons = Array.isArray(readiness?.reasons) ?
-      readiness.reasons.map((reason) => ({
-        code: String(reason?.code || EMPTY_STRING),
-        detail:
-          typeof reason?.detail === TYPEOF.STRING && reason.detail.length > NUM.ZERO ?
-            reason.detail :
-            null,
-      })) :
-      [];
-
-    return {
-      tableName: readiness?.tableName || null,
-      nodeId,
-      state: readiness?.benchmarkReady === true ?
-        BENCHMARK_ADMISSION_STATE.READY :
-        BENCHMARK_ADMISSION_STATE.BLOCKED,
-      degradationState:
-        operationDegradation?.degradationState ||
-        BENCHMARK_DEGRADATION_STATE.HEALTHY,
-      routingReady: readiness?.routingReady === true,
-      schemaReady: readiness?.schemaReady === true,
-      topologyReady: readiness?.topologyReady === true,
-      localReplicaRole,
-      degradedByOperationIds:
-        Array.isArray(operationDegradation?.operationIds) ?
-          [...operationDegradation.operationIds] :
-          [],
-      reasons,
-    };
-  }
-
-  /**
-   * Build per-node replica-operation degradation state for benchmark admission.
-   * @param {Array<Object>} replicaOperationRows
-   * @return {Map<string, Object>}
-   * @private
-   */
-  buildDiscoveryReplicaOperationDegradationByNodeId(
-    replicaOperationRows = [],
-    options = {},
-  ) {
-    const degradationByNodeId = new Map();
-    const scopedPartitionIds = options.partitionIds instanceof Set ?
-      options.partitionIds :
-      null;
-    for (const row of replicaOperationRows) {
-      if (!this.isReplicaOperationRelevantToDiscoveryScope(
-        row,
-        scopedPartitionIds,
-      )) {
-        continue;
-      }
-      const operationId = firstStringField(
-        row,
-        COLUMN.OPERATION_ID,
-        'operation_id',
-        'operationId',
-      );
-      const status = String(firstStringField(
-        row,
-        COLUMN.STATUS,
-        'status',
-      ) || EMPTY_STRING).toLowerCase();
-      const type = String(firstStringField(
-        row,
-        'type',
-        'operation_type',
-        'operationType',
-      ) || EMPTY_STRING).toUpperCase();
-      const workflowStep = normalizeReplicaOperationWorkflowStep(row);
-      const hasCompletedAt = hasMeaningfulField(
-        row,
-        'completed_at',
-        'completedAt',
-      );
-      const nodeIds = uniqueSorted([
-        firstStringField(row, 'source_node_id', 'sourceNodeId'),
-        firstStringField(row, COLUMN.TARGET_NODE_ID, 'target_node_id', 'targetNodeId'),
-      ]);
-      if (!operationId || nodeIds.length === NUM.ZERO) {
-        continue;
-      }
-      if (isReplicaOperationTerminalSuccess(type, status, workflowStep, hasCompletedAt)) {
-        continue;
-      }
-
-      const degradationState = this.resolveReplicaOperationDegradationState(
-        type,
-        status,
-      );
-      if (degradationState === BENCHMARK_DEGRADATION_STATE.HEALTHY) {
-        continue;
-      }
-      const reasonCode =
-        status === 'failed' ?
-          SERVICE_DISCOVERY_READINESS_REASON.REPLICA_OPERATION_FAILED :
-          SERVICE_DISCOVERY_READINESS_REASON.REPLICA_OPERATION_IN_FLIGHT;
-      const reasonDetail = `${operationId}:${type}:${status}`;
-
-      for (const nodeId of nodeIds) {
-        const existing = degradationByNodeId.get(nodeId) || {
-          degradationState: BENCHMARK_DEGRADATION_STATE.HEALTHY,
-          operationIds: [],
-          reasons: [],
-        };
-        if ((BENCHMARK_DEGRADATION_PRIORITY[degradationState] || NUM.ZERO) >
-            (BENCHMARK_DEGRADATION_PRIORITY[existing.degradationState] || NUM.ZERO)) {
-          existing.degradationState = degradationState;
-        }
-        existing.operationIds = uniqueSorted([
-          ...existing.operationIds,
-          operationId,
-        ]);
-        if (!existing.reasons.some((reason) =>
-          reason.code === reasonCode && reason.detail === reasonDetail)) {
-          existing.reasons.push({
-            code: reasonCode,
-            detail: reasonDetail,
-          });
-        }
-        degradationByNodeId.set(nodeId, existing);
-      }
-    }
-    return degradationByNodeId;
-  }
-
-  /**
-   * Determine whether one replica operation applies to the discovered scope.
-   * Table-scoped discovery should only degrade nodes for operations that touch
-   * the discovered table's target partitions.
-   * @param {Object} row
-   * @param {Set<string>|null} scopedPartitionIds
-   * @return {boolean}
-   * @private
-   */
-  isReplicaOperationRelevantToDiscoveryScope(row, scopedPartitionIds) {
-    if (!(scopedPartitionIds instanceof Set) || scopedPartitionIds.size === NUM.ZERO) {
-      return true;
-    }
-    const partitionId = firstStringField(
-      row,
-      COLUMN.PARTITION_ID,
-      'partition_id',
-      'partitionId',
-      'entity_id',
-      'entityId',
-    );
-    return Boolean(partitionId) && scopedPartitionIds.has(partitionId);
-  }
-
-  /**
-   * Resolve one benchmark degradation state from replica-operation type/status.
-   * @param {string} type
-   * @param {string} status
-   * @return {string}
-   * @private
-   */
-  resolveReplicaOperationDegradationState(type, status) {
-    if (!type || !status) {
-      return BENCHMARK_DEGRADATION_STATE.HEALTHY;
-    }
-    const isFailed = status === 'failed';
-    if (type === REPLICA_OPERATION_TYPE.REPLACE) {
-      return isFailed ?
-        BENCHMARK_DEGRADATION_STATE.MOVE_FAILED :
-        BENCHMARK_DEGRADATION_STATE.MOVE_PENDING;
-    }
-    if (type === REPLICA_OPERATION_TYPE.ADD) {
-      return isFailed ?
-        BENCHMARK_DEGRADATION_STATE.PROMOTION_FAILED :
-        BENCHMARK_DEGRADATION_STATE.PROMOTION_PENDING;
-    }
-    if (type === REPLICA_OPERATION_TYPE.REMOVE) {
-      return BENCHMARK_DEGRADATION_STATE.DRAIN_BLOCKED;
-    }
-    return BENCHMARK_DEGRADATION_STATE.HEALTHY;
-  }
-
-  /**
-   * Build bounded preflight critical-path snapshot from node-local diagnostics.
-   * @return {Object}
-   * @private
-   */
-  buildLocalPreflightCriticalPathSnapshot() {
-    const capturedAtMs = Date.now();
-    const nodeAddress = this.resolvePreflightSnapshotNodeAddress();
-    const routerConnectivity = this.buildPreflightRouterConnectivitySummary();
-    const controlPlanePartitions = this.buildPreflightControlPlanePartitionsSummary();
-    const cdcHealth = this.buildPreflightCdcHealthSummary();
-    const cacheFreshness = this.buildPreflightCacheFreshnessSummary({
-      capturedAtMs,
-    });
-    const rowCounts = this.buildPreflightRowCountsSummary();
-    const discovery = this.buildPreflightDiscoverySummary();
-
-    return {
-      schemaVersion: ADMIN_PREFLIGHT_CRITICAL_PATH_SNAPSHOT.SCHEMA_VERSION,
-      capturedAtMs,
-      nodeId: this.nodeId,
-      address: nodeAddress,
-      routerConnectivity,
-      controlPlanePartitions,
-      cdcHealth,
-      cacheFreshness,
-      rowCounts,
-      discovery,
-    };
-  }
-
-  /**
-   * Resolve local preflight critical-path snapshot with bounded authoritative repair.
-   * @return {Promise<Object>}
-   * @private
-   */
-  async resolvePreflightCriticalPathSnapshot() {
-    const snapshot = this.buildLocalPreflightCriticalPathSnapshot();
-    if (!this.shouldAttemptAuthoritativePreflightRepair(snapshot)) {
-      return snapshot;
-    }
-    const repair = await this.ensureAuthoritativeDiscoveryCacheRepair({
-      reason: 'preflight_critical_path_snapshot',
-    });
-    if (repair.applied !== true) {
-      return snapshot;
-    }
-    return this.buildLocalPreflightCriticalPathSnapshot();
-  }
-
-  /**
-   * Determine whether preflight snapshot warrants authoritative cache repair.
-   * @param {Object} snapshot
-   * @return {boolean}
-   * @private
-   */
-  shouldAttemptAuthoritativePreflightRepair(snapshot) {
-    if (!this.systemTableCache ||
-        !this.cacheMutationTarget ||
-        typeof this.cacheMutationTarget.applySystemTableChange !== TYPEOF.FUNCTION ||
-        !this.sqlQueryEngine ||
-        typeof this.sqlQueryEngine.executeRequest !== TYPEOF.FUNCTION) {
-      return false;
-    }
-    const stalenessMs = Number(snapshot?.cacheFreshness?.stalenessMs);
-    if (Number.isFinite(stalenessMs) &&
-        stalenessMs >= AUTHORITATIVE_DISCOVERY_REPAIR.STALE_THRESHOLD_MS) {
-      return true;
-    }
-    const selectedNodeIds = Array.isArray(snapshot?.discovery?.selectedNodeIds) ?
-      snapshot.discovery.selectedNodeIds :
-      ADMIN_CACHE_DUMP.EMPTY;
-    const serviceEndpointsCount = Number(snapshot?.rowCounts?.serviceEndpointsCount);
-    if (selectedNodeIds.length === NUM.ZERO &&
-        Number.isFinite(serviceEndpointsCount) &&
-        Math.floor(serviceEndpointsCount) > NUM.ZERO) {
-      return true;
-    }
-    return false;
-  }
-
-  /**
-   * Resolve best-effort node address for preflight snapshots.
-   * @return {string}
-   * @private
-   */
-  resolvePreflightSnapshotNodeAddress() {
-    const routerAddress = typeof this.messageRouter?.nodeAddress === TYPEOF.STRING ?
-      this.messageRouter.nodeAddress :
-      null;
-    if (routerAddress) {
-      return routerAddress;
-    }
-
-    if (this.systemTableCache &&
-        typeof this.systemTableCache.getAll === TYPEOF.FUNCTION) {
-      const nodes = this.systemTableCache.getAll(TABLES.NODES);
-      const localRow = nodes.find((row) =>
-        firstStringField(row, COLUMN.NODE_ID, 'id') === this.nodeId,
-      );
-      const address = firstStringField(localRow, COLUMN.NODE_ADDRESS, 'address');
-      if (address) {
-        return address;
-      }
-    }
-
-    return this.nodeId || ADMIN_DEFAULT.NODE_ID;
-  }
-
-  /**
-   * Summarize message-router connectivity by coarse state buckets.
-   * @return {Object}
-   * @private
-   */
-  buildPreflightRouterConnectivitySummary() {
-    const defaultSummary = {
-      connectedCount: NUM.ZERO,
-      reconnectingCount: NUM.ZERO,
-      disconnectedCount: NUM.ZERO,
-    };
-    if (!this.messageRouter ||
-        typeof this.messageRouter.getStats !== TYPEOF.FUNCTION) {
-      return defaultSummary;
-    }
-
-    const stats = this.messageRouter.getStats();
-    const connections = stats?.connections && typeof stats.connections === TYPEOF.OBJECT ?
-      stats.connections :
-      {};
-    let connectedCount = NUM.ZERO;
-    let reconnectingCount = NUM.ZERO;
-    let disconnectedCount = NUM.ZERO;
-    for (const [nodeId, info] of Object.entries(connections)) {
-      if (!nodeId || nodeId === this.nodeId) {
-        continue;
-      }
-      const state = String(info?.state || EMPTY_STRING)
-        .trim()
-        .toLowerCase();
-      if (state === CONNECTION_STATE.CONNECTED) {
-        connectedCount += NUM.ONE;
-      } else if (state === CONNECTION_STATE.RECONNECTING) {
-        reconnectingCount += NUM.ONE;
-      } else {
-        disconnectedCount += NUM.ONE;
-      }
-    }
-    return {
-      connectedCount,
-      reconnectingCount,
-      disconnectedCount,
-    };
-  }
-
-  /**
-   * Summarize leadership/health for control-plane partitions required for discovery.
-   * @return {Object}
-   * @private
-   */
-  buildPreflightControlPlanePartitionsSummary() {
-    const partitionTables = [
-      TABLES.NODES,
-      TABLES.SERVICES,
-      TABLES.NODE_ENDPOINTS,
-      TABLES.SERVICE_ENDPOINTS,
-    ];
-    const summary = {};
-    for (const tableName of partitionTables) {
-      summary[tableName] = this.buildPreflightControlPlanePartitionEntry(tableName);
-    }
-    return summary;
-  }
-
-  buildPreflightControlPlanePartitionEntry(tableName) {
-    const partitionId = INITIAL_PARTITION_IDS[tableName] || null;
-    if (!partitionId) {
-      return {
-        leaderKnown: false,
-        leaderNodeId: null,
-        isLeaderLocal: false,
-        lastErrorCode: 'partition_id_unknown',
-      };
-    }
-
-    if (!this.systemTableCache ||
-        typeof this.systemTableCache.getAll !== TYPEOF.FUNCTION) {
-      return {
-        leaderKnown: false,
-        leaderNodeId: null,
-        isLeaderLocal: false,
-        lastErrorCode: 'cache_unavailable',
-      };
-    }
-
-    const partitionRows = this.systemTableCache.getAll(TABLES.PARTITIONS);
-    const partitionRow = partitionRows.find((row) =>
-      row?.[COLUMN.PARTITION_ID] === partitionId,
-    );
-    if (!partitionRow) {
-      return {
-        leaderKnown: false,
-        leaderNodeId: null,
-        isLeaderLocal: false,
-        lastErrorCode: 'partition_row_missing',
-      };
-    }
-
-    const serviceRows = this.systemTableCache.getAll(TABLES.SERVICES);
-    const requiresAddress = tableName !== TABLES.SERVICES;
-    const leaderService = serviceRows.find((service) => {
-      if (service?.[COLUMN.SERVICE_TYPE] !== SERVICE_TYPE_PARTITION) {
-        return false;
-      }
-      if (service?.[COLUMN.PARTITION_ID] !== partitionId) {
-        return false;
-      }
-      if (String(service?.[COLUMN.RAFT_ROLE] || EMPTY_STRING)
-        .toLowerCase() !== LEADER_RAFT_ROLE) {
-        return false;
-      }
-      if (String(service?.[COLUMN.STATUS] || EMPTY_STRING)
-        .toLowerCase() !== STATUS_ACTIVE) {
-        return false;
-      }
-      if (requiresAddress && !service?.[COLUMN.ADDRESS]) {
-        return false;
-      }
-      return true;
-    });
-    if (!leaderService) {
-      return {
-        leaderKnown: false,
-        leaderNodeId: null,
-        isLeaderLocal: false,
-        lastErrorCode: 'leader_service_missing',
-      };
-    }
-
-    const leaderNodeId = firstStringField(
-      partitionRow,
-      COLUMN.LEADER_NODE_ID,
-    ) ||
-      firstStringField(leaderService, COLUMN.NODE_ID, 'nodeId');
-    if (!leaderNodeId) {
-      return {
-        leaderKnown: false,
-        leaderNodeId: null,
-        isLeaderLocal: false,
-        lastErrorCode: 'leader_node_id_missing',
-      };
-    }
-
-    return {
-      leaderKnown: true,
-      leaderNodeId,
-      isLeaderLocal: leaderNodeId === this.nodeId,
-      lastErrorCode: null,
-    };
-  }
-
-  /**
-   * Summarize CDC/mutation pipeline health.
-   * @return {Object}
-   * @private
-   */
-  buildPreflightCdcHealthSummary() {
-    let bufferDepth = NUM.ZERO;
-    let retryCount = NUM.ZERO;
-    if (this.messageRouter &&
-        typeof this.messageRouter.getStats === TYPEOF.FUNCTION) {
-      const stats = this.messageRouter.getStats();
-      const outboundQueues = stats?.outboundQueues &&
-        typeof stats.outboundQueues === TYPEOF.OBJECT ?
-        stats.outboundQueues :
-        {};
-      for (const queue of Object.values(outboundQueues)) {
-        bufferDepth += Number(queue?.pending || NUM.ZERO);
-      }
-      const connections = stats?.connections &&
-        typeof stats.connections === TYPEOF.OBJECT ?
-        stats.connections :
-        {};
-      for (const conn of Object.values(connections)) {
-        retryCount += Number(conn?.reconnectAttempts || NUM.ZERO);
-      }
-    }
-    return {
-      bufferDepth: Number.isFinite(bufferDepth) ?
-        Math.max(NUM.ZERO, Math.floor(bufferDepth)) :
-        NUM.ZERO,
-      retryCount: Number.isFinite(retryCount) ?
-        Math.max(NUM.ZERO, Math.floor(retryCount)) :
-        NUM.ZERO,
-      lastErrorCode: null,
-      lastForwardAttemptAtMs: null,
-    };
-  }
-
-  /**
-   * Summarize cache freshness/watermark relevant to readiness.
-   * @param {Object} options
-   * @param {number} options.capturedAtMs
-   * @return {Object}
-   * @private
-   */
-  buildPreflightCacheFreshnessSummary(options) {
-    const capturedAtMs = Number(options?.capturedAtMs);
-    const lastAppliedAtMs = typeof this.systemTableCache?.getLastAppliedAtMs === TYPEOF.FUNCTION ?
-      this.systemTableCache.getLastAppliedAtMs(TABLES.SERVICE_ENDPOINTS) :
-      null;
-    const tableNames = [
-      TABLES.SERVICES,
-      TABLES.NODE_ENDPOINTS,
-      TABLES.SERVICE_ENDPOINTS,
-    ];
-    const lastAppliedCauseIdByTableName = {};
-    for (const tableName of tableNames) {
-      lastAppliedCauseIdByTableName[tableName] =
-        typeof this.systemTableCache?.getLastAppliedCauseId === TYPEOF.FUNCTION ?
-          this.systemTableCache.getLastAppliedCauseId(tableName) :
-          null;
-    }
-    const appliedSchemaVersion = typeof this.systemTableCache?.getAppliedSchemaVersion ===
-      TYPEOF.FUNCTION ?
-      normalizeSchemaVersionValue(
-        this.systemTableCache.getAppliedSchemaVersion(TABLES.SERVICE_ENDPOINTS),
-      ) :
-      null;
-    const numericLastAppliedAtMs = Number(lastAppliedAtMs);
-    const hasNumericLastAppliedAtMs =
-      lastAppliedAtMs !== null &&
-      typeof lastAppliedAtMs !== TYPEOF.UNDEFINED &&
-      Number.isFinite(numericLastAppliedAtMs);
-    const stalenessMs = Number.isFinite(capturedAtMs) &&
-      hasNumericLastAppliedAtMs ?
-      Math.max(NUM.ZERO, Math.floor(capturedAtMs - numericLastAppliedAtMs)) :
-      null;
-    return {
-      lastAppliedAtMs: hasNumericLastAppliedAtMs ?
-        Math.floor(numericLastAppliedAtMs) :
-        null,
-      appliedSchemaVersion,
-      stalenessMs,
-      lastAppliedCauseIdByTableName,
-    };
-  }
-
-  /**
-   * Summarize control-plane row counts relevant to readiness.
-   * @return {Object}
-   * @private
-   */
-  buildPreflightRowCountsSummary() {
-    if (!this.systemTableCache ||
-        typeof this.systemTableCache.getAll !== TYPEOF.FUNCTION) {
-      return {
-        sysPostgresWireServiceCount: NUM.ZERO,
-        nodeEndpointsCount: NUM.ZERO,
-        serviceEndpointsCount: NUM.ZERO,
-      };
-    }
-
-    const serviceDefinitionRows =
-      this.systemTableCache.getAll(TABLES.SERVICE_DEFINITIONS);
-    const sysPostgresWireServiceCount = serviceDefinitionRows.filter((row) =>
-      row?.[COLUMN.SERVICE_ID] === META_SERVICE_ID.POSTGRES_WIRE,
-    ).length;
-
-    const nodeEndpointsCount =
-      typeof this.systemTableCache.count === TYPEOF.FUNCTION ?
-        this.systemTableCache.count(TABLES.NODE_ENDPOINTS) :
-        this.systemTableCache.getAll(TABLES.NODE_ENDPOINTS).length;
-    const serviceEndpointsCount =
-      typeof this.systemTableCache.count === TYPEOF.FUNCTION ?
-        this.systemTableCache.count(TABLES.SERVICE_ENDPOINTS) :
-        this.systemTableCache.getAll(TABLES.SERVICE_ENDPOINTS).length;
-
-    return {
-      sysPostgresWireServiceCount,
-      nodeEndpointsCount,
-      serviceEndpointsCount,
-    };
-  }
-
-  /**
-   * Summarize strict discovery selection/exclusion from local service discovery state.
-   * @return {Object}
-   * @private
-   */
-  buildPreflightDiscoverySummary() {
-    try {
-      const snapshot = this.buildLocalServiceDiscoverySnapshot({
-        serviceIdAllowlist: [META_SERVICE_ID.POSTGRES_WIRE],
-      });
-      const selectedNodeIds = [];
-      const excludedByNodeId = {};
-
-      const services = Array.isArray(snapshot?.services) ? snapshot.services : [];
-      for (const service of services) {
-        const replicas = Array.isArray(service?.replicas) ? service.replicas : [];
-        for (const replica of replicas) {
-          const nodeId = typeof replica?.nodeId === TYPEOF.STRING ?
-            replica.nodeId :
-            null;
-          if (!nodeId) {
-            continue;
-          }
-          const readiness = replica?.readiness || null;
-          const reasons = Array.isArray(readiness?.reasons) ? readiness.reasons : [];
-          const reasonCodes = uniqueSorted(reasons
-            .map((reason) => String(reason?.code || EMPTY_STRING))
-            .filter(Boolean));
-          if (reasonCodes.length === NUM.ZERO) {
-            selectedNodeIds.push(nodeId);
-          } else {
-            excludedByNodeId[nodeId] = reasonCodes;
-          }
-        }
-      }
-
-      return {
-        selectedNodeIds: uniqueSorted(selectedNodeIds),
-        excludedByNodeId,
-      };
-    } catch (_error) {
-      return {
-        selectedNodeIds: ADMIN_CACHE_DUMP.EMPTY,
-        excludedByNodeId: {},
-      };
-    }
-  }
-
-  /**
-   * Perform bounded authoritative cache repair for discovery-critical tables.
-   * @param {Object} [options={}]
-   * @return {Promise<{applied: boolean, skipped: boolean, tableCount: number}>}
-   * @private
-   */
-  async ensureAuthoritativeDiscoveryCacheRepair(options = {}) {
-    if (!this.systemTableCache ||
-        !this.cacheMutationTarget ||
-        typeof this.cacheMutationTarget.applySystemTableChange !== TYPEOF.FUNCTION ||
-        !this.sqlQueryEngine ||
-        typeof this.sqlQueryEngine.executeRequest !== TYPEOF.FUNCTION) {
-      return {
-        applied: false,
-        skipped: true,
-        tableCount: NUM.ZERO,
-      };
-    }
-
-    const now = Date.now();
-    if (this.authoritativeDiscoveryRepairPromise) {
-      return this.authoritativeDiscoveryRepairPromise;
-    }
-    if (now - this.lastAuthoritativeDiscoveryRepairAtMs <
-      AUTHORITATIVE_DISCOVERY_REPAIR.COOLDOWN_MS) {
-      return {
-        applied: false,
-        skipped: true,
-        tableCount: NUM.ZERO,
-      };
-    }
-
-    const runRepair = async () => {
-      const causeId =
-        'admin-authoritative-discovery-repair:' +
-        String(options.reason || 'unknown') +
-        ':' + String(now);
-      const queryResults = await Promise.allSettled(
-        AUTHORITATIVE_DISCOVERY_REPAIR.TABLES.map(async (tableName) => {
-          const queryResult = await this.executeSqlRequestWithTimeout(
-            createSqlRequest({
-              statement: `SELECT * FROM ${tableName}`,
-              parameters: ADMIN_CACHE_DUMP.EMPTY,
-              sessionId:
-                `${String(options.reason || 'repair')}:${tableName}:${now}`,
-              executionMode: EXECUTION_MODE.SQL_STATEMENT,
-            }),
-            AUTHORITATIVE_DISCOVERY_REPAIR.QUERY_TIMEOUT_MS,
-          );
-          if (queryResult?.success === false) {
-            throw new Error(queryResult.error || 'authoritative_query_failed');
-          }
-          return {
-            tableName,
-            rows: Array.isArray(queryResult?.rows) ?
-              queryResult.rows :
-              ADMIN_CACHE_DUMP.EMPTY,
-          };
-        }),
-      );
-
-      let repairedTableCount = NUM.ZERO;
-      let repairedRowCount = NUM.ZERO;
-      const errors = [];
-      for (const result of queryResults) {
-        if (result.status !== 'fulfilled') {
-          errors.push(String(result.reason?.message || result.reason || 'unknown_error'));
-          continue;
-        }
-        repairedRowCount += this.applyAuthoritativeSystemTableRows(
-          result.value.tableName,
-          result.value.rows,
-          causeId,
-        );
-        repairedTableCount += NUM.ONE;
-      }
-
-      this.lastAuthoritativeDiscoveryRepairAtMs = Date.now();
-      if (errors.length > NUM.ZERO) {
-        this.logger.warn('Authoritative discovery cache repair completed with errors', {
-          nodeId: this.nodeId,
-          reason: options.reason || null,
-          tableName: options.tableName || null,
-          tableId: options.tableId || null,
-          repairedTableCount,
-          repairedRowCount,
-          errorCount: errors.length,
-          errors,
-        });
-      } else {
-        this.logger.info('Authoritative discovery cache repair completed', {
-          nodeId: this.nodeId,
-          reason: options.reason || null,
-          tableName: options.tableName || null,
-          tableId: options.tableId || null,
-          repairedTableCount,
-          repairedRowCount,
-        });
-      }
-
-      return {
-        applied: repairedTableCount > NUM.ZERO,
-        skipped: false,
-        tableCount: repairedTableCount,
-      };
-    };
-
-    this.authoritativeDiscoveryRepairPromise = runRepair()
-      .finally(() => {
-        this.authoritativeDiscoveryRepairPromise = null;
-      });
-    return this.authoritativeDiscoveryRepairPromise;
-  }
-
-  /**
-   * Reconcile one cached system table with authoritative query rows.
-   * @param {string} tableName
-   * @param {Array<Object>} rows
-   * @param {string} causeId
-   * @return {number}
-   * @private
-   */
-  applyAuthoritativeSystemTableRows(tableName, rows, causeId) {
-    const authoritativeRows = Array.isArray(rows) ? rows : ADMIN_CACHE_DUMP.EMPTY;
-    const primaryKeyField = getSystemCachePrimaryKeyField(tableName);
-    const cachedRows = this.systemTableCache.getAll(tableName);
-    const authoritativeKeys = new Set();
-
-    for (const row of authoritativeRows) {
-      const key = row?.[primaryKeyField] ?? row?.id;
-      if (typeof key === TYPEOF.UNDEFINED || key === null) {
-        continue;
-      }
-      authoritativeKeys.add(key);
-      this.cacheMutationTarget.applySystemTableChange(
-        tableName,
-        CDC_OPERATION.INSERT,
-        row,
-        {causeId},
-      );
-    }
-
-    for (const row of cachedRows) {
-      const key = row?.[primaryKeyField] ?? row?.id;
-      if (typeof key === TYPEOF.UNDEFINED || key === null ||
-          authoritativeKeys.has(key)) {
-        continue;
-      }
-      this.cacheMutationTarget.applySystemTableChange(
-        tableName,
-        CDC_OPERATION.DELETE,
-        row,
-        {causeId},
-      );
-    }
-
-    return authoritativeRows.length;
-  }
-
-  /**
-   * Build canonical query_result payload for preflight critical-path snapshot query.
-   * @return {Object}
-   * @private
-   */
-  async buildPreflightCriticalPathSnapshotQueryResult() {
-    const snapshot = await this.resolvePreflightCriticalPathSnapshot();
-    return {
-      success: true,
-      rows: [snapshot],
-      count: NUM.ONE,
-      partitions: ADMIN_CACHE_DUMP.EMPTY,
-      tableName: ADMIN_PREFLIGHT_CRITICAL_PATH_SNAPSHOT.TABLE_NAME,
-    };
-  }
-
-  /**
-   * Build local control snapshot payload from system cache only.
-   * @return {Object}
-   * @private
-   */
-  buildLocalControlSnapshot() {
-    if (!this.systemTableCache ||
-      typeof this.systemTableCache.getAll !== TYPEOF.FUNCTION) {
-      throw new Error(ADMIN_ERROR_MESSAGE.CONTROL_SNAPSHOT_UNAVAILABLE);
-    }
-
-    const nodeRows = this.systemTableCache.getAll(TABLES.NODES);
-    const partitionRows = this.systemTableCache.getAll(TABLES.PARTITIONS);
-    const serviceRows = this.systemTableCache.getAll(TABLES.SERVICES);
-    const replicaOperationRows =
-      this.systemTableCache.getAll(TABLES.REPLICA_OPERATIONS);
-
-    const nodeIds = uniqueSorted(nodeRows
-      .map((row) => firstStringField(row, COLUMN.NODE_ID, 'id'))
-      .filter(Boolean));
-    const partitionIds = uniqueSorted(partitionRows
-      .map((row) => firstStringField(row, COLUMN.PARTITION_ID, 'id'))
-      .filter(Boolean));
-
-    const leaderSummary = this.buildControlSnapshotLeaderSummary(
-      partitionRows,
-      serviceRows,
-    );
-    const voterCounts = this.buildControlSnapshotVoterCounts(serviceRows);
-    const replicaOperations =
-      this.buildControlSnapshotReplicaOperationSummary(replicaOperationRows);
-
-    return {
-      schemaVersion: ADMIN_CONTROL_SNAPSHOT.SCHEMA_VERSION,
-      nodeId: this.nodeId,
-      capturedAt: Date.now(),
-      nodes: nodeIds,
-      partitions: partitionIds,
-      cdcTelemetry: this.buildLocalCdcTelemetry(),
-      leaders: leaderSummary.leaders,
-      replicaRoles: leaderSummary.replicaRoles,
-      replicaRoleDiagnostics: leaderSummary.replicaRoleDiagnostics,
-      voterCounts,
-      replicaOperations,
-    };
-  }
-
-  /**
-   * Build canonical leader summary from owner rows plus replica-role detail.
-   * Canonical leader identity comes from partitions.leader_node_id.
-   * Replica rows are attached only as supporting diagnostics.
-   * @param {Array<Object>} partitionRows
-   * @param {Array<Object>} serviceRows
-   * @return {Object}
-   * @private
-   */
-  buildControlSnapshotLeaderSummary(partitionRows = [], serviceRows = []) {
-    const leaders = {};
-    const replicaRoles = {};
-    const replicaLeaderNodeIdsByPartition = new Map();
-
-    for (const serviceRow of serviceRows) {
-      const serviceType = firstStringField(
-        serviceRow,
-        COLUMN.SERVICE_TYPE,
-        'type',
-        'serviceType',
-      );
-      if (serviceType !== SERVICE_TYPE_PARTITION) {
-        continue;
-      }
-
-      const partitionId = firstStringField(
-        serviceRow,
-        COLUMN.PARTITION_ID,
-        'partitionId',
-      );
-      if (!partitionId) {
-        continue;
-      }
-
-      const raftRole = firstStringField(
-        serviceRow,
-        COLUMN.RAFT_ROLE,
-        'raftRole',
-      );
-      const normalizedRaftRole = String(raftRole || '').toLowerCase();
-      if (!normalizedRaftRole) {
-        continue;
-      }
-
-      const replicaId = firstStringField(
-        serviceRow,
-        COLUMN.REPLICA_ID,
-        COLUMN.SERVICE_ID,
-        'replicaId',
-        'id',
-      );
-      if (!replicaId) {
-        continue;
-      }
-      replicaRoles[partitionId] = replicaRoles[partitionId] || {};
-      replicaRoles[partitionId][replicaId] = normalizedRaftRole;
-
-      if (normalizedRaftRole !== LEADER_RAFT_ROLE) {
-        continue;
-      }
-
-      const leaderNodeId = firstStringField(
-        serviceRow,
-        COLUMN.LEADER_NODE_ID,
-        COLUMN.NODE_ID,
-        'nodeId',
-      );
-      if (!leaderNodeId) {
-        continue;
-      }
-      let partitionLeaderNodeIds = replicaLeaderNodeIdsByPartition.get(partitionId);
-      if (!partitionLeaderNodeIds) {
-        partitionLeaderNodeIds = new Set();
-        replicaLeaderNodeIdsByPartition.set(partitionId, partitionLeaderNodeIds);
-      }
-      partitionLeaderNodeIds.add(leaderNodeId);
-    }
-
-    const replicaRoleDiagnostics = {};
-    for (const partitionRow of partitionRows) {
-      const partitionId = firstStringField(
-        partitionRow,
-        COLUMN.PARTITION_ID,
-        'partitionId',
-        'id',
-      );
-      if (!partitionId) {
-        continue;
-      }
-
-      const canonicalLeaderNodeId = firstStringField(
-        partitionRow,
-        COLUMN.LEADER_NODE_ID,
-        'leaderNodeId',
-      );
-      if (canonicalLeaderNodeId) {
-        leaders[partitionId] = canonicalLeaderNodeId;
-      }
-
-      const replicaLeaderNodeIds = uniqueSorted(Array.from(
-        replicaLeaderNodeIdsByPartition.get(partitionId) || [],
-      ));
-      const inconsistentReplicaRoles = replicaLeaderNodeIds.length > NUM.ONE ||
-        (canonicalLeaderNodeId &&
-          replicaLeaderNodeIds.length > NUM.ZERO &&
-          !replicaLeaderNodeIds.includes(canonicalLeaderNodeId));
-
-      replicaRoleDiagnostics[partitionId] = {
-        canonicalLeaderNodeId: canonicalLeaderNodeId || null,
-        source: TABLES.PARTITIONS,
-        inconsistentReplicaRoles,
-        replicaLeaderNodeIds,
-        issues: inconsistentReplicaRoles ?
-          [CONSISTENCY_MISMATCH_KIND.REPLICA_ROLE] :
-          [],
-      };
-    }
-
-    return {
-      leaders,
-      replicaRoles,
-      replicaRoleDiagnostics,
-    };
-  }
-
-  /**
-   * Build voter-count map per partition from local services rows.
-   * @param {Array<Object>} serviceRows
-   * @return {Object}
-   * @private
-   */
-  buildControlSnapshotVoterCounts(serviceRows = []) {
-    const voterCounts = {};
-    for (const serviceRow of serviceRows) {
-      const serviceType = firstStringField(
-        serviceRow,
-        COLUMN.SERVICE_TYPE,
-        'type',
-        'serviceType',
-      );
-      if (serviceType !== SERVICE_TYPE_PARTITION) {
-        continue;
-      }
-
-      const status = firstStringField(serviceRow, COLUMN.STATUS, 'status');
-      if (String(status || '').toLowerCase() !== STATUS_ACTIVE) {
-        continue;
-      }
-
-      const raftRole = firstStringField(serviceRow, COLUMN.RAFT_ROLE, 'raftRole');
-      const normalizedRaftRole = String(raftRole || '').toLowerCase();
-      if (!normalizedRaftRole || !isLoadReadyReplicaRaftRole(normalizedRaftRole)) {
-        continue;
-      }
-
-      const address = firstStringField(
-        serviceRow,
-        COLUMN.ADDRESS,
-        'address',
-      );
-      if (!address) {
-        continue;
-      }
-
-      const partitionId = firstStringField(
-        serviceRow,
-        COLUMN.PARTITION_ID,
-        'partitionId',
-      );
-      if (!partitionId) {
-        continue;
-      }
-
-      voterCounts[partitionId] = (voterCounts[partitionId] || NUM.ZERO) + NUM.ONE;
-    }
-    return voterCounts;
-  }
-
-  /**
-   * Build replica operation in-flight summary.
-   * @param {Array<Object>} replicaOperationRows
-   * @param {Object} [options={}]
-   * @return {Object}
-   * @private
-   */
-  buildControlSnapshotReplicaOperationSummary(replicaOperationRows = [], options = {}) {
-    const scopedPartitionIds =
-      options.partitionIds instanceof Set && options.partitionIds.size > NUM.ZERO ?
-        options.partitionIds :
-        null;
-    const statusHistogram = {};
-    let inFlightCount = NUM.ZERO;
-    const partitionGroupInFlight = {};
-    for (const row of replicaOperationRows) {
-      const partitionGroupId = firstStringField(
-        row,
-        COLUMN.PARTITION_ID,
-        'partition_id',
-        'partitionId',
-        'entity_id',
-        'entityId',
-      ) || STATUS_UNKNOWN;
-      if (scopedPartitionIds && !scopedPartitionIds.has(partitionGroupId)) {
-        continue;
-      }
-      const status = firstStringField(row, COLUMN.STATUS, 'status') ||
-        STATUS_UNKNOWN;
-      statusHistogram[status] = (statusHistogram[status] || NUM.ZERO) + NUM.ONE;
-      if (!ADMIN_CONTROL_SNAPSHOT.IN_FLIGHT_EXCLUDED_STATUSES.includes(status)) {
-        inFlightCount += NUM.ONE;
-        partitionGroupInFlight[partitionGroupId] =
-          (partitionGroupInFlight[partitionGroupId] || NUM.ZERO) + NUM.ONE;
-      }
-    }
-
-    return {
-      inFlightCount,
-      statusHistogram,
-      partitionGroupInFlight,
-    };
-  }
-
-  /**
-   * Build node-local CDC telemetry with authoritative fallback diagnostics.
-   * @return {Object}
-   * @private
-   */
-  buildLocalCdcTelemetry() {
-    const partitionServices = this.resolveLocalPartitionServices();
-    let subscriberCount = NUM.ZERO;
-    let bufferedEvents = NUM.ZERO;
-    let catchupLagEvents = NUM.ZERO;
-    let catchupThroughputEventsPerSec = NUM.ZERO;
-    let catchupDetected = false;
-
-    if (partitionServices instanceof Map) {
-      for (const partitionService of partitionServices.values()) {
-        if (!partitionService ||
-            typeof partitionService.getCDCSubscriptionDiagnostics !== TYPEOF.FUNCTION) {
-          continue;
-        }
-        const diagnostics = partitionService.getCDCSubscriptionDiagnostics();
-        if (!diagnostics || typeof diagnostics !== TYPEOF.OBJECT) {
-          continue;
-        }
-        const partitionSubscriberCount = Number(diagnostics.subscriberCount || NUM.ZERO);
-        const partitionBufferedEvents = Number(diagnostics.bufferedEvents || NUM.ZERO);
-        subscriberCount += partitionSubscriberCount;
-        bufferedEvents += partitionBufferedEvents;
-        catchupLagEvents = Math.max(catchupLagEvents, partitionBufferedEvents);
-        if (partitionBufferedEvents > NUM.ZERO ||
-            diagnostics.bufferReplayInFlight === true) {
-          catchupDetected = true;
-        }
-      }
-    }
-
-    const authoritativeFallback =
-      typeof this.cdcIntegrationService?.getAuthoritativeFallbackDiagnostics ===
-        TYPEOF.FUNCTION ?
-        this.cdcIntegrationService.getAuthoritativeFallbackDiagnostics() :
-        {
-          schemaVersion: NUM.ONE,
-          nodeId: this.nodeId,
-          windowMs: 60 * 1000,
-          totalCount: NUM.ZERO,
-          windowCount: NUM.ZERO,
-          windowRatePerMinute: NUM.ZERO,
-          phases: {
-            bootstrap: {windowCount: NUM.ZERO, totalCount: NUM.ZERO},
-            recovery: {windowCount: NUM.ZERO, totalCount: NUM.ZERO},
-            steady_state: {windowCount: NUM.ZERO, totalCount: NUM.ZERO},
-          },
-          outcomes: {
-            recovered: {windowCount: NUM.ZERO, totalCount: NUM.ZERO},
-            failed: {windowCount: NUM.ZERO, totalCount: NUM.ZERO},
-          },
-          byTable: {},
-          recentEvents: ADMIN_CACHE_DUMP.EMPTY,
-        };
-
-    return {
-      subscriberCount,
-      bufferedEvents,
-      catchupLagEvents,
-      catchupThroughputEventsPerSec,
-      mode: catchupDetected ?
-        CDC_TELEMETRY_MODE.CATCHUP :
-        CDC_TELEMETRY_MODE.STEADY,
-      authoritativeFallback,
-    };
-  }
-
-  /**
-   * Build canonical query_result payload for control snapshot query.
-   * @return {Object}
-   * @private
-   */
-  buildControlSnapshotQueryResult() {
-    const snapshot = this.buildLocalControlSnapshot();
-    return {
-      success: true,
-      rows: [snapshot],
-      count: NUM.ONE,
-      partitions: ADMIN_CACHE_DUMP.EMPTY,
-      tableName: ADMIN_CONTROL_SNAPSHOT.TABLE_NAME,
-    };
-  }
-
-  /**
-   * Build canonical query_result payload for local service discovery query.
-   * @param {Object} [options={}]
-   * @return {Object}
-   * @private
    */
   async buildServiceDiscoveryQueryResult(options = {}) {
-    const snapshot = await this.resolveServiceDiscoverySnapshot(options);
-    return {
-      success: true,
-      rows: [snapshot],
-      count: NUM.ONE,
-      partitions: ADMIN_CACHE_DUMP.EMPTY,
-      tableName: ADMIN_SERVICE_DISCOVERY.TABLE_NAME,
-    };
+    return this.serviceDiscovery
+      .buildServiceDiscoveryQueryResult(options);
+  }
+
+  /**
+   * Delegate: resolve service discovery snapshot.
+   * @param {Object} [options={}]
+   * @return {Promise<Object>}
+   */
+  async resolveServiceDiscoverySnapshot(options = {}) {
+    return this.serviceDiscovery
+      .resolveServiceDiscoverySnapshot(options);
+  }
+
+  /**
+   * Delegate: build service discovery replica readiness.
+   * @param {Object} replica
+   * @param {Object} readinessContext
+   * @return {Object}
+   */
+  buildServiceDiscoveryReplicaReadiness(replica, readinessContext) {
+    return this.serviceDiscovery
+      .buildServiceDiscoveryReplicaReadiness(
+        replica, readinessContext,
+      );
+  }
+
+
+  /**
+   * Delegate: build local preflight critical-path snapshot.
+   * @return {Object}
+   */
+  buildLocalPreflightCriticalPathSnapshot() {
+    return this.preflightSnapshot
+      .buildLocalPreflightCriticalPathSnapshot();
+  }
+
+  /**
+   * Delegate: resolve preflight critical-path snapshot.
+   * @return {Promise<Object>}
+   */
+  async resolvePreflightCriticalPathSnapshot() {
+    return this.preflightSnapshot
+      .resolvePreflightCriticalPathSnapshot();
+  }
+
+  /**
+   * Delegate: build preflight critical-path snapshot query result.
+   * @return {Promise<Object>}
+   */
+  async buildPreflightCriticalPathSnapshotQueryResult() {
+    return this.preflightSnapshot
+      .buildPreflightCriticalPathSnapshotQueryResult();
+  }
+
+  /**
+   * Delegate: build preflight cache freshness summary.
+   * @param {Object} options
+   * @return {Object}
+   */
+  buildPreflightCacheFreshnessSummary(options) {
+    return this.preflightSnapshot
+      .buildPreflightCacheFreshnessSummary(options);
+  }
+
+  /**
+   * Delegate: build local control snapshot.
+   * @return {Object}
+   */
+  buildLocalControlSnapshot() {
+    return this.controlSnapshot.buildLocalControlSnapshot();
+  }
+
+  /**
+   * Delegate: build control snapshot leader summary.
+   * @param {Array<Object>} partitionRows
+   * @param {Array<Object>} serviceRows
+   * @return {Object}
+   */
+  buildControlSnapshotLeaderSummary(
+    partitionRows = [], serviceRows = [],
+  ) {
+    return this.controlSnapshot
+      .buildControlSnapshotLeaderSummary(
+        partitionRows, serviceRows,
+      );
+  }
+
+  /**
+   * Delegate: build control snapshot voter counts.
+   * @param {Array<Object>} serviceRows
+   * @return {Object}
+   */
+  buildControlSnapshotVoterCounts(serviceRows = []) {
+    return this.controlSnapshot
+      .buildControlSnapshotVoterCounts(serviceRows);
+  }
+
+  /**
+   * Delegate: build control snapshot replica operation summary.
+   * @param {Array<Object>} replicaOperationRows
+   * @param {Object} [options={}]
+   * @return {Object}
+   */
+  buildControlSnapshotReplicaOperationSummary(
+    replicaOperationRows = [], options = {},
+  ) {
+    return this.controlSnapshot
+      .buildControlSnapshotReplicaOperationSummary(
+        replicaOperationRows, options,
+      );
+  }
+
+  /**
+   * Delegate: build local CDC telemetry.
+   * @return {Object}
+   */
+  buildLocalCdcTelemetry() {
+    return this.controlSnapshot.buildLocalCdcTelemetry();
+  }
+
+  /**
+   * Delegate: build control snapshot query result.
+   * @return {Object}
+   */
+  buildControlSnapshotQueryResult() {
+    return this.controlSnapshot
+      .buildControlSnapshotQueryResult();
   }
 
   /**
@@ -4642,6 +2012,8 @@ class AdminWebSocketAPI {
       this.debugMetadataStore = new DebugMetadataStore({
         sqlQueryEngine: engine,
       });
+      this.debugHandlers.debugMetadataStore =
+        this.debugMetadataStore;
     }
   }
 
@@ -4686,8 +2058,8 @@ class AdminWebSocketAPI {
     for (const clientInfo of this.clients) {
       try {
         clientInfo.socket.close();
-      } catch {
-        // Ignore close errors
+      } catch (_closeErr) {
+        // Ignore close errors during shutdown
       }
     }
     this.clients.clear();
@@ -4725,115 +2097,6 @@ class AdminWebSocketAPI {
       nodeId: this.nodeId,
     });
   }
-}
-
-/**
- * Parse comma-separated role header to string array.
- * @param {*} rolesHeader
- * @return {Array<string>}
- */
-function parseHeaderRoles(rolesHeader) {
-  if (typeof rolesHeader !== TYPEOF.STRING) {
-    return [];
-  }
-  return rolesHeader.split(',')
-    .map((value) => value.trim())
-    .filter((value) => value.length > NUM.ZERO);
-}
-
-/**
- * Parse limit query parameter.
- * @param {*} limitParam
- * @return {number|undefined}
- */
-function parseRequestLimit(limitParam) {
-  if (typeof limitParam === TYPEOF.STRING) {
-    const parsed = Number.parseInt(limitParam, 10);
-    return Number.isInteger(parsed) ? parsed : undefined;
-  }
-  if (Number.isInteger(limitParam)) {
-    return limitParam;
-  }
-  return undefined;
-}
-
-/**
- * Build trace stream subscription filter from query params.
- * @param {Object} query
- * @return {Object}
- */
-function buildTraceStreamFilter(query) {
-  const filter = {};
-  const lineagePrefix = normalizeQueryFilterValue(query.lineagePrefix);
-  const level = normalizeQueryFilterValue(query.level);
-  const nodeId = normalizeQueryFilterValue(query.nodeId);
-  const source = normalizeQueryFilterValue(query.source);
-  const levels = parseTraceLevels(query.levels);
-
-  if (lineagePrefix) {
-    filter.lineagePrefix = lineagePrefix;
-  }
-  if (level) {
-    filter.level = level;
-  }
-  if (nodeId) {
-    filter.nodeId = nodeId;
-  }
-  if (source) {
-    filter.source = source;
-  }
-  if (levels.length > NUM.ZERO) {
-    filter.levels = levels;
-  }
-
-  return filter;
-}
-
-/**
- * Parse comma-separated trace levels query parameter.
- * @param {*} levelsParam
- * @return {Array<string>}
- */
-function parseTraceLevels(levelsParam) {
-  if (typeof levelsParam !== TYPEOF.STRING) {
-    return [];
-  }
-  return levelsParam.split(',')
-    .map((value) => value.trim())
-    .filter((value) => value.length > NUM.ZERO);
-}
-
-/**
- * Parse one query filter value to trimmed string.
- * @param {*} value
- * @return {string|null}
- */
-function normalizeQueryFilterValue(value) {
-  if (typeof value !== TYPEOF.STRING) {
-    return null;
-  }
-  const trimmed = value.trim();
-  return trimmed.length > NUM.ZERO ? trimmed : null;
-}
-
-/**
- * Convert snapshot payload to JSON-safe response.
- * @param {Object} snapshot
- * @return {Object}
- */
-function normalizeSnapshotApiPayload(snapshot) {
-  if (!snapshot || typeof snapshot !== TYPEOF.OBJECT) {
-    return snapshot;
-  }
-  if (!snapshot.envelope || !Buffer.isBuffer(snapshot.envelope)) {
-    return snapshot;
-  }
-
-  return {
-    ...snapshot,
-    envelopeBase64: snapshot.envelope.toString('base64'),
-    envelope: undefined,
-  };
 }
 
 export {AdminWebSocketAPI, MessageType, ErrorCode};

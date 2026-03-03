@@ -6,7 +6,7 @@
 
 import {CDC_OPERATION, NUM, SQL} from '../constants/index.js';
 import {STRING} from '../constants/strings.js';
-import {SystemTableName} from '../bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
   PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_EVENT,
@@ -738,7 +738,7 @@ class PartitionCDCGenerator {
       );
       const row = stmt.get(keyValue);
       if (row) {
-        if (tableName !== SystemTableName.LOGS) {
+        if (tableName !== SYSTEM_TABLE_NAME.LOGS) {
           this.logger.info(PARTITION_SERVICE_LOG_MSG.FETCHED_INSERT_ROW, {
             tableName,
             rowKeys: Object.keys(row),
@@ -778,7 +778,7 @@ class PartitionCDCGenerator {
       return null;
     }
 
-    if (tableName !== SystemTableName.LOGS) {
+    if (tableName !== SYSTEM_TABLE_NAME.LOGS) {
       const [keyColumn, keyValue] = entries[NUM.ZERO];
       this.logger.info(PARTITION_SERVICE_LOG_MSG.FETCHING_UPDATE_ROW, {
         tableName,
@@ -798,7 +798,7 @@ class PartitionCDCGenerator {
       );
       const row = stmt.get(...whereValues);
       if (row) {
-        if (tableName !== SystemTableName.LOGS) {
+        if (tableName !== SYSTEM_TABLE_NAME.LOGS) {
           this.logger.info(PARTITION_SERVICE_LOG_MSG.FETCHED_UPDATE_ROW, {
             tableName,
             rowKeys: Object.keys(row),
@@ -807,7 +807,7 @@ class PartitionCDCGenerator {
         return row;
       }
 
-      if (tableName !== SystemTableName.LOGS) {
+      if (tableName !== SYSTEM_TABLE_NAME.LOGS) {
         const [keyColumn, keyValue] = entries[NUM.ZERO];
         this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_NO_ROW_UPDATE, {
           tableName,

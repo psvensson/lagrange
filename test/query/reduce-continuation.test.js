@@ -24,7 +24,7 @@ import {
 } from '../../src/query/execution-context.js';
 import {
   ExchangeManager,
-} from '../../src/query/exchange-manager.js';
+} from '../../src/query/distributed/exchange-manager.js';
 import {
   PLAN_KIND,
   EXCHANGE_MODE,

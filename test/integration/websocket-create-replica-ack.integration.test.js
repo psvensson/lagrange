@@ -17,7 +17,7 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {ReplicaLifecycleManager} from '../../src/node/replica-lifecycle-manager.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
-import {SystemTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 
 /**
  * Initialize test environment.
@@ -41,7 +41,8 @@ function initializeTestEnvironment() {
  * Clean up test environment.
  */
 async function cleanupTestEnvironment() {
-  await LoggingService.getInstance().shutdown().catch(() => {});
+  await LoggingService.getInstance().shutdown()
+    .catch((err) => console.warn('shutdown failed', err));
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
 }
@@ -136,19 +137,19 @@ test('WebSocket CREATE_REPLICA ACK delivery', {timeout: 10000}, async (t) => {
       const systemTableCache = new SystemTableCache();
       const cdcIntegrationService = createMockCDCIntegrationService(systemTableCache);
       const now = Date.now();
-      systemTableCache.applySystemTableChange(SystemTableName.TABLES, 'INSERT', {
+      systemTableCache.applySystemTableChange(SYSTEM_TABLE_NAME.TABLES, 'INSERT', {
         table_id: 'test_table',
         table_name: 'test_table',
         schema_definition: JSON.stringify(createTestSchema('test_table')),
       });
-      systemTableCache.applySystemTableChange(SystemTableName.PARTITIONS, 'INSERT', {
+      systemTableCache.applySystemTableChange(SYSTEM_TABLE_NAME.PARTITIONS, 'INSERT', {
         partition_id: 'ws-test-partition',
         table_id: 'test_table',
         partition_key_start: null,
         partition_key_end: null,
         leader_node_id: seedNodeId,
       });
-      systemTableCache.applySystemTableChange(SystemTableName.SERVICES, 'INSERT', {
+      systemTableCache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
         service_id: 'ws-test-partition-r1',
         service_type: 'partition',
         partition_id: 'ws-test-partition',

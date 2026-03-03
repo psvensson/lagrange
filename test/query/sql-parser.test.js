@@ -6,6 +6,7 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {SQLParser} from '../../src/query/sql-parser.js';
+import {PARSER_DIALECT} from '../../src/query/pg/pg-compat-constants.js';
 
 // Initialize configuration for tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -371,8 +372,6 @@ test('SQLParser - parses parameter placeholders', async (t) => {
 });
 
 // --- Subquery and derived table tests (Requirements: 9.1, 9.2, 9.3, 12.1) ---
-
-import {PARSER_DIALECT} from '../../src/query/pg-compat-constants.js';
 
 test('SQLParser - parses IN subquery in SQLite mode', async (t) => {
   const parser = new SQLParser(

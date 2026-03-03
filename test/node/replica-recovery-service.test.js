@@ -10,7 +10,7 @@ import {
   ReplicaStatus,
   ServiceType,
 } from '../../src/node/replica-recovery-service.js';
-import {SystemTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 
@@ -247,7 +247,7 @@ test('ReplicaRecoveryService - creates partition replica when below minimum', as
 
   // Check CDC operation
   const insertOps = mockCDC.operations.filter((op) =>
-    op.type === 'insert' && op.tableName === SystemTableName.SERVICES,
+    op.type === 'insert' && op.tableName === SYSTEM_TABLE_NAME.SERVICES,
   );
   t.equal(insertOps.length, 1, 'should have one insert operation');
   t.equal(insertOps[0].data.service_type, ServiceType.PARTITION_REPLICA,
@@ -307,7 +307,7 @@ test('ReplicaRecoveryService - creates message group replica when below minimum'
 
     // Check CDC operation
     const insertOps = mockCDC.operations.filter((op) =>
-      op.type === 'insert' && op.tableName === SystemTableName.SERVICES,
+      op.type === 'insert' && op.tableName === SYSTEM_TABLE_NAME.SERVICES,
     );
     t.equal(insertOps.length, 1, 'should have one insert operation');
     t.equal(insertOps[0].data.service_type, ServiceType.MESSAGE_GROUP_REPLICA,
@@ -411,7 +411,7 @@ test('ReplicaRecoveryService - prefers nodes without existing replicas', async (
 
   // Check that replica was created on node-3 (the one without a replica)
   const insertOps = mockCDC.operations.filter((op) =>
-    op.type === 'insert' && op.tableName === SystemTableName.SERVICES,
+    op.type === 'insert' && op.tableName === SYSTEM_TABLE_NAME.SERVICES,
   );
   t.equal(insertOps.length, 1, 'should have one insert operation');
   t.equal(insertOps[0].data.node_id, 'node-3',

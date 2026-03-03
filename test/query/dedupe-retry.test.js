@@ -12,7 +12,7 @@ import {describe, it} from 'node:test';
 import assert from 'node:assert/strict';
 import {
   CallbackStageExecutor,
-} from '../../src/query/callback-stage-executor.js';
+} from '../../src/query/callback/callback-stage-executor.js';
 import {
   DedupeRegistry,
 } from '../../src/query/dedupe-registry.js';
@@ -22,7 +22,7 @@ import {
 import {
   STAGE_STATE,
   STAGE_RESULT_FIELD as SF,
-} from '../../src/query/callback-stage-constants.js';
+} from '../../src/query/callback/callback-stage-constants.js';
 
 describe('dedupe on retry - CallbackStageExecutor', () => {
   it('should skip already-committed batch on retry', async () => {

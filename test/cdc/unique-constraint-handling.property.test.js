@@ -17,7 +17,7 @@ import {
   CDCIntegrationService,
   CDCOperationType,
 } from '../../src/cdc/cdc-integration-service.js';
-import {SystemTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {SQL} from '../../src/constants/sql.js';
@@ -158,7 +158,7 @@ test('Property 5: UNIQUE Constraint Handling - nodes table uses INSERT OR REPLAC
           service.initialize();
 
           const result = await service.insertSystemTableRow(
-            SystemTableName.NODES,
+            SYSTEM_TABLE_NAME.NODES,
             nodeData,
           );
 
@@ -176,7 +176,7 @@ test('Property 5: UNIQUE Constraint Handling - nodes table uses INSERT OR REPLAC
           );
           t.ok(insertQuery, 'Should use INSERT INTO');
           t.ok(
-            insertQuery.sql.includes(SystemTableName.NODES),
+            insertQuery.sql.includes(SYSTEM_TABLE_NAME.NODES),
             'Should target nodes table',
           );
 
@@ -209,7 +209,7 @@ test('Property 5: UNIQUE Constraint Handling - services table uses INSERT INTO',
           service.initialize();
 
           const result = await service.insertSystemTableRow(
-            SystemTableName.SERVICES,
+            SYSTEM_TABLE_NAME.SERVICES,
             serviceData,
           );
 
@@ -227,7 +227,7 @@ test('Property 5: UNIQUE Constraint Handling - services table uses INSERT INTO',
           );
           t.ok(insertQuery, 'Should use INSERT INTO');
           t.ok(
-            insertQuery.sql.includes(SystemTableName.SERVICES),
+            insertQuery.sql.includes(SYSTEM_TABLE_NAME.SERVICES),
             'Should target services table',
           );
 
@@ -262,7 +262,7 @@ test('Property 5: UNIQUE Constraint Handling - duplicate inserts do not cause er
 
           // First insert
           const result1 = await service.insertSystemTableRow(
-            SystemTableName.NODES,
+            SYSTEM_TABLE_NAME.NODES,
             nodeData,
           );
           t.equal(result1.success, true, 'First insert should succeed');
@@ -270,7 +270,7 @@ test('Property 5: UNIQUE Constraint Handling - duplicate inserts do not cause er
           // Second insert with same primary key but different status
           const duplicateData = {...nodeData, status: newStatus};
           const result2 = await service.insertSystemTableRow(
-            SystemTableName.NODES,
+            SYSTEM_TABLE_NAME.NODES,
             duplicateData,
           );
 
@@ -310,7 +310,7 @@ test('Property 5: UNIQUE Constraint Handling - duplicate inserts do not cause er
 test('Property 5: UNIQUE Constraint Handling - no silent failures', async (t) => {
   await fc.assert(
     fc.asyncProperty(
-      fc.constantFrom(SystemTableName.NODES, SystemTableName.SERVICES),
+      fc.constantFrom(SYSTEM_TABLE_NAME.NODES, SYSTEM_TABLE_NAME.SERVICES),
       nodeDataArb,
       async (tableName, baseData) => {
         const mockSqlEngine = createMockSqlQueryEngine();
@@ -322,7 +322,7 @@ test('Property 5: UNIQUE Constraint Handling - no silent failures', async (t) =>
 
         // Prepare data appropriate for the table
         let data;
-        if (tableName === SystemTableName.NODES) {
+        if (tableName === SYSTEM_TABLE_NAME.NODES) {
           data = baseData;
         } else {
           data = {
@@ -401,7 +401,7 @@ test('Property 5: UNIQUE Constraint Handling - SQL errors are not swallowed',
 
           let thrownError = null;
           try {
-            await service.insertSystemTableRow(SystemTableName.NODES, nodeData);
+            await service.insertSystemTableRow(SYSTEM_TABLE_NAME.NODES, nodeData);
           } catch (error) {
             thrownError = error;
           }
@@ -443,7 +443,7 @@ test('Property 5: UNIQUE Constraint Handling - upsertSystemTableRow uses INSERT 
           service.initialize();
 
           const result = await service.upsertSystemTableRow(
-            SystemTableName.NODES,
+            SYSTEM_TABLE_NAME.NODES,
             nodeData,
           );
 
@@ -502,7 +502,7 @@ test('Property 5: UNIQUE Constraint Handling - last insert wins semantics',
           let lastResult;
           for (const status of statusSequence) {
             lastResult = await service.insertSystemTableRow(
-              SystemTableName.NODES,
+              SYSTEM_TABLE_NAME.NODES,
               {...baseData, status},
             );
             t.equal(lastResult.success, true, `Insert with status ${status} should succeed`);

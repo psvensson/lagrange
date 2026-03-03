@@ -9,7 +9,7 @@ import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
-import {SystemTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {isNodeRecordReady} from '../../src/node/node-readiness-policy.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
@@ -79,7 +79,7 @@ async function runWithCleanupTimeout(task, label, t) {
  */
 function getPartitionReplicaRows(systemTableCache) {
   return systemTableCache.filter(
-    SystemTableName.SERVICES,
+    SYSTEM_TABLE_NAME.SERVICES,
     (row) =>
       row.service_type === SERVICE_TYPE.PARTITION &&
       typeof row.partition_id === 'string' &&
@@ -253,7 +253,7 @@ test('Three-node seed rebalance', {timeout: TEST_TIMEOUT_MS}, async (t) => {
       const nodesReady = await waitFor(() => {
         const now = Date.now();
         const readyNodes = systemTableCache.filter(
-          SystemTableName.NODES,
+          SYSTEM_TABLE_NAME.NODES,
           (row) => isNodeRecordReady(row, {now, requireActiveStatus: true}),
         ) || [];
         const readyNodeIds = new Set(readyNodes.map((row) => row.node_id));

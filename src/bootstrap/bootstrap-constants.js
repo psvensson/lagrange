@@ -293,6 +293,7 @@ const BOOTSTRAP_LOG_MSG = Object.freeze({
     'Failed bootstrap cleanup complete',
   FAILED_BOOTSTRAP_CLEANUP_SUMMARY:
     'Failed bootstrap cleanup summary',
+  REGISTERING_SERVICE: 'Registering service',
 });
 
 const BOOTSTRAP_ERROR = Object.freeze({
@@ -315,6 +316,8 @@ const BOOTSTRAP_ERROR = Object.freeze({
 
 const BOOTSTRAP_SQL = Object.freeze({
   CONFIG_COUNT: 'SELECT COUNT(*) as count FROM config',
+  EPOCH_EXISTS:
+    'SELECT config_key FROM config WHERE config_key = ?',
 });
 
 const BOOTSTRAP_DEFAULT = Object.freeze({

@@ -13,7 +13,7 @@ import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {BootstrapReadinessState} from '../../src/bootstrap/bootstrap-readiness-state.js';
-import {SystemTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {PARTITION_SERVICE_EVENT} from '../../src/partition/partition-service-constants.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
@@ -146,7 +146,10 @@ async function probeBootstrapReady(seedApiPort) {
   if (rawBody.length > 0) {
     try {
       parsedBody = JSON.parse(rawBody);
-    } catch (_parseError) {
+    } catch (parseError) {
+      // Non-JSON response body during bootstrap probe is expected
+      // while the node is still initializing
+      console.warn('bootstrap probe JSON parse failed', parseError);
       parsedBody = null;
     }
   }
@@ -182,7 +185,7 @@ function isVoterReadyPartitionReplica(row) {
 
 function collectPartitionVoterCounts(systemTableCache) {
   const rows = systemTableCache.filter(
-    SystemTableName.SERVICES,
+    SYSTEM_TABLE_NAME.SERVICES,
     (row) => isVoterReadyPartitionReplica(row),
   ) || [];
 
@@ -369,7 +372,7 @@ test('Node join convergence SLO', {timeout: 30000}, async (t) => {
       );
 
       const nodeReadyObserved = await waitFor(async () => {
-        const nodeRow = systemTableCache.get(SystemTableName.NODES, joiningNodeId);
+        const nodeRow = systemTableCache.get(SYSTEM_TABLE_NAME.NODES, joiningNodeId);
         return !!nodeRow &&
           nodeRow.status === 'active' &&
           nodeRow.connection_state === 'ready';
@@ -556,7 +559,7 @@ test('Node join convergence SLO real-network readiness path', {timeout: 30000}, 
     t.equal(joinResult.success, true, 'joining node should join successfully');
 
     const nodeReadyObserved = await waitFor(async () => {
-      const nodeRow = systemTableCache.get(SystemTableName.NODES, joiningNodeId);
+      const nodeRow = systemTableCache.get(SYSTEM_TABLE_NAME.NODES, joiningNodeId);
       return !!nodeRow &&
         nodeRow.status === 'active' &&
         nodeRow.connection_state === 'ready';

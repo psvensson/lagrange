@@ -7,7 +7,7 @@
 import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
-import {SystemTableName} from '../bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
   COLUMN,
   ENDPOINT_STATUS,
@@ -35,6 +35,9 @@ const ZERO = 0;
 const ONE = 1;
 const MS_PER_MINUTE = 60000;
 const MIN_REGRESSION_SAMPLE_COUNT = 2;
+
+const ENDPOINT_ID_PREFIX = 'ep-';
+const ENDPOINT_ID_SUFFIX = '-ws';
 
 /**
  * Estimate usage-percent slope (percent per minute) with linear regression.
@@ -149,8 +152,8 @@ class HeartbeatService extends EventEmitter {
       HEARTBEAT_MEMORY_TREND.WINDOW_MS;
     this.memoryTrendMinSamples = Number.isFinite(memoryTrend.minSamples) &&
       memoryTrend.minSamples >= MIN_REGRESSION_SAMPLE_COUNT ?
-        Math.floor(memoryTrend.minSamples) :
-        HEARTBEAT_MEMORY_TREND.MIN_SAMPLES;
+      Math.floor(memoryTrend.minSamples) :
+      HEARTBEAT_MEMORY_TREND.MIN_SAMPLES;
     this.memoryTrendSlopePercentPerMinThreshold =
       Number.isFinite(memoryTrend.slopePercentPerMinThreshold) ?
         memoryTrend.slopePercentPerMinThreshold :
@@ -301,7 +304,7 @@ class HeartbeatService extends EventEmitter {
       undefined;
 
     const cache = this.systemTableCache;
-    const existing = cache.get(SystemTableName.NODES, this.nodeId) || null;
+    const existing = cache.get(SYSTEM_TABLE_NAME.NODES, this.nodeId) || null;
 
     const updateRow = {
       node_address: this.nodeAddress ||
@@ -364,9 +367,10 @@ class HeartbeatService extends EventEmitter {
 
     // Register or refresh WebSocket endpoint, but avoid rewriting unchanged
     // endpoint rows on every heartbeat.
-    const endpointId = `ep-${this.nodeId}-ws`;
+    const endpointId =
+      `${ENDPOINT_ID_PREFIX}${this.nodeId}${ENDPOINT_ID_SUFFIX}`;
     const existingEp = cache.get(
-      SystemTableName.NODE_ENDPOINTS, endpointId,
+      SYSTEM_TABLE_NAME.NODE_ENDPOINTS, endpointId,
     ) || null;
     const endpointRow = this.buildEndpointRow(existingEp, now);
     if (this.shouldUpsertEndpointRow(endpointRow, now)) {
@@ -375,7 +379,7 @@ class HeartbeatService extends EventEmitter {
         return;
       }
       await this.cdcIntegrationService.upsertSystemTableRow(
-        SystemTableName.NODE_ENDPOINTS, endpointRow,
+        SYSTEM_TABLE_NAME.NODE_ENDPOINTS, endpointRow,
       );
       this.lastEndpointUpsertAt = now;
       this.lastEndpointUpsertSignature =
@@ -414,7 +418,7 @@ class HeartbeatService extends EventEmitter {
 
     try {
       await this.cdcIntegrationService.updateSystemTableRow(
-        SystemTableName.NODES,
+        SYSTEM_TABLE_NAME.NODES,
         {node_id: this.nodeId},
         updateRow,
       );
@@ -442,7 +446,7 @@ class HeartbeatService extends EventEmitter {
 
     try {
       return await this.cdcIntegrationService.updateSystemTableRow(
-        SystemTableName.NODES,
+        SYSTEM_TABLE_NAME.NODES,
         whereClause,
         {
           connection_state: STATE.DISCONNECTED,
@@ -467,7 +471,8 @@ class HeartbeatService extends EventEmitter {
    */
   buildEndpointRow(existingEp, now) {
     return {
-      [COLUMN.ENDPOINT_ID]: `ep-${this.nodeId}-ws`,
+      [COLUMN.ENDPOINT_ID]:
+        `${ENDPOINT_ID_PREFIX}${this.nodeId}${ENDPOINT_ID_SUFFIX}`,
       [COLUMN.NODE_ID]: this.nodeId,
       [COLUMN.TRANSPORT_TYPE]: TRANSPORT_TYPE.WEBSOCKET,
       [COLUMN.ADDRESS]: this.nodeAddress,

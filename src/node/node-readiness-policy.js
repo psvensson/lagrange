@@ -1,5 +1,7 @@
-import {SystemTableName} from '../bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {NUM, SERVICE_STATUS, STATE, TYPEOF} from '../constants/index.js';
+
+const REQUIRE_ACTIVE_STATUS_DEFAULT = true;
 
 /**
  * Check if a node record is ready based on lease and state fields.
@@ -15,7 +17,8 @@ function isNodeRecordReady(nodeRow, options = {}) {
   }
 
   const now = Number.isFinite(options.now) ? options.now : Date.now();
-  const requireActiveStatus = options.requireActiveStatus !== false;
+  const requireActiveStatus =
+    options.requireActiveStatus ?? REQUIRE_ACTIVE_STATUS_DEFAULT;
 
   if (requireActiveStatus && nodeRow.status !== SERVICE_STATUS.ACTIVE) {
     return false;
@@ -50,7 +53,7 @@ function isNodeReadyWithConnection(options = {}) {
     return false;
   }
 
-  const nodeRow = cache.get(SystemTableName.NODES, nodeId);
+  const nodeRow = cache.get(SYSTEM_TABLE_NAME.NODES, nodeId);
   if (!isNodeRecordReady(nodeRow, options)) {
     return false;
   }

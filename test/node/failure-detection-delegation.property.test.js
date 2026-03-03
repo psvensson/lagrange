@@ -23,7 +23,7 @@ import {
   FAILURE_DETECTOR_SQL,
   NODE_STATUS,
 } from '../../src/node/node-constants.js';
-import {SystemTableName} from
+import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 
 /**
@@ -264,7 +264,7 @@ test('Property 1: Failure detection delegation', async (t) => {
             // Should have written SUSPECTED status
             const suspectedOp = mockCDC.operations.find(
               (op) =>
-                op.tableName === SystemTableName.NODES &&
+                op.tableName === SYSTEM_TABLE_NAME.NODES &&
                 op.data.status === NODE_STATUS.SUSPECTED,
             );
 
@@ -330,7 +330,7 @@ test('Property 1: Failure detection delegation', async (t) => {
             // Should have written FAILED status
             const failedOp = mockCDC.operations.find(
               (op) =>
-                op.tableName === SystemTableName.NODES &&
+                op.tableName === SYSTEM_TABLE_NAME.NODES &&
                 op.data.status === NODE_STATUS.FAILED,
             );
 

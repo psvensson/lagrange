@@ -8,7 +8,7 @@
 import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
-import {SystemTableName} from '../bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {MovePlanner} from './move-planner.js';
 import {
   OperationType,
@@ -63,8 +63,13 @@ const SQL_BUDGET = Object.freeze({
 });
 
 const CRITICAL_SYSTEM_PARTITION_IDS = new Set(
-  Object.values(SystemTableName).map((tableName) => `${tableName}-p1`),
+  Object.values(SYSTEM_TABLE_NAME).map((tableName) => `${tableName}-p1`),
 );
+
+const ODD_MODULUS = 2;
+const ODD_REMAINDER = 1;
+const ODD_STEP = 2;
+const ODD_ADJUST = 1;
 
 /**
  * Validate that a replica count is odd (required for Raft quorum).
@@ -72,7 +77,7 @@ const CRITICAL_SYSTEM_PARTITION_IDS = new Set(
  * @return {boolean} True if count is odd.
  */
 function isOddReplicaCount(count) {
-  return count % 2 === 1;
+  return count % ODD_MODULUS === ODD_REMAINDER;
 }
 
 /**
@@ -85,7 +90,8 @@ function adjustToOddCount(count, direction = ADJUST_DIRECTION.UP) {
   if (isOddReplicaCount(count)) {
     return count;
   }
-  return direction === ADJUST_DIRECTION.UP ? count + 1 : count - 1;
+  return direction === ADJUST_DIRECTION.UP ?
+    count + ODD_ADJUST : count - ODD_ADJUST;
 }
 
 /**
@@ -95,7 +101,7 @@ function adjustToOddCount(count, direction = ADJUST_DIRECTION.UP) {
  * @return {number} Next odd count or current if at max.
  */
 function getNextOddCount(current, max) {
-  const next = current + 2;
+  const next = current + ODD_STEP;
   return next <= max ? next : current;
 }
 
@@ -106,7 +112,7 @@ function getNextOddCount(current, max) {
  * @return {number} Previous odd count or current if at min.
  */
 function getPreviousOddCount(current, min) {
-  const prev = current - 2;
+  const prev = current - ODD_STEP;
   return prev >= min ? prev : current;
 }
 
@@ -673,7 +679,7 @@ class UnifiedRebalancer extends EventEmitter {
    */
   getAvailableNodes() {
     const now = Date.now();
-    return this.systemTableCache.filter(SystemTableName.NODES, (node) => {
+    return this.systemTableCache.filter(SYSTEM_TABLE_NAME.NODES, (node) => {
       return isNodeRecordReady(node, {
         now,
         requireActiveStatus: true,
@@ -705,7 +711,7 @@ class UnifiedRebalancer extends EventEmitter {
   getCurrentReplicas() {
     if (this.entityType === EntityType.MESSAGE_GROUP) {
       return this.systemTableCache.filter(
-        SystemTableName.SERVICES, (service) => {
+        SYSTEM_TABLE_NAME.SERVICES, (service) => {
           return service.group_id === this.entityId &&
             service.service_type === EntityType.MESSAGE_GROUP;
         });
@@ -715,7 +721,7 @@ class UnifiedRebalancer extends EventEmitter {
     // that equals or is prefixed by the entity (definition) ID.
     if (this.entityType === EntityType.RUNTIME_SERVICE) {
       return this.systemTableCache.filter(
-        SystemTableName.SERVICES, (service) => {
+        SYSTEM_TABLE_NAME.SERVICES, (service) => {
           return service.service_type ===
             EntityType.RUNTIME_SERVICE &&
             service.service_id === this.entityId;
@@ -724,7 +730,7 @@ class UnifiedRebalancer extends EventEmitter {
 
     // For partitions, get services with matching partition_id
     return this.systemTableCache.filter(
-      SystemTableName.SERVICES, (service) => {
+      SYSTEM_TABLE_NAME.SERVICES, (service) => {
         return service.partition_id === this.entityId &&
           service.service_type === EntityType.PARTITION;
       });
@@ -748,7 +754,7 @@ class UnifiedRebalancer extends EventEmitter {
    */
   getInFlightOperations() {
     return this.systemTableCache.filter(
-      SystemTableName.REPLICA_OPERATIONS,
+      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
       (operation) => {
         if (TERMINAL_STATUSES.includes(operation.status)) {
           return false;
@@ -834,7 +840,7 @@ class UnifiedRebalancer extends EventEmitter {
     const now = Date.now();
     const readyNodeIds = new Set(
       this.systemTableCache
-        .filter(SystemTableName.NODES, (node) => {
+        .filter(SYSTEM_TABLE_NAME.NODES, (node) => {
           return isNodeRecordReady(node, {
             now,
             requireActiveStatus: true,
@@ -1818,7 +1824,7 @@ class UnifiedRebalancer extends EventEmitter {
         this.systemTableCache &&
         typeof this.systemTableCache.filter === 'function') {
       localAccessReplicas = this.systemTableCache.filter(
-        SystemTableName.SERVICES,
+        SYSTEM_TABLE_NAME.SERVICES,
         (service) => {
           return service?.service_type === EntityType.MESSAGE_GROUP &&
             service?.status === ReplicaStatus.ACTIVE &&

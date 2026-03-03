@@ -11,7 +11,7 @@
 import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
-import {SystemTableName} from '../bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {NUM} from '../constants/index.js';
 import {
   NODE_CONFIG_KEY,
@@ -135,7 +135,7 @@ class NodeLifecycleService extends EventEmitter {
 
     try {
       const result = await this.cdcIntegrationService.insertSystemTableRow(
-        SystemTableName.NODES,
+        SYSTEM_TABLE_NAME.NODES,
         data,
       );
 
@@ -188,7 +188,7 @@ class NodeLifecycleService extends EventEmitter {
 
     try {
       const result = await this.cdcIntegrationService.updateSystemTableRow(
-        SystemTableName.NODES,
+        SYSTEM_TABLE_NAME.NODES,
         {node_id: nodeId},
         updateData,
       );
@@ -223,7 +223,7 @@ class NodeLifecycleService extends EventEmitter {
 
     try {
       const result = await this.cdcIntegrationService.deleteSystemTableRow(
-        SystemTableName.NODES,
+        SYSTEM_TABLE_NAME.NODES,
         {node_id: nodeId},
       );
 
@@ -264,7 +264,7 @@ class NodeLifecycleService extends EventEmitter {
           nodeId: this.nodeId,
           error: error.message,
         });
-        throw error;
+        this.emit(NODE_LIFECYCLE_SERVICE_EVENT.HEARTBEAT_ERROR, error);
       }
     }, this.heartbeatIntervalMs);
     this.heartbeatTimer.unref();

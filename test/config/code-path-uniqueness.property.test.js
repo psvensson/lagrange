@@ -191,7 +191,6 @@ test('Property 14: Code Path Uniqueness', async (t) => {
       'RaftNode', // Inner class in message-group-service.js and partition-service.js
       // Shared utility/error names used in separate bounded contexts
       'InvalidTransitionError',
-      'PartitionRaftLogEntry',
       'InProcWebSocket',
     ]);
 
@@ -225,17 +224,9 @@ test('Property 14: Code Path Uniqueness', async (t) => {
     );
 
     // Also verify no unexpected duplicates exist
-    const allowedDuplicatesList = new Set([
-      'LiveQueryManager', // CLI wrapper vs core implementation
-      'RaftNode', // Inner class in message-group-service.js and partition-service.js
-      'InvalidTransitionError',
-      'PartitionRaftLogEntry',
-      'InProcWebSocket',
-    ]);
-
     const duplicates = [];
     for (const [className, files] of CLASS_REGISTRY.entries()) {
-      if (files.length > 1 && !allowedDuplicatesList.has(className)) {
+      if (files.length > 1 && !allowedDuplicates.has(className)) {
         duplicates.push({className, files});
       }
     }

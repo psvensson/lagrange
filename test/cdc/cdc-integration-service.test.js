@@ -9,7 +9,7 @@ import {
   CDCOperationType,
   VALID_SYSTEM_TABLES,
 } from '../../src/cdc/cdc-integration-service.js';
-import {SystemTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
@@ -80,8 +80,8 @@ function createCacheWaitProbe() {
         node_id: 'node-1',
         node_address: 'localhost:8080',
       };
-      listener(SystemTableName.NODES);
-      listener(SystemTableName.LOGS);
+      listener(SYSTEM_TABLE_NAME.NODES);
+      listener(SYSTEM_TABLE_NAME.LOGS);
     },
     offCacheChange() {
       state.offCacheChangeCalls++;
@@ -147,11 +147,11 @@ test('CDCIntegrationService - insertSystemTableRow', async (t) => {
     created_at: Date.now(),
   };
 
-  const result = await service.insertSystemTableRow(SystemTableName.NODES, data);
+  const result = await service.insertSystemTableRow(SYSTEM_TABLE_NAME.NODES, data);
 
   t.equal(result.success, true, 'should succeed');
   t.equal(result.operation, CDCOperationType.INSERT, 'should be INSERT operation');
-  t.equal(result.tableName, SystemTableName.NODES, 'should have correct table name');
+  t.equal(result.tableName, SYSTEM_TABLE_NAME.NODES, 'should have correct table name');
   t.equal(mockSqlEngine.executedQueries.length, 1, 'should execute one query');
   t.ok(
     mockSqlEngine.executedQueries[0].sql.includes('INSERT INTO'),
@@ -178,7 +178,7 @@ test('CDCIntegrationService - insertSystemTableRow generates id', async (t) => {
     created_at: Date.now(),
   };
 
-  const result = await service.insertSystemTableRow(SystemTableName.NODES, data);
+  const result = await service.insertSystemTableRow(SYSTEM_TABLE_NAME.NODES, data);
 
   t.equal(result.success, true, 'should succeed');
   t.ok(result.data.node_id, 'should generate node_id');
@@ -204,7 +204,7 @@ test('CDCIntegrationService - insertSystemTableRow skips cache wait for logs', a
     created_at: Date.now(),
   };
 
-  await service.insertSystemTableRow(SystemTableName.LOGS, data);
+  await service.insertSystemTableRow(SYSTEM_TABLE_NAME.LOGS, data);
 
   t.equal(
     state.onCacheChangeCalls,
@@ -229,7 +229,7 @@ test('CDCIntegrationService - insertSystemTableRow waits for propagated tables',
     node_address: 'localhost:8080',
   };
 
-  await service.insertSystemTableRow(SystemTableName.NODES, data);
+  await service.insertSystemTableRow(SYSTEM_TABLE_NAME.NODES, data);
 
   t.equal(state.onCacheChangeCalls, 1, 'should subscribe to cache waits for nodes table');
   t.ok(state.offCacheChangeCalls >= 1, 'should clean up cache wait subscription');
@@ -249,7 +249,7 @@ test('CDCIntegrationService - waitForCacheUpdate skips in bootstrap mode', async
   // Enable bootstrap mode with local partition map to match seed registration path.
   service.setBootstrapMode(true, new Map());
 
-  await service.waitForCacheUpdate(SystemTableName.NODES, 'node-1', true);
+  await service.waitForCacheUpdate(SYSTEM_TABLE_NAME.NODES, 'node-1', true);
 
   t.equal(
     state.onCacheChangeCalls,
@@ -298,14 +298,14 @@ test('CDCIntegrationService - authoritative fallback diagnostics track phase win
     service.initialize();
 
     await service.repairCacheVisibilityHole(
-      SystemTableName.NODES,
+      SYSTEM_TABLE_NAME.NODES,
       'node-1',
       true,
       null,
       {fallbackPhase: 'steady_state'},
     );
     await service.repairCacheVisibilityHole(
-      SystemTableName.NODES,
+      SYSTEM_TABLE_NAME.NODES,
       'node-1',
       true,
       null,
@@ -343,14 +343,14 @@ test('CDCIntegrationService - updateSystemTableRow', async (t) => {
   };
 
   const result = await service.updateSystemTableRow(
-    SystemTableName.NODES,
+    SYSTEM_TABLE_NAME.NODES,
     whereClause,
     data,
   );
 
   t.equal(result.success, true, 'should succeed');
   t.equal(result.operation, CDCOperationType.UPDATE, 'should be UPDATE operation');
-  t.equal(result.tableName, SystemTableName.NODES, 'should have correct table name');
+  t.equal(result.tableName, SYSTEM_TABLE_NAME.NODES, 'should have correct table name');
   t.equal(mockSqlEngine.executedQueries.length, 1, 'should execute one query');
   t.ok(
     mockSqlEngine.executedQueries[0].sql.includes('UPDATE'),
@@ -371,7 +371,7 @@ test('CDCIntegrationService - upsertSystemTableRow skips cache wait when request
     service.initialize();
 
     await service.upsertSystemTableRow(
-      SystemTableName.NODES,
+      SYSTEM_TABLE_NAME.NODES,
       {
         node_id: 'node-1',
         node_address: 'localhost:8080',
@@ -395,10 +395,10 @@ test(
     let listener = null;
     const cache = {
       has(tableName, key) {
-        return tableName === SystemTableName.NODES && key === 'node-1';
+        return tableName === SYSTEM_TABLE_NAME.NODES && key === 'node-1';
       },
       get(tableName, key) {
-        if (tableName !== SystemTableName.NODES || key !== 'node-1') {
+        if (tableName !== SYSTEM_TABLE_NAME.NODES || key !== 'node-1') {
           return undefined;
         }
         return {
@@ -426,7 +426,7 @@ test(
 
     await t.rejects(
       service.updateSystemTableRow(
-        SystemTableName.NODES,
+        SYSTEM_TABLE_NAME.NODES,
         {node_id: 'node-1'},
         {status: 'suspected', updated_at: 200},
         {
@@ -482,7 +482,7 @@ test(
     service.cacheWaitTimeoutMs = 20;
 
     const result = await service.updateSystemTableRow(
-      SystemTableName.NODES,
+      SYSTEM_TABLE_NAME.NODES,
       {node_id: 'node-1'},
       {status: 'suspected', updated_at: 200},
       {
@@ -501,7 +501,7 @@ test(
       'repair should read the authoritative row by primary key',
     );
     t.same(
-      cache.get(SystemTableName.NODES, 'node-1'),
+      cache.get(SYSTEM_TABLE_NAME.NODES, 'node-1'),
       authoritativeRow,
       'repair should hydrate the expected row into cache',
     );
@@ -550,7 +550,7 @@ test(
     service.cacheWaitTimeoutMs = 20;
 
     const result = await service.insertSystemTableRow(
-      SystemTableName.TABLES,
+      SYSTEM_TABLE_NAME.TABLES,
       authoritativeRow,
     );
 
@@ -562,7 +562,7 @@ test(
       'repair should read the inserted row by primary key',
     );
     t.same(
-      cache.get(SystemTableName.TABLES, 'tbl-1'),
+      cache.get(SYSTEM_TABLE_NAME.TABLES, 'tbl-1'),
       authoritativeRow,
       'repair should hydrate the inserted row into cache',
     );
@@ -610,7 +610,7 @@ test(
     service.cacheWaitTimeoutMs = 20;
 
     const result = await service.updateSystemTableRow(
-      SystemTableName.NODES,
+      SYSTEM_TABLE_NAME.NODES,
       {node_id: 'node-1'},
       {status: 'suspected', updated_at: 200},
       {
@@ -623,12 +623,12 @@ test(
 
     t.equal(result.success, true, 'should repair through the writable cache target');
     t.same(
-      writableCache.get(SystemTableName.NODES, 'node-1'),
+      writableCache.get(SYSTEM_TABLE_NAME.NODES, 'node-1'),
       authoritativeRow,
       'writable cache should receive the authoritative repair row',
     );
     t.same(
-      readOnlyCache.get(SystemTableName.NODES, 'node-1'),
+      readOnlyCache.get(SYSTEM_TABLE_NAME.NODES, 'node-1'),
       authoritativeRow,
       'read-only readers should observe the repaired row',
     );
@@ -647,13 +647,13 @@ test('CDCIntegrationService - deleteSystemTableRow', async (t) => {
   const whereClause = {node_id: 'node-1'};
 
   const result = await service.deleteSystemTableRow(
-    SystemTableName.NODES,
+    SYSTEM_TABLE_NAME.NODES,
     whereClause,
   );
 
   t.equal(result.success, true, 'should succeed');
   t.equal(result.operation, CDCOperationType.DELETE, 'should be DELETE operation');
-  t.equal(result.tableName, SystemTableName.NODES, 'should have correct table name');
+  t.equal(result.tableName, SYSTEM_TABLE_NAME.NODES, 'should have correct table name');
   t.equal(mockSqlEngine.executedQueries.length, 1, 'should execute one query');
   t.ok(
     mockSqlEngine.executedQueries[0].sql.includes('DELETE'),
@@ -688,7 +688,7 @@ test('CDCIntegrationService - validates data object', async (t) => {
   service.initialize();
 
   try {
-    await service.insertSystemTableRow(SystemTableName.NODES, null);
+    await service.insertSystemTableRow(SYSTEM_TABLE_NAME.NODES, null);
     t.fail('should throw error for null data');
   } catch (error) {
     t.ok(error.message.includes('requires data object'), 'should have error message');
@@ -706,7 +706,7 @@ test('CDCIntegrationService - requires primary key for update', async (t) => {
 
   try {
     await service.updateSystemTableRow(
-      SystemTableName.NODES,
+      SYSTEM_TABLE_NAME.NODES,
       {status: 'active'}, // Missing primary key
       {status: 'failed'},
     );
@@ -727,7 +727,7 @@ test('CDCIntegrationService - requires primary key for delete', async (t) => {
 
   try {
     await service.deleteSystemTableRow(
-      SystemTableName.NODES,
+      SYSTEM_TABLE_NAME.NODES,
       {status: 'active'}, // Missing primary key
     );
     t.fail('should throw error for missing primary key');
@@ -744,7 +744,7 @@ test('CDCIntegrationService - throws when sqlQueryEngine not available', async (
   service.initialize();
 
   try {
-    await service.insertSystemTableRow(SystemTableName.NODES, {node_id: '1'});
+    await service.insertSystemTableRow(SYSTEM_TABLE_NAME.NODES, {node_id: '1'});
     t.fail('should throw error when sqlQueryEngine not available');
   } catch (error) {
     t.ok(error.message.includes('sqlQueryEngine not provided'),
@@ -759,7 +759,7 @@ test('CDCIntegrationService - throws when not initialized', async (t) => {
   });
 
   try {
-    await service.insertSystemTableRow(SystemTableName.NODES, {node_id: '1'});
+    await service.insertSystemTableRow(SYSTEM_TABLE_NAME.NODES, {node_id: '1'});
     t.fail('should throw error when not initialized');
   } catch (error) {
     t.ok(error.message.includes('not properly initialized'), 'should have error message');
@@ -775,14 +775,14 @@ test('CDCIntegrationService - tracks statistics', async (t) => {
   });
   service.initialize();
 
-  await service.insertSystemTableRow(SystemTableName.NODES, {node_id: '1'});
-  await service.insertSystemTableRow(SystemTableName.NODES, {node_id: '2'});
+  await service.insertSystemTableRow(SYSTEM_TABLE_NAME.NODES, {node_id: '1'});
+  await service.insertSystemTableRow(SYSTEM_TABLE_NAME.NODES, {node_id: '2'});
   await service.updateSystemTableRow(
-    SystemTableName.NODES,
+    SYSTEM_TABLE_NAME.NODES,
     {node_id: '1'},
     {status: 'failed'},
   );
-  await service.deleteSystemTableRow(SystemTableName.NODES, {node_id: '2'});
+  await service.deleteSystemTableRow(SYSTEM_TABLE_NAME.NODES, {node_id: '2'});
 
   const stats = service.getStats();
   t.equal(stats.inserts, 2, 'should track inserts');
@@ -805,13 +805,13 @@ test('CDCIntegrationService - emits events', async (t) => {
   service.on('update', (e) => events.push({type: 'update', ...e}));
   service.on('delete', (e) => events.push({type: 'delete', ...e}));
 
-  await service.insertSystemTableRow(SystemTableName.NODES, {node_id: '1'});
+  await service.insertSystemTableRow(SYSTEM_TABLE_NAME.NODES, {node_id: '1'});
   await service.updateSystemTableRow(
-    SystemTableName.NODES,
+    SYSTEM_TABLE_NAME.NODES,
     {node_id: '1'},
     {status: 'failed'},
   );
-  await service.deleteSystemTableRow(SystemTableName.NODES, {node_id: '1'});
+  await service.deleteSystemTableRow(SYSTEM_TABLE_NAME.NODES, {node_id: '1'});
 
   t.equal(events.length, 3, 'should emit 3 events');
   t.equal(events[0].type, 'insert', 'should emit insert event');
@@ -821,17 +821,17 @@ test('CDCIntegrationService - emits events', async (t) => {
 });
 
 test('CDCIntegrationService - VALID_SYSTEM_TABLES contains all system tables', async (t) => {
-  t.ok(VALID_SYSTEM_TABLES.includes(SystemTableName.NODES), 'should include nodes');
-  t.ok(VALID_SYSTEM_TABLES.includes(SystemTableName.SERVICES), 'should include services');
-  t.ok(VALID_SYSTEM_TABLES.includes(SystemTableName.PARTITIONS), 'should include partitions');
-  t.ok(VALID_SYSTEM_TABLES.includes(SystemTableName.TABLES), 'should include tables');
+  t.ok(VALID_SYSTEM_TABLES.includes(SYSTEM_TABLE_NAME.NODES), 'should include nodes');
+  t.ok(VALID_SYSTEM_TABLES.includes(SYSTEM_TABLE_NAME.SERVICES), 'should include services');
+  t.ok(VALID_SYSTEM_TABLES.includes(SYSTEM_TABLE_NAME.PARTITIONS), 'should include partitions');
+  t.ok(VALID_SYSTEM_TABLES.includes(SYSTEM_TABLE_NAME.TABLES), 'should include tables');
   t.ok(
-    VALID_SYSTEM_TABLES.includes(SystemTableName.MESSAGE_GROUPS),
+    VALID_SYSTEM_TABLES.includes(SYSTEM_TABLE_NAME.MESSAGE_GROUPS),
     'should include message_groups',
   );
-  t.ok(VALID_SYSTEM_TABLES.includes(SystemTableName.INDICES), 'should include indices');
-  t.ok(VALID_SYSTEM_TABLES.includes(SystemTableName.LOGS), 'should include logs');
-  t.ok(VALID_SYSTEM_TABLES.includes(SystemTableName.CONFIG), 'should include config');
+  t.ok(VALID_SYSTEM_TABLES.includes(SYSTEM_TABLE_NAME.INDICES), 'should include indices');
+  t.ok(VALID_SYSTEM_TABLES.includes(SYSTEM_TABLE_NAME.LOGS), 'should include logs');
+  t.ok(VALID_SYSTEM_TABLES.includes(SYSTEM_TABLE_NAME.CONFIG), 'should include config');
   t.end();
 });
 
@@ -843,7 +843,7 @@ test('CDCIntegrationService - resetStats', async (t) => {
   });
   service.initialize();
 
-  await service.insertSystemTableRow(SystemTableName.NODES, {node_id: '1'});
+  await service.insertSystemTableRow(SYSTEM_TABLE_NAME.NODES, {node_id: '1'});
 
   let stats = service.getStats();
   t.equal(stats.inserts, 1, 'should have 1 insert');
@@ -908,7 +908,7 @@ test('CDCIntegrationService - handleEpochChangeCDC applies valid epoch', async (
   });
 
   const cdcEvent = {
-    tableName: SystemTableName.CONFIG,
+    tableName: SYSTEM_TABLE_NAME.CONFIG,
     operation: 'UPDATE',
     data: {
       config_key: EPOCH_CONFIG_KEY,
@@ -945,7 +945,7 @@ test('CDCIntegrationService - handleEpochChangeCDC emits epochChange event', asy
   });
 
   const cdcEvent = {
-    tableName: SystemTableName.CONFIG,
+    tableName: SYSTEM_TABLE_NAME.CONFIG,
     operation: 'UPDATE',
     data: {
       config_key: EPOCH_CONFIG_KEY,
@@ -973,7 +973,7 @@ test('CDCIntegrationService - handleEpochChangeCDC rejects non-epoch config key'
   service.setEpochManager(epochManager);
 
   const cdcEvent = {
-    tableName: SystemTableName.CONFIG,
+    tableName: SYSTEM_TABLE_NAME.CONFIG,
     operation: 'UPDATE',
     data: {
       config_key: 'some_other_config',
@@ -1014,7 +1014,7 @@ test('CDCIntegrationService - handleEpochChangeCDC rejects stale epoch', async (
   });
 
   const cdcEvent = {
-    tableName: SystemTableName.CONFIG,
+    tableName: SYSTEM_TABLE_NAME.CONFIG,
     operation: 'UPDATE',
     data: {
       config_key: EPOCH_CONFIG_KEY,
@@ -1037,7 +1037,7 @@ test('CDCIntegrationService - handleEpochChangeCDC without epoch manager', async
   service.initialize();
 
   const cdcEvent = {
-    tableName: SystemTableName.CONFIG,
+    tableName: SYSTEM_TABLE_NAME.CONFIG,
     operation: 'UPDATE',
     data: {
       config_key: EPOCH_CONFIG_KEY,
@@ -1085,7 +1085,7 @@ test('CDCIntegrationService - handleEpochChangeCDC with invalid JSON', async (t)
   service.setEpochManager(epochManager);
 
   const cdcEvent = {
-    tableName: SystemTableName.CONFIG,
+    tableName: SYSTEM_TABLE_NAME.CONFIG,
     operation: 'UPDATE',
     data: {
       config_key: EPOCH_CONFIG_KEY,
@@ -1111,7 +1111,7 @@ test('CDCIntegrationService - handleEpochChangeCDC with invalid epoch data', asy
   service.setEpochManager(epochManager);
 
   const cdcEvent = {
-    tableName: SystemTableName.CONFIG,
+    tableName: SYSTEM_TABLE_NAME.CONFIG,
     operation: 'UPDATE',
     data: {
       config_key: EPOCH_CONFIG_KEY,
@@ -1151,7 +1151,7 @@ test('CDCIntegrationService - tracks epochChanges in stats', async (t) => {
     });
 
     const cdcEvent = {
-      tableName: SystemTableName.CONFIG,
+      tableName: SYSTEM_TABLE_NAME.CONFIG,
       operation: 'UPDATE',
       data: {
         config_key: EPOCH_CONFIG_KEY,
@@ -1262,7 +1262,7 @@ test('CDCIntegrationService - handleNodeStateCDC processes valid event', async (
   service.initialize();
 
   const cdcEvent = {
-    tableName: SystemTableName.NODES,
+    tableName: SYSTEM_TABLE_NAME.NODES,
     operation: 'UPDATE',
     data: {
       node_id: 'node-1',
@@ -1289,7 +1289,7 @@ test('CDCIntegrationService - handleNodeStateCDC emits nodeStateChange event', a
   service.on('nodeStateChange', (e) => events.push(e));
 
   const cdcEvent = {
-    tableName: SystemTableName.NODES,
+    tableName: SYSTEM_TABLE_NAME.NODES,
     operation: 'UPDATE',
     data: {
       node_id: 'node-1',
@@ -1319,7 +1319,7 @@ test('CDCIntegrationService - handleNodeStateCDC triggers rebalancer', async (t)
   service.setRebalancer(rebalancer);
 
   const cdcEvent = {
-    tableName: SystemTableName.NODES,
+    tableName: SYSTEM_TABLE_NAME.NODES,
     operation: 'UPDATE',
     data: {
       node_id: 'node-1',
@@ -1342,7 +1342,7 @@ test('CDCIntegrationService - handleNodeStateCDC rejects non-nodes table', async
   service.initialize();
 
   const cdcEvent = {
-    tableName: SystemTableName.CONFIG,
+    tableName: SYSTEM_TABLE_NAME.CONFIG,
     operation: 'UPDATE',
     data: {
       config_key: 'some_key',
@@ -1377,7 +1377,7 @@ test('CDCIntegrationService - handleNodeStateCDC rejects missing node_id', async
   service.initialize();
 
   const cdcEvent = {
-    tableName: SystemTableName.NODES,
+    tableName: SYSTEM_TABLE_NAME.NODES,
     operation: 'UPDATE',
     data: {
       status: NodeState.READY,
@@ -1398,7 +1398,7 @@ test('CDCIntegrationService - handleNodeStateCDC rejects missing status', async 
   service.initialize();
 
   const cdcEvent = {
-    tableName: SystemTableName.NODES,
+    tableName: SYSTEM_TABLE_NAME.NODES,
     operation: 'UPDATE',
     data: {
       node_id: 'node-1',
@@ -1420,7 +1420,7 @@ test('CDCIntegrationService - handleNodeStateCDC tracks state changes', async (t
 
   // First state change: null -> JOINING
   const event1 = {
-    tableName: SystemTableName.NODES,
+    tableName: SYSTEM_TABLE_NAME.NODES,
     operation: 'INSERT',
     data: {
       node_id: 'node-1',
@@ -1433,7 +1433,7 @@ test('CDCIntegrationService - handleNodeStateCDC tracks state changes', async (t
 
   // Second state change: JOINING -> READY
   const event2 = {
-    tableName: SystemTableName.NODES,
+    tableName: SYSTEM_TABLE_NAME.NODES,
     operation: 'UPDATE',
     data: {
       node_id: 'node-1',
@@ -1458,7 +1458,7 @@ test('CDCIntegrationService - handleNodeStateCDC skips unchanged state', async (
 
   // First event sets state to READY
   const event1 = {
-    tableName: SystemTableName.NODES,
+    tableName: SYSTEM_TABLE_NAME.NODES,
     operation: 'UPDATE',
     data: {
       node_id: 'node-1',
@@ -1469,7 +1469,7 @@ test('CDCIntegrationService - handleNodeStateCDC skips unchanged state', async (
 
   // Second event with same state
   const event2 = {
-    tableName: SystemTableName.NODES,
+    tableName: SYSTEM_TABLE_NAME.NODES,
     operation: 'UPDATE',
     data: {
       node_id: 'node-1',
@@ -1494,7 +1494,7 @@ test('CDCIntegrationService - handleNodeStateCDC tracks nodeStateChanges in stat
   const states = [NodeState.JOINING, NodeState.READY, NodeState.DRAINING];
   for (const status of states) {
     const cdcEvent = {
-      tableName: SystemTableName.NODES,
+      tableName: SYSTEM_TABLE_NAME.NODES,
       operation: 'UPDATE',
       data: {
         node_id: 'node-1',
@@ -1518,7 +1518,7 @@ test('CDCIntegrationService - handleNodeStateCDC without rebalancer', async (t) 
   // Don't set rebalancer
 
   const cdcEvent = {
-    tableName: SystemTableName.NODES,
+    tableName: SYSTEM_TABLE_NAME.NODES,
     operation: 'UPDATE',
     data: {
       node_id: 'node-1',
@@ -1548,7 +1548,7 @@ test('CDCIntegrationService - handleNodeStateCDC handles DRAINING state', async 
 
   // First set to READY
   service.handleNodeStateCDC({
-    tableName: SystemTableName.NODES,
+    tableName: SYSTEM_TABLE_NAME.NODES,
     operation: 'UPDATE',
     data: {
       node_id: 'node-1',
@@ -1558,7 +1558,7 @@ test('CDCIntegrationService - handleNodeStateCDC handles DRAINING state', async 
 
   // Then transition to DRAINING
   service.handleNodeStateCDC({
-    tableName: SystemTableName.NODES,
+    tableName: SYSTEM_TABLE_NAME.NODES,
     operation: 'UPDATE',
     data: {
       node_id: 'node-1',
@@ -1906,7 +1906,7 @@ test('CDCIntegrationService - executeSQL routes to direct partition in bootstrap
     service.setBootstrapMode(true, mockPartitionServices);
 
     const result = await service.insertSystemTableRow(
-      SystemTableName.SERVICES,
+      SYSTEM_TABLE_NAME.SERVICES,
       {
         service_id: 'service-1',
         address: 'node1/service/1',
@@ -1931,7 +1931,7 @@ test('CDCIntegrationService - executeSQL routes to SQL engine in normal mode',
     t.equal(service.bootstrapMode, false, 'bootstrap mode should be disabled');
 
     const result = await service.insertSystemTableRow(
-      SystemTableName.SERVICES,
+      SYSTEM_TABLE_NAME.SERVICES,
       {
         service_id: 'service-1',
         address: 'node1/service/1',
@@ -1978,7 +1978,7 @@ test('CDCIntegrationService - executeSQL switches from bootstrap to normal mode'
     service.setBootstrapMode(true, mockPartitionServices);
 
     // First insert should go direct to partition
-    await service.insertSystemTableRow(SystemTableName.SERVICES, {
+    await service.insertSystemTableRow(SYSTEM_TABLE_NAME.SERVICES, {
       service_id: 'service-1',
       address: 'node1/service/1',
     });
@@ -1994,7 +1994,7 @@ test('CDCIntegrationService - executeSQL switches from bootstrap to normal mode'
     service.clearBootstrapMode();
 
     // Second insert should go through SQL engine
-    await service.insertSystemTableRow(SystemTableName.SERVICES, {
+    await service.insertSystemTableRow(SYSTEM_TABLE_NAME.SERVICES, {
       service_id: 'service-2',
       address: 'node1/service/2',
     });
@@ -2024,7 +2024,7 @@ test('CDCIntegrationService - executeSQL throws when SQL engine missing in norma
     t.equal(service.sqlQueryEngine, null, 'SQL engine should be null');
 
     try {
-      await service.insertSystemTableRow(SystemTableName.SERVICES, {
+      await service.insertSystemTableRow(SYSTEM_TABLE_NAME.SERVICES, {
         service_id: 'service-1',
         address: 'node1/service/1',
       });
@@ -2062,7 +2062,7 @@ test('CDCIntegrationService - executeSQL single code path based on mode flag',
 
     // Test 1: Bootstrap mode enabled - should use direct path
     service.setBootstrapMode(true, mockPartitionServices);
-    await service.insertSystemTableRow(SystemTableName.NODES, {
+    await service.insertSystemTableRow(SYSTEM_TABLE_NAME.NODES, {
       node_id: 'node-1',
       node_address: 'localhost:8080',
     });
@@ -2074,7 +2074,7 @@ test('CDCIntegrationService - executeSQL single code path based on mode flag',
 
     // Test 2: Bootstrap mode disabled - should use SQL engine path
     service.clearBootstrapMode();
-    await service.insertSystemTableRow(SystemTableName.NODES, {
+    await service.insertSystemTableRow(SYSTEM_TABLE_NAME.NODES, {
       node_id: 'node-2',
       node_address: 'localhost:8081',
     });

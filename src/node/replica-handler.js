@@ -14,7 +14,7 @@ import {AddressManager} from '../address/address-manager.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
-import {SystemTableName} from '../bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {STORAGE_DEFAULT} from '../storage/storage-constants.js';
 import {NUM, WORKFLOW_STEP} from '../constants/index.js';
 import {assertCritical} from '../utils/assert.js';
@@ -48,7 +48,7 @@ import {
 import {ReplicaStateMachine} from './replica-state-machine.js';
 
 const CRITICAL_SYSTEM_PARTITION_IDS = new Set(
-  Object.values(SystemTableName).map((tableName) => `${tableName}-p1`),
+  Object.values(SYSTEM_TABLE_NAME).map((tableName) => `${tableName}-p1`),
 );
 
 const VOTER_READY_CHECK_INTERVAL_MS = 250;
@@ -68,11 +68,11 @@ const ESTABLISHED_VOTER_ROLES = new Set([
 ]);
 const SYSTEM_TABLE_HYDRATION_SQL = Object.freeze({
   PARTITION_BY_ID:
-    `SELECT * FROM ${SystemTableName.PARTITIONS} WHERE partition_id = ?`,
+    `SELECT * FROM ${SYSTEM_TABLE_NAME.PARTITIONS} WHERE partition_id = ?`,
   TABLE_BY_ID:
-    `SELECT * FROM ${SystemTableName.TABLES} WHERE table_id = ?`,
+    `SELECT * FROM ${SYSTEM_TABLE_NAME.TABLES} WHERE table_id = ?`,
   PARTITION_SERVICES:
-    `SELECT * FROM ${SystemTableName.SERVICES} ` +
+    `SELECT * FROM ${SYSTEM_TABLE_NAME.SERVICES} ` +
     'WHERE partition_id = ? AND service_type = ?',
 });
 
@@ -670,7 +670,7 @@ class ReplicaHandler extends EventEmitter {
             typeof partitionService.shutdown === REPLICA_HANDLER_TYPEOF.FUNCTION) {
           try {
             await partitionService.shutdown();
-          } catch {
+          } catch (_shutdownErr) {
             // Best-effort shutdown only.
           }
         }
@@ -898,7 +898,7 @@ class ReplicaHandler extends EventEmitter {
       // Delete service row from services table
       try {
         await this.cdcIntegrationService.deleteSystemTableRow(
-          SystemTableName.SERVICES,
+          SYSTEM_TABLE_NAME.SERVICES,
           {service_id: replicaId},
         );
       } catch (deleteError) {
@@ -1001,7 +1001,7 @@ class ReplicaHandler extends EventEmitter {
     });
 
     try {
-      const existing = this.systemTableCache.get(SystemTableName.SERVICES, replicaId);
+      const existing = this.systemTableCache.get(SYSTEM_TABLE_NAME.SERVICES, replicaId);
       const partitionId = additionalData.partitionId !== undefined ?
         additionalData.partitionId :
         (existing?.partition_id || null);
@@ -1079,7 +1079,7 @@ class ReplicaHandler extends EventEmitter {
     }
 
     const operationRow = this.systemTableCache.get(
-      SystemTableName.REPLICA_OPERATIONS,
+      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
       operationId,
     );
 
@@ -1111,7 +1111,7 @@ class ReplicaHandler extends EventEmitter {
     }
 
     const removeOperations = this.systemTableCache.filter(
-      SystemTableName.REPLICA_OPERATIONS,
+      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
       (row) => row?.partition_id === partitionId &&
         typeof row?.type === REPLICA_HANDLER_TYPEOF.STRING &&
         row.type.toUpperCase() === 'REMOVE',
@@ -1185,7 +1185,7 @@ class ReplicaHandler extends EventEmitter {
       return false;
     }
 
-    const serviceRow = this.systemTableCache.get(SystemTableName.SERVICES, replicaId);
+    const serviceRow = this.systemTableCache.get(SYSTEM_TABLE_NAME.SERVICES, replicaId);
     if (!serviceRow || !serviceRow.address) {
       return false;
     }
@@ -1215,7 +1215,7 @@ class ReplicaHandler extends EventEmitter {
     }
 
     const existing = this.systemTableCache.get(
-      SystemTableName.REPLICA_OPERATIONS,
+      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
       operationId,
     );
 
@@ -1275,7 +1275,7 @@ class ReplicaHandler extends EventEmitter {
         // the operation row to be temporarily missing. A partial upsert can
         // violate NOT NULL constraints (e.g., type/source/target columns).
         await this.cdcIntegrationService.updateSystemTableRow(
-          SystemTableName.REPLICA_OPERATIONS,
+          SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
           {operation_id: operationId},
           updateData,
         );
@@ -1283,7 +1283,7 @@ class ReplicaHandler extends EventEmitter {
       }
 
       await this.cdcIntegrationService.updateSystemTableRow(
-        SystemTableName.REPLICA_OPERATIONS,
+        SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
         {operation_id: operationId},
         updateData,
       );
@@ -1376,7 +1376,7 @@ class ReplicaHandler extends EventEmitter {
     }
 
     const partition = this.systemTableCache.get(
-      SystemTableName.PARTITIONS,
+      SYSTEM_TABLE_NAME.PARTITIONS,
       partitionId,
     );
     if (!partition) {
@@ -1384,7 +1384,7 @@ class ReplicaHandler extends EventEmitter {
       throw new Error(partitionMetadataMissing(partitionId));
     }
 
-    const table = this.systemTableCache.get(SystemTableName.TABLES, partition.table_id);
+    const table = this.systemTableCache.get(SYSTEM_TABLE_NAME.TABLES, partition.table_id);
     if (!table) {
       const tableMetadataMissing = REPLICA_HANDLER_ERROR_MSG.TABLE_METADATA_MISSING;
       throw new Error(tableMetadataMissing(partition.table_id));
@@ -1406,7 +1406,7 @@ class ReplicaHandler extends EventEmitter {
     };
 
     const services = this.systemTableCache.filter(
-      SystemTableName.SERVICES,
+      SYSTEM_TABLE_NAME.SERVICES,
       (service) =>
         service.partition_id === partitionId &&
         service.service_type === REPLICA_HANDLER_SERVICE.TYPE,
@@ -1529,7 +1529,7 @@ class ReplicaHandler extends EventEmitter {
       const partitionRow = partitionRows[NUM.ZERO] || null;
       if (partitionRow) {
         hydratedRows += this.applyHydratedSystemTableRow(
-          SystemTableName.PARTITIONS,
+          SYSTEM_TABLE_NAME.PARTITIONS,
           partitionRow,
         );
       }
@@ -1545,7 +1545,7 @@ class ReplicaHandler extends EventEmitter {
         const tableRow = tableRows[NUM.ZERO] || null;
         if (tableRow) {
           hydratedRows += this.applyHydratedSystemTableRow(
-            SystemTableName.TABLES,
+            SYSTEM_TABLE_NAME.TABLES,
             tableRow,
           );
         }
@@ -1558,7 +1558,7 @@ class ReplicaHandler extends EventEmitter {
       );
       for (const serviceRow of serviceRows) {
         hydratedRows += this.applyHydratedSystemTableRow(
-          SystemTableName.SERVICES,
+          SYSTEM_TABLE_NAME.SERVICES,
           serviceRow,
         );
       }
@@ -1744,7 +1744,7 @@ class ReplicaHandler extends EventEmitter {
     }
 
     // Read from cache (single source of truth for replica state)
-    const cacheEntry = this.systemTableCache.get(SystemTableName.SERVICES, replicaId);
+    const cacheEntry = this.systemTableCache.get(SYSTEM_TABLE_NAME.SERVICES, replicaId);
     const service = this.getTrackedService(replicaId);
 
     // Check if this replica belongs to this node
@@ -1789,7 +1789,7 @@ class ReplicaHandler extends EventEmitter {
   getAllLocalReplicas() {
     const replicasById = new Map();
     const localServices = this.systemTableCache.filter(
-      SystemTableName.SERVICES,
+      SYSTEM_TABLE_NAME.SERVICES,
       (row) => row.node_id === this.nodeId,
     );
 

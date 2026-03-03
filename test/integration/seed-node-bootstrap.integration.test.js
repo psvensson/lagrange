@@ -14,7 +14,7 @@ import {ServiceThreadManager} from '../../src/threading/service-thread-manager.j
 import {
   INITIAL_MESSAGE_GROUP_REPLICA_IDS,
   INITIAL_REPLICA_IDS,
-  SystemTableName,
+  SYSTEM_TABLE_NAME,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
   META_SERVICE_ID,
@@ -54,9 +54,12 @@ function initializeTestEnvironment() {
  * Clean up test environment.
  */
 async function cleanupTestEnvironment() {
-  await NodeService.getInstance().shutdown().catch(() => {});
-  await ServiceThreadManager.getInstance().shutdown().catch(() => {});
-  await LoggingService.getInstance().shutdown().catch(() => {});
+  await NodeService.getInstance().shutdown()
+    .catch((err) => console.warn('shutdown failed', err.message));
+  await ServiceThreadManager.getInstance().shutdown()
+    .catch((err) => console.warn('shutdown failed', err.message));
+  await LoggingService.getInstance().shutdown()
+    .catch((err) => console.warn('shutdown failed', err.message));
   NodeService.resetInstance();
   ServiceThreadManager.resetInstance();
   ConfigurationManager.resetInstance();
@@ -177,12 +180,12 @@ test('Seed node bootstrap integration', async (t) => {
 
       // Verify system tables are registered in tables table
       const systemTableNames = [
-        SystemTableName.NODES,
-        SystemTableName.PARTITIONS,
-        SystemTableName.SERVICES,
-        SystemTableName.TABLES,
-        SystemTableName.MESSAGE_GROUPS,
-        SystemTableName.REPLICA_OPERATIONS,
+        SYSTEM_TABLE_NAME.NODES,
+        SYSTEM_TABLE_NAME.PARTITIONS,
+        SYSTEM_TABLE_NAME.SERVICES,
+        SYSTEM_TABLE_NAME.TABLES,
+        SYSTEM_TABLE_NAME.MESSAGE_GROUPS,
+        SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
       ];
 
       for (const tableName of systemTableNames) {
@@ -212,7 +215,7 @@ test('Seed node bootstrap integration', async (t) => {
     } finally {
       // Cleanup (includes control plane + router shutdown)
       if (bootstrapService) {
-        await bootstrapService.shutdown().catch(() => {});
+        await bootstrapService.shutdown().catch((err) => console.warn('shutdown failed', err.message));
       }
     }
   });
@@ -240,18 +243,24 @@ test('Seed node bootstrap integration', async (t) => {
       let messageGroupCreateCalls = 0;
       let partitionCreateCalls = 0;
       const originalCreateMessageGroup =
-        bootstrapService.createBootstrapMessageGroupReplica.bind(bootstrapService);
+        bootstrapService.seedMessageGroupsPhase
+          .createBootstrapMessageGroupReplica
+          .bind(bootstrapService.seedMessageGroupsPhase);
       const originalCreatePartition =
-        bootstrapService.createBootstrapPartitionReplica.bind(bootstrapService);
+        bootstrapService.seedPartitionsPhase
+          .createBootstrapPartitionReplica
+          .bind(bootstrapService.seedPartitionsPhase);
 
-      bootstrapService.createBootstrapMessageGroupReplica = async (context) => {
-        messageGroupCreateCalls++;
-        return originalCreateMessageGroup(context);
-      };
-      bootstrapService.createBootstrapPartitionReplica = async (context) => {
-        partitionCreateCalls++;
-        return originalCreatePartition(context);
-      };
+      bootstrapService.seedMessageGroupsPhase
+        .createBootstrapMessageGroupReplica = async (context) => {
+          messageGroupCreateCalls++;
+          return originalCreateMessageGroup(context);
+        };
+      bootstrapService.seedPartitionsPhase
+        .createBootstrapPartitionReplica = async (context) => {
+          partitionCreateCalls++;
+          return originalCreatePartition(context);
+        };
 
       try {
         const result = await bootstrapService.bootstrap();
@@ -291,7 +300,7 @@ test('Seed node bootstrap integration', async (t) => {
           'lifecycle manager should track running state for bootstrap services',
         );
       } finally {
-        await bootstrapService.shutdown().catch(() => {});
+        await bootstrapService.shutdown().catch((err) => console.warn('shutdown failed', err.message));
       }
     });
 
@@ -344,7 +353,7 @@ test('Seed node bootstrap integration', async (t) => {
     } finally {
       // Cleanup (includes control plane + router shutdown)
       if (bootstrapService) {
-        await bootstrapService.shutdown().catch(() => {});
+        await bootstrapService.shutdown().catch((err) => console.warn('shutdown failed', err.message));
       }
     }
   });
@@ -383,7 +392,7 @@ test('Seed node bootstrap integration', async (t) => {
 
       // Attempt to write to system table after bootstrap
       // This should route through SQL engine, not direct partition write
-      const result = await cdcService.insertSystemTableRow(SystemTableName.NODES, {
+      const result = await cdcService.insertSystemTableRow(SYSTEM_TABLE_NAME.NODES, {
         node_id: 'test-node-after-bootstrap',
         node_address: 'ws://localhost:9999',
         status: 'ACTIVE',
@@ -401,7 +410,7 @@ test('Seed node bootstrap integration', async (t) => {
     } finally {
       // Cleanup (includes control plane + router shutdown)
       if (bootstrapService) {
-        await bootstrapService.shutdown().catch(() => {});
+        await bootstrapService.shutdown().catch((err) => console.warn('shutdown failed', err.message));
       }
     }
   });
@@ -443,7 +452,7 @@ test('Seed node bootstrap integration', async (t) => {
     } finally {
       // Cleanup (includes control plane + router shutdown)
       if (bootstrapService) {
-        await bootstrapService.shutdown().catch(() => {});
+        await bootstrapService.shutdown().catch((err) => console.warn('shutdown failed', err.message));
       }
     }
   });
@@ -507,7 +516,7 @@ test('Seed node bootstrap integration', async (t) => {
     } finally {
       // Cleanup (includes control plane + router shutdown)
       if (bootstrapService) {
-        await bootstrapService.shutdown().catch(() => {});
+        await bootstrapService.shutdown().catch((err) => console.warn('shutdown failed', err.message));
       }
     }
   });

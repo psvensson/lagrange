@@ -8,6 +8,7 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
+import fc from 'fast-check';
 import {
   validateLookupArgs,
   isAllowedAccessPath,
@@ -20,7 +21,7 @@ import {
   LOOKUP_ACCESS_PATH,
   PRIMITIVE_ERROR_MSG,
   LOOKUP_RESULT_FIELD as LRF,
-} from '../../src/query/distributed-context-constants.js';
+} from '../../src/query/distributed/distributed-context-constants.js';
 import {
   LOOKUP_MAX_KEYS,
 } from '../../src/wasm-service/query-budget-constants.js';
@@ -381,8 +382,6 @@ test('executeLookup - calls telemetry callback', async (t) => {
 
 
 // ─── Additional coverage for Req 5.2 ────────────────────────
-
-import fc from 'fast-check';
 
 test('isAllowedAccessPath - undefined denied', (t) => {
   t.notOk(isAllowedAccessPath(undefined));

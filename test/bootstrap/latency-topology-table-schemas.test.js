@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {TABLES} from '../../src/constants/tables.js';
 import {COLUMN} from '../../src/constants/columns.js';
 import {
-  SystemTableName,
+  SYSTEM_TABLE_NAME,
   SYSTEM_TABLE_SCHEMAS,
   INITIAL_PARTITION_IDS,
   INITIAL_REPLICA_IDS,
@@ -36,10 +36,10 @@ describe('latency topology table constants', () => {
     assert.equal(TABLES.INTER_GROUP_LATENCIES, 'inter_group_latencies');
   });
 
-  it('registers latency table names in SystemTableName', () => {
-    assert.equal(SystemTableName.LATENCY_GROUPS, TABLES.LATENCY_GROUPS);
+  it('registers latency table names in SYSTEM_TABLE_NAME', () => {
+    assert.equal(SYSTEM_TABLE_NAME.LATENCY_GROUPS, TABLES.LATENCY_GROUPS);
     assert.equal(
-      SystemTableName.INTER_GROUP_LATENCIES,
+      SYSTEM_TABLE_NAME.INTER_GROUP_LATENCIES,
       TABLES.INTER_GROUP_LATENCIES,
     );
   });

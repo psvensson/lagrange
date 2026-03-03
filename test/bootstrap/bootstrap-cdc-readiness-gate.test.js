@@ -12,7 +12,7 @@ import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {CDCPipelineReadinessGate} from
   '../../src/cdc/cdc-pipeline-readiness-gate.js';
-import {SystemTableName} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {CACHE_HYDRATION_TABLES} from '../../src/cache/cache-constants.js';
 
 const NODE_ID = 'readiness-gate-test-node';
@@ -47,14 +47,14 @@ const createFullyHydratedCache = () => {
   const listeners = [];
   return {
     getAll: (tableName) => {
-      if (tableName === SystemTableName.SERVICES) {
+      if (tableName === SYSTEM_TABLE_NAME.SERVICES) {
         return [{
           service_id: 'p1', service_type: 'partition',
           status: 'ACTIVE', raft_role: 'leader',
           node_id: NODE_ID, address: `${NODE_ID}/partition/p1`,
         }];
       }
-      if (tableName === SystemTableName.NODES) {
+      if (tableName === SYSTEM_TABLE_NAME.NODES) {
         return [{node_id: NODE_ID}];
       }
       return [{id: '1'}];
@@ -113,10 +113,12 @@ const applyCommonStubs = (service, systemTableCache, hydrationResult) => {
   service.getLeaderMessageGroupService = () => ({
     applyCDCEvent: async () => {},
   });
-  service.hydrateFromLocalPartitions = async () => hydrationResult;
-  service.ensureLatencyTopologyOwners = () => {};
-  service.waitForSystemServiceLeadersInCache = async () => {};
-  service.swapSystemTableWriter = () => {};
+  service.seedCacheHydrationPhase.hydrateFromLocalPartitions =
+    async () => hydrationResult;
+  service.seedCacheHydrationPhase.ensureLatencyTopologyOwners = () => {};
+  service.seedCacheHydrationPhase.waitForSystemServiceLeadersInCache =
+    async () => {};
+  service.seedRegistrationPhase.swapSystemTableWriter = () => {};
   service.cdcIntegrationService = {
     setSystemTableCache: () => {},
     setEpochManager: () => {},
@@ -151,7 +153,8 @@ test('phaseCacheHydration succeeds when CDC pipeline is ready',
     service.partitionServices = createPartitionServicesWithSubscribers();
     service.messageGroupServices = createMessageGroupServicesWithLeader();
 
-    service.subscribeToInitialSystemTableCDC = async () => {};
+    service.seedCacheHydrationPhase
+      .subscribeToInitialSystemTableCDC = async () => {};
 
     await service.phaseCacheHydration();
     t.pass('phaseCacheHydration completed with ready CDC pipeline');
@@ -179,14 +182,16 @@ test('phaseCacheHydration fails on CDC readiness gate timeout',
     // Empty services — no subscribers, no leader → gate never passes.
     service.partitionServices = new Map();
     service.messageGroupServices = new Map();
-    service.subscribeToInitialSystemTableCDC = async () => {};
-    service.createCdcPipelineReadinessGate = (cache) =>
-      new CDCPipelineReadinessGate({
-        systemTableCache: cache,
-        cdcPropagatedTables: CACHE_HYDRATION_TABLES,
-        now: clock.now,
-        sleep: clock.sleep,
-      });
+    service.seedCacheHydrationPhase
+      .subscribeToInitialSystemTableCDC = async () => {};
+    service.seedCacheHydrationPhase
+      .createCdcPipelineReadinessGate = (cache) =>
+        new CDCPipelineReadinessGate({
+          systemTableCache: cache,
+          cdcPropagatedTables: CACHE_HYDRATION_TABLES,
+          now: clock.now,
+          sleep: clock.sleep,
+        });
 
     await t.rejects(
       service.phaseCacheHydration(),
@@ -217,14 +222,16 @@ test('phaseCacheHydration timeout error lists unmet conditions',
     // No partition services or message groups → all conditions unmet.
     service.partitionServices = new Map();
     service.messageGroupServices = new Map();
-    service.subscribeToInitialSystemTableCDC = async () => {};
-    service.createCdcPipelineReadinessGate = (cache) =>
-      new CDCPipelineReadinessGate({
-        systemTableCache: cache,
-        cdcPropagatedTables: CACHE_HYDRATION_TABLES,
-        now: clock.now,
-        sleep: clock.sleep,
-      });
+    service.seedCacheHydrationPhase
+      .subscribeToInitialSystemTableCDC = async () => {};
+    service.seedCacheHydrationPhase
+      .createCdcPipelineReadinessGate = (cache) =>
+        new CDCPipelineReadinessGate({
+          systemTableCache: cache,
+          cdcPropagatedTables: CACHE_HYDRATION_TABLES,
+          now: clock.now,
+          sleep: clock.sleep,
+        });
 
     try {
       await service.phaseCacheHydration();

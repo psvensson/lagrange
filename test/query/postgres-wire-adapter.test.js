@@ -11,7 +11,7 @@ import {
   PostgresWireAdapter,
   PG_SESSION_STATE,
   PG_WIRE_ERROR_MSG,
-} from '../../src/query/postgres-wire-adapter.js';
+} from '../../src/query/pg/postgres-wire-adapter.js';
 import {EXECUTION_MODE} from '../../src/query/sql-adapter-constants.js';
 
 /**

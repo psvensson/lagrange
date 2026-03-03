@@ -4,7 +4,7 @@ import {
   registerBuiltInMetaServiceEndpoints,
   META_SERVICE_DEFINITION_REGISTRATION_ERROR,
 } from '../../src/bootstrap/shared/meta-service-definition-registration.js';
-import {SystemTableName} from
+import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {META_SERVICE_ID} from '../../src/constants/index.js';
 
@@ -22,7 +22,7 @@ describe('meta-service-endpoint-registration', () => {
 
     assert.equal(endpointIds.length, 3);
     const endpointUpserts = upserts.filter(
-      (entry) => entry.tableName === SystemTableName.SERVICE_ENDPOINTS,
+      (entry) => entry.tableName === SYSTEM_TABLE_NAME.SERVICE_ENDPOINTS,
     );
     assert.equal(endpointUpserts.length, 3);
 
@@ -59,7 +59,7 @@ describe('meta-service-endpoint-registration', () => {
     });
 
     const endpointUpserts = upserts.filter(
-      (entry) => entry.tableName === SystemTableName.SERVICE_ENDPOINTS,
+      (entry) => entry.tableName === SYSTEM_TABLE_NAME.SERVICE_ENDPOINTS,
     );
     assert.equal(endpointUpserts.length, 3);
     for (const endpoint of endpointUpserts) {

@@ -15,7 +15,7 @@ import {
   SERVICE_STATUS,
   STATE,
 } from '../../src/constants/index.js';
-import {SystemTableName} from
+import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 
 function initEnv() {
@@ -84,7 +84,7 @@ test('Message-group operation routing integration', async (t) => {
             return null;
           },
           getAll: (tableName) => {
-            if (tableName === SystemTableName.SERVICES) {
+            if (tableName === SYSTEM_TABLE_NAME.SERVICES) {
               return [{
                 [COLUMN.NODE_ID]: 'node-2',
                 [COLUMN.SERVICE_TYPE]:

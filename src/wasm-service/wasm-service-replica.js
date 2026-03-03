@@ -11,7 +11,7 @@ import {RaftReplicaBase} from '../raft/raft-replica-base.js';
 import {AuthoritativeRowMutationHelper} from '../raft/authoritative-row-mutation-helper.js';
 import {SERVICE_TYPE} from '../constants/service.js';
 import {COLUMN, TABLES, TYPEOF} from '../constants/index.js';
-import {SystemTableName} from '../bootstrap/system-table-schemas-constants.js';
+import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {isSystemTableWriteReady} from '../cache/leader-readiness-gate.js';
 import {SessionKVStore} from './session-kv-store.js';
 import {SafetyInterval} from './safety-interval.js';
@@ -25,27 +25,42 @@ import {
   WRITE_CONSISTENCY_MODE,
 } from './wasm-service-constants.js';
 
+// Entry type scalar values
+const ENTRY_TYPE_KV_SET = 'kv_set';
+const ENTRY_TYPE_KV_DELETE = 'kv_delete';
+const ENTRY_TYPE_KV_DELETE_SESSION = 'kv_delete_session';
+const ENTRY_TYPE_TIMER_STATE = 'timer_state';
+
 /**
  * Entry type constants for committed Raft log entries.
  * @enum {string}
  */
 const ENTRY_TYPE = Object.freeze({
-  KV_SET: 'kv_set',
-  KV_DELETE: 'kv_delete',
-  KV_DELETE_SESSION: 'kv_delete_session',
-  TIMER_STATE: 'timer_state',
+  KV_SET: ENTRY_TYPE_KV_SET,
+  KV_DELETE: ENTRY_TYPE_KV_DELETE,
+  KV_DELETE_SESSION: ENTRY_TYPE_KV_DELETE_SESSION,
+  TIMER_STATE: ENTRY_TYPE_TIMER_STATE,
 });
+
+// Message operation scalar values
+const MESSAGE_OP_READ = 'read';
+const MESSAGE_OP_WRITE = 'write';
 
 /**
  * Message operation constants for incoming service messages.
  * @enum {string}
  */
 const MESSAGE_OP = Object.freeze({
-  READ: 'read',
-  WRITE: 'write',
+  READ: MESSAGE_OP_READ,
+  WRITE: MESSAGE_OP_WRITE,
 });
 
 const METADATA_FLUSH_RETRY_DELAY_MS = 250;
+
+const SQLITE_MEMORY_PATH = ':memory:';
+
+const FLUSH_REASON_NOT_OWNER = 'not-owner';
+const FLUSH_REASON_READY = 'ready';
 
 const METADATA_FLUSH_LOG_MSG = Object.freeze({
   ROLE_RETRY_FAILED: 'WASM role update retry failed',
@@ -86,7 +101,7 @@ class WasmServiceReplica extends RaftReplicaBase {
       WASM_SERVICE_DEFAULT.WRITE_CONSISTENCY;
 
     this.kvStore = new SessionKVStore(
-      options.dbPath || ':memory:',
+      options.dbPath || SQLITE_MEMORY_PATH,
     );
     this.timerManager = new TimerManager(this);
     this.safetyInterval = new SafetyInterval(
@@ -239,7 +254,7 @@ class WasmServiceReplica extends RaftReplicaBase {
 
   createRoleMutationHelper() {
     return new AuthoritativeRowMutationHelper({
-      tableName: SystemTableName.SERVICES,
+      tableName: SYSTEM_TABLE_NAME.SERVICES,
       buildWhereClause: (_role, context = {}) => {
         const whereClause = {[COLUMN.SERVICE_ID]: this.replicaId};
         const cachedRow = context.cachedRow;
@@ -277,7 +292,7 @@ class WasmServiceReplica extends RaftReplicaBase {
 
   createLeaderNodeMutationHelper() {
     return new AuthoritativeRowMutationHelper({
-      tableName: SystemTableName.SERVICES,
+      tableName: SYSTEM_TABLE_NAME.SERVICES,
       buildWhereClause: (_leaderNodeId, context = {}) => {
         const whereClause = {[COLUMN.SERVICE_ID]: this.replicaId};
         const cachedRow = context.cachedRow;
@@ -306,7 +321,7 @@ class WasmServiceReplica extends RaftReplicaBase {
       prepareFlush: () => ({
         skip: !this.isLeader,
         clearPending: !this.isLeader,
-        reason: !this.isLeader ? 'not-owner' : 'ready',
+        reason: !this.isLeader ? FLUSH_REASON_NOT_OWNER : FLUSH_REASON_READY,
       }),
       isWriteReady: () => this.isServicesLeaderAvailable(),
       retryDelayMs: METADATA_FLUSH_RETRY_DELAY_MS,
@@ -666,7 +681,7 @@ class WasmServiceReplica extends RaftReplicaBase {
   isServicesLeaderAvailable() {
     return isSystemTableWriteReady(
       this.systemTableCache,
-      SystemTableName.SERVICES,
+      SYSTEM_TABLE_NAME.SERVICES,
     );
   }
 

@@ -26,7 +26,7 @@ import {
 } from '../../src/query/budget-limit-error.js';
 import {
   CallbackStageExecutor,
-} from '../../src/query/callback-stage-executor.js';
+} from '../../src/query/callback/callback-stage-executor.js';
 import {
   CancellationToken,
 } from '../../src/query/cancellation-token.js';
@@ -45,13 +45,13 @@ import {
 import {
   STAGE_STATE,
   STAGE_RESULT_FIELD as SF,
-} from '../../src/query/callback-stage-constants.js';
+} from '../../src/query/callback/callback-stage-constants.js';
 import {
   GUARDRAIL_ERROR_MSG as ERR,
 } from '../../src/query/guardrail-constants.js';
 import {
   PRIMITIVE_ERROR_MSG,
-} from '../../src/query/distributed-context-constants.js';
+} from '../../src/query/distributed/distributed-context-constants.js';
 import {
   QB_FIELD,
 } from '../../src/wasm-service/query-budget-constants.js';

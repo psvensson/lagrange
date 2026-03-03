@@ -69,6 +69,7 @@ const LOG_LEVEL_ORDER = Object.freeze({
 const LOG_QUERY_LOG_MSG = Object.freeze({
   INITIALIZED: 'LogQueryService initialized',
   SHUTDOWN: 'LogQueryService shutdown',
+  QUERY_EXECUTION_FAILED: 'LogQueryService query execution failed',
 });
 
 const LOG_QUERY_ERROR_MSG = Object.freeze({

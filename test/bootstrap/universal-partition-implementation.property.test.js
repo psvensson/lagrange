@@ -11,7 +11,7 @@
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {
-  SystemTableName,
+  SYSTEM_TABLE_NAME,
   SYSTEM_TABLE_SCHEMAS,
   INITIAL_PARTITION_IDS,
   INITIAL_REPLICA_IDS,
@@ -84,7 +84,7 @@ const userSchemaArbitrary = fc.record({
 const userTableIdArbitrary = fc.string({minLength: 3, maxLength: 20})
   .filter((s) => /^[a-z_][a-z0-9_]*$/i.test(s))
   .filter((s) => !SQL_RESERVED_KEYWORDS.has(s.toLowerCase()))
-  .filter((s) => !Object.values(SystemTableName).includes(s));
+  .filter((s) => !Object.values(SYSTEM_TABLE_NAME).includes(s));
 
 /**
  * Feature: distributed-database-system
@@ -255,15 +255,15 @@ test('Property 32: No infrastructure distinction between system and user tables'
           try {
             systemPartition.subscribeToCDC(() => {});
             systemCDCSubscribed = true;
-          } catch (_e) {
-            // CDC subscription failed
+          } catch (cdcErr) {
+            console.warn('CDC subscription failed for system', cdcErr);
           }
 
           try {
             userPartition.subscribeToCDC(() => {});
             userCDCSubscribed = true;
-          } catch (_e) {
-            // CDC subscription failed
+          } catch (cdcErr) {
+            console.warn('CDC subscription failed for user', cdcErr);
           }
 
           // Both should support CDC subscription - same infrastructure
