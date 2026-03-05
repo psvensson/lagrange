@@ -12,6 +12,7 @@ import {CONFIG_KEY} from '../config/config-constants.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {NUM, SERVICE_TYPE} from '../constants/index.js';
 import {
+  PARTITION_TRANSITION_STATE,
   PARTITION_SUBSYSTEM,
   SPLIT_MERGE_DEFAULT,
   SPLIT_MERGE_ERROR_MSG,
@@ -66,9 +67,13 @@ class PartitionSplitMergeManager extends EventEmitter {
 
       this.keyRangeManager = options.keyRangeManager || null;
       this.getPartitionMetrics = options.getPartitionMetrics || (() => ({}));
+      this.listPartitions = options.listPartitions || null;
       this.tablePolicyService = options.tablePolicyService || null;
       this.createPartition = options.createPartition || (() => {});
       this.deletePartition = options.deletePartition || (() => {});
+      this.executeSplitCandidate = options.executeSplitCandidate || null;
+      this.executeMergeCandidate = options.executeMergeCandidate || null;
+      this.autoExecuteCandidates = options.autoExecuteCandidates !== false;
       this.storageAdmissionService =
         options.storageAdmissionService || null;
       this.storageAccountingService =
@@ -100,6 +105,7 @@ class PartitionSplitMergeManager extends EventEmitter {
       // State
       this.state = OperationState.IDLE;
       this.evaluationTimer = null;
+      this.allowManagedSplitDuringEvaluation = false;
 
       // Logging
       const loggingService = LoggingService.getInstance();
@@ -117,7 +123,7 @@ class PartitionSplitMergeManager extends EventEmitter {
     if (this.tablePolicyService) {
       return this.tablePolicyService.getPolicyForPartition(partitionId);
     }
-    throw new Error('TablePolicyService is required for split/merge policy lookup');
+    return {};
   }
 
   /**
@@ -134,6 +140,279 @@ class PartitionSplitMergeManager extends EventEmitter {
       return value;
     }
     return fallback;
+  }
+
+  /**
+   * List partitions eligible for evaluation.
+   * Falls back to KeyRangeManager partition IDs for legacy/unit-test paths.
+   * @return {Promise<Array>} Partition descriptors or partition IDs.
+   * @private
+   */
+  async loadEvaluationPartitions() {
+    if (typeof this.listPartitions === 'function') {
+      const partitions = await this.listPartitions();
+      return Array.isArray(partitions) ? partitions : [];
+    }
+    if (!this.keyRangeManager) {
+      return [];
+    }
+    return this.keyRangeManager.getAllPartitions();
+  }
+
+  /**
+   * Normalize a partition identifier from either a string or row object.
+   * @param {string|Object} partition - Partition descriptor.
+   * @return {string|null} Partition ID.
+   * @private
+   */
+  getPartitionId(partition) {
+    if (typeof partition === 'string') {
+      return partition;
+    }
+    if (!partition || typeof partition !== 'object') {
+      return null;
+    }
+    return partition.partition_id || partition.partitionId || null;
+  }
+
+  /**
+   * Resolve table ID for grouping partition rows.
+   * @param {Object} partition - Partition descriptor.
+   * @return {string|null} Table ID.
+   * @private
+   */
+  getPartitionTableId(partition) {
+    if (!partition || typeof partition !== 'object') {
+      return null;
+    }
+    return partition.table_id || partition.tableId || null;
+  }
+
+  /**
+   * Resolve partition sort start key for adjacency ordering.
+   * @param {Object} partition - Partition descriptor.
+   * @return {*} Start key.
+   * @private
+   */
+  getPartitionStartKey(partition) {
+    if (!partition || typeof partition !== 'object') {
+      return null;
+    }
+    return partition.partition_key_start ?? partition.partitionKeyStart ?? null;
+  }
+
+  /**
+   * Resolve partition sort end key for adjacency ordering.
+   * @param {Object} partition - Partition descriptor.
+   * @return {*} End key.
+   * @private
+   */
+  getPartitionEndKey(partition) {
+    if (!partition || typeof partition !== 'object') {
+      return null;
+    }
+    return partition.partition_key_end ?? partition.partitionKeyEnd ?? null;
+  }
+
+  /**
+   * Compare partition key values with NULL representing unbounded edges.
+   * @param {*} left - Left key.
+   * @param {*} right - Right key.
+   * @return {number} Sort order.
+   * @private
+   */
+  comparePartitionKeys(left, right) {
+    if (left === right) {
+      return NUM.ZERO;
+    }
+    if (left === null || left === undefined) {
+      return NUM.NEGATIVE_ONE;
+    }
+    if (right === null || right === undefined) {
+      return NUM.ONE;
+    }
+    if (left < right) {
+      return NUM.NEGATIVE_ONE;
+    }
+    if (left > right) {
+      return NUM.ONE;
+    }
+    return NUM.ZERO;
+  }
+
+  /**
+   * Normalize a key range from either a KeyRange or a plain object.
+   * Treat omitted bounds as unbounded edges.
+   * @param {KeyRange|Object|null} range - Range descriptor.
+   * @return {KeyRange|null} Normalized range.
+   * @private
+   */
+  normalizeKeyRange(range) {
+    if (!range || typeof range !== 'object') {
+      return null;
+    }
+    if (range instanceof KeyRange) {
+      return range.clone();
+    }
+    return new KeyRange(range.start ?? null, range.end ?? null);
+  }
+
+  /**
+   * Sort partition rows for merge adjacency checks.
+   * @param {Array} partitions - Partition descriptors.
+   * @return {Array<Object>} Sorted partition rows.
+   * @private
+   */
+  sortEvaluationPartitions(partitions) {
+    return [...partitions]
+      .filter((partition) => partition && typeof partition === 'object')
+      .sort((left, right) => {
+        const tableOrder = this.comparePartitionKeys(
+          this.getPartitionTableId(left),
+          this.getPartitionTableId(right),
+        );
+        if (tableOrder !== NUM.ZERO) {
+          return tableOrder;
+        }
+        return this.comparePartitionKeys(
+          this.getPartitionStartKey(left),
+          this.getPartitionStartKey(right),
+        );
+      });
+  }
+
+  /**
+   * Load metrics for a partition ID or row object.
+   * @param {string|Object} partition - Partition descriptor.
+   * @return {Promise<Object>} Metrics payload.
+   * @private
+   */
+  async resolvePartitionMetrics(partition) {
+    const partitionId = this.getPartitionId(partition);
+    const rawMetrics = partitionId ?
+      await this.getPartitionMetrics(partitionId, partition) :
+      {};
+    const metrics = rawMetrics && typeof rawMetrics === 'object' ?
+      {...rawMetrics} :
+      {};
+
+    if ((metrics.sizeBytes === undefined || metrics.sizeBytes === null) &&
+        partition &&
+        typeof partition === 'object') {
+      const sizeBytes = Number(
+        partition.size_bytes ?? partition.sizeBytes ?? NUM.ZERO,
+      );
+      metrics.sizeBytes = Number.isFinite(sizeBytes) ? sizeBytes : NUM.ZERO;
+    }
+
+    if (metrics.queriesPerMinute === undefined ||
+        metrics.queriesPerMinute === null) {
+      metrics.queriesPerMinute = NUM.ZERO;
+    }
+
+    return metrics;
+  }
+
+  /**
+   * Execute one split candidate when a runtime owner is provided.
+   * @param {string} partitionId - Partition ID.
+   * @return {Promise<Object|null>} Execution result.
+   * @private
+   */
+  async executeManagedSplitCandidate(partitionId) {
+    if (!partitionId ||
+        !this.autoExecuteCandidates ||
+        typeof this.executeSplitCandidate !== 'function') {
+      return null;
+    }
+    this.allowManagedSplitDuringEvaluation = true;
+    try {
+      return await this.executeSplitCandidate(partitionId);
+    } finally {
+      this.allowManagedSplitDuringEvaluation = false;
+    }
+  }
+
+  /**
+   * Determine how one managed split execution should be classified.
+   * @param {Object|null} execution - Managed split execution result.
+   * @return {string} Outcome bucket: executed, deferred, or error.
+   * @private
+   */
+  classifyManagedSplitExecution(execution) {
+    if (!execution || execution.success === true) {
+      return 'executed';
+    }
+    const state = String(execution.state || '').toLowerCase();
+    if (state === PARTITION_TRANSITION_STATE.BLOCKED ||
+        state === PARTITION_TRANSITION_STATE.DEFERRED) {
+      return 'deferred';
+    }
+    return 'error';
+  }
+
+  /**
+   * Resolve a stable error message for a managed split execution.
+   * @param {Object} execution - Managed split execution result.
+   * @return {string} Error message.
+   * @private
+   */
+  resolveManagedSplitExecutionError(execution) {
+    if (typeof execution?.error === 'string' && execution.error.length > 0) {
+      return execution.error;
+    }
+    return SPLIT_MERGE_ERROR_MSG.MANAGED_SPLIT_EXECUTION_FAILED;
+  }
+
+  /**
+   * Record one managed split execution in the canonical outcome bucket.
+   * @param {Object} results - Evaluation results accumulator.
+   * @param {string} partitionId - Candidate partition ID.
+   * @param {Object|null} execution - Managed split execution result.
+   * @private
+   */
+  recordManagedSplitExecutionOutcome(results, partitionId, execution) {
+    if (!execution) {
+      return;
+    }
+
+    const outcome = this.classifyManagedSplitExecution(execution);
+    if (outcome === 'executed') {
+      results.executedSplits.push(execution);
+      return;
+    }
+
+    if (outcome === 'deferred') {
+      this.logger.warn(SPLIT_MERGE_LOG_MSG.SPLIT_EXECUTION_DEFERRED, {
+        partitionId,
+        state: execution.state || null,
+        workflowId: execution.workflowId || null,
+      });
+      results.splitDeferred.push({
+        partitionId,
+        reason: execution.state || PARTITION_TRANSITION_STATE.DEFERRED,
+        execution,
+      });
+      this.emit(SPLIT_MERGE_EVENT.SPLIT_DEFERRED, {
+        partitionId,
+        reason: execution.state || PARTITION_TRANSITION_STATE.DEFERRED,
+      });
+      return;
+    }
+
+    const error = this.resolveManagedSplitExecutionError(execution);
+    this.logger.error(SPLIT_MERGE_LOG_MSG.SPLIT_EXECUTION_FAILED, {
+      partitionId,
+      error,
+      state: execution.state || null,
+      workflowId: execution.workflowId || null,
+    });
+    results.splitErrors.push({
+      partitionId,
+      error,
+      state: execution.state || null,
+      workflowId: execution.workflowId || null,
+    });
   }
 
   /**
@@ -344,10 +623,16 @@ class PartitionSplitMergeManager extends EventEmitter {
       primaryKeyColumn,
     } = options;
 
-    if (this.state !== OperationState.IDLE) {
+    const allowDuringEvaluation =
+      this.state === OperationState.EVALUATING &&
+      this.allowManagedSplitDuringEvaluation;
+    if (this.state !== OperationState.IDLE && !allowDuringEvaluation) {
       throw new Error(SPLIT_MERGE_ERROR_MSG.managerBusy(this.state));
     }
 
+    const restoreState = allowDuringEvaluation ?
+      OperationState.EVALUATING :
+      OperationState.IDLE;
     this.state = OperationState.SPLITTING;
     this.emit(SPLIT_MERGE_EVENT.SPLIT_STARTED, {partitionId});
 
@@ -367,9 +652,11 @@ class PartitionSplitMergeManager extends EventEmitter {
       );
 
       // Get current key range
-      const currentRange = this.keyRangeManager ?
-        this.keyRangeManager.getRange(partitionId) :
-        partitionService.getKeyRange();
+      const currentRange = this.normalizeKeyRange(
+        this.keyRangeManager ?
+          this.keyRangeManager.getRange(partitionId) :
+          partitionService.getKeyRange(),
+      );
 
       if (!currentRange) {
         throw new Error(SPLIT_MERGE_ERROR_MSG.partitionRangeMissing(partitionId));
@@ -413,25 +700,27 @@ class PartitionSplitMergeManager extends EventEmitter {
         timestamp: Date.now(),
       };
 
-      this.logger.info(SPLIT_MERGE_LOG_MSG.SPLIT_COMPLETED, {
+      this.logger.info(SPLIT_MERGE_LOG_MSG.SPLIT_PLAN_COMPLETED, {
         partitionId,
         leftPartitionId,
         rightPartitionId,
         medianKey,
+        phase: 'split_plan',
       });
 
       this.emit(SPLIT_MERGE_EVENT.SPLIT_COMPLETED, result);
       return result;
     } catch (error) {
-      this.logger.error(SPLIT_MERGE_LOG_MSG.SPLIT_FAILED, {
+      this.logger.error(SPLIT_MERGE_LOG_MSG.SPLIT_PLAN_FAILED, {
         partitionId,
         error: error.message,
+        phase: 'split_plan',
       });
 
       this.emit(SPLIT_MERGE_EVENT.SPLIT_FAILED, {partitionId, error: error.message});
       throw error;
     } finally {
-      this.state = OperationState.IDLE;
+      this.state = restoreState;
     }
   }
 
@@ -695,21 +984,25 @@ class PartitionSplitMergeManager extends EventEmitter {
           evaluated: true,
           partitionsEvaluated: NUM.ZERO,
           splitCandidates: [],
+          executedSplits: [],
+          splitErrors: [],
           splitDeferred: [],
           mergeCandidates: [],
         };
 
-        if (!this.keyRangeManager) {
+        const partitions = await this.loadEvaluationPartitions();
+        if (partitions.length === NUM.ZERO) {
           return results;
         }
-
-        const partitions = this.keyRangeManager.getAllPartitions();
         results.partitionsEvaluated = partitions.length;
         const targetNodeId = preflightOptions.targetNodeId || null;
 
-        for (const partitionId of partitions) {
-          const metrics =
-            await this.getPartitionMetrics(partitionId);
+        for (const partition of partitions) {
+          const partitionId = this.getPartitionId(partition);
+          if (!partitionId) {
+            continue;
+          }
+          const metrics = await this.resolvePartitionMetrics(partition);
           const policy = await this.getTablePolicy(partitionId);
 
           if (!this.evaluateSplitCriteria(
@@ -752,24 +1045,64 @@ class PartitionSplitMergeManager extends EventEmitter {
           }
         }
 
+        for (const partitionId of results.splitCandidates) {
+          try {
+            const execution = await this.executeManagedSplitCandidate(partitionId);
+            this.recordManagedSplitExecutionOutcome(
+              results,
+              partitionId,
+              execution,
+            );
+          } catch (error) {
+            this.logger.error(SPLIT_MERGE_LOG_MSG.SPLIT_EXECUTION_FAILED, {
+              partitionId,
+              error: error.message,
+              phase: 'workflow_execution',
+            });
+            results.splitErrors.push({
+              partitionId,
+              error: error.message,
+            });
+          }
+        }
+
         // Merge eligibility is never blocked by capacity pressure
         // (Req 7.3). Merges reduce storage usage and remain
         // eligible even under hard/exhausted pressure.
-        const sortedPartitions =
-          this.keyRangeManager.getSortedPartitions();
+        const sortedPartitions = this.keyRangeManager ?
+          this.keyRangeManager.getSortedPartitions() :
+          this.sortEvaluationPartitions(partitions);
         for (
           let i = NUM.ZERO;
           i < sortedPartitions.length - NUM.ONE;
           i++
         ) {
-          const leftId = sortedPartitions[i].partitionId;
-          const rightId =
-            sortedPartitions[i + NUM.ONE].partitionId;
+          const leftPartition = sortedPartitions[i];
+          const rightPartition = sortedPartitions[i + NUM.ONE];
+          const leftId = this.keyRangeManager ?
+            leftPartition.partitionId :
+            this.getPartitionId(leftPartition);
+          const rightId = this.keyRangeManager ?
+            rightPartition.partitionId :
+            this.getPartitionId(rightPartition);
+          if (!leftId || !rightId) {
+            continue;
+          }
+          if (!this.keyRangeManager &&
+              this.getPartitionTableId(leftPartition) !==
+                this.getPartitionTableId(rightPartition)) {
+            continue;
+          }
+          if (!this.keyRangeManager &&
+              this.comparePartitionKeys(
+                this.getPartitionEndKey(leftPartition),
+                this.getPartitionStartKey(rightPartition),
+              ) !== NUM.ZERO) {
+            continue;
+          }
 
-          const leftMetrics =
-            await this.getPartitionMetrics(leftId);
-          const rightMetrics =
-            await this.getPartitionMetrics(rightId);
+          const leftMetrics = await this.resolvePartitionMetrics(leftPartition);
+          const rightMetrics = await this.resolvePartitionMetrics(rightPartition);
           const policy = await this.getTablePolicy(leftId);
 
           if (this.evaluateMergeCriteria(

@@ -6,7 +6,6 @@ import {
   COLUMN,
   SERVICE_TYPE,
   SERVICE_STATUS,
-  STATE,
   TABLES,
 } from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
@@ -15,6 +14,7 @@ import {
   LATENCY_TOPOLOGY_MESSAGE_TYPE,
 } from '../../src/topology/latency-topology-constants.js';
 import {
+  CDC_GROUP_PUBLICATION_MODE,
   CDC_GROUP_PROPAGATION_REASON,
   CDC_GROUP_PROPAGATION_STRATEGY,
   CDC_GROUP_PROPAGATION_STATUS,
@@ -212,6 +212,57 @@ test('CDCGroupPropagationService uses safe mode when configured', async (t) => {
   t.end();
 });
 
+test('CDCGroupPropagationService reports repair_only publication mode when ' +
+  'safe mode is configured', async (t) => {
+  setupConfig(LATENCY_PROPAGATION_MODE.SAFE);
+  const cache = createTopologyCache({
+    nodes: [{
+      [COLUMN.NODE_ID]: 'node-a',
+      [COLUMN.LATENCY_GROUP_ID]: 'g-1',
+    }],
+    groups: [
+      createGroupRow('g-1', 'node-a'),
+      createGroupRow('g-2', 'node-b'),
+    ],
+    services: [
+      createMessageGroupServiceRow(
+        'mg-node-b',
+        'node-b',
+        'node-b/message-group/mg-node-b',
+        RAFT_ROLE.LEADER,
+        'g-2',
+      ),
+    ],
+  });
+  const service = new CDCGroupPropagationService({
+    nodeId: 'node-a',
+    systemTableCache: cache,
+    messageRouter: createMessageRouter([{acknowledged: true}]),
+    latencyTreeService: {
+      getRoutingOrder: () => ['g-1', 'g-2'],
+    },
+    nowFn: () => 1500,
+  });
+  service.initialize();
+  service.start();
+
+  const diagnostics = service.getPublicationModeDiagnostics();
+
+  assert.equal(
+    diagnostics.currentMode,
+    CDC_GROUP_PUBLICATION_MODE.REPAIR_ONLY,
+  );
+  assert.equal(
+    diagnostics.reasonCode,
+    CDC_GROUP_PROPAGATION_REASON.CONFIG_SAFE_MODE,
+  );
+  assert.ok(diagnostics.enteredAt, 'repair_only mode should expose enteredAt');
+
+  service.stop();
+  teardownConfig();
+  t.end();
+});
+
 test('CDCGroupPropagationService fans out by group coordinators in grouped mode',
   async (t) => {
     setupConfig(LATENCY_PROPAGATION_MODE.GROUPED);
@@ -374,12 +425,14 @@ test('CDCGroupPropagationService reports grouped delivery failures', async (t) =
         'node-b',
         'node-b/message-group/mg-node-b',
         RAFT_ROLE.LEADER,
+        'g-2',
       ),
       createMessageGroupServiceRow(
         'mg-node-c',
         'node-c',
         'node-c/message-group/mg-node-c',
         RAFT_ROLE.LEADER,
+        'g-3',
       ),
     ],
   });
@@ -387,6 +440,7 @@ test('CDCGroupPropagationService reports grouped delivery failures', async (t) =
   const router = createMessageRouter([
     {acknowledged: false, error: 'timeout'},
     {acknowledged: true},
+    {acknowledged: false, error: 'timeout'},
   ]);
   const tree = {
     getRoutingOrder: () => ['g-1', 'g-2', 'g-3'],
@@ -417,12 +471,214 @@ test('CDCGroupPropagationService reports grouped delivery failures', async (t) =
   assert.equal(result.success, false);
   assert.equal(result.deliveryFailures.length, 1);
   assert.equal(result.deliveryFailures[0].targetGroupId, 'g-2');
+  assert.equal(
+    result.fallbackReason,
+    CDC_GROUP_PROPAGATION_REASON.GROUPED_DELIVERY_FAILURE,
+  );
+  assert.equal(router.calls.length, 3, 'safe fallback should retry the failed group directly');
   assert.equal(service.getStats().groupedDeliveryFailureCount, 1);
+  assert.equal(service.getStats().fallbackCount, 1);
 
   service.stop();
   teardownConfig();
   t.end();
 });
+
+test('CDCGroupPropagationService tracks publication mode transitions ' +
+  'between grouped and conservative fanout', async (t) => {
+  setupConfig(LATENCY_PROPAGATION_MODE.GROUPED);
+  const cache = createTopologyCache({
+    nodes: [{
+      [COLUMN.NODE_ID]: 'node-a',
+      [COLUMN.LATENCY_GROUP_ID]: 'g-1',
+    }],
+    groups: [
+      createGroupRow('g-1', 'node-a'),
+      createGroupRow('g-2', 'node-b'),
+      createGroupRow('g-3', 'node-c'),
+    ],
+    services: [
+      createMessageGroupServiceRow(
+        'mg-node-b',
+        'node-b',
+        'node-b/message-group/mg-node-b',
+        RAFT_ROLE.LEADER,
+        'g-2',
+      ),
+      createMessageGroupServiceRow(
+        'mg-node-c',
+        'node-c',
+        'node-c/message-group/mg-node-c',
+        RAFT_ROLE.LEADER,
+        'g-3',
+      ),
+    ],
+  });
+  const source = createSourceMessageGroupService();
+  let nowMs = 2000;
+  const service = new CDCGroupPropagationService({
+    nodeId: 'node-a',
+    systemTableCache: cache,
+    messageRouter: createMessageRouter([
+      {acknowledged: false, error: 'timeout'},
+      {acknowledged: true},
+      {acknowledged: true},
+      {acknowledged: true},
+      {acknowledged: true},
+    ]),
+    latencyTreeService: {
+      getRoutingOrder: () => ['g-1', 'g-2', 'g-3'],
+    },
+    nowFn: () => nowMs,
+    deliveryRetryMaxAttempts: 1,
+  });
+  service.initialize();
+  service.start();
+
+  assert.equal(
+    service.getPublicationModeDiagnostics().currentMode,
+    CDC_GROUP_PUBLICATION_MODE.GROUPED,
+  );
+
+  await service.propagateCDCEvent({
+    tableName: TABLES.NODES,
+    operation: 'UPDATE',
+    data: {[COLUMN.NODE_ID]: 'node-degraded'},
+    sourceMessageGroupService: source,
+  });
+  const degradedDiagnostics = service.getPublicationModeDiagnostics();
+  const degradedTransition = degradedDiagnostics.recentTransitions[
+    degradedDiagnostics.recentTransitions.length - 1
+  ];
+  assert.equal(
+    degradedDiagnostics.currentMode,
+    CDC_GROUP_PUBLICATION_MODE.CONSERVATIVE_FANOUT,
+  );
+  assert.equal(
+    degradedDiagnostics.reasonCode,
+    CDC_GROUP_PROPAGATION_REASON.GROUPED_DELIVERY_FAILURE,
+  );
+  assert.equal(
+    degradedTransition.from,
+    CDC_GROUP_PUBLICATION_MODE.GROUPED,
+  );
+  assert.equal(
+    degradedTransition.to,
+    CDC_GROUP_PUBLICATION_MODE.CONSERVATIVE_FANOUT,
+  );
+  assert.equal(
+    degradedTransition.reasonCode,
+    CDC_GROUP_PROPAGATION_REASON.GROUPED_DELIVERY_FAILURE,
+  );
+
+  nowMs = 3000;
+  await service.propagateCDCEvent({
+    tableName: TABLES.NODES,
+    operation: 'UPDATE',
+    data: {[COLUMN.NODE_ID]: 'node-recovered'},
+    sourceMessageGroupService: source,
+  });
+  const recoveredDiagnostics = service.getPublicationModeDiagnostics();
+  const lastTransition = recoveredDiagnostics.recentTransitions[
+    recoveredDiagnostics.recentTransitions.length - 1
+  ];
+  assert.equal(
+    recoveredDiagnostics.currentMode,
+    CDC_GROUP_PUBLICATION_MODE.GROUPED,
+  );
+  assert.equal(
+    lastTransition.from,
+    CDC_GROUP_PUBLICATION_MODE.CONSERVATIVE_FANOUT,
+  );
+  assert.equal(lastTransition.to, CDC_GROUP_PUBLICATION_MODE.GROUPED);
+  assert.equal(
+    lastTransition.reasonCode,
+    CDC_GROUP_PROPAGATION_REASON.GROUPED_DELIVERY_RECOVERED,
+  );
+  assert.equal(recoveredDiagnostics.enteredAt, '1970-01-01T00:00:03.000Z');
+
+  service.stop();
+  teardownConfig();
+  t.end();
+});
+
+test('CDCGroupPropagationService recovers grouped delivery failures via safe fallback',
+  async (t) => {
+    setupConfig(LATENCY_PROPAGATION_MODE.GROUPED);
+    const cache = createTopologyCache({
+      nodes: [{
+        [COLUMN.NODE_ID]: 'node-a',
+        [COLUMN.LATENCY_GROUP_ID]: 'g-1',
+      }],
+      groups: [
+        createGroupRow('g-1', 'node-a'),
+        createGroupRow('g-2', 'node-b'),
+        createGroupRow('g-3', 'node-c'),
+      ],
+      services: [
+        createMessageGroupServiceRow(
+          'mg-node-b',
+          'node-b',
+          'node-b/message-group/mg-node-b',
+          RAFT_ROLE.LEADER,
+          'g-2',
+        ),
+        createMessageGroupServiceRow(
+          'mg-node-c',
+          'node-c',
+          'node-c/message-group/mg-node-c',
+          RAFT_ROLE.LEADER,
+          'g-3',
+        ),
+      ],
+    });
+    const source = createSourceMessageGroupService();
+    source.groupId = 'g-1';
+    const router = createMessageRouter([
+      {acknowledged: false, error: 'timeout'},
+      {acknowledged: true},
+      {acknowledged: true},
+    ]);
+    const tree = {
+      getRoutingOrder: () => ['g-1', 'g-2', 'g-3'],
+    };
+    const service = new CDCGroupPropagationService({
+      nodeId: 'node-a',
+      systemTableCache: cache,
+      messageRouter: router,
+      latencyTreeService: tree,
+      nowFn: () => 4050,
+      deliveryRetryMaxAttempts: 1,
+    });
+    service.initialize();
+    service.start();
+
+    const result = await service.propagateCDCEvent({
+      tableName: TABLES.PARTITIONS,
+      operation: 'UPDATE',
+      data: {[COLUMN.PARTITION_ID]: 'p-1'},
+      sourceMessageGroupService: source,
+    });
+
+    assert.equal(result.mode, CDC_GROUP_PROPAGATION_STATUS.GROUPED);
+    assert.equal(result.success, true);
+    assert.equal(result.deliveryFailures.length, 0);
+    assert.equal(
+      result.fallbackReason,
+      CDC_GROUP_PROPAGATION_REASON.GROUPED_DELIVERY_FAILURE,
+    );
+    assert.equal(
+      result.fallbackStrategy,
+      CDC_GROUP_PROPAGATION_STRATEGY.DIRECT_FANOUT,
+    );
+    assert.equal(router.calls.length, 3, 'safe fallback should repair the failed group');
+    assert.equal(service.getStats().groupedDeliveryFailureCount, 1);
+    assert.equal(service.getStats().fallbackCount, 1);
+
+    service.stop();
+    teardownConfig();
+    t.end();
+  });
 
 test('CDCGroupPropagationService safe fallback still fans out to active group leaders',
   async (t) => {
@@ -518,14 +774,14 @@ test('CDCGroupPropagationService treats thrown delivery errors as failures witho
     const tree = {
       getRoutingOrder: () => ['g-1', 'g-2'],
     };
-  const service = new CDCGroupPropagationService({
-    nodeId: 'node-a',
-    systemTableCache: cache,
-    messageRouter: router,
-    latencyTreeService: tree,
-    nowFn: () => 6000,
-    deliveryRetryMaxAttempts: 1,
-  });
+    const service = new CDCGroupPropagationService({
+      nodeId: 'node-a',
+      systemTableCache: cache,
+      messageRouter: router,
+      latencyTreeService: tree,
+      nowFn: () => 6000,
+      deliveryRetryMaxAttempts: 1,
+    });
     service.initialize();
     service.start();
 

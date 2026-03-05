@@ -116,12 +116,15 @@ class SeedMessageGroupsPhase {
     const d = this.delegates;
     const logger = d.getLogger();
     const definition = context?.definition || {};
+    const directOptions = context?.replicaOptions || null;
     const serviceId =
+      directOptions?.replicaId ||
       definition[SERVICE_DESCRIPTOR_FIELD.SERVICE_ID];
-    const options = d.resolveBootstrapReplicaOptions(
-      serviceId,
-      UNIFIED_SERVICE_TYPE.MESSAGE_GROUP,
-    );
+    const options = directOptions ||
+      d.resolveBootstrapReplicaOptions(
+        serviceId,
+        UNIFIED_SERVICE_TYPE.MESSAGE_GROUP,
+      );
 
     if (d.getMessageGroupServices().has(options.replicaId)) {
       return {status: SERVICE_LIFECYCLE_STATE.CREATED};
@@ -175,13 +178,16 @@ class SeedMessageGroupsPhase {
    */
   async startBootstrapMessageGroupReplica(replicaHandle, _context) {
     const d = this.delegates;
+    const directOptions = _context?.replicaOptions || null;
     const serviceId =
+      directOptions?.replicaId ||
       replicaHandle[SERVICE_DESCRIPTOR_FIELD.SERVICE_ID] ||
       replicaHandle[SERVICE_DESCRIPTOR_FIELD.REPLICA_ID];
-    const options = d.resolveBootstrapReplicaOptions(
-      serviceId,
-      UNIFIED_SERVICE_TYPE.MESSAGE_GROUP,
-    );
+    const options = directOptions ||
+      d.resolveBootstrapReplicaOptions(
+        serviceId,
+        UNIFIED_SERVICE_TYPE.MESSAGE_GROUP,
+      );
     const messageGroup =
       d.getMessageGroupServices().get(options.replicaId);
 
@@ -208,13 +214,16 @@ class SeedMessageGroupsPhase {
    */
   async stopBootstrapMessageGroupReplica(replicaHandle, _context) {
     const d = this.delegates;
+    const directOptions = _context?.replicaOptions || null;
     const serviceId =
+      directOptions?.replicaId ||
       replicaHandle[SERVICE_DESCRIPTOR_FIELD.SERVICE_ID] ||
       replicaHandle[SERVICE_DESCRIPTOR_FIELD.REPLICA_ID];
-    const options = d.resolveBootstrapReplicaOptions(
-      serviceId,
-      UNIFIED_SERVICE_TYPE.MESSAGE_GROUP,
-    );
+    const options = directOptions ||
+      d.resolveBootstrapReplicaOptions(
+        serviceId,
+        UNIFIED_SERVICE_TYPE.MESSAGE_GROUP,
+      );
     const messageGroup =
       d.getMessageGroupServices().get(options.replicaId);
     if (!messageGroup) {

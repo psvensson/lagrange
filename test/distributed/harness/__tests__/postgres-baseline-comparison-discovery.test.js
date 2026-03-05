@@ -1229,6 +1229,218 @@ describe('postgres-baseline-comparison scenario', () => {
       );
     });
 
+  it('extends strict discovery timeout to cover strict pre-load readiness budget',
+    async () => {
+      const loadCalls = [];
+      let timingController = null;
+      const requiredSchemaVersion = '1740589945123:7:seed-1';
+      const provider = {
+        createContainer: async (_options) => ({
+          containerId: 'benchmark-postgres-1',
+          ip: '172.18.0.80',
+          name: 'benchmark-postgres-1',
+        }),
+        execInContainer: async (_containerId, cmd) => {
+          const command = String(cmd[2] || '');
+          if (command.includes('pg_isready')) {
+            return {exitCode: 0, stdout: 'accepting connections', stderr: ''};
+          }
+          if (command.includes('pg_stat_replication')) {
+            return {exitCode: 0, stdout: '0\n', stderr: ''};
+          }
+          return {exitCode: 0, stdout: '', stderr: ''};
+        },
+        stopContainer: async () => {},
+        removeContainer: async () => {},
+      };
+
+      function createNode(nodeId, role, discoveryNodeIds) {
+        return {
+          id: nodeId,
+          role,
+          discoveryNodeIds,
+          query: async (sql) => {
+            const statement = String(sql);
+            if (statement === 'SELECT 1') {
+              return {rows: [{value: 1}]};
+            }
+            if (statement === 'SELECT count(*) FROM benchmark_events WHERE 1 = 0') {
+              return {rows: [{count: 0}]};
+            }
+            if (statement.includes('FROM tables')) {
+              return {
+                rows: [{
+                  table_id: 'tbl-benchmark',
+                  schema_version: requiredSchemaVersion,
+                  updated_at: 1740589945123,
+                }],
+              };
+            }
+            if (statement.startsWith('UPDATE partitions SET table_name')) {
+              return {rows: [], changes: 1};
+            }
+            if (statement.includes('FROM partitions')) {
+              return {rows: [{partition_id: 'p1'}]};
+            }
+            if (statement.includes('FROM replica_operations') &&
+              statement.includes('status NOT IN')) {
+              return {rows: []};
+            }
+            return {rows: []};
+          },
+          queryWithTimeout: async function(sql, params = [], _options = {}) {
+            const statement = String(sql);
+            if (statement === NODE_CLIENT_CONTROL_SNAPSHOT_SQL) {
+              return {
+                rows: [buildControlSnapshotPayload(this.id)],
+              };
+            }
+            if (statement === NODE_CLIENT_SERVICE_DISCOVERY_SQL ||
+                statement.startsWith(SERVICE_DISCOVERY_SQL_PREFIX)) {
+              if (timingController && timingController.now() < 7) {
+                return {
+                  rows: [{
+                    schemaVersion: NODE_CLIENT_SERVICE_DISCOVERY_SCHEMA_VERSION,
+                    nodeId: this.id,
+                    capturedAt: Date.now(),
+                    serviceCount: 0,
+                    replicaCount: 0,
+                    services: [],
+                  }],
+                };
+              }
+              const snapshot = buildServiceDiscoverySnapshot(this);
+              const services = Array.isArray(snapshot.services) ?
+                snapshot.services :
+                [];
+              for (const service of services) {
+                const replicas = Array.isArray(service?.replicas) ?
+                  service.replicas :
+                  [];
+                for (const replica of replicas) {
+                  replica.readiness = {
+                    ...(replica?.readiness || {}),
+                    benchmarkReady: true,
+                    topologyReady: true,
+                    appliedSchemaVersion: requiredSchemaVersion,
+                  };
+                }
+              }
+              return {
+                rows: [snapshot],
+              };
+            }
+            return this.query(statement, params);
+          },
+          getReachabilityDiagnostics: async () => ({
+            nodeId,
+            reachable: true,
+            adminReady: true,
+          }),
+        };
+      }
+
+      const seedNode = createNode('seed-1', 'seed', ['seed-1', 'joiner-1']);
+      const joinerNode = createNode('joiner-1', 'joiner', ['seed-1', 'joiner-1']);
+      const cluster = {
+        _config: {
+          benchmark: {
+            baselineImage: 'postgres:16',
+            durationSeconds: 5,
+            clients: 2,
+            jobs: 1,
+            loadOpsPerSec: 40,
+            loadDuration: '5s',
+            loadMaxInFlight: 64,
+            tableName: 'benchmark_events',
+            replicationFactor: 1,
+            syncReplicaAcks: 0,
+            strictDiscovery: true,
+            strictPreloadReadiness: true,
+            requiredSutLoadNodeCount: 2,
+            readyTimeoutMs: 5,
+            readyPollIntervalMs: 5,
+            quiescentTimeoutMs: 40,
+            quiescentPollIntervalMs: 5,
+            quiescentStableWindowMs: 0,
+          },
+          convergence: {
+            settleTimeoutMs: 1000,
+            quietWindowMs: 100,
+            targetVoterCount: 3,
+          },
+          resourceLimits: {
+            memory: '1g',
+            cpus: '1.0',
+          },
+          timeouts: {
+            nodeStartup: 1000,
+          },
+        },
+        _scenarioOverrides: {
+          postgresBaselineComparison: {
+            createPostgresPool: () => ({
+              query: async () => ({rows: []}),
+              end: async () => {},
+            }),
+            createLoadGenerator: (nodes) => {
+              loadCalls.push(nodes.map((node) => node.id));
+              const isBaselineLoad =
+                String(nodes?.[0]?.id || '').startsWith(
+                  'postgres-baseline-load-node-',
+                );
+              return {
+                start: () => ({
+                  waitComplete: async () => (
+                    isBaselineLoad ?
+                      {
+                        total: 100,
+                        success: 100,
+                        failed: 0,
+                        errors: 0,
+                        opsPerSec: 100,
+                        latency: {avg: 1, p50: 1, p95: 2, p99: 2},
+                      } :
+                      {
+                        total: 100,
+                        success: 100,
+                        failed: 0,
+                        errors: 0,
+                        opsPerSec: 50,
+                        latency: {avg: 4, p50: 3, p95: 6, p99: 7},
+                      }
+                  ),
+                }),
+              };
+            },
+          },
+        },
+        _providers: [provider],
+        _hostAssignment: [0],
+        _networkName: 'test-net',
+        getNodes: () => asNodeHandles([seedNode, joinerNode]),
+        waitForConvergence: async () => ({settledAfterMs: 1}),
+        assertConsistency: async () => {},
+      };
+
+      timingController = installVirtualScenarioTiming(cluster);
+      const result = await scenarioRun(cluster);
+      assert.equal(
+        result.details.benchmark.sutLoadNodeCount,
+        2,
+        'strict discovery should keep polling until all required nodes are discovered',
+      );
+      assert.equal(
+        loadCalls.length,
+        2,
+        'both sut and baseline loads should run after delayed strict discovery recovers',
+      );
+      assert.ok(
+        timingController.getSleepCalls().some((durationMs) => durationMs > 0),
+        'strict discovery should consume virtual poll time while waiting for readiness',
+      );
+    });
+
   it('discovers replicas when discovery readiness metadata is absent',
     async () => {
       const loadCalls = [];
@@ -3221,7 +3433,7 @@ describe('postgres-baseline-comparison scenario', () => {
           );
           assert.match(
             message,
-            /probes=.*probe timeout/i,
+            /probes=.*(probe timeout|circuit breaker is open)/i,
             'failure should include per-node readiness probe diagnostics',
           );
           return true;

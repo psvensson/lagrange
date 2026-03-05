@@ -1,0 +1,150 @@
+import {AddressManager} from '../address/address-manager.js';
+import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
+import {
+  ENTITY_TYPE,
+  SERVICE_STATUS,
+  SERVICE_TYPE,
+  TYPEOF,
+} from '../constants/index.js';
+import {RAFT_ROLE} from '../raft/constants.js';
+
+const MESSAGE_GROUP_SERVICE_ROW_OWNER_ERROR = Object.freeze({
+  GROUP_ID_REQUIRED: 'MessageGroupServiceRowOwner requires groupId',
+  NODE_ID_REQUIRED: 'MessageGroupServiceRowOwner requires nodeId',
+  REPLICA_ID_REQUIRED: 'MessageGroupServiceRowOwner requires replicaId',
+  UPSERT_REQUIRED:
+    'MessageGroupServiceRowOwner requires upsertSystemTableRow for registration',
+  DELETE_REQUIRED:
+    'MessageGroupServiceRowOwner requires deleteSystemTableRow for removal',
+});
+
+function assertRequiredString(value, errorMessage) {
+  if (typeof value !== TYPEOF.STRING || value.length === 0) {
+    throw new Error(errorMessage);
+  }
+}
+
+function resolveMessageGroupRaftRole(service) {
+  const isLeader = service?.isLeader === true ||
+    (typeof service?.isLeaderReplica === TYPEOF.FUNCTION &&
+      service.isLeaderReplica());
+  if (isLeader) {
+    return RAFT_ROLE.LEADER;
+  }
+
+  if (typeof service?.getRole === TYPEOF.FUNCTION) {
+    return service.getRole() || RAFT_ROLE.FOLLOWER;
+  }
+
+  return service?.role || RAFT_ROLE.FOLLOWER;
+}
+
+class MessageGroupServiceRowOwner {
+  constructor(options = {}) {
+    this.systemTableWriter = options.systemTableWriter || null;
+    this.now = typeof options.now === TYPEOF.FUNCTION ?
+      options.now :
+      () => Date.now();
+  }
+
+  static buildServiceRow(options = {}) {
+    const {
+      groupId,
+      replicaId,
+      nodeId,
+      service = null,
+      timestamp = Date.now(),
+      status = SERVICE_STATUS.ACTIVE,
+      extraFields = null,
+    } = options;
+
+    assertRequiredString(
+      groupId,
+      MESSAGE_GROUP_SERVICE_ROW_OWNER_ERROR.GROUP_ID_REQUIRED,
+    );
+    assertRequiredString(
+      replicaId,
+      MESSAGE_GROUP_SERVICE_ROW_OWNER_ERROR.REPLICA_ID_REQUIRED,
+    );
+    assertRequiredString(
+      nodeId,
+      MESSAGE_GROUP_SERVICE_ROW_OWNER_ERROR.NODE_ID_REQUIRED,
+    );
+
+    const address = AddressManager.getInstance().format(
+      nodeId,
+      ENTITY_TYPE.MESSAGE_GROUP,
+      replicaId,
+    );
+
+    return {
+      service_id: replicaId,
+      service_type: SERVICE_TYPE.MESSAGE_GROUP,
+      node_id: nodeId,
+      partition_id: null,
+      group_id: groupId,
+      replica_id: replicaId,
+      raft_role: resolveMessageGroupRaftRole(service),
+      status,
+      address,
+      created_at: timestamp,
+      updated_at: timestamp,
+      ...(extraFields || {}),
+    };
+  }
+
+  async registerReplica(options = {}) {
+    if (
+      !this.systemTableWriter ||
+      typeof this.systemTableWriter.upsertSystemTableRow !== TYPEOF.FUNCTION
+    ) {
+      throw new Error(
+        MESSAGE_GROUP_SERVICE_ROW_OWNER_ERROR.UPSERT_REQUIRED,
+      );
+    }
+
+    const row = MessageGroupServiceRowOwner.buildServiceRow({
+      ...options,
+      timestamp: options.timestamp ?? this.now(),
+    });
+
+    await this.systemTableWriter.upsertSystemTableRow(
+      SYSTEM_TABLE_NAME.SERVICES,
+      row,
+    );
+
+    return row;
+  }
+
+  async removeReplica(options = {}) {
+    if (
+      !this.systemTableWriter ||
+      typeof this.systemTableWriter.deleteSystemTableRow !== TYPEOF.FUNCTION
+    ) {
+      throw new Error(
+        MESSAGE_GROUP_SERVICE_ROW_OWNER_ERROR.DELETE_REQUIRED,
+      );
+    }
+
+    const {replicaId, nodeId} = options;
+    assertRequiredString(
+      replicaId,
+      MESSAGE_GROUP_SERVICE_ROW_OWNER_ERROR.REPLICA_ID_REQUIRED,
+    );
+
+    const whereClause = {
+      service_id: replicaId,
+      service_type: SERVICE_TYPE.MESSAGE_GROUP,
+    };
+    if (typeof nodeId === TYPEOF.STRING && nodeId.length > 0) {
+      whereClause.node_id = nodeId;
+    }
+
+    await this.systemTableWriter.deleteSystemTableRow(
+      SYSTEM_TABLE_NAME.SERVICES,
+      whereClause,
+    );
+  }
+}
+
+export {MessageGroupServiceRowOwner};

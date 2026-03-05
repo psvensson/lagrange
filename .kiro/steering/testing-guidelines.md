@@ -27,6 +27,53 @@ This ensures:
 - Regressions are prevented by the new test
 - The test suite grows to cover real-world failure scenarios
 
+## Reuse-First Fix Strategy
+
+**Before writing new code to fix a bug, search for existing systems or
+abstractions that already solve the problem or can be extended to solve it.**
+
+This applies to both the fix itself and the test that reproduces it.
+
+### When fixing a bug
+
+1. **Search for existing owners** - Does a component already own this behavior?
+   Extend or correct it rather than adding a parallel path.
+2. **Search for existing abstractions** - Is there a helper, base class, shared
+   utility, or state machine that already handles the general case? Wire into
+   it instead of building a one-off solution.
+3. **Combine before creating** - If two existing pieces almost solve the
+   problem, combine them. Do not create a third piece that reimplements both.
+4. **Pause and zoom out** - Periodically step back and ask whether the bug is a
+   symptom of a higher-level architectural issue. If a broader fix at a higher
+   layer would prevent an entire class of bugs, prefer that over a narrow
+   patch at the symptom site. Flag the broader opportunity even if the
+   immediate fix is scoped smaller.
+
+### When writing the reproduction test
+
+1. **Reuse existing test fixtures and helpers** - Check the test suite for
+   setup utilities, factory functions, or shared harnesses that already
+   construct the scenario you need.
+2. **Extend existing test files** - If a test file already covers the component
+   under test, add the new case there rather than creating a new file.
+3. **Leverage existing assertion patterns** - Follow the conventions already
+   established in nearby tests for asserting ownership, lifecycle, and state.
+
+### Periodic architecture check
+
+During any multi-step fix or feature, pause at least once to consider:
+
+- Is the current problem a repeated pattern? If so, is there a shared
+  abstraction that should exist but does not?
+- Would a small refactor at a higher level eliminate the need for the current
+  fix entirely?
+- Are multiple recent bugs clustering around the same boundary or component?
+  That may indicate a design-level issue worth addressing instead of patching
+  each symptom individually.
+
+Document these observations in commit messages or PR descriptions so the team
+can evaluate broader changes.
+
 ## Owner-Path Regression Policy
 
 When a bug involves component ownership, lifecycle persistence, or system-table
@@ -49,9 +96,28 @@ Required coverage:
 These tests should be small and targeted. The goal is to prove architecture
 conformance, not just end-state behavior.
 
+## Deterministic Control-Loop Regression Policy
+
+When a change touches control-plane progression (dispatch, rebalance, split,
+admission progression, operation timeout handling), tests must prove
+deterministic owner-path behavior rather than only eventual convergence.
+
+Required coverage:
+
+1. **Single in-flight reconcile** - Add a regression proving only one
+   progression execution can run for a given owner key at a time.
+2. **Enqueue-only triggers** - Add coverage proving event handlers enqueue work
+   and do not execute long-running progression inline.
+3. **No dual mutation paths** - If polling/recovery exists, prove it feeds the
+   same owner queue instead of mutating state via a second direct path.
+4. **Monotonic workflow transitions** - Add a regression proving no backward
+   step transitions except explicit terminal recovery transitions.
+5. **Stale-fence rejection** - Add a regression proving stale owner claims or
+   stale events cannot overwrite newer transitions.
+
 ## Test Duration Hard Limit
 
-**Any uinit test taking longer than 2 seconds is a HARD ERROR that requires immediate analysis. INtegration tests can take up to 30 seconds**
+**Any unit test taking longer than 2 seconds is a HARD ERROR that requires immediate analysis. Integration tests can take up to 30 seconds**
 
 This is a powerful multi-core machine running in-memory tests. There is no valid reason for tests to take more than a couple of seconds. If a test exceeds this limit:
 
@@ -92,6 +158,21 @@ try {
 }
 ```
 
+## Timeout Budget and Classification Policy
+
+Timeouts in control-plane logic are hard correctness bugs and must be tested as
+typed outcomes, not generic strings.
+
+Required behavior:
+
+1. Add tests that assert remaining-budget derivation for nested operations
+   rather than fresh full-budget resets.
+2. Add tests that assert timeout classification payloads, not only error text.
+3. Treat exact-boundary timeout clusters (for example exactly 4s/6s/30s/60s)
+   as hard failures requiring deterministic regression coverage before closure.
+4. Include timeout class and budget context in integration or harness failure
+   artifacts used for diagnosis.
+
 ## Property-Based Test Iteration Limit
 
 Property-based tests using fast-check must limit iterations to keep test runs fast:
@@ -119,6 +200,39 @@ Tests must never be skipped. Every test that exists must run and pass.
 - **Do not comment out** tests to avoid running them
 - If a test is failing, fix the code or the test - do not skip it
 - If a test is no longer relevant, remove it entirely rather than skipping
+
+## No Test-Only Code Paths in Production Code
+
+**Production code must never contain alternate code paths, branches, or
+special-case logic that exist solely to make tests pass.**
+
+Tests must exercise the real production code paths. If a test cannot be written
+against the existing code, that is a signal to improve the design — not to add
+a test-specific backdoor.
+
+It is FORBIDDEN to:
+
+- Add `if (process.env.NODE_ENV === 'test')` or similar environment checks
+  that change runtime behavior for tests.
+- Introduce optional parameters, flags, or configuration that are only used by
+  test harnesses to bypass real logic.
+- Create alternate constructors, factory methods, or initialization paths that
+  only tests call.
+- Weaken validation, skip steps, or short-circuit logic to make a test
+  scenario easier to set up.
+- Export internal implementation details solely so tests can reach them.
+
+If production code is hard to test, fix the design:
+
+1. **Extract and inject** - Break the hard-to-test dependency out and inject it
+   so tests can supply a controlled substitute.
+2. **Narrow the interface** - If a component does too much, split it so each
+   piece is independently testable through its public contract.
+3. **Use the real path** - Set up the test to exercise the same code path that
+   production uses, even if setup is more involved.
+
+The test suite must prove that production code works — not that a
+test-friendly fork of it works.
 
 ## Fix Failing Tests Immediately
 
@@ -174,15 +288,17 @@ For any correctness bug first discovered in a `3node`, `5node`, or `7node`
 distributed baseline:
 
 1. Add a targeted reproduction before closure.
-2. Prefer the deterministic integration layer under `test/integration/` over a
+2. Start reproduction in regular deterministic layers first (unit and targeted
+   integration) before rerunning a full distributed harness.
+3. Prefer the deterministic integration layer under `test/integration/` over a
    full Docker baseline rerun when the bug can be isolated there.
-3. Use the smallest fixture layer that still preserves the failure contract:
+4. Use the smallest fixture layer that still preserves the failure contract:
    replica creation, promotion delay, failed move, degraded admission,
    fallback visibility, or other control-plane instability.
-4. Do not mark the bug closed just because the baseline rerun happens to pass.
+5. Do not mark the bug closed just because the baseline rerun happens to pass.
    Closure requires a stable targeted regression in the normal development
    loop.
-5. If a baseline failure cannot yet be reproduced below the full harness,
+6. If a baseline failure cannot yet be reproduced below the full harness,
    record that gap explicitly and keep the issue open until the deterministic
    layer exists.
 

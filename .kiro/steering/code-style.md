@@ -26,6 +26,34 @@ Do not use strings and number directly in the code, but import them from files c
 - Break long lines appropriately to stay under 100 characters
 - Use consistent formatting with existing codebase patterns
 
+## Post-Write System Guidelines Verification
+
+**After writing or modifying any code, verify that it conforms to the system
+guidelines before considering the work done.**
+
+This is not optional. Every completed change must pass a self-review against
+the system guidelines (`system guidelines.md`). Specifically:
+
+1. **Zero duplication** - Confirm no new parallel implementation, shadow state,
+   or duplicated logic was introduced. Re-check the verification checklist in
+   §1.5 of the system guidelines.
+2. **Single owner** - Confirm every new piece of state, every row mutation, and
+   every field write is routed through its canonical owner.
+3. **No magic values** - Confirm all scalars are named constants imported from
+   the appropriate constants file.
+4. **Single naming** - Confirm no new synonyms were introduced for existing
+   concepts.
+5. **Communication paths** - Confirm messages go through the MessageRouter and
+   data-plane traffic uses Message Group transport.
+6. **Cache discipline** - Confirm no new ad-hoc caches or shadow copies of
+   system data were created outside `SystemTableCache`.
+7. **Error handling** - Confirm no swallowed errors or try/catch control flow.
+8. **Architecture docs** - If the change affects system behavior, confirm
+   `architecture.md` is updated.
+
+If any check fails, fix the code before marking the task complete. Do not defer
+guideline conformance to a follow-up.
+
 ## Common Patterns
 
 ```javascript

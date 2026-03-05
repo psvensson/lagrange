@@ -64,7 +64,7 @@ test('ReplicaStateMachine uses injected clock for create and update persistence'
     logging.initialize({level: 'error'});
 
     const persisted = [];
-    const nowValues = [1234, 2345];
+    const nowValues = [1234, 1234, 2345, 2345];
     const cdcIntegrationService = {
       async upsertSystemTableRow(tableName, data) {
         persisted.push({type: 'upsert', tableName, data});
@@ -206,6 +206,74 @@ test('ReplicaStateMachine emits transitionError with stable code on invalid tran
       'transitionError should include current state');
     t.equal(errors[0].attemptedState, ReplicaState.ACTIVE,
       'transitionError should include attempted state');
+
+    stateMachine.clear();
+    ConfigurationManager.resetInstance();
+    LoggingService.resetInstance();
+  });
+
+test('ReplicaStateMachine does not consume timeout budget while persistence is in flight',
+  async (t) => {
+    ConfigurationManager.resetInstance();
+    LoggingService.resetInstance();
+
+    const config = ConfigurationManager.getInstance();
+    config.initialize({});
+
+    const logging = LoggingService.getInstance();
+    logging.initialize({level: 'error'});
+
+    let nowValue = 1000;
+    let releasePersistence = null;
+    const cdcIntegrationService = {
+      async upsertSystemTableRow() {
+        await new Promise((resolve) => {
+          releasePersistence = resolve;
+        });
+        return {success: true};
+      },
+      async updateSystemTableRow() {
+        return {success: true};
+      },
+    };
+
+    const stateMachine = new ReplicaStateMachine({
+      nodeId: 'node-1',
+      cdcIntegrationService,
+      pendingTimeoutMs: 100,
+      now: () => nowValue,
+    });
+
+    const transitionPromise = stateMachine.transition('svc-pending', ReplicaState.PENDING, {
+      partitionId: 'partition-1',
+      nodeId: 'node-1',
+      reason: 'test',
+      serviceId: 'svc-pending',
+      serviceAddress: 'node-1/partition/svc-pending',
+    });
+
+    await Promise.resolve();
+
+    nowValue = 1250;
+    t.equal(stateMachine.checkTimeoutsNow(), 0,
+      'timeout checker should ignore an unpersisted pending transition');
+    t.equal(stateMachine.getState('svc-pending')?.state, ReplicaState.PENDING,
+      'replica should remain pending while persistence is blocked');
+
+    releasePersistence();
+    await transitionPromise;
+
+    nowValue = 1350;
+    t.equal(stateMachine.checkTimeoutsNow(), 0,
+      'timeout budget should start after persistence completes');
+    t.equal(stateMachine.getState('svc-pending')?.state, ReplicaState.PENDING,
+      'replica should still be pending before the post-persistence deadline');
+
+    nowValue = 1451;
+    t.equal(stateMachine.checkTimeoutsNow(), 1,
+      'replica should time out once the post-persistence budget is exhausted');
+    t.equal(stateMachine.getState('svc-pending')?.state, ReplicaState.FAILED,
+      'replica should eventually transition to failed');
 
     stateMachine.clear();
     ConfigurationManager.resetInstance();

@@ -22,6 +22,20 @@ const ADMIN_ADAPTER_ERROR = Object.freeze({
   UNSUPPORTED_TYPE: 'unsupported admin websocket message type for service dispatch',
 });
 
+const ZERO = 0;
+
+function resolveOptionalTimeoutMs(value) {
+  const parsedValue = Number(value);
+  if (!Number.isFinite(parsedValue)) {
+    return null;
+  }
+  const normalizedValue = Math.floor(parsedValue);
+  if (normalizedValue <= ZERO) {
+    return null;
+  }
+  return normalizedValue;
+}
+
 function isAdminMessageDispatchable(type) {
   return type === ADMIN_MESSAGE_TYPE.QUERY ||
     type === ADMIN_MESSAGE_TYPE.PARTITION_CALLBACK ||
@@ -43,14 +57,19 @@ function mapAdminMessageToOperation(messageType) {
 
 function mapAdminMessageToPayload(message) {
   if (message.type === ADMIN_MESSAGE_TYPE.QUERY) {
-    return {
+    const payload = {
       queryId: message.queryId || null,
       sql: message.sql,
       params: message.params || [],
     };
+    const timeoutMs = resolveOptionalTimeoutMs(message.timeoutMs);
+    if (timeoutMs !== null) {
+      payload.timeoutMs = timeoutMs;
+    }
+    return payload;
   }
   if (message.type === ADMIN_MESSAGE_TYPE.PARTITION_CALLBACK) {
-    return {
+    const payload = {
       queryId: message.queryId || null,
       statement: message.statement || message.sql,
       parameters: message.parameters || message.params || [],
@@ -58,6 +77,11 @@ function mapAdminMessageToPayload(message) {
       callbackExport: message.callbackExport,
       runtimeKind: message.runtimeKind,
     };
+    const timeoutMs = resolveOptionalTimeoutMs(message.timeoutMs);
+    if (timeoutMs !== null) {
+      payload.timeoutMs = timeoutMs;
+    }
+    return payload;
   }
   return {
     queryId: message.queryId || null,

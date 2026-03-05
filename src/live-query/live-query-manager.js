@@ -31,6 +31,9 @@ import {
   extractPartitionKeyValue,
 } from './live-query-service.js';
 
+const DEFAULT_PARTITION_VERSION = 1;
+const ACTIVE_PARTITION_STATE = 'NORMAL';
+
 /**
  * QueryGroup manages clients with identical queries sharing CDC subscriptions.
  */
@@ -207,10 +210,7 @@ class QueryGroup extends EventEmitter {
     }
 
     try {
-      const tableInfo = this.systemCache.get(TABLES.TABLES, this.table) ||
-        this.systemCache.find(TABLES.TABLES, (t) =>
-          t.table_name === this.table || t.tableName === this.table,
-        );
+      const tableInfo = this.getTableInfo();
 
       if (tableInfo) {
         this.partitionKeyColumn = tableInfo.primary_key ||
@@ -250,9 +250,13 @@ class QueryGroup extends EventEmitter {
     }
 
     try {
-      const partitions = this.systemCache.filter(TABLES.PARTITIONS, (p) =>
+      const tableInfo = this.getTableInfo();
+      const activePartitionVersion = this.resolveActivePartitionVersion(tableInfo);
+      const partitions = (this.systemCache.filter(TABLES.PARTITIONS, (p) =>
         p.table_name === this.table || p.tableName === this.table,
-      ) || [];
+      ) || []).filter((partition) =>
+        this.isPartitionVisibleForRouting(partition, activePartitionVersion),
+      );
 
       if (keyValue === null) {
         // No partition key filter - subscribe to all partitions
@@ -311,6 +315,65 @@ class QueryGroup extends EventEmitter {
 
     return this.compareValues(key, start) >= 0 &&
            this.compareValues(key, end) < 0;
+  }
+
+  /**
+   * Read current table metadata from the system cache.
+   * @return {Object|null} Table metadata row.
+   * @private
+   */
+  getTableInfo() {
+    if (!this.systemCache || !this.table) {
+      return null;
+    }
+
+    return this.systemCache.get(TABLES.TABLES, this.table) ||
+      this.systemCache.find(TABLES.TABLES, (t) =>
+        t.table_name === this.table || t.tableName === this.table,
+      ) ||
+      null;
+  }
+
+  /**
+   * Resolve active partition version from table metadata.
+   * Missing values default to version 1 for compatibility.
+   * @param {Object|null} tableInfo
+   * @return {number}
+   * @private
+   */
+  resolveActivePartitionVersion(tableInfo) {
+    const value = tableInfo?.active_partition_version ??
+      tableInfo?.activePartitionVersion;
+    const parsed = Number(value);
+    if (!Number.isInteger(parsed) || parsed < DEFAULT_PARTITION_VERSION) {
+      return DEFAULT_PARTITION_VERSION;
+    }
+    return parsed;
+  }
+
+  /**
+   * Determine whether a partition participates in current table routing.
+   * @param {Object} partition
+   * @param {number} activePartitionVersion
+   * @return {boolean}
+   * @private
+   */
+  isPartitionVisibleForRouting(partition, activePartitionVersion) {
+    const partitionVersion = Number(
+      partition?.partition_version ?? partition?.partitionVersion,
+    );
+    const normalizedVersion = Number.isInteger(partitionVersion) &&
+      partitionVersion >= DEFAULT_PARTITION_VERSION ?
+      partitionVersion :
+      DEFAULT_PARTITION_VERSION;
+    if (normalizedVersion !== activePartitionVersion) {
+      return false;
+    }
+
+    const state = String(
+      partition?.state ?? ACTIVE_PARTITION_STATE,
+    ).toUpperCase();
+    return state === ACTIVE_PARTITION_STATE;
   }
 
   /**

@@ -17,17 +17,26 @@ const CDC_GROUP_PROPAGATION_EVENT = Object.freeze({
 });
 
 const CDC_GROUP_PROPAGATION_REASON = Object.freeze({
+  CONFIG_GROUPED_MODE: 'config_grouped_mode',
   CONFIG_SAFE_MODE: 'config_safe_mode',
   MISSING_LOCAL_GROUP: 'missing_local_group',
   MISSING_ACTIVE_GROUPS: 'missing_active_groups',
   MISSING_COORDINATOR_NODE: 'missing_coordinator_node',
   MISSING_COORDINATOR_ADDRESS: 'missing_coordinator_address',
   MESSAGE_ROUTER_UNAVAILABLE: 'message_router_unavailable',
+  GROUPED_DELIVERY_FAILURE: 'grouped_delivery_failure',
+  GROUPED_DELIVERY_RECOVERED: 'grouped_delivery_recovered',
 });
 
 const CDC_GROUP_PROPAGATION_STATUS = Object.freeze({
   GROUPED: 'grouped',
   SAFE: 'safe',
+});
+
+const CDC_GROUP_PUBLICATION_MODE = Object.freeze({
+  GROUPED: 'grouped',
+  CONSERVATIVE_FANOUT: 'conservative_fanout',
+  REPAIR_ONLY: 'repair_only',
 });
 
 const CDC_GROUP_PROPAGATION_STRATEGY = Object.freeze({
@@ -76,5 +85,6 @@ export {
   CDC_GROUP_PROPAGATION_STATE,
   CDC_GROUP_PROPAGATION_STRATEGY,
   CDC_GROUP_PROPAGATION_STATUS,
+  CDC_GROUP_PUBLICATION_MODE,
   CDC_GROUP_PROPAGATION_SUBSYSTEM,
 };

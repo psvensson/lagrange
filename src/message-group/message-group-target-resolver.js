@@ -21,6 +21,10 @@ function filterRows(cache, tableName, predicate) {
   return [];
 }
 
+function findRow(cache, tableName, predicate) {
+  return filterRows(cache, tableName, predicate)[NUM.ZERO] || null;
+}
+
 function getActiveMessageGroupServiceCandidates(cache, groupId) {
   return filterRows(cache, TABLES.SERVICES, (row) => {
     return row?.[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP &&
@@ -31,9 +35,54 @@ function getActiveMessageGroupServiceCandidates(cache, groupId) {
   });
 }
 
-function resolveMessageGroupLeaderServiceFromCache(cache, groupId, options = {}) {
+function getCanonicalLeaderNodeId(cache, groupId) {
+  const groupRow = findRow(cache, TABLES.MESSAGE_GROUPS, (row) => {
+    return row?.[COLUMN.GROUP_ID] === groupId;
+  });
+  const leaderNodeId = groupRow?.[COLUMN.LEADER_NODE_ID];
+  return typeof leaderNodeId === TYPEOF.STRING &&
+    leaderNodeId.length > NUM.ZERO ?
+    leaderNodeId :
+    null;
+}
+
+function resolveCanonicalLeaderServiceCandidate(
+  cache,
+  groupId,
+  candidates,
+  options = {},
+) {
   const excludeServiceId = options.excludeServiceId || null;
+  const leaderNodeId = getCanonicalLeaderNodeId(cache, groupId);
+
+  if (!leaderNodeId) {
+    return null;
+  }
+
+  return candidates.find((row) => {
+    return row?.[COLUMN.NODE_ID] === leaderNodeId &&
+      (!excludeServiceId || row[COLUMN.SERVICE_ID] !== excludeServiceId);
+  }) || null;
+}
+
+function resolveMessageGroupLeaderServiceFromCache(cache, groupId, options = {}) {
   const candidates = getActiveMessageGroupServiceCandidates(cache, groupId);
+  const canonicalLeader = resolveCanonicalLeaderServiceCandidate(
+    cache,
+    groupId,
+    candidates,
+    options,
+  );
+
+  if (canonicalLeader) {
+    return canonicalLeader;
+  }
+
+  if (getCanonicalLeaderNodeId(cache, groupId)) {
+    return null;
+  }
+
+  const excludeServiceId = options.excludeServiceId || null;
   return candidates.find((row) => {
     return row[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER &&
       (!excludeServiceId || row[COLUMN.SERVICE_ID] !== excludeServiceId);
@@ -49,6 +98,16 @@ function resolveMessageGroupForwardServiceFromCache(cache, groupId, options = {}
 
   if (candidates.length === NUM.ZERO) {
     return null;
+  }
+
+  const canonicalLeader = resolveCanonicalLeaderServiceCandidate(
+    cache,
+    groupId,
+    candidates,
+    options,
+  );
+  if (canonicalLeader) {
+    return canonicalLeader;
   }
 
   const sorted = [...candidates].sort((left, right) => {
@@ -95,13 +154,14 @@ function resolveMessageGroupTargetAddressFromCache(cache, groupId, options = {})
     return null;
   }
 
-  const preferredConnected = candidates.find((row) => {
-    return row[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER &&
-      (!excludeServiceId || row[COLUMN.SERVICE_ID] !== excludeServiceId) &&
-      isConnectedNode(row[COLUMN.NODE_ID]);
-  });
-  if (preferredConnected) {
-    return preferredConnected[COLUMN.ADDRESS];
+  const preferredLeader = resolveMessageGroupLeaderServiceFromCache(
+    cache,
+    groupId,
+    {excludeServiceId},
+  );
+  if (preferredLeader &&
+      isConnectedNode(preferredLeader[COLUMN.NODE_ID])) {
+    return preferredLeader[COLUMN.ADDRESS];
   }
 
   const preferredSeedConnected = candidates.find((row) => {

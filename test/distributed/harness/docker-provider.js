@@ -36,6 +36,25 @@ const CONTAINER_LOG_ERROR_STRING_TOO_LONG = 'ERR_STRING_TOO_LONG';
 const UTF8_ENCODING = 'utf8';
 const NETWORK_EXISTS_ERROR_PATTERN = 'already exists';
 const NETWORK_LIST_FILTER_NAME = 'name';
+const BUILD_CONTEXT_STATIC_ENTRIES = Object.freeze([
+  '.dockerignore',
+  'package-lock.json',
+  'package.json',
+  'src',
+]);
+
+function buildImageContext(contextPath, dockerfile) {
+  const entries = Array.from(new Set([
+    ...BUILD_CONTEXT_STATIC_ENTRIES,
+    dockerfile,
+  ].filter((entry) => typeof entry === 'string' && entry.length > ZERO)))
+    .sort();
+
+  return {
+    context: contextPath,
+    src: entries,
+  };
+}
 
 class DockerProvider {
   /**
@@ -168,7 +187,7 @@ class DockerProvider {
     let stream;
     try {
       stream = await this._docker.buildImage(
-        {context: contextPath, src: ['.']},
+        buildImageContext(contextPath, dockerfile),
         {t: tag, dockerfile, labels},
       );
     } catch (err) {

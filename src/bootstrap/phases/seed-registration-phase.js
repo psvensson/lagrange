@@ -18,6 +18,8 @@ import {
   BootstrapSystemTableWriter,
   RoutedSqlSystemTableWriter,
 } from '../system-table-writer.js';
+import {MessageGroupServiceRowOwner} from
+  '../../message-group/message-group-service-row-owner.js';
 import {
   registerBuiltInMetaServiceDefinitions,
   registerBuiltInMetaServiceEndpoints,
@@ -146,49 +148,41 @@ class SeedRegistrationPhase {
     const logger = d.getLogger();
     const systemTableWriter = this.ensureSystemTableWriter();
     const nodeId = d.getNodeId();
+    const messageGroupServiceRowOwner =
+      new MessageGroupServiceRowOwner({
+        systemTableWriter,
+        now: () => now,
+      });
 
     // Register message group replicas
     for (const [replicaId, service] of
       d.getMessageGroupServices()) {
-      const isLeader = service.isLeaderReplica &&
-        service.isLeaderReplica();
-      const currentRole = service.getRole ?
-        service.getRole() : null;
-      const raftRole = isLeader ?
-        RAFT_ROLE.LEADER :
-        currentRole || RAFT_ROLE.FOLLOWER;
-      const unifiedAddress =
-        `${nodeId}${ADDRESS.SEPARATOR}` +
-        `${ENTITY_TYPE.MESSAGE_GROUP}${ADDRESS.SEPARATOR}` +
-        `${replicaId}`;
-      const serviceData = {
-        service_id: replicaId,
-        service_type: SERVICE_TYPE.MESSAGE_GROUP,
-        node_id: nodeId,
-        partition_id: null,
-        group_id: INITIAL_MESSAGE_GROUP_ID,
-        replica_id: replicaId,
-        raft_role: raftRole,
-        status: SERVICE_STATUS.ACTIVE,
-        address: unifiedAddress,
-        created_at: now,
-        updated_at: now,
-      };
+      const serviceData =
+        MessageGroupServiceRowOwner.buildServiceRow({
+          groupId: INITIAL_MESSAGE_GROUP_ID,
+          replicaId,
+          nodeId,
+          service,
+          timestamp: now,
+        });
 
       logger.debug(
         BOOTSTRAP_LOG_MSG.REGISTERING_SERVICE, {
           serviceId: replicaId,
           serviceType: SERVICE_TYPE.MESSAGE_GROUP,
-          raftRole,
-          address: unifiedAddress,
+          raftRole: serviceData.raft_role,
+          address: serviceData.address,
           nodeId,
         });
 
       try {
-        await systemTableWriter.upsertSystemTableRow(
-          SYSTEM_TABLE_NAME.SERVICES,
-          serviceData,
-        );
+        await messageGroupServiceRowOwner.registerReplica({
+          groupId: INITIAL_MESSAGE_GROUP_ID,
+          replicaId,
+          nodeId,
+          service,
+          timestamp: now,
+        });
       } catch (error) {
         logger.error(
           BOOTSTRAP_LOG_MSG.MESSAGE_GROUP_SERVICE_REGISTER_FAILED,
@@ -298,6 +292,10 @@ class SeedRegistrationPhase {
         partition_key: schema.columns[NUM.ZERO].name,
         table_policies: JSON.stringify({}),
         partition_count: NUM.ONE,
+        active_partition_version: NUM.ONE,
+        pending_partition_version: null,
+        partition_transition_state: null,
+        partition_transition_metadata: null,
         created_at: now,
         updated_at: now,
       };
@@ -321,6 +319,7 @@ class SeedRegistrationPhase {
         table_name: tableName,
         partition_key_start: null,
         partition_key_end: null,
+        partition_version: NUM.ONE,
         replica_count: NUM.THREE,
         size_bytes: NUM.ZERO,
         leader_node_id: d.getNodeId(),

@@ -16,7 +16,12 @@ import {
   STATE,
   STRING,
   TRANSPORT_TYPE,
+  TYPEOF,
 } from '../constants/index.js';
+import {
+  TRANSPORT_CONFIG_KEY,
+  TRANSPORT_DEFAULT,
+} from '../constants/transport.js';
 import {assertCritical} from '../utils/assert.js';
 import {
   HEARTBEAT_CONFIG_KEY,
@@ -103,6 +108,12 @@ class HeartbeatService extends EventEmitter {
     this.clearIntervalFn = typeof options.clearIntervalFn === 'function' ?
       options.clearIntervalFn :
       clearInterval;
+    this.setTimeoutFn = typeof options.setTimeoutFn === 'function' ?
+      options.setTimeoutFn :
+      setTimeout;
+    this.clearTimeoutFn = typeof options.clearTimeoutFn === 'function' ?
+      options.clearTimeoutFn :
+      clearTimeout;
 
     const config = ConfigurationManager.getInstance();
     this.heartbeatIntervalMs =
@@ -126,12 +137,16 @@ class HeartbeatService extends EventEmitter {
       options.nodeMetadataMaxStalenessMs > ZERO ?
         Math.floor(options.nodeMetadataMaxStalenessMs) :
         HEARTBEAT_DEFAULT.NODE_METADATA_MAX_STALENESS_MS;
+    this.heartbeatAttemptTimeoutMs =
+      this.resolveHeartbeatAttemptTimeoutMs(options.heartbeatAttemptTimeoutMs);
 
     this.heartbeatTimer = null;
     this.heartbeatConsecutiveFailures = NUM.ZERO;
     this.heartbeatCount = NUM.ZERO;
     this.state = HEARTBEAT_STATE.CREATED;
     this.heartbeatInFlight = false;
+    this.heartbeatAttemptSequence = ZERO;
+    this.activeHeartbeatAttempt = null;
     this.lastNodeHeartbeatWriteAt = null;
     this.lastNodeHeartbeatWriteSignature = null;
     this.lastEndpointUpsertAt = null;
@@ -191,7 +206,52 @@ class HeartbeatService extends EventEmitter {
     this.logger.info(HEARTBEAT_LOG_MSG.INITIALIZED, {
       nodeId: this.nodeId,
       heartbeatIntervalMs: this.heartbeatIntervalMs,
+      heartbeatAttemptTimeoutMs: this.heartbeatAttemptTimeoutMs,
     });
+  }
+
+  /**
+   * Resolve per-attempt heartbeat timeout.
+   * Keeps the timeout inside the ready-lease budget so one stalled
+   * write cannot suppress all future lease refreshes.
+   * @param {number|undefined} overrideMs
+   * @return {number}
+   * @private
+   */
+  resolveHeartbeatAttemptTimeoutMs(overrideMs) {
+    if (Number.isFinite(overrideMs) && overrideMs > ZERO) {
+      return Math.floor(overrideMs);
+    }
+
+    const config = ConfigurationManager.getInstance();
+    const configuredTransportTimeoutMs =
+      config.get(TRANSPORT_CONFIG_KEY.MESSAGE_TIMEOUT_MS);
+    const transportMessageTimeoutMs =
+      Number.isFinite(configuredTransportTimeoutMs) &&
+      configuredTransportTimeoutMs > ZERO ?
+        Math.floor(configuredTransportTimeoutMs) :
+        TRANSPORT_DEFAULT.MESSAGE_TIMEOUT_MS;
+    const leaseSafetyWindowMs = Math.max(
+      ONE,
+      Math.floor(this.readyLeaseMs / 3),
+    );
+    const transportSafetyWindowMs =
+      transportMessageTimeoutMs +
+      HEARTBEAT_DEFAULT.ATTEMPT_TIMEOUT_SAFETY_MARGIN_MS;
+    const defaultTimeoutMs = Math.max(
+      this.heartbeatIntervalMs,
+      leaseSafetyWindowMs,
+      transportSafetyWindowMs,
+    );
+    const maxSafeTimeoutMs = Math.max(
+      ONE,
+      this.readyLeaseMs - this.heartbeatIntervalMs,
+    );
+
+    return Math.max(
+      ONE,
+      Math.min(defaultTimeoutMs, maxSafeTimeoutMs),
+    );
   }
 
   /**
@@ -225,7 +285,7 @@ class HeartbeatService extends EventEmitter {
           this.heartbeatInFlight === true) {
         return;
       }
-      this.heartbeatInFlight = true;
+      const attempt = this.beginHeartbeatAttempt();
 
       try {
         let stats = options.stats;
@@ -233,32 +293,46 @@ class HeartbeatService extends EventEmitter {
           try {
             stats = await options.getStats();
           } catch (error) {
-            this.recordFailure('stats', error.message);
+            if (!attempt.timedOut) {
+              this.recordFailure('stats', error.message);
+            }
             return;
           }
         }
 
+        if (attempt.timedOut) {
+          return;
+        }
+
         try {
           await this.sendHeartbeat(stats, options.capabilities);
-          this.heartbeatCount++;
-
-          if (this.heartbeatConsecutiveFailures > NUM.ZERO) {
-            this.logger.info(HEARTBEAT_LOG_MSG.HEARTBEAT_RECOVERED, {
-              nodeId: this.nodeId,
-              previousFailures: this.heartbeatConsecutiveFailures,
-            });
-            this.heartbeatConsecutiveFailures = NUM.ZERO;
-          }
-
-          this.emit(HEARTBEAT_EVENT.HEARTBEAT_SENT, {
-            nodeId: this.nodeId,
-            count: this.heartbeatCount,
-          });
         } catch (error) {
-          this.recordFailure('register', error.message);
+          if (!attempt.timedOut) {
+            this.recordFailure('register', error.message);
+          }
+          return;
         }
+
+        if (attempt.timedOut) {
+          return;
+        }
+
+        this.heartbeatCount++;
+
+        if (this.heartbeatConsecutiveFailures > NUM.ZERO) {
+          this.logger.info(HEARTBEAT_LOG_MSG.HEARTBEAT_RECOVERED, {
+            nodeId: this.nodeId,
+            previousFailures: this.heartbeatConsecutiveFailures,
+          });
+          this.heartbeatConsecutiveFailures = NUM.ZERO;
+        }
+
+        this.emit(HEARTBEAT_EVENT.HEARTBEAT_SENT, {
+          nodeId: this.nodeId,
+          count: this.heartbeatCount,
+        });
       } finally {
-        this.heartbeatInFlight = false;
+        this.completeHeartbeatAttempt(attempt);
       }
     };
 
@@ -284,10 +358,73 @@ class HeartbeatService extends EventEmitter {
       this.clearIntervalFn(this.heartbeatTimer);
       this.heartbeatTimer = null;
     }
+    if (this.activeHeartbeatAttempt?.timeoutHandle) {
+      this.clearTimeoutFn(this.activeHeartbeatAttempt.timeoutHandle);
+      this.activeHeartbeatAttempt.timeoutHandle = null;
+    }
+    this.activeHeartbeatAttempt = null;
+    this.heartbeatInFlight = false;
     this.state = HEARTBEAT_STATE.STOPPED;
     this.logger.info(HEARTBEAT_LOG_MSG.STOPPED, {
       nodeId: this.nodeId,
     });
+  }
+
+  /**
+   * Begin one guarded heartbeat attempt with a timeout watchdog.
+   * @return {{id: number, timedOut: boolean, timeoutHandle: Object|null}}
+   * @private
+   */
+  beginHeartbeatAttempt() {
+    const attempt = {
+      id: this.heartbeatAttemptSequence + ONE,
+      timedOut: false,
+      timeoutHandle: null,
+    };
+    this.heartbeatAttemptSequence = attempt.id;
+    this.activeHeartbeatAttempt = attempt;
+    this.heartbeatInFlight = true;
+
+    attempt.timeoutHandle = this.setTimeoutFn(() => {
+      if (attempt.timedOut) {
+        return;
+      }
+      attempt.timedOut = true;
+      this.recordFailure(
+        'attempt_timeout',
+        `Heartbeat attempt timed out after ${this.heartbeatAttemptTimeoutMs}ms`,
+      );
+      if (this.activeHeartbeatAttempt?.id === attempt.id) {
+        this.activeHeartbeatAttempt = null;
+        this.heartbeatInFlight = false;
+      }
+    }, this.heartbeatAttemptTimeoutMs);
+    if (typeof attempt.timeoutHandle?.unref === TYPEOF.FUNCTION) {
+      attempt.timeoutHandle.unref();
+    }
+
+    return attempt;
+  }
+
+  /**
+   * Complete one heartbeat attempt and release ownership if still current.
+   * @param {{id: number, timeoutHandle: Object|null}|null} attempt
+   * @private
+   */
+  completeHeartbeatAttempt(attempt) {
+    if (!attempt) {
+      return;
+    }
+
+    if (attempt.timeoutHandle) {
+      this.clearTimeoutFn(attempt.timeoutHandle);
+      attempt.timeoutHandle = null;
+    }
+
+    if (this.activeHeartbeatAttempt?.id === attempt.id) {
+      this.activeHeartbeatAttempt = null;
+      this.heartbeatInFlight = false;
+    }
   }
 
   /**

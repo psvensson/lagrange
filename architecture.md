@@ -119,11 +119,22 @@ The distributed SQL layer is now single-path and owner-specific:
 4. `DistributedWriteCoordinator` is the only owner for distributed
    INSERT/UPDATE/DELETE routing, participant result aggregation, and
    idempotency envelope metadata.
-5. `DistributedTransactionCoordinator` is the only owner for distributed
+5. `DurableWorkflowCoordinator` is the reusable workflow runtime for
+   durable owner-key workflow state, participant persistence,
+   recovery-from-rows, and single-flight execution. It owns workflow
+   mechanics only, not transaction or partition semantics.
+6. `DistributedTransactionCoordinator` is the only owner for distributed
    transaction participant enlistment, prepare/commit/rollback state machine,
    and recovery from `sql_transactions`, `sql_transaction_participants`,
-   and `sql_write_operations`.
-6. `SQLQueryEngine` remains the orchestration entrypoint and delegates to the
+   and `sql_write_operations`. It composes `DurableWorkflowCoordinator` and
+   keeps transaction-only semantics such as 2PC stages and write-operation
+   journaling local.
+7. `ManagedSplitWorkflow` is the only owner for managed partition-split
+   prepare/provision/backfill-handoff orchestration. It composes
+   `DurableWorkflowCoordinator`, persists split workflow identity in
+   `tables.partition_transition_metadata`, and hands off post-start source
+   backfill/cutover ownership to `PartitionService`.
+8. `SQLQueryEngine` remains the orchestration entrypoint and delegates to the
    owners above. It does not keep alternate distributed execution branches.
 
 Forbidden patterns for distributed SQL:
@@ -1610,13 +1621,16 @@ node storage during replication, recovery, and split workflows.
 
 | Concern | Owner | Notes |
 |---------|-------|-------|
+| Control-plane readiness classification | `ControlPlaneReadinessService` | Canonical per-node readiness vectors for routing, placement, and diagnostics |
+| Metadata publication mode | `CDCGroupPropagationService` | Canonical grouped/conservative-fanout/repair-only publication owner |
 | Budget resolution/registration | `NodeStorageBudgetService` | Seed/join startup-owned integration |
 | Replica size estimation + capacity snapshot | `StorageCapacityAccountingService` | Derives used/reserved/available from metadata |
-| Admission decision + reservation API | `StorageAdmissionService` | Single gate for ADD/REPLACE/SPLIT increases |
-| Operation lifecycle transitions | `RebalanceCoordinator` | Delegates reservation state changes |
+| Admission decision + reservation API | `StorageAdmissionService` | Single gate for ADD/REPLACE/SPLIT increases; consumes readiness + publication owners |
+| Operation lifecycle transitions | `RebalanceCoordinator` | Delegates reservation state changes and routes ADD/REPLACE creation through admission owner |
 | Placement planning | `MovePlanner` | Consumes admission/accounting APIs; no duplicate planner |
 | Pressure-state behavior | `StoragePressureBehavior` | Gates moves by per-node pressure state |
 | Split gating integration | `PartitionSplitMergeManager` | Calls admission owner for feasibility |
+| Managed split workflow admission | `ManagedSplitWorkflow` | Persists admission_pending/blocked/deferred outcomes from the admission owner |
 | Capacity metrics | `StorageCapacityMetrics` | Collects per-node metrics and admission counters |
 | Migration/backfill | `StorageCapacityMigration` | Deterministic backfill for existing nodes |
 
@@ -1644,8 +1658,14 @@ Capacity snapshots are derived projections (not persisted) computed by
 ```
 Storage-Increasing Operation (ADD/REPLACE/SPLIT)
        │
+       ├── ControlPlaneReadinessService projects canonical node readiness
+       │
+       ├── CDCGroupPropagationService exposes current publication mode
+       │
        ▼
 StorageAdmissionService.checkAdd/checkReplace/checkSplit
+       │
+       ├── Consume readiness + publication diagnostics
        │
        ├── Get capacity snapshot from StorageCapacityAccountingService
        │   (reads nodes, services, partitions, storage_reservations)
@@ -1659,6 +1679,11 @@ StorageAdmissionService.checkAdd/checkReplace/checkSplit
        ├── Apply configured admission policy override
        │
        └── Return structured decision (allow/deny, reason, projected %)
+
+Callers:
+- `ManagedSplitWorkflow` persists admission outcomes for split workflows.
+- `RebalanceCoordinator.createOperation()` invokes the same owner for ADD and
+  REPLACE workflows before operation rows are created.
 ```
 
 ### Pressure States

@@ -68,6 +68,27 @@ class CDCEvent {
 
 const CDC_OPERATIONS = CDC_OPERATION;
 
+function normalizeCDCEventData(event) {
+  const data = event?.data && typeof event.data === 'object' ? event.data : null;
+  const whereClause =
+    event?.whereClause && typeof event.whereClause === 'object' ?
+      event.whereClause :
+      null;
+
+  if (event?.operation === CDC_OPERATIONS.DELETE) {
+    return whereClause ? {...whereClause} : data;
+  }
+
+  if (event?.operation === CDC_OPERATIONS.UPDATE) {
+    if (whereClause && data) {
+      return {...whereClause, ...data};
+    }
+    return data || whereClause;
+  }
+
+  return data;
+}
+
 /**
  * CDCHandler manages CDC subscriptions and applies events to the cache.
  * It ensures events are applied in HLC timestamp order for consistency.
@@ -195,7 +216,7 @@ class CDCHandler extends EventEmitter {
       new CDCEvent(
         event.tableName,
         event.operation,
-        event.data,
+        normalizeCDCEventData(event),
         event.timestamp,
         event.sourcePartition,
         event.causeId,
@@ -254,7 +275,7 @@ class CDCHandler extends EventEmitter {
       new CDCEvent(
         event.tableName,
         event.operation,
-        event.data,
+        normalizeCDCEventData(event),
         event.timestamp,
         event.sourcePartition,
         event.causeId,

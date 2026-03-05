@@ -89,6 +89,9 @@ function evaluateCanonicalVersionedReadiness({
   adminQueryable,
   routingReady,
   topologyReady,
+  schemaReady,
+  requireTopologyReady = true,
+  allowSchemaReadyFallback = false,
   requiredSchemaVersion,
   appliedSchemaVersion,
 }) {
@@ -99,7 +102,7 @@ function evaluateCanonicalVersionedReadiness({
   if (routingReady !== true) {
     reasons.push(DISCOVERY_READINESS_REASON_ROUTING_NOT_READY);
   }
-  if (topologyReady !== true) {
+  if (requireTopologyReady === true && topologyReady !== true) {
     reasons.push(DISCOVERY_READINESS_REASON_TOPOLOGY_NOT_READY);
   }
 
@@ -108,7 +111,11 @@ function evaluateCanonicalVersionedReadiness({
   const normalizedAppliedSchemaVersion =
     normalizeRequiredSchemaVersion(appliedSchemaVersion);
   if (!normalizedRequiredSchemaVersion || !normalizedAppliedSchemaVersion) {
-    reasons.push(DISCOVERY_READINESS_REASON_SCHEMA_VERSION_UNKNOWN);
+    const schemaFallbackReady =
+      allowSchemaReadyFallback === true && schemaReady === true;
+    if (!schemaFallbackReady) {
+      reasons.push(DISCOVERY_READINESS_REASON_SCHEMA_VERSION_UNKNOWN);
+    }
   } else if (compareSchemaVersions(
     normalizedAppliedSchemaVersion,
     normalizedRequiredSchemaVersion,
@@ -165,6 +172,7 @@ function buildCanonicalReadinessFromDiscoveryError({
     adminQueryable: false,
     routingReady: false,
     topologyReady: false,
+    requireTopologyReady: true,
     requiredSchemaVersion,
     appliedSchemaVersion: null,
   });

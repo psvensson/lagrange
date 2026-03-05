@@ -111,6 +111,58 @@ test('NodeJoiningService - executePhase routes work through class A scheduler', 
     'joining phase execution should run through class A scheduler');
 });
 
+test('NodeJoiningService - initializeMessageGroupServiceHandler uses NodeService cache',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const registeredHandlers = new Map();
+    const cache = new SystemTableCache();
+    const originalGetNodeService = NodeService.getInstance;
+
+    try {
+      NodeService.getInstance = () => ({
+        getSystemTableCache() {
+          return cache;
+        },
+      });
+
+      const service = new NodeJoiningService({
+        nodeId: 'joining-node-message-group-handler',
+        nodeAddress: 'ws://localhost:9090',
+        seedNodeAddress: 'http://localhost:8080',
+      });
+      service.messageRouter = {
+        register(address, handler) {
+          registeredHandlers.set(address, handler);
+        },
+        unregister() {},
+      };
+      service.cdcIntegrationService = {
+        updateSystemTableRow: async () => true,
+      };
+      service.createJoinMessageGroupReplica = async () => {};
+      service.startJoinMessageGroupReplica = async () => {};
+      service.stopJoinMessageGroupReplica = async () => {};
+
+      t.doesNotThrow(
+        () => service.initializeMessageGroupServiceHandler(),
+        'joiner handler initialization should use the canonical NodeService cache',
+      );
+      t.ok(
+        service.messageGroupServiceHandler,
+        'should retain the initialized message-group service handler',
+      );
+      t.ok(
+        registeredHandlers.has(
+          'joining-node-message-group-handler/service/message-group-handler',
+        ),
+        'should register the service handler at the control-plane address',
+      );
+    } finally {
+      NodeService.getInstance = originalGetNodeService;
+    }
+  });
+
 test('NodeJoiningService - retries bootstrap when seed responds BOOTSTRAP_NOT_READY',
   async (t) => {
     initializeTestEnvironment();
@@ -803,7 +855,7 @@ test('NodeJoiningService - prefers authoritative cache nodes during mesh connect
       'should derive websocket address from authoritative cache row');
   });
 
-test('NodeJoiningService - ready state update reconciles mesh connections first',
+test('NodeJoiningService - ready state update triggers mesh reconciliation without blocking',
   async (t) => {
     initializeTestEnvironment();
 
@@ -865,9 +917,9 @@ test('NodeJoiningService - ready state update reconciles mesh connections first'
     await service.sendControlPlaneNodeStateUpdate({state: 'ready'});
 
     t.same(callOrder, [
-      'connect:late-peer:ws://localhost:8087',
       'deliver:seed-node/message-group/mg-1-r1:ready',
-    ], 'should repair missing peer connection before sending ready update');
+      'connect:late-peer:ws://localhost:8087',
+    ], 'ready update should not wait on best-effort peer mesh repair');
   });
 
 test('NodeJoiningService - steady ready heartbeats skip redundant mesh reconciliation',
@@ -1143,6 +1195,7 @@ test('NodeJoiningService - signals readiness after querying state', async (t) =>
   service.phaseJoinExistingMessageGroup = async () => {};
   service.phaseWaitForLeadership = async () => {};
   service.initializeReplicaHandler = () => {};
+  service.initializeMessageGroupServiceHandler = () => {};
   service.initializeControlPlaneService = async () => {};
   service.initializeRuntimeServiceHandler = () => {};
   service.phaseQuerySystemState = async () => {
@@ -1214,6 +1267,7 @@ test(
     service.phaseJoinExistingMessageGroup = async () => {};
     service.phaseWaitForLeadership = async () => {};
     service.initializeReplicaHandler = () => {};
+    service.initializeMessageGroupServiceHandler = () => {};
     service.initializeControlPlaneService = async () => {};
     service.createCdcIntegrationService = () => ({});
     service.ensureLatencyTopologyOwners = () => ({});

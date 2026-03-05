@@ -73,6 +73,15 @@ const TABLES_SCHEMA = {
     {name: 'partition_key', type: COLUMN_TYPE.TEXT, notNull: true},
     {name: 'table_policies', type: COLUMN_TYPE.TEXT, notNull: true, defaultValue: '\'{}\''},
     {name: 'partition_count', type: COLUMN_TYPE.INTEGER, notNull: true, defaultValue: 1},
+    {
+      name: 'active_partition_version',
+      type: COLUMN_TYPE.INTEGER,
+      notNull: true,
+      defaultValue: 1,
+    },
+    {name: 'pending_partition_version', type: COLUMN_TYPE.INTEGER},
+    {name: 'partition_transition_state', type: COLUMN_TYPE.TEXT},
+    {name: 'partition_transition_metadata', type: COLUMN_TYPE.TEXT},
     {name: 'created_at', type: COLUMN_TYPE.INTEGER, notNull: true},
     {name: 'updated_at', type: COLUMN_TYPE.INTEGER, notNull: true},
   ],
@@ -93,6 +102,12 @@ const PARTITIONS_SCHEMA = {
     {name: 'table_name', type: COLUMN_TYPE.TEXT},
     {name: 'partition_key_start', type: COLUMN_TYPE.TEXT},
     {name: 'partition_key_end', type: COLUMN_TYPE.TEXT},
+    {
+      name: 'partition_version',
+      type: COLUMN_TYPE.INTEGER,
+      notNull: true,
+      defaultValue: 1,
+    },
     {name: 'replica_count', type: COLUMN_TYPE.INTEGER, notNull: true, defaultValue: 3},
     {name: 'size_bytes', type: COLUMN_TYPE.INTEGER, notNull: true, defaultValue: 0},
     {name: 'leader_node_id', type: COLUMN_TYPE.TEXT},
@@ -426,6 +441,18 @@ const REPLICA_OPERATIONS_SCHEMA = {
     {name: 'idx_replica_ops_status', columns: ['status']},
     {name: 'idx_replica_ops_partition', columns: ['partition_id']},
     {name: 'idx_replica_ops_entity', columns: ['entity_type', 'entity_id']},
+    {
+      name: 'idx_replica_ops_source_step_type',
+      columns: ['source_node_id', 'workflow_step', 'type'],
+    },
+    {
+      name: 'idx_replica_ops_target_step_type',
+      columns: ['target_node_id', 'workflow_step', 'type'],
+    },
+    {
+      name: 'idx_replica_ops_partition_target',
+      columns: ['partition_id', 'target_node_id'],
+    },
     {name: 'idx_replica_ops_created', columns: ['created_at']},
   ],
 };

@@ -79,6 +79,66 @@ test('TableCreationService - continues when split/merge evaluation fails',
     t.equal(result.operation, 'CREATE_TABLE');
   });
 
+test('TableCreationService - starts periodic split/merge evaluation when manager supports it',
+  async (t) => {
+    let startCalls = 0;
+    const service = new TableCreationService({
+      partitionSplitMergeManager: {
+        startPeriodicEvaluation() {
+          startCalls += 1;
+        },
+      },
+    });
+
+    t.equal(startCalls, 1);
+
+    await service.shutdown();
+  });
+
+test('TableCreationService - stops previous periodic split/merge manager on replacement',
+  async (t) => {
+    let firstStopCalls = 0;
+    let secondStartCalls = 0;
+    const firstManager = {
+      startPeriodicEvaluation() {},
+      stopPeriodicEvaluation() {
+        firstStopCalls += 1;
+      },
+    };
+    const secondManager = {
+      startPeriodicEvaluation() {
+        secondStartCalls += 1;
+      },
+      stopPeriodicEvaluation() {},
+    };
+
+    const service = new TableCreationService({
+      partitionSplitMergeManager: firstManager,
+    });
+    service.setPartitionSplitMergeManager(secondManager);
+
+    t.equal(firstStopCalls, 1);
+    t.equal(secondStartCalls, 1);
+
+    await service.shutdown();
+  });
+
+test('TableCreationService - stops periodic split/merge evaluation on shutdown',
+  async (t) => {
+    let stopCalls = 0;
+    const service = new TableCreationService({
+      partitionSplitMergeManager: {
+        startPeriodicEvaluation() {},
+        stopPeriodicEvaluation() {
+          stopCalls += 1;
+        },
+      },
+    });
+
+    await service.shutdown();
+    t.equal(stopCalls, 1);
+  });
+
 test('TableCreationService - writes partition metadata with logical table_name',
   async (t) => {
     const writes = [];
@@ -101,10 +161,22 @@ test('TableCreationService - writes partition metadata with logical table_name',
 
     const partitionWrite = writes.find((entry) => entry.tableName === 'partitions');
     t.ok(partitionWrite, 'expected partitions write');
-    t.equal(
+  t.equal(
       partitionWrite?.row?.table_name,
       'users',
       'partition metadata should include logical table_name',
+    );
+    t.equal(
+      partitionWrite?.row?.partition_version,
+      1,
+      'partition metadata should start in version 1',
+    );
+    const tableWrite = writes.find((entry) => entry.tableName === 'tables');
+    t.ok(tableWrite, 'expected tables write');
+    t.equal(
+      tableWrite?.row?.active_partition_version,
+      1,
+      'table metadata should start with active partition version 1',
     );
   });
 
@@ -130,12 +202,22 @@ test('TableCreationService - provisions initial partition when callback is confi
     const result = await service.createTable(createCreateTableAst());
     t.equal(result.success, true);
     t.ok(provisionContext, 'partition provisioner should receive context');
-    t.equal(provisionContext?.tableName, 'users', 'provisioner gets table name');
-    t.equal(provisionContext?.replicaCount, 3, 'provisioner gets replica count');
-    t.ok(
-      String(provisionContext?.partitionId || '').startsWith('tbl-'),
-      'provisioner gets generated partition ID',
-    );
+  t.equal(provisionContext?.tableName, 'users', 'provisioner gets table name');
+  t.equal(provisionContext?.replicaCount, 3, 'provisioner gets replica count');
+  t.ok(
+    String(provisionContext?.partitionId || '').startsWith('tbl-'),
+    'provisioner gets generated partition ID',
+  );
+  t.equal(
+    provisionContext?.tableMetadata?.table_name,
+    'users',
+    'provisioner gets the canonical table metadata snapshot',
+  );
+  t.equal(
+    provisionContext?.partitionMetadata?.partition_id,
+    provisionContext?.partitionId,
+    'provisioner gets the canonical partition metadata snapshot',
+  );
   });
 
 test('TableCreationService - surfaces initial partition provisioning failures',

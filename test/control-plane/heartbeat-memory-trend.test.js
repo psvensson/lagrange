@@ -7,6 +7,7 @@ import {
 } from '../../src/control-plane/heartbeat-service.js';
 import {HEARTBEAT_EVENT} from
   '../../src/control-plane/heartbeat-service-constants.js';
+import {TRANSPORT_DEFAULT} from '../../src/constants/transport.js';
 
 function initEnv() {
   ConfigurationManager.resetInstance();
@@ -206,6 +207,31 @@ test('HeartbeatService sendHeartbeat uses injected clock', async (t) => {
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
 });
+
+test('HeartbeatService keeps attempt timeout outside transport message timeout boundary',
+  async (t) => {
+    initEnv();
+
+    const service = new HeartbeatService({
+      nodeId: 'node-timeout-budget',
+      nodeAddress: '10.0.0.12:8080',
+      cdcIntegrationService: createMockCdc(),
+      systemTableCache: createMockCache(),
+    });
+
+    t.ok(
+      service.heartbeatAttemptTimeoutMs > TRANSPORT_DEFAULT.MESSAGE_TIMEOUT_MS,
+      'heartbeat attempt watchdog should exceed router message timeout to avoid equal-deadline races',
+    );
+    t.ok(
+      service.heartbeatAttemptTimeoutMs <=
+        service.readyLeaseMs - service.heartbeatIntervalMs,
+      'heartbeat attempt watchdog should remain within the ready-lease safety budget',
+    );
+
+    ConfigurationManager.resetInstance();
+    LoggingService.resetInstance();
+  });
 
 test('HeartbeatService throttles endpoint upserts but refreshes after interval', async (t) => {
   initEnv();
@@ -648,6 +674,107 @@ test('HeartbeatService does not overlap heartbeat writes when a tick is still in
         release();
       }
       await new Promise((resolve) => setTimeout(resolve, 0));
+      ConfigurationManager.resetInstance();
+      LoggingService.resetInstance();
+    }
+  });
+
+test('HeartbeatService recovers from a hung heartbeat attempt after timeout',
+  async (t) => {
+    initEnv();
+
+    const intervalHandles = [];
+    const timeoutHandles = [];
+    const writes = [];
+    const service = new HeartbeatService({
+      nodeId: 'node-timeout',
+      nodeAddress: '10.0.0.11:8080',
+      cdcIntegrationService: {
+        updateSystemTableRow: async () => {
+          const writeIndex = writes.length;
+          writes.push({resolved: false});
+          if (writeIndex === 0) {
+            return new Promise(() => {});
+          }
+          writes[writeIndex].resolved = true;
+          return {success: true};
+        },
+        upsertSystemTableRow: async () => ({success: true}),
+      },
+      systemTableCache: createMockCache(),
+      setIntervalFn: (callback, intervalMs) => {
+        const handle = {
+          callback,
+          intervalMs,
+          unrefCalled: false,
+          unref() {
+            this.unrefCalled = true;
+          },
+        };
+        intervalHandles.push(handle);
+        return handle;
+      },
+      clearIntervalFn: () => {},
+      setTimeoutFn: (callback, delayMs) => {
+        const handle = {
+          callback,
+          delayMs,
+          cleared: false,
+          unrefCalled: false,
+          unref() {
+            this.unrefCalled = true;
+          },
+        };
+        timeoutHandles.push(handle);
+        return handle;
+      },
+      clearTimeoutFn: (handle) => {
+        if (handle) {
+          handle.cleared = true;
+        }
+      },
+      heartbeatAttemptTimeoutMs: 25,
+    });
+
+    service.initialize();
+    service.start();
+
+    try {
+      t.equal(writes.length, 1, 'start should issue the first heartbeat attempt');
+      t.equal(service.heartbeatConsecutiveFailures, 0,
+        'first heartbeat attempt should not fail immediately');
+
+      await intervalHandles[0].callback();
+      t.equal(
+        writes.length,
+        1,
+        'heartbeat loop should not overlap before the attempt timeout fires',
+      );
+
+      t.equal(timeoutHandles.length, 1,
+        'heartbeat attempt should arm a timeout watchdog');
+      timeoutHandles[0].callback();
+
+      t.equal(
+        service.heartbeatConsecutiveFailures,
+        1,
+        'timed out heartbeat attempt should count as a failure',
+      );
+
+      await intervalHandles[0].callback();
+      t.equal(
+        writes.length,
+        2,
+        'heartbeat loop should retry after timing out the stalled attempt',
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      t.equal(service.getHeartbeatCount(), 1,
+        'successful retry should increment the heartbeat count');
+      t.equal(service.heartbeatConsecutiveFailures, 0,
+        'successful retry should reset consecutive failures');
+    } finally {
+      service.stop();
       ConfigurationManager.resetInstance();
       LoggingService.resetInstance();
     }

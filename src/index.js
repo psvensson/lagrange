@@ -44,6 +44,8 @@ import {
 import {
   resolveControlPlaneRolloutControls,
 } from './runtime/control-plane-rollout-controls.js';
+import {createManagedSplitMetricsProvider} from
+  './partition/managed-split-metrics-provider.js';
 
 // Re-export modules for external use
 export * from './query/index.js';
@@ -610,6 +612,18 @@ async function main() {
         serviceRuntimeLifecycle: nodeJoiningService.serviceRuntimeLifecycle,
         wasmExecutor,
       });
+      const {PartitionSplitMergeManager} =
+        await import('./partition/partition-split-merge-manager.js');
+      const partitionSplitMergeManager = new PartitionSplitMergeManager({
+        tablePolicyService: nodeJoiningService.tablePolicyService,
+        listPartitions: () => sqlQueryEngine.listManagedSplitPartitions(),
+        getPartitionMetrics: createManagedSplitMetricsProvider({
+          partitionServices: joinResult.partitionServices,
+        }),
+        executeSplitCandidate: (partitionId) =>
+          sqlQueryEngine.executeManagedSplit(partitionId),
+      });
+      sqlQueryEngine.setPartitionSplitMergeManager(partitionSplitMergeManager);
     }
     bootstrapAPI.setSqlQueryEngine(sqlQueryEngine);
 
@@ -818,6 +832,18 @@ async function main() {
       serviceRuntimeLifecycle: bootstrapService.serviceRuntimeLifecycle,
       wasmExecutor,
     });
+    const {PartitionSplitMergeManager} =
+      await import('./partition/partition-split-merge-manager.js');
+    const partitionSplitMergeManager = new PartitionSplitMergeManager({
+      tablePolicyService: bootstrapService.tablePolicyService,
+      listPartitions: () => sqlQueryEngine.listManagedSplitPartitions(),
+      getPartitionMetrics: createManagedSplitMetricsProvider({
+        partitionServices: bootstrapResult.partitionServices,
+      }),
+      executeSplitCandidate: (partitionId) =>
+        sqlQueryEngine.executeManagedSplit(partitionId),
+    });
+    sqlQueryEngine.setPartitionSplitMergeManager(partitionSplitMergeManager);
 
     const seedDynamicConfigWiring = await startDynamicConfigWiring({
       nodeId: config.get(CONFIG_KEY.NODE_ID),

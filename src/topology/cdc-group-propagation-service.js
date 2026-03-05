@@ -12,10 +12,10 @@ import {
   LATENCY_GROUP_STATE,
   LATENCY_PROPAGATION_MODE,
   LATENCY_TOPOLOGY_CONFIG_KEY,
-  LATENCY_TOPOLOGY_DEFAULT,
   LATENCY_TOPOLOGY_MESSAGE_TYPE,
 } from './latency-topology-constants.js';
 import {
+  CDC_GROUP_PUBLICATION_MODE,
   CDC_GROUP_PROPAGATION_ERROR_MSG,
   CDC_GROUP_PROPAGATION_EVENT,
   CDC_GROUP_PROPAGATION_LOG_MSG,
@@ -32,6 +32,7 @@ const CDC_GROUP_PROPAGATION_MESSAGE = Object.freeze({
 });
 const MESSAGE_GROUP_REPLICA_SUFFIX = '-r';
 const DELIVERY_ERROR_UNKNOWN = 'unknown delivery error';
+const PUBLICATION_TRANSITION_HISTORY_LIMIT = 10;
 
 class CDCGroupPropagationService extends EventEmitter {
   /**
@@ -51,7 +52,11 @@ class CDCGroupPropagationService extends EventEmitter {
     this.nowFn = options.nowFn || Date.now;
 
     this.config = ConfigurationManager.getInstance();
-    this.propagationMode = LATENCY_TOPOLOGY_DEFAULT.PROPAGATION_MODE;
+    this.propagationMode =
+      this.config.get(LATENCY_TOPOLOGY_CONFIG_KEY.PROPAGATION_MODE) ===
+        LATENCY_PROPAGATION_MODE.GROUPED ?
+        LATENCY_PROPAGATION_MODE.GROUPED :
+        LATENCY_PROPAGATION_MODE.SAFE;
 
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
@@ -88,6 +93,18 @@ class CDCGroupPropagationService extends EventEmitter {
       CDC_GROUP_PROPAGATION_RETRY.MAX_DELAY_MS,
     );
     this.backgroundRetryTimers = new Set();
+    this.publicationModeDiagnostics = this.freezePublicationModeDiagnostics({
+      currentMode: this.propagationMode ===
+        LATENCY_PROPAGATION_MODE.GROUPED ?
+        CDC_GROUP_PUBLICATION_MODE.GROUPED :
+        CDC_GROUP_PUBLICATION_MODE.REPAIR_ONLY,
+      reasonCode: this.propagationMode ===
+        LATENCY_PROPAGATION_MODE.GROUPED ?
+        null :
+        CDC_GROUP_PROPAGATION_REASON.CONFIG_SAFE_MODE,
+      enteredAt: this.toIsoTimestamp(this.now()),
+      recentTransitions: [],
+    });
   }
 
   /**
@@ -185,6 +202,10 @@ class CDCGroupPropagationService extends EventEmitter {
     this.refreshConfig();
     const groupedContext = this.buildGroupedContext();
     if (groupedContext.fallbackReason) {
+      this.setPublicationMode(
+        CDC_GROUP_PUBLICATION_MODE.CONSERVATIVE_FANOUT,
+        groupedContext.fallbackReason,
+      );
       return this.propagateSafe({
         tableName,
         operation,
@@ -195,6 +216,10 @@ class CDCGroupPropagationService extends EventEmitter {
     }
 
     if (this.propagationMode !== LATENCY_PROPAGATION_MODE.GROUPED) {
+      this.setPublicationMode(
+        CDC_GROUP_PUBLICATION_MODE.REPAIR_ONLY,
+        CDC_GROUP_PROPAGATION_REASON.CONFIG_SAFE_MODE,
+      );
       return this.propagateSafe({
         tableName,
         operation,
@@ -206,31 +231,56 @@ class CDCGroupPropagationService extends EventEmitter {
 
     await sourceMessageGroupService.applyCDCEvent(tableName, operation, data);
 
-    const deliveryFailures = await this.deliverToTargetsWithRetry({
+    const groupedDeliveryFailures = await this.deliverToTargetsWithRetry({
       tableName,
       operation,
       data,
       sourceGroupId: groupedContext.sourceGroupId,
       targets: groupedContext.targets,
     });
+    const groupedFailureCount = groupedDeliveryFailures.length;
+    const fallbackRecovery = groupedFailureCount > NUM.ZERO ?
+      await this.recoverGroupedDeliveryFailuresWithSafeFanout({
+        tableName,
+        operation,
+        data,
+        sourceGroupId: groupedContext.sourceGroupId,
+        deliveryFailures: groupedDeliveryFailures,
+      }) :
+      {deliveryFailures: groupedDeliveryFailures, fallbackUsed: false};
+    const deliveryFailures = fallbackRecovery.deliveryFailures;
+    const fallbackUsed = fallbackRecovery.fallbackUsed === true;
 
     const timestamp = this.now();
     this.stats.groupedCount += NUM.ONE;
     this.stats.lastStrategy =
       CDC_GROUP_PROPAGATION_STRATEGY.GROUP_COORDINATOR;
     this.stats.lastMode = CDC_GROUP_PROPAGATION_STATUS.GROUPED;
-    this.stats.lastFallbackReason = null;
+    this.stats.lastFallbackReason = fallbackUsed ?
+      CDC_GROUP_PROPAGATION_REASON.GROUPED_DELIVERY_FAILURE :
+      null;
     this.stats.lastPropagationAt = timestamp;
     this.stats.lastTargetGroupCount = groupedContext.targets.length;
 
-    if (deliveryFailures.length > NUM.ZERO) {
-      this.stats.groupedDeliveryFailureCount += deliveryFailures.length;
+    if (groupedFailureCount > NUM.ZERO) {
+      this.stats.groupedDeliveryFailureCount += groupedFailureCount;
+      this.setPublicationMode(
+        CDC_GROUP_PUBLICATION_MODE.CONSERVATIVE_FANOUT,
+        CDC_GROUP_PROPAGATION_REASON.GROUPED_DELIVERY_FAILURE,
+      );
       this.logger.warn(CDC_GROUP_PROPAGATION_LOG_MSG.GROUPED_DELIVERY_FAILED, {
         nodeId: this.nodeId,
         tableName,
         operation,
-        failureCount: deliveryFailures.length,
+        failureCount: groupedFailureCount,
+        recoveredCount: groupedFailureCount - deliveryFailures.length,
+        unresolvedCount: deliveryFailures.length,
       });
+    } else {
+      this.setPublicationMode(
+        CDC_GROUP_PUBLICATION_MODE.GROUPED,
+        CDC_GROUP_PROPAGATION_REASON.GROUPED_DELIVERY_RECOVERED,
+      );
     }
 
     const result = {
@@ -241,6 +291,12 @@ class CDCGroupPropagationService extends EventEmitter {
       sourceGroupId: groupedContext.sourceGroupId,
       targetGroupCount: groupedContext.targets.length,
       deliveryFailures,
+      fallbackReason: fallbackUsed ?
+        CDC_GROUP_PROPAGATION_REASON.GROUPED_DELIVERY_FAILURE :
+        null,
+      fallbackStrategy: fallbackUsed ?
+        CDC_GROUP_PROPAGATION_STRATEGY.DIRECT_FANOUT :
+        null,
       timestamp,
     };
     this.emit(CDC_GROUP_PROPAGATION_EVENT.PROPAGATED, result);
@@ -291,24 +347,10 @@ class CDCGroupPropagationService extends EventEmitter {
     this.stats.lastTargetGroupCount = safeTargets.length;
 
     if (options.fallbackReason) {
-      this.stats.fallbackCount += NUM.ONE;
-      this.emit(CDC_GROUP_PROPAGATION_EVENT.SAFE_FALLBACK, {
-        reason: options.fallbackReason,
+      this.recordSafeFallback(options.fallbackReason, {
         tableName: options.tableName,
         operation: options.operation,
       });
-      const fallbackLogContext = {
-        nodeId: this.nodeId,
-        tableName: options.tableName,
-        operation: options.operation,
-        strategy: CDC_GROUP_PROPAGATION_STRATEGY.DIRECT_FANOUT,
-        reason: options.fallbackReason,
-      };
-      if (options.fallbackReason === CDC_GROUP_PROPAGATION_REASON.CONFIG_SAFE_MODE) {
-        this.logger.debug(CDC_GROUP_PROPAGATION_LOG_MSG.SAFE_FALLBACK, fallbackLogContext);
-      } else {
-        this.logger.warn(CDC_GROUP_PROPAGATION_LOG_MSG.SAFE_FALLBACK, fallbackLogContext);
-      }
     }
 
     this.logger.debug(CDC_GROUP_PROPAGATION_LOG_MSG.PROPAGATED_SAFE, {
@@ -489,6 +531,137 @@ class CDCGroupPropagationService extends EventEmitter {
       });
     }
     return [...targetsByGroupId.values()];
+  }
+
+  /**
+   * Re-drive grouped delivery misses through the conservative direct-fanout
+   * path so control-plane metadata converges under coordinator instability.
+   * @param {Object} options
+   * @return {Promise<{deliveryFailures:Array<Object>, fallbackUsed:boolean}>}
+   * @private
+   */
+  async recoverGroupedDeliveryFailuresWithSafeFanout(options) {
+    const originalFailures = Array.isArray(options.deliveryFailures) ?
+      options.deliveryFailures :
+      [];
+    if (originalFailures.length === NUM.ZERO) {
+      return {
+        deliveryFailures: [],
+        fallbackUsed: false,
+      };
+    }
+
+    const failedGroupIds = new Set();
+    const unresolvedFailures = [];
+    for (const failure of originalFailures) {
+      const groupId = failure?.targetGroupId;
+      if (typeof groupId === TYPEOF.STRING && groupId.length > NUM.ZERO) {
+        failedGroupIds.add(groupId);
+        continue;
+      }
+      unresolvedFailures.push(failure);
+    }
+    if (failedGroupIds.size === NUM.ZERO) {
+      return {
+        deliveryFailures: originalFailures,
+        fallbackUsed: false,
+      };
+    }
+
+    const safeTargets = this.buildSafeTargets(options.sourceGroupId)
+      .filter((target) => failedGroupIds.has(target.groupId));
+    if (safeTargets.length === NUM.ZERO) {
+      return {
+        deliveryFailures: originalFailures,
+        fallbackUsed: false,
+      };
+    }
+
+    this.recordSafeFallback(
+      CDC_GROUP_PROPAGATION_REASON.GROUPED_DELIVERY_FAILURE,
+      {
+        tableName: options.tableName,
+        operation: options.operation,
+        failedGroupCount: failedGroupIds.size,
+      },
+    );
+
+    const recoveredFailures = await this.deliverToTargetsWithRetry({
+      tableName: options.tableName,
+      operation: options.operation,
+      data: options.data,
+      sourceGroupId: options.sourceGroupId,
+      targets: safeTargets,
+    });
+    const failuresByKey = new Map();
+    let unkeyedCounter = NUM.ZERO;
+    const targetedGroupIds = new Set(
+      safeTargets.map((target) => target.groupId),
+    );
+
+    for (const failure of unresolvedFailures) {
+      failuresByKey.set(`unkeyed-${unkeyedCounter++}`, failure);
+    }
+    for (const failure of originalFailures) {
+      const groupId = failure?.targetGroupId;
+      if (typeof groupId === TYPEOF.STRING &&
+          groupId.length > NUM.ZERO &&
+          !targetedGroupIds.has(groupId)) {
+        failuresByKey.set(groupId, failure);
+      }
+    }
+    for (const failure of recoveredFailures) {
+      const groupId = failure?.targetGroupId;
+      if (typeof groupId === TYPEOF.STRING && groupId.length > NUM.ZERO) {
+        failuresByKey.set(groupId, failure);
+      } else {
+        failuresByKey.set(`recovered-unkeyed-${unkeyedCounter++}`, failure);
+      }
+    }
+
+    return {
+      deliveryFailures: [...failuresByKey.values()],
+      fallbackUsed: true,
+    };
+  }
+
+  /**
+   * Emit diagnostics for one direct-fanout fallback decision.
+   * @param {string} reason
+   * @param {Object} context
+   * @private
+   */
+  recordSafeFallback(reason, context = {}) {
+    this.stats.fallbackCount += NUM.ONE;
+    this.emit(CDC_GROUP_PROPAGATION_EVENT.SAFE_FALLBACK, {
+      reason,
+      tableName: context.tableName,
+      operation: context.operation,
+    });
+
+    const fallbackLogContext = {
+      nodeId: this.nodeId,
+      tableName: context.tableName,
+      operation: context.operation,
+      strategy: CDC_GROUP_PROPAGATION_STRATEGY.DIRECT_FANOUT,
+      reason,
+    };
+    if (Number.isInteger(context.failedGroupCount) &&
+        context.failedGroupCount > NUM.ZERO) {
+      fallbackLogContext.failedGroupCount = context.failedGroupCount;
+    }
+
+    if (reason === CDC_GROUP_PROPAGATION_REASON.CONFIG_SAFE_MODE) {
+      this.logger.debug(
+        CDC_GROUP_PROPAGATION_LOG_MSG.SAFE_FALLBACK,
+        fallbackLogContext,
+      );
+      return;
+    }
+    this.logger.warn(
+      CDC_GROUP_PROPAGATION_LOG_MSG.SAFE_FALLBACK,
+      fallbackLogContext,
+    );
   }
 
   /**
@@ -821,10 +994,35 @@ class CDCGroupPropagationService extends EventEmitter {
   refreshConfig() {
     const value = this.config.get(LATENCY_TOPOLOGY_CONFIG_KEY.PROPAGATION_MODE);
     if (value === LATENCY_PROPAGATION_MODE.GROUPED) {
+      const previousPropagationMode = this.propagationMode;
       this.propagationMode = LATENCY_PROPAGATION_MODE.GROUPED;
+      if (previousPropagationMode !== LATENCY_PROPAGATION_MODE.GROUPED ||
+          !this.publicationModeDiagnostics) {
+        this.setPublicationMode(
+          CDC_GROUP_PUBLICATION_MODE.GROUPED,
+          CDC_GROUP_PROPAGATION_REASON.CONFIG_GROUPED_MODE,
+        );
+      }
       return;
     }
     this.propagationMode = LATENCY_PROPAGATION_MODE.SAFE;
+    this.setPublicationMode(
+      CDC_GROUP_PUBLICATION_MODE.REPAIR_ONLY,
+      CDC_GROUP_PROPAGATION_REASON.CONFIG_SAFE_MODE,
+    );
+  }
+
+  /**
+   * Get the canonical publication-mode diagnostics snapshot.
+   * @return {Object}
+   */
+  getPublicationModeDiagnostics() {
+    return this.freezePublicationModeDiagnostics({
+      ...this.publicationModeDiagnostics,
+      recentTransitions: Array.isArray(
+        this.publicationModeDiagnostics?.recentTransitions,
+      ) ? this.publicationModeDiagnostics.recentTransitions : [],
+    });
   }
 
   /**
@@ -841,7 +1039,71 @@ class CDCGroupPropagationService extends EventEmitter {
       deliveryRetryDelayMs: this.deliveryRetryDelayMs,
       deliveryRetryBackoffMultiplier: this.deliveryRetryBackoffMultiplier,
       deliveryRetryMaxDelayMs: this.deliveryRetryMaxDelayMs,
+      publicationModeDiagnostics: this.getPublicationModeDiagnostics(),
     };
+  }
+
+  /**
+   * Update the canonical publication-mode diagnostics.
+   * @param {string} nextMode
+   * @param {string|null} reasonCode
+   * @private
+   */
+  setPublicationMode(nextMode, reasonCode) {
+    const current = this.publicationModeDiagnostics;
+    if (!nextMode) {
+      return;
+    }
+
+    if (!current || current.currentMode !== nextMode) {
+      const changedAt = this.toIsoTimestamp(this.now());
+      const recentTransitions = Array.isArray(current?.recentTransitions) ?
+        [...current.recentTransitions] :
+        [];
+
+      if (current?.currentMode) {
+        recentTransitions.push(Object.freeze({
+          from: current.currentMode,
+          to: nextMode,
+          reasonCode: reasonCode || null,
+          changedAt,
+        }));
+      }
+      this.publicationModeDiagnostics = this.freezePublicationModeDiagnostics({
+        currentMode: nextMode,
+        reasonCode: reasonCode || null,
+        enteredAt: changedAt,
+        recentTransitions: recentTransitions.slice(
+          -PUBLICATION_TRANSITION_HISTORY_LIMIT,
+        ),
+      });
+      return;
+    }
+
+    if (reasonCode && current.reasonCode !== reasonCode) {
+      this.publicationModeDiagnostics = this.freezePublicationModeDiagnostics({
+        ...current,
+        reasonCode,
+      });
+    }
+  }
+
+  /**
+   * Create a read-only publication diagnostics snapshot.
+   * @param {Object} diagnostics
+   * @return {Object}
+   * @private
+   */
+  freezePublicationModeDiagnostics(diagnostics) {
+    const transitions = Array.isArray(diagnostics?.recentTransitions) ?
+      diagnostics.recentTransitions.map((entry) => Object.freeze({...entry})) :
+      [];
+    return Object.freeze({
+      currentMode: diagnostics?.currentMode || null,
+      reasonCode: diagnostics?.reasonCode || null,
+      enteredAt: diagnostics?.enteredAt || null,
+      recentTransitions: Object.freeze(transitions),
+    });
   }
 
   /**
@@ -862,6 +1124,16 @@ class CDCGroupPropagationService extends EventEmitter {
    */
   now() {
     return this.nowFn();
+  }
+
+  /**
+   * Convert the current clock value to an ISO-8601 timestamp.
+   * @param {number} value
+   * @return {string}
+   * @private
+   */
+  toIsoTimestamp(value) {
+    return new Date(value).toISOString();
   }
 
   /**

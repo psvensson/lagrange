@@ -395,6 +395,10 @@ class SQLiteLogAdapter {
       term: this.node ? this.node.term : 0,
     };
 
+    if (!entry || typeof entry.index !== 'number' || !Number.isFinite(entry.index)) {
+      return defaultInfo;
+    }
+
     if (entry.index <= 1) {
       return defaultInfo;
     }

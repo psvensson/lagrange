@@ -67,7 +67,14 @@ import {
   STRING,
   TABLES,
 } from '../constants/index.js';
-import {PARTITION_RAFT_ROLE, PARTITION_STATE, PARTITION_SUBSYSTEM} from './partition-constants.js';
+import {
+  PARTITION_RAFT_ROLE,
+  PARTITION_SPLIT_MIRROR_ORIGIN,
+  PARTITION_STATE,
+  PARTITION_SUBSYSTEM,
+  PARTITION_TRANSITION_METADATA_FIELD,
+  PARTITION_TRANSITION_STATE,
+} from './partition-constants.js';
 import {
   PARTITION_SERVICE_ADDRESS,
   PARTITION_SERVICE_COLUMN,
@@ -313,6 +320,8 @@ class PartitionService extends EventEmitter {
     this.learnerCatchUpCheckIntervalMs = options.learnerCatchUpCheckIntervalMs ||
       PARTITION_SERVICE_DEFAULT.LEARNER_CATCH_UP_CHECK_INTERVAL_MS;
     this.learnerPromotionTimer = null;
+    this.splitReplication = null;
+    this.splitReplicationRun = null;
   }
 
   get systemTableCache() {
@@ -375,6 +384,12 @@ class PartitionService extends EventEmitter {
     return this.roleMutationHelper?.retryTimer || null;
   }
 
+  set roleUpdateRetryTimer(timer) {
+    if (this.roleMutationHelper) {
+      this.roleMutationHelper.retryTimer = timer;
+    }
+  }
+
   get pendingLeaderNodeUpdate() {
     return this.leaderNodeMutationHelper?.pendingValue || null;
   }
@@ -399,8 +414,20 @@ class PartitionService extends EventEmitter {
     return this.leaderNodeMutationHelper?.inFlight || false;
   }
 
+  set leaderNodeUpdateInFlight(inFlight) {
+    if (this.leaderNodeMutationHelper) {
+      this.leaderNodeMutationHelper.inFlight = inFlight;
+    }
+  }
+
   get leaderNodeUpdateRetryTimer() {
     return this.leaderNodeMutationHelper?.retryTimer || null;
+  }
+
+  set leaderNodeUpdateRetryTimer(timer) {
+    if (this.leaderNodeMutationHelper) {
+      this.leaderNodeMutationHelper.retryTimer = timer;
+    }
   }
 
   createRoleMutationHelper() {
@@ -1261,6 +1288,7 @@ class PartitionService extends EventEmitter {
     this.db.exec(sql);
 
     this.ensureNodesTableColumns();
+    this.ensureTablesTableColumns();
     this.ensureMessageGroupsTableColumns();
     this.ensurePartitionsTableColumns();
 
@@ -1375,6 +1403,78 @@ class PartitionService extends EventEmitter {
   }
 
   /**
+   * Ensure tables table includes partition lifecycle columns.
+   * @private
+   */
+  ensureTablesTableColumns() {
+    if (this.tableName !== SYSTEM_TABLE_NAME.TABLES) {
+      return;
+    }
+
+    const columns = this.db.prepare(`PRAGMA table_info(${this.tableName})`).all();
+    const hasActivePartitionVersion = columns.some(
+      (col) => col.name === PARTITION_SERVICE_COLUMN.ACTIVE_PARTITION_VERSION,
+    );
+    const hasPendingPartitionVersion = columns.some(
+      (col) => col.name === PARTITION_SERVICE_COLUMN.PENDING_PARTITION_VERSION,
+    );
+    const hasPartitionTransitionState = columns.some(
+      (col) => col.name === PARTITION_SERVICE_COLUMN.PARTITION_TRANSITION_STATE,
+    );
+    const hasPartitionTransitionMetadata = columns.some(
+      (col) => col.name === PARTITION_SERVICE_COLUMN.PARTITION_TRANSITION_METADATA,
+    );
+
+    if (!hasActivePartitionVersion) {
+      this.db.exec(
+        `ALTER TABLE ${this.tableName} ` +
+        PARTITION_SERVICE_COLUMN_SQL.ADD_ACTIVE_PARTITION_VERSION,
+      );
+
+      this.logger.info(PARTITION_SERVICE_LOG_MSG.ADDED_ACTIVE_PARTITION_VERSION, {
+        tableName: this.tableName,
+        partitionId: this.partitionId,
+      });
+    }
+
+    if (!hasPendingPartitionVersion) {
+      this.db.exec(
+        `ALTER TABLE ${this.tableName} ` +
+        PARTITION_SERVICE_COLUMN_SQL.ADD_PENDING_PARTITION_VERSION,
+      );
+
+      this.logger.info(PARTITION_SERVICE_LOG_MSG.ADDED_PENDING_PARTITION_VERSION, {
+        tableName: this.tableName,
+        partitionId: this.partitionId,
+      });
+    }
+
+    if (!hasPartitionTransitionState) {
+      this.db.exec(
+        `ALTER TABLE ${this.tableName} ` +
+        PARTITION_SERVICE_COLUMN_SQL.ADD_PARTITION_TRANSITION_STATE,
+      );
+
+      this.logger.info(PARTITION_SERVICE_LOG_MSG.ADDED_PARTITION_TRANSITION_STATE, {
+        tableName: this.tableName,
+        partitionId: this.partitionId,
+      });
+    }
+
+    if (!hasPartitionTransitionMetadata) {
+      this.db.exec(
+        `ALTER TABLE ${this.tableName} ` +
+        PARTITION_SERVICE_COLUMN_SQL.ADD_PARTITION_TRANSITION_METADATA,
+      );
+
+      this.logger.info(PARTITION_SERVICE_LOG_MSG.ADDED_PARTITION_TRANSITION_METADATA, {
+        tableName: this.tableName,
+        partitionId: this.partitionId,
+      });
+    }
+  }
+
+  /**
    * Ensure partitions table includes table_name column for compatibility.
    * @private
    */
@@ -1387,6 +1487,9 @@ class PartitionService extends EventEmitter {
     const hasTableName = columns.some(
       (col) => col.name === PARTITION_SERVICE_COLUMN.TABLE_NAME,
     );
+    const hasPartitionVersion = columns.some(
+      (col) => col.name === PARTITION_SERVICE_COLUMN.PARTITION_VERSION,
+    );
 
     if (!hasTableName) {
       this.db.exec(
@@ -1395,6 +1498,18 @@ class PartitionService extends EventEmitter {
       );
 
       this.logger.info(PARTITION_SERVICE_LOG_MSG.ADDED_PARTITIONS_TABLE_NAME, {
+        tableName: this.tableName,
+        partitionId: this.partitionId,
+      });
+    }
+
+    if (!hasPartitionVersion) {
+      this.db.exec(
+        `ALTER TABLE ${this.tableName} ` +
+        PARTITION_SERVICE_COLUMN_SQL.ADD_PARTITION_VERSION,
+      );
+
+      this.logger.info(PARTITION_SERVICE_LOG_MSG.ADDED_PARTITION_VERSION, {
         tableName: this.tableName,
         partitionId: this.partitionId,
       });
@@ -1494,6 +1609,8 @@ class PartitionService extends EventEmitter {
       // Handle remote SQL query execution
       // Enables transparent query routing across the cluster
       return this.handleRemoteQuery(payload);
+    case PARTITION_SERVICE_MESSAGE_TYPE.START_SPLIT_REPLICATION:
+      return this.handleStartSplitReplication(payload);
     default:
       // Unknown message type - log and acknowledge to avoid blocking
       this.logger.debug(PARTITION_SERVICE_LOG_MSG.UNKNOWN_MESSAGE_TYPE, {
@@ -1597,7 +1714,7 @@ class PartitionService extends EventEmitter {
    * @private
    */
   async handleRemoteQuery(payload) {
-    const {sql, params} = payload;
+    const {sql, params, splitMirrorOrigin} = payload;
 
     if (!sql) {
       return {acknowledged: false, error: PARTITION_SERVICE_ERROR_MSG.MISSING_SQL_QUERY};
@@ -1638,7 +1755,9 @@ class PartitionService extends EventEmitter {
     });
 
     try {
-      const result = await this.executeQuery(sql, params || []);
+      const result = await this.executeQuery(sql, params || [], {
+        splitMirrorOrigin: splitMirrorOrigin || null,
+      });
       return {
         acknowledged: true,
         success: true,
@@ -1655,6 +1774,84 @@ class PartitionService extends EventEmitter {
       });
       throw error;
     }
+  }
+
+  /**
+   * Validate and start one source-partition split replication workflow.
+   * The request is acknowledged once accepted; backfill/cutover continues
+   * asynchronously on the source leader.
+   * @param {Object} payload - Split replication request.
+   * @return {Promise<Object>} ACK response.
+   * @private
+   */
+  async handleStartSplitReplication(payload) {
+    const transitionMetadata = payload?.transitionMetadata;
+    const metadata = this.normalizeSplitTransitionMetadata(transitionMetadata);
+    if (!metadata) {
+      return {
+        acknowledged: false,
+        error: PARTITION_SERVICE_ERROR_MSG.INVALID_SPLIT_REPLICATION,
+      };
+    }
+
+    this.logger.info(PARTITION_SERVICE_LOG_MSG.START_SPLIT_REPLICATION_REQUEST, {
+      partitionId: this.partitionId,
+      tableId: payload?.tableId || this.tableId,
+      tableName: payload?.tableName || this.tableName,
+      targetPartitionIds: metadata.targetPartitionIds,
+      targetPartitionVersion: metadata.targetPartitionVersion,
+    });
+
+    if (this.role !== RaftRole.LEADER) {
+      const leaderAddress = this.resolveLeaderAddress();
+      if (leaderAddress && this.transport) {
+        return this.transport.deliver(leaderAddress, {
+          type: PARTITION_SERVICE_MESSAGE_TYPE.START_SPLIT_REPLICATION,
+          partitionId: payload?.partitionId || this.partitionId,
+          tableId: payload?.tableId || this.tableId,
+          tableName: payload?.tableName || this.tableName,
+          transitionMetadata,
+        });
+      }
+      return {
+        acknowledged: false,
+        error: ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE,
+      };
+    }
+
+    if (this.splitReplication &&
+        this.isSameSplitReplication(this.splitReplication.metadata, metadata)) {
+      return {acknowledged: true, success: true};
+    }
+
+    if (this.splitReplication) {
+      return {
+        acknowledged: false,
+        error: PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_STATE_REQUIRED,
+      };
+    }
+
+    this.splitReplication = {
+      metadata,
+      phase: PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING,
+      pendingEntries: [],
+      flushInFlight: false,
+      startedAt: Date.now(),
+      lastError: null,
+    };
+    this.splitReplicationRun = this.runSplitReplicationWorkflow()
+      .catch((error) => {
+        if (this.splitReplication) {
+          this.splitReplication.lastError = error.message;
+          this.splitReplication.phase = 'failed';
+        }
+        this.logger.error(PARTITION_SERVICE_LOG_MSG.SPLIT_REPLICATION_FAILED, {
+          partitionId: this.partitionId,
+          error: error.message,
+        });
+      });
+
+    return {acknowledged: true, success: true};
   }
 
   /**
@@ -1975,7 +2172,7 @@ class PartitionService extends EventEmitter {
    * @param {Array} params - Query parameters.
    * @return {Promise<Object>} Query result.
    */
-  async executeQuery(sql, params = []) {
+  async executeQuery(sql, params = [], options = {}) {
     if (!this.initialized) {
       throw new Error(PARTITION_SERVICE_ERROR_MSG.NOT_INITIALIZED);
     }
@@ -2016,6 +2213,7 @@ class PartitionService extends EventEmitter {
             type: PARTITION_SERVICE_OPERATION.QUERY,
             sql,
             params,
+            splitMirrorOrigin: options.splitMirrorOrigin || null,
           });
         }
         // For write operations outside transaction, go through Raft
@@ -2023,6 +2221,7 @@ class PartitionService extends EventEmitter {
           type: PARTITION_SERVICE_OPERATION.QUERY,
           sql,
           params,
+          splitMirrorOrigin: options.splitMirrorOrigin || null,
         });
       }
     } catch (error) {
@@ -2542,6 +2741,11 @@ class PartitionService extends EventEmitter {
           partitionId: this.partitionId,
           error: error.message,
         });
+      });
+
+      await this.handleSplitReplicationAfterWrite({
+        ...entry,
+        changes: info.changes,
       });
 
       // Schedule size update
@@ -3146,6 +3350,7 @@ class PartitionService extends EventEmitter {
         sizeBytes,
         timestamp: this.lastSizeUpdate,
       });
+      await this.persistPartitionSize(sizeBytes);
     } catch (error) {
       this.logger.error(PARTITION_SERVICE_ERROR_MSG.PARTITION_SIZE_UPDATE_FAILED, {
         partitionId: this.partitionId,
@@ -3214,6 +3419,473 @@ class PartitionService extends EventEmitter {
    */
   getSize() {
     return this.sizeBytes;
+  }
+
+  /**
+   * Persist leader-owned size_bytes updates into the partitions system table.
+   * @param {number} sizeBytes - Latest measured size.
+   * @return {Promise<void>}
+   * @private
+   */
+  async persistPartitionSize(sizeBytes) {
+    if (!this.isLeader ||
+        !this.systemTableCache ||
+        !this.cdcIntegrationService ||
+        !this.isPartitionsLeaderAvailable()) {
+      return;
+    }
+
+    const cachedPartition = this.systemTableCache.get?.(
+      TABLES.PARTITIONS,
+      this.partitionId,
+    ) || null;
+    if (!cachedPartition) {
+      return;
+    }
+
+    const cachedSize = Number(
+      cachedPartition.size_bytes ?? cachedPartition.sizeBytes,
+    );
+    if (Number.isFinite(cachedSize) && cachedSize === sizeBytes) {
+      return;
+    }
+
+    try {
+      await this.cdcIntegrationService.updateSystemTableRow(
+        TABLES.PARTITIONS,
+        {partition_id: this.partitionId},
+        {
+          size_bytes: sizeBytes,
+          updated_at: Date.now(),
+        },
+      );
+    } catch (error) {
+      this.logger.warn(PARTITION_SERVICE_LOG_MSG.SPLIT_REPLICATION_SIZE_PERSIST_FAILED, {
+        partitionId: this.partitionId,
+        sizeBytes,
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * Normalize split transition metadata from table/control-plane payloads.
+   * @param {Object|string|null} rawMetadata - Metadata payload.
+   * @return {Object|null} Normalized metadata.
+   * @private
+   */
+  normalizeSplitTransitionMetadata(rawMetadata) {
+    if (!rawMetadata) {
+      return null;
+    }
+    let metadata = rawMetadata;
+    if (typeof rawMetadata === 'string') {
+      try {
+        metadata = JSON.parse(rawMetadata);
+      } catch {
+        return null;
+      }
+    }
+    if (!metadata || typeof metadata !== 'object') {
+      return null;
+    }
+    const targetPartitionIds =
+      metadata[PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_IDS];
+    const targetPartitionVersion = Number(
+      metadata[PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_VERSION],
+    );
+    const primaryKeyColumn =
+      metadata[PARTITION_TRANSITION_METADATA_FIELD.PRIMARY_KEY_COLUMN];
+    const sourcePartitionId =
+      metadata[PARTITION_TRANSITION_METADATA_FIELD.SOURCE_PARTITION_ID];
+    if (!primaryKeyColumn ||
+        !sourcePartitionId ||
+        sourcePartitionId !== this.partitionId ||
+        !Array.isArray(targetPartitionIds) ||
+        targetPartitionIds.length !== NUM.TWO ||
+        !targetPartitionIds[0] ||
+        !targetPartitionIds[1] ||
+        !Number.isInteger(targetPartitionVersion)) {
+      return null;
+    }
+    return {
+      primaryKeyColumn,
+      sourcePartitionId,
+      splitKey: metadata[PARTITION_TRANSITION_METADATA_FIELD.SPLIT_KEY],
+      targetPartitionIds: [...targetPartitionIds],
+      targetPartitionVersion,
+    };
+  }
+
+  /**
+   * Determine whether two split-replication descriptors refer to the same split.
+   * @param {Object|null} left - Existing metadata.
+   * @param {Object|null} right - Incoming metadata.
+   * @return {boolean} True when both describe the same split.
+   * @private
+   */
+  isSameSplitReplication(left, right) {
+    if (!left || !right) {
+      return false;
+    }
+    return left.primaryKeyColumn === right.primaryKeyColumn &&
+      left.sourcePartitionId === right.sourcePartitionId &&
+      left.splitKey === right.splitKey &&
+      left.targetPartitionVersion === right.targetPartitionVersion &&
+      Array.isArray(left.targetPartitionIds) &&
+      Array.isArray(right.targetPartitionIds) &&
+      left.targetPartitionIds.length === right.targetPartitionIds.length &&
+      left.targetPartitionIds.every((partitionId, index) =>
+        partitionId === right.targetPartitionIds[index],
+      );
+  }
+
+  /**
+   * Run snapshot backfill and queued-delta catch-up for the active split.
+   * @return {Promise<void>}
+   * @private
+   */
+  async runSplitReplicationWorkflow() {
+    const splitReplication = this.splitReplication;
+    const metadata = splitReplication?.metadata || null;
+    if (!metadata) {
+      throw new Error(PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_STATE_REQUIRED);
+    }
+
+    this.logger.info(PARTITION_SERVICE_LOG_MSG.SPLIT_REPLICATION_STARTED, {
+      partitionId: this.partitionId,
+      targetPartitionIds: metadata.targetPartitionIds,
+      targetPartitionVersion: metadata.targetPartitionVersion,
+    });
+
+    const snapshot = this.openSplitSnapshotDatabase();
+    try {
+      await this.backfillSplitSnapshot(snapshot, metadata);
+      splitReplication.phase = 'split_catchup';
+      await this.flushSplitReplicationQueue();
+      await this.markSplitCutoverActive(metadata);
+      splitReplication.phase = PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE;
+      await this.flushSplitReplicationQueue();
+      this.logger.info(PARTITION_SERVICE_LOG_MSG.SPLIT_REPLICATION_COMPLETED, {
+        partitionId: this.partitionId,
+        targetPartitionIds: metadata.targetPartitionIds,
+        targetPartitionVersion: metadata.targetPartitionVersion,
+      });
+    } finally {
+      snapshot?.close?.();
+    }
+  }
+
+  /**
+   * Open a snapshot reader pinned to the current source-partition state.
+   * Falls back to the live connection for in-memory test databases.
+   * @return {Database|Object} Snapshot database handle.
+   * @private
+   */
+  openSplitSnapshotDatabase() {
+    if (!this.dbPath ||
+        this.dbPath === PARTITION_SERVICE_DEFAULT.MEMORY_DB_PATH) {
+      return {
+        prepare: (...args) => this.db.prepare(...args),
+        close() {},
+      };
+    }
+
+    const snapshotDb = new Database(this.dbPath, {
+      readonly: true,
+      fileMustExist: true,
+    });
+    snapshotDb.exec('BEGIN');
+    return snapshotDb;
+  }
+
+  /**
+   * Copy the source snapshot into child partitions using idempotent upserts.
+   * @param {Database|Object} snapshotDb - Snapshot handle.
+   * @param {Object} metadata - Normalized split metadata.
+   * @return {Promise<void>}
+   * @private
+   */
+  async backfillSplitSnapshot(snapshotDb, metadata) {
+    const columns = snapshotDb.prepare(`PRAGMA table_info(${this.tableName})`).all()
+      .map((column) => column.name);
+    const sql = `SELECT * FROM ${this.tableName} ` +
+      `ORDER BY ${metadata.primaryKeyColumn}`;
+    const rows = snapshotDb.prepare(sql).all();
+
+    for (const row of rows) {
+      await this.applySplitSnapshotRow(row, columns, metadata);
+    }
+  }
+
+  /**
+   * Apply one snapshot row to the correct child partition.
+   * @param {Object} row - Source row.
+   * @param {Array<string>} columns - Column list.
+   * @param {Object} metadata - Split metadata.
+   * @return {Promise<void>}
+   * @private
+   */
+  async applySplitSnapshotRow(row, columns, metadata) {
+    const targetPartitionId = this.resolveSplitTargetPartitionId(
+      row?.[metadata.primaryKeyColumn],
+      metadata,
+    );
+    const placeholders = columns
+      .map(() => PARTITION_SERVICE_SQL_FRAGMENT.QUESTION_MARK)
+      .join(PARTITION_SERVICE_SQL_FRAGMENT.COMMA_SPACE);
+    const sql = `${SQL.INSERT_OR_REPLACE_INTO} ${this.tableName} ` +
+      `(${columns.join(PARTITION_SERVICE_SQL_FRAGMENT.COMMA_SPACE)}) ` +
+      `${SQL.VALUES} (${placeholders})`;
+    const params = columns.map((column) => row[column]);
+    await this.routeSplitMirroredWrite(targetPartitionId, sql, params);
+  }
+
+  /**
+   * Update table metadata so routing flips to the new partition version.
+   * @param {Object} metadata - Split metadata.
+   * @return {Promise<void>}
+   * @private
+   */
+  async markSplitCutoverActive(metadata) {
+    if (!this.cdcIntegrationService) {
+      throw new Error(PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_STATE_REQUIRED);
+    }
+
+    await this.cdcIntegrationService.updateSystemTableRow(
+      TABLES.TABLES,
+      {table_id: this.tableId},
+      {
+        active_partition_version: metadata.targetPartitionVersion,
+        pending_partition_version: null,
+        partition_count: metadata.targetPartitionIds.length,
+        partition_transition_state:
+          PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
+        updated_at: Date.now(),
+      },
+    );
+
+    this.logger.info(PARTITION_SERVICE_LOG_MSG.SPLIT_REPLICATION_CUTOVER_UPDATED, {
+      partitionId: this.partitionId,
+      tableId: this.tableId,
+      targetPartitionVersion: metadata.targetPartitionVersion,
+      targetPartitionIds: metadata.targetPartitionIds,
+    });
+  }
+
+  /**
+   * Handle source-partition writes while a split is in progress.
+   * Backfilling queues ordered deltas; cutover-active mirrors immediately.
+   * @param {Object} entry - Applied source write entry.
+   * @return {Promise<void>}
+   * @private
+   */
+  async handleSplitReplicationAfterWrite(entry) {
+    const splitReplication = this.splitReplication;
+    if (!splitReplication ||
+        !splitReplication.metadata ||
+        this.partitionId !== splitReplication.metadata.sourcePartitionId) {
+      return;
+    }
+
+    if (entry.splitMirrorOrigin === PARTITION_SPLIT_MIRROR_ORIGIN.TARGET) {
+      return;
+    }
+
+    if (splitReplication.phase === PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING ||
+        splitReplication.phase === 'split_catchup') {
+      splitReplication.pendingEntries.push(this.cloneSplitEntry(entry));
+      return;
+    }
+
+    if (splitReplication.phase !== PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE) {
+      return;
+    }
+
+    try {
+      await this.replaySplitEntry(entry, splitReplication.metadata);
+    } catch (error) {
+      splitReplication.pendingEntries.push(this.cloneSplitEntry(entry));
+      splitReplication.lastError = error.message;
+      this.logger.warn(PARTITION_SERVICE_LOG_MSG.SPLIT_REPLICATION_MIRROR_FAILED, {
+        partitionId: this.partitionId,
+        error: error.message,
+      });
+      this.flushSplitReplicationQueue().catch((flushError) => {
+        splitReplication.lastError = flushError.message;
+        this.logger.warn(PARTITION_SERVICE_LOG_MSG.SPLIT_REPLICATION_MIRROR_FAILED, {
+          partitionId: this.partitionId,
+          error: flushError.message,
+        });
+      });
+    }
+  }
+
+  /**
+   * Flush queued post-snapshot deltas in source order.
+   * @return {Promise<void>}
+   * @private
+   */
+  async flushSplitReplicationQueue() {
+    const splitReplication = this.splitReplication;
+    if (!splitReplication || splitReplication.flushInFlight) {
+      return;
+    }
+
+    splitReplication.flushInFlight = true;
+    try {
+      while (splitReplication.pendingEntries.length > NUM.ZERO) {
+        const entry = splitReplication.pendingEntries.shift();
+        try {
+          await this.replaySplitEntry(entry, splitReplication.metadata);
+        } catch (error) {
+          splitReplication.pendingEntries.unshift(entry);
+          throw error;
+        }
+      }
+    } finally {
+      splitReplication.flushInFlight = false;
+    }
+  }
+
+  /**
+   * Clone a write entry before placing it in the split catch-up queue.
+   * @param {Object} entry - Applied write entry.
+   * @return {Object} Safe queued copy.
+   * @private
+   */
+  cloneSplitEntry(entry) {
+    return {
+      ...entry,
+      params: Array.isArray(entry?.params) ? [...entry.params] : [],
+      data: entry?.data && typeof entry.data === 'object' ? {...entry.data} : entry?.data,
+      whereClause: entry?.whereClause && typeof entry.whereClause === 'object' ?
+        {...entry.whereClause} :
+        entry?.whereClause,
+    };
+  }
+
+  /**
+   * Replay one queued source write against the correct child partition.
+   * @param {Object} entry - Applied source write entry.
+   * @param {Object} metadata - Split metadata.
+   * @return {Promise<void>}
+   * @private
+   */
+  async replaySplitEntry(entry, metadata) {
+    const routingKey = this.extractSplitRoutingKey(entry, metadata.primaryKeyColumn);
+    const targetPartitionId = this.resolveSplitTargetPartitionId(routingKey, metadata);
+    await this.routeSplitMirroredWrite(
+      targetPartitionId,
+      entry.sql,
+      entry.params || [],
+    );
+  }
+
+  /**
+   * Route one mirrored write through the standard partition query path.
+   * @param {string} partitionId - Child partition ID.
+   * @param {string} sql - SQL statement.
+   * @param {Array} params - Statement parameters.
+   * @return {Promise<void>}
+   * @private
+   */
+  async routeSplitMirroredWrite(partitionId, sql, params) {
+    const queryExecutor = this.sqlQueryEngine?.queryExecutor || null;
+    if (!queryExecutor ||
+        typeof queryExecutor.executeOnPartition !== PARTITION_SERVICE_TYPE.FUNCTION) {
+      throw new Error(PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_ROUTING_FAILED);
+    }
+
+    const result = await queryExecutor.executeOnPartition(
+      partitionId,
+      sql,
+      params,
+      false,
+      true,
+      false,
+      {splitMirrorOrigin: PARTITION_SPLIT_MIRROR_ORIGIN.SOURCE},
+    );
+
+    if (!result?.success) {
+      throw new Error(
+        result?.error || PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_ROUTING_FAILED,
+      );
+    }
+  }
+
+  /**
+   * Resolve the child partition ID for one partition-key value.
+   * @param {*} value - Primary-key value.
+   * @param {Object} metadata - Split metadata.
+   * @return {string} Target child partition ID.
+   * @private
+   */
+  resolveSplitTargetPartitionId(value, metadata) {
+    const [leftPartitionId, rightPartitionId] = metadata.targetPartitionIds;
+    if (value === null || value === undefined) {
+      return rightPartitionId;
+    }
+    return value < metadata.splitKey ? leftPartitionId : rightPartitionId;
+  }
+
+  /**
+   * Extract the partition routing key from an applied write entry.
+   * @param {Object} entry - Applied source write entry.
+   * @param {string} primaryKeyColumn - Partition key column.
+   * @return {*} Routing key.
+   * @private
+   */
+  extractSplitRoutingKey(entry, primaryKeyColumn) {
+    if (entry?.whereClause &&
+        Object.prototype.hasOwnProperty.call(entry.whereClause, primaryKeyColumn)) {
+      return entry.whereClause[primaryKeyColumn];
+    }
+    if (entry?.data &&
+        Object.prototype.hasOwnProperty.call(entry.data, primaryKeyColumn)) {
+      return entry.data[primaryKeyColumn];
+    }
+
+    let operationType = entry?.type || PARTITION_SERVICE_OPERATION.QUERY;
+    if (operationType === PARTITION_SERVICE_OPERATION.QUERY && entry?.sql) {
+      const sqlUpper = entry.sql.trim().toUpperCase();
+      if (sqlUpper.startsWith(SQL.INSERT_OR_REPLACE_INTO.toUpperCase())) {
+        operationType = PARTITION_SERVICE_OPERATION.UPSERT;
+      } else if (sqlUpper.startsWith(PARTITION_SERVICE_OPERATION.INSERT)) {
+        operationType = PARTITION_SERVICE_OPERATION.INSERT;
+      } else if (sqlUpper.startsWith(PARTITION_SERVICE_OPERATION.UPDATE)) {
+        operationType = PARTITION_SERVICE_OPERATION.UPDATE;
+      } else if (sqlUpper.startsWith(PARTITION_SERVICE_OPERATION.DELETE)) {
+        operationType = PARTITION_SERVICE_OPERATION.DELETE;
+      }
+    }
+
+    let extracted = {};
+    if (entry?.sql) {
+      const params = Array.isArray(entry.params) ? entry.params : [];
+      if (params.length > NUM.ZERO &&
+          entry.sql.includes(PARTITION_SERVICE_SQL_FRAGMENT.QUESTION_MARK)) {
+        extracted = this.extractDataFromParameterizedSQL(
+          entry.sql,
+          params,
+          this.tableName,
+          operationType,
+        );
+      } else if (operationType === PARTITION_SERVICE_OPERATION.INSERT ||
+          operationType === PARTITION_SERVICE_OPERATION.UPSERT) {
+        extracted = this.extractInsertDataFromSQL(entry.sql, this.tableName);
+      } else if (operationType === PARTITION_SERVICE_OPERATION.UPDATE) {
+        extracted = this.extractUpdateDataFromSQL(entry.sql, this.tableName);
+      } else if (operationType === PARTITION_SERVICE_OPERATION.DELETE) {
+        extracted = this.extractDeleteDataFromSQL(entry.sql);
+      }
+    }
+
+    const routingKey = extracted?.[primaryKeyColumn];
+    if (routingKey === undefined || routingKey === null) {
+      throw new Error(PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_ROUTING_FAILED);
+    }
+    return routingKey;
   }
 
   /**

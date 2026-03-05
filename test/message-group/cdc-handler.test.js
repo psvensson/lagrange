@@ -292,6 +292,59 @@ test('CDCHandler - applyImmediate bypasses buffer', async (t) => {
   handler.shutdown();
 });
 
+test('CDCHandler - applyImmediate normalizes DELETE events from whereClause', async (t) => {
+  const handler = new CDCHandler(cache, {bufferSize: 10});
+  handler.initialize();
+  handler.subscribe('services');
+
+  cache.applySystemTableChange('services', CDC_OPERATIONS.INSERT, {
+    service_id: 'svc-delete',
+    service_type: 'partition',
+    partition_id: 'partition-1',
+    node_id: 'node-1',
+    status: 'active',
+  });
+
+  handler.applyImmediate({
+    tableName: 'services',
+    operation: CDC_OPERATIONS.DELETE,
+    whereClause: {service_id: 'svc-delete'},
+    timestamp: hlcClock.now().toString(),
+  });
+
+  t.notOk(cache.get('services', 'svc-delete'),
+    'DELETE should use whereClause primary key when data is omitted');
+
+  handler.shutdown();
+});
+
+test('CDCHandler - applyImmediate normalizes UPDATE events from whereClause', async (t) => {
+  const handler = new CDCHandler(cache, {bufferSize: 10});
+  handler.initialize();
+  handler.subscribe('services');
+
+  cache.applySystemTableChange('services', CDC_OPERATIONS.INSERT, {
+    service_id: 'svc-update',
+    service_type: 'partition',
+    partition_id: 'partition-1',
+    node_id: 'node-1',
+    status: 'pending',
+  });
+
+  handler.applyImmediate({
+    tableName: 'services',
+    operation: CDC_OPERATIONS.UPDATE,
+    data: {status: 'active'},
+    whereClause: {service_id: 'svc-update'},
+    timestamp: hlcClock.now().toString(),
+  });
+
+  t.equal(cache.get('services', 'svc-update')?.status, 'active',
+    'UPDATE should merge whereClause primary key into the applied row');
+
+  handler.shutdown();
+});
+
 test('CDCHandler - applyImmediate preserves causeId in apply telemetry', async (t) => {
   const handler = new CDCHandler(cache, {bufferSize: 10});
   handler.initialize();

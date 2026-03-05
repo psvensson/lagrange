@@ -112,3 +112,52 @@ test('NodeJoiningService treats unacknowledged control-plane heartbeats as failu
       'should surface unacknowledged delivery as a failure',
     );
   });
+
+test('NodeJoiningService does not block READY heartbeats on cluster mesh reconciliation',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const deliveries = [];
+    let connectAttempts = 0;
+    const service = new NodeJoiningService({
+      nodeId: 'joiner-node',
+      nodeAddress: 'ddb-test-reuse-3-4:8080',
+      seedNodeAddress: 'http://ddb-test-reuse-3-1:3000',
+    });
+
+    service.messageRouter = {
+      deliver: async (targetAddress, message) => {
+        deliveries.push({targetAddress, message});
+        return {acknowledged: true};
+      },
+    };
+    service.shouldReconnectClusterMesh = () => true;
+    service.connectToClusterNodes = async () => {
+      connectAttempts++;
+      await new Promise(() => {});
+    };
+    service.resolveControlPlaneTargetAddress = ({allowBootstrapHints} = {}) =>
+      allowBootstrapHints === false ?
+        null :
+        'seed-node/message-group/mg-1-r1';
+
+    const outcome = await Promise.race([
+      service.sendControlPlaneNodeStateUpdate({
+        state: STATE.READY,
+        capabilities: ['partition_replica'],
+      }).then(() => 'completed'),
+      new Promise((resolve) => setTimeout(() => resolve('timed_out'), 50)),
+    ]);
+
+    t.equal(
+      outcome,
+      'completed',
+      'should send READY state update without waiting for mesh reconciliation',
+    );
+    t.equal(
+      connectAttempts,
+      1,
+      'should still trigger background mesh reconciliation',
+    );
+    t.equal(deliveries.length, 1, 'should deliver the node-state update once');
+  });

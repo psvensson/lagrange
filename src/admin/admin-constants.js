@@ -284,6 +284,8 @@ const CONSISTENCY_MISMATCH_KIND = Object.freeze({
 
 const ADMIN_CONTROL_SNAPSHOT = Object.freeze({
   QUERY_SQL: 'SELECT * FROM control_snapshot_local()',
+  QUERY_SQL_FORCE_REPAIR:
+    'SELECT * FROM control_snapshot_local(true)',
   QUERY_SCOPE_KEY: 'scope',
   QUERY_SCOPE_LOCAL: 'local',
   SCHEMA_VERSION: 1,

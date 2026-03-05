@@ -141,6 +141,9 @@ import {
   RuntimeServiceHandlerSetup,
 } from './shared/runtime-service-handler-setup.js';
 import {
+  MessageGroupServiceHandlerSetup,
+} from './shared/message-group-service-handler-setup.js';
+import {
   resolveCanonicalRequiredSchemaVersion as _resolveCanonicalRequiredSchemaVersion,
   resolveCanonicalAppliedSchemaVersion as _resolveCanonicalAppliedSchemaVersion,
   extractCanonicalSnapshotSchemaVersion as _extractCanonicalSnapshotSchemaVersion,
@@ -289,6 +292,7 @@ class NodeJoiningService extends EventEmitter {
     this.cdcSubscriptionsActive = false;
     // Control plane target address for control messages
     this.controlPlaneTargetAddress = null;
+    this.pendingClusterMeshReconciliation = null;
 
     // Node lifecycle state machine for explicit state transitions
     // Requirements: 2.1, 2.2, 2.3, 2.4
@@ -713,6 +717,7 @@ class NodeJoiningService extends EventEmitter {
       this.createCdcIntegrationService();
       this.ensureLatencyTopologyOwners();
       this.initializeReplicaHandler();
+      this.initializeMessageGroupServiceHandler();
       await this.initializeControlPlaneService();
 
       // Initialize runtime service handler AFTER control-plane readiness.
@@ -1991,19 +1996,7 @@ class NodeJoiningService extends EventEmitter {
       return;
     }
 
-    if (state === STATE.READY &&
-        this.messageRouter &&
-        this.shouldReconnectClusterMesh()) {
-      try {
-        await this.connectToClusterNodes();
-      } catch (error) {
-        this.logger.warn('Failed to reconcile cluster mesh before NODE_STATE_UPDATE', {
-          nodeId: this.nodeId,
-          state,
-          error: error.message,
-        });
-      }
-    }
+    this.triggerBackgroundClusterMeshReconciliation(state);
 
     const targetAddress =
       this.resolveControlPlaneTargetAddress({allowBootstrapHints: false}) ||
@@ -2070,6 +2063,46 @@ class NodeJoiningService extends EventEmitter {
       });
       throw new Error(JOINING_ERROR_MSG.controlPlaneMessageFailed(error.message));
     }
+  }
+
+  /**
+   * Reconcile peer mesh connectivity without blocking the READY heartbeat path.
+   * Heartbeats are a liveness signal and should not wait on best-effort
+   * background connection maintenance.
+   * @param {string} state - Node connection state being reported.
+   * @return {void}
+   * @private
+   */
+  triggerBackgroundClusterMeshReconciliation(state) {
+    if (state !== STATE.READY ||
+        !this.messageRouter ||
+        !this.shouldReconnectClusterMesh()) {
+      return;
+    }
+
+    if (this.pendingClusterMeshReconciliation) {
+      return;
+    }
+
+    const reconciliation = Promise.resolve()
+      .then(() => this.connectToClusterNodes())
+      .catch((error) => {
+        this.logger.warn(
+          'Failed to reconcile cluster mesh during READY NODE_STATE_UPDATE',
+          {
+            nodeId: this.nodeId,
+            state,
+            error: error.message,
+          },
+        );
+      })
+      .finally(() => {
+        if (this.pendingClusterMeshReconciliation === reconciliation) {
+          this.pendingClusterMeshReconciliation = null;
+        }
+      });
+
+    this.pendingClusterMeshReconciliation = reconciliation;
   }
 
   /**
@@ -3066,6 +3099,53 @@ class NodeJoiningService extends EventEmitter {
 
     if (result) {
       this.runtimeServiceHandler = result.runtimeServiceHandler;
+    }
+  }
+
+  /**
+   * Initialize the MessageGroupServiceHandler for control-plane
+   * message-group replica operations.
+   * @private
+   */
+  initializeMessageGroupServiceHandler() {
+    const systemTableCache =
+      NodeService.getInstance().getSystemTableCache();
+    const descriptorForReplica = (replicaId) => ({
+      serviceId: replicaId,
+      serviceType: 'message_group',
+      replicaId,
+    });
+
+    const result = MessageGroupServiceHandlerSetup.create({
+      nodeId: this.nodeId,
+      messageRouter: this.messageRouter,
+      cdcIntegrationService: this.cdcIntegrationService,
+      systemTableCache,
+      createMessageGroupReplica: async (options) => {
+        return this.createJoinMessageGroupReplica({
+          definition: descriptorForReplica(options.replicaId),
+          replicaOptions: options,
+        });
+      },
+      startMessageGroupReplica: async (options) => {
+        return this.startJoinMessageGroupReplica(
+          descriptorForReplica(options.replicaId),
+          {replicaOptions: options},
+        );
+      },
+      stopMessageGroupReplica: async (options) => {
+        return this.stopJoinMessageGroupReplica(
+          descriptorForReplica(options.replicaId),
+          {replicaOptions: options},
+        );
+      },
+      resolveLocalMessageGroupReplica: (replicaId) =>
+        this.messageGroupServices.get(replicaId) || null,
+      rpcClient: this.rpcClient,
+    });
+
+    if (result) {
+      this.messageGroupServiceHandler = result.messageGroupServiceHandler;
     }
   }
 

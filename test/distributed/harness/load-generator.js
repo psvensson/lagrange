@@ -29,6 +29,7 @@ const ADMISSION_BACKOFF_MS_DEFAULT = 250;
 const NODE_BREAKER_OWNER_NODE_CLIENT = 'node-client';
 const NODE_CLIENT_ADMISSION_ERROR_CIRCUIT_OPEN = 'circuit_open';
 const NODE_CLIENT_ADMISSION_ERROR_BUDGET_EXHAUSTED = 'budget_exhausted';
+const NODE_CLIENT_ADMISSION_ERROR_ROUTING_NOT_READY = 'routing_not_ready';
 const UNDISPATCHED_REASON_CAPACITY = 'capacity';
 const UNDISPATCHED_REASON_DURATION_TIMEOUT = 'durationTimeout';
 const UNDISPATCHED_REASON_CANCELLED = 'cancelled';
@@ -944,11 +945,13 @@ class LoadRun {
   _isAdmissionSignalError(error) {
     const code = String(error?.code || '').toLowerCase();
     if (code === NODE_CLIENT_ADMISSION_ERROR_CIRCUIT_OPEN ||
-        code === NODE_CLIENT_ADMISSION_ERROR_BUDGET_EXHAUSTED) {
+        code === NODE_CLIENT_ADMISSION_ERROR_BUDGET_EXHAUSTED ||
+        code === NODE_CLIENT_ADMISSION_ERROR_ROUTING_NOT_READY) {
       return true;
     }
     const message = String(error?.message || '').toLowerCase();
-    return message.includes('circuit breaker is open');
+    return message.includes('circuit breaker is open') ||
+      message.includes('routing not ready');
   }
 
   _isCircuitOpenAdmissionError(error) {

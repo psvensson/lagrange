@@ -225,6 +225,7 @@ test(
           }
           return null;
         },
+        getAll: (_tableName) => [],
       },
       rebalanceCoordinator: coordinator,
     });
@@ -445,33 +446,12 @@ test(
           }
           return null;
         },
-      },
-      sqlQueryEngine: {
-        executeQuery: async (sql, params) => {
-          if (sql.includes('FROM nodes') &&
-              params?.[0] === 'node-2') {
-            const row = nodeStore.get('node-2');
-            return {success: true, rows: row ? [row] : []};
-          }
-          if (sql.includes('FROM replica_operations') &&
-              sql.includes('target_node_id') &&
-              params?.[0] === 'node-2' &&
-              params?.[1] === WORKFLOW_STEP.PENDING &&
+        getAll: (tableName) => {
+          if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS &&
               operationRow.workflow_step === WORKFLOW_STEP.PENDING) {
-            return {success: true, rows: [operationRow]};
+            return [operationRow];
           }
-          if (sql.includes('FROM services')) {
-            return {
-              success: true,
-              rows: [{
-                service_id: 'svc-partition-handler',
-                [COLUMN.NODE_ID]: 'node-2',
-                [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
-                [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-              }],
-            };
-          }
-          return {success: true, rows: []};
+          return [];
         },
       },
       rebalanceCoordinator: {
@@ -521,7 +501,8 @@ test(
 );
 
 test(
-  'ReplicaDispatchService dispatches pending operation when lease is ready even if router state is disconnected',
+  'ReplicaDispatchService dispatches pending operation when lease is ready ' +
+    'even if router state is disconnected',
   async (t) => {
     initEnv();
 
@@ -716,17 +697,12 @@ test(
           }
           return null;
         },
-      },
-      sqlQueryEngine: {
-        executeQuery: async (sql, params) => {
-          if (sql.includes('FROM replica_operations') &&
-              sql.includes('target_node_id') &&
-              params?.[0] === 'node-2' &&
-              params?.[1] === WORKFLOW_STEP.PENDING &&
+        getAll: (tableName) => {
+          if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS &&
               operationRow.workflow_step === WORKFLOW_STEP.PENDING) {
-            return {success: true, rows: [operationRow]};
+            return [operationRow];
           }
-          return {success: true, rows: []};
+          return [];
         },
       },
       rebalanceCoordinator: {
@@ -834,6 +810,13 @@ test(
         }
         return null;
       },
+      getAll: (tableName) => {
+        if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS &&
+            operationRow.workflow_step === WORKFLOW_STEP.PENDING) {
+          return [operationRow];
+        }
+        return [];
+      },
     };
 
     const service = new ReplicaDispatchService({
@@ -869,18 +852,6 @@ test(
         },
       },
       systemTableCache,
-      sqlQueryEngine: {
-        executeQuery: async (sql, params) => {
-          if (sql.includes('FROM replica_operations') &&
-              sql.includes('target_node_id') &&
-              params?.[0] === 'node-2' &&
-              params?.[1] === WORKFLOW_STEP.PENDING &&
-              operationRow.workflow_step === WORKFLOW_STEP.PENDING) {
-            return {success: true, rows: [operationRow]};
-          }
-          return {success: true, rows: []};
-        },
-      },
       rebalanceCoordinator: {
         executeOperation: async () => {
           executeCount += 1;
@@ -921,6 +892,269 @@ test(
         operationRow.workflow_step,
         WORKFLOW_STEP.SENDING,
         'pending operation should be claimed after cache-change retry',
+      );
+    } finally {
+      service.stop();
+    }
+  },
+);
+
+async function waitForRetryDrain(service) {
+  while (service.retryInFlightNodes.size > 0) {
+    await Promise.resolve();
+  }
+}
+
+test(
+  'ReplicaDispatchService coalesces duplicate ready triggers for one heartbeat',
+  async (t) => {
+    initEnv();
+
+    const now = Date.now();
+    const operationRow = {
+      operation_id: 'op-ready-trigger-coalesce-1',
+      type: 'ADD',
+      partition_id: 'tables-p1',
+      replica_id: 'tables-p1-r9',
+      source_node_id: 'node-1',
+      target_node_id: 'node-2',
+      status: 'pending',
+      workflow_step: WORKFLOW_STEP.PENDING,
+      created_at: now,
+      updated_at: now,
+      steps_history: '[]',
+    };
+    const readyNodeRow = {
+      node_id: 'node-2',
+      status: SERVICE_STATUS.ACTIVE,
+      connection_state: STATE.READY,
+      ready_lease_expires_at: now + 30000,
+      last_heartbeat: now,
+    };
+
+    let executeCount = 0;
+    let pendingReadCount = 0;
+    const service = new ReplicaDispatchService({
+      nodeId: 'node-1',
+      messageRouter: {
+        getConnectionState: () => STATE.CONNECTED,
+      },
+      cdcIntegrationService: {
+        upsertSystemTableRow: async () => ({success: true}),
+        updateSystemTableRow: async (_tableName, whereClause, updateData) => {
+          const isPendingClaim =
+            whereClause?.operation_id === operationRow.operation_id &&
+            whereClause?.workflow_step === WORKFLOW_STEP.PENDING &&
+            operationRow.workflow_step === WORKFLOW_STEP.PENDING;
+          if (isPendingClaim) {
+            operationRow.workflow_step = updateData.workflow_step;
+            operationRow.updated_at = updateData.updated_at;
+            return {
+              success: true,
+              partitionResult: {
+                affectedRows: 1,
+              },
+            };
+          }
+          return {
+            success: true,
+            partitionResult: {
+              affectedRows: 0,
+            },
+          };
+        },
+      },
+      systemTableCache: {
+        get: (tableName, key) => {
+          if (tableName === SYSTEM_TABLE_NAME.NODES && key === 'node-2') {
+            return readyNodeRow;
+          }
+          if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS &&
+              key === operationRow.operation_id) {
+            return operationRow;
+          }
+          return null;
+        },
+        getAll: (tableName) => {
+          if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
+            pendingReadCount += 1;
+            return operationRow.workflow_step === WORKFLOW_STEP.PENDING ?
+              [operationRow] :
+              [];
+          }
+          if (tableName === SYSTEM_TABLE_NAME.SERVICES) {
+            return [{
+              [COLUMN.NODE_ID]: 'node-2',
+              [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
+              [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+            }];
+          }
+          return [];
+        },
+      },
+      rebalanceCoordinator: {
+        executeOperation: async () => {
+          executeCount += 1;
+          return {success: true};
+        },
+      },
+    });
+    service.initialize();
+
+    const leaderMessageGroup = {
+      isLeaderReplica: () => true,
+    };
+
+    try {
+      await service.handleNodeStateUpdate({
+        [ControlPlaneField.NODE_ID]: 'node-2',
+        [ControlPlaneField.NODE_ADDRESS]: 'localhost:8082',
+        [ControlPlaneField.STATE]: STATE.READY,
+        [ControlPlaneField.HEARTBEAT_AT]: now,
+        [ControlPlaneField.READY_LEASE_EXPIRES_AT]: now + 30000,
+      });
+      await service.handleCdcApplied(leaderMessageGroup, {
+        tableName: SYSTEM_TABLE_NAME.NODES,
+        data: readyNodeRow,
+      });
+      service.handleCacheNodeChange(
+        SYSTEM_TABLE_NAME.NODES,
+        readyNodeRow,
+      );
+      await waitForRetryDrain(service);
+
+      t.equal(
+        executeCount,
+        1,
+        'should dispatch pending operation exactly once',
+      );
+      t.equal(
+        pendingReadCount,
+        1,
+        'should scan pending rows once for one ready heartbeat',
+      );
+    } finally {
+      service.stop();
+    }
+  },
+);
+
+test(
+  'ReplicaDispatchService retries pending operation when target handler appears',
+  async (t) => {
+    initEnv();
+
+    const now = Date.now();
+    const operationRow = {
+      operation_id: 'op-handler-activation-retry-1',
+      type: 'REMOVE',
+      partition_id: 'tables-p1',
+      replica_id: 'tables-p1-r9',
+      source_node_id: 'node-1',
+      target_node_id: 'node-2',
+      status: 'pending',
+      workflow_step: WORKFLOW_STEP.PENDING,
+      created_at: now,
+      updated_at: now,
+      steps_history: '[]',
+    };
+    const nodeRow = {
+      node_id: 'node-2',
+      status: SERVICE_STATUS.ACTIVE,
+      connection_state: STATE.READY,
+      ready_lease_expires_at: now + 30000,
+      last_heartbeat: now,
+    };
+    let serviceRows = [];
+    let executeCount = 0;
+
+    const service = new ReplicaDispatchService({
+      nodeId: 'node-1',
+      messageRouter: {
+        getConnectionState: () => STATE.CONNECTED,
+      },
+      cdcIntegrationService: {
+        upsertSystemTableRow: async () => ({success: true}),
+        updateSystemTableRow: async (_tableName, whereClause, updateData) => {
+          const isPendingClaim =
+            whereClause?.operation_id === operationRow.operation_id &&
+            whereClause?.workflow_step === WORKFLOW_STEP.PENDING &&
+            operationRow.workflow_step === WORKFLOW_STEP.PENDING;
+          if (isPendingClaim) {
+            operationRow.workflow_step = updateData.workflow_step;
+            operationRow.updated_at = updateData.updated_at;
+            return {
+              success: true,
+              partitionResult: {
+                affectedRows: 1,
+              },
+            };
+          }
+          return {
+            success: true,
+            partitionResult: {
+              affectedRows: 0,
+            },
+          };
+        },
+      },
+      systemTableCache: {
+        get: (tableName, key) => {
+          if (tableName === SYSTEM_TABLE_NAME.NODES && key === 'node-2') {
+            return nodeRow;
+          }
+          if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS &&
+              key === operationRow.operation_id) {
+            return operationRow;
+          }
+          return null;
+        },
+        getAll: (tableName) => {
+          if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
+            return operationRow.workflow_step === WORKFLOW_STEP.PENDING ?
+              [operationRow] :
+              [];
+          }
+          if (tableName === SYSTEM_TABLE_NAME.SERVICES) {
+            return serviceRows;
+          }
+          return [];
+        },
+      },
+      rebalanceCoordinator: {
+        executeOperation: async () => {
+          executeCount += 1;
+          return {success: true};
+        },
+      },
+    });
+    service.initialize();
+
+    try {
+      await service.dispatchOperationRow(operationRow);
+      t.equal(
+        executeCount,
+        0,
+        'should not dispatch remove before handler exists',
+      );
+
+      serviceRows = [{
+        [COLUMN.NODE_ID]: 'node-2',
+        [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
+        [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+      }];
+      service.handleCacheNodeChange(SYSTEM_TABLE_NAME.SERVICES, serviceRows[0]);
+      await waitForRetryDrain(service);
+
+      t.equal(
+        executeCount,
+        1,
+        'should retry and dispatch when handler becomes active',
+      );
+      t.equal(
+        operationRow.workflow_step,
+        WORKFLOW_STEP.SENDING,
+        'operation should be claimed after handler activation retry',
       );
     } finally {
       service.stop();

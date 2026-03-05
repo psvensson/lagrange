@@ -691,15 +691,21 @@ class NodeHandle {
    */
   async queryWithTimeout(sql, params = [], options = {}) {
     const lane = this._resolveAdminLane(options);
+    const timeoutMs = resolvePositiveTimeoutMs(
+      options.timeoutMs,
+      REQUEST_TIMEOUT_OPTION_DEFAULT_MS,
+    );
     return this._sendAdminRequest(
       {
         type: QUERY_MESSAGE_TYPE,
         sql,
         params: Array.isArray(params) ? params : [],
+        timeoutMs,
       },
       'query',
       {
         ...options,
+        timeoutMs,
         lane,
       },
     );

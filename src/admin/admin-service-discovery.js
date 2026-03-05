@@ -26,13 +26,19 @@ import {buildServiceDiscoveryCatalog} from
   '../runtime/service-discovery-catalog.js';
 import {isLoadReadyReplicaRaftRole} from
   '../node/replica-state-machine-constants.js';
-import {isTerminalStep as isTerminalReplicaOperationStep} from
-  '../rebalancer/replica-status.js';
+import {
+  DEFAULT_STEP_TIMEOUT_MS_BY_WORKFLOW_STEP,
+  isReplicaOperationStale,
+  isReplicaOperationTerminalSuccess,
+  normalizeReplicaOperationRecord,
+} from '../rebalancer/replica-operation-liveness.js';
 import {getSystemCachePrimaryKeyField} from
   '../cache/system-cache-key-descriptor.js';
 import {isTableCdcReadinessRelevant} from '../cache/cdc-table-policy.js';
 import {createSqlRequest} from '../query/sql-request.js';
 import {EXECUTION_MODE} from '../query/sql-adapter-constants.js';
+import {evaluateAuthoritativeRepairPolicy} from
+  './admin-authoritative-repair-policy.js';
 import {
   ADMIN_CACHE_DUMP,
   ADMIN_ERROR_MESSAGE,
@@ -52,9 +58,7 @@ const EMPTY_STRING = '';
 const LEADER_RAFT_ROLE = 'leader';
 const SERVICE_TYPE_PARTITION = 'partition';
 const STATUS_ACTIVE = 'active';
-const STATUS_FAILED = 'failed';
-const STATUS_REMOVED = 'removed';
-const WORKFLOW_STEP_FAILED = 'FAILED';
+const SERVICE_DISCOVERY_REASON_DETAIL_SEPARATOR = ':';
 
 const SERVICE_DISCOVERY_READINESS_REASON = Object.freeze({
   ROUTING_NOT_READY: 'routing_not_ready',
@@ -63,6 +67,7 @@ const SERVICE_DISCOVERY_READINESS_REASON = Object.freeze({
   REPLICA_OPERATIONS_IN_FLIGHT: 'replica_operations_in_flight',
   REPLICA_OPERATION_IN_FLIGHT: 'replica_operation_in_flight',
   REPLICA_OPERATION_FAILED: 'replica_operation_failed',
+  REPLICA_OPERATION_STALE_TIMEOUT: 'replica_operation_stale_timeout',
   LEADERSHIP_UNSTABLE: 'leadership_unstable',
   LOCAL_REPLICA_NOT_VOTER_READY: 'local_replica_not_voter_ready',
   LOCAL_CDC_DIAGNOSTICS_UNAVAILABLE: 'local_cdc_diagnostics_unavailable',
@@ -133,65 +138,6 @@ const SERVICE_DISCOVERY_SQL_WITH_TABLE_AND_ID_PATTERN =
   /^select \* from service_discovery_local\(\s*'([a-z_][a-z0-9_]*)'\s*,\s*'([a-z0-9_-]+)'\s*\)$/;
 
 // ── single-use helper functions ─────────────────────────────────────────────
-
-/**
- * Return true when at least one key holds a non-empty value.
- * @param {Object} record
- * @param {...string} keys
- * @return {boolean}
- */
-function hasMeaningfulField(record, ...keys) {
-  for (const key of keys) {
-    const value = record?.[key];
-    if (value !== null && value !== undefined && value !== EMPTY_STRING) {
-      return true;
-    }
-  }
-  return false;
-}
-
-/**
- * Normalize replica-operation workflow step to uppercase string.
- * @param {Object} row
- * @return {string}
- */
-function normalizeReplicaOperationWorkflowStep(row) {
-  return String(firstStringField(
-    row,
-    'workflow_step',
-    'workflowStep',
-  ) || EMPTY_STRING).toUpperCase();
-}
-
-/**
- * Determine whether a replica operation is terminally successful.
- * @param {string} type
- * @param {string} status
- * @param {string} workflowStep
- * @param {boolean} hasCompletedAt
- * @return {boolean}
- */
-function isReplicaOperationTerminalSuccess(
-  type, status, workflowStep, hasCompletedAt,
-) {
-  if (!type || !status) {
-    return false;
-  }
-  if (status === STATUS_FAILED || workflowStep === WORKFLOW_STEP_FAILED) {
-    return false;
-  }
-  if (workflowStep &&
-      isTerminalReplicaOperationStep(type, workflowStep)) {
-    return true;
-  }
-  if (!hasCompletedAt) {
-    return false;
-  }
-  if (type === REPLICA_OPERATION_TYPE.ADD) {
-    return status === STATUS_ACTIVE;
-  }
-  return status === STATUS_REMOVED;
-}
 
 /**
  * Compare two schema version values numerically or lexicographically.
@@ -509,6 +455,11 @@ class AdminServiceDiscovery {
       capturedAt: Date.now(),
       serviceCount: services.length,
       replicaCount,
+      replicaOperations:
+        readinessContext.replicaOperationSummary &&
+          typeof readinessContext.replicaOperationSummary === TYPEOF.OBJECT ?
+          readinessContext.replicaOperationSummary :
+          null,
       services,
     };
   }
@@ -574,21 +525,16 @@ class AdminServiceDiscovery {
     const scopedDiscoveryQuery =
       normalizeIdentifier(options.tableName) !== null ||
       normalizeDiscoveryTableId(options.tableId) !== null;
-    if (snapshot.serviceCount === NUM.ZERO ||
-        snapshot.replicaCount === NUM.ZERO) {
-      if (scopedDiscoveryQuery) {
-        return true;
-      }
-      return cacheRepairEligible;
-    }
-
     const services = Array.isArray(snapshot.services) ?
       snapshot.services : [];
     let readyReplicaCount = NUM.ZERO;
+    const selectedNodeIds = new Set();
+    let hasCacheGapReasons = false;
     for (const service of services) {
       const replicas = Array.isArray(service?.replicas) ?
         service.replicas : [];
       for (const replica of replicas) {
+        const nodeId = String(replica?.nodeId || EMPTY_STRING);
         const readiness = replica?.readiness || null;
         if (!readiness ||
             typeof readiness !== TYPEOF.OBJECT) {
@@ -599,24 +545,40 @@ class AdminServiceDiscovery {
         if (readiness.benchmarkReady === true ||
             reasons.length === NUM.ZERO) {
           readyReplicaCount += NUM.ONE;
+          if (nodeId) {
+            selectedNodeIds.add(nodeId);
+          }
         }
         for (const reason of reasons) {
           const code = String(reason?.code || EMPTY_STRING);
-          if (cacheRepairEligible &&
-              AUTHORITATIVE_DISCOVERY_CACHE_GAP_REASON_CODES
-                .has(code)) {
-            return true;
+          if (AUTHORITATIVE_DISCOVERY_CACHE_GAP_REASON_CODES
+            .has(code)) {
+            hasCacheGapReasons = true;
           }
         }
       }
     }
-
-    if (scopedDiscoveryQuery) {
-      return false;
-    }
-
-    return cacheRepairEligible &&
-      readyReplicaCount === NUM.ZERO;
+    const serviceEndpointsCount =
+      typeof this.systemTableCache.count === TYPEOF.FUNCTION ?
+        this.systemTableCache.count(TABLES.SERVICE_ENDPOINTS) :
+        this.systemTableCache.getAll(TABLES.SERVICE_ENDPOINTS).length;
+    const staleReplicaOpsInFlightCount = Number(
+      snapshot?.replicaOperations?.staleInFlightCount,
+    );
+    const evaluation = evaluateAuthoritativeRepairPolicy({
+      cacheStalenessMs: stalenessMs,
+      staleThresholdMs: AUTHORITATIVE_DISCOVERY_REPAIR.STALE_THRESHOLD_MS,
+      cacheRepairEligible,
+      scopedQuery: scopedDiscoveryQuery,
+      serviceCount: snapshot.serviceCount,
+      replicaCount: snapshot.replicaCount,
+      readyReplicaCount,
+      selectedNodeCount: selectedNodeIds.size,
+      serviceEndpointsCount,
+      staleReplicaOpsInFlightCount,
+      hasCacheGapReasons,
+    });
+    return evaluation.shouldRepair;
   }
 
   /**
@@ -692,7 +654,13 @@ class AdminServiceDiscovery {
             partitionIds: tablePartitionContext.partitionIds,
           },
         ) :
-        {inFlightCount: NUM.ZERO};
+        {
+          inFlightCount: NUM.ZERO,
+          staleInFlightCount: NUM.ZERO,
+          stepHistogram: {},
+          oldestInFlightAgeMs: null,
+          operationTimelineById: {},
+        };
     const replicaOperationDegradationByNodeId =
       this.buildDiscoveryReplicaOperationDegradationByNodeId(
         replicaOperationRows,
@@ -713,6 +681,19 @@ class AdminServiceDiscovery {
       localPartitionCdcState,
       replicaOpsInFlight:
         replicaOperationSummary.inFlightCount,
+      staleReplicaOpsInFlight:
+        Number(replicaOperationSummary.staleInFlightCount || NUM.ZERO),
+      oldestReplicaOperationAgeMs:
+        Number.isFinite(replicaOperationSummary.oldestInFlightAgeMs) ?
+          Math.floor(replicaOperationSummary.oldestInFlightAgeMs) :
+          null,
+      replicaOperationTimelineById:
+        replicaOperationSummary.operationTimelineById &&
+          typeof replicaOperationSummary.operationTimelineById ===
+            TYPEOF.OBJECT ?
+          replicaOperationSummary.operationTimelineById :
+          {},
+      replicaOperationSummary,
       replicaOperationDegradationByNodeId,
     };
   }
@@ -1408,6 +1389,25 @@ class AdminServiceDiscovery {
             null,
       })) :
       [];
+    const degradedByOperationIds =
+      Array.isArray(operationDegradation?.operationIds) ?
+        [...operationDegradation.operationIds] :
+        [];
+    const timelineByOperationId =
+      readinessContext.replicaOperationTimelineById &&
+        typeof readinessContext.replicaOperationTimelineById === TYPEOF.OBJECT ?
+        readinessContext.replicaOperationTimelineById :
+        {};
+    const replicaOperationTimeline = [];
+    for (const operationId of degradedByOperationIds) {
+      const operationTimeline = timelineByOperationId[operationId];
+      if (!Array.isArray(operationTimeline)) {
+        continue;
+      }
+      for (const entry of operationTimeline) {
+        replicaOperationTimeline.push(entry);
+      }
+    }
 
     return {
       tableName: readiness?.tableName || null,
@@ -1422,11 +1422,9 @@ class AdminServiceDiscovery {
       schemaReady: readiness?.schemaReady === true,
       topologyReady: readiness?.topologyReady === true,
       localReplicaRole,
-      degradedByOperationIds:
-        Array.isArray(operationDegradation?.operationIds) ?
-          [...operationDegradation.operationIds] :
-          [],
+      degradedByOperationIds,
       reasons,
+      replicaOperationTimeline,
     };
   }
 
@@ -1453,30 +1451,10 @@ class AdminServiceDiscovery {
       )) {
         continue;
       }
-      const operationId = firstStringField(
-        row,
-        COLUMN.OPERATION_ID,
-        'operation_id',
-        'operationId',
-      );
-      const status = String(firstStringField(
-        row,
-        COLUMN.STATUS,
-        'status',
-      ) || EMPTY_STRING).toLowerCase();
-      const type = String(firstStringField(
-        row,
-        'type',
-        'operation_type',
-        'operationType',
-      ) || EMPTY_STRING).toUpperCase();
-      const workflowStep =
-        normalizeReplicaOperationWorkflowStep(row);
-      const hasCompletedAt = hasMeaningfulField(
-        row,
-        'completed_at',
-        'completedAt',
-      );
+      const normalizedOperation = normalizeReplicaOperationRecord(row);
+      const operationId = normalizedOperation.operationId;
+      const status = normalizedOperation.status;
+      const type = normalizedOperation.type;
       const nodeIds = uniqueSorted([
         firstStringField(
           row, 'source_node_id', 'sourceNodeId',
@@ -1492,15 +1470,31 @@ class AdminServiceDiscovery {
         continue;
       }
       if (isReplicaOperationTerminalSuccess(
-        type, status, workflowStep, hasCompletedAt,
+        normalizedOperation,
       )) {
         continue;
       }
+      const staleTimeout = isReplicaOperationStale(
+        normalizedOperation,
+        {
+          stepTimeoutMsByWorkflowStep:
+            DEFAULT_STEP_TIMEOUT_MS_BY_WORKFLOW_STEP,
+          nowMs: Date.now(),
+        },
+      );
+      const timeoutMs = Number(
+        DEFAULT_STEP_TIMEOUT_MS_BY_WORKFLOW_STEP[
+          normalizedOperation.workflowStep
+        ],
+      );
 
       const degradationState =
         this.resolveReplicaOperationDegradationState(
           type,
           status,
+          {
+            staleTimeout,
+          },
         );
       if (degradationState ===
           BENCHMARK_DEGRADATION_STATE.HEALTHY) {
@@ -1510,10 +1504,23 @@ class AdminServiceDiscovery {
         status === 'failed' ?
           SERVICE_DISCOVERY_READINESS_REASON
             .REPLICA_OPERATION_FAILED :
+          (staleTimeout ?
+            SERVICE_DISCOVERY_READINESS_REASON
+              .REPLICA_OPERATION_STALE_TIMEOUT :
           SERVICE_DISCOVERY_READINESS_REASON
-            .REPLICA_OPERATION_IN_FLIGHT;
+            .REPLICA_OPERATION_IN_FLIGHT);
       const reasonDetail =
-        `${operationId}:${type}:${status}`;
+        staleTimeout ?
+          `${operationId}:${type}:${status}` +
+            SERVICE_DISCOVERY_REASON_DETAIL_SEPARATOR +
+            String(normalizedOperation.workflowStep || EMPTY_STRING) +
+            SERVICE_DISCOVERY_REASON_DETAIL_SEPARATOR +
+            'ageMs=' + String(normalizedOperation.ageMs) +
+            SERVICE_DISCOVERY_REASON_DETAIL_SEPARATOR +
+            'timeoutMs=' + (Number.isFinite(timeoutMs) ?
+              String(timeoutMs) :
+              EMPTY_STRING) :
+          `${operationId}:${type}:${status}`;
 
       for (const nodeId of nodeIds) {
         const existing =
@@ -1580,18 +1587,20 @@ class AdminServiceDiscovery {
    * @param {string} status
    * @return {string}
    */
-  resolveReplicaOperationDegradationState(type, status) {
+  resolveReplicaOperationDegradationState(type, status, options = {}) {
     if (!type || !status) {
       return BENCHMARK_DEGRADATION_STATE.HEALTHY;
     }
     const isFailed = status === 'failed';
+    const staleTimeout = options?.staleTimeout === true;
+    const treatAsFailed = isFailed || staleTimeout;
     if (type === REPLICA_OPERATION_TYPE.REPLACE) {
-      return isFailed ?
+      return treatAsFailed ?
         BENCHMARK_DEGRADATION_STATE.MOVE_FAILED :
         BENCHMARK_DEGRADATION_STATE.MOVE_PENDING;
     }
     if (type === REPLICA_OPERATION_TYPE.ADD) {
-      return isFailed ?
+      return treatAsFailed ?
         BENCHMARK_DEGRADATION_STATE.PROMOTION_FAILED :
         BENCHMARK_DEGRADATION_STATE.PROMOTION_PENDING;
     }

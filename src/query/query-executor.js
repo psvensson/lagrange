@@ -42,6 +42,10 @@ import {DistributedMergeEngine} from './distributed/distributed-merge-engine.js'
 import {ParallelQueryCoordinator} from './distributed/parallel-query-coordinator.js';
 import {DISTRIBUTED_JOIN_STRATEGY} from './distributed/distributed-query-plan-constants.js';
 
+const QUERY_MESSAGE_FIELD_SPLIT_MIRROR_ORIGIN = 'splitMirrorOrigin';
+const LEADER_GAP_REASON_OWNER_MISSING = 'owner_missing';
+const LEADER_GAP_REASON_SERVICE_MISSING = 'service_missing';
+
 /**
  * QueryExecutor handles parallel query execution across partitions
  * and aggregates results while preserving SQL semantics.
@@ -77,6 +81,7 @@ class QueryExecutor {
               coordinatorOptions.forRead === true,
               coordinatorOptions.preferLeader === true,
               coordinatorOptions.preferSameLatencyGroup === true,
+              coordinatorOptions,
             ),
       });
     this.lastCoordinatorMetrics = null;
@@ -85,6 +90,7 @@ class QueryExecutor {
     // Per-partition warning throttle to prevent log floods when a
     // partition has no active service (e.g. during rebalancer lag).
     this.noServiceWarnLastAt = new Map();
+    this.canonicalLeaderWarnLastAt = new Map();
 
     // Configuration
     const config = ConfigurationManager.getInstance();
@@ -213,6 +219,11 @@ class QueryExecutor {
       true, // forRead = true for SELECT
       options.preferLeader || false,
       options.preferSameLatencyGroup === true,
+      {
+        timeoutMs: options.timeoutMs,
+        cancellationToken:
+          options.cancellationToken || null,
+      },
     );
     const fanoutMetrics = this.getLastCoordinatorMetrics();
 
@@ -352,6 +363,11 @@ class QueryExecutor {
       true,
       options.preferLeader || false,
       options.preferSameLatencyGroup === true,
+      {
+        timeoutMs: options.timeoutMs,
+        cancellationToken:
+          options.cancellationToken || null,
+      },
     );
     fanoutMetrics.push(this.getLastCoordinatorMetrics());
     const mainFailures = mainResults.filter((result) => !result.success);
@@ -397,6 +413,11 @@ class QueryExecutor {
           true,
           options.preferLeader || false,
           options.preferSameLatencyGroup === true,
+          {
+            timeoutMs: options.timeoutMs,
+            cancellationToken:
+              options.cancellationToken || null,
+          },
         );
         fanoutMetrics.push(this.getLastCoordinatorMetrics());
         const joinFailures = joinResults.filter((result) => !result.success);
@@ -844,6 +865,7 @@ class QueryExecutor {
     forRead = false,
     preferLeader = false,
     preferSameLatencyGroup = false,
+    executionOptions = {},
   ) {
     const coordinatorResult = await this.parallelQueryCoordinator.executeParallel(
       sql,
@@ -853,7 +875,11 @@ class QueryExecutor {
         forRead,
         preferLeader,
         preferSameLatencyGroup,
+        splitMirrorOrigin: executionOptions.splitMirrorOrigin || null,
         timestamp: _timestamp,
+        timeoutMs: executionOptions.timeoutMs,
+        cancellationToken:
+          executionOptions.cancellationToken || null,
       },
     );
     this.lastCoordinatorMetrics = coordinatorResult.metrics || null;
@@ -886,7 +912,12 @@ class QueryExecutor {
     forRead,
     preferLeader,
     preferSameLatencyGroup,
+    executionOptions = {},
   ) {
+    const cancellationToken =
+      executionOptions?.cancellationToken || null;
+    this.throwIfCancelled(cancellationToken);
+
     // Validate dependencies
     if (!this.messageRouter) {
       this.logger.error(QUERY_LOG_MSG.MESSAGE_ROUTER_UNAVAILABLE, {partitionId});
@@ -912,6 +943,7 @@ class QueryExecutor {
     let lastError = null;
 
     for (let attempt = NUM.ONE; attempt <= maxAttempts; attempt++) {
+      this.throwIfCancelled(cancellationToken);
       let serviceCandidates = this.getPartitionServiceCandidates(
         partitionId,
         forRead,
@@ -923,28 +955,21 @@ class QueryExecutor {
         const hasPartitionRecord = this.hasPartitionRecord(partitionId);
 
         if (!forRead) {
-          if (hasRoutableService) {
-            // If leader metadata is stale/missing, route to routable replicas and
-            // rely on follower forwarding/redirect to reach the current leader.
-            serviceCandidates = this.getPartitionServiceCandidates(
-              partitionId,
-              true,
-              false,
-              preferSameLatencyGroup,
-            );
-          }
-
-          if (serviceCandidates.length > 0) {
-            // Continue with routable replica candidates in the normal routing loop.
-          } else if (hasRoutableService && attempt < maxAttempts) {
+          if (hasRoutableService && attempt < maxAttempts) {
             lastError = ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE;
             await this.delay(this.leaderRetryDelayMs);
+            this.throwIfCancelled(cancellationToken);
             continue;
-          } else if (!hasRoutableService && hasPartitionRecord && attempt < maxAttempts) {
+          }
+          if (!hasRoutableService &&
+              hasPartitionRecord &&
+              attempt < maxAttempts) {
             lastError = ERRORS.PARTITION_SERVICE_NOT_FOUND;
             await this.delay(this.leaderRetryDelayMs);
+            this.throwIfCancelled(cancellationToken);
             continue;
-          } else if (hasRoutableService) {
+          }
+          if (hasRoutableService) {
             this.logger.warn(QUERY_LOG_MSG.NO_LEADER_SERVICE_FOR_PARTITION, {
               partitionId,
               attempts: attempt,
@@ -955,7 +980,8 @@ class QueryExecutor {
               error: ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE,
               rows: [],
             };
-          } else if (!hasRoutableService) {
+          }
+          if (!hasRoutableService) {
             const now = Date.now();
             const lastAt = this.noServiceWarnLastAt.get(partitionId);
             if (!Number.isFinite(lastAt) ||
@@ -1001,11 +1027,18 @@ class QueryExecutor {
         });
 
         try {
-          const response = await this.messageRouter.deliver(address, {
+          this.throwIfCancelled(cancellationToken);
+          const request = {
             type: QUERY_MESSAGE_TYPE.QUERY,
             sql,
             params,
-          });
+          };
+          if (executionOptions.splitMirrorOrigin) {
+            request[QUERY_MESSAGE_FIELD_SPLIT_MIRROR_ORIGIN] =
+              executionOptions.splitMirrorOrigin;
+          }
+          const response = await this.messageRouter.deliver(address, request);
+          this.throwIfCancelled(cancellationToken);
 
           if (response.acknowledged && response.success) {
             return {
@@ -1027,7 +1060,13 @@ class QueryExecutor {
 
             const redirectResponse = await this.messageRouter.deliver(
               response.leaderAddress,
-              {type: QUERY_MESSAGE_TYPE.QUERY, sql, params},
+              {
+                type: QUERY_MESSAGE_TYPE.QUERY,
+                sql,
+                params,
+                [QUERY_MESSAGE_FIELD_SPLIT_MIRROR_ORIGIN]:
+                  executionOptions.splitMirrorOrigin || null,
+              },
             );
 
             if (redirectResponse.acknowledged && redirectResponse.success) {
@@ -1087,6 +1126,7 @@ class QueryExecutor {
 
       if (!forRead && attempt < maxAttempts) {
         await this.delay(this.leaderRetryDelayMs);
+        this.throwIfCancelled(cancellationToken);
       }
     }
 
@@ -1139,6 +1179,19 @@ class QueryExecutor {
   }
 
   /**
+   * Throw when cooperative cancellation has been requested.
+   * @param {Object|null} cancellationToken
+   * @private
+   */
+  throwIfCancelled(cancellationToken) {
+    if (!cancellationToken ||
+      typeof cancellationToken.throwIfCancelled !== 'function') {
+      return;
+    }
+    cancellationToken.throwIfCancelled();
+  }
+
+  /**
    * Get partition service candidates in preferred order.
    * @param {string} partitionId - Partition ID.
    * @param {boolean} forRead - True when executing read-only queries.
@@ -1187,6 +1240,7 @@ class QueryExecutor {
       localGroupId,
       forRead && preferSameLatencyGroup,
     );
+    const canonicalLeaderNodeId = this.getPartitionLeaderNodeId(partitionId);
     const candidates = [];
     const seen = new Set();
     const addService = (service) => {
@@ -1205,16 +1259,34 @@ class QueryExecutor {
       });
     };
 
-    const leaders = orderedServices
-      .filter((service) => service.raft_role === RAFT_ROLE.LEADER);
+    const canonicalLeaderServices = canonicalLeaderNodeId ?
+      orderedServices.filter((service) => service.node_id === canonicalLeaderNodeId) :
+      [];
 
     if (!forRead) {
-      leaders.forEach(addService);
+      if (!canonicalLeaderNodeId) {
+        this.logCanonicalLeaderRoutingGap(partitionId, {
+          reason: LEADER_GAP_REASON_OWNER_MISSING,
+          services: orderedServices,
+        });
+        return [];
+      }
+      if (canonicalLeaderServices.length === NUM.ZERO) {
+        this.logCanonicalLeaderRoutingGap(partitionId, {
+          reason: LEADER_GAP_REASON_SERVICE_MISSING,
+          canonicalLeaderNodeId,
+          services: orderedServices,
+        });
+        return [];
+      }
+      canonicalLeaderServices.forEach(addService);
       return candidates;
     }
 
     if (prioritizeLeader) {
-      leaders.forEach(addService);
+      if (canonicalLeaderNodeId) {
+        canonicalLeaderServices.forEach(addService);
+      }
       orderedServices
         .filter((service) => service.node_id === this.nodeId)
         .forEach(addService);
@@ -1358,30 +1430,13 @@ class QueryExecutor {
    * @return {string|null} Leader address or null if not found.
    */
   findPartitionLeaderAddress(partitionId) {
-    if (!this.systemCache && this.getOverlayPartitionServices(partitionId).length === 0) {
-      this.logger.warn(LOG_MSG.SYSTEM_CACHE_NOT_AVAILABLE, {partitionId});
-      return null;
-    }
-
-    if (typeof this.systemCache?.filter !== 'function' &&
-        this.getOverlayPartitionServices(partitionId).length === 0) {
-      this.logger.warn(QUERY_LOG_MSG.SYSTEM_CACHE_FILTER_UNSUPPORTED, {partitionId});
-      return null;
-    }
-
-    const services = this.getRoutablePartitionServices(partitionId).filter((s) =>
-      s.partition_id === partitionId &&
-      s.service_type === SERVICE_TYPE.PARTITION &&
-      s.raft_role === RAFT_ROLE.LEADER &&
-      s.status === SERVICE_STATUS.ACTIVE,
-    ) || [];
-
-    if (services.length === 0) {
+    const service = this.findPartitionService(partitionId);
+    if (!service || typeof service.address !== 'string' || service.address.length === 0) {
       this.logger.debug(QUERY_LOG_MSG.NO_LEADER_SERVICE_FOR_PARTITION, {partitionId});
       return null;
     }
 
-    return services[0].address;
+    return service.address;
   }
 
   /**
@@ -1404,8 +1459,7 @@ class QueryExecutor {
    * @private
    */
   isRoutablePartitionService(service) {
-    return service.status !== ReplicaStatus.FAILED &&
-      service.status !== ReplicaStatus.REMOVED &&
+    return service.status === SERVICE_STATUS.ACTIVE &&
       typeof service.address === 'string' &&
       service.address.length > NUM.ZERO;
   }
@@ -1423,6 +1477,105 @@ class QueryExecutor {
     }
     const partition = overlay.getPartitionById(partitionId);
     return partition && typeof partition === 'object' ? partition : null;
+  }
+
+  /**
+   * Resolve the canonical partition record for routing decisions.
+   * Overlay metadata outranks cache metadata while transition routing is active.
+   * @param {string} partitionId - Partition ID.
+   * @return {Object|null}
+   * @private
+   */
+  getPartitionRecord(partitionId) {
+    const overlayPartition = this.getOverlayPartitionRecord(partitionId);
+    if (overlayPartition) {
+      return overlayPartition;
+    }
+    if (!this.systemCache) {
+      return null;
+    }
+    if (typeof this.systemCache.get === 'function') {
+      const record = this.systemCache.get(TABLES.PARTITIONS, partitionId);
+      if (record) {
+        return record;
+      }
+    }
+    if (typeof this.systemCache.filter === 'function') {
+      const records = this.systemCache.filter(TABLES.PARTITIONS, (partition) =>
+        partition.partition_id === partitionId,
+      );
+      if (records.length > NUM.ZERO) {
+        return records[NUM.ZERO];
+      }
+    }
+    if (typeof this.systemCache.getAll === 'function') {
+      const records = this.systemCache.getAll(TABLES.PARTITIONS) || [];
+      return records.find((partition) => partition.partition_id === partitionId) || null;
+    }
+    return null;
+  }
+
+  /**
+   * Resolve the canonical leader node for one partition from owner metadata.
+   * @param {string} partitionId - Partition ID.
+   * @return {string|null}
+   * @private
+   */
+  getPartitionLeaderNodeId(partitionId) {
+    const partition = this.getPartitionRecord(partitionId);
+    const leaderNodeId = partition?.[COLUMN.LEADER_NODE_ID] ?? partition?.leaderNodeId ?? null;
+    return typeof leaderNodeId === 'string' && leaderNodeId.length > NUM.ZERO ?
+      leaderNodeId :
+      null;
+  }
+
+  /**
+   * Emit throttled diagnostics when canonical partition leader routing cannot
+   * map owner metadata to a routable service.
+   * @param {string} partitionId
+   * @param {Object} options
+   * @private
+   */
+  logCanonicalLeaderRoutingGap(partitionId, options = {}) {
+    const reason = String(options.reason || LEADER_GAP_REASON_OWNER_MISSING);
+    const warnKey = partitionId + ':' + reason;
+    const now = Date.now();
+    const lastWarnAt = this.canonicalLeaderWarnLastAt.get(warnKey);
+    if (Number.isFinite(lastWarnAt) &&
+        now - lastWarnAt < this.noServiceWarnThrottleMs) {
+      return;
+    }
+    this.canonicalLeaderWarnLastAt.set(warnKey, now);
+    const services = Array.isArray(options.services) ? options.services : [];
+    const routableNodeIds = [...new Set(services
+      .map((service) => service?.node_id)
+      .filter((nodeId) => typeof nodeId === 'string' && nodeId.length > NUM.ZERO))];
+    const staleLeaderNodeIds = [...new Set(services
+      .filter((service) => service?.raft_role === RAFT_ROLE.LEADER)
+      .map((service) => service?.node_id)
+      .filter((nodeId) => typeof nodeId === 'string' && nodeId.length > NUM.ZERO))];
+
+    if (reason === LEADER_GAP_REASON_SERVICE_MISSING) {
+      this.logger.warn(
+        QUERY_LOG_MSG.CANONICAL_LEADER_SERVICE_MISSING_FOR_PARTITION,
+        {
+          partitionId,
+          leaderNodeId: options.canonicalLeaderNodeId || null,
+          routableNodeIds,
+          staleLeaderNodeIds,
+        },
+      );
+      return;
+    }
+
+    this.logger.warn(
+      QUERY_LOG_MSG.CANONICAL_LEADER_METADATA_MISSING_FOR_PARTITION,
+      {
+        partitionId,
+        routableNodeIds,
+        staleLeaderNodeIds,
+      },
+    );
   }
 
   /**
@@ -2120,7 +2273,7 @@ class QueryExecutor {
    * @param {Array} params - Query parameters.
    * @return {Promise<Object>} Insert result.
    */
-  async executeInsert(ast, partitionId, params = []) {
+  async executeInsert(ast, partitionId, params = [], executionOptions = {}) {
     const sql = this.buildInsertSQL(ast);
 
     this.logger.debug('Executing INSERT', {
@@ -2130,7 +2283,15 @@ class QueryExecutor {
     });
 
     // Route through message router like all other operations
-    const result = await this.executeOnPartition(partitionId, sql, params);
+    const result = await this.executeOnPartition(
+      partitionId,
+      sql,
+      params,
+      false,
+      false,
+      false,
+      executionOptions,
+    );
 
     if (!result.success) {
       throw new Error(result.error || `Insert failed on partition: ${partitionId}`);
@@ -2202,7 +2363,12 @@ class QueryExecutor {
    * @param {Array} params - Query parameters.
    * @return {Promise<Object>} Update result.
    */
-  async executeUpdate(ast, partitionIds, params = []) {
+  async executeUpdate(
+    ast,
+    partitionIds,
+    params = [],
+    executionOptions = {},
+  ) {
     const sql = this.buildUpdateSQL(ast);
 
     this.logger.debug('Executing UPDATE', {
@@ -2215,6 +2381,10 @@ class QueryExecutor {
       sql,
       params,
       this.hlcClock.now(),
+      false,
+      false,
+      false,
+      executionOptions,
     );
     const fanoutMetrics = this.getLastCoordinatorMetrics();
 
@@ -2292,7 +2462,12 @@ class QueryExecutor {
    * @param {Array} params - Query parameters.
    * @return {Promise<Object>} Delete result.
    */
-  async executeDelete(ast, partitionIds, params = []) {
+  async executeDelete(
+    ast,
+    partitionIds,
+    params = [],
+    executionOptions = {},
+  ) {
     const sql = this.buildDeleteSQL(ast);
 
     this.logger.debug('Executing DELETE', {
@@ -2305,6 +2480,10 @@ class QueryExecutor {
       sql,
       params,
       this.hlcClock.now(),
+      false,
+      false,
+      false,
+      executionOptions,
     );
     const fanoutMetrics = this.getLastCoordinatorMetrics();
 

@@ -1,5 +1,5 @@
 import {mkdir, readdir, readFile, writeFile} from 'node:fs/promises';
-import {basename, join, relative, resolve} from 'node:path';
+import {join, relative, resolve} from 'node:path';
 
 const FAILURE_BUNDLE_SCHEMA_VERSION = 1;
 const FAILURE_BUNDLE_RUN_DIRNAME = 'failure-bundles';
@@ -16,6 +16,8 @@ const LOG_TAIL_LINE_COUNT = 20;
 const MARKDOWN_SECTION_BREAK = '\n\n';
 const UNKNOWN_VALUE = 'unknown';
 const NO_PROGRESS_REASON_CODE = 'stalled_no_progress';
+const NODE_DIAGNOSTICS_TRACE_LIMIT = 5;
+const NODE_ID_ERROR_PATTERN = /\bnode=([a-z0-9._:-]+)\b/gi;
 
 function toWorkspaceRelative(targetPath, workspaceRoot = process.cwd()) {
   if (typeof targetPath !== 'string' || targetPath.length === ZERO) {
@@ -80,6 +82,77 @@ function resolveReadinessSnapshot(entry) {
   };
 }
 
+function resolveControlPlaneDiagnostics(entry) {
+  const snapshotsByNodeId = resolveControlSnapshot(entry);
+  const publicationModeByNodeId = {};
+  const readinessByNodeId = {};
+  const placementEligibilityByNodeId = {};
+  const workflowAdmissionsByWorkflowId = {};
+  const timeoutClassifications = [];
+
+  if (snapshotsByNodeId && typeof snapshotsByNodeId === 'object') {
+    for (const [snapshotNodeId, snapshot] of Object.entries(snapshotsByNodeId)) {
+      const diagnostics = snapshot?.controlPlaneDiagnostics;
+      if (!diagnostics || typeof diagnostics !== 'object') {
+        continue;
+      }
+
+      if (diagnostics.publicationMode &&
+          typeof diagnostics.publicationMode === 'object') {
+        publicationModeByNodeId[snapshotNodeId] =
+          diagnostics.publicationMode;
+      }
+
+      const readiness = diagnostics.readinessByNodeId &&
+        typeof diagnostics.readinessByNodeId === 'object' ?
+        diagnostics.readinessByNodeId :
+        {};
+      Object.assign(readinessByNodeId, readiness);
+
+      const placement = diagnostics.placementEligibilityByNodeId &&
+        typeof diagnostics.placementEligibilityByNodeId === 'object' ?
+        diagnostics.placementEligibilityByNodeId :
+        {};
+      Object.assign(placementEligibilityByNodeId, placement);
+
+      const workflows = diagnostics.workflowAdmissionsByWorkflowId &&
+        typeof diagnostics.workflowAdmissionsByWorkflowId === 'object' ?
+        diagnostics.workflowAdmissionsByWorkflowId :
+        {};
+      Object.assign(workflowAdmissionsByWorkflowId, workflows);
+
+      const timeouts = Array.isArray(diagnostics.timeoutClassifications) ?
+        diagnostics.timeoutClassifications :
+        [];
+      for (const timeout of timeouts) {
+        if (!timeout || typeof timeout !== 'object') {
+          continue;
+        }
+        timeoutClassifications.push({
+          snapshotNodeId,
+          ...timeout,
+        });
+      }
+    }
+  }
+
+  if (Object.keys(publicationModeByNodeId).length === ZERO &&
+      Object.keys(readinessByNodeId).length === ZERO &&
+      Object.keys(placementEligibilityByNodeId).length === ZERO &&
+      Object.keys(workflowAdmissionsByWorkflowId).length === ZERO &&
+      timeoutClassifications.length === ZERO) {
+    return null;
+  }
+
+  return {
+    publicationModeByNodeId,
+    readinessByNodeId,
+    placementEligibilityByNodeId,
+    workflowAdmissionsByWorkflowId,
+    timeoutClassifications,
+  };
+}
+
 function resolveControlSnapshot(entry) {
   const diagnostics = resolveFailureDiagnostics(entry);
   const snapshotsByNodeId = diagnostics?.rootCauseBundle?.snapshotsByNodeId;
@@ -89,19 +162,83 @@ function resolveControlSnapshot(entry) {
   return null;
 }
 
+function resolveAdminQueryTraceByNodeId(entry) {
+  const diagnostics = resolveFailureDiagnostics(entry);
+  const traceByNodeId = diagnostics?.rootCauseBundle?.adminQueryTraceByNodeId;
+  if (traceByNodeId && typeof traceByNodeId === 'object') {
+    return traceByNodeId;
+  }
+  return null;
+}
+
+function resolveLoadMetrics(entry) {
+  const diagnostics = resolveFailureDiagnostics(entry);
+  if (diagnostics?.loadMetrics &&
+      typeof diagnostics.loadMetrics === 'object' &&
+      !Array.isArray(diagnostics.loadMetrics)) {
+    return diagnostics.loadMetrics;
+  }
+  if (entry?.loadMetrics &&
+      typeof entry.loadMetrics === 'object' &&
+      !Array.isArray(entry.loadMetrics)) {
+    return entry.loadMetrics;
+  }
+  return null;
+}
+
+function extractNodeIdsFromText(value) {
+  const nodeIds = [];
+  const matches = String(value || '').matchAll(NODE_ID_ERROR_PATTERN);
+  for (const match of matches) {
+    const nodeId = String(match?.[1] || '');
+    if (nodeId.length > ZERO) {
+      nodeIds.push(nodeId);
+    }
+  }
+  return nodeIds;
+}
+
 function resolveRelevantNodeIds(entry) {
   const diagnostics = resolveFailureDiagnostics(entry);
+  const loadMetrics = resolveLoadMetrics(entry);
   const affectedNodeIds = Array.isArray(diagnostics?.failure?.affectedNodeIds) ?
     diagnostics.failure.affectedNodeIds :
     [];
-  if (affectedNodeIds.length > ZERO) {
-    return [...affectedNodeIds];
+  const nodeIds = new Set(affectedNodeIds);
+  for (const snapshotNodeId of Object.keys(resolveControlSnapshot(entry) || {})) {
+    nodeIds.add(snapshotNodeId);
   }
-  const snapshotNodeIds = Object.keys(resolveControlSnapshot(entry) || {});
-  if (snapshotNodeIds.length > ZERO) {
-    return snapshotNodeIds;
+  for (const traceNodeId of Object.keys(resolveAdminQueryTraceByNodeId(entry) || {})) {
+    nodeIds.add(traceNodeId);
   }
-  return [];
+  const perNodeMetrics = loadMetrics?.perNode &&
+    typeof loadMetrics.perNode === 'object' &&
+    !Array.isArray(loadMetrics.perNode) ?
+    loadMetrics.perNode :
+    {};
+  for (const [nodeId, nodeMetrics] of Object.entries(perNodeMetrics)) {
+    const attemptedErrors = Number(nodeMetrics?.attemptErrors || ZERO);
+    const dispatched = Number(nodeMetrics?.dispatched || ZERO);
+    const success = Number(nodeMetrics?.success || ZERO);
+    const rejected = Number(nodeMetrics?.rejected || ZERO);
+    if (attemptedErrors > ZERO ||
+        dispatched > success ||
+        rejected > ZERO) {
+      nodeIds.add(nodeId);
+    }
+  }
+  const failedPhaseErrors = Array.isArray(diagnostics?.failedPhase?.errors) ?
+    diagnostics.failedPhase.errors :
+    [];
+  const distinctErrors = Array.isArray(loadMetrics?.distinctErrors) ?
+    loadMetrics.distinctErrors :
+    [];
+  for (const errorText of [...failedPhaseErrors, ...distinctErrors]) {
+    for (const nodeId of extractNodeIdsFromText(errorText)) {
+      nodeIds.add(nodeId);
+    }
+  }
+  return [...nodeIds];
 }
 
 async function collectScenarioLogArtifacts(scenarioDir, relevantNodeIds, workspaceRoot) {
@@ -164,6 +301,69 @@ async function collectScenarioLogArtifacts(scenarioDir, relevantNodeIds, workspa
   return result;
 }
 
+function buildFocusedNodeDiagnostics(entry, logs, controlPlaneDiagnostics = null) {
+  const relevantNodeIds = resolveRelevantNodeIds(entry);
+  const loadMetrics = resolveLoadMetrics(entry);
+  const perNodeMetrics = loadMetrics?.perNode &&
+    typeof loadMetrics.perNode === 'object' &&
+    !Array.isArray(loadMetrics.perNode) ?
+    loadMetrics.perNode :
+    {};
+  const distinctErrors = Array.isArray(loadMetrics?.distinctErrors) ?
+    loadMetrics.distinctErrors :
+    [];
+  const failedPhaseErrors = Array.isArray(resolveFailureDiagnostics(entry)?.failedPhase?.errors) ?
+    resolveFailureDiagnostics(entry).failedPhase.errors :
+    [];
+  const errorTexts = [...failedPhaseErrors, ...distinctErrors];
+  const controlSnapshotByNodeId = resolveControlSnapshot(entry) || {};
+  const adminQueryTraceByNodeId = resolveAdminQueryTraceByNodeId(entry) || {};
+  const nodeDiagnostics = {};
+
+  for (const nodeId of relevantNodeIds) {
+    const matchingErrors = errorTexts.filter((errorText) =>
+      extractNodeIdsFromText(errorText).includes(nodeId),
+    );
+    const traceEntries = Array.isArray(adminQueryTraceByNodeId[nodeId]) ?
+      adminQueryTraceByNodeId[nodeId].slice(-NODE_DIAGNOSTICS_TRACE_LIMIT) :
+      [];
+    const readiness =
+      controlPlaneDiagnostics?.readinessByNodeId?.[nodeId] || null;
+    const placementEligibility =
+      controlPlaneDiagnostics?.placementEligibilityByNodeId?.[nodeId] || null;
+    const publicationMode =
+      controlPlaneDiagnostics?.publicationModeByNodeId?.[nodeId] || null;
+    const nodeLogPath = logs?.nodeLogPaths?.[nodeId] || null;
+    const logExcerpt = Array.isArray(logs?.excerptsByNodeId?.[nodeId]) ?
+      logs.excerptsByNodeId[nodeId] :
+      [];
+    if (!perNodeMetrics[nodeId] &&
+        matchingErrors.length === ZERO &&
+        !controlSnapshotByNodeId[nodeId] &&
+        traceEntries.length === ZERO &&
+        !readiness &&
+        !placementEligibility &&
+        !publicationMode &&
+        !nodeLogPath &&
+        logExcerpt.length === ZERO) {
+      continue;
+    }
+    nodeDiagnostics[nodeId] = {
+      loadMetrics: perNodeMetrics[nodeId] || null,
+      errors: matchingErrors,
+      adminQueryTrace: traceEntries,
+      controlSnapshot: controlSnapshotByNodeId[nodeId] || null,
+      readiness,
+      placementEligibility,
+      publicationMode,
+      logPath: nodeLogPath,
+      logExcerpt,
+    };
+  }
+
+  return nodeDiagnostics;
+}
+
 function buildScenarioFailureBundle({
   entry,
   reportOutputPath,
@@ -175,6 +375,12 @@ function buildScenarioFailureBundle({
   const diagnostics = resolveFailureDiagnostics(entry);
   const failure = diagnostics.failure || null;
   const noProgress = diagnostics.noProgress || null;
+  const controlPlane = resolveControlPlaneDiagnostics(entry);
+  const nodeDiagnostics = buildFocusedNodeDiagnostics(
+    entry,
+    logs,
+    controlPlane,
+  );
   return {
     schemaVersion: FAILURE_BUNDLE_SCHEMA_VERSION,
     generatedAt: new Date().toISOString(),
@@ -198,6 +404,7 @@ function buildScenarioFailureBundle({
       rootCauseBundle: diagnostics.rootCauseBundle || null,
     },
     controlSnapshot: resolveControlSnapshot(entry),
+    controlPlane,
     readiness: resolveReadinessSnapshot(entry),
     topFailures: {
       reasonCounts: resolveFailureReasonCounts(entry),
@@ -207,10 +414,134 @@ function buildScenarioFailureBundle({
         [],
       loadMetrics: entry.loadMetrics || null,
     },
+    nodeDiagnostics,
     logs,
     playback: entry.playback || null,
     trace: entry.trace || null,
   };
+}
+
+function formatList(values) {
+  const items = Array.isArray(values) ?
+    values
+      .map((value) => String(value || '').trim())
+      .filter((value) => value.length > ZERO) :
+    [];
+  return items.length > ZERO ? items.join(', ') : UNKNOWN_VALUE;
+}
+
+function formatReadinessDimensions(readiness) {
+  const dimensions = readiness?.dimensions &&
+    typeof readiness.dimensions === 'object' ?
+    readiness.dimensions :
+    {};
+  const entries = Object.entries(dimensions)
+    .map(([dimension, value]) =>
+      `${dimension}=${value === true ? 'ready' : 'blocked'}`,
+    );
+  return entries.length > ZERO ? entries.join(', ') : UNKNOWN_VALUE;
+}
+
+function formatPublicationMode(publicationMode) {
+  if (!publicationMode || typeof publicationMode !== 'object') {
+    return UNKNOWN_VALUE;
+  }
+  return [
+    'mode=' + String(publicationMode.currentMode || UNKNOWN_VALUE),
+    'reason=' + String(publicationMode.reasonCode || UNKNOWN_VALUE),
+  ].join(', ');
+}
+
+function formatWorkflowAdmission(workflow) {
+  if (!workflow || typeof workflow !== 'object') {
+    return UNKNOWN_VALUE;
+  }
+  return [
+    'state=' + String(workflow.transitionState || UNKNOWN_VALUE),
+    'decision=' + String(
+      workflow?.admission?.decisionType ||
+      workflow?.admission?.decision ||
+      UNKNOWN_VALUE,
+    ),
+    'blockingReasons=' + formatList(
+      Array.isArray(workflow?.blockingReasons) ?
+        workflow.blockingReasons.map((reason) => reason?.code || reason) :
+        [],
+    ),
+  ].join(', ');
+}
+
+function formatTimeoutClassificationEntry(entry) {
+  const timeoutClassification = entry?.timeoutClassification &&
+    typeof entry.timeoutClassification === 'object' ?
+    entry.timeoutClassification :
+    {};
+  return [
+    'workflowId=' + String(entry?.workflowId || UNKNOWN_VALUE),
+    'classification=' + String(
+      timeoutClassification.classification || UNKNOWN_VALUE,
+    ),
+    'boundaryHit=' + String(timeoutClassification.boundaryHit === true),
+    'nestedOperation=' + String(
+      timeoutClassification.nestedOperation || UNKNOWN_VALUE,
+    ),
+  ].join(', ');
+}
+
+function formatNodeClientChannelMetrics(channel, metrics) {
+  if (!metrics || typeof metrics !== 'object') {
+    return `- ${channel}: ` + UNKNOWN_VALUE;
+  }
+  return [
+    '- ' + channel + ':',
+    'requests=' + String(metrics.requests ?? ZERO),
+    'successes=' + String(metrics.successes ?? ZERO),
+    'errors=' + String(metrics.errors ?? ZERO),
+    'timeouts=' + String(metrics.timeouts ?? ZERO),
+    'retries=' + String(metrics.retries ?? ZERO),
+    'breakerOpens=' + String(metrics.breakerOpens ?? ZERO),
+    'budgetDenials=' + String(metrics.budgetDenials ?? ZERO),
+    'timeoutBudgetMismatches=' + String(metrics.timeoutBudgetMismatches ?? ZERO),
+    'timedOutInFlight=' + String(metrics.timedOutInFlight ?? ZERO),
+  ].join(' ');
+}
+
+function formatNodeClientChannelState(channel, nodeId, state) {
+  if (!state || typeof state !== 'object') {
+    return `- ${channel}/${nodeId}: ` + UNKNOWN_VALUE;
+  }
+  return [
+    '- ' + channel + '/' + nodeId + ':',
+    'inFlight=' + String(state.inFlight ?? ZERO),
+    'consecutiveFailures=' + String(state.consecutiveFailures ?? ZERO),
+    'openUntilMs=' + String(state.openUntilMs ?? ZERO),
+    'circuitOpen=' + String(state.circuitOpen === true),
+  ].join(' ');
+}
+
+function formatNodeDiagnosticLoadMetrics(loadMetrics) {
+  if (!loadMetrics || typeof loadMetrics !== 'object') {
+    return null;
+  }
+  return [
+    'dispatched=' + Number(loadMetrics.dispatched || ZERO),
+    'success=' + Number(loadMetrics.success || ZERO),
+    'attemptErrors=' + Number(loadMetrics.attemptErrors || ZERO),
+    'admissionSignals=' + Number(loadMetrics.admissionSignals || ZERO),
+    'queuePressureSignals=' + Number(loadMetrics.queuePressureSignals || ZERO),
+    'rejected=' + Number(loadMetrics.rejected || ZERO),
+  ].join(', ');
+}
+
+function formatAdminQueryTraceEntry(entry) {
+  return [
+    'outcome=' + String(entry?.outcome || UNKNOWN_VALUE),
+    'operation=' + String(entry?.operation || UNKNOWN_VALUE),
+    'lane=' + String(entry?.lane || UNKNOWN_VALUE),
+    'timeoutMs=' + String(entry?.timeoutMs ?? UNKNOWN_VALUE),
+    'durationMs=' + String(entry?.durationMs ?? UNKNOWN_VALUE),
+    'error=' + String(entry?.error || UNKNOWN_VALUE),
+  ].join(', ');
 }
 
 function renderScenarioFailureBundleMarkdown(bundle) {
@@ -243,10 +574,25 @@ function renderScenarioFailureBundleMarkdown(bundle) {
     sections.push(
       '## No Progress\n' +
       [
-        `- Reason Code: ${bundle.diagnostics.noProgress.reasonCode || NO_PROGRESS_REASON_CODE}`,
-        `- Stalled Reason: ${bundle.diagnostics.noProgress.stalledReason || UNKNOWN_VALUE}`,
-        `- Last Progress: ${bundle.diagnostics.noProgress.lastProgressEvent?.message || UNKNOWN_VALUE}`,
-        `- Last Meaningful Change: ${bundle.diagnostics.noProgress.lastMeaningfulChange?.message || UNKNOWN_VALUE}`,
+        '- Reason Code: ' +
+          String(
+            bundle.diagnostics.noProgress.reasonCode ||
+            NO_PROGRESS_REASON_CODE,
+          ),
+        '- Stalled Reason: ' +
+          String(
+            bundle.diagnostics.noProgress.stalledReason || UNKNOWN_VALUE,
+          ),
+        '- Last Progress: ' +
+          String(
+            bundle.diagnostics.noProgress.lastProgressEvent?.message ||
+            UNKNOWN_VALUE,
+          ),
+        '- Last Meaningful Change: ' +
+          String(
+            bundle.diagnostics.noProgress.lastMeaningfulChange?.message ||
+            UNKNOWN_VALUE,
+          ),
       ].join('\n'),
     );
   }
@@ -269,6 +615,163 @@ function renderScenarioFailureBundleMarkdown(bundle) {
         const content = Array.isArray(lines) ? lines.join('\n') : '';
         return `### ${nodeId}\n\n\`\`\`text\n${content}\n\`\`\``;
       }).join(MARKDOWN_SECTION_BREAK),
+    );
+  }
+
+  const nodeDiagnostics = bundle?.nodeDiagnostics &&
+    typeof bundle.nodeDiagnostics === 'object' ?
+    Object.entries(bundle.nodeDiagnostics) :
+    [];
+  if (nodeDiagnostics.length > ZERO) {
+    sections.push(
+      '## Node Diagnostics\n' +
+      nodeDiagnostics.map(([nodeId, nodeDiagnostic]) => {
+        const lines = [];
+        if (nodeDiagnostic?.logPath) {
+          lines.push(`- Log Path: ${nodeDiagnostic.logPath}`);
+        }
+        const loadMetrics = formatNodeDiagnosticLoadMetrics(
+          nodeDiagnostic?.loadMetrics,
+        );
+        if (loadMetrics) {
+          lines.push(`- Load Metrics: ${loadMetrics}`);
+        }
+        if (nodeDiagnostic?.readiness) {
+          lines.push(
+            `- Readiness: ${formatReadinessDimensions(nodeDiagnostic.readiness)}`,
+          );
+        }
+        if (nodeDiagnostic?.placementEligibility) {
+          lines.push(
+            '- Placement Eligibility: ' +
+              String(
+                nodeDiagnostic.placementEligibility.placementEligible === true ?
+                  'eligible' :
+                  'ineligible',
+              ) +
+              ` (failedDimensions=${formatList(
+                nodeDiagnostic.placementEligibility.failedDimensions,
+              )}, reasonCodes=${formatList(
+                nodeDiagnostic.placementEligibility.reasonCodes,
+              )})`,
+          );
+        }
+        if (nodeDiagnostic?.publicationMode) {
+          lines.push(
+            `- Publication Mode: ${formatPublicationMode(nodeDiagnostic.publicationMode)}`,
+          );
+        }
+        const errors = Array.isArray(nodeDiagnostic?.errors) ?
+          nodeDiagnostic.errors :
+          [];
+        if (errors.length > ZERO) {
+          for (const errorText of errors) {
+            lines.push(`- Error: ${errorText}`);
+          }
+        }
+        const traces = Array.isArray(nodeDiagnostic?.adminQueryTrace) ?
+          nodeDiagnostic.adminQueryTrace :
+          [];
+        if (traces.length > ZERO) {
+          lines.push('```text');
+          for (const traceEntry of traces) {
+            lines.push(formatAdminQueryTraceEntry(traceEntry));
+          }
+          lines.push('```');
+        }
+        return `### ${nodeId}\n\n${lines.join('\n')}`;
+      }).join(MARKDOWN_SECTION_BREAK),
+    );
+  }
+
+  const publicationModes = bundle?.controlPlane?.publicationModeByNodeId &&
+    typeof bundle.controlPlane.publicationModeByNodeId === 'object' ?
+    Object.entries(bundle.controlPlane.publicationModeByNodeId) :
+    [];
+  const workflowAdmissions = bundle?.controlPlane?.workflowAdmissionsByWorkflowId &&
+    typeof bundle.controlPlane.workflowAdmissionsByWorkflowId === 'object' ?
+    Object.entries(bundle.controlPlane.workflowAdmissionsByWorkflowId) :
+    [];
+  const timeoutClassifications = Array.isArray(
+    bundle?.controlPlane?.timeoutClassifications,
+  ) ?
+    bundle.controlPlane.timeoutClassifications :
+    [];
+  if (publicationModes.length > ZERO ||
+      workflowAdmissions.length > ZERO ||
+      timeoutClassifications.length > ZERO) {
+    const controlPlaneSections = [];
+    if (publicationModes.length > ZERO) {
+      controlPlaneSections.push(
+        '### Publication Modes\n' +
+        publicationModes
+          .map(([nodeId, publicationMode]) =>
+            `- ${nodeId}: ${formatPublicationMode(publicationMode)}`,
+          )
+          .join('\n'),
+      );
+    }
+    if (workflowAdmissions.length > ZERO) {
+      controlPlaneSections.push(
+        '### Workflow Admissions\n' +
+        workflowAdmissions
+          .map(([workflowId, workflow]) =>
+            `- ${workflowId}: ${formatWorkflowAdmission(workflow)}`,
+          )
+          .join('\n'),
+      );
+    }
+    if (timeoutClassifications.length > ZERO) {
+      controlPlaneSections.push(
+        '### Timeout Classifications\n' +
+        timeoutClassifications
+          .map((entry) => `- ${formatTimeoutClassificationEntry(entry)}`)
+          .join('\n'),
+      );
+    }
+    sections.push(
+      '## Control Plane Diagnostics\n' +
+      controlPlaneSections.join(MARKDOWN_SECTION_BREAK),
+    );
+  }
+
+  const channelMetrics = bundle?.diagnostics?.rootCauseBundle?.channelMetrics &&
+    typeof bundle.diagnostics.rootCauseBundle.channelMetrics === 'object' ?
+    Object.entries(bundle.diagnostics.rootCauseBundle.channelMetrics) :
+    [];
+  const channelStateByChannel = bundle?.diagnostics?.rootCauseBundle?.channelStateByChannel &&
+    typeof bundle.diagnostics.rootCauseBundle.channelStateByChannel === 'object' ?
+    Object.entries(bundle.diagnostics.rootCauseBundle.channelStateByChannel) :
+    [];
+  if (channelMetrics.length > ZERO || channelStateByChannel.length > ZERO) {
+    const nodeClientSections = [];
+    if (channelMetrics.length > ZERO) {
+      nodeClientSections.push(
+        '### Metrics\n' +
+        channelMetrics
+          .map(([channel, metrics]) =>
+            formatNodeClientChannelMetrics(channel, metrics),
+          )
+          .join('\n'),
+      );
+    }
+    if (channelStateByChannel.length > ZERO) {
+      nodeClientSections.push(
+        '### Channel State\n' +
+        channelStateByChannel
+          .flatMap(([channel, nodeStates]) =>
+            Object.entries(
+              nodeStates && typeof nodeStates === 'object' ? nodeStates : {},
+            )
+              .map(([nodeId, state]) =>
+                formatNodeClientChannelState(channel, nodeId, state)),
+          )
+          .join('\n'),
+      );
+    }
+    sections.push(
+      '## Node Client Channels\n' +
+      nodeClientSections.join(MARKDOWN_SECTION_BREAK),
     );
   }
 
@@ -307,7 +810,9 @@ function renderRunFailureBundleMarkdown(bundle) {
     '## Scenarios\n' + (
       Array.isArray(bundle.scenarios) && bundle.scenarios.length > ZERO ?
         bundle.scenarios.map((scenario) =>
-          `- ${scenario.scenario}: ${scenario.summary.phase || UNKNOWN_VALUE} (${scenario.markdownPath})`,
+          `- ${scenario.scenario}: ` +
+            `${scenario.summary.phase || UNKNOWN_VALUE} ` +
+            `(${scenario.markdownPath})`,
         ).join('\n') :
         '- none'
     ),

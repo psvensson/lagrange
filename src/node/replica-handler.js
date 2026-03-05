@@ -76,6 +76,30 @@ const SYSTEM_TABLE_HYDRATION_SQL = Object.freeze({
     'WHERE partition_id = ? AND service_type = ?',
 });
 
+function resolveSnapshotStateForTransition(existingStatus, localStatus, targetStatus) {
+  if (existingStatus) {
+    return existingStatus;
+  }
+  if (localStatus && localStatus !== targetStatus) {
+    return localStatus;
+  }
+
+  switch (targetStatus) {
+    case ReplicaStatus.CREATING:
+      return ReplicaStatus.PENDING;
+    case ReplicaStatus.SYNCING:
+      return ReplicaStatus.CREATING;
+    case ReplicaStatus.ACTIVE:
+      return ReplicaStatus.SYNCING;
+    case ReplicaStatus.REMOVING:
+      return ReplicaStatus.ACTIVE;
+    case ReplicaStatus.REMOVED:
+      return ReplicaStatus.REMOVING;
+    default:
+      return localStatus || ReplicaStatus.ACTIVE;
+  }
+}
+
 function isFreshPartitionBootstrapWindow(partition) {
   if (!partition || partition.leader_node_id) {
     return false;
@@ -83,6 +107,40 @@ function isFreshPartitionBootstrapWindow(partition) {
   return Number.isFinite(partition.created_at) &&
     Number.isFinite(partition.updated_at) &&
     partition.created_at === partition.updated_at;
+}
+
+function buildReplicaOperationCacheVisibilityOptions(
+  _workflowStep,
+  _status,
+  updateData,
+  options = {},
+) {
+  const expectedCacheFields = {};
+  const minimumCacheFields = {};
+
+  if (typeof options.replicaId === 'string' && options.replicaId.length > NUM.ZERO) {
+    expectedCacheFields.replica_id = options.replicaId;
+  }
+  if (typeof options.errorMessage === 'string' && options.errorMessage.length > NUM.ZERO) {
+    expectedCacheFields.error_message = options.errorMessage;
+  }
+  if (Number.isFinite(updateData?.updated_at)) {
+    minimumCacheFields.updated_at = updateData.updated_at;
+  }
+  if (Number.isFinite(updateData?.completed_at)) {
+    minimumCacheFields.completed_at = updateData.completed_at;
+  }
+
+  return {
+    expectedCacheFields:
+      Object.keys(expectedCacheFields).length > NUM.ZERO ?
+        expectedCacheFields :
+        null,
+    minimumCacheFields:
+      Object.keys(minimumCacheFields).length > NUM.ZERO ?
+        minimumCacheFields :
+        null,
+  };
 }
 
 /**
@@ -135,6 +193,7 @@ class ReplicaHandler extends EventEmitter {
     // Track in-progress operations by operationId
     this.inProgressOperations = new Map();
     this.operationTasks = new Set();
+    this.operationUpdateRetryState = new Map();
     this.shuttingDown = false;
     this.shutdownPromise = null;
 
@@ -142,6 +201,16 @@ class ReplicaHandler extends EventEmitter {
     const config = ConfigurationManager.getInstance();
     this.syncTimeoutMs = config.get(CONFIG_KEY.REPLICA_HANDLER_SYNC_TIMEOUT_MS) ||
       REPLICA_HANDLER_DEFAULT.SYNC_TIMEOUT_MS;
+    this.operationCacheVisibilityRetryDelayMs =
+      Number.isFinite(options.operationCacheVisibilityRetryDelayMs) &&
+      options.operationCacheVisibilityRetryDelayMs > NUM.ZERO ?
+        Math.floor(options.operationCacheVisibilityRetryDelayMs) :
+        250;
+    this.maxOperationCacheVisibilityRetryAttempts =
+      Number.isInteger(options.maxOperationCacheVisibilityRetryAttempts) &&
+      options.maxOperationCacheVisibilityRetryAttempts > NUM.ZERO ?
+        options.maxOperationCacheVisibilityRetryAttempts :
+        3;
 
     // Logging
     const loggingService = LoggingService.getInstance();
@@ -401,6 +470,26 @@ class ReplicaHandler extends EventEmitter {
     const operationId = request?.[ReplicaOperationField.OPERATION_ID];
     const partitionId = request?.[ReplicaOperationField.PARTITION_ID];
     const replicaId = request?.[ReplicaOperationField.REPLICA_ID];
+    const bootstrapReplicaIds =
+      Array.isArray(request?.[ReplicaOperationField.REPLICA_IDS]) ?
+        request[ReplicaOperationField.REPLICA_IDS] :
+        [];
+    const bootstrapPeerAddresses =
+      Array.isArray(request?.[ReplicaOperationField.PEER_ADDRESSES]) ?
+        request[ReplicaOperationField.PEER_ADDRESSES] :
+        [];
+    const bootstrapTableMetadata =
+      request?.[ReplicaOperationField.BOOTSTRAP_TABLE_METADATA] &&
+      typeof request[ReplicaOperationField.BOOTSTRAP_TABLE_METADATA] ===
+        REPLICA_HANDLER_TYPEOF.OBJECT ?
+        request[ReplicaOperationField.BOOTSTRAP_TABLE_METADATA] :
+        null;
+    const bootstrapPartitionMetadata =
+      request?.[ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA] &&
+      typeof request[ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA] ===
+        REPLICA_HANDLER_TYPEOF.OBJECT ?
+        request[ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA] :
+        null;
     const tableName = request?.tableName || null;
 
     this.logger.info(REPLICA_HANDLER_LOG_MSG.CREATE_REQUEST, {
@@ -482,9 +571,6 @@ class ReplicaHandler extends EventEmitter {
       tableName,
       startedAt: Date.now(),
     });
-    await this.updateReplicaStatus(replicaId, ReplicaStatus.PENDING, {
-      partitionId,
-    });
 
     // Start async creation after ACK has returned.
     this.registerOperationTask(new Promise((resolve) => {
@@ -500,6 +586,10 @@ class ReplicaHandler extends EventEmitter {
           operationId,
           partitionId,
           replicaId,
+          bootstrapReplicaIds,
+          bootstrapPeerAddresses,
+          bootstrapTableMetadata,
+          bootstrapPartitionMetadata,
         }).catch((error) => {
           this.logger.error(REPLICA_HANDLER_LOG_MSG.ASYNC_CREATE_FAILED, {
             operationId,
@@ -530,6 +620,10 @@ class ReplicaHandler extends EventEmitter {
       operationId,
       partitionId,
       replicaId,
+      bootstrapReplicaIds,
+      bootstrapPeerAddresses,
+      bootstrapTableMetadata,
+      bootstrapPartitionMetadata,
     } = request;
     const progress = this.startReplicaCreationProgress({
       partitionId,
@@ -540,14 +634,32 @@ class ReplicaHandler extends EventEmitter {
 
     try {
       this.throwIfShuttingDown();
+      await this.updateReplicaStatus(replicaId, ReplicaStatus.PENDING, {
+        partitionId,
+      });
+      this.throwIfShuttingDown();
       await this.updateReplicaStatus(replicaId, ReplicaStatus.CREATING, {
         partitionId,
+      });
+      this.applyBootstrapMetadataPayload({
+        partitionId,
+        bootstrapTableMetadata,
+        bootstrapPartitionMetadata,
       });
       this.updateReplicaCreationProgress(progress, {
         stage: REPLICA_HANDLER_PROGRESS.STAGE_RESOLVING_CONTEXT,
       });
 
-      const context = await this.resolveReplicaContextWithRetry(partitionId, replicaId);
+      const context = await this.resolveReplicaContextWithRetry(
+        partitionId,
+        replicaId,
+        {
+          bootstrapReplicaIds,
+          bootstrapPeerAddresses,
+          bootstrapTableMetadata,
+          bootstrapPartitionMetadata,
+        },
+      );
       this.throwIfShuttingDown();
       const {
         tableName,
@@ -1006,6 +1118,8 @@ class ReplicaHandler extends EventEmitter {
         additionalData.partitionId :
         (existing?.partition_id || null);
       const localService = this.getTrackedService(replicaId);
+      const localReplica = this.getLocalReplica(replicaId);
+      const previousLocalStatus = localReplica?.status || null;
       this.setLocalReplica(replicaId, {
         replicaId,
         partitionId,
@@ -1013,29 +1127,43 @@ class ReplicaHandler extends EventEmitter {
         service: localService,
       });
       const trackedState = this.replicaStateMachine?.getState?.(replicaId) || null;
-      if (!trackedState && newStatus !== ReplicaStatus.PENDING && existing) {
+      if (!trackedState && newStatus !== ReplicaStatus.PENDING &&
+          typeof this.replicaStateMachine?.registerReplicaSnapshot ===
+            REPLICA_HANDLER_TYPEOF.FUNCTION &&
+          (existing || localReplica)) {
         this.replicaStateMachine.registerReplicaSnapshot(replicaId, {
           partitionId,
-          nodeId: existing.node_id || this.nodeId,
-          state: existing.status || ReplicaStatus.ACTIVE,
-          serviceId: existing.service_id || replicaId,
+          nodeId: existing?.node_id || this.nodeId,
+          state: resolveSnapshotStateForTransition(
+            existing?.status,
+            previousLocalStatus,
+            newStatus,
+          ),
+          serviceId: existing?.service_id || replicaId,
+          serviceType: existing?.service_type || REPLICA_HANDLER_SERVICE.TYPE,
+          serviceAddress:
+            existing?.address || this.buildTrackedServiceAddress(replicaId),
         });
       }
 
-      const transitionResult = this.replicaStateMachine.transition(
-        replicaId,
-        newStatus,
-        {
-          partitionId,
-          nodeId: existing?.node_id || this.nodeId,
-          errorMessage: additionalData.errorMessage,
-          serviceId: existing?.service_id || replicaId,
-          serviceType: existing?.service_type || REPLICA_HANDLER_SERVICE.TYPE,
-          serviceAddress: existing?.address || this.buildTrackedServiceAddress(replicaId),
-        },
+      const transitionResult = await Promise.resolve(
+        this.replicaStateMachine.transition(
+          replicaId,
+          newStatus,
+          {
+            partitionId,
+            nodeId: existing?.node_id || this.nodeId,
+            errorMessage: additionalData.errorMessage,
+            serviceId: existing?.service_id || replicaId,
+            serviceType: existing?.service_type || REPLICA_HANDLER_SERVICE.TYPE,
+            serviceAddress: existing?.address || this.buildTrackedServiceAddress(replicaId),
+          },
+        ),
       );
-      if (transitionResult && typeof transitionResult.then === REPLICA_HANDLER_TYPEOF.FUNCTION) {
-        await transitionResult;
+      if (transitionResult === false) {
+        throw new Error(
+          `Replica state transition rejected for ${replicaId}: ${newStatus}`,
+        );
       }
     } catch (error) {
       this.logger.error(REPLICA_HANDLER_LOG_MSG.UPDATE_STATUS_FAILED, {
@@ -1228,6 +1356,9 @@ class ReplicaHandler extends EventEmitter {
       return;
     }
 
+    const retryGeneration =
+      this.beginReplicaOperationUpdateAttempt(operationId);
+
     const now = Date.now();
     let stepsHistory = [];
     if (Array.isArray(existing?.steps_history)) {
@@ -1269,25 +1400,49 @@ class ReplicaHandler extends EventEmitter {
       updateData.completed_at = now;
     }
 
-    try {
-      if (!existing) {
-        // Avoid creating partial replica_operations rows when cache lag causes
-        // the operation row to be temporarily missing. A partial upsert can
-        // violate NOT NULL constraints (e.g., type/source/target columns).
-        await this.cdcIntegrationService.updateSystemTableRow(
-          SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-          {operation_id: operationId},
-          updateData,
-        );
-        return;
-      }
+    const cacheVisibilityOptions = buildReplicaOperationCacheVisibilityOptions(
+      workflowStep,
+      status,
+      updateData,
+      options,
+    );
+    const expectedCacheFields = cacheVisibilityOptions.expectedCacheFields;
+    const minimumCacheFields = cacheVisibilityOptions.minimumCacheFields;
 
+    try {
+      // Avoid creating partial replica_operations rows when cache lag causes
+      // the operation row to be temporarily missing. A partial upsert can
+      // violate NOT NULL constraints (e.g., type/source/target columns).
       await this.cdcIntegrationService.updateSystemTableRow(
         SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
         {operation_id: operationId},
         updateData,
+        {
+          expectedCacheFields,
+          minimumCacheFields,
+        },
       );
+      this.clearReplicaOperationUpdateAttempt(operationId, retryGeneration);
     } catch (error) {
+      if (this.isRetryableCacheVisibilityError(error)) {
+        this.logger.warn(REPLICA_HANDLER_LOG_MSG.UPDATE_STATUS_FAILED, {
+          operationId,
+          workflowStep,
+          error: error.message,
+          retryScheduled: true,
+        });
+        this.scheduleReplicaOperationUpdateRetry({
+          operationId,
+          workflowStep,
+          updateData,
+          expectedCacheFields,
+          minimumCacheFields,
+          attempt: 1,
+          generation: retryGeneration,
+        });
+        return;
+      }
+      this.clearReplicaOperationUpdateAttempt(operationId, retryGeneration);
       this.logger.warn(REPLICA_HANDLER_LOG_MSG.UPDATE_STATUS_FAILED, {
         operationId,
         workflowStep,
@@ -1304,7 +1459,7 @@ class ReplicaHandler extends EventEmitter {
    * @return {Promise<Object>} Resolved metadata.
    * @private
    */
-  async resolveReplicaContextWithRetry(partitionId, replicaId) {
+  async resolveReplicaContextWithRetry(partitionId, replicaId, options = {}) {
     this.throwIfShuttingDown();
     const deadline = Date.now() + this.syncTimeoutMs;
     let metadataWaitLogged = false;
@@ -1314,7 +1469,7 @@ class ReplicaHandler extends EventEmitter {
     while (Date.now() <= deadline) {
       this.throwIfShuttingDown();
       try {
-        return this.resolveReplicaContext(partitionId, replicaId);
+        return this.resolveReplicaContext(partitionId, replicaId, options);
       } catch (error) {
         if (!this.isTransientMetadataResolutionError(error)) {
           throw error;
@@ -1361,13 +1516,275 @@ class ReplicaHandler extends EventEmitter {
   }
 
   /**
+   * Determine whether a CDC failure is only a cache visibility false negative.
+   * @param {Error} error
+   * @return {boolean}
+   * @private
+   */
+  isRetryableCacheVisibilityError(error) {
+    const message = typeof error?.message === REPLICA_HANDLER_TYPEOF.STRING ?
+      error.message :
+      '';
+    return message.includes('Cache update not observed');
+  }
+
+  /**
+   * Start one logical replica_operations update attempt.
+   * Newer attempts fence older deferred retries for the same operation row.
+   * @param {string} operationId
+   * @return {number} Attempt generation for this logical update.
+   * @private
+   */
+  beginReplicaOperationUpdateAttempt(operationId) {
+    const currentState = this.operationUpdateRetryState.get(operationId);
+    if (typeof currentState?.cancelPendingRetry ===
+        REPLICA_HANDLER_TYPEOF.FUNCTION) {
+      currentState.cancelPendingRetry();
+    } else if (currentState?.timeoutHandle) {
+      clearTimeout(currentState.timeoutHandle);
+    }
+
+    const generation = (currentState?.generation || NUM.ZERO) + NUM.ONE;
+    this.operationUpdateRetryState.set(operationId, {
+      generation,
+      timeoutHandle: null,
+      cancelPendingRetry: null,
+    });
+    return generation;
+  }
+
+  /**
+   * Record the timer for a deferred replica_operations retry.
+   * @param {string} operationId
+   * @param {number} generation
+   * @param {NodeJS.Timeout} timeoutHandle
+   * @param {Function} cancelPendingRetry
+   * @return {boolean} True when the retry is still current.
+   * @private
+   */
+  setReplicaOperationRetryTimer(
+    operationId,
+    generation,
+    timeoutHandle,
+    cancelPendingRetry,
+  ) {
+    const currentState = this.operationUpdateRetryState.get(operationId);
+    if (!currentState || currentState.generation !== generation) {
+      cancelPendingRetry();
+      return false;
+    }
+
+    if (typeof currentState.cancelPendingRetry ===
+        REPLICA_HANDLER_TYPEOF.FUNCTION &&
+        currentState.timeoutHandle !== timeoutHandle) {
+      currentState.cancelPendingRetry();
+    }
+    currentState.timeoutHandle = timeoutHandle;
+    currentState.cancelPendingRetry = cancelPendingRetry;
+    return true;
+  }
+
+  /**
+   * Check whether a deferred retry still belongs to the latest logical update.
+   * @param {string} operationId
+   * @param {number} generation
+   * @return {boolean}
+   * @private
+   */
+  isCurrentReplicaOperationUpdateAttempt(operationId, generation) {
+    const currentState = this.operationUpdateRetryState.get(operationId);
+    return Boolean(currentState) && currentState.generation === generation;
+  }
+
+  /**
+   * Clear deferred retry state once a logical update attempt settles.
+   * @param {string} operationId
+   * @param {number} generation
+   * @return {void}
+   * @private
+   */
+  clearReplicaOperationUpdateAttempt(operationId, generation) {
+    const currentState = this.operationUpdateRetryState.get(operationId);
+    if (!currentState || currentState.generation !== generation) {
+      return;
+    }
+    if (typeof currentState.cancelPendingRetry ===
+        REPLICA_HANDLER_TYPEOF.FUNCTION) {
+      currentState.cancelPendingRetry();
+    } else if (currentState.timeoutHandle) {
+      clearTimeout(currentState.timeoutHandle);
+    }
+    this.operationUpdateRetryState.delete(operationId);
+  }
+
+  /**
+   * Retry one replica_operations row update after a cache visibility false
+   * negative. The write is idempotent and should not fail replica creation.
+   * @param {Object} options
+   * @param {string} options.operationId
+   * @param {string} options.workflowStep
+   * @param {Object} options.updateData
+   * @param {Object} options.expectedCacheFields
+   * @param {Object} options.minimumCacheFields
+   * @param {number} options.attempt
+   * @param {number} options.generation
+   * @return {void}
+   * @private
+   */
+  scheduleReplicaOperationUpdateRetry(options = {}) {
+    const {
+      operationId,
+      workflowStep,
+      updateData,
+      expectedCacheFields,
+      minimumCacheFields,
+      attempt = 1,
+      generation,
+    } = options;
+    if (!operationId || !updateData) {
+      return;
+    }
+    if (attempt > this.maxOperationCacheVisibilityRetryAttempts) {
+      if (generation !== undefined) {
+        this.clearReplicaOperationUpdateAttempt(operationId, generation);
+      }
+      return;
+    }
+
+    this.registerOperationTask(new Promise((resolve) => {
+      let settled = false;
+      const cancelPendingRetry = () => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timeoutHandle);
+        resolve();
+      };
+      const timeoutHandle = setTimeout(() => {
+        settled = true;
+        const currentState = this.operationUpdateRetryState.get(operationId);
+        if (currentState?.timeoutHandle === timeoutHandle) {
+          currentState.timeoutHandle = null;
+          currentState.cancelPendingRetry = null;
+        }
+        if (this.shuttingDown) {
+          if (generation !== undefined) {
+            this.clearReplicaOperationUpdateAttempt(operationId, generation);
+          }
+          resolve();
+          return;
+        }
+        if (generation !== undefined &&
+            !this.isCurrentReplicaOperationUpdateAttempt(
+              operationId,
+              generation,
+            )) {
+          resolve();
+          return;
+        }
+        resolve(this.retryReplicaOperationUpdate({
+          operationId,
+          workflowStep,
+          updateData,
+          expectedCacheFields,
+          minimumCacheFields,
+          attempt,
+          generation,
+        }));
+      }, this.operationCacheVisibilityRetryDelayMs);
+
+      if (generation !== undefined &&
+          !this.setReplicaOperationRetryTimer(
+            operationId,
+            generation,
+            timeoutHandle,
+            cancelPendingRetry,
+          )) {
+        return;
+      }
+    }));
+  }
+
+  /**
+   * Execute one deferred replica_operations retry after a cache visibility
+   * false negative.
+   * @param {Object} options
+   * @return {Promise<void>}
+   * @private
+   */
+  async retryReplicaOperationUpdate(options = {}) {
+    const {
+      operationId,
+      workflowStep,
+      updateData,
+      expectedCacheFields,
+      minimumCacheFields,
+      attempt = 1,
+      generation,
+    } = options;
+    if (generation !== undefined &&
+        !this.isCurrentReplicaOperationUpdateAttempt(
+          operationId,
+          generation,
+        )) {
+      return;
+    }
+
+    try {
+      await this.cdcIntegrationService.updateSystemTableRow(
+        SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+        {operation_id: operationId},
+        updateData,
+        {
+          expectedCacheFields,
+          minimumCacheFields,
+        },
+      );
+      if (generation !== undefined) {
+        this.clearReplicaOperationUpdateAttempt(operationId, generation);
+      }
+    } catch (error) {
+      if (this.isRetryableCacheVisibilityError(error) &&
+          attempt < this.maxOperationCacheVisibilityRetryAttempts) {
+        this.logger.warn(REPLICA_HANDLER_LOG_MSG.UPDATE_STATUS_FAILED, {
+          operationId,
+          workflowStep,
+          error: error.message,
+          retryScheduled: true,
+          retryAttempt: attempt + 1,
+        });
+        this.scheduleReplicaOperationUpdateRetry({
+          operationId,
+          workflowStep,
+          updateData,
+          expectedCacheFields,
+          minimumCacheFields,
+          attempt: attempt + 1,
+          generation,
+        });
+        return;
+      }
+      if (generation !== undefined) {
+        this.clearReplicaOperationUpdateAttempt(operationId, generation);
+      }
+      this.logger.error(REPLICA_HANDLER_LOG_MSG.UPDATE_STATUS_FAILED, {
+        operationId,
+        workflowStep,
+        error: error.message,
+        retryAttempt: attempt,
+      });
+    }
+  }
+
+  /**
    * Resolve replica metadata from the system table cache.
    * @param {string} partitionId - Partition ID.
    * @param {string} replicaId - Replica ID.
    * @return {Object} Resolved metadata.
    * @private
    */
-  resolveReplicaContext(partitionId, replicaId) {
+  resolveReplicaContext(partitionId, replicaId, options = {}) {
     if (!this.systemTableCache) {
       throw new Error(REPLICA_HANDLER_ERROR_MSG.CACHE_NOT_AVAILABLE);
     }
@@ -1375,16 +1792,27 @@ class ReplicaHandler extends EventEmitter {
       throw new Error(REPLICA_HANDLER_ERROR_MSG.CACHE_MISSING_FILTER);
     }
 
+    const payloadPartition = this.normalizeBootstrapPartitionMetadata(
+      partitionId,
+      options.bootstrapPartitionMetadata,
+    );
+    const payloadTable = this.normalizeBootstrapTableMetadata(
+      payloadPartition?.table_id || null,
+      options.bootstrapTableMetadata,
+    );
     const partition = this.systemTableCache.get(
       SYSTEM_TABLE_NAME.PARTITIONS,
       partitionId,
-    );
+    ) || payloadPartition;
     if (!partition) {
       const partitionMetadataMissing = REPLICA_HANDLER_ERROR_MSG.PARTITION_METADATA_MISSING;
       throw new Error(partitionMetadataMissing(partitionId));
     }
 
-    const table = this.systemTableCache.get(SYSTEM_TABLE_NAME.TABLES, partition.table_id);
+    const table = this.systemTableCache.get(
+      SYSTEM_TABLE_NAME.TABLES,
+      partition.table_id,
+    ) || payloadTable;
     if (!table) {
       const tableMetadataMissing = REPLICA_HANDLER_ERROR_MSG.TABLE_METADATA_MISSING;
       throw new Error(tableMetadataMissing(partition.table_id));
@@ -1416,6 +1844,16 @@ class ReplicaHandler extends EventEmitter {
     const replicaIds = [];
     const peerAddresses = [];
     const seenReplicaIds = new Set();
+    const requestedReplicaIds = Array.isArray(options.bootstrapReplicaIds) ?
+      options.bootstrapReplicaIds.filter((value) =>
+        typeof value === REPLICA_HANDLER_TYPEOF.STRING && value.length > NUM.ZERO,
+      ) :
+      [];
+    const requestedPeerAddresses = Array.isArray(options.bootstrapPeerAddresses) ?
+      options.bootstrapPeerAddresses.filter((value) =>
+        typeof value === REPLICA_HANDLER_TYPEOF.STRING && value.length > NUM.ZERO,
+      ) :
+      [];
     // Count only established voters from sibling services. Freshly staged
     // rows in pending/creating/syncing states do not imply an existing group.
     const establishedExistingReplicaIds = new Set();
@@ -1462,6 +1900,19 @@ class ReplicaHandler extends EventEmitter {
       (service) => service.raft_role === RAFT_ROLE.LEADER,
     );
     const isFreshBootstrapPartition = isFreshPartitionBootstrapWindow(partition);
+    if (isFreshBootstrapPartition) {
+      for (const requestedReplicaId of requestedReplicaIds) {
+        if (!seenReplicaIds.has(requestedReplicaId)) {
+          seenReplicaIds.add(requestedReplicaId);
+          replicaIds.push(requestedReplicaId);
+        }
+      }
+      for (const requestedPeerAddress of requestedPeerAddresses) {
+        if (!peerAddresses.includes(requestedPeerAddress)) {
+          peerAddresses.push(requestedPeerAddress);
+        }
+      }
+    }
     // Fresh CREATE TABLE provisioning dispatches replica creation before the
     // partition row has a persisted leader_node_id. A single sibling leader
     // must not force later members of that first cohort into learner mode.
@@ -1579,6 +2030,95 @@ class ReplicaHandler extends EventEmitter {
       });
       return NUM.ZERO;
     }
+  }
+
+  /**
+   * Apply bootstrap metadata payload rows into the local cache before context
+   * resolution retries. This avoids waiting for eventual CDC visibility when
+   * the coordinator already knows the canonical rows.
+   * @param {Object} options
+   * @param {string} options.partitionId
+   * @param {Object|null} options.bootstrapTableMetadata
+   * @param {Object|null} options.bootstrapPartitionMetadata
+   * @return {void}
+   * @private
+   */
+  applyBootstrapMetadataPayload(options = {}) {
+    if (!this.systemTableCache ||
+        typeof this.systemTableCache.applySystemTableChange !==
+          REPLICA_HANDLER_TYPEOF.FUNCTION) {
+      return;
+    }
+
+    const partitionRow = this.normalizeBootstrapPartitionMetadata(
+      options.partitionId,
+      options.bootstrapPartitionMetadata,
+    );
+    const tableRow = this.normalizeBootstrapTableMetadata(
+      partitionRow?.table_id || null,
+      options.bootstrapTableMetadata,
+    );
+
+    if (tableRow) {
+      this.applyHydratedSystemTableRow(SYSTEM_TABLE_NAME.TABLES, tableRow);
+    }
+    if (partitionRow) {
+      this.applyHydratedSystemTableRow(
+        SYSTEM_TABLE_NAME.PARTITIONS,
+        partitionRow,
+      );
+    }
+  }
+
+  /**
+   * Normalize bootstrap table metadata from a CREATE_REPLICA payload.
+   * @param {string|null} expectedTableId
+   * @param {Object|null} tableRow
+   * @return {Object|null}
+   * @private
+   */
+  normalizeBootstrapTableMetadata(expectedTableId, tableRow) {
+    if (!tableRow || typeof tableRow !== REPLICA_HANDLER_TYPEOF.OBJECT) {
+      return null;
+    }
+    const tableId = tableRow.table_id || tableRow.tableId || null;
+    if (typeof tableId !== REPLICA_HANDLER_TYPEOF.STRING ||
+        tableId.length === NUM.ZERO) {
+      return null;
+    }
+    if (expectedTableId && tableId !== expectedTableId) {
+      return null;
+    }
+    return {
+      ...tableRow,
+      table_id: tableId,
+    };
+  }
+
+  /**
+   * Normalize bootstrap partition metadata from a CREATE_REPLICA payload.
+   * @param {string} expectedPartitionId
+   * @param {Object|null} partitionRow
+   * @return {Object|null}
+   * @private
+   */
+  normalizeBootstrapPartitionMetadata(expectedPartitionId, partitionRow) {
+    if (!partitionRow ||
+        typeof partitionRow !== REPLICA_HANDLER_TYPEOF.OBJECT) {
+      return null;
+    }
+    const partitionId = partitionRow.partition_id || partitionRow.partitionId || null;
+    const tableId = partitionRow.table_id || partitionRow.tableId || null;
+    if (partitionId !== expectedPartitionId ||
+        typeof tableId !== REPLICA_HANDLER_TYPEOF.STRING ||
+        tableId.length === NUM.ZERO) {
+      return null;
+    }
+    return {
+      ...partitionRow,
+      partition_id: partitionId,
+      table_id: tableId,
+    };
   }
 
   /**
@@ -2073,6 +2613,7 @@ class ReplicaHandler extends EventEmitter {
       this.inProgressOperations.clear();
       this.localServices.clear();
       this.localReplicas.clear();
+      this.operationUpdateRetryState.clear();
       this.initialized = false;
 
       this.emit(REPLICA_HANDLER_EVENT.SHUTDOWN, {nodeId: this.nodeId});

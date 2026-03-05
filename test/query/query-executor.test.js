@@ -9,6 +9,7 @@ import {test} from '../../src/test-helpers/tap.js';
 import {QueryExecutor} from '../../src/query/query-executor.js';
 import {SQLParser} from '../../src/query/sql-parser.js';
 import {NodeService} from '../../src/node/node-service.js';
+import {ERRORS} from '../../src/constants/index.js';
 
 // Initialize configuration for tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -51,12 +52,26 @@ function createMockSystemCache(partitionIds) {
     address: `test-node/partition/${pid}`,
     status: 'active',
   }));
+  const partitions = partitionIds.map((partitionId) => ({
+    partition_id: partitionId,
+    leader_node_id: 'test-node',
+  }));
 
   return {
     services,
+    partitions,
+    get: function(type, key) {
+      if (type === 'partitions') {
+        return this.partitions.find((partition) => partition.partition_id === key) || null;
+      }
+      return null;
+    },
     filter: function(type, predicate) {
       if (type === 'services') {
         return this.services.filter(predicate);
+      }
+      if (type === 'partitions') {
+        return this.partitions.filter(predicate);
       }
       return [];
     },
@@ -431,7 +446,8 @@ test('QueryExecutor - throws for INSERT on missing partition', async (t) => {
   );
 });
 
-test('QueryExecutor - routes writes when no leader is present', async (t) => {
+test('QueryExecutor - routes writes when canonical owner is present but raft role is stale',
+  async (t) => {
   mockPartitionData.set('p1', [{id: 1}]);
 
   const router = createMockMessageRouter();
@@ -449,7 +465,7 @@ test('QueryExecutor - routes writes when no leader is present', async (t) => {
   const ast = parseSQL('UPDATE users SET status = \'active\' WHERE id = 1');
   const result = await executor.executeUpdate(ast, ['p1']);
 
-  t.equal(result.success, true, 'update should still route without leader');
+  t.equal(result.success, true, 'update should route through canonical leader owner');
   t.equal(result.partitions.length, 1, 'should target the partition');
 
   mockPartitionData.clear();
@@ -588,8 +604,15 @@ test('QueryExecutor - findPartitionLeaderAddress returns null when cache unavail
   t.end();
 });
 
-test('QueryExecutor - findPartitionLeaderAddress filters by leader role', (t) => {
+test('QueryExecutor - findPartitionLeaderAddress uses canonical partition leader owner',
+  (t) => {
   const systemCache = {
+    partitions: [
+      {
+        partition_id: 'p1',
+        leader_node_id: 'node2',
+      },
+    ],
     services: [
       {
         service_id: 'p1-follower',
@@ -610,9 +633,18 @@ test('QueryExecutor - findPartitionLeaderAddress filters by leader role', (t) =>
         status: 'active',
       },
     ],
+    get: function(type, key) {
+      if (type === 'partitions') {
+        return this.partitions.find((partition) => partition.partition_id === key) || null;
+      }
+      return null;
+    },
     filter: function(type, predicate) {
       if (type === 'services') {
         return this.services.filter(predicate);
+      }
+      if (type === 'partitions') {
+        return this.partitions.filter(predicate);
       }
       return [];
     },
@@ -631,6 +663,12 @@ test('QueryExecutor - findPartitionLeaderAddress filters by leader role', (t) =>
 
 test('QueryExecutor - findPartitionLeaderAddress filters by active status', (t) => {
   const systemCache = {
+    partitions: [
+      {
+        partition_id: 'p1',
+        leader_node_id: 'node2',
+      },
+    ],
     services: [
       {
         service_id: 'p1-inactive',
@@ -651,9 +689,18 @@ test('QueryExecutor - findPartitionLeaderAddress filters by active status', (t) 
         status: 'active',
       },
     ],
+    get: function(type, key) {
+      if (type === 'partitions') {
+        return this.partitions.find((partition) => partition.partition_id === key) || null;
+      }
+      return null;
+    },
     filter: function(type, predicate) {
       if (type === 'services') {
         return this.services.filter(predicate);
+      }
+      if (type === 'partitions') {
+        return this.partitions.filter(predicate);
       }
       return [];
     },
@@ -669,6 +716,219 @@ test('QueryExecutor - findPartitionLeaderAddress filters by active status', (t) 
   t.equal(address, 'node2/partition/p1');
   t.end();
 });
+
+test('QueryExecutor - findPartitionLeaderAddress fails closed without canonical partition leader',
+  (t) => {
+    const systemCache = {
+      services: [
+        {
+          service_id: 'p1-stale-leader',
+          service_type: 'partition',
+          partition_id: 'p1',
+          node_id: 'node2',
+          raft_role: 'leader',
+          address: 'node2/partition/p1',
+          status: 'active',
+        },
+      ],
+      get: function(_type, _key) {
+        return null;
+      },
+      filter: function(type, predicate) {
+        if (type === 'services') {
+          return this.services.filter(predicate);
+        }
+        return [];
+      },
+    };
+
+    const executor = new QueryExecutor({
+      messageRouter: createMockMessageRouter(),
+      systemCache,
+    });
+
+    const address = executor.findPartitionLeaderAddress('p1');
+
+    t.equal(address, null);
+    t.end();
+  });
+
+test('QueryExecutor - executeOnPartition fails closed on stale service leader hints',
+  async (t) => {
+    let deliveries = 0;
+    const systemCache = {
+      partitions: [
+        {
+          partition_id: 'p1',
+          leader_node_id: null,
+        },
+      ],
+      services: [
+        {
+          service_id: 'p1-stale-leader',
+          service_type: 'partition',
+          partition_id: 'p1',
+          node_id: 'node2',
+          raft_role: 'leader',
+          address: 'node2/partition/p1',
+          status: 'active',
+        },
+      ],
+      get: function(type, key) {
+        if (type === 'partitions') {
+          return this.partitions.find((partition) => partition.partition_id === key) || null;
+        }
+        return null;
+      },
+      filter: function(type, predicate) {
+        if (type === 'services') {
+          return this.services.filter(predicate);
+        }
+        if (type === 'partitions') {
+          return this.partitions.filter(predicate);
+        }
+        return [];
+      },
+    };
+    const messageRouter = {
+      deliver: async () => {
+        deliveries += 1;
+        return {acknowledged: true, success: true, rows: []};
+      },
+    };
+
+    const executor = new QueryExecutor({
+      messageRouter,
+      systemCache,
+    });
+    executor.leaderRetryAttempts = 1;
+    executor.leaderRetryDelayMs = 1;
+
+    const result = await executor.executeOnPartition(
+      'p1',
+      'INSERT INTO users (id) VALUES (\'1\')',
+      [],
+      false,
+      false,
+      false,
+    );
+
+    t.equal(result.success, false);
+    t.equal(result.error, ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE);
+    t.equal(deliveries, 0, 'write path should not dispatch using stale service hints');
+  });
+
+test('QueryExecutor - findPartitionLeaderAddress prefers canonical partition leader ' +
+  'over stale service raft_role metadata', (t) => {
+  const systemCache = {
+    partitions: [
+      {
+        partition_id: 'p1',
+        leader_node_id: 'node1',
+      },
+    ],
+    services: [
+      {
+        service_id: 'p1-node1',
+        service_type: 'partition',
+        partition_id: 'p1',
+        node_id: 'node1',
+        raft_role: null,
+        address: 'node1/partition/p1',
+        status: 'active',
+      },
+      {
+        service_id: 'p1-node2',
+        service_type: 'partition',
+        partition_id: 'p1',
+        node_id: 'node2',
+        raft_role: 'leader',
+        address: 'node2/partition/p1',
+        status: 'active',
+      },
+    ],
+    get: function(type, key) {
+      if (type === 'partitions') {
+        return this.partitions.find((partition) => partition.partition_id === key) || null;
+      }
+      return null;
+    },
+    filter: function(type, predicate) {
+      if (type === 'services') {
+        return this.services.filter(predicate);
+      }
+      if (type === 'partitions') {
+        return this.partitions.filter(predicate);
+      }
+      return [];
+    },
+  };
+
+  const executor = new QueryExecutor({
+    messageRouter: createMockMessageRouter(),
+    systemCache,
+  });
+
+  const address = executor.findPartitionLeaderAddress('p1');
+
+  t.equal(address, 'node1/partition/p1');
+  t.end();
+});
+
+test('QueryExecutor - excludes creating and syncing services from routable candidates',
+  (t) => {
+    const systemCache = {
+      services: [
+        {
+          service_id: 'p1-creating',
+          service_type: 'partition',
+          partition_id: 'p1',
+          node_id: 'node1',
+          raft_role: 'leader',
+          address: 'node1/partition/p1',
+          status: 'creating',
+        },
+        {
+          service_id: 'p1-syncing',
+          service_type: 'partition',
+          partition_id: 'p1',
+          node_id: 'node2',
+          raft_role: 'follower',
+          address: 'node2/partition/p1',
+          status: 'syncing',
+        },
+        {
+          service_id: 'p1-active',
+          service_type: 'partition',
+          partition_id: 'p1',
+          node_id: 'node3',
+          raft_role: 'leader',
+          address: 'node3/partition/p1',
+          status: 'active',
+        },
+      ],
+      filter(type, predicate) {
+        if (type === 'services') {
+          return this.services.filter(predicate);
+        }
+        return [];
+      },
+    };
+
+    const executor = new QueryExecutor({
+      messageRouter: createMockMessageRouter(),
+      systemCache,
+    });
+
+    const services = executor.getRoutablePartitionServices('p1');
+
+    t.same(
+      services.map((service) => service.service_id),
+      ['p1-active'],
+      'only fully active partition services should be routable',
+    );
+    t.end();
+  });
 
 test('QueryExecutor - read candidates ignore NodeService leader hints', (t) => {
   const originalGetInstance = NodeService.getInstance;

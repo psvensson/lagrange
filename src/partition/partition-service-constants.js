@@ -77,6 +77,7 @@ const PARTITION_SERVICE_MESSAGE_TYPE = Object.freeze({
   FORWARD_WRITE: 'FORWARD_WRITE',
   SYSTEM_TABLE_WRITE: 'SYSTEM_TABLE_WRITE',
   QUERY: 'QUERY',
+  START_SPLIT_REPLICATION: 'START_SPLIT_REPLICATION',
 });
 
 const PARTITION_SERVICE_RESPONSE = Object.freeze({
@@ -141,6 +142,11 @@ const PARTITION_SERVICE_COLUMN = Object.freeze({
   CAPABILITIES: 'capabilities',
   READY_LEASE_EXPIRES_AT: 'ready_lease_expires_at',
   TABLE_NAME: 'table_name',
+  ACTIVE_PARTITION_VERSION: 'active_partition_version',
+  PENDING_PARTITION_VERSION: 'pending_partition_version',
+  PARTITION_TRANSITION_STATE: 'partition_transition_state',
+  PARTITION_TRANSITION_METADATA: 'partition_transition_metadata',
+  PARTITION_VERSION: 'partition_version',
 });
 
 const PARTITION_SERVICE_COLUMN_SQL = Object.freeze({
@@ -154,6 +160,16 @@ const PARTITION_SERVICE_COLUMN_SQL = Object.freeze({
     'ADD COLUMN leader_node_id TEXT',
   ADD_TABLE_NAME:
     'ADD COLUMN table_name TEXT',
+  ADD_ACTIVE_PARTITION_VERSION:
+    'ADD COLUMN active_partition_version INTEGER NOT NULL DEFAULT 1',
+  ADD_PENDING_PARTITION_VERSION:
+    'ADD COLUMN pending_partition_version INTEGER',
+  ADD_PARTITION_TRANSITION_STATE:
+    'ADD COLUMN partition_transition_state TEXT',
+  ADD_PARTITION_TRANSITION_METADATA:
+    'ADD COLUMN partition_transition_metadata TEXT',
+  ADD_PARTITION_VERSION:
+    'ADD COLUMN partition_version INTEGER NOT NULL DEFAULT 1',
   BACKFILL_CONNECTION_STATE_FROM_LEGACY_WS:
     'SET connection_state = ws_connection_state ' +
     'WHERE ws_connection_state IS NOT NULL',
@@ -223,13 +239,32 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
   ADDED_CAPABILITIES: 'Added capabilities column to nodes table',
   ADDED_READY_LEASE: 'Added ready_lease_expires_at column to nodes table',
   ADDED_MESSAGE_GROUP_LEADER: 'Added leader_node_id column to message_groups table',
+  ADDED_ACTIVE_PARTITION_VERSION:
+    'Added active_partition_version column to tables table',
+  ADDED_PENDING_PARTITION_VERSION:
+    'Added pending_partition_version column to tables table',
+  ADDED_PARTITION_TRANSITION_STATE:
+    'Added partition_transition_state column to tables table',
+  ADDED_PARTITION_TRANSITION_METADATA:
+    'Added partition_transition_metadata column to tables table',
   ADDED_PARTITIONS_TABLE_NAME: 'Added table_name column to partitions table',
+  ADDED_PARTITION_VERSION: 'Added partition_version column to partitions table',
   RECEIVED_RAFT_PACKET: 'Received Raft packet',
   SENDING_RAFT_RESPONSE: 'Sending Raft response',
   FAILED_RAFT_RESPONSE: 'Failed to send Raft response',
   UNKNOWN_MESSAGE_TYPE: 'Unknown application message type',
   HANDLING_SYSTEM_TABLE_WRITE: 'Handling system table write from remote node',
   HANDLING_REMOTE_QUERY: 'Handling remote query',
+  START_SPLIT_REPLICATION_REQUEST:
+    'Handling partition split replication request',
+  SPLIT_REPLICATION_STARTED: 'Partition split replication started',
+  SPLIT_REPLICATION_COMPLETED: 'Partition split replication completed',
+  SPLIT_REPLICATION_FAILED: 'Partition split replication failed',
+  SPLIT_REPLICATION_MIRROR_FAILED: 'Partition split mirror delivery failed',
+  SPLIT_REPLICATION_CUTOVER_UPDATED:
+    'Partition split cutover metadata updated',
+  SPLIT_REPLICATION_SIZE_PERSIST_FAILED:
+    'Partition size persistence failed',
   REDIRECTING_WRITE_TO_LEADER: 'Redirecting write to leader',
   APPLYING_COMMITTED_ENTRY: 'Applying committed entry',
   TRANSACTION_COMMIT_APPLIED: 'Transaction commit entry applied',
@@ -280,6 +315,7 @@ const PARTITION_SERVICE_ERROR_MSG = Object.freeze({
   REQUIRE_REPLICA_ID: 'PartitionService requires replicaId',
   INVALID_MESSAGE: 'Invalid message',
   INVALID_FORWARD_WRITE: 'Invalid FORWARD_WRITE message',
+  INVALID_SPLIT_REPLICATION: 'Invalid START_SPLIT_REPLICATION message',
   unknownMessage: (type) => `Unknown message type: ${type}`,
   unknownOperation: (operation) => `Unknown operation: ${operation}`,
   forwardWriteFailed: (message) =>
@@ -327,6 +363,10 @@ const PARTITION_SERVICE_ERROR_MSG = Object.freeze({
     'CDC subscriber must be a function or object with handleCDCEvent',
   PARTITION_SIZE_FAILED: 'Failed to calculate partition size',
   PARTITION_SIZE_UPDATE_FAILED: 'Failed to update partition size',
+  SPLIT_REPLICATION_ROUTING_FAILED:
+    'Failed to route mirrored partition split write',
+  SPLIT_REPLICATION_STATE_REQUIRED:
+    'Partition split transition metadata is required',
   PERSIST_LEADER_AFTER_CDC_FAILED:
     'Failed to persist partition leader after CDC service set',
   PERSIST_PARTITION_LEADER_FAILED: 'Failed to persist partition leader update',

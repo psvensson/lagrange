@@ -834,6 +834,12 @@ describe('postgres-baseline-comparison scenario', () => {
     const adminQueryTraceSnapshot = Array.isArray(options.adminQueryTraceSnapshot) ?
       options.adminQueryTraceSnapshot :
       [];
+    const controlSnapshotSequence = Array.isArray(options.controlSnapshotSequence) &&
+      options.controlSnapshotSequence.length > 0 ?
+      options.controlSnapshotSequence.map((entry) =>
+        isRecord(entry) ? entry : {}) :
+      [{}];
+    let controlSnapshotIndex = 0;
     const quiescentTimeoutMs = Number.isInteger(options.quiescentTimeoutMs) &&
       options.quiescentTimeoutMs > 0 ?
       options.quiescentTimeoutMs :
@@ -907,8 +913,13 @@ describe('postgres-baseline-comparison scenario', () => {
           if (throwOnControlSnapshot) {
             throw new Error('control snapshot fallback should not be queried');
           }
+          const controlSnapshotOverrides =
+            controlSnapshotSequence[
+              Math.min(controlSnapshotIndex, controlSnapshotSequence.length - 1)
+            ];
+          controlSnapshotIndex += 1;
           return {
-            rows: [buildControlSnapshotPayload(this.id)],
+            rows: [buildControlSnapshotPayload(this.id, controlSnapshotOverrides)],
           };
         }
         if (statement === NODE_CLIENT_SERVICE_DISCOVERY_SQL ||
@@ -1177,9 +1188,47 @@ describe('postgres-baseline-comparison scenario', () => {
       );
     });
 
-  it('uses strict canonical snapshot path without fallback probe queries',
+  it('waits for strict pre-load rebalancing quiescence before starting load',
     async () => {
-      const {cluster, controlSnapshotCalls, tableProbeCalls} =
+      const {cluster, controlSnapshotCalls, loadCalls} =
+        buildVersionedStrictReadinessCluster({
+          controlSnapshotSequence: [{
+            replicaOperations: {
+              inFlightCount: 1,
+            },
+          }, {
+            replicaOperations: {
+              inFlightCount: 1,
+            },
+          }, {
+            replicaOperations: {
+              inFlightCount: 0,
+            },
+          }],
+          quiescentTimeoutMs: 120,
+        });
+
+      const result = await run(cluster);
+      assert.equal(
+        result.details.benchmark.sutLoadNodeCount,
+        1,
+        'strict pre-load readiness should still admit the node once replica work drains',
+      );
+      assert.ok(
+        controlSnapshotCalls.length >= 3,
+        'strict pre-load gate should keep sampling control snapshots until ' +
+          'replica operations drain',
+      );
+      assert.equal(
+        loadCalls.length,
+        2,
+        'load should start only after strict pre-load quiescence is satisfied',
+      );
+    });
+
+  it('uses strict canonical snapshot path without fallback table probe queries',
+    async () => {
+      const {cluster, tableProbeCalls} =
         buildVersionedStrictReadinessCluster({
           includeAppliedSchemaVersion: false,
           quiescentTimeoutMs: 120,
@@ -1188,11 +1237,6 @@ describe('postgres-baseline-comparison scenario', () => {
       await assert.rejects(
         run(cluster),
         /strict_preload_readiness_failed.*schema_version_unknown/i,
-      );
-      assert.equal(
-        controlSnapshotCalls.length,
-        0,
-        'strict canonical pre-load gate should avoid control snapshot fallback queries',
       );
       assert.equal(
         tableProbeCalls.length,

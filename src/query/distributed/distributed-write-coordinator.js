@@ -24,6 +24,8 @@ const OPERATION_ID_PREFIX = 'dwrite-';
 const PROMISE_STATUS_FULFILLED = 'fulfilled';
 const UNARY_MINUS = '-';
 const UNARY_PLUS = '+';
+const PARTICIPANT_ROLE_PRIMARY = 'primary';
+const PARTICIPANT_ROLE_MIRROR = 'mirror';
 
 /**
  * Canonical owner for distributed INSERT/UPDATE/DELETE execution.
@@ -86,7 +88,11 @@ class DistributedWriteCoordinator {
         options.partitionIds :
         [];
       for (const partitionId of partitionIds) {
-        partitionStatements.set(partitionId, {...ast});
+        partitionStatements.set(partitionId, {
+          ast: {...ast},
+          role: PARTICIPANT_ROLE_PRIMARY,
+          executionOptions: {},
+        });
       }
     }
 
@@ -97,6 +103,28 @@ class DistributedWriteCoordinator {
       returningSpec: ast.returning || null,
       idempotencyKey,
     };
+  }
+
+  /**
+   * Append one mirror-only participant to an existing write plan.
+   * Mirror participants affect success/failure but are excluded from
+   * user-facing affected-row and RETURNING aggregation.
+   * @param {Object} plan - Existing write plan.
+   * @param {string} partitionId - Mirror partition ID.
+   * @param {Object} ast - Statement AST.
+   * @param {Object} executionOptions - Delivery options.
+   * @return {Object} The mutated write plan.
+   */
+  addMirrorParticipant(plan, partitionId, ast, executionOptions = {}) {
+    if (!plan || !partitionId || !ast) {
+      return plan;
+    }
+    plan.partitionStatements.set(partitionId, {
+      ast: {...ast},
+      role: PARTICIPANT_ROLE_MIRROR,
+      executionOptions: {...executionOptions},
+    });
+    return plan;
   }
 
   /**
@@ -113,17 +141,33 @@ class DistributedWriteCoordinator {
 
       if (orderedPartitions.length === 1) {
         const partitionId = orderedPartitions[0];
-        const statementAst = plan.partitionStatements.get(partitionId);
+        const participant = plan.partitionStatements.get(partitionId);
         const result = await this.executePartitionStatement(
-          plan.statementType, statementAst, partitionId, params,
+          plan.statementType,
+          participant.ast,
+          partitionId,
+          params,
+          participant.executionOptions || {},
         );
-        participantResults.push({partitionId, ...result});
+        participantResults.push({
+          partitionId,
+          role: participant.role || PARTICIPANT_ROLE_PRIMARY,
+          ...result,
+        });
       } else {
         const promises = orderedPartitions.map((partitionId) => {
-          const statementAst = plan.partitionStatements.get(partitionId);
+          const participant = plan.partitionStatements.get(partitionId);
           return this.executePartitionStatement(
-            plan.statementType, statementAst, partitionId, params,
-          ).then((result) => ({partitionId, ...result}));
+            plan.statementType,
+            participant.ast,
+            partitionId,
+            params,
+            participant.executionOptions || {},
+          ).then((result) => ({
+            partitionId,
+            role: participant.role || PARTICIPANT_ROLE_PRIMARY,
+            ...result,
+          }));
         });
         const settled = await Promise.allSettled(promises);
         for (const outcome of settled) {
@@ -150,6 +194,14 @@ class DistributedWriteCoordinator {
       const failedParticipants = participantResults.filter(
         (result) => !result.success,
       );
+      const primaryPartitions = participantResults
+        .filter((result) => result.role !== PARTICIPANT_ROLE_MIRROR)
+        .map((result) => result.partitionId)
+        .filter(Boolean);
+      const mirrorPartitions = participantResults
+        .filter((result) => result.role === PARTICIPANT_ROLE_MIRROR)
+        .map((result) => result.partitionId)
+        .filter(Boolean);
       const rows = [];
       let affectedRows = 0;
       const retryCount = participantResults.reduce((sum, result) => {
@@ -159,6 +211,9 @@ class DistributedWriteCoordinator {
       }, 0);
       for (const result of participantResults) {
         if (!result.success) {
+          continue;
+        }
+        if (result.role === PARTICIPANT_ROLE_MIRROR) {
           continue;
         }
         affectedRows += result.affectedRows || 0;
@@ -173,7 +228,8 @@ class DistributedWriteCoordinator {
           operation: plan.statementType,
           affectedRows,
           rows,
-          partitions: orderedPartitions,
+          partitions: primaryPartitions,
+          mirrorPartitions,
           failedPartitions: failedParticipants.map(
             (result) => result.partitionId,
           ),
@@ -196,7 +252,8 @@ class DistributedWriteCoordinator {
         operation: plan.statementType,
         affectedRows,
         rows,
-        partitions: orderedPartitions,
+        partitions: primaryPartitions,
+        mirrorPartitions,
         participantResults,
         idempotencyKey: plan.idempotencyKey,
         operationId: plan.operationId,
@@ -213,7 +270,13 @@ class DistributedWriteCoordinator {
    * @return {Promise<Object>} Participant execution result.
    * @private
    */
-  async executePartitionStatement(statementType, statementAst, partitionId, params) {
+  async executePartitionStatement(
+    statementType,
+    statementAst,
+    partitionId,
+    params,
+    executionOptions = {},
+  ) {
     for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
       try {
         const result = await this.executePartitionStatementOnce(
@@ -221,6 +284,7 @@ class DistributedWriteCoordinator {
           statementAst,
           partitionId,
           params,
+          executionOptions,
         );
         if (result.success !== false) {
           return {
@@ -260,14 +324,35 @@ class DistributedWriteCoordinator {
    * @return {Promise<Object>} Participant result.
    * @private
    */
-  async executePartitionStatementOnce(statementType, statementAst, partitionId, params) {
+  async executePartitionStatementOnce(
+    statementType,
+    statementAst,
+    partitionId,
+    params,
+    executionOptions = {},
+  ) {
     if (statementType === QUERY_AST_TYPE.INSERT) {
-      return this.queryExecutor.executeInsert(statementAst, partitionId, params);
+      return this.queryExecutor.executeInsert(
+        statementAst,
+        partitionId,
+        params,
+        executionOptions,
+      );
     }
     if (statementType === QUERY_AST_TYPE.UPDATE) {
-      return this.queryExecutor.executeUpdate(statementAst, [partitionId], params);
+      return this.queryExecutor.executeUpdate(
+        statementAst,
+        [partitionId],
+        params,
+        executionOptions,
+      );
     }
-    return this.queryExecutor.executeDelete(statementAst, [partitionId], params);
+    return this.queryExecutor.executeDelete(
+      statementAst,
+      [partitionId],
+      params,
+      executionOptions,
+    );
   }
 
   /**
@@ -296,11 +381,15 @@ class DistributedWriteCoordinator {
       }
       if (!partitionStatements.has(partitionId)) {
         partitionStatements.set(partitionId, {
-          ...ast,
-          values: [],
+          ast: {
+            ...ast,
+            values: [],
+          },
+          role: PARTICIPANT_ROLE_PRIMARY,
+          executionOptions: {},
         });
       }
-      partitionStatements.get(partitionId).values.push(row);
+      partitionStatements.get(partitionId).ast.values.push(row);
     }
   }
 

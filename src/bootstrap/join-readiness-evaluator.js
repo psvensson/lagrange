@@ -29,18 +29,15 @@ import {
 } from '../constants/index.js';
 import {ENDPOINT_SYNC_HEALTH} from '../runtime/endpoint-sync-constants.js';
 import {META_SERVICE_ID} from '../constants/wasm-meta.js';
-import {ReplicaStatus} from '../rebalancer/replica-status.js';
+import {
+  isReplicaOperationInFlight,
+  normalizeReplicaOperationRecord,
+} from '../rebalancer/replica-operation-liveness.js';
 import {
   JOIN_READINESS_DEFAULT_TABLE,
   JOIN_READINESS_REASON,
   JOIN_READINESS_REPAIR,
 } from './node-joining-constants.js';
-
-const JOIN_READINESS_IN_FLIGHT_EXCLUDED_STATUSES = new Set([
-  String(SERVICE_STATUS.ACTIVE).toLowerCase(),
-  String(ReplicaStatus.REMOVED).toLowerCase(),
-  String(ReplicaStatus.FAILED).toLowerCase(),
-]);
 
 const JOIN_READINESS_REASON_PRECEDENCE = Object.freeze([
   JOIN_READINESS_REASON.ROUTING_NOT_READY,
@@ -791,32 +788,21 @@ class JoinReadinessEvaluator {
       systemTableCache.getAll(TABLES.REPLICA_OPERATIONS) || [];
     const inFlightOperations = [];
     for (const row of rows) {
-      const status = String(row?.status || '').toLowerCase();
-      if (!status ||
-          !JOIN_READINESS_IN_FLIGHT_EXCLUDED_STATUSES.has(status)) {
+      const normalizedOperation = normalizeReplicaOperationRecord(row);
+      if (isReplicaOperationInFlight(normalizedOperation)) {
         inFlightOperations.push({
-          operationId: String(
-            row?.operation_id || row?.operationId || '',
-          ),
-          type: String(row?.type || ''),
-          partitionId: String(
-            row?.partition_id || row?.partitionId || '',
-          ),
+          operationId: normalizedOperation.operationId,
+          type: normalizedOperation.type,
+          partitionId: normalizedOperation.partitionGroupId,
           replicaId: String(
             row?.replica_id || row?.replicaId || '',
           ),
-          sourceNodeId: String(
-            row?.source_node_id || row?.sourceNodeId || '',
-          ),
-          targetNodeId: String(
-            row?.target_node_id || row?.targetNodeId || '',
-          ),
-          status,
-          workflowStep: String(
-            row?.workflow_step || row?.workflowStep || '',
-          ),
-          completedAt:
-            row?.completed_at || row?.completedAt || null,
+          sourceNodeId: normalizedOperation.sourceNodeId,
+          targetNodeId: normalizedOperation.targetNodeId,
+          status: normalizedOperation.status,
+          workflowStep: normalizedOperation.workflowStep,
+          completedAt: normalizedOperation.completedAt,
+          ageMs: normalizedOperation.ageMs,
         });
       }
     }

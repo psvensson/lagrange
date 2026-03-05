@@ -2,6 +2,7 @@ import {
   NODE_CLIENT_CHANNEL,
   NODE_CLIENT_CONTEXT_KEYS,
   NODE_CLIENT_CONTROL_SNAPSHOT_SCHEMA_VERSION,
+  NODE_CLIENT_CONTROL_SNAPSHOT_FORCE_REPAIR_SQL,
   NODE_CLIENT_CONTROL_SNAPSHOT_SQL,
   NODE_CLIENT_ERROR_CODES,
   NODE_CLIENT_PREFLIGHT_CRITICAL_PATH_SNAPSHOT_SCHEMA_VERSION,
@@ -39,6 +40,7 @@ const TRANSIENT_OPERATION_ERROR_PATTERNS = Object.freeze([
 ]);
 
 const OPERATION_QUERY_LOAD = 'queryLoad';
+const OPERATION_QUERY_LOAD_PROBE = 'queryLoadProbe';
 const OPERATION_QUERY_CONTROL = 'queryControl';
 const OPERATION_PROBE_READINESS = 'probeReadiness';
 const OPERATION_FETCH_CONTROL_SNAPSHOT = 'fetchControlSnapshot';
@@ -189,6 +191,7 @@ const NODE_CLIENT_METRIC_KEY_BUDGET_DENIALS = 'budgetDenials';
 const NODE_CLIENT_METRIC_KEY_TIMEOUT_BUDGET_MISMATCHES =
   'timeoutBudgetMismatches';
 const NODE_CLIENT_METRIC_KEY_TIMED_OUT_IN_FLIGHT = 'timedOutInFlight';
+const NODE_CHANNEL_STATE_KEY_SEPARATOR = '::';
 
 const NODE_CLIENT_METRIC_KEYS = Object.freeze([
   NODE_CLIENT_METRIC_KEY_REQUESTS,
@@ -295,13 +298,14 @@ function classifyTimeoutClass(error) {
   return NODE_CLIENT_TIMEOUT_CLASS.NON_TIMEOUT;
 }
 
-function isControlOrSnapshotChannel(channel) {
+function isAdminOrProbeChannel(channel) {
   return channel === NODE_CLIENT_CHANNEL.CONTROL ||
-    channel === NODE_CLIENT_CHANNEL.SNAPSHOT;
+    channel === NODE_CLIENT_CHANNEL.SNAPSHOT ||
+    channel === NODE_CLIENT_CHANNEL.PROBE;
 }
 
 function isTransientAdminOperationError(channel, error) {
-  if (!isControlOrSnapshotChannel(channel)) {
+  if (!isAdminOrProbeChannel(channel)) {
     return false;
   }
   if (error?.timeoutClass === NODE_CLIENT_TIMEOUT_CLASS.TIMEOUT) {
@@ -416,6 +420,12 @@ function buildServiceDiscoverySql(context = {}) {
     DISCOVERY_SQL_SUFFIX;
 }
 
+function buildControlSnapshotSql(context = {}) {
+  return context?.[NODE_CLIENT_CONTEXT_KEYS.FORCE_AUTHORITATIVE_REPAIR] === true ?
+    NODE_CLIENT_CONTROL_SNAPSHOT_FORCE_REPAIR_SQL :
+    NODE_CLIENT_CONTROL_SNAPSHOT_SQL;
+}
+
 function createEmptyChannelMetrics() {
   return {
     [NODE_CLIENT_METRIC_KEY_REQUESTS]: ZERO,
@@ -447,6 +457,41 @@ function createMetricsSnapshot(metricsByChannel) {
   });
 }
 
+function createChannelStateSnapshot(nodeChannelState, nowMs = Date.now()) {
+  const byChannel = {};
+  for (const [key, state] of nodeChannelState.entries()) {
+    const separatorIndex = String(key).indexOf(NODE_CHANNEL_STATE_KEY_SEPARATOR);
+    if (separatorIndex <= ZERO) {
+      continue;
+    }
+    const channel = String(key).slice(ZERO, separatorIndex);
+    const nodeId = String(key).slice(
+      separatorIndex + NODE_CHANNEL_STATE_KEY_SEPARATOR.length,
+    );
+    if (!channel || !nodeId) {
+      continue;
+    }
+    if (!byChannel[channel]) {
+      byChannel[channel] = {};
+    }
+    const openUntilMs = Number(state?.openUntilMs || ZERO);
+    byChannel[channel][nodeId] = Object.freeze({
+      inFlight: Number(state?.inFlight || ZERO),
+      consecutiveFailures: Number(state?.consecutiveFailures || ZERO),
+      openUntilMs,
+      circuitOpen: openUntilMs > nowMs,
+    });
+  }
+  return Object.freeze(
+    Object.fromEntries(
+      Object.entries(byChannel).map(([channel, nodeStates]) => [
+        channel,
+        Object.freeze({...nodeStates}),
+      ]),
+    ),
+  );
+}
+
 class NodeClient {
   constructor(options = {}) {
     this._policies = resolveNodeClientChannelPolicies({
@@ -467,6 +512,22 @@ class NodeClient {
       node,
       channel: NODE_CLIENT_CHANNEL.LOAD,
       operation: OPERATION_QUERY_LOAD,
+      context,
+      invoke: (timeoutMs) => this._queryWithTimeout(
+        node,
+        sql,
+        params,
+        timeoutMs,
+        NODE_CLIENT_CHANNEL.LOAD,
+      ),
+    });
+  }
+
+  async queryLoadProbe(node, sql, params = [], context = {}) {
+    return this._executeChannelOperation({
+      node,
+      channel: NODE_CLIENT_CHANNEL.PROBE,
+      operation: OPERATION_QUERY_LOAD_PROBE,
       context,
       invoke: (timeoutMs) => this._queryWithTimeout(
         node,
@@ -508,6 +569,7 @@ class NodeClient {
   }
 
   async fetchControlSnapshot(node, context = {}) {
+    const controlSnapshotSql = buildControlSnapshotSql(context);
     return this._executeChannelOperation({
       node,
       channel: NODE_CLIENT_CHANNEL.SNAPSHOT,
@@ -516,7 +578,7 @@ class NodeClient {
       invoke: async (timeoutMs) => {
         const rawResult = await this._queryWithTimeout(
           node,
-          NODE_CLIENT_CONTROL_SNAPSHOT_SQL,
+          controlSnapshotSql,
           [],
           timeoutMs,
           NODE_CLIENT_CHANNEL.SNAPSHOT,
@@ -573,6 +635,10 @@ class NodeClient {
 
   getMetricsSnapshot() {
     return createMetricsSnapshot(this._metricsByChannel);
+  }
+
+  getChannelStateSnapshot() {
+    return createChannelStateSnapshot(this._nodeChannelState);
   }
 
   async _executeChannelOperation(options) {
@@ -731,7 +797,7 @@ class NodeClient {
   }
 
   _getNodeChannelState(nodeId, channel) {
-    const key = channel + '::' + nodeId;
+    const key = channel + NODE_CHANNEL_STATE_KEY_SEPARATOR + nodeId;
     let state = this._nodeChannelState.get(key);
     if (!state) {
       state = {

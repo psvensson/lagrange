@@ -16,6 +16,8 @@ const SNAPSHOT_MISSING_REASON_QUERY_FAILED = 'snapshot_query_failed';
 
 const UNKNOWN_NODE_ID = 'unknown';
 const UNKNOWN_NODE_ADDRESS = 'unknown';
+const ROOT_CAUSE_SNAPSHOT_KIND_PREFLIGHT_CRITICAL_PATH =
+  'preflight_critical_path';
 
 function normalizeNodeId(node) {
   return typeof node?.id === 'string' && node.id.length > 0 ?
@@ -63,6 +65,7 @@ function buildMissingSnapshotEntry(node, error) {
 export async function collectPreflightCriticalPathSnapshots({
   nodeClient,
   nodes,
+  context = {},
 }) {
   const snapshotNodes = Array.isArray(nodes) ? nodes : [];
   const snapshotsByNodeId = {};
@@ -73,7 +76,40 @@ export async function collectPreflightCriticalPathSnapshots({
       if (typeof nodeClient?.fetchPreflightCriticalPathSnapshot !== 'function') {
         throw new Error('NodeClient missing fetchPreflightCriticalPathSnapshot');
       }
-      const snapshot = await nodeClient.fetchPreflightCriticalPathSnapshot(node);
+      const snapshot = await nodeClient.fetchPreflightCriticalPathSnapshot(
+        node,
+        context,
+      );
+      snapshotsByNodeId[nodeId] = {
+        ...snapshot,
+        nodeId,
+        address: typeof snapshot?.address === 'string' && snapshot.address.length > 0 ?
+          snapshot.address :
+          normalizeNodeAddress(node),
+      };
+    } catch (error) {
+      snapshotsByNodeId[nodeId] = buildMissingSnapshotEntry(node, error);
+    }
+  }));
+
+  return snapshotsByNodeId;
+}
+
+export async function collectFailureControlSnapshots({
+  nodeClient,
+  nodes,
+  context = {},
+}) {
+  const snapshotNodes = Array.isArray(nodes) ? nodes : [];
+  const snapshotsByNodeId = {};
+
+  await Promise.all(snapshotNodes.map(async (node) => {
+    const nodeId = normalizeNodeId(node);
+    try {
+      if (typeof nodeClient?.fetchControlSnapshot !== 'function') {
+        throw new Error('NodeClient missing fetchControlSnapshot');
+      }
+      const snapshot = await nodeClient.fetchControlSnapshot(node, context);
       snapshotsByNodeId[nodeId] = {
         ...snapshot,
         nodeId,
@@ -94,6 +130,10 @@ export function buildRootCauseBundle({
   snapshotsByNodeId,
   playback,
   adminQueryTraceByNodeId,
+  snapshotKind = null,
+  evaluateInvariants = true,
+  channelMetrics = null,
+  channelStateByChannel = null,
 }) {
   const dominantReason = typeof failureArtifact?.dominantReason === 'string' ?
     failureArtifact.dominantReason :
@@ -111,7 +151,11 @@ export function buildRootCauseBundle({
     ROOT_CAUSE_CLASS.UNKNOWN;
 
   const hasSnapshots = snapshotsByNodeId && typeof snapshotsByNodeId === 'object';
-  const invariantEvaluation = hasSnapshots ?
+  const shouldEvaluateInvariants =
+    evaluateInvariants === true &&
+    (snapshotKind === null ||
+      snapshotKind === ROOT_CAUSE_SNAPSHOT_KIND_PREFLIGHT_CRITICAL_PATH);
+  const invariantEvaluation = hasSnapshots && shouldEvaluateInvariants ?
     evaluateRootCauseInvariants({snapshotsByNodeId}) :
     null;
   if (invariantEvaluation?.dominantInvariant) {
@@ -126,6 +170,9 @@ export function buildRootCauseBundle({
   };
   if (snapshotsByNodeId && typeof snapshotsByNodeId === 'object') {
     bundle.snapshotsByNodeId = snapshotsByNodeId;
+    bundle.snapshotKind =
+      snapshotKind ||
+      ROOT_CAUSE_SNAPSHOT_KIND_PREFLIGHT_CRITICAL_PATH;
   }
   if (invariantEvaluation) {
     bundle.invariants = invariantEvaluation.invariants;
@@ -133,6 +180,12 @@ export function buildRootCauseBundle({
   }
   if (adminQueryTraceByNodeId && typeof adminQueryTraceByNodeId === 'object') {
     bundle.adminQueryTraceByNodeId = adminQueryTraceByNodeId;
+  }
+  if (channelMetrics && typeof channelMetrics === 'object') {
+    bundle.channelMetrics = channelMetrics;
+  }
+  if (channelStateByChannel && typeof channelStateByChannel === 'object') {
+    bundle.channelStateByChannel = channelStateByChannel;
   }
   if (playback && typeof playback === 'object') {
     bundle.playback = playback;

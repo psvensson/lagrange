@@ -522,6 +522,41 @@ test('Unit: buildImage reports errors with build output', async (t) => {
 
 test('Unit: buildImage passes labels to docker build options', async (t) => {
   await t.test(
+    'sends explicit build-context entries required by dockerode tar packing',
+    async () => {
+      const provider = new DockerProvider({socketPath: '/var/run/docker.sock'});
+
+      let capturedBuildContext = null;
+      let capturedBuildOptions = null;
+      provider._docker.buildImage = async (context, options) => {
+        capturedBuildContext = context;
+        capturedBuildOptions = options;
+        return {};
+      };
+      provider._collectBuildOutput = async () => [];
+
+      await provider.buildImage(
+        '/project',
+        'myimage:context',
+        'Dockerfile',
+        null,
+        {'ddb.git-hash': 'abc1234'},
+      );
+
+      assert.deepStrictEqual(capturedBuildContext, {
+        context: '/project',
+        src: ['.dockerignore', 'Dockerfile', 'package-lock.json',
+          'package.json', 'src'],
+      });
+      assert.deepStrictEqual(capturedBuildOptions, {
+        t: 'myimage:context',
+        dockerfile: 'Dockerfile',
+        labels: {'ddb.git-hash': 'abc1234'},
+      });
+    },
+  );
+
+  await t.test(
     'forwards labels to docker buildImage options',
     async () => {
       const provider = new DockerProvider({socketPath: '/var/run/docker.sock'});

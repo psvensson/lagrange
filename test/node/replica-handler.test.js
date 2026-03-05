@@ -14,6 +14,7 @@ import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-consta
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {
   ReplicaOperationMessageType,
   ReplicaOperationResponseStatus,
@@ -279,6 +280,303 @@ test('ReplicaHandler', async (t) => {
     t.equal(handler.initialized, false, 'not initialized after shutdown');
   });
 
+  t.test(
+    'updateOperationStep uses monotonic cache visibility checks for terminal updates',
+    async (t) => {
+      const cache = createSeededCache();
+      seedReplicaOperation(cache, 'op-terminal-visibility', {
+        partitionId: 'partition-1',
+        replicaId: 'replica-1',
+        targetNodeId: 'test-node',
+        status: ReplicaStatus.SYNCING,
+        workflow_step: WORKFLOW_STEP.SYNCING,
+      });
+      const updateCalls = [];
+      const cdcIntegrationService = {
+        async updateSystemTableRow(tableName, whereClause, data, options) {
+          updateCalls.push({tableName, whereClause, data, options});
+          return {success: true};
+        },
+      };
+
+      const handler = new ReplicaHandler({
+        nodeId: 'test-node',
+        dataDir: tempDir,
+        systemTableCache: cache,
+        cdcIntegrationService,
+        createPartitionService: createMockPartitionServiceFactory(),
+      });
+
+      handler.initialize();
+
+      await handler.updateOperationStep(
+        'op-terminal-visibility',
+        WORKFLOW_STEP.ACTIVE,
+        {replicaId: 'replica-1'},
+      );
+
+      t.equal(updateCalls.length, 1, 'should persist exactly one operation update');
+      t.equal(
+        updateCalls[0]?.tableName,
+        SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+        'should write the replica_operations row',
+      );
+      t.equal(
+        updateCalls[0]?.options?.expectedCacheFields?.workflow_step,
+        undefined,
+        'should not wait on brittle workflow_step exact matches',
+      );
+      t.equal(
+        updateCalls[0]?.options?.expectedCacheFields?.status,
+        undefined,
+        'should not wait on brittle status exact matches',
+      );
+      t.equal(
+        updateCalls[0]?.options?.expectedCacheFields?.replica_id,
+        'replica-1',
+        'should wait for the canonical replica_id binding',
+      );
+      t.type(
+        updateCalls[0]?.options?.minimumCacheFields?.updated_at,
+        'number',
+        'should enforce monotonic updated_at propagation',
+      );
+      t.type(
+        updateCalls[0]?.options?.minimumCacheFields?.completed_at,
+        'number',
+        'should enforce monotonic terminal completion propagation',
+      );
+
+      await handler.shutdown();
+    },
+  );
+
+  t.test(
+    'updateOperationStep retries replica operation cache visibility false negatives',
+    async (t) => {
+      const cache = createSeededCache();
+      seedReplicaOperation(cache, 'op-cache-gap', {
+        partitionId: 'partition-1',
+        replicaId: 'replica-1',
+        targetNodeId: 'test-node',
+        status: ReplicaStatus.SYNCING,
+        workflow_step: WORKFLOW_STEP.SYNCING,
+      });
+      const updateCalls = [];
+      const cdcIntegrationService = {
+        async updateSystemTableRow(tableName, whereClause, data, options) {
+          updateCalls.push({tableName, whereClause, data, options});
+          if (updateCalls.length === 1) {
+            throw new Error(
+              'Cache update not observed for replica_operations:op-cache-gap within 1000ms',
+            );
+          }
+          return {success: true};
+        },
+      };
+
+      const handler = new ReplicaHandler({
+        nodeId: 'test-node',
+        dataDir: tempDir,
+        systemTableCache: cache,
+        cdcIntegrationService,
+        createPartitionService: createMockPartitionServiceFactory(),
+      });
+      handler.operationCacheVisibilityRetryDelayMs = 10;
+      handler.initialize();
+
+      await t.resolves(
+        handler.updateOperationStep(
+          'op-cache-gap',
+          WORKFLOW_STEP.ACTIVE,
+          {replicaId: 'replica-1'},
+        ),
+        'cache visibility false negatives should not fail replica progression',
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 40));
+
+      t.equal(updateCalls.length, 2,
+        'replica operation cache visibility false negatives should be retried');
+      t.equal(
+        updateCalls[1]?.data?.workflow_step,
+        WORKFLOW_STEP.ACTIVE,
+        'retry should target the same workflow step',
+      );
+
+      await handler.shutdown();
+    },
+  );
+
+  t.test(
+    'updateOperationStep avoids brittle workflow/status cache expectations ' +
+      'during concurrent progression',
+    async (t) => {
+      const cache = createSeededCache();
+      seedReplicaOperation(cache, 'op-concurrent-progress', {
+        partitionId: 'partition-1',
+        replicaId: 'replica-1',
+        targetNodeId: 'test-node',
+        status: ReplicaStatus.SYNCING,
+        workflow_step: WORKFLOW_STEP.SYNCING,
+      });
+      const updateCalls = [];
+      const cdcIntegrationService = {
+        async updateSystemTableRow(tableName, whereClause, data, options) {
+          updateCalls.push({tableName, whereClause, data, options});
+          if (options?.expectedCacheFields?.workflow_step ||
+              options?.expectedCacheFields?.status) {
+            throw new Error(
+              'Cache update not observed for ' +
+              'replica_operations:op-concurrent-progress within 1000ms',
+            );
+          }
+          return {success: true};
+        },
+      };
+
+      const handler = new ReplicaHandler({
+        nodeId: 'test-node',
+        dataDir: tempDir,
+        systemTableCache: cache,
+        cdcIntegrationService,
+        createPartitionService: createMockPartitionServiceFactory(),
+      });
+      handler.operationCacheVisibilityRetryDelayMs = 10;
+      handler.initialize();
+
+      await t.resolves(
+        handler.updateOperationStep(
+          'op-concurrent-progress',
+          WORKFLOW_STEP.ACTIVE,
+          {replicaId: 'replica-1'},
+        ),
+        'concurrent progression should not degrade into cache-visibility retries',
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 40));
+
+      t.equal(
+        updateCalls.length,
+        1,
+        'concurrent progression should not schedule retry writes',
+      );
+      t.equal(
+        updateCalls[0]?.options?.expectedCacheFields?.workflow_step,
+        undefined,
+        'cache wait should not require exact workflow_step visibility',
+      );
+      t.equal(
+        updateCalls[0]?.options?.expectedCacheFields?.status,
+        undefined,
+        'cache wait should not require exact status visibility',
+      );
+      t.equal(
+        updateCalls[0]?.options?.expectedCacheFields?.replica_id,
+        'replica-1',
+        'cache wait should still pin replica identity',
+      );
+      t.type(
+        updateCalls[0]?.options?.minimumCacheFields?.updated_at,
+        'number',
+        'cache wait should enforce monotonic updated_at visibility',
+      );
+      t.type(
+        updateCalls[0]?.options?.minimumCacheFields?.completed_at,
+        'number',
+        'cache wait should enforce monotonic completed_at visibility for terminal steps',
+      );
+
+      await handler.shutdown();
+    },
+  );
+
+  t.test(
+    'updateOperationStep suppresses stale cache-visibility retries after a newer step',
+    async (t) => {
+      const cache = createSeededCache();
+      seedReplicaOperation(cache, 'op-stale-cache-gap', {
+        partitionId: 'partition-1',
+        replicaId: 'replica-1',
+        targetNodeId: 'test-node',
+        status: ReplicaStatus.CREATING,
+        workflow_step: WORKFLOW_STEP.CREATING,
+      });
+      const updateCalls = [];
+      let syncingAttemptCount = 0;
+      const cdcIntegrationService = {
+        async updateSystemTableRow(tableName, whereClause, data, options) {
+          updateCalls.push({tableName, whereClause, data, options});
+          if (data.workflow_step === WORKFLOW_STEP.SYNCING &&
+              syncingAttemptCount === 0) {
+            syncingAttemptCount += 1;
+            throw new Error(
+              'Cache update not observed for replica_operations:' +
+              'op-stale-cache-gap within 1000ms',
+            );
+          }
+          cache.applySystemTableChange(tableName, 'UPDATE', {
+            ...whereClause,
+            ...data,
+          });
+          return {success: true};
+        },
+      };
+
+      const handler = new ReplicaHandler({
+        nodeId: 'test-node',
+        dataDir: tempDir,
+        systemTableCache: cache,
+        cdcIntegrationService,
+        createPartitionService: createMockPartitionServiceFactory(),
+      });
+      handler.operationCacheVisibilityRetryDelayMs = 10;
+      handler.initialize();
+
+      await t.resolves(
+        handler.updateOperationStep(
+          'op-stale-cache-gap',
+          WORKFLOW_STEP.SYNCING,
+          {replicaId: 'replica-1'},
+        ),
+        'initial syncing transition should degrade to a retry instead of failing',
+      );
+      await t.resolves(
+        handler.updateOperationStep(
+          'op-stale-cache-gap',
+          WORKFLOW_STEP.ACTIVE,
+          {replicaId: 'replica-1'},
+        ),
+        'newer active transition should still succeed',
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 40));
+
+      t.same(
+        updateCalls.map((call) => call.data.workflow_step),
+        [WORKFLOW_STEP.SYNCING, WORKFLOW_STEP.ACTIVE],
+        'stale syncing retry should not overwrite a newer active step',
+      );
+
+      const stored = cache.get(
+        SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+        'op-stale-cache-gap',
+      );
+      t.equal(
+        stored?.workflow_step,
+        WORKFLOW_STEP.ACTIVE,
+        'replica operation should remain at the newest step',
+      );
+      t.equal(
+        stored?.status,
+        ReplicaStatus.ACTIVE,
+        'replica operation status should remain terminal',
+      );
+
+      await handler.shutdown();
+    },
+  );
+
   t.test('handleMessage routes to correct handler', async (t) => {
     const cache = createSeededCache();
     seedReplicaOperation(cache, 'op-1');
@@ -393,6 +691,109 @@ test('ReplicaHandler', async (t) => {
 
     await handler.shutdown();
   });
+
+  t.test(
+    'handleCreateReplica - returns ACK before slow pending status persistence completes',
+    async (t) => {
+      const cache = createSeededCache();
+      seedReplicaOperation(cache, 'op-slow-pending');
+      const mockCDC = createMockCDCService(cache);
+      let releasePendingStatus = null;
+      let pendingStatusStarted = false;
+      const createdReplicaIds = [];
+
+      const handler = new ReplicaHandler({
+        nodeId: 'test-node',
+        cdcIntegrationService: mockCDC,
+        systemTableCache: cache,
+        createPartitionService: async (options) => {
+          createdReplicaIds.push(options.replicaId);
+          return {
+            partitionId: options.partitionId,
+            replicaId: options.replicaId,
+            initialized: true,
+            async shutdown() {},
+            async syncFromLeader() {},
+          };
+        },
+        replicaStateMachine: {
+          getState() {
+            return null;
+          },
+          async transition(replicaId, newStatus) {
+            if (replicaId === 'replica-slow' &&
+                newStatus === ReplicaStatus.PENDING) {
+              pendingStatusStarted = true;
+              await new Promise((resolve) => {
+                releasePendingStatus = resolve;
+              });
+            }
+          },
+        },
+        dataDir: tempDir,
+      });
+
+      handler.initialize();
+
+      const responsePromise = handler.handleCreateReplica({
+        operationId: 'op-slow-pending',
+        partitionId: 'partition-1',
+        replicaId: 'replica-slow',
+      });
+
+      const response = await Promise.race([
+        responsePromise,
+        new Promise((_, reject) => {
+          setTimeout(() => {
+            reject(new Error('CREATE_REPLICA ACK should not wait for pending status persistence'));
+          }, 25);
+        }),
+      ]);
+
+      t.equal(
+        response.status,
+        ReplicaOperationResponseStatus.INITIATED,
+        'CREATE_REPLICA should ACK immediately even when pending status persistence is slow',
+      );
+      t.equal(
+        handler.getLocalReplica('replica-slow')?.status,
+        ReplicaStatus.PENDING,
+        'local idempotency state should still become pending before ACK',
+      );
+      t.same(
+        createdReplicaIds,
+        [],
+        'replica creation should not begin before pending persistence is released',
+      );
+
+      await new Promise((resolve) => setImmediate(resolve));
+      t.equal(
+        pendingStatusStarted,
+        true,
+        'slow pending-status persistence should begin in the detached background task after ACK',
+      );
+      t.type(
+        releasePendingStatus,
+        'function',
+        'background pending-status persistence should expose the test release gate',
+      );
+
+      releasePendingStatus();
+      await waitForReplicaEvent(
+        handler,
+        'replicaCreated',
+        'replicaCreationFailed',
+      );
+
+      t.same(
+        createdReplicaIds,
+        ['replica-slow'],
+        'replica creation should continue after pending persistence completes',
+      );
+
+      await handler.shutdown();
+    },
+  );
 
   t.test('shutdown prevents queued createReplicaAsync work from starting', async (t) => {
     const cache = createSeededCache();
@@ -777,6 +1178,87 @@ test('ReplicaHandler', async (t) => {
     },
   );
 
+  t.test(
+    'handleCreateReplica - explicit bootstrap cohort should seed full peer topology ' +
+      'for a fresh partition',
+    async (t) => {
+      const partitionId = 'partition-1';
+      const tableId = 'table-1';
+      const cache = createMetadataOnlyCache({partitionId, tableId});
+      seedReplicaOperation(cache, 'op-1', {partitionId, replicaId: 'replica-1'});
+      const now = Date.now();
+      cache.applySystemTableChange(SYSTEM_TABLE_NAME.PARTITIONS, 'INSERT', {
+        partition_id: partitionId,
+        table_id: tableId,
+        partition_key_start: null,
+        partition_key_end: null,
+        leader_node_id: null,
+        created_at: now,
+        updated_at: now,
+      });
+      const bootstrapReplicaIds = ['replica-1', 'replica-2', 'replica-3'];
+      const bootstrapPeerAddresses = [
+        'node-1/partition/replica-1',
+        'node-2/partition/replica-2',
+        'node-3/partition/replica-3',
+      ];
+      let capturedOptions = null;
+
+      const handler = new ReplicaHandler({
+        nodeId: 'node-1',
+        cdcIntegrationService: createMockCDCService(cache),
+        systemTableCache: cache,
+        dataDir: tempDir,
+        createPartitionService: async (options) => {
+          capturedOptions = options;
+          return {
+            partitionId: options.partitionId,
+            replicaId: options.replicaId,
+            initialized: true,
+            async shutdown() {},
+            async syncFromLeader() {},
+          };
+        },
+      });
+
+      handler.initialize();
+
+      const created = waitForReplicaEvent(
+        handler,
+        'replicaCreated',
+        'replicaCreationFailed',
+      );
+
+      await handler.handleCreateReplica({
+        operationId: 'op-1',
+        partitionId,
+        replicaId: 'replica-1',
+        replicaIds: bootstrapReplicaIds,
+        peerAddresses: bootstrapPeerAddresses,
+      });
+      await created;
+
+      t.ok(capturedOptions, 'partition factory should receive create options');
+      t.same(
+        capturedOptions.replicaIds,
+        bootstrapReplicaIds,
+        'fresh bootstrap should use the explicit initial replica cohort',
+      );
+      t.same(
+        capturedOptions.peerAddresses,
+        bootstrapPeerAddresses,
+        'fresh bootstrap should use the explicit peer addresses for the cohort',
+      );
+      t.equal(
+        capturedOptions.isJoiningExistingGroup,
+        false,
+        'explicit bootstrap topology should still remain in bootstrap mode',
+      );
+
+      handler.shutdown();
+    },
+  );
+
   t.test('handleCreateReplica - returns already_exists for active replica',
     async (t) => {
       const cache = createSeededCache();
@@ -1057,6 +1539,101 @@ test('ReplicaHandler', async (t) => {
       );
       t.ok(metadataQueries.length >= 2,
         'handler should query authoritative system tables during metadata hydration');
+
+      handler.shutdown();
+    },
+  );
+
+  t.test(
+    'handleCreateReplica - uses bootstrap metadata payload when cache rows ' +
+      'have not propagated yet',
+    async (t) => {
+      const partitionId = 'partition-bootstrap';
+      const replicaId = 'partition-bootstrap-r2';
+      const operationId = 'op-bootstrap';
+      const tableId = 'table-bootstrap';
+      const tableName = 'split_bootstrap_events';
+      const cache = new SystemTableCache();
+      seedReplicaOperation(cache, operationId, {
+        partitionId,
+        replicaId,
+        targetNodeId: 'test-node',
+      });
+      const mockCDC = createMockCDCService(cache);
+
+      const handler = new ReplicaHandler({
+        nodeId: 'test-node',
+        cdcIntegrationService: mockCDC,
+        systemTableCache: cache,
+        createPartitionService: createMockPartitionServiceFactory(),
+        dataDir: tempDir,
+      });
+      handler.syncTimeoutMs = 200;
+      handler.initialize();
+
+      const created = waitForReplicaEvent(
+        handler,
+        'replicaCreated',
+        'replicaCreationFailed',
+      );
+
+      const response = await handler.handleCreateReplica({
+        operationId,
+        partitionId,
+        replicaId,
+        replicaIds: [
+          'partition-bootstrap-r1',
+          'partition-bootstrap-r2',
+          'partition-bootstrap-r3',
+        ],
+        peerAddresses: [
+          'node-a/partition/partition-bootstrap-r1',
+          'test-node/partition/partition-bootstrap-r2',
+          'node-c/partition/partition-bootstrap-r3',
+        ],
+        bootstrapTableMetadata: {
+          table_id: tableId,
+          table_name: tableName,
+          schema_definition: JSON.stringify({
+            columns: [{name: 'event_id', type: 'TEXT', primaryKey: true}],
+          }),
+        },
+        bootstrapPartitionMetadata: {
+          partition_id: partitionId,
+          table_id: tableId,
+          table_name: tableName,
+          partition_key_start: null,
+          partition_key_end: 'm',
+          partition_version: 2,
+          replica_count: 3,
+          size_bytes: 0,
+          leader_node_id: null,
+          state: 'NORMAL',
+          created_at: 100,
+          updated_at: 100,
+        },
+      });
+      t.equal(response.status, ReplicaOperationResponseStatus.INITIATED,
+        'create request should be acknowledged');
+
+      await created;
+
+      const tableRow = cache.get(SYSTEM_TABLE_NAME.TABLES, tableId);
+      t.equal(tableRow?.table_name, tableName,
+        'bootstrap table metadata should be hydrated into local cache');
+      const partitionRow = cache.get(SYSTEM_TABLE_NAME.PARTITIONS, partitionId);
+      t.equal(partitionRow?.table_id, tableId,
+        'bootstrap partition metadata should be hydrated into local cache');
+
+      const serviceRow = cache.get(SYSTEM_TABLE_NAME.SERVICES, replicaId);
+      t.equal(serviceRow?.status, ReplicaStatus.ACTIVE,
+        'replica should become ACTIVE from bootstrap metadata alone');
+
+      const metadataQueries = mockCDC.operations.filter((operation) =>
+        operation.type === 'executeSQL',
+      );
+      t.equal(metadataQueries.length, 0,
+        'handler should not need authoritative metadata SQL when bootstrap metadata is provided');
 
       handler.shutdown();
     },
@@ -1556,6 +2133,36 @@ test('ReplicaHandler', async (t) => {
           ReplicaStatus.ACTIVE,
         ],
         'handler should drive replica lifecycle via the shared state machine',
+      );
+    });
+
+  t.test('updateReplicaStatus throws when the replica state machine rejects a transition',
+    async (t) => {
+      const cache = createSeededCache();
+      const mockCDC = createMockCDCService(cache);
+
+      const handler = new ReplicaHandler({
+        nodeId: 'test-node',
+        cdcIntegrationService: mockCDC,
+        systemTableCache: cache,
+        replicaStateMachine: {
+          getState() {
+            return null;
+          },
+          transition() {
+            return false;
+          },
+        },
+        createPartitionService: createMockPartitionServiceFactory(),
+        dataDir: tempDir,
+      });
+
+      await t.rejects(
+        handler.updateReplicaStatus('replica-1', ReplicaStatus.CREATING, {
+          partitionId: 'partition-1',
+        }),
+        /Replica state transition rejected/,
+        'invalid transitions should fail fast instead of being treated as success',
       );
     });
 

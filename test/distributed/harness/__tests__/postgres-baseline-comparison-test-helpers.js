@@ -9,6 +9,7 @@ import {
   buildComparison,
 } from '../../scenarios/postgres-baseline-comparison.js';
 import {
+  NODE_CLIENT_CONTROL_SNAPSHOT_FORCE_REPAIR_SQL,
   NODE_CLIENT_CONTROL_SNAPSHOT_SQL,
   NODE_CLIENT_SERVICE_DISCOVERY_SCHEMA_VERSION,
   NODE_CLIENT_SERVICE_DISCOVERY_SQL,
@@ -262,7 +263,8 @@ function asNodeHandle(node) {
       null;
   adapted.queryWithTimeout = async (sql, params = [], options = {}) => {
     const normalizedSql = String(sql);
-    if (normalizedSql === NODE_CLIENT_CONTROL_SNAPSHOT_SQL) {
+    if (normalizedSql === NODE_CLIENT_CONTROL_SNAPSHOT_SQL ||
+        normalizedSql === NODE_CLIENT_CONTROL_SNAPSHOT_FORCE_REPAIR_SQL) {
       if (originalQueryWithTimeout) {
         const result = await originalQueryWithTimeout(sql, params, options);
         if (hasValidControlSnapshotResult(result)) {
@@ -436,7 +438,8 @@ function buildVersionedStrictReadinessCluster(options = {}) {
           )],
         };
       }
-      if (statement === NODE_CLIENT_CONTROL_SNAPSHOT_SQL) {
+      if (statement === NODE_CLIENT_CONTROL_SNAPSHOT_SQL ||
+          statement === NODE_CLIENT_CONTROL_SNAPSHOT_FORCE_REPAIR_SQL) {
         controlSnapshotCalls.push(this.id);
         if (throwOnControlSnapshot) {
           throw new Error('control snapshot fallback should not be queried');
@@ -608,6 +611,7 @@ export {
   installVirtualScenarioTiming,
   resolveBenchmarkConfig,
   buildComparison,
+  NODE_CLIENT_CONTROL_SNAPSHOT_FORCE_REPAIR_SQL,
   NODE_CLIENT_CONTROL_SNAPSHOT_SQL,
   NODE_CLIENT_SERVICE_DISCOVERY_SCHEMA_VERSION,
   NODE_CLIENT_SERVICE_DISCOVERY_SQL,

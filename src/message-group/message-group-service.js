@@ -61,6 +61,7 @@ import {
 import {CDCHandler} from './cdc-handler.js';
 import {getOrCreateCauseId, normalizeCauseId} from '../utils/cause-id.js';
 import {MessageGroupOperationLedger} from './message-group-operation-ledger.js';
+import {QUERY_MESSAGE_TYPE} from '../query/query-constants.js';
 
 // Note: isRaftPacket and RAFT_PACKET_TYPES are imported from shared module
 // src/raft/raft-packet-utils.js - Requirements: 9.1, 9.2, 9.3, 9.4
@@ -265,6 +266,12 @@ class MessageGroupService extends EventEmitter {
     return this.roleMutationHelper?.retryTimer || null;
   }
 
+  set roleUpdateRetryTimer(timer) {
+    if (this.roleMutationHelper) {
+      this.roleMutationHelper.retryTimer = timer;
+    }
+  }
+
   get pendingLeaderNodeUpdate() {
     return this.leaderNodeMutationHelper?.pendingValue || null;
   }
@@ -289,8 +296,20 @@ class MessageGroupService extends EventEmitter {
     return this.leaderNodeMutationHelper?.inFlight || false;
   }
 
+  set leaderNodeUpdateInFlight(inFlight) {
+    if (this.leaderNodeMutationHelper) {
+      this.leaderNodeMutationHelper.inFlight = inFlight;
+    }
+  }
+
   get leaderNodeUpdateRetryTimer() {
     return this.leaderNodeMutationHelper?.retryTimer || null;
+  }
+
+  set leaderNodeUpdateRetryTimer(timer) {
+    if (this.leaderNodeMutationHelper) {
+      this.leaderNodeMutationHelper.retryTimer = timer;
+    }
   }
 
   createRoleMutationHelper() {
@@ -998,6 +1017,39 @@ class MessageGroupService extends EventEmitter {
     // Track pending message
     this.pendingMessages.set(messageId, messageEnvelope);
 
+    if (this.isQueryDeliveryPayload(message)) {
+      try {
+        const deliveryResult = await this.attemptDirectDelivery(
+          messageEnvelope,
+          {
+            maxAttempts: NUM.ONE,
+            disableRetryDelay: true,
+          },
+        );
+        if (!deliveryResult.delivered) {
+          throw new Error(
+            deliveryResult.error || 'Query message delivery failed',
+          );
+        }
+        messageEnvelope.status = MessageStatus.DELIVERED;
+        const {delivered: _d, attempt: _a, ...transportResult} = deliveryResult;
+        return {
+          messageId,
+          status: MessageStatus.DELIVERED,
+          deliveryType: 'direct',
+          ...transportResult,
+        };
+      } catch (error) {
+        this.logger.error('Failed to send message', {
+          messageId,
+          targetService,
+          error: error.message,
+        });
+        messageEnvelope.status = MessageStatus.FAILED;
+        throw error;
+      }
+    }
+
     // Simultaneous delivery and persistence (non-blocking)
     const deliveryPromise = this.attemptDirectDelivery(messageEnvelope);
     const persistPromise = this.persistToRaftLog(messageEnvelope);
@@ -1054,10 +1106,13 @@ class MessageGroupService extends EventEmitter {
    * Attempt direct delivery to target service.
    * Throws error if transport is unavailable (defense in depth).
    * @param {Object} messageEnvelope - Message envelope.
+   * @param {Object} options
+   * @param {number} [options.maxAttempts]
+   * @param {boolean} [options.disableRetryDelay]
    * @return {Promise<Object>} Delivery result.
    * @private
    */
-  async attemptDirectDelivery(messageEnvelope) {
+  async attemptDirectDelivery(messageEnvelope, options = {}) {
     const {id: messageId, targetService, payload} = messageEnvelope;
 
     // Transport is guaranteed to exist (validated in constructor)
@@ -1073,12 +1128,18 @@ class MessageGroupService extends EventEmitter {
 
     let lastError = null;
 
-    for (let attempt = 0; attempt < this.retryMaxAttempts; attempt++) {
+    const maxAttempts = Number.isInteger(options?.maxAttempts) &&
+      options.maxAttempts > NUM.ZERO ?
+      options.maxAttempts :
+      this.retryMaxAttempts;
+    const disableRetryDelay = options?.disableRetryDelay === true;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
       messageEnvelope.attempts++;
 
       try {
         // Calculate delay with exponential backoff and jitter
-        if (attempt > 0) {
+        if (!disableRetryDelay && attempt > 0) {
           const baseDelay = Math.min(
             this.retryInitialDelayMs * Math.pow(this.retryBackoffMultiplier, attempt - 1),
             this.retryMaxDelayMs,
@@ -1100,6 +1161,7 @@ class MessageGroupService extends EventEmitter {
           // Spread transport result directly - ACK structure is flat
           return {delivered: true, attempt: attempt + 1, ...result};
         }
+        lastError = new Error(result?.error || 'Message delivery not acknowledged');
       } catch (error) {
         lastError = error;
         this.logger.debug('Delivery attempt failed', {
@@ -1115,6 +1177,20 @@ class MessageGroupService extends EventEmitter {
       delivered: false,
       error: lastError?.message || 'Max retries exceeded',
     };
+  }
+
+  /**
+   * Determine whether payload should use fast non-durable query delivery.
+   * @param {Object} payload
+   * @return {boolean}
+   * @private
+   */
+  isQueryDeliveryPayload(payload) {
+    return Boolean(
+      payload &&
+      typeof payload === TYPEOF.OBJECT &&
+      payload.type === QUERY_MESSAGE_TYPE.QUERY,
+    );
   }
 
 

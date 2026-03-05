@@ -19,6 +19,7 @@ const CONNECTION_STATE = Object.freeze({
 
 const ROUTER_MESSAGE_TYPE = Object.freeze({
   SERVICE_MESSAGE: 'service_message',
+  SERVICE_RESPONSE: 'service_response',
   ACK: 'ack',
   IDENTIFY: 'identify',
   PING: 'ping',
@@ -32,6 +33,7 @@ const ROUTER_MESSAGE_TYPE = Object.freeze({
 const WS_MESSAGE_TYPE = Object.freeze({
   RAFT_MESSAGE: 'raft_message',
   SERVICE_MESSAGE: 'service_message',
+  SERVICE_RESPONSE: 'service_response',
   PING: 'ping',
   PONG: 'pong',
   ACK: 'ack',

@@ -256,6 +256,7 @@ class ReplicaStateMachine extends EventEmitter {
       nodeId: context.nodeId || existingState?.nodeId || this.nodeId,
       state: newState,
       stateEnteredAt: now,
+      timeoutStartedAt: null,
       previousState,
       triggerReason: context.reason || REPLICA_STATE_MACHINE_REASON.UNKNOWN,
       errorMessage: context.errorMessage || null,
@@ -289,11 +290,14 @@ class ReplicaStateMachine extends EventEmitter {
       timeInPreviousState,
     });
 
-    if (previousState === null) {
-      return this._createReplicaRowInCdc(replicaState);
-    }
+    const persistenceResult = previousState === null ?
+      this._createReplicaRowInCdc(replicaState) :
+      this._updateReplicaStateInCdc(replicaState, previousState);
 
-    return this._updateReplicaStateInCdc(replicaState, previousState);
+    return Promise.resolve(persistenceResult).then((result) => {
+      this._armTimeoutClock(replicaId);
+      return result;
+    });
   }
 
   /**
@@ -399,6 +403,27 @@ class ReplicaStateMachine extends EventEmitter {
 
       throw error;
     }
+  }
+
+  /**
+   * Arm timeout tracking after the transition has been durably persisted.
+   * This prevents CDC write latency from consuming replica lifecycle timeout
+   * budgets before the new state is actually effective.
+   * @param {string} replicaId - Replica identifier.
+   * @private
+   */
+  _armTimeoutClock(replicaId) {
+    const replicaState = this.replicas.get(replicaId);
+    if (!replicaState) {
+      return;
+    }
+
+    if (this.timeouts[replicaState.state] === undefined) {
+      replicaState.timeoutStartedAt = null;
+      return;
+    }
+
+    replicaState.timeoutStartedAt = this.now();
   }
 
   /**
@@ -751,7 +776,16 @@ class ReplicaStateMachine extends EventEmitter {
         continue;
       }
 
-      const elapsed = now - state.stateEnteredAt;
+      const hasExplicitTimeoutAnchor =
+        Object.prototype.hasOwnProperty.call(state, 'timeoutStartedAt');
+      const timeoutAnchor = hasExplicitTimeoutAnchor ?
+        state.timeoutStartedAt :
+        state.stateEnteredAt;
+      if (!Number.isFinite(timeoutAnchor)) {
+        continue;
+      }
+
+      const elapsed = now - timeoutAnchor;
       if (elapsed > timeout) {
         timedOutReplicas.push({
           replicaId,
@@ -1048,6 +1082,7 @@ class ReplicaStateMachine extends EventEmitter {
       nodeId: context.nodeId || this.nodeId,
       state,
       stateEnteredAt: now,
+      timeoutStartedAt: this.timeouts[state] === undefined ? null : now,
       previousState: null,
       triggerReason: context.triggerReason ||
         REPLICA_STATE_MACHINE_REASON.RECOVERY_REGISTRATION,

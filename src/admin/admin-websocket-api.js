@@ -34,12 +34,18 @@ import websocket from '@fastify/websocket';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {
+  TIMEOUT_BUDGET_CLASSIFICATION,
+  createTimeoutBudget,
+  createTimeoutBudgetError,
+} from '../control-plane/timeout-budget.js';
+import {
   ERRNO,
   HTTP_STATUS,
   NUM,
   TYPEOF,
 } from '../constants/index.js';
 import {TRANSPORT_EVENT} from '../constants/transport.js';
+import {CancellationToken} from '../query/cancellation-token.js';
 import {createSqlRequest} from '../query/sql-request.js';
 import {EXECUTION_MODE} from '../query/sql-adapter-constants.js';
 import {guardedAdaptAdminAction} from './admin-api-adapter.js';
@@ -137,6 +143,23 @@ function createAdminOperationError(errorCode, message, hint = null) {
 }
 
 /**
+ * Resolve one optional positive timeout override from message payload.
+ * @param {*} value
+ * @return {number|null}
+ */
+function resolveRequestedQueryTimeoutMs(value) {
+  const parsedValue = Number(value);
+  if (!Number.isFinite(parsedValue)) {
+    return null;
+  }
+  const normalizedValue = Math.floor(parsedValue);
+  if (normalizedValue <= NUM.ZERO) {
+    return null;
+  }
+  return normalizedValue;
+}
+
+/**
  * Build a typed admin-operation error used for websocket responses.
  * administrative SQL/cache operations on the configured admin WebSocket port.
  *
@@ -163,6 +186,7 @@ class AdminWebSocketAPI {
     this.nodeId = options.nodeId || ADMIN_DEFAULT.NODE_ID;
     this.enforcementMode = options.enforcementMode ||
       ADMIN_DEFAULT.ENFORCEMENT_MODE;
+    this.nowFn = options.nowFn || (() => Date.now());
     this.testRunService = options.testRunService || new AdminTestRunService();
     this.debugMetadataStore = options.debugMetadataStore ||
       (this.sqlQueryEngine ?
@@ -183,6 +207,11 @@ class AdminWebSocketAPI {
         null;
     this.liveQueryManager = options.liveQueryManager || null;
     this.cdcIntegrationService = options.cdcIntegrationService || null;
+    this.controlPlaneReadinessService =
+      options.controlPlaneReadinessService ||
+      this.sqlQueryEngine?.rebalanceCoordinator?.storageAdmissionService
+        ?.controlPlaneReadinessService ||
+      null;
     this.enableAdminStream = options.enableAdminStream !== false;
 
     // Configuration
@@ -204,6 +233,39 @@ class AdminWebSocketAPI {
     // Connected clients
     this.clients = new Set();
 
+    // Control snapshot delegate
+    this.controlSnapshot = new AdminControlSnapshot({
+      systemTableCache: this.systemTableCache,
+      nodeId: this.nodeId,
+      cacheMutationTarget: this.cacheMutationTarget,
+      sqlQueryEngine: this.sqlQueryEngine,
+      cdcIntegrationService: this.cdcIntegrationService,
+      controlPlaneReadinessService: this.controlPlaneReadinessService,
+      ensureAuthoritativeDiscoveryCacheRepair: (opts) =>
+        this.serviceDiscovery
+          ?.ensureAuthoritativeDiscoveryCacheRepair(opts),
+      resolveLocalPartitionServices: () =>
+        this.serviceDiscovery.resolveLocalPartitionServices(),
+      nowFn: this.nowFn,
+    });
+
+    // Preflight critical path snapshot delegate
+    this.preflightSnapshot = new AdminPreflightSnapshot({
+      systemTableCache: this.systemTableCache,
+      nodeId: this.nodeId,
+      messageRouter: this.messageRouter,
+      cacheMutationTarget: this.cacheMutationTarget,
+      sqlQueryEngine: this.sqlQueryEngine,
+      buildLocalServiceDiscoverySnapshot: (opts) =>
+        this.serviceDiscovery
+          .buildLocalServiceDiscoverySnapshot(opts),
+      ensureAuthoritativeDiscoveryCacheRepair: (opts) =>
+        this.serviceDiscovery
+          .ensureAuthoritativeDiscoveryCacheRepair(opts),
+      buildControlPlaneDiagnosticsSnapshot: () =>
+        this.controlSnapshot.buildControlPlaneDiagnosticsSnapshot(),
+    });
+
     // Service discovery delegate
     this.serviceDiscovery = new AdminServiceDiscovery({
       systemTableCache: this.systemTableCache,
@@ -223,30 +285,6 @@ class AdminWebSocketAPI {
           .buildControlSnapshotReplicaOperationSummary(rows, opts),
       executeSqlRequestWithTimeout: (req, timeout) =>
         this.executeSqlRequestWithTimeout(req, timeout),
-    });
-
-    // Preflight critical path snapshot delegate
-    this.preflightSnapshot = new AdminPreflightSnapshot({
-      systemTableCache: this.systemTableCache,
-      nodeId: this.nodeId,
-      messageRouter: this.messageRouter,
-      cacheMutationTarget: this.cacheMutationTarget,
-      sqlQueryEngine: this.sqlQueryEngine,
-      buildLocalServiceDiscoverySnapshot: (opts) =>
-        this.serviceDiscovery
-          .buildLocalServiceDiscoverySnapshot(opts),
-      ensureAuthoritativeDiscoveryCacheRepair: (opts) =>
-        this.serviceDiscovery
-          .ensureAuthoritativeDiscoveryCacheRepair(opts),
-    });
-
-    // Control snapshot delegate
-    this.controlSnapshot = new AdminControlSnapshot({
-      systemTableCache: this.systemTableCache,
-      nodeId: this.nodeId,
-      cdcIntegrationService: this.cdcIntegrationService,
-      resolveLocalPartitionServices: () =>
-        this.serviceDiscovery.resolveLocalPartitionServices(),
     });
 
     // Debug handlers delegate
@@ -978,6 +1016,7 @@ class AdminWebSocketAPI {
     const queryId = payload?.queryId || null;
     const sql = payload?.sql;
     const params = payload?.params || [];
+    const timeoutMs = resolveRequestedQueryTimeoutMs(payload?.timeoutMs);
 
     if (!queryId) {
       throw createAdminOperationError(
@@ -996,8 +1035,13 @@ class AdminWebSocketAPI {
     if (this.isPreflightCriticalPathSnapshotQuery(sql)) {
       return this.buildPreflightCriticalPathSnapshotQueryResult();
     }
-    if (this.isControlSnapshotQuery(sql)) {
-      return this.buildControlSnapshotQueryResult();
+    const controlSnapshotQuery =
+      this.parseControlSnapshotQuery(sql);
+    if (controlSnapshotQuery.isQuery) {
+      return this.buildControlSnapshotQueryResult({
+        forceAuthoritativeRepair:
+          controlSnapshotQuery.forceAuthoritativeRepair,
+      });
     }
     const serviceDiscoveryQuery = parseServiceDiscoverySqlQuery(sql);
     if (serviceDiscoveryQuery.isQuery) {
@@ -1025,6 +1069,7 @@ class AdminWebSocketAPI {
       routed.sql,
       routed.params || [],
       queryId,
+      timeoutMs,
     );
     if (routed.warning) {
       result.warning = routed.warning;
@@ -1045,6 +1090,7 @@ class AdminWebSocketAPI {
     const callbackModuleRef = payload?.callbackModuleRef;
     const callbackExport = payload?.callbackExport;
     const runtimeKind = payload?.runtimeKind;
+    const timeoutMs = resolveRequestedQueryTimeoutMs(payload?.timeoutMs);
 
     if (!queryId) {
       throw createAdminOperationError(
@@ -1082,15 +1128,18 @@ class AdminWebSocketAPI {
       );
     }
 
-    return this.executeSqlRequestWithTimeout(createSqlRequest({
-      statement,
-      parameters,
-      sessionId: queryId,
-      executionMode: EXECUTION_MODE.PARTITION_CALLBACK,
-      callbackModuleRef,
-      callbackExport,
-      runtimeKind,
-    }));
+    return this.executeSqlRequestWithTimeout(
+      createSqlRequest({
+        statement,
+        parameters,
+        sessionId: queryId,
+        executionMode: EXECUTION_MODE.PARTITION_CALLBACK,
+        callbackModuleRef,
+        callbackExport,
+        runtimeKind,
+      }),
+      timeoutMs === null ? undefined : timeoutMs,
+    );
   }
 
   /**
@@ -1460,7 +1509,7 @@ class AdminWebSocketAPI {
       return;
     }
     try {
-      const snapshot = this.buildLocalControlSnapshot();
+      const snapshot = await this.buildLocalControlSnapshot();
       reply.code(HTTP_STATUS.OK).send(snapshot);
     } catch (error) {
       reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE).send({
@@ -1540,8 +1589,35 @@ class AdminWebSocketAPI {
    * @private
    */
   isControlSnapshotQuery(sql) {
-    return normalizeSql(sql) ===
-      normalizeSql(ADMIN_CONTROL_SNAPSHOT.QUERY_SQL);
+    return this.parseControlSnapshotQuery(sql).isQuery;
+  }
+
+  /**
+   * Parse one local control snapshot SQL query.
+   * @param {string} sql
+   * @return {Object}
+   * @private
+   */
+  parseControlSnapshotQuery(sql) {
+    const normalizedSql = normalizeSql(sql);
+    if (normalizedSql ===
+      normalizeSql(ADMIN_CONTROL_SNAPSHOT.QUERY_SQL)) {
+      return {
+        isQuery: true,
+        forceAuthoritativeRepair: false,
+      };
+    }
+    if (normalizedSql ===
+      normalizeSql(ADMIN_CONTROL_SNAPSHOT.QUERY_SQL_FORCE_REPAIR)) {
+      return {
+        isQuery: true,
+        forceAuthoritativeRepair: true,
+      };
+    }
+    return {
+      isQuery: false,
+      forceAuthoritativeRepair: false,
+    };
   }
 
   /**
@@ -1590,9 +1666,9 @@ class AdminWebSocketAPI {
 
   /**
    * Delegate: build local preflight critical-path snapshot.
-   * @return {Object}
+   * @return {Promise<Object>}
    */
-  buildLocalPreflightCriticalPathSnapshot() {
+  async buildLocalPreflightCriticalPathSnapshot() {
     return this.preflightSnapshot
       .buildLocalPreflightCriticalPathSnapshot();
   }
@@ -1627,9 +1703,13 @@ class AdminWebSocketAPI {
 
   /**
    * Delegate: build local control snapshot.
-   * @return {Object}
+   * @return {Promise<Object>}
    */
-  buildLocalControlSnapshot() {
+  async buildLocalControlSnapshot() {
+    if (typeof this.controlSnapshot.resolveLocalControlSnapshot ===
+      TYPEOF.FUNCTION) {
+      return this.controlSnapshot.resolveLocalControlSnapshot();
+    }
     return this.controlSnapshot.buildLocalControlSnapshot();
   }
 
@@ -1683,11 +1763,12 @@ class AdminWebSocketAPI {
 
   /**
    * Delegate: build control snapshot query result.
-   * @return {Object}
+   * @param {Object} [options={}]
+   * @return {Promise<Object>}
    */
-  buildControlSnapshotQueryResult() {
+  async buildControlSnapshotQueryResult(options = {}) {
     return this.controlSnapshot
-      .buildControlSnapshotQueryResult();
+      .buildControlSnapshotQueryResult(options);
   }
 
   /**
@@ -1702,6 +1783,7 @@ class AdminWebSocketAPI {
       queryId,
       sql: message.sql,
       params: message.params || [],
+      timeoutMs: resolveRequestedQueryTimeoutMs(message.timeoutMs),
     };
 
     this.logger.debug(ADMIN_LOG_MSG.EXECUTING_QUERY, {
@@ -1736,6 +1818,7 @@ class AdminWebSocketAPI {
       callbackModuleRef: message.callbackModuleRef,
       callbackExport: message.callbackExport,
       runtimeKind: message.runtimeKind,
+      timeoutMs: resolveRequestedQueryTimeoutMs(message.timeoutMs),
     };
 
     this.logger.debug(ADMIN_LOG_MSG.EXECUTING_QUERY, {
@@ -1764,16 +1847,21 @@ class AdminWebSocketAPI {
    * @param {string} sql - SQL query.
    * @param {Array} params - Query parameters.
    * @param {string} queryId - Query ID.
+   * @param {number|null} [timeoutMs] - Optional timeout override.
    * @return {Promise<Object>} Query result.
    * @private
    */
-  async executeQueryWithTimeout(sql, params, queryId) {
-    return this.executeSqlRequestWithTimeout(createSqlRequest({
-      statement: sql,
-      parameters: params,
-      sessionId: queryId,
-      executionMode: EXECUTION_MODE.SQL_STATEMENT,
-    }));
+  async executeQueryWithTimeout(sql, params, queryId, timeoutMs = null) {
+    const requestedTimeoutMs = resolveRequestedQueryTimeoutMs(timeoutMs);
+    return this.executeSqlRequestWithTimeout(
+      createSqlRequest({
+        statement: sql,
+        parameters: params,
+        sessionId: queryId,
+        executionMode: EXECUTION_MODE.SQL_STATEMENT,
+      }),
+      requestedTimeoutMs === null ? undefined : requestedTimeoutMs,
+    );
   }
 
   /**
@@ -1788,15 +1876,36 @@ class AdminWebSocketAPI {
       throw new Error(ADMIN_ERROR_MESSAGE.QUERY_ENGINE_UNAVAILABLE);
     }
 
+    const timeoutBudget = createTimeoutBudget({
+      configuredBudgetMs: timeoutMs,
+      now: this.nowFn,
+    });
+    const cancellationToken =
+      sqlRequest?.cancellationToken ||
+      new CancellationToken();
+    const requestWithControl = {
+      ...sqlRequest,
+      timeoutMs,
+      cancellationToken,
+    };
     let timeoutId;
     try {
       const timeoutPromise = new Promise((_, reject) => {
         timeoutId = setTimeout(() => {
-          reject(new Error(ADMIN_ERROR_MESSAGE.queryTimeout(timeoutMs)));
+          cancellationToken.cancel(
+            ADMIN_ERROR_MESSAGE.queryTimeout(timeoutMs),
+          );
+          reject(createTimeoutBudgetError({
+            message: ADMIN_ERROR_MESSAGE.queryTimeout(timeoutMs),
+            budget: timeoutBudget,
+            classification: TIMEOUT_BUDGET_CLASSIFICATION.REMOTE_CALL_TIMEOUT,
+            nestedOperation: 'admin_sql_query',
+            now: this.nowFn,
+          }));
         }, timeoutMs);
       });
 
-      const queryPromise = this.sqlQueryEngine.executeRequest(sqlRequest);
+      const queryPromise = this.sqlQueryEngine.executeRequest(requestWithControl);
 
       return await Promise.race([queryPromise, timeoutPromise]);
     } finally {

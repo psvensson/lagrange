@@ -25,6 +25,8 @@ const DISPATCH_LOG_MSG = Object.freeze({
     'No active handler for entity type on target node',
   RETRY_PENDING_READY_NODE:
     'Retrying pending replica operations for ready node',
+  RETRY_READY_TRIGGER_SKIPPED:
+    'Skipped duplicate ready-trigger retry',
 });
 
 const DISPATCH_ERROR_MSG = Object.freeze({
@@ -34,6 +36,10 @@ const DISPATCH_ERROR_MSG = Object.freeze({
   MISSING_CDC_UPDATE:
     'ReplicaDispatchService requires cdcIntegrationService.updateSystemTableRow',
   MISSING_CACHE: 'ReplicaDispatchService requires systemTableCache',
+  MISSING_CACHE_GET:
+    'ReplicaDispatchService requires systemTableCache.get',
+  MISSING_CACHE_GET_ALL:
+    'ReplicaDispatchService requires systemTableCache.getAll',
   MISSING_COORDINATOR:
     'ReplicaDispatchService requires rebalanceCoordinator',
   NOT_INITIALIZED:

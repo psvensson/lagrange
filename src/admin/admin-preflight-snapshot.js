@@ -27,6 +27,8 @@ import {
   ADMIN_DEFAULT,
   ADMIN_PREFLIGHT_CRITICAL_PATH_SNAPSHOT,
 } from './admin-constants.js';
+import {evaluateAuthoritativeRepairPolicy} from
+  './admin-authoritative-repair-policy.js';
 import {AUTHORITATIVE_DISCOVERY_REPAIR} from './admin-service-discovery.js';
 import {
   firstStringField,
@@ -39,6 +41,7 @@ const EMPTY_STRING = '';
 const LEADER_RAFT_ROLE = 'leader';
 const SERVICE_TYPE_PARTITION = 'partition';
 const STATUS_ACTIVE = 'active';
+const PREFLIGHT_AUTHORITATIVE_REPAIR_WAIT_BUDGET_MS = 1000;
 const PREFLIGHT_ERROR_CODE = Object.freeze({
   PARTITION_ID_UNKNOWN: 'partition_id_unknown',
   CACHE_UNAVAILABLE: 'cache_unavailable',
@@ -68,6 +71,7 @@ class AdminPreflightSnapshot {
    * @param {Object|null} deps.sqlQueryEngine
    * @param {Function|null} deps.buildLocalServiceDiscoverySnapshot
    * @param {Function|null} deps.ensureAuthoritativeDiscoveryCacheRepair
+   * @param {Function|null} deps.buildControlPlaneDiagnosticsSnapshot
    */
   constructor(deps = {}) {
     this.systemTableCache = deps.systemTableCache || null;
@@ -83,6 +87,15 @@ class AdminPreflightSnapshot {
       typeof deps.ensureAuthoritativeDiscoveryCacheRepair === TYPEOF.FUNCTION ?
         deps.ensureAuthoritativeDiscoveryCacheRepair :
         null;
+    this.buildControlPlaneDiagnosticsSnapshot =
+      typeof deps.buildControlPlaneDiagnosticsSnapshot === TYPEOF.FUNCTION ?
+        deps.buildControlPlaneDiagnosticsSnapshot :
+        null;
+    this.authoritativeRepairWaitBudgetMs =
+      Number.isFinite(deps.authoritativeRepairWaitBudgetMs) &&
+      deps.authoritativeRepairWaitBudgetMs > NUM.ZERO ?
+        Math.floor(deps.authoritativeRepairWaitBudgetMs) :
+        PREFLIGHT_AUTHORITATIVE_REPAIR_WAIT_BUDGET_MS;
   }
 
   /**
@@ -90,7 +103,7 @@ class AdminPreflightSnapshot {
    * diagnostics.
    * @return {Object}
    */
-  buildLocalPreflightCriticalPathSnapshot() {
+  async buildLocalPreflightCriticalPathSnapshot() {
     const capturedAtMs = Date.now();
     const nodeAddress = this.resolvePreflightSnapshotNodeAddress();
     const routerConnectivity =
@@ -103,6 +116,8 @@ class AdminPreflightSnapshot {
     });
     const rowCounts = this.buildPreflightRowCountsSummary();
     const discovery = this.buildPreflightDiscoverySummary();
+    const controlPlaneDiagnostics =
+      await this.resolveControlPlaneDiagnosticsSnapshot();
 
     return {
       schemaVersion:
@@ -116,6 +131,7 @@ class AdminPreflightSnapshot {
       cacheFreshness,
       rowCounts,
       discovery,
+      controlPlaneDiagnostics,
     };
   }
 
@@ -125,20 +141,98 @@ class AdminPreflightSnapshot {
    * @return {Promise<Object>}
    */
   async resolvePreflightCriticalPathSnapshot() {
-    const snapshot = this.buildLocalPreflightCriticalPathSnapshot();
+    const snapshot = await this.buildLocalPreflightCriticalPathSnapshot();
     if (!this.shouldAttemptAuthoritativePreflightRepair(snapshot)) {
       return snapshot;
     }
     if (!this.ensureAuthoritativeDiscoveryCacheRepair) {
       return snapshot;
     }
-    const repair = await this.ensureAuthoritativeDiscoveryCacheRepair({
-      reason: PREFLIGHT_REPAIR_REASON,
-    });
+    const repair = await this.awaitAuthoritativeRepairWithinBudget(
+      this.ensureAuthoritativeDiscoveryCacheRepair({
+        reason: PREFLIGHT_REPAIR_REASON,
+      }),
+    );
     if (repair.applied !== true) {
       return snapshot;
     }
     return this.buildLocalPreflightCriticalPathSnapshot();
+  }
+
+  /**
+   * Resolve canonical control-plane diagnostics for preflight snapshots.
+   * @return {Promise<Object|null>}
+   * @private
+   */
+  async resolveControlPlaneDiagnosticsSnapshot() {
+    if (!this.buildControlPlaneDiagnosticsSnapshot) {
+      return null;
+    }
+    try {
+      const diagnostics =
+        await this.buildControlPlaneDiagnosticsSnapshot();
+      return diagnostics && typeof diagnostics === TYPEOF.OBJECT ?
+        diagnostics :
+        null;
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  /**
+   * Wait for authoritative repair only within the preflight budget.
+   * Preflight diagnostics must not block on expensive cache repair.
+   * @param {Promise<Object>} repairPromise
+   * @return {Promise<Object>}
+   * @private
+   */
+  async awaitAuthoritativeRepairWithinBudget(repairPromise) {
+    const waitBudgetMs = this.authoritativeRepairWaitBudgetMs;
+    const wrappedRepairPromise = Promise.resolve(repairPromise)
+      .then((repair) => ({
+        kind: 'repair',
+        repair,
+      }))
+      .catch(() => ({
+        kind: 'repair',
+        repair: {
+          applied: false,
+          skipped: true,
+          tableCount: NUM.ZERO,
+        },
+      }));
+    const timeoutResult = {
+      kind: 'timeout',
+      repair: {
+        applied: false,
+        skipped: true,
+        tableCount: NUM.ZERO,
+      },
+    };
+
+    if (!Number.isFinite(waitBudgetMs) || waitBudgetMs <= NUM.ZERO) {
+      const result = await wrappedRepairPromise;
+      return result.repair;
+    }
+
+    let timeoutHandle = null;
+    try {
+      const timeoutPromise = new Promise((resolve) => {
+        timeoutHandle = setTimeout(
+          () => resolve(timeoutResult),
+          waitBudgetMs,
+        );
+      });
+      const result = await Promise.race([
+        wrappedRepairPromise,
+        timeoutPromise,
+      ]);
+      return result.repair;
+    } finally {
+      if (timeoutHandle) {
+        clearTimeout(timeoutHandle);
+      }
+    }
   }
 
   /**
@@ -157,24 +251,20 @@ class AdminPreflightSnapshot {
           TYPEOF.FUNCTION) {
       return false;
     }
-    const stalenessMs = Number(snapshot?.cacheFreshness?.stalenessMs);
-    if (Number.isFinite(stalenessMs) &&
-        stalenessMs >=
-          AUTHORITATIVE_DISCOVERY_REPAIR.STALE_THRESHOLD_MS) {
-      return true;
-    }
     const selectedNodeIds =
       Array.isArray(snapshot?.discovery?.selectedNodeIds) ?
         snapshot.discovery.selectedNodeIds :
         ADMIN_CACHE_DUMP.EMPTY;
     const serviceEndpointsCount =
       Number(snapshot?.rowCounts?.serviceEndpointsCount);
-    if (selectedNodeIds.length === NUM.ZERO &&
-        Number.isFinite(serviceEndpointsCount) &&
-        Math.floor(serviceEndpointsCount) > NUM.ZERO) {
-      return true;
-    }
-    return false;
+    const stalenessMs = Number(snapshot?.cacheFreshness?.stalenessMs);
+    const evaluation = evaluateAuthoritativeRepairPolicy({
+      cacheStalenessMs: stalenessMs,
+      staleThresholdMs: AUTHORITATIVE_DISCOVERY_REPAIR.STALE_THRESHOLD_MS,
+      selectedNodeCount: selectedNodeIds.length,
+      serviceEndpointsCount,
+    });
+    return evaluation.shouldRepair;
   }
 
   /**
@@ -574,8 +664,7 @@ class AdminPreflightSnapshot {
    * @return {Promise<Object>}
    */
   async buildPreflightCriticalPathSnapshotQueryResult() {
-    const snapshot =
-      await this.resolvePreflightCriticalPathSnapshot();
+    const snapshot = await this.resolvePreflightCriticalPathSnapshot();
     return {
       success: true,
       rows: [snapshot],

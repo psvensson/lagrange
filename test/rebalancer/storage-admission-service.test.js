@@ -21,6 +21,11 @@ import {
   RESERVATION_STATUS,
   STORAGE_CAPACITY_DEFAULT,
 } from '../../src/rebalancer/storage-capacity-constants.js';
+import {
+  STORAGE_ADMISSION_DECISION_TYPE,
+  STORAGE_ADMISSION_OPERATION_TYPE,
+  STORAGE_ADMISSION_REASON,
+} from '../../src/rebalancer/storage-admission-constants.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {
   StorageCapacityAccountingService,
@@ -64,6 +69,31 @@ function createServices(cache, accounting) {
     accountingService: accounting,
   });
   return service;
+}
+
+function createReadiness(nodeId, overrides = {}) {
+  return Object.freeze({
+    nodeId,
+    dimensions: {
+      processAlive: true,
+      clusterMemberHealthy: true,
+      routingReady: true,
+      loadReady: true,
+      placementEligible: true,
+      controlPlaneWritable: true,
+      metadataPublicationHealthy: true,
+      ...(overrides.dimensions || {}),
+    },
+    reasons: Object.freeze(overrides.reasons || []),
+  });
+}
+
+function createReadinessService(readinessByNodeId) {
+  return {
+    async getNodeReadiness(nodeId) {
+      return readinessByNodeId[nodeId] || createReadiness(nodeId);
+    },
+  };
 }
 
 function setupWithNode(nodeId, budgetBytes) {
@@ -314,6 +344,196 @@ test('checkSplit - denies when budget exceeded', async (t) => {
 
   t.equal(result.decision, ADMISSION_DECISION.DENY);
   t.equal(result.reason, ADMISSION_REASON.BUDGET_EXCEEDED);
+  t.end();
+});
+
+test('checkSplit - returns structured admitted result for bootstrap targets',
+  async (t) => {
+    initializeConfig();
+    const cache = new SystemTableCache();
+    const accounting = new StorageCapacityAccountingService({
+      systemTableCache: cache,
+    });
+    accounting.initialize({systemTableCache: cache});
+
+    insertRow(cache, TABLES.NODES, {
+      [COLUMN.NODE_ID]: 'node-a',
+      [COLUMN.STORAGE_BUDGET_BYTES]: NUM.THOUSAND,
+    });
+    insertRow(cache, TABLES.NODES, {
+      [COLUMN.NODE_ID]: 'node-b',
+      [COLUMN.STORAGE_BUDGET_BYTES]: NUM.THOUSAND,
+    });
+
+    const admission = new StorageAdmissionService({
+      accountingService: accounting,
+      controlPlaneReadinessService: createReadinessService({
+        'node-a': createReadiness('node-a'),
+        'node-b': createReadiness('node-b'),
+      }),
+      now: () => 1000,
+    });
+
+    const result = await admission.checkSplit({
+      targetNodeIds: ['node-a', 'node-b'],
+      estimatedBytes: NUM.TEN,
+      requiredReplicaCount: 2,
+    });
+
+    t.equal(result.allowed, true);
+    t.equal(
+      result.decisionType,
+      STORAGE_ADMISSION_DECISION_TYPE.ADMITTED,
+    );
+    t.equal(
+      result.operationType,
+      STORAGE_ADMISSION_OPERATION_TYPE.PARTITION_SPLIT,
+    );
+    t.equal(result.requiredReplicaCount, 2);
+    t.same(result.eligibleNodeIds, ['node-a', 'node-b']);
+    t.same(result.blockingReasons, []);
+    t.equal(result.decisionTimestamp, '1970-01-01T00:00:01.000Z');
+    t.equal(
+      result.projectedUtilizationByNodeId['node-a'].projectedAllocatedBytes,
+      NUM.TEN,
+    );
+    t.equal(result.projectedUtilization, null);
+    t.end();
+  });
+
+test('checkSplit - returns blocked result when too few nodes are eligible',
+  async (t) => {
+    initializeConfig();
+    const cache = new SystemTableCache();
+    const accounting = new StorageCapacityAccountingService({
+      systemTableCache: cache,
+    });
+    accounting.initialize({systemTableCache: cache});
+
+    insertRow(cache, TABLES.NODES, {
+      [COLUMN.NODE_ID]: 'node-a',
+      [COLUMN.STORAGE_BUDGET_BYTES]: NUM.THOUSAND,
+    });
+    insertRow(cache, TABLES.NODES, {
+      [COLUMN.NODE_ID]: 'node-b',
+    });
+
+    const admission = new StorageAdmissionService({
+      accountingService: accounting,
+      controlPlaneReadinessService: createReadinessService({
+        'node-a': createReadiness('node-a'),
+        'node-b': createReadiness('node-b', {
+          dimensions: {
+            controlPlaneWritable: false,
+            placementEligible: false,
+          },
+          reasons: [{
+            code: STORAGE_ADMISSION_REASON.CONTROL_PLANE_WRITE_UNHEALTHY,
+            dimension: 'controlPlaneWritable',
+            sourceOwner: 'ControlPlaneReadinessService',
+            observedAt: '2026-03-04T00:00:00.000Z',
+          }],
+        }),
+      }),
+    });
+
+    const result = await admission.checkSplit({
+      targetNodeIds: ['node-a', 'node-b'],
+      estimatedBytes: NUM.TEN,
+      requiredReplicaCount: 2,
+    });
+
+    t.equal(result.allowed, false);
+    t.equal(
+      result.decisionType,
+      STORAGE_ADMISSION_DECISION_TYPE.BLOCKED,
+    );
+    t.same(result.eligibleNodeIds, ['node-a']);
+    t.same(result.blockingReasons, [
+      STORAGE_ADMISSION_REASON.INSUFFICIENT_PLACEMENT_ELIGIBLE_NODES,
+      STORAGE_ADMISSION_REASON.CONTROL_PLANE_WRITE_UNHEALTHY,
+      STORAGE_ADMISSION_REASON.STORAGE_BUDGET_EXHAUSTED,
+    ]);
+    t.same(result.ineligibleNodes, [{
+      nodeId: 'node-b',
+      failedDimensions: ['placementEligible', 'controlPlaneWritable'],
+      reasonCodes: [
+        STORAGE_ADMISSION_REASON.CONTROL_PLANE_WRITE_UNHEALTHY,
+        ADMISSION_REASON.NO_BUDGET_REGISTERED,
+      ],
+      projectedUtilization: result.ineligibleNodes[0].projectedUtilization,
+    }]);
+    t.equal(result.projectedUtilizationByNodeId['node-b'].budgetBytes, null);
+    t.end();
+  });
+
+test('checkSplit - defers when publication mode is degraded', async (t) => {
+  initializeConfig();
+  const cache = new SystemTableCache();
+  const accounting = new StorageCapacityAccountingService({
+    systemTableCache: cache,
+  });
+  accounting.initialize({systemTableCache: cache});
+
+  insertRow(cache, TABLES.NODES, {
+    [COLUMN.NODE_ID]: 'node-a',
+    [COLUMN.STORAGE_BUDGET_BYTES]: NUM.THOUSAND,
+  });
+  insertRow(cache, TABLES.NODES, {
+    [COLUMN.NODE_ID]: 'node-b',
+    [COLUMN.STORAGE_BUDGET_BYTES]: NUM.THOUSAND,
+  });
+
+  const degradedReason = {
+    code: STORAGE_ADMISSION_REASON.METADATA_PUBLICATION_DEGRADED,
+    dimension: 'metadataPublicationHealthy',
+    sourceOwner: 'CDCGroupPropagationService',
+    observedAt: '2026-03-04T00:00:00.000Z',
+  };
+  const admission = new StorageAdmissionService({
+    accountingService: accounting,
+    controlPlaneReadinessService: createReadinessService({
+      'node-a': createReadiness('node-a', {
+        dimensions: {
+          metadataPublicationHealthy: false,
+          controlPlaneWritable: false,
+          placementEligible: false,
+        },
+        reasons: [degradedReason],
+      }),
+      'node-b': createReadiness('node-b', {
+        dimensions: {
+          metadataPublicationHealthy: false,
+          controlPlaneWritable: false,
+          placementEligible: false,
+        },
+        reasons: [degradedReason],
+      }),
+    }),
+  });
+
+  const result = await admission.checkSplit({
+    targetNodeIds: ['node-a', 'node-b'],
+    estimatedBytes: NUM.TEN,
+    requiredReplicaCount: 2,
+  });
+
+  t.equal(result.allowed, false);
+  t.equal(
+    result.decisionType,
+    STORAGE_ADMISSION_DECISION_TYPE.DEFERRED,
+  );
+  t.same(result.blockingReasons, [
+    STORAGE_ADMISSION_REASON.INSUFFICIENT_PLACEMENT_ELIGIBLE_NODES,
+    STORAGE_ADMISSION_REASON.METADATA_PUBLICATION_DEGRADED,
+  ]);
+  t.same(
+    result.ineligibleNodes.map((entry) => entry.reasonCodes),
+    [
+      [STORAGE_ADMISSION_REASON.METADATA_PUBLICATION_DEGRADED],
+      [STORAGE_ADMISSION_REASON.METADATA_PUBLICATION_DEGRADED],
+    ],
+  );
   t.end();
 });
 

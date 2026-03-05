@@ -8,6 +8,8 @@
 
 import {assertCritical} from '../../utils/assert.js';
 import {NodeService} from '../../node/node-service.js';
+import {MessageGroupServiceRowOwner} from
+  '../../message-group/message-group-service-row-owner.js';
 import {MessageGroupService} from '../../message-group/message-group-service.js';
 import {
   MESSAGE_GROUP_ASSIGNMENT_STRATEGY as AssignmentStrategy,
@@ -76,12 +78,15 @@ class CreateMessageGroupPhase {
    */
   async createJoinMessageGroupReplica(context) {
     const definition = context?.definition || {};
+    const directOptions = context?.replicaOptions || null;
     const serviceId =
+      directOptions?.replicaId ||
       definition[SERVICE_DESCRIPTOR_FIELD.SERVICE_ID];
-    const options = this.delegates.resolveJoinReplicaOptions(
-      serviceId,
-      UNIFIED_SERVICE_TYPE.MESSAGE_GROUP,
-    );
+    const options = directOptions ||
+      this.delegates.resolveJoinReplicaOptions(
+        serviceId,
+        UNIFIED_SERVICE_TYPE.MESSAGE_GROUP,
+      );
 
     const messageGroupServices =
       this.delegates.getMessageGroupServices();
@@ -160,13 +165,16 @@ class CreateMessageGroupPhase {
    * @return {Promise<Object>}
    */
   async startJoinMessageGroupReplica(replicaHandle, _context) {
+    const directOptions = _context?.replicaOptions || null;
     const serviceId =
+      directOptions?.replicaId ||
       replicaHandle[SERVICE_DESCRIPTOR_FIELD.SERVICE_ID] ||
       replicaHandle[SERVICE_DESCRIPTOR_FIELD.REPLICA_ID];
-    const options = this.delegates.resolveJoinReplicaOptions(
-      serviceId,
-      UNIFIED_SERVICE_TYPE.MESSAGE_GROUP,
-    );
+    const options = directOptions ||
+      this.delegates.resolveJoinReplicaOptions(
+        serviceId,
+        UNIFIED_SERVICE_TYPE.MESSAGE_GROUP,
+      );
     const messageGroupServices =
       this.delegates.getMessageGroupServices();
     const messageGroup =
@@ -194,13 +202,16 @@ class CreateMessageGroupPhase {
    * @return {Promise<Object>}
    */
   async stopJoinMessageGroupReplica(replicaHandle, _context) {
+    const directOptions = _context?.replicaOptions || null;
     const serviceId =
+      directOptions?.replicaId ||
       replicaHandle[SERVICE_DESCRIPTOR_FIELD.SERVICE_ID] ||
       replicaHandle[SERVICE_DESCRIPTOR_FIELD.REPLICA_ID];
-    const options = this.delegates.resolveJoinReplicaOptions(
-      serviceId,
-      UNIFIED_SERVICE_TYPE.MESSAGE_GROUP,
-    );
+    const options = directOptions ||
+      this.delegates.resolveJoinReplicaOptions(
+        serviceId,
+        UNIFIED_SERVICE_TYPE.MESSAGE_GROUP,
+      );
     const messageGroupServices =
       this.delegates.getMessageGroupServices();
     const messageGroup =
@@ -373,29 +384,20 @@ class CreateMessageGroupPhase {
       moveReplicaAssignment.replicaToMove === replicaId ?
       moveReplicaAssignment.assignmentId || null :
       null;
-    const serviceData = {
-      service_id: replicaId,
-      service_type: SERVICE_TYPE.MESSAGE_GROUP,
-      node_id: this.nodeId,
-      partition_id: null,
-      group_id: groupId,
-      replica_id: replicaId,
-      raft_role: service.getRole ?
-        service.getRole() :
-        service.role,
-      status: SERVICE_STATUS.ACTIVE,
-      address: `${this.nodeId}${ADDRESS.SEPARATOR}` +
-        `${ENTITY_TYPE.MESSAGE_GROUP}` +
-        `${ADDRESS.SEPARATOR}${replicaId}`,
-      created_at: now,
-      updated_at: now,
-      ...(assignmentId ?
-        {
-          [JOIN_BACKFILL_QUERY.ASSIGNMENT_ID_FIELD]:
-            assignmentId,
-        } :
-        {}),
-    };
+    const serviceData =
+      MessageGroupServiceRowOwner.buildServiceRow({
+        groupId,
+        replicaId,
+        nodeId: this.nodeId,
+        service,
+        timestamp: now,
+        extraFields: assignmentId ?
+          {
+            [JOIN_BACKFILL_QUERY.ASSIGNMENT_ID_FIELD]:
+              assignmentId,
+          } :
+          null,
+      });
 
     const registerUrl =
       `${seedNodeAddress}${JOINING_HTTP.REGISTER_SERVICE_PATH}`;

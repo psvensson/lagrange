@@ -18,6 +18,7 @@ function createSystemCache(nodeRow) {
       }
       return [];
     },
+    getAll: (_tableName) => [],
   };
 }
 
@@ -109,4 +110,119 @@ test('dispatch readiness is lease-based while rebalancer keeps transport checks'
     'rebalancer should reject expired lease');
 
   ConfigurationManager.resetInstance();
+});
+
+test('dispatch initialization requires full cache read APIs', async (t) => {
+  const service = new ReplicaDispatchService({
+    nodeId: 'seed-node',
+    messageRouter: {},
+    systemTableCache: {},
+    cdcIntegrationService: {},
+    rebalanceCoordinator: {},
+  });
+  t.throws(
+    () => service.initialize(),
+    /systemTableCache.get/,
+    'service should fail fast when cache read APIs are missing',
+  );
+});
+
+test('dispatch reads use cache-backed owner state only', async (t) => {
+  const now = Date.now();
+  const operationRow = {
+    operation_id: 'op-cache-first-1',
+    type: 'ADD',
+    partition_id: 'tables-p1',
+    replica_id: 'tables-p1-r4',
+    source_node_id: 'seed-node',
+    target_node_id: 'node-a',
+    status: 'pending',
+    workflow_step: 'PENDING',
+    created_at: now,
+    updated_at: now,
+    steps_history: '[]',
+  };
+  const nodeRow = {
+    node_id: 'node-a',
+    status: SERVICE_STATUS.ACTIVE,
+    connection_state: STATE.READY,
+    ready_lease_expires_at: now + 30000,
+  };
+  const serviceRow = {
+    node_id: 'node-a',
+    service_type: SERVICE_TYPE.PARTITION,
+    status: SERVICE_STATUS.ACTIVE,
+  };
+
+  let executeCount = 0;
+  const service = new ReplicaDispatchService({
+    nodeId: 'seed-node',
+    messageRouter: {},
+    systemTableCache: {
+      get: (tableName, key) => {
+        if (tableName === TABLES.NODES && key === nodeRow.node_id) {
+          return nodeRow;
+        }
+        if (tableName === TABLES.REPLICA_OPERATIONS &&
+            key === operationRow.operation_id) {
+          return operationRow;
+        }
+        return null;
+      },
+      getAll: (tableName) => {
+        if (tableName === TABLES.REPLICA_OPERATIONS) {
+          return [operationRow];
+        }
+        if (tableName === TABLES.SERVICES) {
+          return [serviceRow];
+        }
+        return [];
+      },
+    },
+    cdcIntegrationService: {
+      updateSystemTableRow: async (_tableName, whereClause, updateData) => {
+        if (whereClause?.operation_id === operationRow.operation_id &&
+            whereClause?.workflow_step === 'PENDING' &&
+            operationRow.workflow_step === 'PENDING') {
+          operationRow.workflow_step = updateData.workflow_step;
+          operationRow.updated_at = updateData.updated_at;
+          return {
+            success: true,
+            partitionResult: {
+              affectedRows: 1,
+            },
+          };
+        }
+        return {
+          success: true,
+          partitionResult: {
+            affectedRows: 0,
+          },
+        };
+      },
+    },
+    rebalanceCoordinator: {
+      executeOperation: async () => {
+        executeCount += 1;
+        return {success: true};
+      },
+    },
+  });
+
+  const node = await service.getNodeRow('node-a');
+  const operation = await service.getReplicaOperationRow('op-cache-first-1');
+  const hasHandler = await service.hasHandlerOnTarget(
+    'node-a',
+    SERVICE_TYPE.PARTITION,
+  );
+  await service.retryPendingDispatchesForNode('node-a');
+
+  t.equal(node.node_id, 'node-a', 'node read should come from cache');
+  t.equal(
+    operation.operation_id,
+    'op-cache-first-1',
+    'operation read should come from cache',
+  );
+  t.equal(hasHandler, true, 'handler probe should use cache-backed services');
+  t.equal(executeCount, 1, 'pending cache-backed operation should dispatch once');
 });

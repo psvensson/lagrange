@@ -38,6 +38,8 @@ const RouterMessageType = ROUTER_MESSAGE_TYPE;
 const IPV6_ANY_HOST = '::';
 const IPV6_HOST_PREFIX = '[';
 const IPV6_HOST_SUFFIX = ']';
+const WEBSOCKET_CONNECT_TIMEOUT_CONFIG_KEY = 'timeout.websocketConnectMs';
+const WEBSOCKET_CONNECT_TIMEOUT_ERROR_CODE = 'WS_CONNECT_TIMEOUT';
 const QUEUE_WAIT_BUCKETS = Object.freeze([
   {upperBoundMs: 1, label: 'le_1ms'},
   {upperBoundMs: 5, label: 'le_5ms'},
@@ -255,6 +257,8 @@ class MessageRouter extends EventEmitter {
 
     // Pending messages awaiting acknowledgment
     this.pendingMessages = new Map();
+    // Pending SERVICE_RESPONSE payloads awaiting handler completion.
+    this.pendingResponses = new Map();
     this.pendingPings = new Map();
 
     // Configuration
@@ -272,6 +276,16 @@ class MessageRouter extends EventEmitter {
     this.messageTimeoutMs =
       config.get(TRANSPORT_CONFIG_KEY.MESSAGE_TIMEOUT_MS) ||
       TRANSPORT_DEFAULT.MESSAGE_TIMEOUT_MS;
+    const configuredConnectTimeoutMs =
+      config.get(WEBSOCKET_CONNECT_TIMEOUT_CONFIG_KEY);
+    this.connectTimeoutMs =
+      Number.isFinite(options.connectTimeoutMs) &&
+      options.connectTimeoutMs > TRANSPORT_NUM.ZERO ?
+        Math.floor(options.connectTimeoutMs) :
+        Number.isFinite(configuredConnectTimeoutMs) &&
+        configuredConnectTimeoutMs > TRANSPORT_NUM.ZERO ?
+          Math.floor(configuredConnectTimeoutMs) :
+          this.messageTimeoutMs;
     this.pingTimeoutMs =
       config.get(TRANSPORT_CONFIG_KEY.PING_TIMEOUT_MS) ||
       TRANSPORT_DEFAULT.PING_TIMEOUT_MS;
@@ -691,10 +705,49 @@ class MessageRouter extends EventEmitter {
       return this.establishInProcessConnection(connectionInfo);
     }
     return new Promise((resolve, reject) => {
+      let settled = false;
       try {
         const ws = new WebSocket(connectionInfo.address);
+        let connectionEstablished = false;
+        const clearConnectTimeout = () => {
+          if (connectTimeout) {
+            clearTimeout(connectTimeout);
+            connectTimeout = null;
+          }
+        };
+        const rejectPendingConnection = (error) => {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          clearConnectTimeout();
+          connectionInfo.state = ConnectionState.DISCONNECTED;
+          connectionInfo.ws = null;
+          reject(error);
+        };
+        let connectTimeout = setTimeout(() => {
+          const error = new Error(
+            `WebSocket connection timeout after ${this.connectTimeoutMs}ms`,
+          );
+          error.code = WEBSOCKET_CONNECT_TIMEOUT_ERROR_CODE;
+          rejectPendingConnection(error);
+          try {
+            ws.terminate();
+          } catch {
+            // Best-effort cleanup for stalled handshakes.
+          }
+        }, this.connectTimeoutMs);
+        if (typeof connectTimeout?.unref === 'function') {
+          connectTimeout.unref();
+        }
 
         ws.on(TRANSPORT_EVENT.OPEN, () => {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          connectionEstablished = true;
+          clearConnectTimeout();
           connectionInfo.ws = ws;
           connectionInfo.state = ConnectionState.CONNECTED;
           connectionInfo.reconnectAttempts = TRANSPORT_NUM.ZERO;
@@ -723,6 +776,15 @@ class MessageRouter extends EventEmitter {
         });
 
         ws.on(TRANSPORT_EVENT.CLOSE, () => {
+          if (!connectionEstablished) {
+            if (!settled) {
+              rejectPendingConnection(new Error(
+                `WebSocket connection closed before open for node ` +
+                `${connectionInfo.nodeId}`,
+              ));
+            }
+            return;
+          }
           this.handleConnectionClose(connectionInfo.nodeId);
         });
 
@@ -732,9 +794,9 @@ class MessageRouter extends EventEmitter {
             error: error.message,
           });
 
-          if (connectionInfo.state === ConnectionState.CONNECTING) {
-            this.handleConnectionClose(connectionInfo.nodeId);
-            reject(error);
+          if (!connectionEstablished &&
+              connectionInfo.state === ConnectionState.CONNECTING) {
+            rejectPendingConnection(error);
           }
         });
       } catch (error) {
@@ -873,6 +935,11 @@ class MessageRouter extends EventEmitter {
         return;
       }
 
+      if (message.type === RouterMessageType.SERVICE_RESPONSE) {
+        this.handleServiceResponse(message);
+        return;
+      }
+
       // Handle service message
       if (message.type === RouterMessageType.SERVICE_MESSAGE) {
         this.handleServiceMessage(ws, message);
@@ -981,7 +1048,8 @@ class MessageRouter extends EventEmitter {
 
   /**
    * Handle service message from remote node.
-   * Flattens handler result into ACK to avoid nested result structures.
+   * Sends ACK immediately to release sender-side queue pressure, then
+   * resolves the handler asynchronously via SERVICE_RESPONSE.
    * @param {WebSocket} ws - WebSocket connection.
    * @param {Object} message - Service message.
    * @private
@@ -997,6 +1065,13 @@ class MessageRouter extends EventEmitter {
       hasHandler: this.handlers.has(targetAddress),
     });
 
+    // Always ACK immediately so the sender can release outbound queue slots.
+    this.sendRaw(ws, {
+      type: RouterMessageType.ACK,
+      messageId,
+      acknowledged: true,
+    });
+
     // Find handler for target address
     let handler = this.handlers.get(targetAddress);
     if (!handler && payload && typeof payload === TRANSPORT_TYPEOF.OBJECT) {
@@ -1009,59 +1084,7 @@ class MessageRouter extends EventEmitter {
       }
     }
 
-    if (handler) {
-      try {
-        // Create envelope similar to InMemoryTransport
-        const envelope = {
-          messageId,
-          sourceAddress: message.sourceAddress,
-          sourceNodeId: message.sourceNodeId,
-          targetAddress,
-          payload,
-          timestamp: message.timestamp,
-        };
-
-        // Call handler (may be sync or async)
-        const resultPromise = Promise.resolve(handler(envelope));
-
-        resultPromise
-          .then((result) => {
-            // Flatten handler result into ACK - spread result fields directly
-            // This avoids nested {result: {result: ...}} structures
-            const ack = {
-              type: RouterMessageType.ACK,
-              messageId,
-              acknowledged: true,
-            };
-            // Spread handler result fields (excluding 'acknowledged' to avoid override)
-            // Keep handler's 'type' as 'responseType' to preserve it
-            if (result && typeof result === TRANSPORT_TYPEOF.OBJECT) {
-              const {acknowledged: _ack, type: handlerType, ...rest} = result;
-              Object.assign(ack, rest);
-              if (handlerType) {
-                ack.responseType = handlerType;
-              }
-            }
-            this.sendRaw(ws, ack);
-          })
-          .catch((error) => {
-            this.sendRaw(ws, {
-              type: RouterMessageType.ACK,
-              messageId,
-              acknowledged: false,
-              error: error.message,
-            });
-          });
-      } catch (error) {
-        this.sendRaw(ws, {
-          type: RouterMessageType.ACK,
-          messageId,
-          acknowledged: false,
-          error: error.message,
-        });
-      }
-    } else {
-      // No handler - emit event for external handling
+    if (!handler) {
       this.emit(TRANSPORT_EVENT.MESSAGE, {
         messageId,
         targetAddress,
@@ -1069,16 +1092,219 @@ class MessageRouter extends EventEmitter {
         sourceAddress: message.sourceAddress,
         sourceNodeId: message.sourceNodeId,
       });
-
-      // Send acknowledgment (message received but no handler)
       this.sendRaw(ws, {
-        type: RouterMessageType.ACK,
+        type: RouterMessageType.SERVICE_RESPONSE,
         messageId,
-        acknowledged: true,
-        noHandler: true,
-        error: ROUTER_ERROR_MSG.noHandlerForAddress(targetAddress),
+        sourceAddress: message.sourceAddress,
+        result: {
+          noHandler: true,
+          error: ROUTER_ERROR_MSG.noHandlerForAddress(targetAddress),
+        },
+      });
+      return;
+    }
+
+    const envelope = {
+      messageId,
+      sourceAddress: message.sourceAddress,
+      sourceNodeId: message.sourceNodeId,
+      targetAddress,
+      payload,
+      timestamp: message.timestamp,
+    };
+
+    Promise.resolve()
+      .then(() => handler(envelope))
+      .then((result) => {
+        this.logger.debug(ROUTER_LOG_MSG.SERVICE_RESPONSE_SENT, {
+          messageId,
+          targetAddress,
+        });
+        this.sendRaw(ws, {
+          type: RouterMessageType.SERVICE_RESPONSE,
+          messageId,
+          sourceAddress: message.sourceAddress,
+          result,
+        });
+      })
+      .catch((error) => {
+        this.logger.debug(ROUTER_LOG_MSG.SERVICE_RESPONSE_ERROR, {
+          messageId,
+          targetAddress,
+          error: error.message,
+        });
+        this.sendRaw(ws, {
+          type: RouterMessageType.SERVICE_RESPONSE,
+          messageId,
+          sourceAddress: message.sourceAddress,
+          error: error.message,
+        });
+      });
+  }
+
+  /**
+   * Handle SERVICE_RESPONSE message and settle pending response waiters.
+   * @param {Object} message - Service response message.
+   * @private
+   */
+  handleServiceResponse(message) {
+    const {messageId, result, error} = message;
+    this.logger.debug(ROUTER_LOG_MSG.SERVICE_RESPONSE_RECEIVED, {
+      messageId,
+      hasError: Boolean(error),
+    });
+    const settled = this.settlePendingResponse(messageId, {
+      result,
+      error,
+    });
+    if (!settled) {
+      this.logger.warn(ROUTER_LOG_MSG.SERVICE_RESPONSE_NO_PENDING, {
+        messageId,
       });
     }
+  }
+
+  /**
+   * Register a pending SERVICE_RESPONSE waiter.
+   * @param {string} messageId - Correlated message ID.
+   * @param {string|null} targetNodeId - Target node ID.
+   * @return {Promise<*>} Resolves with handler result.
+   * @private
+   */
+  registerPendingResponse(messageId, targetNodeId = null) {
+    return new Promise((resolve, reject) => {
+      this.pendingResponses.set(messageId, {
+        resolve,
+        reject,
+        timeoutId: null,
+        targetNodeId,
+      });
+    });
+  }
+
+  /**
+   * Arm timeout for a pending SERVICE_RESPONSE waiter.
+   * Timeout is started after ACK to avoid premature rejection while still
+   * waiting for sender-side ACK.
+   * @param {string} messageId - Correlated message ID.
+   * @param {number} timeoutMs - Timeout in milliseconds.
+   * @return {boolean} True when timeout was armed.
+   * @private
+   */
+  armPendingResponseTimeout(messageId, timeoutMs) {
+    const pending = this.pendingResponses.get(messageId);
+    if (!pending || pending.timeoutId) {
+      return false;
+    }
+    const timeoutId = setTimeout(() => {
+      this.pendingResponses.delete(messageId);
+      pending.reject(new Error(ROUTER_ERROR_MSG.PENDING_RESPONSE_TIMEOUT));
+    }, timeoutMs);
+    if (typeof timeoutId.unref === TRANSPORT_TYPEOF.FUNCTION) {
+      timeoutId.unref();
+    }
+    pending.timeoutId = timeoutId;
+    return true;
+  }
+
+  /**
+   * Settle pending SERVICE_RESPONSE waiter.
+   * @param {string} messageId - Correlated message ID.
+   * @param {Object} payload - Service response payload.
+   * @param {*} payload.result - Handler result.
+   * @param {string} payload.error - Handler error.
+   * @return {boolean} True when pending waiter was found.
+   * @private
+   */
+  settlePendingResponse(messageId, {result, error}) {
+    const pending = this.pendingResponses.get(messageId);
+    if (!pending) {
+      return false;
+    }
+    if (pending.timeoutId) {
+      clearTimeout(pending.timeoutId);
+    }
+    this.pendingResponses.delete(messageId);
+
+    if (error) {
+      pending.reject(new Error(error));
+    } else {
+      pending.resolve(result);
+    }
+    return true;
+  }
+
+  /**
+   * Remove pending SERVICE_RESPONSE waiter without settling it.
+   * @param {string} messageId - Correlated message ID.
+   * @return {boolean} True when a waiter was removed.
+   * @private
+   */
+  cancelPendingResponse(messageId) {
+    const pending = this.pendingResponses.get(messageId);
+    if (!pending) {
+      return false;
+    }
+    if (pending.timeoutId) {
+      clearTimeout(pending.timeoutId);
+    }
+    this.pendingResponses.delete(messageId);
+    return true;
+  }
+
+  /**
+   * Fail pending SERVICE_RESPONSE waiters for a target node.
+   * @param {string} nodeId - Target node ID.
+   * @param {Error} error - Failure reason.
+   * @private
+   */
+  failPendingResponsesForNode(nodeId, error) {
+    for (const [messageId, pending] of this.pendingResponses) {
+      if (pending.targetNodeId === nodeId) {
+        if (pending.timeoutId) {
+          clearTimeout(pending.timeoutId);
+        }
+        this.pendingResponses.delete(messageId);
+        pending.reject(error);
+      }
+    }
+  }
+
+  /**
+   * Check whether an ACK includes legacy inline handler payload.
+   * @param {Object} ackResult - ACK result.
+   * @return {boolean} True when ACK carries handler payload.
+   * @private
+   */
+  hasInlineAckPayload(ackResult) {
+    if (!ackResult ||
+      typeof ackResult !== TRANSPORT_TYPEOF.OBJECT ||
+      ackResult.acknowledged !== true) {
+      return false;
+    }
+    const passthroughKeys = new Set([
+      'messageId',
+      'acknowledged',
+      'correlationId',
+    ]);
+    return Object.keys(ackResult).some((key) => !passthroughKeys.has(key));
+  }
+
+  /**
+   * Normalize SERVICE_RESPONSE payload to transport delivery shape.
+   * @param {*} result - Handler result payload.
+   * @return {Object} Normalized payload fields.
+   * @private
+   */
+  normalizeServiceResponseResult(result) {
+    if (!result || typeof result !== TRANSPORT_TYPEOF.OBJECT) {
+      return {};
+    }
+    const {acknowledged: _ack, type: handlerType, ...rest} = result;
+    if (handlerType && !Object.prototype.hasOwnProperty.call(rest, 'responseType')) {
+      rest.responseType = handlerType;
+    }
+    return rest;
   }
 
   /**
@@ -1139,6 +1365,7 @@ class MessageRouter extends EventEmitter {
       );
       this.failOutboundQueue(nodeId, disconnectError);
       this.failPendingMessagesForNode(nodeId, disconnectError);
+      this.failPendingResponsesForNode(nodeId, disconnectError);
 
       this.emit(TRANSPORT_EVENT.CONNECTION_CLOSED, {nodeId});
 
@@ -1172,6 +1399,9 @@ class MessageRouter extends EventEmitter {
     if (this.isShuttingDown) {
       return;
     }
+    if (connectionInfo.reconnectTimeout) {
+      return;
+    }
     if (connectionInfo.reconnectAttempts >= this.reconnectMaxAttempts) {
       this.logger.error(ROUTER_LOG_MSG.MAX_RECONNECTS_REACHED, {
         nodeId: connectionInfo.nodeId,
@@ -1197,6 +1427,7 @@ class MessageRouter extends EventEmitter {
     });
 
     connectionInfo.reconnectTimeout = setTimeout(async () => {
+      connectionInfo.reconnectTimeout = null;
       try {
         await this.establishConnection(connectionInfo);
       } catch (error) {
@@ -1204,9 +1435,15 @@ class MessageRouter extends EventEmitter {
           nodeId: connectionInfo.nodeId,
           error: error.message,
         });
-        throw error;
+        if (this.isShuttingDown) {
+          return;
+        }
+        this.scheduleReconnect(connectionInfo);
       }
     }, delay);
+    if (typeof connectionInfo.reconnectTimeout?.unref === 'function') {
+      connectionInfo.reconnectTimeout.unref();
+    }
   }
 
   /**
@@ -1780,37 +2017,97 @@ class MessageRouter extends EventEmitter {
    * @private
    */
   async deliverRemote(targetAddress, messageId, payload, targetNodeId, correlationId) {
-    return this.enqueueOutbound(targetNodeId, () => {
-      const connection = this.nodeConnections.get(targetNodeId);
+    // Register pending response before send to avoid races where the
+    // SERVICE_RESPONSE arrives immediately after ACK.
+    const responsePromise = this.registerPendingResponse(
+      messageId,
+      targetNodeId,
+    );
 
-      if (!connection || connection.state !== ConnectionState.CONNECTED) {
-        this.logger.warn(ROUTER_LOG_MSG.NO_TARGET_CONNECTION, {
-          messageId,
+    let ackResult;
+    let queueWaitMs = TRANSPORT_NUM.ZERO;
+    try {
+      const ackOutcome = await this.enqueueOutbound(targetNodeId, () => {
+        const connection = this.nodeConnections.get(targetNodeId);
+
+        if (!connection || connection.state !== ConnectionState.CONNECTED) {
+          this.logger.warn(ROUTER_LOG_MSG.NO_TARGET_CONNECTION, {
+            messageId,
+            targetAddress,
+            targetNodeId,
+            localNodeId: this.nodeId,
+            connectionExists: !!connection,
+            connectionState: connection?.state,
+            availableConnections: Array.from(this.nodeConnections.keys()),
+          });
+
+          return {
+            messageId,
+            correlationId,
+            acknowledged: false,
+            error: ROUTER_ERROR_MSG.noConnectionToNode(targetNodeId),
+          };
+        }
+
+        return this.sendMessage(
+          connection,
           targetAddress,
+          messageId,
+          payload,
           targetNodeId,
-          localNodeId: this.nodeId,
-          connectionExists: !!connection,
-          connectionState: connection?.state,
-          availableConnections: Array.from(this.nodeConnections.keys()),
-        });
+          correlationId,
+        );
+      });
+      const normalizedAckOutcome = normalizeDeliveryOutcome(ackOutcome);
+      ackResult = normalizedAckOutcome.result;
+      queueWaitMs = normalizedAckOutcome.queueWaitMs;
+    } catch (error) {
+      this.cancelPendingResponse(messageId);
+      throw error;
+    }
 
-        return {
+    if (!ackResult?.acknowledged) {
+      this.cancelPendingResponse(messageId);
+      return {
+        result: ackResult,
+        queueWaitMs,
+      };
+    }
+
+    // Compatibility: tolerate legacy ACKs that still include handler payload.
+    if (this.hasInlineAckPayload(ackResult)) {
+      this.cancelPendingResponse(messageId);
+      return {
+        result: ackResult,
+        queueWaitMs,
+      };
+    }
+
+    // Start response timeout only after ACK succeeded.
+    this.armPendingResponseTimeout(messageId, this.messageTimeoutMs);
+
+    try {
+      const serviceResult = await responsePromise;
+      return {
+        result: {
           messageId,
           correlationId,
-          acknowledged: false,
-          error: ROUTER_ERROR_MSG.noConnectionToNode(targetNodeId),
-        };
-      }
-
-      return this.sendMessage(
-        connection,
-        targetAddress,
-        messageId,
-        payload,
-        targetNodeId,
-        correlationId,
-      );
-    });
+          acknowledged: true,
+          ...this.normalizeServiceResponseResult(serviceResult),
+        },
+        queueWaitMs,
+      };
+    } catch (error) {
+      return {
+        result: {
+          messageId,
+          correlationId,
+          acknowledged: true,
+          error: error.message,
+        },
+        queueWaitMs,
+      };
+    }
   }
 
   /**
@@ -1985,6 +2282,7 @@ class MessageRouter extends EventEmitter {
       initialized: this.initialized,
       messageCount: this.messageCount,
       pendingMessages: this.pendingMessages.size,
+      pendingResponses: this.pendingResponses.size,
       handlers: this.handlers.size,
       connections: connectionStats,
       connectedNodes: this.getConnectedNodes().length,
@@ -2014,13 +2312,19 @@ class MessageRouter extends EventEmitter {
     }
     this.pendingMessages.clear();
 
+    const shutdownError = new Error(ROUTER_ERROR_MSG.SHUTDOWN);
+    for (const [, pending] of this.pendingResponses) {
+      clearTimeout(pending.timeoutId);
+      pending.reject(shutdownError);
+    }
+    this.pendingResponses.clear();
+
     for (const [, pending] of this.pendingPings) {
       clearTimeout(pending.timeout);
       pending.resolve(false);
     }
     this.pendingPings.clear();
 
-    const shutdownError = new Error(ROUTER_ERROR_MSG.SHUTDOWN);
     for (const [nodeId] of this.outboundQueues) {
       this.failOutboundQueueGracefully(nodeId, shutdownError);
     }

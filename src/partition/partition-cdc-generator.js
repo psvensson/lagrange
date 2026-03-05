@@ -8,6 +8,9 @@ import {CDC_OPERATION, NUM, SQL} from '../constants/index.js';
 import {STRING} from '../constants/strings.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
+  extractConjunctiveWhereColumns,
+} from './partition-sql-parser.js';
+import {
   PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_EVENT,
   PARTITION_SERVICE_LOG_MSG,
@@ -546,22 +549,9 @@ class PartitionCDCGenerator {
 
     // Extract column names from WHERE clause
     // Handle parentheses around the WHERE clause: WHERE (col = ?)
-    const whereColumns = [];
-    if (whereMatch) {
-      // Strip outer parentheses if present
-      let whereContent = whereMatch[NUM.ONE].trim();
-      if (whereContent.startsWith(PARTITION_SERVICE_SQL_FRAGMENT.OPEN_PAREN) &&
-        whereContent.endsWith(PARTITION_SERVICE_SQL_FRAGMENT.CLOSE_PAREN)) {
-        whereContent = whereContent.slice(NUM.ONE, -NUM.ONE).trim();
-      }
-      const whereParts = whereContent.split(/\s+AND\s+/i);
-      for (const part of whereParts) {
-        // Strip any remaining parentheses from individual parts
-        const cleanPart = part.trim().replace(/^\(+|\)+$/g, STRING.EMPTY);
-        const match = cleanPart.match(/^(\w+)\s*=/);
-        if (match) whereColumns.push(match[NUM.ONE]);
-      }
-    }
+    const whereColumns = whereMatch ?
+      extractConjunctiveWhereColumns(whereMatch[NUM.ONE]) :
+      [];
 
     const allColumns = [...setColumns, ...whereColumns];
     if (allColumns.length !== params.length) {
@@ -617,14 +607,8 @@ class PartitionCDCGenerator {
       return {};
     }
 
-    const whereColumns = [];
-    // Handle both "col = ?" and "(col = ?)" formats
-    const whereContent = whereMatch[NUM.ONE].replace(/^\(|\)$/g, STRING.EMPTY).trim();
-    const whereParts = whereContent.split(/\s+AND\s+/i);
-    for (const part of whereParts) {
-      const match = part.trim().match(/^(\w+)\s*=/);
-      if (match) whereColumns.push(match[NUM.ONE]);
-    }
+    const whereContent = whereMatch[NUM.ONE].trim();
+    const whereColumns = extractConjunctiveWhereColumns(whereContent);
 
     if (whereColumns.length !== params.length) {
       this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_PARAM_DELETE_MISMATCH, {

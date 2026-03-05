@@ -4,6 +4,7 @@
  * Requirements: 4.21, 4.22, 11.6, 11.7, 11.8, 11.9
  */
 
+import net from 'net';
 import t from '../../src/test-helpers/tap.js';
 import {MessageRouter, ConnectionState, RouterMessageType} from
   '../../src/transport/message-router.js';
@@ -403,6 +404,181 @@ t.test('MessageRouter unit tests', async (t) => {
       'should mark connection as self-connection',
     );
   });
+
+  t.test('connectToNode enforces websocket handshake timeouts', async (t) => {
+    cleanupTestEnvironment();
+    const config = ConfigurationManager.getInstance();
+    config.initialize({
+      node: {id: 'test-node'},
+      logging: {level: 'error'},
+      transport: {messageTimeoutMs: 5000},
+      timeout: {websocketConnectMs: 1000},
+    });
+    const logging = LoggingService.getInstance();
+    logging.initialize({level: 'error'});
+
+    const slowServer = net.createServer((socket) => {
+      socket.on('data', () => {});
+    });
+    await new Promise((resolve) => slowServer.listen(0, '127.0.0.1', resolve));
+    t.teardown(async () => {
+      await new Promise((resolve) => slowServer.close(resolve));
+    });
+
+    const address = slowServer.address();
+    const port = typeof address === 'object' && address ? address.port : null;
+    const router = new MessageRouter({nodeId: 'timeout-test-node'});
+    await router.initialize({startServer: false});
+    t.teardown(async () => {
+      await router.shutdown();
+    });
+
+    const outcome = await Promise.race([
+      router.connectToNode('slow-node', `ws://127.0.0.1:${port}`)
+        .then(() => 'connected')
+        .catch((error) => error),
+      new Promise((resolve) => setTimeout(() => resolve('timed_out'), 1100)),
+    ]);
+
+    t.type(outcome, Error, 'should reject stalled handshakes');
+    t.match(outcome.message, /timeout/i, 'should surface a timeout error');
+    t.equal(
+      router.getConnectionState('slow-node'),
+      ConnectionState.DISCONNECTED,
+      'should mark timed out connections as disconnected',
+    );
+  });
+
+  t.test('scheduleReconnect retries failed reconnects without unhandled rejections',
+    async (t) => {
+      const router = new MessageRouter({nodeId: 'reconnect-retry-node'});
+      await router.initialize({startServer: false});
+      t.teardown(async () => {
+        await router.shutdown();
+      });
+
+      router.reconnectIntervalMs = 5;
+      router.reconnectBackoffMultiplier = 1;
+      router.reconnectMaxAttempts = 4;
+
+      const connectionInfo = {
+        connectionId: 'reconnect-1',
+        nodeId: 'remote-node',
+        address: 'ws://remote-node:8082',
+        ws: null,
+        state: ConnectionState.DISCONNECTED,
+        reconnectAttempts: 0,
+        reconnectTimeout: null,
+        isIncoming: false,
+        isSelfConnection: false,
+        createdAt: Date.now(),
+      };
+      router.nodeConnections.set(connectionInfo.nodeId, connectionInfo);
+
+      let attempts = 0;
+      router.establishConnection = async (connection) => {
+        attempts++;
+        if (attempts < 3) {
+          connection.state = ConnectionState.DISCONNECTED;
+          throw new Error(`dial failed ${attempts}`);
+        }
+        connection.state = ConnectionState.CONNECTED;
+        connection.reconnectAttempts = 0;
+        connection.ws = {};
+      };
+
+      const unhandledRejections = [];
+      const onUnhandledRejection = (error) => {
+        unhandledRejections.push(error);
+      };
+      process.on('unhandledRejection', onUnhandledRejection);
+      t.teardown(() => {
+        process.off('unhandledRejection', onUnhandledRejection);
+      });
+
+      router.scheduleReconnect(connectionInfo);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      t.equal(attempts, 3, 'should keep retrying until a reconnect succeeds');
+      t.equal(
+        connectionInfo.state,
+        ConnectionState.CONNECTED,
+        'should mark the connection connected after a successful retry',
+      );
+      t.equal(
+        connectionInfo.reconnectTimeout,
+        null,
+        'should clear the reconnect timer after callback execution',
+      );
+      t.same(
+        unhandledRejections,
+        [],
+        'should not surface reconnect failures as unhandled rejections',
+      );
+    });
+
+  t.test('scheduleReconnect closes after max failed attempts without throwing',
+    async (t) => {
+      const router = new MessageRouter({nodeId: 'reconnect-max-node'});
+      await router.initialize({startServer: false});
+      t.teardown(async () => {
+        await router.shutdown();
+      });
+
+      router.reconnectIntervalMs = 5;
+      router.reconnectBackoffMultiplier = 1;
+      router.reconnectMaxAttempts = 2;
+
+      const connectionInfo = {
+        connectionId: 'reconnect-2',
+        nodeId: 'remote-node',
+        address: 'ws://remote-node:8082',
+        ws: null,
+        state: ConnectionState.DISCONNECTED,
+        reconnectAttempts: 0,
+        reconnectTimeout: null,
+        isIncoming: false,
+        isSelfConnection: false,
+        createdAt: Date.now(),
+      };
+      router.nodeConnections.set(connectionInfo.nodeId, connectionInfo);
+
+      let attempts = 0;
+      router.establishConnection = async (connection) => {
+        attempts++;
+        connection.state = ConnectionState.DISCONNECTED;
+        throw new Error('dial failed');
+      };
+
+      const unhandledRejections = [];
+      const onUnhandledRejection = (error) => {
+        unhandledRejections.push(error);
+      };
+      process.on('unhandledRejection', onUnhandledRejection);
+      t.teardown(() => {
+        process.off('unhandledRejection', onUnhandledRejection);
+      });
+
+      router.scheduleReconnect(connectionInfo);
+      await new Promise((resolve) => setTimeout(resolve, 40));
+
+      t.equal(attempts, 2, 'should stop after the configured max reconnect attempts');
+      t.equal(
+        connectionInfo.state,
+        ConnectionState.CLOSED,
+        'should close the connection after exhausting retries',
+      );
+      t.equal(
+        connectionInfo.reconnectTimeout,
+        null,
+        'should not leave a reconnect timer armed after exhaustion',
+      );
+      t.same(
+        unhandledRejections,
+        [],
+        'should not crash the process when retries are exhausted',
+      );
+    });
 
   t.test('should emit nodeConnected on identification', async (t) => {
     const router = new MessageRouter({nodeId: 'local-node'});
@@ -877,4 +1053,150 @@ t.test('MessageRouter unit tests', async (t) => {
 
     await router.shutdown();
   });
+
+  t.test('remote slow handler does not block queued deliveries waiting for ACK',
+    async (t) => {
+      cleanupTestEnvironment();
+      const config = ConfigurationManager.getInstance();
+      config.initialize({
+        node: {id: 'node-a'},
+        logging: {level: 'error'},
+        transport: {
+          messageTimeoutMs: 180,
+        },
+      });
+      const logging = LoggingService.getInstance();
+      logging.initialize({level: 'error'});
+
+      const routerA = new MessageRouter({
+        nodeId: 'node-a',
+        wsPort: 12901,
+        inProcess: true,
+      });
+      const routerB = new MessageRouter({
+        nodeId: 'node-b',
+        wsPort: 12902,
+        inProcess: true,
+      });
+
+      await routerA.initialize({startServer: true});
+      await routerB.initialize({startServer: true});
+      t.teardown(async () => {
+        await routerA.shutdown().catch(() => {});
+        await routerB.shutdown().catch(() => {});
+      });
+
+      routerA.outboundQueueMaxConcurrent = 1;
+
+      let firstCallResolver = null;
+      let invocationCount = 0;
+      routerB.register('node-b/service/slow-ack-test', async (envelope) => {
+        invocationCount += 1;
+        if (invocationCount === 1) {
+          return await new Promise((resolve) => {
+            firstCallResolver = resolve;
+          });
+        }
+        return {
+          acknowledged: true,
+          id: envelope.payload?.id,
+        };
+      });
+
+      await routerA.connectToNode('node-b', 'ws://localhost:12902');
+
+      const firstPromise = routerA.deliver(
+        'node-b/service/slow-ack-test',
+        {type: 'TEST', id: 1},
+      );
+      await new Promise((resolve) => setTimeout(resolve, 15));
+
+      const secondStartMs = Date.now();
+      const secondResult = await routerA.deliver(
+        'node-b/service/slow-ack-test',
+        {type: 'TEST', id: 2},
+      );
+      const secondDurationMs = Date.now() - secondStartMs;
+
+      if (firstCallResolver) {
+        firstCallResolver({
+          acknowledged: true,
+          id: 1,
+        });
+      }
+      await firstPromise;
+
+      t.equal(secondResult.acknowledged, true, 'second delivery should be acknowledged');
+      t.equal(secondResult.id, 2, 'second delivery should preserve handler payload');
+      t.ok(
+        secondDurationMs < 80,
+        `second delivery should not be blocked by first ACK wait ` +
+        `(took ${secondDurationMs}ms)`,
+      );
+    });
+
+  t.test('ack timeout does not emit unhandled pending response rejection',
+    async (t) => {
+      cleanupTestEnvironment();
+      const config = ConfigurationManager.getInstance();
+      config.initialize({
+        node: {id: 'node-a'},
+        logging: {level: 'error'},
+        transport: {
+          messageTimeoutMs: 100,
+        },
+      });
+      const logging = LoggingService.getInstance();
+      logging.initialize({level: 'error'});
+
+      const router = new MessageRouter({
+        nodeId: 'node-a',
+      });
+      await router.initialize({startServer: false});
+      t.teardown(async () => {
+        await router.shutdown().catch(() => {});
+      });
+
+      // Simulate a connected peer socket that silently drops outbound writes.
+      router.nodeConnections.set('node-b', {
+        nodeId: 'node-b',
+        nodeAddress: 'ws://node-b:9999',
+        connectionId: 'node-b',
+        ws: {
+          readyState: 1,
+          send: () => {},
+        },
+        state: ConnectionState.CONNECTED,
+        isIncoming: false,
+        reconnectAttempts: 0,
+        reconnectTimeout: null,
+        pingInterval: null,
+        address: 'ws://node-b:9999',
+        isSelfConnection: false,
+      });
+
+      const unhandled = [];
+      const onUnhandled = (error) => {
+        unhandled.push(error);
+      };
+      process.on('unhandledRejection', onUnhandled);
+      t.teardown(() => {
+        process.off('unhandledRejection', onUnhandled);
+      });
+
+      const result = await router.deliver(
+        'node-b/service/no-ack',
+        {type: 'TEST'},
+      );
+
+      t.equal(result.acknowledged, false, 'delivery should fail when ACK times out');
+      t.match(result.error, /Message timeout/i, 'should surface ACK timeout error');
+
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      t.equal(
+        unhandled.length,
+        0,
+        'pending SERVICE_RESPONSE timeout should not surface as unhandled rejection',
+      );
+    });
 });

@@ -21,6 +21,27 @@ const CDC_ROW_FETCH_LOG_SUPPRESSED_TABLES = new Set([
 ]);
 
 /**
+ * Extract column names from a simple conjunctive WHERE clause.
+ * Supports nested wrapping parentheses around equality predicates.
+ * @param {string} whereContent - WHERE clause content without the WHERE keyword.
+ * @return {Array<string>} Extracted column names.
+ */
+export function extractConjunctiveWhereColumns(whereContent) {
+  if (!whereContent) {
+    return [];
+  }
+
+  return whereContent.trim().split(/\s+AND\s+/i)
+    .map((part) => {
+      const cleanPart = part.trim()
+        .replace(/^\(+|\)+$/g, STRING.EMPTY);
+      const match = cleanPart.match(/^(\w+)\s*=/);
+      return match ? match[NUM.ONE] : null;
+    })
+    .filter(Boolean);
+}
+
+/**
  * Whether to emit info-level logs for CDC row fetches on a given table.
  * @param {string} tableName - Table name.
  * @return {boolean}
@@ -348,29 +369,9 @@ export function extractDataFromParameterizedSQL(
 
     // Extract column names from WHERE clause
     // Handle parentheses around the WHERE clause: WHERE (col = ?)
-    const whereColumns = [];
-    if (whereMatch) {
-      // Strip outer parentheses if present
-      let whereContent = whereMatch[NUM.ONE].trim();
-      if (
-        whereContent.startsWith(
-          PARTITION_SERVICE_SQL_FRAGMENT.OPEN_PAREN,
-        ) &&
-        whereContent.endsWith(
-          PARTITION_SERVICE_SQL_FRAGMENT.CLOSE_PAREN,
-        )
-      ) {
-        whereContent = whereContent.slice(NUM.ONE, -NUM.ONE).trim();
-      }
-      const whereParts = whereContent.split(/\s+AND\s+/i);
-      for (const part of whereParts) {
-        // Strip any remaining parentheses from individual parts
-        const cleanPart = part.trim()
-          .replace(/^\(+|\)+$/g, STRING.EMPTY);
-        const match = cleanPart.match(/^(\w+)\s*=/);
-        if (match) whereColumns.push(match[NUM.ONE]);
-      }
-    }
+    const whereColumns = whereMatch ?
+      extractConjunctiveWhereColumns(whereMatch[NUM.ONE]) :
+      [];
 
     const allColumns = [...setColumns, ...whereColumns];
     if (allColumns.length !== params.length) {
@@ -410,15 +411,8 @@ export function extractDataFromParameterizedSQL(
       return {};
     }
 
-    const whereColumns = [];
-    // Handle both "col = ?" and "(col = ?)" formats
-    const whereContent = whereMatch[NUM.ONE]
-      .replace(/^\(|\)$/g, STRING.EMPTY).trim();
-    const whereParts = whereContent.split(/\s+AND\s+/i);
-    for (const part of whereParts) {
-      const match = part.trim().match(/^(\w+)\s*=/);
-      if (match) whereColumns.push(match[NUM.ONE]);
-    }
+    const whereContent = whereMatch[NUM.ONE].trim();
+    const whereColumns = extractConjunctiveWhereColumns(whereContent);
 
     if (whereColumns.length !== params.length) {
       logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_PARAM_DELETE_MISMATCH, {

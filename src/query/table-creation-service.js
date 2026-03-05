@@ -33,7 +33,7 @@ class TableCreationService {
   constructor(options = {}) {
     this.systemCache = options.systemCache || null;
     this.cdcIntegrationService = options.cdcIntegrationService || null;
-    this.partitionSplitMergeManager = options.partitionSplitMergeManager || null;
+    this.partitionSplitMergeManager = null;
     this.partitionProvisioner =
       typeof options.partitionProvisioner === 'function' ?
         options.partitionProvisioner :
@@ -45,6 +45,7 @@ class TableCreationService {
       config.get(CONFIG_KEY.PARTITION_DEFAULT_REPLICA_COUNT) || NUM.THREE;
 
     this.logger = this.initLogger();
+    this.setPartitionSplitMergeManager(options.partitionSplitMergeManager || null);
   }
 
   /**
@@ -85,7 +86,12 @@ class TableCreationService {
    * @param {Object} manager - PartitionSplitMergeManager instance.
    */
   setPartitionSplitMergeManager(manager) {
+    if (this.partitionSplitMergeManager === manager) {
+      return;
+    }
+    this.stopPeriodicSplitMergeEvaluation();
     this.partitionSplitMergeManager = manager || null;
+    this.startPeriodicSplitMergeEvaluation();
   }
 
   /**
@@ -164,6 +170,10 @@ class TableCreationService {
       partition_key: partitionKey,
       table_policies: JSON.stringify({}),
       partition_count: 1,
+      active_partition_version: 1,
+      pending_partition_version: null,
+      partition_transition_state: null,
+      partition_transition_metadata: null,
       created_at: Date.now(),
       updated_at: Date.now(),
     };
@@ -176,6 +186,7 @@ class TableCreationService {
       table_name: tableName,
       partition_key_start: null, // NULL means unbounded lower
       partition_key_end: null, // NULL means unbounded upper
+      partition_version: 1,
       replica_count: this.defaultReplicaCount,
       size_bytes: 0,
       leader_node_id: null,
@@ -196,7 +207,9 @@ class TableCreationService {
     await this.provisionInitialPartition({
       tableId,
       tableName,
+      tableMetadata,
       partitionId,
+      partitionMetadata,
       replicaCount: partitionMetadata.replica_count,
     });
 
@@ -225,7 +238,10 @@ class TableCreationService {
    * @param {Object} context - Provisioning context.
    * @param {string} context.tableId - Table ID.
    * @param {string} context.tableName - Table name.
+   * @param {Object} [context.tableMetadata] - Canonical table row snapshot.
    * @param {string} context.partitionId - Initial partition ID.
+   * @param {Object} [context.partitionMetadata] - Canonical partition row
+   *   snapshot.
    * @param {number} context.replicaCount - Desired replica count.
    * @return {Promise<void>}
    * @private
@@ -284,6 +300,38 @@ class TableCreationService {
         splitMergeEvaluationError: error.message,
       });
     }
+  }
+
+  /**
+   * Start periodic split/merge evaluation when supported by the manager.
+   * @private
+   */
+  startPeriodicSplitMergeEvaluation() {
+    const manager = this.partitionSplitMergeManager;
+    if (!manager || typeof manager.startPeriodicEvaluation !== 'function') {
+      return;
+    }
+    manager.startPeriodicEvaluation();
+  }
+
+  /**
+   * Stop periodic split/merge evaluation when supported by the manager.
+   * @private
+   */
+  stopPeriodicSplitMergeEvaluation() {
+    const manager = this.partitionSplitMergeManager;
+    if (!manager || typeof manager.stopPeriodicEvaluation !== 'function') {
+      return;
+    }
+    manager.stopPeriodicEvaluation();
+  }
+
+  /**
+   * Shutdown lifecycle-owned resources.
+   * @return {Promise<void>}
+   */
+  async shutdown() {
+    this.stopPeriodicSplitMergeEvaluation();
   }
 
   /**

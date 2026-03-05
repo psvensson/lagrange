@@ -4,6 +4,8 @@ import {
   QUERY_ERROR_MSG,
   QUERY_OPERATION,
 } from '../query-constants.js';
+import {DurableWorkflowCoordinator} from
+  '../../workflow/durable-workflow-coordinator.js';
 
 const TRANSACTION_STATUS = Object.freeze({
   ACTIVE: 'ACTIVE',
@@ -54,7 +56,31 @@ class DistributedTransactionCoordinator {
     this.persistParticipant = options.persistParticipant || (async () => {});
     this.persistWriteOperation = options.persistWriteOperation || (async () => {});
     this.now = options.now || (() => Date.now());
-    this.transactionsBySession = new Map();
+    this.workflowCoordinator = options.workflowCoordinator ||
+      new DurableWorkflowCoordinator({
+        persistWorkflow: async (workflow) => {
+          await this.persistTransaction({
+            transactionId: workflow.transactionId || workflow.workflowId,
+            sessionId: workflow.sessionId || workflow.ownerKey,
+            status: workflow.status,
+            createdAt: workflow.createdAt,
+            updatedAt: workflow.updatedAt,
+          });
+        },
+        persistParticipant: async (participant) => {
+          await this.persistParticipant({
+            participantId: participant.participantId,
+            transactionId: participant.transactionId || participant.workflowId,
+            partitionId: participant.partitionId || participant.participantKey,
+            status: participant.status,
+            lastError: participant.lastError,
+            createdAt: participant.createdAt,
+            updatedAt: participant.updatedAt,
+          });
+        },
+        now: this.now,
+      });
+    this.transactionsBySession = this.workflowCoordinator.workflowsByOwnerKey;
   }
 
   /**
@@ -72,23 +98,25 @@ class DistributedTransactionCoordinator {
     }
 
     const now = this.now();
+    const transactionId = this.createTransactionId(sessionId);
     const tx = {
       sessionId,
-      transactionId: this.createTransactionId(sessionId),
+      ownerKey: sessionId,
+      transactionId,
+      workflowId: transactionId,
       status: TRANSACTION_STATUS.ACTIVE,
       participants: new Map(),
       writeOperations: [],
       createdAt: now,
       updatedAt: now,
     };
-    this.transactionsBySession.set(sessionId, tx);
-    await this.persistTransactionRecord(tx);
+    await this.workflowCoordinator.registerWorkflow(tx);
 
     return {
       success: true,
       operation: QUERY_OPERATION.BEGIN_TRANSACTION,
       sessionId,
-      transactionId: tx.transactionId,
+      transactionId,
     };
   }
 
@@ -116,8 +144,9 @@ class DistributedTransactionCoordinator {
       }
       await this.beginParticipant(sessionId, partitionId);
       const now = this.now();
-      tx.participants.set(partitionId, {
+      await this.workflowCoordinator.upsertParticipant(tx.workflowId, {
         participantId: this.createParticipantId(tx.transactionId, partitionId),
+        transactionId: tx.transactionId,
         partitionId,
         status: PARTICIPANT_STATUS.ACTIVE,
         lastError: null,
@@ -384,8 +413,24 @@ class DistributedTransactionCoordinator {
 
     this.recoverFromSystemTables({
       transactions: rows,
-      participants: [],
-      writeOperations: [],
+      participants: rows.flatMap((row) => {
+        const transactionId = row.transaction_id || row.transactionId;
+        const participants = Array.isArray(row.participants) ? row.participants : [];
+        return participants.map((partitionId) => ({
+          transaction_id: transactionId,
+          partition_id: partitionId,
+        }));
+      }),
+      writeOperations: rows.flatMap((row) => {
+        const transactionId = row.transaction_id || row.transactionId;
+        const writeOperations = Array.isArray(row.writeOperations) ?
+          row.writeOperations :
+          [];
+        return writeOperations.map((operation) => ({
+          ...operation,
+          transaction_id: transactionId,
+        }));
+      }),
     });
   }
 
@@ -408,59 +453,57 @@ class DistributedTransactionCoordinator {
       payload.writeOperations :
       [];
 
-    const transactionById = new Map();
-    for (const row of transactionRows) {
-      const sessionId = row.session_id || row.sessionId;
-      const transactionId = row.transaction_id || row.transactionId;
-      const status = row.status || TRANSACTION_STATUS.FAILED;
-      if (!sessionId || !transactionId) {
-        continue;
-      }
-      if (TERMINAL_TRANSACTION_STATUS.has(status)) {
-        continue;
-      }
-      const tx = {
-        sessionId,
-        transactionId,
-        status,
-        participants: new Map(),
-        writeOperations: [],
-        createdAt: row.created_at || row.createdAt || this.now(),
-        updatedAt: row.updated_at || row.updatedAt || this.now(),
-      };
-      transactionById.set(transactionId, tx);
-      this.transactionsBySession.set(sessionId, tx);
-    }
-
-    for (const row of participantRows) {
-      const transactionId = row.transaction_id || row.transactionId;
-      const partitionId = row.partition_id || row.partitionId;
-      if (!transactionId || !partitionId) {
-        continue;
-      }
-      const tx = transactionById.get(transactionId);
-      if (!tx) {
-        continue;
-      }
-      const participantId = row.participant_id ||
-        row.participantId ||
-        this.createParticipantId(transactionId, partitionId);
-      tx.participants.set(partitionId, {
-        participantId,
-        partitionId,
-        status: row.status || PARTICIPANT_STATUS.FAILED,
-        lastError: row.last_error || row.lastError || null,
-        createdAt: row.created_at || row.createdAt || tx.createdAt,
-        updatedAt: row.updated_at || row.updatedAt || tx.updatedAt,
-      });
-    }
+    this.workflowCoordinator.recover({
+      workflows: transactionRows,
+      participants: participantRows,
+      loadWorkflow: (row) => {
+        const sessionId = row.session_id || row.sessionId;
+        const transactionId = row.transaction_id || row.transactionId;
+        const status = row.status || TRANSACTION_STATUS.FAILED;
+        if (!sessionId || !transactionId) {
+          return null;
+        }
+        return {
+          sessionId,
+          ownerKey: sessionId,
+          transactionId,
+          workflowId: transactionId,
+          status,
+          writeOperations: [],
+          createdAt: row.created_at || row.createdAt || this.now(),
+          updatedAt: row.updated_at || row.updatedAt || this.now(),
+        };
+      },
+      loadParticipant: (row) => {
+        const transactionId = row.transaction_id || row.transactionId;
+        const partitionId = row.partition_id || row.partitionId;
+        if (!transactionId || !partitionId) {
+          return null;
+        }
+        return {
+          workflowId: transactionId,
+          transactionId,
+          participantId: row.participant_id ||
+            row.participantId ||
+            this.createParticipantId(transactionId, partitionId),
+          participantKey: partitionId,
+          partitionId,
+          status: row.status || PARTICIPANT_STATUS.FAILED,
+          lastError: row.last_error || row.lastError || null,
+          createdAt: row.created_at || row.createdAt || this.now(),
+          updatedAt: row.updated_at || row.updatedAt || this.now(),
+        };
+      },
+      isTerminalWorkflow: (workflow) =>
+        TERMINAL_TRANSACTION_STATUS.has(workflow.status),
+    });
 
     for (const row of writeOperationRows) {
       const transactionId = row.transaction_id || row.transactionId;
       if (!transactionId) {
         continue;
       }
-      const tx = transactionById.get(transactionId);
+      const tx = this.workflowCoordinator.getWorkflowById(transactionId);
       if (!tx) {
         continue;
       }
@@ -495,30 +538,17 @@ class DistributedTransactionCoordinator {
     successStatus,
     operation,
   ) {
-    const failedParticipants = [];
-    for (const [partitionId, participant] of tx.participants.entries()) {
-      participant.status = transientStatus;
-      participant.updatedAt = this.now();
-      participant.lastError = null;
-      await this.persistParticipantRecord(tx, participant);
-
-      try {
-        await operation(partitionId);
-        participant.status = successStatus;
-        participant.updatedAt = this.now();
-        participant.lastError = null;
-      } catch (error) {
-        participant.status = PARTICIPANT_STATUS.FAILED;
-        participant.lastError = error.message;
-        participant.updatedAt = this.now();
-        failedParticipants.push({
-          partitionId,
-          error: error.message,
-        });
-      }
-      await this.persistParticipantRecord(tx, participant);
-    }
-    return failedParticipants;
+    const failedParticipants = await this.workflowCoordinator.executeParticipantStage(
+      tx.workflowId,
+      transientStatus,
+      successStatus,
+      (partitionId) => operation(partitionId),
+      {failureStatus: PARTICIPANT_STATUS.FAILED},
+    );
+    return failedParticipants.map((entry) => ({
+      partitionId: entry.participantKey,
+      error: entry.error,
+    }));
   }
 
   /**
@@ -528,13 +558,7 @@ class DistributedTransactionCoordinator {
    * @private
    */
   async persistTransactionRecord(tx) {
-    await this.persistTransaction({
-      transactionId: tx.transactionId,
-      sessionId: tx.sessionId,
-      status: tx.status,
-      createdAt: tx.createdAt,
-      updatedAt: tx.updatedAt,
-    });
+    await this.workflowCoordinator.persistWorkflowState(tx.workflowId);
   }
 
   /**
@@ -562,15 +586,10 @@ class DistributedTransactionCoordinator {
    * @private
    */
   async persistParticipantRecord(tx, participant) {
-    await this.persistParticipant({
-      participantId: participant.participantId,
-      transactionId: tx.transactionId,
-      partitionId: participant.partitionId,
-      status: participant.status,
-      lastError: participant.lastError,
-      createdAt: participant.createdAt,
-      updatedAt: participant.updatedAt,
-    });
+    await this.workflowCoordinator.persistParticipantState(
+      tx.workflowId,
+      participant.partitionId,
+    );
   }
 
   /**

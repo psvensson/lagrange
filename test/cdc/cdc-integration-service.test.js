@@ -260,6 +260,90 @@ test('CDCIntegrationService - waitForCacheUpdate skips in bootstrap mode', async
   t.end();
 });
 
+test('CDCIntegrationService - waitForCacheUpdate accepts monotonic minimum fields',
+  async (t) => {
+    const operationId = 'op-monotonic-1';
+    const expectedUpdatedAt = 1000;
+    const authoritativeRow = {
+      operation_id: operationId,
+      status: 'creating',
+      workflow_step: 'CREATING',
+      updated_at: 1200,
+    };
+    const listeners = new Set();
+    const state = {
+      row: null,
+      onCacheChangeCalls: 0,
+      offCacheChangeCalls: 0,
+    };
+    const cache = {
+      has(tableName, key) {
+        return tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS &&
+          key === operationId &&
+          Boolean(state.row);
+      },
+      get(tableName, key) {
+        if (tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS ||
+          key !== operationId) {
+          return null;
+        }
+        return state.row;
+      },
+      onCacheChange(listener) {
+        state.onCacheChangeCalls++;
+        listeners.add(listener);
+      },
+      offCacheChange(listener) {
+        state.offCacheChangeCalls++;
+        listeners.delete(listener);
+      },
+    };
+    const cacheMutationTarget = {
+      applySystemTableChange(_tableName, _operation, record) {
+        state.row = {...record};
+        for (const listener of listeners) {
+          listener(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS);
+        }
+      },
+    };
+    const sqlQueryEngine = {
+      async executeQuery() {
+        return {
+          success: true,
+          rows: [{...authoritativeRow}],
+        };
+      },
+    };
+    const service = new CDCIntegrationService({
+      nodeId: 'test-node',
+      sqlQueryEngine,
+      systemTableCache: cache,
+      cacheMutationTarget,
+    });
+    service.initialize();
+
+    await service.waitForCacheUpdate(
+      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+      operationId,
+      true,
+      {
+        expectedFields: {updated_at: expectedUpdatedAt},
+        minimumFields: {updated_at: expectedUpdatedAt},
+        timeoutMs: 5,
+      },
+    );
+
+    t.equal(
+      state.row?.workflow_step,
+      'CREATING',
+      'cache repair should accept a newer updated_at progression',
+    );
+    t.equal(state.onCacheChangeCalls > 0, true, 'should subscribe to cache changes');
+    t.equal(state.offCacheChangeCalls > 0, true, 'should clean up cache listener');
+    t.end();
+  },
+);
+
 test('CDCIntegrationService - authoritative fallback diagnostics track phase windows',
   async (t) => {
     const mockSqlEngine = {
@@ -302,12 +386,14 @@ test('CDCIntegrationService - authoritative fallback diagnostics track phase win
       'node-1',
       true,
       null,
+      null,
       {fallbackPhase: 'steady_state'},
     );
     await service.repairCacheVisibilityHole(
       SYSTEM_TABLE_NAME.NODES,
       'node-1',
       true,
+      null,
       null,
       {fallbackPhase: 'recovery'},
     );
@@ -359,6 +445,63 @@ test('CDCIntegrationService - updateSystemTableRow', async (t) => {
   t.end();
 });
 
+test(
+  'CDCIntegrationService - updateSystemTableRow forwards minimum cache fields',
+  async (t) => {
+    const mockSqlEngine = createMockSqlQueryEngine();
+    const service = new CDCIntegrationService({
+      nodeId: 'test-node',
+      sqlQueryEngine: mockSqlEngine,
+      systemTableCache: {
+        onCacheChange() {},
+        offCacheChange() {},
+      },
+    });
+    service.initialize();
+
+    const waitCalls = [];
+    service.waitForCacheUpdate = async (
+      tableName,
+      key,
+      expectPresent,
+      options = {},
+    ) => {
+      waitCalls.push({
+        tableName,
+        key,
+        expectPresent,
+        options,
+      });
+    };
+
+    await service.updateSystemTableRow(
+      SYSTEM_TABLE_NAME.NODES,
+      {node_id: 'node-1'},
+      {
+        status: 'suspected',
+        updated_at: 200,
+      },
+      {
+        expectedCacheFields: {node_id: 'node-1'},
+        minimumCacheFields: {updated_at: 200},
+      },
+    );
+
+    t.equal(waitCalls.length, 1, 'should perform one cache wait');
+    t.same(
+      waitCalls[0]?.options?.minimumFields,
+      {updated_at: 200},
+      'should forward caller minimum cache fields to cache waits',
+    );
+    t.same(
+      waitCalls[0]?.options?.expectedFields,
+      {node_id: 'node-1'},
+      'should keep forwarding exact cache fields alongside minimums',
+    );
+    t.end();
+  },
+);
+
 test('CDCIntegrationService - upsertSystemTableRow skips cache wait when requested',
   async (t) => {
     const mockSqlEngine = createMockSqlQueryEngine();
@@ -383,6 +526,62 @@ test('CDCIntegrationService - upsertSystemTableRow skips cache wait when request
       state.onCacheChangeCalls,
       0,
       'should not subscribe to cache waits when explicitly skipped',
+    );
+    t.end();
+  },
+);
+
+test('CDCIntegrationService - insertSystemTableRow skips cache wait when requested',
+  async (t) => {
+    const mockSqlEngine = createMockSqlQueryEngine();
+    const {cache, state} = createCacheWaitProbe();
+    const service = new CDCIntegrationService({
+      nodeId: 'test-node',
+      sqlQueryEngine: mockSqlEngine,
+      systemTableCache: cache,
+    });
+    service.initialize();
+
+    await service.insertSystemTableRow(
+      SYSTEM_TABLE_NAME.NODES,
+      {
+        node_id: 'node-1',
+        node_address: 'localhost:8080',
+      },
+      {skipCacheWait: true},
+    );
+
+    t.equal(
+      state.onCacheChangeCalls,
+      0,
+      'should not subscribe to cache waits when insert explicitly skips them',
+    );
+    t.end();
+  },
+);
+
+test('CDCIntegrationService - updateSystemTableRow skips cache wait when requested',
+  async (t) => {
+    const mockSqlEngine = createMockSqlQueryEngine();
+    const {cache, state} = createCacheWaitProbe();
+    const service = new CDCIntegrationService({
+      nodeId: 'test-node',
+      sqlQueryEngine: mockSqlEngine,
+      systemTableCache: cache,
+    });
+    service.initialize();
+
+    await service.updateSystemTableRow(
+      SYSTEM_TABLE_NAME.NODES,
+      {node_id: 'node-1'},
+      {node_address: 'localhost:8080'},
+      {skipCacheWait: true},
+    );
+
+    t.equal(
+      state.onCacheChangeCalls,
+      0,
+      'should not subscribe to cache waits when update explicitly skips them',
     );
     t.end();
   },

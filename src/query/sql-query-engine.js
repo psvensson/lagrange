@@ -33,9 +33,13 @@ import {
   WRITE_OPERATION_STATUS,
 } from './distributed/distributed-transaction-coordinator.js';
 import {OperationType} from '../rebalancer/replica-status.js';
+import {
+  ReplicaOperationField,
+} from '../rebalancer/replica-operation-constants.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {
+  ENTITY_TYPE,
   TABLES,
   METRICS_LOG_TAG,
   SERVICE_TYPE,
@@ -77,6 +81,27 @@ import {
 import {parseCallbackModuleArtifact} from './callback/callback-module-artifact.js';
 import {reorderParams} from './pg/pg-translate.js';
 import {SqlParseCache} from './sql-parse-cache.js';
+import {AddressManager} from '../address/address-manager.js';
+import {isNodeRecordReady} from '../node/node-readiness-policy.js';
+import {
+  STORAGE_CAPACITY_CONFIG_KEY,
+  STORAGE_CAPACITY_DEFAULT,
+} from '../rebalancer/storage-capacity-constants.js';
+import {
+  TIMEOUT_BUDGET_CLASSIFICATION,
+  TIMEOUT_BUDGET_DEFAULT,
+  createChildTimeoutBudget,
+  createTimeoutBudget,
+  createTimeoutBudgetError,
+  getRemainingBudgetMs,
+} from '../control-plane/timeout-budget.js';
+import {
+  PARTITION_SPLIT_MIRROR_ORIGIN,
+  PARTITION_TRANSITION_METADATA_FIELD,
+  PARTITION_TRANSITION_STATE,
+} from '../partition/partition-constants.js';
+import {ManagedSplitWorkflow} from '../partition/managed-split-workflow.js';
+import {PARTITION_SERVICE_MESSAGE_TYPE} from '../partition/partition-service-constants.js';
 
 const CODE_LOOKUP_BY_FUNCTION_ID_SQL =
   `SELECT * FROM ${TABLES.CODE} WHERE function_id = ?`;
@@ -94,9 +119,9 @@ const EXPLAIN_DISTRIBUTED_PREFIX_REGEX = /^\s*EXPLAIN\s+DISTRIBUTED\s+/i;
 const STATUS_ACTIVE = 'active';
 const CONNECTION_STATE_CONNECTED = String(STATE.CONNECTED).toLowerCase();
 const CONNECTION_STATE_READY = String(STATE.READY).toLowerCase();
-const MIN_ROUTABLE_REPLICA_COUNT = 1;
-const BEST_EFFORT_PROVISION_DISPATCH_TIMEOUT_MS = 250;
-const BEST_EFFORT_PROVISION_TIMEOUT_REASON = 'best_effort_dispatch_timeout';
+const DEFAULT_PARTITION_VERSION = 1;
+const ACTIVE_PARTITION_STATE = 'NORMAL';
+const TABLE_PARTITION_TARGET_NODE_WAIT = 'table_partition_target_node_wait';
 
 /**
  * SQLQueryEngine is the main entry point for SQL query processing.
@@ -126,6 +151,7 @@ class SQLQueryEngine {
     this.cdcIntegrationService = options.cdcIntegrationService || null;
     this.nodeId = options.nodeId || QUERY_SUBSYSTEM.SQL_QUERY_ENGINE;
     this.rebalanceCoordinator = options.rebalanceCoordinator || null;
+    this.nowFn = options.nowFn || (() => Date.now());
     this.tablePartitionProvisioningTimeoutMs =
       Number.isFinite(options.tablePartitionProvisioningTimeoutMs) &&
       options.tablePartitionProvisioningTimeoutMs > 0 ?
@@ -136,6 +162,11 @@ class SQLQueryEngine {
       options.tablePartitionProvisioningPollIntervalMs > 0 ?
         Math.floor(options.tablePartitionProvisioningPollIntervalMs) :
         QUERY_DEFAULTS.TABLE_CREATE_PROVISION_POLL_INTERVAL_MS;
+    this.tablePartitionTargetNodeConvergenceTimeoutMs =
+      Number.isFinite(options.tablePartitionTargetNodeConvergenceTimeoutMs) &&
+      options.tablePartitionTargetNodeConvergenceTimeoutMs > 0 ?
+        Math.floor(options.tablePartitionTargetNodeConvergenceTimeoutMs) :
+        QUERY_DEFAULTS.TABLE_CREATE_TARGET_NODE_CONVERGENCE_TIMEOUT_MS;
 
     this.partitionResolver = new PartitionResolver({
       systemCache: this.systemCache,
@@ -175,6 +206,7 @@ class SQLQueryEngine {
         persistWriteOperation: async (record) =>
           this.persistDistributedWriteOperationRow(record),
       });
+    this.managedSplitWorkflow = options.managedSplitWorkflow || null;
 
     const tablePartitionProvisioner = typeof options.tablePartitionProvisioner ===
       'function' ?
@@ -182,10 +214,11 @@ class SQLQueryEngine {
       (this.rebalanceCoordinator ?
         (context) => this.provisionInitialTablePartition(context) :
         null);
+    this.partitionSplitMergeManager = options.partitionSplitMergeManager || null;
     this.tableCreationService = new TableCreationService({
       systemCache: this.systemCache,
       cdcIntegrationService: this.cdcIntegrationService,
-      partitionSplitMergeManager: options.partitionSplitMergeManager || null,
+      partitionSplitMergeManager: this.partitionSplitMergeManager,
       partitionProvisioner: tablePartitionProvisioner,
     });
 
@@ -202,6 +235,58 @@ class SQLQueryEngine {
     );
 
     this.logger = this.initLogger();
+    this.managedSplitWorkflow = this.managedSplitWorkflow ||
+      new ManagedSplitWorkflow({
+        nodeId: this.nodeId,
+        getCDCIntegrationService: () => this.cdcIntegrationService,
+        getPartitionInfo: (partitionId) => this.getPartitionInfo(partitionId),
+        getTableInfo: (tableNameOrId) => this.getTableInfo(tableNameOrId),
+        parsePartitionTransition: (tableInfo) =>
+          this.parsePartitionTransition(tableInfo),
+        isLocalManagedSplitLeader: (partitionInfo) =>
+          this.isLocalManagedSplitLeader(partitionInfo),
+        resolveActivePartitionVersion: (tableInfo) =>
+          this.resolveActivePartitionVersion(tableInfo),
+        buildManagedSplitPlan: (...args) => this.buildManagedSplitPlan(...args),
+        resolveProvisionTargetNodeIds: (replicaCount) =>
+          this.resolveProvisionTargetNodeIds(replicaCount),
+        getRoutablePartitionServiceNodeIds: (partitionId) =>
+          this.getRoutablePartitionServiceNodeIds(partitionId),
+        calculateQuorumReplicaCount: (replicaCount) =>
+          this.calculateQuorumReplicaCount(replicaCount),
+        storageAdmissionService:
+          this.rebalanceCoordinator?.storageAdmissionService || null,
+        createExecutionTimeoutBudget: () =>
+          this.createControlPlaneTimeoutBudget(
+            this.tablePartitionProvisioningTimeoutMs,
+          ),
+        estimateSplitAdmissionBytes: (partitionInfo, tableInfo) =>
+          this.estimateSplitAdmissionBytes(partitionInfo, tableInfo),
+        waitForTablePartitionMetadata: (
+          tableId,
+          partitionId,
+          timeoutBudget,
+        ) =>
+          this.waitForTablePartitionMetadata(
+            tableId,
+            partitionId,
+            timeoutBudget,
+          ),
+        provisionInitialTablePartition: (context) =>
+          this.provisionInitialTablePartition(context),
+        startSplitReplicationOnSourcePartition: (
+          partitionId,
+          tableId,
+          tableName,
+          transitionMetadata,
+        ) => this.startSplitReplicationOnSourcePartition(
+          partitionId,
+          tableId,
+          tableName,
+          transitionMetadata,
+        ),
+        logger: this.logger,
+      });
 
     // Configuration
     const config = ConfigurationManager.getInstance();
@@ -290,7 +375,19 @@ class SQLQueryEngine {
    * @param {Object} manager - PartitionSplitMergeManager instance.
    */
   setPartitionSplitMergeManager(manager) {
+    this.partitionSplitMergeManager = manager || null;
     this.tableCreationService.setPartitionSplitMergeManager(manager);
+  }
+
+  /**
+   * Shutdown lifecycle-owned query services.
+   * @return {Promise<void>}
+   */
+  async shutdown() {
+    if (this.tableCreationService &&
+        typeof this.tableCreationService.shutdown === 'function') {
+      await this.tableCreationService.shutdown();
+    }
   }
 
   /**
@@ -366,6 +463,8 @@ class SQLQueryEngine {
         result = await this.executeQuery(statement, parameters, {
           sessionId,
           dialect: sqlRequest.dialect,
+          timeoutMs: sqlRequest.timeoutMs,
+          cancellationToken: sqlRequest.cancellationToken || null,
         });
         break;
 
@@ -1006,6 +1105,9 @@ class SQLQueryEngine {
    */
   async executeQuery(sql, params = [], options = {}) {
     const sessionId = options.sessionId || QUERY_SESSION.DEFAULT;
+    const cancellationToken =
+      options?.cancellationToken || null;
+    cancellationToken?.throwIfCancelled?.();
     this.recoverDistributedTransactionStateFromCache();
     if (EXPLAIN_DISTRIBUTED_PREFIX_REGEX.test(sql)) {
       return this.executeExplainDistributed(sql, params, {
@@ -1050,13 +1152,19 @@ class SQLQueryEngine {
     }
 
     const parseEndMs = Date.now();
+    cancellationToken?.throwIfCancelled?.();
 
     try {
       // Route based on statement type
       let result;
       switch (ast.type) {
       case QUERY_AST_TYPE.SELECT:
-        result = await this.executeSelect(ast, params, sessionId);
+        result = await this.executeSelect(
+          ast,
+          params,
+          sessionId,
+          options,
+        );
         break;
 
       case QUERY_AST_TYPE.INSERT:
@@ -1222,7 +1330,14 @@ class SQLQueryEngine {
    * Provision initial routable replica for a newly-created table partition.
    * @param {Object} context - Table partition context.
    * @param {string} context.tableId - Table ID.
+   * @param {Object} [context.tableMetadata] - Canonical table row snapshot.
    * @param {string} context.partitionId - Partition ID.
+   * @param {Object} [context.partitionMetadata] - Canonical partition row
+   *   snapshot.
+   * @param {number} [context.minimumRoutableReplicaCount] - Minimum ready
+   *   replica cohort required before provisioning can continue.
+   * @param {string[]} [context.targetNodeIds] - Explicit provisioning target
+   *   nodes for split child bootstrapping.
    * @return {Promise<void>}
    * @private
    */
@@ -1233,6 +1348,9 @@ class SQLQueryEngine {
       context.replicaCount > 0 ?
         context.replicaCount :
         1;
+    const explicitTargetNodeIds = this.normalizeTargetNodeIds(
+      context?.targetNodeIds,
+    );
 
     if (!partitionId) {
       throw new Error(QUERY_ERROR_MSG.TABLE_PARTITION_PROVISION_PARTITION_ID_REQUIRED);
@@ -1244,81 +1362,333 @@ class SQLQueryEngine {
       throw new Error(QUERY_ERROR_MSG.TABLE_PARTITION_PROVISION_COORDINATOR_REQUIRED);
     }
 
-    const provisionTargetNodeIds =
-      this.resolveProvisionTargetNodeIds(requestedReplicaCount);
-    const targetReplicaCount = Math.max(
-      1,
-      Math.min(
-        requestedReplicaCount,
-        provisionTargetNodeIds.length > 0 ?
-          provisionTargetNodeIds.length :
-          1,
-      ),
+    let targetReplicaCount = explicitTargetNodeIds.length > 0 ?
+      Math.max(1, Math.min(requestedReplicaCount, explicitTargetNodeIds.length)) :
+      Math.max(1, requestedReplicaCount);
+    const hasExplicitMinimumRoutableReplicaCount =
+      Number.isInteger(context?.minimumRoutableReplicaCount) &&
+      context.minimumRoutableReplicaCount > 0;
+    let minimumRoutableReplicaCount =
+      this.resolveMinimumProvisioningReplicaCount(
+        context?.minimumRoutableReplicaCount,
+        targetReplicaCount,
+      );
+    let enforceEveryProvisioningOperation =
+      minimumRoutableReplicaCount >= targetReplicaCount;
+    const bootstrapTableMetadata =
+      context?.tableMetadata && typeof context.tableMetadata === 'object' ?
+        context.tableMetadata :
+        null;
+    const bootstrapPartitionMetadata =
+      context?.partitionMetadata && typeof context.partitionMetadata === 'object' ?
+        context.partitionMetadata :
+        null;
+    const timeoutBudget = context?.timeoutBudget || this.createControlPlaneTimeoutBudget(
+      this.tablePartitionProvisioningTimeoutMs,
     );
+    let provisionTargetNodeIds =
+      this.resolveProvisionTargetNodeIdsForContext(
+        explicitTargetNodeIds,
+        targetReplicaCount,
+      );
 
-    let routableNodeIds = this.getRoutablePartitionServiceNodeIds(partitionId);
-    if (routableNodeIds.length >= targetReplicaCount) {
+    const routableNodeIds = this.getRoutablePartitionServiceNodeIds(partitionId);
+    if (routableNodeIds.length >= minimumRoutableReplicaCount) {
       return;
     }
 
+    if (explicitTargetNodeIds.length === 0 &&
+        enforceEveryProvisioningOperation &&
+        provisionTargetNodeIds.length < targetReplicaCount) {
+      const convergenceResult = await this.waitForProvisionTargetNodeIds({
+        partitionId,
+        requiredReplicaCount: targetReplicaCount,
+        timeoutBudget,
+        failOnTimeout: false,
+        maxWaitMs: this.tablePartitionTargetNodeConvergenceTimeoutMs,
+      });
+      provisionTargetNodeIds = convergenceResult.nodeIds;
+
+      if (convergenceResult.timedOut &&
+          provisionTargetNodeIds.length < targetReplicaCount) {
+        targetReplicaCount = Math.max(1, provisionTargetNodeIds.length);
+        if (!hasExplicitMinimumRoutableReplicaCount) {
+          minimumRoutableReplicaCount = Math.min(
+            minimumRoutableReplicaCount,
+            targetReplicaCount,
+          );
+        }
+        enforceEveryProvisioningOperation =
+          minimumRoutableReplicaCount >= targetReplicaCount;
+        this.logger.warn(
+          QUERY_LOG_MSG.TABLE_PARTITION_TARGET_NODE_FALLBACK_USED,
+          {
+            partitionId,
+            requiredReplicaCount: convergenceResult.requiredReplicaCount,
+            resolvedReplicaCount: targetReplicaCount,
+            minimumRoutableReplicaCount,
+            convergenceTimedOut: true,
+            waitedMs: convergenceResult.waitedMs,
+            diagnostics: convergenceResult.diagnostics,
+          },
+        );
+      }
+    }
+    provisionTargetNodeIds = provisionTargetNodeIds.slice(
+      0,
+      Math.max(1, Math.min(targetReplicaCount, provisionTargetNodeIds.length)),
+    );
+
+    const plannedOperations = [];
     for (const targetNodeId of provisionTargetNodeIds) {
       if (routableNodeIds.includes(targetNodeId)) {
         continue;
       }
 
-      const operation = await this.rebalanceCoordinator.createOperation({
+      plannedOperations.push(await this.rebalanceCoordinator.createOperation({
         type: OperationType.ADD,
         partitionId,
         entityType: SERVICE_TYPE.PARTITION,
         entityId: partitionId,
         nodeId: targetNodeId,
-      });
-      const requiresMinimumRouting =
-        routableNodeIds.length < MIN_ROUTABLE_REPLICA_COUNT;
-      const executionPromise = this.rebalanceCoordinator.executeOperation(
-        operation,
-      );
-      const executionResult = requiresMinimumRouting ?
-        await executionPromise :
-        await Promise.race([
-          executionPromise,
-          this.sleep(BEST_EFFORT_PROVISION_DISPATCH_TIMEOUT_MS).then(() => ({
-            success: false,
-            skipped: true,
-            reason: BEST_EFFORT_PROVISION_TIMEOUT_REASON,
-          })),
-        ]);
+      }));
+    }
 
-      if (executionResult?.reason === BEST_EFFORT_PROVISION_TIMEOUT_REASON) {
-        this.logger.warn('Best-effort replica provision dispatch timed out', {
-          partitionId,
-          targetNodeId,
-          timeoutMs: BEST_EFFORT_PROVISION_DISPATCH_TIMEOUT_MS,
-          targetReplicaCount,
-        });
-        continue;
+    const bootstrapTopology = this.buildInitialPartitionBootstrapTopology(
+      partitionId,
+      plannedOperations,
+    );
+    this.logger.debug(QUERY_LOG_MSG.TABLE_PARTITION_PROVISION_START, {
+      partitionId,
+      targetReplicaCount,
+      minimumRoutableReplicaCount,
+      enforceEveryProvisioningOperation,
+      plannedOperationCount: plannedOperations.length,
+      phase: 'dispatch_operations',
+      remainingBudgetMs: getRemainingBudgetMs(timeoutBudget, {
+        now: this.nowFn,
+      }),
+    });
+
+    const metadataWaitReplicaIds = [];
+    for (const operation of plannedOperations) {
+      operation[ReplicaOperationField.REPLICA_IDS] =
+        bootstrapTopology.replicaIds;
+      operation[ReplicaOperationField.PEER_ADDRESSES] =
+        bootstrapTopology.peerAddresses;
+      if (bootstrapTableMetadata) {
+        operation[ReplicaOperationField.BOOTSTRAP_TABLE_METADATA] =
+          bootstrapTableMetadata;
       }
+      if (bootstrapPartitionMetadata) {
+        operation[ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA] =
+          bootstrapPartitionMetadata;
+      }
+      const executionResult =
+        await this.rebalanceCoordinator.executeOperation(operation);
 
       if (executionResult && executionResult.success === false &&
           executionResult.skipped !== true) {
-        if (requiresMinimumRouting) {
+        if (enforceEveryProvisioningOperation) {
           throw new Error(
             executionResult.error ||
             QUERY_ERROR_MSG.TABLE_PARTITION_PROVISION_DISPATCH_FAILED,
           );
         }
-        this.logger.warn('Best-effort replica provision dispatch failed', {
-          partitionId,
-          targetNodeId,
-          targetReplicaCount,
-          error:
-            executionResult.error ||
-            QUERY_ERROR_MSG.TABLE_PARTITION_PROVISION_DISPATCH_FAILED,
-        });
         continue;
       }
 
-      routableNodeIds = this.getRoutablePartitionServiceNodeIds(partitionId);
+      const replicaId = operation?.replicaId || operation?.replica_id || null;
+      if (typeof replicaId === 'string' && replicaId.length > 0) {
+        metadataWaitReplicaIds.push(replicaId);
+      }
+    }
+
+    const uniqueMetadataWaitReplicaIds = [...new Set(metadataWaitReplicaIds)];
+    if (uniqueMetadataWaitReplicaIds.length > 0) {
+      if (enforceEveryProvisioningOperation) {
+        this.logger.debug(QUERY_LOG_MSG.TABLE_PARTITION_PROVISION_START, {
+          partitionId,
+          phase: 'wait_replica_metadata',
+          replicaIds: uniqueMetadataWaitReplicaIds,
+          remainingBudgetMs: getRemainingBudgetMs(timeoutBudget, {
+            now: this.nowFn,
+          }),
+        });
+        await Promise.all(
+          uniqueMetadataWaitReplicaIds.map((replicaId) =>
+            this.waitForPartitionServiceMetadata(
+              replicaId,
+              timeoutBudget,
+              {requireRoutable: true},
+            ),
+          ),
+        );
+      } else {
+        this.logger.debug(QUERY_LOG_MSG.TABLE_PARTITION_PROVISION_START, {
+          partitionId,
+          phase: 'wait_minimum_replica_metadata',
+          replicaIds: uniqueMetadataWaitReplicaIds,
+          minimumRoutableReplicaCount,
+          remainingBudgetMs: getRemainingBudgetMs(timeoutBudget, {
+            now: this.nowFn,
+          }),
+        });
+        await this.waitForMinimumRoutableReplicaMetadata(
+          partitionId,
+          uniqueMetadataWaitReplicaIds,
+          minimumRoutableReplicaCount,
+          timeoutBudget,
+        );
+      }
+    }
+
+    await this.waitForRoutablePartitionServiceCount(
+      partitionId,
+      minimumRoutableReplicaCount,
+      timeoutBudget,
+    );
+    await this.waitForPartitionLeaderService(partitionId, timeoutBudget);
+  }
+
+  /**
+   * Return active, non-transitioning partitions eligible for split evaluation.
+   * @return {Array<Object>} Partition metadata rows.
+   */
+  listManagedSplitPartitions() {
+    if (!this.systemCache || typeof this.systemCache.getAll !== 'function') {
+      return [];
+    }
+
+    const tables = this.systemCache.getAll(TABLES.TABLES) || [];
+    const partitions = this.systemCache.getAll(TABLES.PARTITIONS) || [];
+    const activeVersionByTableId = new Map();
+    const blockedTableIds = new Set();
+
+    for (const table of tables) {
+      const tableId = table.table_id || table.tableId;
+      if (!tableId) {
+        continue;
+      }
+      if (this.parsePartitionTransition(table)) {
+        blockedTableIds.add(tableId);
+        continue;
+      }
+      activeVersionByTableId.set(
+        tableId,
+        this.resolveActivePartitionVersion(table),
+      );
+    }
+
+    return partitions.filter((partition) => {
+      const tableId = partition.table_id || partition.tableId;
+      if (!tableId || blockedTableIds.has(tableId)) {
+        return false;
+      }
+      if (!this.isLocalManagedSplitLeader(partition)) {
+        return false;
+      }
+      return this.isPartitionVisibleForRouting(
+        partition,
+        activeVersionByTableId.get(tableId) || DEFAULT_PARTITION_VERSION,
+      );
+    });
+  }
+
+  /**
+   * Execute one managed split for a source partition.
+   * @param {string} partitionId - Source partition ID.
+   * @return {Promise<Object>} Split orchestration result.
+   */
+  async executeManagedSplit(partitionId) {
+    if (!this.managedSplitWorkflow ||
+        typeof this.managedSplitWorkflow.execute !== 'function') {
+      throw new Error(QUERY_ERROR_MSG.TABLE_SPLIT_START_FAILED);
+    }
+    return this.managedSplitWorkflow.execute(partitionId);
+  }
+
+  /**
+   * Build one managed split plan using the shared split manager median logic.
+   * @param {Object} partitionInfo - Source partition row.
+   * @param {string} tableName - Logical table name.
+   * @param {string} tableId - Table ID.
+   * @param {string} primaryKeyColumn - Partition key column.
+   * @return {Promise<Object>} Split plan.
+   * @private
+   */
+  async buildManagedSplitPlan(
+    partitionInfo,
+    tableName,
+    tableId,
+    primaryKeyColumn,
+  ) {
+    const manager = this.partitionSplitMergeManager;
+    if (!manager || typeof manager.splitPartition !== 'function') {
+      throw new Error(QUERY_ERROR_MSG.TABLE_SPLIT_START_FAILED);
+    }
+
+    return manager.splitPartition({
+      partitionId: partitionInfo.partition_id || partitionInfo.partitionId,
+      tableName,
+      tableId,
+      primaryKeyColumn,
+      partitionService: {
+        executeQuery: async (sql, params = []) => {
+          const result = await this.queryExecutor.executeOnPartition(
+            partitionInfo.partition_id || partitionInfo.partitionId,
+            sql,
+            params,
+            true,
+            true,
+            false,
+          );
+          return {
+            rows: result.rows || [],
+          };
+        },
+        getKeyRange: () => ({
+          start:
+            partitionInfo.partition_key_start ?? partitionInfo.partitionKeyStart,
+          end:
+            partitionInfo.partition_key_end ?? partitionInfo.partitionKeyEnd,
+        }),
+      },
+    });
+  }
+
+  /**
+   * Ask the source partition leader to start snapshot backfill + CDC mirroring.
+   * @param {string} partitionId - Source partition ID.
+   * @param {string} tableId - Table ID.
+   * @param {string} tableName - Table name.
+   * @param {Object} transitionMetadata - Split transition metadata.
+   * @return {Promise<void>}
+   * @private
+   */
+  async startSplitReplicationOnSourcePartition(
+    partitionId,
+    tableId,
+    tableName,
+    transitionMetadata,
+  ) {
+    const serviceInfo = this.queryExecutor.findPartitionService(partitionId);
+    if (!serviceInfo) {
+      throw new Error(QUERY_ERROR_MSG.TABLE_SPLIT_START_FAILED);
+    }
+
+    const response = await this.messageRouter.deliver(serviceInfo.address, {
+      type: PARTITION_SERVICE_MESSAGE_TYPE.START_SPLIT_REPLICATION,
+      partitionId,
+      tableId,
+      tableName,
+      transitionMetadata,
+    });
+
+    if (!response?.acknowledged || response?.success === false) {
+      throw new Error(
+        response?.error || QUERY_ERROR_MSG.TABLE_SPLIT_START_FAILED,
+      );
     }
   }
 
@@ -1330,16 +1700,77 @@ class SQLQueryEngine {
    * @return {Promise<void>}
    * @private
    */
-  async waitForTablePartitionMetadata(tableId, partitionId) {
+  async waitForTablePartitionMetadata(tableId, partitionId, timeoutBudget = null) {
+    const hasTableAndPartitionMetadata = () => {
+      const hasPartitionRecord = this.queryExecutor &&
+        typeof this.queryExecutor.hasPartitionRecord === 'function' ?
+        this.queryExecutor.hasPartitionRecord(partitionId) :
+        false;
+      const hasTableRecord = tableId ? this.hasTableMetadata(tableId) : true;
+      return hasPartitionRecord && hasTableRecord;
+    };
+    if (hasTableAndPartitionMetadata()) {
+      return;
+    }
+
+    const usesCacheRepairWaits = this.cdcIntegrationService &&
+      typeof this.cdcIntegrationService.waitForCacheUpdate === 'function' &&
+      this.systemCache &&
+      typeof this.systemCache.onCacheChange === 'function';
+    const effectiveBudget = this.allocateControlPlaneTimeoutBudget({
+      timeoutBudget,
+      requestedBudgetMs: this.tablePartitionProvisioningTimeoutMs,
+      minimumBudgetMs: usesCacheRepairWaits ?
+        TIMEOUT_BUDGET_DEFAULT.MINIMUM_OPERATION_BUDGET_MS :
+        this.tablePartitionProvisioningPollIntervalMs,
+      classification: TIMEOUT_BUDGET_CLASSIFICATION.CACHE_VISIBILITY_TIMEOUT,
+      nestedOperation: 'table_partition_metadata_wait',
+      timeoutError:
+        QUERY_ERROR_MSG.TABLE_PARTITION_METADATA_TIMEOUT_PREFIX + partitionId,
+    });
+    const waitBudgetMs = getRemainingBudgetMs(effectiveBudget, {
+      now: this.nowFn,
+    });
+
+    if (usesCacheRepairWaits) {
+      const waits = [
+        this.cdcIntegrationService.waitForCacheUpdate(
+          TABLES.PARTITIONS,
+          partitionId,
+          true,
+          {
+            fallbackPhase: 'steady_state',
+            timeoutMs: waitBudgetMs,
+          },
+        ),
+      ];
+      if (tableId) {
+        waits.push(
+          this.cdcIntegrationService.waitForCacheUpdate(
+            TABLES.TABLES,
+            tableId,
+            true,
+            {
+              fallbackPhase: 'steady_state',
+              timeoutMs: waitBudgetMs,
+            },
+          ),
+        );
+      }
+      await Promise.all(waits);
+      return;
+    }
+
     await this.waitForCondition(
-      () => {
-        const hasPartitionRecord = this.queryExecutor.hasPartitionRecord(partitionId);
-        const hasTableRecord = tableId ? this.hasTableMetadata(tableId) : true;
-        return hasPartitionRecord && hasTableRecord;
-      },
-      this.tablePartitionProvisioningTimeoutMs,
+      hasTableAndPartitionMetadata,
+      waitBudgetMs,
       this.tablePartitionProvisioningPollIntervalMs,
       QUERY_ERROR_MSG.TABLE_PARTITION_METADATA_TIMEOUT_PREFIX + partitionId,
+      {
+        timeoutBudget: effectiveBudget,
+        classification: TIMEOUT_BUDGET_CLASSIFICATION.CACHE_VISIBILITY_TIMEOUT,
+        nestedOperation: 'table_partition_metadata_wait',
+      },
     );
   }
 
@@ -1349,8 +1780,130 @@ class SQLQueryEngine {
    * @return {Promise<void>}
    * @private
    */
-  async waitForRoutablePartitionService(partitionId) {
-    await this.waitForRoutablePartitionServiceCount(partitionId, 1);
+  async waitForRoutablePartitionService(partitionId, timeoutBudget = null) {
+    await this.waitForRoutablePartitionServiceCount(
+      partitionId,
+      1,
+      timeoutBudget,
+    );
+  }
+
+  /**
+   * Wait for one partition service row to become visible in local cache.
+   * Uses CDC authoritative repair when available.
+   * @param {string} replicaId - Partition service replica ID.
+   * @param {Object} [options]
+   * @param {boolean} [options.requireRoutable]
+   * @return {Promise<void>}
+   * @private
+   */
+  async waitForPartitionServiceMetadata(
+    replicaId,
+    timeoutBudget = null,
+    options = {},
+  ) {
+    const requireRoutable = options?.requireRoutable === true;
+    const conditionFn = requireRoutable ?
+      () => this.hasRoutableServiceMetadata(replicaId) :
+      () => this.hasServiceMetadata(replicaId);
+    if (conditionFn()) {
+      return;
+    }
+
+    const usesCacheRepairWaits = this.cdcIntegrationService &&
+      typeof this.cdcIntegrationService.waitForCacheUpdate === 'function' &&
+      this.systemCache &&
+      typeof this.systemCache.onCacheChange === 'function';
+    const nestedOperation = requireRoutable ?
+      'partition_service_routable_wait' :
+      'partition_service_metadata_wait';
+    const effectiveBudget = this.allocateControlPlaneTimeoutBudget({
+      timeoutBudget,
+      requestedBudgetMs: this.tablePartitionProvisioningTimeoutMs,
+      minimumBudgetMs: usesCacheRepairWaits ?
+        TIMEOUT_BUDGET_DEFAULT.MINIMUM_OPERATION_BUDGET_MS :
+        this.tablePartitionProvisioningPollIntervalMs,
+      classification: TIMEOUT_BUDGET_CLASSIFICATION.CACHE_VISIBILITY_TIMEOUT,
+      nestedOperation,
+      timeoutError:
+        QUERY_ERROR_MSG.TABLE_PARTITION_SERVICE_METADATA_TIMEOUT_PREFIX +
+        replicaId,
+    });
+    const waitBudgetMs = getRemainingBudgetMs(effectiveBudget, {
+      now: this.nowFn,
+    });
+
+    if (usesCacheRepairWaits) {
+      await this.cdcIntegrationService.waitForCacheUpdate(
+        TABLES.SERVICES,
+        replicaId,
+        true,
+        {
+          expectedFields: requireRoutable ?
+            {status: STATUS_ACTIVE} :
+            undefined,
+          fallbackPhase: 'steady_state',
+          timeoutMs: waitBudgetMs,
+        },
+      );
+      if (!requireRoutable || this.hasRoutableServiceMetadata(replicaId)) {
+        return;
+      }
+    }
+
+    await this.waitForCondition(
+      conditionFn,
+      waitBudgetMs,
+      this.tablePartitionProvisioningPollIntervalMs,
+      QUERY_ERROR_MSG.TABLE_PARTITION_SERVICE_METADATA_TIMEOUT_PREFIX + replicaId,
+      {
+        timeoutBudget: effectiveBudget,
+        classification: TIMEOUT_BUDGET_CLASSIFICATION.CACHE_VISIBILITY_TIMEOUT,
+        nestedOperation,
+      },
+    );
+  }
+
+  /**
+   * Best-effort metadata hydration for split quorum waits.
+   * @param {string} partitionId - Partition ID.
+   * @param {string[]} replicaIds - Candidate replica IDs.
+   * @param {number} minimumRoutableReplicaCount - Required routable cohort.
+   * @param {Object|null} timeoutBudget - Shared timeout budget.
+   * @return {Promise<void>}
+   * @private
+   */
+  async waitForMinimumRoutableReplicaMetadata(
+    partitionId,
+    replicaIds,
+    minimumRoutableReplicaCount,
+    timeoutBudget = null,
+  ) {
+    const uniqueReplicaIds = [...new Set(
+      (Array.isArray(replicaIds) ? replicaIds : [])
+        .filter((replicaId) =>
+          typeof replicaId === 'string' && replicaId.length > 0,
+        ),
+    )];
+    if (uniqueReplicaIds.length === 0) {
+      return;
+    }
+
+    for (const replicaId of uniqueReplicaIds) {
+      if (this.getRoutablePartitionServiceNodeIds(partitionId).length >=
+        minimumRoutableReplicaCount) {
+        return;
+      }
+      try {
+        await this.waitForPartitionServiceMetadata(
+          replicaId,
+          timeoutBudget,
+          {requireRoutable: true},
+        );
+      } catch (_error) {
+        // Best-effort hydration: aggregate routable-count wait is authoritative.
+      }
+    }
   }
 
   /**
@@ -1360,17 +1913,82 @@ class SQLQueryEngine {
    * @return {Promise<void>}
    * @private
    */
-  async waitForRoutablePartitionServiceCount(partitionId, minimumCount) {
+  async waitForRoutablePartitionServiceCount(
+    partitionId,
+    minimumCount,
+    timeoutBudget = null,
+  ) {
     const requiredCount = Number.isInteger(minimumCount) &&
       minimumCount > 0 ?
       minimumCount :
       1;
+    const hasRequiredRoutableCount = () =>
+      this.getRoutablePartitionServiceNodeIds(partitionId).length >=
+        requiredCount;
+    if (hasRequiredRoutableCount()) {
+      return;
+    }
+
+    const effectiveBudget = this.allocateControlPlaneTimeoutBudget({
+      timeoutBudget,
+      requestedBudgetMs: this.tablePartitionProvisioningTimeoutMs,
+      minimumBudgetMs: this.tablePartitionProvisioningPollIntervalMs,
+      classification: TIMEOUT_BUDGET_CLASSIFICATION.PUBLICATION_WAIT_TIMEOUT,
+      nestedOperation: 'partition_routing_wait',
+      timeoutError:
+        QUERY_ERROR_MSG.TABLE_PARTITION_ROUTING_TIMEOUT_PREFIX + partitionId,
+    });
     await this.waitForCondition(
-      () => this.getRoutablePartitionServiceNodeIds(partitionId).length >=
-        requiredCount,
-      this.tablePartitionProvisioningTimeoutMs,
+      hasRequiredRoutableCount,
+      getRemainingBudgetMs(effectiveBudget, {now: this.nowFn}),
       this.tablePartitionProvisioningPollIntervalMs,
       QUERY_ERROR_MSG.TABLE_PARTITION_ROUTING_TIMEOUT_PREFIX + partitionId,
+      {
+        timeoutBudget: effectiveBudget,
+        classification: TIMEOUT_BUDGET_CLASSIFICATION.PUBLICATION_WAIT_TIMEOUT,
+        nestedOperation: 'partition_routing_wait',
+      },
+    );
+  }
+
+  /**
+   * Wait for one active leader service row to become visible for the partition.
+   * @param {string} partitionId - Partition ID.
+   * @return {Promise<void>}
+   * @private
+   */
+  async waitForPartitionLeaderService(partitionId, timeoutBudget = null) {
+    const hasLeaderRoute = () => {
+      if (!this.queryExecutor ||
+          typeof this.queryExecutor.findPartitionLeaderAddress !== 'function') {
+        return false;
+      }
+      const address = this.queryExecutor.findPartitionLeaderAddress(partitionId);
+      return typeof address === 'string' && address.length > 0;
+    };
+    if (hasLeaderRoute()) {
+      return;
+    }
+
+    const effectiveBudget = this.allocateControlPlaneTimeoutBudget({
+      timeoutBudget,
+      requestedBudgetMs: this.tablePartitionProvisioningTimeoutMs,
+      minimumBudgetMs: this.tablePartitionProvisioningPollIntervalMs,
+      classification: TIMEOUT_BUDGET_CLASSIFICATION.PUBLICATION_WAIT_TIMEOUT,
+      nestedOperation: 'partition_leader_wait',
+      timeoutError:
+        QUERY_ERROR_MSG.TABLE_PARTITION_LEADER_TIMEOUT_PREFIX + partitionId,
+    });
+    await this.waitForCondition(
+      hasLeaderRoute,
+      getRemainingBudgetMs(effectiveBudget, {now: this.nowFn}),
+      this.tablePartitionProvisioningPollIntervalMs,
+      QUERY_ERROR_MSG.TABLE_PARTITION_LEADER_TIMEOUT_PREFIX + partitionId,
+      {
+        timeoutBudget: effectiveBudget,
+        classification: TIMEOUT_BUDGET_CLASSIFICATION.PUBLICATION_WAIT_TIMEOUT,
+        nestedOperation: 'partition_leader_wait',
+      },
     );
   }
 
@@ -1399,6 +2017,91 @@ class SQLQueryEngine {
         (row) => row.table_id === tableId,
       );
       return Array.isArray(matches) && matches.length > 0;
+    }
+
+    return false;
+  }
+
+  /**
+   * Check whether one partition service row is available in local cache.
+   * @param {string} replicaId - Partition service replica ID.
+   * @return {boolean} True when service row exists in cache.
+   * @private
+   */
+  hasServiceMetadata(replicaId) {
+    if (!replicaId || !this.systemCache) {
+      return false;
+    }
+
+    if (typeof this.systemCache.has === 'function') {
+      return this.systemCache.has(TABLES.SERVICES, replicaId);
+    }
+
+    if (typeof this.systemCache.get === 'function') {
+      return Boolean(this.systemCache.get(TABLES.SERVICES, replicaId));
+    }
+
+    if (typeof this.systemCache.filter === 'function') {
+      const matches = this.systemCache.filter(
+        TABLES.SERVICES,
+        (row) =>
+          row.service_id === replicaId ||
+          row.replica_id === replicaId,
+      );
+      return Array.isArray(matches) && matches.length > 0;
+    }
+
+    return false;
+  }
+
+  /**
+   * Check whether one partition service row is available and routable.
+   * @param {string} replicaId - Partition service replica ID.
+   * @return {boolean} True when service row is routable in local cache.
+   * @private
+   */
+  hasRoutableServiceMetadata(replicaId) {
+    if (!replicaId || !this.systemCache) {
+      return false;
+    }
+
+    const isRoutableService = (service) => {
+      if (!service || typeof service !== 'object') {
+        return false;
+      }
+      if (this.queryExecutor &&
+          typeof this.queryExecutor.isRoutablePartitionService === 'function') {
+        return this.queryExecutor.isRoutablePartitionService(service);
+      }
+      const status = String(service.status || '').toLowerCase();
+      return status === STATUS_ACTIVE &&
+        typeof service.address === 'string' &&
+        service.address.length > 0;
+    };
+    const matchesReplicaId = (row) => row?.service_id === replicaId ||
+      row?.replica_id === replicaId;
+
+    if (typeof this.systemCache.get === 'function') {
+      const row = this.systemCache.get(TABLES.SERVICES, replicaId);
+      if (isRoutableService(row)) {
+        return true;
+      }
+    }
+
+    if (typeof this.systemCache.filter === 'function') {
+      const matches = this.systemCache.filter(
+        TABLES.SERVICES,
+        (row) => matchesReplicaId(row) && isRoutableService(row),
+      );
+      return Array.isArray(matches) && matches.length > 0;
+    }
+
+    if (typeof this.systemCache.getAll === 'function') {
+      const rows = this.systemCache.getAll(TABLES.SERVICES);
+      if (!Array.isArray(rows)) {
+        return false;
+      }
+      return rows.some((row) => matchesReplicaId(row) && isRoutableService(row));
     }
 
     return false;
@@ -1437,6 +2140,230 @@ class SQLQueryEngine {
   }
 
   /**
+   * Get current partition service rows from the local cache.
+   * @param {string} partitionId - Partition ID.
+   * @return {Array<Object>} Partition service rows.
+   * @private
+   */
+  getPartitionServiceRows(partitionId) {
+    if (!partitionId || !this.systemCache) {
+      return [];
+    }
+    if (typeof this.systemCache.filter === 'function') {
+      const rows = this.systemCache.filter(
+        TABLES.SERVICES,
+        (service) =>
+          service?.partition_id === partitionId &&
+          service?.service_type === SERVICE_TYPE.PARTITION,
+      );
+      return Array.isArray(rows) ? rows : [];
+    }
+    if (typeof this.systemCache.getAll === 'function') {
+      const rows = this.systemCache.getAll(TABLES.SERVICES);
+      if (!Array.isArray(rows)) {
+        return [];
+      }
+      return rows.filter((service) =>
+        service?.partition_id === partitionId &&
+        service?.service_type === SERVICE_TYPE.PARTITION,
+      );
+    }
+    return [];
+  }
+
+  /**
+   * Resolve the minimum routable replica cohort required before provisioning
+   * can continue.
+   * @param {number|undefined|null} requestedMinimumReplicaCount
+   * @param {number} targetReplicaCount
+   * @return {number}
+   * @private
+   */
+  resolveMinimumProvisioningReplicaCount(
+    requestedMinimumReplicaCount,
+    targetReplicaCount,
+  ) {
+    if (!Number.isInteger(requestedMinimumReplicaCount) ||
+        requestedMinimumReplicaCount <= 0) {
+      return targetReplicaCount;
+    }
+
+    return Math.max(
+      1,
+      Math.min(requestedMinimumReplicaCount, targetReplicaCount),
+    );
+  }
+
+  /**
+   * Wait for the active-node cache to expose enough provisioning targets.
+   * @param {Object} options
+   * @param {string} options.partitionId
+   * @param {number} options.requiredReplicaCount
+   * @param {Object} options.timeoutBudget
+   * @param {number} [options.maxWaitMs]
+   * @param {boolean} [options.failOnTimeout]
+   * @return {Promise<Object>}
+   * @private
+   */
+  async waitForProvisionTargetNodeIds(options = {}) {
+    const requiredReplicaCount = Number.isInteger(options.requiredReplicaCount) &&
+      options.requiredReplicaCount > 0 ?
+      options.requiredReplicaCount :
+      1;
+    const partitionId = String(options.partitionId || '');
+    let resolution =
+      this.resolveProvisionTargetNodeIdsWithDiagnostics(requiredReplicaCount);
+    let resolvedNodeIds = resolution.nodeIds;
+    let lastDiagnostics = resolution.diagnostics;
+    let timedOut = false;
+    const failOnTimeout = options.failOnTimeout !== false;
+    const maxWaitMs = Number.isFinite(options.maxWaitMs) &&
+      options.maxWaitMs > 0 ?
+      Math.floor(options.maxWaitMs) :
+      this.tablePartitionProvisioningTimeoutMs;
+    const waitTimeoutMs = Math.max(
+      this.tablePartitionProvisioningPollIntervalMs,
+      Math.min(maxWaitMs, this.tablePartitionProvisioningTimeoutMs),
+    );
+    if (resolvedNodeIds.length >= requiredReplicaCount) {
+      return {
+        nodeIds: resolvedNodeIds,
+        diagnostics: lastDiagnostics,
+        timedOut,
+        requiredReplicaCount,
+        waitedMs: 0,
+      };
+    }
+
+    const waitStartedAt = this.nowFn();
+    try {
+      await this.waitForCondition(
+        () => {
+          resolution =
+            this.resolveProvisionTargetNodeIdsWithDiagnostics(requiredReplicaCount);
+          resolvedNodeIds = resolution.nodeIds;
+          lastDiagnostics = resolution.diagnostics;
+          return resolvedNodeIds.length >= requiredReplicaCount;
+        },
+        waitTimeoutMs,
+        this.tablePartitionProvisioningPollIntervalMs,
+        QUERY_ERROR_MSG.TABLE_PARTITION_TARGET_NODE_TIMEOUT_PREFIX +
+          partitionId,
+        {
+          timeoutBudget: options.timeoutBudget || null,
+          classification: TIMEOUT_BUDGET_CLASSIFICATION.CACHE_VISIBILITY_TIMEOUT,
+          nestedOperation: TABLE_PARTITION_TARGET_NODE_WAIT,
+        },
+      );
+    } catch (error) {
+      timedOut = true;
+      const timeoutLogPayload = {
+        partitionId,
+        requiredReplicaCount,
+        maxWaitMs: waitTimeoutMs,
+        waitedMs: this.nowFn() - waitStartedAt,
+        diagnostics: lastDiagnostics,
+      };
+      if (failOnTimeout) {
+        this.logger.error(
+          QUERY_LOG_MSG.TABLE_PARTITION_TARGET_NODE_WAIT_TIMEOUT,
+          timeoutLogPayload,
+        );
+        throw error;
+      }
+      this.logger.warn(
+        QUERY_LOG_MSG.TABLE_PARTITION_TARGET_NODE_WAIT_TIMEOUT,
+        timeoutLogPayload,
+      );
+    }
+
+    if (lastDiagnostics?.usedDegradedFallback && !timedOut) {
+      this.logger.warn(
+        QUERY_LOG_MSG.TABLE_PARTITION_TARGET_NODE_FALLBACK_USED,
+        {
+          partitionId,
+          requiredReplicaCount,
+          diagnostics: lastDiagnostics,
+        },
+      );
+    }
+
+    return {
+      nodeIds: resolvedNodeIds,
+      diagnostics: lastDiagnostics,
+      timedOut,
+      requiredReplicaCount,
+      waitedMs: this.nowFn() - waitStartedAt,
+    };
+  }
+
+  /**
+   * Build the explicit bootstrap cohort for initial table partition creation.
+   * @param {string} partitionId - Partition ID.
+   * @param {Array<Object>} plannedOperations - Planned ADD operations.
+   * @return {Object} Replica IDs and peer addresses for the initial cohort.
+   * @private
+   */
+  buildInitialPartitionBootstrapTopology(partitionId, plannedOperations) {
+    const addressManager = AddressManager.getInstance();
+    const replicaIds = [];
+    const peerAddresses = [];
+    const seenReplicaIds = new Set();
+    const currentServices = this.getPartitionServiceRows(partitionId);
+
+    for (const service of currentServices) {
+      const serviceReplicaId = service?.service_id || service?.replica_id || null;
+      const nodeId = service?.node_id || service?.nodeId || null;
+      if (typeof serviceReplicaId !== 'string' || serviceReplicaId.length === 0) {
+        continue;
+      }
+      if (!seenReplicaIds.has(serviceReplicaId)) {
+        seenReplicaIds.add(serviceReplicaId);
+        replicaIds.push(serviceReplicaId);
+      }
+      if (typeof service?.address === 'string' && service.address.length > 0) {
+        peerAddresses.push(service.address);
+        continue;
+      }
+      if (typeof nodeId === 'string' && nodeId.length > 0) {
+        peerAddresses.push(
+          addressManager.format(
+            nodeId,
+            ENTITY_TYPE.PARTITION,
+            serviceReplicaId,
+          ),
+        );
+      }
+    }
+
+    for (const operation of plannedOperations) {
+      const replicaId = operation?.replicaId || null;
+      const nodeId = operation?.targetNodeId || operation?.nodeId || null;
+      if (typeof replicaId !== 'string' || replicaId.length === 0) {
+        continue;
+      }
+      if (!seenReplicaIds.has(replicaId)) {
+        seenReplicaIds.add(replicaId);
+        replicaIds.push(replicaId);
+      }
+      if (typeof nodeId === 'string' && nodeId.length > 0) {
+        peerAddresses.push(
+          addressManager.format(
+            nodeId,
+            ENTITY_TYPE.PARTITION,
+            replicaId,
+          ),
+        );
+      }
+    }
+
+    return {
+      replicaIds,
+      peerAddresses: [...new Set(peerAddresses)],
+    };
+  }
+
+  /**
    * Resolve active node IDs eligible for initial replica provisioning.
    * Prefers local node first to keep early routing local.
    * @param {number} requestedReplicaCount
@@ -1444,41 +2371,87 @@ class SQLQueryEngine {
    * @private
    */
   resolveProvisionTargetNodeIds(requestedReplicaCount) {
+    return this.resolveProvisionTargetNodeIdsWithDiagnostics(
+      requestedReplicaCount,
+    ).nodeIds;
+  }
+
+  /**
+   * Resolve active node IDs plus eligibility diagnostics.
+   * @param {number} requestedReplicaCount
+   * @return {{nodeIds: string[], diagnostics: Object}}
+   * @private
+   */
+  resolveProvisionTargetNodeIdsWithDiagnostics(requestedReplicaCount) {
     const desiredReplicaCount = Number.isInteger(requestedReplicaCount) &&
       requestedReplicaCount > 0 ?
       requestedReplicaCount :
       1;
 
-    const activeNodeIds = this.getActiveNodeIdsFromCache();
-    if (activeNodeIds.length === 0) {
-      return [this.nodeId];
+    const diagnostics =
+      this.resolveProvisionTargetNodeDiagnostics(desiredReplicaCount);
+    let selectedNodeIds = diagnostics.selectedNodeIds;
+    if (selectedNodeIds.length === 0) {
+      selectedNodeIds = [this.nodeId];
+    } else if (!selectedNodeIds.includes(this.nodeId)) {
+      selectedNodeIds = [this.nodeId, ...selectedNodeIds];
     }
 
-    const uniqueNodeIds = [...new Set(activeNodeIds)];
-    if (!uniqueNodeIds.includes(this.nodeId)) {
-      uniqueNodeIds.unshift(this.nodeId);
-    }
+    const orderedNodeIds = this.orderProvisionTargetNodeIds(selectedNodeIds);
+    const cappedNodeIds = orderedNodeIds.slice(
+      0,
+      Math.max(1, Math.min(desiredReplicaCount, orderedNodeIds.length)),
+    );
+
+    return {
+      nodeIds: cappedNodeIds,
+      diagnostics: {
+        ...diagnostics,
+        selectedNodeIds: orderedNodeIds,
+        resolvedNodeIds: cappedNodeIds,
+      },
+    };
+  }
+
+  /**
+   * Order node IDs lexicographically while keeping the local node first.
+   * @param {Array<string>} nodeIds
+   * @return {Array<string>}
+   * @private
+   */
+  orderProvisionTargetNodeIds(nodeIds) {
+    const uniqueNodeIds = [...new Set(nodeIds)];
     uniqueNodeIds.sort((left, right) => left.localeCompare(right));
     if (uniqueNodeIds.includes(this.nodeId)) {
       uniqueNodeIds.splice(uniqueNodeIds.indexOf(this.nodeId), 1);
       uniqueNodeIds.unshift(this.nodeId);
     }
-
-    return uniqueNodeIds.slice(
-      0,
-      Math.max(1, Math.min(desiredReplicaCount, uniqueNodeIds.length)),
-    );
+    return uniqueNodeIds;
   }
 
   /**
-   * Get active node IDs from local system cache.
-   * @return {Array<string>}
+   * Resolve provision-target diagnostics from local cache state.
+   * @param {number} requestedReplicaCount
+   * @return {Object}
    * @private
    */
-  getActiveNodeIdsFromCache() {
+  resolveProvisionTargetNodeDiagnostics(requestedReplicaCount) {
+    const desiredReplicaCount = Number.isInteger(requestedReplicaCount) &&
+      requestedReplicaCount > 0 ?
+      requestedReplicaCount :
+      1;
     if (!this.systemCache) {
-      return [];
+      return {
+        requestedReplicaCount: desiredReplicaCount,
+        activeNodeRowCount: 0,
+        activeServiceRowCount: 0,
+        strictNodeIds: [],
+        degradedFallbackNodeIds: [],
+        selectedNodeIds: [],
+        usedDegradedFallback: false,
+      };
     }
+
     const activeNodeRows = [];
     const serviceRows = [];
     if (typeof this.systemCache.filter === 'function') {
@@ -1528,43 +2501,245 @@ class SQLQueryEngine {
       }
     }
 
-    const activeNodeEligibilityById = new Map();
+    const activeNodeSeenById = new Set();
+    const activeNodeReadinessById = new Map();
+    const activeNodeConnectionById = new Map();
     for (const row of activeNodeRows) {
       const nodeId = row?.node_id || row?.nodeId || row?.id || null;
       if (typeof nodeId !== 'string' || nodeId.length === 0) {
         continue;
       }
+      activeNodeSeenById.add(nodeId);
+      const leaseExpiry = Number(
+        row?.ready_lease_expires_at ?? row?.readyLeaseExpiresAt,
+      );
+      const hasReadyLease = Number.isFinite(leaseExpiry);
       const connectionState = String(
         row?.connection_state || row?.connectionState || '',
       ).toLowerCase();
       const hasConnectionState = connectionState.length > 0;
       const isConnectionReady = connectionState === CONNECTION_STATE_CONNECTED ||
         connectionState === CONNECTION_STATE_READY;
-      activeNodeEligibilityById.set(
-        nodeId,
-        !hasConnectionState || isConnectionReady,
-      );
+      const connectionEligible = !hasConnectionState || isConnectionReady;
+      const isNodeReady = hasReadyLease ?
+        isNodeRecordReady(row, {requireActiveStatus: true}) :
+        true;
+      activeNodeReadinessById.set(nodeId, isNodeReady);
+      activeNodeConnectionById.set(nodeId, connectionEligible);
     }
 
-    const eligibleNodeIds = [...activeNodeEligibilityById.entries()]
-      .filter(([_nodeId, eligible]) => eligible === true)
-      .map(([nodeId]) => nodeId)
-      .filter((nodeId) => typeof nodeId === 'string' && nodeId.length > 0);
-    const serviceNodeIds = serviceRows
-      .map((row) => row?.node_id || row?.nodeId || null)
-      .filter((nodeId) => {
-        if (typeof nodeId !== 'string' || nodeId.length === 0) {
-          return false;
-        }
-        if (!activeNodeEligibilityById.has(nodeId)) {
-          return true;
-        }
-        // Active service ownership is a stronger signal than a transiently
-        // stale disconnected node row during table-create provisioning.
-        return true;
-      })
-      .filter((nodeId) => typeof nodeId === 'string' && nodeId.length > 0);
-    return [...new Set([...eligibleNodeIds, ...serviceNodeIds])];
+    const strictNodeIds = this.orderProvisionTargetNodeIds(
+      [...activeNodeReadinessById.entries()]
+        .filter(([nodeId, ready]) =>
+          ready === true && activeNodeConnectionById.get(nodeId) === true)
+        .map(([nodeId]) => nodeId),
+    );
+
+    const strictServiceNodeIds = [];
+    const degradedServiceNodeIds = [];
+    const seenServiceNodeIds = new Set();
+    for (const row of serviceRows) {
+      const nodeId = row?.node_id || row?.nodeId || null;
+      if (typeof nodeId !== 'string' || nodeId.length === 0 ||
+          seenServiceNodeIds.has(nodeId)) {
+        continue;
+      }
+      seenServiceNodeIds.add(nodeId);
+      if (!activeNodeSeenById.has(nodeId)) {
+        strictServiceNodeIds.push(nodeId);
+        continue;
+      }
+      if (activeNodeReadinessById.get(nodeId) === true) {
+        strictServiceNodeIds.push(nodeId);
+        continue;
+      }
+      if (activeNodeConnectionById.get(nodeId) === true) {
+        degradedServiceNodeIds.push(nodeId);
+      }
+    }
+
+    const mergedStrictNodeIds = this.orderProvisionTargetNodeIds(
+      [...strictNodeIds, ...strictServiceNodeIds],
+    );
+    const strictNodeIdSet = new Set(mergedStrictNodeIds);
+    const degradedFallbackNodeIds = this.orderProvisionTargetNodeIds(
+      degradedServiceNodeIds.filter((nodeId) => !strictNodeIdSet.has(nodeId)),
+    );
+    let selectedNodeIds = mergedStrictNodeIds;
+    let usedDegradedFallback = false;
+    if (selectedNodeIds.length < desiredReplicaCount &&
+        degradedFallbackNodeIds.length > 0) {
+      selectedNodeIds = this.orderProvisionTargetNodeIds(
+        [...selectedNodeIds, ...degradedFallbackNodeIds],
+      );
+      usedDegradedFallback = true;
+    }
+
+    return {
+      requestedReplicaCount: desiredReplicaCount,
+      activeNodeRowCount: activeNodeRows.length,
+      activeServiceRowCount: serviceRows.length,
+      strictNodeIds: mergedStrictNodeIds,
+      degradedFallbackNodeIds,
+      selectedNodeIds,
+      usedDegradedFallback,
+    };
+  }
+
+  /**
+   * Resolve target nodes for one provisioning context.
+   * Explicit targets override readiness-discovered nodes.
+   * @param {string[]|undefined|null} explicitTargetNodeIds
+   * @param {number} requestedReplicaCount
+   * @return {Array<string>}
+   * @private
+   */
+  resolveProvisionTargetNodeIdsForContext(
+    explicitTargetNodeIds,
+    requestedReplicaCount,
+  ) {
+    const explicitTargets = this.normalizeTargetNodeIds(explicitTargetNodeIds);
+    if (explicitTargets.length === 0) {
+      return this.resolveProvisionTargetNodeIds(requestedReplicaCount);
+    }
+
+    const desiredReplicaCount = Number.isInteger(requestedReplicaCount) &&
+      requestedReplicaCount > 0 ?
+      requestedReplicaCount :
+      1;
+    return explicitTargets.slice(
+      0,
+      Math.max(1, Math.min(desiredReplicaCount, explicitTargets.length)),
+    );
+  }
+
+  /**
+   * Normalize one node-id list to unique non-empty string IDs.
+   * @param {Array<string>|undefined|null} targetNodeIds
+   * @return {Array<string>}
+   * @private
+   */
+  normalizeTargetNodeIds(targetNodeIds) {
+    if (!Array.isArray(targetNodeIds)) {
+      return [];
+    }
+
+    const normalizedNodeIds = [];
+    const seenNodeIds = new Set();
+    for (const nodeId of targetNodeIds) {
+      const normalizedNodeId = String(nodeId || '');
+      if (normalizedNodeId.length === 0 ||
+          seenNodeIds.has(normalizedNodeId)) {
+        continue;
+      }
+      seenNodeIds.add(normalizedNodeId);
+      normalizedNodeIds.push(normalizedNodeId);
+    }
+
+    return normalizedNodeIds;
+  }
+
+  /**
+   * Estimate bytes for split admission using the canonical storage
+   * accounting model when it is available.
+   * @param {Object} partitionInfo
+   * @return {number}
+   * @private
+   */
+  estimateSplitAdmissionBytes(partitionInfo) {
+    const sizeBytes = Number(
+      partitionInfo?.size_bytes ?? partitionInfo?.sizeBytes,
+    );
+    const normalizedSizeBytes = Number.isFinite(sizeBytes) && sizeBytes > 0 ?
+      sizeBytes :
+      0;
+    const accountingService =
+      this.rebalanceCoordinator?.storageAccountingService || null;
+
+    if (accountingService &&
+        typeof accountingService.estimateReplicaBytes === 'function') {
+      const splitAmplificationFactor =
+        ConfigurationManager.getInstance().get(
+          STORAGE_CAPACITY_CONFIG_KEY.SPLIT_AMPLIFICATION_FACTOR,
+        ) || STORAGE_CAPACITY_DEFAULT.SPLIT_AMPLIFICATION_FACTOR;
+      return accountingService.estimateReplicaBytes({
+        entityType: SERVICE_TYPE.PARTITION,
+        sizeBytes: normalizedSizeBytes,
+        amplificationFactor: splitAmplificationFactor,
+      });
+    }
+
+    return Math.max(1, Math.ceil(normalizedSizeBytes));
+  }
+
+  /**
+   * Calculate the minimum majority-sized cohort required for a routable Raft
+   * partition during split bootstrap.
+   * @param {number} replicaCount
+   * @return {number}
+   * @private
+   */
+  calculateQuorumReplicaCount(replicaCount) {
+    const normalizedReplicaCount = Number.isInteger(replicaCount) &&
+      replicaCount > 0 ?
+      replicaCount :
+      1;
+    return Math.floor(normalizedReplicaCount / 2) + 1;
+  }
+
+  /**
+   * Get active node IDs from local system cache.
+   * Prefers strict readiness and uses degraded service-backed fallback only
+   * when strict candidates are insufficient for the requested cohort size.
+   * @param {number} requestedReplicaCount
+   * @return {Array<string>}
+   * @private
+   */
+  getActiveNodeIdsFromCache(requestedReplicaCount) {
+    return this.resolveProvisionTargetNodeDiagnostics(
+      requestedReplicaCount,
+    ).selectedNodeIds;
+  }
+
+  /**
+   * Create one control-plane timeout budget.
+   * @param {number} configuredBudgetMs
+   * @return {Object}
+   * @private
+   */
+  createControlPlaneTimeoutBudget(configuredBudgetMs) {
+    return createTimeoutBudget({
+      configuredBudgetMs,
+      now: this.nowFn,
+    });
+  }
+
+  /**
+   * Allocate one nested timeout budget from the remaining deadline.
+   * @param {Object} options
+   * @return {Object}
+   * @private
+   */
+  allocateControlPlaneTimeoutBudget(options = {}) {
+    const baseBudget = options.timeoutBudget || this.createControlPlaneTimeoutBudget(
+      options.requestedBudgetMs,
+    );
+    const allocation = createChildTimeoutBudget(baseBudget, {
+      requestedBudgetMs: options.requestedBudgetMs,
+      minimumBudgetMs: options.minimumBudgetMs ||
+        TIMEOUT_BUDGET_DEFAULT.MINIMUM_OPERATION_BUDGET_MS,
+      classification: options.classification,
+      nestedOperation: options.nestedOperation,
+      now: this.nowFn,
+    });
+
+    if (allocation.allowed) {
+      return allocation.budget;
+    }
+
+    const error = new Error(options.timeoutError);
+    error.timeoutClassification = allocation.timeoutClassification;
+    throw error;
   }
 
   /**
@@ -1576,17 +2751,55 @@ class SQLQueryEngine {
    * @return {Promise<void>}
    * @private
    */
-  async waitForCondition(predicate, timeoutMs, intervalMs, timeoutError) {
-    const deadlineMs = Date.now() + timeoutMs;
+  async waitForCondition(
+    predicate,
+    timeoutMs,
+    intervalMs,
+    timeoutError,
+    timeoutOptions = {},
+  ) {
+    if (await predicate()) {
+      return;
+    }
 
-    while (Date.now() < deadlineMs) {
+    const effectiveBudget = timeoutOptions?.timeoutBudget ?
+      this.allocateControlPlaneTimeoutBudget({
+        timeoutBudget: timeoutOptions.timeoutBudget,
+        requestedBudgetMs: timeoutMs,
+        minimumBudgetMs: timeoutOptions.minimumBudgetMs ||
+          TIMEOUT_BUDGET_DEFAULT.MINIMUM_OPERATION_BUDGET_MS,
+        classification: timeoutOptions.classification ||
+          TIMEOUT_BUDGET_CLASSIFICATION.ABSOLUTE_DEADLINE_EXHAUSTED,
+        nestedOperation: timeoutOptions.nestedOperation ||
+          'wait_for_condition',
+        timeoutError,
+      }) :
+      this.createControlPlaneTimeoutBudget(timeoutMs);
+
+    while (true) {
       if (await predicate()) {
         return;
       }
-      await this.sleep(intervalMs);
+      const remainingMs = getRemainingBudgetMs(effectiveBudget, {
+        now: this.nowFn,
+      });
+      if (remainingMs <= 0) {
+        break;
+      }
+      await this.sleep(Math.min(intervalMs, remainingMs));
     }
 
-    throw new Error(timeoutError);
+    if (await predicate()) {
+      return;
+    }
+    throw createTimeoutBudgetError({
+      message: timeoutError,
+      budget: effectiveBudget,
+      classification: timeoutOptions.classification ||
+        TIMEOUT_BUDGET_CLASSIFICATION.ABSOLUTE_DEADLINE_EXHAUSTED,
+      nestedOperation: timeoutOptions.nestedOperation || 'wait_for_condition',
+      now: this.nowFn,
+    });
   }
 
   /**
@@ -1607,7 +2820,7 @@ class SQLQueryEngine {
    * @return {Promise<Object>} Query result.
    * @private
    */
-  async executeSelect(ast, params, sessionId) {
+  async executeSelect(ast, params, sessionId, queryOptions = {}) {
     // FROM-less SELECT (e.g., SELECT 1, SELECT 1+1) — route to any
     // available partition and let SQLite evaluate the expression.
     if (!ast.from) {
@@ -1672,6 +2885,9 @@ class SQLQueryEngine {
       {
         preferLeader,
         distributedPlan,
+        timeoutMs: queryOptions.timeoutMs,
+        cancellationToken:
+          queryOptions.cancellationToken || null,
       },
     );
     const executionDurationMs = Date.now() - executionStartTimeMs;
@@ -1761,6 +2977,7 @@ class SQLQueryEngine {
    */
   async executeInsert(ast, params, sessionId) {
     const tableName = ast.table;
+    const tableInfo = this.getTableInfo(tableName);
     const planningStartTimeMs = Date.now();
     const distributedPlan = this.distributedQueryPlanner.planInsert(
       ast,
@@ -1781,6 +2998,7 @@ class SQLQueryEngine {
       params,
       {sessionId},
     );
+    this.addTransitionMirrorParticipants(writePlan, ast, tableInfo);
 
     const txState = this.transactionCoordinator.getTransaction(sessionId);
     const writePartitions = Array.from(writePlan.partitionStatements.keys());
@@ -1889,6 +3107,7 @@ class SQLQueryEngine {
    */
   async executeUpdate(ast, params, sessionId) {
     const tableName = ast.table;
+    const tableInfo = this.getTableInfo(tableName);
     const planningStartTimeMs = Date.now();
     const distributedPlan = this.distributedQueryPlanner.planUpdate(
       ast,
@@ -1915,6 +3134,8 @@ class SQLQueryEngine {
         partitionIds,
       },
     );
+    this.addTransitionMirrorParticipants(writePlan, ast, tableInfo);
+    const writePartitions = Array.from(writePlan.partitionStatements.keys());
 
     const txState = this.transactionCoordinator.getTransaction(sessionId);
     if (txState) {
@@ -1924,7 +3145,7 @@ class SQLQueryEngine {
       );
       const enlistResult = await this.transactionCoordinator.enlistParticipants(
         sessionId,
-        partitionIds,
+        writePartitions,
       );
       if (!enlistResult.success) {
         return enlistResult;
@@ -1932,7 +3153,7 @@ class SQLQueryEngine {
       await this.transactionCoordinator.recordWriteOperation(sessionId, {
         statementType: QUERY_AST_TYPE.UPDATE,
         operationId: writePlan.operationId,
-        partitionIds,
+        partitionIds: writePartitions,
         idempotencyKey: writePlan.idempotencyKey,
         payloadHash,
       });
@@ -2021,6 +3242,7 @@ class SQLQueryEngine {
    */
   async executeDelete(ast, params, sessionId) {
     const tableName = ast.table;
+    const tableInfo = this.getTableInfo(tableName);
     const planningStartTimeMs = Date.now();
     const distributedPlan = this.distributedQueryPlanner.planDelete(
       ast,
@@ -2047,6 +3269,8 @@ class SQLQueryEngine {
         partitionIds,
       },
     );
+    this.addTransitionMirrorParticipants(writePlan, ast, tableInfo);
+    const writePartitions = Array.from(writePlan.partitionStatements.keys());
 
     const txState = this.transactionCoordinator.getTransaction(sessionId);
     if (txState) {
@@ -2056,7 +3280,7 @@ class SQLQueryEngine {
       );
       const enlistResult = await this.transactionCoordinator.enlistParticipants(
         sessionId,
-        partitionIds,
+        writePartitions,
       );
       if (!enlistResult.success) {
         return enlistResult;
@@ -2064,7 +3288,7 @@ class SQLQueryEngine {
       await this.transactionCoordinator.recordWriteOperation(sessionId, {
         statementType: QUERY_AST_TYPE.DELETE,
         operationId: writePlan.operationId,
-        partitionIds,
+        partitionIds: writePartitions,
         idempotencyKey: writePlan.idempotencyKey,
         payloadHash,
       });
@@ -2548,6 +3772,7 @@ class SQLQueryEngine {
 
     const tableInfo = this.getTableInfo(tableName);
     const tableId = tableInfo?.table_id || tableInfo?.tableId || null;
+    const activePartitionVersion = this.resolveActivePartitionVersion(tableInfo);
 
     // Get partitions from system cache - the single source of truth
     if (typeof this.systemCache.filter === 'function') {
@@ -2555,13 +3780,19 @@ class SQLQueryEngine {
         this.systemCache.filter(TABLES.PARTITIONS, (partition) =>
           matchesTableRef(partition, tableName),
         ) || [];
+      const visibleDirectMatches = directMatches.filter((partition) =>
+        this.isPartitionVisibleForRouting(partition, activePartitionVersion),
+      );
       if (directMatches.length > 0 || !tableId || tableId === tableName) {
-        return directMatches;
+        return visibleDirectMatches;
       }
 
-      return this.systemCache.filter(TABLES.PARTITIONS, (partition) =>
+      const tableIdMatches = this.systemCache.filter(TABLES.PARTITIONS, (partition) =>
         matchesTableRef(partition, tableId),
       ) || [];
+      return tableIdMatches.filter((partition) =>
+        this.isPartitionVisibleForRouting(partition, activePartitionVersion),
+      );
     }
 
     if (typeof this.systemCache.getAll === 'function') {
@@ -2569,12 +3800,17 @@ class SQLQueryEngine {
       const directMatches = all.filter((partition) =>
         matchesTableRef(partition, tableName),
       );
+      const visibleDirectMatches = directMatches.filter((partition) =>
+        this.isPartitionVisibleForRouting(partition, activePartitionVersion),
+      );
       if (directMatches.length > 0 || !tableId || tableId === tableName) {
-        return directMatches;
+        return visibleDirectMatches;
       }
 
       return all.filter((partition) =>
         matchesTableRef(partition, tableId),
+      ).filter((partition) =>
+        this.isPartitionVisibleForRouting(partition, activePartitionVersion),
       );
     }
 
@@ -2621,6 +3857,179 @@ class SQLQueryEngine {
     }
 
     return null;
+  }
+
+  /**
+   * Resolve one partition metadata row by partition ID.
+   * @param {string} partitionId - Partition ID.
+   * @return {Object|null} Partition metadata row.
+   * @private
+   */
+  getPartitionInfo(partitionId) {
+    if (!partitionId || !this.systemCache) {
+      return null;
+    }
+
+    try {
+      if (typeof this.systemCache.get === 'function') {
+        const direct = this.systemCache.get(TABLES.PARTITIONS, partitionId);
+        if (direct) {
+          return direct;
+        }
+      }
+      if (typeof this.systemCache.find === 'function') {
+        const found = this.systemCache.find(TABLES.PARTITIONS, (partition) =>
+          partition.partition_id === partitionId ||
+          partition.partitionId === partitionId,
+        );
+        if (found) {
+          return found;
+        }
+      }
+      if (typeof this.systemCache.getAll === 'function') {
+        const partitions = this.systemCache.getAll(TABLES.PARTITIONS) || [];
+        return partitions.find((partition) =>
+          partition.partition_id === partitionId ||
+          partition.partitionId === partitionId,
+        ) || null;
+      }
+    } catch (_cacheErr) {
+      // Cache not available
+    }
+
+    return null;
+  }
+
+  /**
+   * Determine whether the local node is the persisted leader for one partition.
+   * @param {Object|null} partitionInfo - Partition metadata row.
+   * @return {boolean} True when the local node owns split orchestration.
+   * @private
+   */
+  isLocalManagedSplitLeader(partitionInfo) {
+    if (!partitionInfo || !this.nodeId) {
+      return false;
+    }
+    const leaderNodeId =
+      partitionInfo.leader_node_id ?? partitionInfo.leaderNodeId ?? null;
+    return Boolean(leaderNodeId) && leaderNodeId === this.nodeId;
+  }
+
+  /**
+   * Parse partition transition metadata from a table row.
+   * @param {Object|null} tableInfo - Table metadata row.
+   * @return {Object|null} Parsed transition metadata.
+   * @private
+   */
+  parsePartitionTransition(tableInfo) {
+    if (!tableInfo) {
+      return null;
+    }
+
+    const state = tableInfo.partition_transition_state ??
+      tableInfo.partitionTransitionState ??
+      null;
+    const rawMetadata = tableInfo.partition_transition_metadata ??
+      tableInfo.partitionTransitionMetadata ??
+      null;
+    if (!state || !rawMetadata) {
+      return null;
+    }
+
+    try {
+      const metadata = typeof rawMetadata === 'string' ?
+        JSON.parse(rawMetadata) :
+        rawMetadata;
+      return metadata && typeof metadata === 'object' ?
+        {
+          state,
+          metadata,
+        } :
+        null;
+    } catch (_parseErr) {
+      return null;
+    }
+  }
+
+  /**
+   * Add post-cutover mirror participants so writes keep the source
+   * partition current while caches converge to the new partition set.
+   * @param {Object} writePlan - Distributed write plan.
+   * @param {Object} ast - Statement AST.
+   * @param {Object|null} tableInfo - Table metadata row.
+   * @return {Object} The mutated write plan.
+   * @private
+   */
+  addTransitionMirrorParticipants(writePlan, ast, tableInfo) {
+    const transition = this.parsePartitionTransition(tableInfo);
+    if (!transition ||
+        transition.state !== PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE) {
+      return writePlan;
+    }
+
+    const metadata = transition.metadata || {};
+    const activeVersion = this.resolveActivePartitionVersion(tableInfo);
+    const targetVersion = Number(
+      metadata[PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_VERSION],
+    );
+    const sourcePartitionId =
+      metadata[PARTITION_TRANSITION_METADATA_FIELD.SOURCE_PARTITION_ID];
+    if (!sourcePartitionId ||
+        !Number.isInteger(targetVersion) ||
+        targetVersion !== activeVersion) {
+      return writePlan;
+    }
+
+    this.distributedWriteCoordinator.addMirrorParticipant(
+      writePlan,
+      sourcePartitionId,
+      ast,
+      {splitMirrorOrigin: PARTITION_SPLIT_MIRROR_ORIGIN.TARGET},
+    );
+    return writePlan;
+  }
+
+  /**
+   * Resolve active partition version from table metadata.
+   * Missing values default to version 1 for compatibility.
+   * @param {Object|null} tableInfo - Table metadata row.
+   * @return {number} Active partition-set version.
+   * @private
+   */
+  resolveActivePartitionVersion(tableInfo) {
+    const value = tableInfo?.active_partition_version ??
+      tableInfo?.activePartitionVersion;
+    const parsed = Number(value);
+    if (!Number.isInteger(parsed) || parsed < DEFAULT_PARTITION_VERSION) {
+      return DEFAULT_PARTITION_VERSION;
+    }
+    return parsed;
+  }
+
+  /**
+   * Determine whether a partition row should participate in normal routing.
+   * Hidden or non-normal child partitions remain invisible until cutover.
+   * @param {Object} partition - Partition metadata row.
+   * @param {number} activePartitionVersion - Active partition-set version.
+   * @return {boolean} True when the partition is routable for table traffic.
+   * @private
+   */
+  isPartitionVisibleForRouting(partition, activePartitionVersion) {
+    const partitionVersion = Number(
+      partition?.partition_version ?? partition?.partitionVersion,
+    );
+    const normalizedVersion = Number.isInteger(partitionVersion) &&
+      partitionVersion >= DEFAULT_PARTITION_VERSION ?
+      partitionVersion :
+      DEFAULT_PARTITION_VERSION;
+    if (normalizedVersion !== activePartitionVersion) {
+      return false;
+    }
+
+    const state = String(
+      partition?.state ?? ACTIVE_PARTITION_STATE,
+    ).toUpperCase();
+    return state === ACTIVE_PARTITION_STATE;
   }
 
   /**

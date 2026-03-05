@@ -199,6 +199,62 @@ Before generating or modifying code, answer these questions:
 
 If the answer to any of 4/5/6/7/8/9/10 is yes, you are violating this contract.
 
+### 1.6 Deterministic Control-Plane Progression
+
+Control-plane concerns (dispatch, rebalance progression, split progression,
+admission progression) MUST execute through a deterministic owner-key reconcile
+path.
+
+- Events may enqueue owner-key work, but they MUST NOT execute long-running
+  progression inline.
+- For a given owner key, there MUST be at most one reconcile execution in
+  flight.
+- Multiple triggers for the same concern (event, cache update, timer) MUST
+  converge into the same reconcile queue and owner path.
+- Broad polling loops are recovery-only tools. They MUST NOT be the steady-state
+  primary progression mechanism.
+
+### 1.7 Durable Workflow + Transaction Boundary Rule
+
+Topology-changing operations MUST use one durable monotonic workflow contract
+and one transactional contract.
+
+- Step transitions MUST be persisted durably with previous step, next step,
+  reason, and timestamp.
+- A transition that requires atomic multi-row authoritative updates MUST commit
+  through the shared `DistributedTransactionCoordinator`.
+- Do not implement ad-hoc cross-owner write ordering to emulate atomicity.
+- Do not create a second workflow engine for control-plane operations when
+  `DurableWorkflowCoordinator` already owns the workflow contract.
+
+### 1.8 Canonical Read-Model Contract (No Two Truths)
+
+Each decision path MUST declare exactly one canonical read model for its
+semantics.
+
+- CDC-propagated metadata decisions in steady state should read from
+  `SystemTableCache`.
+- SQL reads for equivalent semantics are limited to authoritative writes,
+  explicit recovery sweeps, or diagnostics reconciliation.
+- A single decision path MUST NOT mix cache and SQL fallbacks for the same
+  semantic meaning.
+- Cache/authoritative divergence must be surfaced as typed diagnostics and
+  invariants, not hidden by silent fallback behavior.
+
+### 1.9 Timeout and Invariant Hard Rules
+
+Timeouts and invariant breaches in control-plane logic are correctness bugs, not
+operational noise.
+
+- Every top-level control-plane operation MUST start with one canonical timeout
+  budget.
+- Nested operations MUST derive from remaining budget; they MUST NOT start with
+  fresh default full budgets.
+- Exact-boundary timeout clusters (for example exactly 4s/6s/30s/60s) MUST be
+  treated as hard bugs with typed classification.
+- Control-plane owners MUST emit structured invariant results. Hard invariant
+  breaches MUST fail deterministic test gates.
+
 ---
 
 ## 2. Data Architecture
@@ -386,6 +442,12 @@ This section exists because LLMs tend to generate these patterns. Do not:
 - Use one row shape for initial insert and another partial/incompatible shape in
   later replace/upsert paths.
 - Let bootstrap-only write helpers remain reachable from normal runtime logic.
+- Execute progression logic directly from event handlers while a second timer
+  loop mutates the same owner key.
+- Mix cache and SQL fallback reads for one semantic decision path.
+- Start nested waits with fresh timeout constants after part of the budget is
+  already consumed.
+- Treat exact-boundary timeout clusters as expected runtime behavior.
 
 When you catch yourself about to do any of these: stop, search, reuse.
 

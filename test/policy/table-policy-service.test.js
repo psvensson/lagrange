@@ -166,6 +166,42 @@ test('TablePolicyService - getPolicyForPartition looks up table',
     t.end();
   });
 
+test('TablePolicyService - getPolicyForPartition uses system cache fallback',
+  async (t) => {
+    const mockCache = {
+      getAll(tableName) {
+        if (tableName === 'partitions') {
+          return [{
+            partition_id: 'partition-1',
+            table_id: 'table-1',
+          }];
+        }
+        if (tableName === 'tables') {
+          return [{
+            table_id: 'table-1',
+            table_policies: JSON.stringify({
+              replicaCount: 5,
+              splitStorageThreshold: 16384,
+            }),
+          }];
+        }
+        return [];
+      },
+    };
+
+    const service = new TablePolicyService({
+      systemTableCache: mockCache,
+    });
+    const policy =
+      await service.getPolicyForPartition('partition-1');
+
+    t.equal(policy.replicaCount, 5,
+      'Should resolve replica count from cached table policy');
+    t.equal(policy.splitStorageThreshold, 16384,
+      'Should resolve split threshold from cached table policy');
+    t.end();
+  });
+
 test('TablePolicyService - validatePolicy accepts valid policy',
   async (t) => {
     const service = new TablePolicyService();

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {test} from '../../../../src/test-helpers/tap.js';
 import {NodeClient} from '../node-client.js';
 import {
+  NODE_CLIENT_CONTROL_SNAPSHOT_FORCE_REPAIR_SQL,
   NODE_CLIENT_CONTROL_SNAPSHOT_SQL,
   NODE_CLIENT_CONTEXT_KEYS,
   NODE_CLIENT_SERVICE_DISCOVERY_SCHEMA_VERSION,
@@ -197,6 +198,39 @@ test('NodeClient fetchControlSnapshot uses local snapshot query path only', asyn
   assert.equal(distributedFanoutCalls, ZERO);
   assert.deepEqual(snapshot, expectedSnapshot);
 });
+
+test('NodeClient fetchControlSnapshot supports forced authoritative repair context',
+  async () => {
+    const node = {
+      id: 'node-local',
+      async queryWithTimeout(sql) {
+        assert.equal(sql, NODE_CLIENT_CONTROL_SNAPSHOT_FORCE_REPAIR_SQL);
+        return {
+          rows: [{
+            schemaVersion: 1,
+            nodeId: 'node-local',
+            capturedAt: 1,
+            nodes: ['node-local'],
+            partitions: [],
+            leaders: {},
+            replicaOperations: {
+              inFlightCount: 0,
+              statusHistogram: {},
+              partitionGroupInFlight: {},
+            },
+          }],
+        };
+      },
+      async getReachabilityDiagnostics() {
+        return {reachable: true};
+      },
+    };
+    const client = new NodeClient();
+
+    await client.fetchControlSnapshot(node, {
+      [NODE_CLIENT_CONTEXT_KEYS.FORCE_AUTHORITATIVE_REPAIR]: true,
+    });
+  });
 
 test('NodeClient fetchControlSnapshot validates snapshot schema version', async () => {
   const node = {
@@ -1124,5 +1158,75 @@ test('NodeClient tracks timed-out operations still in-flight', async () => {
     metrics.probe.timedOutInFlight,
     ONE,
     'timed-out while in-flight counter should be incremented',
+  );
+});
+
+test('NodeClient isolates load-lane probes from load channel breaker state', async () => {
+  let loadLaneCallCount = ZERO;
+  const node = {
+    id: 'load-probe-isolation-node',
+    async queryWithTimeout(_sql, _params, options = {}) {
+      const lane = String(options?.lane || '');
+      if (lane === 'load') {
+        loadLaneCallCount += ONE;
+        if (loadLaneCallCount === ONE) {
+          throw new Error('Admin API query timed out for load probe');
+        }
+      }
+      return {rows: [{ok: true}]};
+    },
+    async getReachabilityDiagnostics() {
+      return {reachable: true};
+    },
+  };
+
+  const client = new NodeClient({
+    channelPolicies: {
+      load: {
+        circuitBreakerThreshold: 1,
+        cooldownMs: 1000,
+        retryBudget: 0,
+      },
+      probe: {
+        circuitBreakerThreshold: 1,
+        cooldownMs: 1000,
+        retryBudget: 0,
+      },
+    },
+  });
+
+  await assert.rejects(
+    client.queryLoadProbe(node, 'SELECT 1'),
+    /timed out/i,
+  );
+  const loadResult = await client.queryLoad(node, 'SELECT 1');
+  assert.equal(loadResult.rows[0].ok, true);
+  await assert.rejects(
+    client.queryLoadProbe(node, 'SELECT 1'),
+    (error) => error?.code === 'circuit_open',
+  );
+
+  const metrics = client.getMetricsSnapshot();
+  assert.equal(
+    metrics.probe.breakerOpens,
+    ONE,
+    'probe channel should open its own breaker after probe timeout',
+  );
+  assert.equal(
+    metrics.load.successes,
+    ONE,
+    'load channel should remain healthy after probe-only breaker open',
+  );
+
+  const channelState = client.getChannelStateSnapshot();
+  assert.equal(
+    channelState.probe['load-probe-isolation-node'].circuitOpen,
+    true,
+    'probe breaker state should be visible in snapshot',
+  );
+  assert.equal(
+    channelState.load?.['load-probe-isolation-node']?.circuitOpen || false,
+    false,
+    'load breaker state should remain closed',
   );
 });

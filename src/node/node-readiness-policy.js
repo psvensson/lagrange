@@ -33,6 +33,42 @@ function isNodeRecordReady(nodeRow, options = {}) {
 }
 
 /**
+ * Check whether a node row represented a ready heartbeat when it was written.
+ * This avoids reclassifying delayed lease-refresh CDC events as fresh
+ * not-ready to ready transitions after wall-clock time has advanced.
+ * @param {Object} nodeRow - Node row from the nodes table.
+ * @param {Object} options - Readiness options.
+ * @param {number} options.now - Current timestamp fallback when heartbeat time
+ *   is unavailable.
+ * @param {boolean} options.requireActiveStatus - Require status=active.
+ * @return {boolean} True when the row encoded a ready heartbeat at write time.
+ */
+function wasNodeRecordReadyWhenWritten(nodeRow, options = {}) {
+  if (!nodeRow) {
+    return false;
+  }
+
+  const requireActiveStatus =
+    options.requireActiveStatus ?? REQUIRE_ACTIVE_STATUS_DEFAULT;
+  if (requireActiveStatus && nodeRow.status !== SERVICE_STATUS.ACTIVE) {
+    return false;
+  }
+
+  const leaseExpiry = Number(nodeRow.ready_lease_expires_at);
+  if (!Number.isFinite(leaseExpiry)) {
+    return false;
+  }
+
+  const heartbeatAt = Number(nodeRow.last_heartbeat);
+  if (Number.isFinite(heartbeatAt)) {
+    return leaseExpiry > heartbeatAt;
+  }
+
+  const now = Number.isFinite(options.now) ? options.now : Date.now();
+  return leaseExpiry > now;
+}
+
+/**
  * Check node readiness using nodes table + router connection state.
  * @param {Object} options - Readiness options.
  * @param {string} options.nodeId - Node ID.
@@ -104,4 +140,5 @@ export {
   isNodeRecordReady,
   isNodeReadyWithConnection,
   isNodeReadyWithTransport,
+  wasNodeRecordReadyWhenWritten,
 };

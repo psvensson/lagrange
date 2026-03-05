@@ -75,7 +75,7 @@ const REBALANCER_DEFAULT = Object.freeze({
     MAX_CONCURRENT_ADDS: NUM.FIVE,
     MAX_CONCURRENT_REMOVES: NUM.FIVE,
     PERIODIC_CHECK_INTERVAL_MS: 60000,
-    TIMEOUT_CHECK_INTERVAL_MS: 5000,
+    TIMEOUT_CHECK_INTERVAL_MS: 1000,
   }),
   UNIFIED: Object.freeze({
     PERIODIC_CHECK_INTERVAL_MS: 60000,
@@ -256,6 +256,10 @@ const REBALANCE_COORDINATOR_ERROR_MSG = Object.freeze({
   MESSAGE_NOT_ACKED: 'Message not acknowledged',
   POLICY_REQUIRED: 'RebalanceCoordinator requires tablePolicyService',
   SQL_ENGINE_REQUIRED: 'RebalanceCoordinator requires sqlQueryEngine',
+  WORKFLOW_COORDINATOR_REQUIRED:
+    'RebalanceCoordinator requires operationWorkflowCoordinator with runExclusive()',
+  WORKFLOW_COORDINATOR_REGISTRY_REQUIRED:
+    'operationWorkflowCoordinator requires inFlightExecutionsByOwnerKey Map',
 });
 
 const REBALANCER_ERROR_MSG = Object.freeze({
@@ -302,6 +306,7 @@ const REBALANCER_SKIP_REASON = Object.freeze({
   START_DELAY: 'start_delay',
   SAFETY_BLOCKED: 'safety_blocked',
   OPERATION_ALREADY_EXECUTING: 'operation_already_executing',
+  OPERATION_OWNED_BY_ANOTHER_NODE: 'operation_owned_by_another_node',
   AWAITING_READY_ADD_CAPACITY: 'awaiting_ready_add_capacity',
 });
 

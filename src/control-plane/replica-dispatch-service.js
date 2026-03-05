@@ -8,7 +8,10 @@ import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
-import {isNodeRecordReady} from '../node/node-readiness-policy.js';
+import {
+  isNodeRecordReady,
+  wasNodeRecordReadyWhenWritten,
+} from '../node/node-readiness-policy.js';
 import {OperationType} from '../rebalancer/replica-status.js';
 import {REBALANCE_COORDINATOR_EVENT} from '../rebalancer/rebalancer-constants.js';
 import {
@@ -38,9 +41,12 @@ import {
   DISPATCH_SUBSYSTEM,
 } from './replica-dispatch-service-constants.js';
 
-const SQL_SELECT_PENDING_REPLICA_OPS_FOR_NODE =
-  'SELECT * FROM replica_operations WHERE target_node_id = ?' +
-  ' AND workflow_step = ?';
+const RETRY_TRIGGER_SOURCE = Object.freeze({
+  NODE_STATE_UPDATE: 'node_state_update',
+  NODES_CDC: 'nodes_cdc',
+  NODES_CACHE: 'nodes_cache',
+  SERVICES_CACHE: 'services_cache',
+});
 
 class ReplicaDispatchService extends EventEmitter {
   /**
@@ -50,7 +56,6 @@ class ReplicaDispatchService extends EventEmitter {
    * @param {Object} options.cdcIntegrationService - CDC service.
    * @param {Object} options.systemTableCache - System table cache.
    * @param {Object} options.rebalanceCoordinator - Rebalance coordinator.
-   * @param {Object} options.sqlQueryEngine - SQL query engine.
    */
   constructor(options = {}) {
     super();
@@ -60,12 +65,12 @@ class ReplicaDispatchService extends EventEmitter {
     this.cdcIntegrationService = options.cdcIntegrationService || null;
     this.systemTableCache = options.systemTableCache || null;
     this.rebalanceCoordinator = options.rebalanceCoordinator || null;
-    this.sqlQueryEngine = options.sqlQueryEngine || null;
 
     this.messageGroupServices = new Set();
     this.messageGroupHandlers = new Map();
     this.dispatchInFlight = new Set();
     this.retryInFlightNodes = new Set();
+    this.nodeReadyRetryWatermarks = new Map();
     this.cacheChangeListener = null;
     this.coordinatorOperationCreatedListener = null;
     this.state = DISPATCH_STATE.CREATED;
@@ -90,6 +95,14 @@ class ReplicaDispatchService extends EventEmitter {
       this.systemTableCache, DISPATCH_ERROR_MSG.MISSING_CACHE,
     );
     assertCritical(
+      typeof this.systemTableCache.get === TYPEOF.FUNCTION,
+      DISPATCH_ERROR_MSG.MISSING_CACHE_GET,
+    );
+    assertCritical(
+      typeof this.systemTableCache.getAll === TYPEOF.FUNCTION,
+      DISPATCH_ERROR_MSG.MISSING_CACHE_GET_ALL,
+    );
+    assertCritical(
       this.cdcIntegrationService, DISPATCH_ERROR_MSG.MISSING_CDC,
     );
     assertCritical(
@@ -103,8 +116,8 @@ class ReplicaDispatchService extends EventEmitter {
 
     if (this.systemTableCache &&
         typeof this.systemTableCache.onCacheChange === TYPEOF.FUNCTION) {
-      this.cacheChangeListener = (tableName, _operation, record) => {
-        this.handleCacheNodeChange(tableName, record);
+      this.cacheChangeListener = (tableName, operation, record) => {
+        this.handleCacheNodeChange(tableName, operation, record);
       };
       this.systemTableCache.onCacheChange(this.cacheChangeListener);
     }
@@ -219,14 +232,13 @@ class ReplicaDispatchService extends EventEmitter {
   async handleCdcApplied(mgService, event) {
     if (event?.tableName === SYSTEM_TABLE_NAME.NODES) {
       const nodeRow = event?.data;
-      const nodeId =
-        nodeRow?.[COLUMN.NODE_ID] ||
-        nodeRow?.node_id ||
-        nodeRow?.id ||
-        null;
-
-      if (nodeId && this.isNodeReady(nodeId)) {
-        await this.retryPendingDispatchesForNode(nodeId);
+      const nodeId = this.getNodeIdFromRecord(nodeRow);
+      if (nodeId) {
+        await this.retryPendingDispatchesForReadyNode({
+          nodeId,
+          nodeRow,
+          source: RETRY_TRIGGER_SOURCE.NODES_CDC,
+        });
       }
       return;
     }
@@ -373,8 +385,15 @@ class ReplicaDispatchService extends EventEmitter {
     );
 
     if (state === STATE.READY) {
-      await this.retryPendingDispatchesForNode(nodeId);
+      await this.retryPendingDispatchesForReadyNode({
+        nodeId,
+        nodeRow: baseRow,
+        source: RETRY_TRIGGER_SOURCE.NODE_STATE_UPDATE,
+      });
+      return;
     }
+
+    this.clearNodeReadyRetryWatermark(nodeId);
   }
 
   /**
@@ -474,16 +493,7 @@ class ReplicaDispatchService extends EventEmitter {
 
     this.retryInFlightNodes.add(nodeId);
     try {
-      if (!this.sqlQueryEngine ||
-          typeof this.sqlQueryEngine.executeQuery !== TYPEOF.FUNCTION) {
-        return;
-      }
-
-      const result = await this.sqlQueryEngine.executeQuery(
-        SQL_SELECT_PENDING_REPLICA_OPS_FOR_NODE,
-        [nodeId, WORKFLOW_STEP.PENDING],
-      );
-      const pendingRows = Array.isArray(result?.rows) ? result.rows : [];
+      const pendingRows = await this.getPendingReplicaOpsForNode(nodeId);
       if (pendingRows.length === NUM.ZERO) {
         return;
       }
@@ -502,21 +512,101 @@ class ReplicaDispatchService extends EventEmitter {
   }
 
   /**
-   * Handle node-table cache updates and retry dispatch when a node becomes ready.
-   * @param {string} tableName - Updated table name.
-   * @param {Object} record - Updated row.
+   * Read pending replica_operations for one target node.
+   * Uses SystemTableCache as the single source of truth.
+   * @param {string} nodeId - Target node ID.
+   * @return {Promise<Array<Object>>} Pending operation rows.
    * @private
    */
-  handleCacheNodeChange(tableName, record) {
-    if (tableName !== SYSTEM_TABLE_NAME.NODES) {
+  async getPendingReplicaOpsForNode(nodeId) {
+    const cacheRows = this.getSystemTableRowsFromCache(
+      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+    );
+    return cacheRows.filter((row) => {
+      return row?.target_node_id === nodeId &&
+        row?.workflow_step === WORKFLOW_STEP.PENDING;
+    });
+  }
+
+  /**
+   * Retry pending dispatches for a ready node while deduping duplicate
+   * triggers for the same heartbeat row.
+   * @param {Object} options - Retry trigger details.
+   * @param {string} options.nodeId - Target node ID.
+   * @param {Object} [options.nodeRow] - Candidate nodes row.
+   * @param {string} [options.source] - Trigger source for diagnostics.
+   * @return {Promise<boolean>} True when retry path was executed.
+   * @private
+   */
+  async retryPendingDispatchesForReadyNode(options = {}) {
+    const nodeId = options.nodeId;
+    if (!nodeId || !this.isNodeReady(nodeId)) {
+      this.clearNodeReadyRetryWatermark(nodeId);
+      return false;
+    }
+
+    const nodeRow = options.nodeRow &&
+      typeof options.nodeRow === TYPEOF.OBJECT ?
+      options.nodeRow :
+      this.getSystemTableRowFromCache(SYSTEM_TABLE_NAME.NODES, nodeId);
+    if (nodeRow &&
+        !wasNodeRecordReadyWhenWritten(nodeRow, {
+          requireActiveStatus: true,
+        })) {
+      return false;
+    }
+
+    if (!this.shouldRetryNodeReadyWatermark(nodeId, nodeRow)) {
+      this.logger.debug(DISPATCH_LOG_MSG.RETRY_READY_TRIGGER_SKIPPED, {
+        nodeId,
+        source: options.source || null,
+        reason: 'duplicate_ready_trigger',
+      });
+      return false;
+    }
+
+    await this.retryPendingDispatchesForNode(nodeId);
+    return true;
+  }
+
+  /**
+   * Handle cache updates and retry dispatch when key rows become available.
+   * @param {string} tableName - Updated table name.
+   * @param {string|Object} operationOrRecord - Operation or updated row.
+   * @param {Object} [recordInput] - Updated row.
+   * @private
+   */
+  handleCacheNodeChange(tableName, operationOrRecord, recordInput) {
+    const record = recordInput || operationOrRecord;
+    if (!record) {
       return;
     }
-    const nodeId =
-      record?.[COLUMN.NODE_ID] ||
-      record?.node_id ||
-      record?.id ||
-      null;
-    if (!nodeId || !this.isNodeReady(nodeId)) {
+
+    if (tableName === SYSTEM_TABLE_NAME.NODES) {
+      const nodeId = this.getNodeIdFromRecord(record);
+      if (!nodeId) {
+        return;
+      }
+      this.retryPendingDispatchesForReadyNode({
+        nodeId,
+        nodeRow: record,
+        source: RETRY_TRIGGER_SOURCE.NODES_CACHE,
+      }).catch((error) => {
+        this.logger.warn(DISPATCH_LOG_MSG.CDC_HANDLING_FAILED, {
+          nodeId,
+          error: error.message,
+        });
+      });
+      return;
+    }
+
+    if (tableName !== SYSTEM_TABLE_NAME.SERVICES) {
+      return;
+    }
+
+    const nodeId = this.getNodeIdFromRecord(record);
+    const status = record?.[COLUMN.STATUS] || record?.status || null;
+    if (!nodeId || status !== SERVICE_STATUS.ACTIVE || !this.isNodeReady(nodeId)) {
       return;
     }
 
@@ -524,8 +614,95 @@ class ReplicaDispatchService extends EventEmitter {
       this.logger.warn(DISPATCH_LOG_MSG.CDC_HANDLING_FAILED, {
         nodeId,
         error: error.message,
+        source: RETRY_TRIGGER_SOURCE.SERVICES_CACHE,
       });
     });
+  }
+
+  /**
+   * Resolve node id from a system row shape.
+   * @param {Object} record - Row object.
+   * @return {string|null} Node ID.
+   * @private
+   */
+  getNodeIdFromRecord(record) {
+    return record?.[COLUMN.NODE_ID] ||
+      record?.node_id ||
+      record?.id ||
+      null;
+  }
+
+  /**
+   * Clear cached ready-trigger watermark for one node.
+   * @param {string} nodeId - Node ID.
+   * @private
+   */
+  clearNodeReadyRetryWatermark(nodeId) {
+    if (!nodeId) {
+      return;
+    }
+    this.nodeReadyRetryWatermarks.delete(nodeId);
+  }
+
+  /**
+   * Build a comparable watermark for one ready row.
+   * @param {Object} nodeRow - Nodes row candidate.
+   * @return {Object|null} Comparable watermark or null when unavailable.
+   * @private
+   */
+  getNodeReadyRetryWatermark(nodeRow) {
+    const heartbeatAt = Number(
+      nodeRow?.[COLUMN.LAST_HEARTBEAT] || nodeRow?.last_heartbeat,
+    );
+    const readyLeaseExpiresAt = Number(
+      nodeRow?.[COLUMN.READY_LEASE_EXPIRES_AT] ||
+      nodeRow?.ready_lease_expires_at,
+    );
+    if (!Number.isFinite(heartbeatAt) ||
+        !Number.isFinite(readyLeaseExpiresAt)) {
+      return null;
+    }
+    return {heartbeatAt, readyLeaseExpiresAt};
+  }
+
+  /**
+   * Compare two ready-row watermarks for monotonic retry progression.
+   * @param {Object|null} previous - Previous watermark.
+   * @param {Object|null} next - Next watermark.
+   * @return {boolean} True when next watermark is newer.
+   * @private
+   */
+  isNodeReadyRetryWatermarkNewer(previous, next) {
+    if (!next) {
+      return !previous;
+    }
+    if (!previous) {
+      return true;
+    }
+    if (next.heartbeatAt > previous.heartbeatAt) {
+      return true;
+    }
+    if (next.heartbeatAt < previous.heartbeatAt) {
+      return false;
+    }
+    return next.readyLeaseExpiresAt > previous.readyLeaseExpiresAt;
+  }
+
+  /**
+   * Check and record ready-trigger watermark for deduped retry scheduling.
+   * @param {string} nodeId - Node ID.
+   * @param {Object} nodeRow - Nodes row candidate.
+   * @return {boolean} True when retry should run for this trigger.
+   * @private
+   */
+  shouldRetryNodeReadyWatermark(nodeId, nodeRow) {
+    const next = this.getNodeReadyRetryWatermark(nodeRow);
+    const previous = this.nodeReadyRetryWatermarks.get(nodeId) || null;
+    if (!this.isNodeReadyRetryWatermarkNewer(previous, next)) {
+      return false;
+    }
+    this.nodeReadyRetryWatermarks.set(nodeId, next);
+    return true;
   }
 
   /**
@@ -662,49 +839,60 @@ class ReplicaDispatchService extends EventEmitter {
    * @private
    */
   async hasHandlerOnTarget(nodeId, entityType) {
-    if (this.sqlQueryEngine) {
-      const result = await this.sqlQueryEngine.executeQuery(
-        'SELECT service_id FROM services WHERE node_id = ?' +
-        ' AND service_type = ? AND status = ?',
-        [nodeId, entityType, SERVICE_STATUS.ACTIVE],
-      );
-      return (result.rows?.length || NUM.ZERO) > NUM.ZERO;
-    }
-    return false;
+    const serviceRows = this.getSystemTableRowsFromCache(SYSTEM_TABLE_NAME.SERVICES);
+    return serviceRows.some((row) => {
+      return row?.[COLUMN.NODE_ID] === nodeId &&
+        row?.[COLUMN.SERVICE_TYPE] === entityType &&
+        row?.[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE;
+    });
   }
 
   /**
-   * Read a node row via SQL engine.
+   * Read a node row from SystemTableCache.
    * @param {string} nodeId - Node ID.
    * @return {Promise<Object>} Node row or empty object.
    * @private
    */
   async getNodeRow(nodeId) {
-    if (this.sqlQueryEngine) {
-      const result = await this.sqlQueryEngine.executeQuery(
-        'SELECT * FROM nodes WHERE node_id = ?', [nodeId],
-      );
-      return result.rows?.[0] || {};
-    }
-    return {};
+    return this.getSystemTableRowFromCache(
+      SYSTEM_TABLE_NAME.NODES,
+      nodeId,
+    ) || {};
   }
 
   /**
-   * Read a replica operation row via SQL engine.
+   * Read a replica operation row from SystemTableCache.
    * @param {string} operationId - Operation ID.
    * @return {Promise<Object|null>} Operation row or null.
    * @private
    */
   async getReplicaOperationRow(operationId) {
-    if (this.sqlQueryEngine) {
-      const result = await this.sqlQueryEngine.executeQuery(
-        'SELECT * FROM replica_operations' +
-        ' WHERE operation_id = ?',
-        [operationId],
-      );
-      return result.rows?.[0] || null;
-    }
-    return null;
+    return this.getSystemTableRowFromCache(
+      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+      operationId,
+    ) || null;
+  }
+
+  /**
+   * Read one row from SystemTableCache if key access is available.
+   * @param {string} tableName - System table name.
+   * @param {string} key - Primary key.
+   * @return {Object|null} Cached row or null.
+   * @private
+   */
+  getSystemTableRowFromCache(tableName, key) {
+    return this.systemTableCache.get(tableName, key) || null;
+  }
+
+  /**
+   * Read all rows from SystemTableCache if table scans are available.
+   * @param {string} tableName - System table name.
+   * @return {Array<Object>|null} Cached rows or null when unavailable.
+   * @private
+   */
+  getSystemTableRowsFromCache(tableName) {
+    const rows = this.systemTableCache.getAll(tableName);
+    return Array.isArray(rows) ? rows : [];
   }
 
   /**
@@ -786,6 +974,7 @@ class ReplicaDispatchService extends EventEmitter {
     this.messageGroupServices.clear();
     this.dispatchInFlight.clear();
     this.retryInFlightNodes.clear();
+    this.nodeReadyRetryWatermarks.clear();
 
     this.state = DISPATCH_STATE.STOPPED;
     this.logger.info(DISPATCH_LOG_MSG.STOPPED, {nodeId: this.nodeId});

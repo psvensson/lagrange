@@ -102,6 +102,67 @@ class TablePolicyService extends EventEmitter {
   }
 
   /**
+   * Lookup one table row from the local system cache.
+   * @param {string} tableId - Table ID.
+   * @return {Object|null} Cached row when present.
+   * @private
+   */
+  lookupCachedTable(tableId) {
+    if (!tableId || !this.systemTableCache) {
+      return null;
+    }
+
+    if (typeof this.systemTableCache.filter === TYPEOF.FUNCTION) {
+      const rows = this.systemTableCache.filter(
+        TABLES.TABLES,
+        (table) => table?.table_id === tableId || table?.tableId === tableId,
+      );
+      return rows[0] || null;
+    }
+
+    if (typeof this.systemTableCache.getAll === TYPEOF.FUNCTION) {
+      const rows = this.systemTableCache.getAll(TABLES.TABLES) || [];
+      return rows.find((table) =>
+        table?.table_id === tableId || table?.tableId === tableId,
+      ) || null;
+    }
+
+    return null;
+  }
+
+  /**
+   * Lookup one partition row from the local system cache.
+   * @param {string} partitionId - Partition ID.
+   * @return {Object|null} Cached row when present.
+   * @private
+   */
+  lookupCachedPartition(partitionId) {
+    if (!partitionId || !this.systemTableCache) {
+      return null;
+    }
+
+    if (typeof this.systemTableCache.filter === TYPEOF.FUNCTION) {
+      const rows = this.systemTableCache.filter(
+        TABLES.PARTITIONS,
+        (partition) =>
+          partition?.partition_id === partitionId ||
+          partition?.partitionId === partitionId,
+      );
+      return rows[0] || null;
+    }
+
+    if (typeof this.systemTableCache.getAll === TYPEOF.FUNCTION) {
+      const rows = this.systemTableCache.getAll(TABLES.PARTITIONS) || [];
+      return rows.find((partition) =>
+        partition?.partition_id === partitionId ||
+        partition?.partitionId === partitionId,
+      ) || null;
+    }
+
+    return null;
+  }
+
+  /**
    * Get the policy for a specific table.
    * @param {string} tableId - Table ID.
    * @return {Promise<Object>} Table policy (merged with defaults).
@@ -125,6 +186,9 @@ class TablePolicyService extends EventEmitter {
         [tableId],
       );
       table = result.rows?.[0] || null;
+    }
+    if (!table) {
+      table = this.lookupCachedTable(tableId);
     }
     if (!table) {
       this.logger.debug(
@@ -173,6 +237,9 @@ class TablePolicyService extends EventEmitter {
         [partitionId],
       );
       partition = result.rows?.[0] || null;
+    }
+    if (!partition) {
+      partition = this.lookupCachedPartition(partitionId);
     }
     if (!partition) {
       this.logger.debug(

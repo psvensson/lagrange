@@ -27,6 +27,11 @@ import {
 } from '../constants/index.js';
 import {ENTRYPOINT_DEFAULT} from '../constants/entrypoint.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
+import {
+  TIMEOUT_BUDGET_CLASSIFICATION,
+  createTimeoutBudget,
+  createTimeoutBudgetError,
+} from '../control-plane/timeout-budget.js';
 import {HLCClockService} from '../hlc/hlc-clock-service.js';
 import {
   SYSTEM_TABLE_NAME,
@@ -737,6 +742,9 @@ class CDCIntegrationService extends EventEmitter {
    * @param {string} tableName - System table name.
    * @param {string} key - Primary key value.
    * @param {boolean} expectPresent - True if record should exist after write.
+   * @param {Object} [options] - Cache wait options.
+   * @param {Object} [options.expectedFields] - Exact field-value matches.
+   * @param {Object} [options.minimumFields] - Minimum field thresholds.
    * @return {Promise<void>}
    * @private
    */
@@ -766,6 +774,18 @@ class CDCIntegrationService extends EventEmitter {
       typeof options.expectedFields === TYPEOF.OBJECT ?
       options.expectedFields :
       null;
+    const minimumFields = options?.minimumFields &&
+      typeof options.minimumFields === TYPEOF.OBJECT ?
+      options.minimumFields :
+      null;
+    const normalizedExpectedFields = this.normalizeExpectedFieldsForMinimums(
+      expectedFields,
+      minimumFields,
+    );
+    const timeoutMs = Number.isFinite(options?.timeoutMs) &&
+      options.timeoutMs > 0 ?
+      Math.floor(options.timeoutMs) :
+      this.cacheWaitTimeoutMs;
     const fallbackPhase = this.resolveAuthoritativeFallbackPhase(
       options?.fallbackPhase,
     );
@@ -774,7 +794,8 @@ class CDCIntegrationService extends EventEmitter {
       tableName,
       key,
       expectPresent,
-      expectedFields,
+      normalizedExpectedFields,
+      minimumFields,
     );
 
     if (isSatisfied()) {
@@ -783,6 +804,9 @@ class CDCIntegrationService extends EventEmitter {
 
     await new Promise((resolve, reject) => {
       let settled = false;
+      const timeoutBudget = createTimeoutBudget({
+        configuredBudgetMs: timeoutMs,
+      });
       const cleanup = (error = null) => {
         if (settled) {
           return;
@@ -822,7 +846,8 @@ class CDCIntegrationService extends EventEmitter {
               tableName,
               key,
               expectPresent,
-              expectedFields,
+              normalizedExpectedFields,
+              minimumFields,
               {fallbackPhase},
             );
             if (repaired && isSatisfied()) {
@@ -853,15 +878,22 @@ class CDCIntegrationService extends EventEmitter {
             });
           }
 
-          cleanup(new Error(
-            CDC_ERROR_MSG.CACHE_WAIT_TIMEOUT(
-              tableName,
-              key,
-              this.cacheWaitTimeoutMs,
-            ),
-          ));
+          const buildCacheWaitTimeoutMessage =
+            CDC_ERROR_MSG.CACHE_WAIT_TIMEOUT;
+          const timeoutMessage = buildCacheWaitTimeoutMessage(
+            tableName,
+            key,
+            timeoutMs,
+          );
+          cleanup(createTimeoutBudgetError({
+            message: timeoutMessage,
+            budget: timeoutBudget,
+            classification:
+              TIMEOUT_BUDGET_CLASSIFICATION.CACHE_VISIBILITY_TIMEOUT,
+            nestedOperation: `cache_wait:${tableName}`,
+          }));
         })();
-      }, this.cacheWaitTimeoutMs);
+      }, timeoutMs);
 
       cache.onCacheChange(listener);
     });
@@ -873,10 +905,17 @@ class CDCIntegrationService extends EventEmitter {
    * @param {string} key
    * @param {boolean} expectPresent
    * @param {Object|null} expectedFields
+   * @param {Object|null} minimumFields
    * @return {boolean}
    * @private
    */
-  isCacheExpectationSatisfied(tableName, key, expectPresent, expectedFields = null) {
+  isCacheExpectationSatisfied(
+    tableName,
+    key,
+    expectPresent,
+    expectedFields = null,
+    minimumFields = null,
+  ) {
     const present = this.hasCacheRecord(tableName, key);
     if (expectPresent && !present) {
       return false;
@@ -887,9 +926,13 @@ class CDCIntegrationService extends EventEmitter {
     if (!expectPresent) {
       return false;
     }
+    const record = this.getCacheRecord(tableName, key);
     return this.doesCacheRecordMatchExpectedFields(
-      this.getCacheRecord(tableName, key),
+      record,
       expectedFields,
+    ) && this.doesCacheRecordMeetMinimumFields(
+      record,
+      minimumFields,
     );
   }
 
@@ -935,6 +978,7 @@ class CDCIntegrationService extends EventEmitter {
    * @param {string} key
    * @param {boolean} expectPresent
    * @param {Object|null} expectedFields
+   * @param {Object|null} minimumFields
    * @return {Promise<boolean>} True when a repair was applied.
    * @private
    */
@@ -943,6 +987,7 @@ class CDCIntegrationService extends EventEmitter {
     key,
     expectPresent,
     expectedFields = null,
+    minimumFields = null,
     options = {},
   ) {
     const cacheMutationTarget = this.cacheMutationTarget;
@@ -997,6 +1042,7 @@ class CDCIntegrationService extends EventEmitter {
       key,
       expectPresent,
       expectedFields,
+      minimumFields,
     );
     if (repaired) {
       const fallbackSignal = this.recordAuthoritativeFallbackSignal({
@@ -1199,6 +1245,108 @@ class CDCIntegrationService extends EventEmitter {
     }
 
     return true;
+  }
+
+  /**
+   * Remove exact-match fields that are validated by minimum thresholds.
+   * @param {Object|null} expectedFields
+   * @param {Object|null} minimumFields
+   * @return {Object|null}
+   * @private
+   */
+  normalizeExpectedFieldsForMinimums(expectedFields, minimumFields) {
+    if (!expectedFields) {
+      return null;
+    }
+    if (!minimumFields) {
+      return expectedFields;
+    }
+
+    const normalized = {};
+    for (const [fieldName, expectedValue] of Object.entries(expectedFields)) {
+      if (Object.prototype.hasOwnProperty.call(minimumFields, fieldName)) {
+        continue;
+      }
+      normalized[fieldName] = expectedValue;
+    }
+
+    return Object.keys(normalized).length > NUM.ZERO ? normalized : null;
+  }
+
+  /**
+   * Determine whether one cached row satisfies all minimum field thresholds.
+   * @param {Object|undefined} record
+   * @param {Object|null} minimumFields
+   * @return {boolean}
+   * @private
+   */
+  doesCacheRecordMeetMinimumFields(record, minimumFields) {
+    if (!minimumFields) {
+      return true;
+    }
+    if (!record || typeof record !== TYPEOF.OBJECT) {
+      return false;
+    }
+
+    for (const [fieldName, minimumValue] of Object.entries(minimumFields)) {
+      if (!this.isCacheFieldValueAtLeast(record[fieldName], minimumValue)) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  /**
+   * Check whether one cached value is equal to or greater than a minimum.
+   * @param {*} actualValue
+   * @param {*} minimumValue
+   * @return {boolean}
+   * @private
+   */
+  isCacheFieldValueAtLeast(actualValue, minimumValue) {
+    if (this.areCacheFieldValuesEqual(actualValue, minimumValue)) {
+      return true;
+    }
+    const actualComparable = this.normalizeComparableCacheFieldValue(actualValue);
+    const minimumComparable = this.normalizeComparableCacheFieldValue(minimumValue);
+    if (actualComparable === null || minimumComparable === null) {
+      return false;
+    }
+    return actualComparable >= minimumComparable;
+  }
+
+  /**
+   * Normalize one cache field into a comparable numeric value when possible.
+   * @param {*} value
+   * @return {number|null}
+   * @private
+   */
+  normalizeComparableCacheFieldValue(value) {
+    if (typeof value === TYPEOF.NUMBER) {
+      return Number.isFinite(value) ? value : null;
+    }
+    if (typeof value === TYPEOF.BIGINT) {
+      const normalized = Number(value);
+      return Number.isFinite(normalized) ? normalized : null;
+    }
+    if (value instanceof Date) {
+      const timestamp = value.getTime();
+      return Number.isFinite(timestamp) ? timestamp : null;
+    }
+    if (typeof value === TYPEOF.STRING) {
+      if (value.length === NUM.ZERO) {
+        return null;
+      }
+      const asNumber = Number(value);
+      if (Number.isFinite(asNumber)) {
+        return asNumber;
+      }
+      const asDate = Date.parse(value);
+      return Number.isFinite(asDate) ? asDate : null;
+    }
+
+    return null;
   }
 
   /**
@@ -1467,9 +1615,10 @@ class CDCIntegrationService extends EventEmitter {
    *
    * @param {string} tableName - System table name.
    * @param {Object} data - Row data to insert.
+   * @param {Object} [options] - Insert options.
    * @return {Promise<Object>} Insert result.
    */
-  async insertSystemTableRow(tableName, data) {
+  async insertSystemTableRow(tableName, data, options = {}) {
     this.validateTableName(tableName);
     this.validateData(data, CDC_OPERATION.INSERT);
 
@@ -1499,7 +1648,7 @@ class CDCIntegrationService extends EventEmitter {
       const pkField = this.getPrimaryKeyField(tableName);
       const pkValue = rowData[pkField];
       const cacheWaitStartMs = Date.now();
-      if (pkValue) {
+      if (pkValue && options?.skipCacheWait !== true) {
         await this.waitForCacheUpdate(tableName, pkValue, true);
       }
       const cacheWaitDurationMs = Date.now() - cacheWaitStartMs;
@@ -1612,14 +1761,20 @@ class CDCIntegrationService extends EventEmitter {
       }
 
       const cacheWaitStartMs = Date.now();
-      if (typeof result.affectedRows !== TYPEOF.NUMBER ||
-        result.affectedRows > NUM.ZERO) {
+      if (options?.skipCacheWait !== true &&
+        (typeof result.affectedRows !== TYPEOF.NUMBER ||
+        result.affectedRows > NUM.ZERO)) {
         const expectedCacheFields = options?.expectedCacheFields &&
           typeof options.expectedCacheFields === TYPEOF.OBJECT ?
           options.expectedCacheFields :
           null;
+        const minimumCacheFields = options?.minimumCacheFields &&
+          typeof options.minimumCacheFields === TYPEOF.OBJECT ?
+          options.minimumCacheFields :
+          null;
         await this.waitForCacheUpdate(tableName, id, true, {
           expectedFields: expectedCacheFields,
+          minimumFields: minimumCacheFields,
         });
       }
       const cacheWaitDurationMs = Date.now() - cacheWaitStartMs;

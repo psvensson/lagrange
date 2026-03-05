@@ -1062,15 +1062,32 @@ class UnifiedRebalancer extends EventEmitter {
     }
 
     // Create operation record via coordinator
-    const operation = await this.rebalanceCoordinator.createOperation({
-      type: operationType,
-      partitionId: this.entityId,
-      entityType: this.entityType,
-      entityId: this.entityId,
-      nodeId: move.nodeId,
-      replicaId: move.replicaId,
-      sourceNodeId: move.sourceNodeId,
-    });
+    let operation = null;
+    try {
+      operation = await this.rebalanceCoordinator.createOperation({
+        type: operationType,
+        partitionId: this.entityId,
+        entityType: this.entityType,
+        entityId: this.entityId,
+        nodeId: move.nodeId,
+        replicaId: move.replicaId,
+        sourceNodeId: move.sourceNodeId,
+      });
+    } catch (error) {
+      if (error?.admissionResult) {
+        return {
+          success: false,
+          skipped: true,
+          reason:
+            error.admissionResult.decisionType || 'admission_denied',
+          operation: move.type,
+          nodeId: move.nodeId,
+          replicaId: move.replicaId,
+          admission: error.admissionResult,
+        };
+      }
+      throw error;
+    }
 
     return {
       success: true,

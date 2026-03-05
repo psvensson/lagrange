@@ -30,6 +30,11 @@ import {
   TABLES,
 } from '../../src/constants/index.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
+import {
+  PARTITION_SPLIT_MIRROR_ORIGIN,
+  PARTITION_TRANSITION_METADATA_FIELD,
+  PARTITION_TRANSITION_STATE,
+} from '../../src/partition/partition-constants.js';
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -176,6 +181,8 @@ test(
     partition.persistedRole = RaftRole.LEADER;
     partition.pendingLeaderNodeUpdate = partition.nodeId;
     partition.persistedLeaderNodeId = partition.nodeId;
+    const retryTimer = setTimeout(() => {}, 10000);
+    partition.leaderNodeMutationHelper.retryTimer = retryTimer;
 
     partition.raft.emit('leader change', 'leader-change-partition-1-r2');
     await Promise.resolve();
@@ -187,6 +194,7 @@ test(
     t.equal(partition.persistedRole, RaftRole.FOLLOWER);
     t.equal(partition.pendingLeaderNodeUpdate, null);
     t.equal(partition.persistedLeaderNodeId, null);
+    t.equal(partition.leaderNodeUpdateRetryTimer, null);
 
     await partition.shutdown();
   },
@@ -751,6 +759,60 @@ test('PartitionService - raw SQL INSERT OR REPLACE generates CDC UPSERT', async 
   await partition.shutdown();
 });
 
+test('PartitionService - raw SQL nested parenthesized DELETE preserves composite CDC key',
+  async (t) => {
+    const schema = {
+      columns: [
+        {name: 'service_id', type: 'TEXT'},
+        {name: 'service_type', type: 'TEXT'},
+        {name: 'node_id', type: 'TEXT'},
+        {name: 'status', type: 'TEXT'},
+      ],
+    };
+
+    const partition = new PartitionService({
+      partitionId: 'test-partition-sql-delete-composite',
+      tableId: 'services',
+      tableName: 'services',
+      replicaId: 'replica-1',
+      replicaIds: ['replica-1'],
+      schema,
+      dbPath: ':memory:',
+    });
+
+    await partition.initialize();
+    await Promise.resolve();
+
+    await partition.executeQuery(
+      'INSERT INTO services (service_id, service_type, node_id, status) ' +
+        'VALUES (?, ?, ?, ?)',
+      ['svc-1', 'partition', 'node-1', 'active'],
+    );
+
+    const cdcEvents = [];
+    partition.subscribeToCDC((event) => {
+      cdcEvents.push(event);
+    });
+    await Promise.resolve();
+    cdcEvents.length = 0;
+
+    await partition.executeQuery(
+      'DELETE FROM services WHERE (((service_id = ?) AND ' +
+        '(service_type = ?)) AND (node_id = ?))',
+      ['svc-1', 'partition', 'node-1'],
+    );
+
+    t.equal(cdcEvents.length, 1);
+    t.equal(cdcEvents[0].operation, CDCOperation.DELETE);
+    t.same(cdcEvents[0].data, {
+      service_id: 'svc-1',
+      service_type: 'partition',
+      node_id: 'node-1',
+    });
+
+    await partition.shutdown();
+  });
+
 test('PartitionService - follower applyCommittedEntry must not emit CDC', async (t) => {
   // Bug: applyCommittedEntry generates CDC events on ALL replicas
   // (leader + followers). Only the leader should emit CDC events;
@@ -970,6 +1032,188 @@ test('PartitionService - calculates partition size', async (t) => {
 
   await partition.shutdown();
 });
+
+test('PartitionService - persists partition size_bytes for leader-owned partitions',
+  async (t) => {
+    const updates = [];
+    const systemTableCache = new SystemTableCache();
+    const partitionsPartitionId = INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.PARTITIONS];
+    systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
+      [COLUMN.PARTITION_ID]: partitionsPartitionId,
+      [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.PARTITIONS,
+    });
+    systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
+      [COLUMN.SERVICE_ID]: 'partitions-leader',
+      [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
+      [COLUMN.PARTITION_ID]: partitionsPartitionId,
+      [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
+      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+      [COLUMN.ADDRESS]: 'seed-node/partition/partitions-leader',
+    });
+    systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
+      [COLUMN.PARTITION_ID]: 'test-partition-size-persist',
+      [COLUMN.TABLE_ID]: 'size_persist_test',
+      size_bytes: 0,
+    });
+    const partition = new PartitionService({
+      partitionId: 'test-partition-size-persist',
+      tableId: 'size_persist_test',
+      tableName: 'size_persist_test',
+      replicaId: 'replica-1',
+      replicaIds: ['replica-1'],
+      schema: {
+        columns: [
+          {name: 'id', type: 'TEXT', primaryKey: true},
+          {name: 'payload', type: 'TEXT'},
+        ],
+      },
+      dbPath: ':memory:',
+      cdcIntegrationService: {
+        async updateSystemTableRow(tableName, whereClause, data) {
+          updates.push({tableName, whereClause, data});
+          return {success: true};
+        },
+      },
+      systemTableCache,
+    });
+
+    await partition.initialize();
+
+    await partition.insertData('size_persist_test', {
+      id: 'row-1',
+      payload: 'x'.repeat(2048),
+    });
+    await partition.updatePartitionSize();
+
+    const persistedUpdates = updates.filter((entry) =>
+      entry.tableName === TABLES.PARTITIONS &&
+      entry.whereClause.partition_id === 'test-partition-size-persist',
+    );
+    const persistedUpdate =
+      persistedUpdates[persistedUpdates.length - 1] || null;
+
+    t.ok(persistedUpdate, 'should persist latest size_bytes to partitions table');
+    t.equal(typeof persistedUpdate.data.size_bytes, 'number');
+    t.ok(persistedUpdate.data.size_bytes > 0);
+
+    await partition.shutdown();
+  });
+
+test('PartitionService - queues source writes during split backfill and suppresses target echoes',
+  async (t) => {
+    const mirroredWrites = [];
+    const partition = new PartitionService({
+      partitionId: 'users-source',
+      tableId: 'tbl-users',
+      tableName: 'users',
+      replicaId: 'users-source-r1',
+      replicaIds: ['users-source-r1'],
+      dbPath: ':memory:',
+    });
+
+    partition.splitReplication = {
+      metadata: {
+        primaryKeyColumn: 'id',
+        sourcePartitionId: 'users-source',
+        splitKey: 'm',
+        targetPartitionIds: ['users-left', 'users-right'],
+        targetPartitionVersion: 2,
+      },
+      phase: PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING,
+      pendingEntries: [],
+      flushInFlight: false,
+      startedAt: Date.now(),
+      lastError: null,
+    };
+    partition.replaySplitEntry = async (entry) => {
+      mirroredWrites.push(entry.sql);
+    };
+
+    await partition.handleSplitReplicationAfterWrite({
+      sql: 'INSERT INTO users (id, name) VALUES (?, ?)',
+      params: ['zoe', 'Zoe'],
+      data: {id: 'zoe', name: 'Zoe'},
+    });
+    await partition.handleSplitReplicationAfterWrite({
+      sql: 'INSERT INTO users (id, name) VALUES (?, ?)',
+      params: ['zoe', 'Zoe'],
+      data: {id: 'zoe', name: 'Zoe'},
+      splitMirrorOrigin: PARTITION_SPLIT_MIRROR_ORIGIN.TARGET,
+    });
+
+    t.equal(partition.splitReplication.pendingEntries.length, 1);
+
+    partition.splitReplication.phase =
+      PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE;
+    await partition.flushSplitReplicationQueue();
+
+    t.same(mirroredWrites, ['INSERT INTO users (id, name) VALUES (?, ?)']);
+    t.equal(partition.splitReplication.pendingEntries.length, 0);
+  });
+
+test('PartitionService - starts split replication workflow and marks cutover active',
+  async (t) => {
+    const updateCalls = [];
+    const partition = new PartitionService({
+      partitionId: 'users-source',
+      tableId: 'tbl-users',
+      tableName: 'users',
+      replicaId: 'users-source-r1',
+      replicaIds: ['users-source-r1'],
+      dbPath: ':memory:',
+      cdcIntegrationService: {
+        async updateSystemTableRow(tableName, whereClause, data) {
+          updateCalls.push({tableName, whereClause, data});
+          return {success: true};
+        },
+      },
+    });
+
+    partition.role = RaftRole.LEADER;
+    partition.isLeader = true;
+    partition.backfillSplitSnapshot = async () => {
+      partition.splitReplication.pendingEntries.push({
+        sql: 'UPDATE users SET name = ? WHERE id = ?',
+        params: ['Bob', 'bob'],
+        whereClause: {id: 'bob'},
+      });
+    };
+    partition.flushSplitReplicationQueue = async function() {
+      while (this.splitReplication.pendingEntries.length > 0) {
+        this.splitReplication.pendingEntries.shift();
+      }
+    };
+
+    const response = await partition.handleStartSplitReplication({
+      partitionId: 'users-source',
+      tableId: 'tbl-users',
+      tableName: 'users',
+      transitionMetadata: {
+        [PARTITION_TRANSITION_METADATA_FIELD.PRIMARY_KEY_COLUMN]: 'id',
+        [PARTITION_TRANSITION_METADATA_FIELD.SOURCE_PARTITION_ID]: 'users-source',
+        [PARTITION_TRANSITION_METADATA_FIELD.SPLIT_KEY]: 'm',
+        [PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_IDS]: [
+          'users-left',
+          'users-right',
+        ],
+        [PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_VERSION]: 2,
+      },
+    });
+
+    await partition.splitReplicationRun;
+
+    t.same(response, {acknowledged: true, success: true});
+    t.equal(
+      partition.splitReplication.phase,
+      PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
+    );
+    const cutoverUpdate = updateCalls.find((entry) =>
+      entry.tableName === TABLES.TABLES &&
+      entry.whereClause.table_id === 'tbl-users',
+    );
+    t.ok(cutoverUpdate, 'should persist cutover metadata to tables table');
+    t.equal(cutoverUpdate.data.active_partition_version, 2);
+  });
 
 test('PartitionService - key range management', async (t) => {
   const partition = new PartitionService({

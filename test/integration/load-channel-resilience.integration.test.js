@@ -7,6 +7,7 @@ const ZERO = 0;
 const ONE = 1;
 const TIMEOUT_ERROR_CODE = 'ETIMEDOUT';
 const CIRCUIT_OPEN_ERROR_CODE = 'circuit_open';
+const ROUTING_NOT_READY_ERROR_CODE = 'routing_not_ready';
 const LOAD_BREAKER_OWNER_NODE_CLIENT = 'node-client';
 
 function createNodeHandle(id, queryWithTimeout) {
@@ -201,6 +202,58 @@ test('legacy breaker layering can still reproduce cascade-shaped failures',
       assert.ok(metrics.attemptErrors > ZERO,
         'legacy path should record repeated failed attempts');
       assert.ok(totalCalls > ZERO, 'legacy path should repeatedly probe the failing node');
+    } finally {
+      run.cancel();
+    }
+  });
+
+test('routing-health admission sheds before dispatching breaker-prone load operations',
+  {timeout: 30000}, async () => {
+    let blockedAdmissionCalls = ZERO;
+    let nodeLoadCalls = ZERO;
+    const blockedNode = createNodeHandle(
+      'routing-blocked-node',
+      async (_sql, _params, options = {}) => {
+        if (options.lane === 'load') {
+          nodeLoadCalls += ONE;
+        }
+        return {rows: [{ok: true}]};
+      },
+    );
+
+    const routedLoadNodes = [{
+      id: blockedNode.id,
+      breakerOwner: LOAD_BREAKER_OWNER_NODE_CLIENT,
+      query: async () => {
+        blockedAdmissionCalls += ONE;
+        const error = new Error('routing not ready');
+        error.code = ROUTING_NOT_READY_ERROR_CODE;
+        throw error;
+      },
+    }];
+
+    const loadGenerator = new LoadGenerator(routedLoadNodes, {
+      opsPerSec: 180,
+      duration: 180,
+      maxInFlight: 8,
+      nodeMaxInFlight: 1,
+      admissionBackoffMs: 40,
+      operations: ['SELECT'],
+    });
+
+    const run = loadGenerator.start();
+    try {
+      const metrics = await run.waitComplete();
+      assert.ok(blockedAdmissionCalls > ZERO,
+        'expected routing admission checks to be exercised');
+      assert.equal(nodeLoadCalls, ZERO,
+        'load should be shed before dispatching to blocked node');
+      assert.equal(metrics.failed, ZERO,
+        'routing admission denials should not become operation-level failures');
+      assert.equal(metrics.errors, ZERO,
+        'routing admission denials should not become operation-level errors');
+      assert.ok(metrics.attemptErrors > ZERO,
+        'attempt-level admission denials should remain observable');
     } finally {
       run.cancel();
     }

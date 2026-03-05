@@ -149,3 +149,50 @@ test('benchmark admission ignores unrelated failed movement deterministically',
       await api.shutdown();
     }
   });
+
+test('benchmark admission exposes stale timeout diagnostics for blocked REMOVE',
+  async (t) => {
+    const nowMs = Date.now();
+    const staleUpdatedAtMs = nowMs - 70000;
+    const {api} = await createBenchmarkDiscoveryApi({
+      nodeId: 'node-2',
+      updatedAt: nowMs,
+      replicaOperations: [{
+        operation_id: 'op-remove-stale',
+        partition_id: 'partition-benchmark-events-1',
+        type: 'REMOVE',
+        source_node_id: 'node-1',
+        target_node_id: 'node-2',
+        status: 'stopping',
+        workflow_step: 'STOPPING',
+        updated_at: staleUpdatedAtMs,
+      }],
+    });
+
+    try {
+      const snapshot = await api.resolveServiceDiscoverySnapshot({
+        tableName: TABLE_NAME,
+      });
+      const replica = findReplica(snapshot, 'node-2');
+      const admission = replica?.benchmarkAdmission || null;
+
+      t.equal(admission?.state, 'blocked');
+      t.equal(
+        admission?.reasons?.some((reason) =>
+          reason?.code === 'replica_operation_stale_timeout'),
+        true,
+        'stale in-flight operation should be classified explicitly',
+      );
+      t.equal(
+        Number.isInteger(snapshot?.replicaOperations?.staleInFlightCount),
+        true,
+        'snapshot should expose stale in-flight aggregate diagnostics',
+      );
+      t.ok(
+        snapshot?.replicaOperations?.operationTimelineById?.['op-remove-stale'],
+        'snapshot should include per-operation timeline artifact',
+      );
+    } finally {
+      await api.shutdown();
+    }
+  });

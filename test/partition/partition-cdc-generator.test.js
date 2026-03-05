@@ -393,6 +393,29 @@ describe('PartitionCDCGenerator', () => {
       assert.strictEqual(receivedEvents.length, 1);
       assert.strictEqual(receivedEvents[0].data.id, 'del-param-1');
     });
+
+    it('should extract data from parameterized DELETE with nested parentheses',
+      async () => {
+        const receivedEvents = [];
+        generator.subscribe((event) => receivedEvents.push(event));
+
+        const entry = {
+          type: 'QUERY',
+          sql: 'DELETE FROM services WHERE (((service_id = ?) AND ' +
+            '(service_type = ?)) AND (node_id = ?))',
+          params: ['svc-1', 'partition', 'node-1'],
+          timestamp: Date.now(),
+        };
+
+        await generator.generateEvent(entry);
+
+        assert.strictEqual(receivedEvents.length, 1);
+        assert.deepStrictEqual(receivedEvents[0].data, {
+          service_id: 'svc-1',
+          service_type: 'partition',
+          node_id: 'node-1',
+        });
+      });
   });
 
   describe('subscriber types', () => {

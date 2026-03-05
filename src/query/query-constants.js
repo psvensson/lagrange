@@ -119,12 +119,34 @@ const QUERY_ERROR_MSG = Object.freeze({
     'Table partition provisioning requires partitionId',
   TABLE_PARTITION_METADATA_TIMEOUT_PREFIX:
     'Timed out waiting for table partition metadata for partition ',
+  TABLE_PARTITION_SERVICE_METADATA_TIMEOUT_PREFIX:
+    'Timed out waiting for partition service metadata for replica ',
+  TABLE_PARTITION_TARGET_NODE_TIMEOUT_PREFIX:
+    'Timed out waiting for active provisioning target nodes for partition ',
   TABLE_PARTITION_ROUTING_TIMEOUT_PREFIX:
     'Timed out waiting for routable partition service for partition ',
+  TABLE_PARTITION_LEADER_TIMEOUT_PREFIX:
+    'Timed out waiting for partition leader service for partition ',
   TABLE_PARTITION_PROVISION_DISPATCH_FAILED:
     'Failed to dispatch initial table partition replica creation',
   MISSING_JOIN_PLAN:
     'Missing canonical join partition plan',
+  TABLE_SPLIT_ALREADY_IN_PROGRESS:
+    'Table already has a partition split transition in progress',
+  TABLE_SPLIT_PRIMARY_KEY_REQUIRED:
+    'Partition split orchestration requires a single-column partition key',
+  TABLE_SPLIT_PARTITION_NOT_FOUND:
+    'Partition split source partition metadata not found',
+  TABLE_SPLIT_TABLE_NOT_FOUND:
+    'Partition split table metadata not found',
+  TABLE_SPLIT_LEADER_REQUIRED:
+    'Managed partition split must be initiated by the source partition leader',
+  TABLE_SPLIT_BOOTSTRAP_TARGETS_REQUIRED_PREFIX:
+    'Managed partition split requires at least ',
+  TABLE_SPLIT_SOURCE_QUORUM_REQUIRED_PREFIX:
+    'Managed partition split requires at least ',
+  TABLE_SPLIT_START_FAILED:
+    'Failed to start partition split replication on source partition',
 });
 
 const QUERY_ROUTER_ERROR_MSG = Object.freeze({
@@ -161,6 +183,10 @@ const QUERY_LOG_MSG = Object.freeze({
   SYSTEM_CACHE_FILTER_UNSUPPORTED: 'System cache does not support filter',
   NO_ACTIVE_SERVICE_FOR_PARTITION: 'No active service found for partition',
   NO_LEADER_SERVICE_FOR_PARTITION: 'No leader service found for partition',
+  CANONICAL_LEADER_METADATA_MISSING_FOR_PARTITION:
+    'Canonical partition leader metadata missing',
+  CANONICAL_LEADER_SERVICE_MISSING_FOR_PARTITION:
+    'Canonical partition leader service missing',
   NO_PARTITIONS_FOR_TABLE: 'No partitions available for table',
   NO_KEY_CONDITIONS: 'No key conditions, using scatter-gather',
   RESOLVED_PARTITIONS: 'Resolved partitions for query',
@@ -179,8 +205,15 @@ const QUERY_LOG_MSG = Object.freeze({
   TABLE_PARTITION_PROVISION_START: 'Provisioning initial table partition replica',
   TABLE_PARTITION_PROVISION_SUCCESS: 'Initial table partition provisioning completed',
   TABLE_PARTITION_PROVISION_FAILED: 'Initial table partition provisioning failed',
+  TABLE_PARTITION_TARGET_NODE_FALLBACK_USED:
+    'Using degraded provisioning target-node fallback',
+  TABLE_PARTITION_TARGET_NODE_WAIT_TIMEOUT:
+    'Provisioning target-node convergence timed out',
   TABLE_SPLIT_MERGE_EVAL_FAILED:
     'Split/merge evaluation after table create failed',
+  TABLE_SPLIT_START: 'Starting managed partition split',
+  TABLE_SPLIT_PREPARED: 'Prepared managed partition split',
+  TABLE_SPLIT_START_FAILED: 'Managed partition split start failed',
   FOLLOWING_LEADER_REDIRECT: 'Following leader redirect',
   WRITE_OP_PERSIST_FAILED:
     'Non-transactional write operation persistence failed',
@@ -325,6 +358,7 @@ const QUERY_DEFAULTS = Object.freeze({
   NO_SERVICE_WARN_THROTTLE_MS: TIME_MS.SECOND * NUM.FIVE,
   TABLE_CREATE_PROVISION_TIMEOUT_MS: TIME_MS.SECOND * NUM.TEN * NUM.THREE,
   TABLE_CREATE_PROVISION_POLL_INTERVAL_MS: NUM.FIVE * NUM.TEN,
+  TABLE_CREATE_TARGET_NODE_CONVERGENCE_TIMEOUT_MS: TIME_MS.SECOND,
 
   COORDINATOR_MAX_PARALLEL_PARTITIONS: NUM.THOUSAND,
   COORDINATOR_MAX_CONCURRENT_CONNECTIONS: NUM.THOUSAND * NUM.TEN,

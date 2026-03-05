@@ -18,6 +18,7 @@ import {
 } from '../query-constants.js';
 
 const QUERY_ID_PREFIX = 'q-';
+const QUERY_CANCELLED_ERROR = 'Query cancelled';
 
 /**
  * Tracks execution metrics for a single partition query.
@@ -395,11 +396,17 @@ class ParallelQueryCoordinator {
    * @param {Array} partitionIds - Partition IDs.
    * @param {Array} params - Query parameters.
    * @param {QueryExecutionMetrics} metrics - Metrics tracker.
-   * @param {Object} _options - Execution options.
+   * @param {Object} options - Execution options.
    * @return {Promise<Array>} Array of partition results.
    * @private
    */
-  async executeWithTimeoutAndStragglers(sql, partitionIds, params, metrics, _options) {
+  async executeWithTimeoutAndStragglers(
+    sql,
+    partitionIds,
+    params,
+    metrics,
+    options,
+  ) {
     const partitionChunks = this.buildPartitionChunks(partitionIds);
     const allResults = [];
     for (const partitionChunk of partitionChunks) {
@@ -408,7 +415,7 @@ class ParallelQueryCoordinator {
         partitionChunk,
         params,
         metrics,
-        _options,
+        options,
       );
       allResults.push(...chunkResults);
     }
@@ -421,18 +428,28 @@ class ParallelQueryCoordinator {
    * @param {Array<string>} partitionIds - Partition chunk.
    * @param {Array} params - Query parameters.
    * @param {QueryExecutionMetrics} metrics - Metrics tracker.
-   * @param {Object} _options - Execution options.
+   * @param {Object} options - Execution options.
    * @return {Promise<Array>} Array of partition results for this chunk.
    * @private
    */
-  async executeChunkWithTimeoutAndStragglers(sql, partitionIds, params, metrics, _options) {
+  async executeChunkWithTimeoutAndStragglers(
+    sql,
+    partitionIds,
+    params,
+    metrics,
+    options,
+  ) {
     this.activeConnections += partitionIds.length;
     let timeoutId = null;
+    const effectiveTimeoutMs = this.resolveTimeoutMs(options?.timeoutMs);
+    const cancellationPromise = this.createCancellationPromise(
+      options?.cancellationToken || null,
+    );
 
     try {
       // Create execution promises for each partition
       const executionPromises = partitionIds.map((partitionId) =>
-        this.executeOnPartitionWithMetrics(sql, partitionId, params, metrics, _options),
+        this.executeOnPartitionWithMetrics(sql, partitionId, params, metrics, options),
       );
 
       // Create timeout promise with clearable timer
@@ -440,9 +457,9 @@ class ParallelQueryCoordinator {
         timeoutId = setTimeout(() => {
           reject(new Error(
             `${QUERY_ERROR_MSG.QUERY_TIMEOUT_AFTER_PREFIX}` +
-            `${this.queryTimeoutMs}${QUERY_ERROR_MSG.QUERY_TIMEOUT_AFTER_SUFFIX}`,
+            `${effectiveTimeoutMs}${QUERY_ERROR_MSG.QUERY_TIMEOUT_AFTER_SUFFIX}`,
           ));
-        }, this.queryTimeoutMs);
+        }, effectiveTimeoutMs);
       });
 
       // Execute with straggler detection if enabled
@@ -454,6 +471,7 @@ class ParallelQueryCoordinator {
           params,
           metrics,
           timeoutPromise,
+          cancellationPromise,
         );
         // Clear timeout after speculative execution completes
         if (timeoutId !== null) {
@@ -464,10 +482,14 @@ class ParallelQueryCoordinator {
       }
 
       // Simple parallel execution with timeout
-      const results = await Promise.race([
+      const racePromises = [
         Promise.all(executionPromises),
         timeoutPromise,
-      ]);
+      ];
+      if (cancellationPromise) {
+        racePromises.push(cancellationPromise);
+      }
+      const results = await Promise.race(racePromises);
 
       // Detect and log stragglers
       this.detectAndLogStragglers(metrics);
@@ -491,6 +513,7 @@ class ParallelQueryCoordinator {
    * @param {Array} params - Query parameters.
    * @param {QueryExecutionMetrics} metrics - Metrics tracker.
    * @param {Promise} timeoutPromise - Timeout promise.
+   * @param {Promise|null} cancellationPromise - Cancellation promise.
    * @return {Promise<Array>} Array of partition results.
    * @private
    */
@@ -501,6 +524,7 @@ class ParallelQueryCoordinator {
     params,
     metrics,
     timeoutPromise,
+    cancellationPromise,
   ) {
     const results = new Map();
     const pendingPartitions = new Set(partitionIds);
@@ -545,10 +569,14 @@ class ParallelQueryCoordinator {
 
     try {
       // Wait for all original promises or timeout
-      await Promise.race([
+      const racePromises = [
         Promise.all(wrappedPromises),
         timeoutPromise,
-      ]);
+      ];
+      if (cancellationPromise) {
+        racePromises.push(cancellationPromise);
+      }
+      await Promise.race(racePromises);
 
       // Detect and log stragglers
       this.detectAndLogStragglers(metrics);
@@ -722,6 +750,46 @@ class ParallelQueryCoordinator {
       return service.executeQuery(sql, params);
     }
     throw new Error(QUERY_ERROR_MSG.SERVICE_EXECUTE_UNSUPPORTED);
+  }
+
+  /**
+   * Resolve effective timeout from optional override.
+   * @param {number|undefined|null} timeoutMs
+   * @return {number}
+   * @private
+   */
+  resolveTimeoutMs(timeoutMs) {
+    if (Number.isFinite(timeoutMs) && timeoutMs > 0) {
+      return Math.floor(timeoutMs);
+    }
+    return this.queryTimeoutMs;
+  }
+
+  /**
+   * Build cancellation promise for cooperative aborts.
+   * @param {Object|null} cancellationToken
+   * @return {Promise<never>|null}
+   * @private
+   */
+  createCancellationPromise(cancellationToken) {
+    if (!cancellationToken ||
+      typeof cancellationToken.onCancel !== 'function') {
+      return null;
+    }
+
+    return new Promise((_, reject) => {
+      const rejectWithReason = (reason) => {
+        reject(new Error(reason || QUERY_CANCELLED_ERROR));
+      };
+      cancellationToken.onCancel(rejectWithReason);
+      if (typeof cancellationToken.isCancelled === 'function' &&
+        cancellationToken.isCancelled()) {
+        const reason = typeof cancellationToken.getReason === 'function' ?
+          cancellationToken.getReason() :
+          null;
+        rejectWithReason(reason);
+      }
+    });
   }
 
   /**

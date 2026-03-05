@@ -16,6 +16,7 @@ import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {isNodeRecordReady} from '../node/node-readiness-policy.js';
+import {DurableWorkflowCoordinator} from '../workflow/durable-workflow-coordinator.js';
 import {
   WORKFLOW_STEP, NUM, ERRORS, TIME_MS, METRICS_LOG_TAG,
   UNIFIED_SERVICE_TYPE,
@@ -23,10 +24,15 @@ import {
 import {SERVICE_TYPE} from '../constants/service.js';
 import {assertCritical} from '../utils/assert.js';
 import {
+  buildControlPlaneQueryOptions,
+  TIMEOUT_BUDGET_CLASSIFICATION,
+  buildTimeoutClassification,
+  createTimeoutBudget,
+} from '../control-plane/timeout-budget.js';
+import {
   OPERATION_METADATA_KEY,
   ReplicaStatus,
   TERMINAL_STATUSES,
-  TERMINAL_STATUS_SQL_CLAUSE,
   WORKFLOW_STEP_TO_STATUS,
   OperationType,
   isTerminalStep,
@@ -53,6 +59,9 @@ import {
   STORAGE_CAPACITY_CONFIG_KEY,
   STORAGE_CAPACITY_DEFAULT,
 } from './storage-capacity-constants.js';
+import {
+  STORAGE_ADMISSION_DECISION_TYPE,
+} from './storage-admission-constants.js';
 
 /**
  * SQL queries for replica_operations table access.
@@ -60,8 +69,16 @@ import {
  */
 const SQL = Object.freeze({
   SELECT_OPERATION_BY_ID: 'SELECT * FROM replica_operations WHERE operation_id = ?',
-  SELECT_INCOMPLETE_OPERATIONS: `SELECT * FROM replica_operations 
-    WHERE status NOT IN (${TERMINAL_STATUS_SQL_CLAUSE})`,
+  SELECT_INCOMPLETE_OPERATIONS: `SELECT * FROM replica_operations
+    WHERE (
+      source_node_id = ?
+      OR ((source_node_id IS NULL OR source_node_id = '') AND target_node_id = ?)
+    )
+    AND (
+      workflow_step IN (?, ?, ?, ?, ?)
+      OR (workflow_step = ? AND type = ?)
+    )
+    ORDER BY updated_at ASC`,
   SELECT_OPERATIONS_BY_PARTITION: 'SELECT * FROM replica_operations WHERE partition_id = ?',
   SELECT_OPERATIONS_BY_ENTITY: `SELECT * FROM replica_operations
     WHERE (
@@ -70,13 +87,12 @@ const SQL = Object.freeze({
     )`,
   SELECT_IN_FLIGHT_FOR_ENTITY_NODE: `SELECT * FROM replica_operations
     WHERE partition_id = ? AND target_node_id = ?
-    AND status NOT IN (${TERMINAL_STATUS_SQL_CLAUSE})
     AND (
       (entity_type = ? AND entity_id = ?)
       OR (entity_type IS NULL OR entity_type = '')
     )`,
   SELECT_IN_FLIGHT_BY_TYPE: `SELECT * FROM replica_operations 
-    WHERE type = ? AND status NOT IN (${TERMINAL_STATUS_SQL_CLAUSE})`,
+    WHERE type = ?`,
   INSERT_OPERATION: `INSERT INTO replica_operations (
     operation_id, type, partition_id, replica_id, source_node_id, target_node_id,
     status, workflow_step, created_at, updated_at, completed_at, error_message, steps_history,
@@ -108,6 +124,10 @@ const SQL = Object.freeze({
 const RECENT_INTENT_TTL_MS = 15000;
 const OPERATION_PERSIST_RETRY_DELAY_MS = TIME_MS.SECOND / NUM.FOUR;
 const OPERATION_PERSIST_RETRY_TIMEOUT_MS = TIME_MS.SECOND * NUM.FIVE;
+const CDC_FALLBACK_PHASE_RECOVERY = 'recovery';
+const INCOMPLETE_OPERATION_QUERY_SLOW_THRESHOLD_MS = TIME_MS.SECOND;
+const INCOMPLETE_OPERATION_QUERY_WARN_THROTTLE_MS = TIME_MS.SECOND * NUM.TEN;
+const INCOMPLETE_OPERATION_QUERY_ROW_WARN_THRESHOLD = 1000;
 
 const OPERATION_HANDLER = Object.freeze({
   [SERVICE_TYPE.PARTITION]: 'replica-handler',
@@ -127,6 +147,12 @@ const FAILURE_LOG_LEVEL = Object.freeze({
   ERROR: 'error',
   WARN: 'warn',
 });
+const OPERATION_SINGLE_FLIGHT_SCOPE = Object.freeze({
+  CREATE: 'create',
+  EXECUTE: 'execute',
+});
+const OPERATION_SINGLE_FLIGHT_KEY_SEPARATOR = ':';
+const CONTROL_PLANE_QUERY_OPTIONS = buildControlPlaneQueryOptions();
 
 /**
  * RebalanceCoordinator manages the complete rebalancing workflow.
@@ -233,11 +259,29 @@ class RebalanceCoordinator extends EventEmitter {
       reservationsReconciled: NUM.ZERO,
     };
 
-    // In-memory dedupe guard for concurrent createOperation() calls.
-    // This is an ephemeral lock (not an operation-state cache).
-    this.operationsInCreation = new Map();
-    this.operationsInExecution = new Map();
+    this.operationWorkflowCoordinator = assertCritical(
+      options.operationWorkflowCoordinator ||
+        new DurableWorkflowCoordinator(),
+      REBALANCE_COORDINATOR_ERROR_MSG.WORKFLOW_COORDINATOR_REQUIRED,
+    );
+    this.operationWorkflowRunExclusive = assertCritical(
+      typeof this.operationWorkflowCoordinator.runExclusive === 'function' ?
+        this.operationWorkflowCoordinator.runExclusive.bind(
+          this.operationWorkflowCoordinator,
+        ) :
+        null,
+      REBALANCE_COORDINATOR_ERROR_MSG.WORKFLOW_COORDINATOR_REQUIRED,
+    );
+    const workflowInFlightExecutions = assertCritical(
+      this.operationWorkflowCoordinator.inFlightExecutionsByOwnerKey instanceof Map ?
+        this.operationWorkflowCoordinator.inFlightExecutionsByOwnerKey :
+        null,
+      REBALANCE_COORDINATOR_ERROR_MSG.WORKFLOW_COORDINATOR_REGISTRY_REQUIRED,
+    );
+    this.operationsInCreation = workflowInFlightExecutions;
+    this.operationsInExecution = workflowInFlightExecutions;
     this.recentOperationIntents = new Map();
+    this.lastIncompleteOperationQueryWarningAtMs = NUM.ZERO;
 
     this.isShuttingDown = false;
     this.initialized = false;
@@ -317,6 +361,7 @@ class RebalanceCoordinator extends EventEmitter {
     const result = await this.sqlQueryEngine.executeQuery(
       SQL.SELECT_OPERATION_BY_ID,
       [operationId],
+      CONTROL_PLANE_QUERY_OPTIONS,
     );
 
     if (!result.success || !result.rows || result.rows.length === NUM.ZERO) {
@@ -332,10 +377,24 @@ class RebalanceCoordinator extends EventEmitter {
    * @private
    */
   async queryIncompleteOperations() {
+    const queryStartedAtMs = Date.now();
     const result = await this.sqlQueryEngine.executeQuery(
       SQL.SELECT_INCOMPLETE_OPERATIONS,
-      [],
+      [
+        this.nodeId,
+        this.nodeId,
+        WORKFLOW_STEP.PENDING,
+        WORKFLOW_STEP.SENDING,
+        WORKFLOW_STEP.CREATING,
+        WORKFLOW_STEP.SYNCING,
+        WORKFLOW_STEP.STOPPING,
+        WORKFLOW_STEP.ACTIVE,
+        OperationType.REPLACE,
+      ],
+      CONTROL_PLANE_QUERY_OPTIONS,
     );
+    const queryDurationMs = Date.now() - queryStartedAtMs;
+    const rowCount = Array.isArray(result?.rows) ? result.rows.length : NUM.ZERO;
 
     if (!result.success || !result.rows) {
       this.logger.error(REBALANCE_COORDINATOR_LOG_MSG.QUERY_OPERATIONS_FAILED, {
@@ -345,7 +404,30 @@ class RebalanceCoordinator extends EventEmitter {
       return [];
     }
 
-    return result.rows.map((row) => this.rowToOperation(row));
+    const shouldWarnOnQueryPressure =
+      queryDurationMs >= INCOMPLETE_OPERATION_QUERY_SLOW_THRESHOLD_MS ||
+      rowCount >= INCOMPLETE_OPERATION_QUERY_ROW_WARN_THRESHOLD;
+    if (shouldWarnOnQueryPressure) {
+      const nowMs = Date.now();
+      if (
+        nowMs - this.lastIncompleteOperationQueryWarningAtMs >=
+        INCOMPLETE_OPERATION_QUERY_WARN_THROTTLE_MS
+      ) {
+        this.lastIncompleteOperationQueryWarningAtMs = nowMs;
+        this.logger.warn(
+          'In-flight operation owner query indicates control-plane pressure',
+          {
+            nodeId: this.nodeId,
+            queryDurationMs,
+            rowCount,
+          },
+        );
+      }
+    }
+
+    return result.rows
+      .map((row) => this.rowToOperation(row))
+      .filter((operation) => !this.isOperationTerminal(operation));
   }
 
   /**
@@ -368,6 +450,7 @@ class RebalanceCoordinator extends EventEmitter {
     const result = await this.sqlQueryEngine.executeQuery(
       SQL.SELECT_IN_FLIGHT_FOR_ENTITY_NODE,
       [partitionId, targetNodeId, entityType, entityId],
+      CONTROL_PLANE_QUERY_OPTIONS,
     );
 
     if (!result.success || !result.rows || result.rows.length === NUM.ZERO) {
@@ -376,7 +459,8 @@ class RebalanceCoordinator extends EventEmitter {
 
     const operations = result.rows.map((row) => this.rowToOperation(row));
     return operations.find((operation) => {
-      return this.operationMatchesMoveIntent(operation, move, entityType, entityId);
+      return !this.isOperationTerminal(operation) &&
+        this.operationMatchesMoveIntent(operation, move, entityType, entityId);
     }) || null;
   }
 
@@ -420,6 +504,65 @@ class RebalanceCoordinator extends EventEmitter {
 
     operation.sourceReplicaId = this.getReplaceSourceReplicaId(operation);
     return operation;
+  }
+
+  /**
+   * Determine whether an operation has reached its terminal workflow step.
+   * Falls back to status when workflow data is incomplete.
+   * @param {Object} operation - Operation row or payload.
+   * @return {boolean} True when terminal.
+   * @private
+   */
+  isOperationTerminal(operation) {
+    if (!operation) {
+      return false;
+    }
+
+    const operationType = operation.type || null;
+    const workflowStep =
+      operation.workflowStep ?? operation.workflow_step ?? null;
+    if (typeof operationType === 'string' &&
+        typeof workflowStep === 'string' &&
+        workflowStep.length > NUM.ZERO) {
+      return isTerminalStep(operationType, workflowStep);
+    }
+
+    return TERMINAL_STATUSES.includes(operation.status);
+  }
+
+  /**
+   * Resolve the canonical owner node for one operation lifecycle.
+   * Source node owns operation progression. Legacy rows may fall back to
+   * target node ownership when source is unavailable.
+   * @param {Object} operation
+   * @return {string|null}
+   * @private
+   */
+  resolveOperationOwnerNodeId(operation) {
+    const sourceNodeId = String(
+      operation?.sourceNodeId || operation?.source_node_id || '',
+    );
+    if (sourceNodeId.length > NUM.ZERO) {
+      return sourceNodeId;
+    }
+
+    const targetNodeId = String(
+      operation?.targetNodeId || operation?.target_node_id || '',
+    );
+    if (targetNodeId.length > NUM.ZERO) {
+      return targetNodeId;
+    }
+    return null;
+  }
+
+  /**
+   * Return true when this coordinator owns operation lifecycle progression.
+   * @param {Object} operation
+   * @return {boolean}
+   * @private
+   */
+  isOperationLocallyOwned(operation) {
+    return this.resolveOperationOwnerNodeId(operation) === this.nodeId;
   }
 
   /**
@@ -531,7 +674,7 @@ class RebalanceCoordinator extends EventEmitter {
     return this.systemTableCache.filter(
       SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
       (row) => {
-        if (!row || TERMINAL_STATUSES.includes(row.status)) {
+        if (!row || this.isOperationTerminal(row)) {
           return false;
         }
         const rowEntityType = row.entity_type || SERVICE_TYPE.PARTITION;
@@ -557,7 +700,7 @@ class RebalanceCoordinator extends EventEmitter {
     try {
       const operations = await this.getOperationsByEntity(entityType, entityId);
       for (const operation of operations) {
-        if (!operation || TERMINAL_STATUSES.includes(operation.status)) {
+        if (!operation || this.isOperationTerminal(operation)) {
           continue;
         }
 
@@ -758,6 +901,46 @@ class RebalanceCoordinator extends EventEmitter {
     }
   }
 
+  /**
+   * Build one operation single-flight key for shared workflow coordination.
+   * @param {string} scope - Lock scope prefix.
+   * @param {string} key - Scope-specific key.
+   * @return {string} Single-flight owner key.
+   * @private
+   */
+  buildOperationSingleFlightKey(scope, key) {
+    return [
+      scope,
+      key,
+    ].join(OPERATION_SINGLE_FLIGHT_KEY_SEPARATOR);
+  }
+
+  /**
+   * Build create-operation single-flight key.
+   * @param {string} dedupeKey - Move-intent dedupe key.
+   * @return {string}
+   * @private
+   */
+  getCreateOperationSingleFlightKey(dedupeKey) {
+    return this.buildOperationSingleFlightKey(
+      OPERATION_SINGLE_FLIGHT_SCOPE.CREATE,
+      dedupeKey,
+    );
+  }
+
+  /**
+   * Build execute-operation single-flight key.
+   * @param {string} operationId - Operation ID.
+   * @return {string}
+   * @private
+   */
+  getExecuteOperationSingleFlightKey(operationId) {
+    return this.buildOperationSingleFlightKey(
+      OPERATION_SINGLE_FLIGHT_SCOPE.EXECUTE,
+      operationId,
+    );
+  }
+
 
   /**
    * Create an operation record (persisted via SQL engine).
@@ -781,6 +964,8 @@ class RebalanceCoordinator extends EventEmitter {
     const entityType = move.entityType || SERVICE_TYPE.PARTITION;
     const entityId = move.entityId || move.partitionId;
     const dedupeKey = this.buildOperationIntentKey(move, entityType, entityId);
+    const singleFlightKey =
+      this.getCreateOperationSingleFlightKey(dedupeKey);
     this.pruneExpiredOperationIntents();
 
     const recentOperation = this.getRecentOperationIntent(dedupeKey);
@@ -788,19 +973,15 @@ class RebalanceCoordinator extends EventEmitter {
       return recentOperation;
     }
 
-    const existingPromise = this.operationsInCreation.get(dedupeKey);
+    const existingPromise = this.operationsInCreation.get(singleFlightKey);
     if (existingPromise) {
       return existingPromise;
     }
 
-    const creationPromise = this.createOperationInternal(move);
-    this.operationsInCreation.set(dedupeKey, creationPromise);
-
-    try {
-      return await creationPromise;
-    } finally {
-      this.operationsInCreation.delete(dedupeKey);
-    }
+    return this.operationWorkflowRunExclusive(
+      singleFlightKey,
+      () => this.createOperationInternal(move),
+    );
   }
 
   /**
@@ -814,6 +995,9 @@ class RebalanceCoordinator extends EventEmitter {
     const entityId = move.entityId || move.partitionId;
     const partitionId = move.partitionId || entityId;
     const dedupeKey = this.buildOperationIntentKey(move, entityType, entityId);
+    const sourceNodeId = move.type === OperationType.REPLACE ?
+      (move.sourceNodeId || this.nodeId) :
+      this.nodeId;
 
     // Deduplication: check for existing in-flight operation
     const existing = await this.queryExistingInFlightOperation(
@@ -838,13 +1022,18 @@ class RebalanceCoordinator extends EventEmitter {
     }
 
     const operationId = uuidv4();
-    const sourceNodeId = move.type === OperationType.REPLACE ?
-      (move.sourceNodeId || this.nodeId) :
-      this.nodeId;
     const sourceReplicaId = move.type === OperationType.REPLACE ?
       (move.replicaId || null) :
       null;
     let operationReplicaId = move.replicaId || null;
+
+    await this.ensureProvisioningAdmissionAllowed({
+      move,
+      entityType,
+      entityId,
+      partitionId,
+      sourceNodeId,
+    });
 
     if (move.type === OperationType.ADD && !operationReplicaId) {
       operationReplicaId = await this.allocateCanonicalReplicaId({
@@ -904,6 +1093,98 @@ class RebalanceCoordinator extends EventEmitter {
   }
 
   /**
+   * Ensure storage admission approves one storage-increasing workflow.
+   * @param {Object} context
+   * @return {Promise<void>}
+   * @private
+   */
+  async ensureProvisioningAdmissionAllowed(context) {
+    if (!this.storageAdmissionService) {
+      return;
+    }
+
+    const moveType = context?.move?.type || null;
+    let admissionResult = null;
+    const estimatedBytes = this.estimateProvisioningAdmissionBytes(
+      context?.entityType,
+    );
+
+    if (moveType === OperationType.ADD &&
+        typeof this.storageAdmissionService.checkAdd === 'function') {
+      admissionResult = await this.storageAdmissionService.checkAdd({
+        targetNodeId: context.move.nodeId,
+        estimatedBytes,
+      });
+    } else if (moveType === OperationType.REPLACE &&
+        typeof this.storageAdmissionService.checkReplace === 'function') {
+      admissionResult = await this.storageAdmissionService.checkReplace({
+        sourceNodeId: context.sourceNodeId,
+        targetNodeId: context.move.nodeId,
+        estimatedBytes,
+      });
+    }
+
+    if (!admissionResult) {
+      return;
+    }
+
+    if (admissionResult.allowed === true ||
+        admissionResult.decisionType ===
+          STORAGE_ADMISSION_DECISION_TYPE.ADMITTED) {
+      return;
+    }
+
+    throw this.createProvisioningAdmissionError(
+      context.move,
+      admissionResult,
+    );
+  }
+
+  /**
+   * Estimate replica bytes for admission decisions.
+   * @param {string} entityType
+   * @return {number}
+   * @private
+   */
+  estimateProvisioningAdmissionBytes(entityType) {
+    if (!this.storageAccountingService ||
+        typeof this.storageAccountingService.estimateReplicaBytes !==
+          'function') {
+      return NUM.ZERO;
+    }
+    return this.storageAccountingService.estimateReplicaBytes({
+      entityType: entityType || SERVICE_TYPE.PARTITION,
+      sizeBytes: NUM.ZERO,
+    });
+  }
+
+  /**
+   * Build a typed admission-denied error for coordinator callers.
+   * @param {Object} move
+   * @param {Object} admissionResult
+   * @return {Error}
+   * @private
+   */
+  createProvisioningAdmissionError(move, admissionResult) {
+    const primaryReason = Array.isArray(admissionResult?.blockingReasons) &&
+      admissionResult.blockingReasons.length > NUM.ZERO ?
+      String(
+        admissionResult.blockingReasons[0]?.code ||
+        admissionResult.blockingReasons[0]?.reason ||
+        admissionResult.blockingReasons[0] ||
+        '',
+      ) :
+      String(admissionResult?.reason || admissionResult?.decisionType || '');
+    const error = new Error(
+      `Provisioning admission ${admissionResult?.decisionType || 'blocked'} ` +
+      `for ${move?.type || 'operation'} on ${move?.nodeId || 'unknown'}` +
+      (primaryReason ? `: ${primaryReason}` : ''),
+    );
+    error.admissionResult = admissionResult;
+    return error;
+  }
+
+  /**
    * Persist a new operation via SQL engine.
    * @param {Object} operation - Operation to persist.
    * @return {Promise<boolean>} True when row inserted, false when ignored.
@@ -940,9 +1221,11 @@ class RebalanceCoordinator extends EventEmitter {
     }
 
     if (typeof result.changes === 'number') {
+      await this.waitForReplicaOperationCacheVisibility(operation);
       return result.changes > 0;
     }
 
+    await this.waitForReplicaOperationCacheVisibility(operation);
     return true;
   }
 
@@ -974,6 +1257,50 @@ class RebalanceCoordinator extends EventEmitter {
       });
       throw new Error(result.error);
     }
+
+    await this.waitForReplicaOperationCacheVisibility(operation);
+  }
+
+  /**
+   * Wait for replica_operations cache visibility after SQL persistence.
+   * @param {Object} operation
+   * @return {Promise<void>}
+   * @private
+   */
+  async waitForReplicaOperationCacheVisibility(operation) {
+    if (!operation?.operationId ||
+        !this.cdcIntegrationService ||
+        typeof this.cdcIntegrationService.waitForCacheUpdate !==
+          'function') {
+      return;
+    }
+    const minimumFields = {};
+    if (Number.isFinite(operation.updatedAt)) {
+      minimumFields.updated_at = operation.updatedAt;
+    }
+    if (Number.isFinite(operation.completedAt)) {
+      minimumFields.completed_at = operation.completedAt;
+    }
+    const expectedFields = {};
+    if (operation.replicaId !== null && operation.replicaId !== undefined) {
+      expectedFields.replica_id = operation.replicaId;
+    }
+    const expectedCacheFields = Object.keys(expectedFields).length > NUM.ZERO ?
+      expectedFields :
+      undefined;
+    const minimumCacheFields = Object.keys(minimumFields).length > NUM.ZERO ?
+      minimumFields :
+      undefined;
+    await this.cdcIntegrationService.waitForCacheUpdate(
+      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+      operation.operationId,
+      true,
+      {
+        expectedFields: expectedCacheFields,
+        minimumFields: minimumCacheFields,
+        fallbackPhase: CDC_FALLBACK_PHASE_RECOVERY,
+      },
+    );
   }
 
   /**
@@ -986,7 +1313,11 @@ class RebalanceCoordinator extends EventEmitter {
   async executeOperationMutationWithRetry(sql, params) {
     const startedAt = Date.now();
     while (true) {
-      const result = await this.sqlQueryEngine.executeQuery(sql, params);
+      const result = await this.sqlQueryEngine.executeQuery(
+        sql,
+        params,
+        CONTROL_PLANE_QUERY_OPTIONS,
+      );
       if (result.success || !this.isRetryableOperationPersistError(result.error)) {
         return result;
       }
@@ -1210,6 +1541,7 @@ class RebalanceCoordinator extends EventEmitter {
         RESERVATION_STATUS.ACTIVE,
         now,
       ],
+      CONTROL_PLANE_QUERY_OPTIONS,
     );
 
     if (expireResult.success &&
@@ -1228,13 +1560,13 @@ class RebalanceCoordinator extends EventEmitter {
     const activeResult = await this.sqlQueryEngine.executeQuery(
       SQL.SELECT_ACTIVE_RESERVATIONS,
       [RESERVATION_STATUS.ACTIVE],
+      CONTROL_PLANE_QUERY_OPTIONS,
     );
 
     if (activeResult.success && activeResult.rows) {
       for (const row of activeResult.rows) {
         const op = await this.queryOperationById(row.operation_id);
-        const isTerminal = !op ||
-          TERMINAL_STATUSES.includes(op.status);
+        const isTerminal = !op || this.isOperationTerminal(op);
         if (isTerminal) {
           const releaseResult =
             await this.sqlQueryEngine.executeQuery(
@@ -1246,6 +1578,7 @@ class RebalanceCoordinator extends EventEmitter {
                 row.operation_id,
                 RESERVATION_STATUS.ACTIVE,
               ],
+              CONTROL_PLANE_QUERY_OPTIONS,
             );
           if (releaseResult.success) {
             orphansReleased++;
@@ -1296,7 +1629,10 @@ class RebalanceCoordinator extends EventEmitter {
     }
 
     const operationId = operation?.operationId;
-    if (operationId && this.operationsInExecution.has(operationId)) {
+    const singleFlightKey = operationId ?
+      this.getExecuteOperationSingleFlightKey(operationId) :
+      null;
+    if (singleFlightKey && this.operationsInExecution.has(singleFlightKey)) {
       return {
         success: false,
         skipped: true,
@@ -1305,17 +1641,14 @@ class RebalanceCoordinator extends EventEmitter {
       };
     }
 
-    const executionPromise = this.executeOperationInternal(operation);
-    if (operationId) {
-      this.operationsInExecution.set(operationId, executionPromise);
+    if (!singleFlightKey) {
+      return this.executeOperationInternal(operation);
     }
-    try {
-      return await executionPromise;
-    } finally {
-      if (operationId) {
-        this.operationsInExecution.delete(operationId);
-      }
-    }
+
+    return this.operationWorkflowRunExclusive(
+      singleFlightKey,
+      () => this.executeOperationInternal(operation),
+    );
   }
 
   /**
@@ -1327,6 +1660,15 @@ class RebalanceCoordinator extends EventEmitter {
   async executeOperationInternal(operation) {
     if (!this.messageRouter) {
       throw new Error(REBALANCE_COORDINATOR_ERROR_MSG.ROUTER_MISSING);
+    }
+
+    if (!this.isOperationLocallyOwned(operation)) {
+      return {
+        success: false,
+        skipped: true,
+        reason: REBALANCER_SKIP_REASON.OPERATION_OWNED_BY_ANOTHER_NODE,
+        operationId: operation?.operationId,
+      };
     }
 
     const replaceRemovePhase = this.isReplaceRemovePhase(operation);
@@ -1410,6 +1752,28 @@ class RebalanceCoordinator extends EventEmitter {
     };
     if (requestReason) {
       request[ReplicaOperationField.REASON] = requestReason;
+    }
+    if (Array.isArray(operation[ReplicaOperationField.REPLICA_IDS]) &&
+        operation[ReplicaOperationField.REPLICA_IDS].length > NUM.ZERO) {
+      request[ReplicaOperationField.REPLICA_IDS] =
+        operation[ReplicaOperationField.REPLICA_IDS];
+    }
+    if (Array.isArray(operation[ReplicaOperationField.PEER_ADDRESSES]) &&
+        operation[ReplicaOperationField.PEER_ADDRESSES].length > NUM.ZERO) {
+      request[ReplicaOperationField.PEER_ADDRESSES] =
+        operation[ReplicaOperationField.PEER_ADDRESSES];
+    }
+    if (operation[ReplicaOperationField.BOOTSTRAP_TABLE_METADATA] &&
+        typeof operation[ReplicaOperationField.BOOTSTRAP_TABLE_METADATA] ===
+          'object') {
+      request[ReplicaOperationField.BOOTSTRAP_TABLE_METADATA] =
+        operation[ReplicaOperationField.BOOTSTRAP_TABLE_METADATA];
+    }
+    if (operation[ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA] &&
+        typeof operation[ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA] ===
+          'object') {
+      request[ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA] =
+        operation[ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA];
     }
 
     this.logger.debug(REBALANCE_COORDINATOR_LOG_MSG.SEND_OPERATION, {
@@ -1829,6 +2193,7 @@ class RebalanceCoordinator extends EventEmitter {
    * @param {Object} [options] - Failure logging options.
    * @param {string} [options.logLevel] - Log level for failure event.
    * @param {string} [options.logMessage] - Log message override.
+   * @param {Object} [options.stepMetadata] - FAILED step metadata.
    * @return {Promise<void>}
    */
   async failOperation(operation, errorMessage, options = {}) {
@@ -1847,7 +2212,15 @@ class RebalanceCoordinator extends EventEmitter {
     operation.updatedAt = now;
     operation.completedAt = now;
     operation.errorMessage = normalizedError;
-    operation.stepsHistory.push({step: WORKFLOW_STEP.FAILED, timestamp: now});
+    const failedStepEntry = {
+      step: WORKFLOW_STEP.FAILED,
+      timestamp: now,
+    };
+    if (options.stepMetadata &&
+        typeof options.stepMetadata === 'object') {
+      Object.assign(failedStepEntry, options.stepMetadata);
+    }
+    operation.stepsHistory.push(failedStepEntry);
 
     await this.persistOperationUpdate(operation);
 
@@ -1955,33 +2328,53 @@ class RebalanceCoordinator extends EventEmitter {
     const incompleteOps = await this.queryIncompleteOperations();
 
     for (const operation of incompleteOps) {
+      if (!this.isOperationLocallyOwned(operation)) {
+        continue;
+      }
       // Skip completed or failed operations
-      if (isTerminalStep(operation.type, operation.workflowStep)) {
+      if (this.isOperationTerminal(operation)) {
         continue;
       }
 
-      // REPLACE operations transition from ACTIVE to STOPPING by dispatching
-      // source removal once replacement activation is observed.
-      if (operation.type === OperationType.REPLACE &&
-          operation.workflowStep === WORKFLOW_STEP.ACTIVE) {
-        await this.executeOperation(operation);
+      if (await this.reconcileOperationProgress(operation)) {
         continue;
       }
 
       const elapsed = now - operation.updatedAt;
       const timeout = this.getTimeoutForStep(operation.workflowStep);
+      const timeoutBudget = createTimeoutBudget({
+        configuredBudgetMs: timeout,
+        startedAtMs: operation.updatedAt,
+      });
+      const timeoutClassification = buildTimeoutClassification({
+        budget: timeoutBudget,
+        classification:
+          TIMEOUT_BUDGET_CLASSIFICATION.REBALANCE_OPERATION_TIMEOUT,
+        nestedOperation:
+          `rebalance:${String(operation.workflowStep || 'unknown').toLowerCase()}`,
+        now: () => now,
+      });
 
-      if (elapsed > timeout) {
+      if (elapsed >= timeout) {
         this.logger.warn(REBALANCE_COORDINATOR_LOG_MSG.OPERATION_TIMED_OUT, {
           operationId: operation.operationId,
           workflowStep: operation.workflowStep,
           elapsed,
           timeout,
+          timeoutClassification,
         });
 
         await this.failOperation(
           operation,
           `Timeout in ${operation.workflowStep} step after ${elapsed}ms`,
+          {
+            stepMetadata: {
+              timeoutClassification,
+              timeoutMs: timeout,
+              elapsedMs: elapsed,
+              timedOutAtMs: now,
+            },
+          },
         );
 
         this.stats.operationsTimedOut++;
@@ -2021,6 +2414,65 @@ class RebalanceCoordinator extends EventEmitter {
   }
 
   /**
+   * Reconcile one in-flight operation against observed replica state.
+   * This keeps workflows progressing even if the async handler update is lost.
+   * @param {Object} operation - Operation to reconcile.
+   * @return {Promise<boolean>} True when the workflow advanced.
+   * @private
+   */
+  async reconcileOperationProgress(operation) {
+    if (!operation) {
+      return false;
+    }
+    if (!this.isOperationLocallyOwned(operation)) {
+      return false;
+    }
+
+    if (operation.type === OperationType.REPLACE &&
+        operation.workflowStep === WORKFLOW_STEP.ACTIVE) {
+      await this.executeOperation(operation);
+      return true;
+    }
+
+    if (operation.workflowStep !== WORKFLOW_STEP.CREATING &&
+        operation.workflowStep !== WORKFLOW_STEP.SYNCING) {
+      return false;
+    }
+
+    const actualStatus = await this.getActualReplicaStatus(
+      operation.replicaId,
+      operation.partitionId,
+      operation.targetNodeId,
+    );
+
+    if (actualStatus === ReplicaStatus.SYNCING &&
+        operation.workflowStep === WORKFLOW_STEP.CREATING) {
+      await this.updateStep(operation, WORKFLOW_STEP.SYNCING);
+      return true;
+    }
+
+    if (actualStatus === ReplicaStatus.ACTIVE) {
+      if (operation.type === OperationType.REPLACE) {
+        await this.updateStep(operation, WORKFLOW_STEP.ACTIVE);
+        await this.executeOperation(operation);
+      } else {
+        await this.completeOperation(operation);
+      }
+      return true;
+    }
+
+    if (actualStatus === ReplicaStatus.FAILED) {
+      await this.failOperation(
+        operation,
+        'Replica failed during operation reconciliation',
+      );
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
    * Handle node recovery - process incomplete operations.
    * Requirements: 7.1, 7.2, 7.3
    *
@@ -2051,6 +2503,9 @@ class RebalanceCoordinator extends EventEmitter {
     });
 
     for (const op of incompleteOps) {
+      if (!this.isOperationLocallyOwned(op)) {
+        continue;
+      }
       // Handle based on workflow step
       if (this.isPreSyncStep(op.workflowStep)) {
         // Mark PENDING, SENDING, CREATING as FAILED (Requirement 7.2)
@@ -2182,6 +2637,7 @@ class RebalanceCoordinator extends EventEmitter {
       const result = await this.sqlQueryEngine.executeQuery(
         SQL.SELECT_REPLICA_STATUS,
         [replicaId],
+        CONTROL_PLANE_QUERY_OPTIONS,
       );
 
       if (result.success && result.rows && result.rows.length > NUM.ZERO) {
@@ -2193,6 +2649,7 @@ class RebalanceCoordinator extends EventEmitter {
     const result = await this.sqlQueryEngine.executeQuery(
       SQL.SELECT_REPLICA_BY_PARTITION_NODE,
       [partitionId, targetNodeId],
+      CONTROL_PLANE_QUERY_OPTIONS,
     );
 
     if (result.success && result.rows && result.rows.length > NUM.ZERO) {
@@ -2222,6 +2679,7 @@ class RebalanceCoordinator extends EventEmitter {
     const result = await this.sqlQueryEngine.executeQuery(
       'SELECT * FROM replica_operations ORDER BY created_at DESC',
       [],
+      CONTROL_PLANE_QUERY_OPTIONS,
     );
 
     if (!result.success || !result.rows) {
@@ -2252,6 +2710,7 @@ class RebalanceCoordinator extends EventEmitter {
     const result = await this.sqlQueryEngine.executeQuery(
       SQL.SELECT_OPERATIONS_BY_ENTITY,
       [entityType, entityId, entityId],
+      CONTROL_PLANE_QUERY_OPTIONS,
     );
 
     if (!result.success || !result.rows) {
@@ -2292,13 +2751,17 @@ class RebalanceCoordinator extends EventEmitter {
     const result = await this.sqlQueryEngine.executeQuery(
       SQL.SELECT_IN_FLIGHT_BY_TYPE,
       [OperationType.REMOVE],
+      CONTROL_PLANE_QUERY_OPTIONS,
     );
 
     if (!result.success || !result.rows) {
       return NUM.ZERO;
     }
 
-    return result.rows.length;
+    return result.rows
+      .map((row) => this.rowToOperation(row))
+      .filter((operation) => !this.isOperationTerminal(operation))
+      .length;
   }
 
   /**
@@ -2371,7 +2834,6 @@ class RebalanceCoordinator extends EventEmitter {
     });
 
     this.operationsInCreation.clear();
-    this.operationsInExecution.clear();
     this.recentOperationIntents.clear();
 
     this.emit(REBALANCE_COORDINATOR_EVENT.SHUTDOWN);

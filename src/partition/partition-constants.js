@@ -16,6 +16,32 @@ const PARTITION_STATE = Object.freeze({
   MERGING: 'MERGING',
 });
 
+const PARTITION_TRANSITION_STATE = Object.freeze({
+  ADMISSION_PENDING: 'admission_pending',
+  BLOCKED: 'blocked',
+  DEFERRED: 'deferred',
+  FAILED: 'failed',
+  SPLIT_PREPARING: 'split_preparing',
+  SPLIT_BACKFILLING: 'split_backfilling',
+  SPLIT_CUTOVER_ACTIVE: 'split_cutover_active',
+});
+
+const PARTITION_TRANSITION_METADATA_FIELD = Object.freeze({
+  WORKFLOW_ID: 'workflowId',
+  ADMISSION: 'admission',
+  FAILURE: 'failure',
+  PRIMARY_KEY_COLUMN: 'primaryKeyColumn',
+  SOURCE_PARTITION_ID: 'sourcePartitionId',
+  SPLIT_KEY: 'splitKey',
+  TARGET_PARTITION_IDS: 'targetPartitionIds',
+  TARGET_PARTITION_VERSION: 'targetPartitionVersion',
+});
+
+const PARTITION_SPLIT_MIRROR_ORIGIN = Object.freeze({
+  SOURCE: 'source',
+  TARGET: 'target',
+});
+
 const PARTITION_RAFT_ROLE = RAFT_ROLE;
 
 const PARTITION_REQUEST_TYPE = Object.freeze({
@@ -99,8 +125,10 @@ const SPLIT_MERGE_LOG_MSG = Object.freeze({
   EVALUATED_SPLIT_CRITERIA: 'Evaluated split criteria',
   EVALUATED_MERGE_CRITERIA: 'Evaluated merge criteria',
   STARTING_SPLIT: 'Starting partition split',
-  SPLIT_COMPLETED: 'Partition split completed',
-  SPLIT_FAILED: 'Partition split failed',
+  SPLIT_PLAN_COMPLETED: 'Partition split plan completed',
+  SPLIT_PLAN_FAILED: 'Partition split plan failed',
+  SPLIT_EXECUTION_DEFERRED: 'Managed split execution deferred',
+  SPLIT_EXECUTION_FAILED: 'Managed split execution failed',
   STARTING_MERGE: 'Starting partition merge',
   MERGE_COMPLETED: 'Partition merge completed',
   MERGE_FAILED: 'Partition merge failed',
@@ -137,6 +165,7 @@ const SPLIT_MERGE_ERROR_MSG = Object.freeze({
     `Range integrity violation: merged end (${mergedEnd}) != right end (${rightEnd})`,
   managerBusy: (state) => `Cannot split: manager is in ${state} state`,
   mergeManagerBusy: (state) => `Cannot merge: manager is in ${state} state`,
+  MANAGED_SPLIT_EXECUTION_FAILED: 'Managed split execution failed',
   partitionRangeMissing: (partitionId) =>
     `Partition ${partitionId} not found in key range manager`,
   leftPartitionMissing: (partitionId) =>
@@ -209,4 +238,7 @@ export {
   SPLIT_MERGE_REASON,
   SPLIT_MERGE_SQL,
   SPLIT_MERGE_STATE,
+  PARTITION_TRANSITION_STATE,
+  PARTITION_TRANSITION_METADATA_FIELD,
+  PARTITION_SPLIT_MIRROR_ORIGIN,
 };

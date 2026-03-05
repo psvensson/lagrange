@@ -1,6 +1,7 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {ParallelQueryCoordinator} from '../../src/query/distributed/parallel-query-coordinator.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {CancellationToken} from '../../src/query/cancellation-token.js';
 
 const config = ConfigurationManager.getInstance();
 if (!config.isInitialized()) {
@@ -193,4 +194,96 @@ test('ParallelQueryCoordinator - emits fanout metrics log', async (t) => {
     debugCalls.every((c) => c.tag === metricsCall.tag),
     'metrics logs only emitted at info level',
   );
+});
+
+test('ParallelQueryCoordinator - per-query timeout override controls chunk timeout',
+  async (t) => {
+    const originalSetTimeout = globalThis.setTimeout;
+    const originalClearTimeout = globalThis.clearTimeout;
+    const scheduledTimeouts = [];
+
+    globalThis.setTimeout = (callback, timeoutMs) => {
+      scheduledTimeouts.push(timeoutMs);
+      globalThis.queueMicrotask(callback);
+      return 1;
+    };
+    globalThis.clearTimeout = () => {};
+
+    const partitions = new Map([
+      ['p1', {
+        async executeQuery() {
+          return new Promise(() => {});
+        },
+      }],
+    ]);
+
+    const coordinator = new ParallelQueryCoordinator({
+      systemCache: createMockSystemCache(partitions),
+    });
+    coordinator.speculativeExecutionEnabled = false;
+
+    try {
+      await t.rejects(
+        coordinator.executeParallel(
+          'SELECT * FROM test',
+          ['p1'],
+          [],
+          {timeoutMs: 4321},
+        ),
+        /Query timeout after 4321ms/,
+      );
+      t.ok(
+        scheduledTimeouts.includes(4321),
+        'coordinator should schedule timeout using per-query override',
+      );
+    } finally {
+      globalThis.setTimeout = originalSetTimeout;
+      globalThis.clearTimeout = originalClearTimeout;
+    }
+  });
+
+test('ParallelQueryCoordinator - cooperative cancellation aborts fanout', async (t) => {
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
+
+  globalThis.setTimeout = (callback, _timeoutMs) => {
+    globalThis.queueMicrotask(callback);
+    return 1;
+  };
+  globalThis.clearTimeout = () => {};
+
+  const partitions = new Map([
+    ['p1', {
+      async executeQuery() {
+        return new Promise(() => {});
+      },
+    }],
+  ]);
+
+  const coordinator = new ParallelQueryCoordinator({
+    systemCache: createMockSystemCache(partitions),
+  });
+  coordinator.speculativeExecutionEnabled = false;
+
+  const cancellationToken = new CancellationToken();
+  cancellationToken.cancel('cancelled-by-test');
+
+  try {
+    await t.rejects(
+      coordinator.executeParallel(
+        'SELECT * FROM test',
+        ['p1'],
+        [],
+        {
+          timeoutMs: 5000,
+          cancellationToken,
+        },
+      ),
+      /cancelled-by-test/,
+      'cancelled token should abort parallel fanout before timeout',
+    );
+  } finally {
+    globalThis.setTimeout = originalSetTimeout;
+    globalThis.clearTimeout = originalClearTimeout;
+  }
 });

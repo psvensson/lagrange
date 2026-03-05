@@ -39,6 +39,23 @@ function createPreviousNodeRow(nodeId, leaseOffsetMs) {
   };
 }
 
+function createPreviousReadyHeartbeatRow(nodeId, options = {}) {
+  const now = Date.now();
+  const lastHeartbeatOffsetMs = Number.isFinite(options.lastHeartbeatOffsetMs) ?
+    options.lastHeartbeatOffsetMs :
+    LEASE_EXPIRED_MS * 2;
+  const leaseOffsetMs = Number.isFinite(options.leaseOffsetMs) ?
+    options.leaseOffsetMs :
+    LEASE_EXPIRED_MS;
+  return {
+    node_id: nodeId,
+    status: SERVICE_STATUS.ACTIVE,
+    connection_state: STATE.DISCONNECTED,
+    last_heartbeat: now + lastHeartbeatOffsetMs,
+    ready_lease_expires_at: now + leaseOffsetMs,
+  };
+}
+
 function setReadyNodeCache(bootstrapService, nodeRows) {
   const rowsByNodeId = new Map(
     nodeRows.map((nodeRow) => [nodeRow.node_id, {...nodeRow}]),
@@ -170,6 +187,60 @@ test('BootstrapService node-ready rebalance trigger ownership', async (t) => {
             'Skipping node-ready rebalance trigger: no not-ready to ready transition'),
         false,
         'no-transition skip should not be emitted at info level',
+      );
+    },
+  );
+
+  await t.test(
+    'treats delayed ready-lease refresh from a prior heartbeat as no transition',
+    async (t) => {
+      const bootstrapService = new BootstrapService({
+        nodeId: 'seed-node',
+        nodeAddress: 'localhost:8080',
+        config: {
+          nodeReadyRebalanceDelayMs: NODE_READY_REBALANCE_DELAY_MS,
+        },
+      });
+
+      const infoLogs = [];
+      const debugLogs = [];
+      bootstrapService.logger = {
+        info(message, context) {
+          infoLogs.push({message, context});
+        },
+        debug(message, context) {
+          debugLogs.push({message, context});
+        },
+        warn() {},
+        error() {},
+      };
+
+      const scheduled = bootstrapService.handleNodeReadyRebalanceTrigger(
+        {
+          data: {
+            ...createNodeEvent('node-refresh', LEASE_VALID_MS, STATE.DISCONNECTED).data,
+            last_heartbeat: Date.now(),
+          },
+        },
+        createPreviousReadyHeartbeatRow('node-refresh'),
+      );
+
+      t.equal(
+        scheduled,
+        false,
+        'delayed lease refresh should not retrigger node_ready rebalancing',
+      );
+      t.ok(
+        debugLogs.some((entry) =>
+          entry.message ===
+            'Skipping node-ready rebalance trigger: no not-ready to ready transition'),
+        'delayed lease refresh should be classified as a no-transition skip',
+      );
+      t.equal(
+        infoLogs.some((entry) =>
+          entry.message === 'Scheduling node-ready rebalance trigger'),
+        false,
+        'delayed lease refresh should not schedule a rebalance timer',
       );
     },
   );

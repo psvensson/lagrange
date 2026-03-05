@@ -5,6 +5,7 @@
 
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {UnifiedRebalancer} from '../../src/rebalancer/unified-rebalancer.js';
+import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {
   DEFAULT_TABLE_POLICY,
   DEFAULT_MESSAGE_GROUP_POLICY,
@@ -107,11 +108,7 @@ function createMockPolicyService(options = {}) {
       if (!partition) return {...DEFAULT_TABLE_POLICY};
       const table = tables.find((t) => t.table_id === partition.table_id);
       if (!table || !table.table_policies) return {...DEFAULT_TABLE_POLICY};
-      try {
-        return {...DEFAULT_TABLE_POLICY, ...JSON.parse(table.table_policies)};
-      } catch (error) {
-        throw error;
-      }
+      return {...DEFAULT_TABLE_POLICY, ...JSON.parse(table.table_policies)};
     },
     getMessageGroupPolicy: async () => ({...DEFAULT_MESSAGE_GROUP_POLICY}),
   };
@@ -184,6 +181,20 @@ function createMockCoordinator() {
       totalOperations: 0,
     }),
   };
+}
+
+function isTrackedOperationInFlight(operation) {
+  if (!operation) {
+    return false;
+  }
+
+  const workflowStep = operation.workflow_step || operation.workflowStep || null;
+  if (workflowStep === WORKFLOW_STEP.FAILED ||
+      workflowStep === WORKFLOW_STEP.REMOVED) {
+    return false;
+  }
+
+  return !(operation.type === 'ADD' && workflowStep === WORKFLOW_STEP.ACTIVE);
 }
 
 /**
@@ -277,21 +288,32 @@ function createTestCoordinator(options = {}) {
       if (sql.includes('replica_operations')) {
         const allOps = Array.from(trackedOperations.values());
 
+        if (sql.includes('WHERE operation_id = ?')) {
+          const [operationId] = params;
+          const operation = trackedOperations.get(operationId);
+          return {
+            success: true,
+            rows: operation ? [operation] : [],
+          };
+        }
+
         // Handle deduplication query (partition_id AND target_node_id)
         if (sql.includes('partition_id = ?') && sql.includes('target_node_id = ?')) {
           const [partitionId, targetNodeId] = params;
           const matching = allOps.filter((op) =>
             op.partition_id === partitionId &&
             op.target_node_id === targetNodeId &&
-            !['active', 'removed', 'failed'].includes(op.status));
+            isTrackedOperationInFlight(op));
           return {success: true, rows: matching};
         }
 
         // Filter for non-terminal operations if query includes status filter
         // Matches both old NOT IN syntax and new <> syntax
-        if (sql.includes('status <>') || sql.includes('NOT IN')) {
+        if (sql.includes('workflow_step') ||
+            sql.includes('status <>') ||
+            sql.includes('NOT IN')) {
           const incompleteOps = allOps.filter((op) =>
-            !['active', 'removed', 'failed'].includes(op.status));
+            isTrackedOperationInFlight(op));
           return {success: true, rows: incompleteOps};
         }
 
@@ -309,6 +331,8 @@ function createTestCoordinator(options = {}) {
     tablePolicyService: mockPolicyService,
     messageRouter: mockMessageRouter,
     sqlQueryEngine: mockSqlEngine,
+    storageAdmissionService: options.storageAdmissionService || null,
+    storageAccountingService: options.storageAccountingService || null,
     enableTimeouts,
   });
 

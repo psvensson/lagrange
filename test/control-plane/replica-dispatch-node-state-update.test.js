@@ -65,15 +65,7 @@ test('ReplicaDispatchService persists NODE_STATE_UPDATE ready heartbeats', async
         }
         return cacheNode;
       },
-    },
-    sqlQueryEngine: {
-      executeQuery: async (sql, params) => {
-        if (sql.includes('FROM nodes') &&
-            params?.[0] === 'node-2') {
-          return {success: true, rows: [cacheNode]};
-        }
-        return {success: true, rows: []};
-      },
+      getAll: (_tableName) => [],
     },
     rebalanceCoordinator: {
       executeOperation: async () => ({success: true}),
@@ -154,15 +146,7 @@ test('ReplicaDispatchService applies nodeRow payload from NODE_STATE_UPDATE hear
           }
           return cacheNode;
         },
-      },
-      sqlQueryEngine: {
-        executeQuery: async (sql, params) => {
-          if (sql.includes('FROM nodes') &&
-              params?.[0] === 'node-3') {
-            return {success: true, rows: [cacheNode]};
-          }
-          return {success: true, rows: []};
-        },
+        getAll: (_tableName) => [],
       },
       rebalanceCoordinator: {
         executeOperation: async () => ({success: true}),

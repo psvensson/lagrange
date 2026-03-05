@@ -4,6 +4,8 @@ import {
   TRANSACTION_STATUS,
 } from '../../src/query/distributed/distributed-transaction-coordinator.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+import {DurableWorkflowCoordinator} from
+  '../../src/workflow/durable-workflow-coordinator.js';
 
 const config = ConfigurationManager.getInstance();
 if (!config.isInitialized()) {
@@ -221,4 +223,27 @@ test('DistributedTransactionCoordinator - recovers from canonical system table r
     t.same(tx.participants, ['p1']);
     t.equal(tx.writeOperations.length, 1);
     t.same(tx.writeOperations[0].partitionIds, ['p1']);
+  });
+
+test('DistributedTransactionCoordinator - uses injected workflow coordinator',
+  async (t) => {
+    const workflowCoordinator = new DurableWorkflowCoordinator();
+    const coordinator = new DistributedTransactionCoordinator({
+      workflowCoordinator,
+      beginParticipant: async () => {},
+      commitParticipant: async () => {},
+      rollbackParticipant: async () => {},
+      now: () => 1000,
+    });
+
+    await coordinator.begin('s8');
+    await coordinator.enlistParticipants('s8', ['p1']);
+
+    const workflow = workflowCoordinator.getWorkflowByOwnerKey('s8');
+    t.ok(workflow, 'transaction state should be owned by the injected workflow coordinator');
+    t.equal(workflow.transactionId, coordinator.getTransaction('s8').transactionId);
+    t.ok(
+      workflow.participants.has('p1'),
+      'participant state should be persisted through the injected workflow coordinator',
+    );
   });

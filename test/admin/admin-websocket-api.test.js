@@ -6,7 +6,10 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {AdminWebSocketAPI, MessageType, ErrorCode} from
   '../../src/admin/admin-websocket-api.js';
-import {CONSISTENCY_MISMATCH_KIND} from '../../src/admin/admin-constants.js';
+import {
+  ADMIN_CONTROL_SNAPSHOT,
+  CONSISTENCY_MISMATCH_KIND,
+} from '../../src/admin/admin-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {createReadOnlyCache} from '../../src/cache/read-only-system-table-cache.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -1278,6 +1281,117 @@ test('AdminWebSocketAPI - local control snapshot derives canonical leaders ' +
     await api.shutdown();
   });
 
+test('AdminWebSocketAPI - local control snapshot exposes structured control-plane diagnostics',
+  async (t) => {
+    const workflowId = 'split-table-1-partition-1-v2';
+    const cache = createPopulatedCache();
+    cache.applySystemTableChange(TABLES.TABLES, 'UPDATE', {
+      id: 'table-1',
+      partition_transition_state: 'failed',
+      partition_transition_metadata: JSON.stringify({
+        workflowId,
+        sourcePartitionId: 'partition-1',
+        targetPartitionIds: ['partition-1-left', 'partition-1-right'],
+        admission: {
+          decisionType: 'blocked',
+          blockingReasons: [{
+            code: 'metadata_publication_degraded',
+          }],
+        },
+        failure: {
+          classification: 'split_execution_failure',
+          timeoutClassification: {
+            classification: 'cache_visibility_timeout',
+            boundaryHit: true,
+            nestedOperation: 'table_partition_metadata_wait',
+          },
+        },
+      }),
+    });
+
+    const api = new AdminWebSocketAPI({
+      nodeId: 'node-1',
+      systemTableCache: cache,
+      controlPlaneReadinessService: {
+        async getAllNodeReadiness() {
+          return [{
+            nodeId: 'node-1',
+            dimensions: {
+              processAlive: true,
+              clusterMemberHealthy: true,
+              routingReady: true,
+              loadReady: true,
+              placementEligible: false,
+              controlPlaneWritable: false,
+              metadataPublicationHealthy: false,
+            },
+            reasons: [{
+              code: 'metadata_publication_degraded',
+            }],
+            publication: {
+              currentMode: 'conservative_fanout',
+              reasonCode: 'grouped_delivery_failed',
+              enteredAt: '2026-03-04T00:00:00.000Z',
+              recentTransitions: [{
+                mode: 'conservative_fanout',
+                reasonCode: 'grouped_delivery_failed',
+              }],
+            },
+          }];
+        },
+      },
+      sqlQueryEngine: {
+        executeRequest: async () => ({success: true, rows: []}),
+      },
+    });
+
+    await api.initialize(0, {listen: false});
+
+    const response = await api.getFastify().inject({
+      method: 'GET',
+      url: '/api/admin/control-snapshot?scope=local',
+    });
+    const payload = response.json();
+    const diagnostics = payload.controlPlaneDiagnostics;
+
+    t.equal(response.statusCode, 200, 'should return 200 for local snapshot');
+    t.equal(
+      diagnostics.publicationMode.currentMode,
+      'conservative_fanout',
+      'snapshot should expose canonical publication mode',
+    );
+    t.equal(
+      diagnostics.readinessByNodeId['node-1'].dimensions.placementEligible,
+      false,
+      'snapshot should expose per-node readiness dimensions',
+    );
+    t.same(
+      diagnostics.placementEligibilityByNodeId['node-1'].reasonCodes,
+      ['metadata_publication_degraded'],
+      'snapshot should expose placement-eligibility reason codes',
+    );
+    t.equal(
+      diagnostics.workflowAdmissionsByWorkflowId[workflowId].blockingReasons[0].code,
+      'metadata_publication_degraded',
+      'snapshot should expose persisted workflow admission reasons',
+    );
+    t.equal(
+      diagnostics.timeoutClassifications[0].timeoutClassification.classification,
+      'cache_visibility_timeout',
+      'snapshot should expose persisted timeout classifications',
+    );
+
+    const preflightResult =
+      await api.buildPreflightCriticalPathSnapshotQueryResult();
+    t.equal(
+      preflightResult.rows[0].controlPlaneDiagnostics.publicationMode.currentMode,
+      'conservative_fanout',
+      'preflight snapshot should carry the same control-plane diagnostics block',
+    );
+
+    await api.shutdown();
+  });
+
 test('AdminWebSocketAPI - local control snapshot query avoids distributed fanout',
   async (t) => {
     let executeRequestCalls = 0;
@@ -1319,6 +1433,138 @@ test('AdminWebSocketAPI - local control snapshot query avoids distributed fanout
     ws.close();
     await api.shutdown();
   });
+
+test('AdminWebSocketAPI - forced control snapshot query routes through ' +
+  'authoritative repair path', async (t) => {
+  const writableCache = createPopulatedCache();
+  const repairEngine = createSystemTableRepairQueryEngine({
+    [TABLES.NODES]: writableCache.getAll(TABLES.NODES),
+    [TABLES.PARTITIONS]: writableCache.getAll(TABLES.PARTITIONS),
+    [TABLES.SERVICES]: writableCache.getAll(TABLES.SERVICES),
+    [TABLES.TABLES]: writableCache.getAll(TABLES.TABLES),
+    [TABLES.NODE_ENDPOINTS]: writableCache.getAll(TABLES.NODE_ENDPOINTS),
+    [TABLES.SERVICE_DEFINITIONS]:
+      writableCache.getAll(TABLES.SERVICE_DEFINITIONS),
+    [TABLES.SERVICE_ENDPOINTS]:
+      writableCache.getAll(TABLES.SERVICE_ENDPOINTS),
+    [TABLES.REPLICA_OPERATIONS]:
+      writableCache.getAll(TABLES.REPLICA_OPERATIONS),
+  });
+  const api = new AdminWebSocketAPI({
+    nodeId: 'test-node',
+    systemTableCache: createReadOnlyCache(writableCache),
+    cacheMutationTarget: writableCache,
+    sqlQueryEngine: repairEngine,
+  });
+
+  const result = await api.executeLocalQueryEnvelope({
+    queryId: 'q-force-control-snapshot',
+    sql: ADMIN_CONTROL_SNAPSHOT.QUERY_SQL_FORCE_REPAIR,
+    params: [],
+  });
+  t.equal(result.success, true, 'forced control snapshot query should succeed');
+  t.equal(Array.isArray(result.rows), true, 'forced query should return one snapshot row');
+  t.equal(
+    repairEngine.executeRequestCalls.includes(`SELECT * FROM ${TABLES.PARTITIONS}`),
+    true,
+    'forced control snapshot query should run authoritative repair reads',
+  );
+});
+
+test(
+  'AdminWebSocketAPI - local control snapshot repairs partition topology gaps',
+  async (t) => {
+    const tableId = 'table-benchmark-events';
+    const sourcePartitionId = 'partition-benchmark-events-v1';
+    const leftPartitionId = 'partition-benchmark-events-left';
+    const rightPartitionId = 'partition-benchmark-events-right';
+
+    const writableCache = createPopulatedCache();
+    writableCache.applySystemTableChange(TABLES.TABLES, 'INSERT', {
+      id: tableId,
+      table_id: tableId,
+      name: 'benchmark_events',
+      table_name: 'benchmark_events',
+      active_partition_version: 2,
+      partition_count: 2,
+      partition_transition_state: 'split_cutover_active',
+      partition_transition_metadata: JSON.stringify({
+        workflowId: 'split-table-benchmark-events-v2',
+        sourcePartitionId,
+        targetPartitionVersion: 2,
+        targetPartitionIds: [leftPartitionId, rightPartitionId],
+      }),
+    });
+    writableCache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
+      id: sourcePartitionId,
+      partition_id: sourcePartitionId,
+      table_id: tableId,
+      table_name: 'benchmark_events',
+      partition_version: 1,
+      state: 'NORMAL',
+    });
+
+    const authoritativePartitions = [
+      ...writableCache.getAll(TABLES.PARTITIONS),
+      {
+        id: leftPartitionId,
+        partition_id: leftPartitionId,
+        table_id: tableId,
+        table_name: 'benchmark_events',
+        partition_version: 2,
+        state: 'NORMAL',
+      },
+      {
+        id: rightPartitionId,
+        partition_id: rightPartitionId,
+        table_id: tableId,
+        table_name: 'benchmark_events',
+        partition_version: 2,
+        state: 'NORMAL',
+      },
+    ];
+
+    const repairEngine = createSystemTableRepairQueryEngine({
+      [TABLES.NODES]: writableCache.getAll(TABLES.NODES),
+      [TABLES.PARTITIONS]: authoritativePartitions,
+      [TABLES.SERVICES]: writableCache.getAll(TABLES.SERVICES),
+      [TABLES.TABLES]: writableCache.getAll(TABLES.TABLES),
+      [TABLES.NODE_ENDPOINTS]: writableCache.getAll(TABLES.NODE_ENDPOINTS),
+      [TABLES.SERVICE_DEFINITIONS]: writableCache.getAll(TABLES.SERVICE_DEFINITIONS),
+      [TABLES.SERVICE_ENDPOINTS]: writableCache.getAll(TABLES.SERVICE_ENDPOINTS),
+      [TABLES.REPLICA_OPERATIONS]: writableCache.getAll(TABLES.REPLICA_OPERATIONS),
+    });
+
+    const api = new AdminWebSocketAPI({
+      nodeId: 'test-node',
+      systemTableCache: createReadOnlyCache(writableCache),
+      cacheMutationTarget: writableCache,
+      sqlQueryEngine: repairEngine,
+    });
+
+    const result = await api.buildControlSnapshotQueryResult();
+    const snapshot = result?.rows?.[0] || null;
+    const partitionIds = Array.isArray(snapshot?.partitions) ?
+      snapshot.partitions :
+      [];
+
+    t.equal(
+      partitionIds.includes(leftPartitionId),
+      true,
+      'control snapshot should include repaired left child partition',
+    );
+    t.equal(
+      partitionIds.includes(rightPartitionId),
+      true,
+      'control snapshot should include repaired right child partition',
+    );
+    t.equal(
+      repairEngine.executeRequestCalls.includes(`SELECT * FROM ${TABLES.PARTITIONS}`),
+      true,
+      'control snapshot repair should query authoritative partitions rows',
+    );
+  },
+);
 
 test('AdminWebSocketAPI - local service discovery endpoint shape and filtering',
   async (t) => {
@@ -2640,6 +2886,48 @@ test(
       ),
       true,
       'preflight repair should query authoritative service endpoints',
+    );
+  },
+);
+
+test(
+  'AdminWebSocketAPI - preflight snapshot does not block on slow authoritative repair',
+  async (t) => {
+    const writableCache = createPopulatedCache();
+    seedServiceDiscoveryRows(writableCache);
+    writableCache.lastAppliedAtMsByTableName.set(
+      TABLES.SERVICE_ENDPOINTS,
+      Date.now() - 10000,
+    );
+    const api = new AdminWebSocketAPI({
+      nodeId: 'test-node',
+      systemTableCache: createReadOnlyCache(writableCache),
+      cacheMutationTarget: writableCache,
+      sqlQueryEngine: createMockQueryEngine(),
+    });
+
+    let repairAttempts = 0;
+    api.preflightSnapshot.authoritativeRepairWaitBudgetMs = 10;
+    api.preflightSnapshot.ensureAuthoritativeDiscoveryCacheRepair = async () => {
+      repairAttempts++;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      return {applied: true, skipped: false, tableCount: 1};
+    };
+
+    const outcome = await Promise.race([
+      api.buildPreflightCriticalPathSnapshotQueryResult(),
+      new Promise((resolve) => setTimeout(() => resolve('timed_out'), 25)),
+    ]);
+
+    t.not(
+      outcome,
+      'timed_out',
+      'preflight snapshot should return without waiting for slow repair',
+    );
+    t.equal(
+      repairAttempts,
+      1,
+      'preflight snapshot should still trigger authoritative repair once',
     );
   },
 );

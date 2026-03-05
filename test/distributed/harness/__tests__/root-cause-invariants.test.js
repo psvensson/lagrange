@@ -189,4 +189,63 @@ describe('root-cause invariant attribution', () => {
         ROOT_CAUSE_CODE.LEADERSHIP_UNKNOWN_CONTROL_PLANE_PARTITION,
       );
     });
+
+  it('keeps failure-artifact classification when control snapshots are captured outside preflight',
+    () => {
+      const failureArtifact = {
+        schemaVersion: 1,
+        phase: 'verify',
+        strictMode: true,
+        rootCauseClass: ROOT_CAUSE_CLASS.LOAD,
+        dominantReason: 'load run completed with operation errors',
+        reasonCounts: {
+          'load run completed with operation errors': 1,
+        },
+      };
+      const snapshotsByNodeId = {
+        'seed-1': {
+          schemaVersion: 1,
+          nodeId: 'seed-1',
+          capturedAt: Date.now(),
+          nodes: ['seed-1'],
+          partitions: ['p1'],
+          leaders: {p1: 'seed-1'},
+          replicaOperations: {
+            inFlightCount: 0,
+            statusHistogram: {},
+          },
+          controlPlaneDiagnostics: {
+            schemaVersion: 1,
+            publicationMode: {
+              currentMode: 'grouped',
+              reasonCode: null,
+            },
+          },
+        },
+      };
+
+      const bundle = buildRootCauseBundle({
+        failureArtifact,
+        snapshotsByNodeId,
+        snapshotKind: 'control_snapshot',
+        evaluateInvariants: false,
+      });
+
+      assert.equal(bundle.snapshotKind, 'control_snapshot');
+      assert.equal(
+        bundle.rootCauseClass,
+        ROOT_CAUSE_CLASS.LOAD,
+        'control-snapshot capture should not force preflight invariant classification',
+      );
+      assert.equal(
+        bundle.rootCauseCode,
+        ROOT_CAUSE_CODE.UNKNOWN,
+        'control-snapshot capture should not inject preflight invariant reason codes',
+      );
+      assert.equal(
+        Object.prototype.hasOwnProperty.call(bundle, 'invariants'),
+        false,
+        'invariants should not be attached when invariant evaluation is disabled',
+      );
+    });
 });

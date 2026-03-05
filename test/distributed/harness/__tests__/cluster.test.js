@@ -827,6 +827,11 @@ test('Unit: NodeHandle.queryWithTimeout captures timeout query trace entries',
       assert.strictEqual(traces.length, 1, 'timeout query should capture one trace');
       const trace = traces[0];
       assert.strictEqual(trace.queryId, capturedQuery.queryId);
+      assert.strictEqual(
+        capturedQuery.timeoutMs,
+        ADMIN_QUERY_TRACE_TIMEOUT_TEST_MS,
+        'query payload should include the per-request timeout override',
+      );
       assert.strictEqual(trace.lane, 'default');
       assert.strictEqual(trace.operation, 'query');
       assert.strictEqual(trace.outcome, 'timeout');

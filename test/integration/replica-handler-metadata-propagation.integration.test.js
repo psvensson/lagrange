@@ -12,8 +12,10 @@ import path from 'path';
 import {ReplicaHandler} from '../../src/node/replica-handler.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
+import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {ReplicaOperationResponseStatus} from
   '../../src/rebalancer/replica-operation-constants.js';
 import {
@@ -185,4 +187,112 @@ test('ReplicaHandler metadata propagation integration', {timeout: 30000}, async 
     }
     handler.shutdown();
   });
+
+  await t.test(
+    'updateOperationStep repairs stale replica operation visibility after cache lag',
+    async (t) => {
+      const nodeId = 'integration-node';
+      const operationId = 'op-cache-lag';
+      const partitionId = 'partition-1';
+      const replicaId = 'partition-1-r1';
+      const cache = new SystemTableCache();
+      const authoritativeOperationRow = {
+        operation_id: operationId,
+        type: 'ADD',
+        partition_id: partitionId,
+        replica_id: replicaId,
+        source_node_id: nodeId,
+        target_node_id: nodeId,
+        status: ReplicaStatus.SYNCING,
+        workflow_step: WORKFLOW_STEP.SYNCING,
+        created_at: 100,
+        updated_at: 100,
+        completed_at: null,
+        error_message: null,
+        steps_history: JSON.stringify([
+          {step: WORKFLOW_STEP.PENDING, timestamp: 90},
+          {step: WORKFLOW_STEP.SYNCING, timestamp: 100},
+        ]),
+      };
+
+      cache.applySystemTableChange(
+        SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+        'INSERT',
+        {...authoritativeOperationRow},
+      );
+
+      const sqlQueryEngine = {
+        async executeQuery(sql, params = []) {
+          if (sql.startsWith('UPDATE replica_operations SET')) {
+            authoritativeOperationRow.status = ReplicaStatus.ACTIVE;
+            authoritativeOperationRow.workflow_step = WORKFLOW_STEP.ACTIVE;
+            authoritativeOperationRow.updated_at = params[2];
+            authoritativeOperationRow.steps_history = params[3];
+            authoritativeOperationRow.replica_id = params[4];
+            authoritativeOperationRow.completed_at = params[5];
+            return {success: true, affectedRows: 1};
+          }
+          if (sql.startsWith('SELECT * FROM replica_operations WHERE operation_id = ?')) {
+            return {
+              success: true,
+              rows: [{...authoritativeOperationRow}],
+            };
+          }
+          throw new Error(`Unexpected query: ${sql}`);
+        },
+      };
+      const cdcIntegrationService = new CDCIntegrationService({
+        nodeId,
+        sqlQueryEngine,
+        systemTableCache: cache,
+      });
+      cdcIntegrationService.initialize();
+      cdcIntegrationService.cacheWaitTimeoutMs = 20;
+
+      const handler = new ReplicaHandler({
+        nodeId,
+        systemTableCache: cache,
+        cdcIntegrationService,
+        dataDir: tempDir,
+        createPartitionService: async () => ({
+          async shutdown() {},
+          async syncFromLeader() {},
+        }),
+      });
+      handler.initialize();
+
+      await handler.updateOperationStep(
+        operationId,
+        WORKFLOW_STEP.ACTIVE,
+        {replicaId},
+      );
+
+      const operationRow = cache.get(
+        SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+        operationId,
+      );
+      t.equal(
+        operationRow?.workflow_step,
+        WORKFLOW_STEP.ACTIVE,
+        'cache should converge to the terminal workflow_step',
+      );
+      t.equal(
+        operationRow?.status,
+        ReplicaStatus.ACTIVE,
+        'cache should converge to the terminal status',
+      );
+      t.equal(
+        operationRow?.replica_id,
+        replicaId,
+        'cache should preserve the canonical replica_id',
+      );
+      t.type(
+        operationRow?.completed_at,
+        'number',
+        'cache repair should hydrate the terminal completion timestamp',
+      );
+
+      await handler.shutdown();
+    },
+  );
 });

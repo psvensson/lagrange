@@ -33,6 +33,18 @@ describe('admin-service-message-adapter', () => {
     assert.ok(envelope.traceId.length > 0);
   });
 
+  it('maps optional per-query timeout override for dispatchable queries', () => {
+    const envelope = adaptAdminMessageToServiceMessage({
+      type: ADMIN_MESSAGE_TYPE.QUERY,
+      queryId: 'q-timeout',
+      sql: 'SELECT 1',
+      params: [],
+      timeoutMs: 1234,
+    });
+
+    assert.equal(envelope.payload.timeoutMs, 1234);
+  });
+
   it('preserves explicit traceId from context', () => {
     const envelope = adaptAdminMessageToServiceMessage(
       {

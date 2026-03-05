@@ -79,6 +79,9 @@ import {
   RuntimeServiceHandlerSetup,
 } from './shared/runtime-service-handler-setup.js';
 import {
+  MessageGroupServiceHandlerSetup,
+} from './shared/message-group-service-handler-setup.js';
+import {
   ReplicaCreationProgressReporter,
 } from '../utils/replica-creation-progress-reporter.js';
 import {createSeedPhaseOwners} from './owners/seed-phase-owners.js';
@@ -106,7 +109,10 @@ import {
   NodeLifecycleStateMachine,
   NodeState,
 } from '../node/node-lifecycle-state-machine.js';
-import {isNodeRecordReady} from '../node/node-readiness-policy.js';
+import {
+  isNodeRecordReady,
+  wasNodeRecordReadyWhenWritten,
+} from '../node/node-readiness-policy.js';
 import {BOOTSTRAP_SUB_PHASE} from '../node/node-constants.js';
 import {
   ADDRESS,
@@ -642,6 +648,13 @@ class BootstrapService extends EventEmitter {
       this.logger.info('metrics.bootstrap.post_pipeline.replica_handler', {
         nodeId: this.nodeId,
         durationMs: Date.now() - replicaHandlerStartMs,
+      });
+
+      const messageGroupHandlerStartMs = Date.now();
+      this.initializeMessageGroupServiceHandler();
+      this.logger.info('metrics.bootstrap.post_pipeline.message_group_handler', {
+        nodeId: this.nodeId,
+        durationMs: Date.now() - messageGroupHandlerStartMs,
       });
 
       // Initialize control plane service after cache and handlers are ready
@@ -1370,7 +1383,7 @@ class BootstrapService extends EventEmitter {
 
     const now = Date.now();
     const isReady = isNodeRecordReady(nodeRow, {now});
-    const wasReady = isNodeRecordReady(previousRow, {now});
+    const wasReady = wasNodeRecordReadyWhenWritten(previousRow, {now});
 
     if (!isReady) {
       this.logger.info('Skipping node-ready rebalance trigger: node not ready', {
@@ -2091,6 +2104,52 @@ class BootstrapService extends EventEmitter {
 
     if (result) {
       this.runtimeServiceHandler = result.runtimeServiceHandler;
+    }
+  }
+
+  /**
+   * Initialize the MessageGroupServiceHandler for control-plane
+   * message-group replica operations.
+   * @private
+   */
+  initializeMessageGroupServiceHandler() {
+    const systemTableCache = this.getSystemTableCache();
+    const descriptorForReplica = (replicaId) => ({
+      serviceId: replicaId,
+      serviceType: 'message_group',
+      replicaId,
+    });
+
+    const result = MessageGroupServiceHandlerSetup.create({
+      nodeId: this.nodeId,
+      messageRouter: this.messageRouter,
+      cdcIntegrationService: this.cdcIntegrationService,
+      systemTableCache,
+      createMessageGroupReplica: async (options) => {
+        return this.createBootstrapMessageGroupReplica({
+          definition: descriptorForReplica(options.replicaId),
+          replicaOptions: options,
+        });
+      },
+      startMessageGroupReplica: async (options) => {
+        return this.startBootstrapMessageGroupReplica(
+          descriptorForReplica(options.replicaId),
+          {replicaOptions: options},
+        );
+      },
+      stopMessageGroupReplica: async (options) => {
+        return this.stopBootstrapMessageGroupReplica(
+          descriptorForReplica(options.replicaId),
+          {replicaOptions: options},
+        );
+      },
+      resolveLocalMessageGroupReplica: (replicaId) =>
+        this.messageGroupServices.get(replicaId) || null,
+      rpcClient: this.rpcClient,
+    });
+
+    if (result) {
+      this.messageGroupServiceHandler = result.messageGroupServiceHandler;
     }
   }
 

@@ -223,6 +223,36 @@ test('PartitionSplitMergeManager - splitPartition creates two adjacent partition
   manager.shutdown();
 });
 
+test('PartitionSplitMergeManager - splitPartition normalizes undefined unbounded ' +
+  'range edges', async (t) => {
+  const mockPartitionService = {
+    executeQuery: async (sql) => {
+      if (sql.includes('COUNT')) {
+        return {rows: [{total: 100}]};
+      }
+      return {rows: [{id: 50}]};
+    },
+    getKeyRange: () => ({start: undefined, end: undefined}),
+  };
+
+  const manager = new PartitionSplitMergeManager({
+  });
+
+  const result = await manager.splitPartition({
+    partitionId: 'partition-1',
+    partitionService: mockPartitionService,
+    tableName: 'test_table',
+    tableId: 'test-table',
+    primaryKeyColumn: 'id',
+  });
+
+  t.equal(result.success, true);
+  t.equal(result.leftPartition.keyRange.start, null);
+  t.equal(result.rightPartition.keyRange.end, null);
+
+  manager.shutdown();
+});
+
 
 test('PartitionSplitMergeManager - mergePartitions combines adjacent partitions', async (t) => {
   const keyRangeManager = new KeyRangeManager('test-table');
@@ -419,3 +449,175 @@ test('PartitionSplitMergeManager - emits events during merge', async (t) => {
 
   manager.shutdown();
 });
+
+test('PartitionSplitMergeManager - evaluates managed cache-backed partitions and executes splits',
+  async (t) => {
+    const executedPartitionIds = [];
+    const manager = new PartitionSplitMergeManager({
+      listPartitions: async () => ([
+        {
+          partition_id: 'users-p1',
+          table_id: 'tbl-users',
+          partition_key_start: null,
+          partition_key_end: null,
+          size_bytes: 128,
+        },
+      ]),
+      getPartitionMetrics: async (_partitionId, partition) => ({
+        sizeBytes: partition.size_bytes,
+      }),
+      executeSplitCandidate: async (partitionId) => {
+        executedPartitionIds.push(partitionId);
+        return {success: true, partitionId};
+      },
+      tablePolicyService: {
+        async getPolicyForPartition() {
+          return {splitStorageThreshold: 64};
+        },
+      },
+    });
+
+    const results = await manager.evaluateAllPartitions();
+
+    t.equal(results.partitionsEvaluated, 1);
+    t.same(results.splitCandidates, ['users-p1']);
+    t.same(executedPartitionIds, ['users-p1']);
+    t.equal(results.executedSplits.length, 1);
+
+    manager.shutdown();
+  });
+
+test('PartitionSplitMergeManager - allows managed execution callback to invoke split ' +
+  'during evaluation', async (t) => {
+  const keyRangeManager = new KeyRangeManager('tbl-users');
+  keyRangeManager.addPartition('users-p1', KeyRange.fullRange());
+
+  const mockPartitionService = {
+    executeQuery: async (sql) => {
+      if (sql.includes('COUNT')) {
+        return {rows: [{total: 100}]};
+      }
+      return {rows: [{id: 50}]};
+    },
+    getKeyRange: () => ({start: null, end: null}),
+  };
+
+  let manager = null;
+  manager = new PartitionSplitMergeManager({
+    keyRangeManager,
+    listPartitions: async () => ([
+      {
+        partition_id: 'users-p1',
+        table_id: 'tbl-users',
+        partition_key_start: null,
+        partition_key_end: null,
+        size_bytes: 128,
+      },
+    ]),
+    getPartitionMetrics: async (_partitionId, partition) => ({
+      sizeBytes: partition.size_bytes,
+    }),
+    executeSplitCandidate: async (partitionId) => manager.splitPartition({
+      partitionId,
+      partitionService: mockPartitionService,
+      tableName: 'users',
+      tableId: 'tbl-users',
+      primaryKeyColumn: 'id',
+    }),
+    tablePolicyService: {
+      async getPolicyForPartition() {
+        return {splitStorageThreshold: 64};
+      },
+    },
+  });
+
+  const results = await manager.evaluateAllPartitions();
+
+  t.same(results.splitErrors, []);
+  t.equal(results.executedSplits.length, 1);
+  t.equal(results.executedSplits[0].success, true);
+  t.equal(keyRangeManager.getPartitionCount(), 2);
+  t.equal(manager.getState(), OperationState.IDLE);
+
+  manager.shutdown();
+});
+
+test('PartitionSplitMergeManager - records unsuccessful managed split executions as errors',
+  async (t) => {
+    const manager = new PartitionSplitMergeManager({
+      listPartitions: async () => ([
+        {
+          partition_id: 'users-p1',
+          table_id: 'tbl-users',
+          partition_key_start: null,
+          partition_key_end: null,
+          size_bytes: 128,
+        },
+      ]),
+      getPartitionMetrics: async (_partitionId, partition) => ({
+        sizeBytes: partition.size_bytes,
+      }),
+      executeSplitCandidate: async (partitionId) => ({
+        success: false,
+        partitionId,
+        error: 'timed out waiting for split quorum',
+      }),
+      tablePolicyService: {
+        async getPolicyForPartition() {
+          return {splitStorageThreshold: 64};
+        },
+      },
+    });
+
+    const results = await manager.evaluateAllPartitions();
+
+    t.equal(
+      results.executedSplits.length,
+      0,
+      'unsuccessful managed execution should not be reported as completed split',
+    );
+    t.equal(results.splitErrors.length, 1);
+    t.equal(results.splitErrors[0]?.partitionId, 'users-p1');
+    t.match(results.splitErrors[0]?.error || '', /timed out/);
+
+    manager.shutdown();
+  });
+
+test('PartitionSplitMergeManager - records deferred managed split executions as deferred',
+  async (t) => {
+    const manager = new PartitionSplitMergeManager({
+      listPartitions: async () => ([
+        {
+          partition_id: 'users-p1',
+          table_id: 'tbl-users',
+          partition_key_start: null,
+          partition_key_end: null,
+          size_bytes: 128,
+        },
+      ]),
+      getPartitionMetrics: async (_partitionId, partition) => ({
+        sizeBytes: partition.size_bytes,
+      }),
+      executeSplitCandidate: async (partitionId) => ({
+        success: false,
+        partitionId,
+        state: 'deferred',
+        workflowId: 'split-tbl-users-users-p1-v2',
+      }),
+      tablePolicyService: {
+        async getPolicyForPartition() {
+          return {splitStorageThreshold: 64};
+        },
+      },
+    });
+
+    const results = await manager.evaluateAllPartitions();
+
+    t.equal(results.executedSplits.length, 0);
+    t.equal(results.splitErrors.length, 0);
+    t.equal(results.splitDeferred.length, 1);
+    t.equal(results.splitDeferred[0]?.partitionId, 'users-p1');
+    t.equal(results.splitDeferred[0]?.reason, 'deferred');
+
+    manager.shutdown();
+  });
