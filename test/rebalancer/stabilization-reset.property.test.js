@@ -18,7 +18,6 @@ import {
   REBALANCER_NODE_STATUS,
   REBALANCER_DEFAULT_POLICY,
 } from '../../src/rebalancer/rebalancer-constants.js';
-import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 
 /**
  * All stabilization reset trigger constants.
@@ -117,6 +116,7 @@ function createTestRebalancer(overrides = {}) {
 function cleanupRebalancer(rebalancer) {
   clearTimeout(rebalancer.stabilizationTimer);
   clearTimeout(rebalancer.scheduledCheck);
+  rebalancer.rebalanceCheckQueue.shutdown();
 }
 
 test('Property 6: Stabilization reset on trigger events', async (t) => {
@@ -217,66 +217,6 @@ test('Property 6: Stabilization reset on trigger events', async (t) => {
               transition.oldState,
               transition.newState,
             );
-            const after = Date.now();
-
-            const updated = rebalancer.lastStateChangeTime;
-
-            cleanupRebalancer(rebalancer);
-            resetTestDependencies();
-
-            // lastStateChangeTime must be updated to approximately now
-            return updated >= before &&
-              updated <= after &&
-              (after - updated) < MAX_TIME_DELTA_MS;
-          },
-        ),
-        {numRuns: 10},
-      );
-    },
-  );
-
-  /**
-   * Property: For any CDC event representing a critical service failure,
-   * onCDCEvent SHALL reset lastStateChangeTime to current time.
-   */
-  t.test(
-    'onCDCEvent resets stabilization for critical service failures',
-    async () => {
-      const entityId = 'test-partition-p1';
-
-      // Generate CDC events for service failures that target this entity
-      const cdcEventArb = fc.constantFrom(
-        {
-          tableName: 'services',
-          operation: 'UPDATE',
-          data: {
-            status: ReplicaStatus.FAILED,
-            partition_id: entityId,
-          },
-        },
-        {
-          tableName: 'services',
-          operation: 'UPDATE',
-          data: {
-            status: ReplicaStatus.FAILED,
-            group_id: entityId,
-          },
-        },
-      );
-
-      fc.assert(
-        fc.property(
-          cdcEventArb,
-          (event) => {
-            initializeTestDependencies();
-
-            const rebalancer = createTestRebalancer();
-
-            // Set lastStateChangeTime to a past value to detect the update
-            rebalancer.lastStateChangeTime = 0;
-
-            const before = Date.now();
-            rebalancer.onCDCEvent(event);
             const after = Date.now();
 
             const updated = rebalancer.lastStateChangeTime;

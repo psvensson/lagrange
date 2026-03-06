@@ -689,7 +689,7 @@ const DEFAULT_CONFIG = {
     partitionReplicaOverheadBytes: 10485760, // 10 MiB
     messageGroupReplicaOverheadBytes: 1048576, // 1 MiB
     serviceReplicaOverheadBytes: 5242880, // 5 MiB
-    storageAdmissionMode: 'observe',
+    storageAdmissionMode: 'enforce',
   },
   replicaHandler: {
     syncTimeoutMs: 60000, // 60 seconds to wait for voter-ready activation

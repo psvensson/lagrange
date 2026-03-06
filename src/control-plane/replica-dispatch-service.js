@@ -9,9 +9,14 @@ import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
-  isNodeRecordReady,
   wasNodeRecordReadyWhenWritten,
 } from '../node/node-readiness-policy.js';
+import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+} from './control-plane-readiness-constants.js';
+import {
+  ControlPlaneReadinessService,
+} from './control-plane-readiness-service.js';
 import {OperationType} from '../rebalancer/replica-status.js';
 import {REBALANCE_COORDINATOR_EVENT} from '../rebalancer/rebalancer-constants.js';
 import {
@@ -37,16 +42,14 @@ import {
   DISPATCH_ERROR_MSG,
   DISPATCH_EVENT,
   DISPATCH_LOG_MSG,
+  DISPATCH_QUEUE_NAME,
   DISPATCH_STATE,
   DISPATCH_SUBSYSTEM,
 } from './replica-dispatch-service-constants.js';
-
-const RETRY_TRIGGER_SOURCE = Object.freeze({
-  NODE_STATE_UPDATE: 'node_state_update',
-  NODES_CDC: 'nodes_cdc',
-  NODES_CACHE: 'nodes_cache',
-  SERVICES_CACHE: 'services_cache',
-});
+import {OwnerKeyReconcileQueue} from
+  '../workflow/owner-key-reconcile-queue.js';
+import {RECONCILE_REASON} from
+  '../workflow/reconcile-queue-constants.js';
 
 class ReplicaDispatchService extends EventEmitter {
   /**
@@ -56,6 +59,8 @@ class ReplicaDispatchService extends EventEmitter {
    * @param {Object} options.cdcIntegrationService - CDC service.
    * @param {Object} options.systemTableCache - System table cache.
    * @param {Object} options.rebalanceCoordinator - Rebalance coordinator.
+   * @param {Object} [options.storageAccountingService] - Storage accounting owner.
+   * @param {Object} [options.cdcGroupPropagationService] - CDC publication owner.
    */
   constructor(options = {}) {
     super();
@@ -65,6 +70,22 @@ class ReplicaDispatchService extends EventEmitter {
     this.cdcIntegrationService = options.cdcIntegrationService || null;
     this.systemTableCache = options.systemTableCache || null;
     this.rebalanceCoordinator = options.rebalanceCoordinator || null;
+    this.storageAccountingService =
+      options.storageAccountingService ||
+      this.rebalanceCoordinator?.storageAccountingService ||
+      null;
+    this.cdcGroupPropagationService =
+      options.cdcGroupPropagationService ||
+      this.rebalanceCoordinator?.cdcGroupPropagationService ||
+      null;
+    this.controlPlaneReadinessService =
+      options.controlPlaneReadinessService ||
+      new ControlPlaneReadinessService({
+        nodeId: this.nodeId,
+        systemTableCache: this.systemTableCache,
+        storageAccountingService: this.storageAccountingService,
+        cdcGroupPropagationService: this.cdcGroupPropagationService,
+      });
 
     this.messageGroupServices = new Set();
     this.messageGroupHandlers = new Map();
@@ -82,6 +103,18 @@ class ReplicaDispatchService extends EventEmitter {
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
       loggingService.forSubsystem(DISPATCH_SUBSYSTEM) : console;
+
+    this.operationDispatchQueue = new OwnerKeyReconcileQueue({
+      name: DISPATCH_QUEUE_NAME.OPERATION,
+      reconcileFn: (ownerKey, _reasons, context) =>
+        this.reconcileOperationDispatch(ownerKey, context),
+    });
+
+    this.nodeReadyRetryQueue = new OwnerKeyReconcileQueue({
+      name: DISPATCH_QUEUE_NAME.NODE_READY,
+      reconcileFn: (ownerKey, _reasons, context) =>
+        this.reconcileNodeReadyRetry(ownerKey, context),
+    });
   }
 
   /**
@@ -229,47 +262,49 @@ class ReplicaDispatchService extends EventEmitter {
    * @param {Object} event - CDC event.
    * @private
    */
-  async handleCdcApplied(mgService, event) {
-    if (event?.tableName === SYSTEM_TABLE_NAME.NODES) {
-      const nodeRow = event?.data;
-      const nodeId = this.getNodeIdFromRecord(nodeRow);
-      if (nodeId) {
-        await this.retryPendingDispatchesForReadyNode({
-          nodeId,
-          nodeRow,
-          source: RETRY_TRIGGER_SOURCE.NODES_CDC,
-        });
-      }
-      return;
-    }
-
-    if (event?.tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
-      return;
-    }
-
-    const row = event?.data;
-    if (!row || !row.operation_id) {
-      return;
-    }
-
-    this.buildOperationFromRow(row);
-
-    if (row.type === OperationType.REPLACE &&
-        row.workflow_step === WORKFLOW_STEP.ACTIVE) {
-      if (!mgService.isLeaderReplica()) {
+  async handleCdcApplied(_mgService, event) {
+      if (event?.tableName === SYSTEM_TABLE_NAME.NODES) {
+        const nodeRow = event?.data;
+        const nodeId = this.getNodeIdFromRecord(nodeRow);
+        if (nodeId) {
+          this.nodeReadyRetryQueue.enqueue(
+            nodeId,
+            RECONCILE_REASON.NODES_CDC_READY,
+            {nodeRow},
+          );
+        }
         return;
       }
-      const operation = this.buildOperationFromRow(row);
-      await this.rebalanceCoordinator.executeOperation(operation);
-      return;
-    }
 
-    if (row.workflow_step !== WORKFLOW_STEP.PENDING) {
-      return;
-    }
+      if (event?.tableName !== SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
+        return;
+      }
 
-    await this.dispatchOperationRow(row);
-  }
+      const row = event?.data;
+      if (!row || !row.operation_id) {
+        return;
+      }
+
+      if (row.type === OperationType.REPLACE &&
+          row.workflow_step === WORKFLOW_STEP.ACTIVE) {
+        this.operationDispatchQueue.enqueue(
+          row.operation_id,
+          RECONCILE_REASON.CDC_REPLACE_ACTIVE,
+          {row},
+        );
+        return;
+      }
+
+      if (row.workflow_step !== WORKFLOW_STEP.PENDING) {
+        return;
+      }
+
+      this.operationDispatchQueue.enqueue(
+        row.operation_id,
+        RECONCILE_REASON.CDC_OPERATION_PENDING,
+        {row},
+      );
+    }
 
   /**
    * Handle local coordinator operation-created events.
@@ -279,18 +314,20 @@ class ReplicaDispatchService extends EventEmitter {
    * @private
    */
   async handleCoordinatorOperationCreated(operation) {
-    if (!operation || !operation.operationId) {
-      return;
-    }
+      if (!operation || !operation.operationId) {
+        return;
+      }
 
-    if (operation.workflowStep !== WORKFLOW_STEP.PENDING) {
-      return;
-    }
+      if (operation.workflowStep !== WORKFLOW_STEP.PENDING) {
+        return;
+      }
 
-    await this.dispatchOperationRow(
-      this.buildOperationRowFromCoordinator(operation),
-    );
-  }
+      this.operationDispatchQueue.enqueue(
+        operation.operationId,
+        RECONCILE_REASON.COORDINATOR_OPERATION_CREATED,
+        {row: this.buildOperationRowFromCoordinator(operation)},
+      );
+    }
 
   /**
    * Handle NODE_STATE_UPDATE messages.
@@ -385,11 +422,11 @@ class ReplicaDispatchService extends EventEmitter {
     );
 
     if (state === STATE.READY) {
-      await this.retryPendingDispatchesForReadyNode({
+      this.nodeReadyRetryQueue.enqueue(
         nodeId,
-        nodeRow: baseRow,
-        source: RETRY_TRIGGER_SOURCE.NODE_STATE_UPDATE,
-      });
+        RECONCILE_REASON.NODE_STATE_UPDATE_READY,
+        {nodeRow: baseRow},
+      );
       return;
     }
 
@@ -402,19 +439,16 @@ class ReplicaDispatchService extends EventEmitter {
    * @private
    */
   async handleReplicaOperationDispatch(payload) {
-    const operationId = payload[ControlPlaneField.OPERATION_ID];
-    if (!operationId) {
-      return;
+      const operationId = payload[ControlPlaneField.OPERATION_ID];
+      if (!operationId) {
+        return;
+      }
+
+      this.operationDispatchQueue.enqueue(
+        operationId,
+        RECONCILE_REASON.MESSAGE_DISPATCH_REQUEST,
+      );
     }
-
-    const row = await this.getReplicaOperationRow(operationId);
-
-    if (!row || row.workflow_step !== WORKFLOW_STEP.PENDING) {
-      return;
-    }
-
-    await this.dispatchOperationRow(row);
-  }
 
   /**
    * Dispatch an operation record to its target node.
@@ -435,7 +469,10 @@ class ReplicaDispatchService extends EventEmitter {
     }
 
     const targetNodeId = row.target_node_id;
-    if (!this.isNodeReady(targetNodeId)) {
+    const dispatchReadiness = this.captureDispatchReadiness(
+      targetNodeId,
+    );
+    if (!dispatchReadiness.ready) {
       return;
     }
 
@@ -473,6 +510,7 @@ class ReplicaDispatchService extends EventEmitter {
       this.emit(DISPATCH_EVENT.OPERATION_DISPATCHED, {
         operationId: operation.operationId,
         targetNodeId,
+        readinessSnapshot: dispatchReadiness.snapshot,
       });
     } finally {
       this.dispatchInFlight.delete(operation.operationId);
@@ -570,6 +608,57 @@ class ReplicaDispatchService extends EventEmitter {
   }
 
   /**
+   * Reconcile callback for the operation dispatch queue.
+   * Resolves the operation row and dispatches or executes it.
+   * @param {string} operationId - The operation to reconcile.
+   * @param {Object} [context] - Context from the enqueue call.
+   * @private
+   */
+  async reconcileOperationDispatch(operationId, context) {
+    if (!this.rebalanceCoordinator) {
+      return;
+    }
+
+    let row = context?.row || null;
+
+    if (!row) {
+      row = await this.getReplicaOperationRow(operationId);
+    }
+
+    if (!row || !row.operation_id) {
+      return;
+    }
+
+    if (row.type === OperationType.REPLACE &&
+        row.workflow_step === WORKFLOW_STEP.ACTIVE) {
+      const operation = this.buildOperationFromRow(row);
+      await this.rebalanceCoordinator.executeOperation(operation);
+      return;
+    }
+
+    if (row.workflow_step !== WORKFLOW_STEP.PENDING) {
+      return;
+    }
+
+    await this.dispatchOperationRow(row);
+  }
+
+  /**
+   * Reconcile callback for the node-ready retry queue.
+   * Checks readiness and retries pending dispatches for the node.
+   * @param {string} nodeId - The node to reconcile.
+   * @param {Object} [context] - Context from the enqueue call.
+   * @private
+   */
+  async reconcileNodeReadyRetry(nodeId, context) {
+    const nodeRow = context?.nodeRow || null;
+    await this.retryPendingDispatchesForReadyNode({
+      nodeId,
+      nodeRow,
+    });
+  }
+
+  /**
    * Handle cache updates and retry dispatch when key rows become available.
    * @param {string} tableName - Updated table name.
    * @param {string|Object} operationOrRecord - Operation or updated row.
@@ -577,47 +666,42 @@ class ReplicaDispatchService extends EventEmitter {
    * @private
    */
   handleCacheNodeChange(tableName, operationOrRecord, recordInput) {
-    const record = recordInput || operationOrRecord;
-    if (!record) {
-      return;
-    }
-
-    if (tableName === SYSTEM_TABLE_NAME.NODES) {
-      const nodeId = this.getNodeIdFromRecord(record);
-      if (!nodeId) {
+      const record = recordInput || operationOrRecord;
+      if (!record) {
         return;
       }
-      this.retryPendingDispatchesForReadyNode({
-        nodeId,
-        nodeRow: record,
-        source: RETRY_TRIGGER_SOURCE.NODES_CACHE,
-      }).catch((error) => {
-        this.logger.warn(DISPATCH_LOG_MSG.CDC_HANDLING_FAILED, {
+
+      if (tableName === SYSTEM_TABLE_NAME.NODES) {
+        const nodeId = this.getNodeIdFromRecord(record);
+        if (!nodeId) {
+          return;
+        }
+        this.nodeReadyRetryQueue.enqueue(
           nodeId,
-          error: error.message,
-        });
-      });
-      return;
-    }
+          RECONCILE_REASON.NODES_CACHE_READY,
+          {nodeRow: record},
+        );
+        return;
+      }
 
-    if (tableName !== SYSTEM_TABLE_NAME.SERVICES) {
-      return;
-    }
+      if (tableName !== SYSTEM_TABLE_NAME.SERVICES) {
+        return;
+      }
 
-    const nodeId = this.getNodeIdFromRecord(record);
-    const status = record?.[COLUMN.STATUS] || record?.status || null;
-    if (!nodeId || status !== SERVICE_STATUS.ACTIVE || !this.isNodeReady(nodeId)) {
-      return;
-    }
+      const nodeId = this.getNodeIdFromRecord(record);
+      const status =
+        record?.[COLUMN.STATUS] || record?.status || null;
+      if (!nodeId ||
+          status !== SERVICE_STATUS.ACTIVE ||
+          !this.isNodeReady(nodeId)) {
+        return;
+      }
 
-    this.retryPendingDispatchesForNode(nodeId).catch((error) => {
-      this.logger.warn(DISPATCH_LOG_MSG.CDC_HANDLING_FAILED, {
+      this.nodeReadyRetryQueue.enqueue(
         nodeId,
-        error: error.message,
-        source: RETRY_TRIGGER_SOURCE.SERVICES_CACHE,
-      });
-    });
-  }
+        RECONCILE_REASON.SERVICES_CACHE_ACTIVE,
+      );
+    }
 
   /**
    * Resolve node id from a system row shape.
@@ -814,24 +898,58 @@ class ReplicaDispatchService extends EventEmitter {
 
   /**
    * Check if a node is ready.
+   * @readModel DISPATCH_NODE_READINESS — READ_MODEL_SOURCE.SYSTEM_TABLE_CACHE
    * @param {string} nodeId - Node ID.
    * @return {boolean} True if node is ready.
    * @private
    */
   isNodeReady(nodeId) {
-    if (!nodeId || !this.systemTableCache ||
-        typeof this.systemTableCache.get !== TYPEOF.FUNCTION) {
+    if (!nodeId ||
+        typeof this.controlPlaneReadinessService.getNodeReadinessSync !==
+          TYPEOF.FUNCTION) {
       return false;
     }
 
-    const nodeRow = this.systemTableCache.get(SYSTEM_TABLE_NAME.NODES, nodeId);
-    return isNodeRecordReady(nodeRow, {
-      requireActiveStatus: true,
-    });
+    const readiness =
+      this.controlPlaneReadinessService.getNodeReadinessSync(nodeId);
+    if (!readiness || !readiness.dimensions) {
+      return false;
+    }
+
+    return readiness.dimensions[
+      CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY
+    ] === true &&
+      readiness.dimensions[
+        CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY
+      ] === true;
+  }
+
+  /**
+   * Capture readiness snapshot for a dispatch decision.
+   * Returns both the ready/not-ready verdict and the compact
+   * snapshot summary for persistence in diagnostics.
+   *
+   * @param {string} nodeId - Target node ID.
+   * @return {{ready: boolean, snapshot: Object|null}}
+   * @private
+   */
+  captureDispatchReadiness(nodeId) {
+    const ready = this.isNodeReady(nodeId);
+    if (!nodeId ||
+        typeof this.controlPlaneReadinessService.getNodeReadinessSync !==
+          TYPEOF.FUNCTION) {
+      return {ready, snapshot: null};
+    }
+    const readiness =
+      this.controlPlaneReadinessService.getNodeReadinessSync(nodeId);
+    const snapshot =
+      ControlPlaneReadinessService.compactSnapshotSummary(readiness);
+    return {ready, snapshot};
   }
 
   /**
    * Check if target node has an active handler for the entity type.
+   * @readModel DISPATCH_HANDLER_CHECK — READ_MODEL_SOURCE.SYSTEM_TABLE_CACHE
    * @param {string} nodeId - Target node ID.
    * @param {string} entityType - Entity type from the operation.
    * @return {Promise<boolean>} True if a matching active service
@@ -862,6 +980,13 @@ class ReplicaDispatchService extends EventEmitter {
 
   /**
    * Read a replica operation row from SystemTableCache.
+   * @param {string} operationId - Operation ID.
+   * @return {Promise<Object|null>} Operation row or null.
+   * @private
+   */
+  /**
+   * Get a replica operation row from cache.
+   * @readModel DISPATCH_OPERATION_LOOKUP — READ_MODEL_SOURCE.SYSTEM_TABLE_CACHE
    * @param {string} operationId - Operation ID.
    * @return {Promise<Object|null>} Operation row or null.
    * @private
@@ -975,6 +1100,9 @@ class ReplicaDispatchService extends EventEmitter {
     this.dispatchInFlight.clear();
     this.retryInFlightNodes.clear();
     this.nodeReadyRetryWatermarks.clear();
+
+    this.operationDispatchQueue.shutdown();
+    this.nodeReadyRetryQueue.shutdown();
 
     this.state = DISPATCH_STATE.STOPPED;
     this.logger.info(DISPATCH_LOG_MSG.STOPPED, {nodeId: this.nodeId});

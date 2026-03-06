@@ -2073,7 +2073,12 @@ class MessageGroupService extends EventEmitter {
       this.rebalancer.systemTableCache = this.systemTableCache;
       this.rebalancer.cdcIntegrationService = this.cdcIntegrationService;
       this.rebalancer.tablePolicyService = this.tablePolicyService;
-      this.rebalancer.rebalanceCoordinator = this.rebalanceCoordinator;
+      if (typeof this.rebalancer.setRebalanceCoordinator !== TYPEOF.FUNCTION) {
+        throw new Error(
+          MESSAGE_GROUP_SERVICE_ERROR_MSG.MISSING_REBALANCER_SET_COORDINATOR,
+        );
+      }
+      this.rebalancer.setRebalanceCoordinator(this.rebalanceCoordinator);
       this.rebalancer.messageRouter = this.transport;
       this.rebalancer.sqlQueryEngine = this.cdcIntegrationService?.sqlQueryEngine || null;
       this.rebalancer.setLeader(this.isLeaderReplica());

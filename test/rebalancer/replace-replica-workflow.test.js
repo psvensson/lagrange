@@ -484,7 +484,7 @@ test('REPLACE replica workflow', async (t) => {
           parsedSql.some((sql) => {
             return sql.includes('FROM replica_operations') &&
               sql.includes('source_node_id = ?') &&
-              sql.includes('target_node_id = ?');
+              !sql.includes("source_node_id IS NULL OR source_node_id = ''");
           }),
           'coordinator should use parser-safe owner-scoped query for incomplete operations',
         );

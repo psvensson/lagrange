@@ -236,6 +236,7 @@ async function waitForPartitionGrowthAndSpread(seedNode, options = {}) {
 
 export {
   TABLE_NAME_LOGS,
+  escapeSql,
   sleep,
   rowsFromResult,
   queryTableDistribution,

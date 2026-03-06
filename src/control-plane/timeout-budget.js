@@ -5,10 +5,14 @@ const TIMEOUT_BUDGET_CLASSIFICATION = Object.freeze({
   CACHE_VISIBILITY_TIMEOUT: 'cache_visibility_timeout',
   REBALANCE_OPERATION_TIMEOUT: 'rebalance_operation_timeout',
   ABSOLUTE_DEADLINE_EXHAUSTED: 'absolute_deadline_exhausted',
+  EXACT_BOUNDARY_HIT: 'exact_boundary_hit',
 });
 
 const TIMEOUT_BUDGET_DEFAULT = Object.freeze({
   MINIMUM_OPERATION_BUDGET_MS: 5,
+  REBALANCE_OPERATION_BUDGET_MS: 300000,
+  SPLIT_OPERATION_BUDGET_MS: 300000,
+  DISPATCH_OPERATION_BUDGET_MS: 60000,
 });
 
 const CONTROL_PLANE_TIMEOUT_DEFAULT = Object.freeze({
@@ -89,13 +93,20 @@ function buildControlPlaneQueryOptions(options = {}) {
 function buildTimeoutClassification(options = {}) {
   const budget = options.budget;
   const timing = getBudgetTiming(budget, options.now);
+  const boundaryHit = timing.rawRemainingMs === 0;
 
   return Object.freeze({
-    classification: options.classification,
+    classification: boundaryHit ?
+      TIMEOUT_BUDGET_CLASSIFICATION.EXACT_BOUNDARY_HIT :
+      options.classification,
     configuredBudgetMs: budget.configuredBudgetMs,
     remainingBudgetMs: timing.remainingBudgetMs,
-    boundaryHit: timing.rawRemainingMs === 0,
+    boundaryHit,
     nestedOperation: options.nestedOperation || null,
+    operationName: budget.operationName || null,
+    originalClassification: boundaryHit ?
+      options.classification :
+      null,
   });
 }
 
@@ -151,6 +162,22 @@ function createTimeoutBudgetError(options = {}) {
   return error;
 }
 
+function createTopLevelOperationBudget(options = {}) {
+  const configuredBudgetMs = normalizePositiveInteger(
+    options.configuredBudgetMs,
+  );
+  const operationName = options.operationName || null;
+  const budget = createTimeoutBudget({
+    configuredBudgetMs,
+    startedAtMs: options.startedAtMs,
+    now: options.now,
+  });
+  return Object.freeze({
+    ...budget,
+    operationName,
+  });
+}
+
 export {
   CONTROL_PLANE_TIMEOUT_DEFAULT,
   TIMEOUT_BUDGET_CLASSIFICATION,
@@ -160,6 +187,7 @@ export {
   createChildTimeoutBudget,
   createTimeoutBudget,
   createTimeoutBudgetError,
+  createTopLevelOperationBudget,
   getRemainingBudgetMs,
   resolveControlPlaneQueryTimeoutMs,
 };

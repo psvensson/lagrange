@@ -19,9 +19,11 @@ import {
 } from './replica-status.js';
 import {assertCritical} from '../utils/assert.js';
 import {
-  isNodeRecordReady,
-  isNodeReadyWithTransport,
-} from '../node/node-readiness-policy.js';
+  CONTROL_PLANE_READINESS_DIMENSION,
+} from '../control-plane/control-plane-readiness-constants.js';
+import {
+  ControlPlaneReadinessService,
+} from '../control-plane/control-plane-readiness-service.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {
   REBALANCER_CONFIG_KEY,
@@ -33,6 +35,7 @@ import {
   REBALANCER_LOG_MSG,
   REBALANCER_MOVE_TYPE,
   REBALANCER_NODE_STATUS,
+  REBALANCER_QUEUE_NAME,
   REBALANCER_SKIP_REASON,
   REBALANCER_SUBSYSTEM,
   REBALANCER_TRIGGER,
@@ -41,6 +44,11 @@ import {
 import {
   CLUSTER_READINESS_TIMEOUT_MS,
 } from '../constants/cdc-lifecycle-constants.js';
+import {NUM, STATE, TYPEOF} from '../constants/index.js';
+import {OwnerKeyReconcileQueue} from
+  '../workflow/owner-key-reconcile-queue.js';
+import {RECONCILE_REASON} from
+  '../workflow/reconcile-queue-constants.js';
 
 const EntityType = REBALANCER_ENTITY_TYPE;
 
@@ -264,11 +272,27 @@ class UnifiedRebalancer extends EventEmitter {
     this.currentInterval = this.periodicCheckIntervalMs;
     this.maxInterval = this.periodicCheckIntervalMs * 2;
 
-    // Storage capacity services (optional, for capacity-aware placement)
+    // Storage capacity services.
     this.storageAdmissionService =
-      options.storageAdmissionService || null;
+      options.storageAdmissionService ||
+      this.rebalanceCoordinator?.storageAdmissionService ||
+      null;
     this.storageAccountingService =
-      options.storageAccountingService || null;
+      options.storageAccountingService ||
+      this.rebalanceCoordinator?.storageAccountingService ||
+      null;
+    this.cdcGroupPropagationService =
+      options.cdcGroupPropagationService ||
+      this.rebalanceCoordinator?.cdcGroupPropagationService ||
+      null;
+    this.controlPlaneReadinessService =
+      options.controlPlaneReadinessService ||
+      new ControlPlaneReadinessService({
+        nodeId: this.nodeId,
+        systemTableCache: this.systemTableCache,
+        storageAccountingService: this.storageAccountingService,
+        cdcGroupPropagationService: this.cdcGroupPropagationService,
+      });
 
     // Cluster readiness gate (optional, for bootstrap-lifecycle-hardening)
     // When provided, defers first planning cycle until cluster is ready.
@@ -285,9 +309,16 @@ class UnifiedRebalancer extends EventEmitter {
       storageAdmissionService: this.storageAdmissionService,
       accountingService: this.storageAccountingService,
     });
+    this.syncOwnerDependenciesFromCoordinator(this.rebalanceCoordinator);
 
     this.isShuttingDown = false;
     this.initialized = false;
+
+    this.rebalanceCheckQueue = new OwnerKeyReconcileQueue({
+      name: `${REBALANCER_QUEUE_NAME.REBALANCE_CHECK}:${this.entityId}`,
+      reconcileFn: (_ownerKey, reasons) =>
+        this.reconcileRebalanceCheck(reasons),
+    });
   }
 
   /**
@@ -316,12 +347,41 @@ class UnifiedRebalancer extends EventEmitter {
    */
   setRebalanceCoordinator(coordinator) {
     this.rebalanceCoordinator = coordinator;
+    this.syncOwnerDependenciesFromCoordinator(coordinator);
 
     this.logger.info(REBALANCER_LOG_MSG.COORDINATOR_SET, {
       entityId: this.entityId,
       entityType: this.entityType,
       hasCoordinator: !!coordinator,
     });
+  }
+
+  /**
+   * Synchronize owner-scoped dependencies from coordinator.
+   * @param {Object|null} coordinator
+   * @private
+   */
+  syncOwnerDependenciesFromCoordinator(coordinator) {
+    if (!coordinator || typeof coordinator !== TYPEOF.OBJECT) {
+      return;
+    }
+    if (coordinator.storageAdmissionService) {
+      this.storageAdmissionService = coordinator.storageAdmissionService;
+    }
+    if (coordinator.storageAccountingService) {
+      this.storageAccountingService = coordinator.storageAccountingService;
+    }
+    if (coordinator.cdcGroupPropagationService) {
+      this.cdcGroupPropagationService = coordinator.cdcGroupPropagationService;
+    }
+    if (coordinator.controlPlaneReadinessService) {
+      this.controlPlaneReadinessService =
+        coordinator.controlPlaneReadinessService;
+    }
+    if (this.movePlanner) {
+      this.movePlanner.storageAdmissionService = this.storageAdmissionService;
+      this.movePlanner.accountingService = this.storageAccountingService;
+    }
   }
 
   /**
@@ -675,16 +735,27 @@ class UnifiedRebalancer extends EventEmitter {
 
   /**
    * Get all available nodes from the cache.
+   * @readModel REBALANCE_AVAILABLE_NODES — READ_MODEL_SOURCE.SYSTEM_TABLE_CACHE
    * @return {Array<Object>} Array of active nodes.
    */
   getAvailableNodes() {
-    const now = Date.now();
-    return this.systemTableCache.filter(SYSTEM_TABLE_NAME.NODES, (node) => {
-      return isNodeRecordReady(node, {
-        now,
-        requireActiveStatus: true,
-      });
-    });
+    return this.systemTableCache.filter(
+      SYSTEM_TABLE_NAME.NODES,
+      (node) => {
+        const nodeId = node?.node_id || null;
+        if (!nodeId) {
+          return false;
+        }
+        const readiness = this.controlPlaneReadinessService
+          .getNodeReadinessSync(nodeId);
+        if (!readiness || !readiness.dimensions) {
+          return false;
+        }
+        return readiness.dimensions[
+          CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY
+        ] === true;
+      },
+    );
   }
 
   /**
@@ -693,19 +764,78 @@ class UnifiedRebalancer extends EventEmitter {
    * @return {Promise<boolean>} True if ready.
    */
   async isNodeReady(nodeId) {
-    return isNodeReadyWithTransport({
-      nodeId,
-      systemTableCache: this.systemTableCache,
-      messageRouter: this.messageRouter,
-      requireActiveStatus: true,
-      requireOutboundQueue: true,
-      enableReadinessPing: this.enableReadinessPing,
-      readinessPingTimeoutMs: this.readinessPingTimeoutMs,
-    });
+    const readiness = this.controlPlaneReadinessService
+      .getNodeReadinessSync(nodeId);
+    if (!readiness || !readiness.dimensions ||
+        readiness.dimensions[
+          CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY
+        ] !== true ||
+        readiness.dimensions[
+          CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY
+        ] !== true) {
+      return false;
+    }
+
+    // Transport-level checks beyond canonical readiness dimensions.
+    // Connection state, outbound queue, and optional ping verify live
+    // reachability that cache-based readiness cannot observe.
+    if (!this.isTransportReady(nodeId)) {
+      return false;
+    }
+
+    if (this.enableReadinessPing) {
+      return this.checkReadinessPing(nodeId);
+    }
+
+    return true;
+  }
+
+  /**
+   * Check transport-level reachability for a node.
+   * Verifies connection state and outbound queue availability via
+   * the message router. These checks complement the canonical
+   * readiness dimensions which are cache-based.
+   * @param {string} nodeId - Node ID.
+   * @return {boolean} True when transport is ready.
+   */
+  isTransportReady(nodeId) {
+    const router = this.messageRouter;
+    if (!router || typeof router.getConnectionState !== TYPEOF.FUNCTION) {
+      return false;
+    }
+
+    if (router.getConnectionState(nodeId) !== STATE.CONNECTED) {
+      return false;
+    }
+
+    if (typeof router.isOutboundQueueAvailable === TYPEOF.FUNCTION &&
+        !router.isOutboundQueueAvailable(nodeId)) {
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * Perform an optional readiness ping to verify live reachability.
+   * @param {string} nodeId - Node ID.
+   * @return {Promise<boolean>} True when ping succeeds.
+   */
+  async checkReadinessPing(nodeId) {
+    const router = this.messageRouter;
+    if (!router || typeof router.pingNode !== TYPEOF.FUNCTION) {
+      return true;
+    }
+
+    const pingTimeout = Number.isFinite(this.readinessPingTimeoutMs) ?
+      this.readinessPingTimeoutMs :
+      NUM.ZERO;
+    return router.pingNode(nodeId, pingTimeout);
   }
 
   /**
    * Get current replicas for this entity.
+   * @readModel REBALANCE_CURRENT_REPLICAS — READ_MODEL_SOURCE.SYSTEM_TABLE_CACHE
    * @return {Array<Object>} Array of replica objects.
    */
   getCurrentReplicas() {
@@ -750,6 +880,8 @@ class UnifiedRebalancer extends EventEmitter {
 
   /**
    * Get in-flight replica operations for this entity.
+   * @readModel REBALANCE_IN_FLIGHT_OPERATIONS —
+   *   READ_MODEL_SOURCE.SYSTEM_TABLE_CACHE
    * @return {Array<Object>} Array of replica_operations rows in-flight.
    */
   getInFlightOperations() {
@@ -765,50 +897,57 @@ class UnifiedRebalancer extends EventEmitter {
   }
 
   /**
-   * Query configured rebalance budget.
-   * Falls back to configured default when SQL is unavailable or key missing.
-   * @return {Promise<number>} Configured budget.
-   */
-  async getConfiguredRebalanceBudget() {
-    if (!this.sqlQueryEngine || !this.sqlQueryEngine.executeQuery) {
-      return this.rebalanceBudget;
+     * Query the configured rebalance budget from authoritative config.
+     * Returns the constructor-provided default when the config row
+     * is absent or unparseable — this is a default, not a mixed read model.
+     *
+     * @readModel REBALANCE_CONFIGURED_BUDGET — READ_MODEL_SOURCE.AUTHORITATIVE_SQL
+     * @return {Promise<number>} Configured rebalance budget.
+     */
+    async getConfiguredRebalanceBudget() {
+      assertCritical(
+        this.sqlQueryEngine && this.sqlQueryEngine.executeQuery,
+        REBALANCER_ERROR_MSG.SQL_ENGINE_REQUIRED,
+      );
+
+      const result = await this.sqlQueryEngine.executeQuery(
+        SQL_BUDGET.SELECT_REBALANCE_BUDGET,
+        [REBALANCER_CONFIG_KEY.REBALANCE_BUDGET],
+      );
+
+      if (!result.success || !result.rows || result.rows.length === 0) {
+        return this.rebalanceBudget;
+      }
+
+      const parsed = Number(result.rows[0].config_value);
+      return Number.isFinite(parsed) && parsed > 0 ?
+        parsed : this.rebalanceBudget;
     }
-
-    const result = await this.sqlQueryEngine.executeQuery(
-      SQL_BUDGET.SELECT_REBALANCE_BUDGET,
-      [REBALANCER_CONFIG_KEY.REBALANCE_BUDGET],
-    );
-
-    if (!result.success || !result.rows || result.rows.length === 0) {
-      return this.rebalanceBudget;
-    }
-
-    const parsed = Number(result.rows[0].config_value);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : this.rebalanceBudget;
-  }
 
   /**
-   * Query global in-flight operation count.
-   * Falls back to local cache if SQL is unavailable.
-   * @return {Promise<number>} In-flight operation count.
-   */
-  async getGlobalInFlightOperationCount() {
-    if (!this.sqlQueryEngine || !this.sqlQueryEngine.executeQuery) {
-      return this.getInFlightOperations().length;
+     * Query the global in-flight operation count via authoritative SQL.
+     *
+     * @readModel REBALANCE_GLOBAL_BUDGET — READ_MODEL_SOURCE.AUTHORITATIVE_SQL
+     * @return {Promise<number>} In-flight operation count.
+     */
+    async getGlobalInFlightOperationCount() {
+      assertCritical(
+        this.sqlQueryEngine && this.sqlQueryEngine.executeQuery,
+        REBALANCER_ERROR_MSG.SQL_ENGINE_REQUIRED,
+      );
+
+      const result = await this.sqlQueryEngine.executeQuery(
+        SQL_BUDGET.SELECT_IN_FLIGHT_COUNT,
+        [],
+      );
+
+      if (!result.success || !result.rows || result.rows.length === 0) {
+        return 0;
+      }
+
+      const parsed = Number(result.rows[0].total_count);
+      return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
     }
-
-    const result = await this.sqlQueryEngine.executeQuery(
-      SQL_BUDGET.SELECT_IN_FLIGHT_COUNT,
-      [],
-    );
-
-    if (!result.success || !result.rows || result.rows.length === 0) {
-      return 0;
-    }
-
-    const parsed = Number(result.rows[0].total_count);
-    return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
-  }
 
   /**
    * Check whether this rebalancer targets a critical system partition.
@@ -837,14 +976,21 @@ class UnifiedRebalancer extends EventEmitter {
       return activeReplicas;
     }
 
-    const now = Date.now();
     const readyNodeIds = new Set(
       this.systemTableCache
         .filter(SYSTEM_TABLE_NAME.NODES, (node) => {
-          return isNodeRecordReady(node, {
-            now,
-            requireActiveStatus: true,
-          });
+          const nodeId = node?.node_id || null;
+          if (!nodeId) {
+            return false;
+          }
+          const readiness = this.controlPlaneReadinessService
+            .getNodeReadinessSync(nodeId);
+          if (!readiness || !readiness.dimensions) {
+            return false;
+          }
+          return readiness.dimensions[
+            CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY
+          ] === true;
         })
         .map((node) => node.node_id),
     );
@@ -1866,25 +2012,51 @@ class UnifiedRebalancer extends EventEmitter {
    * @param {string} reason - Reason for immediate check.
    */
   triggerImmediateCheck(reason) {
-    if (!this.isLeader) {
-      return;
+      if (!this.isLeader) {
+        return;
+      }
+
+      this.logger.info(REBALANCER_LOG_MSG.IMMEDIATE_TRIGGER, {
+        entityId: this.entityId,
+        entityType: this.entityType,
+        reason,
+      });
+
+      const reconcileReason = this.mapTriggerReason(reason);
+      this.rebalanceCheckQueue.enqueue(
+        this.entityId,
+        reconcileReason,
+      );
     }
 
-    this.logger.info(REBALANCER_LOG_MSG.IMMEDIATE_TRIGGER, {
-      entityId: this.entityId,
-      entityType: this.entityType,
-      reason,
-    });
+  /**
+   * Map a trigger reason string to a typed RECONCILE_REASON constant.
+   * @param {string} reason - The trigger reason.
+   * @return {string} A RECONCILE_REASON constant.
+   * @private
+   */
+  mapTriggerReason(reason) {
+    switch (reason) {
+      case 'node_became_ready':
+        return RECONCILE_REASON.NODE_BECAME_READY;
+      case 'node_left_ready':
+        return RECONCILE_REASON.NODE_LEFT_READY;
+      case 'node_failed':
+        return RECONCILE_REASON.NODE_FAILED;
+      default:
+        return RECONCILE_REASON.PERIODIC_CHECK;
+    }
+  }
 
-    // Cancel pending scheduled check
+  /**
+   * Reconcile callback for the rebalance check queue.
+   * Cancels any pending scheduled check and runs checkRebalance.
+   * @param {Array<string>} _reasons - Accumulated reason codes.
+   * @private
+   */
+  async reconcileRebalanceCheck(_reasons) {
     this.cancelScheduledCheck();
-
-    // Execute check after short delay (to batch rapid events)
-    // Track this timeout so it can be cancelled on shutdown
-    this.scheduledCheck = setTimeout(() => {
-      // Avoid unhandled rejections from timer-triggered checks during shutdown races.
-      void this.checkRebalance().catch(() => {});
-    }, this.criticalCheckDelayMs);
+    await this.checkRebalance();
   }
 
   /**
@@ -1971,34 +2143,6 @@ class UnifiedRebalancer extends EventEmitter {
 
       this.triggerImmediateCheck(reason);
     }
-  }
-
-  /**
-   * Handle CDC event for potential rebalancing trigger.
-   * @param {Object} event - CDC event.
-   */
-  onCDCEvent(event) {
-    if (!this.isLeader) {
-      return;
-    }
-
-    // Check if this is a critical event requiring immediate action
-    if (this.isCriticalCDCEvent(event)) {
-      // Reset stabilization timer for critical state changes
-      if (event.tableName === 'services' &&
-          event.data?.status === ReplicaStatus.FAILED) {
-        this.recordStateChange(
-          STABILIZATION_RESET_TRIGGER.REPLICA_FAILED,
-        );
-      } else if (event.tableName === 'nodes' &&
-          event.data?.status === NodeStatus.FAILED) {
-        this.recordStateChange(
-          STABILIZATION_RESET_TRIGGER.NODE_FAILED,
-        );
-      }
-      this.triggerImmediateCheck(event.type || 'cdc_event');
-    }
-    // Otherwise, let the periodic check handle it
   }
 
   /**
@@ -2094,6 +2238,7 @@ class UnifiedRebalancer extends EventEmitter {
     this.isShuttingDown = true;
     this.isLeader = false;
     this.cancelScheduledCheck();
+    this.rebalanceCheckQueue.shutdown();
     // Clear stabilization timer
     if (this.stabilizationTimer) {
       clearTimeout(this.stabilizationTimer);

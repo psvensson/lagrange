@@ -24,8 +24,17 @@ import {
   ReplicaDispatchService,
 } from '../../control-plane/replica-dispatch-service.js';
 import {
+  ControlPlaneReadinessService,
+} from '../../control-plane/control-plane-readiness-service.js';
+import {
   RebalanceCoordinator,
 } from '../../rebalancer/rebalance-coordinator.js';
+import {
+  StorageAdmissionService,
+} from '../../rebalancer/storage-admission-service.js';
+import {
+  StorageCapacityAccountingService,
+} from '../../rebalancer/storage-capacity-accounting-service.js';
 import {NodeService} from '../../node/node-service.js';
 import {LoggingService} from '../../logging/logging-service.js';
 import {DependencyError} from '../bootstrap-errors.js';
@@ -77,6 +86,7 @@ class ControlPlaneSetup {
    * @param {string} options.nodeAddress - Node address (required).
    * @param {Object} options.messageRouter - Message router (required).
    * @param {Object} options.cdcIntegrationService - CDC service.
+   * @param {Object} [options.cdcGroupPropagationService] - CDC publication owner.
    * @param {Object} options.systemTableCache - System table cache.
    * @param {Object} options.tablePolicyService - Table policy service.
    * @param {Map} options.messageGroupServices - MG services to attach.
@@ -97,6 +107,7 @@ class ControlPlaneSetup {
       tablePolicyService,
       messageGroupServices,
       rebalanceCoordinator: existingCoordinator,
+      cdcGroupPropagationService,
     } = options;
 
     // Validate required dependencies
@@ -149,6 +160,39 @@ class ControlPlaneSetup {
 
     // Create or use existing RebalanceCoordinator
     let rebalanceCoordinator = existingCoordinator;
+    let storageAccountingService =
+      rebalanceCoordinator?.storageAccountingService || null;
+    if (!storageAccountingService) {
+      storageAccountingService =
+        new StorageCapacityAccountingService({
+          systemTableCache,
+          sqlQueryEngine: cdcIntegrationService.sqlQueryEngine,
+        });
+    }
+
+    let controlPlaneReadinessService =
+      rebalanceCoordinator?.controlPlaneReadinessService || null;
+    if (!controlPlaneReadinessService) {
+      controlPlaneReadinessService = new ControlPlaneReadinessService({
+        nodeId,
+        systemTableCache,
+        storageAccountingService,
+        cdcGroupPropagationService: cdcGroupPropagationService || null,
+      });
+    }
+
+    let storageAdmissionService =
+      rebalanceCoordinator?.storageAdmissionService || null;
+    if (!storageAdmissionService) {
+      storageAdmissionService = new StorageAdmissionService({
+        nodeId,
+        accountingService: storageAccountingService,
+        systemTableCache,
+        cdcGroupPropagationService: cdcGroupPropagationService || null,
+        controlPlaneReadinessService,
+      });
+    }
+
     if (!rebalanceCoordinator) {
       rebalanceCoordinator = new RebalanceCoordinator({
         nodeId,
@@ -157,10 +201,30 @@ class ControlPlaneSetup {
         messageRouter,
         tablePolicyService,
         sqlQueryEngine: cdcIntegrationService.sqlQueryEngine,
+        storageAccountingService,
+        storageAdmissionService,
+        controlPlaneReadinessService,
+        cdcGroupPropagationService: cdcGroupPropagationService || null,
       });
       rebalanceCoordinator.initialize();
 
       logger.debug(LOG_MSG.COORDINATOR_CREATED, {nodeId});
+    }
+
+    if (!rebalanceCoordinator.storageAccountingService) {
+      rebalanceCoordinator.storageAccountingService = storageAccountingService;
+    }
+    if (!rebalanceCoordinator.storageAdmissionService) {
+      rebalanceCoordinator.storageAdmissionService = storageAdmissionService;
+    }
+    if (!rebalanceCoordinator.controlPlaneReadinessService) {
+      rebalanceCoordinator.controlPlaneReadinessService =
+        controlPlaneReadinessService;
+    }
+    if (!rebalanceCoordinator.cdcGroupPropagationService &&
+        cdcGroupPropagationService) {
+      rebalanceCoordinator.cdcGroupPropagationService =
+        cdcGroupPropagationService;
     }
 
     // Create decomposed control plane services
@@ -195,6 +259,9 @@ class ControlPlaneSetup {
       systemTableCache,
       rebalanceCoordinator,
       sqlQueryEngine: cdcIntegrationService.sqlQueryEngine,
+      controlPlaneReadinessService,
+      storageAccountingService,
+      cdcGroupPropagationService: cdcGroupPropagationService || null,
     });
     dispatchService.initialize();
 

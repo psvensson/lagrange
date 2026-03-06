@@ -39,6 +39,14 @@ const INVARIANT_ID = Object.freeze({
     'cdc.subscription_progress_visible',
   BENCHMARK_REQUIRED_NODES_ALL_READY:
     'benchmark.required_nodes_all_ready',
+  LEADER_UNIQUENESS:
+    'control_plane.leader_uniqueness',
+  MONOTONIC_STEPS:
+    'control_plane.monotonic_steps',
+  CLAIM_EXCLUSIVITY:
+    'control_plane.claim_exclusivity',
+  ORPHAN_IN_FLIGHT:
+    'control_plane.orphan_in_flight',
 });
 
 function freezeDefinition(definition) {
@@ -162,6 +170,50 @@ const INVARIANT_CATALOG = Object.freeze({
     expected: {
       condition:
         'all required benchmark nodes are admitted by the shared readiness evaluator',
+    },
+  }),
+  [INVARIANT_ID.LEADER_UNIQUENESS]: freezeDefinition({
+    id: INVARIANT_ID.LEADER_UNIQUENESS,
+    severity: INVARIANT_SEVERITY.CRITICAL,
+    scope: INVARIANT_SCOPE.PARTITION,
+    owningSubsystem: 'invariant-engine',
+    defaultReasonCode: 'duplicate_leader',
+    expected: {
+      condition:
+        'each partition or message group has at most one canonical leader',
+    },
+  }),
+  [INVARIANT_ID.MONOTONIC_STEPS]: freezeDefinition({
+    id: INVARIANT_ID.MONOTONIC_STEPS,
+    severity: INVARIANT_SEVERITY.CRITICAL,
+    scope: INVARIANT_SCOPE.CLUSTER,
+    owningSubsystem: 'invariant-engine',
+    defaultReasonCode: 'backward_step_transition',
+    expected: {
+      condition:
+        'workflow step transitions are monotonically increasing',
+    },
+  }),
+  [INVARIANT_ID.CLAIM_EXCLUSIVITY]: freezeDefinition({
+    id: INVARIANT_ID.CLAIM_EXCLUSIVITY,
+    severity: INVARIANT_SEVERITY.CRITICAL,
+    scope: INVARIANT_SCOPE.CLUSTER,
+    owningSubsystem: 'invariant-engine',
+    defaultReasonCode: 'duplicate_claim',
+    expected: {
+      condition:
+        'each operation id and owner key has at most one active claim',
+    },
+  }),
+  [INVARIANT_ID.ORPHAN_IN_FLIGHT]: freezeDefinition({
+    id: INVARIANT_ID.ORPHAN_IN_FLIGHT,
+    severity: INVARIANT_SEVERITY.ERROR,
+    scope: INVARIANT_SCOPE.CLUSTER,
+    owningSubsystem: 'invariant-engine',
+    defaultReasonCode: 'orphan_in_flight_operation',
+    expected: {
+      condition:
+        'every in-flight operation has a corresponding owner key',
     },
   }),
 });

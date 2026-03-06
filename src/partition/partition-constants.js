@@ -175,6 +175,8 @@ const SPLIT_MERGE_ERROR_MSG = Object.freeze({
   partitionsNotAdjacent: (leftId, leftEnd, rightId, rightStart) =>
     `Partitions are not adjacent: ${leftId} end (${leftEnd}) != ` +
     `${rightId} start (${rightStart})`,
+  SPLIT_PREFLIGHT_OWNER_REQUIRED:
+    'Split capacity preflight requires storageAdmissionService and storageAccountingService',
 });
 
 const SPLIT_MERGE_DEFAULT = Object.freeze({

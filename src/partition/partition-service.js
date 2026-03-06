@@ -16,7 +16,6 @@ import {CONFIG_KEY} from '../config/config-constants.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {HLCClockService} from '../hlc/hlc-clock-service.js';
 import {UnifiedRebalancer, EntityType} from '../rebalancer/unified-rebalancer.js';
-import {RebalanceCoordinator} from '../rebalancer/rebalance-coordinator.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
 import {assertCritical} from '../utils/assert.js';
 import {PendingRequestTracker} from './pending-request-tracker.js';
@@ -4082,12 +4081,14 @@ class PartitionService extends EventEmitter {
     this.ownsRebalanceCoordinator = false;
 
     if (this.rebalancer) {
-      if (typeof this.rebalancer.setRebalanceCoordinator ===
-          PARTITION_SERVICE_TYPE.FUNCTION) {
-        this.rebalancer.setRebalanceCoordinator(rebalanceCoordinator);
-      } else {
-        this.rebalancer.rebalanceCoordinator = rebalanceCoordinator;
-      }
+      const setRebalanceCoordinator = assertCritical(
+        typeof this.rebalancer.setRebalanceCoordinator ===
+            PARTITION_SERVICE_TYPE.FUNCTION ?
+          this.rebalancer.setRebalanceCoordinator.bind(this.rebalancer) :
+          null,
+        PARTITION_SERVICE_ERROR_MSG.REBALANCER_SET_COORDINATOR_REQUIRED,
+      );
+      setRebalanceCoordinator(rebalanceCoordinator);
     }
 
     if (shouldShutdownPrevious) {
@@ -4130,12 +4131,14 @@ class PartitionService extends EventEmitter {
       this.rebalancer.messageRouter = this.messageRouter;
       this.rebalancer.sqlQueryEngine = this.sqlQueryEngine;
       if (this.rebalanceCoordinator) {
-        if (typeof this.rebalancer.setRebalanceCoordinator ===
-            PARTITION_SERVICE_TYPE.FUNCTION) {
-          this.rebalancer.setRebalanceCoordinator(this.rebalanceCoordinator);
-        } else {
-          this.rebalancer.rebalanceCoordinator = this.rebalanceCoordinator;
-        }
+        const setRebalanceCoordinator = assertCritical(
+          typeof this.rebalancer.setRebalanceCoordinator ===
+              PARTITION_SERVICE_TYPE.FUNCTION ?
+            this.rebalancer.setRebalanceCoordinator.bind(this.rebalancer) :
+            null,
+          PARTITION_SERVICE_ERROR_MSG.REBALANCER_SET_COORDINATOR_REQUIRED,
+        );
+        setRebalanceCoordinator(this.rebalanceCoordinator);
       }
       if (typeof this.rebalancer.setLeader === PARTITION_SERVICE_TYPE.FUNCTION) {
         this.rebalancer.setLeader(this.isLeader);
@@ -4147,7 +4150,8 @@ class PartitionService extends EventEmitter {
         !this.cdcIntegrationService ||
         !this.tablePolicyService ||
         !this.messageRouter ||
-        !this.sqlQueryEngine) {
+        !this.sqlQueryEngine ||
+        !this.rebalanceCoordinator) {
       return;
     }
 
@@ -4179,27 +4183,18 @@ class PartitionService extends EventEmitter {
       this.sqlQueryEngine,
       PARTITION_SERVICE_ERROR_MSG.REBALANCER_SQL_ENGINE_REQUIRED,
     );
+    const rebalanceCoordinator = assertCritical(
+      this.rebalanceCoordinator,
+      PARTITION_SERVICE_ERROR_MSG.REBALANCER_COORDINATOR_REQUIRED,
+    );
 
-    if (!this.rebalanceCoordinator) {
-      this.rebalanceCoordinator = new RebalanceCoordinator({
-        nodeId: this.nodeId,
-        systemTableCache: systemTableCache,
-        cdcIntegrationService: cdcIntegrationService,
-        messageRouter: messageRouter,
-        tablePolicyService: tablePolicyService,
-        sqlQueryEngine: sqlQueryEngine,
-        enableTimeouts: false,
-      });
-      this.ownsRebalanceCoordinator = true;
-    }
-
-    this.rebalanceCoordinator.systemTableCache = systemTableCache;
-    this.rebalanceCoordinator.cdcIntegrationService = cdcIntegrationService;
-    this.rebalanceCoordinator.tablePolicyService = tablePolicyService;
-    this.rebalanceCoordinator.sqlQueryEngine = sqlQueryEngine;
-    if (typeof this.rebalanceCoordinator.initialize ===
+    rebalanceCoordinator.systemTableCache = systemTableCache;
+    rebalanceCoordinator.cdcIntegrationService = cdcIntegrationService;
+    rebalanceCoordinator.tablePolicyService = tablePolicyService;
+    rebalanceCoordinator.sqlQueryEngine = sqlQueryEngine;
+    if (typeof rebalanceCoordinator.initialize ===
         PARTITION_SERVICE_TYPE.FUNCTION) {
-      this.rebalanceCoordinator.initialize();
+      rebalanceCoordinator.initialize();
     }
 
     this.rebalancer = new UnifiedRebalancer({
@@ -4211,7 +4206,7 @@ class PartitionService extends EventEmitter {
       nodeId: this.nodeId,
       replicaStateMachine: this.replicaStateMachine,
       messageRouter: messageRouter,
-      rebalanceCoordinator: this.rebalanceCoordinator,
+      rebalanceCoordinator: rebalanceCoordinator,
     });
     this.rebalancer.initialize();
     this.rebalancer.setLeader(this.isLeader);

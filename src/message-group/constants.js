@@ -70,6 +70,8 @@ const MESSAGE_GROUP_SERVICE_ERROR_MSG = Object.freeze({
     'MessageGroupService requires transport - WebSocket transport is mandatory',
   INVALID_TRANSPORT:
     'MessageGroupService requires WebSocket-based transport (MessageRouter)',
+  MISSING_REBALANCER_SET_COORDINATOR:
+    'MessageGroupService rebalancer must implement setRebalanceCoordinator',
 });
 
 const MESSAGE_GROUP_OPERATION_LEDGER = Object.freeze({

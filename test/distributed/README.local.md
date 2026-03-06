@@ -350,6 +350,20 @@ Optional deep-dive analysis for one report:
 npm run analyze:pg-baseline -- --report test-output/reports/<report>.report.json
 ```
 
+Required triage summary after any harness failure:
+
+```bash
+npm run analyze:distributed-failure -- --report test-output/reports/<report>.report.json
+```
+
+When to use it:
+
+1. Immediately after a failing harness run, before making code changes.
+2. When comparing repeated failing runs to confirm whether the dominant failure
+   signature changed.
+3. During closure checks to verify that timeout/error counts and mismatch
+   classes actually moved in the expected direction.
+
 ## Artifacts
 
 By default, harness artifacts go under:

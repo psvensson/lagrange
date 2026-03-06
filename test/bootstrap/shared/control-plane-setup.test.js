@@ -39,6 +39,7 @@ describe('ControlPlaneSetup', () => {
 
     mockSystemTableCache = {
       get: () => null,
+      getAll: () => [],
       filter: () => [],
     };
 
@@ -278,6 +279,51 @@ describe('ControlPlaneSetup', () => {
 
         assert.strictEqual(
           result.rebalanceCoordinator, existingCoordinator,
+        );
+        assert.ok(
+          existingCoordinator.storageAccountingService,
+        );
+        assert.ok(
+          existingCoordinator.storageAdmissionService,
+        );
+        assert.ok(
+          existingCoordinator.controlPlaneReadinessService,
+        );
+      });
+
+    it('should wire canonical readiness owners through coordinator and dispatch',
+      async () => {
+        const cdcGroupPropagationService = {
+          getPublicationModeDiagnostics: () => ({
+            currentMode: 'grouped',
+            reasonCode: null,
+            enteredAt: '2026-03-06T00:00:00.000Z',
+            recentTransitions: [],
+          }),
+        };
+
+        const result = await ControlPlaneSetup.create({
+          nodeId: 'test-node',
+          nodeAddress: 'localhost:8080',
+          messageRouter: mockMessageRouter,
+          cdcIntegrationService: mockCdcIntegrationService,
+          cdcGroupPropagationService,
+          systemTableCache: mockSystemTableCache,
+          tablePolicyService: mockTablePolicyService,
+        });
+
+        createdServices.push(result);
+
+        assert.ok(
+          result.rebalanceCoordinator.storageAccountingService,
+        );
+        assert.strictEqual(
+          result.rebalanceCoordinator.cdcGroupPropagationService,
+          cdcGroupPropagationService,
+        );
+        assert.strictEqual(
+          result.dispatchService.controlPlaneReadinessService,
+          result.rebalanceCoordinator.controlPlaneReadinessService,
         );
       });
 

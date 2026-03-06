@@ -155,3 +155,128 @@ test('DurableWorkflowCoordinator - recovers workflows and participants from rows
     t.same(Array.from(workflow.participants.keys()), ['p1']);
     t.equal(workflow.participants.get('p1').participantId, 'participant-1');
   });
+
+import {WORKFLOW_TRANSITION_FIELD} from
+  '../../src/workflow/workflow-constants.js';
+
+test('DurableWorkflowCoordinator - transitionStep persists canonical ' +
+  'transition fields', async (t) => {
+  const persistedWorkflows = [];
+  const fixedNow = 5000;
+  const coordinator = new DurableWorkflowCoordinator({
+    persistWorkflow: async (workflow) => {
+      persistedWorkflows.push(JSON.parse(JSON.stringify({
+        workflowId: workflow.workflowId,
+        step: workflow.step,
+        transitionHistory: workflow.transitionHistory,
+        updatedAt: workflow.updatedAt,
+      })));
+    },
+    now: () => fixedNow,
+  });
+
+  await coordinator.registerWorkflow({
+    workflowId: 'wf-transition',
+    ownerKey: 'owner-transition',
+    step: 'PENDING',
+    transitionHistory: [],
+  });
+
+  await coordinator.transitionStep('wf-transition', {
+    nextStep: 'SENDING',
+    reason: 'dispatch_sending',
+  });
+
+  const workflow = coordinator.getWorkflowById('wf-transition');
+  t.equal(workflow.step, 'SENDING', 'step should be updated');
+  t.equal(workflow.transitionHistory.length, 1);
+
+  const entry = workflow.transitionHistory[0];
+  t.equal(
+    entry[WORKFLOW_TRANSITION_FIELD.PREVIOUS_STEP],
+    'PENDING',
+    'transition must include previousStep',
+  );
+  t.equal(
+    entry[WORKFLOW_TRANSITION_FIELD.NEXT_STEP],
+    'SENDING',
+    'transition must include nextStep',
+  );
+  t.equal(
+    entry[WORKFLOW_TRANSITION_FIELD.REASON],
+    'dispatch_sending',
+    'transition must include reason',
+  );
+  t.equal(
+    entry[WORKFLOW_TRANSITION_FIELD.TIMESTAMP],
+    fixedNow,
+    'transition must include timestamp',
+  );
+  t.equal(
+    entry[WORKFLOW_TRANSITION_FIELD.OWNER_KEY],
+    'owner-transition',
+    'transition must include ownerKey',
+  );
+
+  t.ok(
+    persistedWorkflows.length >= 2,
+    'workflow should be persisted on register and transition',
+  );
+});
+
+test('DurableWorkflowCoordinator - transitionStep rejects missing ' +
+  'nextStep', async (t) => {
+  const coordinator = new DurableWorkflowCoordinator();
+  await coordinator.registerWorkflow({
+    workflowId: 'wf-no-step',
+    ownerKey: 'owner-no-step',
+  });
+
+  t.rejects(
+    () => coordinator.transitionStep('wf-no-step', {reason: 'test'}),
+    {message: /nextStep/},
+    'transitionStep must reject when nextStep is missing',
+  );
+});
+
+test('DurableWorkflowCoordinator - transitionStep rejects missing ' +
+  'reason', async (t) => {
+  const coordinator = new DurableWorkflowCoordinator();
+  await coordinator.registerWorkflow({
+    workflowId: 'wf-no-reason',
+    ownerKey: 'owner-no-reason',
+  });
+
+  t.rejects(
+    () => coordinator.transitionStep('wf-no-reason', {nextStep: 'DONE'}),
+    {message: /reason/},
+    'transitionStep must reject when reason is missing',
+  );
+});
+
+test('DurableWorkflowCoordinator - transitionStep merges extra ' +
+  'metadata into history entry', async (t) => {
+  const coordinator = new DurableWorkflowCoordinator({
+    now: () => 9000,
+  });
+  await coordinator.registerWorkflow({
+    workflowId: 'wf-meta',
+    ownerKey: 'owner-meta',
+    step: 'STEP_A',
+    transitionHistory: [],
+  });
+
+  await coordinator.transitionStep('wf-meta', {
+    nextStep: 'STEP_B',
+    reason: 'test_reason',
+    metadata: {errorMessage: 'something broke'},
+  });
+
+  const workflow = coordinator.getWorkflowById('wf-meta');
+  const entry = workflow.transitionHistory[0];
+  t.equal(entry.errorMessage, 'something broke');
+  t.equal(
+    entry[WORKFLOW_TRANSITION_FIELD.REASON],
+    'test_reason',
+  );
+});

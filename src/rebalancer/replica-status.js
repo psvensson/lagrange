@@ -147,6 +147,7 @@ const REPLACE_WORKFLOW_STEPS = [
  */
 const OPERATION_METADATA_KEY = Object.freeze({
   SOURCE_REPLICA_ID: 'sourceReplicaId',
+  READINESS_SNAPSHOT: 'readinessSnapshot',
 });
 
 /**

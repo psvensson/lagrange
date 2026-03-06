@@ -379,6 +379,10 @@ const PARTITION_SERVICE_ERROR_MSG = Object.freeze({
   REBALANCER_ROUTER_REQUIRED: 'PartitionService requires messageRouter for rebalancer',
   REBALANCER_SQL_ENGINE_REQUIRED:
     'PartitionService requires sqlQueryEngine for rebalancer',
+  REBALANCER_COORDINATOR_REQUIRED:
+    'PartitionService requires rebalanceCoordinator for rebalancer',
+  REBALANCER_SET_COORDINATOR_REQUIRED:
+    'PartitionService rebalancer must implement setRebalanceCoordinator',
   REBALANCE_COORDINATOR_SHUTDOWN_FAILED:
     'Failed to shutdown rebalance coordinator',
   DELIVERY_NOT_ACK: 'Delivery not acknowledged',

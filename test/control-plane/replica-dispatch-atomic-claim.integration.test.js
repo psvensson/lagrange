@@ -138,6 +138,9 @@ test(
       await service.handleReplicaOperationDispatch({
         [ControlPlaneField.OPERATION_ID]: operationRow.operation_id,
       });
+      await new Promise((resolve) => {
+        setTimeout(resolve, 0);
+      });
 
       t.equal(
         executeCount,
@@ -353,6 +356,9 @@ test(
         tableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
         data: operationRow,
       });
+      await new Promise((resolve) => {
+        setTimeout(resolve, 0);
+      });
 
       t.equal(
         executeCount,
@@ -482,6 +488,9 @@ test(
         [ControlPlaneField.NODE_ADDRESS]: 'localhost:8082',
         [ControlPlaneField.STATE]: STATE.READY,
         [ControlPlaneField.HEARTBEAT_AT]: now + 1000,
+      });
+      await new Promise((resolve) => {
+        setTimeout(resolve, 0);
       });
 
       t.equal(
@@ -742,6 +751,9 @@ test(
         tableName: SYSTEM_TABLE_NAME.NODES,
         data: readyNodeRow,
       });
+      await new Promise((resolve) => {
+        setTimeout(resolve, 0);
+      });
 
       t.equal(
         executeCount,
@@ -901,8 +913,9 @@ test(
 
 async function waitForRetryDrain(service) {
   while (service.retryInFlightNodes.size > 0) {
-    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   }
+  await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 test(
@@ -1032,6 +1045,157 @@ test(
         pendingReadCount,
         1,
         'should scan pending rows once for one ready heartbeat',
+      );
+    } finally {
+      service.stop();
+    }
+  },
+);
+
+test(
+  'ReplicaDispatchService keeps pending retry loop deterministic when claim path times out',
+  async (t) => {
+    initEnv();
+
+    const now = Date.now();
+    const operationRow = {
+      operation_id: 'op-ready-timeout-loop-1',
+      type: 'ADD',
+      partition_id: 'tables-p1',
+      replica_id: 'tables-p1-r10',
+      source_node_id: 'node-1',
+      target_node_id: 'node-2',
+      status: 'pending',
+      workflow_step: WORKFLOW_STEP.PENDING,
+      created_at: now,
+      updated_at: now,
+      steps_history: '[]',
+    };
+    const nodeStore = new Map();
+    nodeStore.set('node-2', {
+      node_id: 'node-2',
+      status: SERVICE_STATUS.ACTIVE,
+      connection_state: STATE.READY,
+      ready_lease_expires_at: now + 30000,
+      last_heartbeat: now,
+    });
+
+    let claimAttemptCount = 0;
+    let executeCount = 0;
+    const service = new ReplicaDispatchService({
+      nodeId: 'node-1',
+      messageRouter: {
+        getConnectionState: () => STATE.CONNECTED,
+      },
+      cdcIntegrationService: {
+        upsertSystemTableRow: async (_tableName, row) => {
+          if (row?.node_id) {
+            nodeStore.set(row.node_id, {
+              ...row,
+              last_heartbeat: row.last_heartbeat ?? Date.now(),
+            });
+          }
+          return {success: true};
+        },
+        updateSystemTableRow: async (_tableName, whereClause) => {
+          const isPendingClaim =
+            whereClause?.operation_id === operationRow.operation_id &&
+            whereClause?.workflow_step === WORKFLOW_STEP.PENDING;
+          if (!isPendingClaim) {
+            return {
+              success: true,
+              partitionResult: {affectedRows: 0},
+            };
+          }
+          claimAttemptCount += 1;
+          throw new Error('Query timeout after 5000ms');
+        },
+      },
+      systemTableCache: {
+        get: (tableName, key) => {
+          if (tableName === SYSTEM_TABLE_NAME.NODES) {
+            return nodeStore.get(key) || null;
+          }
+          if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS &&
+              key === operationRow.operation_id) {
+            return operationRow;
+          }
+          return null;
+        },
+        getAll: (tableName) => {
+          if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
+            return [operationRow];
+          }
+          if (tableName === SYSTEM_TABLE_NAME.SERVICES) {
+            return [{
+              [COLUMN.NODE_ID]: 'node-2',
+              [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
+              [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+            }];
+          }
+          return [];
+        },
+      },
+      rebalanceCoordinator: {
+        executeOperation: async () => {
+          executeCount += 1;
+          return {success: true};
+        },
+      },
+    });
+    service.initialize();
+
+    const leaderMessageGroup = {
+      isLeaderReplica: () => true,
+    };
+
+    try {
+      await service.handleNodeStateUpdate({
+        [ControlPlaneField.NODE_ID]: 'node-2',
+        [ControlPlaneField.NODE_ADDRESS]: 'localhost:8082',
+        [ControlPlaneField.STATE]: STATE.READY,
+        [ControlPlaneField.HEARTBEAT_AT]: now + 1000,
+      });
+      await waitForRetryDrain(service);
+
+      const cdcReadyRow = {
+        ...nodeStore.get('node-2'),
+        last_heartbeat: now + 2000,
+        ready_lease_expires_at: now + 32000,
+      };
+      nodeStore.set('node-2', cdcReadyRow);
+      await service.handleCdcApplied(leaderMessageGroup, {
+        tableName: SYSTEM_TABLE_NAME.NODES,
+        data: cdcReadyRow,
+      });
+      await waitForRetryDrain(service);
+
+      const cacheReadyRow = {
+        ...nodeStore.get('node-2'),
+        last_heartbeat: now + 3000,
+        ready_lease_expires_at: now + 33000,
+      };
+      nodeStore.set('node-2', cacheReadyRow);
+      service.handleCacheNodeChange(
+        SYSTEM_TABLE_NAME.NODES,
+        cacheReadyRow,
+      );
+      await waitForRetryDrain(service);
+
+      t.equal(
+        claimAttemptCount,
+        3,
+        'ready triggers should deterministically retry the same pending claim',
+      );
+      t.equal(
+        executeCount,
+        0,
+        'timed-out claim path should never enter operation execution',
+      );
+      t.equal(
+        operationRow.workflow_step,
+        WORKFLOW_STEP.PENDING,
+        'operation should remain pending while claim attempts time out',
       );
     } finally {
       service.stop();

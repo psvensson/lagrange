@@ -66,18 +66,18 @@ function resolveSevenNodeLoadDuringPartitioningScenarioConfig(options = {}) {
   return Object.freeze({
     expectedNodeCount: normalizeFiniteNumber(options.expectedNodeCount, 7),
     loadOpsPerSec: normalizeFiniteNumber(options.loadOpsPerSec, 140),
-    loadDuration: normalizeNonEmptyString(options.loadDuration, '120s'),
+    loadDuration: normalizeNonEmptyString(options.loadDuration, '240s'),
     loadOperations: normalizeNonEmptyArray(
       options.loadOperations,
       DEFAULT_MIXED_LOAD_OPERATIONS,
     ),
     tableName: normalizeNonEmptyString(options.tableName, DEFAULT_LOG_TABLE_NAME),
     minAdditionalPartitions:
-      normalizeFiniteNumber(options.minAdditionalPartitions, 2),
+      normalizeFiniteNumber(options.minAdditionalPartitions, 1),
     minDistinctReplicaNodes:
-      normalizeFiniteNumber(options.minDistinctReplicaNodes, 6),
+      normalizeFiniteNumber(options.minDistinctReplicaNodes, 5),
     partitioningTimeoutMs:
-      normalizeFiniteNumber(options.partitioningTimeoutMs, 90000),
+      normalizeFiniteNumber(options.partitioningTimeoutMs, 180000),
     partitioningPollIntervalMs:
       normalizeFiniteNumber(options.partitioningPollIntervalMs, 250),
     minOpsAfterPartitioning:

@@ -203,3 +203,80 @@ test('ControlPlaneReadinessService marks hard-pressure nodes ineligible',
     );
     t.end();
   });
+
+test('ControlPlaneReadinessService fails closed without storage owner',
+  async (t) => {
+    const cache = createCache({
+      nodes: [createActiveNode('node-4')],
+      services: [createMessageGroupService('node-4')],
+    });
+    const readinessService = new ControlPlaneReadinessService({
+      nodeId: 'node-4',
+      systemTableCache: cache,
+      cdcGroupPropagationService: createPublicationService({
+        currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+        reasonCode: null,
+        enteredAt: '2026-03-04T00:00:00.000Z',
+        recentTransitions: [],
+      }),
+      now: () => 1500,
+    });
+
+    const readiness = await readinessService.getNodeReadiness('node-4');
+    const reasonCodes = readiness.reasons.map((reason) => reason.code);
+
+    t.equal(readiness.capacity, null);
+    t.equal(readiness.dimensions.placementEligible, false);
+    t.ok(
+      reasonCodes.includes(
+        CONTROL_PLANE_READINESS_REASON.STORAGE_BUDGET_UNAVAILABLE,
+      ),
+    );
+    t.end();
+  });
+
+test('ControlPlaneReadinessService fails closed without publication owner',
+  async (t) => {
+    let statsCalls = 0;
+    const cache = createCache({
+      nodes: [createActiveNode('node-5')],
+      services: [createMessageGroupService('node-5')],
+    });
+    const readinessService = new ControlPlaneReadinessService({
+      nodeId: 'node-5',
+      systemTableCache: cache,
+      storageAccountingService: createAccountingService({
+        'node-5': {
+          nodeId: 'node-5',
+          budgetBytes: 1000,
+          pressureState: 'normal',
+        },
+      }),
+      cdcGroupPropagationService: {
+        getStats() {
+          statsCalls += 1;
+          return {
+            lastFallbackReason: 'should_not_be_used',
+          };
+        },
+      },
+      now: () => 1500,
+    });
+
+    const readiness = await readinessService.getNodeReadiness('node-5');
+    const reasonCodes = readiness.reasons.map((reason) => reason.code);
+
+    t.equal(
+      readiness.publication.currentMode,
+      CONTROL_PLANE_PUBLICATION_MODE.REPAIR_ONLY,
+    );
+    t.equal(readiness.dimensions.metadataPublicationHealthy, false);
+    t.equal(readiness.dimensions.controlPlaneWritable, false);
+    t.ok(
+      reasonCodes.includes(
+        CONTROL_PLANE_READINESS_REASON.METADATA_PUBLICATION_REPAIR_ONLY,
+      ),
+    );
+    t.equal(statsCalls, 0, 'readiness should not synthesize publication via getStats fallback');
+    t.end();
+  });

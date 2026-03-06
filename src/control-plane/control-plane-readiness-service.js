@@ -16,6 +16,7 @@ import {
   CONTROL_PLANE_READINESS_OWNER,
   CONTROL_PLANE_READINESS_REASON,
   CONTROL_PLANE_READINESS_SUBSYSTEM,
+  READINESS_SNAPSHOT_KEY,
 } from './control-plane-readiness-constants.js';
 
 function buildReason(
@@ -46,6 +47,8 @@ class ControlPlaneReadinessService {
     this.nodeLifecycleStateMachine = options.nodeLifecycleStateMachine || null;
     this.storageAccountingService = options.storageAccountingService || null;
     this.cdcGroupPropagationService = options.cdcGroupPropagationService || null;
+    this.loggedMissingStorageAccountingOwner = false;
+    this.loggedMissingPublicationOwner = false;
     this.now = typeof options.now === TYPEOF.FUNCTION ?
       options.now :
       () => Date.now();
@@ -77,6 +80,9 @@ class ControlPlaneReadinessService {
 
   /**
    * Build readiness for one node.
+   * @readModel READINESS_NODE_STATE — READ_MODEL_SOURCE.SYSTEM_TABLE_CACHE
+   * @readModel READINESS_SERVICE_STATE — READ_MODEL_SOURCE.SYSTEM_TABLE_CACHE
+   * @readModel READINESS_CAPACITY — READ_MODEL_SOURCE.SYSTEM_TABLE_CACHE
    * @param {string} nodeId
    * @return {Promise<Object>}
    */
@@ -119,6 +125,53 @@ class ControlPlaneReadinessService {
   }
 
   /**
+   * Synchronous readiness snapshot for a single node.
+   * Computes all dimensions that do not require async capacity lookup.
+   * `placementEligible` is conservatively false when capacity is
+   * unavailable synchronously.
+   * @param {string} nodeId
+   * @return {Object|null} Frozen readiness snapshot or null.
+   */
+  getNodeReadinessSync(nodeId) {
+    const observedAt = normalizeIsoTimestamp(this.now());
+    const nodeRow = this.getNodeRow(nodeId);
+    const publication = this.getPublicationDiagnostics(observedAt);
+
+    if (!nodeRow) {
+      return this.buildMissingNodeReadiness(
+        nodeId, observedAt, publication,
+      );
+    }
+
+    const lifecycleState = this.getLifecycleState(nodeId, nodeRow);
+    const serviceRows = this.getNodeServiceRows(nodeId);
+    const dimensions = this.buildDimensions({
+      nodeRow,
+      lifecycleState,
+      serviceRows,
+      capacity: null,
+      publication,
+    });
+    const reasons = this.buildReasons({
+      dimensions,
+      lifecycleState,
+      serviceRows,
+      capacity: null,
+      publication,
+      observedAt,
+    });
+
+    return Object.freeze({
+      nodeId,
+      lifecycleState,
+      publication,
+      capacity: null,
+      dimensions,
+      reasons,
+    });
+  }
+
+  /**
    * Resolve publication diagnostics from the canonical publication owner.
    * @param {string} observedAt
    * @return {Object}
@@ -131,21 +184,20 @@ class ControlPlaneReadinessService {
       return this.cdcGroupPropagationService.getPublicationModeDiagnostics();
     }
 
-    const stats = this.cdcGroupPropagationService &&
-      typeof this.cdcGroupPropagationService.getStats === TYPEOF.FUNCTION ?
-      this.cdcGroupPropagationService.getStats() :
-      null;
-    const reasonCode = typeof stats?.lastFallbackReason === TYPEOF.STRING &&
-      stats.lastFallbackReason.length > NUM.ZERO ?
-      stats.lastFallbackReason :
-      null;
-    const currentMode = reasonCode ?
-      CONTROL_PLANE_PUBLICATION_MODE.CONSERVATIVE_FANOUT :
-      CONTROL_PLANE_PUBLICATION_MODE.GROUPED;
+    if (!this.loggedMissingPublicationOwner) {
+      this.loggedMissingPublicationOwner = true;
+      this.logger.error(
+        'ControlPlaneReadinessService missing CDC publication owner',
+        {
+          nodeId: this.nodeId,
+          owner: CONTROL_PLANE_READINESS_OWNER.CDC_GROUP_PROPAGATION,
+        },
+      );
+    }
 
     return Object.freeze({
-      currentMode,
-      reasonCode,
+      currentMode: CONTROL_PLANE_PUBLICATION_MODE.REPAIR_ONLY,
+      reasonCode: 'publication_owner_unavailable',
       enteredAt: observedAt,
       recentTransitions: Object.freeze([]),
     });
@@ -384,23 +436,25 @@ class ControlPlaneReadinessService {
    * @return {Promise<Object|null>}
    * @private
    */
-  async getCapacitySnapshot(nodeId, nodeRow) {
+  async getCapacitySnapshot(nodeId, _nodeRow) {
     if (this.storageAccountingService &&
         typeof this.storageAccountingService.getCapacitySnapshotForNode ===
           TYPEOF.FUNCTION) {
       return this.storageAccountingService.getCapacitySnapshotForNode(nodeId);
     }
 
-    const budgetBytes = Number(nodeRow?.[COLUMN.STORAGE_BUDGET_BYTES]);
-    return Object.freeze({
-      nodeId,
-      budgetBytes: Number.isFinite(budgetBytes) && budgetBytes > NUM.ZERO ?
-        budgetBytes :
-        null,
-      pressureState: Number.isFinite(budgetBytes) && budgetBytes > NUM.ZERO ?
-        PRESSURE_STATE.NORMAL :
-        PRESSURE_STATE.EXHAUSTED,
-    });
+    if (!this.loggedMissingStorageAccountingOwner) {
+      this.loggedMissingStorageAccountingOwner = true;
+      this.logger.error(
+        'ControlPlaneReadinessService missing storage accounting owner',
+        {
+          nodeId: this.nodeId,
+          owner: CONTROL_PLANE_READINESS_OWNER.STORAGE_ACCOUNTING,
+        },
+      );
+    }
+
+    return null;
   }
 
   /**
@@ -533,6 +587,38 @@ class ControlPlaneReadinessService {
 
     return isNodeRecordReady(nodeRow, {
       now: this.now(),
+    });
+  }
+
+  /**
+   * Build a compact snapshot summary suitable for persistence
+   * alongside admission, dispatch, and progression decisions.
+   *
+   * Extracts only the key fields needed for diagnostics linkage
+   * without the full verbose snapshot (publication details, capacity
+   * breakdown, etc.).
+   *
+   * @param {Object|null} snapshot - Frozen readiness snapshot from
+   *   getNodeReadiness / getNodeReadinessSync.
+   * @return {Object|null} Compact frozen summary or null.
+   */
+  static compactSnapshotSummary(snapshot) {
+    if (!snapshot) {
+      return null;
+    }
+    const reasonCodes = Array.isArray(snapshot.reasons) ?
+      snapshot.reasons.map((r) => r?.code).filter(Boolean) :
+      [];
+    return Object.freeze({
+      [READINESS_SNAPSHOT_KEY.NODE_ID]: snapshot.nodeId || null,
+      [READINESS_SNAPSHOT_KEY.DIMENSIONS]:
+        snapshot.dimensions ?
+          Object.freeze({...snapshot.dimensions}) :
+          null,
+      [READINESS_SNAPSHOT_KEY.REASON_CODES]:
+        Object.freeze(reasonCodes),
+      [READINESS_SNAPSHOT_KEY.LIFECYCLE_STATE]:
+        snapshot.lifecycleState || null,
     });
   }
 }

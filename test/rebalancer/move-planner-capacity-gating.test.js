@@ -398,7 +398,7 @@ test('MovePlanner capacity gating', async (t) => {
 
   // --- Req 11.3: Consumes admission API, no duplication ---
 
-  await t.test('admission error on a node includes it for availability',
+  await t.test('admission error on a node rejects it instead of fail-open',
     async (t) => {
       const nodes = [
         {node_id: 'n1', cpu_usage_percent: 10},
@@ -426,10 +426,17 @@ test('MovePlanner capacity gating', async (t) => {
 
       const result = await planner.calculateTargetState([], policy);
 
-      t.equal(result.targetNodes.length, NUM.TWO,
-        'both nodes should be included on error');
-      t.equal(result.degraded, false,
-        'should not be degraded');
+      t.equal(result.targetNodes.length, NUM.ONE,
+        'node with admission error should be excluded');
+      t.equal(result.targetNodes[NUM.ZERO], 'n1',
+        'only successful admission target should remain');
+      t.equal(result.degraded, true,
+        'should degrade when capacity checks fail');
+      t.equal(
+        result.capacityDiagnostics.rejectionsByReason.admission_error,
+        NUM.ONE,
+        'diagnostics should include admission_error rejection count',
+      );
     });
 
   // --- Message group capacity gating ---

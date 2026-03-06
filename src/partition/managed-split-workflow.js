@@ -6,7 +6,6 @@ import {
 import {
   STORAGE_ADMISSION_DECISION_TYPE,
   STORAGE_ADMISSION_OPERATION_TYPE,
-  STORAGE_ADMISSION_REASON,
 } from '../rebalancer/storage-admission-constants.js';
 import {DurableWorkflowCoordinator} from '../workflow/durable-workflow-coordinator.js';
 import {
@@ -63,6 +62,7 @@ class ManagedSplitWorkflow {
       options.startSplitReplicationOnSourcePartition || (async () => {});
     this.logger = options.logger || console;
     this.now = options.now || (() => Date.now());
+    this.transactionCoordinator = options.transactionCoordinator || null;
     this.workflowCoordinator = options.workflowCoordinator ||
       new DurableWorkflowCoordinator({
         persistWorkflow: async (workflow) =>
@@ -276,10 +276,10 @@ class ManagedSplitWorkflow {
         updated_at: now,
       };
 
-      await Promise.all([
-        this.insertPartitionMetadata(leftPartitionMetadata),
-        this.insertPartitionMetadata(rightPartitionMetadata),
-      ]);
+      await this.insertPartitionMetadataAtomically(
+        leftPartitionMetadata,
+        rightPartitionMetadata,
+      );
       await Promise.all([
         this.waitForTablePartitionMetadata(
           tableId,
@@ -547,44 +547,13 @@ class ManagedSplitWorkflow {
    * @private
    */
   async evaluateSplitAdmission(options) {
-    if (this.storageAdmissionService &&
-        typeof this.storageAdmissionService.checkSplit === 'function') {
-      return this.storageAdmissionService.checkSplit({
-        targetNodeIds: options.candidateTargetNodeIds,
-        estimatedBytes: options.estimatedBytes,
-        requiredReplicaCount: options.requiredReplicaCount,
-        minimumRoutableSourceCount: options.requiredReplicaCount,
-        sourceRoutableNodeIds: options.sourceRoutableNodeIds,
-      });
-    }
-
-    const sourceQuorumSatisfied =
-      options.sourceRoutableNodeIds.length >= options.requiredReplicaCount;
-    const targetQuorumSatisfied =
-      options.candidateTargetNodeIds.length >= options.requiredReplicaCount;
-    const blockingReasons = [];
-
-    if (!targetQuorumSatisfied) {
-      blockingReasons.push(
-        STORAGE_ADMISSION_REASON.INSUFFICIENT_PLACEMENT_ELIGIBLE_NODES,
-      );
-    }
-    if (!sourceQuorumSatisfied) {
-      blockingReasons.push(STORAGE_ADMISSION_REASON.SOURCE_QUORUM_NOT_ROUTABLE);
-    }
-
-    return {
-      allowed: sourceQuorumSatisfied && targetQuorumSatisfied,
-      decisionType: sourceQuorumSatisfied && targetQuorumSatisfied ?
-        STORAGE_ADMISSION_DECISION_TYPE.ADMITTED :
-        STORAGE_ADMISSION_DECISION_TYPE.BLOCKED,
-      operationType: STORAGE_ADMISSION_OPERATION_TYPE.PARTITION_SPLIT,
+    return this.storageAdmissionService.checkSplit({
+      targetNodeIds: options.candidateTargetNodeIds,
+      estimatedBytes: options.estimatedBytes,
       requiredReplicaCount: options.requiredReplicaCount,
-      eligibleNodeIds: [...options.candidateTargetNodeIds],
-      ineligibleNodes: [],
-      blockingReasons,
-      decisionTimestamp: new Date(this.now()).toISOString(),
-    };
+      minimumRoutableSourceCount: options.requiredReplicaCount,
+      sourceRoutableNodeIds: options.sourceRoutableNodeIds,
+    });
   }
 
   /**
@@ -701,6 +670,42 @@ class ManagedSplitWorkflow {
       partitionMetadata,
       {skipCacheWait: true},
     );
+  }
+
+  /**
+   * Insert two partition metadata rows atomically using the
+   * distributed transaction coordinator when available.
+   *
+   * @param {Object} leftMetadata - Left partition metadata.
+   * @param {Object} rightMetadata - Right partition metadata.
+   * @return {Promise<void>}
+   * @private
+   */
+  async insertPartitionMetadataAtomically(leftMetadata, rightMetadata) {
+    const txCoordinator = this.transactionCoordinator;
+    if (txCoordinator) {
+      const sessionId =
+        `split-${leftMetadata.partition_id}:` +
+        `${rightMetadata.partition_id}`;
+      const beginResult = await txCoordinator.begin(sessionId);
+      if (!beginResult.success) {
+        throw new Error(beginResult.error);
+      }
+      try {
+        await this.insertPartitionMetadata(leftMetadata);
+        await this.insertPartitionMetadata(rightMetadata);
+        const commitResult = await txCoordinator.commit(sessionId);
+        if (!commitResult.success) {
+          throw new Error(commitResult.error);
+        }
+      } catch (error) {
+        await txCoordinator.rollback(sessionId);
+        throw error;
+      }
+    } else {
+      await this.insertPartitionMetadata(leftMetadata);
+      await this.insertPartitionMetadata(rightMetadata);
+    }
   }
 
   /**

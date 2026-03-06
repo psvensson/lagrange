@@ -36,6 +36,10 @@ test('AdminWebSocketAPI classifies timed out queries with structured ' +
     t.equal(scheduledTimeoutMs, 30000);
     t.equal(
       error.timeoutClassification.classification,
+      TIMEOUT_BUDGET_CLASSIFICATION.EXACT_BOUNDARY_HIT,
+    );
+    t.equal(
+      error.timeoutClassification.originalClassification,
       TIMEOUT_BUDGET_CLASSIFICATION.REMOTE_CALL_TIMEOUT,
     );
     t.equal(error.timeoutClassification.boundaryHit, true);

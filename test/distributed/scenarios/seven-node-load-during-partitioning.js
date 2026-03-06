@@ -1,7 +1,8 @@
 /**
  * Scenario: Seven-Node Load During Partitioning
  *
- * Starts mixed load first, then verifies partition growth occurs while the
+ * Applies low split thresholds via table policies on the target table,
+ * starts mixed load, then verifies partition growth occurs while the
  * workload continues to make progress.
  */
 
@@ -11,11 +12,33 @@ import {
   resolveSevenNodeLoadDuringPartitioningScenarioConfig,
 } from '../harness/scenario-config.js';
 import {
+  escapeSql,
   sleep,
   queryTableDistribution,
+  rowsFromResult,
 } from './table-distribution-helpers.js';
 
 const ZERO = 0;
+const SPLIT_STORAGE_THRESHOLD_BYTES = 16384;
+const SPLIT_TRAFFIC_THRESHOLD_QPM = 120;
+const MERGE_STORAGE_THRESHOLD_BYTES = 1;
+const MERGE_TRAFFIC_THRESHOLD_QPM = 1;
+
+const TABLE_SPLIT_POLICIES = Object.freeze({
+  splitStorageThreshold: SPLIT_STORAGE_THRESHOLD_BYTES,
+  splitTrafficThreshold: SPLIT_TRAFFIC_THRESHOLD_QPM,
+  mergeStorageThreshold: MERGE_STORAGE_THRESHOLD_BYTES,
+  mergeTrafficThreshold: MERGE_TRAFFIC_THRESHOLD_QPM,
+});
+
+const SQL_SELECT_TABLE_ID_PREFIX =
+  'SELECT table_id FROM tables WHERE table_name = \'';
+const SQL_SELECT_TABLE_ID_SUFFIX = '\'';
+const SQL_UPDATE_TABLE_POLICIES_PREFIX =
+  'UPDATE tables SET table_policies = \'';
+const SQL_UPDATE_TABLE_POLICIES_MID =
+  '\' WHERE table_id = \'';
+const SQL_UPDATE_TABLE_POLICIES_SUFFIX = '\'';
 
 /**
  * Pick seed node with deterministic fallback.
@@ -43,6 +66,48 @@ function trackAdditionalPartitions(
     }
     additionalPartitionIds.add(partitionId);
   }
+}
+
+/**
+ * Query the table_id for a given table name.
+ * @param {Object} seedNode
+ * @param {string} tableName
+ * @return {Promise<string|null>}
+ */
+async function queryTableId(seedNode, tableName) {
+  const sql = SQL_SELECT_TABLE_ID_PREFIX +
+    escapeSql(tableName) +
+    SQL_SELECT_TABLE_ID_SUFFIX;
+  const result = await seedNode.query(sql);
+  const rows = rowsFromResult(result);
+  for (const row of rows) {
+    const value = row?.table_id || row?.tableId;
+    if (typeof value === 'string' && value.length > ZERO) {
+      return value;
+    }
+  }
+  return null;
+}
+
+/**
+ * Apply low split thresholds as table policies on the target table.
+ * @param {Object} seedNode
+ * @param {string} tableName
+ * @return {Promise<void>}
+ */
+async function applyTableSplitPolicies(seedNode, tableName) {
+  const tableId = await queryTableId(seedNode, tableName);
+  assert.ok(
+    tableId,
+    'Could not resolve table_id for "' + tableName +
+    '" — table must exist before applying split policies',
+  );
+  const policySql = SQL_UPDATE_TABLE_POLICIES_PREFIX +
+    escapeSql(JSON.stringify(TABLE_SPLIT_POLICIES)) +
+    SQL_UPDATE_TABLE_POLICIES_MID +
+    escapeSql(tableId) +
+    SQL_UPDATE_TABLE_POLICIES_SUFFIX;
+  await seedNode.query(policySql);
 }
 
 /**
@@ -83,6 +148,8 @@ async function run(cluster, options = {}) {
     targetVoterCount: CONVERGENCE_DEFAULTS.targetVoterCount,
   });
 
+  await applyTableSplitPolicies(seedNode, tableName);
+
   const loadRun = cluster.startLoad({
     opsPerSec: loadOpsPerSec,
     duration: loadDuration,
@@ -91,10 +158,13 @@ async function run(cluster, options = {}) {
 
   let partitioningEvidence = null;
   try {
-    const baseline = await queryTableDistribution(seedNode, {tableName});
+    const baseline = await queryTableDistribution(
+      seedNode, {tableName},
+    );
     assert.ok(
       baseline.partitionCount > ZERO,
-      'No partitions found for table "' + tableName + '" at scenario start',
+      'No partitions found for table "' + tableName +
+      '" at scenario start',
     );
 
     const baselinePartitionIds = new Set(baseline.partitionIds);
@@ -109,7 +179,9 @@ async function run(cluster, options = {}) {
 
     while (Date.now() <= deadline) {
       sampleCount += 1;
-      latestDistribution = await queryTableDistribution(seedNode, {tableName});
+      latestDistribution = await queryTableDistribution(
+        seedNode, {tableName},
+      );
       latestMetrics = loadRun.getMetrics();
 
       trackAdditionalPartitions(
@@ -126,7 +198,8 @@ async function run(cluster, options = {}) {
       const growthSatisfied =
         additionalPartitionIds.size >= minAdditionalPartitions;
       const spreadSatisfied =
-        latestDistribution.replicaNodeCount >= minDistinctReplicaNodes;
+        latestDistribution.replicaNodeCount >=
+        minDistinctReplicaNodes;
       const operationsAfterPartitioning =
         metricsAtFirstPartitioning === null ?
           ZERO :
@@ -142,9 +215,11 @@ async function run(cluster, options = {}) {
         partitioningEvidence = {
           baselinePartitionCount: baseline.partitionCount,
           additionalPartitionCount: additionalPartitionIds.size,
-          additionalPartitionIds: Array.from(additionalPartitionIds).sort(),
+          additionalPartitionIds:
+            Array.from(additionalPartitionIds).sort(),
           replicaNodeCount: latestDistribution.replicaNodeCount,
-          replicaNodeIds: Array.from(latestDistribution.replicaNodeIds).sort(),
+          replicaNodeIds:
+            Array.from(latestDistribution.replicaNodeIds).sort(),
           metricsAtFirstPartitioning,
           metricsAtSuccess: latestMetrics.total,
           operationsAfterPartitioning,
@@ -165,7 +240,8 @@ async function run(cluster, options = {}) {
       'Additional partitions=' + additionalPartitionIds.size +
       ', spread=' + latestDistribution.replicaNodeCount +
       ', metrics.total=' + latestMetrics.total +
-      ', metricsAtFirstPartitioning=' + metricsAtFirstPartitioning,
+      ', metricsAtFirstPartitioning=' +
+      metricsAtFirstPartitioning,
     );
   } finally {
     if (typeof loadRun.cancel === 'function') {
@@ -174,7 +250,10 @@ async function run(cluster, options = {}) {
   }
 
   const metrics = await loadRun.waitComplete();
-  assert.ok(metrics.total > ZERO, 'Expected at least one mixed load operation');
+  assert.ok(
+    metrics.total > ZERO,
+    'Expected at least one mixed load operation',
+  );
 
   const successRate = metrics.total > ZERO ?
     metrics.success / metrics.total :

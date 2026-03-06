@@ -3014,6 +3014,8 @@ class NodeJoiningService extends EventEmitter {
       nodeAddress: this.nodeAddress,
       messageRouter: this.messageRouter,
       cdcIntegrationService,
+      cdcGroupPropagationService:
+        this.latencyTopology?.cdcGroupPropagationService || null,
       systemTableCache,
       tablePolicyService: this.tablePolicyService,
       messageGroupServices: this.messageGroupServices,

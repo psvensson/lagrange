@@ -200,6 +200,7 @@ const REBALANCE_COORDINATOR_EVENT = Object.freeze({
   RESERVATION_CREATED: 'reservationCreated',
   RESERVATION_RELEASED: 'reservationReleased',
   RESERVATION_RECONCILED: 'reservationReconciled',
+  READ_MODEL_DIVERGENCE: 'readModelDivergence',
   SHUTDOWN: 'shutdown',
 });
 
@@ -246,6 +247,8 @@ const REBALANCE_COORDINATOR_LOG_MSG = Object.freeze({
     'Expired stale storage reservation during reconciliation',
   RESERVATION_RECONCILE_ORPHAN:
     'Released orphan storage reservation during reconciliation',
+  READ_MODEL_DIVERGENCE:
+    'Cache/authoritative divergence detected during reconciliation',
 });
 
 const REBALANCE_COORDINATOR_ERROR_MSG = Object.freeze({
@@ -256,6 +259,14 @@ const REBALANCE_COORDINATOR_ERROR_MSG = Object.freeze({
   MESSAGE_NOT_ACKED: 'Message not acknowledged',
   POLICY_REQUIRED: 'RebalanceCoordinator requires tablePolicyService',
   SQL_ENGINE_REQUIRED: 'RebalanceCoordinator requires sqlQueryEngine',
+  STORAGE_ADMISSION_REQUIRED:
+    'RebalanceCoordinator requires storageAdmissionService for add/replace operations',
+  STORAGE_ACCOUNTING_REQUIRED:
+    'RebalanceCoordinator requires storageAccountingService for add/replace operations',
+  STORAGE_ADMISSION_CHECK_ADD_REQUIRED:
+    'storageAdmissionService must provide checkAdd()',
+  STORAGE_ADMISSION_CHECK_REPLACE_REQUIRED:
+    'storageAdmissionService must provide checkReplace()',
   WORKFLOW_COORDINATOR_REQUIRED:
     'RebalanceCoordinator requires operationWorkflowCoordinator with runExclusive()',
   WORKFLOW_COORDINATOR_REGISTRY_REQUIRED:
@@ -310,8 +321,33 @@ const REBALANCER_SKIP_REASON = Object.freeze({
   AWAITING_READY_ADD_CAPACITY: 'awaiting_ready_add_capacity',
 });
 
+const REBALANCER_QUEUE_NAME = Object.freeze({
+  REBALANCE_CHECK: 'rebalance-check-reconcile',
+});
+
+/**
+ * Canonical reason codes for rebalance operation step transitions.
+ * Used as the `reason` field in durable workflow transition records.
+ *
+ * @enum {string}
+ */
+const OPERATION_TRANSITION_REASON = Object.freeze({
+  DISPATCH_SENDING: 'dispatch_sending',
+  DISPATCH_CREATING: 'dispatch_creating',
+  DISPATCH_STOPPING: 'dispatch_stopping',
+  DISPATCH_ALREADY_EXISTS: 'dispatch_already_exists',
+  DISPATCH_COMPLETED: 'dispatch_completed',
+  RECONCILE_ACTIVE: 'reconcile_active',
+  RECONCILE_FAILED: 'reconcile_failed',
+  OPERATION_COMPLETED: 'operation_completed',
+  OPERATION_FAILED: 'operation_failed',
+  OPERATION_TIMED_OUT: 'operation_timed_out',
+  SAFETY_POLICY_BLOCKED: 'safety_policy_blocked',
+});
+
 export {
   MOVE_REASON,
+  OPERATION_TRANSITION_REASON,
   PLACEMENT_DEGRADED_REASON,
   REBALANCER_SUBSYSTEM,
   REBALANCER_ENTITY_TYPE,
@@ -323,6 +359,7 @@ export {
   REBALANCER_DEFAULT_POLICY,
   REBALANCER_EVENT,
   REBALANCER_LOG_MSG,
+  REBALANCER_QUEUE_NAME,
   REBALANCER_SKIP_REASON,
   STABILIZATION_RESET_TRIGGER,
   REBALANCE_COORDINATOR_EVENT,

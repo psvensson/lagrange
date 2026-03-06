@@ -114,53 +114,44 @@ test('TablePolicyService uses SQL engine for getPolicyForPartition',
 
 // --- RaftRoleTracker ---
 
-test('RaftRoleTracker uses SQL engine for getServiceRole',
+test('RaftRoleTracker uses SystemTableCache for getServiceRole',
   async (t) => {
-    const engine = createTrackingEngine((sql, params) => {
-      if (sql.includes('FROM services')) {
-        return {
-          rows: [{service_id: params[0], raft_role: 'leader'}],
-        };
-      }
-      return {rows: []};
-    });
-
     const tracker = new RaftRoleTracker({
-      sqlQueryEngine: engine,
+      systemTableCache: {
+        get: (_table, key) => {
+          if (key === 'svc-1') {
+            return {service_id: 'svc-1', raft_role: 'leader'};
+          }
+          return null;
+        },
+        filter: () => [],
+      },
     });
 
     const role = await tracker.getServiceRole('svc-1');
 
-    t.equal(engine.queries.length, 1,
-      'Should make 1 SQL query');
-    t.match(engine.queries[0].sql, /FROM services/,
-      'Should query services table');
     t.equal(role, 'leader',
-      'Should return role from SQL');
+      'Should return role from cache');
   });
 
-test('RaftRoleTracker uses SQL engine for getServicesByRole',
+test('RaftRoleTracker uses SystemTableCache for getServicesByRole',
   async (t) => {
-    const engine = createTrackingEngine((sql, params) => {
-      if (sql.includes('raft_role = ?')) {
-        return {
-          rows: [
-            {service_id: 'svc-1', raft_role: params[0]},
-            {service_id: 'svc-2', raft_role: params[0]},
-          ],
-        };
-      }
-      return {rows: []};
-    });
-
     const tracker = new RaftRoleTracker({
-      sqlQueryEngine: engine,
+      systemTableCache: {
+        get: () => null,
+        filter: (_table, predicate) => {
+          const rows = [
+            {service_id: 'svc-1', raft_role: 'follower'},
+            {service_id: 'svc-2', raft_role: 'follower'},
+            {service_id: 'svc-3', raft_role: 'leader'},
+          ];
+          return rows.filter(predicate);
+        },
+      },
     });
 
     const services = await tracker.getServicesByRole('follower');
 
-    t.equal(engine.queries.length, 1,
-      'Should make 1 SQL query');
     t.equal(services.length, 2,
       'Should return 2 services');
   });
@@ -450,11 +441,11 @@ test('Services return empty results without SQL engine',
     const tracker = new RaftRoleTracker();
     const role = await tracker.getServiceRole('svc-1');
     t.equal(role, null,
-      'RaftRoleTracker returns null without engine');
+      'RaftRoleTracker returns null without cache');
 
     const services = await tracker.getServicesByRole('leader');
     t.same(services, [],
-      'RaftRoleTracker returns empty array without engine');
+      'RaftRoleTracker returns empty array without cache');
 
     // DynamicConfigService
     const configService = new DynamicConfigService();

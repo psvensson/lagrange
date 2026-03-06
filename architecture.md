@@ -60,8 +60,13 @@ To prevent overlap and contradictory runtime behavior:
    `UnifiedRebalancer` may orchestrate, but must not duplicate planning logic.
 3. **Operation Lifecycle:** `RebalanceCoordinator` + `replica_operations` owns
    operation state. Workflow transitions must be monotonic and idempotent.
+   Step transitions route through `DurableWorkflowCoordinator.transitionStep()`
+   to persist canonical transition records.
 4. **Dispatch:** `ReplicaDispatchService` dispatches only after an atomic
    workflow-step claim (`PENDING -> SENDING`) to prevent duplicate dispatch.
+   Event handlers (CDC, cache change, node state, coordinator events) enqueue
+   owner keys into `OwnerKeyReconcileQueue` instances with typed reason codes.
+   No event handler runs long-running progression logic inline.
 5. **Leader Discovery for Writes:** write routing consults canonical owner
    rows first: `partitions.leader_node_id` for partition leaders and
    `message_groups.leader_node_id` for message-group leaders. `services`
@@ -70,6 +75,11 @@ To prevent overlap and contradictory runtime behavior:
 6. **Readiness Gating:** dispatch and rebalancer use a shared readiness policy.
 7. **Epoch Propagation:** `config.current_epoch` + CDC is the single epoch
    authority; no secondary epoch source.
+8. **Control-Plane Progression:** Event-triggered control-plane work (dispatch,
+   rebalance checks) flows through `OwnerKeyReconcileQueue`
+   (`src/workflow/owner-key-reconcile-queue.js`). The queue de-duplicates by
+   owner key and drains items through a single reconcile callback. Periodic
+   polling loops remain as recovery-only paths.
 8. **SQL Scaling:** SQL service replicas use the replicated service lifecycle
    (`service_profile = 'sql_engine'`, active `runtime_kind = native_js`
    via `SQL_ENGINE_RUNTIME_KIND`). No parallel SQL-specific scaling framework.
@@ -98,6 +108,13 @@ To prevent overlap and contradictory runtime behavior:
     `src/admin/admin-constants.js`), not mutation owners.
 16. **Runtime Mutation Ownership:** Runtime drivers must not write system
    metadata directly; service and operation mutations flow through SQL/CDC.
+17. **Timeout Budget Tree:** Every top-level control-plane operation starts
+   with one canonical budget (`createTopLevelOperationBudget` in
+   `src/control-plane/timeout-budget.js`). Sub-operations derive from
+   remaining budget via `createChildTimeoutBudget`; they never start with
+   fresh defaults. Sub-operations below `MINIMUM_OPERATION_BUDGET_MS` are
+   rejected. Named constants for rebalance, split, and dispatch budgets
+   live in `TIMEOUT_BUDGET_DEFAULT`.
 17. **Live Query Runtime Ownership:** `createLiveQueryStartupWiring` is the
     single startup-owned path that creates one `LiveQueryManager` per node,
     wires it into `AdminWebSocketAPI`, and bridges `SystemTableCache` CDC
@@ -121,14 +138,21 @@ The distributed SQL layer is now single-path and owner-specific:
    idempotency envelope metadata.
 5. `DurableWorkflowCoordinator` is the reusable workflow runtime for
    durable owner-key workflow state, participant persistence,
-   recovery-from-rows, and single-flight execution. It owns workflow
-   mechanics only, not transaction or partition semantics.
+   recovery-from-rows, single-flight execution, and monotonic step
+   transitions. It owns workflow mechanics only, not transaction or
+   partition semantics. All topology-changing operations
+   (split/rebalance/replace) route step transitions through
+   `transitionStep()`, which persists `previousStep`, `nextStep`,
+   `reason`, `timestamp`, and `ownerKey` on every transition.
 6. `DistributedTransactionCoordinator` is the only owner for distributed
    transaction participant enlistment, prepare/commit/rollback state machine,
    and recovery from `sql_transactions`, `sql_transaction_participants`,
    and `sql_write_operations`. It composes `DurableWorkflowCoordinator` and
    keeps transaction-only semantics such as 2PC stages and write-operation
-   journaling local.
+   journaling local. Control-plane owners (`RebalanceCoordinator`,
+   `ManagedSplitWorkflow`) use it to wrap step transitions that require
+   atomic multi-row commits. Idempotency is enforced by operation id and
+   step id via `DurableWorkflowCoordinator.isTransitionIdempotent()`.
 7. `ManagedSplitWorkflow` is the only owner for managed partition-split
    prepare/provision/backfill-handoff orchestration. It composes
    `DurableWorkflowCoordinator`, persists split workflow identity in
@@ -199,7 +223,7 @@ This section is the canonical owner map for consolidation work tracked in:
 | Message router setup | `MessageRouterSetup` | `BootstrapService`, `NodeJoiningService` |
 | CDC setup + upgrade | `CDCIntegrationSetup` | `BootstrapService`, `NodeJoiningService` |
 | Replica handler setup | `ReplicaHandlerSetup` | `BootstrapService`, `NodeJoiningService` |
-| Control-plane setup | `ControlPlaneSetup` | `BootstrapService`, `NodeJoiningService` |
+| Control-plane setup | `ControlPlaneSetup` | `BootstrapService`, `NodeJoiningService`; creates `StorageCapacityAccountingService` + `StorageAdmissionService` and injects both into `RebalanceCoordinator` |
 | Node storage budget registration | `NodeStorageBudgetService` | `BootstrapService`, `NodeJoiningService` |
 | Message-group CDC apply path | `CDCHandler` | `MessageGroupService` |
 | System cache key mapping | `SYSTEM_CACHE_KEY_DESCRIPTOR` | `SystemTableCache`, `SQLiteSystemCache` |
@@ -305,6 +329,116 @@ Required read order:
 2. Read replica rows second for supporting detail.
 3. Report disagreements explicitly as inconsistency diagnostics.
 4. Never rebuild canonical leader truth from `services` row iteration order.
+
+### Control-Plane Decision Read-Model Contract
+
+Each control-plane decision path declares exactly one read-model source.
+Mixed cache/SQL fallback within a single semantic decision is forbidden.
+The canonical registry lives in `src/control-plane/read-model-contract.js`.
+
+| Source | Usage |
+| --- | --- |
+| `SYSTEM_TABLE_CACHE` | CDC-propagated metadata, steady-state decisions |
+| `AUTHORITATIVE_SQL` | Partition-leader writes and deduplication queries |
+| `RECOVERY_SQL` | Explicit recovery sweeps with typed reason codes |
+| `DIAGNOSTICS_SQL` | Reconciliation and diagnostics with typed reason codes |
+
+Decision methods are annotated with `@readModel` JSDoc tags referencing
+the declared source from `CONTROL_PLANE_DECISION_READ_MODEL`.
+
+## Control-Plane Predictability and Determinism
+
+Control-plane progression (dispatch, rebalance, split) follows a
+deterministic owner-key model. Events enqueue work; reconcile
+executors drain it one-at-a-time per owner key. Supporting modules
+enforce invariants, timeout budgets, failure closure, and migration
+exit gates.
+
+### Owner-Key Reconcile Queue
+
+`OwnerKeyReconcileQueue` (`src/workflow/owner-key-reconcile-queue.js`)
+is the single progression entry for dispatch, rebalance, and split.
+
+| Rule | Detail |
+| --- | --- |
+| Enqueue only | Events enqueue owner keys with typed reasons; no inline progression |
+| De-duplication | Pending items are merged by owner key; reasons accumulate |
+| Single in-flight | At most one reconcile execution per owner key at any time |
+| Fence validation | Stale fence tokens are rejected with typed diagnostics |
+| Recovery path | Periodic polling enqueues into the same queue; no alternate mutation path |
+
+Single-Path Contract items 4 and 8 reference this queue.
+
+### Invariant Engine
+
+`InvariantEngine` (`src/control-plane/invariant-engine.js`) evaluates
+canonical control-plane invariants against a state snapshot.
+
+| Invariant | Severity | Catalog ID |
+| --- | --- | --- |
+| Leader uniqueness by owner rows | hard | `LEADER_UNIQUENESS` |
+| Workflow step monotonicity | hard | `MONOTONIC_STEPS` |
+| Claim exclusivity by operation and owner key | hard | `CLAIM_EXCLUSIVITY` |
+| No orphan in-flight operations | hard | `ORPHAN_IN_FLIGHT` |
+
+Hard breaches fail deterministic test gates. Soft breaches emit
+diagnostic warnings only. Invariant definitions live in
+`src/invariants/invariant-catalog.js`.
+
+### Failure Class Registry
+
+`FailureClassRegistry` (`src/control-plane/failure-class-registry.js`)
+maps harness-discovered failures to deterministic test IDs.
+
+Closure policy:
+
+1. A failure class is `open` until a deterministic reproduction
+   exists below full harness scale.
+2. Each closed class requires a deterministic repro test, an
+   owner-path regression, and an invariant assertion.
+3. Harness reruns are confirmation artifacts, not sole closure
+   evidence.
+
+### Phase Exit Criteria
+
+`PhaseExitCriteria` (`src/control-plane/phase-exit-criteria.js`)
+defines measurable exit gates per migration phase.
+
+| Phase | Exit gates |
+| --- | --- |
+| Queue consolidation | No inline progression; single in-flight enforced |
+| Workflow and transaction unification | No ad-hoc multi-row commits; monotonic transition history |
+| Read-model and readiness closure | One read-model contract per decision; typed divergence events |
+| Timeout and invariant enforcement | Typed timeout classes emitted; hard invariant gates active |
+| Dual-path removal | No remaining dual progression paths; docs match implementation |
+
+Each phase carries rollback notes. Phase constants live in
+`src/control-plane/phase-exit-constants.js`.
+
+### Dual-Path Closure Verification
+
+`DualPathClosure` (`src/control-plane/dual-path-closure.js`) verifies
+no dual progression paths remain after phase closure.
+
+Detected violation types:
+
+1. Temporary toggles not removed at phase boundary.
+2. Duplicate progression branches for the same concern.
+3. Legacy code paths that should have been deleted.
+
+Each concern (dispatch, rebalance, split) must have exactly one
+progression owner path after closure.
+
+### Forbidden Patterns
+
+1. Running long progression logic inline from event handlers.
+2. Multiple reconcile executions in flight for the same owner key.
+3. Mixing cache and SQL fallback in one semantic decision path.
+4. Starting nested operations with fresh timeout budgets instead
+   of deriving from remaining budget.
+5. Closing harness-discovered failures without a deterministic
+   reproduction test.
+6. Leaving dual progression paths after a migration phase closes.
 
 ## Extension Path for New Raft-Backed Runtime Services
 

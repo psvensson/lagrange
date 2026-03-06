@@ -19,6 +19,9 @@ import {REBALANCER_LOG_MSG} from '../../src/rebalancer/rebalancer-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
+import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+} from '../../src/control-plane/control-plane-readiness-constants.js';
 
 // Initialize test environment
 function initializeTestEnvironment() {
@@ -115,6 +118,13 @@ function createMockMessageRouter(connectionState = 'connected') {
 
 // Create mock rebalance coordinator
 function createMockCoordinator() {
+  const storageAccountingService = {
+    estimateReplicaBytes: () => 1,
+  };
+  const storageAdmissionService = {
+    checkAdd: async () => ({decision: 'allow'}),
+    checkReplace: async () => ({decision: 'allow'}),
+  };
   return {
     getMoveSafetyError: () => null,
     createOperation: async (move) => ({
@@ -137,6 +147,62 @@ function createMockCoordinator() {
       inFlightOperations: 0,
       totalOperations: 0,
     }),
+    storageAccountingService,
+    storageAdmissionService,
+  };
+}
+
+// Create mock readiness service backed by the same cache
+function createMockReadinessService(mockCache) {
+  return {
+    getNodeReadinessSync: (nodeId) => {
+      const nodeRow = mockCache.get('nodes', nodeId);
+      if (!nodeRow) {
+        return {
+          nodeId,
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: false,
+            [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]:
+              false,
+            [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: false,
+            [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: false,
+            [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: false,
+            [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
+              false,
+            [CONTROL_PLANE_READINESS_DIMENSION
+              .METADATA_PUBLICATION_HEALTHY]: true,
+          },
+          reasons: [],
+        };
+      }
+      const now = Date.now();
+      const leaseExpiry = Number(nodeRow.ready_lease_expires_at);
+      const leaseValid =
+        Number.isFinite(leaseExpiry) && leaseExpiry > now;
+      const isActive = nodeRow.status === 'active';
+      const healthy = isActive && leaseValid;
+      return {
+        nodeId,
+        dimensions: {
+          [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
+          [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]:
+            healthy,
+          [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: healthy,
+          [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: healthy,
+          [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]:
+            healthy,
+          [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
+            healthy,
+          [CONTROL_PLANE_READINESS_DIMENSION
+            .METADATA_PUBLICATION_HEALTHY]: true,
+        },
+        reasons: [],
+      };
+    },
+    getNodeReadiness: async (nodeId) => {
+      return createMockReadinessService(mockCache)
+        .getNodeReadinessSync(nodeId);
+    },
   };
 }
 
@@ -154,11 +220,21 @@ function createTestRebalancer(options = {}) {
     connectionState = 'connected',
   } = options;
 
-  const mockCache = createMockCache(nodes, services, partitions, tables, replicaOperations);
+  const mockCache = createMockCache(
+    nodes, services, partitions, tables, replicaOperations,
+  );
   const mockCdcService = createMockCdcService();
-  const mockPolicyService = createMockPolicyService(partitions, tables);
+  const mockPolicyService = createMockPolicyService(
+    partitions, tables,
+  );
   const mockMessageRouter = createMockMessageRouter(connectionState);
   const mockCoordinator = createMockCoordinator();
+  const mockSqlQueryEngine = {
+    async executeQuery() {
+      return {success: true, rows: []};
+    },
+  };
+  const mockReadinessService = createMockReadinessService(mockCache);
 
   return new UnifiedRebalancer({
     entityId,
@@ -169,6 +245,8 @@ function createTestRebalancer(options = {}) {
     tablePolicyService: mockPolicyService,
     messageRouter: mockMessageRouter,
     rebalanceCoordinator: mockCoordinator,
+    sqlQueryEngine: mockSqlQueryEngine,
+    controlPlaneReadinessService: mockReadinessService,
   });
 }
 
@@ -199,6 +277,62 @@ test('UnifiedRebalancer - Basic Initialization', async (t) => {
 
     t.equal(rebalancer.initialized, true);
   });
+
+  await t.test('inherits admission/accounting owners from coordinator',
+    async (t) => {
+      const rebalancer = createTestRebalancer({
+        entityId: 'partition-1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+      });
+
+      t.equal(
+        rebalancer.storageAdmissionService,
+        rebalancer.rebalanceCoordinator.storageAdmissionService,
+      );
+      t.equal(
+        rebalancer.storageAccountingService,
+        rebalancer.rebalanceCoordinator.storageAccountingService,
+      );
+      t.equal(
+        rebalancer.movePlanner.storageAdmissionService,
+        rebalancer.storageAdmissionService,
+      );
+    });
+
+  await t.test('setRebalanceCoordinator refreshes owner dependencies',
+    async (t) => {
+      const rebalancer = createTestRebalancer({
+        entityId: 'partition-1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+      });
+      const replacementCoordinator = createMockCoordinator();
+
+      rebalancer.storageAdmissionService = null;
+      rebalancer.storageAccountingService = null;
+      rebalancer.movePlanner.storageAdmissionService = null;
+      rebalancer.movePlanner.accountingService = null;
+
+      rebalancer.setRebalanceCoordinator(replacementCoordinator);
+
+      t.equal(
+        rebalancer.storageAdmissionService,
+        replacementCoordinator.storageAdmissionService,
+      );
+      t.equal(
+        rebalancer.storageAccountingService,
+        replacementCoordinator.storageAccountingService,
+      );
+      t.equal(
+        rebalancer.movePlanner.storageAdmissionService,
+        replacementCoordinator.storageAdmissionService,
+      );
+      t.equal(
+        rebalancer.movePlanner.accountingService,
+        replacementCoordinator.storageAccountingService,
+      );
+    });
 
   await t.test('sets leader status', async (t) => {
     const rebalancer = createTestRebalancer({

@@ -70,6 +70,20 @@ function createMockCdc() {
   };
 }
 
+function createAdmissionService(accountingService) {
+  return new StorageAdmissionService({
+    accountingService,
+    cdcGroupPropagationService: {
+      getPublicationModeDiagnostics: () => ({
+        currentMode: 'grouped',
+        reasonCode: null,
+        enteredAt: new Date().toISOString(),
+        recentTransitions: [],
+      }),
+    },
+  });
+}
+
 // --- getBackfillBudget ---
 
 test('getBackfillBudget - computes 80% of disk_gb in bytes', (t) => {
@@ -291,9 +305,7 @@ test('observe mode - overrides deny to allow', async (t) => {
     [COLUMN.STORAGE_BUDGET_BYTES]: NUM.HUNDRED,
   });
 
-  const admission = new StorageAdmissionService({
-    accountingService: accounting,
-  });
+  const admission = createAdmissionService(accounting);
 
   // Request exceeds budget -> would be denied in enforce mode
   const result = await admission.checkAdd({
@@ -320,9 +332,7 @@ test('observe mode - allows already-allowed decisions unchanged',
       [COLUMN.STORAGE_BUDGET_BYTES]: NUM.THOUSAND,
     });
 
-    const admission = new StorageAdmissionService({
-      accountingService: accounting,
-    });
+    const admission = createAdmissionService(accounting);
 
     const result = await admission.checkAdd({
       targetNodeId: 'node-1',
@@ -334,7 +344,7 @@ test('observe mode - allows already-allowed decisions unchanged',
     t.end();
   });
 
-test('observe mode - default mode is observe', async (t) => {
+test('enforce mode - default mode is enforce', async (t) => {
   initializeConfig();
   const cache = new SystemTableCache();
   const accounting = new StorageCapacityAccountingService({
@@ -347,17 +357,15 @@ test('observe mode - default mode is observe', async (t) => {
     [COLUMN.STORAGE_BUDGET_BYTES]: NUM.HUNDRED,
   });
 
-  const admission = new StorageAdmissionService({
-    accountingService: accounting,
-  });
+  const admission = createAdmissionService(accounting);
 
-  // Default mode is observe, so deny should be overridden
+  // Default mode is enforce, so deny should be preserved.
   const result = await admission.checkAdd({
     targetNodeId: 'node-1',
     estimatedBytes: NUM.HUNDRED + NUM.ONE,
   });
 
-  t.equal(result.decision, ADMISSION_DECISION.ALLOW);
+  t.equal(result.decision, ADMISSION_DECISION.DENY);
   t.end();
 });
 
@@ -376,9 +384,7 @@ test('enforce mode - returns actual deny decisions', async (t) => {
     [COLUMN.STORAGE_BUDGET_BYTES]: NUM.HUNDRED,
   });
 
-  const admission = new StorageAdmissionService({
-    accountingService: accounting,
-  });
+  const admission = createAdmissionService(accounting);
 
   const result = await admission.checkAdd({
     targetNodeId: 'node-1',
@@ -403,9 +409,7 @@ test('enforce mode - allows when capacity available', async (t) => {
     [COLUMN.STORAGE_BUDGET_BYTES]: NUM.THOUSAND,
   });
 
-  const admission = new StorageAdmissionService({
-    accountingService: accounting,
-  });
+  const admission = createAdmissionService(accounting);
 
   const result = await admission.checkAdd({
     targetNodeId: 'node-1',
@@ -433,9 +437,7 @@ test('mode transition - observe to enforce via refreshConfig',
       [COLUMN.STORAGE_BUDGET_BYTES]: NUM.HUNDRED,
     });
 
-    const admission = new StorageAdmissionService({
-      accountingService: accounting,
-    });
+    const admission = createAdmissionService(accounting);
 
     // In observe mode: deny overridden to allow
     const r1 = await admission.checkAdd({

@@ -36,6 +36,7 @@ import {
 } from '../../src/rebalancer/storage-admission-service.js';
 import {
   SPLIT_MERGE_EVENT,
+  SPLIT_MERGE_ERROR_MSG,
   SPLIT_MERGE_REASON,
 } from '../../src/partition/partition-constants.js';
 
@@ -83,8 +84,18 @@ function buildServices(nodeId, budgetBytes) {
     [COLUMN.STORAGE_BUDGET_BYTES]: budgetBytes,
   });
 
+  const cdcGroupPropagationService = {
+    getPublicationModeDiagnostics: () => ({
+      currentMode: 'grouped',
+      reasonCode: null,
+      enteredAt: new Date().toISOString(),
+      recentTransitions: [],
+    }),
+  };
+
   const admission = new StorageAdmissionService({
     accountingService: accounting,
+    cdcGroupPropagationService,
   });
 
   return {cache, accounting, admission};
@@ -130,17 +141,16 @@ afterEach(() => {
 
 // --- checkSplitCapacityPreflight ---
 
-test('checkSplitCapacityPreflight - returns feasible when no ' +
-    'admission service wired', async (t) => {
+test('checkSplitCapacityPreflight - fails when required ' +
+    'capacity owners are missing', async (t) => {
   const {manager} = buildManager();
 
-  const result = await manager.checkSplitCapacityPreflight(
-    'partition-1', {sizeBytes: 100}, 'node-1',
+  await t.rejects(
+    manager.checkSplitCapacityPreflight(
+      'partition-1', {sizeBytes: 100}, 'node-1',
+    ),
+    new Error(SPLIT_MERGE_ERROR_MSG.SPLIT_PREFLIGHT_OWNER_REQUIRED),
   );
-
-  t.equal(result.feasible, true);
-  t.equal(result.reason, SPLIT_MERGE_REASON.CAPACITY_AVAILABLE);
-  t.equal(result.admissionResult, null);
   manager.shutdown();
 });
 

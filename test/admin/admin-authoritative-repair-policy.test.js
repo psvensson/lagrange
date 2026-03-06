@@ -19,6 +19,28 @@ test('authoritative repair policy triggers for stale cache watermark',
     );
   });
 
+test('authoritative repair policy does not trigger stale-only repair for scoped discovery',
+  async (t) => {
+    const result = evaluateAuthoritativeRepairPolicy({
+      scopedQuery: true,
+      cacheStalenessMs: 6000,
+      staleThresholdMs: 5000,
+      serviceCount: 1,
+      replicaCount: 2,
+      selectedNodeCount: 1,
+      serviceEndpointsCount: 2,
+      hasCacheGapReasons: false,
+    });
+
+    t.equal(result.shouldRepair, false);
+    t.equal(
+      result.triggerCodes.includes(
+        AUTHORITATIVE_REPAIR_TRIGGER.CACHE_STALE_WATERMARK,
+      ),
+      false,
+    );
+  });
+
 test('authoritative repair policy triggers for empty discovery with endpoints',
   async (t) => {
     const result = evaluateAuthoritativeRepairPolicy({

@@ -96,6 +96,30 @@ Required coverage:
 These tests should be small and targeted. The goal is to prove architecture
 conformance, not just end-state behavior.
 
+## System Guideline Conformance Gate for New and Existing Tests
+
+When adding new tests or changing existing tests for production code, you must
+also audit the code under test for System Guidelines violations and fix them as
+part of the same change. This requirement applies equally to new test files and
+edits to existing test files.
+
+Required workflow:
+
+1. Identify the production files touched by the new or modified test and their
+   direct owner collaborators.
+2. Check those files against `.kiro/steering/system guidelines.md` with special
+   focus on:
+   - owner dependency routing
+   - duplicate logic and fallback paths
+   - single source of truth for state and row-field ownership
+3. If you find a violation, add a failing regression that captures it and fix
+   the production code before closing the test task.
+4. Do not land a test-only change that leaves a known System Guidelines
+   violation in the code path being tested.
+5. In test descriptions, name the owner path being verified (for example
+   "uses `storageAdmissionService.checkSplit`" or
+   "refreshes via `setRebalanceCoordinator`").
+
 ## Deterministic Control-Loop Regression Policy
 
 When a change touches control-plane progression (dispatch, rebalance, split,
@@ -172,6 +196,20 @@ Required behavior:
    as hard failures requiring deterministic regression coverage before closure.
 4. Include timeout class and budget context in integration or harness failure
    artifacts used for diagnosis.
+
+## Distributed Harness Failure Triage Script
+
+After any distributed harness failure, run the consolidated diagnostics script
+before implementing a fix:
+
+```bash
+npm run analyze:distributed-failure -- --report test-output/reports/<report>.report.json
+```
+
+This is required so every failure investigation starts from the same
+structured signal set (phase reason counts, channel metrics, load metrics,
+consistency mismatches, and cluster-stage timing) instead of ad hoc log
+sampling.
 
 ## Property-Based Test Iteration Limit
 

@@ -1020,6 +1020,51 @@ test('MessageGroupService - getStatus returns complete status', async (t) => {
   }
 });
 
+test('MessageGroupService - rebalancer coordinator refresh uses owner sync path',
+  async (t) => {
+    const {router, nodeId, cleanup} = await createTestTransport();
+    try {
+      const service = new MessageGroupService({
+        groupId: 'mg-sync-owner',
+        replicaId: 'mg-sync-owner-r1',
+        nodeId,
+        transport: router,
+      });
+      const coordinator = {
+        id: 'coordinator-b',
+      };
+      let setCoordinatorCalls = 0;
+      const rebalancer = {
+        setRebalanceCoordinator(value) {
+          setCoordinatorCalls += 1;
+          this.rebalanceCoordinator = value;
+        },
+        setLeader() {},
+      };
+
+      service.rebalanceCoordinator = coordinator;
+      service.cdcIntegrationService = {sqlQueryEngine: {}};
+      service.tablePolicyService = {};
+      service.rebalancer = rebalancer;
+      service.isLeaderReplica = () => true;
+
+      service.maybeInitializeRebalancer();
+
+      t.equal(
+        setCoordinatorCalls,
+        1,
+        'should route coordinator refresh through setRebalanceCoordinator',
+      );
+      t.equal(
+        rebalancer.rebalanceCoordinator,
+        coordinator,
+        'should set the refreshed coordinator on rebalancer',
+      );
+    } finally {
+      await cleanup();
+    }
+  });
+
 test('MessageGroupService - shutdown cleans up', async (t) => {
   const {router, nodeId, cleanup} = await createTestTransport();
   try {

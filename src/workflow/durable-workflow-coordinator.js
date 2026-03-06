@@ -1,4 +1,8 @@
-import {WORKFLOW_ERROR_MSG} from './workflow-constants.js';
+import {
+  WORKFLOW_ERROR_MSG,
+  WORKFLOW_TRANSITION_FIELD,
+  buildTransitionIdempotencyKey,
+} from './workflow-constants.js';
 
 /**
  * Generic durable workflow runtime with optional participant persistence.
@@ -17,6 +21,7 @@ class DurableWorkflowCoordinator {
     this.workflowsById = new Map();
     this.workflowsByOwnerKey = new Map();
     this.inFlightExecutionsByOwnerKey = new Map();
+    this.committedTransitions = new Set();
   }
 
   /**
@@ -51,6 +56,101 @@ class DurableWorkflowCoordinator {
   }
 
   /**
+   * Record a durable monotonic step transition on a workflow.
+   *
+   * Each transition persists previousStep, nextStep, reason, timestamp,
+   * and ownerKey as required by the durable workflow contract.
+   *
+   * @param {string} workflowId - Workflow ID.
+   * @param {Object} transition - Transition descriptor.
+   * @param {string} transition.nextStep - Target step.
+   * @param {string} transition.reason - Human/machine-readable reason.
+   * @param {Object} [transition.metadata] - Extra fields merged into the
+   *   transition history entry.
+   * @param {Object} [updates] - Additional workflow field updates applied
+   *   alongside the transition.
+   * @return {Promise<Object>} Updated workflow state.
+   */
+  /**
+     * Record a durable monotonic step transition on a workflow.
+     *
+     * Each transition persists previousStep, nextStep, reason, timestamp,
+     * ownerKey, and fenceToken as required by the durable workflow contract.
+     *
+     * When a fence token is provided in the transition, it is validated
+     * against the workflow's current fence token. If the workflow already
+     * has a fence token that is strictly greater than the provided one,
+     * the transition is rejected as stale.
+     *
+     * @param {string} workflowId - Workflow ID.
+     * @param {Object} transition - Transition descriptor.
+     * @param {string} transition.nextStep - Target step.
+     * @param {string} transition.reason - Human/machine-readable reason.
+     * @param {number} [transition.fenceToken] - Owner epoch / lease token.
+     * @param {Object} [transition.metadata] - Extra fields merged into the
+     *   transition history entry.
+     * @param {Object} [updates] - Additional workflow field updates applied
+     *   alongside the transition.
+     * @return {Promise<Object>} Updated workflow state.
+     */
+    async transitionStep(workflowId, transition, updates = {}) {
+      const nextStep = transition?.nextStep;
+      if (!nextStep) {
+        throw new Error(WORKFLOW_ERROR_MSG.NEXT_STEP_REQUIRED);
+      }
+      const reason = transition?.reason;
+      if (!reason) {
+        throw new Error(WORKFLOW_ERROR_MSG.REASON_REQUIRED);
+      }
+
+      const workflow = this.requireWorkflow(workflowId);
+
+      if (this.isTransitionIdempotent(workflowId, nextStep)) {
+        return workflow;
+      }
+
+      const transitionFence = transition.fenceToken;
+      if (transitionFence !== undefined && transitionFence !== null) {
+        const currentFence = workflow.fenceToken;
+        if (currentFence !== undefined && currentFence !== null &&
+            transitionFence < currentFence) {
+          throw new Error(WORKFLOW_ERROR_MSG.STALE_FENCE_TOKEN);
+        }
+        workflow.fenceToken = transitionFence;
+      }
+
+      const previousStep = workflow.step || null;
+      const now = this.now();
+
+      const historyEntry = {
+        [WORKFLOW_TRANSITION_FIELD.PREVIOUS_STEP]: previousStep,
+        [WORKFLOW_TRANSITION_FIELD.NEXT_STEP]: nextStep,
+        [WORKFLOW_TRANSITION_FIELD.REASON]: reason,
+        [WORKFLOW_TRANSITION_FIELD.TIMESTAMP]: now,
+        [WORKFLOW_TRANSITION_FIELD.OWNER_KEY]: workflow.ownerKey,
+        [WORKFLOW_TRANSITION_FIELD.FENCE_TOKEN]:
+          workflow.fenceToken ?? null,
+      };
+      if (transition.metadata &&
+          typeof transition.metadata === 'object') {
+        Object.assign(historyEntry, transition.metadata);
+      }
+
+      if (!Array.isArray(workflow.transitionHistory)) {
+        workflow.transitionHistory = [];
+      }
+      workflow.transitionHistory.push(historyEntry);
+
+      workflow.step = nextStep;
+      workflow.updatedAt = now;
+      Object.assign(workflow, updates);
+
+      await this.persistWorkflow(workflow);
+      this.markTransitionCommitted(workflowId, nextStep);
+      return workflow;
+    }
+
+  /**
    * Persist the current workflow state.
    * @param {string} workflowId - Workflow ID.
    * @return {Promise<Object>} Persisted workflow state.
@@ -75,7 +175,22 @@ class DurableWorkflowCoordinator {
     if (workflow.ownerKey) {
       this.workflowsByOwnerKey.delete(workflow.ownerKey);
     }
+    this.clearCommittedTransitions(workflowId);
     return workflow;
+  }
+
+  /**
+   * Remove all committed-transition idempotency keys for a workflow.
+   * @param {string} workflowId - Workflow ID.
+   * @private
+   */
+  clearCommittedTransitions(workflowId) {
+    const prefix = `${workflowId}:`;
+    for (const key of this.committedTransitions) {
+      if (key.startsWith(prefix)) {
+        this.committedTransitions.delete(key);
+      }
+    }
   }
 
   /**
@@ -376,6 +491,27 @@ class DurableWorkflowCoordinator {
       record.participantId ||
       '';
     return String(participantKey || '');
+  }
+
+  /**
+   * Check whether a transition has already been committed.
+   * @param {string} operationId - Operation or workflow ID.
+   * @param {string} stepId - Target step of the transition.
+   * @return {boolean} True if the transition was already committed.
+   */
+  isTransitionIdempotent(operationId, stepId) {
+    const key = buildTransitionIdempotencyKey(operationId, stepId);
+    return this.committedTransitions.has(key);
+  }
+
+  /**
+   * Mark a transition as committed so replays are rejected.
+   * @param {string} operationId - Operation or workflow ID.
+   * @param {string} stepId - Target step of the transition.
+   */
+  markTransitionCommitted(operationId, stepId) {
+    const key = buildTransitionIdempotencyKey(operationId, stepId);
+    this.committedTransitions.add(key);
   }
 
   /**

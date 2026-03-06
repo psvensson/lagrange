@@ -699,6 +699,80 @@ test('Req 13.5 — No bypass paths for admission or reservation ' +
     t.end();
   });
 
+  await t.test('RebalanceCoordinator add/replace admission fails closed ' +
+    'when storageAdmissionService is missing', async (t) => {
+    const coordinator = new RebalanceCoordinator({
+      nodeId: 'node-1',
+      systemTableCache: createMinimalCache(),
+      cdcIntegrationService: {
+        updateSystemTableRow: async () => ({success: true}),
+      },
+      messageRouter: {
+        deliver: async () => ({acknowledged: true}),
+        getConnectionState: () => 'connected',
+      },
+      tablePolicyService: {
+        getPolicyForPartition: () => ({}),
+      },
+      sqlQueryEngine: {
+        executeQuery: async () => ({success: true, rows: []}),
+      },
+      storageAccountingService: {
+        estimateReplicaBytes: () => NUM.THOUSAND,
+      },
+    });
+
+    await t.rejects(
+      coordinator.ensureProvisioningAdmissionAllowed({
+        move: {type: 'add', nodeId: 'node-2'},
+        entityType: SERVICE_TYPE.PARTITION,
+        sourceNodeId: 'node-1',
+      }),
+      /storageAdmissionService/,
+      'add admission must fail closed when admission owner is missing',
+    );
+    await coordinator.shutdown();
+  });
+
+  await t.test('RebalanceCoordinator add/replace admission fails closed ' +
+    'when storageAccountingService is missing', async (t) => {
+    const coordinator = new RebalanceCoordinator({
+      nodeId: 'node-1',
+      systemTableCache: createMinimalCache(),
+      cdcIntegrationService: {
+        updateSystemTableRow: async () => ({success: true}),
+      },
+      messageRouter: {
+        deliver: async () => ({acknowledged: true}),
+        getConnectionState: () => 'connected',
+      },
+      tablePolicyService: {
+        getPolicyForPartition: () => ({}),
+      },
+      sqlQueryEngine: {
+        executeQuery: async () => ({success: true, rows: []}),
+      },
+      storageAdmissionService: {
+        checkAdd: async () => ({
+          decision: ADMISSION_DECISION.ALLOW,
+          decisionType: 'admitted',
+          allowed: true,
+        }),
+      },
+    });
+
+    await t.rejects(
+      coordinator.ensureProvisioningAdmissionAllowed({
+        move: {type: 'add', nodeId: 'node-2'},
+        entityType: SERVICE_TYPE.PARTITION,
+        sourceNodeId: 'node-1',
+      }),
+      /storageAccountingService/,
+      'add admission must fail closed when accounting owner is missing',
+    );
+    await coordinator.shutdown();
+  });
+
   await t.test('no alternate checkCapacity or hasCapacity ' +
     'methods exist on any storage-capacity component', (t) => {
     const components = [

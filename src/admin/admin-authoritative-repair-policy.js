@@ -41,11 +41,16 @@ function hasDiscoverySelectionGap(selectedNodeCount, serviceEndpointsCount) {
 
 function evaluateAuthoritativeRepairPolicy(options = {}) {
   const triggerCodes = [];
+  const scopedQuery = options.scopedQuery === true;
+  const allowScopedStaleWatermarkRepair =
+    options.allowScopedStaleWatermarkRepair === true;
   const cacheStaleWatermark = isCacheStalenessOverThreshold(
     options.cacheStalenessMs,
     options.staleThresholdMs,
   );
-  if (cacheStaleWatermark) {
+  const shouldTriggerStaleWatermarkRepair = cacheStaleWatermark &&
+    (!scopedQuery || allowScopedStaleWatermarkRepair);
+  if (shouldTriggerStaleWatermarkRepair) {
     triggerCodes.push(
       AUTHORITATIVE_REPAIR_TRIGGER.CACHE_STALE_WATERMARK,
     );
@@ -79,7 +84,6 @@ function evaluateAuthoritativeRepairPolicy(options = {}) {
 
   const serviceCount = normalizeNonNegativeInteger(options.serviceCount);
   const replicaCount = normalizeNonNegativeInteger(options.replicaCount);
-  const scopedQuery = options.scopedQuery === true;
   if (scopedQuery &&
       (serviceCount === NUM.ZERO || replicaCount === NUM.ZERO)) {
     triggerCodes.push(

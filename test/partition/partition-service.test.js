@@ -1916,7 +1916,11 @@ test('PartitionService - setCdcIntegrationService sets service on partition and 
     t.equal(partition.cdcIntegrationService, null, 'Initially null');
 
     // Provide stubbed rebalancer/coordinator to verify propagation.
-    partition.rebalancer = {cdcIntegrationService: null, shutdown: () => {}};
+    partition.rebalancer = {
+      cdcIntegrationService: null,
+      setRebalanceCoordinator: () => {},
+      shutdown: () => {},
+    };
     partition.rebalanceCoordinator = {cdcIntegrationService: null};
 
     // Set the CDC integration service

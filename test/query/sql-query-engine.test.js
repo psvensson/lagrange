@@ -3940,6 +3940,10 @@ test('SQLQueryEngine - waitForCondition classifies exact deadline exhaustion',
     t.equal(error.message, 'boundary timeout');
     t.equal(
       error.timeoutClassification.classification,
+      TIMEOUT_BUDGET_CLASSIFICATION.EXACT_BOUNDARY_HIT,
+    );
+    t.equal(
+      error.timeoutClassification.originalClassification,
       TIMEOUT_BUDGET_CLASSIFICATION.CACHE_VISIBILITY_TIMEOUT,
     );
     t.equal(error.timeoutClassification.boundaryHit, true);

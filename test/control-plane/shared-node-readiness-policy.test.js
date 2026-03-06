@@ -3,6 +3,70 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {ReplicaDispatchService} from '../../src/control-plane/replica-dispatch-service.js';
 import {UnifiedRebalancer} from '../../src/rebalancer/unified-rebalancer.js';
 import {SERVICE_STATUS, SERVICE_TYPE, STATE, TABLES} from '../../src/constants/index.js';
+import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+} from '../../src/control-plane/control-plane-readiness-constants.js';
+
+/**
+ * Build a mock readiness service backed by a cache.
+ * Mirrors ControlPlaneReadinessService dimension semantics:
+ * clusterMemberHealthy requires active status + valid lease.
+ * routingReady requires clusterMemberHealthy.
+ * @param {Object} systemTableCache
+ * @return {Object}
+ */
+function createMockReadinessService(systemTableCache) {
+  return {
+    getNodeReadinessSync: (nodeId) => {
+      const nodeRow = systemTableCache.get(TABLES.NODES, nodeId);
+      if (!nodeRow) {
+        return {
+          nodeId,
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: false,
+            [CONTROL_PLANE_READINESS_DIMENSION
+              .CLUSTER_MEMBER_HEALTHY]: false,
+            [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: false,
+            [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: false,
+            [CONTROL_PLANE_READINESS_DIMENSION
+              .PLACEMENT_ELIGIBLE]: false,
+            [CONTROL_PLANE_READINESS_DIMENSION
+              .CONTROL_PLANE_WRITABLE]: false,
+            [CONTROL_PLANE_READINESS_DIMENSION
+              .METADATA_PUBLICATION_HEALTHY]: true,
+          },
+          reasons: [],
+        };
+      }
+      const now = Date.now();
+      const leaseExpiry = Number(nodeRow.ready_lease_expires_at);
+      const leaseValid =
+        Number.isFinite(leaseExpiry) && leaseExpiry > now;
+      const isActive = nodeRow.status === SERVICE_STATUS.ACTIVE;
+      const healthy = isActive && leaseValid;
+      return {
+        nodeId,
+        dimensions: {
+          [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
+          [CONTROL_PLANE_READINESS_DIMENSION
+            .CLUSTER_MEMBER_HEALTHY]: healthy,
+          [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: healthy,
+          [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: healthy,
+          [CONTROL_PLANE_READINESS_DIMENSION
+            .PLACEMENT_ELIGIBLE]: healthy,
+          [CONTROL_PLANE_READINESS_DIMENSION
+            .CONTROL_PLANE_WRITABLE]: healthy,
+          [CONTROL_PLANE_READINESS_DIMENSION
+            .METADATA_PUBLICATION_HEALTHY]: true,
+        },
+        reasons: [],
+      };
+    },
+    getNodeReadiness: async function(nodeId) {
+      return this.getNodeReadinessSync(nodeId);
+    },
+  };
+}
 
 function createSystemCache(nodeRow) {
   return {
@@ -45,16 +109,20 @@ function createRebalancer(systemTableCache, messageRouter) {
       }),
     },
     rebalanceCoordinator: {},
+    controlPlaneReadinessService:
+      createMockReadinessService(systemTableCache),
   });
 }
 
-function createDispatchService(systemTableCache, messageRouter) {
+function createDispatchService(systemTableCache, _messageRouter) {
   return new ReplicaDispatchService({
     nodeId: 'seed-node',
-    messageRouter,
+    messageRouter: _messageRouter,
     systemTableCache,
     cdcIntegrationService: {},
     rebalanceCoordinator: {},
+    controlPlaneReadinessService:
+      createMockReadinessService(systemTableCache),
   });
 }
 
@@ -155,30 +223,31 @@ test('dispatch reads use cache-backed owner state only', async (t) => {
   };
 
   let executeCount = 0;
+  const inlineCache = {
+    get: (tableName, key) => {
+      if (tableName === TABLES.NODES && key === nodeRow.node_id) {
+        return nodeRow;
+      }
+      if (tableName === TABLES.REPLICA_OPERATIONS &&
+          key === operationRow.operation_id) {
+        return operationRow;
+      }
+      return null;
+    },
+    getAll: (tableName) => {
+      if (tableName === TABLES.REPLICA_OPERATIONS) {
+        return [operationRow];
+      }
+      if (tableName === TABLES.SERVICES) {
+        return [serviceRow];
+      }
+      return [];
+    },
+  };
   const service = new ReplicaDispatchService({
     nodeId: 'seed-node',
     messageRouter: {},
-    systemTableCache: {
-      get: (tableName, key) => {
-        if (tableName === TABLES.NODES && key === nodeRow.node_id) {
-          return nodeRow;
-        }
-        if (tableName === TABLES.REPLICA_OPERATIONS &&
-            key === operationRow.operation_id) {
-          return operationRow;
-        }
-        return null;
-      },
-      getAll: (tableName) => {
-        if (tableName === TABLES.REPLICA_OPERATIONS) {
-          return [operationRow];
-        }
-        if (tableName === TABLES.SERVICES) {
-          return [serviceRow];
-        }
-        return [];
-      },
-    },
+    systemTableCache: inlineCache,
     cdcIntegrationService: {
       updateSystemTableRow: async (_tableName, whereClause, updateData) => {
         if (whereClause?.operation_id === operationRow.operation_id &&
@@ -207,6 +276,8 @@ test('dispatch reads use cache-backed owner state only', async (t) => {
         return {success: true};
       },
     },
+    controlPlaneReadinessService:
+      createMockReadinessService(inlineCache),
   });
 
   const node = await service.getNodeRow('node-a');

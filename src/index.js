@@ -622,6 +622,12 @@ async function main() {
         }),
         executeSplitCandidate: (partitionId) =>
           sqlQueryEngine.executeManagedSplit(partitionId),
+        storageAdmissionService:
+          nodeJoiningService.rebalanceCoordinator?.storageAdmissionService ||
+          null,
+        storageAccountingService:
+          nodeJoiningService.rebalanceCoordinator?.storageAccountingService ||
+          null,
       });
       sqlQueryEngine.setPartitionSplitMergeManager(partitionSplitMergeManager);
     }
@@ -842,6 +848,10 @@ async function main() {
       }),
       executeSplitCandidate: (partitionId) =>
         sqlQueryEngine.executeManagedSplit(partitionId),
+      storageAdmissionService:
+        bootstrapService.rebalanceCoordinator?.storageAdmissionService || null,
+      storageAccountingService:
+        bootstrapService.rebalanceCoordinator?.storageAccountingService || null,
     });
     sqlQueryEngine.setPartitionSplitMergeManager(partitionSplitMergeManager);
 

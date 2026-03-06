@@ -83,12 +83,15 @@ function buildWorkflow(options = {}) {
     getRoutablePartitionServiceNodeIds:
       options.getRoutablePartitionServiceNodeIds ||
       (() => ['node-a', 'node-b']),
-    storageAdmissionService: options.storageAdmissionService || {
-      async checkSplit(payload) {
-        admissionCalls.push(payload);
-        return createAdmissionResult();
-      },
-    },
+    storageAdmissionService:
+      Object.hasOwn(options, 'storageAdmissionService') ?
+        options.storageAdmissionService :
+        {
+          async checkSplit(payload) {
+            admissionCalls.push(payload);
+            return createAdmissionResult();
+          },
+        },
     waitForTablePartitionMetadata:
       options.waitForTablePartitionMetadata || (async () => {}),
     provisionInitialTablePartition:
@@ -284,6 +287,7 @@ test('ManagedSplitWorkflow persists blocked split admission instead of ' +
 
 test('ManagedSplitWorkflow uses source-routable nodes when active target ' +
   'discovery cannot satisfy split quorum', async (t) => {
+  const admissionCalls = [];
   const {
     workflow,
     updateCalls,
@@ -292,7 +296,15 @@ test('ManagedSplitWorkflow uses source-routable nodes when active target ' +
     resolveProvisionTargetNodeIds: () => ['node-a'],
     getRoutablePartitionServiceNodeIds: () => ['node-a', 'node-b'],
     calculateQuorumReplicaCount: () => 2,
-    storageAdmissionService: {},
+    storageAdmissionService: {
+      async checkSplit(payload) {
+        admissionCalls.push(payload);
+        return createAdmissionResult({
+          requiredReplicaCount: 2,
+          eligibleNodeIds: payload.targetNodeIds,
+        });
+      },
+    },
   });
 
   const result = await workflow.execute('users-p1');
@@ -397,5 +409,123 @@ test('ManagedSplitWorkflow preserves workflow identity across deferred ' +
       PARTITION_TRANSITION_METADATA_FIELD.ADMISSION
     ].blockingReasons,
     [STORAGE_ADMISSION_REASON.METADATA_PUBLICATION_DEGRADED],
+  );
+});
+import {
+  DistributedTransactionCoordinator,
+} from '../../src/query/distributed/distributed-transaction-coordinator.js';
+
+test('ManagedSplitWorkflow wraps partition metadata insertion in ' +
+  'transaction boundary', async (t) => {
+  const txCalls = [];
+  const txCoordinator = new DistributedTransactionCoordinator({
+    beginParticipant: async () => {},
+    prepareParticipant: async () => {},
+    commitParticipant: async () => {},
+    rollbackParticipant: async () => {},
+    now: () => 1000,
+  });
+  const originalBegin = txCoordinator.begin.bind(txCoordinator);
+  const originalCommit = txCoordinator.commit.bind(txCoordinator);
+  txCoordinator.begin = async (sessionId) => {
+    txCalls.push(`begin:${sessionId}`);
+    return originalBegin(sessionId);
+  };
+  txCoordinator.commit = async (sessionId) => {
+    txCalls.push(`commit:${sessionId}`);
+    return originalCommit(sessionId);
+  };
+
+  const insertCalls = [];
+  const {workflow} = buildWorkflow({
+    transactionCoordinator: txCoordinator,
+    cdcIntegrationService: {
+      async updateSystemTableRow() {
+        return {success: true, affectedRows: 1};
+      },
+      async insertSystemTableRow(tableName, row) {
+        insertCalls.push({tableName, partitionId: row.partition_id});
+        return {success: true};
+      },
+    },
+  });
+  workflow.transactionCoordinator = txCoordinator;
+
+  const result = await workflow.execute('users-p1');
+
+  t.equal(result.success, true);
+  t.equal(
+    insertCalls.length,
+    2,
+    'both partition metadata rows must be inserted',
+  );
+  t.ok(
+    txCalls.some((c) => c.startsWith('begin:')),
+    'transaction begin must be called for atomic partition insert',
+  );
+  t.ok(
+    txCalls.some((c) => c.startsWith('commit:')),
+    'transaction commit must be called for atomic partition insert',
+  );
+});
+
+test('ManagedSplitWorkflow fails loudly when storageAdmissionService ' +
+  'is not wired', async (t) => {
+  // After removing the fallback dual-path, a missing admission service
+  // must cause a hard failure rather than silently blocking splits.
+  const {workflow} = buildWorkflow({
+    storageAdmissionService: null,
+    getRoutablePartitionServiceNodeIds: () => ['node-a'],
+    calculateQuorumReplicaCount: () => 2,
+    resolveProvisionTargetNodeIds: () => [],
+  });
+
+  try {
+    await workflow.execute('users-p1');
+    t.fail('should have thrown when storageAdmissionService is null');
+  } catch (error) {
+    t.ok(
+      error instanceof TypeError,
+      'missing admission service should throw TypeError',
+    );
+  }
+});
+
+test('ManagedSplitWorkflow with storageAdmissionService in observe mode ' +
+  'overrides denial when quorum is transiently insufficient', async (t) => {
+  // When the admission service is properly wired and in observe mode
+  // (the default), it should override denials and allow the split even
+  // when quorum is transiently insufficient.
+  const admissionCalls = [];
+  const {
+    workflow,
+    provisionCalls,
+  } = buildWorkflow({
+    storageAdmissionService: {
+      async checkSplit(payload) {
+        admissionCalls.push(payload);
+        return createAdmissionResult({
+          allowed: true,
+          decisionType: STORAGE_ADMISSION_DECISION_TYPE.ADMITTED,
+          eligibleNodeIds: payload.targetNodeIds,
+        });
+      },
+    },
+    getRoutablePartitionServiceNodeIds: () => ['node-a'],
+    calculateQuorumReplicaCount: () => 2,
+    resolveProvisionTargetNodeIds: () => [],
+  });
+
+  const result = await workflow.execute('users-p1');
+
+  t.equal(
+    result.success,
+    true,
+    'admission service with observe mode should allow the split',
+  );
+  t.equal(admissionCalls.length, 1, 'admission service should be consulted');
+  t.ok(
+    provisionCalls.length > 0,
+    'child provisioning should proceed after admission',
   );
 });

@@ -259,9 +259,9 @@ test('queryIncompleteOperations scopes reads to local operation owner',
       'query should scope results to local source owner',
     );
     t.equal(
-      operationQuery.sql.includes('target_node_id = ?'),
-      true,
-      'query should include legacy fallback ownership by target node',
+      operationQuery.sql.includes("source_node_id IS NULL OR source_node_id = ''"),
+      false,
+      'query should avoid legacy target fallback predicate in owner path',
     );
     t.equal(
       operationQuery.params.includes('node-local'),
@@ -274,3 +274,210 @@ test('queryIncompleteOperations scopes reads to local operation owner',
       'owner-scoped query should retain shared timeout budget',
     );
   });
+
+test('queryIncompleteOperations avoids legacy OR predicate timeout path',
+  async (t) => {
+    const executeQueryCalls = [];
+    const coordinator = new RebalanceCoordinator({
+      nodeId: 'node-owner-only',
+      systemTableCache: {
+        get() {
+          return null;
+        },
+      },
+      cdcIntegrationService: {
+        async waitForCacheUpdate() {},
+      },
+      messageRouter: {
+        async deliver() {
+          return {acknowledged: true, status: 'completed'};
+        },
+      },
+      tablePolicyService: {
+        async getPolicyForPartition() {
+          return {minReplicaCount: 1};
+        },
+      },
+      sqlQueryEngine: {
+        async executeQuery(sql, params, options = {}) {
+          const query = String(sql);
+          executeQueryCalls.push({
+            sql: query,
+            params: [...(Array.isArray(params) ? params : [])],
+            options,
+          });
+          if (query.includes("source_node_id IS NULL OR source_node_id = ''")) {
+            return {
+              success: false,
+              error: 'Query timeout after 5000ms',
+              rows: [],
+            };
+          }
+          return {
+            success: true,
+            rows: [
+              {
+                operation_id: 'owner-op-1',
+                type: 'ADD',
+                partition_id: 'partition-owner',
+                replica_id: 'partition-owner-r2',
+                source_node_id: 'node-owner-only',
+                target_node_id: 'node-target',
+                status: 'creating',
+                workflow_step: 'CREATING',
+                created_at: 10,
+                updated_at: 20,
+                completed_at: null,
+                error_message: null,
+                steps_history: '[]',
+                entity_type: 'partition',
+                entity_id: 'partition-owner',
+              },
+            ],
+            affectedRows: 0,
+          };
+        },
+      },
+      enableTimeouts: false,
+    });
+
+    coordinator.initialize();
+    try {
+      const operations = await coordinator.queryIncompleteOperations();
+      t.equal(
+        operations.length,
+        1,
+        'owner-scoped query should return in-flight operations without legacy OR fallback',
+      );
+      t.equal(
+        executeQueryCalls.some((call) =>
+          call.sql.includes("source_node_id IS NULL OR source_node_id = ''")),
+        false,
+        'query path should not execute legacy OR fallback predicate',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  });
+
+test('timeout checker backs off empty incomplete-operation scans', async (t) => {
+  let incompleteQueryAttempts = 0;
+  const coordinator = new RebalanceCoordinator({
+    nodeId: 'node-empty-backoff',
+    systemTableCache: {
+      get() {
+        return null;
+      },
+    },
+    cdcIntegrationService: {
+      async waitForCacheUpdate() {},
+    },
+    messageRouter: {
+      async deliver() {
+        return {acknowledged: true, status: 'completed'};
+      },
+    },
+    tablePolicyService: {
+      async getPolicyForPartition() {
+        return {minReplicaCount: 1};
+      },
+    },
+    sqlQueryEngine: {
+      async executeQuery(sql) {
+        if (String(sql).includes('FROM replica_operations')) {
+          incompleteQueryAttempts += 1;
+        }
+        return {
+          success: true,
+          rows: [],
+          affectedRows: 0,
+        };
+      },
+    },
+    enableTimeouts: false,
+  });
+  coordinator.incompleteOperationQueryEmptyBackoffMs = 60_000;
+
+  coordinator.initialize();
+  try {
+    await coordinator.checkTimeouts();
+    await coordinator.checkTimeouts();
+    await coordinator.checkTimeouts();
+    t.equal(
+      incompleteQueryAttempts,
+      1,
+      'empty timeout scans should back off instead of querying on every loop',
+    );
+
+    coordinator.lastEmptyIncompleteOperationQueryAtMs =
+      Date.now() - coordinator.incompleteOperationQueryEmptyBackoffMs - 1;
+    await coordinator.checkTimeouts();
+    t.equal(
+      incompleteQueryAttempts,
+      2,
+      'query should resume once empty-scan backoff window has elapsed',
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
+test(
+  'timeout checker survives repeated replica_operations query timeouts',
+  async (t) => {
+    let incompleteQueryAttempts = 0;
+    const coordinator = new RebalanceCoordinator({
+      nodeId: 'node-timeout-loop',
+      systemTableCache: {
+        get() {
+          return null;
+        },
+      },
+      cdcIntegrationService: {
+        async waitForCacheUpdate() {},
+      },
+      messageRouter: {
+        async deliver() {
+          return {acknowledged: true, status: 'completed'};
+        },
+      },
+      tablePolicyService: {
+        async getPolicyForPartition() {
+          return {minReplicaCount: 1};
+        },
+      },
+      sqlQueryEngine: {
+        async executeQuery(sql) {
+          if (String(sql).includes('FROM replica_operations')) {
+            incompleteQueryAttempts += 1;
+            throw new Error('Query timeout after 5000ms');
+          }
+          return {
+            success: true,
+            rows: [],
+            affectedRows: 0,
+          };
+        },
+      },
+    });
+    coordinator.timeoutCheckIntervalMs = 5;
+
+    coordinator.initialize();
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    } finally {
+      await coordinator.shutdown();
+    }
+
+    t.equal(
+      incompleteQueryAttempts >= 2,
+      true,
+      'periodic timeout loop should keep running through repeated query timeouts',
+    );
+    t.equal(
+      coordinator.timeoutCheckInFlight,
+      false,
+      'timeout loop should release in-flight guard after timeout errors',
+    );
+  },
+);

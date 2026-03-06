@@ -53,6 +53,19 @@ const CONTROL_PLANE_READINESS_DEFAULT = Object.freeze({
   ]),
 });
 
+/**
+ * Keys used when persisting a compact readiness snapshot summary
+ * alongside admission, dispatch, and progression decisions.
+ * @enum {string}
+ */
+const READINESS_SNAPSHOT_KEY = Object.freeze({
+  NODE_ID: 'nodeId',
+  DIMENSIONS: 'dimensions',
+  REASON_CODES: 'reasonCodes',
+  LIFECYCLE_STATE: 'lifecycleState',
+  OBSERVED_AT: 'observedAt',
+});
+
 export {
   CONTROL_PLANE_PUBLICATION_MODE,
   CONTROL_PLANE_READINESS_DEFAULT,
@@ -60,4 +73,5 @@ export {
   CONTROL_PLANE_READINESS_OWNER,
   CONTROL_PLANE_READINESS_REASON,
   CONTROL_PLANE_READINESS_SUBSYSTEM,
+  READINESS_SNAPSHOT_KEY,
 };

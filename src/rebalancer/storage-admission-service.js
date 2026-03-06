@@ -74,6 +74,9 @@ function buildResult(options) {
       });
     }) :
     [];
+  const readinessSnapshots = options.readinessSnapshots ?
+    Object.freeze({...options.readinessSnapshots}) :
+    Object.freeze({});
 
   return Object.freeze({
     allowed,
@@ -91,6 +94,7 @@ function buildResult(options) {
     projectedUtilization: options.projectedUtilization ?
       Object.freeze(options.projectedUtilization) :
       null,
+    readinessSnapshots,
   });
 }
 
@@ -283,12 +287,15 @@ class StorageAdmissionService {
     const ineligibleNodes = [];
     const blockingReasons = [];
     const projectedUtilizationByNodeId = {};
+    const readinessSnapshots = {};
     let legacyReason = STORAGE_ADMISSION_REASON.CAPACITY_AVAILABLE;
     let legacyProjectedUtilization = null;
 
     for (const nodeId of candidateNodeIds) {
       const readiness = await this.controlPlaneReadinessService
         .getNodeReadiness(nodeId);
+      readinessSnapshots[nodeId] =
+        ControlPlaneReadinessService.compactSnapshotSummary(readiness);
       const capacity = await this.evaluateCapacity({
         targetNodeId: nodeId,
         estimatedBytes,
@@ -356,6 +363,7 @@ class StorageAdmissionService {
           legacyReason :
           (allowed ? legacyReason :
             (finalizedBlockingReasons[NUM.ZERO] || legacyReason)),
+        readinessSnapshots,
       }),
       candidateNodeIds,
     );
@@ -504,6 +512,7 @@ class StorageAdmissionService {
       projectedUtilizationByNodeId: result.projectedUtilizationByNodeId,
       projectedUtilization: result.projectedUtilization,
       reason: result.reason,
+      readinessSnapshots: result.readinessSnapshots,
     });
   }
 

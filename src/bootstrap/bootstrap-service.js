@@ -2036,6 +2036,8 @@ class BootstrapService extends EventEmitter {
       nodeAddress: this.nodeAddress,
       messageRouter: this.messageRouter,
       cdcIntegrationService: this.cdcIntegrationService,
+      cdcGroupPropagationService:
+        this.latencyTopology?.cdcGroupPropagationService || null,
       systemTableCache: this.systemTableCache,
       tablePolicyService: this.tablePolicyService,
       messageGroupServices: this.messageGroupServices,

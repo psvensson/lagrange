@@ -43,6 +43,9 @@ const MOVE_PLANNER_TOPOLOGY_SCORE = Object.freeze({
   DIVERSITY_NEW_GROUP_BONUS: 4,
   DIVERSITY_EXISTING_GROUP_PENALTY: 4,
 });
+const CAPACITY_REJECTION_REASON = Object.freeze({
+  ADMISSION_ERROR: 'admission_error',
+});
 
 /**
  * MovePlanner calculates replica placement and moves for partitions,
@@ -168,8 +171,7 @@ class MovePlanner {
    *
    * When storageAdmissionService is available, each candidate node is
    * checked via checkAdd. Nodes that fail admission are excluded from
-   * placement. When the service is unavailable, all nodes pass through
-   * unchanged (graceful degradation).
+   * placement.
    *
    * Requirements: 5.1, 5.4, 11.3
    *
@@ -218,9 +220,22 @@ class MovePlanner {
               projectedUtilization: result.projectedUtilization,
             });
         }
-      } catch (_err) {
-        // On error, include the node to preserve availability
-        feasibleNodes.push(node);
+      } catch (err) {
+        diagnostics.rejectionsByReason[
+          CAPACITY_REJECTION_REASON.ADMISSION_ERROR
+        ] = (
+          diagnostics.rejectionsByReason[
+            CAPACITY_REJECTION_REASON.ADMISSION_ERROR
+          ] || NUM.ZERO
+        ) + NUM.ONE;
+        this.logger.warn(
+          STORAGE_CAPACITY_LOG_MSG.CAPACITY_FILTER_REJECTED, {
+            entityId: this.entityId,
+            nodeId,
+            reason: CAPACITY_REJECTION_REASON.ADMISSION_ERROR,
+            error: err?.message || null,
+          },
+        );
       }
     }
 

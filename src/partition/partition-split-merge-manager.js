@@ -437,12 +437,9 @@ class PartitionSplitMergeManager extends EventEmitter {
   ) {
     if (!this.storageAdmissionService ||
         !this.storageAccountingService) {
-      // No admission wired — allow by default (observe mode).
-      return {
-        feasible: true,
-        reason: SPLIT_MERGE_REASON.CAPACITY_AVAILABLE,
-        admissionResult: null,
-      };
+      throw new Error(
+        SPLIT_MERGE_ERROR_MSG.SPLIT_PREFLIGHT_OWNER_REQUIRED,
+      );
     }
 
     const sizeBytes = metrics.sizeBytes || NUM.ZERO;
@@ -1011,7 +1008,7 @@ class PartitionSplitMergeManager extends EventEmitter {
           }
 
           // Capacity preflight for split candidates
-          if (targetNodeId && this.storageAdmissionService) {
+          if (targetNodeId) {
             const preflight =
               await this.checkSplitCapacityPreflight(
                 partitionId, metrics, targetNodeId,

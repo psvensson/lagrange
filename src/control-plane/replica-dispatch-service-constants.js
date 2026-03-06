@@ -27,6 +27,15 @@ const DISPATCH_LOG_MSG = Object.freeze({
     'Retrying pending replica operations for ready node',
   RETRY_READY_TRIGGER_SKIPPED:
     'Skipped duplicate ready-trigger retry',
+  ENQUEUE_OPERATION_DISPATCH:
+    'Enqueued operation for dispatch reconcile',
+  ENQUEUE_NODE_READY_RETRY:
+    'Enqueued node for ready-retry reconcile',
+});
+
+const DISPATCH_QUEUE_NAME = Object.freeze({
+  OPERATION: 'dispatch-operation-reconcile',
+  NODE_READY: 'dispatch-node-ready-reconcile',
 });
 
 const DISPATCH_ERROR_MSG = Object.freeze({
@@ -57,4 +66,5 @@ export {
   DISPATCH_LOG_MSG,
   DISPATCH_ERROR_MSG,
   DISPATCH_EVENT,
+  DISPATCH_QUEUE_NAME,
 };

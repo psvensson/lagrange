@@ -214,46 +214,36 @@ class RaftRoleTracker extends EventEmitter {
   }
 
   /**
-   * Get the current role for a service.
+   * Get the current role for a service from SystemTableCache.
+   * Single read-model path — no local mirror or SQL fallback.
    * @param {string} serviceId - Service ID.
    * @return {Promise<string|null>} Current role or null.
    */
   async getServiceRole(serviceId) {
-    // First check tracked services
-    const tracked = this.trackedServices.get(serviceId);
-    if (tracked && tracked.currentRole) {
-      return tracked.currentRole;
+    if (!this.systemTableCache ||
+        typeof this.systemTableCache.get !== 'function') {
+      return null;
     }
 
-    // Fall back to SQL engine
-    if (this.sqlQueryEngine) {
-      const result = await this.sqlQueryEngine.executeQuery(
-        'SELECT raft_role FROM services WHERE service_id = ?',
-        [serviceId],
-      );
-      const service = result.rows?.[0];
-      if (service && service.raft_role) {
-        return service.raft_role;
-      }
-    }
-
-    return null;
+    const row = this.systemTableCache.get(TABLES.SERVICES, serviceId);
+    return row?.raft_role || null;
   }
 
   /**
-   * Get all services with a specific role.
+   * Get all services with a specific role from SystemTableCache.
    * @param {string} role - Raft role to filter by.
    * @return {Promise<Array<Object>>} Services with the specified role.
    */
   async getServicesByRole(role) {
-    if (this.sqlQueryEngine) {
-      const result = await this.sqlQueryEngine.executeQuery(
-        'SELECT * FROM services WHERE raft_role = ?',
-        [role],
-      );
-      return result.rows || [];
+    if (!this.systemTableCache ||
+        typeof this.systemTableCache.filter !== 'function') {
+      return [];
     }
-    return [];
+
+    return this.systemTableCache.filter(
+      TABLES.SERVICES,
+      (row) => row?.raft_role === role,
+    ) || [];
   }
 
   /**

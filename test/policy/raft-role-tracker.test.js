@@ -38,6 +38,15 @@ function createMockSqlEngine(services = {}) {
   };
 }
 
+// Mock SystemTableCache for read-path tests
+function createMockSystemTableCache(services = {}) {
+  const rows = Object.values(services);
+  return {
+    get: (_tableName, key) => services[key] || null,
+    filter: (_tableName, predicate) => rows.filter(predicate),
+  };
+}
+
 // Mock service with event emitter
 function createMockService() {
   return new EventEmitter();
@@ -140,43 +149,37 @@ test('RaftRoleTracker - setServiceRole rejects invalid role',
     t.end();
   });
 
-test('RaftRoleTracker - getServiceRole returns tracked role',
+test('RaftRoleTracker - getServiceRole returns role from cache',
   async (t) => {
-    const mockCDC = createMockCDCService();
-    const tracker = new RaftRoleTracker({
-      cdcIntegrationService: mockCDC,
-    });
-
-    tracker.registerService('service-1', null);
-    await tracker.setServiceRole('service-1', RaftRole.FOLLOWER);
-
-    const role = await tracker.getServiceRole('service-1');
-    t.equal(role, RaftRole.FOLLOWER,
-      'Should return follower role');
-    t.end();
-  });
-
-test('RaftRoleTracker - getServiceRole falls back to SQL engine',
-  async (t) => {
-    const mockEngine = createMockSqlEngine({
+    const cache = createMockSystemTableCache({
       'service-1': {
         service_id: 'service-1',
-        raft_role: 'leader',
+        raft_role: 'follower',
       },
     });
     const tracker = new RaftRoleTracker({
-      sqlQueryEngine: mockEngine,
+      systemTableCache: cache,
     });
 
     const role = await tracker.getServiceRole('service-1');
-    t.equal(role, 'leader',
-      'Should return role from SQL engine');
+    t.equal(role, RaftRole.FOLLOWER,
+      'Should return follower role from cache');
+    t.end();
+  });
+
+test('RaftRoleTracker - getServiceRole returns null without cache',
+  async (t) => {
+    const tracker = new RaftRoleTracker();
+
+    const role = await tracker.getServiceRole('service-1');
+    t.equal(role, null,
+      'Should return null without cache');
     t.end();
   });
 
 test('RaftRoleTracker - getServicesByRole filters correctly',
   async (t) => {
-    const mockEngine = createMockSqlEngine({
+    const cache = createMockSystemTableCache({
       'service-1': {
         service_id: 'service-1',
         raft_role: 'leader',
@@ -191,7 +194,7 @@ test('RaftRoleTracker - getServicesByRole filters correctly',
       },
     });
     const tracker = new RaftRoleTracker({
-      sqlQueryEngine: mockEngine,
+      systemTableCache: cache,
     });
 
     const leaders = await tracker.getServicesByRole('leader');
@@ -201,7 +204,7 @@ test('RaftRoleTracker - getServicesByRole filters correctly',
 
 test('RaftRoleTracker - getLeaders returns leader services',
   async (t) => {
-    const mockEngine = createMockSqlEngine({
+    const cache = createMockSystemTableCache({
       'service-1': {
         service_id: 'service-1',
         raft_role: 'leader',
@@ -212,7 +215,7 @@ test('RaftRoleTracker - getLeaders returns leader services',
       },
     });
     const tracker = new RaftRoleTracker({
-      sqlQueryEngine: mockEngine,
+      systemTableCache: cache,
     });
 
     const leaders = await tracker.getLeaders();
@@ -224,7 +227,7 @@ test('RaftRoleTracker - getLeaders returns leader services',
 
 test('RaftRoleTracker - getFollowers returns follower services',
   async (t) => {
-    const mockEngine = createMockSqlEngine({
+    const cache = createMockSystemTableCache({
       'service-1': {
         service_id: 'service-1',
         raft_role: 'leader',
@@ -239,7 +242,7 @@ test('RaftRoleTracker - getFollowers returns follower services',
       },
     });
     const tracker = new RaftRoleTracker({
-      sqlQueryEngine: mockEngine,
+      systemTableCache: cache,
     });
 
     const followers = await tracker.getFollowers();

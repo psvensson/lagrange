@@ -199,6 +199,35 @@ Before generating or modifying code, answer these questions:
 
 If the answer to any of 4/5/6/7/8/9/10 is yes, you are violating this contract.
 
+### 1.5.1 Owner Wiring and Fallback Elimination Procedure
+
+When changing control-plane code (dispatch, rebalance, split, admission, or
+readiness), complete this procedure before closing the task:
+
+1. Define the canonical owner dependency and required methods first (for
+   example `storageAdmissionService.checkAdd`, `storageAccountingService
+   .estimateReplicaBytes`, `cdcGroupPropagationService
+   .getPublicationModeDiagnostics`).
+2. Wire the owner from the composition root (`ControlPlaneSetup`, bootstrap
+   setup, or equivalent). Do not create local replacement logic in consumers.
+3. If owner references can refresh at runtime, route refresh through the
+   canonical setter path (for example `setRebalanceCoordinator`) so child
+   dependencies resync; do not mutate coordinator/owner fields directly.
+4. Missing owner dependencies are hard dependency errors. Fail loudly with a
+   typed error instead of synthesizing fallback decisions or "allow by default"
+   behavior.
+5. Keep exactly one decision path for one semantic. Do not add local
+   "owner-unavailable" alternate logic that reconstructs equivalent decisions
+   from secondary data.
+6. Add or update a regression that proves the injected owner path is actually
+   used and fails when that owner is bypassed.
+
+Mandatory pre-merge scan for touched files:
+
+- Search for direct owner field mutation where a setter exists.
+- Search for synthetic fallback decisions when owner dependencies are absent.
+- Search for duplicate decision logic that reimplements owner behavior locally.
+
 ### 1.6 Deterministic Control-Plane Progression
 
 Control-plane concerns (dispatch, rebalance progression, split progression,
