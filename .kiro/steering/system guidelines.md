@@ -695,6 +695,11 @@ is a bug.
   `architecture/` directory when one file is no longer enough. Those files are
   internal architecture documents, not end-user docs, and they must be linked
   from `architecture.md`.
+- When a feature is implemented or a capability status changes, update
+  `roadmap.md` to reflect the new status.
+- When a completed feature changes user-facing behavior, capabilities, or
+  system architecture visible to users, update `README.md` to reflect the
+  current state.
 - The `docs/` directory is for end-user documentation only.
 - The `examples/` directory is for end-user examples only. Examples may support
   `docs/`, but they must remain user-facing rather than internal design notes
