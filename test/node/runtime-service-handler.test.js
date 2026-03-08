@@ -242,7 +242,7 @@ describe('RuntimeServiceHandler handleCreateReplica', () => {
     );
   });
 
-  it('calls lifecycle create + start and persists ACTIVE step',
+  it('calls lifecycle create + start without direct workflow-step persistence',
     async () => {
       const {handler, lifecycle, cdc} = createHandler();
       await handler.handleCreateReplica({
@@ -265,7 +265,7 @@ describe('RuntimeServiceHandler handleCreateReplica', () => {
       const stepUpdate = cdc.updates.find(
         (u) => u.updateData.workflow_step === WORKFLOW_STEP.ACTIVE,
       );
-      assert.ok(stepUpdate, 'should persist ACTIVE step');
+      assert.equal(stepUpdate, undefined, 'should not persist ACTIVE step directly');
     });
 
   it('transitions to FAILED when lifecycle throws', async () => {
@@ -287,10 +287,7 @@ describe('RuntimeServiceHandler handleCreateReplica', () => {
     const stepUpdate = cdc.updates.find(
       (u) => u.updateData.workflow_step === WORKFLOW_STEP.FAILED,
     );
-    assert.ok(stepUpdate, 'should persist FAILED step');
-    assert.ok(
-      stepUpdate.updateData.error_message.includes('bind failed'),
-    );
+    assert.equal(stepUpdate, undefined, 'should not persist FAILED step directly');
   });
 
   it('fails when service definition not found', async () => {
@@ -315,7 +312,7 @@ describe('RuntimeServiceHandler handleCreateReplica', () => {
     const stepUpdate = cdc.updates.find(
       (u) => u.updateData.workflow_step === WORKFLOW_STEP.FAILED,
     );
-    assert.ok(stepUpdate, 'should persist FAILED step');
+    assert.equal(stepUpdate, undefined, 'should not persist FAILED step directly');
   });
 });
 
@@ -396,7 +393,7 @@ describe('RuntimeServiceHandler handleRemoveReplica', () => {
     );
   });
 
-  it('calls lifecycle stop and persists REMOVED step', async () => {
+  it('calls lifecycle stop without direct workflow-step persistence', async () => {
     const {handler, lifecycle, cdc} = createHandler();
     handler.localReplicas.set('sys-postgres-wire-r1', {
       replicaId: 'sys-postgres-wire-r1',
@@ -421,7 +418,7 @@ describe('RuntimeServiceHandler handleRemoveReplica', () => {
     const stepUpdate = cdc.updates.find(
       (u) => u.updateData.workflow_step === WORKFLOW_STEP.REMOVED,
     );
-    assert.ok(stepUpdate, 'should persist REMOVED step');
+    assert.equal(stepUpdate, undefined, 'should not persist REMOVED step directly');
   });
 
   it('transitions to FAILED when stop throws', async () => {
@@ -448,7 +445,7 @@ describe('RuntimeServiceHandler handleRemoveReplica', () => {
     const stepUpdate = cdc.updates.find(
       (u) => u.updateData.workflow_step === WORKFLOW_STEP.FAILED,
     );
-    assert.ok(stepUpdate, 'should persist FAILED step');
+    assert.equal(stepUpdate, undefined, 'should not persist FAILED step directly');
   });
 });
 

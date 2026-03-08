@@ -55,6 +55,7 @@ function createSpyLogger() {
       infoCalls.push({tag, data});
     },
     debug() {},
+    warn() {},
     error(tag, data) {
       errorCalls.push({tag, data});
     },

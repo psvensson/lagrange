@@ -130,16 +130,17 @@ test('LogRetentionService runCleanup with mock engine - deletes logs', async (t)
   let deleteCalled = false;
 
   const mockEngine = {
-    executeQuery: async (sql) => {
+    executeQuery: async (sql, params) => {
       if (sql.includes('SELECT')) {
         selectCalled = true;
         return {success: true, results: mockLogs, count: 3};
       }
       if (sql.includes('DELETE')) {
         deleteCalled = true;
-        t.ok(sql.includes('\'log-1\''), 'should include log-1');
-        t.ok(sql.includes('\'log-2\''), 'should include log-2');
-        t.ok(sql.includes('\'log-3\''), 'should include log-3');
+        t.ok(Array.isArray(params), 'delete should use parameterized ids');
+        t.ok(params.includes('log-1'), 'should include log-1');
+        t.ok(params.includes('log-2'), 'should include log-2');
+        t.ok(params.includes('log-3'), 'should include log-3');
         return {success: true, affectedRows: 3};
       }
       return {success: true};
@@ -248,13 +249,11 @@ test('LogRetentionService uses table policy retention period', async (t) => {
   let capturedCutoff = null;
 
   const mockEngine = {
-    executeQuery: async (sql) => {
-      if (sql.includes('SELECT') && sql.includes('timestamp <')) {
-        // Extract cutoff time from SQL
-        const match = sql.match(/timestamp < (\d+)/);
-        if (match) {
-          capturedCutoff = parseInt(match[1], 10);
-        }
+    executeQuery: async (sql, params) => {
+      if (sql.includes('SELECT') &&
+          sql.includes('timestamp < ?') &&
+          Array.isArray(params)) {
+        capturedCutoff = params[0];
       }
       return {success: true, results: [], count: 0};
     },

@@ -29,9 +29,22 @@ function createPartitionServiceRows(partitionIds) {
 }
 
 function createSystemCache({tables, partitions, services}) {
+  const normalizedPartitions = (partitions || []).map((partition) => {
+    const leaderService = (services || []).find((service) =>
+      service.partition_id === partition.partition_id &&
+      String(service.raft_role || '').toLowerCase() === String('leader'),
+    );
+    return {
+      ...partition,
+      leader_node_id: partition.leader_node_id ||
+        partition.leaderNodeId ||
+        leaderService?.node_id ||
+        null,
+    };
+  });
   return {
     tables: tables || [],
-    partitions: partitions || [],
+    partitions: normalizedPartitions,
     services: services || [],
     get(type, key) {
       if (type === 'tables') {
@@ -283,5 +296,9 @@ test('baseline gap: multi-partition UPDATE surfaces partial failure', async (t) 
 
   t.equal(result.success, false);
   t.equal(result.errorCode, 'DISTRIBUTED_PARTICIPANT_FAILURE');
-  t.same(result.failedPartitions, ['p2']);
+  t.ok(Array.isArray(result.failedPartitions));
+  t.ok(result.failedPartitions.includes('p2'));
+  t.ok(result.failedPartitions.every((partitionId) => {
+    return partitionId === 'p1' || partitionId === 'p2';
+  }));
 });

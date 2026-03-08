@@ -84,9 +84,9 @@ describe('local benchmark configs', () => {
         LOCAL_BENCHMARK_7NODE_PARTITION_SPLIT_CONFIG,
       );
 
-      assert.deepEqual(parsedConfig.partition, {
-        evaluationIntervalMs: 60000,
-      });
+      assert.equal(parsedConfig.partition.evaluationIntervalMs, 60000);
+      assert.ok(parsedConfig.partition.splitThresholdBytes > 0);
+      assert.ok(parsedConfig.partition.mergeThresholdBytes > 0);
       assert.equal(parsedConfig.benchmark.clients, 7);
       assert.equal(parsedConfig.benchmark.loadDuration, '75s');
       assert.equal(
@@ -103,9 +103,7 @@ describe('local benchmark configs', () => {
         LOCAL_BENCHMARK_7NODE_PARTITION_SPLIT_LOW_THROUGHPUT_CONFIG,
       );
 
-      assert.deepEqual(parsedConfig.partition, {
-        evaluationIntervalMs: 60000,
-      });
+      assert.equal(parsedConfig.partition.evaluationIntervalMs, 60000);
       assert.equal(parsedConfig.benchmark.clients, 7);
       assert.equal(parsedConfig.benchmark.jobs, 2);
       assert.equal(parsedConfig.benchmark.loadOpsPerSec, 24);

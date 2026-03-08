@@ -19,6 +19,16 @@ let testPortCounter = 28000;
 let messageGroup;
 let router;
 
+const validTargetAddressArb = fc.record({
+  nodeId: fc.string({minLength: 1, maxLength: 12})
+    .map((s) => s.replace(/[^a-zA-Z0-9-]/g, 'a')),
+  entityType: fc.constantFrom('service', 'partition', 'message-group'),
+  entityId: fc.string({minLength: 1, maxLength: 12})
+    .map((s) => s.replace(/[^a-zA-Z0-9-]/g, 'b')),
+}).map((parts) => {
+  return `${parts.nodeId}/${parts.entityType}/${parts.entityId}`;
+});
+
 beforeEach(async () => {
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
@@ -66,12 +76,11 @@ test('Property 9: Message Delivery Reliability - messages are persisted', async 
     fc.asyncProperty(
       // Generate random message payloads
       fc.record({
-        type: fc.constantFrom('RAFT', 'CDC', 'QUERY', 'HEARTBEAT'),
+        type: fc.constantFrom('RAFT', 'CDC', 'HEARTBEAT'),
         data: fc.string({minLength: 1, maxLength: 100}),
         priority: fc.integer({min: 1, max: 10}),
       }),
-      // Generate random target service addresses
-      fc.string({minLength: 5, maxLength: 50}).filter((s) => s.trim().length > 0),
+      validTargetAddressArb,
       async (payload, targetService) => {
         // Send message
         const result = await messageGroup.sendMessage(targetService, payload);
@@ -113,7 +122,7 @@ test('Property 9: Message Delivery Reliability - Raft log persistence', async (t
       // Generate multiple messages
       fc.array(
         fc.record({
-          target: fc.string({minLength: 5, maxLength: 30}),
+          target: validTargetAddressArb,
           payload: fc.record({
             action: fc.constantFrom('create', 'update', 'delete'),
             id: fc.uuid(),

@@ -30,6 +30,9 @@ import {DurableWorkflowCoordinator} from
   '../../src/workflow/durable-workflow-coordinator.js';
 import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
+import {
+  createMockControlPlaneReadinessService,
+} from './test-helpers.js';
 
 const TEST_NODE_ID = 'convergence-node';
 const TEST_PARTITION_ID = 'partition-conv-1';
@@ -215,12 +218,12 @@ function createConvergenceCoordinator(options = {}) {
       },
     },
     sqlQueryEngine: sqlEngine,
-    storageAccountingService: {estimateReplicaBytes: () => 1},
-    controlPlaneReadinessService: {
-      getNodeReadinessSync() {
-        return null;
-      },
+    storageAdmissionService: {
+      checkAdd: async () => ({allowed: true, decisionType: 'admitted'}),
+      checkReplace: async () => ({allowed: true, decisionType: 'admitted'}),
     },
+    storageAccountingService: {estimateReplicaBytes: () => 1},
+    controlPlaneReadinessService: createMockControlPlaneReadinessService(),
     operationWorkflowCoordinator: workflowCoordinator,
     executorOutcomeEmitter: emitter,
     enableTimeouts: false,
@@ -440,6 +443,13 @@ test('Owner-path convergence: all progression entry points ' +
       };
 
       const operationMap = new Map([[operationId, {...opRow}]]);
+      const serviceRows = [{
+        service_id: TEST_REPLICA_ID,
+        replica_id: TEST_REPLICA_ID,
+        partition_id: TEST_PARTITION_ID,
+        node_id: TEST_NODE_ID,
+        status: ReplicaStatus.REMOVING,
+      }];
       let failedPersistStartedResolve;
       const failedPersistStarted = new Promise((resolve) => {
         failedPersistStartedResolve = resolve;
@@ -482,11 +492,19 @@ test('Owner-path convergence: all progression entry points ' +
             if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
               return Array.from(operationMap.values());
             }
+            if (tableName === SYSTEM_TABLE_NAME.SERVICES) {
+              return [...serviceRows];
+            }
             return [];
           },
           get(tableName, key) {
             if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
               return operationMap.get(key) || null;
+            }
+            if (tableName === SYSTEM_TABLE_NAME.SERVICES) {
+              return serviceRows.find((row) => {
+                return row.service_id === key || row.replica_id === key;
+              }) || null;
             }
             return null;
           },
@@ -535,18 +553,44 @@ test('Owner-path convergence: all progression entry points ' +
               const row = operationMap.get(opId);
               return {success: true, rows: row ? [row] : []};
             }
+            if (sql.includes('FROM services') &&
+                sql.includes('service_id = ?')) {
+              const replicaId = params?.[0];
+              const row = serviceRows.find((service) => {
+                return service.service_id === replicaId ||
+                  service.replica_id === replicaId;
+              });
+              return {
+                success: true,
+                rows: row ? [{status: row.status}] : [],
+              };
+            }
+            if (sql.includes('FROM services') &&
+                sql.includes('partition_id = ?') &&
+                sql.includes('node_id = ?')) {
+              const partitionId = params?.[0];
+              const nodeId = params?.[1];
+              const row = serviceRows.find((service) => {
+                return service.partition_id === partitionId &&
+                  service.node_id === nodeId;
+              });
+              return {
+                success: true,
+                rows: row ? [{status: row.status}] : [],
+              };
+            }
             if (sql.includes('replica_operations')) {
               return {success: true, rows: Array.from(operationMap.values())};
             }
             return {success: true, rows: []};
           },
         },
-        storageAccountingService: {estimateReplicaBytes: () => 1},
-        controlPlaneReadinessService: {
-          getNodeReadinessSync() {
-            return null;
-          },
+        storageAdmissionService: {
+          checkAdd: async () => ({allowed: true, decisionType: 'admitted'}),
+          checkReplace: async () => ({allowed: true, decisionType: 'admitted'}),
         },
+        storageAccountingService: {estimateReplicaBytes: () => 1},
+        controlPlaneReadinessService: createMockControlPlaneReadinessService(),
         operationWorkflowCoordinator: workflowCoordinator,
         executorOutcomeEmitter: emitter,
         enableTimeouts: false,
@@ -555,7 +599,14 @@ test('Owner-path convergence: all progression entry points ' +
 
       try {
         const timeoutPromise = coordinator.checkTimeouts();
-        await failedPersistStarted;
+        await Promise.race([
+          failedPersistStarted,
+          new Promise((_, reject) => {
+            setTimeout(() => {
+              reject(new Error('Timed out waiting for FAILED persistence gate'));
+            }, 2000);
+          }),
+        ]);
 
         emitter.emitOutcome(
           EXECUTOR_OUTCOME_TYPE.REPLICA_REMOVE_FAILED,

@@ -26,6 +26,8 @@ import {
   createMockCdcService,
   createMockPolicyService,
   createMockMessageRouter,
+  createMockControlPlaneReadinessService,
+  createMockTransactionCoordinator,
 } from './test-helpers.js';
 
 function initializeConfig(overrides = {}) {
@@ -216,6 +218,10 @@ function createCoordinatorWithStorage(options = {}) {
     tablePolicyService: createMockPolicyService(),
     messageRouter: createMockMessageRouter(),
     sqlQueryEngine: sqlEngine,
+    transactionCoordinator: createMockTransactionCoordinator(),
+    controlPlaneReadinessService: createMockControlPlaneReadinessService({
+      systemTableCache: cache,
+    }),
     enableTimeouts: false,
     storageAccountingService: accounting,
     storageAdmissionService:
@@ -316,6 +322,8 @@ test('createOperation - fails fast when accounting service is absent',
       tablePolicyService: createMockPolicyService(),
       messageRouter: createMockMessageRouter(),
       sqlQueryEngine: sqlEngine,
+      transactionCoordinator: createMockTransactionCoordinator(),
+      controlPlaneReadinessService: createMockControlPlaneReadinessService(),
       storageAdmissionService: createMockAdmissionService(),
       enableTimeouts: false,
     });
@@ -656,7 +664,7 @@ test('reconcileReservations - skips non-terminal active reservations',
     t.end();
   });
 
-test('reconcileReservations - fails fast without accounting service',
+test('reconcileReservations - works without accounting service',
   async (t) => {
     initializeConfig();
     const coordinator = new RebalanceCoordinator({
@@ -666,15 +674,16 @@ test('reconcileReservations - fails fast without accounting service',
       tablePolicyService: createMockPolicyService(),
       messageRouter: createMockMessageRouter(),
       sqlQueryEngine: createTrackingSqlEngine(),
+      transactionCoordinator: createMockTransactionCoordinator(),
+      controlPlaneReadinessService: createMockControlPlaneReadinessService(),
       storageAdmissionService: createMockAdmissionService(),
       enableTimeouts: false,
     });
     coordinator.initialize();
 
-    await t.rejects(
-      coordinator.reconcileReservations(),
-      /storageAccountingService/,
-    );
+    const result = await coordinator.reconcileReservations();
+    t.equal(result.expired, NUM.ZERO);
+    t.equal(result.orphansReleased, NUM.ZERO);
     t.end();
   });
 

@@ -52,6 +52,8 @@ const SYSTEM_TABLE_NAME = {
   SQL_TRANSACTIONS: TABLES.SQL_TRANSACTIONS,
   SQL_TRANSACTION_PARTICIPANTS: TABLES.SQL_TRANSACTION_PARTICIPANTS,
   SQL_WRITE_OPERATIONS: TABLES.SQL_WRITE_OPERATIONS,
+  SCHEMA_MIGRATIONS: TABLES.SCHEMA_MIGRATIONS,
+  SCHEMA_MIGRATION_PARTITIONS: TABLES.SCHEMA_MIGRATION_PARTITIONS,
   DEBUG_SESSIONS: TABLES.DEBUG_SESSIONS,
   DEBUG_BREAKPOINTS: TABLES.DEBUG_BREAKPOINTS,
   DEBUG_SNAPSHOTS: TABLES.DEBUG_SNAPSHOTS,
@@ -919,6 +921,56 @@ const SQL_WRITE_OPERATIONS_SCHEMA = {
 };
 
 /**
+ * Schema migrations system table schema.
+ * Stores durable migration workflow state for user table schema changes.
+ */
+const SCHEMA_MIGRATIONS_SCHEMA = {
+  tableName: SYSTEM_TABLE_NAME.SCHEMA_MIGRATIONS,
+  columns: [
+    {name: 'migration_id', type: COLUMN_TYPE.TEXT, primaryKey: true},
+    {name: 'table_id', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'table_name', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'migration_type', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'source_schema', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'target_schema', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'status', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'current_stage', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'error_message', type: COLUMN_TYPE.TEXT},
+    {name: 'created_at', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'updated_at', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'completed_at', type: COLUMN_TYPE.INTEGER},
+  ],
+  indices: [
+    {name: 'idx_schema_migrations_table', columns: ['table_id']},
+    {name: 'idx_schema_migrations_status', columns: ['status']},
+  ],
+};
+
+/**
+ * Schema migration partitions system table schema.
+ * Stores per-partition migration progress for each migration workflow.
+ */
+const SCHEMA_MIGRATION_PARTITIONS_SCHEMA = {
+  tableName: SYSTEM_TABLE_NAME.SCHEMA_MIGRATION_PARTITIONS,
+  columns: [
+    {name: 'migration_id', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'partition_id', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'status', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'backfill_cursor', type: COLUMN_TYPE.TEXT},
+    {name: 'retry_count', type: COLUMN_TYPE.INTEGER, notNull: true, defaultValue: 0},
+    {name: 'error_message', type: COLUMN_TYPE.TEXT},
+    {name: 'updated_at', type: COLUMN_TYPE.INTEGER, notNull: true},
+  ],
+  primaryKey: ['migration_id', 'partition_id'],
+  indices: [
+    {
+      name: 'idx_schema_migration_partitions_status',
+      columns: ['migration_id', 'status'],
+    },
+  ],
+};
+
+/**
  * Debug sessions system table schema.
  * Stores tenant-scoped distributed debug session metadata.
  */
@@ -1125,6 +1177,8 @@ const SYSTEM_TABLE_SCHEMAS = [
   SQL_TRANSACTIONS_SCHEMA,
   SQL_TRANSACTION_PARTICIPANTS_SCHEMA,
   SQL_WRITE_OPERATIONS_SCHEMA,
+  SCHEMA_MIGRATIONS_SCHEMA,
+  SCHEMA_MIGRATION_PARTITIONS_SCHEMA,
   DEBUG_SESSIONS_SCHEMA,
   DEBUG_BREAKPOINTS_SCHEMA,
   DEBUG_SNAPSHOTS_SCHEMA,
@@ -1164,6 +1218,9 @@ const INITIAL_PARTITION_IDS = {
   [SYSTEM_TABLE_NAME.SQL_TRANSACTION_PARTICIPANTS]:
     'sql_transaction_participants-p1',
   [SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS]: 'sql_write_operations-p1',
+  [SYSTEM_TABLE_NAME.SCHEMA_MIGRATIONS]: 'schema_migrations-p1',
+  [SYSTEM_TABLE_NAME.SCHEMA_MIGRATION_PARTITIONS]:
+    'schema_migration_partitions-p1',
   [SYSTEM_TABLE_NAME.DEBUG_SESSIONS]: 'debug_sessions-p1',
   [SYSTEM_TABLE_NAME.DEBUG_BREAKPOINTS]: 'debug_breakpoints-p1',
   [SYSTEM_TABLE_NAME.DEBUG_SNAPSHOTS]: 'debug_snapshots-p1',
@@ -1246,6 +1303,16 @@ const INITIAL_REPLICA_IDS = {
     'sql_write_operations-p1-r1',
     'sql_write_operations-p1-r2',
     'sql_write_operations-p1-r3',
+  ],
+  [SYSTEM_TABLE_NAME.SCHEMA_MIGRATIONS]: [
+    'schema_migrations-p1-r1',
+    'schema_migrations-p1-r2',
+    'schema_migrations-p1-r3',
+  ],
+  [SYSTEM_TABLE_NAME.SCHEMA_MIGRATION_PARTITIONS]: [
+    'schema_migration_partitions-p1-r1',
+    'schema_migration_partitions-p1-r2',
+    'schema_migration_partitions-p1-r3',
   ],
   [SYSTEM_TABLE_NAME.DEBUG_SESSIONS]: [
     'debug_sessions-p1-r1',
@@ -1395,6 +1462,8 @@ export {
   SQL_TRANSACTIONS_SCHEMA,
   SQL_TRANSACTION_PARTICIPANTS_SCHEMA,
   SQL_WRITE_OPERATIONS_SCHEMA,
+  SCHEMA_MIGRATIONS_SCHEMA,
+  SCHEMA_MIGRATION_PARTITIONS_SCHEMA,
   DEBUG_SESSIONS_SCHEMA,
   DEBUG_BREAKPOINTS_SCHEMA,
   DEBUG_SNAPSHOTS_SCHEMA,

@@ -64,6 +64,10 @@ function createMockMessageRouter() {
  * @return {Object} Mock system cache.
  */
 function createMockSystemCache(tables, partitions) {
+  const normalizedPartitions = partitions.map((partition) => ({
+    ...partition,
+    leader_node_id: partition.leader_node_id || partition.leaderNodeId || 'test-node',
+  }));
   const services = partitions.map((p) => ({
     service_id: p.partition_id,
     service_type: 'partition',
@@ -82,12 +86,12 @@ function createMockSystemCache(tables, partitions) {
       return null;
     },
     filter(type, predicate) {
-      if (type === 'partitions') return partitions.filter(predicate);
+      if (type === 'partitions') return normalizedPartitions.filter(predicate);
       if (type === 'services') return services.filter(predicate);
       return [];
     },
     getAll(type) {
-      if (type === 'partitions') return partitions;
+      if (type === 'partitions') return normalizedPartitions;
       if (type === 'tables') return tables;
       if (type === 'services') return services;
       return [];

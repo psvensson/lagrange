@@ -1,0 +1,212 @@
+{
+  "timestamp": "2026-03-08T11:54:27.603Z",
+  "summary": {
+    "total": 1,
+    "passed": 0,
+    "failed": 1,
+    "duration": 361193
+  },
+  "optimizationSummary": {
+    "totalPriorityItems": 0,
+    "scenariosWithPriorities": 0,
+    "topComponents": [],
+    "topPartitions": []
+  },
+  "standardSummary": {
+    "historicalReportsConsidered": 3,
+    "scenariosComparedToPrevious": 1,
+    "scenariosComparedToPostgresBaseline": 0,
+    "diagnosticsCoverageSummary": {
+      "scenariosWithCoverage": 0,
+      "scenariosWithoutCoverage": 1,
+      "totalSamples": 0,
+      "coverageRate": 0,
+      "scenarios": [
+        {
+          "scenario": "seven-node-postgres-baseline-partition-split",
+          "status": "unavailable",
+          "reason": "not_reported",
+          "sampleCount": 0
+        }
+      ]
+    },
+    "writePathAttributionSummary": {
+      "scenariosWithDiagnostics": 0,
+      "topPhases": []
+    },
+    "scaleEfficiencySummary": {
+      "observationCount": 0,
+      "comparableGroupCount": 0,
+      "groups": [],
+      "topOpportunities": []
+    },
+    "scenarios": [
+      {
+        "scenario": "seven-node-postgres-baseline-partition-split",
+        "similarityKey": "seven-node-postgres-baseline-partition-split|default",
+        "current": {
+          "passed": false,
+          "clusterSize": 7,
+          "durationMs": 361193,
+          "performanceMetricsAvailable": false,
+          "validForPerformanceComparison": false,
+          "performanceInvalidReason": "metrics_unavailable",
+          "observedOpsPerSec": 0,
+          "observedP99LatencyMs": 0,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "previousSimilarRun": {
+          "reportTimestamp": "2026-03-08T11:36:45.746Z",
+          "reportPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/.playback/low-throughput-7node-r3.report.json",
+          "passed": false,
+          "clusterSize": 7,
+          "durationMs": 147572,
+          "performanceMetricsAvailable": false,
+          "validForPerformanceComparison": false,
+          "performanceInvalidReason": "metrics_unavailable",
+          "observedOpsPerSec": 0,
+          "observedP99LatencyMs": 0,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "deltaVsPrevious": {
+          "passedChanged": false,
+          "clusterSizeChanged": false,
+          "durationMs": 213621,
+          "durationRatio": 1.4475713549995934,
+          "opsPerSec": 0,
+          "opsPerSecRatio": null,
+          "opsPerSecPerNode": 0,
+          "opsPerSecPerNodeRatio": null,
+          "p99LatencyMs": 0,
+          "p99LatencyMsRatio": null
+        },
+        "postgresBaseline": null,
+        "parity": null,
+        "writePathTopPhases": []
+      }
+    ]
+  },
+  "scenarios": [
+    {
+      "scenario": "seven-node-postgres-baseline-partition-split",
+      "passed": false,
+      "duration": 361193,
+      "clusterSize": 7,
+      "startedAt": "2026-03-08T11:48:26.362Z",
+      "convergenceTiming": null,
+      "analysisSummary": null,
+      "error": "Timed out waiting for benchmark table \"benchmark_partition_split_events\" to split and spread. baselinePartitions=0, latestPartitions=3, latestReplicaNodeCount=3, samples=59",
+      "stackTrace": "Error: Timed out waiting for benchmark table \"benchmark_partition_split_events\" to split and spread. baselinePartitions=0, latestPartitions=3, latestReplicaNodeCount=3, samples=59\n    at waitForSplitEvidence (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/scenarios/seven-node-postgres-baseline-partition-split.js:142:9)\n    at async Module.run (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/scenarios/seven-node-postgres-baseline-partition-split.js:254:25)\n    at async runScenarios (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:1191:9)\n    at async main (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:1770:33)",
+      "logs": null,
+      "playback": {
+        "scenarioName": "seven-node-postgres-baseline-partition-split",
+        "startedAt": 1772970506363,
+        "endedAt": 1772970867597,
+        "durationMs": 361234,
+        "files": {
+          "events": ".playback/.playback/low-throughput-7node-r4/seven-node-postgres-baseline-partition-split/events.ndjson",
+          "samples": ".playback/.playback/low-throughput-7node-r4/seven-node-postgres-baseline-partition-split/samples.ndjson",
+          "snapshots": ".playback/.playback/low-throughput-7node-r4/seven-node-postgres-baseline-partition-split/snapshots.ndjson",
+          "manifest": ".playback/.playback/low-throughput-7node-r4/seven-node-postgres-baseline-partition-split/playback-manifest.json",
+          "viewer": ".playback/.playback/low-throughput-7node-r4/seven-node-postgres-baseline-partition-split/playback-viewer.html"
+        },
+        "counts": {
+          "events": 53,
+          "samples": 148,
+          "snapshots": 291
+        },
+        "warnings": []
+      },
+      "trace": null,
+      "traceAssertion": null,
+      "memoryLeak": {
+        "enabled": false,
+        "analyzed": false,
+        "leakDetected": false,
+        "sampleCount": 0,
+        "nodeCount": 0,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "nodes": [],
+        "warnings": [],
+        "config": {
+          "enabled": false,
+          "failOnDetection": false,
+          "requireSamples": false,
+          "minSamplesPerNode": 8,
+          "warmupFraction": 0.2,
+          "minWarmupMs": 30000,
+          "minAnalysisWindowMs": 60000,
+          "maxPositiveSlopeBytesPerMin": 1048576,
+          "minGrowthBytes": 16777216,
+          "minPositiveDeltaRatio": 0.65,
+          "captureHeapArtifacts": false,
+          "heapSnapshotNearLimitCount": 2
+        }
+      },
+      "memoryLeakAssertion": null,
+      "performanceDiagnostics": null,
+      "details": null,
+      "invariantBreaches": {
+        "totalCount": 0,
+        "hardCount": 0,
+        "softCount": 0,
+        "failing": [],
+        "hardBreaches": [],
+        "softBreaches": []
+      },
+      "exampleResults": null,
+      "loadMetrics": null,
+      "performanceMeasurement": {
+        "available": false,
+        "validForComparison": false,
+        "invalidReason": "metrics_unavailable",
+        "observedOpsPerSec": null,
+        "observedP99LatencyMs": null
+      },
+      "partitionHotspots": null,
+      "optimizationPriorities": null,
+      "failureBundle": {
+        "jsonPath": ".playback/.playback/low-throughput-7node-r4/seven-node-postgres-baseline-partition-split/failure-bundle.json",
+        "markdownPath": ".playback/.playback/low-throughput-7node-r4/seven-node-postgres-baseline-partition-split/failure-bundle.md"
+      }
+    }
+  ],
+  "benchmarkRegressionGate": {
+    "enabled": false,
+    "status": "skipped",
+    "reason": "disabled",
+    "settings": {
+      "enabled": false,
+      "maxThroughputRegressionRatio": 0.1,
+      "minimumThroughputRatioSutToBaseline": 0.1,
+      "baselineProvider": "liferaft",
+      "failIfBaselineMissing": false,
+      "approvedMitigationId": null,
+      "parityMismatchPolicy": "warn"
+    },
+    "currentProvider": "liferaft",
+    "baselineProvider": "liferaft",
+    "comparedScenarioCount": 0,
+    "failedScenarioCount": 0,
+    "mitigatedScenarioCount": 0,
+    "missingBaselineScenarios": [],
+    "comparisons": [],
+    "parityMismatchCount": 0,
+    "lowThroughputRatioCount": 0,
+    "warnings": []
+  },
+  "failureBundle": {
+    "jsonPath": ".playback/.playback/low-throughput-7node-r4/failure-bundles/run-failure-bundle.json",
+    "markdownPath": ".playback/.playback/low-throughput-7node-r4/failure-bundles/run-failure-bundle.md"
+  },
+  "metadata": {
+    "raftProvider": "liferaft",
+    "configPath": "test/distributed/config/local-benchmark-7node-partition-split-low-throughput.json",
+    "scenarioFilter": "seven-node-postgres-baseline-partition-split"
+  }
+}

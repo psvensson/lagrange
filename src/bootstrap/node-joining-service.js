@@ -54,6 +54,7 @@ import {
   getSystemCachePrimaryKeyFieldOrFallback,
 } from '../cache/system-cache-key-descriptor.js';
 import {SQLQueryEngine} from '../query/sql-query-engine.js';
+import {wireMigrationWorkflowOwners} from '../migration/migration-composition.js';
 import {TablePolicyService} from '../policy/table-policy-service.js';
 import {NodeStorageBudgetSetup} from './shared/node-storage-budget-setup.js';
 import {
@@ -3291,6 +3292,14 @@ class NodeJoiningService extends EventEmitter {
       messageRouter: this.messageRouter,
       nodeId: this.nodeId,
       rebalanceCoordinator: this.rebalanceCoordinator,
+      migrationAutoWire: false,
+    });
+    wireMigrationWorkflowOwners({
+      sqlCore: sqlQueryEngine,
+      systemTableCache,
+      transactionCoordinator: sqlQueryEngine.transactionCoordinator,
+      logger: this.logger,
+      now: () => Date.now(),
     });
 
     const cdcIntegrationService = CDCIntegrationSetup.createForNormal({

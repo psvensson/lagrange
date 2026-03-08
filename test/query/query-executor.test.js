@@ -10,6 +10,7 @@ import {QueryExecutor} from '../../src/query/query-executor.js';
 import {SQLParser} from '../../src/query/sql-parser.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {ERRORS} from '../../src/constants/index.js';
+import {MIGRATION_PARTITION_OPERATION} from '../../src/migration/migration-constants.js';
 
 // Initialize configuration for tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -1035,6 +1036,45 @@ test('QueryExecutor - executeOnPartition dispatches writes during the fresh ' +
   t.equal(lastAddress, 'node2/partition/p1-r2');
   t.equal(deliveries, 1, 'write path should dispatch through the visible bootstrap leader');
 });
+
+test('QueryExecutor - executeOnPartition forwards migration operation metadata',
+  async (t) => {
+    const systemCache = createMockSystemCache(['p1']);
+    let capturedMessage = null;
+    const messageRouter = {
+      deliver: async (_address, message) => {
+        capturedMessage = message;
+        return {
+          acknowledged: true,
+          success: true,
+          rows: [],
+          changes: 1,
+        };
+      },
+    };
+
+    const executor = new QueryExecutor({
+      messageRouter,
+      systemCache,
+    });
+
+    const result = await executor.executeOnPartition(
+      'p1',
+      'ALTER TABLE users ADD COLUMN age INTEGER DEFAULT 10',
+      [],
+      false,
+      true,
+      false,
+      {
+        migrationOperation: MIGRATION_PARTITION_OPERATION.ALTER_TABLE,
+        migrationId: 'migration-1',
+      },
+    );
+
+    t.equal(result.success, true);
+    t.equal(capturedMessage.migrationOperation, MIGRATION_PARTITION_OPERATION.ALTER_TABLE);
+    t.equal(capturedMessage.migrationId, 'migration-1');
+  });
 
 test('QueryExecutor - findPartitionLeaderAddress prefers canonical partition leader ' +
   'over stale service raft_role metadata', (t) => {

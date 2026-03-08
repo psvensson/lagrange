@@ -112,7 +112,10 @@ test('LoggingService can flush buffered logs in background chunks', async (t) =>
     'should not synchronously drain buffered entries in background mode',
   );
 
-  await new Promise((resolve) => setTimeout(resolve, 40));
+  const waitForFlushDeadline = Date.now() + 250;
+  while (Date.now() < waitForFlushDeadline && seenMessages.length < 5) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
   t.equal(seenMessages.length, 5, 'should flush all buffered entries asynchronously');
 
   LoggingService.resetInstance();

@@ -6,6 +6,10 @@
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {UnifiedRebalancer} from '../../src/rebalancer/unified-rebalancer.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
+import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+} from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
   DistributedTransactionCoordinator,
 } from '../../src/query/distributed/distributed-transaction-coordinator.js';
@@ -86,6 +90,64 @@ function createMockCache(options = {}) {
   };
 }
 
+function isNodeRepairEligible(node) {
+  if (!node || typeof node !== 'object') {
+    return false;
+  }
+  if (typeof node.repair_eligible === 'boolean') {
+    return node.repair_eligible;
+  }
+
+  const status = typeof node.status === 'string' ?
+    node.status.toLowerCase() : 'active';
+  const connectionState = typeof node.connection_state === 'string' ?
+    node.connection_state.toLowerCase() : 'ready';
+  const readyLeaseExpiresAt = typeof node.ready_lease_expires_at === 'number' ?
+    node.ready_lease_expires_at :
+    Date.now() + 10000;
+
+  if (status === 'failed' || status === 'stopped' || status === 'shutting_down') {
+    return false;
+  }
+  if (connectionState !== 'ready') {
+    return false;
+  }
+  return readyLeaseExpiresAt > Date.now();
+}
+
+function createMockControlPlaneReadinessService(options = {}) {
+  const {
+    systemTableCache = null,
+    defaultRepairEligible = true,
+    readinessByNodeId = {},
+  } = options;
+
+  return {
+    getNodeReadinessSync(nodeId) {
+      const explicit = readinessByNodeId[nodeId];
+      if (explicit) {
+        return explicit;
+      }
+
+      const nodeRow = systemTableCache &&
+        typeof systemTableCache.get === 'function' ?
+        systemTableCache.get(SYSTEM_TABLE_NAME.NODES, nodeId) :
+        null;
+      const repairEligible = nodeRow ?
+        isNodeRepairEligible(nodeRow) :
+        defaultRepairEligible;
+
+      return {
+        nodeId,
+        dimensions: {
+          [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: repairEligible,
+          [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: repairEligible,
+        },
+      };
+    },
+  };
+}
+
 /**
  * Create a mock CDC integration service.
  * @return {Object} Mock CDC service.
@@ -94,6 +156,14 @@ function createMockCdcService() {
   return {
     upsertSystemTableRow: async () => ({success: true}),
     updateSystemTableRow: async () => ({success: true}),
+  };
+}
+
+function createMockTransactionCoordinator() {
+  return {
+    begin: async () => ({success: true}),
+    commit: async () => ({success: true}),
+    rollback: async () => ({success: true}),
   };
 }
 
@@ -162,6 +232,15 @@ function createMockSqlQueryEngine(options = {}) {
  * @return {Object} Mock coordinator.
  */
 function createMockCoordinator() {
+  const storageAccountingService = {
+    estimateReplicaBytes: () => 1,
+  };
+  const storageAdmissionService = {
+    checkAdd: async () => ({allowed: true, decisionType: 'admitted'}),
+    checkReplace: async () => ({allowed: true, decisionType: 'admitted'}),
+    checkSplit: async () => ({allowed: true, decisionType: 'admitted'}),
+  };
+  const controlPlaneReadinessService = createMockControlPlaneReadinessService();
   return {
     getMoveSafetyError: () => null,
     createOperation: async (move) => ({
@@ -183,6 +262,9 @@ function createMockCoordinator() {
       inFlightOperations: 0,
       totalOperations: 0,
     }),
+    storageAccountingService,
+    storageAdmissionService,
+    controlPlaneReadinessService,
   };
 }
 
@@ -345,8 +427,20 @@ function createTestCoordinator(options = {}) {
     messageRouter: mockMessageRouter,
     sqlQueryEngine: mockSqlEngine,
     transactionCoordinator,
-    storageAdmissionService: options.storageAdmissionService || null,
-    storageAccountingService: options.storageAccountingService || null,
+    controlPlaneReadinessService:
+      options.controlPlaneReadinessService ||
+      createMockControlPlaneReadinessService({
+        systemTableCache: mockCache,
+        defaultRepairEligible: true,
+      }),
+    storageAdmissionService: options.storageAdmissionService || {
+      checkAdd: async () => ({allowed: true, decisionType: 'admitted'}),
+      checkReplace: async () => ({allowed: true, decisionType: 'admitted'}),
+      checkSplit: async () => ({allowed: true, decisionType: 'admitted'}),
+    },
+    storageAccountingService: options.storageAccountingService || {
+      estimateReplicaBytes: () => 1,
+    },
     enableTimeouts,
   });
 
@@ -385,6 +479,22 @@ function createTestRebalancer(options = {}) {
   const mockMessageRouter = options.messageRouter ||
     createMockMessageRouter({connectionState});
   const mockCoordinator = options.rebalanceCoordinator || createMockCoordinator();
+  const storageAdmissionService = options.storageAdmissionService ||
+    mockCoordinator.storageAdmissionService || {
+      checkAdd: async () => ({allowed: true, decisionType: 'admitted'}),
+      checkReplace: async () => ({allowed: true, decisionType: 'admitted'}),
+      checkSplit: async () => ({allowed: true, decisionType: 'admitted'}),
+    };
+  const storageAccountingService = options.storageAccountingService ||
+    mockCoordinator.storageAccountingService || {
+      estimateReplicaBytes: () => 1,
+    };
+  const controlPlaneReadinessService = options.controlPlaneReadinessService ||
+    mockCoordinator.controlPlaneReadinessService ||
+    createMockControlPlaneReadinessService({
+      systemTableCache: mockCache,
+      defaultRepairEligible: true,
+    });
 
   return new UnifiedRebalancer({
     entityId,
@@ -395,15 +505,20 @@ function createTestRebalancer(options = {}) {
     tablePolicyService: mockPolicyService,
     messageRouter: mockMessageRouter,
     rebalanceCoordinator: mockCoordinator,
+    controlPlaneReadinessService,
+    storageAdmissionService,
+    storageAccountingService,
   });
 }
 
 export {
   createMockCache,
   createMockCdcService,
+  createMockTransactionCoordinator,
   createMockPolicyService,
   createMockMessageRouter,
   createMockSqlQueryEngine,
+  createMockControlPlaneReadinessService,
   createMockCoordinator,
   createMockReplicaHandler,
   createMockRpcClient,

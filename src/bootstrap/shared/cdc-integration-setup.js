@@ -176,7 +176,9 @@ class CDCIntegrationSetup {
     if (cacheMutationTarget) {
       cdcIntegrationService.setCacheMutationTarget(cacheMutationTarget);
     }
-    if (partitionServicesProvider) {
+    if (partitionServicesProvider &&
+        typeof cdcIntegrationService.setPartitionServicesProvider ===
+        'function') {
       cdcIntegrationService.setPartitionServicesProvider(
         partitionServicesProvider,
       );
@@ -241,7 +243,9 @@ class CDCIntegrationSetup {
     if (cacheMutationTarget) {
       cdcIntegrationService.setCacheMutationTarget(cacheMutationTarget);
     }
-    if (partitionServicesProvider) {
+    if (partitionServicesProvider &&
+        typeof cdcIntegrationService.setPartitionServicesProvider ===
+        'function') {
       cdcIntegrationService.setPartitionServicesProvider(
         partitionServicesProvider,
       );

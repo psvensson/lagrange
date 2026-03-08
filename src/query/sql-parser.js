@@ -72,6 +72,7 @@ const EXTERNAL_TYPE = Object.freeze({
   UPDATE: 'update',
   DELETE: 'delete',
   CREATE: 'create',
+  ALTER: 'alter',
   DROP: 'drop',
 });
 
@@ -156,6 +157,7 @@ class SQLParser {
         : PARSER_CONFIG.DATABASE;
       const externalAst = this.parser.astify(this.sql, {database: dbMode});
       const ast = this.convertAst(externalAst);
+      ast.rawSql = this.sql;
       if (this.dialect === PARSER_DIALECT.POSTGRESQL &&
           this.positionalParams.length > 0) {
         ast._paramMapping = this.positionalParams;
@@ -201,6 +203,8 @@ class SQLParser {
       return this.convertDelete(ast);
     case EXTERNAL_TYPE.CREATE:
       return this.convertCreate(ast);
+    case EXTERNAL_TYPE.ALTER:
+      return this.convertAlter(ast);
     case EXTERNAL_TYPE.DROP:
       return this.convertDrop(ast);
     default:
@@ -397,6 +401,63 @@ class SQLParser {
       }
     }
     return names.length > 0 ? names : null;
+  }
+
+  convertAlter(ast) {
+    const tableName = ast.table?.[0]?.table || null;
+    const expression = Array.isArray(ast.expr) && ast.expr.length > 0 ?
+      ast.expr[0] :
+      null;
+    const action = String(expression?.action || '').toLowerCase();
+    const resource = String(expression?.resource || '').toLowerCase();
+    const columnName = this.resolveAlterColumnName(expression?.column);
+    const oldColumnName = this.resolveAlterColumnName(expression?.old_column);
+    const defaultValue = this.convertAlterDefaultValue(expression?.default_val);
+
+    const operation = {
+      action,
+      resource,
+      columnName: oldColumnName || columnName,
+      newColumnName: action === 'rename' ? columnName : null,
+      dataType: expression?.definition?.dataType || null,
+      defaultValue,
+      keyword: expression?.keyword || null,
+    };
+
+    return {
+      type: AST_TYPE.ALTER_TABLE,
+      table: tableName,
+      operation,
+    };
+  }
+
+  resolveAlterColumnName(columnRef) {
+    if (!columnRef) {
+      return null;
+    }
+    if (typeof columnRef.column === 'string') {
+      return columnRef.column;
+    }
+    if (columnRef.column?.expr?.value) {
+      return columnRef.column.expr.value;
+    }
+    return null;
+  }
+
+  convertAlterDefaultValue(defaultNode) {
+    if (!defaultNode) {
+      return null;
+    }
+    if (Object.prototype.hasOwnProperty.call(defaultNode, 'value')) {
+      const converted = this.convertValue(defaultNode.value);
+      if (converted &&
+        converted.type === EXPR_TYPE.LITERAL &&
+        Object.prototype.hasOwnProperty.call(converted, 'value')) {
+        return converted.value;
+      }
+      return converted;
+    }
+    return null;
   }
 
   convertCreate(ast) {

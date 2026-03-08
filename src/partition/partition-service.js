@@ -92,6 +92,7 @@ import {
   PARTITION_SERVICE_EVENT,
   PARTITION_SERVICE_INIT_STAGE,
   PARTITION_SERVICE_LIFERAFT_TIMER,
+  PARTITION_SERVICE_MIGRATION_OPERATION,
   PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_MESSAGE_TYPE,
   PARTITION_SERVICE_OPERATION,
@@ -139,6 +140,8 @@ const WRITE_PHASE_FIELD_APPLY_WRITE_MS = 'applyWriteMs';
 const WRITE_PHASE_FIELD_TOTAL_MS = 'totalMs';
 const SPLIT_SNAPSHOT_BACKFILL_YIELD_EVERY_ROWS = 64;
 const DEFAULT_TRANSACTION_SESSION_ID = 'default';
+const QUERY_PAYLOAD_FIELD_MIGRATION_OPERATION = 'migrationOperation';
+const QUERY_PAYLOAD_FIELD_MIGRATION_ID = 'migrationId';
 
 
 /**
@@ -256,6 +259,7 @@ class PartitionService extends EventEmitter {
     // Recently-applied write keys for idempotent Raft replay handling.
     this.recentlyAppliedEntryKeys = new Set();
     this.recentlyAppliedEntryOrder = [];
+    this.migrationColumnDefaultsByTable = new Map();
     this.maxTrackedAppliedEntries =
       PARTITION_SERVICE_DEFAULT.MAX_TRACKED_APPLIED_ENTRIES;
 
@@ -2005,7 +2009,14 @@ class PartitionService extends EventEmitter {
    * @private
    */
   async handleRemoteQuery(payload) {
-    const {sql, params, splitMirrorOrigin, sessionId} = payload;
+    const {
+      sql,
+      params,
+      splitMirrorOrigin,
+      sessionId,
+      [QUERY_PAYLOAD_FIELD_MIGRATION_OPERATION]: migrationOperation,
+      [QUERY_PAYLOAD_FIELD_MIGRATION_ID]: migrationId,
+    } = payload;
 
     if (!sql) {
       return {acknowledged: false, error: PARTITION_SERVICE_ERROR_MSG.MISSING_SQL_QUERY};
@@ -2046,10 +2057,22 @@ class PartitionService extends EventEmitter {
     });
 
     try {
-      const result = await this.executeQuery(sql, params || [], {
-        splitMirrorOrigin: splitMirrorOrigin || null,
-        sessionId: sessionId || null,
-      });
+      let result = null;
+      if (migrationOperation === PARTITION_SERVICE_MIGRATION_OPERATION.ALTER_TABLE) {
+        result = await this.executeMigrationAlterQuery(
+          sql,
+          params || [],
+          {
+            migrationId: migrationId || null,
+            sessionId: sessionId || null,
+          },
+        );
+      } else {
+        result = await this.executeQuery(sql, params || [], {
+          splitMirrorOrigin: splitMirrorOrigin || null,
+          sessionId: sessionId || null,
+        });
+      }
       return {
         acknowledged: true,
         success: true,
@@ -2151,6 +2174,84 @@ class PartitionService extends EventEmitter {
   }
 
   /**
+   * Execute one migration ALTER TABLE request through the Raft write path.
+   * @param {string} sql - ALTER TABLE SQL.
+   * @param {Array} params - SQL params.
+   * @param {Object} options - Migration context.
+   * @return {Promise<Object>} Execution result.
+   * @private
+   */
+  async executeMigrationAlterQuery(sql, params = [], options = {}) {
+    if (!sql) {
+      throw new Error(PARTITION_SERVICE_ERROR_MSG.MIGRATION_ALTER_MISSING_SQL);
+    }
+    this.registerMigrationDefaultFromAlterSql(sql);
+    return this.proposeWrite({
+      type: PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE,
+      sql,
+      params,
+      migrationId: options.migrationId || null,
+      sessionId: options.sessionId || null,
+    });
+  }
+
+  /**
+   * Parse and register one column default from ALTER TABLE ADD COLUMN SQL.
+   * @param {string} sql - ALTER TABLE SQL.
+   * @return {void}
+   * @private
+   */
+  registerMigrationDefaultFromAlterSql(sql) {
+    const parsed = this.parseAddColumnDefaultFromAlterSql(sql);
+    if (!parsed || !parsed.columnName || !parsed.hasDefault) {
+      return;
+    }
+    const tableKey = String(this.tableName || this.tableId || '');
+    if (!tableKey) {
+      return;
+    }
+    let columnDefaults = this.migrationColumnDefaultsByTable.get(tableKey);
+    if (!columnDefaults) {
+      columnDefaults = new Map();
+      this.migrationColumnDefaultsByTable.set(tableKey, columnDefaults);
+    }
+    columnDefaults.set(parsed.columnName, parsed.defaultLiteral);
+    this.logger.info(PARTITION_SERVICE_LOG_MSG.MIGRATION_DEFAULT_REGISTERED, {
+      partitionId: this.partitionId,
+      tableName: tableKey,
+      columnName: parsed.columnName,
+    });
+  }
+
+  /**
+   * Extract one default literal from ALTER TABLE ... ADD COLUMN SQL.
+   * @param {string} sql - ALTER TABLE SQL.
+   * @return {Object|null} Parsed default metadata.
+   * @private
+   */
+  parseAddColumnDefaultFromAlterSql(sql) {
+    const normalizedSql = String(sql || '');
+    const addColumnMatch = normalizedSql.match(
+      /^\s*ALTER\s+TABLE\s+.+?\s+ADD\s+COLUMN\s+([^\s]+)\s+([\s\S]+)$/i,
+    );
+    if (!addColumnMatch) {
+      return null;
+    }
+
+    const columnName = String(addColumnMatch[1] || '')
+      .replace(/^["'`]|["'`]$/g, '');
+    const definitionTail = String(addColumnMatch[2] || '');
+    const defaultMatch = definitionTail.match(
+      /\bDEFAULT\s+((?:'[^']*'|\"[^\"]*\"|`[^`]*`|[^\s,]+))/i,
+    );
+    return {
+      columnName,
+      hasDefault: defaultMatch !== null,
+      defaultLiteral: defaultMatch ? defaultMatch[1] : null,
+    };
+  }
+
+  /**
    * Check if a SQL query is a write operation.
    * @param {string} sql - SQL query string.
    * @return {boolean} True if write operation.
@@ -2189,9 +2290,13 @@ class PartitionService extends EventEmitter {
         command.type === PARTITION_SERVICE_OPERATION.UPDATE ||
         command.type === PARTITION_SERVICE_OPERATION.DELETE ||
         command.type === PARTITION_SERVICE_OPERATION.UPSERT ||
-        command.type === PARTITION_SERVICE_OPERATION.QUERY) {
+        command.type === PARTITION_SERVICE_OPERATION.QUERY ||
+        command.type === PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE) {
       // Apply SQL write operation
       if (command.sql) {
+        if (command.type === PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE) {
+          this.registerMigrationDefaultFromAlterSql(command.sql);
+        }
         const entryKey = this.getCommittedEntryKey(command);
         if (entryKey && this.recentlyAppliedEntryKeys.has(entryKey)) {
           this.logger.debug(PARTITION_SERVICE_LOG_MSG.APPLYING_COMMITTED_ENTRY, {
@@ -3738,6 +3843,9 @@ class PartitionService extends EventEmitter {
     let result;
     const sqliteRunStartMs = Date.now();
     try {
+      if (entry.type === PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE) {
+        this.registerMigrationDefaultFromAlterSql(entry.sql);
+      }
       const stmt = this.db.prepare(entry.sql);
       const info = stmt.run(...(entry.params || []));
       this.recordWritePhaseDuration(
@@ -3766,6 +3874,14 @@ class PartitionService extends EventEmitter {
         ...entry,
         changes: info.changes,
       });
+
+      if (entry.type === PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE) {
+        this.logger.info(PARTITION_SERVICE_LOG_MSG.MIGRATION_ALTER_TABLE_APPLIED, {
+          partitionId: this.partitionId,
+          tableName: this.tableName,
+          migrationId: entry.migrationId || null,
+        });
+      }
 
       // Schedule size update
       this.scheduleSizeUpdate();

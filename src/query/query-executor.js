@@ -41,8 +41,11 @@ import {PG_EXPR_TYPE} from './pg/pg-compat-constants.js';
 import {DistributedMergeEngine} from './distributed/distributed-merge-engine.js';
 import {ParallelQueryCoordinator} from './distributed/parallel-query-coordinator.js';
 import {DISTRIBUTED_JOIN_STRATEGY} from './distributed/distributed-query-plan-constants.js';
+import {MIGRATION_PARTITION_OPERATION} from '../migration/migration-constants.js';
 
 const QUERY_MESSAGE_FIELD_SPLIT_MIRROR_ORIGIN = 'splitMirrorOrigin';
+const QUERY_MESSAGE_FIELD_MIGRATION_OPERATION = 'migrationOperation';
+const QUERY_MESSAGE_FIELD_MIGRATION_ID = 'migrationId';
 const LEADER_GAP_REASON_OWNER_MISSING = 'owner_missing';
 const LEADER_GAP_REASON_SERVICE_MISSING = 'service_missing';
 
@@ -1037,6 +1040,15 @@ class QueryExecutor {
             request[QUERY_MESSAGE_FIELD_SPLIT_MIRROR_ORIGIN] =
               executionOptions.splitMirrorOrigin;
           }
+          if (executionOptions.migrationOperation ===
+            MIGRATION_PARTITION_OPERATION.ALTER_TABLE) {
+            request[QUERY_MESSAGE_FIELD_MIGRATION_OPERATION] =
+              executionOptions.migrationOperation;
+            if (executionOptions.migrationId) {
+              request[QUERY_MESSAGE_FIELD_MIGRATION_ID] =
+                executionOptions.migrationId;
+            }
+          }
           const response = await this.messageRouter.deliver(address, request);
           this.throwIfCancelled(cancellationToken);
 
@@ -1066,6 +1078,11 @@ class QueryExecutor {
                 params,
                 [QUERY_MESSAGE_FIELD_SPLIT_MIRROR_ORIGIN]:
                   executionOptions.splitMirrorOrigin || null,
+                [QUERY_MESSAGE_FIELD_MIGRATION_OPERATION]:
+                  executionOptions.migrationOperation ||
+                  null,
+                [QUERY_MESSAGE_FIELD_MIGRATION_ID]:
+                  executionOptions.migrationId || null,
               },
             );
 

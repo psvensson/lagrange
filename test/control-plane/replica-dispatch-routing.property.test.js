@@ -25,6 +25,9 @@ import {
 } from '../../src/constants/index.js';
 import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
+import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+} from '../../src/control-plane/control-plane-readiness-constants.js';
 
 /**
  * Initialize test singletons.
@@ -112,6 +115,21 @@ test('Property 16: Replica dispatch forwards to correct leader',
           };
 
           const mockCoordinator = {
+            claimDispatchTransition: async () => ({
+              operationId: opRow.operation_id,
+              type: opRow.type,
+              partitionId: opRow.partition_id,
+              replicaId: opRow.replica_id,
+              sourceNodeId: opRow.source_node_id,
+              targetNodeId: opRow.target_node_id,
+              status: opRow.status,
+              workflowStep: opRow.workflow_step,
+              createdAt: opRow.created_at,
+              updatedAt: opRow.updated_at,
+              completedAt: null,
+              errorMessage: null,
+              stepsHistory: [],
+            }),
             executeOperation: async (op) => {
               dispatchedOp = op;
             },
@@ -142,6 +160,23 @@ test('Property 16: Replica dispatch forwards to correct leader',
             },
           };
 
+          const mockReadinessService = {
+            getNodeReadinessSync: (nodeId) => {
+              const node = nodeStore.get(nodeId);
+              const ready = !!node &&
+                node.status === SERVICE_STATUS.ACTIVE &&
+                node.connection_state === STATE.READY &&
+                Number(node.ready_lease_expires_at) > Date.now();
+              return {
+                nodeId,
+                dimensions: {
+                  [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: ready,
+                  [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: ready,
+                },
+              };
+            },
+          };
+
           const service = new ReplicaDispatchService({
             nodeId: 'local-node',
             messageRouter: mockRouter,
@@ -149,6 +184,7 @@ test('Property 16: Replica dispatch forwards to correct leader',
             systemTableCache: mockCache,
             rebalanceCoordinator: mockCoordinator,
             sqlQueryEngine: mockSqlQueryEngine,
+            controlPlaneReadinessService: mockReadinessService,
           });
           service.initialize();
 

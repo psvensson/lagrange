@@ -20,12 +20,43 @@ import {NodeService} from '../../src/node/node-service.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {SERVICE_TYPE} from '../../src/constants/index.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
+import {CONTROL_PLANE_READINESS_DIMENSION} from
+  '../../src/control-plane/control-plane-readiness-constants.js';
 import {
   initializeTestEnvironment,
   cleanupTestEnvironment,
   getUniquePort,
   waitFor,
 } from './helpers/cluster-test-helpers.js';
+
+function createAlwaysReadyControlPlaneReadinessService() {
+  return {
+    getNodeReadinessSync: () => ({
+      dimensions: {
+        [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+      },
+    }),
+  };
+}
+
+function createMockStorageAdmissionService() {
+  return {
+    checkAdd: async () => ({allowed: true}),
+    checkReplace: async () => ({allowed: true}),
+  };
+}
+
+function createMockStorageAccountingService() {
+  return {
+    estimateReplicaBytes: () => 1,
+  };
+}
+
+function createMockStoragePressureBehavior() {
+  return {
+    shouldAllowMove: async () => ({decision: 'allow'}),
+  };
+}
 
 /**
  * Create unified peer addresses for replica IDs.
@@ -309,6 +340,9 @@ test('Failure scenario integration tests', async (t) => {
         messageRouter: bootstrapResult.messageRouter,
         tablePolicyService,
         sqlQueryEngine,
+        storageAdmissionService: createMockStorageAdmissionService(),
+        storageAccountingService: createMockStorageAccountingService(),
+        controlPlaneReadinessService: createAlwaysReadyControlPlaneReadinessService(),
         enableTimeouts: false,
       });
       rebalanceCoordinator.initialize();
@@ -371,8 +405,12 @@ test('Failure scenario integration tests', async (t) => {
         systemTableCache,
         cdcIntegrationService,
         tablePolicyService,
+        sqlQueryEngine,
         messageRouter: bootstrapResult.messageRouter,
         rebalanceCoordinator,
+        controlPlaneReadinessService: createAlwaysReadyControlPlaneReadinessService(),
+        storageAccountingService: createMockStorageAccountingService(),
+        storagePressureBehavior: createMockStoragePressureBehavior(),
       });
       rebalancer.initialize();
       rebalancer.setLeader(true);

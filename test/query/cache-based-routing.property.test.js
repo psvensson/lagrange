@@ -46,10 +46,24 @@ const nodeAddressArb = fc.stringMatching(/^node[0-9]+$/);
  * @return {Object} Mock system cache.
  */
 function createMockSystemCache(tableName, partitions, services) {
+  const normalizedPartitions = partitions.map((partition) => {
+    const leaderService = services.find((service) =>
+      service.partition_id === partition.partition_id &&
+      String(service.raft_role || '').toLowerCase() ===
+        String(RAFT_ROLE.LEADER).toLowerCase(),
+    );
+    return {
+      ...partition,
+      leader_node_id: partition.leader_node_id ||
+        partition.leaderNodeId ||
+        leaderService?.node_id ||
+        null,
+    };
+  });
   return {
     filter: function(table, predicate) {
       if (table === TABLES.PARTITIONS) {
-        return partitions.filter(predicate);
+        return normalizedPartitions.filter(predicate);
       }
       if (table === TABLES.SERVICES) {
         return services.filter(predicate);
@@ -58,7 +72,7 @@ function createMockSystemCache(tableName, partitions, services) {
     },
     getAll: function(table) {
       if (table === TABLES.PARTITIONS) {
-        return partitions;
+        return normalizedPartitions;
       }
       if (table === TABLES.SERVICES) {
         return services;
@@ -428,12 +442,12 @@ test('Property: SQL Engine Cache-Based Routing', async (t) => {
    * to find partition locations for any query.
    */
   t.test('SQLQueryEngine uses cache for partition lookup', async (t) => {
-    fc.assert(
-      fc.property(
+    await fc.assert(
+      fc.asyncProperty(
         tableNameArb,
         partitionIdArb,
         nodeAddressArb,
-        (tableName, partitionId, nodeAddress) => {
+        async (tableName, partitionId, nodeAddress) => {
           const partitions = [{
             partition_id: partitionId,
             table_name: tableName,
@@ -465,7 +479,7 @@ test('Property: SQL Engine Cache-Based Routing', async (t) => {
           });
 
           // Execute query
-          engine.executeQuery(`SELECT * FROM ${tableName}`);
+          await engine.executeQuery(`SELECT * FROM ${tableName}`);
 
           const deliveries = messageRouter.getDeliveries();
           const usedCache = deliveries.length > 0;

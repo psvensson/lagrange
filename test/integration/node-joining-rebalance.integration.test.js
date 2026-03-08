@@ -31,6 +31,8 @@ import {
   getUniquePort,
   waitFor,
 } from './helpers/cluster-test-helpers.js';
+import {CONTROL_PLANE_READINESS_DIMENSION} from
+  '../../src/control-plane/control-plane-readiness-constants.js';
 
 async function shutdownOrFail(t, promise, label) {
   try {
@@ -39,6 +41,35 @@ async function shutdownOrFail(t, promise, label) {
     t.comment(`${label}: ${error.message}`);
     throw error;
   }
+}
+
+function createAlwaysReadyControlPlaneReadinessService() {
+  return {
+    getNodeReadinessSync: () => ({
+      dimensions: {
+        [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+      },
+    }),
+  };
+}
+
+function createMockStorageAdmissionService() {
+  return {
+    checkAdd: async () => ({decision: 'allow'}),
+    checkReplace: async () => ({decision: 'allow'}),
+  };
+}
+
+function createMockStorageAccountingService() {
+  return {
+    estimateReplicaBytes: () => 1,
+  };
+}
+
+function createMockStoragePressureBehavior() {
+  return {
+    shouldAllowMove: async () => ({decision: 'allow'}),
+  };
 }
 
 /**
@@ -184,6 +215,10 @@ test('Node joining rebalancing integration', async (t) => {
         messageRouter: bootstrapResult.messageRouter,
         tablePolicyService,
         sqlQueryEngine,
+        controlPlaneReadinessService:
+          createAlwaysReadyControlPlaneReadinessService(),
+        storageAdmissionService: createMockStorageAdmissionService(),
+        storageAccountingService: createMockStorageAccountingService(),
         enableTimeouts: false,
       });
       rebalanceCoordinator.initialize();
@@ -201,6 +236,11 @@ test('Node joining rebalancing integration', async (t) => {
         tablePolicyService,
         messageRouter: bootstrapResult.messageRouter,
         rebalanceCoordinator,
+        controlPlaneReadinessService:
+          createAlwaysReadyControlPlaneReadinessService(),
+        storageAccountingService: createMockStorageAccountingService(),
+        storagePressureBehavior: createMockStoragePressureBehavior(),
+        sqlQueryEngine,
       });
       rebalancer.initialize();
 
@@ -415,6 +455,10 @@ test('Node joining rebalancing integration', async (t) => {
         messageRouter: bootstrapResult.messageRouter,
         tablePolicyService,
         sqlQueryEngine,
+        controlPlaneReadinessService:
+          createAlwaysReadyControlPlaneReadinessService(),
+        storageAdmissionService: createMockStorageAdmissionService(),
+        storageAccountingService: createMockStorageAccountingService(),
         enableTimeouts: false,
       });
       rebalanceCoordinator.initialize();
@@ -455,6 +499,11 @@ test('Node joining rebalancing integration', async (t) => {
         tablePolicyService,
         messageRouter: bootstrapResult.messageRouter,
         rebalanceCoordinator,
+        controlPlaneReadinessService:
+          createAlwaysReadyControlPlaneReadinessService(),
+        storageAccountingService: createMockStorageAccountingService(),
+        storagePressureBehavior: createMockStoragePressureBehavior(),
+        sqlQueryEngine,
       });
       rebalancer.initialize();
 
@@ -577,6 +626,10 @@ test('Node joining rebalancing integration', async (t) => {
         messageRouter: bootstrapResult.messageRouter,
         tablePolicyService,
         sqlQueryEngine,
+        controlPlaneReadinessService:
+          createAlwaysReadyControlPlaneReadinessService(),
+        storageAdmissionService: createMockStorageAdmissionService(),
+        storageAccountingService: createMockStorageAccountingService(),
         enableTimeouts: false,
       });
       rebalanceCoordinator.initialize();
@@ -662,6 +715,11 @@ test('Node joining rebalancing integration', async (t) => {
         tablePolicyService,
         messageRouter: bootstrapResult.messageRouter,
         rebalanceCoordinator,
+        controlPlaneReadinessService:
+          createAlwaysReadyControlPlaneReadinessService(),
+        storageAccountingService: createMockStorageAccountingService(),
+        storagePressureBehavior: createMockStoragePressureBehavior(),
+        sqlQueryEngine,
       });
       rebalancer.initialize();
       rebalancer.setLeader(true);

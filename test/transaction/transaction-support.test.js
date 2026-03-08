@@ -43,7 +43,11 @@ function createMockMessageRouter() {
 
 // Mock system cache with services for routing
 function createMockSystemCache(tables, partitions) {
-  const services = partitions.map((p) => ({
+  const normalizedPartitions = partitions.map((partition) => ({
+    ...partition,
+    leader_node_id: partition.leader_node_id || partition.leaderNodeId || 'test-node',
+  }));
+  const services = normalizedPartitions.map((p) => ({
     service_id: p.partition_id,
     service_type: 'partition',
     partition_id: p.partition_id,
@@ -55,7 +59,7 @@ function createMockSystemCache(tables, partitions) {
 
   return {
     tables,
-    partitions,
+    partitions: normalizedPartitions,
     services,
     get: function(type, key) {
       if (type === 'tables') {

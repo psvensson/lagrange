@@ -189,6 +189,15 @@ function createRecoveryTestCoordinator(options = {}) {
     tablePolicyService: createMockPolicyService(),
     messageRouter: createMockMessageRouter(),
     sqlQueryEngine: sqlEngine,
+    transactionCoordinator: {
+      begin: async () => ({success: true}),
+      commit: async () => ({success: true}),
+      rollback: async () => ({success: true}),
+    },
+    storageAdmissionService: {
+      checkAdd: async () => ({allowed: true, decisionType: 'admitted'}),
+      checkReplace: async () => ({allowed: true, decisionType: 'admitted'}),
+    },
     storageAccountingService: {estimateReplicaBytes: () => 1},
     enableTimeouts: false,
   });

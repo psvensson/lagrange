@@ -23,6 +23,8 @@ import {
   createMockCache,
   createMockPolicyService,
   createMockMessageRouter,
+  createMockControlPlaneReadinessService,
+  createMockTransactionCoordinator,
 } from './test-helpers.js';
 
 /**
@@ -32,6 +34,7 @@ import {
  * @return {Object} Coordinator and helper functions.
  */
 function createTimeoutTestCoordinator(options = {}) {
+  const {services = []} = options;
   const trackedOperations = new Map();
 
   // Mock CDC service (not used for persistence in new architecture)
@@ -92,6 +95,23 @@ function createTimeoutTestCoordinator(options = {}) {
         return {success: true};
       }
 
+      // Handle SELECT services lookups for reconciliation
+      if (sql.includes('FROM services') && sql.includes('service_id = ?')) {
+        const [serviceId] = params;
+        const service = services.find((row) =>
+          row.service_id === serviceId || row.replica_id === serviceId);
+        return {success: true, rows: service ? [{status: service.status}] : []};
+      }
+
+      if (sql.includes('FROM services') &&
+          sql.includes('partition_id = ?') &&
+          sql.includes('node_id = ?')) {
+        const [partitionId, nodeId] = params;
+        const service = services.find((row) =>
+          row.partition_id === partitionId && row.node_id === nodeId);
+        return {success: true, rows: service ? [{status: service.status}] : []};
+      }
+
       // Handle SELECT queries
       if (sql.includes('replica_operations')) {
         const allOps = Array.from(trackedOperations.values());
@@ -106,10 +126,44 @@ function createTimeoutTestCoordinator(options = {}) {
           return {success: true, rows: matching};
         }
 
-        // Filter for non-terminal operations if query includes status filter
-        if (sql.includes('NOT IN')) {
-          const incompleteOps = allOps.filter((op) =>
-            !['active', 'removed', 'failed'].includes(op.status));
+        if (sql.includes('SELECT * FROM replica_operations') &&
+            sql.includes('WHERE type = ?')) {
+          const [type] = params;
+          return {
+            success: true,
+            rows: allOps.filter((op) => op.type === type),
+          };
+        }
+
+        // Owner-scoped in-flight query used by timeout checks
+        if (sql.includes('source_node_id = ?') &&
+            sql.includes('workflow_step IN')) {
+          const [
+            sourceNodeId,
+            pendingStep,
+            sendingStep,
+            creatingStep,
+            syncingStep,
+            stoppingStep,
+            activeStep,
+            replaceType,
+          ] = params;
+          const inFlightSteps = new Set([
+            pendingStep,
+            sendingStep,
+            creatingStep,
+            syncingStep,
+            stoppingStep,
+          ]);
+          const incompleteOps = allOps.filter((op) => {
+            if (op.source_node_id !== sourceNodeId) {
+              return false;
+            }
+            if (inFlightSteps.has(op.workflow_step)) {
+              return true;
+            }
+            return op.workflow_step === activeStep && op.type === replaceType;
+          });
           return {success: true, rows: incompleteOps};
         }
 
@@ -127,6 +181,15 @@ function createTimeoutTestCoordinator(options = {}) {
     tablePolicyService: createMockPolicyService(),
     messageRouter: createMockMessageRouter(),
     sqlQueryEngine: sqlEngine,
+    transactionCoordinator: createMockTransactionCoordinator(),
+    controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+    storageAdmissionService: {
+      checkAdd: async () => ({allowed: true, decisionType: 'admitted'}),
+      checkReplace: async () => ({allowed: true, decisionType: 'admitted'}),
+    },
+    storageAccountingService: {
+      estimateReplicaBytes: () => 1,
+    },
     enableTimeouts: false,
   });
 
@@ -297,7 +360,16 @@ test('Property 7: Timeout Triggers Failure', async (t) => {
 
   await t.test('operation in STOPPING times out and fails', async (t) => {
     const {coordinator, backdateOperation, getTrackedOperation} =
-      createTimeoutTestCoordinator({removingTimeoutMs: 1});
+      createTimeoutTestCoordinator({
+        removingTimeoutMs: 1,
+        services: [{
+          service_id: 'test-replica',
+          replica_id: 'test-replica',
+          partition_id: 'test-partition',
+          node_id: 'test-node',
+          status: ReplicaStatus.REMOVING,
+        }],
+      });
 
     try {
       const operation = await coordinator.createOperation({

@@ -27,6 +27,7 @@ function createTestCache() {
     {
       partition_id: 'p1',
       table_name: 'users',
+      leader_node_id: 'test-node',
       partition_key_start: null,
       partition_key_end: null,
     },

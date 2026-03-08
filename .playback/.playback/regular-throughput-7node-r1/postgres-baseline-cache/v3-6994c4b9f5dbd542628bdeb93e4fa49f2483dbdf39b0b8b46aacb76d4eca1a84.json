@@ -1,0 +1,154 @@
+{
+  "schemaVersion": 3,
+  "key": "v3-6994c4b9f5dbd542628bdeb93e4fa49f2483dbdf39b0b8b46aacb76d4eca1a84",
+  "signature": {
+    "schemaVersion": 3,
+    "engine": "postgres",
+    "machine": {
+      "platform": "linux",
+      "arch": "x64",
+      "hostname": "peter-System-Product-Name",
+      "cpuCount": 20,
+      "cpuModel": "13th Gen Intel(R) Core(TM) i5-13600KF"
+    },
+    "benchmark": {
+      "baselineImage": "postgres:16",
+      "user": "benchmark",
+      "database": "benchmark",
+      "port": 5432,
+      "loadOpsPerSec": 120,
+      "loadDurationMs": 75000,
+      "loadMaxInFlight": 128,
+      "loadNodeCount": 7,
+      "tableName": "benchmark_partition_split_events",
+      "workloadProfile": "benchmark_events_mixed",
+      "operations": [
+        "INSERT",
+        "SELECT"
+      ],
+      "replicationFactor": 3,
+      "syncReplicaAcks": 1
+    }
+  },
+  "cachedAt": "2026-03-08T12:22:04.699Z",
+  "metrics": {
+    "total": 9000,
+    "success": 9000,
+    "failed": 0,
+    "errors": 0,
+    "latency": {
+      "avg": 0.717,
+      "p50": 1,
+      "p95": 1,
+      "p99": 2
+    },
+    "opsPerSec": 120.00160002133362,
+    "queueDelay": {
+      "avg": 0.7903924696180555,
+      "p50": 0.7001953125,
+      "p95": 1.81982421875,
+      "p99": 1.9658203125,
+      "max": 7.26025390625
+    },
+    "targetOperations": 9000,
+    "dispatchedOperations": 9000,
+    "undispatchedOperations": 0,
+    "undispatchedByReason": {
+      "capacity": 0,
+      "durationTimeout": 0,
+      "cancelled": 0
+    },
+    "perNode": {
+      "postgres-baseline-load-node-1": {
+        "dispatched": 1286,
+        "success": 1286,
+        "attemptErrors": 0,
+        "admissionSignals": 0,
+        "queuePressureSignals": 0,
+        "rejected": 0,
+        "rejectedByReason": {
+          "queueFull": 0
+        }
+      },
+      "postgres-baseline-load-node-2": {
+        "dispatched": 1286,
+        "success": 1286,
+        "attemptErrors": 0,
+        "admissionSignals": 0,
+        "queuePressureSignals": 0,
+        "rejected": 0,
+        "rejectedByReason": {
+          "queueFull": 0
+        }
+      },
+      "postgres-baseline-load-node-3": {
+        "dispatched": 1286,
+        "success": 1286,
+        "attemptErrors": 0,
+        "admissionSignals": 0,
+        "queuePressureSignals": 0,
+        "rejected": 0,
+        "rejectedByReason": {
+          "queueFull": 0
+        }
+      },
+      "postgres-baseline-load-node-4": {
+        "dispatched": 1286,
+        "success": 1286,
+        "attemptErrors": 0,
+        "admissionSignals": 0,
+        "queuePressureSignals": 0,
+        "rejected": 0,
+        "rejectedByReason": {
+          "queueFull": 0
+        }
+      },
+      "postgres-baseline-load-node-5": {
+        "dispatched": 1286,
+        "success": 1286,
+        "attemptErrors": 0,
+        "admissionSignals": 0,
+        "queuePressureSignals": 0,
+        "rejected": 0,
+        "rejectedByReason": {
+          "queueFull": 0
+        }
+      },
+      "postgres-baseline-load-node-6": {
+        "dispatched": 1285,
+        "success": 1285,
+        "attemptErrors": 0,
+        "admissionSignals": 0,
+        "queuePressureSignals": 0,
+        "rejected": 0,
+        "rejectedByReason": {
+          "queueFull": 0
+        }
+      },
+      "postgres-baseline-load-node-7": {
+        "dispatched": 1285,
+        "success": 1285,
+        "attemptErrors": 0,
+        "admissionSignals": 0,
+        "queuePressureSignals": 0,
+        "rejected": 0,
+        "rejectedByReason": {
+          "queueFull": 0
+        }
+      }
+    },
+    "rejectedOperations": 0,
+    "rejectedByReason": {
+      "queueFull": 0
+    },
+    "queuePressure": {
+      "samples": 11030,
+      "pendingQueueDepth": {
+        "avg": 0.8159564823209429,
+        "p95": 1,
+        "p99": 1,
+        "max": 1
+      }
+    }
+  }
+}

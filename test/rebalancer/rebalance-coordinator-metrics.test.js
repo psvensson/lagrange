@@ -43,6 +43,18 @@ function createCoordinator(logger) {
     messageRouter: {},
     tablePolicyService: {},
     sqlQueryEngine: createMockSqlEngine(),
+    transactionCoordinator: {
+      begin: async () => ({success: true}),
+      commit: async () => ({success: true}),
+      rollback: async () => ({success: true}),
+    },
+    storageAdmissionService: {
+      checkAdd: async () => ({allowed: true, decisionType: 'admitted'}),
+      checkReplace: async () => ({allowed: true, decisionType: 'admitted'}),
+    },
+    storageAccountingService: {
+      estimateReplicaBytes: () => 1,
+    },
   });
   coordinator.logger = logger;
   return coordinator;

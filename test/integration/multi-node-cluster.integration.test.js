@@ -13,6 +13,9 @@ import {MessageGroupService} from '../../src/message-group/message-group-service
 import {UnifiedRebalancer, EntityType} from '../../src/rebalancer/unified-rebalancer.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
+import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {CONTROL_PLANE_READINESS_DIMENSION} from
+  '../../src/control-plane/control-plane-readiness-constants.js';
 import {
   initializeTestEnvironment,
   cleanupTestEnvironment,
@@ -20,6 +23,35 @@ import {
   getUniquePort,
   TEST_CONFIG,
 } from './helpers/cluster-test-helpers.js';
+
+function createAlwaysReadyControlPlaneReadinessService() {
+  return {
+    getNodeReadinessSync: () => ({
+      dimensions: {
+        [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+      },
+    }),
+  };
+}
+
+function createMockStorageAdmissionService() {
+  return {
+    checkAdd: async () => ({decision: 'allow'}),
+    checkReplace: async () => ({decision: 'allow'}),
+  };
+}
+
+function createMockStorageAccountingService() {
+  return {
+    estimateReplicaBytes: () => 1,
+  };
+}
+
+function createMockStoragePressureBehavior() {
+  return {
+    shouldAllowMove: async () => ({decision: 'allow'}),
+  };
+}
 
 test('Multi-node cluster integration tests', async (t) => {
   t.beforeEach(() => {
@@ -128,6 +160,13 @@ test('Multi-node cluster integration tests', async (t) => {
       // Get real components from bootstrap
       const systemTableCache = NodeService.getInstance().getSystemTableCache();
       const cdcService = bootstrapService.cdcIntegrationService;
+      const partitionRows =
+        systemTableCache.getAll(SYSTEM_TABLE_NAME.PARTITIONS) || [];
+      const selectedPartition = partitionRows.find(
+        (row) => typeof row?.partition_id === 'string' && row.partition_id.length > 0,
+      );
+      t.ok(selectedPartition, 'should have a partition to rebalance');
+      const partitionId = selectedPartition?.partition_id;
 
       // Add another node to trigger rebalancing
       const readyLeaseExpiresAt = Date.now() + 10000;
@@ -145,14 +184,20 @@ test('Multi-node cluster integration tests', async (t) => {
 
       // Create rebalancer using real components
       const rebalancer = new UnifiedRebalancer({
-        entityId: 'partition-1',
+        entityId: partitionId,
         entityType: EntityType.PARTITION,
         systemTableCache,
         cdcIntegrationService: cdcService,
         tablePolicyService: bootstrapService.tablePolicyService,
-        messageRouter: bootstrapService.messageRouter,
+        messageRouter: bootstrapResult.messageRouter,
         rebalanceCoordinator: bootstrapService.rebalanceCoordinator,
         nodeId: seedNodeId,
+        controlPlaneReadinessService:
+          createAlwaysReadyControlPlaneReadinessService(),
+        storageAdmissionService: createMockStorageAdmissionService(),
+        storageAccountingService: createMockStorageAccountingService(),
+        storagePressureBehavior: createMockStoragePressureBehavior(),
+        sqlQueryEngine: cdcService.sqlQueryEngine,
       });
 
       rebalancer.initialize();

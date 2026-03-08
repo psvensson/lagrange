@@ -27,6 +27,7 @@ const QUERY_AST_TYPE = Object.freeze({
   UPDATE: 'UPDATE',
   DELETE: 'DELETE',
   CREATE_TABLE: 'CREATE_TABLE',
+  ALTER_TABLE: 'ALTER_TABLE',
   BEGIN_TRANSACTION: 'BEGIN_TRANSACTION',
   COMMIT: 'COMMIT',
   ROLLBACK: 'ROLLBACK',
@@ -37,6 +38,7 @@ const QUERY_OPERATION = Object.freeze({
   UPDATE: 'UPDATE',
   DELETE: 'DELETE',
   CREATE_TABLE: 'CREATE_TABLE',
+  ALTER_TABLE: 'ALTER_TABLE',
   BEGIN_TRANSACTION: 'BEGIN_TRANSACTION',
   COMMIT: 'COMMIT',
   ROLLBACK: 'ROLLBACK',
@@ -122,6 +124,8 @@ const QUERY_ERROR_MSG = Object.freeze({
     'Distributed operation failed due to participant failures',
   EXPLAIN_DISTRIBUTED_REQUIRES_STATEMENT:
     'EXPLAIN DISTRIBUTED requires a SQL statement',
+  MIGRATION_PIPELINE_UNAVAILABLE:
+    'ALTER TABLE requires a configured migration pipeline',
   TABLE_PARTITION_PROVISION_COORDINATOR_REQUIRED:
     'Table partition provisioning requires a rebalance coordinator',
   TABLE_PARTITION_PROVISION_PARTITION_ID_REQUIRED:

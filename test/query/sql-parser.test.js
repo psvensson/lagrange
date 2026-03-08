@@ -236,6 +236,48 @@ test('SQLParser - parses DELETE without WHERE', async (t) => {
   t.equal(ast.where, null);
 });
 
+test('SQLParser - parses ALTER TABLE ADD COLUMN', async (t) => {
+  const parser = new SQLParser(
+    'ALTER TABLE users ADD COLUMN age INTEGER DEFAULT 42',
+  );
+  const ast = parser.parse();
+
+  t.equal(ast.type, 'ALTER_TABLE');
+  t.equal(ast.table, 'users');
+  t.equal(ast.operation.action, 'add');
+  t.equal(ast.operation.columnName, 'age');
+  t.equal(ast.operation.dataType, 'INTEGER');
+  t.equal(ast.operation.defaultValue, 42);
+  t.match(ast.rawSql, /ALTER TABLE users ADD COLUMN age/i);
+});
+
+test('SQLParser - parses ALTER TABLE RENAME COLUMN', async (t) => {
+  const parser = new SQLParser(
+    'ALTER TABLE users RENAME COLUMN name TO full_name',
+  );
+  const ast = parser.parse();
+
+  t.equal(ast.type, 'ALTER_TABLE');
+  t.equal(ast.table, 'users');
+  t.equal(ast.operation.action, 'rename');
+  t.equal(ast.operation.columnName, 'name');
+  t.equal(ast.operation.newColumnName, 'full_name');
+});
+
+test('SQLParser - parses ALTER COLUMN TYPE in PostgreSQL mode', async (t) => {
+  const parser = new SQLParser(
+    'ALTER TABLE users ALTER COLUMN age TYPE TEXT',
+    {dialect: PARSER_DIALECT.POSTGRESQL},
+  );
+  const ast = parser.parse();
+
+  t.equal(ast.type, 'ALTER_TABLE');
+  t.equal(ast.table, 'users');
+  t.equal(ast.operation.action, 'alter');
+  t.equal(ast.operation.columnName, 'age');
+  t.equal(ast.operation.dataType, 'TEXT');
+});
+
 test('SQLParser - parses complex WHERE with AND/OR', async (t) => {
   const parser = new SQLParser(
     'SELECT * FROM users WHERE status = \'active\' AND (role = \'admin\' OR role = \'mod\')',

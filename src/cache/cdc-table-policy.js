@@ -76,6 +76,14 @@ const SYSTEM_TABLE_CDC_POLICIES = Object.freeze({
     bootstrapHydrationMode: CDC_BOOTSTRAP_HYDRATION_MODE.BOOTSTRAP_ONLY,
     externalCdcAllowed: false,
   }),
+  [TABLES.SCHEMA_MIGRATIONS]: createTablePolicy(TABLES.SCHEMA_MIGRATIONS, {
+    policyClass: CDC_POLICY_CLASS.CONTROL_INTERNAL_PROPAGATION,
+    authorityClass: CDC_AUTHORITY_CLASS.CONTROL,
+    internalCachePropagation: true,
+    readinessRelevant: false,
+    bootstrapHydrationMode: CDC_BOOTSTRAP_HYDRATION_MODE.BOOTSTRAP_ONLY,
+    externalCdcAllowed: false,
+  }),
   [TABLES.INDICES]: createTablePolicy(TABLES.INDICES, {
     policyClass: CDC_POLICY_CLASS.CONTROL_INTERNAL_PROPAGATION,
     authorityClass: CDC_AUTHORITY_CLASS.CONTROL,
@@ -156,6 +164,17 @@ const SYSTEM_TABLE_CDC_POLICIES = Object.freeze({
   ),
   [TABLES.SQL_WRITE_OPERATIONS]: createTablePolicy(
     TABLES.SQL_WRITE_OPERATIONS,
+    {
+      policyClass: CDC_POLICY_CLASS.CONTROL_NO_INTERNAL_PROPAGATION,
+      authorityClass: CDC_AUTHORITY_CLASS.CONTROL,
+      internalCachePropagation: false,
+      readinessRelevant: false,
+      bootstrapHydrationMode: CDC_BOOTSTRAP_HYDRATION_MODE.NONE,
+      externalCdcAllowed: false,
+    },
+  ),
+  [TABLES.SCHEMA_MIGRATION_PARTITIONS]: createTablePolicy(
+    TABLES.SCHEMA_MIGRATION_PARTITIONS,
     {
       policyClass: CDC_POLICY_CLASS.CONTROL_NO_INTERNAL_PROPAGATION,
       authorityClass: CDC_AUTHORITY_CLASS.CONTROL,

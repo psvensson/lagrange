@@ -197,11 +197,7 @@ describe('MessageGroupServiceHandler', () => {
         handler.localReplicas.get('mg-1-r4')?.status,
         ReplicaStatus.ACTIVE,
       );
-      assert.equal(cdc.updates.length, 1);
-      assert.equal(
-        cdc.updates[0].updateData.workflow_step,
-        WORKFLOW_STEP.ACTIVE,
-      );
+      assert.equal(cdc.updates.length, 0);
       assert.equal(cdc.upserts.length, 1);
       assert.equal(cdc.upserts[0].tableName, 'services');
       assert.equal(cdc.upserts[0].data.service_id, 'mg-1-r4');
@@ -209,7 +205,6 @@ describe('MessageGroupServiceHandler', () => {
       assert.equal(cdc.upserts[0].data.node_id, 'test-node');
       assert.equal(cdc.upserts[0].data.status, ReplicaStatus.ACTIVE);
       assert.equal(cdc.operations[0].type, 'upsert');
-      assert.equal(cdc.operations[1].type, 'update');
     });
 
   it('removes an existing local message-group replica discovered via resolver',
@@ -241,16 +236,11 @@ describe('MessageGroupServiceHandler', () => {
         handler.localReplicas.get('mg-1-r1')?.status,
         ReplicaStatus.REMOVED,
       );
-      assert.equal(cdc.updates.length, 1);
-      assert.equal(
-        cdc.updates[0].updateData.workflow_step,
-        WORKFLOW_STEP.REMOVED,
-      );
+      assert.equal(cdc.updates.length, 0);
       assert.equal(cdc.deletes.length, 1);
       assert.equal(cdc.deletes[0].tableName, 'services');
       assert.equal(cdc.deletes[0].whereClause.service_id, 'mg-1-r1');
       assert.equal(cdc.deletes[0].whereClause.node_id, 'test-node');
       assert.equal(cdc.operations[0].type, 'delete');
-      assert.equal(cdc.operations[1].type, 'update');
     });
 });

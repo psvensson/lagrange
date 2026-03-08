@@ -60,6 +60,10 @@ import {ReplicaStatus} from
   '../../src/rebalancer/replica-status.js';
 import {SystemTableCache} from
   '../../src/cache/system-table-cache.js';
+import {
+  createMockControlPlaneReadinessService,
+  createMockTransactionCoordinator,
+} from './test-helpers.js';
 
 const TEST_NODE_ID = 'node-single-writer';
 const TEST_OPERATION_ID = 'op-sw-1';
@@ -174,6 +178,8 @@ function createTestCoordinator(options = {}) {
     },
     operationWorkflowCoordinator: workflowCoordinator,
     executorOutcomeEmitter: emitter,
+    transactionCoordinator: createMockTransactionCoordinator(),
+    controlPlaneReadinessService: createMockControlPlaneReadinessService(),
     enableTimeouts: false,
   });
   coordinator.initialize();

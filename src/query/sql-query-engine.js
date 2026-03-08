@@ -104,6 +104,9 @@ import {
 import {ManagedSplitWorkflow} from '../partition/managed-split-workflow.js';
 import {PARTITION_SERVICE_MESSAGE_TYPE} from '../partition/partition-service-constants.js';
 import {TimeoutPolicy} from '../workflow/timeout-policy.js';
+import {MIGRATION_STATUS} from '../migration/migration-constants.js';
+import {MigrationCoordinator} from '../migration/migration-coordinator.js';
+import {MigrationPipeline} from '../migration/migration-pipeline.js';
 
 const CODE_LOOKUP_BY_FUNCTION_ID_SQL =
   `SELECT * FROM ${TABLES.CODE} WHERE function_id = ?`;
@@ -123,6 +126,9 @@ const CONNECTION_STATE_CONNECTED = String(STATE.CONNECTED).toLowerCase();
 const CONNECTION_STATE_READY = String(STATE.READY).toLowerCase();
 const DEFAULT_PARTITION_VERSION = 1;
 const ACTIVE_PARTITION_STATE = 'NORMAL';
+const DUAL_WRITE_ACTIVE_STATUSES = new Set([
+  MIGRATION_STATUS.DUAL_WRITE,
+]);
 const TABLE_PARTITION_TARGET_NODE_WAIT = 'table_partition_target_node_wait';
 const TABLE_PARTITION_ADMISSION_CONVERGENCE_WAIT_MS = 10000;
 const PROVISIONING_REJECTION_DETAIL_LIMIT = 3;
@@ -283,6 +289,28 @@ class SQLQueryEngine {
     );
 
     this.logger = this.initLogger();
+    this.migrationAutoWireEnabled = options.migrationAutoWire !== false;
+    this.migrationCoordinator = options.migrationCoordinator || null;
+    if (this.migrationAutoWireEnabled &&
+      !this.migrationCoordinator &&
+      this.systemCache) {
+      this.migrationCoordinator = new MigrationCoordinator({
+        sqlCore: this,
+        systemTableCache: this.systemCache,
+        transactionCoordinator: this.transactionCoordinator,
+        logger: this.logger,
+        now: this.nowFn,
+      });
+    }
+    this.migrationPipeline = options.migrationPipeline || null;
+    if (this.migrationAutoWireEnabled &&
+      !this.migrationPipeline &&
+      this.migrationCoordinator) {
+      this.migrationPipeline = new MigrationPipeline({
+        migrationCoordinator: this.migrationCoordinator,
+        logger: this.logger,
+      });
+    }
     this.managedSplitWorkflow = this.managedSplitWorkflow ||
       new ManagedSplitWorkflow({
         nodeId: this.nodeId,
@@ -392,6 +420,23 @@ class SQLQueryEngine {
     this.partitionResolver.setSystemCache(cache);
     this.tableCreationService.setSystemCache(cache);
     this.queryExecutor.setSystemCache(cache);
+    if (this.migrationCoordinator) {
+      this.migrationCoordinator.systemTableCache = cache;
+    } else if (cache && this.migrationAutoWireEnabled) {
+      this.migrationCoordinator = new MigrationCoordinator({
+        sqlCore: this,
+        systemTableCache: cache,
+        transactionCoordinator: this.transactionCoordinator,
+        logger: this.logger,
+        now: this.nowFn,
+      });
+      if (!this.migrationPipeline) {
+        this.migrationPipeline = new MigrationPipeline({
+          migrationCoordinator: this.migrationCoordinator,
+          logger: this.logger,
+        });
+      }
+    }
     this.transactionStateRecovered = false;
     this.recoverDistributedTransactionStateFromCache();
     void this.resumeRecoveredDistributedTransactions();
@@ -438,6 +483,30 @@ class SQLQueryEngine {
   setPartitionSplitMergeManager(manager) {
     this.partitionSplitMergeManager = manager || null;
     this.tableCreationService.setPartitionSplitMergeManager(manager);
+  }
+
+  /**
+   * Set schema migration pipeline.
+   * @param {Object|null} pipeline - Migration pipeline adapter.
+   */
+  setMigrationPipeline(pipeline) {
+    this.migrationPipeline = pipeline || null;
+  }
+
+  /**
+   * Set schema migration coordinator owner.
+   * @param {Object|null} coordinator - Migration coordinator owner.
+   */
+  setMigrationCoordinator(coordinator) {
+    this.migrationCoordinator = coordinator || null;
+    if (!this.migrationPipeline &&
+        this.migrationAutoWireEnabled &&
+        this.migrationCoordinator) {
+      this.migrationPipeline = new MigrationPipeline({
+        migrationCoordinator: this.migrationCoordinator,
+        logger: this.logger,
+      });
+    }
   }
 
   /**
@@ -1302,6 +1371,10 @@ class SQLQueryEngine {
         result = await this.executeCreateTable(ast, sessionId);
         break;
 
+      case QUERY_AST_TYPE.ALTER_TABLE:
+        result = await this.executeAlterTable(ast, sessionId);
+        break;
+
       case QUERY_AST_TYPE.BEGIN_TRANSACTION:
         return this.handleBeginTransaction(sessionId);
 
@@ -1443,6 +1516,21 @@ class SQLQueryEngine {
    */
   async executeCreateTable(ast, _sessionId) {
     return this.tableCreationService.createTable(ast);
+  }
+
+  /**
+   * Execute an ALTER TABLE statement through the migration pipeline.
+   * @param {Object} ast - Parsed ALTER TABLE AST.
+   * @param {string} sessionId - Session ID.
+   * @return {Promise<Object>} Migration initiation result.
+   * @private
+   */
+  async executeAlterTable(ast, sessionId) {
+    if (!this.migrationPipeline ||
+        typeof this.migrationPipeline.handleAlterTable !== 'function') {
+      throw new Error(QUERY_ERROR_MSG.MIGRATION_PIPELINE_UNAVAILABLE);
+    }
+    return this.migrationPipeline.handleAlterTable(ast, sessionId);
   }
 
   /**
@@ -3910,6 +3998,8 @@ class SQLQueryEngine {
     }
 
     const tableName = ast.from.name;
+    const tableInfo = this.getTableInfo(tableName);
+    const dualWriteMode = this.isDualWriteModeActiveForTable(tableInfo);
     const authoritativeLocalResult =
       await this.tryExecuteAuthoritativeSystemTableSelect(
         tableName,
@@ -3989,6 +4079,7 @@ class SQLQueryEngine {
     return {
       ...result,
       tableName,
+      dualWriteMode,
       distributedPlan,
       distributedDiagnostics: distributedPlan.diagnostics,
       distributedMetrics: {
@@ -4153,6 +4244,7 @@ class SQLQueryEngine {
   async executeInsert(ast, params, sessionId, queryOptions = {}) {
     const tableName = ast.table;
     const tableInfo = this.getTableInfo(tableName);
+    const dualWriteMigration = this.getActiveDualWriteMigration(tableInfo);
     const planningStartTimeMs = Date.now();
     const distributedPlan = this.distributedQueryPlanner.planInsert(
       ast,
@@ -4213,13 +4305,20 @@ class SQLQueryEngine {
     let result;
     const executionStartTimeMs = Date.now();
     try {
+      const writeExecutionOptions = {
+        timeoutMs: queryOptions.timeoutMs,
+        cancellationToken: queryOptions.cancellationToken || null,
+      };
+      if (dualWriteMigration) {
+        writeExecutionOptions.dualWriteMode = true;
+        writeExecutionOptions.migrationId =
+          dualWriteMigration.migration_id || dualWriteMigration.migrationId ||
+          null;
+      }
       result = await this.distributedWriteCoordinator.executePlan(
         writePlan,
         params,
-        {
-          timeoutMs: queryOptions.timeoutMs,
-          cancellationToken: queryOptions.cancellationToken || null,
-        },
+        writeExecutionOptions,
       );
     } catch (error) {
       if (txState) {
@@ -4266,6 +4365,7 @@ class SQLQueryEngine {
       ...result,
       operation: QUERY_OPERATION.INSERT,
       tableName,
+      dualWriteMode: dualWriteMigration !== null,
       distributedPlan,
       distributedWritePlan: writePlan,
       distributedDiagnostics: distributedPlan.diagnostics,
@@ -4289,6 +4389,7 @@ class SQLQueryEngine {
   async executeUpdate(ast, params, sessionId, queryOptions = {}) {
     const tableName = ast.table;
     const tableInfo = this.getTableInfo(tableName);
+    const dualWriteMigration = this.getActiveDualWriteMigration(tableInfo);
     const planningStartTimeMs = Date.now();
     const distributedPlan = this.distributedQueryPlanner.planUpdate(
       ast,
@@ -4355,13 +4456,20 @@ class SQLQueryEngine {
     let result;
     const executionStartTimeMs = Date.now();
     try {
+      const writeExecutionOptions = {
+        timeoutMs: queryOptions.timeoutMs,
+        cancellationToken: queryOptions.cancellationToken || null,
+      };
+      if (dualWriteMigration) {
+        writeExecutionOptions.dualWriteMode = true;
+        writeExecutionOptions.migrationId =
+          dualWriteMigration.migration_id || dualWriteMigration.migrationId ||
+          null;
+      }
       result = await this.distributedWriteCoordinator.executePlan(
         writePlan,
         params,
-        {
-          timeoutMs: queryOptions.timeoutMs,
-          cancellationToken: queryOptions.cancellationToken || null,
-        },
+        writeExecutionOptions,
       );
     } catch (error) {
       if (txState) {
@@ -4407,6 +4515,7 @@ class SQLQueryEngine {
     return {
       ...result,
       tableName,
+      dualWriteMode: dualWriteMigration !== null,
       distributedPlan,
       distributedWritePlan: writePlan,
       distributedDiagnostics: distributedPlan.diagnostics,
@@ -4430,6 +4539,7 @@ class SQLQueryEngine {
   async executeDelete(ast, params, sessionId, queryOptions = {}) {
     const tableName = ast.table;
     const tableInfo = this.getTableInfo(tableName);
+    const dualWriteMigration = this.getActiveDualWriteMigration(tableInfo);
     const planningStartTimeMs = Date.now();
     const distributedPlan = this.distributedQueryPlanner.planDelete(
       ast,
@@ -4496,13 +4606,20 @@ class SQLQueryEngine {
     let result;
     const executionStartTimeMs = Date.now();
     try {
+      const writeExecutionOptions = {
+        timeoutMs: queryOptions.timeoutMs,
+        cancellationToken: queryOptions.cancellationToken || null,
+      };
+      if (dualWriteMigration) {
+        writeExecutionOptions.dualWriteMode = true;
+        writeExecutionOptions.migrationId =
+          dualWriteMigration.migration_id || dualWriteMigration.migrationId ||
+          null;
+      }
       result = await this.distributedWriteCoordinator.executePlan(
         writePlan,
         params,
-        {
-          timeoutMs: queryOptions.timeoutMs,
-          cancellationToken: queryOptions.cancellationToken || null,
-        },
+        writeExecutionOptions,
       );
     } catch (error) {
       if (txState) {
@@ -4548,6 +4665,7 @@ class SQLQueryEngine {
     return {
       ...result,
       tableName,
+      dualWriteMode: dualWriteMigration !== null,
       distributedPlan,
       distributedWritePlan: writePlan,
       distributedDiagnostics: distributedPlan.diagnostics,
@@ -5132,6 +5250,72 @@ class SQLQueryEngine {
     }
 
     return null;
+  }
+
+  /**
+   * Read schema-migration rows for one table from system cache.
+   * @param {Object|null} tableInfo - Table metadata row.
+   * @return {Object[]} Matching migration rows.
+   * @private
+   */
+  getTableMigrationsFromCache(tableInfo) {
+    if (!tableInfo || !this.systemCache) {
+      return [];
+    }
+
+    const tableId = tableInfo.table_id || tableInfo.tableId || null;
+    const tableName = tableInfo.table_name || tableInfo.tableName || null;
+    const matchesTable = (row) => {
+      const rowTableId = row?.table_id || row?.tableId || null;
+      const rowTableName = row?.table_name || row?.tableName || null;
+      return (tableId && rowTableId === tableId) ||
+        (tableName && rowTableName === tableName);
+    };
+
+    if (typeof this.systemCache.filter === 'function') {
+      return this.systemCache.filter(
+        TABLES.SCHEMA_MIGRATIONS,
+        matchesTable,
+      ) || [];
+    }
+
+    if (typeof this.systemCache.getAll === 'function') {
+      const rows = this.systemCache.getAll(TABLES.SCHEMA_MIGRATIONS) || [];
+      return rows.filter(matchesTable);
+    }
+
+    return [];
+  }
+
+  /**
+   * Resolve one active dual-write migration row for a table.
+   * @param {Object|null} tableInfo - Table metadata row.
+   * @return {Object|null} Active migration row.
+   * @private
+   */
+  getActiveDualWriteMigration(tableInfo) {
+    const rows = this.getTableMigrationsFromCache(tableInfo);
+    for (const row of rows) {
+      const status = String(
+        row?.status ||
+        row?.current_stage ||
+        '',
+      ).trim();
+      if (DUAL_WRITE_ACTIVE_STATUSES.has(status)) {
+        return row;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Resolve whether a table is currently in dual-write mode.
+   * @param {Object|null} tableInfo - Table metadata row.
+   * @return {boolean} True when dual-write migration is active.
+   * @private
+   */
+  isDualWriteModeActiveForTable(tableInfo) {
+    return this.getActiveDualWriteMigration(tableInfo) !== null;
   }
 
   /**

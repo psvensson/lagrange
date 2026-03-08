@@ -20,6 +20,10 @@ import {
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {
+  createMockControlPlaneReadinessService,
+  createMockTransactionCoordinator,
+} from './test-helpers.js';
 
 const EntityType = REBALANCER_ENTITY_TYPE;
 const MoveType = REBALANCER_MOVE_TYPE;
@@ -148,6 +152,15 @@ function createMockCoordinatorDeps(sqlEngine) {
       getPolicyForPartition: () => ({replicaCount: 3}),
     },
     sqlQueryEngine: sqlEngine,
+    transactionCoordinator: createMockTransactionCoordinator(),
+    controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+    storageAdmissionService: {
+      checkAdd: async () => ({allowed: true, decisionType: 'admitted'}),
+      checkReplace: async () => ({allowed: true, decisionType: 'admitted'}),
+    },
+    storageAccountingService: {
+      estimateReplicaBytes: () => 1,
+    },
     enableTimeouts: false,
   };
 }

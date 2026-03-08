@@ -10,6 +10,9 @@ import {
   EntityType,
   MoveType,
 } from '../../src/rebalancer/unified-rebalancer.js';
+import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+} from '../../src/control-plane/control-plane-readiness-constants.js';
 
 function createReadyNode(nodeId) {
   return {
@@ -40,6 +43,20 @@ function createMockCache(nodes = []) {
         return Array.from(nodeMap.values());
       }
       return [];
+    },
+  };
+}
+
+function createAlwaysReadyReadinessService() {
+  return {
+    getNodeReadinessSync(nodeId) {
+      return {
+        nodeId,
+        dimensions: {
+          [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+          [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: true,
+        },
+      };
     },
   };
 }
@@ -91,6 +108,7 @@ test('UnifiedRebalancer - skips REMOVE when coordinator safety preflight blocks'
       isOutboundQueueAvailable: () => true,
     },
     rebalanceCoordinator: mockCoordinator,
+    controlPlaneReadinessService: createAlwaysReadyReadinessService(),
   });
 
   rebalancer.initialize();
@@ -161,6 +179,7 @@ test('UnifiedRebalancer - defers non-failed REMOVE when no ADD target is ready',
         isOutboundQueueAvailable: () => true,
       },
       rebalanceCoordinator: mockCoordinator,
+      controlPlaneReadinessService: createAlwaysReadyReadinessService(),
     });
 
     rebalancer.initialize();

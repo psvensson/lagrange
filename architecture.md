@@ -628,6 +628,7 @@ snapshots and CDC subscriptions by default.
 | `partitions` | Partition key ranges and replica counts | `partition_id` | MEMBERSHIP |
 | `services` | Replica locations and Raft roles | `service_id` | MEMBERSHIP, ROUTING |
 | `tables` | Table schemas and policies | `table_id` | MEMBERSHIP |
+| `schema_migrations` | Durable schema migration workflow state | `migration_id` | CLUSTER CONFIG |
 | `message_groups` | Message group membership | `group_id` | MEMBERSHIP |
 | `indices` | Secondary index definitions | `index_id` | MEMBERSHIP |
 | `config` | Cluster-wide configuration (epoch, budgets) | `config_key` | CLUSTER CONFIG |
@@ -674,8 +675,24 @@ Hard rules:
 | `package_registry_overrides` | Per-package source overrides | composite (`namespace`, `name`) | Query on demand |
 | `module_dependency_locks` | Immutable dependency locks | `lock_id` | Query on demand |
 | `wasm_operations` | Async operation journal | `operation_id` | Transient workflow state |
+| `schema_migration_partitions` | Per-partition schema migration progress | composite (`migration_id`, `partition_id`) | High-write workflow progress, owner-local |
 | `debug_breakpoints` | Debug breakpoint state | `breakpoint_id` | Transient |
 | `debug_snapshots` | Debug snapshot state | `snapshot_id` | Transient |
+
+### Schema Migration Workflow Ownership
+
+Schema migration execution is explicitly single-owner:
+
+1. `MigrationCoordinator` is the sole lifecycle owner for
+   `schema_migrations` and `schema_migration_partitions`.
+   It creates rows, advances stages, persists retry/cursor/error state,
+   and performs cancellation/rollback transitions.
+2. `PartitionService` owns local partition-side ALTER execution only.
+   It applies migration ALTER SQL through the partition Raft log and
+   does not mutate migration lifecycle rows directly.
+3. `SQLQueryEngine` (`SqlCore`) owns SQL routing into the migration
+   entrypoint (`MigrationPipeline`) and exposes migration observability
+   through normal SELECT query paths.
 
 ## Node State Vocabulary
 

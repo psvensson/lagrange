@@ -9,6 +9,7 @@
  */
 
 import {SQLQueryEngine} from '../../query/sql-query-engine.js';
+import {wireMigrationWorkflowOwners} from '../../migration/migration-composition.js';
 import {RPCClient} from '../../transport/rpc-client.js';
 import {TablePolicyService} from '../../policy/table-policy-service.js';
 import {assertCritical} from '../../utils/assert.js';
@@ -199,6 +200,14 @@ class SeedCacheHydrationPhase {
       messageRouter: d.getMessageRouter(),
       nodeId: d.getNodeId(),
       rebalanceCoordinator: d.getRebalanceCoordinator(),
+      migrationAutoWire: false,
+    });
+    wireMigrationWorkflowOwners({
+      sqlCore: cdcQueryEngine,
+      systemTableCache,
+      transactionCoordinator: cdcQueryEngine.transactionCoordinator,
+      logger,
+      now: () => Date.now(),
     });
 
     const cdcUpgradeStartedAt = Date.now();

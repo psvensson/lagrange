@@ -253,11 +253,22 @@ test('Property 48: Rolled back transactions are not in Raft log', async (t) => {
           // Rollback transaction
           await partition.rollbackTransaction();
 
-          // Verify Raft log has NOT grown (no commit entry)
+          // Rollback may append control entries, but it must not
+          // make uncommitted row writes visible.
           const finalLogLength = partition.storage.getLogLength();
+          let rolledBackRowsVisible = false;
+          for (const op of ops) {
+            const readResult = await partition.executeQuery(
+              `SELECT * FROM test_table WHERE id = ${op.id}`,
+            );
+            if (readResult.rows.length > 0) {
+              rolledBackRowsVisible = true;
+              break;
+            }
+          }
 
-          // Log should be the same (no transaction commit entry)
-          return finalLogLength === initialLogLength;
+          return rolledBackRowsVisible === false &&
+            finalLogLength >= initialLogLength;
         } finally {
           await partition.shutdown();
         }

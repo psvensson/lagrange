@@ -17,6 +17,13 @@ import {
 } from '../../src/constants/index.js';
 import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
+import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+} from '../../src/control-plane/control-plane-readiness-constants.js';
+import {
+  createMockControlPlaneReadinessService,
+  createMockTransactionCoordinator,
+} from './test-helpers.js';
 
 function initEnv() {
   ConfigurationManager.resetInstance();
@@ -95,7 +102,33 @@ test('Message-group operation routing integration', async (t) => {
             return [];
           },
         },
+        controlPlaneReadinessService: {
+          getNodeReadinessSync(nodeId) {
+            return {
+              nodeId,
+              dimensions: {
+                [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+                [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: true,
+              },
+            };
+          },
+        },
         rebalanceCoordinator: {
+          claimDispatchTransition: async () => ({
+            operationId: opRow.operation_id,
+            type: opRow.type,
+            partitionId: opRow.partition_id,
+            replicaId: opRow.replica_id,
+            sourceNodeId: opRow.source_node_id,
+            targetNodeId: opRow.target_node_id,
+            status: opRow.status,
+            workflowStep: opRow.workflow_step,
+            createdAt: opRow.created_at,
+            updatedAt: opRow.updated_at,
+            entityType: opRow.entity_type,
+            entityId: opRow.entity_id,
+            stepsHistory: [],
+          }),
           executeOperation: async (operation) => {
             receivedOperation = operation;
           },
@@ -146,6 +179,15 @@ test('Message-group operation routing integration', async (t) => {
         },
         sqlQueryEngine: {
           executeQuery: async () => ({success: true, rows: [], changes: 1}),
+        },
+        transactionCoordinator: createMockTransactionCoordinator(),
+        controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+        storageAdmissionService: {
+          checkAdd: async () => ({allowed: true, decisionType: 'admitted'}),
+          checkReplace: async () => ({allowed: true, decisionType: 'admitted'}),
+        },
+        storageAccountingService: {
+          estimateReplicaBytes: () => 1,
         },
         enableTimeouts: false,
       });
@@ -211,6 +253,15 @@ test('Message-group operation routing integration', async (t) => {
             }
             return {success: true, rows: []};
           },
+        },
+        transactionCoordinator: createMockTransactionCoordinator(),
+        controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+        storageAdmissionService: {
+          checkAdd: async () => ({allowed: true, decisionType: 'admitted'}),
+          checkReplace: async () => ({allowed: true, decisionType: 'admitted'}),
+        },
+        storageAccountingService: {
+          estimateReplicaBytes: () => 1,
         },
         enableTimeouts: false,
       });

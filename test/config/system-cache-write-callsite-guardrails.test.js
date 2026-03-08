@@ -15,6 +15,7 @@ const SANCTIONED_APPLY_CALL_COUNTS = Object.freeze({
   'bootstrap/phases/create-message-group-phase.js': 1,
   'bootstrap/phases/query-system-state-phase.js': 2,
   'cdc/cdc-integration-service.js': 2,
+  'control-plane/control-plane-readiness-service.js': 2,
   'message-group/cdc-handler.js': 1,
   'node/replica-handler.js': 1,
 });

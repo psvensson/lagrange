@@ -36,6 +36,9 @@ import {
 import {
   StoragePressureBehavior,
 } from '../../src/rebalancer/storage-pressure-behavior.js';
+import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+} from '../../src/control-plane/control-plane-readiness-constants.js';
 
 // --- Helpers ---
 
@@ -74,6 +77,34 @@ function createAccountingWithCache(cache) {
   });
   accounting.initialize({systemTableCache: cache});
   return accounting;
+}
+
+function createAlwaysReadyReadinessService(cache) {
+  return {
+    getNodeRow(nodeId) {
+      return cache.get(TABLES.NODES, nodeId) || null;
+    },
+    getNodeReadinessSync(nodeId) {
+      return {
+        nodeId,
+        dimensions: {
+          [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+          [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: true,
+        },
+      };
+    },
+    async getNodeReadiness(nodeId) {
+      return this.getNodeReadinessSync(nodeId);
+    },
+  };
+}
+
+function createAdmissionService(accounting, cache) {
+  return new StorageAdmissionService({
+    accountingService: accounting,
+    systemTableCache: cache,
+    controlPlaneReadinessService: createAlwaysReadyReadinessService(cache),
+  });
 }
 
 function setupNode(cache, nodeId, budgetBytes) {
@@ -375,9 +406,7 @@ test('PBT: non-critical admission never allows at or above hard ' +
         const accounting = createAccountingWithCache(cache);
         setupNode(cache, 'pbt-nc', budget);
 
-        const admission = new StorageAdmissionService({
-          accountingService: accounting,
-        });
+        const admission = createAdmissionService(accounting, cache);
 
         const result = await admission.checkAdd({
           targetNodeId: 'pbt-nc',
@@ -421,9 +450,7 @@ test('PBT: critical replace allows up to emergency headroom limit',
           const accounting = createAccountingWithCache(cache);
           setupNode(cache, 'pbt-cr', budget);
 
-          const admission = new StorageAdmissionService({
-            accountingService: accounting,
-          });
+          const admission = createAdmissionService(accounting, cache);
 
           const result = await admission.checkReplace({
             targetNodeId: 'pbt-cr',
@@ -469,9 +496,7 @@ test('e2e: node registers budget, snapshot shows capacity, ' +
   t.equal(snapshot.pressureState, PRESSURE_STATE.NORMAL);
 
   // Step 3: admission allows placement
-  const admission = new StorageAdmissionService({
-    accountingService: accounting,
-  });
+  const admission = createAdmissionService(accounting, cache);
   const result = await admission.checkAdd({
     targetNodeId: 'node-e2e',
     estimatedBytes: NUM.HUNDRED,
@@ -495,9 +520,7 @@ test('e2e: node at hard pressure denies non-critical, allows ' +
   addPartitionService(cache, 'svc-big', 'node-hp', 'p-big');
   // used: max(800, 10) + 5 = 805
 
-  const admission = new StorageAdmissionService({
-    accountingService: accounting,
-  });
+  const admission = createAdmissionService(accounting, cache);
 
   // Non-critical: 805 + 100 = 905 -> 90.5% > 85% -> deny
   const nonCritical = await admission.checkAdd({
@@ -533,9 +556,7 @@ test('e2e: split deferred when capacity insufficient, succeeds ' +
   // Tiny budget: split will exceed
   setupNode(cache, 'node-split', NUM.THIRTY);
 
-  const admission = new StorageAdmissionService({
-    accountingService: accounting,
-  });
+  const admission = createAdmissionService(accounting, cache);
 
   // Split estimate: max(20, 10) + 5 = 25, * default amp 2 = 50
   // 50 / 30 = 166% -> deny
@@ -589,9 +610,7 @@ test('e2e: reservation counts toward used capacity in admission',
     // Add active reservation for 50 bytes
     addReservation(cache, 'res-1', 'node-res', NUM.FIVE * NUM.TEN);
 
-    const admission = new StorageAdmissionService({
-      accountingService: accounting,
-    });
+    const admission = createAdmissionService(accounting, cache);
 
     // reserved=50, request=40 -> total 90% > 85% -> deny
     const result = await admission.checkAdd({
@@ -627,9 +646,7 @@ test('e2e: expired reservation does not count toward capacity',
       {expiresAt: NUM.ONE},
     );
 
-    const admission = new StorageAdmissionService({
-      accountingService: accounting,
-    });
+    const admission = createAdmissionService(accounting, cache);
 
     // Expired reservation ignored: request=90 -> 90% > 85% -> deny
     const large = await admission.checkAdd({
@@ -725,9 +742,7 @@ test('e2e: observe mode overrides denial to allow', async (t) => {
 
   setupNode(cache, 'node-obs', NUM.HUNDRED);
 
-  const admission = new StorageAdmissionService({
-    accountingService: accounting,
-  });
+  const admission = createAdmissionService(accounting, cache);
 
   // Request 90 bytes -> 90% > 85% hard -> would deny in enforce
   const result = await admission.checkAdd({
@@ -811,9 +826,7 @@ test('e2e: admission with multiple service types on same node',
       .getCapacitySnapshotForNode('node-multi');
     t.equal(snapshot.usedBytes, 78);
 
-    const admission = new StorageAdmissionService({
-      accountingService: accounting,
-    });
+    const admission = createAdmissionService(accounting, cache);
 
     // 78 + 100 = 178 -> 89% > 85% -> deny
     const denied = await admission.checkAdd({

@@ -226,6 +226,7 @@ test('Property 10: State filtering reflects node state updates', async (t) => {
             connection_state: 'joining',
             ready_lease_expires_at: now - 1000,
             address: 'ws://localhost:3000',
+            updated_at: now,
           };
           cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, node);
           nodeStates.set(nodeId, {
@@ -235,7 +236,8 @@ test('Property 10: State filtering reflects node state updates', async (t) => {
         }
 
         // Apply state updates
-        for (const update of stateUpdates) {
+        for (let updateIndex = 0; updateIndex < stateUpdates.length; updateIndex++) {
+          const update = stateUpdates[updateIndex];
           const nodeIndex = update.nodeIndex % nodeIds.length;
           const nodeId = nodeIds[nodeIndex];
           const leaseExpiry = update.newState === 'ready' ? now + 10_000 : now - 1000;
@@ -243,6 +245,7 @@ test('Property 10: State filtering reflects node state updates', async (t) => {
             node_id: nodeId,
             connection_state: update.newState,
             ready_lease_expires_at: leaseExpiry,
+            updated_at: now + updateIndex + 1,
           };
           cache.applySystemTableChange('nodes', CDC_OPERATIONS.UPDATE, updateData);
           nodeStates.set(nodeId, {

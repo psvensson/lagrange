@@ -46,6 +46,10 @@ import {
 } from './runtime/control-plane-rollout-controls.js';
 import {createManagedSplitMetricsProvider} from
   './partition/managed-split-metrics-provider.js';
+import {PARTITION_SERVICE_EVENT} from
+  './partition/partition-service-constants.js';
+import {wireMigrationWorkflowOwners} from
+  './migration/migration-composition.js';
 
 // Re-export modules for external use
 export * from './query/index.js';
@@ -70,6 +74,16 @@ export * from './storage/index.js';
  */
 export const VERSION = ENTRYPOINT_VERSION;
 const CONTROL_PLANE_WRITE_FAILURE_THRESHOLD = 3;
+const MIGRATION_RECOVERY_REASON = Object.freeze({
+  NODE_RESTART: 'node_restart',
+  LEADER_ELECTED: 'leader_elected',
+});
+const MIGRATION_RECOVERY_LOG_MSG = Object.freeze({
+  SKIPPED: 'Schema migration recovery skipped: migration coordinator unavailable',
+  START: 'Starting schema migration recovery',
+  COMPLETE: 'Schema migration recovery completed',
+  FAILED: 'Schema migration recovery failed',
+});
 
 /**
  * Check for version flag.
@@ -158,6 +172,101 @@ function createSqlCallbackWasmExecutor() {
   return new WasmExecutor({
     moduleMirror: new ModuleMirror(),
   });
+}
+
+/**
+ * Run migration recovery if the SQL engine has a migration coordinator.
+ * @param {Object|null} sqlQueryEngine
+ * @param {Object} logger
+ * @param {string} reason
+ * @return {Promise<void>}
+ */
+async function recoverMigrationsForReason(sqlQueryEngine, logger, reason) {
+  const migrationCoordinator = sqlQueryEngine?.migrationCoordinator || null;
+  if (!migrationCoordinator ||
+      typeof migrationCoordinator.recoverMigrations !== 'function') {
+    logger.debug(MIGRATION_RECOVERY_LOG_MSG.SKIPPED, {reason});
+    return;
+  }
+  logger.info(MIGRATION_RECOVERY_LOG_MSG.START, {reason});
+  try {
+    const recoveryResult = await migrationCoordinator.recoverMigrations();
+    logger.info(MIGRATION_RECOVERY_LOG_MSG.COMPLETE, {
+      reason,
+      recoveredCount: recoveryResult?.recovered || 0,
+    });
+  } catch (error) {
+    logger.error(MIGRATION_RECOVERY_LOG_MSG.FAILED, {
+      reason,
+      error: error.message,
+    });
+  }
+}
+
+/**
+ * Attach migration recovery to partition leader-election events.
+ * @param {Object} options
+ * @param {Object|null} options.sqlQueryEngine
+ * @param {Map|string|Object|null} options.partitionServices
+ * @param {Object} options.logger
+ * @return {Function}
+ */
+function wireMigrationRecoveryOnLeaderElection(options = {}) {
+  const sqlQueryEngine = options.sqlQueryEngine || null;
+  const partitionServices = options.partitionServices || null;
+  const logger = options.logger || console;
+  if (!sqlQueryEngine ||
+      !partitionServices ||
+      typeof partitionServices.values !== 'function') {
+    return () => {};
+  }
+
+  let recoveryInFlight = null;
+  const triggerRecovery = (reason) => {
+    if (recoveryInFlight) {
+      return recoveryInFlight;
+    }
+    recoveryInFlight = recoverMigrationsForReason(
+      sqlQueryEngine,
+      logger,
+      reason,
+    ).finally(() => {
+      recoveryInFlight = null;
+    });
+    return recoveryInFlight;
+  };
+  const handlers = [];
+  for (const partitionService of partitionServices.values()) {
+    if (!partitionService || typeof partitionService.on !== 'function') {
+      continue;
+    }
+    const handler = () => {
+      void triggerRecovery(MIGRATION_RECOVERY_REASON.LEADER_ELECTED);
+    };
+    partitionService.on(PARTITION_SERVICE_EVENT.LEADER_ELECTED, handler);
+    handlers.push({
+      partitionService,
+      handler,
+    });
+  }
+
+  void triggerRecovery(MIGRATION_RECOVERY_REASON.NODE_RESTART);
+
+  return () => {
+    for (const entry of handlers) {
+      if (typeof entry.partitionService?.off === 'function') {
+        entry.partitionService.off(
+          PARTITION_SERVICE_EVENT.LEADER_ELECTED,
+          entry.handler,
+        );
+      } else if (typeof entry.partitionService?.removeListener === 'function') {
+        entry.partitionService.removeListener(
+          PARTITION_SERVICE_EVENT.LEADER_ELECTED,
+          entry.handler,
+        );
+      }
+    }
+  };
 }
 
 /**
@@ -600,6 +709,7 @@ async function main() {
 
     // Create SQL query engine for transparent query routing
     let sqlQueryEngine = null;
+    let detachJoinMigrationRecovery = () => {};
     if (joinResult.messageRouter) {
       const {SQLQueryEngine} = await import('./query/sql-query-engine.js');
       const wasmExecutor = createSqlCallbackWasmExecutor();
@@ -612,6 +722,14 @@ async function main() {
         runtimeDriverRegistry: nodeJoiningService.runtimeDriverRegistry,
         serviceRuntimeLifecycle: nodeJoiningService.serviceRuntimeLifecycle,
         wasmExecutor,
+        migrationAutoWire: false,
+      });
+      wireMigrationWorkflowOwners({
+        sqlCore: sqlQueryEngine,
+        systemTableCache,
+        transactionCoordinator: sqlQueryEngine.transactionCoordinator,
+        logger: mainLogger,
+        now: () => Date.now(),
       });
       const {PartitionSplitMergeManager} =
         await import('./partition/partition-split-merge-manager.js');
@@ -631,6 +749,11 @@ async function main() {
           null,
       });
       sqlQueryEngine.setPartitionSplitMergeManager(partitionSplitMergeManager);
+      detachJoinMigrationRecovery = wireMigrationRecoveryOnLeaderElection({
+        sqlQueryEngine,
+        partitionServices: joinResult.partitionServices,
+        logger: mainLogger,
+      });
     }
     bootstrapAPI.setSqlQueryEngine(sqlQueryEngine);
 
@@ -704,6 +827,7 @@ async function main() {
           null;
         await shutdownLogsTablePersistence(joinLogsTableService, mainLogger);
         shutdownDynamicConfigWiring(joinDynamicConfigWiring, mainLogger);
+        detachJoinMigrationRecovery();
         await nodeJoiningService.cleanup();
         await bootstrapAPI.shutdown();
         await adminAPI.shutdown();
@@ -830,6 +954,7 @@ async function main() {
     // Create SQL query engine for transparent query routing
     const {SQLQueryEngine} = await import('./query/sql-query-engine.js');
     const wasmExecutor = createSqlCallbackWasmExecutor();
+    let detachSeedMigrationRecovery = () => {};
     const sqlQueryEngine = new SQLQueryEngine({
       systemCache: systemTableCache,
       messageRouter: bootstrapResult.messageRouter,
@@ -839,6 +964,14 @@ async function main() {
       runtimeDriverRegistry: bootstrapService.runtimeDriverRegistry,
       serviceRuntimeLifecycle: bootstrapService.serviceRuntimeLifecycle,
       wasmExecutor,
+      migrationAutoWire: false,
+    });
+    wireMigrationWorkflowOwners({
+      sqlCore: sqlQueryEngine,
+      systemTableCache,
+      transactionCoordinator: sqlQueryEngine.transactionCoordinator,
+      logger: mainLogger,
+      now: () => Date.now(),
     });
     const {PartitionSplitMergeManager} =
       await import('./partition/partition-split-merge-manager.js');
@@ -856,6 +989,11 @@ async function main() {
         bootstrapService.rebalanceCoordinator?.storageAccountingService || null,
     });
     sqlQueryEngine.setPartitionSplitMergeManager(partitionSplitMergeManager);
+    detachSeedMigrationRecovery = wireMigrationRecoveryOnLeaderElection({
+      sqlQueryEngine,
+      partitionServices: bootstrapResult.partitionServices,
+      logger: mainLogger,
+    });
 
     const seedDynamicConfigWiring = await startDynamicConfigWiring({
       nodeId: config.get(CONFIG_KEY.NODE_ID),
@@ -931,6 +1069,7 @@ async function main() {
           null;
         await shutdownLogsTablePersistence(seedLogsTableService, mainLogger);
         shutdownDynamicConfigWiring(seedDynamicConfigWiring, mainLogger);
+        detachSeedMigrationRecovery();
         await bootstrapService.shutdown();
         await bootstrapAPI.shutdown();
         await adminAPI.shutdown();

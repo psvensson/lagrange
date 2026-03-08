@@ -400,7 +400,7 @@ test('queryIncompleteOperations prefers cache observation boundary before routed
     }
   });
 
-test('queryExistingInFlightOperation prefers cache observation boundary before routed SQL',
+test('queryExistingInFlightOperation falls back to cache when routed SQL read fails',
   async (t) => {
     let sqlQueryCalls = 0;
     const cacheRows = [
@@ -452,7 +452,11 @@ test('queryExistingInFlightOperation prefers cache observation boundary before r
       sqlQueryEngine: {
         async executeQuery() {
           sqlQueryCalls += 1;
-          throw new Error('routed SQL should not run');
+          return {
+            success: false,
+            error: 'synthetic read failure',
+            rows: [],
+          };
         },
       },
       enableTimeouts: false,
@@ -476,9 +480,9 @@ test('queryExistingInFlightOperation prefers cache observation boundary before r
       t.equal(
         operation?.operationId,
         'op-cache-dedupe-1',
-        'cache observation boundary should answer in-flight dedupe reads',
+        'cache fallback should answer in-flight dedupe reads after SQL failure',
       );
-      t.equal(sqlQueryCalls, 0, 'cache-visible dedupe reads should bypass routed SQL');
+      t.equal(sqlQueryCalls, 1, 'SQL-first dedupe path should attempt one routed read');
     } finally {
       await coordinator.shutdown();
     }

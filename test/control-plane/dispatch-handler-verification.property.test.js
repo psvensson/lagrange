@@ -32,7 +32,11 @@ import {
   DISPATCH_EVENT,
 } from '../../src/control-plane/replica-dispatch-service-constants.js';
 import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+} from '../../src/control-plane/control-plane-readiness-constants.js';
+import {
   OperationType,
+  ReplicaStatus,
 } from '../../src/rebalancer/replica-status.js';
 import {
   ConfigurationManager,
@@ -72,7 +76,7 @@ const removeOperationRowArb = fc.record({
   replica_id: fc.uuid(),
   source_node_id: fc.uuid(),
   target_node_id: fc.uuid(),
-  status: fc.constant(SERVICE_STATUS.ACTIVE),
+  status: fc.constant(ReplicaStatus.PENDING),
   workflow_step: fc.constant(WORKFLOW_STEP.PENDING),
   created_at: fc.integer({min: 1, max: 9999999999}),
   updated_at: fc.integer({min: 1, max: 9999999999}),
@@ -93,7 +97,7 @@ const addOperationRowArb = fc.record({
   replica_id: fc.uuid(),
   source_node_id: fc.uuid(),
   target_node_id: fc.uuid(),
-  status: fc.constant(SERVICE_STATUS.ACTIVE),
+  status: fc.constant(ReplicaStatus.PENDING),
   workflow_step: fc.constant(WORKFLOW_STEP.PENDING),
   created_at: fc.integer({min: 1, max: 9999999999}),
   updated_at: fc.integer({min: 1, max: 9999999999}),
@@ -215,6 +219,23 @@ function createMockDispatchService(options = {}) {
     },
   };
 
+  const mockReadinessService = {
+    getNodeReadinessSync: (nodeId) => {
+      const row = nodeRows.get(nodeId);
+      const ready = !!row &&
+        row[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE &&
+        row[COLUMN.CONNECTION_STATE] === STATE.READY &&
+        Number(row[COLUMN.READY_LEASE_EXPIRES_AT]) > Date.now();
+      return {
+        nodeId,
+        dimensions: {
+          [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: ready,
+          [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: ready,
+        },
+      };
+    },
+  };
+
   const mockSqlQueryEngine = {
     executeQuery: async (sql, params) => {
       if (sql.includes('FROM services')) {
@@ -238,6 +259,7 @@ function createMockDispatchService(options = {}) {
     systemTableCache: mockCache,
     rebalanceCoordinator: mockCoordinator,
     sqlQueryEngine: mockSqlQueryEngine,
+    controlPlaneReadinessService: mockReadinessService,
   });
 
   service.initialize();

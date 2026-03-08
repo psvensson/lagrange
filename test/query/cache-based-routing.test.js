@@ -22,6 +22,7 @@ function createMockSystemCache(partitionIds) {
   const partitions = partitionIds.map((id) => ({
     partition_id: id,
     table_name: 'test_table',
+    leader_node_id: 'node1',
     start_key: '',
     end_key: '',
   }));

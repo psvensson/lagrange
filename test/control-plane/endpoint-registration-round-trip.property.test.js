@@ -71,6 +71,10 @@ test('Property 15: Endpoint registration round-trip',
           };
 
           const mockCdc = {
+            insertSystemTableRow: async (_table, row) => {
+              store.set(row[COLUMN.ENDPOINT_ID], {...row});
+              return {success: true};
+            },
             upsertSystemTableRow: async (_table, row) => {
               store.set(row[COLUMN.ENDPOINT_ID], {...row});
               return {success: true};

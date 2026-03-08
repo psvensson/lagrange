@@ -11,6 +11,8 @@ const TABLES = Object.freeze({
   CONTEXTS: 'contexts',
   CODE: 'code',
   TABLES: 'tables',
+  SCHEMA_MIGRATIONS: 'schema_migrations',
+  SCHEMA_MIGRATION_PARTITIONS: 'schema_migration_partitions',
   NODE_ENDPOINTS: 'node_endpoints',
   SERVICE_DEFINITIONS: 'service_definitions',
   SERVICE_ENDPOINTS: 'service_endpoints',

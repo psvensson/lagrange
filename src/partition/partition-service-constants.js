@@ -95,6 +95,7 @@ const PARTITION_SERVICE_OPERATION = Object.freeze({
   DELETE: 'DELETE',
   UPSERT: 'UPSERT',
   QUERY: 'QUERY',
+  MIGRATION_ALTER_TABLE: 'MIGRATION_ALTER_TABLE',
   BEGIN_TRANSACTION: 'BEGIN_TRANSACTION',
   PREPARE_TRANSACTION: 'PREPARE_TRANSACTION',
   COMMIT: 'COMMIT',
@@ -190,6 +191,10 @@ const PARTITION_SERVICE_LIFERAFT_TIMER = Object.freeze({
 
 const PARTITION_SERVICE_STATUS = Object.freeze({
   INITIATED: 'initiated',
+});
+
+const PARTITION_SERVICE_MIGRATION_OPERATION = Object.freeze({
+  ALTER_TABLE: 'alter_table',
 });
 
 const PARTITION_SERVICE_TYPE = Object.freeze({
@@ -321,6 +326,8 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
   REPLICA_REMOVAL_SELF: 'Replica removal completed (self-removal)',
   RECEIVED_ACK: 'Received ACK in transport response',
   SHUTTING_DOWN: 'Shutting down partition service',
+  MIGRATION_ALTER_TABLE_APPLIED: 'Applied migration ALTER TABLE command',
+  MIGRATION_DEFAULT_REGISTERED: 'Registered migration column default',
 });
 
 const PARTITION_SERVICE_ERROR_MSG = Object.freeze({
@@ -406,6 +413,7 @@ const PARTITION_SERVICE_ERROR_MSG = Object.freeze({
   DELIVERY_NOT_ACK: 'Delivery not acknowledged',
   NESTED_ACK_UNSUPPORTED: 'Nested ACK responses are not supported',
   MESSAGE_DELIVERY_FAILED: 'Message delivery failed',
+  MIGRATION_ALTER_MISSING_SQL: 'Migration ALTER TABLE SQL is required',
 });
 
 const PARTITION_SERVICE_VALUE = Object.freeze({
@@ -449,6 +457,7 @@ export {
   PARTITION_SERVICE_EVENT,
   PARTITION_SERVICE_INIT_STAGE,
   PARTITION_SERVICE_LIFERAFT_TIMER,
+  PARTITION_SERVICE_MIGRATION_OPERATION,
   PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_MESSAGE_TYPE,
   PARTITION_SERVICE_OPERATION,

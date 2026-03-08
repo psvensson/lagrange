@@ -10,6 +10,8 @@ import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {UnifiedRebalancer, EntityType} from
   '../../src/rebalancer/unified-rebalancer.js';
 import {DEFAULT_TABLE_POLICY} from '../../src/policy/policy-constants.js';
+import {CONTROL_PLANE_READINESS_DIMENSION} from
+  '../../src/control-plane/control-plane-readiness-constants.js';
 import {
   initializeTestEnvironment,
   cleanupTestEnvironment,
@@ -55,6 +57,59 @@ function createMockMessageRouter() {
     isOutboundQueueAvailable: () => true,
     pingNode: async () => true,
     deliver: async () => ({acknowledged: true, status: 'initiated'}),
+  };
+}
+
+/**
+ * Create a control-plane readiness service that marks all nodes repair-eligible.
+ * @return {Object} Mock readiness service.
+ */
+function createAlwaysReadyControlPlaneReadinessService() {
+  return {
+    getNodeReadinessSync: () => ({
+      dimensions: {
+        [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+      },
+    }),
+  };
+}
+
+/**
+ * Create a storage accounting service with zero-byte estimates for tests.
+ * @return {Object} Mock storage accounting service.
+ */
+function createMockStorageAccountingService() {
+  return {
+    estimateReplicaBytes: () => 0,
+  };
+}
+
+/**
+ * Create a permissive storage pressure behavior service.
+ * @return {Object} Mock storage pressure behavior service.
+ */
+function createMockStoragePressureBehavior() {
+  return {
+    shouldAllowMove: async () => ({decision: 'allow'}),
+  };
+}
+
+/**
+ * Create a SQL query engine that returns permissive rebalance budget state.
+ * @return {Object} Mock SQL query engine.
+ */
+function createMockSqlQueryEngine() {
+  return {
+    async executeQuery(sql) {
+      const normalizedSql = String(sql || '').toLowerCase();
+      if (normalizedSql.includes('from config')) {
+        return {success: true, rows: [{config_value: '10'}]};
+      }
+      if (normalizedSql.includes('from replica_operations')) {
+        return {success: true, rows: [{total_count: 0}]};
+      }
+      return {success: true, rows: []};
+    },
   };
 }
 
@@ -154,6 +209,10 @@ test('Three-node partition rebalance', async (t) => {
       nodeId: seedNodeId,
       messageRouter: createMockMessageRouter(),
       rebalanceCoordinator: createMockRebalanceCoordinator(operations),
+      controlPlaneReadinessService: createAlwaysReadyControlPlaneReadinessService(),
+      storageAccountingService: createMockStorageAccountingService(),
+      storagePressureBehavior: createMockStoragePressureBehavior(),
+      sqlQueryEngine: createMockSqlQueryEngine(),
     });
     rebalancer.initialize();
     rebalancer.setLeader(true);

@@ -162,6 +162,23 @@ function buildRecoverableWorkflow(options = {}) {
         };
       },
     },
+    probeInitialTablePartitionProvisioning: async ({
+      targetNodeIds,
+      minimumRoutableReplicaCount,
+    }) => {
+      const admittedTargetNodeIds = targetNodeIds.slice(
+        0,
+        Math.max(minimumRoutableReplicaCount, 1),
+      );
+      return {
+        existingRoutableNodeIds: [FIXTURE_NODE_ID],
+        candidateTargetNodeIds: targetNodeIds,
+        admittedTargetNodeIds,
+        rejectedTargetNodePlans: [],
+        maximumProvisionableReplicaCount:
+          admittedTargetNodeIds.length + 1,
+      };
+    },
     waitForTablePartitionMetadata: async () => {},
     provisionInitialTablePartition: async () => {},
     startSplitReplicationOnSourcePartition: async (
@@ -219,7 +236,7 @@ test('split progress stored in process memory is lost after ' +
     'workflow should have persisted SPLIT_BACKFILLING state durably',
   );
   t.ok(
-    backfillingPersist.metadata[
+    backfillingPersist?.metadata?.[
       PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_ID
     ],
     'persisted workflow should carry the workflow identity',

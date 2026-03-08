@@ -24,6 +24,8 @@ import {ReplicaLifecycleManager} from '../../src/node/replica-lifecycle-manager.
 import {MessageRouter} from '../../src/transport/message-router.js';
 import {DEFAULT_TABLE_POLICY} from '../../src/policy/policy-constants.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {CONTROL_PLANE_READINESS_DIMENSION} from
+  '../../src/control-plane/control-plane-readiness-constants.js';
 
 // Port counter for unique ports per test
 let integrationPortCounter = 25000;
@@ -168,9 +170,45 @@ function createMockRebalanceCoordinator() {
 
 function createMockSqlQueryEngine() {
   return {
-    async executeQuery() {
+    async executeQuery(sql) {
+      const normalizedSql = String(sql || '').toLowerCase();
+      if (normalizedSql.includes('from config')) {
+        return {success: true, rows: [{config_value: '10'}]};
+      }
+      if (normalizedSql.includes('from replica_operations')) {
+        return {success: true, rows: [{total_count: 0}]};
+      }
       return {success: true, rows: []};
     },
+  };
+}
+
+function createAlwaysReadyControlPlaneReadinessService() {
+  return {
+    getNodeReadinessSync: () => ({
+      dimensions: {
+        [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+      },
+    }),
+  };
+}
+
+function createMockStorageAdmissionService() {
+  return {
+    checkAdd: async () => ({decision: 'allow'}),
+    checkReplace: async () => ({decision: 'allow'}),
+  };
+}
+
+function createMockStorageAccountingService() {
+  return {
+    estimateReplicaBytes: () => 1,
+  };
+}
+
+function createMockStoragePressureBehavior() {
+  return {
+    shouldAllowMove: async () => ({decision: 'allow'}),
   };
 }
 
@@ -207,6 +245,7 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
         seedRouter: null,
         secondNodeRouter: null,
         secondNodeLifecycleManager: null,
+        partitionRebalancer: null,
       };
 
       try {
@@ -440,9 +479,28 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
 
         resources.seedPartition.setSystemTableCache(systemTableCache);
 
-        // Directly call rebalance() to bypass stabilization period for testing
-        // In production, triggerRebalanceCheck() would be used which respects stabilization
-        const rebalanceResult = await resources.seedPartition.rebalancer.rebalance('node_join');
+        resources.partitionRebalancer = new UnifiedRebalancer({
+          entityId: partitionId,
+          entityType: EntityType.PARTITION,
+          systemTableCache,
+          cdcIntegrationService,
+          tablePolicyService,
+          nodeId: seedNodeId,
+          messageRouter: resources.seedRouter,
+          rebalanceCoordinator: createMockRebalanceCoordinator(),
+          controlPlaneReadinessService:
+            createAlwaysReadyControlPlaneReadinessService(),
+          storageAdmissionService: createMockStorageAdmissionService(),
+          storageAccountingService: createMockStorageAccountingService(),
+          storagePressureBehavior: createMockStoragePressureBehavior(),
+          sqlQueryEngine: createMockSqlQueryEngine(),
+        });
+        resources.partitionRebalancer.initialize();
+        resources.partitionRebalancer.setLeader(true);
+
+        // Directly call rebalance() to bypass stabilization period for testing.
+        const rebalanceResult =
+          await resources.partitionRebalancer.rebalance('node_join');
 
         // ========================================
         // PHASE 7: Verify results
@@ -468,6 +526,10 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
         // ========================================
         if (resources.secondNodeLifecycleManager) {
           resources.secondNodeLifecycleManager.shutdown();
+        }
+        if (resources.partitionRebalancer) {
+          resources.partitionRebalancer.cancelScheduledCheck();
+          resources.partitionRebalancer.shutdown();
         }
         if (resources.seedPartition) {
           resources.seedPartition.rebalancer?.cancelScheduledCheck();
@@ -632,6 +694,12 @@ test('Cross-node replica placement integration tests', {timeout: 15000}, async (
         nodeId,
         messageRouter: createMockMessageRouter(),
         rebalanceCoordinator: createMockRebalanceCoordinator(),
+        controlPlaneReadinessService:
+          createAlwaysReadyControlPlaneReadinessService(),
+        storageAdmissionService: createMockStorageAdmissionService(),
+        storageAccountingService: createMockStorageAccountingService(),
+        storagePressureBehavior: createMockStoragePressureBehavior(),
+        sqlQueryEngine: createMockSqlQueryEngine(),
       });
 
       rebalancer.initialize();

@@ -32,6 +32,10 @@ import {
 } from '../../src/rebalancer/replica-operation-constants.js';
 import {DurableWorkflowCoordinator} from
   '../../src/workflow/durable-workflow-coordinator.js';
+import {
+  createMockControlPlaneReadinessService,
+  createMockTransactionCoordinator,
+} from './test-helpers.js';
 
 /**
  * Test-local constants for fixture identities.
@@ -186,6 +190,8 @@ test('executor-side replica creation succeeds but owner-side ' +
         return {success: true, rows: [], changes: 1};
       },
     },
+    transactionCoordinator: createMockTransactionCoordinator(),
+    controlPlaneReadinessService: createMockControlPlaneReadinessService(),
     enableTimeouts: false,
   });
   coordinator.initialize();

@@ -20,6 +20,8 @@ import {
   createMockPolicyService,
   createMockMessageRouter,
   createMockCdcService,
+  createMockControlPlaneReadinessService,
+  createMockTransactionCoordinator,
 } from './test-helpers.js';
 
 function createTestCoordinatorWithPersistence() {
@@ -90,18 +92,44 @@ function createTestCoordinatorWithPersistence() {
         return {success: true, rows: op ? [op] : []};
       }
 
-      if (sql.includes('replica_operations') && sql.includes('NOT IN')) {
-        if (sql.includes('type = ?')) {
-          const [type] = params;
-          const allOps = Array.from(persistedOperations.values());
-          const matching = allOps.filter((op) =>
-            op.type === type &&
-            !['active', 'removed', 'failed'].includes(op.status));
-          return {success: true, rows: matching};
-        }
+      if (sql.includes('SELECT * FROM replica_operations') &&
+          sql.includes('WHERE type = ?')) {
+        const [type] = params;
         const allOps = Array.from(persistedOperations.values());
-        const incompleteOps = allOps.filter((op) =>
-          !['active', 'removed', 'failed'].includes(op.status));
+        const matching = allOps.filter((op) => op.type === type);
+        return {success: true, rows: matching};
+      }
+
+      if (sql.includes('replica_operations') &&
+          sql.includes('source_node_id = ?') &&
+          sql.includes('workflow_step IN')) {
+        const [
+          sourceNodeId,
+          pendingStep,
+          sendingStep,
+          creatingStep,
+          syncingStep,
+          stoppingStep,
+          activeStep,
+          replaceType,
+        ] = params;
+        const inFlightSteps = new Set([
+          pendingStep,
+          sendingStep,
+          creatingStep,
+          syncingStep,
+          stoppingStep,
+        ]);
+        const allOps = Array.from(persistedOperations.values());
+        const incompleteOps = allOps.filter((op) => {
+          if (op.source_node_id !== sourceNodeId) {
+            return false;
+          }
+          if (inFlightSteps.has(op.workflow_step)) {
+            return true;
+          }
+          return op.workflow_step === activeStep && op.type === replaceType;
+        });
         return {success: true, rows: incompleteOps};
       }
 
@@ -121,6 +149,15 @@ function createTestCoordinatorWithPersistence() {
     tablePolicyService: createMockPolicyService(),
     messageRouter: createMockMessageRouter(),
     sqlQueryEngine,
+    transactionCoordinator: createMockTransactionCoordinator(),
+    controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+    storageAdmissionService: {
+      checkAdd: async () => ({allowed: true, decisionType: 'admitted'}),
+      checkReplace: async () => ({allowed: true, decisionType: 'admitted'}),
+    },
+    storageAccountingService: {
+      estimateReplicaBytes: () => 1,
+    },
     enableTimeouts: false,
   });
 

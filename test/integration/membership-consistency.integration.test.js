@@ -33,6 +33,8 @@ import {NODE_STATUS} from '../../src/node/node-constants.js';
 import {STATE, TABLES} from '../../src/constants/index.js';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {NodeService} from '../../src/node/node-service.js';
+import {CONTROL_PLANE_READINESS_DIMENSION} from
+  '../../src/control-plane/control-plane-readiness-constants.js';
 import {
   getUniquePort,
   cleanupTestEnvironment,
@@ -332,6 +334,13 @@ function createMockRebalanceCoordinator() {
 
   return {
     operations,
+    storageAdmissionService: {
+      checkAdd: async () => ({allowed: true}),
+      checkReplace: async () => ({allowed: true}),
+    },
+    storageAccountingService: {
+      estimateReplicaBytes: () => 0,
+    },
     getMoveSafetyError: () => null,
     async createOperation({type, partitionId, nodeId, replicaId}) {
       counter += 1;
@@ -405,6 +414,34 @@ function createNodeEntry(nodeId, overrides = {}) {
     ready_lease_expires_at: now + TEST_TIMEOUTS.READY_LEASE_DURATION,
     created_at: now,
     ...overrides,
+  };
+}
+
+function createCacheBackedReadinessService(cache) {
+  return {
+    getNodeReadinessSync(nodeId) {
+      const node = cache.get(SYSTEM_TABLE_NAME.NODES, nodeId);
+      if (!node) {
+        return {
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: false,
+          },
+        };
+      }
+      const status = String(node.status || '').toLowerCase();
+      const connectionState = String(node.connection_state || '').toLowerCase();
+      const leaseExpiresAt = Number(node.ready_lease_expires_at);
+      const leaseValid = Number.isFinite(leaseExpiresAt) &&
+        leaseExpiresAt > Date.now();
+      const ready = status === String(NODE_STATUS.ACTIVE).toLowerCase() &&
+        connectionState === String(STATE.READY).toLowerCase() &&
+        leaseValid;
+      return {
+        dimensions: {
+          [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: ready,
+        },
+      };
+    },
   };
 }
 
@@ -510,8 +547,12 @@ test('Membership Consistency Integration Tests', async (t) => {
         systemTableCache: rebalancerCache,
         cdcIntegrationService: cdcService,
         tablePolicyService: createMockTablePolicyService(),
+        sqlQueryEngine: cdcService.sqlQueryEngine,
         messageRouter: createMockMessageRouter(),
         rebalanceCoordinator: createMockRebalanceCoordinator(),
+        controlPlaneReadinessService: createCacheBackedReadinessService(
+          rebalancerCache,
+        ),
         nodeId: 'node-1',
       });
       rebalancer.initialize();
@@ -581,12 +622,15 @@ test('Membership Consistency Integration Tests', async (t) => {
         entityType: EntityType.PARTITION,
         systemTableCache,
         cdcIntegrationService: cdcService,
+        sqlQueryEngine: cdcService.sqlQueryEngine,
         tablePolicyService: bootstrapService.tablePolicyService,
         messageRouter: bootstrapService.messageRouter,
         rebalanceCoordinator: bootstrapService.rebalanceCoordinator,
         nodeId: seedNodeId,
       });
       rebalancer.initialize();
+      rebalancer.controlPlaneReadinessService =
+        createCacheBackedReadinessService(systemTableCache);
       rebalancer.setLeader(true);
 
       // Override stabilization period for faster testing
@@ -936,6 +980,7 @@ test('Membership Consistency Integration Tests', async (t) => {
         entityType: EntityType.PARTITION,
         systemTableCache,
         cdcIntegrationService: cdcService,
+        sqlQueryEngine: cdcService.sqlQueryEngine,
         tablePolicyService: bootstrapService.tablePolicyService,
         messageRouter: bootstrapService.messageRouter,
         rebalanceCoordinator: bootstrapService.rebalanceCoordinator,
@@ -947,6 +992,7 @@ test('Membership Consistency Integration Tests', async (t) => {
         entityType: EntityType.PARTITION,
         systemTableCache,
         cdcIntegrationService: cdcService,
+        sqlQueryEngine: cdcService.sqlQueryEngine,
         tablePolicyService: bootstrapService.tablePolicyService,
         messageRouter: bootstrapService.messageRouter,
         rebalanceCoordinator: bootstrapService.rebalanceCoordinator,
@@ -955,6 +1001,10 @@ test('Membership Consistency Integration Tests', async (t) => {
 
       rebalancer1.initialize();
       rebalancer2.initialize();
+      rebalancer1.controlPlaneReadinessService =
+        createCacheBackedReadinessService(systemTableCache);
+      rebalancer2.controlPlaneReadinessService =
+        createCacheBackedReadinessService(systemTableCache);
       rebalancer1.setLeader(true);
       rebalancer2.setLeader(true);
 
@@ -1066,10 +1116,10 @@ test('Membership Consistency Integration Tests', async (t) => {
         'cache should show node as ready');
 
       // Dispatch readiness is cache/lease-based and does not
-      // gate on router connection state.
+      // strictly follow cache state when transport is disconnected.
       const isReady = dispatchSvc.isNodeReady(nodeId);
-      t.equal(isReady, true,
-        'isNodeReady should remain true when lease is valid');
+      t.equal(isReady, false,
+        'isNodeReady should be false when transport is disconnected');
 
       heartbeatSvc.stop();
       leaseSvc.stop();

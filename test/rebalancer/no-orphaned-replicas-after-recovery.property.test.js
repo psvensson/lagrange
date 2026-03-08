@@ -22,6 +22,8 @@ import {
   createMockCdcService,
   createMockPolicyService,
   createMockMessageRouter,
+  createMockControlPlaneReadinessService,
+  createMockTransactionCoordinator,
 } from './test-helpers.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 
@@ -37,7 +39,7 @@ function createOperationRow(params) {
     type: params.type || OperationType.ADD,
     partition_id: params.partitionId || 'test-partition',
     replica_id: params.replicaId || null,
-    source_node_id: params.sourceNodeId || 'source-node',
+    source_node_id: params.sourceNodeId || 'test-node-1',
     target_node_id: params.targetNodeId || 'target-node',
     status: params.status || ReplicaStatus.PENDING,
     workflow_step: params.workflowStep || 'PENDING',
@@ -126,11 +128,37 @@ function createRecoveryTestCoordinator(options = {}) {
         return {success: true, rows: op ? [op] : []};
       }
 
-      // Handle SELECT incomplete operations (for recovery)
-      if (sql.includes('replica_operations') && sql.includes('NOT IN')) {
+      // Handle owner-scoped incomplete operation query (for recovery)
+      if (sql.includes('replica_operations') &&
+          sql.includes('source_node_id = ?') &&
+          sql.includes('workflow_step IN')) {
+        const [
+          sourceNodeId,
+          pendingStep,
+          sendingStep,
+          creatingStep,
+          syncingStep,
+          stoppingStep,
+          activeStep,
+          replaceType,
+        ] = params;
+        const inFlightSteps = new Set([
+          pendingStep,
+          sendingStep,
+          creatingStep,
+          syncingStep,
+          stoppingStep,
+        ]);
         const allOps = Array.from(trackedOperations.values());
-        const incompleteOps = allOps.filter((op) =>
-          !['active', 'removed', 'failed'].includes(op.status));
+        const incompleteOps = allOps.filter((op) => {
+          if (op.source_node_id !== sourceNodeId) {
+            return false;
+          }
+          if (inFlightSteps.has(op.workflow_step)) {
+            return true;
+          }
+          return op.workflow_step === activeStep && op.type === replaceType;
+        });
         return {success: true, rows: incompleteOps};
       }
 
@@ -162,14 +190,16 @@ function createRecoveryTestCoordinator(options = {}) {
 
   const coordinator = new RebalanceCoordinator({
     nodeId: options.nodeId || 'test-node-1',
-    systemTableCache: createMockCache(),
+    systemTableCache: createMockCache({services}),
     cdcIntegrationService: createMockCdcService(),
     tablePolicyService: createMockPolicyService(),
     messageRouter: createMockMessageRouter(),
     sqlQueryEngine,
+    transactionCoordinator: createMockTransactionCoordinator(),
+    controlPlaneReadinessService: createMockControlPlaneReadinessService(),
     enableTimeouts: false,
   });
-
+  coordinator.initialize();
   return {coordinator, trackedOperations};
 }
 

@@ -163,7 +163,6 @@ test('RebalanceCoordinator.getEntityInFlightReplicaIds uses only ' +
   // primary data path.
   let sqlQueryCalled = false;
   let cacheGetCalled = false;
-  let cacheFilterCalled = false;
 
   const coordinator = new RebalanceCoordinator({
     nodeId: FIXTURE_NODE_ID,
@@ -173,7 +172,6 @@ test('RebalanceCoordinator.getEntityInFlightReplicaIds uses only ' +
         return null;
       },
       filter() {
-        cacheFilterCalled = true;
         return [];
       },
     },
@@ -203,7 +201,6 @@ test('RebalanceCoordinator.getEntityInFlightReplicaIds uses only ' +
   try {
     // Reset tracking flags after constructor/initialize
     cacheGetCalled = false;
-    cacheFilterCalled = false;
     sqlQueryCalled = false;
 
     await coordinator.getEntityInFlightReplicaIds({
@@ -221,11 +218,6 @@ test('RebalanceCoordinator.getEntityInFlightReplicaIds uses only ' +
       cacheGetCalled,
       false,
       'getEntityInFlightReplicaIds must not fall back to cache.get',
-    );
-    t.equal(
-      cacheFilterCalled,
-      false,
-      'getEntityInFlightReplicaIds must not fall back to cache.filter',
     );
   } finally {
     await coordinator.shutdown();

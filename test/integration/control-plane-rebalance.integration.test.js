@@ -32,6 +32,19 @@ import {
   waitFor,
 } from './helpers/cluster-test-helpers.js';
 
+function createMockStorageAdmissionService() {
+  return {
+    checkAdd: async () => ({allowed: true}),
+    checkReplace: async () => ({allowed: true}),
+  };
+}
+
+function createMockStorageAccountingService() {
+  return {
+    estimateReplicaBytes: () => 1,
+  };
+}
+
 async function shutdownOrFail(t, promise, label) {
   try {
     await promise;
@@ -171,6 +184,8 @@ test('Control plane dispatch integration', async (t) => {
         messageRouter: realMessageRouter,
         tablePolicyService,
         sqlQueryEngine,
+        storageAdmissionService: createMockStorageAdmissionService(),
+        storageAccountingService: createMockStorageAccountingService(),
         enableTimeouts: false,
       });
       rebalanceCoordinator.initialize();

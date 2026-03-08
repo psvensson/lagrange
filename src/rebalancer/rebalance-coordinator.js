@@ -546,6 +546,24 @@ class RebalanceCoordinator extends EventEmitter {
     entityId,
     move,
   ) {
+    const result = await this.executeReplicaOperationsRead(
+      SQL.SELECT_IN_FLIGHT_FOR_ENTITY_NODE,
+      [partitionId, targetNodeId, entityType, entityId],
+    );
+
+    if (result.success && Array.isArray(result.rows)) {
+      if (result.rows.length === NUM.ZERO) {
+        return null;
+      }
+
+      const operations = result.rows.map((row) => this.rowToOperation(row));
+      return operations.find((operation) => {
+        return !this.isOperationTerminal(operation) &&
+          this.operationMatchesMoveIntent(operation, move, entityType, entityId);
+      }) || null;
+    }
+
+    // Fallback path for degraded SQL-read conditions.
     const cachedRows = this.filterReplicaOperationRowsFromCache((row) => {
       if (!row ||
           row.partition_id !== partitionId ||
@@ -559,33 +577,19 @@ class RebalanceCoordinator extends EventEmitter {
         row.entity_type === undefined ||
         row.entity_type === '';
     });
-    if (cachedRows !== null) {
-      const cachedOperations =
-        cachedRows.map((row) => this.rowToOperation(row));
-      return cachedOperations.find((operation) => {
-        return !this.isOperationTerminal(operation) &&
-          this.operationMatchesMoveIntent(
-            operation,
-            move,
-            entityType,
-            entityId,
-          );
-      }) || null;
-    }
-
-    const result = await this.executeReplicaOperationsRead(
-      SQL.SELECT_IN_FLIGHT_FOR_ENTITY_NODE,
-      [partitionId, targetNodeId, entityType, entityId],
-    );
-
-    if (!result.success || !result.rows || result.rows.length === NUM.ZERO) {
+    if (cachedRows === null) {
       return null;
     }
 
-    const operations = result.rows.map((row) => this.rowToOperation(row));
-    return operations.find((operation) => {
+    const cachedOperations = cachedRows.map((row) => this.rowToOperation(row));
+    return cachedOperations.find((operation) => {
       return !this.isOperationTerminal(operation) &&
-        this.operationMatchesMoveIntent(operation, move, entityType, entityId);
+        this.operationMatchesMoveIntent(
+          operation,
+          move,
+          entityType,
+          entityId,
+        );
     }) || null;
   }
 
@@ -883,14 +887,47 @@ class RebalanceCoordinator extends EventEmitter {
    */
   async getEntityInFlightReplicaIds({partitionId, entityType, entityId}) {
     const replicaIds = new Set();
+    const result = await this.executeReplicaOperationsRead(
+      SQL.SELECT_OPERATIONS_BY_ENTITY,
+      [entityType, entityId, entityId],
+    );
 
-    const operations =
-      await this.getOperationsByEntity(entityType, entityId);
-    for (const operation of operations) {
+    if (result.success && Array.isArray(result.rows)) {
+      for (const row of result.rows) {
+        const operation = this.rowToOperation(row);
+        if (!operation || this.isOperationTerminal(operation)) {
+          continue;
+        }
+
+        const replicaId = operation.replicaId;
+        if (typeof replicaId === 'string' && replicaId.length > NUM.ZERO) {
+          replicaIds.add(replicaId);
+        }
+      }
+      return replicaIds;
+    }
+
+    // Fallback path for degraded SQL-read conditions.
+    const cachedRows = this.filterReplicaOperationRowsFromCache((row) => {
+      if (!row) {
+        return false;
+      }
+      return (row.entity_type === entityType &&
+        row.entity_id === entityId) ||
+        ((row.entity_type === null ||
+          row.entity_type === undefined ||
+          row.entity_type === '') &&
+          row.partition_id === partitionId);
+    });
+    if (cachedRows === null) {
+      return replicaIds;
+    }
+
+    for (const row of cachedRows) {
+      const operation = this.rowToOperation(row);
       if (!operation || this.isOperationTerminal(operation)) {
         continue;
       }
-
       const replicaId = operation.replicaId;
       if (typeof replicaId === 'string' && replicaId.length > NUM.ZERO) {
         replicaIds.add(replicaId);

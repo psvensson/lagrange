@@ -1,0 +1,19 @@
+{
+  "scenarioName": "seven-node-postgres-baseline-partition-split",
+  "startedAt": 1772969658092,
+  "endedAt": 1772969805721,
+  "durationMs": 147629,
+  "files": {
+    "events": ".playback/.playback/low-throughput-7node-r3/seven-node-postgres-baseline-partition-split/events.ndjson",
+    "samples": ".playback/.playback/low-throughput-7node-r3/seven-node-postgres-baseline-partition-split/samples.ndjson",
+    "snapshots": ".playback/.playback/low-throughput-7node-r3/seven-node-postgres-baseline-partition-split/snapshots.ndjson",
+    "manifest": ".playback/.playback/low-throughput-7node-r3/seven-node-postgres-baseline-partition-split/playback-manifest.json",
+    "viewer": ".playback/.playback/low-throughput-7node-r3/seven-node-postgres-baseline-partition-split/playback-viewer.html"
+  },
+  "counts": {
+    "events": 54,
+    "samples": 73,
+    "snapshots": 134
+  },
+  "warnings": []
+}

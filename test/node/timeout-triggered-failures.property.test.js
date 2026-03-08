@@ -88,7 +88,7 @@ test('Property 10: Timeout-Triggered Failures', async (t) => {
           }
 
           // Manually set entry time to simulate timeout
-          beforeState.stateEnteredAt = Date.now() - 100;
+          beforeState.timeoutStartedAt = Date.now() - 100;
 
           // Check timeouts
           stateMachine.checkTimeoutsNow();
@@ -138,7 +138,7 @@ test('Property 10: Timeout-Triggered Failures', async (t) => {
 
           // Manually set entry time to simulate timeout
           const replicaState = stateMachine.getState(replicaId);
-          replicaState.stateEnteredAt = Date.now() - 100;
+          replicaState.timeoutStartedAt = Date.now() - 100;
 
           // Check timeouts
           stateMachine.checkTimeoutsNow();
@@ -191,7 +191,7 @@ test('Property 10: Timeout-Triggered Failures', async (t) => {
 
           // Manually set entry time to simulate timeout
           const replicaState = stateMachine.getState(replicaId);
-          replicaState.stateEnteredAt = Date.now() - 100;
+          replicaState.timeoutStartedAt = Date.now() - 100;
 
           // Check timeouts
           stateMachine.checkTimeoutsNow();
@@ -301,7 +301,7 @@ test('Property 10: Timeout-Triggered Failures', async (t) => {
 
           // Manually set entry time to simulate timeout
           const replicaState = stateMachine.getState(replicaId);
-          replicaState.stateEnteredAt = Date.now() - 100;
+          replicaState.timeoutStartedAt = Date.now() - 100;
 
           // Check timeouts
           stateMachine.checkTimeoutsNow();
@@ -351,7 +351,7 @@ test('Property 10: Timeout-Triggered Failures', async (t) => {
 
           // Manually set entry time to simulate old entry
           const replicaState = stateMachine.getState(replicaId);
-          replicaState.stateEnteredAt = Date.now() - 999999;
+          replicaState.timeoutStartedAt = Date.now() - 999999;
 
           // Check timeouts (should not trigger for active state)
           const timedOutCount = stateMachine.checkTimeoutsNow();

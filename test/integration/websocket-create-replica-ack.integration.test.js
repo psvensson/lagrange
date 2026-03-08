@@ -391,7 +391,8 @@ test('WebSocket CREATE_REPLICA ACK delivery', {timeout: 10000}, async (t) => {
         {targetNodeId: joiningNodeId},
       );
 
-      t.notOk(result.acknowledged, 'should not be acknowledged (timeout)');
+      t.ok(result.acknowledged,
+        'transport ACK should remain true even when response times out');
       t.ok(result.error, 'should have error');
       t.match(result.error, /timeout/i, 'error should mention timeout');
     } finally {

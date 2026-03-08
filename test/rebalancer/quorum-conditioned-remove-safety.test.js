@@ -468,7 +468,7 @@ test('RebalanceCoordinator - blocks REPLACE remove until replacement is voter-re
 
     const deliveries = [];
     const coordinator = createTestCoordinator({
-      nodeId: 'seed-node',
+      nodeId: 'node-a',
       enableTimeouts: false,
       messageRouter: {
         deliver: async () => {

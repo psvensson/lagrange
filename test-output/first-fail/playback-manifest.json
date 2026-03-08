@@ -1,8 +1,8 @@
 {
   "scenarioName": "first-fail",
-  "startedAt": 1772476231169,
-  "endedAt": 1772476231534,
-  "durationMs": 365,
+  "startedAt": 1772994139789,
+  "endedAt": 1772994140166,
+  "durationMs": 377,
   "files": {
     "events": "test-output/first-fail/events.ndjson",
     "samples": "test-output/first-fail/samples.ndjson",
