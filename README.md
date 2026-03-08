@@ -16,22 +16,18 @@ data, dramatically reducing network traffic and coordination overhead.
 
 ---
 
-## Why Developers Care
+## The Problem
 
-Most distributed applications stitch together databases, queues, workers,
-and analytics pipelines. Lagrange takes a different approach: store the data
-in partitions, then run code directly where the data lives.
+Distributed systems typically shuffle data across the network just to
+process it:
 
-Traditional distributed processing:
+    app -> fetch rows from DB -> send to worker -> process -> write back
 
-    data -> network -> compute -> network -> results
+Every hop adds latency, failure modes, and infrastructure to manage.
 
-Lagrange:
-
-    compute -> data -> results
-
-That means less network movement, fewer infrastructure layers, and a much
-more natural path to distributed execution.
+Lagrange skips the shuffle. Your code runs on the nodes that already hold
+the data — no extra hops, no separate worker fleet, no glue between
+storage and compute.
 
 ---
 
