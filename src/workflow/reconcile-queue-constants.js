@@ -14,6 +14,7 @@ const RECONCILE_REASON = Object.freeze({
   CDC_OPERATION_PENDING: 'cdc_operation_pending',
   CDC_REPLACE_ACTIVE: 'cdc_replace_active',
   MESSAGE_DISPATCH_REQUEST: 'message_dispatch_request',
+  NODE_STATE_UPDATE_MESSAGE: 'node_state_update_message',
 
   // Dispatch: node-ready retry reasons
   NODE_STATE_UPDATE_READY: 'node_state_update_ready',

@@ -20,8 +20,10 @@ import {NUM, WORKFLOW_STEP} from '../constants/index.js';
 import {assertCritical} from '../utils/assert.js';
 import {
   ReplicaStatus,
-  WORKFLOW_STEP_TO_STATUS,
 } from '../rebalancer/replica-status.js';
+import {
+  EXECUTOR_OUTCOME_TYPE,
+} from '../rebalancer/executor-outcome-constants.js';
 import {
   ReplicaOperationMessageType,
   ReplicaOperationField,
@@ -38,7 +40,6 @@ import {
   REPLICA_HANDLER_SERVICE,
   REPLICA_HANDLER_SUBSYSTEM,
   REPLICA_HANDLER_TYPEOF,
-  REPLICA_HANDLER_WORKFLOW,
 } from './replica-handler-constants.js';
 import {PARTITION_SERVICE_INIT_STAGE} from '../partition/partition-service-constants.js';
 import {RAFT_ROLE} from '../raft/constants.js';
@@ -109,40 +110,6 @@ function isFreshPartitionBootstrapWindow(partition) {
     partition.created_at === partition.updated_at;
 }
 
-function buildReplicaOperationCacheVisibilityOptions(
-  _workflowStep,
-  _status,
-  updateData,
-  options = {},
-) {
-  const expectedCacheFields = {};
-  const minimumCacheFields = {};
-
-  if (typeof options.replicaId === 'string' && options.replicaId.length > NUM.ZERO) {
-    expectedCacheFields.replica_id = options.replicaId;
-  }
-  if (typeof options.errorMessage === 'string' && options.errorMessage.length > NUM.ZERO) {
-    expectedCacheFields.error_message = options.errorMessage;
-  }
-  if (Number.isFinite(updateData?.updated_at)) {
-    minimumCacheFields.updated_at = updateData.updated_at;
-  }
-  if (Number.isFinite(updateData?.completed_at)) {
-    minimumCacheFields.completed_at = updateData.completed_at;
-  }
-
-  return {
-    expectedCacheFields:
-      Object.keys(expectedCacheFields).length > NUM.ZERO ?
-        expectedCacheFields :
-        null,
-    minimumCacheFields:
-      Object.keys(minimumCacheFields).length > NUM.ZERO ?
-        minimumCacheFields :
-        null,
-  };
-}
-
 /**
  * ReplicaHandler handles replica creation and removal requests on target nodes.
  * Returns immediately with status, then performs async work.
@@ -193,24 +160,18 @@ class ReplicaHandler extends EventEmitter {
     // Track in-progress operations by operationId
     this.inProgressOperations = new Map();
     this.operationTasks = new Set();
-    this.operationUpdateRetryState = new Map();
     this.shuttingDown = false;
     this.shutdownPromise = null;
 
+    // Executor outcome emitter — replaces direct replica_operations writes.
+    // The coordinator subscribes to outcomes via this emitter (Task 3.2).
+    this.executorOutcomeEmitter = options.executorOutcomeEmitter || null;
+
     // Configuration
     const config = ConfigurationManager.getInstance();
-    this.syncTimeoutMs = config.get(CONFIG_KEY.REPLICA_HANDLER_SYNC_TIMEOUT_MS) ||
+    this.syncTimeoutMs =
+      config.get(CONFIG_KEY.REPLICA_HANDLER_SYNC_TIMEOUT_MS) ||
       REPLICA_HANDLER_DEFAULT.SYNC_TIMEOUT_MS;
-    this.operationCacheVisibilityRetryDelayMs =
-      Number.isFinite(options.operationCacheVisibilityRetryDelayMs) &&
-      options.operationCacheVisibilityRetryDelayMs > NUM.ZERO ?
-        Math.floor(options.operationCacheVisibilityRetryDelayMs) :
-        250;
-    this.maxOperationCacheVisibilityRetryAttempts =
-      Number.isInteger(options.maxOperationCacheVisibilityRetryAttempts) &&
-      options.maxOperationCacheVisibilityRetryAttempts > NUM.ZERO ?
-        options.maxOperationCacheVisibilityRetryAttempts :
-        3;
 
     // Logging
     const loggingService = LoggingService.getInstance();
@@ -717,10 +678,13 @@ class ReplicaHandler extends EventEmitter {
         service: partitionService,
       });
 
-      // Update status to syncing (via CDC - coordinator will see this)
-      await this.updateOperationStep(operationId, WORKFLOW_STEP.SYNCING, {
-        replicaId,
-      });
+      // Emit syncing outcome — coordinator will transition workflow.
+      this.emitExecutorOutcome(
+        EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_SYNCING,
+        operationId,
+        WORKFLOW_STEP.SYNCING,
+        {replicaId},
+      );
       this.updateReplicaCreationProgress(progress, {
         stage: ReplicaStatus.SYNCING,
       });
@@ -748,10 +712,13 @@ class ReplicaHandler extends EventEmitter {
         await this.waitForVoterReadyActivation(replicaId, partitionId);
       }
 
-      // Update status to active
-      await this.updateOperationStep(operationId, WORKFLOW_STEP.ACTIVE, {
-        replicaId,
-      });
+      // Emit active outcome — coordinator will transition workflow.
+      this.emitExecutorOutcome(
+        EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE,
+        operationId,
+        WORKFLOW_STEP.ACTIVE,
+        {replicaId},
+      );
       await this.updateReplicaStatus(replicaId, ReplicaStatus.ACTIVE, {
         partitionId,
       });
@@ -802,11 +769,13 @@ class ReplicaHandler extends EventEmitter {
         stack: error.stack,
       });
 
-      // Update status to failed
-      await this.updateOperationStep(operationId, WORKFLOW_STEP.FAILED, {
-        replicaId,
-        errorMessage: error.message,
-      });
+      // Emit failed outcome — coordinator will transition workflow.
+      this.emitExecutorOutcome(
+        EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_FAILED,
+        operationId,
+        WORKFLOW_STEP.FAILED,
+        {replicaId, errorMessage: error.message},
+      );
       await this.updateReplicaStatus(replicaId, ReplicaStatus.FAILED, {
         partitionId,
         errorMessage: error.message,
@@ -999,10 +968,13 @@ class ReplicaHandler extends EventEmitter {
       // Clean up local resources (SQLite files)
       await this.cleanupReplicaResources(partitionId, replicaId);
 
-      // Update status to removed (via CDC)
-      await this.updateOperationStep(operationId, WORKFLOW_STEP.REMOVED, {
-        replicaId,
-      });
+      // Emit removed outcome — coordinator will transition workflow.
+      this.emitExecutorOutcome(
+        EXECUTOR_OUTCOME_TYPE.REPLICA_REMOVE_COMPLETED,
+        operationId,
+        WORKFLOW_STEP.REMOVED,
+        {replicaId},
+      );
       await this.updateReplicaStatus(replicaId, ReplicaStatus.REMOVED, {
         partitionId,
       });
@@ -1065,11 +1037,13 @@ class ReplicaHandler extends EventEmitter {
         stack: error.stack,
       });
 
-      // Update status to failed
-      await this.updateOperationStep(operationId, WORKFLOW_STEP.FAILED, {
-        replicaId,
-        errorMessage: error.message,
-      });
+      // Emit failed outcome — coordinator will transition workflow.
+      this.emitExecutorOutcome(
+        EXECUTOR_OUTCOME_TYPE.REPLICA_REMOVE_FAILED,
+        operationId,
+        WORKFLOW_STEP.FAILED,
+        {replicaId, errorMessage: error.message},
+      );
       await this.updateReplicaStatus(replicaId, ReplicaStatus.FAILED, {
         partitionId,
         errorMessage: error.message,
@@ -1337,120 +1311,26 @@ class ReplicaHandler extends EventEmitter {
    * @return {Promise<void>}
    * @private
    */
-  async updateOperationStep(operationId, workflowStep, options = {}) {
-    if (!operationId) {
-      return;
-    }
-
-    const existing = this.systemTableCache.get(
-      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-      operationId,
-    );
-
-    if (!existing && !options.replicaId) {
-      this.logger.warn(REPLICA_HANDLER_LOG_MSG.OPERATION_NOT_FOUND, {
-        operationId,
-        workflowStep,
-        nodeId: this.nodeId,
-      });
-      return;
-    }
-
-    const retryGeneration =
-      this.beginReplicaOperationUpdateAttempt(operationId);
-
-    const now = Date.now();
-    let stepsHistory = [];
-    if (Array.isArray(existing?.steps_history)) {
-      stepsHistory = [...existing.steps_history];
-    } else if (existing?.steps_history) {
-      try {
-        stepsHistory = JSON.parse(existing.steps_history);
-      } catch (error) {
-        this.logger.warn(REPLICA_HANDLER_LOG_MSG.PARSE_STEPS_HISTORY_FAILED, {
-          operationId,
-          error: error.message,
-        });
-        throw error;
-      }
-    }
-
-    stepsHistory.push({step: workflowStep, timestamp: now});
-
-    const status = workflowStep === WORKFLOW_STEP.FAILED ?
-      ReplicaStatus.FAILED :
-      (WORKFLOW_STEP_TO_STATUS[workflowStep] ||
-        existing?.status ||
-        ReplicaStatus.PENDING);
-
-    const updateData = {
-      workflow_step: workflowStep,
-      status,
-      updated_at: now,
-      steps_history: JSON.stringify(stepsHistory),
-    };
-
-    if (options.replicaId) {
-      updateData.replica_id = options.replicaId;
-    }
-    if (options.errorMessage) {
-      updateData.error_message = options.errorMessage;
-    }
-    if (REPLICA_HANDLER_WORKFLOW.COMPLETION_STEPS.includes(workflowStep)) {
-      updateData.completed_at = now;
-    }
-
-    const cacheVisibilityOptions = buildReplicaOperationCacheVisibilityOptions(
-      workflowStep,
-      status,
-      updateData,
-      options,
-    );
-    const expectedCacheFields = cacheVisibilityOptions.expectedCacheFields;
-    const minimumCacheFields = cacheVisibilityOptions.minimumCacheFields;
-
-    try {
-      // Avoid creating partial replica_operations rows when cache lag causes
-      // the operation row to be temporarily missing. A partial upsert can
-      // violate NOT NULL constraints (e.g., type/source/target columns).
-      await this.cdcIntegrationService.updateSystemTableRow(
-        SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-        {operation_id: operationId},
-        updateData,
-        {
-          expectedCacheFields,
-          minimumCacheFields,
-        },
-      );
-      this.clearReplicaOperationUpdateAttempt(operationId, retryGeneration);
-    } catch (error) {
-      if (this.isRetryableCacheVisibilityError(error)) {
-        this.logger.warn(REPLICA_HANDLER_LOG_MSG.UPDATE_STATUS_FAILED, {
+  /**
+     * Emit a typed executor outcome instead of writing to
+     * replica_operations directly. The coordinator consumes these
+     * outcomes through the owner-key reconcile queue.
+     *
+     * @param {string} outcomeType - EXECUTOR_OUTCOME_TYPE value.
+     * @param {string} operationId - Replica operation ID.
+     * @param {string} workflowStep - WORKFLOW_STEP the executor reached.
+     * @param {Object} [options] - Optional replicaId, errorMessage.
+     */
+    emitExecutorOutcome(outcomeType, operationId, workflowStep, options = {}) {
+      if (this.executorOutcomeEmitter) {
+        this.executorOutcomeEmitter.emitOutcome(
+          outcomeType,
           operationId,
           workflowStep,
-          error: error.message,
-          retryScheduled: true,
-        });
-        this.scheduleReplicaOperationUpdateRetry({
-          operationId,
-          workflowStep,
-          updateData,
-          expectedCacheFields,
-          minimumCacheFields,
-          attempt: 1,
-          generation: retryGeneration,
-        });
-        return;
+          options,
+        );
       }
-      this.clearReplicaOperationUpdateAttempt(operationId, retryGeneration);
-      this.logger.warn(REPLICA_HANDLER_LOG_MSG.UPDATE_STATUS_FAILED, {
-        operationId,
-        workflowStep,
-        error: error.message,
-      });
-      throw error;
     }
-  }
 
   /**
    * Resolve replica context with retry for transient metadata propagation lag.
@@ -1513,268 +1393,6 @@ class ReplicaHandler extends EventEmitter {
       '';
     return message.startsWith(PARTITION_METADATA_MISSING_PREFIX) ||
       message.startsWith(TABLE_METADATA_MISSING_PREFIX);
-  }
-
-  /**
-   * Determine whether a CDC failure is only a cache visibility false negative.
-   * @param {Error} error
-   * @return {boolean}
-   * @private
-   */
-  isRetryableCacheVisibilityError(error) {
-    const message = typeof error?.message === REPLICA_HANDLER_TYPEOF.STRING ?
-      error.message :
-      '';
-    return message.includes('Cache update not observed');
-  }
-
-  /**
-   * Start one logical replica_operations update attempt.
-   * Newer attempts fence older deferred retries for the same operation row.
-   * @param {string} operationId
-   * @return {number} Attempt generation for this logical update.
-   * @private
-   */
-  beginReplicaOperationUpdateAttempt(operationId) {
-    const currentState = this.operationUpdateRetryState.get(operationId);
-    if (typeof currentState?.cancelPendingRetry ===
-        REPLICA_HANDLER_TYPEOF.FUNCTION) {
-      currentState.cancelPendingRetry();
-    } else if (currentState?.timeoutHandle) {
-      clearTimeout(currentState.timeoutHandle);
-    }
-
-    const generation = (currentState?.generation || NUM.ZERO) + NUM.ONE;
-    this.operationUpdateRetryState.set(operationId, {
-      generation,
-      timeoutHandle: null,
-      cancelPendingRetry: null,
-    });
-    return generation;
-  }
-
-  /**
-   * Record the timer for a deferred replica_operations retry.
-   * @param {string} operationId
-   * @param {number} generation
-   * @param {NodeJS.Timeout} timeoutHandle
-   * @param {Function} cancelPendingRetry
-   * @return {boolean} True when the retry is still current.
-   * @private
-   */
-  setReplicaOperationRetryTimer(
-    operationId,
-    generation,
-    timeoutHandle,
-    cancelPendingRetry,
-  ) {
-    const currentState = this.operationUpdateRetryState.get(operationId);
-    if (!currentState || currentState.generation !== generation) {
-      cancelPendingRetry();
-      return false;
-    }
-
-    if (typeof currentState.cancelPendingRetry ===
-        REPLICA_HANDLER_TYPEOF.FUNCTION &&
-        currentState.timeoutHandle !== timeoutHandle) {
-      currentState.cancelPendingRetry();
-    }
-    currentState.timeoutHandle = timeoutHandle;
-    currentState.cancelPendingRetry = cancelPendingRetry;
-    return true;
-  }
-
-  /**
-   * Check whether a deferred retry still belongs to the latest logical update.
-   * @param {string} operationId
-   * @param {number} generation
-   * @return {boolean}
-   * @private
-   */
-  isCurrentReplicaOperationUpdateAttempt(operationId, generation) {
-    const currentState = this.operationUpdateRetryState.get(operationId);
-    return Boolean(currentState) && currentState.generation === generation;
-  }
-
-  /**
-   * Clear deferred retry state once a logical update attempt settles.
-   * @param {string} operationId
-   * @param {number} generation
-   * @return {void}
-   * @private
-   */
-  clearReplicaOperationUpdateAttempt(operationId, generation) {
-    const currentState = this.operationUpdateRetryState.get(operationId);
-    if (!currentState || currentState.generation !== generation) {
-      return;
-    }
-    if (typeof currentState.cancelPendingRetry ===
-        REPLICA_HANDLER_TYPEOF.FUNCTION) {
-      currentState.cancelPendingRetry();
-    } else if (currentState.timeoutHandle) {
-      clearTimeout(currentState.timeoutHandle);
-    }
-    this.operationUpdateRetryState.delete(operationId);
-  }
-
-  /**
-   * Retry one replica_operations row update after a cache visibility false
-   * negative. The write is idempotent and should not fail replica creation.
-   * @param {Object} options
-   * @param {string} options.operationId
-   * @param {string} options.workflowStep
-   * @param {Object} options.updateData
-   * @param {Object} options.expectedCacheFields
-   * @param {Object} options.minimumCacheFields
-   * @param {number} options.attempt
-   * @param {number} options.generation
-   * @return {void}
-   * @private
-   */
-  scheduleReplicaOperationUpdateRetry(options = {}) {
-    const {
-      operationId,
-      workflowStep,
-      updateData,
-      expectedCacheFields,
-      minimumCacheFields,
-      attempt = 1,
-      generation,
-    } = options;
-    if (!operationId || !updateData) {
-      return;
-    }
-    if (attempt > this.maxOperationCacheVisibilityRetryAttempts) {
-      if (generation !== undefined) {
-        this.clearReplicaOperationUpdateAttempt(operationId, generation);
-      }
-      return;
-    }
-
-    this.registerOperationTask(new Promise((resolve) => {
-      let settled = false;
-      const cancelPendingRetry = () => {
-        if (settled) {
-          return;
-        }
-        settled = true;
-        clearTimeout(timeoutHandle);
-        resolve();
-      };
-      const timeoutHandle = setTimeout(() => {
-        settled = true;
-        const currentState = this.operationUpdateRetryState.get(operationId);
-        if (currentState?.timeoutHandle === timeoutHandle) {
-          currentState.timeoutHandle = null;
-          currentState.cancelPendingRetry = null;
-        }
-        if (this.shuttingDown) {
-          if (generation !== undefined) {
-            this.clearReplicaOperationUpdateAttempt(operationId, generation);
-          }
-          resolve();
-          return;
-        }
-        if (generation !== undefined &&
-            !this.isCurrentReplicaOperationUpdateAttempt(
-              operationId,
-              generation,
-            )) {
-          resolve();
-          return;
-        }
-        resolve(this.retryReplicaOperationUpdate({
-          operationId,
-          workflowStep,
-          updateData,
-          expectedCacheFields,
-          minimumCacheFields,
-          attempt,
-          generation,
-        }));
-      }, this.operationCacheVisibilityRetryDelayMs);
-
-      if (generation !== undefined &&
-          !this.setReplicaOperationRetryTimer(
-            operationId,
-            generation,
-            timeoutHandle,
-            cancelPendingRetry,
-          )) {
-        return;
-      }
-    }));
-  }
-
-  /**
-   * Execute one deferred replica_operations retry after a cache visibility
-   * false negative.
-   * @param {Object} options
-   * @return {Promise<void>}
-   * @private
-   */
-  async retryReplicaOperationUpdate(options = {}) {
-    const {
-      operationId,
-      workflowStep,
-      updateData,
-      expectedCacheFields,
-      minimumCacheFields,
-      attempt = 1,
-      generation,
-    } = options;
-    if (generation !== undefined &&
-        !this.isCurrentReplicaOperationUpdateAttempt(
-          operationId,
-          generation,
-        )) {
-      return;
-    }
-
-    try {
-      await this.cdcIntegrationService.updateSystemTableRow(
-        SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-        {operation_id: operationId},
-        updateData,
-        {
-          expectedCacheFields,
-          minimumCacheFields,
-        },
-      );
-      if (generation !== undefined) {
-        this.clearReplicaOperationUpdateAttempt(operationId, generation);
-      }
-    } catch (error) {
-      if (this.isRetryableCacheVisibilityError(error) &&
-          attempt < this.maxOperationCacheVisibilityRetryAttempts) {
-        this.logger.warn(REPLICA_HANDLER_LOG_MSG.UPDATE_STATUS_FAILED, {
-          operationId,
-          workflowStep,
-          error: error.message,
-          retryScheduled: true,
-          retryAttempt: attempt + 1,
-        });
-        this.scheduleReplicaOperationUpdateRetry({
-          operationId,
-          workflowStep,
-          updateData,
-          expectedCacheFields,
-          minimumCacheFields,
-          attempt: attempt + 1,
-          generation,
-        });
-        return;
-      }
-      if (generation !== undefined) {
-        this.clearReplicaOperationUpdateAttempt(operationId, generation);
-      }
-      this.logger.error(REPLICA_HANDLER_LOG_MSG.UPDATE_STATUS_FAILED, {
-        operationId,
-        workflowStep,
-        error: error.message,
-        retryAttempt: attempt,
-      });
-    }
   }
 
   /**
@@ -2613,7 +2231,6 @@ class ReplicaHandler extends EventEmitter {
       this.inProgressOperations.clear();
       this.localServices.clear();
       this.localReplicas.clear();
-      this.operationUpdateRetryState.clear();
       this.initialized = false;
 
       this.emit(REPLICA_HANDLER_EVENT.SHUTDOWN, {nodeId: this.nodeId});

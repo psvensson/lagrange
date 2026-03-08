@@ -776,6 +776,139 @@ test('Unit: NodeHandle.query sends queryId and ignores initial cache dump', asyn
   }
 });
 
+test('Unit: NodeHandle.queryWithTimeout opens lane-tagged admin stream sockets',
+  async () => {
+    const server = new WebSocketServer({
+      host: '127.0.0.1',
+      port: 0,
+    });
+    await new Promise((resolve, reject) => {
+      server.once('listening', resolve);
+      server.once('error', reject);
+    });
+
+    const address = server.address();
+    assert.ok(address && typeof address === 'object',
+      'server should expose listen address');
+    const adminApiPort = address.port;
+
+    let observedRequestUrl = null;
+    server.on('connection', (socket, request) => {
+      observedRequestUrl = request?.url || null;
+      socket.send(JSON.stringify({
+        type: 'cache_dump',
+        data: {},
+      }));
+      socket.once('message', (data) => {
+        const parsed = JSON.parse(data.toString());
+        socket.send(JSON.stringify({
+          type: 'query_result',
+          queryId: parsed.queryId,
+          results: [{ok: 1}],
+          count: 1,
+        }));
+      });
+    });
+
+    const node = new NodeHandle(
+      'node-1',
+      'container-1',
+      '127.0.0.1',
+      NODE_ROLES.SEED,
+      {getContainerLogs: async () => ''},
+      adminApiPort,
+    );
+
+    try {
+      const result = await node.queryWithTimeout('SELECT 1', [], {
+        lane: 'load',
+      });
+      assert.deepStrictEqual(result.rows, [{ok: 1}]);
+      assert.ok(
+        typeof observedRequestUrl === 'string' &&
+        observedRequestUrl.includes('/api/admin/stream?lane=load'),
+        'lane-tagged admin stream URL should include load lane query parameter',
+      );
+    } finally {
+      node.closeQueryConnection();
+      await new Promise((resolve, reject) => {
+        server.close((err) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          resolve();
+        });
+      });
+    }
+  });
+
+test('Unit: NodeHandle.queryWithTimeout preserves admin stream errorCode',
+  async () => {
+    const server = new WebSocketServer({
+      host: '127.0.0.1',
+      port: 0,
+    });
+    await new Promise((resolve, reject) => {
+      server.once('listening', resolve);
+      server.once('error', reject);
+    });
+
+    const address = server.address();
+    assert.ok(address && typeof address === 'object',
+      'server should expose listen address');
+    const adminApiPort = address.port;
+
+    server.on('connection', (socket) => {
+      socket.send(JSON.stringify({
+        type: 'cache_dump',
+        data: {},
+      }));
+      socket.once('message', (data) => {
+        const parsed = JSON.parse(data.toString());
+        socket.send(JSON.stringify({
+          type: 'query_result',
+          queryId: parsed.queryId,
+          error: 'routing not ready',
+          errorCode: 'ROUTING_NOT_READY',
+          hint: 'retry on healthy node',
+        }));
+      });
+    });
+
+    const node = new NodeHandle(
+      'node-1',
+      'container-1',
+      '127.0.0.1',
+      NODE_ROLES.SEED,
+      {getContainerLogs: async () => ''},
+      adminApiPort,
+    );
+
+    try {
+      await assert.rejects(
+        node.queryWithTimeout('SELECT 1'),
+        (error) => {
+          assert.strictEqual(error.code, 'routing_not_ready');
+          assert.strictEqual(error.hint, 'retry on healthy node');
+          assert.match(String(error.message), /routing not ready/i);
+          return true;
+        },
+      );
+    } finally {
+      node.closeQueryConnection();
+      await new Promise((resolve, reject) => {
+        server.close((err) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          resolve();
+        });
+      });
+    }
+  });
+
 test('Unit: NodeHandle.queryWithTimeout captures timeout query trace entries',
   async () => {
     const server = new WebSocketServer({

@@ -5,6 +5,7 @@
  */
 
 import net from 'net';
+import {EventEmitter} from 'events';
 import t from '../../src/test-helpers/tap.js';
 import {MessageRouter, ConnectionState, RouterMessageType} from
   '../../src/transport/message-router.js';
@@ -220,6 +221,32 @@ t.test('MessageRouter unit tests', async (t) => {
     await router.shutdown();
   });
 
+  t.test('should fall back QUERY messages when resolver returns no transport',
+    async (t) => {
+      const router = new MessageRouter({nodeId: 'test-node'});
+      await router.initialize();
+
+      let localHandlerCalls = 0;
+      router.register('test-node/partition/p1', () => {
+        localHandlerCalls++;
+        return {acknowledged: true, success: true, rows: [{id: 'fallback'}]};
+      });
+
+      router.setQueryMessageGroupServiceResolver(() => null);
+
+      const result = await router.deliver('test-node/partition/p1', {
+        type: 'QUERY',
+        sql: 'SELECT 1',
+        params: [],
+      });
+
+      t.equal(localHandlerCalls, 1, 'should use standard local delivery path');
+      t.equal(result.acknowledged, true, 'should acknowledge query delivery');
+      t.equal(result.success, true, 'should return local handler result');
+
+      await router.shutdown();
+    });
+
   t.test('should fail QUERY messages when message-group transport is missing', async (t) => {
     const router = new MessageRouter({nodeId: 'test-node'});
     await router.initialize();
@@ -302,6 +329,58 @@ t.test('MessageRouter unit tests', async (t) => {
 
     await router.shutdown();
   });
+
+  t.test('should recover a missing remote node connection from the node address resolver',
+    async (t) => {
+      const router = new MessageRouter({nodeId: 'test-node'});
+      await router.initialize();
+
+      const connectCalls = [];
+      router.setNodeAddressResolver((nodeId) => {
+        return nodeId === 'remote-node' ? 'ws://remote-node:9999' : null;
+      });
+      router.connectToNode = async (nodeId, address) => {
+        connectCalls.push({nodeId, address});
+        router.nodeConnections.set(nodeId, {
+          nodeId,
+          address,
+          state: ConnectionState.CONNECTED,
+          ws: {},
+          isIncoming: false,
+        });
+      };
+      router.sendMessage = async (
+        _connection,
+        _targetAddress,
+        messageId,
+        _payload,
+        targetNodeId,
+        correlationId,
+      ) => {
+        return {
+          messageId,
+          correlationId,
+          acknowledged: true,
+          targetNodeId,
+          recovered: true,
+        };
+      };
+
+      const result = await router.deliver(
+        'remote-node/service/remote-service',
+        {type: 'TEST_MESSAGE'},
+      );
+
+      t.equal(connectCalls.length, 1, 'should attempt one on-demand reconnect');
+      t.same(connectCalls[0], {
+        nodeId: 'remote-node',
+        address: 'ws://remote-node:9999',
+      }, 'should reconnect using the resolved node address');
+      t.equal(result.acknowledged, true, 'should deliver after recovering the node connection');
+      t.equal(result.recovered, true, 'should preserve the delivery result from the retry');
+
+      await router.shutdown();
+    });
 
   t.test('should get registered addresses', async (t) => {
     const router = new MessageRouter({nodeId: 'test-node'});
@@ -660,6 +739,56 @@ t.test('MessageRouter unit tests', async (t) => {
     t.equal(router.nodeConnections.size, 0, 'should clear connections');
     t.equal(router.pendingMessages.size, 0, 'should clear pending messages');
   });
+
+  t.test('should not surface pending response shutdown races as unhandled rejections',
+    async (t) => {
+      const router = new MessageRouter({nodeId: 'shutdown-race-test'});
+      await router.initialize({startServer: false});
+
+      const unhandledRejections = [];
+      const onUnhandledRejection = (error) => {
+        unhandledRejections.push(error);
+      };
+      process.on('unhandledRejection', onUnhandledRejection);
+      t.teardown(() => {
+        process.off('unhandledRejection', onUnhandledRejection);
+      });
+
+      const ws = new EventEmitter();
+      ws.readyState = 1;
+      ws.send = () => {};
+      ws.terminate = () => {
+        ws.readyState = 3;
+        queueMicrotask(() => ws.emit('close'));
+      };
+      router.nodeConnections.set('remote-node', {
+        nodeId: 'remote-node',
+        state: ConnectionState.CONNECTED,
+        ws,
+        isIncoming: false,
+        isSelfConnection: false,
+      });
+
+      const deliveryPromise = router.deliver(
+        'remote-node/service/test-service',
+        {type: 'TEST', data: 'shutdown-race'},
+      );
+
+      await Promise.resolve();
+      await router.shutdown();
+
+      const result = await deliveryPromise;
+      await Promise.resolve();
+
+      t.equal(result.acknowledged, false, 'should report failed ACK on shutdown');
+      t.equal(result.error, 'Router shutdown', 'should surface shutdown as delivery error');
+      t.equal(router.pendingResponses.size, 0, 'should clear pending responses');
+      t.same(
+        unhandledRejections,
+        [],
+        'should not emit unhandled rejections when shutdown beats ACK',
+      );
+    });
 
   t.test('should handle multiple initializations idempotently', async (t) => {
     const router = new MessageRouter({nodeId: 'idempotent-test'});
@@ -1132,6 +1261,59 @@ t.test('MessageRouter unit tests', async (t) => {
         secondDurationMs < 80,
         `second delivery should not be blocked by first ACK wait ` +
         `(took ${secondDurationMs}ms)`,
+      );
+    });
+
+  t.test('simultaneous cross-connect keeps bidirectional node routing connected',
+    async (t) => {
+      cleanupTestEnvironment();
+      const config = ConfigurationManager.getInstance();
+      config.initialize({
+        node: {id: 'node-a'},
+        logging: {level: 'error'},
+        transport: {
+          messageTimeoutMs: 200,
+          reconnectIntervalMs: 100,
+          reconnectMaxAttempts: 3,
+        },
+      });
+      const logging = LoggingService.getInstance();
+      logging.initialize({level: 'error'});
+
+      const routerA = new MessageRouter({
+        nodeId: 'node-a',
+        wsPort: 12903,
+        inProcess: true,
+      });
+      const routerB = new MessageRouter({
+        nodeId: 'node-b',
+        wsPort: 12904,
+        inProcess: true,
+      });
+
+      await routerA.initialize({startServer: true});
+      await routerB.initialize({startServer: true});
+      t.teardown(async () => {
+        await routerA.shutdown().catch(() => {});
+        await routerB.shutdown().catch(() => {});
+      });
+
+      await Promise.all([
+        routerA.connectToNode('node-b', 'ws://localhost:12904'),
+        routerB.connectToNode('node-a', 'ws://localhost:12903'),
+      ]);
+
+      await new Promise((resolve) => setTimeout(resolve, 25));
+
+      t.equal(
+        routerA.getConnectionState('node-b'),
+        ConnectionState.CONNECTED,
+        'routerA should keep routable connection keyed by node-b',
+      );
+      t.equal(
+        routerB.getConnectionState('node-a'),
+        ConnectionState.CONNECTED,
+        'routerB should keep routable connection keyed by node-a',
       );
     });
 

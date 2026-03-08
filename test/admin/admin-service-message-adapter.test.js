@@ -19,6 +19,7 @@ describe('admin-service-message-adapter', () => {
       },
       {
         clientId: 'client-1',
+        lane: 'LoAd',
       },
     );
 
@@ -29,6 +30,7 @@ describe('admin-service-message-adapter', () => {
     assert.equal(envelope.payload.sql, 'SELECT 1');
     assert.deepEqual(envelope.payload.params, [1]);
     assert.equal(envelope.metadata.clientId, 'client-1');
+    assert.equal(envelope.metadata.lane, 'load');
     assert.equal(typeof envelope.traceId, 'string');
     assert.ok(envelope.traceId.length > 0);
   });

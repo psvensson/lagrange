@@ -348,6 +348,28 @@ describe('PartitionCDCGenerator', () => {
       assert.strictEqual(receivedEvents[0].data.id, 'upd-param-1');
     });
 
+    it('should extract data from multiline parameterized UPDATE with guarded predicate',
+      async () => {
+        const receivedEvents = [];
+        generator.subscribe((event) => receivedEvents.push(event));
+
+        const entry = {
+          type: 'QUERY',
+          sql: 'UPDATE test_table\n' +
+            'SET value = ?, name = ?\n' +
+            'WHERE id = ? AND value = ?',
+          params: [300, 'new-name', 'upd-param-3', 250],
+          timestamp: Date.now(),
+        };
+
+        await generator.generateEvent(entry);
+
+        assert.strictEqual(receivedEvents.length, 1);
+        assert.strictEqual(receivedEvents[0].data.value, 300);
+        assert.strictEqual(receivedEvents[0].data.name, 'new-name');
+        assert.strictEqual(receivedEvents[0].data.id, 'upd-param-3');
+      });
+
     it('should fetch the authoritative row for parameterized UPDATE', async () => {
       const receivedEvents = [];
       generator.subscribe((event) => receivedEvents.push(event));

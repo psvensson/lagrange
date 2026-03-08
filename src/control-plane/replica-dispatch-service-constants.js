@@ -27,14 +27,19 @@ const DISPATCH_LOG_MSG = Object.freeze({
     'Retrying pending replica operations for ready node',
   RETRY_READY_TRIGGER_SKIPPED:
     'Skipped duplicate ready-trigger retry',
+  NODE_STATE_UPDATE_SKIPPED:
+    'Skipped stale node-state update',
   ENQUEUE_OPERATION_DISPATCH:
     'Enqueued operation for dispatch reconcile',
+  ENQUEUE_NODE_STATE_UPDATE:
+    'Enqueued node-state update for reconcile',
   ENQUEUE_NODE_READY_RETRY:
     'Enqueued node for ready-retry reconcile',
 });
 
 const DISPATCH_QUEUE_NAME = Object.freeze({
   OPERATION: 'dispatch-operation-reconcile',
+  NODE_STATE_UPDATE: 'dispatch-node-state-update-reconcile',
   NODE_READY: 'dispatch-node-ready-reconcile',
 });
 
@@ -42,8 +47,6 @@ const DISPATCH_ERROR_MSG = Object.freeze({
   MISSING_NODE_ID: 'ReplicaDispatchService requires nodeId',
   MISSING_ROUTER: 'ReplicaDispatchService requires messageRouter',
   MISSING_CDC: 'ReplicaDispatchService requires cdcIntegrationService',
-  MISSING_CDC_UPDATE:
-    'ReplicaDispatchService requires cdcIntegrationService.updateSystemTableRow',
   MISSING_CACHE: 'ReplicaDispatchService requires systemTableCache',
   MISSING_CACHE_GET:
     'ReplicaDispatchService requires systemTableCache.get',

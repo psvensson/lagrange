@@ -109,6 +109,26 @@ const AUTHORITATIVE_FALLBACK_OUTCOME = Object.freeze({
 });
 const AUTHORITATIVE_FALLBACK_WINDOW_MS = TIME_MS.MINUTE;
 const AUTHORITATIVE_FALLBACK_RECENT_LIMIT = NUM.TEN;
+const LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY = Object.freeze({
+  ANY_REPLICA: 'any_replica',
+  LOCAL_LEADER: 'local_leader',
+});
+const AUTHORITATIVE_ROW_VERSION_FIELD_CANDIDATES = Object.freeze([
+  'last_heartbeat',
+  'lastHeartbeat',
+  'ready_lease_expires_at',
+  'readyLeaseExpiresAt',
+  'updated_at_hlc',
+  'updatedAtHlc',
+  'schema_version',
+  'schemaVersion',
+  'updated_at',
+  'updatedAt',
+  'completed_at',
+  'completedAt',
+  'created_at',
+  'createdAt',
+]);
 
 function normalizeAuthoritativeFallbackPhase(value) {
   if (value === AUTHORITATIVE_FALLBACK_PHASE.BOOTSTRAP) {
@@ -167,6 +187,12 @@ class CDCIntegrationService extends EventEmitter {
     this.bootstrapMode = false;
     this.bootstrapCompleted = false;
     this.localPartitionServices = null;
+    this.partitionServicesProvider =
+      options.partitionServicesProvider instanceof Map ?
+        () => options.partitionServicesProvider :
+        typeof options.partitionServicesProvider === TYPEOF.FUNCTION ?
+          options.partitionServicesProvider :
+          null;
     this.writeRouter = this.createSqlWriteRouter();
 
     // HLC clock for timestamps
@@ -224,6 +250,22 @@ class CDCIntegrationService extends EventEmitter {
    */
   setCacheMutationTarget(cache) {
     this.cacheMutationTarget = cache;
+  }
+
+  /**
+   * Set the local partition-service provider for authoritative system-table
+   * reads and direct local write bypasses in steady state.
+   * @param {Function|Map|null} provider
+   */
+  setPartitionServicesProvider(provider) {
+    if (provider instanceof Map) {
+      this.partitionServicesProvider = () => provider;
+      return;
+    }
+    this.partitionServicesProvider =
+      typeof provider === TYPEOF.FUNCTION ?
+        provider :
+        null;
   }
 
   /**
@@ -312,7 +354,8 @@ class CDCIntegrationService extends EventEmitter {
    */
   createSqlWriteRouter() {
     return createSqlWriteRouter({
-      execute: (sql, params) => this.executeSQLViaQueryEngine(sql, params),
+      execute: (sql, params, options = {}) =>
+        this.executeSQLViaQueryEngine(sql, params, options),
     });
   }
 
@@ -323,7 +366,8 @@ class CDCIntegrationService extends EventEmitter {
    */
   createBootstrapDirectWriteRouter() {
     return createBootstrapDirectWriteRouter({
-      execute: (sql, params) => this.executeSQLDirectToLocalPartition(sql, params),
+      execute: (sql, params, options = {}) =>
+        this.executeSQLDirectToLocalPartition(sql, params, options),
     });
   }
 
@@ -395,6 +439,508 @@ class CDCIntegrationService extends EventEmitter {
   }
 
   /**
+   * Resolve the currently available local partition-service registry.
+   * @return {Map<string, Object>|null}
+   * @private
+   */
+  resolvePartitionServices() {
+    if (this.bootstrapMode && this.localPartitionServices instanceof Map) {
+      return this.localPartitionServices;
+    }
+    if (typeof this.partitionServicesProvider === TYPEOF.FUNCTION) {
+      const provided = this.partitionServicesProvider();
+      return provided instanceof Map ? provided : null;
+    }
+    return null;
+  }
+
+  /**
+   * Resolve cached system-table partition IDs for one table.
+   * Falls back to the canonical initial partition ID when cache metadata is
+   * not yet available locally.
+   * @param {string} tableName
+   * @return {Array<string>}
+   * @private
+   */
+  resolveSystemTablePartitionIds(tableName) {
+    const cache = this.systemTableCache;
+    if (!cache) {
+      return INITIAL_PARTITION_IDS[tableName] ?
+        [INITIAL_PARTITION_IDS[tableName]] :
+        [];
+    }
+
+    const partitionPredicate = (row) => {
+      const rowTableName = row?.table_name ?? row?.tableName ?? null;
+      const rowTableId = row?.table_id ?? row?.tableId ?? null;
+      return rowTableName === tableName || rowTableId === tableName;
+    };
+    const partitionRows =
+      typeof cache.filter === TYPEOF.FUNCTION ?
+        cache.filter(SYSTEM_TABLE_NAME.PARTITIONS, partitionPredicate) :
+        typeof cache.getAll === TYPEOF.FUNCTION ?
+          (cache.getAll(SYSTEM_TABLE_NAME.PARTITIONS) || [])
+            .filter(partitionPredicate) :
+          [];
+    const resolvedPartitionIds = [...new Set(partitionRows
+      .map((row) => row?.partition_id ?? row?.partitionId ?? row?.id ?? null)
+      .filter(Boolean))];
+    if (resolvedPartitionIds.length > NUM.ZERO) {
+      return resolvedPartitionIds;
+    }
+    return INITIAL_PARTITION_IDS[tableName] ?
+      [INITIAL_PARTITION_IDS[tableName]] :
+      [];
+  }
+
+  /**
+   * Resolve every local partition service that hosts one partition.
+   * @param {Map<string, Object>|null} partitionServices
+   * @param {string} partitionId
+   * @return {Array<Object>}
+   * @private
+   */
+  resolveLocalPartitionServicesForPartition(partitionServices, partitionId) {
+    if (!(partitionServices instanceof Map) || !partitionId) {
+      return [];
+    }
+
+    const matches = [];
+    const seenServices = new Set();
+    const directMatch = partitionServices.get(partitionId) || null;
+    if (directMatch && !seenServices.has(directMatch)) {
+      matches.push(directMatch);
+      seenServices.add(directMatch);
+    }
+
+    for (const partitionService of partitionServices.values()) {
+      if (!partitionService ||
+          partitionService.partitionId !== partitionId ||
+          seenServices.has(partitionService)) {
+        continue;
+      }
+      matches.push(partitionService);
+      seenServices.add(partitionService);
+    }
+
+    return matches;
+  }
+
+  /**
+   * Check whether one local partition service can be used directly.
+   * @param {Object|null} partitionService
+   * @return {boolean}
+   * @private
+   */
+  isLocalPartitionServiceUsable(partitionService) {
+    if (!partitionService) {
+      return false;
+    }
+    if (partitionService.initialized === false) {
+      return false;
+    }
+    return typeof partitionService.executeQuery === TYPEOF.FUNCTION ||
+      typeof partitionService.executeLocalQuery === TYPEOF.FUNCTION ||
+      typeof partitionService?.db?.prepare === TYPEOF.FUNCTION;
+  }
+
+  /**
+   * Check whether one local partition service currently appears to be leader.
+   * @param {Object|null} partitionService
+   * @return {boolean}
+   * @private
+   */
+  isLocalPartitionServiceLeader(partitionService) {
+    if (!this.isLocalPartitionServiceUsable(partitionService)) {
+      return false;
+    }
+    if (partitionService.isLeader === true) {
+      return true;
+    }
+    const role = String(
+      partitionService.role ||
+      partitionService.raftRole ||
+      '',
+    ).toLowerCase();
+    return role === 'leader';
+  }
+
+  /**
+   * Resolve local partition services for a system table.
+   * @param {string} tableName
+   * @param {Object} [options]
+   * @param {string} [options.consistency]
+   * @return {Array<Object>}
+   * @private
+   */
+  resolveLocalSystemTableServices(tableName, options = {}) {
+    const partitionServices = this.resolvePartitionServices();
+    if (!(partitionServices instanceof Map)) {
+      return [];
+    }
+
+    const consistency = options.consistency ||
+      LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA;
+    const matches = [];
+    const seenServices = new Set();
+    const partitionIds = this.resolveSystemTablePartitionIds(tableName);
+    for (const partitionId of partitionIds) {
+      const candidates = this.resolveLocalPartitionServicesForPartition(
+        partitionServices,
+        partitionId,
+      );
+      for (const partitionService of candidates) {
+        if (!this.isLocalPartitionServiceUsable(partitionService) ||
+            seenServices.has(partitionService)) {
+          continue;
+        }
+        if (consistency === LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.LOCAL_LEADER &&
+            !this.isLocalPartitionServiceLeader(partitionService)) {
+          continue;
+        }
+        matches.push(partitionService);
+        seenServices.add(partitionService);
+      }
+    }
+
+    matches.sort((left, right) => {
+      return Number(this.isLocalPartitionServiceLeader(right)) -
+        Number(this.isLocalPartitionServiceLeader(left));
+    });
+
+    return matches;
+  }
+
+  /**
+   * Execute one read query against one local partition service.
+   * @param {Object} partitionService
+   * @param {string} sql
+   * @param {Array<*>} params
+   * @return {Promise<Object>}
+   * @private
+   */
+  async executeLocalSystemTableRead(partitionService, sql, params = []) {
+    if (typeof partitionService?.executeQuery === TYPEOF.FUNCTION) {
+      return partitionService.executeQuery(sql, params);
+    }
+    if (typeof partitionService?.executeLocalQuery === TYPEOF.FUNCTION) {
+      return partitionService.executeLocalQuery(sql, params);
+    }
+    if (typeof partitionService?.db?.prepare === TYPEOF.FUNCTION) {
+      const stmt = partitionService.db.prepare(sql);
+      return {
+        success: true,
+        rows: stmt.all(...params),
+      };
+    }
+    return {
+      success: false,
+      error: 'local_partition_query_unavailable',
+      rows: [],
+    };
+  }
+
+  /**
+   * Normalize one authoritative row version into a comparable value.
+   * @param {Object|null} row
+   * @return {number|string|null}
+   * @private
+   */
+  extractAuthoritativeRowVersion(row) {
+    if (!row || typeof row !== TYPEOF.OBJECT) {
+      return null;
+    }
+    for (const fieldName of AUTHORITATIVE_ROW_VERSION_FIELD_CANDIDATES) {
+      const value = row[fieldName];
+      if (value === undefined || value === null) {
+        continue;
+      }
+      const comparable = this.normalizeComparableCacheFieldValue(value);
+      if (comparable !== null) {
+        return comparable;
+      }
+      if (typeof value === TYPEOF.STRING && value.length > NUM.ZERO) {
+        return value;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Prefer the fresher authoritative repair row.
+   * @param {Object} candidate
+   * @param {Object} existing
+   * @return {boolean}
+   * @private
+   */
+  isAuthoritativeRepairRowNewer(candidate, existing) {
+    const candidateVersion = this.extractAuthoritativeRowVersion(candidate);
+    const existingVersion = this.extractAuthoritativeRowVersion(existing);
+    if (candidateVersion !== null && existingVersion !== null) {
+      if (candidateVersion === existingVersion) {
+        return JSON.stringify(candidate).length >
+          JSON.stringify(existing).length;
+      }
+      return candidateVersion > existingVersion;
+    }
+    if (candidateVersion !== null) {
+      return true;
+    }
+    if (existingVersion !== null) {
+      return false;
+    }
+    return JSON.stringify(candidate).length >
+      JSON.stringify(existing).length;
+  }
+
+  /**
+   * Merge replicated authoritative row sets by primary key.
+   * @param {string} tableName
+   * @param {Array<Array<Object>>} rowSets
+   * @return {Array<Object>}
+   * @private
+   */
+  mergeAuthoritativeSystemTableRowSets(tableName, rowSets) {
+    const keyField = this.getPrimaryKeyField(tableName);
+    const mergedRows = new Map();
+
+    for (const rowSet of rowSets) {
+      const rows = Array.isArray(rowSet) ? rowSet : [];
+      for (const row of rows) {
+        const key = row?.[keyField] ?? row?.id ?? null;
+        if (key === null || key === undefined) {
+          continue;
+        }
+        const existing = mergedRows.get(key);
+        if (!existing || this.isAuthoritativeRepairRowNewer(row, existing)) {
+          mergedRows.set(key, row);
+        }
+      }
+    }
+
+    return [...mergedRows.values()];
+  }
+
+  /**
+   * Read authoritative rows from node-local system partition replicas when
+   * available.
+   * @param {string} tableName
+   * @param {string} sql
+   * @param {Array<*>} params
+   * @param {Object} [options]
+   * @param {string} [options.consistency]
+   * @return {Promise<{available: boolean, rows: Array<Object>}>}
+   * @private
+   */
+  async queryLocalAuthoritativeSystemTableRows(
+    tableName,
+    sql,
+    params = [],
+    options = {},
+  ) {
+    const localServices = this.resolveLocalSystemTableServices(tableName, {
+      consistency: options.consistency,
+    });
+    if (localServices.length === NUM.ZERO) {
+      return {
+        available: false,
+        rows: [],
+      };
+    }
+
+    const rowSets = [];
+    let available = false;
+    for (const partitionService of localServices) {
+      try {
+        const result = await this.executeLocalSystemTableRead(
+          partitionService,
+          sql,
+          params,
+        );
+        if (!result || result.success === false) {
+          continue;
+        }
+        rowSets.push(Array.isArray(result.rows) ? result.rows : []);
+        available = true;
+      } catch (error) {
+        this.logger.warn('Failed to read authoritative system table rows from local partition replica', {
+          nodeId: this.nodeId,
+          tableName,
+          partitionId: partitionService?.partitionId || null,
+          replicaId: partitionService?.replicaId || null,
+          error: error?.message || String(error),
+        });
+      }
+    }
+
+    return {
+      available,
+      rows: available ?
+        this.mergeAuthoritativeSystemTableRowSets(tableName, rowSets) :
+        [],
+    };
+  }
+
+  /**
+   * Execute an authoritative system-table read. Prefers local partition
+   * replicas and falls back to the routed SQL engine when necessary.
+   * @param {string} tableName
+   * @param {string} sql
+   * @param {Array<*>} params
+   * @param {Object} [options]
+   * @return {Promise<Object>}
+   */
+  async executeAuthoritativeSystemTableRead(
+    tableName,
+    sql,
+    params = [],
+    options = {},
+  ) {
+    const statement = sql || `SELECT * FROM ${tableName}`;
+    const preferredConsistency =
+      options.localReadConsistency ||
+      LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA;
+    let localRead = await this.queryLocalAuthoritativeSystemTableRows(
+      tableName,
+      statement,
+      params,
+      {
+        consistency: preferredConsistency,
+      },
+    );
+    if (!localRead.available &&
+        options.replicaFallbackConsistency &&
+        options.replicaFallbackConsistency !== preferredConsistency) {
+      localRead = await this.queryLocalAuthoritativeSystemTableRows(
+        tableName,
+        statement,
+        params,
+        {
+          consistency: options.replicaFallbackConsistency,
+        },
+      );
+    }
+    if (localRead.available) {
+      return {
+        success: true,
+        rows: localRead.rows,
+        count: localRead.rows.length,
+        source: 'local_partition_replica',
+      };
+    }
+
+    if (options.allowSqlFallback === false) {
+      return {
+        success: false,
+        error: 'authoritative_row_source_unavailable',
+        rows: [],
+      };
+    }
+
+    if (!this.sqlQueryEngine ||
+        typeof this.sqlQueryEngine.executeQuery !== TYPEOF.FUNCTION) {
+      return {
+        success: false,
+        error: 'authoritative_row_source_unavailable',
+        rows: [],
+      };
+    }
+
+    const queryResult = await this.sqlQueryEngine.executeQuery(
+      statement,
+      params,
+      options.queryOptions,
+    );
+    if (!queryResult?.success) {
+      return queryResult || {
+        success: false,
+        error: 'authoritative_query_failed',
+        rows: [],
+      };
+    }
+    return {
+      ...queryResult,
+      rows: Array.isArray(queryResult.rows) ? queryResult.rows : [],
+      source: 'sql_query_engine',
+    };
+  }
+
+  /**
+   * Normalize one direct local system-table write result into the SQL-engine
+   * result shape expected by CDC callers.
+   * @param {Object} result
+   * @return {Object}
+   * @private
+   */
+  normalizeLocalSystemTableWriteResult(result) {
+    if (!result || typeof result !== TYPEOF.OBJECT) {
+      return result;
+    }
+    if (typeof result.affectedRows === TYPEOF.NUMBER ||
+        typeof result.changes !== TYPEOF.NUMBER) {
+      return result;
+    }
+    return {
+      ...result,
+      affectedRows: result.changes,
+    };
+  }
+
+  /**
+   * Try to execute a steady-state system-table write through a local partition
+   * service before falling back to the routed SQL path.
+   * @param {string} sql
+   * @param {Array<*>} params
+   * @return {Promise<{handled: boolean, result?: Object}>}
+   * @private
+   */
+  async tryExecuteLocalSystemTableWrite(sql, params = []) {
+    if (!sql || typeof sql !== TYPEOF.STRING) {
+      return {handled: false};
+    }
+    if (sql.trim().toUpperCase().startsWith('SELECT')) {
+      return {handled: false};
+    }
+
+    const tableName = this.extractTableNameFromSQL(sql);
+    if (!tableName || !VALID_SYSTEM_TABLES.includes(tableName)) {
+      return {handled: false};
+    }
+
+    const localServices = this.resolveLocalSystemTableServices(tableName);
+    if (localServices.length === NUM.ZERO) {
+      return {handled: false};
+    }
+
+    for (const partitionService of localServices) {
+      if (typeof partitionService?.executeQuery !== TYPEOF.FUNCTION) {
+        continue;
+      }
+      try {
+        const localResult = await partitionService.executeQuery(sql, params);
+        const result = this.normalizeLocalSystemTableWriteResult(localResult);
+        if (!result || result.success === false) {
+          const message = result?.error || '';
+          if (this.isTransientCdcError(message)) {
+            continue;
+          }
+        }
+        return {
+          handled: true,
+          result,
+        };
+      } catch (error) {
+        if (this.isTransientCdcError(error?.message || '')) {
+          continue;
+        }
+        throw error;
+      }
+    }
+
+    return {handled: false};
+  }
+
+  /**
    * Validate table name is a valid system table.
    * @param {string} tableName - Table name to validate.
    * @throws {Error} If table name is invalid.
@@ -444,7 +990,7 @@ class CDCIntegrationService extends EventEmitter {
    * @return {Promise<Object>} Query result.
    * @private
    */
-  async executeSQLDirectToLocalPartition(sql, params = []) {
+  async executeSQLDirectToLocalPartition(sql, params = [], _options = {}) {
     if (!this.bootstrapMode || !this.localPartitionServices) {
       throw new Error(
         CDC_LOG_MSG.BOOTSTRAP_MODE_REQUIRED_FOR_DIRECT_SQL,
@@ -590,13 +1136,14 @@ class CDCIntegrationService extends EventEmitter {
    * 4. Partition executes query and generates CDC event
    * 5. CDC event updates all node caches
    *
-   * Requirements: 8.4, 8.5
-   * @param {string} sql - SQL query string.
-   * @param {Array} params - Query parameters.
-   * @return {Promise<Object>} Query result.
-   * @private
-   */
-  async executeSQLViaQueryEngine(sql, params = []) {
+  * Requirements: 8.4, 8.5
+  * @param {string} sql - SQL query string.
+  * @param {Array} params - Query parameters.
+   * @param {Object} [options={}] - Query execution options.
+  * @return {Promise<Object>} Query result.
+  * @private
+  */
+  async executeSQLViaQueryEngine(sql, params = [], options = {}) {
     // SQL-routed mode: Route through SQL engine to partition leader
     if (!this.sqlQueryEngine) {
       throw new Error(
@@ -614,11 +1161,32 @@ class CDCIntegrationService extends EventEmitter {
       Number(this.retryDelayMs) || CDC_DEFAULTS.RETRY_DELAY_MS,
     );
     const tableName = this.extractTableNameFromSQL(sql);
+    const queryTimeoutMs = Number(options?.queryTimeoutMs);
+    const queryOptions = {};
+    if (Number.isFinite(queryTimeoutMs) && queryTimeoutMs > NUM.ZERO) {
+      queryOptions.timeoutMs = Math.floor(queryTimeoutMs);
+    }
+    if (options?.cancellationToken) {
+      queryOptions.cancellationToken = options.cancellationToken;
+    }
 
     for (let attempt = NUM.ONE; attempt <= maxAttempts; attempt += NUM.ONE) {
       try {
         const attemptStartMs = Date.now();
-        const result = await this.sqlQueryEngine.executeQuery(sql, params);
+        if (!this.bootstrapMode) {
+          const localWriteResult = await this.tryExecuteLocalSystemTableWrite(
+            sql,
+            params,
+          );
+          if (localWriteResult.handled) {
+            return localWriteResult.result;
+          }
+        }
+        const result = await this.sqlQueryEngine.executeQuery(
+          sql,
+          params,
+          queryOptions,
+        );
 
         if (result && result.success === false) {
           const message = result.error || ERRORS.QUERY_FAILED;
@@ -676,14 +1244,15 @@ class CDCIntegrationService extends EventEmitter {
    * Execute SQL using the active write-router strategy.
    * @param {string} sql
    * @param {Array} params
+   * @param {Object} [options={}]
    * @return {Promise<Object>}
    * @private
    */
-  async executeSQL(sql, params = []) {
+  async executeSQL(sql, params = [], options = {}) {
     if (!this.writeRouter || typeof this.writeRouter.execute !== TYPEOF.FUNCTION) {
       throw new Error('CDC write router is not configured');
     }
-    return this.writeRouter.execute(sql, params);
+    return this.writeRouter.execute(sql, params, options);
   }
 
   /**
@@ -992,15 +1561,14 @@ class CDCIntegrationService extends EventEmitter {
   ) {
     const cacheMutationTarget = this.cacheMutationTarget;
     if (!this.shouldWaitForCacheUpdate(tableName) ||
-      !this.sqlQueryEngine ||
-      typeof this.sqlQueryEngine.executeQuery !== TYPEOF.FUNCTION ||
       !cacheMutationTarget ||
       typeof cacheMutationTarget.applySystemTableChange !== TYPEOF.FUNCTION) {
       return false;
     }
 
     const primaryKeyField = this.getPrimaryKeyField(tableName);
-    const queryResult = await this.sqlQueryEngine.executeQuery(
+    const queryResult = await this.executeAuthoritativeSystemTableRead(
+      tableName,
       `SELECT * FROM ${tableName} WHERE ${primaryKeyField} = ?`,
       [key],
     );
@@ -1638,7 +2206,10 @@ class CDCIntegrationService extends EventEmitter {
         `${SQL.VALUES} (${placeholders})`;
 
       const sqlStartMs = Date.now();
-      const result = await this.executeSQL(sql, values);
+      const result = await this.executeSQL(sql, values, {
+        queryTimeoutMs: options?.queryTimeoutMs,
+        cancellationToken: options?.cancellationToken || null,
+      });
       const sqlDurationMs = Date.now() - sqlStartMs;
 
       if (!result.success) {
@@ -1753,7 +2324,10 @@ class CDCIntegrationService extends EventEmitter {
         `${SQL.WHERE} ${whereStr}`;
 
       const sqlStartMs = Date.now();
-      const result = await this.executeSQL(sql, [...setValues, ...whereValues]);
+      const result = await this.executeSQL(sql, [...setValues, ...whereValues], {
+        queryTimeoutMs: options?.queryTimeoutMs,
+        cancellationToken: options?.cancellationToken || null,
+      });
       const sqlDurationMs = Date.now() - sqlStartMs;
 
       if (!result.success) {
@@ -1848,9 +2422,10 @@ class CDCIntegrationService extends EventEmitter {
    *
    * @param {string} tableName - System table name.
    * @param {Object} whereClause - WHERE clause conditions (must include primary key).
+   * @param {Object} [options] - Delete options.
    * @return {Promise<Object>} Delete result.
    */
-  async deleteSystemTableRow(tableName, whereClause) {
+  async deleteSystemTableRow(tableName, whereClause, options = {}) {
     this.validateTableName(tableName);
     this.validateData(whereClause, CDC_OPERATION_LABEL.DELETE_WHERE);
 
@@ -1873,7 +2448,10 @@ class CDCIntegrationService extends EventEmitter {
       const {whereStr, values} = this.buildWhereParts(whereClause);
       const sql = `${SQL.DELETE_FROM} ${tableName} ${SQL.WHERE} ${whereStr}`;
 
-      const result = await this.executeSQL(sql, values);
+      const result = await this.executeSQL(sql, values, {
+        queryTimeoutMs: options?.queryTimeoutMs,
+        cancellationToken: options?.cancellationToken || null,
+      });
 
       if (!result.success) {
         throw new Error(result.error || CDC_ERROR_MSG.DELETE_FAILED);
@@ -1966,7 +2544,10 @@ class CDCIntegrationService extends EventEmitter {
       const sql = `${SQL.INSERT_OR_REPLACE_INTO} ${tableName} (${columns}) ` +
         `${SQL.VALUES} (${placeholders})`;
 
-      const result = await this.executeSQL(sql, values);
+      const result = await this.executeSQL(sql, values, {
+        queryTimeoutMs: options?.queryTimeoutMs,
+        cancellationToken: options?.cancellationToken || null,
+      });
 
       if (!result.success) {
         throw new Error(result.error || CDC_ERROR_MSG.UPSERT_FAILED);

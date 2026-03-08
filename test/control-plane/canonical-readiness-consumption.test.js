@@ -46,6 +46,8 @@ function buildReadiness(nodeId, ready) {
         ready,
       [CONTROL_PLANE_READINESS_DIMENSION
         .METADATA_PUBLICATION_HEALTHY]: true,
+      [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: ready,
+      [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: ready,
     },
     reasons: [],
   };
@@ -98,6 +100,17 @@ function createMinimalCache(nodes = []) {
       }
       return [];
     },
+  };
+}
+
+function createPublicationOwner() {
+  return {
+    getPublicationModeDiagnostics: () => ({
+      currentMode: 'grouped',
+      reasonCode: 'normal',
+      enteredAt: new Date().toISOString(),
+      recentTransitions: [],
+    }),
   };
 }
 
@@ -172,6 +185,7 @@ test('ReplicaDispatchService.isNodeReady consumes canonical readiness',
         const noReadiness = new ReplicaDispatchService({
           nodeId: FIXTURE_NODE_ID,
           systemTableCache: cache,
+          cdcGroupPropagationService: createPublicationOwner(),
         });
         // Default readiness service is created from cache;
         // node with valid lease is ready via default service.
@@ -279,6 +293,7 @@ test('UnifiedRebalancer.getAvailableNodes consumes canonical readiness',
             canStartRemoveOperation: async () => true,
             getStats: () => ({}),
           },
+          cdcGroupPropagationService: createPublicationOwner(),
         });
         const available = noReadiness.getAvailableNodes();
         t.ok(
@@ -374,6 +389,10 @@ test('RebalanceCoordinator.isNodeReadyForRouting consumes canonical',
           },
           sqlQueryEngine: {
             executeQuery: async () => ({success: true, rows: []}),
+          },
+          cdcGroupPropagationService: {
+            getPublicationModeDiagnostics:
+              createPublicationOwner().getPublicationModeDiagnostics,
           },
           operationWorkflowCoordinator:
             new DurableWorkflowCoordinator(),

@@ -47,6 +47,16 @@ const INVARIANT_ID = Object.freeze({
     'control_plane.claim_exclusivity',
   ORPHAN_IN_FLIGHT:
     'control_plane.orphan_in_flight',
+  CONTROL_PLANE_REPLICA_OPERATIONS_SINGLE_WRITER:
+    'control_plane.replica_operations_single_writer',
+  CONTROL_PLANE_ACK_BEFORE_ADVANCE:
+    'control_plane.ack_before_advance',
+  CONTROL_PLANE_SPLIT_RESUME_COMPLETENESS:
+    'control_plane.split_resume_completeness',
+  CONTROL_PLANE_READINESS_DIMENSION_CORRECTNESS:
+    'control_plane.readiness_dimension_correctness',
+  CONTROL_PLANE_TRANSACTION_COORDINATOR_REQUIRED:
+    'control_plane.transaction_coordinator_required',
 });
 
 function freezeDefinition(definition) {
@@ -216,6 +226,69 @@ const INVARIANT_CATALOG = Object.freeze({
         'every in-flight operation has a corresponding owner key',
     },
   }),
+  [INVARIANT_ID.CONTROL_PLANE_REPLICA_OPERATIONS_SINGLE_WRITER]:
+    freezeDefinition({
+      id: INVARIANT_ID.CONTROL_PLANE_REPLICA_OPERATIONS_SINGLE_WRITER,
+      severity: INVARIANT_SEVERITY.CRITICAL,
+      scope: INVARIANT_SCOPE.CLUSTER,
+      owningSubsystem: 'invariant-engine',
+      defaultReasonCode: 'replica_operations_single_writer_violation',
+      expected: {
+        condition:
+          'owner-managed replica_operations fields are written only by ' +
+          'RebalanceCoordinator',
+      },
+    }),
+  [INVARIANT_ID.CONTROL_PLANE_ACK_BEFORE_ADVANCE]: freezeDefinition({
+    id: INVARIANT_ID.CONTROL_PLANE_ACK_BEFORE_ADVANCE,
+    severity: INVARIANT_SEVERITY.CRITICAL,
+    scope: INVARIANT_SCOPE.PARTITION,
+    owningSubsystem: 'invariant-engine',
+    defaultReasonCode: 'ack_before_advance_violation',
+    expected: {
+      condition:
+        'executor-owned topology phases advance only after durable ' +
+        'participant acknowledgement',
+    },
+  }),
+  [INVARIANT_ID.CONTROL_PLANE_SPLIT_RESUME_COMPLETENESS]: freezeDefinition({
+    id: INVARIANT_ID.CONTROL_PLANE_SPLIT_RESUME_COMPLETENESS,
+    severity: INVARIANT_SEVERITY.CRITICAL,
+    scope: INVARIANT_SCOPE.PARTITION,
+    owningSubsystem: 'invariant-engine',
+    defaultReasonCode: 'split_resume_incomplete',
+    expected: {
+      condition:
+        'resumable split workflows persist workflow identity, phase, ' +
+        'participant state, and required source checkpoints',
+    },
+  }),
+  [INVARIANT_ID.CONTROL_PLANE_READINESS_DIMENSION_CORRECTNESS]:
+    freezeDefinition({
+      id: INVARIANT_ID.CONTROL_PLANE_READINESS_DIMENSION_CORRECTNESS,
+      severity: INVARIANT_SEVERITY.CRITICAL,
+      scope: INVARIANT_SCOPE.NODE,
+      owningSubsystem: 'invariant-engine',
+      defaultReasonCode: 'readiness_dimension_incorrect',
+      expected: {
+        condition:
+          'internal topology consumers gate on repairEligible while ' +
+          'routing and benchmark consumers gate on serveEligible',
+      },
+    }),
+  [INVARIANT_ID.CONTROL_PLANE_TRANSACTION_COORDINATOR_REQUIRED]:
+    freezeDefinition({
+      id: INVARIANT_ID.CONTROL_PLANE_TRANSACTION_COORDINATOR_REQUIRED,
+      severity: INVARIANT_SEVERITY.CRITICAL,
+      scope: INVARIANT_SCOPE.CLUSTER,
+      owningSubsystem: 'invariant-engine',
+      defaultReasonCode: 'transaction_coordinator_required',
+      expected: {
+        condition:
+          'atomic topology transitions do not execute when the distributed ' +
+          'transaction coordinator is absent',
+      },
+    }),
 });
 
 function clonePayload(payload) {

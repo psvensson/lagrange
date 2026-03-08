@@ -186,12 +186,12 @@ const BOOTSTRAP_API_ASSIGNMENT = Object.freeze({
   FIELD_ID: 'assignment_id',
   OPERATION_TYPE: 'MOVE_ASSIGNMENT',
   ACTIVE_RESERVATION_STATUSES: Object.freeze([
-    'active',
     'creating',
     'syncing',
     'removing',
   ]),
   TERMINAL_STATUSES: Object.freeze([
+    'active',
     'failed',
     'removed',
   ]),

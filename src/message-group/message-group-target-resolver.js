@@ -35,6 +35,15 @@ function getActiveMessageGroupServiceCandidates(cache, groupId) {
   });
 }
 
+function isExcludedCandidate(row, options = {}) {
+  const excludeServiceId = options.excludeServiceId || null;
+  const excludeNodeId = options.excludeNodeId || null;
+  return Boolean(
+    (excludeServiceId && row?.[COLUMN.SERVICE_ID] === excludeServiceId) ||
+    (excludeNodeId && row?.[COLUMN.NODE_ID] === excludeNodeId),
+  );
+}
+
 function getCanonicalLeaderNodeId(cache, groupId) {
   const groupRow = findRow(cache, TABLES.MESSAGE_GROUPS, (row) => {
     return row?.[COLUMN.GROUP_ID] === groupId;
@@ -52,7 +61,6 @@ function resolveCanonicalLeaderServiceCandidate(
   candidates,
   options = {},
 ) {
-  const excludeServiceId = options.excludeServiceId || null;
   const leaderNodeId = getCanonicalLeaderNodeId(cache, groupId);
 
   if (!leaderNodeId) {
@@ -61,7 +69,7 @@ function resolveCanonicalLeaderServiceCandidate(
 
   return candidates.find((row) => {
     return row?.[COLUMN.NODE_ID] === leaderNodeId &&
-      (!excludeServiceId || row[COLUMN.SERVICE_ID] !== excludeServiceId);
+      !isExcludedCandidate(row, options);
   }) || null;
 }
 
@@ -82,18 +90,16 @@ function resolveMessageGroupLeaderServiceFromCache(cache, groupId, options = {})
     return null;
   }
 
-  const excludeServiceId = options.excludeServiceId || null;
   return candidates.find((row) => {
     return row[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER &&
-      (!excludeServiceId || row[COLUMN.SERVICE_ID] !== excludeServiceId);
+      !isExcludedCandidate(row, options);
   }) || null;
 }
 
 function resolveMessageGroupForwardServiceFromCache(cache, groupId, options = {}) {
-  const excludeServiceId = options.excludeServiceId || null;
   const candidates = getActiveMessageGroupServiceCandidates(cache, groupId)
     .filter((row) => {
-      return !excludeServiceId || row[COLUMN.SERVICE_ID] !== excludeServiceId;
+      return !isExcludedCandidate(row, options);
     });
 
   if (candidates.length === NUM.ZERO) {
@@ -143,7 +149,6 @@ function resolveMessageGroupForwardServiceFromCache(cache, groupId, options = {}
 }
 
 function resolveMessageGroupTargetAddressFromCache(cache, groupId, options = {}) {
-  const excludeServiceId = options.excludeServiceId || null;
   const seedNodeId = options.seedNodeId || null;
   const isConnectedNode = typeof options.isConnectedNode === TYPEOF.FUNCTION ?
     options.isConnectedNode :
@@ -157,7 +162,7 @@ function resolveMessageGroupTargetAddressFromCache(cache, groupId, options = {})
   const preferredLeader = resolveMessageGroupLeaderServiceFromCache(
     cache,
     groupId,
-    {excludeServiceId},
+    options,
   );
   if (preferredLeader &&
       isConnectedNode(preferredLeader[COLUMN.NODE_ID])) {
@@ -166,7 +171,7 @@ function resolveMessageGroupTargetAddressFromCache(cache, groupId, options = {})
 
   const preferredSeedConnected = candidates.find((row) => {
     return (!!seedNodeId && row[COLUMN.NODE_ID] === seedNodeId) &&
-      (!excludeServiceId || row[COLUMN.SERVICE_ID] !== excludeServiceId) &&
+      !isExcludedCandidate(row, options) &&
       isConnectedNode(row[COLUMN.NODE_ID]);
   });
   if (preferredSeedConnected) {
@@ -174,7 +179,7 @@ function resolveMessageGroupTargetAddressFromCache(cache, groupId, options = {})
   }
 
   const anyConnected = candidates.find((row) => {
-    return (!excludeServiceId || row[COLUMN.SERVICE_ID] !== excludeServiceId) &&
+    return !isExcludedCandidate(row, options) &&
       isConnectedNode(row[COLUMN.NODE_ID]);
   });
   if (anyConnected) {

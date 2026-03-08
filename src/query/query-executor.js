@@ -1241,6 +1241,9 @@ class QueryExecutor {
       forRead && preferSameLatencyGroup,
     );
     const canonicalLeaderNodeId = this.getPartitionLeaderNodeId(partitionId);
+    const bootstrapLeaderServices = !forRead && !canonicalLeaderNodeId ?
+      this.getFreshBootstrapLeaderServices(partitionId, orderedServices) :
+      [];
     const candidates = [];
     const seen = new Set();
     const addService = (service) => {
@@ -1265,6 +1268,10 @@ class QueryExecutor {
 
     if (!forRead) {
       if (!canonicalLeaderNodeId) {
+        if (bootstrapLeaderServices.length > NUM.ZERO) {
+          bootstrapLeaderServices.forEach(addService);
+          return candidates;
+        }
         this.logCanonicalLeaderRoutingGap(partitionId, {
           reason: LEADER_GAP_REASON_OWNER_MISSING,
           services: orderedServices,
@@ -1527,6 +1534,68 @@ class QueryExecutor {
     return typeof leaderNodeId === 'string' && leaderNodeId.length > NUM.ZERO ?
       leaderNodeId :
       null;
+  }
+
+  /**
+   * Resolve a bootstrap-only leader fallback while the partition owner row is
+   * still in its fresh-creation window and leader_node_id has not converged.
+   * Steady-state writes still fail closed when canonical owner metadata is
+   * absent or ambiguous.
+   * @param {string} partitionId
+   * @param {Object[]} services
+   * @return {Object[]}
+   * @private
+   */
+  getFreshBootstrapLeaderServices(partitionId, services) {
+    const partition = this.getPartitionRecord(partitionId);
+    if (!this.isFreshPartitionBootstrapWindow(partition)) {
+      return [];
+    }
+
+    const leaderServices = services.filter((service) =>
+      String(service?.raft_role || '').toLowerCase() ===
+        String(RAFT_ROLE.LEADER).toLowerCase(),
+    );
+    if (leaderServices.length === NUM.ONE) {
+      return leaderServices;
+    }
+
+    return services.length === NUM.ONE ? [services[NUM.ZERO]] : [];
+  }
+
+  /**
+   * Identify the narrow bootstrap window where a partition has been created
+   * but the canonical leader_node_id has not yet been persisted.
+   * @param {Object|null} partition
+   * @return {boolean}
+   * @private
+   */
+  isFreshPartitionBootstrapWindow(partition) {
+    if (!partition) {
+      return false;
+    }
+    const leaderNodeId =
+      partition?.[COLUMN.LEADER_NODE_ID] ??
+      partition?.leader_node_id ??
+      partition?.leaderNodeId ??
+      null;
+    if (typeof leaderNodeId === 'string' && leaderNodeId.length > NUM.ZERO) {
+      return false;
+    }
+
+    const createdAt =
+      partition?.[COLUMN.CREATED_AT] ??
+      partition?.created_at ??
+      partition?.createdAt ??
+      null;
+    const updatedAt =
+      partition?.[COLUMN.UPDATED_AT] ??
+      partition?.updated_at ??
+      partition?.updatedAt ??
+      null;
+    return Number.isFinite(createdAt) &&
+      Number.isFinite(updatedAt) &&
+      createdAt === updatedAt;
   }
 
   /**

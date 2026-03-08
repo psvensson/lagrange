@@ -22,6 +22,10 @@ import {SERVICE_TYPE} from '../../src/constants/service.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
+import {
+  PRESSURE_BEHAVIOR_DECISION,
+  PRESSURE_STATE,
+} from '../../src/rebalancer/storage-capacity-constants.js';
 
 // Initialize test environment
 function initializeTestEnvironment() {
@@ -171,6 +175,8 @@ function createMockReadinessService(mockCache) {
               false,
             [CONTROL_PLANE_READINESS_DIMENSION
               .METADATA_PUBLICATION_HEALTHY]: true,
+            [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: false,
+            [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: false,
           },
           reasons: [],
         };
@@ -195,6 +201,10 @@ function createMockReadinessService(mockCache) {
             healthy,
           [CONTROL_PLANE_READINESS_DIMENSION
             .METADATA_PUBLICATION_HEALTHY]: true,
+          [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]:
+            healthy,
+          [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]:
+            healthy,
         },
         reasons: [],
       };
@@ -298,6 +308,10 @@ test('UnifiedRebalancer - Basic Initialization', async (t) => {
         rebalancer.movePlanner.storageAdmissionService,
         rebalancer.storageAdmissionService,
       );
+      t.equal(
+        rebalancer.movePlanner.storagePressureBehavior.accountingService,
+        rebalancer.storageAccountingService,
+      );
     });
 
   await t.test('setRebalanceCoordinator refreshes owner dependencies',
@@ -332,6 +346,111 @@ test('UnifiedRebalancer - Basic Initialization', async (t) => {
         rebalancer.movePlanner.accountingService,
         replacementCoordinator.storageAccountingService,
       );
+      t.equal(
+        rebalancer.movePlanner.storagePressureBehavior.accountingService,
+        replacementCoordinator.storageAccountingService,
+      );
+    });
+
+  await t.test('rebalance applies storage pressure gating through the ' +
+    'canonical pressure owner', async (t) => {
+      const now = Date.now();
+      const pressureCalls = [];
+      const rebalancer = new UnifiedRebalancer({
+        entityId: 'partition-1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        systemTableCache: createMockCache(
+          [{
+            node_id: 'node-1',
+            status: 'active',
+            ready_lease_expires_at: now + 10000,
+          }, {
+            node_id: 'node-2',
+            status: 'active',
+            ready_lease_expires_at: now + 10000,
+          }],
+          [{
+            service_id: 'svc-1',
+            partition_id: 'partition-1',
+            node_id: 'node-1',
+            status: 'active',
+            address: 'node-1/partition/partition-1',
+          }],
+          [{
+            partition_id: 'partition-1',
+            table_id: 'tbl-1',
+            leader_node_id: 'node-1',
+            replica_count: 2,
+          }],
+          [{
+            table_id: 'tbl-1',
+            table_name: 'users',
+            table_policies: JSON.stringify({targetReplicaCount: 2}),
+          }],
+          [],
+        ),
+        cdcIntegrationService: createMockCdcService(),
+        tablePolicyService: {
+          getPolicyForPartition: () => ({
+            targetReplicaCount: 2,
+            placementConstraints: {},
+          }),
+        },
+        messageRouter: createMockMessageRouter(),
+        rebalanceCoordinator: createMockCoordinator(),
+        sqlQueryEngine: {
+          async executeQuery() {
+            return {success: true, rows: []};
+          },
+        },
+        controlPlaneReadinessService: {
+          getNodeReadinessSync: () => ({
+            dimensions: {
+              [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+            },
+          }),
+          getNodeReadiness: async () => ({
+            dimensions: {
+              [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+            },
+          }),
+        },
+        storagePressureBehavior: {
+          async shouldAllowMove(nodeId, criticality) {
+            pressureCalls.push({nodeId, criticality});
+            return {
+              decision: PRESSURE_BEHAVIOR_DECISION.ALLOW,
+              pressureState: nodeId === 'node-2' ?
+                PRESSURE_STATE.HARD :
+                PRESSURE_STATE.NORMAL,
+            };
+          },
+        },
+      });
+
+      rebalancer.setLeader(true);
+      try {
+        const result = await rebalancer.rebalance(
+          TriggerType.PERIODIC,
+          {
+            targetReplicaCount: 2,
+            placementConstraints: {},
+          },
+        );
+
+        t.equal(result.success, true);
+        t.ok(
+          pressureCalls.some((call) =>
+            call.nodeId === 'node-2' &&
+            call.criticality === 'critical'),
+          'active rebalance path must consult the injected pressure owner ' +
+          'for the storage-increasing target node',
+        );
+      } finally {
+        rebalancer.setLeader(false);
+        await rebalancer.shutdown();
+      }
     });
 
   await t.test('sets leader status', async (t) => {

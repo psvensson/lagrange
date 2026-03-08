@@ -526,8 +526,9 @@ class PartitionCDCGenerator {
    */
   extractParamUpdateData(sql, params, tableName) {
     // Parse UPDATE table SET col1 = ?, col2 = ? WHERE pk = ?
-    const setMatch = sql.match(/SET\s+(.+?)\s+WHERE/i);
-    const whereMatch = sql.match(/WHERE\s+(.+)$/i);
+    // Use [\s\S] so multiline SQL emitted by query builders stays parseable.
+    const setMatch = sql.match(/\bSET\s+([\s\S]+?)\s+\bWHERE\b/i);
+    const whereMatch = sql.match(/\bWHERE\s+([\s\S]+)$/i);
 
     if (!setMatch) {
       this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_PARSE_PARAM_UPDATE_SET_FAILED, {
@@ -562,10 +563,20 @@ class PartitionCDCGenerator {
       return {};
     }
 
-    // Build data object
+    // Build data object while preserving UPDATE semantics:
+    // SET-column values are authoritative; WHERE-only columns backfill keys.
     const data = {};
-    for (let i = NUM.ZERO; i < allColumns.length; i++) {
-      data[allColumns[i]] = params[i];
+    let paramIndex = NUM.ZERO;
+    for (const column of setColumns) {
+      data[column] = params[paramIndex];
+      paramIndex += NUM.ONE;
+    }
+    for (const column of whereColumns) {
+      const value = params[paramIndex];
+      paramIndex += NUM.ONE;
+      if (!Object.prototype.hasOwnProperty.call(data, column)) {
+        data[column] = value;
+      }
     }
 
     this.logger.debug(PARTITION_SERVICE_LOG_MSG.EXTRACTED_PARAM_UPDATE, {
@@ -596,7 +607,8 @@ class PartitionCDCGenerator {
    */
   extractParamDeleteData(sql, params, tableName) {
     // Parse DELETE FROM table WHERE pk = ? or WHERE (pk = ?)
-    const whereMatch = sql.match(/WHERE\s+\(?(.+?)\)?$/i);
+    // Use [\s\S] for multiline predicates.
+    const whereMatch = sql.match(/\bWHERE\s+([\s\S]+)$/i);
     if (!whereMatch) {
       this.logger.warn(PARTITION_SERVICE_ERROR_MSG.CDC_PARSE_PARAM_DELETE_WHERE_FAILED, {
         sql: sql.substring(

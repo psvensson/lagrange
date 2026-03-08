@@ -144,6 +144,65 @@ test('BootstrapService node-ready rebalance trigger ownership', async (t) => {
   });
 
   await t.test(
+    'accepts delayed ready CDC rows that were ready when written',
+    async (t) => {
+      const bootstrapService = new BootstrapService({
+        nodeId: 'seed-node',
+        nodeAddress: 'localhost:8080',
+        config: {
+          nodeReadyRebalanceDelayMs: NODE_READY_REBALANCE_DELAY_MS,
+        },
+      });
+      const now = Date.now();
+      setReadyNodeCache(bootstrapService, [{
+        node_id: 'node-delayed-ready',
+        status: SERVICE_STATUS.ACTIVE,
+        connection_state: STATE.DISCONNECTED,
+        last_heartbeat: now,
+        ready_lease_expires_at: now + LEASE_VALID_MS,
+      }]);
+
+      const reasons = [];
+      bootstrapService.triggerRebalancingOnAllPartitions = (reason) => {
+        reasons.push(reason);
+      };
+
+      const delayedReadyEvent = {
+        data: {
+          node_id: 'node-delayed-ready',
+          status: SERVICE_STATUS.ACTIVE,
+          connection_state: STATE.DISCONNECTED,
+          last_heartbeat: now - 60000,
+          ready_lease_expires_at: now - 30000,
+        },
+      };
+      const previousRow = createPreviousNodeRow(
+        'node-delayed-ready',
+        LEASE_EXPIRED_MS,
+      );
+      previousRow.last_heartbeat = now - 120000;
+      previousRow.ready_lease_expires_at = now - 121000;
+
+      const scheduled = bootstrapService.handleNodeReadyRebalanceTrigger(
+        delayedReadyEvent,
+        previousRow,
+      );
+      t.equal(
+        scheduled,
+        true,
+        'delayed ready row should still schedule rebalance when it was ready at write time',
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, WAIT_FOR_TIMER_FLUSH_MS));
+      t.same(
+        reasons,
+        [BOOTSTRAP_REBALANCE_REASON.NODE_READY],
+        'delayed ready row should eventually trigger one rebalance',
+      );
+    },
+  );
+
+  await t.test(
     'logs no-transition skip at debug level to avoid default log noise',
     async (t) => {
       const bootstrapService = new BootstrapService({
@@ -493,6 +552,87 @@ test('BootstrapService node-ready rebalance trigger ownership', async (t) => {
         reasons.length,
         1,
         'lease flap should not create additional node_ready rebalance triggers',
+      );
+    },
+  );
+
+  await t.test(
+    'ignores stale not-ready regressions while a newer ready trigger is pending',
+    async (t) => {
+      const nodeId = 'node-stale-regression';
+      const now = Date.now();
+      const bootstrapService = new BootstrapService({
+        nodeId: 'seed-node',
+        nodeAddress: 'localhost:8080',
+        config: {
+          nodeReadyRebalanceDelayMs: NODE_READY_REBALANCE_DELAY_MS,
+        },
+      });
+      setReadyNodeCache(bootstrapService, [
+        {
+          node_id: nodeId,
+          status: SERVICE_STATUS.ACTIVE,
+          connection_state: STATE.DISCONNECTED,
+          last_heartbeat: now,
+          ready_lease_expires_at: now + LEASE_VALID_MS,
+        },
+      ]);
+
+      const reasons = [];
+      bootstrapService.triggerRebalancingOnAllPartitions = (reason) => {
+        reasons.push(reason);
+      };
+
+      const firstScheduled = bootstrapService.handleNodeReadyRebalanceTrigger(
+        {
+          data: {
+            node_id: nodeId,
+            status: SERVICE_STATUS.ACTIVE,
+            connection_state: STATE.DISCONNECTED,
+            last_heartbeat: now,
+            ready_lease_expires_at: now + LEASE_VALID_MS,
+          },
+        },
+        {
+          node_id: nodeId,
+          status: SERVICE_STATUS.ACTIVE,
+          connection_state: STATE.DISCONNECTED,
+          last_heartbeat: now - 5000,
+          ready_lease_expires_at: now - 6000,
+        },
+      );
+      t.equal(firstScheduled, true, 'fresh ready transition should schedule');
+
+      const staleRegressionScheduled =
+        bootstrapService.handleNodeReadyRebalanceTrigger(
+          {
+            data: {
+              node_id: nodeId,
+              status: SERVICE_STATUS.ACTIVE,
+              connection_state: STATE.DISCONNECTED,
+              last_heartbeat: now - 10000,
+              ready_lease_expires_at: now - 5000,
+            },
+          },
+          {
+            node_id: nodeId,
+            status: SERVICE_STATUS.ACTIVE,
+            connection_state: STATE.DISCONNECTED,
+            last_heartbeat: now,
+            ready_lease_expires_at: now + LEASE_VALID_MS,
+          },
+        );
+      t.equal(
+        staleRegressionScheduled,
+        false,
+        'stale regression should be ignored instead of clearing the pending trigger',
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, WAIT_FOR_TIMER_FLUSH_MS));
+      t.same(
+        reasons,
+        [BOOTSTRAP_REBALANCE_REASON.NODE_READY],
+        'stale regression should not cancel the pending rebalance trigger',
       );
     },
   );

@@ -331,8 +331,10 @@ class MessageRouter extends EventEmitter {
 
     // Function to resolve service address to node ID
     this.resolveServiceNode = options.resolveServiceNode || null;
+    this.resolveNodeAddress = options.resolveNodeAddress || null;
     this.resolveQueryMessageGroupService =
       options.resolveQueryMessageGroupService || null;
+    this.pendingNodeConnections = new Map();
   }
 
   /**
@@ -785,7 +787,10 @@ class MessageRouter extends EventEmitter {
             }
             return;
           }
-          this.handleConnectionClose(connectionInfo.nodeId);
+          this.handleConnectionClose(
+            connectionInfo.nodeId,
+            connectionInfo.connectionId,
+          );
         });
 
         ws.on(TRANSPORT_EVENT.ERROR, (error) => {
@@ -838,7 +843,10 @@ class MessageRouter extends EventEmitter {
       this.handleMessage(connectionInfo.nodeId, clientWs, data);
     });
     clientWs.on(TRANSPORT_EVENT.CLOSE, () => {
-      this.handleConnectionClose(connectionInfo.nodeId);
+      this.handleConnectionClose(
+        connectionInfo.nodeId,
+        connectionInfo.connectionId,
+      );
     });
     clientWs.on(TRANSPORT_EVENT.ERROR, (error) => {
       this.logger.error(ROUTER_LOG_MSG.WS_ERROR, {
@@ -1005,9 +1013,24 @@ class MessageRouter extends EventEmitter {
 
       const existing = this.nodeConnections.get(nodeId);
       const isSelfConnection = existing?.isSelfConnection && nodeId === this.nodeId;
+      const existingConnected = Boolean(existing) &&
+        existing.state === ConnectionState.CONNECTED;
+      const preferIncomingConnection =
+        this.nodeId.localeCompare(nodeId) > TRANSPORT_NUM.ZERO;
+      const shouldAdoptIncomingConnection = !existing ||
+        (!isSelfConnection &&
+          (!existingConnected || preferIncomingConnection));
 
-      if (!existing || !isSelfConnection) {
-        if (existing && existing.ws && existing.connectionId !== connectionId) {
+      if (isSelfConnection) {
+        this.logger.debug(ROUTER_LOG_MSG.KEEP_ORIGINAL_CONNECTION, {
+          connectionId,
+          nodeId,
+          reason: ROUTER_LOG_MSG.SELF_CONNECTION_ALREADY_REGISTERED,
+        });
+      } else if (shouldAdoptIncomingConnection) {
+        if (existing &&
+            existing.ws &&
+            existing.connectionId !== connectionId) {
           try {
             existing.ws.terminate();
           } catch (error) {
@@ -1015,8 +1038,11 @@ class MessageRouter extends EventEmitter {
               nodeId,
               error: error.message,
             });
-            throw error;
           }
+        }
+        if (existing &&
+            this.nodeConnections.get(nodeId) === existing) {
+          this.nodeConnections.delete(nodeId);
         }
         this.nodeConnections.delete(connectionId);
         this.nodeConnections.set(nodeId, connection);
@@ -1029,8 +1055,17 @@ class MessageRouter extends EventEmitter {
         this.logger.debug(ROUTER_LOG_MSG.KEEP_ORIGINAL_CONNECTION, {
           connectionId,
           nodeId,
-          reason: ROUTER_LOG_MSG.SELF_CONNECTION_ALREADY_REGISTERED,
+          reason: 'existing_connection_preferred',
         });
+        this.nodeConnections.delete(connectionId);
+        try {
+          ws.terminate();
+        } catch (error) {
+          this.logger.warn(ROUTER_LOG_MSG.FAILED_TERMINATE_EXISTING, {
+            nodeId,
+            error: error.message,
+          });
+        }
       }
     }
 
@@ -1339,10 +1374,21 @@ class MessageRouter extends EventEmitter {
    * Self-disconnection is treated as a fatal error (no reconnection).
    * Requirements: 2.1
    * @param {string} nodeId - Node ID.
+   * @param {string|null} expectedConnectionId - Optional stale-close fence.
    * @private
    */
-  handleConnectionClose(nodeId) {
+  handleConnectionClose(nodeId, expectedConnectionId = null) {
     const connection = this.nodeConnections.get(nodeId);
+    if (expectedConnectionId &&
+        connection &&
+        connection.connectionId !== expectedConnectionId) {
+      this.logger.debug('Ignoring stale connection close event', {
+        nodeId,
+        expectedConnectionId,
+        actualConnectionId: connection.connectionId,
+      });
+      return;
+    }
 
     if (connection) {
       this.logger.info(ROUTER_LOG_MSG.CONNECTION_CLOSED, {
@@ -1592,6 +1638,14 @@ class MessageRouter extends EventEmitter {
    */
   setServiceNodeResolver(resolver) {
     this.resolveServiceNode = resolver;
+  }
+
+  /**
+   * Set the function to resolve node ID to a WebSocket address.
+   * @param {Function|null} resolver - Function(nodeId) => wsAddress or null.
+   */
+  setNodeAddressResolver(resolver) {
+    this.resolveNodeAddress = resolver || null;
   }
 
   /**
@@ -1936,28 +1990,36 @@ class MessageRouter extends EventEmitter {
 
     let deliveryOutcome;
     if (this.isQueryDataPlaneMessage(message)) {
-      const queryTransport = this.resolveQueryMessageGroupService ?
-        this.resolveQueryMessageGroupService() :
-        null;
-      if (!queryTransport ||
-        typeof queryTransport.sendMessage !== TRANSPORT_TYPEOF.FUNCTION) {
+      if (typeof this.resolveQueryMessageGroupService !==
+        TRANSPORT_TYPEOF.FUNCTION) {
         throw new Error(
           ROUTER_ERROR_MSG.QUERY_MESSAGE_GROUP_TRANSPORT_REQUIRED,
         );
       }
-      const queryResult = await queryTransport.sendMessage(
-        targetAddress,
-        message,
-      );
-      deliveryOutcome = {
-        result: queryResult,
-        queueWaitMs: TRANSPORT_NUM.ZERO,
-      };
-    } else if (targetNodeId === this.nodeId) {
+      const queryTransport = this.resolveQueryMessageGroupService();
+      if (queryTransport &&
+        typeof queryTransport.sendMessage === TRANSPORT_TYPEOF.FUNCTION) {
+        const queryResult = await queryTransport.sendMessage(
+          targetAddress,
+          message,
+        );
+        deliveryOutcome = {
+          result: queryResult,
+          queueWaitMs: TRANSPORT_NUM.ZERO,
+        };
+      } else {
+        this.logger.warn(ROUTER_LOG_MSG.TRANSPORT_FALLBACK_WS, {
+          targetNodeId,
+          targetAddress,
+          reason: ROUTER_ERROR_MSG.QUERY_MESSAGE_GROUP_TRANSPORT_REQUIRED,
+        });
+      }
+    }
+    if (!deliveryOutcome && targetNodeId === this.nodeId) {
       deliveryOutcome = await this.deliverLocal(
         targetAddress, messageId, message, correlationId,
       );
-    } else {
+    } else if (!deliveryOutcome) {
       deliveryOutcome = await this.deliverRemote(
         targetAddress, messageId, message,
         targetNodeId, correlationId,
@@ -2023,12 +2085,33 @@ class MessageRouter extends EventEmitter {
       messageId,
       targetNodeId,
     );
+    let earlyResponseError = null;
+    responsePromise.catch((error) => {
+      earlyResponseError = error;
+    });
 
     let ackResult;
     let queueWaitMs = TRANSPORT_NUM.ZERO;
     try {
       const ackOutcome = await this.enqueueOutbound(targetNodeId, () => {
-        const connection = this.nodeConnections.get(targetNodeId);
+        let connection = this.nodeConnections.get(targetNodeId);
+
+        if ((!connection || connection.state !== ConnectionState.CONNECTED) &&
+            !this.isShuttingDown) {
+          const reconnectAddress =
+            connection?.address ||
+            this.resolveNodeAddressForDelivery(targetNodeId);
+          if (reconnectAddress) {
+            return this.tryDeliverAfterReconnect(
+              reconnectAddress,
+              targetAddress,
+              messageId,
+              payload,
+              targetNodeId,
+              correlationId,
+            );
+          }
+        }
 
         if (!connection || connection.state !== ConnectionState.CONNECTED) {
           this.logger.warn(ROUTER_LOG_MSG.NO_TARGET_CONNECTION, {
@@ -2087,6 +2170,9 @@ class MessageRouter extends EventEmitter {
     this.armPendingResponseTimeout(messageId, this.messageTimeoutMs);
 
     try {
+      if (earlyResponseError) {
+        throw earlyResponseError;
+      }
       const serviceResult = await responsePromise;
       return {
         result: {
@@ -2108,6 +2194,126 @@ class MessageRouter extends EventEmitter {
         queueWaitMs,
       };
     }
+  }
+
+  /**
+   * Resolve a WebSocket address for one target node when delivery needs an
+   * on-demand connection recovery.
+   * @param {string} targetNodeId
+   * @return {string|null}
+   * @private
+   */
+  resolveNodeAddressForDelivery(targetNodeId) {
+    if (typeof this.resolveNodeAddress !== TRANSPORT_TYPEOF.FUNCTION) {
+      return null;
+    }
+    try {
+      const resolved = this.resolveNodeAddress(targetNodeId);
+      return typeof resolved === TRANSPORT_TYPEOF.STRING &&
+        resolved.length > TRANSPORT_NUM.ZERO ?
+        resolved :
+        null;
+    } catch (error) {
+      this.logger.warn('Failed to resolve node connection address for delivery recovery', {
+        targetNodeId,
+        localNodeId: this.nodeId,
+        error: error?.message || String(error),
+      });
+      return null;
+    }
+  }
+
+  /**
+   * Ensure a remote node connection exists for delivery recovery.
+   * @param {string} targetNodeId
+   * @param {string} address
+   * @return {Promise<Object|null>}
+   * @private
+   */
+  async ensureNodeConnection(targetNodeId, address) {
+    const existing = this.nodeConnections.get(targetNodeId);
+    if (existing && existing.state === ConnectionState.CONNECTED) {
+      return existing;
+    }
+
+    if (this.pendingNodeConnections.has(targetNodeId)) {
+      return this.pendingNodeConnections.get(targetNodeId);
+    }
+
+    const connectionPromise = (async () => {
+      try {
+        await this.connectToNode(targetNodeId, address);
+      } catch (error) {
+        this.logger.warn('Failed to reconnect target node before delivery', {
+          targetNodeId,
+          address,
+          localNodeId: this.nodeId,
+          error: error?.message || String(error),
+        });
+      } finally {
+        this.pendingNodeConnections.delete(targetNodeId);
+      }
+
+      const connection = this.nodeConnections.get(targetNodeId) || null;
+      return connection && connection.state === ConnectionState.CONNECTED ?
+        connection :
+        null;
+    })();
+    this.pendingNodeConnections.set(targetNodeId, connectionPromise);
+    return connectionPromise;
+  }
+
+  /**
+   * Reconnect to one node and retry the send once.
+   * @param {string} reconnectAddress
+   * @param {string} targetAddress
+   * @param {string} messageId
+   * @param {Object} payload
+   * @param {string} targetNodeId
+   * @param {string} correlationId
+   * @return {Promise<Object>}
+   * @private
+   */
+  async tryDeliverAfterReconnect(
+    reconnectAddress,
+    targetAddress,
+    messageId,
+    payload,
+    targetNodeId,
+    correlationId,
+  ) {
+    const connection = await this.ensureNodeConnection(
+      targetNodeId,
+      reconnectAddress,
+    );
+    if (!connection || connection.state !== ConnectionState.CONNECTED) {
+      this.logger.warn(ROUTER_LOG_MSG.NO_TARGET_CONNECTION, {
+        messageId,
+        targetAddress,
+        targetNodeId,
+        localNodeId: this.nodeId,
+        connectionExists: !!connection,
+        connectionState: connection?.state,
+        availableConnections: Array.from(this.nodeConnections.keys()),
+        reconnectAddress,
+        recoveredViaResolver: true,
+      });
+      return {
+        messageId,
+        correlationId,
+        acknowledged: false,
+        error: ROUTER_ERROR_MSG.noConnectionToNode(targetNodeId),
+      };
+    }
+
+    return this.sendMessage(
+      connection,
+      targetAddress,
+      messageId,
+      payload,
+      targetNodeId,
+      correlationId,
+    );
   }
 
   /**

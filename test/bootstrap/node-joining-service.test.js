@@ -745,6 +745,135 @@ test('NodeJoiningService - falls back to bootstrap hints when authoritative targ
     );
   });
 
+test('NodeJoiningService - does not self-target move-replica heartbeats ' +
+  'when only local services metadata is present', async (t) => {
+  initializeTestEnvironment();
+
+  const service = new NodeJoiningService({
+    nodeId: 'joining-node-3',
+    nodeAddress: 'ws://localhost:9092',
+    seedNodeAddress: 'http://localhost:8080',
+  });
+
+  service.seedNodeId = 'seed-node-1';
+  service.bootstrapResponse = {
+    seedNodeId: 'seed-node-1',
+    messageGroupAssignment: {
+      strategy: AssignmentStrategy.MOVE_REPLICA,
+      groupId: 'mg-1',
+      replicaToMove: 'mg-1-r1',
+      peerAddresses: [
+        'seed-node-1/message-group/mg-1-r1',
+        'seed-node-1/message-group/mg-1-r3',
+      ],
+    },
+  };
+
+  service.messageRouter = {
+    getConnectionState: (nodeId) => {
+      return nodeId === 'seed-node-1' ||
+        nodeId === 'joining-node-3' ?
+        'connected' :
+        'disconnected';
+    },
+  };
+
+  const nodeService = NodeService.getInstance();
+  nodeService.initialize({nodeId: 'joining-node-3'});
+  const cache = nodeService.getSystemTableCache();
+  cache.applySystemTableChange('services', 'INSERT', {
+    service_id: 'mg-1-r1',
+    group_id: 'mg-1',
+    node_id: 'joining-node-3',
+    service_type: 'message_group',
+    address: 'joining-node-3/message-group/mg-1-r1',
+    status: 'active',
+    raft_role: 'leader',
+  });
+
+  t.equal(
+    service.resolveControlPlaneTargetAddress({allowBootstrapHints: false}),
+    null,
+    'authoritative target resolution should refuse self-loop heartbeats',
+  );
+  t.equal(
+    service.resolveControlPlaneTargetAddress(),
+    'seed-node-1/message-group/mg-1-r3',
+    'move-replica heartbeats should fall back to seed bootstrap hints instead of self-targeting',
+  );
+});
+
+test('NodeJoiningService - prefers local target for NODE_STATE_UPDATE ' +
+  'when authoritative metadata has a local active replica', async (t) => {
+  initializeTestEnvironment();
+
+  const service = new NodeJoiningService({
+    nodeId: 'joining-node-local',
+    nodeAddress: 'ws://localhost:9093',
+    seedNodeAddress: 'http://localhost:8080',
+  });
+
+  service.seedNodeId = 'seed-node-1';
+  service.bootstrapResponse = {
+    seedNodeId: 'seed-node-1',
+    messageGroupAssignment: {
+      strategy: AssignmentStrategy.MOVE_REPLICA,
+      groupId: 'mg-1',
+      replicaToMove: 'mg-1-r1',
+      peerAddresses: [
+        'seed-node-1/message-group/mg-1-r1',
+        'seed-node-1/message-group/mg-1-r3',
+      ],
+    },
+  };
+
+  const deliveries = [];
+  service.messageRouter = {
+    getConnectionState(nodeId) {
+      return nodeId === 'joining-node-local' || nodeId === 'seed-node-1' ?
+        'connected' :
+        'disconnected';
+    },
+    async deliver(targetAddress, message) {
+      deliveries.push({targetAddress, state: message.state});
+      return {acknowledged: true};
+    },
+  };
+
+  const nodeService = NodeService.getInstance();
+  nodeService.initialize({nodeId: 'joining-node-local'});
+  const cache = nodeService.getSystemTableCache();
+  cache.applySystemTableChange('services', 'INSERT', {
+    service_id: 'mg-1-r2',
+    group_id: 'mg-1',
+    node_id: 'joining-node-local',
+    service_type: 'message_group',
+    address: 'joining-node-local/message-group/mg-1-r2',
+    status: 'active',
+    raft_role: 'follower',
+    updated_at: 20,
+  });
+  cache.applySystemTableChange('services', 'INSERT', {
+    service_id: 'mg-1-r3',
+    group_id: 'mg-1',
+    node_id: 'seed-node-1',
+    service_type: 'message_group',
+    address: 'seed-node-1/message-group/mg-1-r3',
+    status: 'active',
+    raft_role: 'leader',
+    updated_at: 10,
+  });
+
+  await service.sendControlPlaneNodeStateUpdate({state: 'connected'});
+
+  t.same(deliveries, [
+    {
+      targetAddress: 'joining-node-local/message-group/mg-1-r2',
+      state: 'connected',
+    },
+  ], 'NODE_STATE_UPDATE should use the local active replica before remote routes');
+});
+
 test('NodeJoiningService - reconnects disconnected cluster peers during mesh connect',
   async (t) => {
     initializeTestEnvironment();
@@ -1214,8 +1343,8 @@ test('NodeJoiningService - signals readiness after querying state', async (t) =>
     'should signal readiness after state query');
   t.same(
     reporterAssignments,
-    [null],
-    'should disable bootstrap-only control-plane reporter after initial ready signal',
+    [],
+    'should not force control-plane reporter teardown after the initial ready signal',
   );
 });
 

@@ -34,6 +34,10 @@ function createMockReadinessService(systemTableCache) {
               .CONTROL_PLANE_WRITABLE]: false,
             [CONTROL_PLANE_READINESS_DIMENSION
               .METADATA_PUBLICATION_HEALTHY]: true,
+            [CONTROL_PLANE_READINESS_DIMENSION
+              .REPAIR_ELIGIBLE]: false,
+            [CONTROL_PLANE_READINESS_DIMENSION
+              .SERVE_ELIGIBLE]: false,
           },
           reasons: [],
         };
@@ -58,6 +62,10 @@ function createMockReadinessService(systemTableCache) {
             .CONTROL_PLANE_WRITABLE]: healthy,
           [CONTROL_PLANE_READINESS_DIMENSION
             .METADATA_PUBLICATION_HEALTHY]: true,
+          [CONTROL_PLANE_READINESS_DIMENSION
+            .REPAIR_ELIGIBLE]: healthy,
+          [CONTROL_PLANE_READINESS_DIMENSION
+            .SERVE_ELIGIBLE]: healthy,
         },
         reasons: [],
       };
@@ -271,6 +279,16 @@ test('dispatch reads use cache-backed owner state only', async (t) => {
       },
     },
     rebalanceCoordinator: {
+      claimDispatchTransition: async (operationId) => {
+        return {
+          operationId,
+          type: operationRow.type,
+          partitionId: operationRow.partition_id,
+          replicaId: operationRow.replica_id,
+          sourceNodeId: operationRow.source_node_id,
+          targetNodeId: operationRow.target_node_id,
+        };
+      },
       executeOperation: async () => {
         executeCount += 1;
         return {success: true};

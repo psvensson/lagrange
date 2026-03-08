@@ -92,6 +92,9 @@ Required coverage:
 4. **Missing-row behavior** - Add a test proving a missing authoritative row is
    handled only by the canonical creation owner, not by a local fallback inside
    an updater.
+5. **Primary-key mutation path** - For CDC-propagated system tables, add a
+   regression that lifecycle updates are executed with primary-key-addressed
+   writes (query rows, then update by PK) rather than broad predicate updates.
 
 These tests should be small and targeted. The goal is to prove architecture
 conformance, not just end-state behavior.
@@ -119,6 +122,9 @@ Required workflow:
 5. In test descriptions, name the owner path being verified (for example
    "uses `storageAdmissionService.checkSplit`" or
    "refreshes via `setRebalanceCoordinator`").
+6. For CDC-replicated system-table lifecycle changes, include at least one
+   regression that fails when writes are keyed by non-primary predicates instead
+   of canonical primary key.
 
 ## Deterministic Control-Loop Regression Policy
 
@@ -138,6 +144,15 @@ Required coverage:
    step transitions except explicit terminal recovery transitions.
 5. **Stale-fence rejection** - Add a regression proving stale owner claims or
    stale events cannot overwrite newer transitions.
+6. **Acknowledgement-before-advance** - For executor-owned boundaries, add a
+   regression proving the owner advances only after durable participant
+   acknowledgement rather than cache timing or elapsed time.
+7. **Readiness-dimension verification** - For topology changes, assert that
+   internal consumers use `repairEligible` and that routing/benchmark paths use
+   `serveEligible`.
+8. **Cache observation boundary** - Add a regression proving cache divergence
+   emits typed diagnostics/invariant input and that recovery re-enters the same
+   owner queue rather than a direct mutation fallback.
 
 ## Test Duration Hard Limit
 
@@ -339,6 +354,12 @@ distributed baseline:
 6. If a baseline failure cannot yet be reproduced below the full harness,
    record that gap explicitly and keep the issue open until the deterministic
    layer exists.
+7. Treat timeouts as hard correctness failures by default. Do not raise product,
+   harness, or scenario timeouts as a fix until a deterministic root-cause
+   reproduction exists.
+8. For each timeout failure, add or refine diagnostics that identify the owning
+   subsystem (for example queue depth, in-flight work, and backpressure/admission
+   signals) before rerunning broad harness scenarios.
 
 ## Node Join Convergence SLO Strategy
 

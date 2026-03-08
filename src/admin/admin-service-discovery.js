@@ -112,10 +112,13 @@ const SERVICE_DISCOVERY_SCHEMA_VERSION_FIELD_CANDIDATES = Object.freeze([
 const AUTHORITATIVE_REPAIR_COOLDOWN_MS = 1000;
 const AUTHORITATIVE_REPAIR_QUERY_TIMEOUT_MS = 1500;
 const AUTHORITATIVE_REPAIR_STALE_THRESHOLD_MS = 5000;
+const AUTHORITATIVE_REPAIR_REUSE_WINDOW_MS =
+  AUTHORITATIVE_REPAIR_STALE_THRESHOLD_MS;
 const AUTHORITATIVE_DISCOVERY_REPAIR = Object.freeze({
   COOLDOWN_MS: AUTHORITATIVE_REPAIR_COOLDOWN_MS,
   QUERY_TIMEOUT_MS: AUTHORITATIVE_REPAIR_QUERY_TIMEOUT_MS,
   STALE_THRESHOLD_MS: AUTHORITATIVE_REPAIR_STALE_THRESHOLD_MS,
+  REUSE_WINDOW_MS: AUTHORITATIVE_REPAIR_REUSE_WINDOW_MS,
   TABLES: Object.freeze([
     TABLES.NODES,
     TABLES.PARTITIONS,
@@ -387,9 +390,15 @@ class AdminServiceDiscovery {
       typeof deps.executeSqlRequestWithTimeout === TYPEOF.FUNCTION ?
         deps.executeSqlRequestWithTimeout :
         null;
+    this.nowFn =
+      typeof deps.nowFn === TYPEOF.FUNCTION ?
+        deps.nowFn :
+        () => Date.now();
 
     this.authoritativeDiscoveryRepairPromise = null;
     this.lastAuthoritativeDiscoveryRepairAtMs = NUM.ZERO;
+    this.lastAuthoritativeDiscoveryRepairCompletedAtMs = NUM.ZERO;
+    this.lastAuthoritativeDiscoveryRepairResult = null;
   }
 
   /**
@@ -788,6 +797,269 @@ class AdminServiceDiscovery {
       }
     }
     return null;
+  }
+
+  /**
+   * Resolve every local partition service that hosts one partition.
+   * @param {Map<string, Object>|null} partitionServices
+   * @param {string} partitionId
+   * @return {Object[]}
+   */
+  resolveLocalPartitionServicesForPartition(
+    partitionServices, partitionId,
+  ) {
+    if (!(partitionServices instanceof Map) || !partitionId) {
+      return ADMIN_CACHE_DUMP.EMPTY;
+    }
+
+    const matches = [];
+    const seenServices = new Set();
+    const directMatch = partitionServices.get(partitionId) || null;
+    if (directMatch && !seenServices.has(directMatch)) {
+      matches.push(directMatch);
+      seenServices.add(directMatch);
+    }
+
+    for (const partitionService of partitionServices.values()) {
+      if (!partitionService ||
+          partitionService.partitionId !== partitionId ||
+          seenServices.has(partitionService)) {
+        continue;
+      }
+      matches.push(partitionService);
+      seenServices.add(partitionService);
+    }
+
+    return matches;
+  }
+
+  /**
+   * Resolve cached system-table partition IDs for one table.
+   * @param {string} tableName
+   * @return {string[]}
+   */
+  resolveSystemTablePartitionIds(tableName) {
+    if (!this.systemTableCache) {
+      return ADMIN_CACHE_DUMP.EMPTY;
+    }
+
+    const partitionPredicate = (row) => {
+      const rowTableName = firstStringField(
+        row,
+        COLUMN.TABLE_NAME,
+        'table_name',
+        'tableName',
+      );
+      const rowTableId = firstStringField(
+        row,
+        COLUMN.TABLE_ID,
+        'table_id',
+        'tableId',
+      );
+      return rowTableName === tableName || rowTableId === tableName;
+    };
+    const partitionRows =
+      typeof this.systemTableCache.filter === TYPEOF.FUNCTION ?
+        this.systemTableCache.filter(
+          TABLES.PARTITIONS,
+          partitionPredicate,
+        ) :
+        typeof this.systemTableCache.getAll === TYPEOF.FUNCTION ?
+          (this.systemTableCache.getAll(TABLES.PARTITIONS) || [])
+            .filter(partitionPredicate) :
+          ADMIN_CACHE_DUMP.EMPTY;
+    return [...new Set(partitionRows
+      .map((row) =>
+        firstStringField(
+          row,
+          COLUMN.PARTITION_ID,
+          'partition_id',
+          'partitionId',
+          'id',
+        ))
+      .filter(Boolean))];
+  }
+
+  /**
+   * Query authoritative rows from node-local partition replicas.
+   * @param {string} tableName
+   * @return {{available: boolean, rows: Object[]}}
+   */
+  queryLocalAuthoritativeSystemTableRows(tableName) {
+    const partitionServices = this.resolveLocalPartitionServices();
+    if (!(partitionServices instanceof Map)) {
+      return {
+        available: false,
+        rows: ADMIN_CACHE_DUMP.EMPTY,
+      };
+    }
+
+    const partitionIds =
+      this.resolveSystemTablePartitionIds(tableName);
+    if (partitionIds.length === NUM.ZERO) {
+      return {
+        available: false,
+        rows: ADMIN_CACHE_DUMP.EMPTY,
+      };
+    }
+
+    const sql = `SELECT * FROM ${tableName}`;
+    const rowSets = [];
+    let available = false;
+    for (const partitionId of partitionIds) {
+      const localServices =
+        this.resolveLocalPartitionServicesForPartition(
+          partitionServices,
+          partitionId,
+        );
+      for (const partitionService of localServices) {
+        if (partitionService?.initialized !== true ||
+            typeof partitionService?.db?.prepare !== TYPEOF.FUNCTION) {
+          continue;
+        }
+        try {
+          const rows = partitionService.db.prepare(sql).all();
+          rowSets.push(Array.isArray(rows) ? rows : ADMIN_CACHE_DUMP.EMPTY);
+          available = true;
+        } catch (error) {
+          this.logger?.warn?.(
+            'Failed to read authoritative discovery rows ' +
+              'from local partition replica',
+            {
+              nodeId: this.nodeId,
+              tableName,
+              partitionId,
+              replicaId:
+                partitionService?.replicaId ||
+                partitionService?.service_id ||
+                null,
+              error: error.message,
+            },
+          );
+        }
+      }
+    }
+
+    return {
+      available,
+      rows: available ?
+        this.mergeAuthoritativeSystemTableRowSets(tableName, rowSets) :
+        ADMIN_CACHE_DUMP.EMPTY,
+    };
+  }
+
+  /**
+   * Merge replicated authoritative row sets by primary key.
+   * @param {string} tableName
+   * @param {Object[][]} rowSets
+   * @return {Object[]}
+   */
+  mergeAuthoritativeSystemTableRowSets(tableName, rowSets) {
+    const keyField =
+      getSystemCachePrimaryKeyField(tableName) || 'id';
+    const mergedRows = new Map();
+
+    for (const rowSet of rowSets) {
+      const rows = Array.isArray(rowSet) ?
+        rowSet :
+        ADMIN_CACHE_DUMP.EMPTY;
+      for (const row of rows) {
+        const key = row?.[keyField] ?? row?.id;
+        if (typeof key === TYPEOF.UNDEFINED ||
+            key === null) {
+          continue;
+        }
+        const existing = mergedRows.get(key);
+        if (!existing ||
+            this.isAuthoritativeRepairRowNewer(row, existing)) {
+          mergedRows.set(key, row);
+        }
+      }
+    }
+
+    return [...mergedRows.values()];
+  }
+
+  /**
+   * Prefer the fresher authoritative repair row.
+   * @param {Object} candidate
+   * @param {Object} existing
+   * @return {boolean}
+   */
+  isAuthoritativeRepairRowNewer(candidate, existing) {
+    const candidateVersion =
+      extractSchemaVersionFromRecord(candidate);
+    const existingVersion =
+      extractSchemaVersionFromRecord(existing);
+    if (candidateVersion && existingVersion) {
+      return compareSchemaVersionValues(
+        candidateVersion,
+        existingVersion,
+      ) > NUM.ZERO;
+    }
+    if (candidateVersion && !existingVersion) {
+      return true;
+    }
+    if (!candidateVersion && existingVersion) {
+      return false;
+    }
+
+    return JSON.stringify(candidate).length >
+      JSON.stringify(existing).length;
+  }
+
+  /**
+   * Resolve one authoritative row set for bounded discovery repair.
+   * Prefers direct local partition reads so control snapshots do not
+   * depend on the hot routed SQL lane.
+   * @param {string} tableName
+   * @param {Object} options
+   * @return {Promise<{tableName: string, rows: Object[]}>}
+   */
+  async readAuthoritativeSystemTableRows(
+    tableName, options = {},
+  ) {
+    const localRows =
+      this.queryLocalAuthoritativeSystemTableRows(tableName);
+    if (localRows.available) {
+      return {
+        tableName,
+        rows: localRows.rows,
+      };
+    }
+
+    if (typeof this.executeSqlRequestWithTimeout !==
+        TYPEOF.FUNCTION) {
+      throw new Error('authoritative_row_source_unavailable');
+    }
+
+    const now = options.nowMs || Date.now();
+    const queryResult =
+      await this.executeSqlRequestWithTimeout(
+        createSqlRequest({
+          statement: `SELECT * FROM ${tableName}`,
+          parameters: ADMIN_CACHE_DUMP.EMPTY,
+          sessionId:
+            `${String(options.reason || 'repair')}` +
+            `:${tableName}:${now}`,
+          executionMode:
+            EXECUTION_MODE.SQL_STATEMENT,
+        }),
+        AUTHORITATIVE_DISCOVERY_REPAIR
+          .QUERY_TIMEOUT_MS,
+      );
+    if (queryResult?.success === false) {
+      throw new Error(
+        queryResult.error ||
+          'authoritative_query_failed',
+      );
+    }
+    return {
+      tableName,
+      rows: Array.isArray(queryResult?.rows) ?
+        queryResult.rows :
+        ADMIN_CACHE_DUMP.EMPTY,
+    };
   }
 
   /**
@@ -1455,17 +1727,10 @@ class AdminServiceDiscovery {
       const operationId = normalizedOperation.operationId;
       const status = normalizedOperation.status;
       const type = normalizedOperation.type;
-      const nodeIds = uniqueSorted([
-        firstStringField(
-          row, 'source_node_id', 'sourceNodeId',
-        ),
-        firstStringField(
-          row,
-          COLUMN.TARGET_NODE_ID,
-          'target_node_id',
-          'targetNodeId',
-        ),
-      ]);
+      const nodeIds =
+        this.resolveReplicaOperationDegradedNodeIds(
+          normalizedOperation,
+        );
       if (!operationId || nodeIds.length === NUM.ZERO) {
         continue;
       }
@@ -1555,6 +1820,28 @@ class AdminServiceDiscovery {
   }
 
   /**
+   * Resolve which nodes should be benchmark-degraded by one
+   * replica operation.
+   * ADD/REMOVE rows degrade the node hosting the affected replica.
+   * REPLACE rows degrade both the source and the replacement target.
+   * @param {Object} operation
+   * @return {Array<string>}
+   */
+  resolveReplicaOperationDegradedNodeIds(operation) {
+    const sourceNodeId = String(
+      operation?.sourceNodeId || EMPTY_STRING,
+    );
+    const targetNodeId = String(
+      operation?.targetNodeId || EMPTY_STRING,
+    );
+    if (operation?.type === REPLICA_OPERATION_TYPE.ADD ||
+        operation?.type === REPLICA_OPERATION_TYPE.REMOVE) {
+      return uniqueSorted([targetNodeId || sourceNodeId]);
+    }
+    return uniqueSorted([sourceNodeId, targetNodeId]);
+  }
+
+  /**
    * Determine whether one replica operation applies to the
    * discovered scope.
    * @param {Object} row
@@ -1619,9 +1906,6 @@ class AdminServiceDiscovery {
     if (!this.systemTableCache ||
         !this.cacheMutationTarget ||
         typeof this.cacheMutationTarget.applySystemTableChange !==
-          TYPEOF.FUNCTION ||
-        !this.sqlQueryEngine ||
-        typeof this.sqlQueryEngine.executeRequest !==
           TYPEOF.FUNCTION) {
       return {
         applied: false,
@@ -1629,10 +1913,27 @@ class AdminServiceDiscovery {
         tableCount: NUM.ZERO,
       };
     }
+    const hasLocalSource =
+      this.resolveLocalPartitionServices() instanceof Map;
+    const hasSqlFallback =
+      typeof this.executeSqlRequestWithTimeout ===
+      TYPEOF.FUNCTION;
+    if (!hasLocalSource && !hasSqlFallback) {
+      return {
+        applied: false,
+        skipped: true,
+        tableCount: NUM.ZERO,
+      };
+    }
 
-    const now = Date.now();
+    const now = this.nowFn();
     if (this.authoritativeDiscoveryRepairPromise) {
       return this.authoritativeDiscoveryRepairPromise;
+    }
+    const recentRepairResult =
+      this.resolveRecentAuthoritativeDiscoveryRepair(options, now);
+    if (recentRepairResult) {
+      return recentRepairResult;
     }
     if (now - this.lastAuthoritativeDiscoveryRepairAtMs <
       AUTHORITATIVE_DISCOVERY_REPAIR.COOLDOWN_MS) {
@@ -1648,61 +1949,53 @@ class AdminServiceDiscovery {
         'admin-authoritative-discovery-repair:' +
         String(options.reason || 'unknown') +
         ':' + String(now);
-      const queryResults = await Promise.allSettled(
-        AUTHORITATIVE_DISCOVERY_REPAIR.TABLES.map(
-          async (tableName) => {
-            const queryResult =
-              await this.executeSqlRequestWithTimeout(
-                createSqlRequest({
-                  statement: `SELECT * FROM ${tableName}`,
-                  parameters: ADMIN_CACHE_DUMP.EMPTY,
-                  sessionId:
-                    `${String(options.reason || 'repair')}` +
-                    `:${tableName}:${now}`,
-                  executionMode:
-                    EXECUTION_MODE.SQL_STATEMENT,
-                }),
-                AUTHORITATIVE_DISCOVERY_REPAIR
-                  .QUERY_TIMEOUT_MS,
-              );
-            if (queryResult?.success === false) {
-              throw new Error(
-                queryResult.error ||
-                  'authoritative_query_failed',
-              );
-            }
-            return {
-              tableName,
-              rows: Array.isArray(queryResult?.rows) ?
-                queryResult.rows :
-                ADMIN_CACHE_DUMP.EMPTY,
-            };
-          },
-        ),
-      );
-
       let repairedTableCount = NUM.ZERO;
       let repairedRowCount = NUM.ZERO;
       const errors = [];
-      for (const result of queryResults) {
-        if (result.status !== 'fulfilled') {
+      for (const tableName of AUTHORITATIVE_DISCOVERY_REPAIR.TABLES) {
+        let result = null;
+        try {
+          result = await this.readAuthoritativeSystemTableRows(
+            tableName,
+            {
+              nowMs: now,
+              reason: options.reason || 'repair',
+            },
+          );
+        } catch (error) {
           errors.push(String(
-            result.reason?.message ||
-            result.reason ||
+            error?.message ||
+            error ||
             'unknown_error',
           ));
           continue;
         }
         repairedRowCount +=
           this.applyAuthoritativeSystemTableRows(
-            result.value.tableName,
-            result.value.rows,
+            result.tableName,
+            result.rows,
             causeId,
           );
         repairedTableCount += NUM.ONE;
       }
 
-      this.lastAuthoritativeDiscoveryRepairAtMs = Date.now();
+      const completedAtMs = this.nowFn();
+      this.lastAuthoritativeDiscoveryRepairAtMs = completedAtMs;
+      if (repairedTableCount > NUM.ZERO) {
+        this.lastAuthoritativeDiscoveryRepairCompletedAtMs =
+          completedAtMs;
+        this.lastAuthoritativeDiscoveryRepairResult = {
+          applied: true,
+          skipped: false,
+          tableCount: repairedTableCount,
+          repairedRowCount,
+          completedAtMs,
+          reused: false,
+        };
+      } else {
+        this.lastAuthoritativeDiscoveryRepairCompletedAtMs = NUM.ZERO;
+        this.lastAuthoritativeDiscoveryRepairResult = null;
+      }
       if (errors.length > NUM.ZERO) {
         this.logger.warn(
           'Authoritative discovery cache repair ' +
@@ -1730,8 +2023,8 @@ class AdminServiceDiscovery {
         );
       }
 
-      return {
-        applied: repairedTableCount > NUM.ZERO,
+      return this.lastAuthoritativeDiscoveryRepairResult || {
+        applied: false,
         skipped: false,
         tableCount: repairedTableCount,
       };
@@ -1742,6 +2035,48 @@ class AdminServiceDiscovery {
         this.authoritativeDiscoveryRepairPromise = null;
       });
     return this.authoritativeDiscoveryRepairPromise;
+  }
+
+  /**
+   * Reuse one recent successful repair result for non-forced callers so
+   * repeated local snapshots rebuild from the repaired cache instead of
+   * issuing another full discovery repair immediately.
+   * @param {Object} options
+   * @param {number} nowMs
+   * @return {Object|null}
+   * @private
+   */
+  resolveRecentAuthoritativeDiscoveryRepair(options = {}, nowMs = null) {
+    if (options?.bypassReuse === true) {
+      return null;
+    }
+    const completedAtMs = Number(
+      this.lastAuthoritativeDiscoveryRepairCompletedAtMs,
+    );
+    if (!Number.isFinite(completedAtMs) || completedAtMs <= NUM.ZERO) {
+      return null;
+    }
+    const reuseWindowMs = Number.isFinite(options?.reuseWindowMs) &&
+      options.reuseWindowMs > NUM.ZERO ?
+      Math.floor(options.reuseWindowMs) :
+      AUTHORITATIVE_DISCOVERY_REPAIR.REUSE_WINDOW_MS;
+    if (!Number.isFinite(reuseWindowMs) || reuseWindowMs <= NUM.ZERO) {
+      return null;
+    }
+    const effectiveNowMs = Number.isFinite(nowMs) ? nowMs : this.nowFn();
+    if (effectiveNowMs - completedAtMs > reuseWindowMs) {
+      return null;
+    }
+    if (!this.lastAuthoritativeDiscoveryRepairResult ||
+        this.lastAuthoritativeDiscoveryRepairResult.applied !== true) {
+      return null;
+    }
+    return {
+      ...this.lastAuthoritativeDiscoveryRepairResult,
+      reused: true,
+      skipped: false,
+      reusedAtMs: effectiveNowMs,
+    };
   }
 
   /**

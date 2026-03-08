@@ -11,6 +11,8 @@ const CONTROL_PLANE_READINESS_DIMENSION = Object.freeze({
   PLACEMENT_ELIGIBLE: 'placementEligible',
   CONTROL_PLANE_WRITABLE: 'controlPlaneWritable',
   METADATA_PUBLICATION_HEALTHY: 'metadataPublicationHealthy',
+  REPAIR_ELIGIBLE: 'repairEligible',
+  SERVE_ELIGIBLE: 'serveEligible',
 });
 
 const CONTROL_PLANE_READINESS_OWNER = Object.freeze({
@@ -42,6 +44,7 @@ const CONTROL_PLANE_PUBLICATION_MODE = Object.freeze({
 
 const CONTROL_PLANE_READINESS_DEFAULT = Object.freeze({
   LOAD_READY_MAX_PERCENT: NUM.HUNDRED,
+  CLUSTER_MEMBER_STALE_HEARTBEAT_MAX_AGE_MS: NUM.THIRTY_THOUSAND,
   NON_RUNNING_PROCESS_STATES: Object.freeze([
     NODE_STATE.FAILED,
     NODE_STATE.SHUTTING_DOWN,
@@ -64,6 +67,7 @@ const READINESS_SNAPSHOT_KEY = Object.freeze({
   REASON_CODES: 'reasonCodes',
   LIFECYCLE_STATE: 'lifecycleState',
   OBSERVED_AT: 'observedAt',
+  DECISION_DIMENSION: 'decisionDimension',
 });
 
 export {

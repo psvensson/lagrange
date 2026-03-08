@@ -1,17 +1,30 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {
+  assertInvariantGate,
+  buildInvariantArtifactRecords,
+  buildInvariantDiagnosticsBundle,
+  checkAckBeforeAdvance,
   checkLeaderUniqueness,
   checkMonotonicSteps,
   checkClaimExclusivity,
   checkOrphanInFlight,
+  checkReadinessDimensionCorrectness,
+  checkReplicaOperationSingleWriter,
+  checkSplitResumeCompleteness,
+  checkTransactionAvailability,
   evaluateInvariants,
   isBackwardStep,
 } from '../../src/control-plane/invariant-engine.js';
 import {INVARIANT_ID} from '../../src/invariants/invariant-catalog.js';
 import {
+  INVARIANT_BUNDLE_FIELD,
+  INVARIANT_GATE_ERROR_MESSAGE,
   INVARIANT_OUTCOME_SEVERITY,
   INVARIANT_REASON,
 } from '../../src/control-plane/invariant-constants.js';
+import {
+  summarizeInvariantBreaches,
+} from '../distributed/harness/invariant-breaches.js';
 
 // ── Suite-local fixture constants ──────────────────────────────────
 const FIXTURE_ENTITY_A = 'partition-1';
@@ -25,12 +38,88 @@ const FIXTURE_OP_1 = 'op-1';
 const FIXTURE_OP_2 = 'op-2';
 const FIXTURE_OWNER_KEY_A = 'owner-a';
 const FIXTURE_OWNER_KEY_B = 'owner-b';
+const FIXTURE_REBALANCE_COORDINATOR = 'RebalanceCoordinator';
+const FIXTURE_REPLICA_HANDLER = 'ReplicaHandler';
+const FIXTURE_PARTICIPANT_SOURCE = 'source-partition';
+const FIXTURE_CONSUMER_DISPATCH = 'ReplicaDispatchService';
+const FIXTURE_CONSUMER_ROUTING = 'RoutingService';
+const READINESS_DIMENSION_REPAIR = 'repairEligible';
+const READINESS_DIMENSION_SERVE = 'serveEligible';
+const FIXTURE_TRANSITION_ID = 'transition-1';
 const STEP_1 = 1;
 const STEP_2 = 2;
 const STEP_3 = 3;
 const STEP_STR_A = 'a_init';
 const STEP_STR_B = 'b_execute';
 const STEP_STR_C = 'c_finalize';
+
+function buildValidInvariantState(overrides = {}) {
+  return {
+    leaderRows: [
+      {entityId: FIXTURE_ENTITY_A, nodeId: FIXTURE_NODE_1},
+    ],
+    workflows: [{
+      workflowId: FIXTURE_WORKFLOW_A,
+      transitionHistory: [
+        {previousStep: STEP_1, nextStep: STEP_2},
+      ],
+    }],
+    claims: [
+      {operationId: FIXTURE_OP_1, ownerKey: FIXTURE_OWNER_KEY_A},
+    ],
+    inFlightOperations: [
+      {operationId: FIXTURE_OP_1, ownerKey: FIXTURE_OWNER_KEY_A},
+    ],
+    registeredOwnerKeys: new Set([FIXTURE_OWNER_KEY_A]),
+    replicaOperationWrites: [{
+      operationId: FIXTURE_OP_1,
+      writer: FIXTURE_REBALANCE_COORDINATOR,
+      fields: ['status', 'workflow_step'],
+    }],
+    phaseAdvances: [{
+      workflowId: FIXTURE_WORKFLOW_A,
+      participantKey: FIXTURE_PARTICIPANT_SOURCE,
+      acknowledged: true,
+      acknowledgedAt: 100,
+      advancedAt: 200,
+    }],
+    splitResumes: [{
+      workflowId: FIXTURE_WORKFLOW_A,
+      status: 'split_catchup',
+      participants: {
+        [FIXTURE_PARTICIPANT_SOURCE]: {status: 'catchup_ready'},
+      },
+      sourceCheckpoint: {snapshotRevision: 1, lastAppliedDelta: 2},
+      requiresResume: true,
+      requiresSourceCheckpoint: true,
+    }],
+    readinessDecisions: [
+      {
+        consumer: FIXTURE_CONSUMER_DISPATCH,
+        nodeId: FIXTURE_NODE_1,
+        decisionDimension: READINESS_DIMENSION_REPAIR,
+        repairEligible: true,
+        serveEligible: false,
+        consumerOutcome: true,
+      },
+      {
+        consumer: FIXTURE_CONSUMER_ROUTING,
+        nodeId: FIXTURE_NODE_1,
+        decisionDimension: READINESS_DIMENSION_SERVE,
+        repairEligible: true,
+        serveEligible: true,
+        consumerOutcome: true,
+      },
+    ],
+    atomicTransitions: [{
+      transitionId: FIXTURE_TRANSITION_ID,
+      ownerComponent: 'ManagedSplitWorkflow',
+      requiresTransactionCoordinator: true,
+      hasTransactionCoordinator: true,
+    }],
+    ...overrides,
+  };
+}
 
 // ═══════════════════════════════════════════════════════════════════
 // 1. Leader Uniqueness
@@ -350,31 +439,226 @@ test('isBackwardStep detects string backward', async (t) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════
-// 6. evaluateInvariants — full set evaluation
+// 6. Replica Operations Single Writer
 // ═══════════════════════════════════════════════════════════════════
 
-test('evaluateInvariants returns all four invariant results on ' +
-  'valid state', async (t) => {
-  const results = evaluateInvariants({
-    leaderRows: [
-      {entityId: FIXTURE_ENTITY_A, nodeId: FIXTURE_NODE_1},
-    ],
-    workflows: [{
-      workflowId: FIXTURE_WORKFLOW_A,
-      transitionHistory: [
-        {previousStep: STEP_1, nextStep: STEP_2},
-      ],
+test('checkReplicaOperationSingleWriter passes when ' +
+  'RebalanceCoordinator is the only owner-field writer', async (t) => {
+  const result = checkReplicaOperationSingleWriter({
+    replicaOperationWrites: [{
+      operationId: FIXTURE_OP_1,
+      writer: FIXTURE_REBALANCE_COORDINATOR,
+      fields: ['status', 'workflow_step', 'error_message'],
     }],
-    claims: [
-      {operationId: FIXTURE_OP_1, ownerKey: FIXTURE_OWNER_KEY_A},
-    ],
-    inFlightOperations: [
-      {operationId: FIXTURE_OP_1, ownerKey: FIXTURE_OWNER_KEY_A},
-    ],
-    registeredOwnerKeys: new Set([FIXTURE_OWNER_KEY_A]),
   });
 
-  t.equal(results.length, 4);
+  t.equal(
+    result.invariantId,
+    INVARIANT_ID.CONTROL_PLANE_REPLICA_OPERATIONS_SINGLE_WRITER,
+  );
+  t.equal(result.passed, true);
+  t.equal(
+    result.reason,
+    INVARIANT_REASON.REPLICA_OPERATION_SINGLE_WRITER,
+  );
+});
+
+test('checkReplicaOperationSingleWriter fails when a non-owner writes ' +
+  'owner-managed fields', async (t) => {
+  const result = checkReplicaOperationSingleWriter({
+    replicaOperationWrites: [
+      {
+        operationId: FIXTURE_OP_1,
+        writer: FIXTURE_REBALANCE_COORDINATOR,
+        fields: ['status'],
+      },
+      {
+        operationId: FIXTURE_OP_1,
+        writer: FIXTURE_REPLICA_HANDLER,
+        fields: ['workflow_step'],
+      },
+    ],
+  });
+
+  t.equal(result.passed, false);
+  t.equal(
+    result.reason,
+    INVARIANT_REASON.REPLICA_OPERATION_MULTI_WRITER_DETECTED,
+  );
+  t.equal(result.context.violations.length, 1);
+  t.same(
+    result.context.violations[0].writers,
+    [FIXTURE_REBALANCE_COORDINATOR, FIXTURE_REPLICA_HANDLER],
+  );
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// 7. Ack Before Advance
+// ═══════════════════════════════════════════════════════════════════
+
+test('checkAckBeforeAdvance passes when acknowledgement precedes ' +
+  'advancement', async (t) => {
+  const result = checkAckBeforeAdvance({
+    phaseAdvances: [{
+      workflowId: FIXTURE_WORKFLOW_A,
+      participantKey: FIXTURE_PARTICIPANT_SOURCE,
+      acknowledged: true,
+      acknowledgedAt: 100,
+      advancedAt: 200,
+    }],
+  });
+
+  t.equal(result.invariantId, INVARIANT_ID.CONTROL_PLANE_ACK_BEFORE_ADVANCE);
+  t.equal(result.passed, true);
+  t.equal(
+    result.reason,
+    INVARIANT_REASON.ACK_BEFORE_ADVANCE_ENFORCED,
+  );
+});
+
+test('checkAckBeforeAdvance fails when a phase advances without an ' +
+  'accepted acknowledgement', async (t) => {
+  const result = checkAckBeforeAdvance({
+    phaseAdvances: [{
+      workflowId: FIXTURE_WORKFLOW_A,
+      participantKey: FIXTURE_PARTICIPANT_SOURCE,
+      acknowledged: false,
+      acknowledgedAt: null,
+      advancedAt: 200,
+    }],
+  });
+
+  t.equal(result.passed, false);
+  t.equal(result.reason, INVARIANT_REASON.PHASE_ADVANCED_WITHOUT_ACK);
+  t.equal(result.context.violations.length, 1);
+  t.equal(result.context.violations[0].workflowId, FIXTURE_WORKFLOW_A);
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// 8. Split Resume Completeness
+// ═══════════════════════════════════════════════════════════════════
+
+test('checkSplitResumeCompleteness passes when resumable split ' +
+  'metadata is complete', async (t) => {
+  const result = checkSplitResumeCompleteness({
+    splitResumes: buildValidInvariantState().splitResumes,
+  });
+
+  t.equal(
+    result.invariantId,
+    INVARIANT_ID.CONTROL_PLANE_SPLIT_RESUME_COMPLETENESS,
+  );
+  t.equal(result.passed, true);
+  t.equal(result.reason, INVARIANT_REASON.SPLIT_RESUME_COMPLETE);
+});
+
+test('checkSplitResumeCompleteness fails when checkpoint state is ' +
+  'missing for a resumable split', async (t) => {
+  const result = checkSplitResumeCompleteness({
+    splitResumes: [{
+      workflowId: FIXTURE_WORKFLOW_A,
+      status: 'split_catchup',
+      participants: {
+        [FIXTURE_PARTICIPANT_SOURCE]: {status: 'catchup_ready'},
+      },
+      requiresResume: true,
+      requiresSourceCheckpoint: true,
+    }],
+  });
+
+  t.equal(result.passed, false);
+  t.equal(result.reason, INVARIANT_REASON.SPLIT_RESUME_INCOMPLETE);
+  t.same(
+    result.context.violations[0].missingFields,
+    ['sourceCheckpoint'],
+  );
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// 9. Readiness Dimension Correctness
+// ═══════════════════════════════════════════════════════════════════
+
+test('checkReadinessDimensionCorrectness passes when internal and ' +
+  'external consumers use the correct dimensions', async (t) => {
+  const result = checkReadinessDimensionCorrectness({
+    readinessDecisions: buildValidInvariantState().readinessDecisions,
+  });
+
+  t.equal(
+    result.invariantId,
+    INVARIANT_ID.CONTROL_PLANE_READINESS_DIMENSION_CORRECTNESS,
+  );
+  t.equal(result.passed, true);
+  t.equal(result.reason, INVARIANT_REASON.READINESS_DIMENSION_CORRECT);
+});
+
+test('checkReadinessDimensionCorrectness fails when an internal ' +
+  'consumer gates on serveEligible', async (t) => {
+  const result = checkReadinessDimensionCorrectness({
+    readinessDecisions: [{
+      consumer: FIXTURE_CONSUMER_DISPATCH,
+      nodeId: FIXTURE_NODE_1,
+      decisionDimension: READINESS_DIMENSION_SERVE,
+      repairEligible: true,
+      serveEligible: false,
+      consumerOutcome: false,
+    }],
+  });
+
+  t.equal(result.passed, false);
+  t.equal(result.reason, INVARIANT_REASON.READINESS_DIMENSION_INCORRECT);
+  t.equal(result.context.violations[0].violationType, 'wrong_dimension');
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// 10. Transaction Availability
+// ═══════════════════════════════════════════════════════════════════
+
+test('checkTransactionAvailability passes when required atomic ' +
+  'transitions have a coordinator', async (t) => {
+  const result = checkTransactionAvailability({
+    atomicTransitions: buildValidInvariantState().atomicTransitions,
+  });
+
+  t.equal(
+    result.invariantId,
+    INVARIANT_ID.CONTROL_PLANE_TRANSACTION_COORDINATOR_REQUIRED,
+  );
+  t.equal(result.passed, true);
+  t.equal(
+    result.reason,
+    INVARIANT_REASON.TRANSACTION_COORDINATOR_AVAILABLE,
+  );
+});
+
+test('checkTransactionAvailability fails when an atomic transition ' +
+  'is reachable without a coordinator', async (t) => {
+  const result = checkTransactionAvailability({
+    atomicTransitions: [{
+      transitionId: FIXTURE_TRANSITION_ID,
+      ownerComponent: 'ManagedSplitWorkflow',
+      requiresTransactionCoordinator: true,
+      hasTransactionCoordinator: false,
+    }],
+  });
+
+  t.equal(result.passed, false);
+  t.equal(
+    result.reason,
+    INVARIANT_REASON.TRANSACTION_COORDINATOR_MISSING,
+  );
+  t.equal(result.context.violations.length, 1);
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// 11. evaluateInvariants — full set evaluation
+// ═══════════════════════════════════════════════════════════════════
+
+test('evaluateInvariants returns the full invariant set on ' +
+  'valid state', async (t) => {
+  const results = evaluateInvariants(buildValidInvariantState());
+
+  t.equal(results.length, 9);
   t.ok(Object.isFrozen(results));
 
   const ids = results.map((r) => r.invariantId);
@@ -382,6 +666,15 @@ test('evaluateInvariants returns all four invariant results on ' +
   t.ok(ids.includes(INVARIANT_ID.MONOTONIC_STEPS));
   t.ok(ids.includes(INVARIANT_ID.CLAIM_EXCLUSIVITY));
   t.ok(ids.includes(INVARIANT_ID.ORPHAN_IN_FLIGHT));
+  t.ok(ids.includes(INVARIANT_ID.CONTROL_PLANE_REPLICA_OPERATIONS_SINGLE_WRITER));
+  t.ok(ids.includes(INVARIANT_ID.CONTROL_PLANE_ACK_BEFORE_ADVANCE));
+  t.ok(ids.includes(INVARIANT_ID.CONTROL_PLANE_SPLIT_RESUME_COMPLETENESS));
+  t.ok(
+    ids.includes(INVARIANT_ID.CONTROL_PLANE_READINESS_DIMENSION_CORRECTNESS),
+  );
+  t.ok(
+    ids.includes(INVARIANT_ID.CONTROL_PLANE_TRANSACTION_COORDINATOR_REQUIRED),
+  );
 
   for (const result of results) {
     t.equal(result.passed, true, `${result.invariantId} should pass`);
@@ -390,7 +683,7 @@ test('evaluateInvariants returns all four invariant results on ' +
 
 test('evaluateInvariants detects multiple violations in one call',
   async (t) => {
-    const results = evaluateInvariants({
+    const results = evaluateInvariants(buildValidInvariantState({
       leaderRows: [
         {entityId: FIXTURE_ENTITY_A, nodeId: FIXTURE_NODE_1},
         {entityId: FIXTURE_ENTITY_A, nodeId: FIXTURE_NODE_2},
@@ -409,89 +702,99 @@ test('evaluateInvariants detects multiple violations in one call',
         {operationId: FIXTURE_OP_2, ownerKey: FIXTURE_OWNER_KEY_B},
       ],
       registeredOwnerKeys: new Set(),
-    });
+      replicaOperationWrites: [{
+        operationId: FIXTURE_OP_1,
+        writer: FIXTURE_REPLICA_HANDLER,
+        fields: ['status'],
+      }],
+      phaseAdvances: [{
+        workflowId: FIXTURE_WORKFLOW_A,
+        participantKey: FIXTURE_PARTICIPANT_SOURCE,
+        acknowledged: false,
+        advancedAt: 200,
+      }],
+      splitResumes: [{
+        workflowId: FIXTURE_WORKFLOW_A,
+        status: 'split_catchup',
+        participants: {
+          [FIXTURE_PARTICIPANT_SOURCE]: {status: 'catchup_ready'},
+        },
+        requiresResume: true,
+        requiresSourceCheckpoint: true,
+      }],
+      readinessDecisions: [{
+        consumer: FIXTURE_CONSUMER_DISPATCH,
+        nodeId: FIXTURE_NODE_1,
+        decisionDimension: READINESS_DIMENSION_SERVE,
+        repairEligible: true,
+        serveEligible: false,
+        consumerOutcome: false,
+      }],
+      atomicTransitions: [{
+        transitionId: FIXTURE_TRANSITION_ID,
+        ownerComponent: 'ManagedSplitWorkflow',
+        requiresTransactionCoordinator: true,
+        hasTransactionCoordinator: false,
+      }],
+    }));
 
-    t.equal(results.length, 4);
+    t.equal(results.length, 9);
     const failed = results.filter((r) => !r.passed);
-    t.equal(failed.length, 4, 'all four invariants should fail');
+    t.equal(failed.length, 9, 'all invariants should fail');
   });
 
 test('evaluateInvariants handles null/undefined state gracefully',
   async (t) => {
     const results = evaluateInvariants(null);
-    t.equal(results.length, 4);
+    t.equal(results.length, 9);
     for (const result of results) {
       t.equal(result.passed, true);
     }
   });
 
 // ═══════════════════════════════════════════════════════════════════
-// 7. buildInvariantDiagnosticsBundle
+// 12. buildInvariantDiagnosticsBundle
 // ═══════════════════════════════════════════════════════════════════
-
-import {
-  buildInvariantDiagnosticsBundle,
-} from '../../src/control-plane/invariant-engine.js';
-import {
-  INVARIANT_BUNDLE_FIELD,
-} from '../../src/control-plane/invariant-constants.js';
 
 const FIXTURE_OWNER_KEY_DIAG = 'owner-diag-1';
 const FIXTURE_OP_DIAG = 'op-diag-1';
 
 test('buildInvariantDiagnosticsBundle summarizes all-passing results',
   async (t) => {
-    const results = evaluateInvariants({
-      leaderRows: [
-        {entityId: FIXTURE_ENTITY_A, nodeId: FIXTURE_NODE_1},
-      ],
-      workflows: [{
-        workflowId: FIXTURE_WORKFLOW_A,
-        transitionHistory: [
-          {previousStep: STEP_1, nextStep: STEP_2},
-        ],
-      }],
-      claims: [
-        {operationId: FIXTURE_OP_1, ownerKey: FIXTURE_OWNER_KEY_A},
-      ],
-      inFlightOperations: [
-        {operationId: FIXTURE_OP_1, ownerKey: FIXTURE_OWNER_KEY_A},
-      ],
-      registeredOwnerKeys: new Set([FIXTURE_OWNER_KEY_A]),
-    });
+    const results = evaluateInvariants(buildValidInvariantState());
 
     const bundle = buildInvariantDiagnosticsBundle(results);
 
     t.ok(Object.isFrozen(bundle));
-    t.equal(bundle.summary.total, 4);
-    t.equal(bundle.summary.passed, 4);
+    t.equal(bundle.summary.total, 9);
+    t.equal(bundle.summary.passed, 9);
     t.equal(bundle.summary.failed, 0);
     t.equal(bundle.summary.hardFailures, 0);
     t.equal(bundle.summary.softFailures, 0);
     t.equal(bundle.breaches.length, 0);
+    t.equal(bundle.artifactRecords.length, 9);
     t.ok(Object.isFrozen(bundle.breaches));
+    t.ok(Object.isFrozen(bundle.artifactRecords));
     t.ok(typeof bundle.timestamp === 'number');
   });
 
 test('buildInvariantDiagnosticsBundle separates hard and soft failures',
   async (t) => {
-    const results = evaluateInvariants({
+    const results = evaluateInvariants(buildValidInvariantState({
       leaderRows: [
         {entityId: FIXTURE_ENTITY_A, nodeId: FIXTURE_NODE_1},
         {entityId: FIXTURE_ENTITY_A, nodeId: FIXTURE_NODE_2},
       ],
-      workflows: [],
-      claims: [],
       inFlightOperations: [
         {operationId: FIXTURE_OP_1},
       ],
       registeredOwnerKeys: new Set(),
-    });
+    }));
 
     const bundle = buildInvariantDiagnosticsBundle(results);
 
-    t.equal(bundle.summary.total, 4);
-    t.equal(bundle.summary.passed, 2);
+    t.equal(bundle.summary.total, 9);
+    t.equal(bundle.summary.passed, 7);
     t.equal(bundle.summary.failed, 2);
     t.equal(bundle.summary.hardFailures, 1);
     t.equal(bundle.summary.softFailures, 1);
@@ -555,6 +858,29 @@ test('buildInvariantDiagnosticsBundle handles null owner key and ' +
   t.equal(bundle.breaches[0].operationId, null);
 });
 
+test('buildInvariantArtifactRecords produce catalog-shaped entries ' +
+  'consumable by harness summaries', async (t) => {
+  const results = evaluateInvariants(buildValidInvariantState({
+    phaseAdvances: [{
+      workflowId: FIXTURE_WORKFLOW_A,
+      participantKey: FIXTURE_PARTICIPANT_SOURCE,
+      acknowledged: false,
+      advancedAt: 200,
+    }],
+  }));
+
+  const artifactRecords = buildInvariantArtifactRecords(results);
+  const summary = summarizeInvariantBreaches(artifactRecords);
+
+  t.equal(artifactRecords.length, 9);
+  t.equal(summary.totalCount, 1);
+  t.equal(summary.hardCount, 1);
+  t.equal(
+    summary.hardBreaches[0].reasonCode,
+    INVARIANT_REASON.PHASE_ADVANCED_WITHOUT_ACK,
+  );
+});
+
 test('buildInvariantDiagnosticsBundle handles empty results array',
   async (t) => {
     const bundle = buildInvariantDiagnosticsBundle([]);
@@ -583,6 +909,7 @@ test('buildInvariantDiagnosticsBundle uses INVARIANT_BUNDLE_FIELD ' +
 
   t.ok(INVARIANT_BUNDLE_FIELD.SUMMARY in bundle);
   t.ok(INVARIANT_BUNDLE_FIELD.BREACHES in bundle);
+  t.ok(INVARIANT_BUNDLE_FIELD.ARTIFACT_RECORDS in bundle);
   t.ok(INVARIANT_BUNDLE_FIELD.TIMESTAMP in bundle);
   t.ok(INVARIANT_BUNDLE_FIELD.TOTAL in bundle.summary);
   t.ok(INVARIANT_BUNDLE_FIELD.PASSED in bundle.summary);
@@ -592,36 +919,12 @@ test('buildInvariantDiagnosticsBundle uses INVARIANT_BUNDLE_FIELD ' +
 });
 
 // ═══════════════════════════════════════════════════════════════════
-// 8. assertInvariantGate — deterministic hard invariant gate
+// 13. assertInvariantGate — deterministic hard invariant gate
 // ═══════════════════════════════════════════════════════════════════
-
-import {
-  assertInvariantGate,
-} from '../../src/control-plane/invariant-engine.js';
-import {
-  INVARIANT_GATE_ERROR_MESSAGE,
-} from '../../src/control-plane/invariant-constants.js';
 
 test('assertInvariantGate passes when all invariants pass',
   async (t) => {
-    const results = evaluateInvariants({
-      leaderRows: [
-        {entityId: FIXTURE_ENTITY_A, nodeId: FIXTURE_NODE_1},
-      ],
-      workflows: [{
-        workflowId: FIXTURE_WORKFLOW_A,
-        transitionHistory: [
-          {previousStep: STEP_1, nextStep: STEP_2},
-        ],
-      }],
-      claims: [
-        {operationId: FIXTURE_OP_1, ownerKey: FIXTURE_OWNER_KEY_A},
-      ],
-      inFlightOperations: [
-        {operationId: FIXTURE_OP_1, ownerKey: FIXTURE_OWNER_KEY_A},
-      ],
-      registeredOwnerKeys: new Set([FIXTURE_OWNER_KEY_A]),
-    });
+    const results = evaluateInvariants(buildValidInvariantState());
 
     assertInvariantGate(results);
     t.pass('gate did not throw on all-passing results');
@@ -740,9 +1043,113 @@ test('assertInvariantGate does NOT throw on orphan in-flight ' +
   t.pass('gate did not throw on soft-only failure');
 });
 
+test('assertInvariantGate throws on replica_operations single-writer ' +
+  'violation', async (t) => {
+  const results = evaluateInvariants(buildValidInvariantState({
+    replicaOperationWrites: [{
+      operationId: FIXTURE_OP_1,
+      writer: FIXTURE_REPLICA_HANDLER,
+      fields: ['status'],
+    }],
+  }));
+
+  try {
+    assertInvariantGate(results);
+    t.fail('gate should have thrown');
+  } catch (err) {
+    t.equal(err.message, INVARIANT_GATE_ERROR_MESSAGE);
+    t.ok(err.diagnosticsBundle.summary.hardFailures >= 1);
+  }
+});
+
+test('assertInvariantGate throws on ack-before-advance violation',
+  async (t) => {
+    const results = evaluateInvariants(buildValidInvariantState({
+      phaseAdvances: [{
+        workflowId: FIXTURE_WORKFLOW_A,
+        participantKey: FIXTURE_PARTICIPANT_SOURCE,
+        acknowledged: false,
+        advancedAt: 200,
+      }],
+    }));
+
+    try {
+      assertInvariantGate(results);
+      t.fail('gate should have thrown');
+    } catch (err) {
+      t.equal(err.message, INVARIANT_GATE_ERROR_MESSAGE);
+      t.ok(err.diagnosticsBundle.summary.hardFailures >= 1);
+    }
+  });
+
+test('assertInvariantGate throws on split resume completeness violation',
+  async (t) => {
+    const results = evaluateInvariants(buildValidInvariantState({
+      splitResumes: [{
+        workflowId: FIXTURE_WORKFLOW_A,
+        status: 'split_catchup',
+        participants: {
+          [FIXTURE_PARTICIPANT_SOURCE]: {status: 'catchup_ready'},
+        },
+        requiresResume: true,
+        requiresSourceCheckpoint: true,
+      }],
+    }));
+
+    try {
+      assertInvariantGate(results);
+      t.fail('gate should have thrown');
+    } catch (err) {
+      t.equal(err.message, INVARIANT_GATE_ERROR_MESSAGE);
+      t.ok(err.diagnosticsBundle.summary.hardFailures >= 1);
+    }
+  });
+
+test('assertInvariantGate throws on readiness dimension correctness ' +
+  'violation', async (t) => {
+  const results = evaluateInvariants(buildValidInvariantState({
+    readinessDecisions: [{
+      consumer: FIXTURE_CONSUMER_DISPATCH,
+      nodeId: FIXTURE_NODE_1,
+      decisionDimension: READINESS_DIMENSION_SERVE,
+      repairEligible: true,
+      serveEligible: false,
+      consumerOutcome: false,
+    }],
+  }));
+
+  try {
+    assertInvariantGate(results);
+    t.fail('gate should have thrown');
+  } catch (err) {
+    t.equal(err.message, INVARIANT_GATE_ERROR_MESSAGE);
+    t.ok(err.diagnosticsBundle.summary.hardFailures >= 1);
+  }
+});
+
+test('assertInvariantGate throws on missing transaction coordinator ' +
+  'for an atomic transition', async (t) => {
+  const results = evaluateInvariants(buildValidInvariantState({
+    atomicTransitions: [{
+      transitionId: FIXTURE_TRANSITION_ID,
+      ownerComponent: 'ManagedSplitWorkflow',
+      requiresTransactionCoordinator: true,
+      hasTransactionCoordinator: false,
+    }],
+  }));
+
+  try {
+    assertInvariantGate(results);
+    t.fail('gate should have thrown');
+  } catch (err) {
+    t.equal(err.message, INVARIANT_GATE_ERROR_MESSAGE);
+    t.ok(err.diagnosticsBundle.summary.hardFailures >= 1);
+  }
+});
+
 test('assertInvariantGate error includes diagnostics bundle with ' +
   'breach details', async (t) => {
-  const results = evaluateInvariants({
+  const results = evaluateInvariants(buildValidInvariantState({
     leaderRows: [
       {entityId: FIXTURE_ENTITY_A, nodeId: FIXTURE_NODE_1},
       {entityId: FIXTURE_ENTITY_A, nodeId: FIXTURE_NODE_2},
@@ -757,9 +1164,7 @@ test('assertInvariantGate error includes diagnostics bundle with ' +
       {operationId: FIXTURE_OP_1, ownerKey: FIXTURE_OWNER_KEY_A},
       {operationId: FIXTURE_OP_1, ownerKey: FIXTURE_OWNER_KEY_A},
     ],
-    inFlightOperations: [],
-    registeredOwnerKeys: new Set(),
-  });
+  }));
 
   try {
     assertInvariantGate(results);

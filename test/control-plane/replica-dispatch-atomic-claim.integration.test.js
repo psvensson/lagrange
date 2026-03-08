@@ -37,6 +37,36 @@ function initEnv() {
   }
 }
 
+function claimPendingOperation(operation, operationId) {
+  const currentOperationId =
+    operation?.operation_id ||
+    operation?.operationId ||
+    null;
+  const currentStep =
+    operation?.workflow_step ||
+    operation?.workflowStep ||
+    null;
+  if (!currentOperationId ||
+      currentOperationId !== operationId ||
+      currentStep !== WORKFLOW_STEP.PENDING) {
+    return null;
+  }
+
+  const updatedAt = Date.now();
+  if (Object.prototype.hasOwnProperty.call(operation, 'workflow_step') ||
+      Object.prototype.hasOwnProperty.call(operation, 'operation_id')) {
+    operation.workflow_step = WORKFLOW_STEP.SENDING;
+    operation.updated_at = updatedAt;
+  }
+  if (Object.prototype.hasOwnProperty.call(operation, 'workflowStep') ||
+      Object.prototype.hasOwnProperty.call(operation, 'operationId')) {
+    operation.workflowStep = WORKFLOW_STEP.SENDING;
+    operation.updatedAt = updatedAt;
+  }
+
+  return {operationId};
+}
+
 test(
   'ReplicaDispatchService dispatches a pending operation once across triggers',
   async (t) => {
@@ -118,6 +148,16 @@ test(
         },
       },
       rebalanceCoordinator: {
+        cdcGroupPropagationService: {
+          getPublicationModeDiagnostics: () => ({
+            currentMode: 'grouped',
+            reasonCode: 'normal',
+            enteredAt: new Date().toISOString(),
+            recentTransitions: [],
+          }),
+        },
+        claimDispatchTransition: async (opId) =>
+          claimPendingOperation(operationRow, opId),
         executeOperation: async () => {
           executeCount += 1;
           return {success: true};
@@ -179,11 +219,21 @@ test(
 
     let executeCount = 0;
     const coordinator = new EventEmitter();
+    coordinator.cdcGroupPropagationService = {
+      getPublicationModeDiagnostics: () => ({
+        currentMode: 'grouped',
+        reasonCode: 'normal',
+        enteredAt: new Date().toISOString(),
+        recentTransitions: [],
+      }),
+    };
+    coordinator.claimDispatchTransition = async (opId) => {
+      return claimPendingOperation(operation, opId);
+    };
     coordinator.executeOperation = async () => {
       executeCount += 1;
       return {success: true};
     };
-
     const service = new ReplicaDispatchService({
       nodeId: 'node-1',
       messageRouter: {
@@ -339,6 +389,16 @@ test(
         },
       },
       rebalanceCoordinator: {
+        cdcGroupPropagationService: {
+          getPublicationModeDiagnostics: () => ({
+            currentMode: 'grouped',
+            reasonCode: 'normal',
+            enteredAt: new Date().toISOString(),
+            recentTransitions: [],
+          }),
+        },
+        claimDispatchTransition: async (opId) =>
+          claimPendingOperation(operationRow, opId),
         executeOperation: async () => {
           executeCount += 1;
           return {success: true};
@@ -461,6 +521,16 @@ test(
         },
       },
       rebalanceCoordinator: {
+        cdcGroupPropagationService: {
+          getPublicationModeDiagnostics: () => ({
+            currentMode: 'grouped',
+            reasonCode: 'normal',
+            enteredAt: new Date().toISOString(),
+            recentTransitions: [],
+          }),
+        },
+        claimDispatchTransition: async (opId) =>
+          claimPendingOperation(operationRow, opId),
         executeOperation: async () => {
           executeCount += 1;
           return {success: true};
@@ -591,6 +661,16 @@ test(
         },
       },
       rebalanceCoordinator: {
+        cdcGroupPropagationService: {
+          getPublicationModeDiagnostics: () => ({
+            currentMode: 'grouped',
+            reasonCode: 'normal',
+            enteredAt: new Date().toISOString(),
+            recentTransitions: [],
+          }),
+        },
+        claimDispatchTransition: async (opId) =>
+          claimPendingOperation(operationRow, opId),
         executeOperation: async () => {
           executeCount += 1;
           return {success: true};
@@ -715,6 +795,16 @@ test(
         },
       },
       rebalanceCoordinator: {
+        cdcGroupPropagationService: {
+          getPublicationModeDiagnostics: () => ({
+            currentMode: 'grouped',
+            reasonCode: 'normal',
+            enteredAt: new Date().toISOString(),
+            recentTransitions: [],
+          }),
+        },
+        claimDispatchTransition: async (opId) =>
+          claimPendingOperation(operationRow, opId),
         executeOperation: async () => {
           executeCount += 1;
           return {success: true};
@@ -865,6 +955,16 @@ test(
       },
       systemTableCache,
       rebalanceCoordinator: {
+        cdcGroupPropagationService: {
+          getPublicationModeDiagnostics: () => ({
+            currentMode: 'grouped',
+            reasonCode: 'normal',
+            enteredAt: new Date().toISOString(),
+            recentTransitions: [],
+          }),
+        },
+        claimDispatchTransition: async (opId) =>
+          claimPendingOperation(operationRow, opId),
         executeOperation: async () => {
           executeCount += 1;
           return {success: true};
@@ -1006,6 +1106,16 @@ test(
         },
       },
       rebalanceCoordinator: {
+        cdcGroupPropagationService: {
+          getPublicationModeDiagnostics: () => ({
+            currentMode: 'grouped',
+            reasonCode: 'normal',
+            enteredAt: new Date().toISOString(),
+            recentTransitions: [],
+          }),
+        },
+        claimDispatchTransition: async (opId) =>
+          claimPendingOperation(operationRow, opId),
         executeOperation: async () => {
           executeCount += 1;
           return {success: true};
@@ -1045,6 +1155,161 @@ test(
         pendingReadCount,
         1,
         'should scan pending rows once for one ready heartbeat',
+      );
+    } finally {
+      service.stop();
+    }
+  },
+);
+
+test(
+  'ReplicaDispatchService retries again when ready watermark advances',
+  async (t) => {
+    initEnv();
+
+    const now = Date.now();
+    const operationRow = {
+      operation_id: 'op-ready-trigger-newer-watermark-1',
+      type: 'ADD',
+      partition_id: 'tables-p1',
+      replica_id: 'tables-p1-r10',
+      source_node_id: 'node-1',
+      target_node_id: 'node-2',
+      status: 'pending',
+      workflow_step: WORKFLOW_STEP.PENDING,
+      created_at: now,
+      updated_at: now,
+      steps_history: '[]',
+    };
+    const readyNodeRow = {
+      node_id: 'node-2',
+      status: SERVICE_STATUS.ACTIVE,
+      connection_state: STATE.READY,
+      ready_lease_expires_at: now + 30000,
+      last_heartbeat: now,
+    };
+
+    let executeCount = 0;
+    let pendingReadCount = 0;
+    const service = new ReplicaDispatchService({
+      nodeId: 'node-1',
+      messageRouter: {
+        getConnectionState: () => STATE.CONNECTED,
+      },
+      cdcIntegrationService: {
+        upsertSystemTableRow: async () => ({success: true}),
+        updateSystemTableRow: async (_tableName, whereClause, updateData) => {
+          const isPendingClaim =
+            whereClause?.operation_id === operationRow.operation_id &&
+            whereClause?.workflow_step === WORKFLOW_STEP.PENDING &&
+            operationRow.workflow_step === WORKFLOW_STEP.PENDING;
+          if (isPendingClaim) {
+            operationRow.workflow_step = updateData.workflow_step;
+            operationRow.updated_at = updateData.updated_at;
+            return {
+              success: true,
+              partitionResult: {
+                affectedRows: 1,
+              },
+            };
+          }
+          return {
+            success: true,
+            partitionResult: {
+              affectedRows: 0,
+            },
+          };
+        },
+      },
+      systemTableCache: {
+        get: (tableName, key) => {
+          if (tableName === SYSTEM_TABLE_NAME.NODES && key === 'node-2') {
+            return readyNodeRow;
+          }
+          if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS &&
+              key === operationRow.operation_id) {
+            return operationRow;
+          }
+          return null;
+        },
+        getAll: (tableName) => {
+          if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
+            pendingReadCount += 1;
+            return operationRow.workflow_step === WORKFLOW_STEP.PENDING ?
+              [operationRow] :
+              [];
+          }
+          if (tableName === SYSTEM_TABLE_NAME.SERVICES) {
+            return [{
+              [COLUMN.NODE_ID]: 'node-2',
+              [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
+              [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+            }];
+          }
+          return [];
+        },
+      },
+      rebalanceCoordinator: {
+        cdcGroupPropagationService: {
+          getPublicationModeDiagnostics: () => ({
+            currentMode: 'grouped',
+            reasonCode: 'normal',
+            enteredAt: new Date().toISOString(),
+            recentTransitions: [],
+          }),
+        },
+        claimDispatchTransition: async (opId) =>
+          claimPendingOperation(operationRow, opId),
+        executeOperation: async () => {
+          executeCount += 1;
+          return {success: true};
+        },
+      },
+    });
+    service.initialize();
+
+    try {
+      await service.handleNodeStateUpdate({
+        [ControlPlaneField.NODE_ID]: 'node-2',
+        [ControlPlaneField.NODE_ADDRESS]: 'localhost:8082',
+        [ControlPlaneField.STATE]: STATE.READY,
+        [ControlPlaneField.HEARTBEAT_AT]: now,
+        [ControlPlaneField.READY_LEASE_EXPIRES_AT]: now + 30000,
+      });
+      await waitForRetryDrain(service);
+
+      t.equal(
+        executeCount,
+        1,
+        'should dispatch on the first ready watermark',
+      );
+      t.equal(
+        pendingReadCount,
+        1,
+        'should scan pending rows for the first watermark',
+      );
+
+      readyNodeRow.last_heartbeat = now + 1000;
+      readyNodeRow.ready_lease_expires_at = now + 31000;
+
+      await service.handleNodeStateUpdate({
+        [ControlPlaneField.NODE_ID]: 'node-2',
+        [ControlPlaneField.NODE_ADDRESS]: 'localhost:8082',
+        [ControlPlaneField.STATE]: STATE.READY,
+        [ControlPlaneField.HEARTBEAT_AT]: now + 1000,
+        [ControlPlaneField.READY_LEASE_EXPIRES_AT]: now + 31000,
+      });
+      await waitForRetryDrain(service);
+
+      t.equal(
+        executeCount,
+        1,
+        'should not redispatch once the operation is no longer pending',
+      );
+      t.equal(
+        pendingReadCount,
+        2,
+        'should rescan pending rows when the ready watermark advances',
       );
     } finally {
       service.stop();
@@ -1137,6 +1402,22 @@ test(
         },
       },
       rebalanceCoordinator: {
+        cdcGroupPropagationService: {
+          getPublicationModeDiagnostics: () => ({
+            currentMode: 'grouped',
+            reasonCode: 'normal',
+            enteredAt: new Date().toISOString(),
+            recentTransitions: [],
+          }),
+        },
+        claimDispatchTransition: async (opId) => {
+          if (opId !== operationRow.operation_id ||
+              operationRow.workflow_step !== WORKFLOW_STEP.PENDING) {
+            return null;
+          }
+          claimAttemptCount += 1;
+          throw new Error('Query timeout after 5000ms');
+        },
         executeOperation: async () => {
           executeCount += 1;
           return {success: true};
@@ -1286,6 +1567,16 @@ test(
         },
       },
       rebalanceCoordinator: {
+        cdcGroupPropagationService: {
+          getPublicationModeDiagnostics: () => ({
+            currentMode: 'grouped',
+            reasonCode: 'normal',
+            enteredAt: new Date().toISOString(),
+            recentTransitions: [],
+          }),
+        },
+        claimDispatchTransition: async (opId) =>
+          claimPendingOperation(operationRow, opId),
         executeOperation: async () => {
           executeCount += 1;
           return {success: true};

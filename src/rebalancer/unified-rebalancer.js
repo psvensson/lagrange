@@ -10,6 +10,7 @@ import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {MovePlanner} from './move-planner.js';
+import {StoragePressureBehavior} from './storage-pressure-behavior.js';
 import {
   OperationType,
   ReplicaStatus,
@@ -281,6 +282,14 @@ class UnifiedRebalancer extends EventEmitter {
       options.storageAccountingService ||
       this.rebalanceCoordinator?.storageAccountingService ||
       null;
+    this.managesStoragePressureBehavior = !options.storagePressureBehavior;
+    this.storagePressureBehavior =
+      options.storagePressureBehavior ||
+      (this.storageAccountingService ?
+        new StoragePressureBehavior({
+          accountingService: this.storageAccountingService,
+        }) :
+        null);
     this.cdcGroupPropagationService =
       options.cdcGroupPropagationService ||
       this.rebalanceCoordinator?.cdcGroupPropagationService ||
@@ -290,7 +299,10 @@ class UnifiedRebalancer extends EventEmitter {
       new ControlPlaneReadinessService({
         nodeId: this.nodeId,
         systemTableCache: this.systemTableCache,
+        cacheMutationTarget: this.systemTableCache,
+        messageRouter: this.messageRouter,
         storageAccountingService: this.storageAccountingService,
+        cdcIntegrationService: this.cdcIntegrationService,
         cdcGroupPropagationService: this.cdcGroupPropagationService,
       });
 
@@ -308,6 +320,8 @@ class UnifiedRebalancer extends EventEmitter {
       moveStateProvider: this,
       storageAdmissionService: this.storageAdmissionService,
       accountingService: this.storageAccountingService,
+      storagePressureBehavior: this.storagePressureBehavior,
+      strictOwnerDependencies: true,
     });
     this.syncOwnerDependenciesFromCoordinator(this.rebalanceCoordinator);
 
@@ -378,9 +392,15 @@ class UnifiedRebalancer extends EventEmitter {
       this.controlPlaneReadinessService =
         coordinator.controlPlaneReadinessService;
     }
+    if (this.managesStoragePressureBehavior && this.storageAccountingService) {
+      this.storagePressureBehavior = new StoragePressureBehavior({
+        accountingService: this.storageAccountingService,
+      });
+    }
     if (this.movePlanner) {
       this.movePlanner.storageAdmissionService = this.storageAdmissionService;
       this.movePlanner.accountingService = this.storageAccountingService;
+      this.movePlanner.storagePressureBehavior = this.storagePressureBehavior;
     }
   }
 
@@ -752,7 +772,7 @@ class UnifiedRebalancer extends EventEmitter {
           return false;
         }
         return readiness.dimensions[
-          CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY
+          CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE
         ] === true;
       },
     );
@@ -768,10 +788,7 @@ class UnifiedRebalancer extends EventEmitter {
       .getNodeReadinessSync(nodeId);
     if (!readiness || !readiness.dimensions ||
         readiness.dimensions[
-          CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY
-        ] !== true ||
-        readiness.dimensions[
-          CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY
+          CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE
         ] !== true) {
       return false;
     }
@@ -989,7 +1006,7 @@ class UnifiedRebalancer extends EventEmitter {
             return false;
           }
           return readiness.dimensions[
-            CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY
+            CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE
           ] === true;
         })
         .map((node) => node.node_id),
@@ -1460,7 +1477,9 @@ class UnifiedRebalancer extends EventEmitter {
       currentReplicas,
       effectivePolicy,
     );
-    const moves = this.movePlanner.calculateMoves(currentReplicas, targetState);
+    const moves = await this.movePlanner.applyPressureGating(
+      this.movePlanner.calculateMoves(currentReplicas, targetState),
+    );
 
     if (moves.length === 0) {
       this.logger.debug(REBALANCER_LOG_MSG.NO_REBALANCE_NEEDED, {

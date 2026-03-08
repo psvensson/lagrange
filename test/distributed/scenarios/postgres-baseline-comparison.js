@@ -233,6 +233,14 @@ const BENCHMARK_PRELOAD_MAX_REPLICA_OPS_IN_FLIGHT_DEFAULT = 0;
 const BENCHMARK_REBALANCE_HYSTERESIS_MIN_DELTA_DEFAULT = 2;
 const BENCHMARK_LOAD_REBALANCE_MONITOR_POLL_INTERVAL_MS_DEFAULT = 250;
 const BENCHMARK_CRITICAL_REBALANCING_SUSTAINED_SAMPLES_DEFAULT = 3;
+const HEARTBEAT_FRESHNESS_SCHEMA_VERSION = 1;
+const HEARTBEAT_FRESHNESS_STATUS_OK = 'ok';
+const HEARTBEAT_FRESHNESS_STATUS_FAILED = 'failed';
+const HEARTBEAT_FRESHNESS_STATUS_UNAVAILABLE = 'unavailable';
+const HEARTBEAT_FRESHNESS_MAX_STALL_MS_DEFAULT = 15000;
+const HEARTBEAT_FRESHNESS_MIN_SAMPLES_DEFAULT = 2;
+const HEARTBEAT_FRESHNESS_INVARIANT_FAILED_REASON =
+  'heartbeat_freshness_invariant_failed';
 const REBALANCING_PRESSURE_SCHEMA_VERSION = 1;
 const REBALANCING_CRITICAL_STATE_SCHEMA_VERSION = 1;
 const LOAD_ROUTING_ADMISSION_SCHEMA_VERSION = 1;
@@ -969,6 +977,35 @@ function isBenchmarkTableCreateTimeoutError(error) {
     message.includes('deadline exceeded');
 }
 
+function isRetriableBenchmarkTableCreateError(error) {
+  const message = String(error?.message || error || '')
+    .toLowerCase();
+  if (!message) {
+    return false;
+  }
+  return message.includes('unable to satisfy minimum routable provisioning cohort') ||
+    message.includes('control_plane_write_unhealthy') ||
+    message.includes('cluster_member_unhealthy');
+}
+
+async function refreshBenchmarkTableCreateReadModel(
+  nodeClient,
+  canonicalWriteNode,
+) {
+  if (!nodeClient ||
+      typeof nodeClient.fetchPreflightCriticalPathSnapshot !== 'function') {
+    return null;
+  }
+  try {
+    return await nodeClient.fetchPreflightCriticalPathSnapshot(
+      canonicalWriteNode,
+      NODE_CLIENT_TRANSIENT_CONTEXT,
+    );
+  } catch (_error) {
+    return null;
+  }
+}
+
 function createBenchmarkTableCreateAttempt(tableName, writeNodeId, context = {}) {
   const outerTimeoutMs = normalizePositiveIntegerOrNull(context.timeoutMs);
   const innerTimeoutMs = normalizePositiveIntegerOrNull(context.innerTimeoutMs);
@@ -1181,52 +1218,80 @@ async function ensureSutBenchmarkTable(
   tableName,
   benchmarkConfig,
   benchmarkTablePolicies,
+  options = {},
 ) {
+  const timing = resolveScenarioTiming(options.timing);
   const createTableContext =
     buildBenchmarkTableCreateNodeClientContext(benchmarkConfig);
   const canonicalWriteNode =
     resolveCanonicalSystemTableWriteNode(systemTableReadNodes);
-  let createAttempt = createBenchmarkTableCreateAttempt(
-    tableName,
-    canonicalWriteNode.id,
-    createTableContext,
-  );
+  const createRetryTimeoutMs =
+    Number.isInteger(benchmarkConfig?.readyTimeoutMs) &&
+      benchmarkConfig.readyTimeoutMs > ZERO ?
+      benchmarkConfig.readyTimeoutMs :
+      BENCHMARK_DEFAULTS.readyTimeoutMs;
+  const createRetryPollIntervalMs =
+    Number.isInteger(benchmarkConfig?.readyPollIntervalMs) &&
+      benchmarkConfig.readyPollIntervalMs > ZERO ?
+      benchmarkConfig.readyPollIntervalMs :
+      BENCHMARK_DEFAULTS.readyPollIntervalMs;
+  const createRetryDeadlineMs = timing.now() + createRetryTimeoutMs;
+  let createAttempt = null;
   let createResult;
-  try {
-    await nodeClient.queryControl(
-      canonicalWriteNode,
-      buildBenchmarkTableDdl(tableName),
-      [],
+  while (true) {
+    createAttempt = createBenchmarkTableCreateAttempt(
+      tableName,
+      canonicalWriteNode.id,
       createTableContext,
     );
-    createAttempt = finalizeBenchmarkTableCreateAttempt(
-      createAttempt,
-      BENCHMARK_TABLE_CREATE_OUTCOME_SUCCEEDED,
-      null,
-    );
-    createResult = {
-      nodeId: canonicalWriteNode.id,
-    };
-  } catch (error) {
-    const metadataSnapshot = await collectBenchmarkMetadataSnapshot({
-      nodeClient,
-      node: canonicalWriteNode,
-      tableName,
-      tableId: null,
-      requiredSchemaVersion: null,
-      stage: BENCHMARK_METADATA_STAGE_CREATE_ERROR,
-      readinessState: null,
-      probeError: String(error?.message || error),
-    });
-    createAttempt = {
-      ...finalizeBenchmarkTableCreateAttempt(
+    try {
+      await nodeClient.queryControl(
+        canonicalWriteNode,
+        buildBenchmarkTableDdl(tableName),
+        [],
+        createTableContext,
+      );
+      createAttempt = finalizeBenchmarkTableCreateAttempt(
         createAttempt,
-        BENCHMARK_TABLE_CREATE_OUTCOME_FAILED,
-        error,
-      ),
-      metadataSnapshot,
-    };
-    throw attachBenchmarkTableCreateAttempt(error, createAttempt);
+        BENCHMARK_TABLE_CREATE_OUTCOME_SUCCEEDED,
+        null,
+      );
+      createResult = {
+        nodeId: canonicalWriteNode.id,
+      };
+      break;
+    } catch (error) {
+      const metadataSnapshot = await collectBenchmarkMetadataSnapshot({
+        nodeClient,
+        node: canonicalWriteNode,
+        tableName,
+        tableId: null,
+        requiredSchemaVersion: null,
+        stage: BENCHMARK_METADATA_STAGE_CREATE_ERROR,
+        readinessState: null,
+        probeError: String(error?.message || error),
+      });
+      createAttempt = {
+        ...finalizeBenchmarkTableCreateAttempt(
+          createAttempt,
+          BENCHMARK_TABLE_CREATE_OUTCOME_FAILED,
+          error,
+        ),
+        metadataSnapshot,
+      };
+      if (!isRetriableBenchmarkTableCreateError(error) ||
+          timing.now() >= createRetryDeadlineMs) {
+        throw attachBenchmarkTableCreateAttempt(error, createAttempt);
+      }
+      await refreshBenchmarkTableCreateReadModel(
+        nodeClient,
+        canonicalWriteNode,
+      );
+      if (timing.now() >= createRetryDeadlineMs) {
+        throw attachBenchmarkTableCreateAttempt(error, createAttempt);
+      }
+      await timing.sleep(createRetryPollIntervalMs);
+    }
   }
 
   try {
@@ -1526,13 +1591,22 @@ async function runSutSharedLoad({
     benchmarkConfig,
   );
   rebalancingPressure.criticalState = criticalRebalancingState;
+  const heartbeatFreshness = finalizeHeartbeatFreshnessState(
+    rebalancingPressure,
+  );
+  rebalancingPressure.heartbeatFreshness = heartbeatFreshness;
   if (loadError) {
     throw loadError;
   }
   return {
     metrics: loadMetrics,
     rebalancingPressure,
-    internalSignalMessages: criticalRebalancingState.messages,
+    internalSignalMessages: [
+      ...criticalRebalancingState.messages,
+      ...(Array.isArray(heartbeatFreshness?.messages) ?
+        heartbeatFreshness.messages :
+        []),
+    ],
   };
 }
 
@@ -3885,6 +3959,44 @@ async function resolveSutLoadNodes(nodeClient, nodes, seedNode, options = {}) {
   }
 }
 
+function buildReplicaOperationProgressSignature(
+  operationTimelineByOperationId = {},
+) {
+  if (!operationTimelineByOperationId ||
+      typeof operationTimelineByOperationId !== 'object') {
+    return null;
+  }
+
+  const signatures = [];
+  for (const operationId of Object.keys(operationTimelineByOperationId).sort()) {
+    const timeline = Array.isArray(operationTimelineByOperationId[operationId]) ?
+      operationTimelineByOperationId[operationId] :
+      [];
+    if (timeline.length === ZERO) {
+      signatures.push(String(operationId) + '=none');
+      continue;
+    }
+    const entrySignatures = timeline.map((entry) => {
+      const timestampMs = Number.isFinite(entry?.timestampMs) ?
+        Math.floor(entry.timestampMs) :
+        null;
+      return [
+        String(entry?.eventType || ''),
+        String(entry?.step || ''),
+        String(entry?.status || ''),
+        timestampMs === null ? '' : String(timestampMs),
+        entry?.inFlight === true ? '1' : '0',
+      ].join(':');
+    });
+    signatures.push(String(operationId) + '=' + entrySignatures.join(','));
+  }
+
+  if (signatures.length === ZERO) {
+    return null;
+  }
+  return signatures.join('|');
+}
+
 async function waitForSutLoadQuiescence({
   nodeClient,
   loadNodes,
@@ -3927,11 +4039,13 @@ async function waitForSutLoadQuiescence({
   let lowestInFlightCount = Number.POSITIVE_INFINITY;
   let maxLeaderQuietElapsedMs = ZERO;
   let maxIncludedNodeCount = ZERO;
+  let lastOperationTimelineSignature = null;
   const gateProgressState = {
     inFlightCount: null,
     leaderQuietElapsedMs: ZERO,
     partitionGroupInFlight: {},
     operationTimelineByOperationId: {},
+    operationTimelineSignature: null,
   };
   const versionedReadinessByNodeId = {};
   const requiredNodeIds = loadNodes
@@ -4344,6 +4458,8 @@ async function waitForSutLoadQuiescence({
             typeof replicaOperations.operationTimelineById === 'object' ?
             replicaOperations.operationTimelineById :
             {};
+        const operationTimelineSignature =
+          buildReplicaOperationProgressSignature(operationTimelineByOperationId);
         const leaders = controlSnapshot?.leaders &&
           typeof controlSnapshot.leaders === 'object' ?
           controlSnapshot.leaders :
@@ -4384,6 +4500,8 @@ async function waitForSutLoadQuiescence({
         gateProgressState.partitionGroupInFlight = partitionGroupInFlight;
         gateProgressState.operationTimelineByOperationId =
           operationTimelineByOperationId;
+        gateProgressState.operationTimelineSignature =
+          operationTimelineSignature;
 
         return {
           ready: reasons.length === ZERO,
@@ -4428,6 +4546,16 @@ async function waitForSutLoadQuiescence({
         ZERO;
       if (includedCount > maxIncludedNodeCount) {
         maxIncludedNodeCount = includedCount;
+        progressObserved = true;
+      }
+
+      const operationTimelineSignature =
+        typeof gateProgressState.operationTimelineSignature === 'string' ?
+          gateProgressState.operationTimelineSignature :
+          null;
+      if (operationTimelineSignature !== null &&
+          operationTimelineSignature !== lastOperationTimelineSignature) {
+        lastOperationTimelineSignature = operationTimelineSignature;
         progressObserved = true;
       }
 
@@ -5769,10 +5897,233 @@ function buildLoadRebalancingPressureState(options = {}) {
       cancelledLoad: false,
       violationReasons: [],
     },
+    heartbeatFreshness: createHeartbeatFreshnessState({
+      monitoredNodeIds: options.monitoredNodeIds,
+      maxStallMs: options.heartbeatFreshnessMaxStallMs,
+      minSamples: options.heartbeatFreshnessMinSamples,
+    }),
     routingAdmission: buildLoadRoutingAdmissionState({
       admittedNodeIds: options.admittedNodeIds,
     }),
   };
+}
+
+function createHeartbeatFreshnessState(options = {}) {
+  return {
+    schemaVersion: HEARTBEAT_FRESHNESS_SCHEMA_VERSION,
+    monitoredNodeIds: Array.isArray(options.monitoredNodeIds) ?
+      [...options.monitoredNodeIds] :
+      [],
+    maxStallMs:
+      Number.isInteger(options.maxStallMs) && options.maxStallMs > ZERO ?
+        options.maxStallMs :
+        HEARTBEAT_FRESHNESS_MAX_STALL_MS_DEFAULT,
+    minSamples:
+      Number.isInteger(options.minSamples) && options.minSamples > ZERO ?
+        options.minSamples :
+        HEARTBEAT_FRESHNESS_MIN_SAMPLES_DEFAULT,
+    sampleCount: ZERO,
+    status: HEARTBEAT_FRESHNESS_STATUS_UNAVAILABLE,
+    failed: false,
+    evaluatedNodeIds: [],
+    unavailableNodeIds: [],
+    stalledNodeIds: [],
+    messages: [],
+    perNode: {},
+  };
+}
+
+function normalizeControlSnapshotNodeLiveness(nodeLivenessByNodeId, nodeId) {
+  const nodeLiveness = nodeLivenessByNodeId &&
+    typeof nodeLivenessByNodeId === 'object' ?
+    nodeLivenessByNodeId[nodeId] :
+    null;
+  if (!nodeLiveness || typeof nodeLiveness !== 'object') {
+    return null;
+  }
+  const lastHeartbeat = Number(nodeLiveness.lastHeartbeat);
+  const heartbeatAgeMs = Number(nodeLiveness.heartbeatAgeMs);
+  const readyLeaseExpiresAt = Number(nodeLiveness.readyLeaseExpiresAt);
+  const readyLeaseLagMs = Number(
+    nodeLiveness.readyLeaseLagMs ??
+      nodeLiveness.readyLeaseAgeMs,
+  );
+  return {
+    lastHeartbeat: Number.isFinite(lastHeartbeat) ? lastHeartbeat : null,
+    heartbeatAgeMs: Number.isFinite(heartbeatAgeMs) ? heartbeatAgeMs : null,
+    readyLeaseExpiresAt:
+      Number.isFinite(readyLeaseExpiresAt) ? readyLeaseExpiresAt : null,
+    readyLeaseLagMs: Number.isFinite(readyLeaseLagMs) ? readyLeaseLagMs : null,
+  };
+}
+
+function recordHeartbeatFreshnessSample(pressure, observedAtMs, snapshot = null) {
+  const heartbeatFreshness = pressure?.heartbeatFreshness;
+  if (!heartbeatFreshness || typeof heartbeatFreshness !== 'object') {
+    return;
+  }
+  const nodeLivenessByNodeId =
+    snapshot?.controlPlaneDiagnostics?.nodeLivenessByNodeId &&
+    typeof snapshot.controlPlaneDiagnostics.nodeLivenessByNodeId === 'object' ?
+      snapshot.controlPlaneDiagnostics.nodeLivenessByNodeId :
+      null;
+  if (!nodeLivenessByNodeId) {
+    return;
+  }
+
+  heartbeatFreshness.sampleCount += ONE;
+  for (const nodeId of heartbeatFreshness.monitoredNodeIds) {
+    const nodeLiveness = normalizeControlSnapshotNodeLiveness(
+      nodeLivenessByNodeId,
+      nodeId,
+    );
+    const perNode = heartbeatFreshness.perNode[nodeId] || {
+      sampleCount: ZERO,
+      firstObservedAtMs: null,
+      lastObservedAtMs: null,
+      firstLastHeartbeat: null,
+      lastLastHeartbeat: null,
+      lastAdvancedAtMs: null,
+      maxHeartbeatAgeMs: null,
+      currentHeartbeatAgeMs: null,
+      maxReadyLeaseLagMs: null,
+      currentReadyLeaseLagMs: null,
+      maxStallDurationMs: ZERO,
+      advanced: false,
+      failedReasons: [],
+    };
+    if (!nodeLiveness) {
+      heartbeatFreshness.perNode[nodeId] = perNode;
+      continue;
+    }
+
+    perNode.sampleCount += ONE;
+    perNode.firstObservedAtMs =
+      Number.isFinite(perNode.firstObservedAtMs) ?
+        perNode.firstObservedAtMs :
+        observedAtMs;
+    perNode.lastObservedAtMs = observedAtMs;
+    if (Number.isFinite(nodeLiveness.heartbeatAgeMs)) {
+      perNode.currentHeartbeatAgeMs = nodeLiveness.heartbeatAgeMs;
+      perNode.maxHeartbeatAgeMs =
+        Number.isFinite(perNode.maxHeartbeatAgeMs) ?
+          Math.max(perNode.maxHeartbeatAgeMs, nodeLiveness.heartbeatAgeMs) :
+          nodeLiveness.heartbeatAgeMs;
+    }
+    if (Number.isFinite(nodeLiveness.readyLeaseLagMs)) {
+      perNode.currentReadyLeaseLagMs = nodeLiveness.readyLeaseLagMs;
+      perNode.maxReadyLeaseLagMs =
+        Number.isFinite(perNode.maxReadyLeaseLagMs) ?
+          Math.max(perNode.maxReadyLeaseLagMs, nodeLiveness.readyLeaseLagMs) :
+          nodeLiveness.readyLeaseLagMs;
+    }
+    if (Number.isFinite(nodeLiveness.lastHeartbeat)) {
+      perNode.firstLastHeartbeat =
+        Number.isFinite(perNode.firstLastHeartbeat) ?
+          perNode.firstLastHeartbeat :
+          nodeLiveness.lastHeartbeat;
+      if (!Number.isFinite(perNode.lastLastHeartbeat) ||
+          nodeLiveness.lastHeartbeat > perNode.lastLastHeartbeat) {
+        perNode.advanced = Number.isFinite(perNode.firstLastHeartbeat) &&
+          nodeLiveness.lastHeartbeat > perNode.firstLastHeartbeat;
+        perNode.lastLastHeartbeat = nodeLiveness.lastHeartbeat;
+        perNode.lastAdvancedAtMs = observedAtMs;
+      } else if (Number.isFinite(perNode.lastObservedAtMs)) {
+        const stallAnchorMs = Number.isFinite(perNode.lastAdvancedAtMs) ?
+          perNode.lastAdvancedAtMs :
+          perNode.firstObservedAtMs;
+        if (Number.isFinite(stallAnchorMs)) {
+          perNode.maxStallDurationMs = Math.max(
+            perNode.maxStallDurationMs,
+            observedAtMs - stallAnchorMs,
+          );
+        }
+      }
+    }
+    heartbeatFreshness.perNode[nodeId] = perNode;
+  }
+}
+
+function finalizeHeartbeatFreshnessState(pressure) {
+  const heartbeatFreshness = pressure?.heartbeatFreshness;
+  if (!heartbeatFreshness || typeof heartbeatFreshness !== 'object') {
+    return null;
+  }
+
+  const evaluatedNodeIds = [];
+  const unavailableNodeIds = [];
+  const stalledNodeIds = [];
+  const messages = [];
+
+  for (const nodeId of heartbeatFreshness.monitoredNodeIds) {
+    const perNode = heartbeatFreshness.perNode[nodeId] || null;
+    if (!perNode ||
+        !Number.isInteger(perNode.sampleCount) ||
+        perNode.sampleCount < heartbeatFreshness.minSamples) {
+      unavailableNodeIds.push(nodeId);
+      continue;
+    }
+
+    evaluatedNodeIds.push(nodeId);
+    const failedReasons = [];
+    if (perNode.advanced !== true) {
+      failedReasons.push('heartbeat_not_advancing');
+    }
+    if (Number.isFinite(perNode.maxStallDurationMs) &&
+        perNode.maxStallDurationMs > heartbeatFreshness.maxStallMs) {
+      failedReasons.push(
+        'heartbeat_stalled:' + String(perNode.maxStallDurationMs),
+      );
+    }
+    if (Number.isFinite(perNode.currentHeartbeatAgeMs) &&
+        perNode.currentHeartbeatAgeMs > heartbeatFreshness.maxStallMs) {
+      failedReasons.push(
+        'heartbeat_age_exceeded:' + String(perNode.currentHeartbeatAgeMs),
+      );
+    }
+    perNode.failedReasons = failedReasons;
+    if (failedReasons.length > ZERO) {
+      stalledNodeIds.push(nodeId);
+      messages.push(
+        HEARTBEAT_FRESHNESS_INVARIANT_FAILED_REASON +
+          ': node=' + nodeId +
+          ', reasons=' + failedReasons.join('|'),
+      );
+    }
+  }
+
+  heartbeatFreshness.evaluatedNodeIds = evaluatedNodeIds;
+  heartbeatFreshness.unavailableNodeIds = unavailableNodeIds;
+  heartbeatFreshness.stalledNodeIds = stalledNodeIds;
+  heartbeatFreshness.messages = messages;
+  heartbeatFreshness.failed = stalledNodeIds.length > ZERO;
+  heartbeatFreshness.status = stalledNodeIds.length > ZERO ?
+    HEARTBEAT_FRESHNESS_STATUS_FAILED :
+    (evaluatedNodeIds.length > ZERO ?
+      HEARTBEAT_FRESHNESS_STATUS_OK :
+      HEARTBEAT_FRESHNESS_STATUS_UNAVAILABLE);
+  return heartbeatFreshness;
+}
+
+function formatHeartbeatFreshnessFailures(heartbeatFreshness) {
+  const stalledNodeIds = Array.isArray(heartbeatFreshness?.stalledNodeIds) ?
+    heartbeatFreshness.stalledNodeIds :
+    [];
+  const parts = [];
+  for (const nodeId of stalledNodeIds) {
+    const failedReasons = Array.isArray(
+      heartbeatFreshness?.perNode?.[nodeId]?.failedReasons,
+    ) ?
+      heartbeatFreshness.perNode[nodeId].failedReasons :
+      [];
+    parts.push(
+      'node=' + nodeId +
+        ', reasons=' + (failedReasons.length > ZERO ?
+          failedReasons.join('|') :
+          'unknown'),
+    );
+  }
+  return parts.join('; ');
 }
 
 function formatLoadRebalancingPinningReasons(reasons) {
@@ -5809,6 +6160,10 @@ function startLoadRebalancingPressureMonitor(options = {}) {
     minLeaderChangeDelta: benchmarkConfig.rebalanceHysteresisMinDelta,
     pollIntervalMs: benchmarkConfig.loadRebalanceMonitorPollIntervalMs,
     maxReplicaOpsInFlightLimit: benchmarkConfig.loadRebalanceMaxReplicaOpsInFlight,
+    heartbeatFreshnessMaxStallMs:
+      benchmarkConfig.heartbeatFreshnessMaxStallMs,
+    heartbeatFreshnessMinSamples:
+      benchmarkConfig.heartbeatFreshnessMinSamples,
     pinningEnabled: benchmarkConfig.pinRebalancingDuringLoad === true,
     pinningBypassed: benchmarkConfig.allowLoadRebalancePinningBypass === true,
     admittedNodeIds,
@@ -5849,6 +6204,11 @@ function startLoadRebalancingPressureMonitor(options = {}) {
           nodeClient,
           controlSnapshotCandidates,
           NODE_CLIENT_TRANSIENT_CONTEXT,
+        );
+        recordHeartbeatFreshnessSample(
+          pressure,
+          observedAtMs,
+          snapshot,
         );
         const replicaOperations = snapshot?.replicaOperations || {};
         const inFlightReplicaOps = normalizeNonNegativeInteger(
@@ -6035,6 +6395,7 @@ function startLoadRebalancingPressureMonitor(options = {}) {
       await monitorLoop;
       pressure.endedAtMs = Date.now();
       pressure.sampleCount = pressure.samples.length;
+      finalizeHeartbeatFreshnessState(pressure);
       return pressure;
     },
   };
@@ -7472,6 +7833,9 @@ async function run(cluster) {
           benchmarkTableName,
           benchmarkConfig,
           benchmarkConfig.benchmarkTablePolicies,
+          {
+            timing: scenarioOverrides.timing,
+          },
         );
       } catch (error) {
         const createAttempt = resolveBenchmarkTableCreateAttempt(error);
@@ -7905,6 +8269,30 @@ async function run(cluster) {
             ': ' +
             formatLoadRebalancingPinningReasons(loadPinning.violationReasons),
         );
+      }
+      state.heartbeatFreshnessResult =
+        state.rebalancingPressure?.load?.heartbeatFreshness || null;
+      state.strictBenchmarkGate.heartbeatFreshness =
+        state.heartbeatFreshnessResult;
+      if (state.heartbeatFreshnessResult?.failed === true) {
+        return {
+          status: PHASE_STATUS.FAIL,
+          artifacts: {
+            sutLoadNodeIds: state.effectiveSutLoadNodes.map((node) => node.id),
+            loadMetrics: state.loadMetrics,
+            rebalancingPressure: state.rebalancingPressure.load,
+            heartbeatFreshness: state.heartbeatFreshnessResult,
+            saturation: state.saturation,
+            strictBenchmarkGate: state.strictBenchmarkGate,
+          },
+          errors: [
+            HEARTBEAT_FRESHNESS_INVARIANT_FAILED_REASON +
+              ': ' +
+              formatHeartbeatFreshnessFailures(
+                state.heartbeatFreshnessResult,
+              ),
+          ],
+        };
       }
       state.overloadPolicyResult = evaluateOverloadPolicy(
         state.loadMetrics,

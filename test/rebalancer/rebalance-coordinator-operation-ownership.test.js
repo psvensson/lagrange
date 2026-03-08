@@ -44,11 +44,26 @@ function createStorageOwners() {
   };
 }
 
+function createTransactionCoordinator() {
+  return {
+    async begin() {
+      return {success: true};
+    },
+    async commit() {
+      return {success: true};
+    },
+    async rollback() {
+      return {success: true};
+    },
+  };
+}
+
 test('RebalanceCoordinator executeOperation skips operations owned by another node',
   async (t) => {
     let deliverCalls = 0;
     const coordinator = new RebalanceCoordinator({
       nodeId: 'node-local',
+      transactionCoordinator: createTransactionCoordinator(),
       systemTableCache: {
         get() {
           return null;
@@ -125,6 +140,7 @@ test('RebalanceCoordinator createOperation uses injected workflow coordinator si
     const workflowCoordinator = createWorkflowCoordinatorSpy();
     const coordinator = new RebalanceCoordinator({
       nodeId: 'node-local',
+      transactionCoordinator: createTransactionCoordinator(),
       operationWorkflowCoordinator: workflowCoordinator,
       systemTableCache: {
         get() {
@@ -176,6 +192,7 @@ test('RebalanceCoordinator executeOperation uses injected workflow coordinator s
     const workflowCoordinator = createWorkflowCoordinatorSpy();
     const coordinator = new RebalanceCoordinator({
       nodeId: 'node-local',
+      transactionCoordinator: createTransactionCoordinator(),
       operationWorkflowCoordinator: workflowCoordinator,
       systemTableCache: {
         get() {
@@ -242,6 +259,7 @@ test('RebalanceCoordinator checkTimeouts reconciles only local-owner operations'
     const reconciledOperationIds = [];
     const coordinator = new RebalanceCoordinator({
       nodeId: 'node-local',
+      transactionCoordinator: createTransactionCoordinator(),
       systemTableCache: {
         get() {
           return null;
@@ -351,6 +369,7 @@ test('RebalanceCoordinator timeout sweeps fail overdue operations before verify 
 
     const coordinator = new RebalanceCoordinator({
       nodeId: 'node-local',
+      transactionCoordinator: createTransactionCoordinator(),
       systemTableCache: {
         get() {
           return null;
@@ -429,6 +448,7 @@ test('RebalanceCoordinator updateStep persists durable transition fields',
   async (t) => {
     const coordinator = new RebalanceCoordinator({
       nodeId: 'node-local',
+      transactionCoordinator: createTransactionCoordinator(),
       systemTableCache: {
         get() {
           return null;
@@ -511,6 +531,7 @@ test('RebalanceCoordinator completeOperation persists durable transition ' +
   'fields', async (t) => {
   const coordinator = new RebalanceCoordinator({
     nodeId: 'node-local',
+    transactionCoordinator: createTransactionCoordinator(),
     systemTableCache: {
       get() {
         return null;
@@ -585,6 +606,7 @@ test('RebalanceCoordinator failOperation persists durable transition ' +
   'fields', async (t) => {
   const coordinator = new RebalanceCoordinator({
     nodeId: 'node-local',
+    transactionCoordinator: createTransactionCoordinator(),
     systemTableCache: {
       get() {
         return null;
@@ -668,6 +690,7 @@ test('RebalanceCoordinator updateStep routes through workflow ' +
 
   const coordinator = new RebalanceCoordinator({
     nodeId: 'node-local',
+    transactionCoordinator: createTransactionCoordinator(),
     operationWorkflowCoordinator: workflowCoordinator,
     systemTableCache: {
       get() {

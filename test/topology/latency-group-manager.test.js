@@ -432,3 +432,62 @@ test('start schedules periodic cycle with jitter and stop clears timer', async (
   teardownConfig();
   t.end();
 });
+
+test('stop waits for an in-flight assignment cycle to finish', async (t) => {
+  setupConfig();
+  const cache = createMockCache({
+    nodes: [createNodeRow('node-a', 'g-1')],
+    groups: [createGroupRow('g-1', 'rep-g-1')],
+  });
+  const updates = [];
+  let resolveUpdate = null;
+  const cdc = {
+    updates,
+    upserts: [],
+    updateSystemTableRow: async (tableName, whereClause, data) => {
+      await new Promise((resolve) => {
+        resolveUpdate = () => {
+          updates.push({tableName, whereClause, data});
+          resolve();
+        };
+      });
+      return {success: true};
+    },
+    upsertSystemTableRow: async () => ({success: true}),
+  };
+  const measurement = createMockMeasurementService({'rep-g-1': 25});
+  const selection = createMockGroupSelectionService();
+  const manager = new LatencyGroupManager({
+    nodeId: 'node-a',
+    systemTableCache: cache,
+    cdcIntegrationService: cdc,
+    latencyMeasurementService: measurement,
+    groupSelectionService: selection,
+    nowFn: () => 13000,
+  });
+  manager.initialize();
+
+  manager.start({runImmediately: true});
+
+  for (let attempts = 0; attempts < 10 && !resolveUpdate; attempts += 1) {
+    await Promise.resolve();
+  }
+  assert.equal(typeof resolveUpdate, 'function');
+
+  let stopResolved = false;
+  const stopPromise = manager.stop().then(() => {
+    stopResolved = true;
+  });
+
+  await Promise.resolve();
+  assert.equal(stopResolved, false);
+
+  resolveUpdate();
+  await stopPromise;
+
+  assert.equal(stopResolved, true);
+  assert.equal(updates.length, 1);
+
+  teardownConfig();
+  t.end();
+});

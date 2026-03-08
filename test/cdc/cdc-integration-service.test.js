@@ -9,7 +9,10 @@ import {
   CDCOperationType,
   VALID_SYSTEM_TABLES,
 } from '../../src/cdc/cdc-integration-service.js';
-import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {
+  INITIAL_PARTITION_IDS,
+  SYSTEM_TABLE_NAME,
+} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
@@ -42,8 +45,8 @@ function createMockSqlQueryEngine() {
 
   return {
     executedQueries,
-    async executeQuery(sql, params = []) {
-      executedQueries.push({sql, params});
+    async executeQuery(sql, params = [], options = {}) {
+      executedQueries.push({sql, params, options});
       return {
         success: true,
         affectedRows: 1,
@@ -89,6 +92,45 @@ function createCacheWaitProbe() {
   };
 
   return {cache, state};
+}
+
+/**
+ * Create a local partition-service map for authoritative system-table tests.
+ * @param {string} tableName
+ * @param {Object} handlers
+ * @return {Map<string, Object>}
+ */
+function createLocalSystemTablePartitionServices(
+  tableName,
+  handlers = {},
+) {
+  const partitionId = INITIAL_PARTITION_IDS[tableName] || `${tableName}-p1`;
+  return new Map([
+    [partitionId, {
+      partitionId,
+      replicaId: `${partitionId}-r1`,
+      initialized: true,
+      isLeader: handlers.isLeader !== false,
+      async executeQuery(sql, params = []) {
+        if (typeof handlers.executeQuery === 'function') {
+          return handlers.executeQuery(sql, params);
+        }
+        return {
+          success: true,
+          rows: [],
+        };
+      },
+      async executeLocalQuery(sql, params = []) {
+        if (typeof handlers.executeLocalQuery === 'function') {
+          return handlers.executeLocalQuery(sql, params);
+        }
+        return {
+          success: true,
+          rows: [],
+        };
+      },
+    }],
+  ]);
 }
 
 test('CDCIntegrationService - constructor', async (t) => {
@@ -414,6 +456,294 @@ test('CDCIntegrationService - authoritative fallback diagnostics track phase win
   },
 );
 
+test('CDCIntegrationService - steady-state system table writes prefer local partition services',
+  async (t) => {
+    const mockSqlEngine = createMockSqlQueryEngine();
+    const localWrites = [];
+    const service = new CDCIntegrationService({
+      nodeId: 'test-node',
+      sqlQueryEngine: mockSqlEngine,
+      partitionServicesProvider: () => createLocalSystemTablePartitionServices(
+        SYSTEM_TABLE_NAME.NODES,
+        {
+          async executeQuery(sql, params) {
+            localWrites.push({sql, params});
+            return {
+              success: true,
+              changes: 1,
+            };
+          },
+        },
+      ),
+    });
+    service.initialize();
+
+    await service.updateSystemTableRow(
+      SYSTEM_TABLE_NAME.NODES,
+      {node_id: 'node-1'},
+      {status: 'ready'},
+      {skipCacheWait: true},
+    );
+
+    t.equal(localWrites.length, 1, 'should execute through a local partition service');
+    t.equal(
+      mockSqlEngine.executedQueries.length,
+      0,
+      'should not hit routed SQL when a local system partition service is available',
+    );
+    t.match(
+      localWrites[0]?.sql,
+      /^UPDATE nodes SET /,
+      'should preserve the system table SQL mutation',
+    );
+  });
+
+test('CDCIntegrationService - authoritative cache repair prefers local partition replicas',
+  async (t) => {
+    const operationId = 'op-local-repair';
+    const authoritativeRow = {
+      operation_id: operationId,
+      status: 'creating',
+      workflow_step: 'CREATING',
+      updated_at: 500,
+    };
+    const cacheState = {
+      row: null,
+    };
+    const sqlQueryEngine = {
+      executedQueries: [],
+      async executeQuery(sql, params = []) {
+        this.executedQueries.push({sql, params});
+        return {
+          success: true,
+          rows: [{...authoritativeRow}],
+        };
+      },
+    };
+    const service = new CDCIntegrationService({
+      nodeId: 'test-node',
+      sqlQueryEngine,
+      systemTableCache: {
+        has() {
+          return Boolean(cacheState.row);
+        },
+        get() {
+          return cacheState.row;
+        },
+      },
+      cacheMutationTarget: {
+        applySystemTableChange(_tableName, _operation, row) {
+          cacheState.row = {...row};
+        },
+      },
+      partitionServicesProvider: () => createLocalSystemTablePartitionServices(
+        SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+        {
+          async executeQuery(sql, params) {
+            t.equal(
+              params[0],
+              operationId,
+              'local authoritative read should preserve bound parameters',
+            );
+            return {
+              success: true,
+              rows: sql.includes('WHERE operation_id = ?') ?
+                [{...authoritativeRow}] :
+                [],
+            };
+          },
+        },
+      ),
+    });
+    service.initialize();
+
+    const repaired = await service.repairCacheVisibilityHole(
+      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+      operationId,
+      true,
+      null,
+      null,
+      {fallbackPhase: 'recovery'},
+    );
+
+    t.equal(repaired, true, 'should repair the cache from local authoritative rows');
+    t.same(cacheState.row, authoritativeRow, 'should hydrate the repaired row into cache');
+    t.equal(
+      sqlQueryEngine.executedQueries.length,
+      0,
+      'should not use routed SQL when local authoritative replicas are available',
+    );
+  });
+
+test('CDCIntegrationService - leader-only authoritative reads fall back to routed SQL',
+  async (t) => {
+    const sqlReads = [];
+    const service = new CDCIntegrationService({
+      nodeId: 'test-node',
+      sqlQueryEngine: {
+        async executeQuery(sql, params = [], options = {}) {
+          sqlReads.push({sql, params, options});
+          return {
+            success: true,
+            rows: [{
+              operation_id: 'op-sql-fallback',
+              workflow_step: 'PENDING',
+            }],
+          };
+        },
+      },
+      partitionServicesProvider: () => createLocalSystemTablePartitionServices(
+        SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+        {
+          isLeader: false,
+          async executeQuery() {
+            return {
+              success: true,
+              rows: [{
+                operation_id: 'op-local-follower',
+              }],
+            };
+          },
+        },
+      ),
+    });
+    service.initialize();
+
+    const result = await service.executeAuthoritativeSystemTableRead(
+      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+      'SELECT * FROM replica_operations WHERE operation_id = ?',
+      ['op-sql-fallback'],
+      {
+        localReadConsistency: 'local_leader',
+        queryOptions: {timeoutMs: 1234},
+      },
+    );
+
+    t.equal(result.source, 'sql_query_engine', 'should fall back when no local leader is available');
+    t.equal(sqlReads.length, 1, 'should use the routed SQL fallback once');
+    t.equal(sqlReads[0]?.options?.timeoutMs, 1234, 'should preserve query options');
+  });
+
+test('CDCIntegrationService - leader-only authoritative reads can fall back to local replicas',
+  async (t) => {
+    const sqlReads = [];
+    const service = new CDCIntegrationService({
+      nodeId: 'test-node',
+      sqlQueryEngine: {
+        async executeQuery(sql, params = [], options = {}) {
+          sqlReads.push({sql, params, options});
+          return {
+            success: true,
+            rows: [],
+          };
+        },
+      },
+      partitionServicesProvider: () => createLocalSystemTablePartitionServices(
+        SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+        {
+          isLeader: false,
+          async executeQuery(sql, params) {
+            t.equal(
+              params[0],
+              'op-local-fallback',
+              'local replica fallback should preserve query parameters',
+            );
+            return {
+              success: true,
+              rows: [{
+                operation_id: 'op-local-fallback',
+                workflow_step: 'PENDING',
+              }],
+            };
+          },
+        },
+      ),
+    });
+    service.initialize();
+
+    const result = await service.executeAuthoritativeSystemTableRead(
+      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+      'SELECT * FROM replica_operations WHERE operation_id = ?',
+      ['op-local-fallback'],
+      {
+        localReadConsistency: 'local_leader',
+        replicaFallbackConsistency: 'any_replica',
+      },
+    );
+
+    t.equal(
+      result.source,
+      'local_partition_replica',
+      'should use a local follower before routed SQL when replica fallback is allowed',
+    );
+    t.equal(sqlReads.length, 0, 'should not reach routed SQL fallback');
+    t.equal(result.rows.length, 1, 'should return the local replica rows');
+  });
+
+test('CDCIntegrationService - authoritative merge prefers fresher heartbeat rows',
+  async (t) => {
+    const partitionId = INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.NODES];
+    const olderRow = {
+      node_id: 'node-merge-freshness',
+      status: 'active',
+      connection_state: 'ready',
+      last_heartbeat: 1000,
+      ready_lease_expires_at: 16000,
+    };
+    const newerRow = {
+      node_id: 'node-merge-freshness',
+      status: 'active',
+      connection_state: 'ready',
+      last_heartbeat: 5000,
+      ready_lease_expires_at: 20000,
+    };
+    const service = new CDCIntegrationService({
+      nodeId: 'test-node',
+      sqlQueryEngine: createMockSqlQueryEngine(),
+      partitionServicesProvider: () => new Map([
+        ['nodes-leader', {
+          partitionId,
+          replicaId: `${partitionId}-r1`,
+          initialized: true,
+          isLeader: true,
+          async executeQuery() {
+            return {
+              success: true,
+              rows: [{...olderRow}],
+            };
+          },
+        }],
+        ['nodes-follower', {
+          partitionId,
+          replicaId: `${partitionId}-r2`,
+          initialized: true,
+          isLeader: false,
+          async executeQuery() {
+            return {
+              success: true,
+              rows: [{...newerRow}],
+            };
+          },
+        }],
+      ]),
+    });
+    service.initialize();
+
+    const result = await service.executeAuthoritativeSystemTableRead(
+      SYSTEM_TABLE_NAME.NODES,
+      'SELECT * FROM nodes WHERE node_id = ?',
+      ['node-merge-freshness'],
+      {localReadConsistency: 'any_replica'},
+    );
+
+    t.equal(result.success, true, 'authoritative local read should succeed');
+    t.equal(result.source, 'local_partition_replica',
+      'authoritative read should stay on local replicas');
+    t.equal(result.rows.length, 1, 'replica rows should merge by primary key');
+    t.same(result.rows[0], newerRow,
+      'merged authoritative row should retain freshest heartbeat evidence');
+  });
+
 test('CDCIntegrationService - updateSystemTableRow', async (t) => {
   const mockSqlEngine = createMockSqlQueryEngine();
   const service = new CDCIntegrationService({
@@ -444,6 +774,36 @@ test('CDCIntegrationService - updateSystemTableRow', async (t) => {
   );
   t.end();
 });
+
+test('CDCIntegrationService - updateSystemTableRow forwards query timeout to SQL engine',
+  async (t) => {
+    const mockSqlEngine = createMockSqlQueryEngine();
+    const service = new CDCIntegrationService({
+      nodeId: 'test-node',
+      sqlQueryEngine: mockSqlEngine,
+    });
+    service.initialize();
+
+    await service.updateSystemTableRow(
+      SYSTEM_TABLE_NAME.NODES,
+      {node_id: 'node-1'},
+      {
+        status: 'active',
+      },
+      {
+        queryTimeoutMs: 4321,
+        skipCacheWait: true,
+      },
+    );
+
+    t.equal(mockSqlEngine.executedQueries.length, 1, 'should execute one query');
+    t.equal(
+      mockSqlEngine.executedQueries[0]?.options?.timeoutMs,
+      4321,
+      'should pass query timeout through routed SQL execution options',
+    );
+  },
+);
 
 test(
   'CDCIntegrationService - updateSystemTableRow forwards minimum cache fields',

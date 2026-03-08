@@ -200,6 +200,20 @@ class CDCGroupPropagationService extends EventEmitter {
     );
 
     this.refreshConfig();
+    if (this.propagationMode !== LATENCY_PROPAGATION_MODE.GROUPED) {
+      this.setPublicationMode(
+        CDC_GROUP_PUBLICATION_MODE.REPAIR_ONLY,
+        CDC_GROUP_PROPAGATION_REASON.CONFIG_SAFE_MODE,
+      );
+      return this.propagateSafe({
+        tableName,
+        operation,
+        data,
+        sourceMessageGroupService,
+        fallbackReason: CDC_GROUP_PROPAGATION_REASON.CONFIG_SAFE_MODE,
+      });
+    }
+
     const groupedContext = this.buildGroupedContext();
     if (groupedContext.fallbackReason) {
       this.setPublicationMode(
@@ -212,20 +226,6 @@ class CDCGroupPropagationService extends EventEmitter {
         data,
         sourceMessageGroupService,
         fallbackReason: groupedContext.fallbackReason,
-      });
-    }
-
-    if (this.propagationMode !== LATENCY_PROPAGATION_MODE.GROUPED) {
-      this.setPublicationMode(
-        CDC_GROUP_PUBLICATION_MODE.REPAIR_ONLY,
-        CDC_GROUP_PROPAGATION_REASON.CONFIG_SAFE_MODE,
-      );
-      return this.propagateSafe({
-        tableName,
-        operation,
-        data,
-        sourceMessageGroupService,
-        fallbackReason: CDC_GROUP_PROPAGATION_REASON.CONFIG_SAFE_MODE,
       });
     }
 

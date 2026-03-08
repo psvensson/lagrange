@@ -12,7 +12,6 @@ import path from 'path';
 import {ReplicaHandler} from '../../src/node/replica-handler.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
-import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
@@ -189,65 +188,27 @@ test('ReplicaHandler metadata propagation integration', {timeout: 30000}, async 
   });
 
   await t.test(
-    'updateOperationStep repairs stale replica operation visibility after cache lag',
+    'emitExecutorOutcome routes typed outcomes through emitter',
     async (t) => {
       const nodeId = 'integration-node';
-      const operationId = 'op-cache-lag';
+      const operationId = 'op-outcome-int';
       const partitionId = 'partition-1';
       const replicaId = 'partition-1-r1';
       const cache = new SystemTableCache();
-      const authoritativeOperationRow = {
-        operation_id: operationId,
-        type: 'ADD',
-        partition_id: partitionId,
-        replica_id: replicaId,
-        source_node_id: nodeId,
-        target_node_id: nodeId,
-        status: ReplicaStatus.SYNCING,
-        workflow_step: WORKFLOW_STEP.SYNCING,
-        created_at: 100,
-        updated_at: 100,
-        completed_at: null,
-        error_message: null,
-        steps_history: JSON.stringify([
-          {step: WORKFLOW_STEP.PENDING, timestamp: 90},
-          {step: WORKFLOW_STEP.SYNCING, timestamp: 100},
-        ]),
-      };
+      const cdcIntegrationService = createMockCDCService(cache);
 
-      cache.applySystemTableChange(
-        SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-        'INSERT',
-        {...authoritativeOperationRow},
-      );
-
-      const sqlQueryEngine = {
-        async executeQuery(sql, params = []) {
-          if (sql.startsWith('UPDATE replica_operations SET')) {
-            authoritativeOperationRow.status = ReplicaStatus.ACTIVE;
-            authoritativeOperationRow.workflow_step = WORKFLOW_STEP.ACTIVE;
-            authoritativeOperationRow.updated_at = params[2];
-            authoritativeOperationRow.steps_history = params[3];
-            authoritativeOperationRow.replica_id = params[4];
-            authoritativeOperationRow.completed_at = params[5];
-            return {success: true, affectedRows: 1};
-          }
-          if (sql.startsWith('SELECT * FROM replica_operations WHERE operation_id = ?')) {
-            return {
-              success: true,
-              rows: [{...authoritativeOperationRow}],
-            };
-          }
-          throw new Error(`Unexpected query: ${sql}`);
+      const emittedOutcomes = [];
+      const executorOutcomeEmitter = {
+        emitOutcome(outcomeType, opId, workflowStep, options) {
+          emittedOutcomes.push({
+            outcomeType, operationId: opId, workflowStep, ...options,
+          });
         },
       };
-      const cdcIntegrationService = new CDCIntegrationService({
-        nodeId,
-        sqlQueryEngine,
-        systemTableCache: cache,
-      });
-      cdcIntegrationService.initialize();
-      cdcIntegrationService.cacheWaitTimeoutMs = 20;
+
+      seedReplicaOperation(
+        cache, operationId, partitionId, replicaId, nodeId,
+      );
 
       const handler = new ReplicaHandler({
         nodeId,
@@ -258,39 +219,40 @@ test('ReplicaHandler metadata propagation integration', {timeout: 30000}, async 
           async shutdown() {},
           async syncFromLeader() {},
         }),
+        executorOutcomeEmitter,
       });
       handler.initialize();
 
-      await handler.updateOperationStep(
+      handler.emitExecutorOutcome(
+        'REPLICA_CREATE_ACTIVE',
         operationId,
         WORKFLOW_STEP.ACTIVE,
         {replicaId},
       );
 
-      const operationRow = cache.get(
-        SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+      t.equal(emittedOutcomes.length, 1,
+        'should emit exactly one outcome');
+      t.equal(emittedOutcomes[0].outcomeType,
+        'REPLICA_CREATE_ACTIVE',
+        'outcome type should match');
+      t.equal(emittedOutcomes[0].operationId,
         operationId,
-      );
-      t.equal(
-        operationRow?.workflow_step,
+        'operationId should match');
+      t.equal(emittedOutcomes[0].workflowStep,
         WORKFLOW_STEP.ACTIVE,
-        'cache should converge to the terminal workflow_step',
-      );
-      t.equal(
-        operationRow?.status,
-        ReplicaStatus.ACTIVE,
-        'cache should converge to the terminal status',
-      );
-      t.equal(
-        operationRow?.replica_id,
+        'workflowStep should match');
+      t.equal(emittedOutcomes[0].replicaId,
         replicaId,
-        'cache should preserve the canonical replica_id',
-      );
-      t.type(
-        operationRow?.completed_at,
-        'number',
-        'cache repair should hydrate the terminal completion timestamp',
-      );
+        'replicaId should be forwarded');
+
+      // Verify no direct writes to replica_operations occurred.
+      const operationUpdates =
+        cdcIntegrationService.operations.filter((op) =>
+          op.type === 'update' &&
+          op.tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+        );
+      t.equal(operationUpdates.length, 0,
+        'handler should not write to replica_operations directly');
 
       await handler.shutdown();
     },

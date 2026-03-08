@@ -6,6 +6,7 @@
  */
 
 import {
+  CONNECTION_STATE,
   ROUTER_ERROR_MSG,
   ROUTER_LOG_MSG,
   ROUTER_MESSAGE_TYPE,
@@ -13,6 +14,7 @@ import {
 } from '../constants/transport.js';
 
 const RouterMessageType = ROUTER_MESSAGE_TYPE;
+const ConnectionState = CONNECTION_STATE;
 
 /**
  * RouterMessageHandler handles all incoming WebSocket message processing.
@@ -180,9 +182,24 @@ class RouterMessageHandler {
 
       const existing = this.nodeConnections.get(nodeId);
       const isSelfConnection = existing?.isSelfConnection && nodeId === this.nodeId;
+      const existingConnected = Boolean(existing) &&
+        existing.state === ConnectionState.CONNECTED;
+      const preferIncomingConnection =
+        this.nodeId.localeCompare(nodeId) > 0;
+      const shouldAdoptIncomingConnection = !existing ||
+        (!isSelfConnection &&
+          (!existingConnected || preferIncomingConnection));
 
-      if (!existing || !isSelfConnection) {
-        if (existing && existing.ws && existing.connectionId !== connectionId) {
+      if (isSelfConnection) {
+        this.logger.debug(ROUTER_LOG_MSG.KEEP_ORIGINAL_CONNECTION, {
+          connectionId,
+          nodeId,
+          reason: ROUTER_LOG_MSG.SELF_CONNECTION_ALREADY_REGISTERED,
+        });
+      } else if (shouldAdoptIncomingConnection) {
+        if (existing &&
+            existing.ws &&
+            existing.connectionId !== connectionId) {
           try {
             existing.ws.terminate();
           } catch (error) {
@@ -190,8 +207,11 @@ class RouterMessageHandler {
               nodeId,
               error: error.message,
             });
-            throw error;
           }
+        }
+        if (existing &&
+            this.nodeConnections.get(nodeId) === existing) {
+          this.nodeConnections.delete(nodeId);
         }
         this.nodeConnections.delete(connectionId);
         this.nodeConnections.set(nodeId, connection);
@@ -204,8 +224,17 @@ class RouterMessageHandler {
         this.logger.debug(ROUTER_LOG_MSG.KEEP_ORIGINAL_CONNECTION, {
           connectionId,
           nodeId,
-          reason: ROUTER_LOG_MSG.SELF_CONNECTION_ALREADY_REGISTERED,
+          reason: 'existing_connection_preferred',
         });
+        this.nodeConnections.delete(connectionId);
+        try {
+          ws.terminate();
+        } catch (error) {
+          this.logger.warn(ROUTER_LOG_MSG.FAILED_TERMINATE_EXISTING, {
+            nodeId,
+            error: error.message,
+          });
+        }
       }
     }
 

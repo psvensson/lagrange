@@ -9,6 +9,7 @@ import {LoggingService} from '../logging/logging-service.js';
 import {COLUMN, NUM, STATE, TABLES, TYPEOF} from '../constants/index.js';
 import {assertCritical} from '../utils/assert.js';
 import {normalizeCauseId} from '../utils/cause-id.js';
+import {isNodeHeartbeatWatermarkRegression} from '../node/node-readiness-policy.js';
 import {
   CACHE_CDC_OPERATIONS,
   CACHE_DEFAULT,
@@ -424,7 +425,7 @@ class SystemTableCache {
     case CDC_OPERATIONS.INSERT:
       if (table.has(key)) {
         const existing = table.get(key);
-        if (this.isStaleForExistingRecord(existing, data)) {
+        if (this.isStaleForExistingRecord(tableName, existing, data)) {
           const staleMergeResult = this.applyStaleRowBackfill(
             table,
             key,
@@ -462,7 +463,7 @@ class SystemTableCache {
         table.set(key, this.deepClone(data));
       } else {
         const existing = table.get(key);
-        if (this.isStaleForExistingRecord(existing, data)) {
+        if (this.isStaleForExistingRecord(tableName, existing, data)) {
           const staleMergeResult = this.applyStaleRowBackfill(
             table,
             key,
@@ -492,7 +493,7 @@ class SystemTableCache {
         table.set(key, this.deepClone(data));
       } else {
         const existing = table.get(key);
-        if (this.isStaleForExistingRecord(existing, data)) {
+        if (this.isStaleForExistingRecord(tableName, existing, data)) {
           const staleMergeResult = this.applyStaleRowBackfill(
             table,
             key,
@@ -525,7 +526,7 @@ class SystemTableCache {
         });
       } else {
         const existing = table.get(key);
-        if (this.isStaleForExistingRecord(existing, data)) {
+        if (this.isStaleForExistingRecord(tableName, existing, data)) {
           this.logger.debug(CACHE_LOG_MSG.STALE_EVENT_IGNORED, {
             tableName,
             key,
@@ -645,21 +646,32 @@ class SystemTableCache {
 
   /**
    * Determine whether an incoming CDC row is stale versus existing cache row.
+   * @param {string} tableName - Table name.
    * @param {Object} existing - Existing cached row.
    * @param {Object} incoming - Incoming CDC row.
    * @return {boolean} True when incoming row is older.
    * @private
    */
-  isStaleForExistingRecord(existing, incoming) {
+  isStaleForExistingRecord(tableName, existing, incoming) {
     const existingTimestamp = this.getRecordTimestamp(existing);
     const incomingTimestamp = this.getRecordTimestamp(incoming);
 
     if (!Number.isFinite(existingTimestamp) ||
         !Number.isFinite(incomingTimestamp)) {
+      return tableName === TABLES.NODES &&
+        isNodeHeartbeatWatermarkRegression(existing, incoming);
+    }
+
+    if (incomingTimestamp < existingTimestamp) {
+      return true;
+    }
+
+    if (incomingTimestamp > existingTimestamp) {
       return false;
     }
 
-    return incomingTimestamp < existingTimestamp;
+    return tableName === TABLES.NODES &&
+      isNodeHeartbeatWatermarkRegression(existing, incoming);
   }
 
   /**

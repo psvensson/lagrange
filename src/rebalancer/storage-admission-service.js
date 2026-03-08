@@ -12,8 +12,13 @@ import {
   ControlPlaneReadinessService,
 } from '../control-plane/control-plane-readiness-service.js';
 import {
+  CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_READINESS_REASON,
 } from '../control-plane/control-plane-readiness-constants.js';
+import {
+  compactEligibilitySnapshot,
+  evaluateEligibilityDecision,
+} from '../control-plane/eligibility-snapshot.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {assertCritical} from '../utils/assert.js';
 import {NUM, TYPEOF} from '../constants/index.js';
@@ -71,6 +76,10 @@ function buildResult(options) {
         ...entry,
         failedDimensions: freezeStrings(entry.failedDimensions),
         reasonCodes: freezeStrings(entry.reasonCodes),
+        nodeSummary: entry?.nodeSummary &&
+          typeof entry.nodeSummary === TYPEOF.OBJECT ?
+          Object.freeze({...entry.nodeSummary}) :
+          null,
       });
     }) :
     [];
@@ -122,9 +131,16 @@ class StorageAdmissionService {
           options.systemTableCache ||
           this.accountingService.systemTableCache ||
           null,
+        cacheMutationTarget:
+          options.cacheMutationTarget ||
+          options.systemTableCache ||
+          this.accountingService.systemTableCache ||
+          null,
+        messageRouter: options.messageRouter || null,
         nodeLifecycleStateMachine:
           options.nodeLifecycleStateMachine || null,
         storageAccountingService: this.accountingService,
+        cdcIntegrationService: options.cdcIntegrationService || null,
         cdcGroupPropagationService:
           options.cdcGroupPropagationService || null,
         now: this.now,
@@ -293,16 +309,32 @@ class StorageAdmissionService {
 
     for (const nodeId of candidateNodeIds) {
       const readiness = await this.controlPlaneReadinessService
-        .getNodeReadiness(nodeId);
+        .getNodeReadiness(nodeId, {
+          allowAuthoritativeRefresh: true,
+          requireFreshOnIneligible: true,
+          decisionDimension:
+            CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+        });
+      const eligibilityDecision = evaluateEligibilityDecision(
+        readiness,
+        CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+      );
+      const nodeSummary = this.summarizeNodeReadinessRow(nodeId);
       readinessSnapshots[nodeId] =
-        ControlPlaneReadinessService.compactSnapshotSummary(readiness);
+        compactEligibilitySnapshot(
+          readiness,
+          CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+        );
       const capacity = await this.evaluateCapacity({
         targetNodeId: nodeId,
         estimatedBytes,
         isCritical: !!options.isCritical,
       });
-      const failedDimensions = this.collectFailedDimensions(readiness);
-      const nodeReasonCodes = this.collectNodeReasonCodes(readiness, capacity);
+      const failedDimensions = eligibilityDecision.failedDimensions;
+      const nodeReasonCodes = this.collectNodeReasonCodes(
+        eligibilityDecision.reasonCodes,
+        capacity,
+      );
 
       projectedUtilizationByNodeId[nodeId] = capacity.projectedUtilization;
       if (candidateNodeIds.length === NUM.ONE) {
@@ -333,6 +365,7 @@ class StorageAdmissionService {
         failedDimensions,
         reasonCodes: nodeReasonCodes,
         projectedUtilization: capacity.projectedUtilization,
+        nodeSummary,
       });
       this.appendBlockingReasons(blockingReasons, nodeReasonCodes);
     }
@@ -583,37 +616,59 @@ class StorageAdmissionService {
   }
 
   /**
-   * Collect failed readiness dimensions.
-   * @param {Object} readiness
-   * @return {string[]}
+   * Build a compact node-row summary used by admission diagnostics.
+   * @param {string} nodeId
+   * @return {Object|null}
    * @private
    */
-  collectFailedDimensions(readiness) {
-    const dimensions = readiness?.dimensions &&
-      typeof readiness.dimensions === TYPEOF.OBJECT ?
-      readiness.dimensions :
-      {};
-    return Object.keys(dimensions).filter((dimension) => {
-      return dimensions[dimension] !== true;
+  summarizeNodeReadinessRow(nodeId) {
+    if (!this.controlPlaneReadinessService ||
+        typeof this.controlPlaneReadinessService.getNodeRow !== TYPEOF.FUNCTION) {
+      return null;
+    }
+
+    const nodeRow = this.controlPlaneReadinessService.getNodeRow(nodeId);
+    if (!nodeRow || typeof nodeRow !== TYPEOF.OBJECT) {
+      return null;
+    }
+
+    return Object.freeze({
+      status: nodeRow.status ?? null,
+      connectionState:
+        nodeRow.connection_state ??
+        nodeRow.connectionState ??
+        null,
+      lastHeartbeat:
+        nodeRow.last_heartbeat ??
+        nodeRow.lastHeartbeat ??
+        null,
+      readyLeaseExpiresAt:
+        nodeRow.ready_lease_expires_at ??
+        nodeRow.readyLeaseExpiresAt ??
+        null,
+      storageBudgetBytes:
+        nodeRow.storage_budget_bytes ??
+        nodeRow.storageBudgetBytes ??
+        null,
     });
   }
 
   /**
    * Collect raw reason codes for one node.
-   * @param {Object} readiness
+   * @param {string[]} readinessReasonCodes
    * @param {Object} capacity
    * @return {string[]}
    * @private
    */
-  collectNodeReasonCodes(readiness, capacity) {
+  collectNodeReasonCodes(readinessReasonCodes, capacity) {
     const reasonCodes = [];
     const seen = new Set();
-    const reasons = Array.isArray(readiness?.reasons) ?
-      readiness.reasons :
+    const reasons = Array.isArray(readinessReasonCodes) ?
+      readinessReasonCodes :
       [];
 
     for (const reason of reasons) {
-      const code = String(reason?.code || '');
+      const code = String(reason || '');
       if (code.length === NUM.ZERO || seen.has(code)) {
         continue;
       }

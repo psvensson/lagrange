@@ -356,6 +356,48 @@ test('SystemTableCache - stale DELETE is ignored when existing row is newer', as
   t.equal(cache.has('nodes', 'node-1'), true, 'stale delete should not remove newer row');
 });
 
+test(
+  'SystemTableCache - stale nodes UPDATE does not regress heartbeat lease without updated_at',
+  async (t) => {
+    const cache = new SystemTableCache();
+
+    cache.applySystemTableChange('nodes', CDC_OPERATIONS.INSERT, {
+      node_id: 'node-ready',
+      connection_state: 'ready',
+      last_heartbeat: 200,
+      ready_lease_expires_at: 260,
+      status: 'active',
+      cpu_cores: 4,
+    });
+
+    cache.applySystemTableChange('nodes', CDC_OPERATIONS.UPDATE, {
+      node_id: 'node-ready',
+      connection_state: 'ready',
+      last_heartbeat: 120,
+      ready_lease_expires_at: 180,
+      status: 'active',
+      memory_mb: 4096,
+    });
+
+    const result = cache.get('nodes', 'node-ready');
+    t.equal(
+      result.last_heartbeat,
+      200,
+      'stale node update should not regress last_heartbeat',
+    );
+    t.equal(
+      result.ready_lease_expires_at,
+      260,
+      'stale node update should not regress ready_lease_expires_at',
+    );
+    t.equal(
+      result.memory_mb,
+      4096,
+      'stale node update may still backfill unrelated missing fields',
+    );
+  },
+);
+
 test('SystemTableCache - expected CDC idempotency paths should not warn', async (t) => {
   const cache = new SystemTableCache();
   const warnLogs = [];

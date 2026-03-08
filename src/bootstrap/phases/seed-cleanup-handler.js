@@ -271,7 +271,7 @@ class SeedCleanupHandler {
         systemTableWriter.disable();
       }
       d.setSystemTableWriter(null);
-      LatencyTopologySetup.stop(d.getLatencyTopology());
+      await LatencyTopologySetup.stop(d.getLatencyTopology());
       d.setLatencyTopology(null);
 
       d.clearCdcIntegrationService();
@@ -563,7 +563,7 @@ class SeedCleanupHandler {
     d.clearNodeReadyRebalanceState();
     d.stopUnifiedLifecycleOwners();
     await this.quiesceRebalancers();
-    LatencyTopologySetup.stop(d.getLatencyTopology());
+    await LatencyTopologySetup.stop(d.getLatencyTopology());
     d.setLatencyTopology(null);
 
     d.stopAndClearControlPlaneServices();

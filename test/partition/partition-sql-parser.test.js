@@ -44,4 +44,40 @@ describe('partition-sql-parser', () => {
       node_id: 'node-1',
     });
   });
+
+  it('extracts parameterized UPDATE data from multiline SQL and preserves SET value', () => {
+    const data = extractDataFromParameterizedSQL(
+      'UPDATE storage_reservations\n' +
+        'SET status = ?, updated_at = ?, released_at = ?\n' +
+        'WHERE reservation_id = ? AND status = ?',
+      ['released', 1710000000000, 1710000000000, 'res-1', 'active'],
+      'storage_reservations',
+      PARTITION_SERVICE_OPERATION.UPDATE,
+      logger,
+    );
+
+    assert.deepStrictEqual(data, {
+      status: 'released',
+      updated_at: 1710000000000,
+      released_at: 1710000000000,
+      reservation_id: 'res-1',
+    });
+  });
+
+  it('extracts parameterized DELETE data from multiline SQL', () => {
+    const data = extractDataFromParameterizedSQL(
+      'DELETE FROM services\n' +
+        'WHERE service_id = ?\n' +
+        'AND service_type = ?',
+      ['svc-2', 'partition'],
+      'services',
+      PARTITION_SERVICE_OPERATION.DELETE,
+      logger,
+    );
+
+    assert.deepStrictEqual(data, {
+      service_id: 'svc-2',
+      service_type: 'partition',
+    });
+  });
 });

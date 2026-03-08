@@ -26,8 +26,8 @@ class BootstrapDirectWriteRouter {
     this.mode = WRITE_ROUTER_MODE.BOOTSTRAP_DIRECT;
   }
 
-  async execute(sql, params = []) {
-    return this.executeFn(sql, params);
+  async execute(sql, params = [], options = {}) {
+    return this.executeFn(sql, params, options);
   }
 }
 
@@ -38,8 +38,8 @@ class SqlWriteRouter {
     this.mode = WRITE_ROUTER_MODE.SQL_ROUTED;
   }
 
-  async execute(sql, params = []) {
-    return this.executeFn(sql, params);
+  async execute(sql, params = [], options = {}) {
+    return this.executeFn(sql, params, options);
   }
 }
 

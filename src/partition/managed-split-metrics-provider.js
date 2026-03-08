@@ -1,4 +1,6 @@
-import {NUM} from '../constants/index.js';
+import {CDC_PIPELINE_METRIC, NUM} from '../constants/index.js';
+
+const ONE_MINUTE_MS = 60 * 1000;
 
 function normalizePartitionSize(partition) {
   const sizeBytes = Number(partition?.size_bytes ?? partition?.sizeBytes ?? NUM.ZERO);
@@ -23,8 +25,58 @@ function findLocalLeaderPartitionService(partitionServices, partitionId) {
   return null;
 }
 
+function normalizeCounterValue(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < NUM.ZERO) {
+    return null;
+  }
+  return parsed;
+}
+
+function resolveGeneratedWriteCount(partitionService) {
+  if (!partitionService?.cdcPipelineMetrics ||
+      typeof partitionService.cdcPipelineMetrics.getSnapshot !== 'function') {
+    return null;
+  }
+  const snapshot = partitionService.cdcPipelineMetrics.getSnapshot();
+  return normalizeCounterValue(
+    snapshot?.[CDC_PIPELINE_METRIC.EVENTS_GENERATED],
+  );
+}
+
+function calculateQueriesPerMinuteFromSample(
+  partitionId,
+  generatedWriteCount,
+  nowMs,
+  trafficSamples,
+) {
+  const previousSample = trafficSamples.get(partitionId);
+  trafficSamples.set(partitionId, {
+    sampledAtMs: nowMs,
+    generatedWriteCount,
+  });
+
+  if (!previousSample ||
+      !Number.isFinite(previousSample.sampledAtMs) ||
+      !Number.isFinite(previousSample.generatedWriteCount)) {
+    return NUM.ZERO;
+  }
+
+  const deltaMs = nowMs - previousSample.sampledAtMs;
+  const deltaWrites = generatedWriteCount - previousSample.generatedWriteCount;
+  if (deltaMs <= NUM.ZERO || deltaWrites <= NUM.ZERO) {
+    return NUM.ZERO;
+  }
+
+  return (deltaWrites * ONE_MINUTE_MS) / deltaMs;
+}
+
 function createManagedSplitMetricsProvider(options = {}) {
   const partitionServices = options.partitionServices || null;
+  const nowFn = typeof options.now === 'function' ?
+    options.now :
+    () => Date.now();
+  const trafficSamples = new Map();
 
   return (partitionId, partition) => {
     const normalizedPartitionId =
@@ -36,10 +88,19 @@ function createManagedSplitMetricsProvider(options = {}) {
 
     if (localLeaderService) {
       const liveSizeBytes = Number(localLeaderService.getSize());
+      const generatedWriteCount = resolveGeneratedWriteCount(localLeaderService);
+      const queriesPerMinute = generatedWriteCount === null ?
+        NUM.ZERO :
+        calculateQueriesPerMinuteFromSample(
+          normalizedPartitionId,
+          generatedWriteCount,
+          nowFn(),
+          trafficSamples,
+        );
       if (Number.isFinite(liveSizeBytes)) {
         return {
           sizeBytes: liveSizeBytes,
-          queriesPerMinute: NUM.ZERO,
+          queriesPerMinute,
         };
       }
     }
@@ -52,6 +113,8 @@ function createManagedSplitMetricsProvider(options = {}) {
 }
 
 export {
+  calculateQueriesPerMinuteFromSample,
   createManagedSplitMetricsProvider,
   findLocalLeaderPartitionService,
+  resolveGeneratedWriteCount,
 };

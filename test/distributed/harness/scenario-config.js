@@ -78,6 +78,8 @@ function resolveSevenNodeLoadDuringPartitioningScenarioConfig(options = {}) {
       normalizeFiniteNumber(options.minDistinctReplicaNodes, 5),
     partitioningTimeoutMs:
       normalizeFiniteNumber(options.partitioningTimeoutMs, 180000),
+    splitAttemptTimeoutMs:
+      normalizeFiniteNumber(options.splitAttemptTimeoutMs, 30000),
     partitioningPollIntervalMs:
       normalizeFiniteNumber(options.partitioningPollIntervalMs, 250),
     minOpsAfterPartitioning:

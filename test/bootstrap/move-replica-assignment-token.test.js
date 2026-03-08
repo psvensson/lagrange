@@ -153,6 +153,38 @@ function createSqlQueryEngineFixture(rows) {
       }
 
       if (statement.includes('INSERT OR REPLACE INTO services')) {
+        const [
+          serviceId,
+          serviceType,
+          nodeId,
+          partitionId,
+          groupId,
+          replicaId,
+          raftRole,
+          status,
+          address,
+          createdAt,
+          updatedAt,
+        ] = params;
+        const existing = rows.services.find((row) => row.service_id === serviceId);
+        const rowPayload = {
+          service_id: serviceId,
+          service_type: serviceType,
+          node_id: nodeId,
+          partition_id: partitionId,
+          group_id: groupId,
+          replica_id: replicaId,
+          raft_role: raftRole,
+          status,
+          address,
+          created_at: createdAt,
+          updated_at: updatedAt,
+        };
+        if (existing) {
+          Object.assign(existing, rowPayload);
+        } else {
+          rows.services.push(rowPayload);
+        }
         return {success: true, rows: []};
       }
 
@@ -227,6 +259,7 @@ async function bootstrapMoveReplicaAssignment(t, options = {}) {
     api,
     assignment,
     joiningNodeId,
+    rows,
   };
 }
 
@@ -318,6 +351,70 @@ test('BootstrapAPI register-service rejects expired and mismatched assignment to
     'expired token rejection should emit stable reason code',
   );
 });
+
+test('BootstrapAPI does not expire committed MOVE_REPLICA operations on subsequent bootstrap',
+  async (t) => {
+    const fixture = await bootstrapMoveReplicaAssignment(t, {
+      joiningNodeId: '550e8400-e29b-41d4-a716-446655440325',
+    });
+    const {api, assignment, joiningNodeId, rows} = fixture;
+
+    const registerResponse = await api.getFastify().inject({
+      method: 'POST',
+      url: '/register-service',
+      payload: buildRegisterPayload(joiningNodeId, assignment, {
+        assignment_id: assignment.assignmentId,
+      }),
+    });
+    t.equal(
+      registerResponse.statusCode,
+      200,
+      'register-service should complete MOVE_REPLICA handoff',
+    );
+
+    const operationAfterCommit = rows.replica_operations.find((row) =>
+      row.operation_id === assignment.assignmentId,
+    );
+    t.equal(
+      operationAfterCommit?.status,
+      'active',
+      'committed handoff should persist active status',
+    );
+    t.equal(
+      operationAfterCommit?.workflow_step,
+      'ACTIVE',
+      'committed handoff should persist ACTIVE workflow step',
+    );
+
+    const secondBootstrap = await api.getFastify().inject({
+      method: 'POST',
+      url: '/bootstrap',
+      payload: {
+        nodeId: '550e8400-e29b-41d4-a716-446655440326',
+        nodeAddress: 'ws://localhost:9124',
+      },
+    });
+    t.equal(secondBootstrap.statusCode, 200, 'second bootstrap should succeed');
+
+    const operationAfterSecondBootstrap = rows.replica_operations.find((row) =>
+      row.operation_id === assignment.assignmentId,
+    );
+    t.equal(
+      operationAfterSecondBootstrap?.status,
+      'active',
+      'expiry sweep must not rewrite committed handoff to failed',
+    );
+    t.equal(
+      operationAfterSecondBootstrap?.workflow_step,
+      'ACTIVE',
+      'expiry sweep must preserve committed workflow step',
+    );
+    t.equal(
+      operationAfterSecondBootstrap?.error_message || null,
+      null,
+      'committed handoff should not gain synthetic expiry failure',
+    );
+  });
 
 test('BootstrapAPI register-service emits retryable cache visibility timeout response',
   async (t) => {

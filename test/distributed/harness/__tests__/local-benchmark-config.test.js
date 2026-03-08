@@ -19,6 +19,10 @@ const LOCAL_BENCHMARK_7NODE_PARTITION_SPLIT_CONFIG = resolve(
   REPO_ROOT,
   'test/distributed/config/local-benchmark-7node-partition-split.json',
 );
+const LOCAL_BENCHMARK_7NODE_PARTITION_SPLIT_LOW_THROUGHPUT_CONFIG = resolve(
+  REPO_ROOT,
+  'test/distributed/config/local-benchmark-7node-partition-split-low-throughput.json',
+);
 
 describe('local benchmark configs', () => {
   it(
@@ -84,7 +88,34 @@ describe('local benchmark configs', () => {
         evaluationIntervalMs: 60000,
       });
       assert.equal(parsedConfig.benchmark.clients, 7);
-      assert.equal(parsedConfig.benchmark.loadDuration, '150s');
+      assert.equal(parsedConfig.benchmark.loadDuration, '75s');
+      assert.equal(
+        parsedConfig.benchmark.tableName,
+        'benchmark_partition_split_events',
+      );
+    },
+  );
+
+  it(
+    '7-node partition split low-throughput config lowers pressure with tighter preload budgets',
+    async () => {
+      const parsedConfig = await parseConfig(
+        LOCAL_BENCHMARK_7NODE_PARTITION_SPLIT_LOW_THROUGHPUT_CONFIG,
+      );
+
+      assert.deepEqual(parsedConfig.partition, {
+        evaluationIntervalMs: 60000,
+      });
+      assert.equal(parsedConfig.benchmark.clients, 7);
+      assert.equal(parsedConfig.benchmark.jobs, 2);
+      assert.equal(parsedConfig.benchmark.loadOpsPerSec, 24);
+      assert.equal(parsedConfig.benchmark.loadMaxInFlight, 24);
+      assert.equal(parsedConfig.benchmark.loadNodeMaxInFlight, 1);
+      assert.equal(parsedConfig.benchmark.loadQueryTimeoutMs, 4000);
+      assert.equal(parsedConfig.benchmark.controlQueryTimeoutMs, 15000);
+      assert.equal(parsedConfig.benchmark.readyTimeoutMs, 36000);
+      assert.equal(parsedConfig.benchmark.quiescentTimeoutMs, 36000);
+      assert.equal(parsedConfig.benchmark.quiescentNoProgressTimeoutMs, 8000);
       assert.equal(
         parsedConfig.benchmark.tableName,
         'benchmark_partition_split_events',

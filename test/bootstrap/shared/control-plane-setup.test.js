@@ -10,6 +10,8 @@ import {ControlPlaneSetup} from
   '../../../src/bootstrap/shared/control-plane-setup.js';
 import {DependencyError} from
   '../../../src/bootstrap/bootstrap-errors.js';
+import {DistributedTransactionCoordinator} from
+  '../../../src/query/distributed/distributed-transaction-coordinator.js';
 import {LEASE_STATE} from
   '../../../src/control-plane/lease-service-constants.js';
 
@@ -23,6 +25,15 @@ describe('ControlPlaneSetup', () => {
 
   beforeEach(() => {
     createdServices = [];
+    const transactionCoordinator = new DistributedTransactionCoordinator({
+      beginParticipant: async () => {},
+      prepareParticipant: async () => {},
+      commitParticipant: async () => {},
+      rollbackParticipant: async () => {},
+      persistTransaction: async () => {},
+      persistParticipant: async () => {},
+      persistWriteOperation: async () => {},
+    });
 
     mockMessageRouter = {
       register: () => {},
@@ -34,6 +45,7 @@ describe('ControlPlaneSetup', () => {
       insertSystemTableRow: async () => {},
       sqlQueryEngine: {
         execute: async () => ({rows: []}),
+        transactionCoordinator,
       },
     };
 
@@ -218,6 +230,37 @@ describe('ControlPlaneSetup', () => {
         );
       });
 
+    it('should throw DependencyError when transactionCoordinator is missing',
+      async () => {
+        await assert.rejects(
+          async () => ControlPlaneSetup.create({
+            nodeId: 'test-node',
+            nodeAddress: 'localhost:8080',
+            messageRouter: mockMessageRouter,
+            cdcIntegrationService: {
+              ...mockCdcIntegrationService,
+              sqlQueryEngine: {
+                execute: async () => ({rows: []}),
+              },
+            },
+            systemTableCache: mockSystemTableCache,
+            tablePolicyService: mockTablePolicyService,
+          }),
+          (error) => {
+            assert.strictEqual(
+              error instanceof DependencyError, true,
+            );
+            assert.strictEqual(
+              error.serviceName, 'ControlPlaneSetup',
+            );
+            assert.strictEqual(
+              error.dependencyName, 'transactionCoordinator',
+            );
+            return true;
+          },
+        );
+      });
+
     it('should return decomposed services and coordinator',
       async () => {
         const result = await ControlPlaneSetup.create({
@@ -324,6 +367,20 @@ describe('ControlPlaneSetup', () => {
         assert.strictEqual(
           result.dispatchService.controlPlaneReadinessService,
           result.rebalanceCoordinator.controlPlaneReadinessService,
+        );
+        assert.strictEqual(
+          result.rebalanceCoordinator.storageAdmissionService
+            .controlPlaneReadinessService,
+          result.rebalanceCoordinator.controlPlaneReadinessService,
+        );
+        assert.strictEqual(
+          result.rebalanceCoordinator.controlPlaneReadinessService
+            .cdcGroupPropagationService,
+          cdcGroupPropagationService,
+        );
+        assert.strictEqual(
+          result.rebalanceCoordinator.transactionCoordinator,
+          mockCdcIntegrationService.sqlQueryEngine.transactionCoordinator,
         );
       });
 

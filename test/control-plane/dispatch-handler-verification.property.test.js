@@ -183,9 +183,35 @@ function createMockDispatchService(options = {}) {
   };
 
   const mockCoordinator = {
+    claimDispatchTransition: async (opId) => {
+      tracking.claimCalled = true;
+      tracking.claimOperationId = opId;
+      if (!claimSucceeds) {
+        return null;
+      }
+      return {
+        operationId: opId,
+        type: 'ADD',
+        partitionId: 'p1',
+        entityType: SERVICE_TYPE.PARTITION,
+        entityId: 'p1',
+        replicaId: 'r1',
+        sourceNodeId: 'test-node',
+        targetNodeId: 'test-node',
+        status: 'in_progress',
+        workflowStep: WORKFLOW_STEP.SENDING,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        completedAt: null,
+        errorMessage: null,
+        stepsHistory: [],
+      };
+    },
     executeOperation: async (op) => {
       tracking.executeOperationCalled = true;
-      tracking.claimOperationId = op.operationId;
+      if (!tracking.claimOperationId) {
+        tracking.claimOperationId = op.operationId;
+      }
     },
   };
 

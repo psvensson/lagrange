@@ -3,6 +3,100 @@ import {NUM, SERVICE_STATUS, STATE, TYPEOF} from '../constants/index.js';
 
 const REQUIRE_ACTIVE_STATUS_DEFAULT = true;
 
+function normalizeConnectionState(nodeRow) {
+  const rawState = nodeRow?.connection_state ??
+    nodeRow?.connectionState ??
+    null;
+  if (typeof rawState !== TYPEOF.STRING) {
+    return null;
+  }
+
+  const normalizedState = rawState.toLowerCase();
+  return normalizedState.length > NUM.ZERO ? normalizedState : null;
+}
+
+function getFiniteNumber(value) {
+  const normalized = Number(value);
+  return Number.isFinite(normalized) ? normalized : null;
+}
+
+function getNodeHeartbeatWatermark(nodeRow) {
+  if (!nodeRow || typeof nodeRow !== TYPEOF.OBJECT) {
+    return null;
+  }
+
+  return Object.freeze({
+    lastHeartbeat: getFiniteNumber(
+      nodeRow.last_heartbeat ??
+      nodeRow.lastHeartbeat ??
+      nodeRow.lastHeartbeatAt,
+    ),
+    readyLeaseExpiresAt: getFiniteNumber(
+      nodeRow.ready_lease_expires_at ??
+      nodeRow.readyLeaseExpiresAt ??
+      nodeRow.readyLeaseExpiresAtMs ??
+      nodeRow.readyLeaseExpires,
+    ),
+    connectionState: normalizeConnectionState(nodeRow),
+  });
+}
+
+function compareNodeHeartbeatWatermarks(previousRow, nextRow) {
+  const previous = getNodeHeartbeatWatermark(previousRow);
+  const next = getNodeHeartbeatWatermark(nextRow);
+  if (!previous || !next) {
+    return NUM.ZERO;
+  }
+
+  if (previous.lastHeartbeat !== null &&
+      next.lastHeartbeat !== null &&
+      previous.lastHeartbeat !== next.lastHeartbeat) {
+    return next.lastHeartbeat > previous.lastHeartbeat ? 1 : -1;
+  }
+
+  if (previous.readyLeaseExpiresAt !== null &&
+      next.readyLeaseExpiresAt !== null &&
+      previous.readyLeaseExpiresAt !== next.readyLeaseExpiresAt) {
+    return next.readyLeaseExpiresAt > previous.readyLeaseExpiresAt ? 1 : -1;
+  }
+
+  if (previous.lastHeartbeat !== null &&
+      next.lastHeartbeat !== null &&
+      previous.lastHeartbeat === next.lastHeartbeat) {
+    if (previous.readyLeaseExpiresAt !== null &&
+        next.readyLeaseExpiresAt === null) {
+      if (next.connectionState === STATE.CONNECTED ||
+          next.connectionState === STATE.READY) {
+        return -1;
+      }
+      if (next.connectionState === STATE.DISCONNECTED) {
+        return 1;
+      }
+    }
+
+    if (previous.readyLeaseExpiresAt === null &&
+        next.readyLeaseExpiresAt !== null) {
+      return 1;
+    }
+
+    if (previous.connectionState === STATE.READY &&
+        next.connectionState === STATE.CONNECTED) {
+      return -1;
+    }
+
+    if (previous.connectionState === STATE.CONNECTED &&
+        next.connectionState === STATE.READY) {
+      return 1;
+    }
+  }
+
+  return NUM.ZERO;
+}
+
+function isNodeHeartbeatWatermarkRegression(previousRow, nextRow) {
+  return compareNodeHeartbeatWatermarks(previousRow, nextRow) < NUM.ZERO;
+}
+
 /**
  * Check if a node record is ready based on lease and state fields.
  * @param {Object} nodeRow - Node row from the nodes table.
@@ -137,6 +231,9 @@ async function isNodeReadyWithTransport(options = {}) {
 }
 
 export {
+  compareNodeHeartbeatWatermarks,
+  getNodeHeartbeatWatermark,
+  isNodeHeartbeatWatermarkRegression,
   isNodeRecordReady,
   isNodeReadyWithConnection,
   isNodeReadyWithTransport,

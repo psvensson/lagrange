@@ -35,6 +35,9 @@ import {
 import {
   StorageCapacityAccountingService,
 } from '../../rebalancer/storage-capacity-accounting-service.js';
+import {
+  ExecutorOutcomeEmitter,
+} from '../../rebalancer/executor-outcome-emitter.js';
 import {NodeService} from '../../node/node-service.js';
 import {LoggingService} from '../../logging/logging-service.js';
 import {DependencyError} from '../bootstrap-errors.js';
@@ -71,6 +74,7 @@ const ERROR_MSG = Object.freeze({
   CDC_INTEGRATION_SERVICE_REQUIRED: 'cdcIntegrationService',
   SYSTEM_TABLE_CACHE_REQUIRED: 'systemTableCache',
   TABLE_POLICY_SERVICE_REQUIRED: 'tablePolicyService',
+  TRANSACTION_COORDINATOR_REQUIRED: 'transactionCoordinator',
 });
 
 /**
@@ -145,6 +149,18 @@ class ControlPlaneSetup {
       );
     }
 
+    const transactionCoordinator =
+      existingCoordinator?.transactionCoordinator ||
+      cdcIntegrationService.sqlQueryEngine?.transactionCoordinator ||
+      null;
+    if (!transactionCoordinator ||
+        typeof transactionCoordinator.begin !== 'function') {
+      throw new DependencyError(
+        'ControlPlaneSetup',
+        ERROR_MSG.TRANSACTION_COORDINATOR_REQUIRED,
+      );
+    }
+
     const loggingService = LoggingService.getInstance();
     const logger = loggingService.forSubsystem(
       CONTROL_PLANE_SETUP_SUBSYSTEM,
@@ -176,8 +192,12 @@ class ControlPlaneSetup {
       controlPlaneReadinessService = new ControlPlaneReadinessService({
         nodeId,
         systemTableCache,
+        cacheMutationTarget: systemTableCache,
+        messageRouter,
         storageAccountingService,
+        cdcIntegrationService,
         cdcGroupPropagationService: cdcGroupPropagationService || null,
+        strictOwnerDependencies: true,
       });
     }
 
@@ -188,12 +208,19 @@ class ControlPlaneSetup {
         nodeId,
         accountingService: storageAccountingService,
         systemTableCache,
+        cacheMutationTarget: systemTableCache,
+        messageRouter,
+        cdcIntegrationService,
         cdcGroupPropagationService: cdcGroupPropagationService || null,
         controlPlaneReadinessService,
       });
     }
 
     if (!rebalanceCoordinator) {
+      const executorOutcomeEmitter = new ExecutorOutcomeEmitter({
+        logger,
+      });
+
       rebalanceCoordinator = new RebalanceCoordinator({
         nodeId,
         systemTableCache,
@@ -201,10 +228,12 @@ class ControlPlaneSetup {
         messageRouter,
         tablePolicyService,
         sqlQueryEngine: cdcIntegrationService.sqlQueryEngine,
+        transactionCoordinator,
         storageAccountingService,
         storageAdmissionService,
         controlPlaneReadinessService,
         cdcGroupPropagationService: cdcGroupPropagationService || null,
+        executorOutcomeEmitter,
       });
       rebalanceCoordinator.initialize();
 
@@ -225,6 +254,9 @@ class ControlPlaneSetup {
         cdcGroupPropagationService) {
       rebalanceCoordinator.cdcGroupPropagationService =
         cdcGroupPropagationService;
+    }
+    if (!rebalanceCoordinator.transactionCoordinator) {
+      rebalanceCoordinator.transactionCoordinator = transactionCoordinator;
     }
 
     // Create decomposed control plane services

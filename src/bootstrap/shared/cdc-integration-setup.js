@@ -139,6 +139,7 @@ class CDCIntegrationSetup {
     systemTableCache,
     messageRouter,
     cacheMutationTarget = null,
+    partitionServicesProvider = null,
   }) {
     // Validate required dependencies
     if (!nodeId) {
@@ -168,11 +169,17 @@ class CDCIntegrationSetup {
       sqlQueryEngine,
       systemTableCache,
       cacheMutationTarget,
+      partitionServicesProvider,
     });
     cdcIntegrationService.initialize();
     cdcIntegrationService.setSystemTableCache(systemTableCache);
     if (cacheMutationTarget) {
       cdcIntegrationService.setCacheMutationTarget(cacheMutationTarget);
+    }
+    if (partitionServicesProvider) {
+      cdcIntegrationService.setPartitionServicesProvider(
+        partitionServicesProvider,
+      );
     }
 
     // Set message router for mesh connectivity
@@ -208,6 +215,7 @@ class CDCIntegrationSetup {
     systemTableCache,
     messageRouter,
     cacheMutationTarget = null,
+    partitionServicesProvider = null,
   }) {
     if (!cdcIntegrationService) {
       throw new DependencyError('CDCIntegrationSetup', 'cdcIntegrationService');
@@ -232,6 +240,11 @@ class CDCIntegrationSetup {
     cdcIntegrationService.setSystemTableCache(systemTableCache);
     if (cacheMutationTarget) {
       cdcIntegrationService.setCacheMutationTarget(cacheMutationTarget);
+    }
+    if (partitionServicesProvider) {
+      cdcIntegrationService.setPartitionServicesProvider(
+        partitionServicesProvider,
+      );
     }
 
     // Update message router if provided and not already set

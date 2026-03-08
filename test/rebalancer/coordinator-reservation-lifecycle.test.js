@@ -89,12 +89,17 @@ function createTrackingSqlEngine() {
       }
 
       if (sql.includes('UPDATE storage_reservations')) {
-        const [newStatus, updated, released, opId,
+        const [newStatus, updated, released, reservationIdOrOperationId,
           activeStatus] = params;
         let changes = NUM.ZERO;
         for (const [key, row] of reservations) {
-          if (row.operation_id === opId &&
-              row.status === activeStatus) {
+          const matchesOperation = row.operation_id === reservationIdOrOperationId;
+          const matchesReservation =
+            row.reservation_id === reservationIdOrOperationId;
+          const matchesIdentity = sql.includes('reservation_id = ?') ?
+            matchesReservation :
+            matchesOperation;
+          if (matchesIdentity && row.status === activeStatus) {
             reservations.set(key, {
               ...row,
               status: newStatus,
@@ -105,6 +110,20 @@ function createTrackingSqlEngine() {
           }
         }
         return {success: true, changes};
+      }
+
+      if (sql.includes('SELECT * FROM storage_reservations WHERE operation_id = ?')) {
+        const [opId, status] = params;
+        const rows = Array.from(reservations.values())
+          .filter((row) => row.operation_id === opId && row.status === status);
+        return {success: true, rows};
+      }
+
+      if (sql.includes('SELECT * FROM storage_reservations WHERE status = ? AND expires_at <= ?')) {
+        const [status, expiryThreshold] = params;
+        const rows = Array.from(reservations.values())
+          .filter((row) => row.status === status && row.expires_at <= expiryThreshold);
+        return {success: true, rows};
       }
 
       if (sql.includes('UPDATE replica_operations')) {
@@ -123,13 +142,13 @@ function createTrackingSqlEngine() {
       }
 
       if (sql.includes('SELECT * FROM storage_reservations')) {
-        if (sql.includes('status = \'active\'')) {
+        if (params.length > NUM.ZERO) {
+          const [status] = params;
           const active = Array.from(reservations.values())
-            .filter((r) => r.status === RESERVATION_STATUS.ACTIVE);
+            .filter((r) => r.status === status);
           return {success: true, rows: active};
         }
-        // Expire stale handled by UPDATE above
-        return {success: true, rows: []};
+        return {success: true, rows: Array.from(reservations.values())};
       }
 
       if (sql.includes('replica_operations')) {
@@ -161,6 +180,25 @@ function createTrackingSqlEngine() {
   };
 }
 
+function createMockAdmissionService(options = {}) {
+  const admittedResult = Object.freeze({
+    allowed: true,
+    decisionType: 'admitted',
+    blockingReasons: [],
+    eligibleNodeIds: [],
+    ineligibleNodes: [],
+  });
+
+  return {
+    async checkAdd(_context) {
+      return options.checkAddResult || admittedResult;
+    },
+    async checkReplace(_context) {
+      return options.checkReplaceResult || admittedResult;
+    },
+  };
+}
+
 function createCoordinatorWithStorage(options = {}) {
   const nodeId = options.nodeId || 'test-node-1';
   const sqlEngine = options.sqlQueryEngine ||
@@ -180,6 +218,8 @@ function createCoordinatorWithStorage(options = {}) {
     sqlQueryEngine: sqlEngine,
     enableTimeouts: false,
     storageAccountingService: accounting,
+    storageAdmissionService:
+      options.storageAdmissionService || createMockAdmissionService(),
   });
   coordinator.initialize();
   return {coordinator, sqlEngine, accounting};
@@ -265,7 +305,7 @@ test('createOperation - no reservation for REMOVE operation',
     t.end();
   });
 
-test('createOperation - no reservation when accounting service absent',
+test('createOperation - fails fast when accounting service is absent',
   async (t) => {
     initializeConfig();
     const sqlEngine = createTrackingSqlEngine();
@@ -276,6 +316,7 @@ test('createOperation - no reservation when accounting service absent',
       tablePolicyService: createMockPolicyService(),
       messageRouter: createMockMessageRouter(),
       sqlQueryEngine: sqlEngine,
+      storageAdmissionService: createMockAdmissionService(),
       enableTimeouts: false,
     });
     coordinator.initialize();
@@ -286,10 +327,13 @@ test('createOperation - no reservation when accounting service absent',
       nodeId: 'target-node',
     };
 
-    await coordinator.createOperation(move);
+    await t.rejects(
+      coordinator.createOperation(move),
+      /storageAccountingService/,
+    );
 
     t.equal(sqlEngine.reservations.size, NUM.ZERO,
-      'no reservation without accounting service');
+      'no reservation is created when admission dependencies are missing');
     t.end();
   });
 
@@ -345,6 +389,59 @@ test('completeOperation - releases reservation', async (t) => {
   t.ok(resAfter.released_at, 'released_at set');
   t.end();
 });
+
+test('releaseReservationForOperation - uses reservation_id keyed update',
+  async (t) => {
+    initializeConfig();
+    const sqlEngine = createTrackingSqlEngine();
+    const reservationUpdates = [];
+    const originalExecuteQuery = sqlEngine.executeQuery;
+    sqlEngine.executeQuery = async (sql, params) => {
+      if (sql.includes('UPDATE storage_reservations')) {
+        reservationUpdates.push({sql, params});
+      }
+      return originalExecuteQuery(sql, params);
+    };
+    const {coordinator} = createCoordinatorWithStorage({
+      sqlQueryEngine: sqlEngine,
+    });
+    const now = Date.now();
+    const operationId = 'op-keyed-release';
+    const reservationId = `res-${operationId}`;
+    sqlEngine.reservations.set(reservationId, {
+      reservation_id: reservationId,
+      operation_id: operationId,
+      entity_type: SERVICE_TYPE.PARTITION,
+      entity_id: 'p-1',
+      partition_id: 'p-1',
+      target_node_id: 'target-node',
+      estimated_bytes: NUM.HUNDRED,
+      amplification_factor: NUM.ONE,
+      status: RESERVATION_STATUS.ACTIVE,
+      reason_code: RESERVATION_REASON.ADD_REPLICA,
+      created_at: now,
+      updated_at: now,
+      expires_at: now + NUM.THOUSAND,
+      released_at: null,
+    });
+
+    await coordinator.releaseReservationForOperation({
+      operationId,
+      type: OperationType.ADD,
+      partitionId: 'p-1',
+      targetNodeId: 'target-node',
+      entityType: SERVICE_TYPE.PARTITION,
+      entityId: 'p-1',
+    });
+
+    t.ok(reservationUpdates.length > NUM.ZERO,
+      'reservation release should issue at least one reservation update');
+    for (const call of reservationUpdates) {
+      t.equal(call.params[3], reservationId,
+        'reservation release update must be keyed by reservation_id');
+    }
+    t.end();
+  });
 
 test('failOperation - releases reservation', async (t) => {
   initializeConfig();
@@ -458,31 +555,6 @@ test('reconcileReservations - expires stale reservations',
       released_at: null,
     });
 
-    // Override the expire query to handle time-based expiry
-    const originalExec = sqlEngine.executeQuery;
-    sqlEngine.executeQuery = async (sql, params) => {
-      if (sql.includes('UPDATE storage_reservations') &&
-          sql.includes('expires_at')) {
-        const [newStatus, updated, released, activeStatus,
-          expiryThreshold] = params;
-        let changes = NUM.ZERO;
-        for (const [key, row] of sqlEngine.reservations) {
-          if (row.status === activeStatus &&
-              row.expires_at <= expiryThreshold) {
-            sqlEngine.reservations.set(key, {
-              ...row,
-              status: newStatus,
-              updated_at: updated,
-              released_at: released,
-            });
-            changes++;
-          }
-        }
-        return {success: true, changes};
-      }
-      return originalExec(sql, params);
-    };
-
     const {coordinator} = createCoordinatorWithStorage({
       sqlQueryEngine: sqlEngine,
     });
@@ -584,7 +656,7 @@ test('reconcileReservations - skips non-terminal active reservations',
     t.end();
   });
 
-test('reconcileReservations - returns zeros without accounting service',
+test('reconcileReservations - fails fast without accounting service',
   async (t) => {
     initializeConfig();
     const coordinator = new RebalanceCoordinator({
@@ -594,14 +666,15 @@ test('reconcileReservations - returns zeros without accounting service',
       tablePolicyService: createMockPolicyService(),
       messageRouter: createMockMessageRouter(),
       sqlQueryEngine: createTrackingSqlEngine(),
+      storageAdmissionService: createMockAdmissionService(),
       enableTimeouts: false,
     });
     coordinator.initialize();
 
-    const result = await coordinator.reconcileReservations();
-
-    t.equal(result.expired, NUM.ZERO);
-    t.equal(result.orphansReleased, NUM.ZERO);
+    await t.rejects(
+      coordinator.reconcileReservations(),
+      /storageAccountingService/,
+    );
     t.end();
   });
 

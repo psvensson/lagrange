@@ -396,6 +396,12 @@ test('Node join replica activation', {timeout: 180000}, async (t) => {
         }),
         setSystemCache: () => {},
         setMessageRouter: () => {},
+        transactionCoordinator: {
+          begin: async () => ({
+            commit: async () => {},
+            rollback: async () => {},
+          }),
+        },
       };
 
       joiningService.createCdcIntegrationService = () => {

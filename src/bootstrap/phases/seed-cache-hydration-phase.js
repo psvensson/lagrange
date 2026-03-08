@@ -209,6 +209,7 @@ class SeedCacheHydrationPhase {
         sqlQueryEngine: cdcQueryEngine,
         systemTableCache,
         messageRouter: d.getMessageRouter(),
+        partitionServicesProvider: () => d.getPartitionServices(),
       });
       d.setCdcIntegrationService(cdcIntegrationService);
 
@@ -223,6 +224,7 @@ class SeedCacheHydrationPhase {
         sqlQueryEngine: cdcQueryEngine,
         systemTableCache,
         messageRouter: d.getMessageRouter(),
+        partitionServicesProvider: () => d.getPartitionServices(),
       });
 
       logger.debug(LOG_CDC_UPGRADED, {

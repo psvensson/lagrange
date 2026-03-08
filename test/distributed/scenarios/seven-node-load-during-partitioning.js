@@ -39,6 +39,12 @@ const SQL_UPDATE_TABLE_POLICIES_PREFIX =
 const SQL_UPDATE_TABLE_POLICIES_MID =
   '\' WHERE table_id = \'';
 const SQL_UPDATE_TABLE_POLICIES_SUFFIX = '\'';
+const SQL_CONTROL_SNAPSHOT =
+  'SELECT * FROM control_snapshot_local()';
+const FAILURE_PHASE_PARTITIONING = 'partitioning_under_load';
+const FAILURE_ROOT_CAUSE_CLASS_PROGRESSION = 'progression';
+const FAILURE_REASON_NO_SPLIT_ATTEMPTS = 'no_split_attempt_evidence';
+const FAILURE_REASON_NO_PARTITIONING_EVIDENCE = 'no_partitioning_evidence';
 
 /**
  * Pick seed node with deterministic fallback.
@@ -47,6 +53,19 @@ const SQL_UPDATE_TABLE_POLICIES_SUFFIX = '\'';
  */
 function getSeedNode(nodes) {
   return nodes.find((node) => node.role === 'seed') || nodes[0];
+}
+
+/**
+ * Increment a histogram counter.
+ * @param {Object} histogram
+ * @param {string} key
+ */
+function incrementHistogram(histogram, key) {
+  const normalizedKey = String(key || '');
+  if (normalizedKey.length === ZERO) {
+    return;
+  }
+  histogram[normalizedKey] = (histogram[normalizedKey] || ZERO) + 1;
 }
 
 /**
@@ -93,7 +112,7 @@ async function queryTableId(seedNode, tableName) {
  * Apply low split thresholds as table policies on the target table.
  * @param {Object} seedNode
  * @param {string} tableName
- * @return {Promise<void>}
+ * @return {Promise<string>}
  */
 async function applyTableSplitPolicies(seedNode, tableName) {
   const tableId = await queryTableId(seedNode, tableName);
@@ -108,6 +127,181 @@ async function applyTableSplitPolicies(seedNode, tableName) {
     escapeSql(tableId) +
     SQL_UPDATE_TABLE_POLICIES_SUFFIX;
   await seedNode.query(policySql);
+  return tableId;
+}
+
+/**
+ * Summarize placement eligibility reasons from control diagnostics.
+ * @param {Object} placementByNodeId
+ * @return {Object}
+ */
+function summarizePlacementEligibility(placementByNodeId) {
+  const placements = placementByNodeId &&
+    typeof placementByNodeId === 'object' ?
+    Object.values(placementByNodeId) :
+    [];
+  const reasonCounts = {};
+  let eligibleNodeCount = ZERO;
+  let ineligibleNodeCount = ZERO;
+
+  for (const placement of placements) {
+    if (placement?.placementEligible === true) {
+      eligibleNodeCount += 1;
+    } else {
+      ineligibleNodeCount += 1;
+    }
+    const reasonCodes = Array.isArray(placement?.reasonCodes) ?
+      placement.reasonCodes :
+      [];
+    for (const reasonCode of reasonCodes) {
+      incrementHistogram(reasonCounts, reasonCode);
+    }
+  }
+
+  return {
+    totalNodes: placements.length,
+    eligibleNodeCount,
+    ineligibleNodeCount,
+    reasonCounts,
+  };
+}
+
+/**
+ * Summarize split-workflow admissions for one target table.
+ * @param {Object} workflowAdmissionsByWorkflowId
+ * @param {string} tableName
+ * @param {string} tableId
+ * @return {Object}
+ */
+function summarizeSplitWorkflowAdmissions(
+  workflowAdmissionsByWorkflowId,
+  tableName,
+  tableId,
+) {
+  const workflows = workflowAdmissionsByWorkflowId &&
+    typeof workflowAdmissionsByWorkflowId === 'object' ?
+    Object.values(workflowAdmissionsByWorkflowId) :
+    [];
+  const matchingWorkflows = workflows.filter((workflow) => {
+    if (!workflow || typeof workflow !== 'object') {
+      return false;
+    }
+    const matchesTableName = workflow.tableName === tableName;
+    const matchesTableId =
+      typeof tableId === 'string' &&
+      tableId.length > ZERO &&
+      workflow.tableId === tableId;
+    return matchesTableName || matchesTableId;
+  });
+
+  const decisionTypeCounts = {};
+  const transitionStateCounts = {};
+  const blockingReasonCounts = {};
+
+  for (const workflow of matchingWorkflows) {
+    incrementHistogram(
+      decisionTypeCounts,
+      workflow?.admission?.decisionType || workflow?.admission?.decision,
+    );
+    incrementHistogram(transitionStateCounts, workflow?.transitionState);
+    const blockingReasons = Array.isArray(workflow?.blockingReasons) ?
+      workflow.blockingReasons :
+      [];
+    for (const reason of blockingReasons) {
+      incrementHistogram(blockingReasonCounts, reason);
+    }
+  }
+
+  return {
+    workflowCount: matchingWorkflows.length,
+    decisionTypeCounts,
+    transitionStateCounts,
+    blockingReasonCounts,
+    workflowIds: matchingWorkflows
+      .map((workflow) => String(workflow?.workflowId || ''))
+      .filter((workflowId) => workflowId.length > ZERO)
+      .sort(),
+  };
+}
+
+/**
+ * Query split progress diagnostics from control snapshot.
+ * @param {Object} seedNode
+ * @param {string} tableName
+ * @param {string} tableId
+ * @return {Promise<Object>}
+ */
+async function querySplitProgressDiagnostics(seedNode, tableName, tableId) {
+  try {
+    const result = await seedNode.query(SQL_CONTROL_SNAPSHOT);
+    const rows = rowsFromResult(result);
+    if (rows.length === ZERO) {
+      return {
+        available: false,
+        error: 'control snapshot returned no rows',
+      };
+    }
+    const snapshot = rows[0];
+    const controlPlaneDiagnostics = snapshot?.controlPlaneDiagnostics &&
+      typeof snapshot.controlPlaneDiagnostics === 'object' ?
+      snapshot.controlPlaneDiagnostics :
+      null;
+    if (!controlPlaneDiagnostics) {
+      return {
+        available: false,
+        error: 'control snapshot missing controlPlaneDiagnostics',
+      };
+    }
+
+    return {
+      available: true,
+      capturedAt: snapshot?.capturedAt || null,
+      workflowSummary: summarizeSplitWorkflowAdmissions(
+        controlPlaneDiagnostics.workflowAdmissionsByWorkflowId,
+        tableName,
+        tableId,
+      ),
+      placementSummary: summarizePlacementEligibility(
+        controlPlaneDiagnostics.placementEligibilityByNodeId,
+      ),
+      replicaOperationSummary: snapshot?.replicaOperations || null,
+      publicationMode: controlPlaneDiagnostics.publicationMode || null,
+    };
+  } catch (error) {
+    return {
+      available: false,
+      error: error?.message || String(error),
+    };
+  }
+}
+
+/**
+ * Build a structured scenario failure for deterministic diagnostics.
+ * @param {Object} options
+ * @return {Error}
+ */
+function buildPartitioningFailure(options) {
+  const reasonCode = options.reasonCode;
+  const error = new Error(options.message);
+  error.diagnostics = {
+    failure: {
+      phase: FAILURE_PHASE_PARTITIONING,
+      rootCauseClass: FAILURE_ROOT_CAUSE_CLASS_PROGRESSION,
+      dominantReason: reasonCode,
+      reasonCounts: {
+        [reasonCode]: 1,
+      },
+      timeoutMs: options.timeoutMs,
+      sampleCount: options.sampleCount,
+      baselinePartitionCount: options.baselinePartitionCount,
+      additionalPartitionCount: options.additionalPartitionCount,
+      replicaNodeCount: options.replicaNodeCount,
+      metricsTotal: options.metricsTotal,
+      metricsAtFirstPartitioning: options.metricsAtFirstPartitioning,
+      splitProgress: options.splitProgress || null,
+    },
+  };
+  return error;
 }
 
 /**
@@ -126,6 +320,7 @@ async function run(cluster, options = {}) {
     minAdditionalPartitions,
     minDistinctReplicaNodes,
     partitioningTimeoutMs,
+    splitAttemptTimeoutMs,
     partitioningPollIntervalMs,
     minOpsAfterPartitioning,
     minSuccessRate,
@@ -148,7 +343,7 @@ async function run(cluster, options = {}) {
     targetVoterCount: CONVERGENCE_DEFAULTS.targetVoterCount,
   });
 
-  await applyTableSplitPolicies(seedNode, tableName);
+  const tableId = await applyTableSplitPolicies(seedNode, tableName);
 
   const loadRun = cluster.startLoad({
     opsPerSec: loadOpsPerSec,
@@ -170,11 +365,13 @@ async function run(cluster, options = {}) {
     const baselinePartitionIds = new Set(baseline.partitionIds);
     const additionalPartitionIds = new Set();
     const deadline = Date.now() + partitioningTimeoutMs;
+    const splitAttemptDeadline = Date.now() + splitAttemptTimeoutMs;
 
     let sampleCount = ZERO;
     let metricsAtFirstPartitioning = null;
     let latestDistribution = baseline;
     let latestMetrics = loadRun.getMetrics();
+    let latestSplitProgress = null;
     let successObserved = false;
 
     while (Date.now() <= deadline) {
@@ -183,12 +380,40 @@ async function run(cluster, options = {}) {
         seedNode, {tableName},
       );
       latestMetrics = loadRun.getMetrics();
+      latestSplitProgress = await querySplitProgressDiagnostics(
+        seedNode,
+        tableName,
+        tableId,
+      );
 
       trackAdditionalPartitions(
         baselinePartitionIds,
         additionalPartitionIds,
         latestDistribution.partitionIds,
       );
+
+      if (latestSplitProgress.available === true &&
+          latestSplitProgress.workflowSummary.workflowCount === ZERO &&
+          Date.now() >= splitAttemptDeadline) {
+        throw buildPartitioningFailure({
+          reasonCode: FAILURE_REASON_NO_SPLIT_ATTEMPTS,
+          message:
+            'Timed out waiting for split-attempt evidence. ' +
+            'workflowCount=0, placement.ineligible=' +
+            latestSplitProgress.placementSummary.ineligibleNodeCount +
+            ', additionalPartitions=' + additionalPartitionIds.size +
+            ', spread=' + latestDistribution.replicaNodeCount +
+            ', metrics.total=' + latestMetrics.total,
+          timeoutMs: splitAttemptTimeoutMs,
+          sampleCount,
+          baselinePartitionCount: baseline.partitionCount,
+          additionalPartitionCount: additionalPartitionIds.size,
+          replicaNodeCount: latestDistribution.replicaNodeCount,
+          metricsTotal: latestMetrics.total,
+          metricsAtFirstPartitioning,
+          splitProgress: latestSplitProgress,
+        });
+      }
 
       if (metricsAtFirstPartitioning === null &&
           additionalPartitionIds.size > ZERO) {
@@ -224,6 +449,7 @@ async function run(cluster, options = {}) {
           metricsAtSuccess: latestMetrics.total,
           operationsAfterPartitioning,
           sampleCount,
+          splitProgress: latestSplitProgress,
         };
         break;
       }
@@ -234,15 +460,26 @@ async function run(cluster, options = {}) {
       await sleep(partitioningPollIntervalMs);
     }
 
-    assert.ok(
-      successObserved,
-      'Timed out waiting for partitioning-under-load evidence. ' +
-      'Additional partitions=' + additionalPartitionIds.size +
-      ', spread=' + latestDistribution.replicaNodeCount +
-      ', metrics.total=' + latestMetrics.total +
-      ', metricsAtFirstPartitioning=' +
-      metricsAtFirstPartitioning,
-    );
+    if (!successObserved) {
+      throw buildPartitioningFailure({
+        reasonCode: FAILURE_REASON_NO_PARTITIONING_EVIDENCE,
+        message:
+          'Timed out waiting for partitioning-under-load evidence. ' +
+          'Additional partitions=' + additionalPartitionIds.size +
+          ', spread=' + latestDistribution.replicaNodeCount +
+          ', metrics.total=' + latestMetrics.total +
+          ', metricsAtFirstPartitioning=' +
+          metricsAtFirstPartitioning,
+        timeoutMs: partitioningTimeoutMs,
+        sampleCount,
+        baselinePartitionCount: baseline.partitionCount,
+        additionalPartitionCount: additionalPartitionIds.size,
+        replicaNodeCount: latestDistribution.replicaNodeCount,
+        metricsTotal: latestMetrics.total,
+        metricsAtFirstPartitioning,
+        splitProgress: latestSplitProgress,
+      });
+    }
   } finally {
     if (typeof loadRun.cancel === 'function') {
       loadRun.cancel();

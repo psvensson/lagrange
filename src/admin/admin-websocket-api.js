@@ -39,9 +39,13 @@ import {
   createTimeoutBudgetError,
 } from '../control-plane/timeout-budget.js';
 import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+} from '../control-plane/control-plane-readiness-constants.js';
+import {
   ERRNO,
   HTTP_STATUS,
   NUM,
+  TABLES,
   TYPEOF,
 } from '../constants/index.js';
 import {TRANSPORT_EVENT} from '../constants/transport.js';
@@ -54,7 +58,7 @@ import {
   CACHE_DUMP_TABLES,
 } from './admin-meta-command-handlers.js';
 import {parseLiveSelect} from '../live-query/live-query-service.js';
-import {SQLParser} from '../query/sql-parser.js';
+import {AST_TYPE, EXPR_TYPE, SQLParser} from '../query/sql-parser.js';
 import {MUTATION_GUARD_MODE} from './admin-mutation-guard.js';
 import {
   ADMIN_SERVICE_OPERATION,
@@ -119,9 +123,17 @@ const HTTP_HEADER_VALUE = Object.freeze({
   NO_STORE: 'no-store',
   KEEP_ALIVE: 'keep-alive',
 });
+const ADMIN_STREAM_LANE_DEFAULT = 'default';
+const ADMIN_STREAM_LANE_LOAD = 'load';
+const LOAD_LANE_READINESS_CACHE_MAX_AGE_MS = 5000;
 const SSE_FRAME_PREFIX = 'data: ';
 const SSE_FRAME_SUFFIX = '\n\n';
 const EMPTY_STRING = '';
+const ADMIN_CACHE_OBSERVATION_TABLES =
+  new Set([
+    ...CACHE_DUMP_TABLES,
+    TABLES.NODE_ENDPOINTS,
+  ]);
 
 const ADMIN_LOCAL_DISPATCH = Object.freeze({
   TARGET_ADDRESS: 'local/admin-websocket-api',
@@ -212,6 +224,12 @@ class AdminWebSocketAPI {
       this.sqlQueryEngine?.rebalanceCoordinator?.storageAdmissionService
         ?.controlPlaneReadinessService ||
       null;
+    this.heartbeatService = options.heartbeatService || null;
+    this.loadLaneReadinessCacheMaxAgeMs =
+      Number.isFinite(options.loadLaneReadinessCacheMaxAgeMs) &&
+        options.loadLaneReadinessCacheMaxAgeMs > NUM.ZERO ?
+        Math.floor(options.loadLaneReadinessCacheMaxAgeMs) :
+        LOAD_LANE_READINESS_CACHE_MAX_AGE_MS;
     this.enableAdminStream = options.enableAdminStream !== false;
 
     // Configuration
@@ -241,6 +259,7 @@ class AdminWebSocketAPI {
       sqlQueryEngine: this.sqlQueryEngine,
       cdcIntegrationService: this.cdcIntegrationService,
       controlPlaneReadinessService: this.controlPlaneReadinessService,
+      heartbeatService: this.heartbeatService,
       ensureAuthoritativeDiscoveryCacheRepair: (opts) =>
         this.serviceDiscovery
           ?.ensureAuthoritativeDiscoveryCacheRepair(opts),
@@ -285,6 +304,7 @@ class AdminWebSocketAPI {
           .buildControlSnapshotReplicaOperationSummary(rows, opts),
       executeSqlRequestWithTimeout: (req, timeout) =>
         this.executeSqlRequestWithTimeout(req, timeout),
+      nowFn: this.nowFn,
     });
 
     // Debug handlers delegate
@@ -526,8 +546,8 @@ class AdminWebSocketAPI {
       // WebSocket endpoint for admin stream
       // Note: @fastify/websocket passes socket directly in newer versions
       this.fastify.register(async (fastify) => {
-        fastify.get(ADMIN_ROUTE.STREAM, {websocket: true}, (socket, _req) => {
-          this.handleConnection(socket);
+        fastify.get(ADMIN_ROUTE.STREAM, {websocket: true}, (socket, req) => {
+          this.handleConnection(socket, req);
         });
         fastify.get(
           ADMIN_ROUTE.DEBUG_TRACE_STREAM,
@@ -808,11 +828,32 @@ class AdminWebSocketAPI {
   }
 
   /**
-   * Handle new WebSocket connection.
-   * @param {Object} socket - WebSocket connection.
+   * Normalize one admin websocket lane string.
+   * @param {*} lane
+   * @return {string}
    * @private
    */
-  handleConnection(socket) {
+  resolveAdminClientLane(lane) {
+    if (typeof lane !== TYPEOF.STRING) {
+      return ADMIN_STREAM_LANE_DEFAULT;
+    }
+    const normalized = lane.trim().toLowerCase();
+    if (normalized.length === NUM.ZERO) {
+      return ADMIN_STREAM_LANE_DEFAULT;
+    }
+    return normalized;
+  }
+
+  /**
+   * Handle new WebSocket connection.
+   * @param {Object} socket - WebSocket connection.
+   * @param {Object} [request] - Fastify request.
+   * @private
+   */
+  handleConnection(socket, request = null) {
+    const lane = this.resolveAdminClientLane(
+      request?.query?.lane,
+    );
     const clientId = `${ADMIN_CLIENT.PREFIX}${Date.now()}-` +
       `${Math.random()
         .toString(ADMIN_CLIENT.RANDOM_BASE)
@@ -820,12 +861,14 @@ class AdminWebSocketAPI {
 
     this.logger.info(ADMIN_LOG_MSG.CLIENT_CONNECTED, {
       clientId,
+      lane,
       totalClients: this.clients.size + NUM.ONE,
     });
 
     // Add to connected clients
     const clientInfo = {
       id: clientId,
+      lane,
       socket,
       connectedAt: Date.now(),
       liveQueryMap: new Map(),
@@ -868,6 +911,7 @@ class AdminWebSocketAPI {
 
     this.logger.info(ADMIN_LOG_MSG.CLIENT_DISCONNECTED, {
       clientId: clientInfo.id,
+      lane: this.resolveAdminClientLane(clientInfo?.lane),
       totalClients: this.clients.size,
     });
   }
@@ -976,22 +1020,25 @@ class AdminWebSocketAPI {
   /**
    * Execute one canonical Service_Message envelope locally.
    * @param {Object} envelope
-   * @param {Object} _context
+   * @param {Object} context
    * @return {Promise<Object>}
    * @private
    */
-  async executeLocalServiceEnvelope(envelope, _context) {
+  async executeLocalServiceEnvelope(envelope, context = {}) {
     const operation = envelope?.operation;
     const payload = envelope?.payload || {};
 
     if (operation === ADMIN_SERVICE_OPERATION.EXECUTE_QUERY) {
       return {
-        queryResult: await this.executeLocalQueryEnvelope(payload),
+        queryResult: await this.executeLocalQueryEnvelope(payload, context),
       };
     }
     if (operation === ADMIN_SERVICE_OPERATION.EXECUTE_PARTITION_CALLBACK) {
       return {
-        queryResult: await this.executeLocalPartitionCallbackEnvelope(payload),
+        queryResult: await this.executeLocalPartitionCallbackEnvelope(
+          payload,
+          context,
+        ),
       };
     }
     if (operation === ADMIN_SERVICE_OPERATION.GET_CACHE_DUMP) {
@@ -1007,12 +1054,621 @@ class AdminWebSocketAPI {
   }
 
   /**
+   * Return true when one request is executing on the load lane.
+   * @param {Object} executionContext
+   * @return {boolean}
+   * @private
+   */
+  isLoadLaneExecution(executionContext = {}) {
+    const lane = this.resolveAdminClientLane(
+      executionContext?.clientInfo?.lane,
+    );
+    return lane === ADMIN_STREAM_LANE_LOAD;
+  }
+
+  /**
+   * Resolve local readiness snapshot for load-lane admission checks.
+   * @return {Object|null}
+   * @private
+   */
+  async resolveLoadLaneReadinessSnapshot() {
+    if (!this.controlPlaneReadinessService ||
+        typeof this.nodeId !== TYPEOF.STRING ||
+        this.nodeId.length === NUM.ZERO) {
+      return null;
+    }
+    if (typeof this.controlPlaneReadinessService.getNodeReadiness ===
+        TYPEOF.FUNCTION) {
+      return this.controlPlaneReadinessService
+        .getNodeReadiness(
+          this.nodeId,
+          {
+            allowAuthoritativeRefresh: true,
+            allowStaleOnCacheChange: true,
+            requireFreshOnIneligible: true,
+            decisionDimension:
+              CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
+            maxCachedAgeMs: this.loadLaneReadinessCacheMaxAgeMs,
+          },
+        );
+    }
+    if (typeof this.controlPlaneReadinessService.getNodeReadinessSync ===
+        TYPEOF.FUNCTION) {
+      return this.controlPlaneReadinessService
+        .getNodeReadinessSync(this.nodeId);
+    }
+    return null;
+  }
+
+  /**
+   * Fail fast for load-lane queries when local routing/member health
+   * indicates requests should be shed.
+   * @param {Object} executionContext
+   * @private
+   */
+  async assertLoadLaneQueryAdmitted(executionContext = {}) {
+    if (!this.isLoadLaneExecution(executionContext)) {
+      return;
+    }
+    const readiness = await this.resolveLoadLaneReadinessSnapshot();
+    if (!readiness ||
+        typeof readiness !== TYPEOF.OBJECT ||
+        !readiness.dimensions ||
+        typeof readiness.dimensions !== TYPEOF.OBJECT) {
+      return;
+    }
+    const serveEligible = readiness.dimensions[
+      CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE
+    ] === true;
+    if (serveEligible) {
+      return;
+    }
+    const reasonCodes = Array.isArray(readiness.reasons) ?
+      readiness.reasons
+        .map((reason) => String(reason?.code || '').trim())
+        .filter((code) => code.length > NUM.ZERO) :
+      [];
+    throw createAdminOperationError(
+      ErrorCode.INTERNAL_ERROR,
+      'serve not ready: load lane admission denied on node ' +
+        this.nodeId +
+        ' (serveEligible=' + String(serveEligible) +
+        ', reasons=' +
+        (reasonCodes.length > NUM.ZERO ? reasonCodes.join(',') : 'none') +
+        ')',
+    );
+  }
+
+  /**
+   * Execute one simple single-table system observation query from the local
+   * cache instead of routing it back through SqlCore.
+   * @param {string} sql
+   * @param {Array<*>} params
+   * @return {Object|null}
+   * @private
+   */
+  tryExecuteLocalSystemTableObservationQuery(sql, params = []) {
+    if (!this.systemTableCache ||
+        typeof this.systemTableCache.getAll !== TYPEOF.FUNCTION ||
+        typeof sql !== TYPEOF.STRING) {
+      return null;
+    }
+
+    let ast;
+    try {
+      ast = new SQLParser(sql).parse();
+    } catch (_error) {
+      return null;
+    }
+
+    if (ast?.type !== AST_TYPE.SELECT ||
+        !ast.from ||
+        ast.from.subquery ||
+        (Array.isArray(ast.joins) && ast.joins.length > NUM.ZERO) ||
+        ast.distinct === true ||
+        ast.groupBy ||
+        ast.having ||
+        ast.ctes ||
+        ast.recursive === true ||
+        ast.setOperation) {
+      return null;
+    }
+
+    const tableName = normalizeIdentifier(ast.from.name);
+    if (!tableName ||
+        !ADMIN_CACHE_OBSERVATION_TABLES.has(tableName)) {
+      return null;
+    }
+
+    try {
+      let rows = this.systemTableCache.getAll(tableName);
+      rows = Array.isArray(rows) ? rows.map((row) => ({...row})) : [];
+      rows = rows.filter((row) =>
+        this.evaluateLocalSystemTableObservationExpression(
+          ast.where,
+          row,
+          params,
+        ),
+      );
+      rows = this.sortLocalSystemTableObservationRows(
+        rows,
+        ast.orderBy,
+        params,
+      );
+      rows = this.limitLocalSystemTableObservationRows(
+        rows,
+        ast.limit,
+      );
+      rows = this.projectLocalSystemTableObservationRows(
+        rows,
+        ast.columns,
+        params,
+      );
+      if (rows === null) {
+        return null;
+      }
+      return {
+        success: true,
+        rows,
+        count: rows.length,
+        partitions: this.resolveLocalSystemTableObservationPartitions(
+          tableName,
+          rows,
+        ),
+        tableName,
+      };
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  /**
+   * Evaluate one cache-backed WHERE expression against one row.
+   * @param {Object|null} expr
+   * @param {Object} row
+   * @param {Array<*>} params
+   * @return {boolean}
+   * @private
+   */
+  evaluateLocalSystemTableObservationExpression(
+    expr,
+    row,
+    params = [],
+  ) {
+    if (!expr) {
+      return true;
+    }
+
+    if (expr.type === EXPR_TYPE.BINARY) {
+      if (expr.operator === 'AND') {
+        return this.evaluateLocalSystemTableObservationExpression(
+          expr.left,
+          row,
+          params,
+        ) && this.evaluateLocalSystemTableObservationExpression(
+          expr.right,
+          row,
+          params,
+        );
+      }
+      if (expr.operator === 'OR') {
+        return this.evaluateLocalSystemTableObservationExpression(
+          expr.left,
+          row,
+          params,
+        ) || this.evaluateLocalSystemTableObservationExpression(
+          expr.right,
+          row,
+          params,
+        );
+      }
+
+      const leftValue =
+        this.resolveLocalSystemTableObservationValue(
+          expr.left,
+          row,
+          params,
+        );
+      const rightValue =
+        this.resolveLocalSystemTableObservationValue(
+          expr.right,
+          row,
+          params,
+        );
+      const comparison =
+        this.compareLocalSystemTableObservationValues(
+          leftValue,
+          rightValue,
+        );
+
+      switch (expr.operator) {
+      case '=':
+        return comparison === NUM.ZERO;
+      case '<>':
+        return comparison !== NUM.ZERO;
+      case '>':
+        return comparison > NUM.ZERO;
+      case '>=':
+        return comparison >= NUM.ZERO;
+      case '<':
+        return comparison < NUM.ZERO;
+      case '<=':
+        return comparison <= NUM.ZERO;
+      case 'IS NULL':
+        return leftValue === null || leftValue === undefined;
+      case 'IS NOT NULL':
+        return leftValue !== null && leftValue !== undefined;
+      default:
+        throw new Error(
+          `Unsupported local admin cache operator: ${expr.operator}`,
+        );
+      }
+    }
+
+    if (expr.type === EXPR_TYPE.IN) {
+      const candidate =
+        this.resolveLocalSystemTableObservationValue(
+          expr.expression,
+          row,
+          params,
+        );
+      const values = Array.isArray(expr.values) ? expr.values : [];
+      const matched = values.some((valueExpr) => {
+        const value = this.resolveLocalSystemTableObservationValue(
+          valueExpr,
+          row,
+          params,
+        );
+        return this.compareLocalSystemTableObservationValues(
+          candidate,
+          value,
+        ) === NUM.ZERO;
+      });
+      return expr.negated === true ? !matched : matched;
+    }
+
+    if (expr.type === EXPR_TYPE.LIKE) {
+      const candidate =
+        this.resolveLocalSystemTableObservationValue(
+          expr.expression,
+          row,
+          params,
+        );
+      const pattern =
+        this.resolveLocalSystemTableObservationValue(
+          expr.pattern,
+          row,
+          params,
+        );
+      const matched = this.matchesLocalSystemTableObservationLike(
+        candidate,
+        pattern,
+      );
+      return expr.negated === true ? !matched : matched;
+    }
+
+    if (expr.type === EXPR_TYPE.UNARY &&
+        expr.operator === 'NOT') {
+      return !this.evaluateLocalSystemTableObservationExpression(
+        expr.operand,
+        row,
+        params,
+      );
+    }
+
+    return Boolean(
+      this.resolveLocalSystemTableObservationValue(
+        expr,
+        row,
+        params,
+      ),
+    );
+  }
+
+  /**
+   * Resolve one supported expression value against one cache row.
+   * @param {Object|null} expr
+   * @param {Object} row
+   * @param {Array<*>} params
+   * @return {*}
+   * @private
+   */
+  resolveLocalSystemTableObservationValue(
+    expr,
+    row,
+    params = [],
+  ) {
+    if (!expr) {
+      return null;
+    }
+
+    switch (expr.type) {
+    case EXPR_TYPE.LITERAL:
+      return expr.value;
+    case EXPR_TYPE.PARAMETER:
+      return params[expr.index];
+    case EXPR_TYPE.COLUMN:
+      return this.resolveLocalSystemTableObservationValue(
+        expr.expression,
+        row,
+        params,
+      );
+    case EXPR_TYPE.COLUMN_REF: {
+      const directValue = row?.[expr.column];
+      if (directValue !== undefined) {
+        return directValue;
+      }
+      const normalizedColumn =
+        normalizeIdentifier(expr.column);
+      if (!normalizedColumn) {
+        return undefined;
+      }
+      for (const [key, value] of Object.entries(row || {})) {
+        if (normalizeIdentifier(key) === normalizedColumn) {
+          return value;
+        }
+      }
+      return undefined;
+    }
+    case EXPR_TYPE.UNARY:
+      if (expr.operator === '-') {
+        const value = Number(
+          this.resolveLocalSystemTableObservationValue(
+            expr.operand,
+            row,
+            params,
+          ),
+        );
+        return Number.isFinite(value) ? -value : null;
+      }
+      return this.resolveLocalSystemTableObservationValue(
+        expr.operand,
+        row,
+        params,
+      );
+    default:
+      throw new Error(
+        `Unsupported local admin cache expression: ${expr.type}`,
+      );
+    }
+  }
+
+  /**
+   * Compare two cache observation values.
+   * @param {*} left
+   * @param {*} right
+   * @return {number}
+   * @private
+   */
+  compareLocalSystemTableObservationValues(left, right) {
+    if (left === right) {
+      return NUM.ZERO;
+    }
+    if (left === null || left === undefined) {
+      return NUM.NEGATIVE_ONE;
+    }
+    if (right === null || right === undefined) {
+      return NUM.ONE;
+    }
+
+    const leftNumber = Number(left);
+    const rightNumber = Number(right);
+    if (Number.isFinite(leftNumber) &&
+        Number.isFinite(rightNumber) &&
+        String(left).trim().length > NUM.ZERO &&
+        String(right).trim().length > NUM.ZERO) {
+      return leftNumber - rightNumber;
+    }
+
+    return String(left).localeCompare(String(right));
+  }
+
+  /**
+   * Apply column projection for one local cache query result set.
+   * @param {Object[]} rows
+   * @param {Object[]|null} columns
+   * @param {Array<*>} params
+   * @return {Object[]|null}
+   * @private
+   */
+  projectLocalSystemTableObservationRows(
+    rows,
+    columns,
+    params = [],
+  ) {
+    if (!Array.isArray(columns) ||
+        columns.length === NUM.ZERO ||
+        columns.some((column) => column?.type === EXPR_TYPE.STAR)) {
+      return rows.map((row) => ({...row}));
+    }
+
+    const projectedRows = [];
+    for (const row of rows) {
+      const projected = {};
+      for (const column of columns) {
+        if (column?.type !== EXPR_TYPE.COLUMN ||
+            column.expression?.type !== EXPR_TYPE.COLUMN_REF) {
+          return null;
+        }
+        const key =
+          typeof column.alias === TYPEOF.STRING &&
+            column.alias.length > NUM.ZERO ?
+            column.alias :
+            column.expression.column;
+        projected[key] =
+          this.resolveLocalSystemTableObservationValue(
+            column.expression,
+            row,
+            params,
+          );
+      }
+      projectedRows.push(projected);
+    }
+
+    return projectedRows;
+  }
+
+  /**
+   * Apply ORDER BY clauses for one local cache query result set.
+   * @param {Object[]} rows
+   * @param {Object[]|null} orderBy
+   * @param {Array<*>} params
+   * @return {Object[]}
+   * @private
+   */
+  sortLocalSystemTableObservationRows(
+    rows,
+    orderBy,
+    params = [],
+  ) {
+    if (!Array.isArray(orderBy) ||
+        orderBy.length === NUM.ZERO) {
+      return rows;
+    }
+
+    return [...rows].sort((leftRow, rightRow) => {
+      for (const ordering of orderBy) {
+        const leftValue =
+          this.resolveLocalSystemTableObservationValue(
+            ordering.expression,
+            leftRow,
+            params,
+          );
+        const rightValue =
+          this.resolveLocalSystemTableObservationValue(
+            ordering.expression,
+            rightRow,
+            params,
+          );
+        const comparison =
+          this.compareLocalSystemTableObservationValues(
+            leftValue,
+            rightValue,
+          );
+        if (comparison !== NUM.ZERO) {
+          return String(ordering.direction || 'ASC')
+            .toUpperCase() === 'DESC' ?
+            -comparison :
+            comparison;
+        }
+      }
+      return NUM.ZERO;
+    });
+  }
+
+  /**
+   * Apply LIMIT/OFFSET clauses for one local cache query result set.
+   * @param {Object[]} rows
+   * @param {Object|null} limit
+   * @return {Object[]}
+   * @private
+   */
+  limitLocalSystemTableObservationRows(rows, limit) {
+    if (!limit || typeof limit !== TYPEOF.OBJECT) {
+      return rows;
+    }
+
+    const count = Number(limit.count);
+    const offset = Number(limit.offset);
+    const normalizedOffset =
+      Number.isFinite(offset) && offset > NUM.ZERO ?
+        Math.floor(offset) :
+        NUM.ZERO;
+    const normalizedCount =
+      Number.isFinite(count) && count >= NUM.ZERO ?
+        Math.floor(count) :
+        null;
+
+    if (normalizedCount === null) {
+      return rows.slice(normalizedOffset);
+    }
+
+    return rows.slice(
+      normalizedOffset,
+      normalizedOffset + normalizedCount,
+    );
+  }
+
+  /**
+   * Resolve best-effort partition ids for one local cache result.
+   * @param {string} tableName
+   * @param {Object[]} rows
+   * @return {string[]}
+   * @private
+   */
+  resolveLocalSystemTableObservationPartitions(
+    tableName,
+    rows,
+  ) {
+    if (tableName === TABLES.PARTITIONS) {
+      return rows
+        .map((row) => row?.partition_id || row?.partitionId || null)
+        .filter((partitionId) =>
+          typeof partitionId === TYPEOF.STRING &&
+            partitionId.length > NUM.ZERO,
+        );
+    }
+
+    if (tableName === TABLES.SERVICES ||
+        tableName === TABLES.REPLICA_OPERATIONS) {
+      return [...new Set(rows
+        .map((row) => row?.partition_id || row?.partitionId || null)
+        .filter((partitionId) =>
+          typeof partitionId === TYPEOF.STRING &&
+            partitionId.length > NUM.ZERO,
+        ))];
+    }
+
+    if (typeof this.systemTableCache.filter !== TYPEOF.FUNCTION) {
+      return ADMIN_CACHE_DUMP.EMPTY;
+    }
+
+    return this.systemTableCache.filter(
+      TABLES.PARTITIONS,
+      (row) => {
+        const rowTableName =
+          normalizeIdentifier(
+            row?.table_name || row?.tableName || null,
+          );
+        const rowTableId =
+          normalizeIdentifier(
+            row?.table_id || row?.tableId || null,
+          );
+        return rowTableName === tableName ||
+          rowTableId === tableName;
+      },
+    ).map((row) => row?.partition_id || row?.partitionId || null)
+      .filter((partitionId) =>
+        typeof partitionId === TYPEOF.STRING &&
+          partitionId.length > NUM.ZERO,
+      );
+  }
+
+  /**
+   * Match one SQL LIKE pattern for local cache observation queries.
+   * @param {*} value
+   * @param {*} pattern
+   * @return {boolean}
+   * @private
+   */
+  matchesLocalSystemTableObservationLike(value, pattern) {
+    const normalizedValue = String(value ?? EMPTY_STRING);
+    const normalizedPattern = String(pattern ?? EMPTY_STRING)
+      .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      .replace(/%/g, '.*')
+      .replace(/_/g, '.');
+    return new RegExp(`^${normalizedPattern}$`, 'i')
+      .test(normalizedValue);
+  }
+
+  /**
    * Execute canonical query operation payload.
    * @param {Object} payload
+   * @param {Object} executionContext
    * @return {Promise<Object>}
    * @private
    */
-  async executeLocalQueryEnvelope(payload) {
+  async executeLocalQueryEnvelope(payload, executionContext = {}) {
     const queryId = payload?.queryId || null;
     const sql = payload?.sql;
     const params = payload?.params || [];
@@ -1032,6 +1688,7 @@ class AdminWebSocketAPI {
         ADMIN_ERROR_HINT.MISSING_SQL,
       );
     }
+    await this.assertLoadLaneQueryAdmitted(executionContext);
     if (this.isPreflightCriticalPathSnapshotQuery(sql)) {
       return this.buildPreflightCriticalPathSnapshotQueryResult();
     }
@@ -1050,6 +1707,14 @@ class AdminWebSocketAPI {
           tableName: serviceDiscoveryQuery.tableName,
           tableId: serviceDiscoveryQuery.tableId,
         });
+    }
+    const localSystemTableObservation =
+      this.tryExecuteLocalSystemTableObservationQuery(
+        sql,
+        params,
+      );
+    if (localSystemTableObservation) {
+      return localSystemTableObservation;
     }
 
     const routed = guardedAdaptAdminAction(
@@ -1080,10 +1745,14 @@ class AdminWebSocketAPI {
   /**
    * Execute canonical partition-callback payload.
    * @param {Object} payload
+   * @param {Object} _executionContext
    * @return {Promise<Object>}
    * @private
    */
-  async executeLocalPartitionCallbackEnvelope(payload) {
+  async executeLocalPartitionCallbackEnvelope(
+    payload,
+    _executionContext = {},
+  ) {
     const queryId = payload?.queryId || null;
     const statement = payload?.statement;
     const parameters = payload?.parameters || [];
@@ -1349,6 +2018,7 @@ class AdminWebSocketAPI {
 
     const envelope = adaptAdminMessageToServiceMessage(message, {
       clientId: clientInfo.id,
+      lane: this.resolveAdminClientLane(clientInfo?.lane),
       tenantId: message.tenantId || null,
       principal: message.principal || null,
       traceId: message.traceId || null,
@@ -1365,6 +2035,7 @@ class AdminWebSocketAPI {
   async handleServiceDispatchMessage(clientInfo, message) {
     const envelope = adaptAdminMessageToServiceMessage(message, {
       clientId: clientInfo.id,
+      lane: this.resolveAdminClientLane(clientInfo?.lane),
       tenantId: message.tenantId || null,
       principal: message.principal || null,
       traceId: message.traceId || null,

@@ -172,4 +172,96 @@ describe('seven-node-load-during-partitioning scenario', () => {
       );
       assert.deepEqual(calls[2], 'assertConsistency');
     });
+
+  it('fails early with structured diagnostics when split attempts never start',
+    async () => {
+      let metricTotal = 0;
+
+      const seedNode = {
+        id: 'seed-1',
+        role: 'seed',
+        query: async (sql) => {
+          if (sql.includes(SQL_UPDATE_TABLE_POLICIES)) {
+            return {rows: []};
+          }
+          if (sql.includes('control_snapshot_local')) {
+            return {
+              rows: [{
+                controlPlaneDiagnostics: {
+                  workflowAdmissionsByWorkflowId: {},
+                  placementEligibilityByNodeId: {
+                    'seed-1': {
+                      placementEligible: false,
+                      reasonCodes: ['routing_not_ready'],
+                    },
+                  },
+                },
+              }],
+            };
+          }
+          if (sql.includes(SQL_FROM_TABLES)) {
+            return {rows: [{table_id: MOCK_TABLE_ID}]};
+          }
+          if (sql.includes(SQL_FROM_PARTITIONS)) {
+            return {rows: [{partition_id: 'logs-p1'}]};
+          }
+          if (sql.includes(SQL_FROM_SERVICES)) {
+            return {
+              rows: [
+                {partition_id: 'logs-p1', node_id: 'seed-1', status: 'active'},
+              ],
+            };
+          }
+          return {rows: []};
+        },
+      };
+
+      const cluster = {
+        getNodes: () => [
+          seedNode,
+          {id: 'node-2', role: 'joiner'},
+          {id: 'node-3', role: 'joiner'},
+          {id: 'node-4', role: 'joiner'},
+          {id: 'node-5', role: 'joiner'},
+          {id: 'node-6', role: 'joiner'},
+          {id: 'node-7', role: 'joiner'},
+        ],
+        waitForConvergence: async () => ({settledAfterMs: 1}),
+        startLoad: () => ({
+          getMetrics: () => {
+            metricTotal += 1;
+            return {
+              total: metricTotal,
+              success: metricTotal,
+              failed: 0,
+            };
+          },
+          cancel: () => {},
+          waitComplete: async () => ({
+            total: metricTotal,
+            success: metricTotal,
+            failed: 0,
+          }),
+        }),
+      };
+
+      await assert.rejects(
+        run(cluster, {
+          partitioningPollIntervalMs: 1,
+          splitAttemptTimeoutMs: 10,
+          partitioningTimeoutMs: 2000,
+        }),
+        (error) => {
+          assert.match(
+            String(error?.message || ''),
+            /split-attempt evidence/i,
+          );
+          assert.equal(
+            error?.diagnostics?.failure?.dominantReason,
+            'no_split_attempt_evidence',
+          );
+          return true;
+        },
+      );
+    });
 });

@@ -7,6 +7,9 @@ import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.j
 import {UnifiedRebalancer} from '../../src/rebalancer/unified-rebalancer.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {
+  DistributedTransactionCoordinator,
+} from '../../src/query/distributed/distributed-transaction-coordinator.js';
+import {
   DEFAULT_TABLE_POLICY,
   DEFAULT_MESSAGE_GROUP_POLICY,
   EntityType,
@@ -323,6 +326,16 @@ function createTestCoordinator(options = {}) {
       return {success: true, rows: []};
     },
   };
+  const transactionCoordinator =
+    Object.prototype.hasOwnProperty.call(options, 'transactionCoordinator') ?
+      options.transactionCoordinator :
+      new DistributedTransactionCoordinator({
+        beginParticipant: async () => {},
+        prepareParticipant: async () => {},
+        commitParticipant: async () => {},
+        rollbackParticipant: async () => {},
+        now: () => Date.now(),
+      });
 
   const coordinator = new RebalanceCoordinator({
     nodeId,
@@ -331,6 +344,7 @@ function createTestCoordinator(options = {}) {
     tablePolicyService: mockPolicyService,
     messageRouter: mockMessageRouter,
     sqlQueryEngine: mockSqlEngine,
+    transactionCoordinator,
     storageAdmissionService: options.storageAdmissionService || null,
     storageAccountingService: options.storageAccountingService || null,
     enableTimeouts,

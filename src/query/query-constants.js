@@ -127,8 +127,12 @@ const QUERY_ERROR_MSG = Object.freeze({
     'Timed out waiting for routable partition service for partition ',
   TABLE_PARTITION_LEADER_TIMEOUT_PREFIX:
     'Timed out waiting for partition leader service for partition ',
+  TABLE_PARTITION_PROVISION_INSUFFICIENT_TARGETS_PREFIX:
+    'Unable to satisfy minimum routable provisioning cohort for partition ',
   TABLE_PARTITION_PROVISION_DISPATCH_FAILED:
     'Failed to dispatch initial table partition replica creation',
+  TABLE_PARTITION_PROVISION_ABORTED_PRE_DISPATCH:
+    'Aborted provisional replica operations before initial partition dispatch',
   MISSING_JOIN_PLAN:
     'Missing canonical join partition plan',
   TABLE_SPLIT_ALREADY_IN_PROGRESS:
@@ -141,12 +145,18 @@ const QUERY_ERROR_MSG = Object.freeze({
     'Partition split table metadata not found',
   TABLE_SPLIT_LEADER_REQUIRED:
     'Managed partition split must be initiated by the source partition leader',
+  TABLE_SPLIT_TRANSACTION_COORDINATOR_REQUIRED:
+    'Managed partition split requires DistributedTransactionCoordinator for atomic partition metadata insertion',
   TABLE_SPLIT_BOOTSTRAP_TARGETS_REQUIRED_PREFIX:
     'Managed partition split requires at least ',
   TABLE_SPLIT_SOURCE_QUORUM_REQUIRED_PREFIX:
     'Managed partition split requires at least ',
   TABLE_SPLIT_START_FAILED:
     'Failed to start partition split replication on source partition',
+  TABLE_SPLIT_INVALID_PHASE_TRANSITION:
+    'Invalid split phase transition: phase not in owner-managed set',
+  TABLE_SPLIT_WORKFLOW_NOT_FOUND:
+    'Split workflow not found for phase advancement',
 });
 
 const QUERY_ROUTER_ERROR_MSG = Object.freeze({
@@ -207,10 +217,22 @@ const QUERY_LOG_MSG = Object.freeze({
   TABLE_PARTITION_PROVISION_FAILED: 'Initial table partition provisioning failed',
   TABLE_PARTITION_TARGET_NODE_FALLBACK_USED:
     'Using degraded provisioning target-node fallback',
+  TABLE_PARTITION_TARGET_NODE_REJECTED:
+    'Provisioning target node rejected during operation planning',
+  TABLE_PARTITION_PROVISION_INSUFFICIENT_TARGETS:
+    'Insufficient admissible provisioning targets for initial table partition',
+  TABLE_PARTITION_PROVISION_ABORT_PENDING:
+    'Aborting provisional table partition operations before dispatch',
+  TABLE_PARTITION_PROVISION_ABORT_FAILED:
+    'Failed to abort provisional table partition operation',
   TABLE_PARTITION_TARGET_NODE_WAIT_TIMEOUT:
     'Provisioning target-node convergence timed out',
   TABLE_SPLIT_MERGE_EVAL_FAILED:
     'Split/merge evaluation after table create failed',
+  TABLE_POLICY_CHANGE_TRIGGER_SPLIT_EVAL:
+    'Table policy update triggered split/merge evaluation',
+  TABLE_PARTITION_SIZE_CHANGE_TRIGGER_SPLIT_EVAL:
+    'Partition size update triggered split/merge evaluation',
   TABLE_SPLIT_START: 'Starting managed partition split',
   TABLE_SPLIT_PREPARED: 'Prepared managed partition split',
   TABLE_SPLIT_START_FAILED: 'Managed partition split start failed',

@@ -55,6 +55,7 @@ test('benchmark admission blocks pending promotion deterministically',
         operation_id: 'op-add-pending',
         partition_id: 'partition-benchmark-events-1',
         type: 'ADD',
+        source_node_id: 'node-1',
         target_node_id: 'node-2',
         status: 'creating',
         workflow_step: 'CREATING',
@@ -65,15 +66,70 @@ test('benchmark admission blocks pending promotion deterministically',
       const snapshot = await api.resolveServiceDiscoverySnapshot({
         tableName: TABLE_NAME,
       });
-      const replica = findReplica(snapshot, 'node-2');
-      const admission = replica?.benchmarkAdmission || null;
+      const targetReplica = findReplica(snapshot, 'node-2');
+      const targetAdmission = targetReplica?.benchmarkAdmission || null;
+      const sourceReplica = findReplica(snapshot, 'node-1');
+      const sourceAdmission = sourceReplica?.benchmarkAdmission || null;
 
-      t.equal(admission?.state, 'blocked');
-      t.equal(admission?.degradationState, 'promotion_pending');
-      t.same(admission?.degradedByOperationIds, ['op-add-pending']);
+      t.equal(targetAdmission?.state, 'blocked');
+      t.equal(targetAdmission?.degradationState, 'promotion_pending');
+      t.same(targetAdmission?.degradedByOperationIds, ['op-add-pending']);
       t.equal(
-        admission?.reasons?.some((reason) => reason?.code === 'replica_operation_in_flight'),
+        targetAdmission?.reasons?.some((reason) => reason?.code === 'replica_operation_in_flight'),
         true,
+      );
+      t.equal(sourceAdmission?.state, 'blocked');
+      t.equal(sourceAdmission?.degradationState, 'healthy');
+      t.same(sourceAdmission?.degradedByOperationIds, []);
+      t.equal(
+        sourceAdmission?.reasons?.some((reason) =>
+          reason?.code === 'replica_operation_in_flight'),
+        false,
+      );
+    } finally {
+      await api.shutdown();
+    }
+  });
+
+test('benchmark admission blocks failed promotion target without degrading source',
+  async (t) => {
+    const {api} = await createBenchmarkDiscoveryApi({
+      nodeId: 'node-2',
+      replicaOperations: [{
+        operation_id: 'op-add-failed',
+        partition_id: 'partition-benchmark-events-1',
+        type: 'ADD',
+        source_node_id: 'node-1',
+        target_node_id: 'node-2',
+        status: 'failed',
+        workflow_step: 'FAILED',
+      }],
+    });
+
+    try {
+      const snapshot = await api.resolveServiceDiscoverySnapshot({
+        tableName: TABLE_NAME,
+      });
+      const targetReplica = findReplica(snapshot, 'node-2');
+      const targetAdmission = targetReplica?.benchmarkAdmission || null;
+      const sourceReplica = findReplica(snapshot, 'node-1');
+      const sourceAdmission = sourceReplica?.benchmarkAdmission || null;
+
+      t.equal(targetAdmission?.state, 'blocked');
+      t.equal(targetAdmission?.degradationState, 'promotion_failed');
+      t.same(targetAdmission?.degradedByOperationIds, ['op-add-failed']);
+      t.equal(
+        targetAdmission?.reasons?.some((reason) =>
+          reason?.code === 'replica_operation_failed'),
+        true,
+      );
+      t.equal(sourceAdmission?.state, 'ready');
+      t.equal(sourceAdmission?.degradationState, 'healthy');
+      t.same(sourceAdmission?.degradedByOperationIds, []);
+      t.equal(
+        sourceAdmission?.reasons?.some((reason) =>
+          reason?.code === 'replica_operation_failed'),
+        false,
       );
     } finally {
       await api.shutdown();

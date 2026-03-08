@@ -131,9 +131,10 @@ class DistributedWriteCoordinator {
    * Execute a distributed write plan and merge participant results.
    * @param {Object} plan - Distributed write plan.
    * @param {Array} params - Bound parameters.
+   * @param {Object} [executionOptions] - Global execution options.
    * @return {Promise<Object>} Aggregated write result.
    */
-  async executePlan(plan, params = []) {
+  async executePlan(plan, params = [], executionOptions = {}) {
       const participantResults = [];
       const orderedPartitions = Array.from(
         plan.partitionStatements.keys(),
@@ -147,7 +148,10 @@ class DistributedWriteCoordinator {
           participant.ast,
           partitionId,
           params,
-          participant.executionOptions || {},
+          {
+            ...(executionOptions || {}),
+            ...(participant.executionOptions || {}),
+          },
         );
         participantResults.push({
           partitionId,
@@ -162,7 +166,10 @@ class DistributedWriteCoordinator {
             participant.ast,
             partitionId,
             params,
-            participant.executionOptions || {},
+            {
+              ...(executionOptions || {}),
+              ...(participant.executionOptions || {}),
+            },
           ).then((result) => ({
             partitionId,
             role: participant.role || PARTICIPANT_ROLE_PRIMARY,

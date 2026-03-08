@@ -161,6 +161,95 @@ test('DistributedWriteCoordinator - retries failed participant once', async (t) 
   t.equal(attempts.get('p1'), 2);
 });
 
+test('DistributedWriteCoordinator - propagates global execution options to participants',
+  async (t) => {
+    const capturedExecutionOptions = [];
+    const cancellationToken = {token: 'cancel-token'};
+    const coordinator = new DistributedWriteCoordinator({
+      partitionResolver: {},
+      queryExecutor: {
+        async executeInsert() {
+          return {success: true, affectedRows: 0, rows: []};
+        },
+        async executeUpdate() {
+          return {success: true, affectedRows: 0, rows: []};
+        },
+        async executeDelete() {
+          return {success: true, affectedRows: 0, rows: []};
+        },
+      },
+      getTablePartitions() {
+        return [];
+      },
+      getTableInfo() {
+        return {primaryKey: 'id'};
+      },
+      maxRetries: 0,
+    });
+
+    coordinator.executePartitionStatement =
+      async (_type, _ast, partitionId, _params, executionOptions = {}) => {
+        capturedExecutionOptions.push({
+          partitionId,
+          executionOptions: {...executionOptions},
+        });
+        return {
+          success: true,
+          affectedRows: 1,
+          rows: [],
+          attempts: 1,
+        };
+      };
+
+    const plan = {
+      statementType: 'UPDATE',
+      partitionStatements: new Map([
+        ['p1', {
+          ast: {type: 'UPDATE'},
+          role: 'primary',
+          executionOptions: {
+            splitMirrorOrigin: 'target',
+          },
+        }],
+        ['p2', {
+          ast: {type: 'UPDATE'},
+          role: 'primary',
+          executionOptions: {},
+        }],
+      ]),
+      idempotencyKey: 'idempotency-key',
+      operationId: 'operation-id',
+    };
+
+    const result = await coordinator.executePlan(
+      plan,
+      [],
+      {
+        timeoutMs: 1234,
+        cancellationToken,
+      },
+    );
+
+    t.equal(result.success, true);
+    t.equal(capturedExecutionOptions.length, 2);
+    t.match(capturedExecutionOptions[0], {
+      partitionId: 'p1',
+      executionOptions: {
+        timeoutMs: 1234,
+        cancellationToken,
+        splitMirrorOrigin: 'target',
+      },
+    });
+    t.match(capturedExecutionOptions[1], {
+      partitionId: 'p2',
+      executionOptions: {
+        timeoutMs: 1234,
+        cancellationToken,
+      },
+    });
+  },
+);
+
 
 // ---------------------------------------------------------------------------
 // Task 1.3: Unit tests for parallel partition execution

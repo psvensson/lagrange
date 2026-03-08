@@ -5,6 +5,7 @@
  */
 
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
+import LifeRaft from '@markwylde/liferaft';
 import {
   PartitionService,
   PartitionState,
@@ -49,6 +50,40 @@ afterEach(() => {
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
 });
+
+function createLoopbackTransport() {
+  const handlers = new Map();
+  return {
+    register(address, handler) {
+      handlers.set(address, handler);
+    },
+    unregister(address) {
+      handlers.delete(address);
+    },
+    async deliver(address, payload) {
+      const handler = handlers.get(address);
+      if (!handler) {
+        throw new Error(`No handler registered for ${address}`);
+      }
+      return handler({payload});
+    },
+  };
+}
+
+async function waitForCondition(
+  predicate,
+  timeoutMs = 1000,
+  intervalMs = 10,
+) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (await Promise.resolve(predicate())) {
+      return true;
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+  return false;
+}
 
 test('PartitionService - constructor requires partitionId', async (t) => {
   t.throws(() => {
@@ -1153,7 +1188,7 @@ test('PartitionService - queues source writes during split backfill and suppress
 
 test('PartitionService - starts split replication workflow and marks cutover active',
   async (t) => {
-    const updateCalls = [];
+    const advanceCalls = [];
     const partition = new PartitionService({
       partitionId: 'users-source',
       tableId: 'tbl-users',
@@ -1161,13 +1196,18 @@ test('PartitionService - starts split replication workflow and marks cutover act
       replicaId: 'users-source-r1',
       replicaIds: ['users-source-r1'],
       dbPath: ':memory:',
-      cdcIntegrationService: {
-        async updateSystemTableRow(tableName, whereClause, data) {
-          updateCalls.push({tableName, whereClause, data});
-          return {success: true};
+    });
+
+    partition.sqlQueryEngine = {
+      managedSplitWorkflow: {
+        async acknowledgeSourceParticipant(_workflowId, _ack) {
+          return {result: 'accepted'};
+        },
+        async advanceSplitPhase(workflowId, nextPhase, phaseMetadata) {
+          advanceCalls.push({workflowId, nextPhase, phaseMetadata});
         },
       },
-    });
+    };
 
     partition.role = RaftRole.LEADER;
     partition.isLeader = true;
@@ -1197,6 +1237,8 @@ test('PartitionService - starts split replication workflow and marks cutover act
           'users-right',
         ],
         [PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_VERSION]: 2,
+        [PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_ID]:
+          'split-tbl-users-users-source-v2',
       },
     });
 
@@ -1207,12 +1249,81 @@ test('PartitionService - starts split replication workflow and marks cutover act
       partition.splitReplication.phase,
       PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
     );
-    const cutoverUpdate = updateCalls.find((entry) =>
-      entry.tableName === TABLES.TABLES &&
-      entry.whereClause.table_id === 'tbl-users',
+    t.equal(advanceCalls.length, 1,
+      'cutover must delegate to workflow owner via advanceSplitPhase');
+    t.equal(
+      advanceCalls[0].nextPhase,
+      PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
+      'must advance to SPLIT_CUTOVER_ACTIVE through the workflow owner',
     );
-    t.ok(cutoverUpdate, 'should persist cutover metadata to tables table');
-    t.equal(cutoverUpdate.data.active_partition_version, 2);
+  });
+
+test('PartitionService - backfillSplitSnapshot streams rows and yields between batches',
+  async (t) => {
+    const partition = new PartitionService({
+      partitionId: 'users-source',
+      tableId: 'tbl-users',
+      tableName: 'users',
+      replicaId: 'users-source-r1',
+      replicaIds: ['users-source-r1'],
+      dbPath: ':memory:',
+    });
+
+    const appliedRowIds = [];
+    const yieldedAfterCounts = [];
+    partition.splitSnapshotBackfillYieldEveryRows = 2;
+    partition.applySplitSnapshotRow = async (row, columns, metadata) => {
+      appliedRowIds.push({
+        id: row.id,
+        columns,
+        primaryKeyColumn: metadata.primaryKeyColumn,
+      });
+    };
+    partition.yieldSplitBackfillTurn = async () => {
+      yieldedAfterCounts.push(appliedRowIds.length);
+    };
+
+    const rows = [
+      {id: 'a', name: 'Alice'},
+      {id: 'b', name: 'Bob'},
+      {id: 'c', name: 'Carol'},
+      {id: 'd', name: 'Dan'},
+      {id: 'e', name: 'Eve'},
+    ];
+    const preparedSql = [];
+    const snapshotDb = {
+      prepare(sql) {
+        preparedSql.push(sql);
+        if (sql.startsWith('PRAGMA table_info')) {
+          return {
+            all() {
+              return [{name: 'id'}, {name: 'name'}];
+            },
+          };
+        }
+        return {
+          iterate() {
+            return rows[Symbol.iterator]();
+          },
+          all() {
+            throw new Error('split snapshot rows should be streamed');
+          },
+        };
+      },
+    };
+
+    await partition.backfillSplitSnapshot(snapshotDb, {
+      primaryKeyColumn: 'id',
+    });
+
+    t.same(appliedRowIds.map((row) => row.id), ['a', 'b', 'c', 'd', 'e']);
+    t.same(appliedRowIds[0].columns, ['id', 'name']);
+    t.same(
+      yieldedAfterCounts,
+      [2, 4],
+      'should yield after each configured backfill batch',
+    );
+    t.match(preparedSql[1], /ORDER BY id/);
   });
 
 test('PartitionService - key range management', async (t) => {
@@ -1308,6 +1419,7 @@ test('PartitionService - single replica becomes leader', async (t) => {
   t.equal(partition.isLeaderReplica(), true);
   t.equal(partition.getRole(), RaftRole.LEADER);
   t.equal(partition.getLeaderId(), 'replica-1');
+  t.equal(partition.raft.state, LifeRaft.LEADER);
 
   await partition.shutdown();
 });
@@ -1565,6 +1677,88 @@ test('PartitionService - buildPeerAddress returns correct format', async (t) => 
 
   await partition.shutdown();
 });
+
+test('PartitionService - cache reconciliation refreshes moved peers and joins new replicas',
+  async (t) => {
+    const systemTableCache = new SystemTableCache();
+    systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
+      service_id: 'replica-1',
+      partition_id: 'test-partition-19b',
+      service_type: SERVICE_TYPE.PARTITION,
+      node_id: 'node-1',
+      status: SERVICE_STATUS.ACTIVE,
+      raft_role: RaftRole.LEADER,
+    });
+    systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
+      service_id: 'replica-2',
+      partition_id: 'test-partition-19b',
+      service_type: SERVICE_TYPE.PARTITION,
+      node_id: 'node-new',
+      status: SERVICE_STATUS.ACTIVE,
+      raft_role: RaftRole.FOLLOWER,
+    });
+    systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
+      service_id: 'replica-3',
+      partition_id: 'test-partition-19b',
+      service_type: SERVICE_TYPE.PARTITION,
+      node_id: 'node-3',
+      status: SERVICE_STATUS.ACTIVE,
+      raft_role: RaftRole.FOLLOWER,
+    });
+
+    const joinedAddresses = [];
+    const leftAddresses = [];
+    const partition = new PartitionService({
+      partitionId: 'test-partition-19b',
+      tableId: 'peer_refresh_test',
+      replicaId: 'replica-1',
+      replicaIds: ['replica-1'],
+      nodeId: 'node-1',
+      peerAddresses: ['node-old/partition/replica-2'],
+      dbPath: ':memory:',
+    });
+
+    partition.raft = {
+      nodes: [{address: 'node-old/partition/replica-2'}],
+      leave(address) {
+        leftAddresses.push(address);
+      },
+    };
+    partition.raftProvider = {
+      joinPeer(_raft, address) {
+        joinedAddresses.push(address);
+      },
+    };
+
+    partition.systemTableCache = systemTableCache;
+
+    const refreshedAddress = partition.buildPeerAddress('replica-2');
+    await new Promise((resolve) => setImmediate(resolve));
+
+    t.equal(
+      refreshedAddress,
+      'node-new/partition/replica-2',
+      'cache-backed ownership should override stale bootstrap peer hints',
+    );
+    t.same(
+      leftAddresses,
+      ['node-old/partition/replica-2'],
+      'stale raft peer address should be replaced when ownership moves',
+    );
+    t.same(
+      joinedAddresses,
+      [
+        'node-new/partition/replica-2',
+        'node-3/partition/replica-3',
+      ],
+      'newly visible peers should be joined from authoritative cache rows',
+    );
+    t.ok(
+      partition.replicaIds.includes('replica-2') &&
+      partition.replicaIds.includes('replica-3'),
+      'replicaIds should expand to include cache-discovered peers',
+    );
+  });
 
 test('PartitionService - emits leaderElected event for single replica', async (t) => {
   const partition = new PartitionService({
@@ -2268,6 +2462,123 @@ test(
     if (partition.learnerPromotionTimer) {
       clearTimeout(partition.learnerPromotionTimer);
       partition.learnerPromotionTimer = null;
+    }
+  },
+);
+
+test(
+  'PartitionService - reconciled single-replica leader keeps promoted joiner follower',
+  async (t) => {
+    ConfigurationManager.resetInstance();
+    LoggingService.resetInstance();
+    const config = ConfigurationManager.getInstance();
+    config.initialize({
+      node: {id: 'test-node'},
+      raft: {
+        heartbeatIntervalMs: 20,
+        electionTimeoutMinMs: 100,
+        electionTimeoutMaxMs: 200,
+      },
+    });
+    const logger = LoggingService.getInstance();
+    logger.initialize({level: 'error'});
+
+    const systemTableCache = new SystemTableCache();
+    systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
+      service_id: 'replica-1',
+      partition_id: 'stable-join-partition',
+      service_type: SERVICE_TYPE.PARTITION,
+      node_id: 'node-1',
+      status: SERVICE_STATUS.ACTIVE,
+      raft_role: RaftRole.LEADER,
+    });
+
+    const transport = createLoopbackTransport();
+    const leader = new PartitionService({
+      partitionId: 'stable-join-partition',
+      tableId: 'stable_join_table',
+      tableName: 'stable_join_table',
+      replicaId: 'replica-1',
+      replicaIds: ['replica-1'],
+      nodeId: 'node-1',
+      transport,
+      systemTableCache,
+      dbPath: ':memory:',
+    });
+    const joiner = new PartitionService({
+      partitionId: 'stable-join-partition',
+      tableId: 'stable_join_table',
+      tableName: 'stable_join_table',
+      replicaId: 'replica-2',
+      replicaIds: ['replica-1', 'replica-2'],
+      peerAddresses: [
+        'node-1/partition/replica-1',
+        'node-2/partition/replica-2',
+      ],
+      nodeId: 'node-2',
+      transport,
+      systemTableCache,
+      dbPath: ':memory:',
+      isJoiningExistingGroup: true,
+      leaderAddress: 'node-1/partition/replica-1',
+      learnerPromotionDelayMs: 25,
+    });
+
+    try {
+      await leader.initialize();
+      await joiner.initialize();
+
+      t.equal(
+        leader.raft.state,
+        LifeRaft.LEADER,
+        'single-replica owner should become a real raft leader before expansion',
+      );
+
+      systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
+        service_id: 'replica-2',
+        partition_id: 'stable-join-partition',
+        service_type: SERVICE_TYPE.PARTITION,
+        node_id: 'node-2',
+        status: SERVICE_STATUS.ACTIVE,
+        raft_role: RaftRole.LEARNER,
+      });
+
+      const peerJoined = await waitForCondition(
+        () => leader.raft.nodes.some(
+          (node) => node?.address === 'node-2/partition/replica-2',
+        ),
+        1000,
+        10,
+      );
+      t.equal(peerJoined, true, 'leader should reconcile the joiner as a raft peer');
+
+      const promoted = await waitForCondition(
+        () => joiner.role === RaftRole.FOLLOWER,
+        1000,
+        10,
+      );
+      t.equal(promoted, true, 'joiner should promote from learner to follower');
+
+      await new Promise((resolve) => setTimeout(resolve, 320));
+
+      t.equal(
+        joiner.role,
+        RaftRole.FOLLOWER,
+        'joiner should remain follower after promotion when leader heartbeats are active',
+      );
+      t.equal(
+        joiner.raft.state,
+        LifeRaft.FOLLOWER,
+        'joiner raft state should stay follower instead of drifting to candidate',
+      );
+      t.equal(
+        joiner.leaderId,
+        'node-1/partition/replica-1',
+        'joiner should retain the reconciled leader address after promotion',
+      );
+    } finally {
+      await joiner.shutdown();
+      await leader.shutdown();
     }
   },
 );

@@ -85,7 +85,10 @@ function resolveReadinessSnapshot(entry) {
 function resolveControlPlaneDiagnostics(entry) {
   const snapshotsByNodeId = resolveControlSnapshot(entry);
   const publicationModeByNodeId = {};
+  const heartbeatPublicationByNodeId = {};
   const readinessByNodeId = {};
+  const nodeLivenessByNodeId = {};
+  const readinessTransitionsByNodeId = {};
   const placementEligibilityByNodeId = {};
   const workflowAdmissionsByWorkflowId = {};
   const timeoutClassifications = [];
@@ -102,12 +105,34 @@ function resolveControlPlaneDiagnostics(entry) {
         publicationModeByNodeId[snapshotNodeId] =
           diagnostics.publicationMode;
       }
+      if (diagnostics.heartbeatPublication &&
+          typeof diagnostics.heartbeatPublication === 'object') {
+        heartbeatPublicationByNodeId[snapshotNodeId] =
+          diagnostics.heartbeatPublication;
+      }
 
       const readiness = diagnostics.readinessByNodeId &&
         typeof diagnostics.readinessByNodeId === 'object' ?
         diagnostics.readinessByNodeId :
         {};
       Object.assign(readinessByNodeId, readiness);
+
+      const nodeLiveness = diagnostics.nodeLivenessByNodeId &&
+        typeof diagnostics.nodeLivenessByNodeId === 'object' ?
+        diagnostics.nodeLivenessByNodeId :
+        {};
+      Object.assign(nodeLivenessByNodeId, nodeLiveness);
+
+      const readinessTransitions = diagnostics.readinessTransitionsByNodeId &&
+        typeof diagnostics.readinessTransitionsByNodeId === 'object' ?
+        diagnostics.readinessTransitionsByNodeId :
+        {};
+      for (const [nodeId, transitions] of Object.entries(readinessTransitions)) {
+        const existing =
+          readinessTransitionsByNodeId[nodeId] || [];
+        readinessTransitionsByNodeId[nodeId] =
+          mergeTransitionHistory(existing, transitions);
+      }
 
       const placement = diagnostics.placementEligibilityByNodeId &&
         typeof diagnostics.placementEligibilityByNodeId === 'object' ?
@@ -137,7 +162,10 @@ function resolveControlPlaneDiagnostics(entry) {
   }
 
   if (Object.keys(publicationModeByNodeId).length === ZERO &&
+      Object.keys(heartbeatPublicationByNodeId).length === ZERO &&
       Object.keys(readinessByNodeId).length === ZERO &&
+      Object.keys(nodeLivenessByNodeId).length === ZERO &&
+      Object.keys(readinessTransitionsByNodeId).length === ZERO &&
       Object.keys(placementEligibilityByNodeId).length === ZERO &&
       Object.keys(workflowAdmissionsByWorkflowId).length === ZERO &&
       timeoutClassifications.length === ZERO) {
@@ -146,11 +174,45 @@ function resolveControlPlaneDiagnostics(entry) {
 
   return {
     publicationModeByNodeId,
+    heartbeatPublicationByNodeId,
     readinessByNodeId,
+    nodeLivenessByNodeId,
+    readinessTransitionsByNodeId,
     placementEligibilityByNodeId,
     workflowAdmissionsByWorkflowId,
     timeoutClassifications,
   };
+}
+
+function mergeTransitionHistory(existingEntries, nextEntries) {
+  const merged = [];
+  const seen = new Set();
+  for (const entry of [
+    ...(Array.isArray(existingEntries) ? existingEntries : []),
+    ...(Array.isArray(nextEntries) ? nextEntries : []),
+  ]) {
+    if (!entry || typeof entry !== 'object') {
+      continue;
+    }
+    const signature = JSON.stringify({
+      nodeId: entry.nodeId || null,
+      observedAtMs: Number(entry.observedAtMs || ZERO),
+      serveEligible: entry.serveEligible === true,
+      repairEligible: entry.repairEligible === true,
+      reasonCodes: Array.isArray(entry.reasonCodes) ?
+        entry.reasonCodes :
+        [],
+    });
+    if (seen.has(signature)) {
+      continue;
+    }
+    seen.add(signature);
+    merged.push(entry);
+  }
+  merged.sort((left, right) =>
+    Number(left?.observedAtMs || ZERO) - Number(right?.observedAtMs || ZERO),
+  );
+  return merged;
 }
 
 function resolveControlSnapshot(entry) {
@@ -241,6 +303,202 @@ function resolveRelevantNodeIds(entry) {
   return [...nodeIds];
 }
 
+function resolveTraceFailureTimestampMs(entry) {
+  const candidates = [
+    entry?.erroredAtMs,
+    entry?.timeoutAtMs,
+    entry?.resolvedAtMs,
+    entry?.startedAtMs,
+  ];
+  for (const candidate of candidates) {
+    const timestampMs = Number(candidate);
+    if (Number.isFinite(timestampMs) && timestampMs > ZERO) {
+      return timestampMs;
+    }
+  }
+  return null;
+}
+
+function toIsoTimestamp(timestampMs) {
+  return Number.isFinite(timestampMs) ?
+    new Date(timestampMs).toISOString() :
+    null;
+}
+
+function resolveWorkflowRelevantNodeIds(workflow) {
+  const nodeIds = new Set();
+  const addValues = (values) => {
+    for (const value of Array.isArray(values) ? values : []) {
+      const normalized = String(value || '');
+      if (normalized.length > ZERO) {
+        nodeIds.add(normalized);
+      }
+    }
+  };
+  addValues(workflow?.candidateTargetNodeIds);
+  addValues(workflow?.sourceRoutableNodeIds);
+  addValues(workflow?.eligibleNodeIds);
+  for (const entry of Array.isArray(workflow?.ineligibleNodes) ?
+    workflow.ineligibleNodes :
+    []) {
+    const nodeId = String(entry?.nodeId || '');
+    if (nodeId.length > ZERO) {
+      nodeIds.add(nodeId);
+    }
+  }
+  const sourceLeaderNodeId = String(workflow?.sourceLeaderNodeId || '');
+  if (sourceLeaderNodeId.length > ZERO) {
+    nodeIds.add(sourceLeaderNodeId);
+  }
+  return [...nodeIds];
+}
+
+function resolveWorkflowStartTimestampMs(workflow) {
+  const candidates = [
+    workflow?.topologySnapshotCapturedAt,
+    workflow?.admissionDecisionAt,
+    workflow?.failedAt,
+  ];
+  for (const candidate of candidates) {
+    const timestampMs = Date.parse(candidate);
+    if (Number.isFinite(timestampMs)) {
+      return timestampMs;
+    }
+  }
+  return null;
+}
+
+function resolveWorkflowDeniedTimestampMs(workflow) {
+  const transitionState = String(workflow?.transitionState || '').toLowerCase();
+  if (transitionState !== 'blocked' && transitionState !== 'deferred') {
+    return null;
+  }
+  const timestampMs = Date.parse(workflow?.admissionDecisionAt);
+  return Number.isFinite(timestampMs) ? timestampMs : null;
+}
+
+function resolveWorkflowFailureTimestampMs(workflow) {
+  const timestampMs = Date.parse(workflow?.failedAt);
+  return Number.isFinite(timestampMs) ? timestampMs : null;
+}
+
+function buildNodeTimelineCorrelation(entry, controlPlaneDiagnostics, nodeId) {
+  const traceEntries = Array.isArray(
+    resolveAdminQueryTraceByNodeId(entry)?.[nodeId],
+  ) ?
+    resolveAdminQueryTraceByNodeId(entry)[nodeId] :
+    [];
+  const loadFailureEntries = traceEntries
+    .filter((traceEntry) =>
+      traceEntry?.lane === 'load' && traceEntry?.outcome !== 'success',
+    )
+    .map((traceEntry) => ({
+      timestampMs: resolveTraceFailureTimestampMs(traceEntry),
+      traceEntry,
+    }))
+    .filter((candidate) => Number.isFinite(candidate.timestampMs))
+    .sort((left, right) => left.timestampMs - right.timestampMs);
+  const firstLoadFailure = loadFailureEntries[ZERO] || null;
+
+  const readinessTransitions = Array.isArray(
+    controlPlaneDiagnostics?.readinessTransitionsByNodeId?.[nodeId],
+  ) ?
+    [...controlPlaneDiagnostics.readinessTransitionsByNodeId[nodeId]] :
+    [];
+  readinessTransitions.sort((left, right) =>
+    Number(left?.observedAtMs || ZERO) - Number(right?.observedAtMs || ZERO),
+  );
+  const firstReadinessFlip = readinessTransitions[ZERO] || null;
+
+  const relatedWorkflows = Object.values(
+    controlPlaneDiagnostics?.workflowAdmissionsByWorkflowId || {},
+  ).filter((workflow) => resolveWorkflowRelevantNodeIds(workflow).includes(nodeId));
+  const splitStartTimestamps = relatedWorkflows
+    .map((workflow) => resolveWorkflowStartTimestampMs(workflow))
+    .filter((timestampMs) => Number.isFinite(timestampMs))
+    .sort((left, right) => left - right);
+  const splitDeniedTimestamps = relatedWorkflows
+    .map((workflow) => resolveWorkflowDeniedTimestampMs(workflow))
+    .filter((timestampMs) => Number.isFinite(timestampMs))
+    .sort((left, right) => left - right);
+  const splitFailureTimestamps = relatedWorkflows
+    .map((workflow) => resolveWorkflowFailureTimestampMs(workflow))
+    .filter((timestampMs) => Number.isFinite(timestampMs))
+    .sort((left, right) => left - right);
+
+  if (!firstLoadFailure &&
+      !firstReadinessFlip &&
+      splitStartTimestamps.length === ZERO &&
+      splitDeniedTimestamps.length === ZERO &&
+      splitFailureTimestamps.length === ZERO) {
+    return null;
+  }
+
+  const heartbeatAgeMsAtFirstReadinessFlip =
+    Number(firstReadinessFlip?.rawInputs?.heartbeatAgeMs);
+  const readyLeaseLagMsAtFirstReadinessFlip =
+    Number(firstReadinessFlip?.rawInputs?.readyLeaseLagMs);
+  return {
+    firstLoadFailureAtMs: firstLoadFailure?.timestampMs || null,
+    firstLoadFailureAt:
+      toIsoTimestamp(firstLoadFailure?.timestampMs || null),
+    firstLoadFailureQueryId:
+      firstLoadFailure?.traceEntry?.queryId || null,
+    firstReadinessFlipAtMs:
+      Number(firstReadinessFlip?.observedAtMs || ZERO) || null,
+    firstReadinessFlipAt:
+      firstReadinessFlip?.observedAt || null,
+    heartbeatAgeMsAtFirstReadinessFlip:
+      Number.isFinite(heartbeatAgeMsAtFirstReadinessFlip) ?
+        heartbeatAgeMsAtFirstReadinessFlip :
+        null,
+    readyLeaseLagMsAtFirstReadinessFlip:
+      Number.isFinite(readyLeaseLagMsAtFirstReadinessFlip) ?
+        readyLeaseLagMsAtFirstReadinessFlip :
+        null,
+    firstSplitStartedAtMs:
+      splitStartTimestamps.length > ZERO ?
+        splitStartTimestamps[ZERO] :
+        null,
+    firstSplitStartedAt:
+      splitStartTimestamps.length > ZERO ?
+        toIsoTimestamp(splitStartTimestamps[ZERO]) :
+        null,
+    firstSplitRejectedAtMs:
+      splitDeniedTimestamps.length > ZERO ?
+        splitDeniedTimestamps[ZERO] :
+        null,
+    firstSplitRejectedAt:
+      splitDeniedTimestamps.length > ZERO ?
+        toIsoTimestamp(splitDeniedTimestamps[ZERO]) :
+        null,
+    firstSplitFailedAtMs:
+      splitFailureTimestamps.length > ZERO ?
+        splitFailureTimestamps[ZERO] :
+        null,
+    firstSplitFailedAt:
+      splitFailureTimestamps.length > ZERO ?
+        toIsoTimestamp(splitFailureTimestamps[ZERO]) :
+        null,
+    relatedWorkflowIds: relatedWorkflows.map((workflow) => workflow.workflowId),
+  };
+}
+
+function buildTimelineCorrelationByNodeId(entry, controlPlaneDiagnostics = null) {
+  const correlations = {};
+  for (const nodeId of resolveRelevantNodeIds(entry)) {
+    const correlation = buildNodeTimelineCorrelation(
+      entry,
+      controlPlaneDiagnostics,
+      nodeId,
+    );
+    if (correlation) {
+      correlations[nodeId] = correlation;
+    }
+  }
+  return correlations;
+}
+
 async function collectScenarioLogArtifacts(scenarioDir, relevantNodeIds, workspaceRoot) {
   const result = {
     scenarioDirPath: toWorkspaceRelative(scenarioDir, workspaceRoot),
@@ -301,7 +559,12 @@ async function collectScenarioLogArtifacts(scenarioDir, relevantNodeIds, workspa
   return result;
 }
 
-function buildFocusedNodeDiagnostics(entry, logs, controlPlaneDiagnostics = null) {
+function buildFocusedNodeDiagnostics(
+  entry,
+  logs,
+  controlPlaneDiagnostics = null,
+  timelineCorrelationByNodeId = null,
+) {
   const relevantNodeIds = resolveRelevantNodeIds(entry);
   const loadMetrics = resolveLoadMetrics(entry);
   const perNodeMetrics = loadMetrics?.perNode &&
@@ -329,10 +592,21 @@ function buildFocusedNodeDiagnostics(entry, logs, controlPlaneDiagnostics = null
       [];
     const readiness =
       controlPlaneDiagnostics?.readinessByNodeId?.[nodeId] || null;
+    const nodeLiveness =
+      controlPlaneDiagnostics?.nodeLivenessByNodeId?.[nodeId] || null;
     const placementEligibility =
       controlPlaneDiagnostics?.placementEligibilityByNodeId?.[nodeId] || null;
     const publicationMode =
       controlPlaneDiagnostics?.publicationModeByNodeId?.[nodeId] || null;
+    const heartbeatPublication =
+      controlPlaneDiagnostics?.heartbeatPublicationByNodeId?.[nodeId] || null;
+    const readinessTransitions = Array.isArray(
+      controlPlaneDiagnostics?.readinessTransitionsByNodeId?.[nodeId],
+    ) ?
+      controlPlaneDiagnostics.readinessTransitionsByNodeId[nodeId] :
+      [];
+    const timelineCorrelation =
+      timelineCorrelationByNodeId?.[nodeId] || null;
     const nodeLogPath = logs?.nodeLogPaths?.[nodeId] || null;
     const logExcerpt = Array.isArray(logs?.excerptsByNodeId?.[nodeId]) ?
       logs.excerptsByNodeId[nodeId] :
@@ -342,8 +616,12 @@ function buildFocusedNodeDiagnostics(entry, logs, controlPlaneDiagnostics = null
         !controlSnapshotByNodeId[nodeId] &&
         traceEntries.length === ZERO &&
         !readiness &&
+        !nodeLiveness &&
         !placementEligibility &&
         !publicationMode &&
+        !heartbeatPublication &&
+        readinessTransitions.length === ZERO &&
+        !timelineCorrelation &&
         !nodeLogPath &&
         logExcerpt.length === ZERO) {
       continue;
@@ -354,8 +632,12 @@ function buildFocusedNodeDiagnostics(entry, logs, controlPlaneDiagnostics = null
       adminQueryTrace: traceEntries,
       controlSnapshot: controlSnapshotByNodeId[nodeId] || null,
       readiness,
+      nodeLiveness,
       placementEligibility,
       publicationMode,
+      heartbeatPublication,
+      readinessTransitions,
+      timelineCorrelation,
       logPath: nodeLogPath,
       logExcerpt,
     };
@@ -376,10 +658,15 @@ function buildScenarioFailureBundle({
   const failure = diagnostics.failure || null;
   const noProgress = diagnostics.noProgress || null;
   const controlPlane = resolveControlPlaneDiagnostics(entry);
+  const timelineCorrelationByNodeId = buildTimelineCorrelationByNodeId(
+    entry,
+    controlPlane,
+  );
   const nodeDiagnostics = buildFocusedNodeDiagnostics(
     entry,
     logs,
     controlPlane,
+    timelineCorrelationByNodeId,
   );
   return {
     schemaVersion: FAILURE_BUNDLE_SCHEMA_VERSION,
@@ -449,6 +736,80 @@ function formatPublicationMode(publicationMode) {
   return [
     'mode=' + String(publicationMode.currentMode || UNKNOWN_VALUE),
     'reason=' + String(publicationMode.reasonCode || UNKNOWN_VALUE),
+  ].join(', ');
+}
+
+function formatHeartbeatPublication(publication) {
+  if (!publication || typeof publication !== 'object') {
+    return UNKNOWN_VALUE;
+  }
+  return [
+    'path=' + String(publication.publicationPath || UNKNOWN_VALUE),
+    'target=' + String(publication.targetAddress || UNKNOWN_VALUE),
+    'service=' + String(publication.targetServiceId || UNKNOWN_VALUE),
+    'lastAttemptAt=' + String(publication.lastAttemptAt || UNKNOWN_VALUE),
+    'lastSuccessAt=' + String(publication.lastSuccessAt || UNKNOWN_VALUE),
+    'consecutiveFailures=' + String(
+      publication.consecutiveFailures ?? UNKNOWN_VALUE,
+    ),
+    'failure=' + String(publication.lastFailureReason || UNKNOWN_VALUE),
+  ].join(', ');
+}
+
+function formatNodeLiveness(nodeLiveness) {
+  if (!nodeLiveness || typeof nodeLiveness !== 'object') {
+    return UNKNOWN_VALUE;
+  }
+  return [
+    'lastHeartbeat=' + String(nodeLiveness.lastHeartbeat ?? UNKNOWN_VALUE),
+    'heartbeatAgeMs=' + String(nodeLiveness.heartbeatAgeMs ?? UNKNOWN_VALUE),
+    'readyLeaseExpiresAt=' +
+      String(nodeLiveness.readyLeaseExpiresAt ?? UNKNOWN_VALUE),
+    'readyLeaseLagMs=' + String(
+      nodeLiveness.readyLeaseAgeMs ??
+        nodeLiveness.readyLeaseLagMs ??
+        UNKNOWN_VALUE,
+    ),
+  ].join(', ');
+}
+
+function formatTimelineCorrelation(correlation) {
+  if (!correlation || typeof correlation !== 'object') {
+    return UNKNOWN_VALUE;
+  }
+  return [
+    'loadFailureAt=' + String(correlation.firstLoadFailureAt || UNKNOWN_VALUE),
+    'readinessFlipAt=' + String(correlation.firstReadinessFlipAt || UNKNOWN_VALUE),
+    'heartbeatAgeMsAtFlip=' + String(
+      correlation.heartbeatAgeMsAtFirstReadinessFlip ?? UNKNOWN_VALUE,
+    ),
+    'splitStartAt=' + String(correlation.firstSplitStartedAt || UNKNOWN_VALUE),
+    'splitRejectedAt=' + String(
+      correlation.firstSplitRejectedAt || UNKNOWN_VALUE,
+    ),
+    'splitFailedAt=' + String(correlation.firstSplitFailedAt || UNKNOWN_VALUE),
+  ].join(', ');
+}
+
+function formatReadinessTransition(transition) {
+  if (!transition || typeof transition !== 'object') {
+    return UNKNOWN_VALUE;
+  }
+  return [
+    'at=' + String(transition.observedAt || UNKNOWN_VALUE),
+    'serve=' + String(
+      transition.previousServeEligible ?? UNKNOWN_VALUE,
+    ) + '->' + String(transition.serveEligible ?? UNKNOWN_VALUE),
+    'repair=' + String(
+      transition.previousRepairEligible ?? UNKNOWN_VALUE,
+    ) + '->' + String(transition.repairEligible ?? UNKNOWN_VALUE),
+    'heartbeatAgeMs=' + String(
+      transition?.rawInputs?.heartbeatAgeMs ?? UNKNOWN_VALUE,
+    ),
+    'readyLeaseLagMs=' + String(
+      transition?.rawInputs?.readyLeaseLagMs ?? UNKNOWN_VALUE,
+    ),
+    'reasons=' + formatList(transition.reasonCodes),
   ].join(', ');
 }
 
@@ -661,6 +1022,34 @@ function renderScenarioFailureBundleMarkdown(bundle) {
             `- Publication Mode: ${formatPublicationMode(nodeDiagnostic.publicationMode)}`,
           );
         }
+        if (nodeDiagnostic?.heartbeatPublication) {
+          lines.push(
+            '- Heartbeat Publication: ' +
+              formatHeartbeatPublication(nodeDiagnostic.heartbeatPublication),
+          );
+        }
+        if (nodeDiagnostic?.nodeLiveness) {
+          lines.push(
+            `- Node Liveness: ${formatNodeLiveness(nodeDiagnostic.nodeLiveness)}`,
+          );
+        }
+        if (nodeDiagnostic?.timelineCorrelation) {
+          lines.push(
+            '- Timeline Correlation: ' +
+              formatTimelineCorrelation(nodeDiagnostic.timelineCorrelation),
+          );
+        }
+        const readinessTransitions = Array.isArray(
+          nodeDiagnostic?.readinessTransitions,
+        ) ?
+          nodeDiagnostic.readinessTransitions :
+          [];
+        if (readinessTransitions.length > ZERO) {
+          lines.push(
+            '- First Readiness Flip: ' +
+              formatReadinessTransition(readinessTransitions[ZERO]),
+          );
+        }
         const errors = Array.isArray(nodeDiagnostic?.errors) ?
           nodeDiagnostic.errors :
           [];
@@ -688,16 +1077,28 @@ function renderScenarioFailureBundleMarkdown(bundle) {
     typeof bundle.controlPlane.publicationModeByNodeId === 'object' ?
     Object.entries(bundle.controlPlane.publicationModeByNodeId) :
     [];
+  const heartbeatPublications =
+    bundle?.controlPlane?.heartbeatPublicationByNodeId &&
+    typeof bundle.controlPlane.heartbeatPublicationByNodeId === 'object' ?
+      Object.entries(bundle.controlPlane.heartbeatPublicationByNodeId) :
+      [];
   const workflowAdmissions = bundle?.controlPlane?.workflowAdmissionsByWorkflowId &&
     typeof bundle.controlPlane.workflowAdmissionsByWorkflowId === 'object' ?
     Object.entries(bundle.controlPlane.workflowAdmissionsByWorkflowId) :
     [];
+  const readinessTransitionsByNodeId =
+    bundle?.controlPlane?.readinessTransitionsByNodeId &&
+    typeof bundle.controlPlane.readinessTransitionsByNodeId === 'object' ?
+      Object.entries(bundle.controlPlane.readinessTransitionsByNodeId) :
+      [];
   const timeoutClassifications = Array.isArray(
     bundle?.controlPlane?.timeoutClassifications,
   ) ?
     bundle.controlPlane.timeoutClassifications :
     [];
   if (publicationModes.length > ZERO ||
+      heartbeatPublications.length > ZERO ||
+      readinessTransitionsByNodeId.length > ZERO ||
       workflowAdmissions.length > ZERO ||
       timeoutClassifications.length > ZERO) {
     const controlPlaneSections = [];
@@ -711,6 +1112,16 @@ function renderScenarioFailureBundleMarkdown(bundle) {
           .join('\n'),
       );
     }
+    if (heartbeatPublications.length > ZERO) {
+      controlPlaneSections.push(
+        '### Heartbeat Publications\n' +
+        heartbeatPublications
+          .map(([nodeId, publication]) =>
+            `- ${nodeId}: ${formatHeartbeatPublication(publication)}`,
+          )
+          .join('\n'),
+      );
+    }
     if (workflowAdmissions.length > ZERO) {
       controlPlaneSections.push(
         '### Workflow Admissions\n' +
@@ -718,6 +1129,19 @@ function renderScenarioFailureBundleMarkdown(bundle) {
           .map(([workflowId, workflow]) =>
             `- ${workflowId}: ${formatWorkflowAdmission(workflow)}`,
           )
+          .join('\n'),
+      );
+    }
+    if (readinessTransitionsByNodeId.length > ZERO) {
+      controlPlaneSections.push(
+        '### Readiness Flips\n' +
+        readinessTransitionsByNodeId
+          .map(([nodeId, transitions]) => {
+            const firstTransition =
+              Array.isArray(transitions) ? transitions[ZERO] : null;
+            return `- ${nodeId}: ` +
+              formatReadinessTransition(firstTransition);
+          })
           .join('\n'),
       );
     }

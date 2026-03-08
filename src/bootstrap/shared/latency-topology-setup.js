@@ -142,13 +142,13 @@ class LatencyTopologySetup {
    * Stop latency topology owners.
    * @param {Object} topologyOwners
    */
-  static stop(topologyOwners) {
+  static async stop(topologyOwners) {
     const owners = topologyOwners;
     if (!owners || typeof owners !== TYPEOF.OBJECT) {
       return;
     }
     if (owners.latencyGroupManager?.stop) {
-      owners.latencyGroupManager.stop();
+      await owners.latencyGroupManager.stop();
     }
     if (owners.latencyMeasurementService?.stop) {
       owners.latencyMeasurementService.stop();

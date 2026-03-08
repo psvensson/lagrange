@@ -60,6 +60,7 @@ class LatencyGroupManager extends EventEmitter {
     this.state = LATENCY_GROUP_MANAGER_STATE.CREATED;
     this.recalcTimer = null;
     this.cycleInFlight = false;
+    this.activeCyclePromises = new Set();
     this.stats = {
       cycleCount: NUM.ZERO,
       assignmentChangedCount: NUM.ZERO,
@@ -164,12 +165,15 @@ class LatencyGroupManager extends EventEmitter {
   /**
    * Stop periodic assignment recalculation.
    */
-  stop() {
+  async stop() {
     this.clearScheduledCycle();
     this.state = LATENCY_GROUP_MANAGER_STATE.STOPPED;
     this.logger.info(LATENCY_GROUP_MANAGER_LOG_MSG.STOPPED, {
       nodeId: this.nodeId,
     });
+    if (this.activeCyclePromises.size > NUM.ZERO) {
+      await Promise.allSettled([...this.activeCyclePromises]);
+    }
   }
 
   /**
@@ -265,24 +269,32 @@ class LatencyGroupManager extends EventEmitter {
       return;
     }
 
-    try {
-      await this.runAssignmentCycle({trigger});
-    } catch (error) {
-      this.stats.cycleFailureCount += NUM.ONE;
-      this.logger.error(LATENCY_GROUP_MANAGER_LOG_MSG.CYCLE_FAILED, {
-        nodeId: this.nodeId,
-        trigger,
-        error: error.message,
-      });
-      this.emit(LATENCY_GROUP_MANAGER_EVENT.CYCLE_FAILED, {
-        nodeId: this.nodeId,
-        trigger,
-        error: error.message,
-      });
-    } finally {
-      if (this.state === LATENCY_GROUP_MANAGER_STATE.RUNNING) {
-        this.scheduleNextCycle();
+    const cyclePromise = (async () => {
+      try {
+        await this.runAssignmentCycle({trigger});
+      } catch (error) {
+        this.stats.cycleFailureCount += NUM.ONE;
+        this.logger.error(LATENCY_GROUP_MANAGER_LOG_MSG.CYCLE_FAILED, {
+          nodeId: this.nodeId,
+          trigger,
+          error: error.message,
+        });
+        this.emit(LATENCY_GROUP_MANAGER_EVENT.CYCLE_FAILED, {
+          nodeId: this.nodeId,
+          trigger,
+          error: error.message,
+        });
+      } finally {
+        if (this.state === LATENCY_GROUP_MANAGER_STATE.RUNNING) {
+          this.scheduleNextCycle();
+        }
       }
+    })();
+    this.activeCyclePromises.add(cyclePromise);
+    try {
+      await cyclePromise;
+    } finally {
+      this.activeCyclePromises.delete(cyclePromise);
     }
   }
 

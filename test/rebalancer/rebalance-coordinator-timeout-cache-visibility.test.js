@@ -4,6 +4,20 @@ import {
   CONTROL_PLANE_TIMEOUT_DEFAULT,
 } from '../../src/control-plane/timeout-budget.js';
 
+function buildTransactionCoordinator() {
+  return {
+    async begin() {
+      return {success: true};
+    },
+    async commit() {
+      return {success: true};
+    },
+    async rollback() {
+      return {success: true};
+    },
+  };
+}
+
 test('checkTimeouts enforces cache visibility after STOPPING timeout failure',
   async (t) => {
     const nowMs = Date.now();
@@ -60,6 +74,7 @@ test('checkTimeouts enforces cache visibility after STOPPING timeout failure',
 
     const coordinator = new RebalanceCoordinator({
       nodeId: 'node-1',
+      transactionCoordinator: buildTransactionCoordinator(),
       systemTableCache: {
         get() {
           return null;
@@ -132,6 +147,7 @@ test('coordinator SQL reads use shared control-plane timeout options',
     const executeQueryCalls = [];
     const coordinator = new RebalanceCoordinator({
       nodeId: 'node-1',
+      transactionCoordinator: buildTransactionCoordinator(),
       systemTableCache: {
         get() {
           return null;
@@ -200,11 +216,280 @@ test('coordinator SQL reads use shared control-plane timeout options',
     }
   });
 
+test('queryIncompleteOperations prefers authoritative local leader reads for replica_operations',
+  async (t) => {
+    const authoritativeReadCalls = [];
+    const sqlQueryCalls = [];
+    const coordinator = new RebalanceCoordinator({
+      nodeId: 'node-1',
+      transactionCoordinator: buildTransactionCoordinator(),
+      systemTableCache: {
+        get() {
+          return null;
+        },
+      },
+      cdcIntegrationService: {
+        async waitForCacheUpdate() {},
+        async executeAuthoritativeSystemTableRead(
+          tableName,
+          sql,
+          params,
+          options = {},
+        ) {
+          authoritativeReadCalls.push({
+            tableName,
+            sql,
+            params: [...params],
+            options,
+          });
+          return {
+            success: true,
+            source: 'local_partition_replica',
+            rows: [{
+              operation_id: 'op-local-1',
+              type: 'ADD',
+              partition_id: 'partition-1',
+              replica_id: 'partition-1-r2',
+              source_node_id: 'node-1',
+              target_node_id: 'node-2',
+              status: 'pending',
+              workflow_step: 'PENDING',
+              created_at: 100,
+              updated_at: 200,
+              completed_at: null,
+              error_message: null,
+              steps_history: '[]',
+            }],
+          };
+        },
+      },
+      messageRouter: {
+        async deliver() {
+          return {acknowledged: true, status: 'completed'};
+        },
+      },
+      tablePolicyService: {
+        async getPolicyForPartition() {
+          return {minReplicaCount: 1};
+        },
+      },
+      sqlQueryEngine: {
+        async executeQuery(sql, params, options = {}) {
+          sqlQueryCalls.push({sql, params, options});
+          return {
+            success: true,
+            rows: [],
+          };
+        },
+      },
+      enableTimeouts: false,
+    });
+
+    coordinator.initialize();
+    try {
+      const operations = await coordinator.queryIncompleteOperations();
+      t.equal(operations.length, 1, 'should return the authoritative local operation row');
+      t.equal(sqlQueryCalls.length, 0, 'should skip routed SQL when local leader read is available');
+      t.equal(authoritativeReadCalls.length, 1, 'should use the shared authoritative read helper');
+      t.equal(
+        authoritativeReadCalls[0]?.tableName,
+        'replica_operations',
+        'should scope the local authoritative read to replica_operations',
+      );
+      t.equal(
+        authoritativeReadCalls[0]?.options?.localReadConsistency,
+        'local_leader',
+        'should require a local leader before trusting local replica_operations reads',
+      );
+      t.equal(
+        authoritativeReadCalls[0]?.options?.queryOptions?.timeoutMs,
+        CONTROL_PLANE_TIMEOUT_DEFAULT.SQL_QUERY_TIMEOUT_MS,
+        'should preserve control-plane timeout options on fallback-capable reads',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  });
+
+test('queryIncompleteOperations prefers cache observation boundary before routed SQL',
+  async (t) => {
+    let sqlQueryCalls = 0;
+    const cacheRows = [
+      {
+        operation_id: 'op-cache-local-1',
+        type: 'ADD',
+        partition_id: 'partition-1',
+        replica_id: 'partition-1-r2',
+        source_node_id: 'node-1',
+        target_node_id: 'node-2',
+        status: 'creating',
+        workflow_step: 'CREATING',
+        created_at: 100,
+        updated_at: 200,
+        completed_at: null,
+        error_message: null,
+        steps_history: '[]',
+        entity_type: 'partition',
+        entity_id: 'partition-1',
+      },
+      {
+        operation_id: 'op-cache-remote-1',
+        type: 'ADD',
+        partition_id: 'partition-2',
+        replica_id: 'partition-2-r2',
+        source_node_id: 'node-other',
+        target_node_id: 'node-3',
+        status: 'creating',
+        workflow_step: 'CREATING',
+        created_at: 50,
+        updated_at: 60,
+        completed_at: null,
+        error_message: null,
+        steps_history: '[]',
+        entity_type: 'partition',
+        entity_id: 'partition-2',
+      },
+    ];
+    const coordinator = new RebalanceCoordinator({
+      nodeId: 'node-1',
+      transactionCoordinator: buildTransactionCoordinator(),
+      systemTableCache: {
+        filter(tableName, predicate) {
+          if (tableName !== 'replica_operations') {
+            return [];
+          }
+          return cacheRows.filter(predicate);
+        },
+        get() {
+          return null;
+        },
+      },
+      cdcIntegrationService: {
+        async waitForCacheUpdate() {},
+      },
+      messageRouter: {
+        async deliver() {
+          return {acknowledged: true, status: 'completed'};
+        },
+      },
+      tablePolicyService: {
+        async getPolicyForPartition() {
+          return {minReplicaCount: 1};
+        },
+      },
+      sqlQueryEngine: {
+        async executeQuery() {
+          sqlQueryCalls += 1;
+          throw new Error('routed SQL should not run');
+        },
+      },
+      enableTimeouts: false,
+    });
+
+    coordinator.initialize();
+    try {
+      const operations = await coordinator.queryIncompleteOperations();
+      t.same(
+        operations.map((operation) => operation.operationId),
+        ['op-cache-local-1'],
+        'cache observation boundary should answer incomplete owner scans',
+      );
+      t.equal(sqlQueryCalls, 0, 'cache-visible incomplete operations should bypass routed SQL');
+    } finally {
+      await coordinator.shutdown();
+    }
+  });
+
+test('queryExistingInFlightOperation prefers cache observation boundary before routed SQL',
+  async (t) => {
+    let sqlQueryCalls = 0;
+    const cacheRows = [
+      {
+        operation_id: 'op-cache-dedupe-1',
+        type: 'ADD',
+        partition_id: 'partition-1',
+        replica_id: 'partition-1-r2',
+        source_node_id: 'node-1',
+        target_node_id: 'node-2',
+        status: 'creating',
+        workflow_step: 'CREATING',
+        created_at: 100,
+        updated_at: 200,
+        completed_at: null,
+        error_message: null,
+        steps_history: '[]',
+        entity_type: 'partition',
+        entity_id: 'partition-1',
+      },
+    ];
+    const coordinator = new RebalanceCoordinator({
+      nodeId: 'node-1',
+      transactionCoordinator: buildTransactionCoordinator(),
+      systemTableCache: {
+        filter(tableName, predicate) {
+          if (tableName !== 'replica_operations') {
+            return [];
+          }
+          return cacheRows.filter(predicate);
+        },
+        get() {
+          return null;
+        },
+      },
+      cdcIntegrationService: {
+        async waitForCacheUpdate() {},
+      },
+      messageRouter: {
+        async deliver() {
+          return {acknowledged: true, status: 'completed'};
+        },
+      },
+      tablePolicyService: {
+        async getPolicyForPartition() {
+          return {minReplicaCount: 1};
+        },
+      },
+      sqlQueryEngine: {
+        async executeQuery() {
+          sqlQueryCalls += 1;
+          throw new Error('routed SQL should not run');
+        },
+      },
+      enableTimeouts: false,
+    });
+
+    coordinator.initialize();
+    try {
+      const operation = await coordinator.queryExistingInFlightOperation(
+        'partition-1',
+        'node-2',
+        'partition',
+        'partition-1',
+        {
+          type: 'ADD',
+          partitionId: 'partition-1',
+          entityType: 'partition',
+          entityId: 'partition-1',
+          nodeId: 'node-2',
+        },
+      );
+      t.equal(
+        operation?.operationId,
+        'op-cache-dedupe-1',
+        'cache observation boundary should answer in-flight dedupe reads',
+      );
+      t.equal(sqlQueryCalls, 0, 'cache-visible dedupe reads should bypass routed SQL');
+    } finally {
+      await coordinator.shutdown();
+    }
+  });
+
 test('queryIncompleteOperations scopes reads to local operation owner',
   async (t) => {
     const executeQueryCalls = [];
     const coordinator = new RebalanceCoordinator({
       nodeId: 'node-local',
+      transactionCoordinator: buildTransactionCoordinator(),
       systemTableCache: {
         get() {
           return null;
@@ -280,6 +565,7 @@ test('queryIncompleteOperations avoids legacy OR predicate timeout path',
     const executeQueryCalls = [];
     const coordinator = new RebalanceCoordinator({
       nodeId: 'node-owner-only',
+      transactionCoordinator: buildTransactionCoordinator(),
       systemTableCache: {
         get() {
           return null;
@@ -364,6 +650,7 @@ test('timeout checker backs off empty incomplete-operation scans', async (t) => 
   let incompleteQueryAttempts = 0;
   const coordinator = new RebalanceCoordinator({
     nodeId: 'node-empty-backoff',
+    transactionCoordinator: buildTransactionCoordinator(),
     systemTableCache: {
       get() {
         return null;
@@ -428,6 +715,7 @@ test(
     let incompleteQueryAttempts = 0;
     const coordinator = new RebalanceCoordinator({
       nodeId: 'node-timeout-loop',
+      transactionCoordinator: buildTransactionCoordinator(),
       systemTableCache: {
         get() {
           return null;

@@ -36,6 +36,8 @@ const DEFAULT_SPLIT_TRAFFIC_THRESHOLD = SPLIT_MERGE_DEFAULT.SPLIT_TRAFFIC_THRESH
 const DEFAULT_MERGE_STORAGE_THRESHOLD = SPLIT_MERGE_DEFAULT.MERGE_STORAGE_THRESHOLD_BYTES;
 const DEFAULT_MERGE_TRAFFIC_THRESHOLD = SPLIT_MERGE_DEFAULT.MERGE_TRAFFIC_THRESHOLD_QPM;
 const DEFAULT_EVALUATION_INTERVAL_MS = SPLIT_MERGE_DEFAULT.EVALUATION_INTERVAL_MS;
+const DEFAULT_MAX_AUTO_EXECUTE_SPLITS_PER_EVALUATION = 1;
+const DEFAULT_REACTIVE_EVALUATION_DEBOUNCE_MS = 1000;
 
 /**
  * PartitionSplitMergeManager handles automatic partition splitting and merging
@@ -74,6 +76,11 @@ class PartitionSplitMergeManager extends EventEmitter {
       this.executeSplitCandidate = options.executeSplitCandidate || null;
       this.executeMergeCandidate = options.executeMergeCandidate || null;
       this.autoExecuteCandidates = options.autoExecuteCandidates !== false;
+      this.maxAutoExecuteSplitsPerEvaluation =
+        Number.isInteger(options.maxAutoExecuteSplitsPerEvaluation) &&
+        options.maxAutoExecuteSplitsPerEvaluation >= NUM.ZERO ?
+          options.maxAutoExecuteSplitsPerEvaluation :
+          DEFAULT_MAX_AUTO_EXECUTE_SPLITS_PER_EVALUATION;
       this.storageAdmissionService =
         options.storageAdmissionService || null;
       this.storageAccountingService =
@@ -106,6 +113,14 @@ class PartitionSplitMergeManager extends EventEmitter {
       this.state = OperationState.IDLE;
       this.evaluationTimer = null;
       this.allowManagedSplitDuringEvaluation = false;
+      this.reactiveEvaluationDebounceMs =
+        Number.isInteger(options.reactiveEvaluationDebounceMs) &&
+        options.reactiveEvaluationDebounceMs >= NUM.ZERO ?
+          options.reactiveEvaluationDebounceMs :
+          DEFAULT_REACTIVE_EVALUATION_DEBOUNCE_MS;
+      this.requestedEvaluation = null;
+      this.requestedEvaluationTimer = null;
+      this.isShutdown = false;
 
       // Logging
       const loggingService = LoggingService.getInstance();
@@ -951,6 +966,108 @@ class PartitionSplitMergeManager extends EventEmitter {
   }
 
   /**
+   * Request one coalesced split/merge evaluation outside the periodic timer.
+   * Reuses the canonical evaluateAllPartitions path and collapses bursts of
+   * cache-driven triggers into one follow-up evaluation.
+   * @param {Object} [context]
+   * @return {void}
+   */
+  requestEvaluation(context = {}) {
+    if (this.isShutdown) {
+      return;
+    }
+
+    this.requestedEvaluation = this.mergeRequestedEvaluationContext(
+      this.requestedEvaluation,
+      context,
+    );
+    if (this.requestedEvaluationTimer) {
+      return;
+    }
+
+    this.requestedEvaluationTimer = setTimeout(() => {
+      this.requestedEvaluationTimer = null;
+      void this.flushRequestedEvaluation();
+    }, this.reactiveEvaluationDebounceMs);
+    this.requestedEvaluationTimer.unref?.();
+  }
+
+  /**
+   * Merge multiple evaluation requests into one stable context object.
+   * @param {Object|null} existing
+   * @param {Object|null} next
+   * @return {Object}
+   * @private
+   */
+  mergeRequestedEvaluationContext(existing, next) {
+    const merged = {
+      reasonCodes: [],
+      partitionIds: [],
+    };
+    const appendValues = (target, values) => {
+      if (!Array.isArray(values)) {
+        return;
+      }
+      for (const value of values) {
+        const normalizedValue = String(value || '');
+        if (!normalizedValue || target.includes(normalizedValue)) {
+          continue;
+        }
+        target.push(normalizedValue);
+      }
+    };
+    const appendContext = (context) => {
+      if (!context || typeof context !== 'object') {
+        return;
+      }
+      appendValues(
+        merged.reasonCodes,
+        Array.isArray(context.reasonCodes) ?
+          context.reasonCodes :
+          [context.reasonCode, context.reason],
+      );
+      appendValues(
+        merged.partitionIds,
+        Array.isArray(context.partitionIds) ?
+          context.partitionIds :
+          [context.partitionId],
+      );
+    };
+
+    appendContext(existing);
+    appendContext(next);
+    return merged;
+  }
+
+  /**
+   * Drain one pending evaluation request once the manager is idle.
+   * @return {Promise<void>}
+   * @private
+   */
+  async flushRequestedEvaluation() {
+    const request = this.requestedEvaluation;
+    this.requestedEvaluation = null;
+    if (!request) {
+      return;
+    }
+
+    if (this.state !== OperationState.IDLE) {
+      this.requestEvaluation(request);
+      return;
+    }
+
+    try {
+      await this.evaluateAllPartitions();
+    } catch (error) {
+      this.logger.error(SPLIT_MERGE_LOG_MSG.REQUESTED_EVAL_FAILED, {
+        error: error.message,
+        reasonCodes: request.reasonCodes,
+        partitionIds: request.partitionIds,
+      });
+    }
+  }
+
+  /**
    * Evaluate all partitions for split/merge operations.
    * @return {Promise<Object>} Evaluation results.
    */
@@ -1042,7 +1159,30 @@ class PartitionSplitMergeManager extends EventEmitter {
           }
         }
 
+        let splitExecutionAttempts = NUM.ZERO;
         for (const partitionId of results.splitCandidates) {
+          if (splitExecutionAttempts >=
+              this.maxAutoExecuteSplitsPerEvaluation) {
+            this.logger.warn(
+              SPLIT_MERGE_LOG_MSG.SPLIT_DEFERRED_BACKPRESSURE,
+              {
+                partitionId,
+                reason: SPLIT_MERGE_REASON.CONTROL_PLANE_BACKPRESSURE,
+                maxAutoExecuteSplitsPerEvaluation:
+                  this.maxAutoExecuteSplitsPerEvaluation,
+              },
+            );
+            results.splitDeferred.push({
+              partitionId,
+              reason: SPLIT_MERGE_REASON.CONTROL_PLANE_BACKPRESSURE,
+            });
+            this.emit(SPLIT_MERGE_EVENT.SPLIT_DEFERRED, {
+              partitionId,
+              reason: SPLIT_MERGE_REASON.CONTROL_PLANE_BACKPRESSURE,
+            });
+            continue;
+          }
+          splitExecutionAttempts += NUM.ONE;
           try {
             const execution = await this.executeManagedSplitCandidate(partitionId);
             this.recordManagedSplitExecutionOutcome(
@@ -1149,6 +1289,8 @@ class PartitionSplitMergeManager extends EventEmitter {
       mergeStorageThreshold: this.mergeStorageThreshold,
       mergeTrafficThreshold: this.mergeTrafficThreshold,
       evaluationIntervalMs: this.evaluationIntervalMs,
+      maxAutoExecuteSplitsPerEvaluation:
+        this.maxAutoExecuteSplitsPerEvaluation,
     };
   }
 
@@ -1172,6 +1314,10 @@ class PartitionSplitMergeManager extends EventEmitter {
     if (thresholds.evaluationIntervalMs !== undefined) {
       this.evaluationIntervalMs = thresholds.evaluationIntervalMs;
     }
+    if (thresholds.maxAutoExecuteSplitsPerEvaluation !== undefined) {
+      this.maxAutoExecuteSplitsPerEvaluation =
+        thresholds.maxAutoExecuteSplitsPerEvaluation;
+    }
 
     this.logger.info(SPLIT_MERGE_LOG_MSG.THRESHOLDS_UPDATED, this.getThresholds());
   }
@@ -1180,7 +1326,13 @@ class PartitionSplitMergeManager extends EventEmitter {
    * Shutdown the manager.
    */
   shutdown() {
+    this.isShutdown = true;
     this.stopPeriodicEvaluation();
+    if (this.requestedEvaluationTimer) {
+      clearTimeout(this.requestedEvaluationTimer);
+      this.requestedEvaluationTimer = null;
+    }
+    this.requestedEvaluation = null;
     this.removeAllListeners();
     this.logger.info(SPLIT_MERGE_LOG_MSG.MANAGER_SHUTDOWN);
   }
@@ -1194,4 +1346,5 @@ export {
   DEFAULT_MERGE_STORAGE_THRESHOLD,
   DEFAULT_MERGE_TRAFFIC_THRESHOLD,
   DEFAULT_EVALUATION_INTERVAL_MS,
+  DEFAULT_MAX_AUTO_EXECUTE_SPLITS_PER_EVALUATION,
 };

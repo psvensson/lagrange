@@ -19,6 +19,9 @@ import {
   CACHE_HYDRATION_TABLES,
 } from '../../cache/cache-constants.js';
 import {
+  deriveWsAddressFromNodeAddress,
+} from './connect-websocket-phase.js';
+import {
   getSystemCachePrimaryKeyFieldOrFallback,
 } from '../../cache/system-cache-key-descriptor.js';
 import {
@@ -520,12 +523,15 @@ class QuerySystemStatePhase {
     });
 
     const endpointId = `ep-${this.nodeId}-ws`;
+    const canonicalWsAddress =
+      deriveWsAddressFromNodeAddress(this.nodeAddress) ||
+      this.nodeAddress;
 
     const endpointData = {
       [COLUMN.ENDPOINT_ID]: endpointId,
       [COLUMN.NODE_ID]: this.nodeId,
       [COLUMN.TRANSPORT_TYPE]: TRANSPORT_TYPE.WEBSOCKET,
-      [COLUMN.ADDRESS]: this.nodeAddress,
+      [COLUMN.ADDRESS]: canonicalWsAddress,
       [COLUMN.PRIORITY]: NUM.ZERO,
       [COLUMN.METADATA]: JSON.stringify({}),
       [COLUMN.STATUS]: ENDPOINT_STATUS.ACTIVE,
@@ -549,7 +555,7 @@ class QuerySystemStatePhase {
         nodeId: this.nodeId,
         endpointId,
         transportType: TRANSPORT_TYPE.WEBSOCKET,
-        address: this.nodeAddress,
+        address: canonicalWsAddress,
       });
       return endpointData;
     } catch (error) {

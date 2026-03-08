@@ -201,6 +201,7 @@ const REBALANCE_COORDINATOR_EVENT = Object.freeze({
   RESERVATION_RELEASED: 'reservationReleased',
   RESERVATION_RECONCILED: 'reservationReconciled',
   READ_MODEL_DIVERGENCE: 'readModelDivergence',
+  OUTCOME_ROUTED: 'outcomeRouted',
   SHUTDOWN: 'shutdown',
 });
 
@@ -249,6 +250,19 @@ const REBALANCE_COORDINATOR_LOG_MSG = Object.freeze({
     'Released orphan storage reservation during reconciliation',
   READ_MODEL_DIVERGENCE:
     'Cache/authoritative divergence detected during reconciliation',
+  PROVISIONING_ADMISSION_DENIED:
+    'Provisioning admission denied for storage-increasing move',
+  OUTCOME_RECEIVED: 'Executor outcome received via reconcile queue',
+  OUTCOME_OPERATION_NOT_FOUND:
+    'Executor outcome ignored: operation not found',
+  OUTCOME_OPERATION_TERMINAL:
+    'Executor outcome ignored: operation already terminal',
+  OUTCOME_OPERATION_NOT_LOCAL:
+    'Executor outcome ignored: operation not locally owned',
+  OUTCOME_TRANSITION_FAILED:
+    'Executor outcome transition failed',
+  OUTCOME_UNKNOWN_ACTION:
+    'Executor outcome ignored: unknown action mapping',
 });
 
 const REBALANCE_COORDINATOR_ERROR_MSG = Object.freeze({
@@ -267,10 +281,14 @@ const REBALANCE_COORDINATOR_ERROR_MSG = Object.freeze({
     'storageAdmissionService must provide checkAdd()',
   STORAGE_ADMISSION_CHECK_REPLACE_REQUIRED:
     'storageAdmissionService must provide checkReplace()',
+  TRANSACTION_COORDINATOR_REQUIRED:
+    'RebalanceCoordinator requires transactionCoordinator for atomic workflow transitions',
   WORKFLOW_COORDINATOR_REQUIRED:
     'RebalanceCoordinator requires operationWorkflowCoordinator with runExclusive()',
   WORKFLOW_COORDINATOR_REGISTRY_REQUIRED:
     'operationWorkflowCoordinator requires inFlightExecutionsByOwnerKey Map',
+  EXECUTOR_OUTCOME_EMITTER_REQUIRED:
+    'RebalanceCoordinator requires executorOutcomeEmitter',
 });
 
 const REBALANCER_ERROR_MSG = Object.freeze({
@@ -283,6 +301,21 @@ const REBALANCER_ERROR_MSG = Object.freeze({
   ROUTER_REQUIRED: 'UnifiedRebalancer requires messageRouter',
   COORDINATOR_REQUIRED: 'RebalanceCoordinator is required for move execution',
   SQL_ENGINE_REQUIRED: 'UnifiedRebalancer requires sqlQueryEngine',
+});
+
+const MOVE_PLANNER_ERROR_MSG = Object.freeze({
+  STORAGE_ADMISSION_REQUIRED:
+    'MovePlanner requires storageAdmissionService for active capacity-gated planning',
+  STORAGE_ADMISSION_CHECK_ADD_REQUIRED:
+    'MovePlanner storageAdmissionService must provide checkAdd()',
+  STORAGE_ACCOUNTING_REQUIRED:
+    'MovePlanner requires accountingService for active capacity-gated planning',
+  STORAGE_ACCOUNTING_ESTIMATE_REQUIRED:
+    'MovePlanner accountingService must provide estimateReplicaBytes()',
+  STORAGE_PRESSURE_BEHAVIOR_REQUIRED:
+    'MovePlanner requires storagePressureBehavior for active pressure-gated planning',
+  STORAGE_PRESSURE_BEHAVIOR_CHECK_REQUIRED:
+    'MovePlanner storagePressureBehavior must provide shouldAllowMove()',
 });
 
 const MOVE_REASON = Object.freeze({
@@ -339,6 +372,7 @@ const OPERATION_TRANSITION_REASON = Object.freeze({
   DISPATCH_COMPLETED: 'dispatch_completed',
   RECONCILE_ACTIVE: 'reconcile_active',
   RECONCILE_FAILED: 'reconcile_failed',
+  EXECUTOR_OUTCOME: 'executor_outcome',
   OPERATION_COMPLETED: 'operation_completed',
   OPERATION_FAILED: 'operation_failed',
   OPERATION_TIMED_OUT: 'operation_timed_out',
@@ -366,4 +400,5 @@ export {
   REBALANCE_COORDINATOR_LOG_MSG,
   REBALANCE_COORDINATOR_ERROR_MSG,
   REBALANCER_ERROR_MSG,
+  MOVE_PLANNER_ERROR_MSG,
 };

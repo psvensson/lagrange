@@ -37,8 +37,8 @@ function createOperationRow(params) {
     type: params.type || OperationType.ADD,
     partition_id: params.partitionId || 'test-partition',
     replica_id: params.replicaId || null,
-    source_node_id: params.sourceNodeId || 'source-node',
-    target_node_id: params.targetNodeId || 'target-node',
+    source_node_id: params.sourceNodeId || 'test-node-1',
+    target_node_id: params.targetNodeId || 'test-node-1',
     status: params.status || ReplicaStatus.PENDING,
     workflow_step: params.workflowStep || 'PENDING',
     created_at: params.createdAt || now,
@@ -189,6 +189,7 @@ function createRecoveryTestCoordinator(options = {}) {
     tablePolicyService: createMockPolicyService(),
     messageRouter: createMockMessageRouter(),
     sqlQueryEngine: sqlEngine,
+    storageAccountingService: {estimateReplicaBytes: () => 1},
     enableTimeouts: false,
   });
 

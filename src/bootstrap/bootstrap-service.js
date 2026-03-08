@@ -110,6 +110,7 @@ import {
   NodeState,
 } from '../node/node-lifecycle-state-machine.js';
 import {
+  isNodeHeartbeatWatermarkRegression,
   isNodeRecordReady,
   wasNodeRecordReadyWhenWritten,
 } from '../node/node-readiness-policy.js';
@@ -1382,7 +1383,35 @@ class BootstrapService extends EventEmitter {
     }
 
     const now = Date.now();
-    const isReady = isNodeRecordReady(nodeRow, {now});
+    if (isNodeHeartbeatWatermarkRegression(previousRow, incomingRow)) {
+      this.logger.debug(
+        'Skipping node-ready rebalance trigger: stale node liveness regression',
+        {
+          nodeId,
+          operation: cdcEvent?.operation || null,
+          previousReadyLeaseExpiresAt:
+            previousRow.ready_lease_expires_at ??
+            previousRow.readyLeaseExpiresAt ??
+            null,
+          incomingReadyLeaseExpiresAt:
+            incomingRow.ready_lease_expires_at ??
+            incomingRow.readyLeaseExpiresAt ??
+            null,
+          previousLastHeartbeat:
+            previousRow.last_heartbeat ??
+            previousRow.lastHeartbeat ??
+            null,
+          incomingLastHeartbeat:
+            incomingRow.last_heartbeat ??
+            incomingRow.lastHeartbeat ??
+            null,
+        },
+      );
+      return false;
+    }
+    const isReadyByWallClock = isNodeRecordReady(nodeRow, {now});
+    const isReadyWhenWritten = wasNodeRecordReadyWhenWritten(nodeRow, {now});
+    const isReady = isReadyByWallClock || isReadyWhenWritten;
     const wasReady = wasNodeRecordReadyWhenWritten(previousRow, {now});
 
     if (!isReady) {
@@ -1390,6 +1419,8 @@ class BootstrapService extends EventEmitter {
         nodeId,
         status: nodeRow.status || null,
         readyLeaseExpiresAt: nodeRow.ready_lease_expires_at || null,
+        readyByWallClock: isReadyByWallClock,
+        readyWhenWritten: isReadyWhenWritten,
         operation: cdcEvent?.operation || null,
       });
       const existingTimer = this.pendingNodeReadyRebalanceTimers.get(nodeId);

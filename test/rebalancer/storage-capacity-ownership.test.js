@@ -23,6 +23,9 @@ import {
   PRESSURE_STATE,
   STORAGE_CAPACITY_DEFAULT,
 } from '../../src/rebalancer/storage-capacity-constants.js';
+import {
+  MOVE_PLANNER_ERROR_MSG,
+} from '../../src/rebalancer/rebalancer-constants.js';
 
 import {StorageCapacityAccountingService} from
   '../../src/rebalancer/storage-capacity-accounting-service.js';
@@ -339,6 +342,26 @@ test('Req 11.3 — MovePlanner consumes admission and pressure ' +
     t.ok(shouldAllowCalled,
       'applyPressureGating must delegate to shouldAllowMove');
     t.end();
+  });
+
+  await t.test('fails closed when storagePressureBehavior is missing ' +
+    'in strict owner mode', async (t) => {
+    const planner = new MovePlanner({
+      entityId: 'p-1',
+      entityType: SERVICE_TYPE.PARTITION,
+      moveStateProvider: createMinimalMoveStateProvider(),
+      strictOwnerDependencies: true,
+    });
+
+    await t.rejects(
+      planner.applyPressureGating([{
+        type: 'ADD',
+        nodeId: 'n-1',
+        reason: 'spread',
+      }]),
+      new RegExp(MOVE_PLANNER_ERROR_MSG.STORAGE_PRESSURE_BEHAVIOR_REQUIRED),
+      'active planning path must fail closed when pressure owner is missing',
+    );
   });
 });
 

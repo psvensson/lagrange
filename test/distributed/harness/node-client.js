@@ -59,6 +59,7 @@ const SNAPSHOT_FIELD_REPLICA_OPERATIONS = 'replicaOperations';
 const SNAPSHOT_FIELD_IN_FLIGHT_COUNT = 'inFlightCount';
 const SNAPSHOT_FIELD_STATUS_HISTOGRAM = 'statusHistogram';
 const SNAPSHOT_FIELD_PARTITION_GROUP_IN_FLIGHT = 'partitionGroupInFlight';
+const SNAPSHOT_FIELD_OPERATION_TIMELINE_BY_ID = 'operationTimelineById';
 const DISCOVERY_FIELD_SCHEMA_VERSION = 'schemaVersion';
 const DISCOVERY_FIELD_NODE_ID = 'nodeId';
 const DISCOVERY_FIELD_CAPTURED_AT = 'capturedAt';
@@ -1016,6 +1017,45 @@ class NodeClient {
         normalizedPartitionGroupInFlight[String(groupId)] = parsedValue;
       }
     }
+    const operationTimelineById =
+      replicaOperations[SNAPSHOT_FIELD_OPERATION_TIMELINE_BY_ID];
+    const hasOperationTimelineById = operationTimelineById !== undefined;
+    if (hasOperationTimelineById &&
+        (operationTimelineById === null ||
+          typeof operationTimelineById !== 'object' ||
+          Array.isArray(operationTimelineById))) {
+      throw new Error(
+        'snapshot invalid object ' + SNAPSHOT_FIELD_OPERATION_TIMELINE_BY_ID +
+          ' for node ' + normalizeNodeId(node),
+      );
+    }
+    const normalizedOperationTimelineById = {};
+    if (hasOperationTimelineById &&
+        operationTimelineById &&
+        typeof operationTimelineById === 'object') {
+      for (const [operationId, timeline] of Object.entries(operationTimelineById)) {
+        if (!Array.isArray(timeline)) {
+          throw new Error(
+            'snapshot invalid array in ' +
+              SNAPSHOT_FIELD_OPERATION_TIMELINE_BY_ID +
+              ' for node ' + normalizeNodeId(node) +
+              ' operation ' + String(operationId),
+          );
+        }
+        normalizedOperationTimelineById[String(operationId)] =
+          timeline.map((entry) => {
+            if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+              throw new Error(
+                'snapshot invalid timeline entry in ' +
+                  SNAPSHOT_FIELD_OPERATION_TIMELINE_BY_ID +
+                  ' for node ' + normalizeNodeId(node) +
+                  ' operation ' + String(operationId),
+              );
+            }
+            return JSON.parse(JSON.stringify(entry));
+          });
+      }
+    }
     return {
       [SNAPSHOT_FIELD_SCHEMA_VERSION]: schemaVersion,
       [SNAPSHOT_FIELD_NODE_ID]: snapshot[SNAPSHOT_FIELD_NODE_ID],
@@ -1034,6 +1074,15 @@ class NodeClient {
           },
         } :
         {}),
+      ...(snapshot.controlPlaneDiagnostics &&
+        typeof snapshot.controlPlaneDiagnostics === 'object' &&
+        !Array.isArray(snapshot.controlPlaneDiagnostics) ?
+        {
+          controlPlaneDiagnostics: JSON.parse(
+            JSON.stringify(snapshot.controlPlaneDiagnostics),
+          ),
+        } :
+        {}),
       [SNAPSHOT_FIELD_REPLICA_OPERATIONS]: {
         [SNAPSHOT_FIELD_IN_FLIGHT_COUNT]:
           replicaOperations[SNAPSHOT_FIELD_IN_FLIGHT_COUNT],
@@ -1042,6 +1091,12 @@ class NodeClient {
         },
         [SNAPSHOT_FIELD_PARTITION_GROUP_IN_FLIGHT]:
           normalizedPartitionGroupInFlight,
+        ...(hasOperationTimelineById ?
+          {
+            [SNAPSHOT_FIELD_OPERATION_TIMELINE_BY_ID]:
+              normalizedOperationTimelineById,
+          } :
+          {}),
       },
     };
   }

@@ -72,9 +72,28 @@ function buildRuntimeFailureScenario() {
                     reasonCode: 'grouped_delivery_failed',
                   }],
                 },
+                heartbeatPublication: {
+                  publicationPath: 'node_state_reporter',
+                  targetAddress: 'seed-1/message-group/mg-1',
+                  targetNodeId: 'seed-1',
+                  targetServiceType: 'message-group',
+                  targetServiceId: 'mg-1',
+                  lastAttemptAt: '2026-03-07T00:00:04.000Z',
+                  lastSuccessAt: '2026-03-07T00:00:04.010Z',
+                  lastFailureAt: '2026-03-07T00:00:03.000Z',
+                  lastFailureStage: 'register',
+                  lastFailureReason: 'control-plane route unavailable',
+                  consecutiveFailures: 2,
+                },
                 readinessByNodeId: {
                   'node-1': {
                     nodeId: 'node-1',
+                    nodeEvidence: {
+                      lastHeartbeat: 1000,
+                      heartbeatAgeMs: 5000,
+                      readyLeaseExpiresAt: 1500,
+                      readyLeaseAgeMs: 4500,
+                    },
                     dimensions: {
                       processAlive: true,
                       clusterMemberHealthy: true,
@@ -88,6 +107,33 @@ function buildRuntimeFailureScenario() {
                       code: 'metadata_publication_degraded',
                     }],
                   },
+                },
+                nodeLivenessByNodeId: {
+                  'node-1': {
+                    lastHeartbeat: 1000,
+                    heartbeatAgeMs: 5000,
+                    readyLeaseExpiresAt: 1500,
+                    readyLeaseAgeMs: 4500,
+                  },
+                },
+                readinessTransitionsByNodeId: {
+                  'node-1': [{
+                    nodeId: 'node-1',
+                    observedAt: '2026-03-07T00:00:05.000Z',
+                    observedAtMs: Date.parse('2026-03-07T00:00:05.000Z'),
+                    previousServeEligible: true,
+                    serveEligible: false,
+                    previousRepairEligible: true,
+                    repairEligible: false,
+                    previousReasonCodes: [],
+                    reasonCodes: ['metadata_publication_degraded'],
+                    flippedDimensions: ['serveEligible', 'repairEligible'],
+                    rawInputs: {
+                      heartbeatAgeMs: 5000,
+                      readyLeaseLagMs: 4500,
+                      controlPlaneWritable: false,
+                    },
+                  }],
                 },
                 placementEligibilityByNodeId: {
                   'node-1': {
@@ -111,12 +157,23 @@ function buildRuntimeFailureScenario() {
                     transitionState: 'failed',
                     tableId: 'tbl-users',
                     tableName: 'users',
+                    topologySnapshotCapturedAt: '2026-03-07T00:00:02.000Z',
+                    sourceLeaderNodeId: 'node-1',
+                    candidateTargetNodeIds: ['node-1', 'node-2'],
+                    sourceRoutableNodeIds: ['node-1', 'node-2'],
+                    eligibleNodeIds: ['node-2'],
+                    ineligibleNodes: [{
+                      nodeId: 'node-1',
+                    }],
+                    estimatedBytes: 128,
+                    admissionDecisionAt: '2026-03-07T00:00:06.000Z',
                     admission: {
                       decisionType: 'blocked',
                     },
                     blockingReasons: [{
                       code: 'metadata_publication_degraded',
                     }],
+                    failedAt: '2026-03-07T00:00:07.000Z',
                     timeoutClassification: {
                       classification: 'cache_visibility_timeout',
                       boundaryHit: true,
@@ -145,6 +202,8 @@ function buildRuntimeFailureScenario() {
               operation: 'queryLoad',
               timeoutMs: 4000,
               durationMs: 4000,
+              startedAtMs: Date.parse('2026-03-07T00:00:01.000Z'),
+              timeoutAtMs: Date.parse('2026-03-07T00:00:05.000Z'),
               outcome: 'timeout',
               error: 'Admin API query timed out',
             }],
@@ -362,10 +421,27 @@ describe('failure-bundle', () => {
         'conservative_fanout',
       );
       assert.equal(
+        scenarioBundle.controlPlane.heartbeatPublicationByNodeId['node-1'].targetAddress,
+        'seed-1/message-group/mg-1',
+      );
+      assert.equal(
         scenarioBundle.controlPlane.workflowAdmissionsByWorkflowId[
           'split-tbl-users-users-p1-v2'
         ].timeoutClassification.classification,
         'cache_visibility_timeout',
+      );
+      assert.equal(
+        scenarioBundle.nodeDiagnostics['node-1'].timelineCorrelation.firstLoadFailureAt,
+        '2026-03-07T00:00:05.000Z',
+      );
+      assert.equal(
+        scenarioBundle.nodeDiagnostics['node-1']
+          .timelineCorrelation.heartbeatAgeMsAtFirstReadinessFlip,
+        5000,
+      );
+      assert.equal(
+        scenarioBundle.nodeDiagnostics['node-1'].readinessTransitions[0].serveEligible,
+        false,
       );
       assert.match(
         scenarioBundle.nodeDiagnostics['node-1'].errors[0],
@@ -391,6 +467,8 @@ describe('failure-bundle', () => {
       );
       assert.match(markdown, /## Node Diagnostics/);
       assert.match(markdown, /## Control Plane Diagnostics/);
+      assert.match(markdown, /Heartbeat Publication/);
+      assert.match(markdown, /Timeline Correlation/);
       assert.match(markdown, /cache_visibility_timeout/);
       assert.match(markdown, /operation=queryLoad/);
     });

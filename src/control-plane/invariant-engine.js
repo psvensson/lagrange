@@ -12,9 +12,16 @@
  * Requirements: 7.1 (Requirement 7)
  */
 
-import {INVARIANT_ID} from '../invariants/invariant-catalog.js';
+import {
+  createInvariantRecord,
+  INVARIANT_ID,
+} from '../invariants/invariant-catalog.js';
+import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+} from './control-plane-readiness-constants.js';
 import {
   INVARIANT_BUNDLE_FIELD,
+  INVARIANT_ENGINE_SUBSYSTEM,
   INVARIANT_GATE_ERROR_MESSAGE,
   INVARIANT_OUTCOME_SEVERITY,
   INVARIANT_REASON,
@@ -41,6 +48,85 @@ function buildInvariantResult(options) {
       Object.freeze({...options.context}) :
       null,
   });
+}
+
+const REPLICA_OPERATION_CANONICAL_OWNER = 'RebalanceCoordinator';
+const REPLICA_OPERATION_OWNER_FIELDS = new Set([
+  'status',
+  'workflow_step',
+  'completed_at',
+  'error_message',
+  'steps_history',
+  'replica_id',
+]);
+const INTERNAL_TOPOLOGY_READINESS_CONSUMERS = new Set([
+  'ManagedSplitWorkflow',
+  'MovePlanner',
+  'RebalanceCoordinator',
+  'ReplicaDispatchService',
+  'StorageAdmissionService',
+  'UnifiedRebalancer',
+]);
+const EXTERNAL_SERVE_READINESS_CONSUMERS = new Set([
+  'BenchmarkAdmission',
+  'ExternalRouting',
+  'PgWireStartupSafetyGate',
+  'RoutingService',
+]);
+const INVARIANT_ENTITY_ID_CONTEXT_FIELDS = Object.freeze([
+  'operationId',
+  'workflowId',
+  'transitionId',
+  'entityId',
+  'nodeId',
+  'consumer',
+]);
+
+/**
+ * Determine whether a value is a non-empty plain object.
+ * @param {*} value
+ * @return {boolean}
+ */
+function isRecord(value) {
+  return value !== null &&
+    typeof value === 'object' &&
+    !Array.isArray(value);
+}
+
+/**
+ * Convert a value into a finite timestamp when possible.
+ * @param {*} value
+ * @return {number|null}
+ */
+function toFiniteTimestamp(value) {
+  if (Number.isFinite(value)) {
+    return Math.floor(value);
+  }
+  if (typeof value === 'string' && value.length > 0) {
+    const parsed = Date.parse(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+  return null;
+}
+
+/**
+ * Resolve a stable entity id from invariant context when possible.
+ * @param {Object} result - Invariant result.
+ * @return {string|null}
+ */
+function resolveInvariantEntityId(result) {
+  const context = isRecord(result?.context) ? result.context : null;
+  if (!context) {
+    return null;
+  }
+  for (const field of INVARIANT_ENTITY_ID_CONTEXT_FIELDS) {
+    if (typeof context[field] === 'string' && context[field].length > 0) {
+      return context[field];
+    }
+  }
+  return null;
 }
 
 /**
@@ -299,6 +385,371 @@ function checkOrphanInFlight(state) {
 }
 
 /**
+ * Check that owner-managed replica_operations fields have one writer only.
+ *
+ * The state snapshot provides `replicaOperationWrites`: an array of
+ * `{operationId, writer, fields}` entries describing writes against
+ * owner-managed workflow fields.
+ *
+ * @param {Object} state - State snapshot.
+ * @param {Array<Object>} state.replicaOperationWrites - Workflow writes.
+ * @return {Object} Frozen invariant result.
+ */
+function checkReplicaOperationSingleWriter(state) {
+  const writes = Array.isArray(state?.replicaOperationWrites) ?
+    state.replicaOperationWrites :
+    [];
+  const writesByOperation = new Map();
+
+  for (const write of writes) {
+    const operationId = write?.operationId;
+    const writer = write?.writer;
+    const fields = Array.isArray(write?.fields) ? write.fields : [];
+    if (typeof operationId !== 'string' || operationId.length === 0) {
+      continue;
+    }
+    if (typeof writer !== 'string' || writer.length === 0) {
+      continue;
+    }
+    const ownerFields = fields.filter((field) =>
+      REPLICA_OPERATION_OWNER_FIELDS.has(field),
+    );
+    if (ownerFields.length === 0) {
+      continue;
+    }
+    if (!writesByOperation.has(operationId)) {
+      writesByOperation.set(operationId, {
+        writers: new Set(),
+        ownerFields: new Set(),
+      });
+    }
+    const entry = writesByOperation.get(operationId);
+    entry.writers.add(writer);
+    for (const field of ownerFields) {
+      entry.ownerFields.add(field);
+    }
+  }
+
+  const violations = [];
+  for (const [operationId, entry] of writesByOperation.entries()) {
+    const writers = [...entry.writers].sort();
+    if (writers.length === 1 &&
+        writers[0] === REPLICA_OPERATION_CANONICAL_OWNER) {
+      continue;
+    }
+    violations.push(Object.freeze({
+      operationId,
+      canonicalOwner: REPLICA_OPERATION_CANONICAL_OWNER,
+      writers: Object.freeze(writers),
+      ownerFields: Object.freeze([...entry.ownerFields].sort()),
+    }));
+  }
+
+  if (violations.length > 0) {
+    return buildInvariantResult({
+      invariantId:
+        INVARIANT_ID.CONTROL_PLANE_REPLICA_OPERATIONS_SINGLE_WRITER,
+      severity: INVARIANT_OUTCOME_SEVERITY.HARD,
+      passed: false,
+      reason: INVARIANT_REASON.REPLICA_OPERATION_MULTI_WRITER_DETECTED,
+      context: {violations: Object.freeze(violations)},
+    });
+  }
+
+  return buildInvariantResult({
+    invariantId:
+      INVARIANT_ID.CONTROL_PLANE_REPLICA_OPERATIONS_SINGLE_WRITER,
+    severity: INVARIANT_OUTCOME_SEVERITY.HARD,
+    passed: true,
+    reason: INVARIANT_REASON.REPLICA_OPERATION_SINGLE_WRITER,
+  });
+}
+
+/**
+ * Check that executor-owned phase boundaries advance only after acknowledgement.
+ *
+ * The state snapshot provides `phaseAdvances`: an array of
+ * `{workflowId, participantKey, acknowledged, acknowledgedAt, advancedAt}`.
+ *
+ * @param {Object} state - State snapshot.
+ * @param {Array<Object>} state.phaseAdvances - Phase transition evidence.
+ * @return {Object} Frozen invariant result.
+ */
+function checkAckBeforeAdvance(state) {
+  const phaseAdvances = Array.isArray(state?.phaseAdvances) ?
+    state.phaseAdvances :
+    [];
+  const violations = [];
+
+  for (const entry of phaseAdvances) {
+    const advancedAt = toFiniteTimestamp(entry?.advancedAt);
+    if (!Number.isFinite(advancedAt)) {
+      continue;
+    }
+    const acknowledged = entry?.acknowledged === true;
+    const acknowledgedAt = toFiniteTimestamp(entry?.acknowledgedAt);
+    if (acknowledged && Number.isFinite(acknowledgedAt) &&
+        acknowledgedAt <= advancedAt) {
+      continue;
+    }
+    violations.push(Object.freeze({
+      workflowId: entry?.workflowId || null,
+      participantKey: entry?.participantKey || null,
+      acknowledged,
+      acknowledgedAt: acknowledgedAt ?? null,
+      advancedAt,
+    }));
+  }
+
+  if (violations.length > 0) {
+    return buildInvariantResult({
+      invariantId: INVARIANT_ID.CONTROL_PLANE_ACK_BEFORE_ADVANCE,
+      severity: INVARIANT_OUTCOME_SEVERITY.HARD,
+      passed: false,
+      reason: INVARIANT_REASON.PHASE_ADVANCED_WITHOUT_ACK,
+      context: {violations: Object.freeze(violations)},
+    });
+  }
+
+  return buildInvariantResult({
+    invariantId: INVARIANT_ID.CONTROL_PLANE_ACK_BEFORE_ADVANCE,
+    severity: INVARIANT_OUTCOME_SEVERITY.HARD,
+    passed: true,
+    reason: INVARIANT_REASON.ACK_BEFORE_ADVANCE_ENFORCED,
+  });
+}
+
+/**
+ * Check that resumable split workflows persist complete recovery state.
+ *
+ * The state snapshot provides `splitResumes`: an array of
+ * `{workflowId?, metadata?, status, participants?, sourceCheckpoint?,
+ *   requiresResume, requiresSourceCheckpoint?}`.
+ *
+ * @param {Object} state - State snapshot.
+ * @param {Array<Object>} state.splitResumes - Resumable split workflows.
+ * @return {Object} Frozen invariant result.
+ */
+function checkSplitResumeCompleteness(state) {
+  const splitResumes = Array.isArray(state?.splitResumes) ?
+    state.splitResumes :
+    [];
+  const violations = [];
+
+  for (const entry of splitResumes) {
+    if (entry?.requiresResume !== true) {
+      continue;
+    }
+    const metadata = isRecord(entry?.metadata) ? entry.metadata : {};
+    const workflowId = typeof entry?.workflowId === 'string' &&
+      entry.workflowId.length > 0 ?
+      entry.workflowId :
+      metadata.workflowId;
+    const participants = isRecord(entry?.participants) ?
+      entry.participants :
+      (isRecord(metadata.participants) ? metadata.participants : null);
+    const sourceCheckpoint = isRecord(entry?.sourceCheckpoint) ?
+      entry.sourceCheckpoint :
+      (isRecord(metadata.sourceCheckpoint) ? metadata.sourceCheckpoint : null);
+    const missingFields = [];
+
+    if (typeof workflowId !== 'string' || workflowId.length === 0) {
+      missingFields.push('workflowId');
+    }
+    if (typeof entry?.status !== 'string' || entry.status.length === 0) {
+      missingFields.push('status');
+    }
+    if (!participants || Object.keys(participants).length === 0) {
+      missingFields.push('participants');
+    }
+    if (entry?.requiresSourceCheckpoint === true && !sourceCheckpoint) {
+      missingFields.push('sourceCheckpoint');
+    }
+
+    if (missingFields.length > 0) {
+      violations.push(Object.freeze({
+        workflowId: typeof workflowId === 'string' ? workflowId : null,
+        status: typeof entry?.status === 'string' ? entry.status : null,
+        missingFields: Object.freeze(missingFields),
+      }));
+    }
+  }
+
+  if (violations.length > 0) {
+    return buildInvariantResult({
+      invariantId: INVARIANT_ID.CONTROL_PLANE_SPLIT_RESUME_COMPLETENESS,
+      severity: INVARIANT_OUTCOME_SEVERITY.HARD,
+      passed: false,
+      reason: INVARIANT_REASON.SPLIT_RESUME_INCOMPLETE,
+      context: {violations: Object.freeze(violations)},
+    });
+  }
+
+  return buildInvariantResult({
+    invariantId: INVARIANT_ID.CONTROL_PLANE_SPLIT_RESUME_COMPLETENESS,
+    severity: INVARIANT_OUTCOME_SEVERITY.HARD,
+    passed: true,
+    reason: INVARIANT_REASON.SPLIT_RESUME_COMPLETE,
+  });
+}
+
+/**
+ * Check that readiness consumers use the canonical readiness dimension.
+ *
+ * The state snapshot provides `readinessDecisions`: an array of
+ * `{consumer, nodeId?, decisionDimension, repairEligible, serveEligible,
+ *   consumerOutcome?}` entries.
+ *
+ * @param {Object} state - State snapshot.
+ * @param {Array<Object>} state.readinessDecisions - Readiness decisions.
+ * @return {Object} Frozen invariant result.
+ */
+function checkReadinessDimensionCorrectness(state) {
+  const decisions = Array.isArray(state?.readinessDecisions) ?
+    state.readinessDecisions :
+    [];
+  const violations = [];
+
+  for (const decision of decisions) {
+    const consumer = typeof decision?.consumer === 'string' ?
+      decision.consumer :
+      null;
+    const decisionDimension = typeof decision?.decisionDimension === 'string' ?
+      decision.decisionDimension :
+      null;
+    const repairEligible = decision?.repairEligible === true;
+    const serveEligible = decision?.serveEligible === true;
+    const consumerOutcome =
+      typeof decision?.consumerOutcome === 'boolean' ?
+        decision.consumerOutcome :
+        (typeof decision?.allowed === 'boolean' ? decision.allowed : null);
+    const expectedDimension =
+      INTERNAL_TOPOLOGY_READINESS_CONSUMERS.has(consumer) ?
+        CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE :
+        EXTERNAL_SERVE_READINESS_CONSUMERS.has(consumer) ?
+          CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE :
+          null;
+
+    if (serveEligible && !repairEligible) {
+      violations.push(Object.freeze({
+        consumer,
+        nodeId: decision?.nodeId || null,
+        decisionDimension,
+        expectedDimension,
+        repairEligible,
+        serveEligible,
+        consumerOutcome,
+        violationType: 'serve_without_repair',
+      }));
+      continue;
+    }
+
+    if (expectedDimension && decisionDimension !== expectedDimension) {
+      violations.push(Object.freeze({
+        consumer,
+        nodeId: decision?.nodeId || null,
+        decisionDimension,
+        expectedDimension,
+        repairEligible,
+        serveEligible,
+        consumerOutcome,
+        violationType: 'wrong_dimension',
+      }));
+      continue;
+    }
+
+    if (expectedDimension && consumerOutcome !== null) {
+      const expectedOutcome =
+        expectedDimension ===
+        CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE ?
+          repairEligible :
+          serveEligible;
+      if (consumerOutcome !== expectedOutcome) {
+        violations.push(Object.freeze({
+          consumer,
+          nodeId: decision?.nodeId || null,
+          decisionDimension,
+          expectedDimension,
+          repairEligible,
+          serveEligible,
+          consumerOutcome,
+          violationType: 'outcome_mismatch',
+        }));
+      }
+    }
+  }
+
+  if (violations.length > 0) {
+    return buildInvariantResult({
+      invariantId:
+        INVARIANT_ID.CONTROL_PLANE_READINESS_DIMENSION_CORRECTNESS,
+      severity: INVARIANT_OUTCOME_SEVERITY.HARD,
+      passed: false,
+      reason: INVARIANT_REASON.READINESS_DIMENSION_INCORRECT,
+      context: {violations: Object.freeze(violations)},
+    });
+  }
+
+  return buildInvariantResult({
+    invariantId:
+      INVARIANT_ID.CONTROL_PLANE_READINESS_DIMENSION_CORRECTNESS,
+    severity: INVARIANT_OUTCOME_SEVERITY.HARD,
+    passed: true,
+    reason: INVARIANT_REASON.READINESS_DIMENSION_CORRECT,
+  });
+}
+
+/**
+ * Check that atomic topology transitions only run with a transaction coordinator.
+ *
+ * The state snapshot provides `atomicTransitions`: an array of
+ * `{transitionId, ownerComponent?, requiresTransactionCoordinator,
+ *   hasTransactionCoordinator}` entries.
+ *
+ * @param {Object} state - State snapshot.
+ * @param {Array<Object>} state.atomicTransitions - Atomic transition evidence.
+ * @return {Object} Frozen invariant result.
+ */
+function checkTransactionAvailability(state) {
+  const atomicTransitions = Array.isArray(state?.atomicTransitions) ?
+    state.atomicTransitions :
+    [];
+  const violations = [];
+
+  for (const transition of atomicTransitions) {
+    if (transition?.requiresTransactionCoordinator !== true) {
+      continue;
+    }
+    if (transition?.hasTransactionCoordinator === true) {
+      continue;
+    }
+    violations.push(Object.freeze({
+      transitionId: transition?.transitionId || null,
+      ownerComponent: transition?.ownerComponent || null,
+    }));
+  }
+
+  if (violations.length > 0) {
+    return buildInvariantResult({
+      invariantId:
+        INVARIANT_ID.CONTROL_PLANE_TRANSACTION_COORDINATOR_REQUIRED,
+      severity: INVARIANT_OUTCOME_SEVERITY.HARD,
+      passed: false,
+      reason: INVARIANT_REASON.TRANSACTION_COORDINATOR_MISSING,
+      context: {violations: Object.freeze(violations)},
+    });
+  }
+
+  return buildInvariantResult({
+    invariantId:
+      INVARIANT_ID.CONTROL_PLANE_TRANSACTION_COORDINATOR_REQUIRED,
+    severity: INVARIANT_OUTCOME_SEVERITY.HARD,
+    passed: true,
+    reason: INVARIANT_REASON.TRANSACTION_COORDINATOR_AVAILABLE,
+  });
+}
+
+/**
  * Evaluate the full canonical invariant set against a state
  * snapshot.
  *
@@ -313,7 +764,45 @@ function evaluateInvariants(state) {
     checkMonotonicSteps(snapshot),
     checkClaimExclusivity(snapshot),
     checkOrphanInFlight(snapshot),
+    checkReplicaOperationSingleWriter(snapshot),
+    checkAckBeforeAdvance(snapshot),
+    checkSplitResumeCompleteness(snapshot),
+    checkReadinessDimensionCorrectness(snapshot),
+    checkTransactionAvailability(snapshot),
   ]);
+}
+
+/**
+ * Convert control-plane invariant results into invariant-catalog records
+ * suitable for diagnostics bundles and harness artifacts.
+ *
+ * @param {Array<Object>} invariantResults - Results from evaluateInvariants().
+ * @return {Array<Object>} Frozen array of invariant records.
+ */
+function buildInvariantArtifactRecords(invariantResults) {
+  const results = Array.isArray(invariantResults) ?
+    invariantResults :
+    [];
+
+  const records = results.map((result) => {
+    const context = isRecord(result?.context) ?
+      {...result.context} :
+      {};
+    return createInvariantRecord({
+      invariantId: result?.invariantId,
+      passed: result?.passed !== false,
+      entityId: resolveInvariantEntityId(result),
+      owningSubsystem: INVARIANT_ENGINE_SUBSYSTEM,
+      reasonCode: result?.reason,
+      observed: context,
+      details: {
+        ...context,
+        controlPlaneSeverity: result?.severity || null,
+      },
+    });
+  });
+
+  return Object.freeze(records);
 }
 
 /**
@@ -333,6 +822,7 @@ function buildInvariantDiagnosticsBundle(invariantResults) {
   const results = Array.isArray(invariantResults) ?
     invariantResults :
     [];
+  const artifactRecords = buildInvariantArtifactRecords(results);
 
   let passed = 0;
   let failed = 0;
@@ -372,6 +862,7 @@ function buildInvariantDiagnosticsBundle(invariantResults) {
       [INVARIANT_BUNDLE_FIELD.SOFT_FAILURES]: softFailures,
     }),
     [INVARIANT_BUNDLE_FIELD.BREACHES]: Object.freeze(breaches),
+    [INVARIANT_BUNDLE_FIELD.ARTIFACT_RECORDS]: artifactRecords,
     [INVARIANT_BUNDLE_FIELD.TIMESTAMP]: Date.now(),
   });
 }
@@ -413,12 +904,18 @@ function assertInvariantGate(invariantResults) {
 
 export {
   assertInvariantGate,
+  buildInvariantArtifactRecords,
   buildInvariantDiagnosticsBundle,
   buildInvariantResult,
+  checkAckBeforeAdvance,
   checkClaimExclusivity,
   checkLeaderUniqueness,
   checkMonotonicSteps,
   checkOrphanInFlight,
+  checkReadinessDimensionCorrectness,
+  checkReplicaOperationSingleWriter,
+  checkSplitResumeCompleteness,
+  checkTransactionAvailability,
   evaluateInvariants,
   isBackwardStep,
 };

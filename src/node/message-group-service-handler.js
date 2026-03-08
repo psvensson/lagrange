@@ -21,14 +21,15 @@ import {
 } from '../rebalancer/replica-operation-constants.js';
 import {
   ReplicaStatus,
-  WORKFLOW_STEP_TO_STATUS,
 } from '../rebalancer/replica-status.js';
+import {
+  EXECUTOR_OUTCOME_TYPE,
+} from '../rebalancer/executor-outcome-constants.js';
 import {
   MESSAGE_GROUP_SERVICE_HANDLER_ADDRESS,
   MESSAGE_GROUP_SERVICE_HANDLER_ERROR_MSG,
   MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG,
   MESSAGE_GROUP_SERVICE_HANDLER_SUBSYSTEM,
-  MESSAGE_GROUP_SERVICE_HANDLER_WORKFLOW,
 } from './message-group-service-handler-constants.js';
 
 function isFunction(value) {
@@ -67,6 +68,9 @@ class MessageGroupServiceHandler extends EventEmitter {
         systemTableWriter: this.cdcIntegrationService,
       });
     this.rpcClient = null;
+
+    // Executor outcome emitter — replaces direct replica_operations writes.
+    this.executorOutcomeEmitter = options.executorOutcomeEmitter || null;
 
     this.inProgressOperations = new Map();
     this.localReplicas = new Map();
@@ -266,7 +270,9 @@ class MessageGroupServiceHandler extends EventEmitter {
         status: ReplicaStatus.ACTIVE,
       });
 
-      await this.updateOperationStep(
+      // Emit active outcome — coordinator will transition workflow.
+      this.emitExecutorOutcome(
+        EXECUTOR_OUTCOME_TYPE.MESSAGE_GROUP_CREATE_ACTIVE,
         operationId,
         WORKFLOW_STEP.ACTIVE,
         {replicaId},
@@ -283,16 +289,13 @@ class MessageGroupServiceHandler extends EventEmitter {
         status: ReplicaStatus.FAILED,
       });
 
-      await this.updateOperationStep(
+      // Emit failed outcome — coordinator will transition workflow.
+      this.emitExecutorOutcome(
+        EXECUTOR_OUTCOME_TYPE.MESSAGE_GROUP_CREATE_FAILED,
         operationId,
         WORKFLOW_STEP.FAILED,
         {replicaId, errorMessage: error.message},
-      ).catch((stepError) => {
-        this.logger.warn(
-          MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG.UPDATE_STATUS_FAILED,
-          {operationId, replicaId, error: stepError.message},
-        );
-      });
+      );
 
       this.logger.error(
         MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG.CREATE_FAILED,
@@ -444,7 +447,9 @@ class MessageGroupServiceHandler extends EventEmitter {
         status: ReplicaStatus.REMOVED,
       });
 
-      await this.updateOperationStep(
+      // Emit removed outcome — coordinator will transition workflow.
+      this.emitExecutorOutcome(
+        EXECUTOR_OUTCOME_TYPE.MESSAGE_GROUP_REMOVE_COMPLETED,
         operationId,
         WORKFLOW_STEP.REMOVED,
         {replicaId},
@@ -461,16 +466,13 @@ class MessageGroupServiceHandler extends EventEmitter {
         status: ReplicaStatus.FAILED,
       });
 
-      await this.updateOperationStep(
+      // Emit failed outcome — coordinator will transition workflow.
+      this.emitExecutorOutcome(
+        EXECUTOR_OUTCOME_TYPE.MESSAGE_GROUP_REMOVE_FAILED,
         operationId,
         WORKFLOW_STEP.FAILED,
         {replicaId, errorMessage: error.message},
-      ).catch((stepError) => {
-        this.logger.warn(
-          MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG.UPDATE_STATUS_FAILED,
-          {operationId, replicaId, error: stepError.message},
-        );
-      });
+      );
 
       this.logger.error(
         MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG.REMOVE_FAILED,
@@ -621,81 +623,26 @@ class MessageGroupServiceHandler extends EventEmitter {
     return null;
   }
 
-  async updateOperationStep(operationId, workflowStep, options = {}) {
-    if (!operationId) {
-      return;
-    }
-
-    const existing = this.systemTableCache.get(
-      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-      operationId,
-    );
-
-    if (!existing && !options.replicaId) {
-      this.logger.warn(
-        MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG.OPERATION_NOT_FOUND,
-        {operationId, workflowStep, nodeId: this.nodeId},
-      );
-      return;
-    }
-
-    const now = Date.now();
-    let stepsHistory = [];
-    if (Array.isArray(existing?.steps_history)) {
-      stepsHistory = [...existing.steps_history];
-    } else if (existing?.steps_history) {
-      try {
-        stepsHistory = JSON.parse(existing.steps_history);
-      } catch (error) {
-        this.logger.warn(
-          MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG.PARSE_STEPS_HISTORY_FAILED,
-          {operationId, error: error.message},
+  /**
+     * Emit a typed executor outcome instead of writing to
+     * replica_operations directly. The coordinator consumes these
+     * outcomes through the owner-key reconcile queue.
+     *
+     * @param {string} outcomeType - EXECUTOR_OUTCOME_TYPE value.
+     * @param {string} operationId - Replica operation ID.
+     * @param {string} workflowStep - WORKFLOW_STEP the executor reached.
+     * @param {Object} [options] - Optional replicaId, errorMessage.
+     */
+    emitExecutorOutcome(outcomeType, operationId, workflowStep, options = {}) {
+      if (this.executorOutcomeEmitter) {
+        this.executorOutcomeEmitter.emitOutcome(
+          outcomeType,
+          operationId,
+          workflowStep,
+          options,
         );
-        throw error;
       }
     }
-
-    stepsHistory.push({step: workflowStep, timestamp: now});
-
-    const status = workflowStep === WORKFLOW_STEP.FAILED ?
-      ReplicaStatus.FAILED :
-      (WORKFLOW_STEP_TO_STATUS[workflowStep] ||
-        existing?.status ||
-        ReplicaStatus.PENDING);
-
-    const updateData = {
-      workflow_step: workflowStep,
-      status,
-      updated_at: now,
-      steps_history: JSON.stringify(stepsHistory),
-    };
-
-    if (options.replicaId) {
-      updateData.replica_id = options.replicaId;
-    }
-    if (options.errorMessage) {
-      updateData.error_message = options.errorMessage;
-    }
-    if (MESSAGE_GROUP_SERVICE_HANDLER_WORKFLOW.COMPLETION_STEPS.includes(
-      workflowStep,
-    )) {
-      updateData.completed_at = now;
-    }
-
-    try {
-      await this.cdcIntegrationService.updateSystemTableRow(
-        SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-        {operation_id: operationId},
-        updateData,
-      );
-    } catch (error) {
-      this.logger.warn(
-        MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG.UPDATE_STATUS_FAILED,
-        {operationId, workflowStep, error: error.message},
-      );
-      throw error;
-    }
-  }
 
   registerWithRouter(messageRouter, options = {}) {
     if (!messageRouter) {

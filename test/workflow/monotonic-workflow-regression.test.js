@@ -33,6 +33,16 @@ const RECOVERY_REASON = 'test_recovery';
  * @return {RebalanceCoordinator} Coordinator instance.
  */
 function createMinimalCoordinator(overrides = {}) {
+  const transactionCoordinator =
+    Object.prototype.hasOwnProperty.call(overrides, 'transactionCoordinator') ?
+      overrides.transactionCoordinator :
+      new DistributedTransactionCoordinator({
+        beginParticipant: async () => {},
+        prepareParticipant: async () => {},
+        commitParticipant: async () => {},
+        rollbackParticipant: async () => {},
+        now: () => FIXED_NOW,
+      });
   return new RebalanceCoordinator({
     nodeId: MOCK_NODE_ID,
     systemTableCache: {
@@ -56,6 +66,7 @@ function createMinimalCoordinator(overrides = {}) {
         return {success: true, rows: [], changes: 1};
       },
     },
+    transactionCoordinator,
     enableTimeouts: false,
     ...overrides,
   });

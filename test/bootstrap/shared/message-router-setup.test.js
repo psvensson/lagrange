@@ -9,6 +9,7 @@ import {describe, it, beforeEach, afterEach} from 'node:test';
 import assert from 'node:assert';
 import {MessageRouterSetup} from '../../../src/bootstrap/shared/message-router-setup.js';
 import {DependencyError} from '../../../src/bootstrap/bootstrap-errors.js';
+import {NodeService} from '../../../src/node/node-service.js';
 import {createPortAllocator} from '../../../src/test-helpers/port-allocator.js';
 
 const ports = createPortAllocator(import.meta.url);
@@ -108,6 +109,51 @@ describe('MessageRouterSetup', () => {
       createdRouters.push(router);
 
       assert.deepStrictEqual(router.identifyPayload, identifyPayload);
+    });
+
+    it('should normalize raw endpoint rows to websocket delivery addresses', async () => {
+      const originalGetInstance = NodeService.getInstance;
+
+      try {
+        NodeService.getInstance = () => ({
+          getReadOnlySystemTableCache() {
+            return {
+              filter(tableName, predicate) {
+                if (tableName !== 'node_endpoints') {
+                  return [];
+                }
+                const row = {
+                  node_id: 'target-node',
+                  status: 'active',
+                  transport_type: 'ws',
+                  address: 'target-host:8080',
+                  priority: 0,
+                };
+                return predicate(row) ? [row] : [];
+              },
+              get() {
+                return null;
+              },
+            };
+          },
+          getSystemTableCache() {
+            return null;
+          },
+        });
+
+        const router = await MessageRouterSetup.create({
+          nodeId: 'resolver-normalization-test-node',
+          nodeAddress: 'ws://localhost:9999',
+        });
+        createdRouters.push(router);
+
+        assert.strictEqual(
+          router.resolveNodeAddressForDelivery('target-node'),
+          'ws://target-host:8082',
+        );
+      } finally {
+        NodeService.getInstance = originalGetInstance;
+      }
     });
 
     it('should throw error when server initialization fails on port conflict', async () => {

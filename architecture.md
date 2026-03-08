@@ -21,9 +21,11 @@ A scalable distributed database where:
 
 1. **Tables as the Universal Storage Model** - System metadata and user data are stored in tables
 2. **Partitions as Raft Groups** - Each partition is a Raft consensus group using liferaft
-3. **System Cache as Single Source of Truth** - In-memory cache of
-   CDC-propagated system tables, updated by CDC events. Non-propagated
-   tables remain queryable from their owning partition via SQL.
+3. **System Cache as Canonical Observational Read Model** - In-memory cache of
+   CDC-propagated system tables, updated by CDC events. It is the steady-state
+   read model for propagated metadata, but it is not a second completion oracle
+   for topology workflows. Non-propagated tables remain queryable from their
+   owning partition via SQL.
 4. **Message Router for All Communication** - All messages (local and remote) route through MessageRouter
 5. **No Fallback Code Paths** - Single code path for any given logic; no legacy or alternative mechanisms
 6. **System Cache Read Policy** - The system cache is strictly read-only from
@@ -62,8 +64,25 @@ To prevent overlap and contradictory runtime behavior:
    operation state. Workflow transitions must be monotonic and idempotent.
    Step transitions route through `DurableWorkflowCoordinator.transitionStep()`
    to persist canonical transition records.
-4. **Dispatch:** `ReplicaDispatchService` dispatches only after an atomic
-   workflow-step claim (`PENDING -> SENDING`) to prevent duplicate dispatch.
+   Owner-managed `replica_operations` fields (`status`, `workflow_step`,
+   `completed_at`, `error_message`, `steps_history`) are written only by
+   `RebalanceCoordinator`.
+   Executor-side components (`ReplicaHandler`, `MessageGroupServiceHandler`,
+   `RuntimeServiceHandler`) emit typed outcomes via `ExecutorOutcomeEmitter`
+   instead of writing to `replica_operations` directly. The coordinator
+   consumes those outcomes through the owner-key reconcile queue and advances
+   executor-owned boundaries only after durable acknowledgement or authoritative
+   owner validation.
+   **Ownership boundary:** `BootstrapAPI` owns a separate domain for
+   MOVE_REPLICA handoff (`type = 'ADD'` during handoff) and MOVE_ASSIGNMENT
+   reservation (`type = 'MOVE_ASSIGNMENT'`) rows created during node join.
+   The two domains are distinguished by operation type and creation context.
+   Neither domain may create or mutate the other's rows.
+4. **Dispatch:** `ReplicaDispatchService` dispatches only after the
+   coordinator claims the operation via `claimDispatchTransition`
+   (`PENDING -> SENDING`) through the owner path. No component writes
+   to `replica_operations` outside the coordinator for steady-state
+   operations.
    Event handlers (CDC, cache change, node state, coordinator events) enqueue
    owner keys into `OwnerKeyReconcileQueue` instances with typed reason codes.
    No event handler runs long-running progression logic inline.
@@ -72,7 +91,10 @@ To prevent overlap and contradictory runtime behavior:
    `message_groups.leader_node_id` for message-group leaders. `services`
    metadata is supporting replica detail only (`address`, `status`,
    `raft_role`) and may be used for diagnostics only, not routing.
-6. **Readiness Gating:** dispatch and rebalancer use a shared readiness policy.
+6. **Readiness Gating:** internal topology consumers (`ReplicaDispatchService`,
+   `RebalanceCoordinator`, `ManagedSplitWorkflow`, admission planning) use the
+   shared `repairEligible` dimension from `ControlPlaneReadinessService`.
+   Routing and benchmark admission use `serveEligible`.
 7. **Epoch Propagation:** `config.current_epoch` + CDC is the single epoch
    authority; no secondary epoch source.
 8. **Control-Plane Progression:** Event-triggered control-plane work (dispatch,
@@ -154,10 +176,14 @@ The distributed SQL layer is now single-path and owner-specific:
    atomic multi-row commits. Idempotency is enforced by operation id and
    step id via `DurableWorkflowCoordinator.isTransitionIdempotent()`.
 7. `ManagedSplitWorkflow` is the only owner for managed partition-split
-   prepare/provision/backfill-handoff orchestration. It composes
+   lifecycle from admission through cleanup. It composes
    `DurableWorkflowCoordinator`, persists split workflow identity in
-   `tables.partition_transition_metadata`, and hands off post-start source
-   backfill/cutover ownership to `PartitionService`.
+   `tables.partition_transition_metadata`, and owns all durable phase
+   transitions including cutover activation. `PartitionService` acts as
+   a source-execution participant that delegates cutover transition
+   persistence back to `ManagedSplitWorkflow.advanceSplitPhase()`.
+   `SPLIT_OWNER_MANAGED_PHASES` in `partition-constants.js` enumerates
+   every phase that only the workflow owner may persist.
 8. `SQLQueryEngine` remains the orchestration entrypoint and delegates to the
    owners above. It does not keep alternate distributed execution branches.
 
@@ -346,6 +372,18 @@ The canonical registry lives in `src/control-plane/read-model-contract.js`.
 Decision methods are annotated with `@readModel` JSDoc tags referencing
 the declared source from `CONTROL_PLANE_DECISION_READ_MODEL`.
 
+### Cache Observation Boundary
+
+Topology workflows treat cache visibility as observation only, not proof of
+executor completion.
+
+1. Executor-owned phase completion requires authoritative owner commit plus
+   explicit acknowledgement where the semantic boundary is participant-owned.
+2. Cache divergence is emitted as a typed diagnostic event and may feed
+   invariant artifacts, but it does not authorize direct mutation fallback.
+3. Recovery from divergence re-enters the same owner-key reconcile queue used
+   by normal progression.
+
 ## Control-Plane Predictability and Determinism
 
 Control-plane progression (dispatch, rebalance, split) follows a
@@ -379,11 +417,16 @@ canonical control-plane invariants against a state snapshot.
 | Leader uniqueness by owner rows | hard | `LEADER_UNIQUENESS` |
 | Workflow step monotonicity | hard | `MONOTONIC_STEPS` |
 | Claim exclusivity by operation and owner key | hard | `CLAIM_EXCLUSIVITY` |
-| No orphan in-flight operations | hard | `ORPHAN_IN_FLIGHT` |
+| No orphan in-flight operations | soft | `ORPHAN_IN_FLIGHT` |
+| Single writer for owner-managed `replica_operations` fields | hard | `CONTROL_PLANE_REPLICA_OPERATIONS_SINGLE_WRITER` |
+| Acknowledgement before executor-owned phase advance | hard | `CONTROL_PLANE_ACK_BEFORE_ADVANCE` |
+| Split resume completeness | hard | `CONTROL_PLANE_SPLIT_RESUME_COMPLETENESS` |
+| Readiness dimension correctness | hard | `CONTROL_PLANE_READINESS_DIMENSION_CORRECTNESS` |
+| Transaction coordinator required for atomic cut points | hard | `CONTROL_PLANE_TRANSACTION_COORDINATOR_REQUIRED` |
 
-Hard breaches fail deterministic test gates. Soft breaches emit
-diagnostic warnings only. Invariant definitions live in
-`src/invariants/invariant-catalog.js`.
+Hard breaches fail deterministic test gates. Diagnostics bundles also emit
+catalog-shaped artifact records so the same failures can surface in harness
+reports. Invariant definitions live in `src/invariants/invariant-catalog.js`.
 
 ### Failure Class Registry
 
@@ -1755,7 +1798,7 @@ node storage during replication, recovery, and split workflows.
 
 | Concern | Owner | Notes |
 |---------|-------|-------|
-| Control-plane readiness classification | `ControlPlaneReadinessService` | Canonical per-node readiness vectors for routing, placement, and diagnostics |
+| Control-plane readiness classification | `ControlPlaneReadinessService` | Canonical per-node readiness snapshot with `repairEligible` and `serveEligible` stratification; internal topology consumers gate on `repairEligible`, routing/benchmark on `serveEligible` |
 | Metadata publication mode | `CDCGroupPropagationService` | Canonical grouped/conservative-fanout/repair-only publication owner |
 | Budget resolution/registration | `NodeStorageBudgetService` | Seed/join startup-owned integration |
 | Replica size estimation + capacity snapshot | `StorageCapacityAccountingService` | Derives used/reserved/available from metadata |

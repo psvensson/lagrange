@@ -520,7 +520,7 @@ class JoinCleanupHandler {
     }
 
     const latencyTopology = this.delegates.getLatencyTopology();
-    LatencyTopologySetup.stop(latencyTopology);
+    await LatencyTopologySetup.stop(latencyTopology);
     this.delegates.setLatencyTopology(null);
 
     // Shutdown replica state machine

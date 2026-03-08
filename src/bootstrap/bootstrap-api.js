@@ -1756,6 +1756,22 @@ class BootstrapAPI {
 
   /**
    * Persist a new MOVE_REPLICA handoff operation row.
+   *
+   * OWNERSHIP BOUNDARY: BootstrapAPI owns the MOVE_REPLICA handoff
+   * and MOVE_ASSIGNMENT reservation lifecycle as a separate ownership
+   * domain from RebalanceCoordinator. This is an explicit exception
+   * to the single-writer contract for replica_operations:
+   *
+   * - BootstrapAPI owns rows with type = 'ADD' (handoff) and
+   *   type = 'MOVE_ASSIGNMENT' (reservation) created during node join.
+   * - RebalanceCoordinator owns all other replica_operations rows
+   *   (ADD/REMOVE/REPLACE for steady-state rebalancing).
+   * - The two domains are distinguished by operation type and
+   *   creation context (bootstrap vs steady-state).
+   * - BootstrapAPI MUST NOT create or mutate coordinator-owned rows.
+   * - RebalanceCoordinator MUST NOT create or mutate bootstrap-owned
+   *   handoff/reservation rows.
+   *
    * @param {Object} handoffContext - Operation context.
    * @return {Promise<void>}
    * @private
@@ -2423,6 +2439,11 @@ class BootstrapAPI {
     if (BOOTSTRAP_API_ASSIGNMENT.TERMINAL_STATUSES.includes(reservation.status)) {
       return false;
     }
+    if (!BOOTSTRAP_API_ASSIGNMENT.ACTIVE_RESERVATION_STATUSES.includes(
+      reservation.status,
+    )) {
+      return false;
+    }
     if (!Number.isFinite(reservation.leaseExpiresAt)) {
       return false;
     }
@@ -2465,6 +2486,11 @@ class BootstrapAPI {
 
   /**
    * Persist and cache one MOVE_REPLICA assignment reservation.
+   *
+   * OWNERSHIP BOUNDARY: See insertMoveReplicaHandoffOperation for the
+   * full boundary contract. This method creates MOVE_ASSIGNMENT rows
+   * owned by the bootstrap handoff domain.
+   *
    * @param {string} targetNodeId
    * @param {Object} assignment
    * @return {Promise<Object>}
@@ -2499,7 +2525,7 @@ class BootstrapAPI {
       sourceNodeId: assignment.sourceNodeId || null,
       targetNodeId,
       groupId: assignment.groupId || null,
-      status: BOOTSTRAP_API_HANDOFF_STATUS.COMMITTED,
+      status: BOOTSTRAP_API_HANDOFF_STATUS.PREPARING,
       leaseExpiresAt,
       updatedAt: now,
     };

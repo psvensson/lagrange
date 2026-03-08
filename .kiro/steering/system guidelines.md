@@ -9,6 +9,43 @@ new file, and every refactor. When in doubt, the rule wins.
 
 ---
 
+The system is called lagrange.
+
+## 0. Platform Model and Design Intent
+
+Lagrange exposes a small user model built around two primary primitives:
+
+Tables — durable structured state
+
+Services — durable executable workloads
+
+Users express intent through tables, services, SQL, and policies.
+Users do not directly manage partitions, replicas, placement, or rebalancing.
+
+Those lower-level mechanisms are internal system machinery owned by the platform.
+
+Therefore, all generated code MUST preserve the following architectural intent:
+
+External simplicity — do not introduce unnecessary new user-visible concepts.
+
+Internal ownership — partitions, replicas, routing, lifecycle, and placement remain system-owned concerns.
+
+Policy over micromanagement — prefer policy-controlled behavior over direct low-level control surfaces.
+
+No machinery leakage — internal mechanisms must not become accidental user-facing concepts unless explicitly designed as such.
+
+Strengthen existing primitives — new features should extend tables, services, policies, and canonical execution paths rather than create new conceptual categories.
+
+When proposing a new feature or API, first ask:
+
+Does this strengthen tables or services?
+
+Does this preserve the small external model?
+
+Is this internal machinery, or is it being exposed unnecessarily?
+
+If a change introduces a new conceptual entity that is neither a table nor a service, treat that as a design warning and justify it explicitly.
+
 ## 1. ZERO DUPLICATION CONTRACT (highest priority)
 
 This is the single most important rule in the entire system. Violations of this
@@ -182,6 +219,144 @@ It is FORBIDDEN to:
 - Introduce a second mutation helper for the same owner-row concern
 - Publish diagnostics that infer canonical leader truth from replica rows alone
 
+### 1.4.8 No Overloaded Lifecycle Fields Across Concerns
+
+A single persisted field MUST NOT carry multiple lifecycle semantics for
+different owners.
+
+Examples of forbidden overloading:
+
+- Using one timestamp both as "operation completed at" and
+  "assignment lease expires at"
+- Reusing one status value set for both "reservation active" and
+  "operation terminal success"
+- Treating one table row as both claim owner and workflow owner without
+  explicit owner-boundary fields
+
+Required pattern:
+
+1. Keep claim/lease lifecycle, workflow lifecycle, and entity-ownership
+   lifecycle as separate owned concerns.
+2. If they share a row, field subsets must be explicitly partitioned by owner
+   and never reused across concern boundaries.
+3. Expiry/recovery sweep logic may act only on rows/fields owned by that sweep
+   owner; it must not rewrite terminal workflow outcomes from another owner.
+
+### 1.4.9 Status Taxonomy Must Be Enforced by Consumers
+
+When constants define active/terminal status sets, decision logic MUST consume
+those sets directly.
+
+It is FORBIDDEN to:
+
+- Define `ACTIVE_*` / `TERMINAL_*` sets and then bypass them with ad-hoc
+  checks
+- Infer active/terminal state from timestamps alone when status taxonomy exists
+- Mark terminal outcomes and later reclassify them via a sweep that ignores
+  status taxonomy
+
+Mandatory check:
+
+1. Any "is active" predicate must gate on the canonical active status set.
+2. Any sweep that expires entries must skip canonical terminal statuses.
+3. Any status transition to terminal success must be monotonic and must not be
+   rewritten to failure by unrelated expiry logic.
+
+### 1.4.10 Configured Modes Must Dominate Disabled-Path Preconditions
+
+When a subsystem exposes explicit configured modes (for example grouped vs safe),
+the configured mode is canonical and MUST NOT be overwritten by precondition
+checks from a disabled mode path.
+
+It is FORBIDDEN to:
+
+- Run grouped-path prerequisite checks when grouped mode is disabled and then
+  publish grouped degradation reasons
+- Overwrite a healthy configured-safe publication mode with runtime fallback
+  reasons that only apply to grouped delivery
+- Evaluate readiness/admission against diagnostics generated from an inactive
+  strategy path
+
+Required pattern:
+
+1. Gate by configured mode first.
+2. Execute only prerequisites for that mode.
+3. Publish diagnostics reason codes that are valid for the active mode only.
+
+### 1.4.11 Admission Planning Must Consume the Full Candidate Set
+
+For control-plane provisioning (table bootstrap, split child provisioning,
+rebalance add/replace), admission decisions must be made against a candidate
+pool, not a pre-truncated first target.
+
+It is FORBIDDEN to:
+
+- Pre-slice target nodes to the requested replica count before admission checks
+- Fail the whole provisioning step on the first candidate denial when other
+  candidates exist
+- Defer obvious "no admissible cohort" states into long timeout waits
+
+Required pattern:
+
+1. Discover ordered candidate nodes first.
+2. Evaluate canonical admission owner (`storageAdmissionService`) per candidate
+   until the required minimum cohort is satisfiable.
+3. Treat one denied candidate as a rejected candidate, not a global abort,
+   unless no candidate cohort can satisfy the minimum.
+4. If the minimum cohort cannot be satisfied after candidate evaluation, fail
+   immediately with structured rejection diagnostics.
+
+### 1.4.12 Readiness Must Reconcile Lease State with Live Transport
+
+Node readiness decisions MUST NOT be driven by one stale signal (for example
+observer-side lease expiry) when stronger live transport evidence is available.
+
+It is FORBIDDEN to:
+
+- Classify a node as unhealthy solely because `ready_lease_expires_at` is older
+  than local wall clock while transport still reports the node connected
+- Maintain separate readiness semantics per consumer (dispatch, rebalance,
+  admission) for the same "cluster member healthy" decision
+- Treat stale heartbeat rows as healthy forever with no bounded freshness check
+
+Required pattern:
+
+1. Evaluate readiness via `ControlPlaneReadinessService` as the single owner.
+2. Combine lease/readiness-at-write evidence with live transport connectivity
+   when transport owner data is available.
+3. Apply bounded stale-heartbeat tolerance so propagation lag is tolerated but
+   indefinite stale rows are rejected.
+4. Emit explicit reason codes from the canonical readiness snapshot used by
+   admission/dispatch/rebalance decisions.
+5. Internal topology consumers (dispatch, rebalance, split admission, storage
+   admission) share the `repairEligible` dimension; routing and benchmark
+   consumers use `serveEligible`.
+
+### 1.4.13 CDC-Replicated Row Mutations Must Be Primary-Key Addressed
+
+System-table mutations that flow through CDC MUST be row-addressed by canonical
+primary key.
+
+It is FORBIDDEN to:
+
+- Run set-based `UPDATE` / `DELETE` mutations on CDC-propagated system tables
+  using non-primary predicates as the primary write path
+- Depend on SQL parser reconstruction of primary keys from non-key predicates
+  (for example `operation_id`, `status`, range predicates) to make CDC payloads
+  valid
+- Use one broad mutation to represent multiple row lifecycle transitions when
+  CDC/cache propagation is row-scoped
+
+Required pattern:
+
+1. Query candidate rows first using read predicates.
+2. Transition each row by primary key (`... WHERE <pk> = ?`) via the canonical
+   mutation owner path.
+3. Keep one deterministic mutation shape for lifecycle transitions so CDC events
+   always carry the canonical row identity.
+4. If multiple rows qualify, apply per-row transitions (or an explicit
+   transaction wrapper that preserves row identity), not a single broad update.
+
 ### 1.5 Verification Checklist (run this before writing code)
 
 Before generating or modifying code, answer these questions:
@@ -196,8 +371,22 @@ Before generating or modifying code, answer these questions:
 8. Am I mixing row creation and row updates in the same code path? → Stop.
 9. Am I writing fields owned by another component? → Stop.
 10. Am I reconstructing authoritative write state from cache when an owner exists? → Stop.
+11. Am I overloading one field/status to represent multiple owner lifecycles
+    (claim, workflow, entity state)? → Stop.
+12. Did I define active/terminal status sets but bypass them in decision logic? → Stop.
+13. Am I publishing degraded diagnostics from a mode-specific path that is
+    disabled by current config? → Stop.
+14. Am I pre-truncating provisioning candidates or failing on the first denied
+    candidate instead of evaluating the full admissible cohort? → Stop.
+15. Am I classifying node readiness from lease expiry alone while ignoring
+    canonical transport/readiness-owner evidence? → Stop.
+16. Am I mutating CDC-replicated system rows with broad non-primary predicates
+    instead of primary-key-addressed row transitions? → Stop.
+17. Am I fixing a repeated control-plane problem locally instead of routing it
+    through a shared higher-order primitive (authoritative view, eligibility
+    snapshot, operation lane, workflow step runner, timeout policy)? → Stop.
 
-If the answer to any of 4/5/6/7/8/9/10 is yes, you are violating this contract.
+If the answer to any of 4/5/6/7/8/9/10/11/12/13/14/15/16/17 is yes, you are violating this contract.
 
 ### 1.5.1 Owner Wiring and Fallback Elimination Procedure
 
@@ -243,6 +432,20 @@ path.
 - Broad polling loops are recovery-only tools. They MUST NOT be the steady-state
   primary progression mechanism.
 
+### 1.6.1 Topology Workflow Owner Map
+
+Topology-changing workflows have fixed ownership boundaries:
+
+- `RebalanceCoordinator` is the only writer of owner-managed
+  `replica_operations` workflow fields.
+- `ManagedSplitWorkflow` is the only durable owner of split lifecycle phase
+  transitions from admission through cleanup.
+- Executors such as `ReplicaHandler` and `PartitionService` are participants.
+  They emit typed acknowledgements or outcomes and MUST NOT persist owner-owned
+  phase transitions directly.
+- Cache visibility, timer age, or incidental row observation MUST NOT be used
+  as proof that an executor-owned phase completed.
+
 ### 1.7 Durable Workflow + Transaction Boundary Rule
 
 Topology-changing operations MUST use one durable monotonic workflow contract
@@ -252,7 +455,10 @@ and one transactional contract.
   reason, and timestamp.
 - A transition that requires atomic multi-row authoritative updates MUST commit
   through the shared `DistributedTransactionCoordinator`.
+- Executor-owned phase progression requires durable participant
+  acknowledgement before the owner advances the workflow.
 - Do not implement ad-hoc cross-owner write ordering to emulate atomicity.
+- Do not retain sequential fallback branches for atomic topology cut points.
 - Do not create a second workflow engine for control-plane operations when
   `DurableWorkflowCoordinator` already owns the workflow contract.
 
@@ -267,8 +473,56 @@ semantics.
   explicit recovery sweeps, or diagnostics reconciliation.
 - A single decision path MUST NOT mix cache and SQL fallbacks for the same
   semantic meaning.
+- Cache divergence recovery MUST re-enter the same owner-key reconcile queue
+  rather than a direct mutation fallback path.
+- Cache visibility MUST NOT complete an executor-owned topology phase on its
+  own.
 - Cache/authoritative divergence must be surfaced as typed diagnostics and
   invariants, not hidden by silent fallback behavior.
+
+### 1.8.1 Higher-Order Control-Plane Building Blocks Are Mandatory
+
+When control-plane logic becomes hard to reason about, the required fix is to
+raise the abstraction level, not to scatter more one-off line fixes across
+workflow code.
+
+It is FORBIDDEN to:
+
+- Re-implement cache read, authoritative read, retry, ownership, timeout, or
+  eligibility logic inside individual workflows
+- Encode control-plane invariants as ad-hoc booleans, maps, or local helper
+  branches per feature
+- Treat timeouts as opaque operational noise instead of missing progress
+  invariants with typed ownership
+- Add per-callsite single-flight, retry, or readiness interpretations when a
+  shared owner primitive already exists or should exist
+
+Required building blocks for topology and control-plane work:
+
+1. `AuthoritativeControlPlaneView`
+   One owner for authoritative node/service/system-table reads, including
+   freshness evidence and source diagnostics.
+2. `EligibilitySnapshot`
+   One immutable decision object for readiness/admission semantics so serve,
+   repair, split admission, and provisioning do not invent separate truth.
+3. `OperationLane`
+   One owner-key single-flight/concurrency primitive for reconcile and
+   progression work.
+4. `WorkflowStepRunner`
+   One durable workflow-step primitive for claim, execute, classify, and
+   persist transitions through `DurableWorkflowCoordinator`.
+5. `TimeoutPolicy`
+   One timeout contract for top-level budgets, nested allocations, and typed
+   timeout classification.
+
+Mandatory design rule:
+
+- New topology workflows and control-plane features MUST be composed from these
+  shared primitives first.
+- If an existing primitive is missing one capability, extend the primitive.
+  Do not fork the logic into a feature-local implementation.
+- If a repeated concern appears in more than one owner path, stop and extract
+  the shared building block before continuing feature work.
 
 ### 1.9 Timeout and Invariant Hard Rules
 
@@ -282,7 +536,8 @@ operational noise.
 - Exact-boundary timeout clusters (for example exactly 4s/6s/30s/60s) MUST be
   treated as hard bugs with typed classification.
 - Control-plane owners MUST emit structured invariant results. Hard invariant
-  breaches MUST fail deterministic test gates.
+  breaches MUST fail deterministic test gates and remain serializable into
+  diagnostics and harness artifacts.
 
 ---
 
@@ -485,3 +740,51 @@ something, take a step back and consider whether changing the local
 architecture in some way would make your current task easier while still
 adhering to all other rules.
 In that case, bring it to attention and come with a suggestion instead of just plodding on.
+
+## 7. User-Facing Model Discipline
+
+The platform should preserve a small external ontology.
+
+7.1 Tables and Services Are Primary User Concepts
+
+Prefer expressing durable user state as tables.
+
+Prefer expressing durable user execution as services.
+
+Do not introduce new user-visible entity categories unless explicitly required by the platform design.
+
+7.2 Internal Machinery Must Not Leak
+
+It is FORBIDDEN to expose internal implementation concepts as ordinary user-facing control surfaces unless explicitly intended by the architecture.
+
+Examples of internal machinery include:
+
+partitions
+
+replica operations
+
+leader election
+
+rebalance workflows
+
+message groups
+
+cache hydration
+
+control-plane reconcile queues
+
+Users may observe diagnostics about these mechanisms, but must not be required to manage them directly in ordinary workflows.
+
+7.3 Policy Over Direct Physical Control
+
+Expose desired behavior through policies and declarative intent.
+
+Do not add APIs that require users to directly assign partitions, leaders, replicas, or rebalance targets.
+
+If a new API directly manipulates internal placement or lifecycle machinery, treat it as an architectural exception and justify it explicitly.
+
+7.4 Runtime Variety Must Preserve One Service Concept
+
+Different runtime kinds (native_js, wasm_component, oci_container) are implementation choices for services, not separate user-visible ontological classes.
+
+Do not fragment the service model into multiple incompatible conceptual categories unless explicitly designed and documented as such.

@@ -15,8 +15,19 @@
 
 import {MessageRouter} from '../../transport/message-router.js';
 import {LoggingService} from '../../logging/logging-service.js';
+import {NodeService} from '../../node/node-service.js';
 import {DependencyError} from '../bootstrap-errors.js';
-import {NUM, SUBSYSTEM} from '../../constants/index.js';
+import {
+  ADDRESS,
+  COLUMN,
+  NUM,
+  PROTOCOL,
+  SUBSYSTEM,
+  TABLES,
+  TYPEOF,
+} from '../../constants/index.js';
+import {ENTRYPOINT_DEFAULT} from '../../constants/entrypoint.js';
+import {ENDPOINT_STATUS, TRANSPORT_TYPE} from '../../constants/transport-types.js';
 
 /**
  * Subsystem identifier for logging.
@@ -40,6 +51,72 @@ const ERROR_MSG = Object.freeze({
   NODE_ID_REQUIRED: 'nodeId is required for MessageRouterSetup',
   initFailed: (message) => `MessageRouter initialization failed: ${message}`,
 });
+
+function deriveWsAddressFromNodeAddress(nodeAddress) {
+  if (!nodeAddress || typeof nodeAddress !== TYPEOF.STRING) {
+    return null;
+  }
+  if (nodeAddress.startsWith(PROTOCOL.WS) ||
+      nodeAddress.startsWith(PROTOCOL.WSS)) {
+    return nodeAddress;
+  }
+
+  const colonIndex = nodeAddress.lastIndexOf(ADDRESS.PORT_SEPARATOR);
+  if (colonIndex <= NUM.ZERO) {
+    return null;
+  }
+
+  const hostname = nodeAddress.substring(NUM.ZERO, colonIndex);
+  const restPort = Number(nodeAddress.substring(colonIndex + NUM.ONE));
+  if (!hostname || !Number.isFinite(restPort) || restPort <= NUM.ZERO) {
+    return null;
+  }
+
+  const wsPort = restPort + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET;
+  return `${PROTOCOL.WS}${hostname}${ADDRESS.PORT_SEPARATOR}${wsPort}`;
+}
+
+function createNodeWebSocketAddressResolver() {
+  return (targetNodeId) => {
+    if (!targetNodeId) {
+      return null;
+    }
+
+    const nodeService = NodeService.getInstance();
+    const cache = nodeService.getReadOnlySystemTableCache() ||
+      nodeService.getSystemTableCache() ||
+      null;
+    if (!cache) {
+      return null;
+    }
+
+    const endpointRows = typeof cache.filter === TYPEOF.FUNCTION ?
+      cache.filter(TABLES.NODE_ENDPOINTS, (row) => {
+        return row?.[COLUMN.NODE_ID] === targetNodeId &&
+          row?.[COLUMN.STATUS] === ENDPOINT_STATUS.ACTIVE &&
+          row?.[COLUMN.TRANSPORT_TYPE] === TRANSPORT_TYPE.WEBSOCKET &&
+          typeof row?.[COLUMN.ADDRESS] === TYPEOF.STRING &&
+          row[COLUMN.ADDRESS].length > NUM.ZERO;
+      }) :
+      [];
+    if (endpointRows.length > NUM.ZERO) {
+      const sorted = [...endpointRows].sort((left, right) => {
+        return Number(left?.[COLUMN.PRIORITY] || NUM.ZERO) -
+          Number(right?.[COLUMN.PRIORITY] || NUM.ZERO);
+      });
+      const endpointAddress =
+        sorted[NUM.ZERO]?.[COLUMN.ADDRESS] || null;
+      return deriveWsAddressFromNodeAddress(endpointAddress) ||
+        endpointAddress;
+    }
+
+    const nodeRow = typeof cache.get === TYPEOF.FUNCTION ?
+      cache.get(TABLES.NODES, targetNodeId) :
+      null;
+    const nodeAddress = nodeRow?.[COLUMN.NODE_ADDRESS] || null;
+    return deriveWsAddressFromNodeAddress(nodeAddress);
+  };
+}
 
 /**
  * Shared message router setup used by both bootstrap paths.
@@ -95,6 +172,9 @@ class MessageRouterSetup {
       const match = address.match(/^([^/]+)\//);
       return match ? match[NUM.ONE] : null;
     });
+    messageRouter.setNodeAddressResolver(
+      createNodeWebSocketAddressResolver(),
+    );
 
     // Initialize the router
     // If wsPort is specified, start server and establish self-connection

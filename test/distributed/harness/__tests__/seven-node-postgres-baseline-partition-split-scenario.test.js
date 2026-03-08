@@ -13,8 +13,8 @@ describe('seven-node-postgres-baseline-partition-split scenario', () => {
     let baselineRunCount = 0;
     const originalBenchmarkConfig = {
       tableName: 'benchmark_partition_split_events',
-      loadDuration: '150s',
-      durationSeconds: 150,
+      loadDuration: '75s',
+      durationSeconds: 75,
       clients: 7,
     };
 
@@ -63,7 +63,7 @@ describe('seven-node-postgres-baseline-partition-split scenario', () => {
             baselineRunCount += 1;
             const benchmarkConfig = activeCluster?._config?.benchmark || {};
             assert.equal(benchmarkConfig.clients, 7);
-            assert.equal(benchmarkConfig.loadDuration, '150s');
+            assert.equal(benchmarkConfig.loadDuration, '75s');
             assert.equal(
               benchmarkConfig.tableName,
               'benchmark_partition_split_events',

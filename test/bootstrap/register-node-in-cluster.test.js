@@ -66,6 +66,36 @@ test('registerNodeInCluster() - should execute UPSERT writes with correct data',
   t.equal(endpointCall.rowData.status, ENDPOINT_STATUS.ACTIVE, 'should set status to active');
 });
 
+test('registerNodeInCluster() - should canonicalize raw node address to websocket endpoint', async (t) => {
+  const upsertCalls = [];
+  const mockCDCService = {
+    sqlQueryEngine: {},
+    upsertSystemTableRow: async (tableName, rowData) => {
+      upsertCalls.push({tableName, rowData});
+      return {success: true};
+    },
+  };
+
+  const service = new NodeJoiningService({
+    nodeId: 'test-node-canonical-endpoint',
+    nodeAddress: 'joiner-host:8080',
+    seedNodeAddress: 'ws://seed:8000',
+  });
+  service.cdcIntegrationService = mockCDCService;
+
+  await service.registerNodeInCluster();
+
+  const endpointCall = upsertCalls.find((call) =>
+    call.tableName === TABLES.NODE_ENDPOINTS,
+  );
+  t.ok(endpointCall, 'should upsert node_endpoints table');
+  t.equal(
+    endpointCall?.rowData?.address,
+    'ws://joiner-host:8082',
+    'join-time endpoint registration should publish canonical websocket address',
+  );
+});
+
 test('registerNodeInCluster() - should throw error if query fails', async (t) => {
   const mockCDCService = {
     sqlQueryEngine: {},

@@ -19,6 +19,7 @@ import {
   REBALANCER_ENTITY_TYPE,
   REBALANCER_LOG_MSG,
   REBALANCER_MOVE_TYPE,
+  MOVE_PLANNER_ERROR_MSG,
   REBALANCER_SUBSYSTEM,
 } from './rebalancer-constants.js';
 import {
@@ -102,6 +103,8 @@ class MovePlanner {
     this.accountingService = options.accountingService || null;
     this.storagePressureBehavior =
       options.storagePressureBehavior || null;
+    this.strictOwnerDependencies =
+      options.strictOwnerDependencies === true;
 
     // Logging
     const loggingService = LoggingService.getInstance();
@@ -158,6 +161,13 @@ class MovePlanner {
     if (!this.accountingService ||
         typeof this.accountingService.estimateReplicaBytes !==
           'function') {
+      if (this.strictOwnerDependencies) {
+        throw new Error(
+          !this.accountingService ?
+            MOVE_PLANNER_ERROR_MSG.STORAGE_ACCOUNTING_REQUIRED :
+            MOVE_PLANNER_ERROR_MSG.STORAGE_ACCOUNTING_ESTIMATE_REQUIRED,
+        );
+      }
       return NUM.ZERO;
     }
     return this.accountingService.estimateReplicaBytes({
@@ -189,7 +199,20 @@ class MovePlanner {
       capacityFilterApplied: false,
     };
 
-    if (!this.storageAdmissionService || estimatedBytes <= NUM.ZERO) {
+    if (estimatedBytes <= NUM.ZERO) {
+      diagnostics.feasibleCount = nodes.length;
+      return {feasibleNodes: nodes, diagnostics};
+    }
+
+    if (!this.storageAdmissionService ||
+        typeof this.storageAdmissionService.checkAdd !== 'function') {
+      if (this.strictOwnerDependencies) {
+        throw new Error(
+          !this.storageAdmissionService ?
+            MOVE_PLANNER_ERROR_MSG.STORAGE_ADMISSION_REQUIRED :
+            MOVE_PLANNER_ERROR_MSG.STORAGE_ADMISSION_CHECK_ADD_REQUIRED,
+        );
+      }
       diagnostics.feasibleCount = nodes.length;
       return {feasibleNodes: nodes, diagnostics};
     }
@@ -1029,7 +1052,20 @@ class MovePlanner {
    * @return {Promise<Array<Object>>} Filtered/annotated moves.
    */
   async applyPressureGating(moves) {
-    if (!this.storagePressureBehavior || moves.length === NUM.ZERO) {
+    if (moves.length === NUM.ZERO) {
+      return moves;
+    }
+
+    if (!this.storagePressureBehavior ||
+        typeof this.storagePressureBehavior.shouldAllowMove !==
+          'function') {
+      if (this.strictOwnerDependencies) {
+        throw new Error(
+          !this.storagePressureBehavior ?
+            MOVE_PLANNER_ERROR_MSG.STORAGE_PRESSURE_BEHAVIOR_REQUIRED :
+            MOVE_PLANNER_ERROR_MSG.STORAGE_PRESSURE_BEHAVIOR_CHECK_REQUIRED,
+        );
+      }
       return moves;
     }
 

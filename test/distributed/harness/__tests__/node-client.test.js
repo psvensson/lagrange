@@ -169,6 +169,15 @@ test('NodeClient fetchControlSnapshot uses local snapshot query path only', asyn
       inFlightCount: 0,
       statusHistogram: {},
       partitionGroupInFlight: {},
+      operationTimelineById: {
+        'op-1': [{
+          eventType: 'state',
+          step: 'CREATE_REPLICA',
+          status: 'creating',
+          timestampMs: 1234,
+          inFlight: true,
+        }],
+      },
     },
   };
   let localSnapshotCalls = ZERO;

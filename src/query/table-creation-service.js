@@ -31,9 +31,12 @@ class TableCreationService {
    *   provisioning callback.
    */
   constructor(options = {}) {
-    this.systemCache = options.systemCache || null;
+    this.systemCache = null;
     this.cdcIntegrationService = options.cdcIntegrationService || null;
     this.partitionSplitMergeManager = null;
+    this.tablePolicyByTableId = new Map();
+    this.partitionSizeByPartitionId = new Map();
+    this.cachePolicyChangeListener = null;
     this.partitionProvisioner =
       typeof options.partitionProvisioner === 'function' ?
         options.partitionProvisioner :
@@ -45,6 +48,7 @@ class TableCreationService {
       config.get(CONFIG_KEY.PARTITION_DEFAULT_REPLICA_COUNT) || NUM.THREE;
 
     this.logger = this.initLogger();
+    this.setSystemCache(options.systemCache || null);
     this.setPartitionSplitMergeManager(options.partitionSplitMergeManager || null);
   }
 
@@ -70,7 +74,12 @@ class TableCreationService {
    * @param {Object} cache - System table cache.
    */
   setSystemCache(cache) {
-    this.systemCache = cache;
+    if (this.systemCache === cache) {
+      return;
+    }
+    this.detachCachePolicyListener();
+    this.systemCache = cache || null;
+    this.attachCachePolicyListener();
   }
 
   /**
@@ -89,9 +98,260 @@ class TableCreationService {
     if (this.partitionSplitMergeManager === manager) {
       return;
     }
+    this.detachCachePolicyListener();
     this.stopPeriodicSplitMergeEvaluation();
     this.partitionSplitMergeManager = manager || null;
     this.startPeriodicSplitMergeEvaluation();
+    this.attachCachePolicyListener();
+  }
+
+  /**
+   * Attach cache listener that triggers split/merge evaluation when table
+   * policy values change.
+   * @private
+   */
+  attachCachePolicyListener() {
+    const cache = this.systemCache;
+    const manager = this.partitionSplitMergeManager;
+    if (!cache ||
+        typeof cache.onCacheChange !== 'function' ||
+        typeof cache.getAll !== 'function' ||
+        !manager ||
+        typeof manager.evaluateAllPartitions !== 'function' &&
+        typeof manager.requestEvaluation !== 'function') {
+      this.tablePolicyByTableId.clear();
+      this.partitionSizeByPartitionId.clear();
+      return;
+    }
+
+    this.seedTablePolicyCache(cache);
+    this.seedPartitionMetricsCache(cache);
+    this.cachePolicyChangeListener = (tableName, operation, record) => {
+      this.onSystemTableCacheChange(tableName, operation, record);
+    };
+    cache.onCacheChange(this.cachePolicyChangeListener);
+  }
+
+  /**
+   * Detach previously registered cache policy listener.
+   * @private
+   */
+  detachCachePolicyListener() {
+    const cache = this.systemCache;
+    if (cache &&
+        typeof cache.offCacheChange === 'function' &&
+        this.cachePolicyChangeListener) {
+      cache.offCacheChange(this.cachePolicyChangeListener);
+    }
+    this.cachePolicyChangeListener = null;
+    this.tablePolicyByTableId.clear();
+    this.partitionSizeByPartitionId.clear();
+  }
+
+  /**
+   * Seed known table policy values from current cache rows.
+   * @param {Object} cache
+   * @private
+   */
+  seedTablePolicyCache(cache) {
+    this.tablePolicyByTableId.clear();
+    const tableRows = cache.getAll(TABLES.TABLES);
+    if (!Array.isArray(tableRows)) {
+      return;
+    }
+    for (const row of tableRows) {
+      const tableId = this.resolveTableId(row);
+      const policyValue = this.resolveTablePolicyValue(row);
+      if (!tableId || policyValue === null) {
+        continue;
+      }
+      this.tablePolicyByTableId.set(tableId, policyValue);
+    }
+  }
+
+  /**
+   * Seed known partition sizes from current cache rows.
+   * @param {Object} cache
+   * @private
+   */
+  seedPartitionMetricsCache(cache) {
+    this.partitionSizeByPartitionId.clear();
+    const partitionRows = cache.getAll(TABLES.PARTITIONS);
+    if (!Array.isArray(partitionRows)) {
+      return;
+    }
+    for (const row of partitionRows) {
+      const partitionId = this.resolvePartitionId(row);
+      const partitionSize = this.resolvePartitionSizeValue(row);
+      if (!partitionId || partitionSize === null) {
+        continue;
+      }
+      this.partitionSizeByPartitionId.set(partitionId, partitionSize);
+    }
+  }
+
+  /**
+   * Resolve canonical table ID from a row.
+   * @param {Object} row
+   * @return {string|null}
+   * @private
+   */
+  resolveTableId(row) {
+    const tableId = row?.table_id ?? row?.tableId ?? null;
+    return typeof tableId === 'string' && tableId.length > 0 ?
+      tableId :
+      null;
+  }
+
+  /**
+   * Resolve normalized table policy value from a row.
+   * @param {Object} row
+   * @return {string|null}
+   * @private
+   */
+  resolveTablePolicyValue(row) {
+    const value = row?.table_policies ?? row?.tablePolicies ?? null;
+    if (value === null || value === undefined) {
+      return null;
+    }
+    if (typeof value === 'string') {
+      return value;
+    }
+    try {
+      return JSON.stringify(value);
+    } catch (_error) {
+      return String(value);
+    }
+  }
+
+  /**
+   * Resolve canonical partition ID from a row.
+   * @param {Object} row
+   * @return {string|null}
+   * @private
+   */
+  resolvePartitionId(row) {
+    const partitionId = row?.partition_id ?? row?.partitionId ?? null;
+    return typeof partitionId === 'string' && partitionId.length > 0 ?
+      partitionId :
+      null;
+  }
+
+  /**
+   * Resolve normalized partition size from a row.
+   * @param {Object} row
+   * @return {number|null}
+   * @private
+   */
+  resolvePartitionSizeValue(row) {
+    const sizeBytes = Number(row?.size_bytes ?? row?.sizeBytes);
+    return Number.isFinite(sizeBytes) && sizeBytes >= 0 ?
+      sizeBytes :
+      null;
+  }
+
+  /**
+   * Handle system cache change notifications.
+   * @param {string} tableName
+   * @param {string} operation
+   * @param {Object} record
+   * @private
+   */
+  onSystemTableCacheChange(tableName, operation, record) {
+    if (operation !== 'UPDATE' && operation !== 'INSERT') {
+      return;
+    }
+
+    if (tableName === TABLES.TABLES) {
+      this.handleTablePolicyCacheChange(operation, record);
+      return;
+    }
+
+    if (tableName === TABLES.PARTITIONS) {
+      this.handlePartitionMetricsCacheChange(operation, record);
+    }
+  }
+
+  /**
+   * Handle split/merge trigger decisions for table policy cache changes.
+   * @param {string} operation
+   * @param {Object} record
+   * @private
+   */
+  handleTablePolicyCacheChange(operation, record) {
+    const tableId = this.resolveTableId(record);
+    const policyValue = this.resolveTablePolicyValue(record);
+    if (!tableId || policyValue === null) {
+      return;
+    }
+
+    const previousPolicyValue = this.tablePolicyByTableId.get(tableId);
+    this.tablePolicyByTableId.set(tableId, policyValue);
+    if (previousPolicyValue === policyValue) {
+      return;
+    }
+
+    this.logger.debug(QUERY_LOG_MSG.TABLE_POLICY_CHANGE_TRIGGER_SPLIT_EVAL, {
+      tableId,
+      operation,
+    });
+    this.requestSplitMergeEvaluation({
+      reasonCode: 'table_policy_changed',
+    });
+  }
+
+  /**
+   * Handle split/merge trigger decisions for partition size cache changes.
+   * @param {string} operation
+   * @param {Object} record
+   * @private
+   */
+  handlePartitionMetricsCacheChange(operation, record) {
+    const partitionId = this.resolvePartitionId(record);
+    const partitionSize = this.resolvePartitionSizeValue(record);
+    if (!partitionId || partitionSize === null) {
+      return;
+    }
+
+    const previousPartitionSize =
+      this.partitionSizeByPartitionId.get(partitionId);
+    this.partitionSizeByPartitionId.set(partitionId, partitionSize);
+    if (previousPartitionSize === partitionSize) {
+      return;
+    }
+
+    this.logger.debug(
+      QUERY_LOG_MSG.TABLE_PARTITION_SIZE_CHANGE_TRIGGER_SPLIT_EVAL,
+      {
+        partitionId,
+        operation,
+        previousPartitionSize,
+        partitionSize,
+      },
+    );
+    this.requestSplitMergeEvaluation({
+      reasonCode: 'partition_size_changed',
+      partitionId,
+    });
+  }
+
+  /**
+   * Request split/merge evaluation through the manager's canonical trigger path.
+   * Falls back to direct evaluation when the manager does not expose the
+   * coalesced request API yet.
+   * @param {Object} [context]
+   * @private
+   */
+  requestSplitMergeEvaluation(context = {}) {
+    const manager = this.partitionSplitMergeManager;
+    if (!manager) {
+      return;
+    }
+    if (typeof manager.requestEvaluation === 'function') {
+      manager.requestEvaluation(context);
+      return;
+    }
+    void this.evaluateSplitMergeLifecycle();
   }
 
   /**
@@ -135,6 +395,7 @@ class TableCreationService {
     // Check if table already exists
     if (this.tableExists(tableName)) {
       if (ifNotExists) {
+        await this.reconcileExistingInitialPartition(tableName);
         this.logger.debug(QUERY_LOG_MSG.TABLE_EXISTS_SKIP, {tableName});
         return {
           success: true,
@@ -331,6 +592,7 @@ class TableCreationService {
    * @return {Promise<void>}
    */
   async shutdown() {
+    this.detachCachePolicyListener();
     this.stopPeriodicSplitMergeEvaluation();
   }
 
@@ -427,6 +689,106 @@ class TableCreationService {
     }
 
     return false;
+  }
+
+  /**
+   * Re-run initial partition provisioning for existing CREATE TABLE IF NOT EXISTS
+   * retries when metadata was created before provisioning finished.
+   * @param {string} tableName
+   * @return {Promise<void>}
+   * @private
+   */
+  async reconcileExistingInitialPartition(tableName) {
+    const existingTable = this.getTableRecord(tableName);
+    if (!existingTable) {
+      return;
+    }
+
+    const tableId = existingTable.table_id || existingTable.tableId || null;
+    if (!tableId) {
+      return;
+    }
+    const partitionId = `${tableId}-p1`;
+    const existingPartition = this.getPartitionRecord(partitionId);
+    if (!existingPartition) {
+      return;
+    }
+
+    const replicaCount = Number(
+      existingPartition.replica_count ?? existingPartition.replicaCount,
+    );
+    await this.provisionInitialPartition({
+      tableId,
+      tableName,
+      tableMetadata: existingTable,
+      partitionId,
+      partitionMetadata: existingPartition,
+      replicaCount: Number.isInteger(replicaCount) && replicaCount > 0 ?
+        replicaCount :
+        this.defaultReplicaCount,
+    });
+  }
+
+  /**
+   * Resolve one table metadata row from cache.
+   * @param {string} tableName
+   * @return {Object|null}
+   * @private
+   */
+  getTableRecord(tableName) {
+    if (!this.systemCache) {
+      return null;
+    }
+
+    try {
+      if (typeof this.systemCache.find === 'function') {
+        return this.systemCache.find(TABLES.TABLES, (table) =>
+          table?.table_name === tableName || table?.tableName === tableName,
+        ) || null;
+      }
+      if (typeof this.systemCache.getAll === 'function') {
+        const tables = this.systemCache.getAll(TABLES.TABLES) || [];
+        return tables.find((table) =>
+          table?.table_name === tableName || table?.tableName === tableName,
+        ) || null;
+      }
+    } catch {
+      return null;
+    }
+
+    return null;
+  }
+
+  /**
+   * Resolve one partition metadata row from cache.
+   * @param {string} partitionId
+   * @return {Object|null}
+   * @private
+   */
+  getPartitionRecord(partitionId) {
+    if (!this.systemCache || !partitionId) {
+      return null;
+    }
+
+    try {
+      if (typeof this.systemCache.find === 'function') {
+        return this.systemCache.find(TABLES.PARTITIONS, (partition) =>
+          partition?.partition_id === partitionId ||
+          partition?.partitionId === partitionId,
+        ) || null;
+      }
+      if (typeof this.systemCache.getAll === 'function') {
+        const partitions = this.systemCache.getAll(TABLES.PARTITIONS) || [];
+        return partitions.find((partition) =>
+          partition?.partition_id === partitionId ||
+          partition?.partitionId === partitionId,
+        ) || null;
+      }
+    } catch {
+      return null;
+    }
+
+    return null;
   }
 
   /**

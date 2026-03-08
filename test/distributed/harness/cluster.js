@@ -1042,9 +1042,13 @@ class NodeHandle {
     }
 
     const {default: WebSocket} = await import('ws');
+    const laneQuery = encodeURIComponent(
+      String(lane || ADMIN_SOCKET_LANE_DEFAULT),
+    );
     const url =
       'ws://' + this.ip + ':' + this._adminApiPort +
-      '/api/admin/stream';
+      ADMIN_STREAM_PATH +
+      '?lane=' + laneQuery;
 
     const readyPromise = new Promise((resolve, reject) => {
       const ws = new WebSocket(url);
@@ -1164,11 +1168,20 @@ class NodeHandle {
     clearTimeout(pending.timeout);
 
     if (parsed.error) {
-      pending.reject(new Error(
+      const error = new Error(
         'Admin API ' + (pending.operationLabel || 'request') +
         ' failed for node ' +
         this.id + ' on lane ' + lane + ': ' + parsed.error,
-      ));
+      );
+      if (typeof parsed.errorCode === 'string' &&
+          parsed.errorCode.length > ZERO) {
+        error.code = parsed.errorCode.toLowerCase();
+      }
+      if (typeof parsed.hint === 'string' &&
+          parsed.hint.length > ZERO) {
+        error.hint = parsed.hint;
+      }
+      pending.reject(error);
       return;
     }
 

@@ -180,6 +180,7 @@ const CANCEL_WAIT_TIMEOUT_MS = 200;
 const ADMISSION_BACKOFF_MS = 30;
 const BREAKER_OWNER_NODE_CLIENT = 'node-client';
 const NODE_CLIENT_ERROR_CODE_CIRCUIT_OPEN = 'circuit_open';
+const NODE_CLIENT_ERROR_CODE_OPERATION = 'operation_error';
 
 /**
  * Create a mock node whose query method resolves immediately.
@@ -743,6 +744,53 @@ test('admission-control defers dispatch on circuit-open instead of counting oper
       assert.ok(
         metrics.attemptErrors > ZERO,
         'expected admission denials to be visible as attempt-level failures',
+      );
+    } finally {
+      run.cancel();
+    }
+  });
+
+test('admission-control treats load-lane serve-not-ready denials as admission signals',
+  async () => {
+    let admissionErrors = ZERO;
+    const nodes = [{
+      id: 'serve-not-ready-node',
+      breakerOwner: BREAKER_OWNER_NODE_CLIENT,
+      async query(_sql) {
+        admissionErrors++;
+        const error = new Error(
+          'Admin API query failed for node serve-not-ready-node on lane load: ' +
+            'serve not ready: load lane admission denied on node ' +
+            'serve-not-ready-node (serveEligible=false, reasons=' +
+            'cluster_member_unhealthy,control_plane_write_unhealthy)',
+        );
+        error.code = NODE_CLIENT_ERROR_CODE_OPERATION;
+        throw error;
+      },
+    }];
+
+    const gen = new LoadGenerator(nodes, {
+      opsPerSec: 200,
+      duration: 140,
+      admissionBackoffMs: ADMISSION_BACKOFF_MS,
+    });
+    const run = gen.start();
+    try {
+      const metrics = await run.waitComplete();
+      assert.ok(admissionErrors > ZERO, 'expected admission denials to occur');
+      assert.equal(
+        metrics.failed,
+        ZERO,
+        'expected serve-not-ready admission denials to avoid operation failures',
+      );
+      assert.equal(
+        metrics.errors,
+        ZERO,
+        'expected serve-not-ready admission denials to avoid operation errors',
+      );
+      assert.ok(
+        metrics.attemptErrors > ZERO,
+        'expected serve-not-ready admission denials to remain visible in attemptErrors',
       );
     } finally {
       run.cancel();

@@ -212,6 +212,62 @@ test('CDCGroupPropagationService uses safe mode when configured', async (t) => {
   t.end();
 });
 
+test('CDCGroupPropagationService keeps repair_only publication mode in safe mode ' +
+  'when grouped prerequisites are missing', async (t) => {
+  setupConfig(LATENCY_PROPAGATION_MODE.SAFE);
+  const cache = createTopologyCache({
+    nodes: [{
+      [COLUMN.NODE_ID]: 'node-a',
+    }],
+    groups: [
+      createGroupRow('g-2', 'node-b'),
+    ],
+    services: [
+      createMessageGroupServiceRow(
+        'mg-node-b',
+        'node-b',
+        'node-b/message-group/mg-node-b',
+        RAFT_ROLE.LEADER,
+      ),
+    ],
+  });
+  const source = createSourceMessageGroupService();
+  const service = new CDCGroupPropagationService({
+    nodeId: 'node-a',
+    systemTableCache: cache,
+    messageRouter: createMessageRouter([{acknowledged: true}]),
+    latencyTreeService: {
+      getRoutingOrder: () => ['g-2'],
+    },
+    nowFn: () => 2000,
+  });
+
+  service.initialize();
+  service.start();
+  const result = await service.propagateCDCEvent({
+    tableName: TABLES.NODES,
+    operation: 'UPDATE',
+    data: {[COLUMN.NODE_ID]: 'node-z'},
+    sourceMessageGroupService: source,
+  });
+
+  assert.equal(result.mode, CDC_GROUP_PROPAGATION_STATUS.SAFE);
+  assert.equal(result.fallbackReason, CDC_GROUP_PROPAGATION_REASON.CONFIG_SAFE_MODE);
+  const diagnostics = service.getPublicationModeDiagnostics();
+  assert.equal(
+    diagnostics.currentMode,
+    CDC_GROUP_PUBLICATION_MODE.REPAIR_ONLY,
+  );
+  assert.equal(
+    diagnostics.reasonCode,
+    CDC_GROUP_PROPAGATION_REASON.CONFIG_SAFE_MODE,
+  );
+
+  service.stop();
+  teardownConfig();
+  t.end();
+});
+
 test('CDCGroupPropagationService reports repair_only publication mode when ' +
   'safe mode is configured', async (t) => {
   setupConfig(LATENCY_PROPAGATION_MODE.SAFE);

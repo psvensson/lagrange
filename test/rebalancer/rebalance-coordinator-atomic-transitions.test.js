@@ -10,10 +10,23 @@ import {
   DistributedTransactionCoordinator,
   TRANSACTION_STATUS,
 } from '../../src/query/distributed/distributed-transaction-coordinator.js';
+import {
+  REBALANCE_COORDINATOR_ERROR_MSG,
+} from '../../src/rebalancer/rebalancer-constants.js';
 
 const MOCK_NODE_ID = 'node-local';
 
 function createMinimalCoordinator(overrides = {}) {
+  const transactionCoordinator =
+    Object.prototype.hasOwnProperty.call(overrides, 'transactionCoordinator') ?
+      overrides.transactionCoordinator :
+      new DistributedTransactionCoordinator({
+        beginParticipant: async () => {},
+        prepareParticipant: async () => {},
+        commitParticipant: async () => {},
+        rollbackParticipant: async () => {},
+        now: () => 1000,
+      });
   return new RebalanceCoordinator({
     nodeId: MOCK_NODE_ID,
     systemTableCache: {get() { return null; }},
@@ -29,6 +42,7 @@ function createMinimalCoordinator(overrides = {}) {
         return {success: true, rows: [], changes: 1};
       },
     },
+    transactionCoordinator,
     enableTimeouts: false,
     ...overrides,
   });
@@ -248,6 +262,41 @@ test('executeAtomicTransition rolls back on persist failure',
       await coordinator.shutdown();
     }
   });
+
+test('executeAtomicTransition fails closed when transaction coordinator ' +
+  'is absent', async (t) => {
+  let persistCalled = false;
+  const coordinator = createMinimalCoordinator({
+    transactionCoordinator: null,
+    sqlQueryEngine: {
+      async executeQuery() {
+        persistCalled = true;
+        return {success: true, rows: [], changes: 1};
+      },
+    },
+  });
+  coordinator.initialize();
+
+  try {
+    const operation = createTestOperation();
+
+    await t.rejects(
+      coordinator.updateStep(operation, WORKFLOW_STEP.SENDING),
+      {
+        message:
+          REBALANCE_COORDINATOR_ERROR_MSG.TRANSACTION_COORDINATOR_REQUIRED,
+      },
+      'atomic workflow transition must fail closed without a transaction coordinator',
+    );
+    t.equal(
+      persistCalled,
+      false,
+      'row persistence must not run when the transaction coordinator is missing',
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
 
 test('idempotency check prevents duplicate step transition',
   async (t) => {

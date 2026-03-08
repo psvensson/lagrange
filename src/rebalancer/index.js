@@ -62,3 +62,18 @@ export {StoragePressureBehavior} from './storage-pressure-behavior.js';
 export {StorageCapacityMetrics} from './storage-capacity-metrics.js';
 // Storage capacity migration
 export {StorageCapacityMigration} from './storage-capacity-migration.js';
+
+// Executor outcome emission (typed outcomes for single-writer cutover)
+export {
+  ExecutorOutcomeEmitter,
+  buildExecutorOutcome,
+  OUTCOME_EVENT_NAME,
+} from './executor-outcome-emitter.js';
+export {
+  EXECUTOR_OUTCOME_TYPE,
+  EXECUTOR_OUTCOME_FIELD,
+  EXECUTOR_OUTCOME_ACTION,
+  EXECUTOR_OUTCOME_ACTION_MAP,
+  EXECUTOR_OUTCOME_LOG_MSG,
+} from './executor-outcome-constants.js';
+

@@ -16,6 +16,7 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {MovePlanner} from '../../src/rebalancer/move-planner.js';
 import {NUM} from '../../src/constants/index.js';
 import {
+  MOVE_PLANNER_ERROR_MSG,
   PLACEMENT_DEGRADED_REASON,
   REBALANCER_ENTITY_TYPE,
 } from '../../src/rebalancer/rebalancer-constants.js';
@@ -135,9 +136,10 @@ test('MovePlanner capacity gating', async (t) => {
       t.ok(!result.targetNodes.includes('n2'), 'n2 should be excluded');
     });
 
-  // --- Req 5.1: All nodes pass when no admission service ---
+  // --- Owner dependency enforcement: fail closed when owner missing ---
 
-  await t.test('passes all nodes when admission service absent',
+  await t.test('fails closed when admission service owner is absent ' +
+    'for active planning',
     async (t) => {
       const nodes = [
         {node_id: 'n1', cpu_usage_percent: 10},
@@ -149,6 +151,8 @@ test('MovePlanner capacity gating', async (t) => {
         entityId: 'p1',
         entityType: REBALANCER_ENTITY_TYPE.PARTITION,
         moveStateProvider: makeMoveStateProvider(nodes),
+        strictOwnerDependencies: true,
+        accountingService: makeAccountingService(NUM.BYTES_PER_MIB),
       });
 
       const policy = {
@@ -156,11 +160,11 @@ test('MovePlanner capacity gating', async (t) => {
         placementConstraints: {considerCpuLoad: true},
       };
 
-      const result = await planner.calculateTargetState([], policy);
-
-      t.equal(result.targetNodes.length, NUM.THREE,
-        'all nodes should be placed');
-      t.equal(result.degraded, false, 'should not be degraded');
+      await t.rejects(
+        planner.calculateTargetState([], policy),
+        new RegExp(MOVE_PLANNER_ERROR_MSG.STORAGE_ADMISSION_REQUIRED),
+        'planner must fail closed instead of passing all nodes',
+      );
     });
 
   // --- Req 5.3: insufficient_capacity vs insufficient_nodes ---
@@ -309,8 +313,8 @@ test('MovePlanner capacity gating', async (t) => {
         'hard_pressure_exceeded rejections should be 1');
     });
 
-  await t.test('capacityDiagnostics shows filter not applied when ' +
-    'no admission service', async (t) => {
+  await t.test('fails closed when accounting owner is absent for ' +
+    'active planning', async (t) => {
     const nodes = [
       {node_id: 'n1', cpu_usage_percent: 10},
     ];
@@ -319,18 +323,17 @@ test('MovePlanner capacity gating', async (t) => {
       entityId: 'p1',
       entityType: REBALANCER_ENTITY_TYPE.PARTITION,
       moveStateProvider: makeMoveStateProvider(nodes),
+      strictOwnerDependencies: true,
+      storageAdmissionService: makeAdmissionService({}),
     });
 
     const policy = {targetReplicaCount: NUM.ONE};
 
-    const result = await planner.calculateTargetState([], policy);
-    const diag = result.capacityDiagnostics;
-
-    t.ok(diag, 'diagnostics should be present');
-    t.equal(diag.capacityFilterApplied, false,
-      'filter should not be applied');
-    t.equal(diag.rejectedCount, NUM.ZERO,
-      'no rejections');
+    await t.rejects(
+      planner.calculateTargetState([], policy),
+      new RegExp(MOVE_PLANNER_ERROR_MSG.STORAGE_ACCOUNTING_REQUIRED),
+      'planner must fail closed when accounting owner is missing',
+    );
   });
 
   // --- Req 5.5: Existing correctness constraints remain dominant ---

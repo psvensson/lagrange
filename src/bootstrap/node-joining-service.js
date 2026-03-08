@@ -736,7 +736,6 @@ class NodeJoiningService extends EventEmitter {
 
       await this.waitForCanonicalJoinReadinessConvergence();
       await this.signalReadyForReplicas();
-      this.disableSteadyStateControlPlaneReporter();
 
       // Transition to READY state
       // Requirements: 2.10 - READY state for accepting traffic
@@ -868,8 +867,8 @@ class NodeJoiningService extends EventEmitter {
   }
 
   /**
-   * Restrict control-plane heartbeat reporting to bootstrap readiness only.
-   * Steady-state heartbeats must return to the canonical direct CDC path.
+   * Disable control-plane heartbeat reporting when a caller explicitly wants
+   * to fall back to direct CDC heartbeats.
    * @return {void}
    * @private
    */
@@ -1847,18 +1846,23 @@ class NodeJoiningService extends EventEmitter {
    * used only when authoritative metadata is not yet available.
    * @param {Object} [options] - Resolution options.
    * @param {boolean} [options.allowBootstrapHints=true] - Allow hint fallback.
+   * @param {boolean} [options.allowSelfTarget=false] - Allow local message-group targets.
    * @return {string|null} Target address or null.
    * @private
    */
   resolveControlPlaneTargetAddress(options = {}) {
     const allowBootstrapHints = options.allowBootstrapHints !== false;
+    const allowSelfTarget = options.allowSelfTarget === true;
     const assignment = this.bootstrapResponse?.messageGroupAssignment;
     if (!assignment) {
       return null;
     }
 
     const authoritativeTarget =
-      this.resolveControlPlaneTargetAddressFromServices(assignment);
+      this.resolveControlPlaneTargetAddressFromServices(
+        assignment,
+        {allowSelfTarget},
+      );
     if (authoritativeTarget) {
       return authoritativeTarget;
     }
@@ -1873,10 +1877,12 @@ class NodeJoiningService extends EventEmitter {
   /**
    * Resolve control-plane target using authoritative services metadata.
    * @param {Object} assignment - Bootstrap message group assignment.
+   * @param {Object} [options] - Resolution options.
+   * @param {boolean} [options.allowSelfTarget=false] - Allow local targets.
    * @return {string|null} Routable address or null.
    * @private
    */
-  resolveControlPlaneTargetAddressFromServices(assignment) {
+  resolveControlPlaneTargetAddressFromServices(assignment, options = {}) {
     const groupId = assignment?.groupId;
     if (!groupId) {
       return null;
@@ -1893,6 +1899,12 @@ class NodeJoiningService extends EventEmitter {
 
     const seedNodeId = this.bootstrapResponse?.seedNodeId || this.seedNodeId;
     const replicaToMove = assignment.replicaToMove || null;
+    const allowSelfTarget = options.allowSelfTarget === true;
+    const excludeNodeId =
+      allowSelfTarget ||
+      assignment?.strategy === AssignmentStrategy.CREATE_SELF_HOSTED ?
+        null :
+        this.nodeId;
     const hasConnectionState = this.messageRouter &&
       typeof this.messageRouter.getConnectionState === TYPEOF.FUNCTION;
     const isConnectedNode = (nodeId) => {
@@ -1908,8 +1920,56 @@ class NodeJoiningService extends EventEmitter {
       return this.messageRouter.getConnectionState(nodeId) === STATE.CONNECTED;
     };
 
+    if (allowSelfTarget &&
+        cache &&
+        typeof cache.filter === TYPEOF.FUNCTION &&
+        isConnectedNode(this.nodeId)) {
+      const localCandidates = cache.filter(TABLES.SERVICES, (row) => {
+        return row?.[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP &&
+          row?.[COLUMN.GROUP_ID] === groupId &&
+          row?.[COLUMN.NODE_ID] === this.nodeId &&
+          row?.[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE &&
+          typeof row?.[COLUMN.ADDRESS] === TYPEOF.STRING &&
+          row[COLUMN.ADDRESS].length > NUM.ZERO &&
+          (!replicaToMove || row?.[COLUMN.SERVICE_ID] !== replicaToMove);
+      });
+      if (localCandidates.length > NUM.ZERO) {
+        const localTarget = [...localCandidates].sort((left, right) => {
+          const leftLeader = left?.[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER;
+          const rightLeader = right?.[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER;
+          if (leftLeader && !rightLeader) {
+            return NUM.NEGATIVE_ONE;
+          }
+          if (!leftLeader && rightLeader) {
+            return NUM.ONE;
+          }
+          const leftUpdatedAt = Number(left?.[COLUMN.UPDATED_AT]);
+          const rightUpdatedAt = Number(right?.[COLUMN.UPDATED_AT]);
+          const leftHasUpdatedAt = Number.isFinite(leftUpdatedAt);
+          const rightHasUpdatedAt = Number.isFinite(rightUpdatedAt);
+          if (leftHasUpdatedAt && rightHasUpdatedAt &&
+              leftUpdatedAt !== rightUpdatedAt) {
+            return rightUpdatedAt - leftUpdatedAt;
+          }
+          if (leftHasUpdatedAt && !rightHasUpdatedAt) {
+            return NUM.NEGATIVE_ONE;
+          }
+          if (!leftHasUpdatedAt && rightHasUpdatedAt) {
+            return NUM.ONE;
+          }
+          const leftServiceId = left?.[COLUMN.SERVICE_ID] || '';
+          const rightServiceId = right?.[COLUMN.SERVICE_ID] || '';
+          return leftServiceId.localeCompare(rightServiceId);
+        })[NUM.ZERO];
+        if (localTarget?.[COLUMN.ADDRESS]) {
+          return localTarget[COLUMN.ADDRESS];
+        }
+      }
+    }
+
     return resolveMessageGroupTargetAddressFromCache(cache, groupId, {
       excludeServiceId: replicaToMove,
+      excludeNodeId,
       seedNodeId,
       isConnectedNode,
     });
@@ -1999,6 +2059,12 @@ class NodeJoiningService extends EventEmitter {
     this.triggerBackgroundClusterMeshReconciliation(state);
 
     const targetAddress =
+      // NODE_STATE_UPDATE is idempotent and can be accepted by any replica.
+      // Prefer local ingress when available to avoid remote route stalls.
+      this.resolveControlPlaneTargetAddress({
+        allowBootstrapHints: false,
+        allowSelfTarget: true,
+      }) ||
       this.resolveControlPlaneTargetAddress({allowBootstrapHints: false}) ||
       this.resolveControlPlaneTargetAddress({allowBootstrapHints: true});
     if (!targetAddress) {
@@ -2019,6 +2085,14 @@ class NodeJoiningService extends EventEmitter {
       });
     }
     this.controlPlaneTargetAddress = targetAddress;
+    const targetAddressParts = String(targetAddress).split('/');
+    const publicationDiagnostics = {
+      publicationPath: 'node_state_reporter',
+      targetAddress,
+      targetNodeId: targetAddressParts[0] || null,
+      targetServiceType: targetAddressParts[1] || null,
+      targetServiceId: targetAddressParts.slice(2).join('/') || null,
+    };
 
     const message = {
       [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
@@ -2054,14 +2128,21 @@ class NodeJoiningService extends EventEmitter {
         targetAddress,
         state,
       });
+      return publicationDiagnostics;
     } catch (error) {
+      error.publicationDiagnostics = publicationDiagnostics;
       this.logger.error(JOINING_LOG_MSG.NODE_STATE_UPDATE_FAILED, {
         nodeId: this.nodeId,
         targetAddress,
         state,
         error: error.message,
       });
-      throw new Error(JOINING_ERROR_MSG.controlPlaneMessageFailed(error.message));
+      const wrappedError = new Error(
+        JOINING_ERROR_MSG.controlPlaneMessageFailed(error.message),
+      );
+      wrappedError.cause = error;
+      wrappedError.publicationDiagnostics = publicationDiagnostics;
+      throw wrappedError;
     }
   }
 
@@ -3218,6 +3299,7 @@ class NodeJoiningService extends EventEmitter {
       systemTableCache,
       messageRouter: this.messageRouter,
       cacheMutationTarget,
+      partitionServicesProvider: () => this.partitionServices,
     });
     sqlQueryEngine.setCDCIntegrationService(cdcIntegrationService);
 

@@ -23,18 +23,50 @@ const PARTITION_TRANSITION_STATE = Object.freeze({
   FAILED: 'failed',
   SPLIT_PREPARING: 'split_preparing',
   SPLIT_BACKFILLING: 'split_backfilling',
+  SPLIT_CATCHUP: 'split_catchup',
   SPLIT_CUTOVER_ACTIVE: 'split_cutover_active',
 });
+
+/**
+ * Set of split lifecycle phases that only ManagedSplitWorkflow may
+ * persist as durable partition_transition_state values.
+ *
+ * PartitionService and other execution participants MUST NOT write
+ * these states to the tables system table directly. They report typed
+ * acknowledgements and let the workflow owner advance the phase.
+ *
+ * @type {ReadonlySet<string>}
+ */
+const SPLIT_OWNER_MANAGED_PHASES = Object.freeze(new Set([
+  PARTITION_TRANSITION_STATE.ADMISSION_PENDING,
+  PARTITION_TRANSITION_STATE.BLOCKED,
+  PARTITION_TRANSITION_STATE.DEFERRED,
+  PARTITION_TRANSITION_STATE.FAILED,
+  PARTITION_TRANSITION_STATE.SPLIT_PREPARING,
+  PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING,
+  PARTITION_TRANSITION_STATE.SPLIT_CATCHUP,
+  PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
+]));
+
+const RETRYABLE_PARTITION_TRANSITION_STATES = Object.freeze(new Set([
+  PARTITION_TRANSITION_STATE.BLOCKED,
+  PARTITION_TRANSITION_STATE.DEFERRED,
+]));
 
 const PARTITION_TRANSITION_METADATA_FIELD = Object.freeze({
   WORKFLOW_ID: 'workflowId',
   ADMISSION: 'admission',
   FAILURE: 'failure',
   PRIMARY_KEY_COLUMN: 'primaryKeyColumn',
+  RETRY: 'retry',
   SOURCE_PARTITION_ID: 'sourcePartitionId',
+  TOPOLOGY_SNAPSHOT: 'topologySnapshot',
   SPLIT_KEY: 'splitKey',
   TARGET_PARTITION_IDS: 'targetPartitionIds',
   TARGET_PARTITION_VERSION: 'targetPartitionVersion',
+  CUTOVER_APPLIED_AT: 'cutoverAppliedAt',
+  PARTICIPANTS: 'participants',
+  SOURCE_CHECKPOINT: 'sourceCheckpoint',
 });
 
 const PARTITION_SPLIT_MIRROR_ORIGIN = Object.freeze({
@@ -98,6 +130,7 @@ const SPLIT_MERGE_EVENT = Object.freeze({
 
 const SPLIT_MERGE_REASON = Object.freeze({
   BUSY: 'busy',
+  CONTROL_PLANE_BACKPRESSURE: 'control_plane_backpressure',
   INSUFFICIENT_CAPACITY: 'insufficient_capacity',
   CAPACITY_AVAILABLE: 'capacity_available',
 });
@@ -138,6 +171,7 @@ const SPLIT_MERGE_LOG_MSG = Object.freeze({
   RANGE_VALID_AFTER_MERGE: 'Range integrity validated after merge',
   STARTING_PERIODIC_EVAL: 'Starting periodic split/merge evaluation',
   PERIODIC_EVAL_FAILED: 'Periodic evaluation failed',
+  REQUESTED_EVAL_FAILED: 'Requested split/merge evaluation failed',
   STOPPED_PERIODIC_EVAL: 'Stopped periodic split/merge evaluation',
   SKIPPING_EVAL_BUSY: 'Skipping evaluation: manager is busy',
   PARTITION_EVAL_COMPLETED: 'Partition evaluation completed',
@@ -145,6 +179,8 @@ const SPLIT_MERGE_LOG_MSG = Object.freeze({
   MANAGER_SHUTDOWN: 'PartitionSplitMergeManager shutdown',
   SPLIT_CAPACITY_PREFLIGHT: 'Split capacity preflight check',
   SPLIT_DEFERRED_CAPACITY: 'Split deferred due to insufficient capacity',
+  SPLIT_DEFERRED_BACKPRESSURE:
+    'Split deferred due to control-plane backpressure',
   SPLIT_CAPACITY_ALLOWED: 'Split capacity preflight passed',
   MERGE_ELIGIBLE_UNDER_PRESSURE:
     'Merge remains eligible under capacity pressure',
@@ -241,6 +277,8 @@ export {
   SPLIT_MERGE_SQL,
   SPLIT_MERGE_STATE,
   PARTITION_TRANSITION_STATE,
+  RETRYABLE_PARTITION_TRANSITION_STATES,
   PARTITION_TRANSITION_METADATA_FIELD,
   PARTITION_SPLIT_MIRROR_ORIGIN,
+  SPLIT_OWNER_MANAGED_PHASES,
 };

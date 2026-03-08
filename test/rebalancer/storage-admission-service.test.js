@@ -9,9 +9,17 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {CDC_OPERATION} from '../../src/constants/cdc.js';
 import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+  CONTROL_PLANE_PUBLICATION_MODE,
+} from '../../src/control-plane/control-plane-readiness-constants.js';
+import {
+  ControlPlaneReadinessService,
+} from '../../src/control-plane/control-plane-readiness-service.js';
+import {
   COLUMN,
   NUM,
   SERVICE_TYPE,
+  STATE,
   TABLES,
 } from '../../src/constants/index.js';
 import {
@@ -67,6 +75,16 @@ function insertRow(cache, tableName, row) {
 function createServices(cache, accounting) {
   const service = new StorageAdmissionService({
     accountingService: accounting,
+    cdcGroupPropagationService: {
+      getPublicationModeDiagnostics() {
+        return {
+          currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+          reasonCode: null,
+          enteredAt: '2026-01-01T00:00:00.000Z',
+          recentTransitions: [],
+        };
+      },
+    },
   });
   return service;
 }
@@ -88,9 +106,15 @@ function createReadiness(nodeId, overrides = {}) {
   });
 }
 
-function createReadinessService(readinessByNodeId) {
+function createReadinessService(readinessByNodeId, onCall = null) {
   return {
-    async getNodeReadiness(nodeId) {
+    async getNodeReadiness(nodeId, options = {}) {
+      if (typeof onCall === 'function') {
+        onCall({
+          nodeId,
+          options: {...options},
+        });
+      }
       return readinessByNodeId[nodeId] || createReadiness(nodeId);
     },
   };
@@ -462,6 +486,7 @@ test('checkSplit - returns blocked result when too few nodes are eligible',
         ADMISSION_REASON.NO_BUDGET_REGISTERED,
       ],
       projectedUtilization: result.ineligibleNodes[0].projectedUtilization,
+      nodeSummary: null,
     }]);
     t.equal(result.projectedUtilizationByNodeId['node-b'].budgetBytes, null);
     t.end();
@@ -533,6 +558,151 @@ test('checkSplit - defers when publication mode is degraded', async (t) => {
       [STORAGE_ADMISSION_REASON.METADATA_PUBLICATION_DEGRADED],
       [STORAGE_ADMISSION_REASON.METADATA_PUBLICATION_DEGRADED],
     ],
+  );
+  t.end();
+});
+
+test('checkSplit - requests fresh repair-eligibility readiness snapshots',
+  async (t) => {
+    initializeConfig();
+    const cache = new SystemTableCache();
+    const accounting = new StorageCapacityAccountingService({
+      systemTableCache: cache,
+    });
+    accounting.initialize({systemTableCache: cache});
+
+    insertRow(cache, TABLES.NODES, {
+      [COLUMN.NODE_ID]: 'node-a',
+      [COLUMN.STORAGE_BUDGET_BYTES]: NUM.THOUSAND,
+    });
+
+    const readinessCalls = [];
+    const admission = new StorageAdmissionService({
+      accountingService: accounting,
+      controlPlaneReadinessService: createReadinessService(
+        {
+          'node-a': createReadiness('node-a'),
+        },
+        (call) => readinessCalls.push(call),
+      ),
+    });
+
+    const result = await admission.checkSplit({
+      targetNodeId: 'node-a',
+      estimatedBytes: NUM.TEN,
+      requiredReplicaCount: 1,
+    });
+
+    t.equal(result.allowed, true);
+    t.equal(readinessCalls.length, 1);
+    t.same(readinessCalls[0], {
+      nodeId: 'node-a',
+      options: {
+        allowAuthoritativeRefresh: true,
+        requireFreshOnIneligible: true,
+        decisionDimension:
+          CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+      },
+    });
+    t.end();
+  });
+
+test('checkSplit - repairs stale connected node readiness from ' +
+  'authoritative rows before blocking provisioning', async (t) => {
+  initializeConfig();
+  const cache = new SystemTableCache();
+  const accounting = new StorageCapacityAccountingService({
+    systemTableCache: cache,
+  });
+  accounting.initialize({systemTableCache: cache});
+  const now = 500000;
+
+  insertRow(cache, TABLES.NODES, {
+    [COLUMN.NODE_ID]: 'node-stale-ready',
+    [COLUMN.STATUS]: 'active',
+    [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
+    [COLUMN.LAST_HEARTBEAT]: now - 60000,
+    [COLUMN.READY_LEASE_EXPIRES_AT]: now - 30000,
+    [COLUMN.STORAGE_BUDGET_BYTES]: NUM.THOUSAND,
+  });
+
+  const readinessService = new ControlPlaneReadinessService({
+    nodeId: 'seed-node',
+    systemTableCache: cache,
+    cacheMutationTarget: cache,
+    messageRouter: {
+      getConnectionState() {
+        return STATE.CONNECTED;
+      },
+    },
+    storageAccountingService: accounting,
+    cdcIntegrationService: {
+      async executeAuthoritativeSystemTableRead(tableName, sql, params) {
+        if (tableName === TABLES.NODES &&
+            params?.[0] === 'node-stale-ready') {
+          return {
+            success: true,
+            rows: [{
+              [COLUMN.NODE_ID]: 'node-stale-ready',
+              [COLUMN.STATUS]: 'active',
+              [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
+              [COLUMN.LAST_HEARTBEAT]: now - 500,
+              [COLUMN.READY_LEASE_EXPIRES_AT]: now + 60000,
+              [COLUMN.STORAGE_BUDGET_BYTES]: NUM.THOUSAND,
+            }],
+            count: 1,
+            source: 'local_partition_replica',
+          };
+        }
+        if (tableName === TABLES.SERVICES) {
+          return {
+            success: true,
+            rows: [],
+            count: 0,
+            source: 'local_partition_replica',
+          };
+        }
+        return {
+          success: false,
+          rows: [],
+        };
+      },
+    },
+    cdcGroupPropagationService: {
+      getPublicationModeDiagnostics() {
+        return {
+          currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+          reasonCode: null,
+          enteredAt: '2026-01-01T00:00:00.000Z',
+          recentTransitions: [],
+        };
+      },
+    },
+    now: () => now,
+  });
+  const admission = new StorageAdmissionService({
+    accountingService: accounting,
+    controlPlaneReadinessService: readinessService,
+    now: () => now,
+  });
+
+  const result = await admission.checkSplit({
+    targetNodeId: 'node-stale-ready',
+    estimatedBytes: NUM.TEN,
+    requiredReplicaCount: 1,
+  });
+
+  t.equal(result.allowed, true);
+  t.equal(result.decisionType, STORAGE_ADMISSION_DECISION_TYPE.ADMITTED);
+  t.equal(
+    result.readinessSnapshots['node-stale-ready']?.dimensions?.repairEligible,
+    true,
+    'admission should persist the repaired readiness verdict',
+  );
+  t.equal(
+    cache.get(TABLES.NODES, 'node-stale-ready')?.ready_lease_expires_at,
+    now + 60000,
+    'authoritative repair should update the stale cache row before denial',
   );
   t.end();
 });

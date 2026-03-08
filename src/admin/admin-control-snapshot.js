@@ -44,6 +44,7 @@ const SERVICE_TYPE_PARTITION = 'partition';
 const STATUS_ACTIVE = 'active';
 const PARTITION_STATE_NORMAL = 'NORMAL';
 const CONTROL_PLANE_DIAGNOSTICS_SCHEMA_VERSION = 1;
+const CONTROL_PLANE_DIAGNOSTICS_READINESS_CACHE_MAX_AGE_MS = 5000;
 const MANAGED_SPLIT_WORKFLOW_TYPE = 'managed_split';
 const CONTROL_SNAPSHOT_REPAIR_REASON = 'control_snapshot';
 const CDC_TELEMETRY_MODE = Object.freeze({
@@ -77,6 +78,12 @@ class AdminControlSnapshot {
       deps.cdcIntegrationService || null;
     this.controlPlaneReadinessService =
       deps.controlPlaneReadinessService || null;
+    this.heartbeatService = deps.heartbeatService || null;
+    this.readinessSnapshotCacheMaxAgeMs =
+      Number.isFinite(deps.readinessSnapshotCacheMaxAgeMs) &&
+        deps.readinessSnapshotCacheMaxAgeMs > NUM.ZERO ?
+        Math.floor(deps.readinessSnapshotCacheMaxAgeMs) :
+        CONTROL_PLANE_DIAGNOSTICS_READINESS_CACHE_MAX_AGE_MS;
     this.ensureAuthoritativeDiscoveryCacheRepair =
       typeof deps.ensureAuthoritativeDiscoveryCacheRepair === TYPEOF.FUNCTION ?
         deps.ensureAuthoritativeDiscoveryCacheRepair :
@@ -177,6 +184,7 @@ class AdminControlSnapshot {
     try {
       repair = await this.ensureAuthoritativeDiscoveryCacheRepair({
         reason: CONTROL_SNAPSHOT_REPAIR_REASON,
+        bypassReuse: forceAuthoritativeRepair,
       });
     } catch (_error) {
       repair = null;
@@ -201,8 +209,6 @@ class AdminControlSnapshot {
       this.cacheMutationTarget &&
       typeof this.cacheMutationTarget.applySystemTableChange ===
         TYPEOF.FUNCTION &&
-      this.sqlQueryEngine &&
-      typeof this.sqlQueryEngine.executeRequest === TYPEOF.FUNCTION &&
       this.ensureAuthoritativeDiscoveryCacheRepair,
     );
   }
@@ -358,6 +364,7 @@ class AdminControlSnapshot {
       this.nowFn();
     const readinessEntries = await this.resolveControlPlaneReadinessEntries();
     const readinessByNodeId = {};
+    const nodeLivenessByNodeId = {};
     const placementEligibilityByNodeId = {};
 
     for (const readiness of readinessEntries) {
@@ -366,12 +373,17 @@ class AdminControlSnapshot {
         continue;
       }
       readinessByNodeId[nodeId] = readiness;
+      nodeLivenessByNodeId[nodeId] = readiness?.nodeEvidence || null;
       placementEligibilityByNodeId[nodeId] =
         this.buildPlacementEligibilityExplanation(readiness);
     }
 
     const publicationMode =
       this.resolvePublicationModeDiagnostics(readinessEntries);
+    const readinessTransitionsByNodeId =
+      this.resolveReadinessTransitionHistory();
+    const heartbeatPublication =
+      this.resolveHeartbeatPublicationDiagnostics();
     const workflowDiagnostics =
       this.buildWorkflowAdmissionDiagnostics(
         Array.isArray(options.tableRows) ?
@@ -391,7 +403,10 @@ class AdminControlSnapshot {
       nodeId: this.nodeId,
       capturedAt,
       publicationMode,
+      heartbeatPublication,
       readinessByNodeId,
+      nodeLivenessByNodeId,
+      readinessTransitionsByNodeId,
       placementEligibilityByNodeId,
       workflowAdmissionsByWorkflowId:
         workflowDiagnostics.workflowAdmissionsByWorkflowId,
@@ -414,7 +429,11 @@ class AdminControlSnapshot {
     }
     try {
       const readiness =
-        await this.controlPlaneReadinessService.getAllNodeReadiness();
+        await this.controlPlaneReadinessService.getAllNodeReadiness({
+          allowAuthoritativeRefresh: true,
+          allowStaleOnCacheChange: true,
+          maxCachedAgeMs: this.readinessSnapshotCacheMaxAgeMs,
+        });
       return Array.isArray(readiness) ? readiness : ADMIN_CACHE_DUMP.EMPTY;
     } catch (_error) {
       return ADMIN_CACHE_DUMP.EMPTY;
@@ -475,6 +494,51 @@ class AdminControlSnapshot {
       return publicationService.getPublicationModeDiagnostics();
     }
     return null;
+  }
+
+  /**
+   * Resolve recent readiness transitions recorded by the canonical owner.
+   * @return {Object}
+   * @private
+   */
+  resolveReadinessTransitionHistory() {
+    if (!this.controlPlaneReadinessService ||
+        typeof this.controlPlaneReadinessService
+          .getReadinessTransitionHistoryByNodeId !== TYPEOF.FUNCTION) {
+      return {};
+    }
+    try {
+      const history =
+        this.controlPlaneReadinessService
+          .getReadinessTransitionHistoryByNodeId();
+      return history && typeof history === TYPEOF.OBJECT ?
+        history :
+        {};
+    } catch (_error) {
+      return {};
+    }
+  }
+
+  /**
+   * Resolve heartbeat publication diagnostics from the local owner.
+   * @return {Object|null}
+   * @private
+   */
+  resolveHeartbeatPublicationDiagnostics() {
+    if (!this.heartbeatService ||
+        typeof this.heartbeatService.getHeartbeatPublicationDiagnostics !==
+          TYPEOF.FUNCTION) {
+      return null;
+    }
+    try {
+      const diagnostics =
+        this.heartbeatService.getHeartbeatPublicationDiagnostics();
+      return diagnostics && typeof diagnostics === TYPEOF.OBJECT ?
+        diagnostics :
+        null;
+    } catch (_error) {
+      return null;
+    }
   }
 
   /**
@@ -550,6 +614,17 @@ class AdminControlSnapshot {
       typeof failure.timeoutClassification === TYPEOF.OBJECT ?
       failure.timeoutClassification :
       null;
+    const retry = metadata?.[PARTITION_TRANSITION_METADATA_FIELD.RETRY] &&
+      typeof metadata[PARTITION_TRANSITION_METADATA_FIELD.RETRY] ===
+        TYPEOF.OBJECT ?
+      metadata[PARTITION_TRANSITION_METADATA_FIELD.RETRY] :
+      null;
+    const topologySnapshot =
+      metadata?.[PARTITION_TRANSITION_METADATA_FIELD.TOPOLOGY_SNAPSHOT] &&
+      typeof metadata[PARTITION_TRANSITION_METADATA_FIELD.TOPOLOGY_SNAPSHOT] ===
+        TYPEOF.OBJECT ?
+      metadata[PARTITION_TRANSITION_METADATA_FIELD.TOPOLOGY_SNAPSHOT] :
+      null;
 
     return {
       workflowId,
@@ -566,9 +641,40 @@ class AdminControlSnapshot {
       ) ?
         metadata[PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_IDS] :
         ADMIN_CACHE_DUMP.EMPTY,
+      topologySnapshotCapturedAt:
+        firstStringField(topologySnapshot, 'capturedAt'),
+      sourceLeaderNodeId:
+        firstStringField(topologySnapshot, 'sourceLeaderNodeId'),
+      candidateTargetNodeIds: Array.isArray(
+        admission?.candidateTargetNodeIds,
+      ) ?
+        admission.candidateTargetNodeIds :
+        (Array.isArray(topologySnapshot?.candidateTargetNodeIds) ?
+          topologySnapshot.candidateTargetNodeIds :
+          ADMIN_CACHE_DUMP.EMPTY),
+      sourceRoutableNodeIds: Array.isArray(
+        admission?.sourceRoutableNodeIds,
+      ) ?
+        admission.sourceRoutableNodeIds :
+        (Array.isArray(topologySnapshot?.sourceRoutableNodeIds) ?
+          topologySnapshot.sourceRoutableNodeIds :
+          ADMIN_CACHE_DUMP.EMPTY),
+      eligibleNodeIds: Array.isArray(admission?.eligibleNodeIds) ?
+        admission.eligibleNodeIds :
+        ADMIN_CACHE_DUMP.EMPTY,
+      ineligibleNodes: Array.isArray(admission?.ineligibleNodes) ?
+        admission.ineligibleNodes :
+        ADMIN_CACHE_DUMP.EMPTY,
+      estimatedBytes: Number.isFinite(Number(admission?.estimatedBytes)) ?
+        Number(admission.estimatedBytes) :
+        null,
+      admissionDecisionAt:
+        firstStringField(admission, 'decisionTimestamp'),
       admission,
       blockingReasons,
       failure,
+      failedAt: firstStringField(failure, 'failedAt'),
+      nextAttemptAt: firstStringField(retry, 'nextAttemptAt'),
       timeoutClassification,
     };
   }

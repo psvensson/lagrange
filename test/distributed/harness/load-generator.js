@@ -951,7 +951,9 @@ class LoadRun {
     }
     const message = String(error?.message || '').toLowerCase();
     return message.includes('circuit breaker is open') ||
-      message.includes('routing not ready');
+      message.includes('routing not ready') ||
+      message.includes('serve not ready') ||
+      message.includes('load lane admission denied');
   }
 
   _isCircuitOpenAdmissionError(error) {

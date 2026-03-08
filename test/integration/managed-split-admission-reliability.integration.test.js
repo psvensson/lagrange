@@ -4,8 +4,10 @@ import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {
+  NUM,
   SERVICE_STATUS,
   SERVICE_TYPE,
+  STATE,
   TABLES,
 } from '../../src/constants/index.js';
 import {
@@ -96,13 +98,19 @@ function installCanonicalAdmissionOwner(fixture) {
   const controlPlaneReadinessService = new ControlPlaneReadinessService({
     nodeId: FIXTURE_NODE_ID,
     systemTableCache: fixture.systemTableCache,
+    cacheMutationTarget: fixture.systemTableCache,
+    messageRouter: fixture.bootstrapResult.messageRouter,
     storageAccountingService,
+    cdcIntegrationService: fixture.bootstrapService.cdcIntegrationService,
     cdcGroupPropagationService:
       fixture.bootstrapService.latencyTopology?.cdcGroupPropagationService || null,
   });
   const storageAdmissionService = new StorageAdmissionService({
     nodeId: FIXTURE_NODE_ID,
     accountingService: storageAccountingService,
+    cdcIntegrationService: fixture.bootstrapService.cdcIntegrationService,
+    cacheMutationTarget: fixture.systemTableCache,
+    messageRouter: fixture.bootstrapResult.messageRouter,
     controlPlaneReadinessService,
   });
 
@@ -491,6 +499,112 @@ test('managed split defers on degraded publication mode and admin diagnostics ' 
         publicationService.getPublicationModeDiagnostics =
             originalGetPublicationModeDiagnostics;
       }
+    }
+  } finally {
+    await shutdownManagedSplitFixture(fixture);
+  }
+});
+
+test('managed split admission repairs stale connected node readiness from ' +
+  'authoritative local rows before denying provisioning',
+{timeout: TEST_TIMEOUT_MS}, async (t) => {
+  const tableName = 'managed_split_repairable_admission';
+  const fixture = await bootstrapManagedSplitFixture(tableName);
+
+  try {
+    await seedProvisioningAdmissionFixture(fixture, tableName);
+    const {storageAdmissionService, controlPlaneReadinessService} =
+      installCanonicalAdmissionOwner(fixture);
+    const originalGetConnectionState =
+      fixture.bootstrapResult.messageRouter.getConnectionState.bind(
+        fixture.bootstrapResult.messageRouter,
+      );
+    const originalAuthoritativeRead =
+      fixture.bootstrapService.cdcIntegrationService
+        .executeAuthoritativeSystemTableRead
+        .bind(fixture.bootstrapService.cdcIntegrationService);
+    const now = Date.now();
+    const freshSyntheticNodeRow = {
+      node_id: SYNTHETIC_NODE_ID,
+      node_address: `ws://127.0.0.1:${getUniquePort()}`,
+      cpu_cores: 4,
+      memory_mb: 4096,
+      disk_gb: 128,
+      cpu_usage_percent: 0,
+      memory_usage_percent: 0,
+      disk_usage_percent: 0,
+      status: SERVICE_STATUS.ACTIVE,
+      connection_state: STATE.CONNECTED,
+      capabilities: '[]',
+      last_heartbeat: now,
+      ready_lease_expires_at: now + LEASE_EXTENSION_MS,
+      storage_budget_bytes: STORAGE_BUDGET_BYTES,
+      storage_budget_source: 'integration_test_authoritative_refresh',
+      storage_budget_updated_at: now,
+      created_at: now,
+      updated_at: now,
+    };
+    const authoritativeReads = [];
+
+    fixture.bootstrapResult.messageRouter.getConnectionState = (nodeId) => {
+      if (nodeId === SYNTHETIC_NODE_ID) {
+        return STATE.CONNECTED;
+      }
+      return originalGetConnectionState(nodeId);
+    };
+    fixture.bootstrapService.cdcIntegrationService.executeAuthoritativeSystemTableRead =
+      async (tableNameArg, sql, params, options) => {
+        authoritativeReads.push({
+          tableName: tableNameArg,
+          sql,
+          params,
+          options,
+        });
+        if (tableNameArg === TABLES.NODES &&
+            params?.[0] === SYNTHETIC_NODE_ID) {
+          return {
+            success: true,
+            rows: [freshSyntheticNodeRow],
+            count: 1,
+            source: 'local_partition_replica',
+          };
+        }
+        return originalAuthoritativeRead(tableNameArg, sql, params, options);
+      };
+
+    try {
+      const result = await storageAdmissionService.checkSplit({
+        targetNodeIds: [SYNTHETIC_NODE_ID],
+        estimatedBytes: NUM.TEN,
+        requiredReplicaCount: 1,
+      });
+
+      t.equal(result.allowed, true,
+        'authoritative readiness repair should recover the stale target node');
+      t.equal(
+        result.readinessSnapshots?.[SYNTHETIC_NODE_ID]?.dimensions
+          ?.repairEligible,
+        true,
+        'admission should persist the repaired readiness snapshot',
+      );
+      t.ok(
+        authoritativeReads.some((call) =>
+          call.tableName === TABLES.NODES &&
+            call.params?.[0] === SYNTHETIC_NODE_ID,
+        ),
+        'admission should issue an authoritative nodes-table repair read',
+      );
+      t.equal(
+        controlPlaneReadinessService.getNodeRow(SYNTHETIC_NODE_ID)
+          ?.ready_lease_expires_at,
+        freshSyntheticNodeRow.ready_lease_expires_at,
+        'authoritative repair should update the cached node lease',
+      );
+    } finally {
+      fixture.bootstrapResult.messageRouter.getConnectionState =
+        originalGetConnectionState;
+      fixture.bootstrapService.cdcIntegrationService.executeAuthoritativeSystemTableRead =
+        originalAuthoritativeRead;
     }
   } finally {
     await shutdownManagedSplitFixture(fixture);

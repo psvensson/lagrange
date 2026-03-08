@@ -281,21 +281,15 @@ test('ReplicaHandler', async (t) => {
   });
 
   t.test(
-    'updateOperationStep uses monotonic cache visibility checks for terminal updates',
+    'emitExecutorOutcome emits typed outcomes via executorOutcomeEmitter',
     async (t) => {
       const cache = createSeededCache();
-      seedReplicaOperation(cache, 'op-terminal-visibility', {
-        partitionId: 'partition-1',
-        replicaId: 'replica-1',
-        targetNodeId: 'test-node',
-        status: ReplicaStatus.SYNCING,
-        workflow_step: WORKFLOW_STEP.SYNCING,
-      });
-      const updateCalls = [];
-      const cdcIntegrationService = {
-        async updateSystemTableRow(tableName, whereClause, data, options) {
-          updateCalls.push({tableName, whereClause, data, options});
-          return {success: true};
+      const emittedOutcomes = [];
+      const executorOutcomeEmitter = {
+        emitOutcome(outcomeType, operationId, workflowStep, options) {
+          emittedOutcomes.push({
+            outcomeType, operationId, workflowStep, ...options,
+          });
         },
       };
 
@@ -303,275 +297,61 @@ test('ReplicaHandler', async (t) => {
         nodeId: 'test-node',
         dataDir: tempDir,
         systemTableCache: cache,
-        cdcIntegrationService,
+        cdcIntegrationService: createMockCDCService(cache),
         createPartitionService: createMockPartitionServiceFactory(),
+        executorOutcomeEmitter,
       });
-
       handler.initialize();
 
-      await handler.updateOperationStep(
-        'op-terminal-visibility',
+      handler.emitExecutorOutcome(
+        'REPLICA_CREATE_ACTIVE',
+        'op-outcome-1',
         WORKFLOW_STEP.ACTIVE,
         {replicaId: 'replica-1'},
       );
 
-      t.equal(updateCalls.length, 1, 'should persist exactly one operation update');
-      t.equal(
-        updateCalls[0]?.tableName,
-        SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-        'should write the replica_operations row',
-      );
-      t.equal(
-        updateCalls[0]?.options?.expectedCacheFields?.workflow_step,
-        undefined,
-        'should not wait on brittle workflow_step exact matches',
-      );
-      t.equal(
-        updateCalls[0]?.options?.expectedCacheFields?.status,
-        undefined,
-        'should not wait on brittle status exact matches',
-      );
-      t.equal(
-        updateCalls[0]?.options?.expectedCacheFields?.replica_id,
-        'replica-1',
-        'should wait for the canonical replica_id binding',
-      );
-      t.type(
-        updateCalls[0]?.options?.minimumCacheFields?.updated_at,
-        'number',
-        'should enforce monotonic updated_at propagation',
-      );
-      t.type(
-        updateCalls[0]?.options?.minimumCacheFields?.completed_at,
-        'number',
-        'should enforce monotonic terminal completion propagation',
-      );
-
-      await handler.shutdown();
-    },
-  );
-
-  t.test(
-    'updateOperationStep retries replica operation cache visibility false negatives',
-    async (t) => {
-      const cache = createSeededCache();
-      seedReplicaOperation(cache, 'op-cache-gap', {
-        partitionId: 'partition-1',
-        replicaId: 'replica-1',
-        targetNodeId: 'test-node',
-        status: ReplicaStatus.SYNCING,
-        workflow_step: WORKFLOW_STEP.SYNCING,
-      });
-      const updateCalls = [];
-      const cdcIntegrationService = {
-        async updateSystemTableRow(tableName, whereClause, data, options) {
-          updateCalls.push({tableName, whereClause, data, options});
-          if (updateCalls.length === 1) {
-            throw new Error(
-              'Cache update not observed for replica_operations:op-cache-gap within 1000ms',
-            );
-          }
-          return {success: true};
-        },
-      };
-
-      const handler = new ReplicaHandler({
-        nodeId: 'test-node',
-        dataDir: tempDir,
-        systemTableCache: cache,
-        cdcIntegrationService,
-        createPartitionService: createMockPartitionServiceFactory(),
-      });
-      handler.operationCacheVisibilityRetryDelayMs = 10;
-      handler.initialize();
-
-      await t.resolves(
-        handler.updateOperationStep(
-          'op-cache-gap',
-          WORKFLOW_STEP.ACTIVE,
-          {replicaId: 'replica-1'},
-        ),
-        'cache visibility false negatives should not fail replica progression',
-      );
-
-      await new Promise((resolve) => setTimeout(resolve, 40));
-
-      t.equal(updateCalls.length, 2,
-        'replica operation cache visibility false negatives should be retried');
-      t.equal(
-        updateCalls[1]?.data?.workflow_step,
+      t.equal(emittedOutcomes.length, 1,
+        'should emit exactly one outcome');
+      t.equal(emittedOutcomes[0].outcomeType,
+        'REPLICA_CREATE_ACTIVE',
+        'outcome type should match');
+      t.equal(emittedOutcomes[0].operationId,
+        'op-outcome-1',
+        'operationId should match');
+      t.equal(emittedOutcomes[0].workflowStep,
         WORKFLOW_STEP.ACTIVE,
-        'retry should target the same workflow step',
-      );
-
-      await handler.shutdown();
-    },
-  );
-
-  t.test(
-    'updateOperationStep avoids brittle workflow/status cache expectations ' +
-      'during concurrent progression',
-    async (t) => {
-      const cache = createSeededCache();
-      seedReplicaOperation(cache, 'op-concurrent-progress', {
-        partitionId: 'partition-1',
-        replicaId: 'replica-1',
-        targetNodeId: 'test-node',
-        status: ReplicaStatus.SYNCING,
-        workflow_step: WORKFLOW_STEP.SYNCING,
-      });
-      const updateCalls = [];
-      const cdcIntegrationService = {
-        async updateSystemTableRow(tableName, whereClause, data, options) {
-          updateCalls.push({tableName, whereClause, data, options});
-          if (options?.expectedCacheFields?.workflow_step ||
-              options?.expectedCacheFields?.status) {
-            throw new Error(
-              'Cache update not observed for ' +
-              'replica_operations:op-concurrent-progress within 1000ms',
-            );
-          }
-          return {success: true};
-        },
-      };
-
-      const handler = new ReplicaHandler({
-        nodeId: 'test-node',
-        dataDir: tempDir,
-        systemTableCache: cache,
-        cdcIntegrationService,
-        createPartitionService: createMockPartitionServiceFactory(),
-      });
-      handler.operationCacheVisibilityRetryDelayMs = 10;
-      handler.initialize();
-
-      await t.resolves(
-        handler.updateOperationStep(
-          'op-concurrent-progress',
-          WORKFLOW_STEP.ACTIVE,
-          {replicaId: 'replica-1'},
-        ),
-        'concurrent progression should not degrade into cache-visibility retries',
-      );
-
-      await new Promise((resolve) => setTimeout(resolve, 40));
-
-      t.equal(
-        updateCalls.length,
-        1,
-        'concurrent progression should not schedule retry writes',
-      );
-      t.equal(
-        updateCalls[0]?.options?.expectedCacheFields?.workflow_step,
-        undefined,
-        'cache wait should not require exact workflow_step visibility',
-      );
-      t.equal(
-        updateCalls[0]?.options?.expectedCacheFields?.status,
-        undefined,
-        'cache wait should not require exact status visibility',
-      );
-      t.equal(
-        updateCalls[0]?.options?.expectedCacheFields?.replica_id,
+        'workflowStep should match');
+      t.equal(emittedOutcomes[0].replicaId,
         'replica-1',
-        'cache wait should still pin replica identity',
-      );
-      t.type(
-        updateCalls[0]?.options?.minimumCacheFields?.updated_at,
-        'number',
-        'cache wait should enforce monotonic updated_at visibility',
-      );
-      t.type(
-        updateCalls[0]?.options?.minimumCacheFields?.completed_at,
-        'number',
-        'cache wait should enforce monotonic completed_at visibility for terminal steps',
-      );
+        'replicaId should be forwarded');
 
       await handler.shutdown();
     },
   );
 
   t.test(
-    'updateOperationStep suppresses stale cache-visibility retries after a newer step',
+    'emitExecutorOutcome is a no-op when emitter is absent',
     async (t) => {
       const cache = createSeededCache();
-      seedReplicaOperation(cache, 'op-stale-cache-gap', {
-        partitionId: 'partition-1',
-        replicaId: 'replica-1',
-        targetNodeId: 'test-node',
-        status: ReplicaStatus.CREATING,
-        workflow_step: WORKFLOW_STEP.CREATING,
-      });
-      const updateCalls = [];
-      let syncingAttemptCount = 0;
-      const cdcIntegrationService = {
-        async updateSystemTableRow(tableName, whereClause, data, options) {
-          updateCalls.push({tableName, whereClause, data, options});
-          if (data.workflow_step === WORKFLOW_STEP.SYNCING &&
-              syncingAttemptCount === 0) {
-            syncingAttemptCount += 1;
-            throw new Error(
-              'Cache update not observed for replica_operations:' +
-              'op-stale-cache-gap within 1000ms',
-            );
-          }
-          cache.applySystemTableChange(tableName, 'UPDATE', {
-            ...whereClause,
-            ...data,
-          });
-          return {success: true};
-        },
-      };
 
       const handler = new ReplicaHandler({
         nodeId: 'test-node',
         dataDir: tempDir,
         systemTableCache: cache,
-        cdcIntegrationService,
+        cdcIntegrationService: createMockCDCService(cache),
         createPartitionService: createMockPartitionServiceFactory(),
       });
-      handler.operationCacheVisibilityRetryDelayMs = 10;
       handler.initialize();
 
-      await t.resolves(
-        handler.updateOperationStep(
-          'op-stale-cache-gap',
-          WORKFLOW_STEP.SYNCING,
-          {replicaId: 'replica-1'},
-        ),
-        'initial syncing transition should degrade to a retry instead of failing',
-      );
-      await t.resolves(
-        handler.updateOperationStep(
-          'op-stale-cache-gap',
-          WORKFLOW_STEP.ACTIVE,
-          {replicaId: 'replica-1'},
-        ),
-        'newer active transition should still succeed',
-      );
-
-      await new Promise((resolve) => setTimeout(resolve, 40));
-
-      t.same(
-        updateCalls.map((call) => call.data.workflow_step),
-        [WORKFLOW_STEP.SYNCING, WORKFLOW_STEP.ACTIVE],
-        'stale syncing retry should not overwrite a newer active step',
-      );
-
-      const stored = cache.get(
-        SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-        'op-stale-cache-gap',
-      );
-      t.equal(
-        stored?.workflow_step,
+      // Should not throw when executorOutcomeEmitter is null.
+      handler.emitExecutorOutcome(
+        'REPLICA_CREATE_ACTIVE',
+        'op-no-emitter',
         WORKFLOW_STEP.ACTIVE,
-        'replica operation should remain at the newest step',
+        {replicaId: 'replica-1'},
       );
-      t.equal(
-        stored?.status,
-        ReplicaStatus.ACTIVE,
-        'replica operation status should remain terminal',
-      );
+
+      t.pass('no error when executorOutcomeEmitter is absent');
 
       await handler.shutdown();
     },

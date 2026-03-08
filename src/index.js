@@ -252,6 +252,7 @@ function createAdminAPIWithLiveQuery(options) {
     cdcIntegrationService: options.cdcIntegrationService || null,
     messageRouter: options.messageRouter || null,
     serviceDiagnosticsProvider: options.serviceDiagnosticsProvider || null,
+    heartbeatService: options.heartbeatService || null,
     partitionServicesProvider:
       typeof options.partitionServicesProvider === 'function' ?
         options.partitionServicesProvider :
@@ -652,6 +653,7 @@ async function main() {
       messageRouter: joinResult.messageRouter,
       serviceDiagnosticsProvider:
         createServiceDiagnosticsProvider(nodeJoiningService),
+      heartbeatService: nodeJoiningService.heartbeatService,
       partitionServicesProvider: () => joinResult.partitionServices,
     });
     const adminAPI = joinAdminStartup.adminAPI;
@@ -877,6 +879,7 @@ async function main() {
       messageRouter: bootstrapResult.messageRouter,
       serviceDiagnosticsProvider:
         createServiceDiagnosticsProvider(bootstrapService),
+      heartbeatService: bootstrapService.heartbeatService,
       partitionServicesProvider: () => bootstrapResult.partitionServices,
     });
     const adminAPI = seedAdminStartup.adminAPI;

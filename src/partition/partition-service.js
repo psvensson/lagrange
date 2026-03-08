@@ -75,6 +75,14 @@ import {
   PARTITION_TRANSITION_STATE,
 } from './partition-constants.js';
 import {
+  SPLIT_ACK_STATUS,
+  SPLIT_ACK_CHECKPOINT_FIELD,
+  SPLIT_PARTICIPANT_PREFIX,
+} from './split-ack-constants.js';
+import {
+  PARTICIPANT_ACK_FIELD,
+} from '../workflow/workflow-constants.js';
+import {
   PARTITION_SERVICE_ADDRESS,
   PARTITION_SERVICE_COLUMN,
   PARTITION_SERVICE_COLUMN_SQL,
@@ -128,6 +136,7 @@ const WRITE_PHASE_FIELD_RAFT_COMMAND_DISPATCH_MS = 'raftCommandDispatchMs';
 const WRITE_PHASE_FIELD_FORWARD_DELIVER_MS = 'forwardDeliverMs';
 const WRITE_PHASE_FIELD_APPLY_WRITE_MS = 'applyWriteMs';
 const WRITE_PHASE_FIELD_TOTAL_MS = 'totalMs';
+const SPLIT_SNAPSHOT_BACKFILL_YIELD_EVERY_ROWS = 64;
 
 
 /**
@@ -274,6 +283,9 @@ class PartitionService extends EventEmitter {
     this.pendingRequestTracker = new PendingRequestTracker({
       defaultTimeoutMs: PARTITION_SERVICE_DEFAULT.PENDING_REQUEST_TIMEOUT_MS,
     });
+    this.systemTableCacheChangeListener =
+      this.handleSystemTableCacheChange.bind(this);
+    this.peerReconciliationScheduled = false;
 
     // Rebalancer - manages replica placement when this partition is leader
     this.rebalancer = null;
@@ -319,8 +331,18 @@ class PartitionService extends EventEmitter {
     this.learnerCatchUpCheckIntervalMs = options.learnerCatchUpCheckIntervalMs ||
       PARTITION_SERVICE_DEFAULT.LEARNER_CATCH_UP_CHECK_INTERVAL_MS;
     this.learnerPromotionTimer = null;
+    // Transient split execution handle — NOT canonical workflow state.
+    // The durable split phase is owned by ManagedSplitWorkflow via
+    // DurableWorkflowCoordinator. This object caches active execution
+    // context (phase, pending write entries, flush guard) for the
+    // duration of one runSplitReplicationWorkflow() invocation.
+    // On process restart, the workflow owner reconstructs canonical
+    // state from durable rows; this handle is rebuilt from that state
+    // via reconstructSplitExecutionState().
     this.splitReplication = null;
     this.splitReplicationRun = null;
+    this.splitSnapshotBackfillYieldEveryRows =
+      SPLIT_SNAPSHOT_BACKFILL_YIELD_EVERY_ROWS;
   }
 
   get systemTableCache() {
@@ -328,6 +350,14 @@ class PartitionService extends EventEmitter {
   }
 
   set systemTableCache(systemTableCache) {
+    const previousCache = this._systemTableCache || null;
+    if (previousCache &&
+        previousCache !== systemTableCache &&
+        typeof previousCache.offCacheChange === PARTITION_SERVICE_TYPE.FUNCTION &&
+        this.systemTableCacheChangeListener) {
+      previousCache.offCacheChange(this.systemTableCacheChangeListener);
+    }
+
     this._systemTableCache = systemTableCache;
     this.roleMutationHelper?.setSystemTableCache(systemTableCache);
     this.leaderNodeMutationHelper?.setSystemTableCache(systemTableCache);
@@ -337,6 +367,13 @@ class PartitionService extends EventEmitter {
     if (this.rebalanceCoordinator) {
       this.rebalanceCoordinator.systemTableCache = systemTableCache;
     }
+    if (systemTableCache &&
+        systemTableCache !== previousCache &&
+        typeof systemTableCache.onCacheChange === PARTITION_SERVICE_TYPE.FUNCTION &&
+        this.systemTableCacheChangeListener) {
+      systemTableCache.onCacheChange(this.systemTableCacheChangeListener);
+    }
+    this.scheduleRaftPeerReconciliation();
   }
 
   get cdcIntegrationService() {
@@ -536,6 +573,7 @@ class PartitionService extends EventEmitter {
    */
   buildPeerAddress(peerId) {
     const addressManager = AddressManager.getInstance();
+    const cacheAddress = this.resolvePeerAddressFromCache(peerId);
 
     // If peerId is already in unified format, validate and return as-is.
     // Fail fast (and log) when a provided address is not unified.
@@ -575,6 +613,9 @@ class PartitionService extends EventEmitter {
           ) ||
           addr.endsWith(`${PARTITION_SERVICE_ADDRESS.SEPARATOR}${peerId}`)
         ) {
+          if (cacheAddress) {
+            return cacheAddress;
+          }
           this.logger.debug(PARTITION_SERVICE_LOG_MSG.PEER_ADDRESS_FROM_LIST, {
             peerId,
             address: addr,
@@ -585,23 +626,8 @@ class PartitionService extends EventEmitter {
       }
     }
 
-    // Try to look up nodeId from system table cache
-    if (this.systemTableCache) {
-      const service = this.systemTableCache.get(TABLES.SERVICES, peerId);
-      if (service && service.node_id) {
-        const address = addressManager.format(
-          service.node_id,
-          ENTITY_TYPE.PARTITION,
-          peerId,
-        );
-        this.logger.debug(PARTITION_SERVICE_LOG_MSG.PEER_ADDRESS_FROM_CACHE, {
-          peerId,
-          nodeId: service.node_id,
-          address,
-          partitionId: this.partitionId,
-        });
-        return address;
-      }
+    if (cacheAddress) {
+      return cacheAddress;
     }
 
     throw new Error(`Unable to resolve unified peer address for ${peerId}`);
@@ -618,6 +644,177 @@ class PartitionService extends EventEmitter {
     }
 
     return this.buildPeerAddress(this.leaderId);
+  }
+
+  /**
+   * Resolve one peer address from authoritative services cache state.
+   * Cache-backed rows override stale bootstrap peer hints when ownership moves.
+   * @param {string} peerId
+   * @return {string|null}
+   * @private
+   */
+  resolvePeerAddressFromCache(peerId) {
+    if (!this.systemTableCache ||
+        typeof this.systemTableCache.get !== PARTITION_SERVICE_TYPE.FUNCTION) {
+      return null;
+    }
+
+    const service = this.systemTableCache.get(TABLES.SERVICES, peerId);
+    if (!service || !service.node_id) {
+      return null;
+    }
+
+    const address = AddressManager.getInstance().format(
+      service.node_id,
+      ENTITY_TYPE.PARTITION,
+      peerId,
+    );
+    this.logger.debug(PARTITION_SERVICE_LOG_MSG.PEER_ADDRESS_FROM_CACHE, {
+      peerId,
+      nodeId: service.node_id,
+      address,
+      partitionId: this.partitionId,
+    });
+    return address;
+  }
+
+  /**
+   * React to authoritative services cache changes for this partition.
+   * Existing voters need this to discover newly added or moved peers.
+   * @param {string} tableName
+   * @param {string} _operation
+   * @param {Object} record
+   * @private
+   */
+  handleSystemTableCacheChange(tableName, _operation, record) {
+    if (tableName !== TABLES.SERVICES || !record) {
+      return;
+    }
+
+    if (record.partition_id !== this.partitionId ||
+        record.service_type !== SERVICE_TYPE.PARTITION) {
+      return;
+    }
+
+    this.scheduleRaftPeerReconciliation();
+  }
+
+  /**
+   * Coalesce peer reconciliation work triggered by cache updates.
+   * @private
+   */
+  scheduleRaftPeerReconciliation() {
+    if (this.peerReconciliationScheduled) {
+      return;
+    }
+
+    this.peerReconciliationScheduled = true;
+    setImmediate(() => {
+      this.peerReconciliationScheduled = false;
+      this.reconcileRaftPeersFromCache();
+    });
+  }
+
+  /**
+   * Join newly visible peers and replace moved peer addresses using the
+   * authoritative services cache. Missing rows are ignored conservatively.
+   * @private
+   */
+  reconcileRaftPeersFromCache() {
+    if (!this.raft ||
+        !this.systemTableCache ||
+        typeof this.systemTableCache.filter !== PARTITION_SERVICE_TYPE.FUNCTION) {
+      return;
+    }
+
+    const services = this.systemTableCache.filter(TABLES.SERVICES, (service) => {
+      return service.partition_id === this.partitionId &&
+        service.service_type === SERVICE_TYPE.PARTITION;
+    });
+    if (services.length === NUM.ZERO) {
+      return;
+    }
+
+    const addressManager = AddressManager.getInstance();
+    const expectedAddressesByReplicaId = new Map();
+    for (const service of services) {
+      const replicaId = service.service_id || service.replica_id;
+      if (!replicaId || replicaId === this.replicaId) {
+        continue;
+      }
+
+      const status = service.status || ReplicaStatus.ACTIVE;
+      if (status === ReplicaStatus.FAILED ||
+          status === ReplicaStatus.REMOVING ||
+          status === ReplicaStatus.REMOVED) {
+        continue;
+      }
+
+      const peerAddress =
+        typeof service.address === 'string' &&
+          service.address.length > NUM.ZERO ?
+          service.address :
+          (
+            typeof service.node_id === 'string' &&
+            service.node_id.length > NUM.ZERO ?
+              addressManager.format(
+                service.node_id,
+                ENTITY_TYPE.PARTITION,
+                replicaId,
+              ) :
+              null
+          );
+      if (!peerAddress) {
+        continue;
+      }
+
+      expectedAddressesByReplicaId.set(replicaId, peerAddress);
+      if (!this.replicaIds.includes(replicaId)) {
+        this.replicaIds.push(replicaId);
+      }
+    }
+
+    const currentNodes = Array.isArray(this.raft.nodes) ?
+      [...this.raft.nodes] :
+      [];
+    const currentAddresses = new Set(
+      currentNodes
+        .map((node) => node?.address)
+        .filter((address) =>
+          typeof address === 'string' && address.length > NUM.ZERO,
+        ),
+    );
+
+    for (const [replicaId, expectedAddress] of expectedAddressesByReplicaId.entries()) {
+      const staleAddresses = currentNodes
+        .map((node) => node?.address)
+        .filter((address) => {
+          if (typeof address !== 'string' ||
+              address.length === NUM.ZERO ||
+              address === expectedAddress) {
+            return false;
+          }
+          try {
+            const parsed = addressManager.parse(address);
+            return parsed.serviceType === ENTITY_TYPE.PARTITION &&
+              parsed.serviceId === replicaId;
+          } catch (_error) {
+            return false;
+          }
+        });
+
+      if (typeof this.raft.leave === PARTITION_SERVICE_TYPE.FUNCTION) {
+        for (const staleAddress of staleAddresses) {
+          this.raft.leave(staleAddress);
+          currentAddresses.delete(staleAddress);
+        }
+      }
+
+      if (!currentAddresses.has(expectedAddress)) {
+        this.raftProvider.joinPeer(this.raft, expectedAddress);
+        currentAddresses.add(expectedAddress);
+      }
+    }
   }
 
   /**
@@ -950,7 +1147,12 @@ class PartitionService extends EventEmitter {
     // Only consider it single-replica if replicaIds.length === 1
     // Do NOT use replicaIds.every() check as that could cause premature leadership
     // when peer list is incomplete (violates Requirements 4.3, 5.1, 5.2, 5.3)
-    const isSingleReplica = this.replicaIds.length === NUM.ONE;
+    const isSingleReplica = () => {
+      const peerCount = Array.isArray(this.raft?.nodes) ?
+        this.raft.nodes.length :
+        NUM.ZERO;
+      return this.replicaIds.length === NUM.ONE && peerCount === NUM.ZERO;
+    };
 
     // Learner phase: new replicas joining existing groups start as non-voting learners
     // They receive log entries but don't vote until caught up
@@ -977,7 +1179,7 @@ class PartitionService extends EventEmitter {
       },
       roles: RaftRole,
       getCurrentTerm: () => this.raftProvider.getCurrentTerm(this.raft),
-      shouldIgnoreDemotionEvent: () => isSingleReplica && this.isLeader,
+      shouldIgnoreDemotionEvent: () => isSingleReplica() && this.isLeader,
       onLeader: ({term}) => {
         this.storage.currentTerm = term;
 
@@ -1054,6 +1256,7 @@ class PartitionService extends EventEmitter {
         });
       }
     }
+    this.reconcileRaftPeersFromCache();
 
     this.maybeInitializeRebalancer();
 
@@ -1065,26 +1268,31 @@ class PartitionService extends EventEmitter {
     // Let liferaft handle all multi-replica elections
     // Requirements: 10.5
     if (this.replicaIds.length === NUM.ONE) {
-      // Manually promote to leader for single-replica case
-      this.role = RaftRole.LEADER;
-      this.isLeader = true;
-      this.leaderId = this.replicaId;
-      this.queueRoleUpdate(this.role);
-      this.queueLeaderNodeUpdate(this.nodeId);
-
-      // Activate rebalancer when becoming leader
-      if (this.rebalancer) {
-        this.rebalancer.setLeader(true);
+      if (this.raft &&
+          typeof this.raft.change === PARTITION_SERVICE_TYPE.FUNCTION) {
+        this.raft.change({
+          state: LifeRaft.LEADER,
+        });
+        this.raft.leader = this.unifiedAddress;
+      } else {
+        // Best-effort fallback when the embedded raft implementation is absent.
+        this.role = RaftRole.LEADER;
+        this.isLeader = true;
+        this.leaderId = this.replicaId;
+        this.queueRoleUpdate(this.role);
+        this.queueLeaderNodeUpdate(this.nodeId);
+        if (this.rebalancer) {
+          this.rebalancer.setLeader(true);
+        }
+        this.emit(PARTITION_SERVICE_EVENT.LEADER_ELECTED, {
+          leaderId: this.replicaId,
+          term: this.raftProvider.getCurrentTerm(this.raft),
+          partitionId: this.partitionId,
+        });
       }
 
       this.logger.info(PARTITION_SERVICE_LOG_MSG.SINGLE_REPLICA_LEADER, {
         replicaId: this.replicaId,
-        partitionId: this.partitionId,
-      });
-
-      this.emit(PARTITION_SERVICE_EVENT.LEADER_ELECTED, {
-        leaderId: this.replicaId,
-        term: this.raftProvider.getCurrentTerm(this.raft),
         partitionId: this.partitionId,
       });
     } else {
@@ -1830,6 +2038,9 @@ class PartitionService extends EventEmitter {
       };
     }
 
+    // Transient execution handle — the durable split phase is owned
+    // by ManagedSplitWorkflow. This object caches active execution
+    // context for the duration of runSplitReplicationWorkflow().
     this.splitReplication = {
       metadata,
       phase: PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING,
@@ -1842,7 +2053,8 @@ class PartitionService extends EventEmitter {
       .catch((error) => {
         if (this.splitReplication) {
           this.splitReplication.lastError = error.message;
-          this.splitReplication.phase = 'failed';
+          this.splitReplication.phase =
+            PARTITION_TRANSITION_STATE.FAILED;
         }
         this.logger.error(PARTITION_SERVICE_LOG_MSG.SPLIT_REPLICATION_FAILED, {
           partitionId: this.partitionId,
@@ -3513,6 +3725,8 @@ class PartitionService extends EventEmitter {
       splitKey: metadata[PARTITION_TRANSITION_METADATA_FIELD.SPLIT_KEY],
       targetPartitionIds: [...targetPartitionIds],
       targetPartitionVersion,
+      workflowId:
+        metadata[PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_ID] || null,
     };
   }
 
@@ -3540,6 +3754,61 @@ class PartitionService extends EventEmitter {
   }
 
   /**
+   * Reconstruct the transient split execution handle from durable
+   * workflow state after a process restart.
+   *
+   * The canonical split phase and participant state are owned by
+   * ManagedSplitWorkflow via DurableWorkflowCoordinator. This method
+   * rebuilds the local execution context so that
+   * handleSplitReplicationAfterWrite can route writes correctly while
+   * the workflow resumes.
+   *
+   * @param {Object} durableState - Durable workflow state.
+   * @param {string} durableState.phase - Canonical workflow phase from
+   *   PARTITION_TRANSITION_STATE.
+   * @param {Object} durableState.metadata - Normalized split
+   *   transition metadata (recoverable from the tables row).
+   * @return {Object|null} Reconstructed transient execution handle,
+   *   or null if the durable state is not an active split.
+   */
+  reconstructSplitExecutionState(durableState) {
+    if (!durableState || !durableState.phase || !durableState.metadata) {
+      return null;
+    }
+    const phase = durableState.phase;
+    const activeSplitPhases = new Set([
+      PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING,
+      PARTITION_TRANSITION_STATE.SPLIT_CATCHUP,
+      PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
+    ]);
+    if (!activeSplitPhases.has(phase)) {
+      return null;
+    }
+    const metadata =
+      this.normalizeSplitTransitionMetadata(durableState.metadata);
+    if (!metadata) {
+      return null;
+    }
+    this.splitReplication = {
+      metadata,
+      phase,
+      pendingEntries: [],
+      flushInFlight: false,
+      startedAt: Date.now(),
+      lastError: null,
+    };
+    this.logger.info(
+      PARTITION_SERVICE_LOG_MSG.SPLIT_REPLICATION_RECONSTRUCTED,
+      {
+        partitionId: this.partitionId,
+        phase,
+        workflowId: metadata.workflowId,
+      },
+    );
+    return this.splitReplication;
+  }
+
+  /**
    * Run snapshot backfill and queued-delta catch-up for the active split.
    * @return {Promise<void>}
    * @private
@@ -3548,7 +3817,9 @@ class PartitionService extends EventEmitter {
     const splitReplication = this.splitReplication;
     const metadata = splitReplication?.metadata || null;
     if (!metadata) {
-      throw new Error(PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_STATE_REQUIRED);
+      throw new Error(
+        PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_STATE_REQUIRED,
+      );
     }
 
     this.logger.info(PARTITION_SERVICE_LOG_MSG.SPLIT_REPLICATION_STARTED, {
@@ -3557,22 +3828,101 @@ class PartitionService extends EventEmitter {
       targetPartitionVersion: metadata.targetPartitionVersion,
     });
 
+    await this.emitSplitSourceAck(metadata, SPLIT_ACK_STATUS.SNAPSHOT_STARTED);
+
     const snapshot = this.openSplitSnapshotDatabase();
     try {
       await this.backfillSplitSnapshot(snapshot, metadata);
-      splitReplication.phase = 'split_catchup';
+      splitReplication.phase = PARTITION_TRANSITION_STATE.SPLIT_CATCHUP;
+
+      await this.emitSplitSourceAck(
+        metadata,
+        SPLIT_ACK_STATUS.CATCHUP_READY,
+      );
+
       await this.flushSplitReplicationQueue();
       await this.markSplitCutoverActive(metadata);
       splitReplication.phase = PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE;
       await this.flushSplitReplicationQueue();
-      this.logger.info(PARTITION_SERVICE_LOG_MSG.SPLIT_REPLICATION_COMPLETED, {
-        partitionId: this.partitionId,
-        targetPartitionIds: metadata.targetPartitionIds,
-        targetPartitionVersion: metadata.targetPartitionVersion,
-      });
+
+      await this.emitSplitSourceAck(
+        metadata,
+        SPLIT_ACK_STATUS.CLEANUP_COMPLETED,
+        {
+          [SPLIT_ACK_CHECKPOINT_FIELD.SOURCE_MIRROR_REMOVED]: false,
+        },
+      );
+
+      this.logger.info(
+        PARTITION_SERVICE_LOG_MSG.SPLIT_REPLICATION_COMPLETED,
+        {
+          partitionId: this.partitionId,
+          targetPartitionIds: metadata.targetPartitionIds,
+          targetPartitionVersion: metadata.targetPartitionVersion,
+        },
+      );
     } finally {
       snapshot?.close?.();
     }
+  }
+
+  /**
+   * Emit a typed source-side split acknowledgement to the workflow owner.
+   *
+   * Builds a canonical PARTICIPANT_ACK_FIELD payload and routes it
+   * through ManagedSplitWorkflow.acknowledgeSourceParticipant so the
+   * durable workflow coordinator persists participant state.
+   *
+   * @param {Object} metadata - Normalized split transition metadata.
+   * @param {string} ackStatus - SPLIT_ACK_STATUS value.
+   * @param {Object} [checkpoint] - Optional checkpoint data.
+   * @return {Promise<Object>} Acknowledgement result.
+   * @private
+   */
+  async emitSplitSourceAck(metadata, ackStatus, checkpoint) {
+    const splitWorkflow = this.sqlQueryEngine?.managedSplitWorkflow;
+    if (!splitWorkflow ||
+        typeof splitWorkflow.acknowledgeSourceParticipant !==
+          PARTITION_SERVICE_TYPE.FUNCTION) {
+      throw new Error(
+        PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_STATE_REQUIRED,
+      );
+    }
+
+    const workflowId = metadata.workflowId;
+    if (!workflowId) {
+      throw new Error(
+        PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_STATE_REQUIRED,
+      );
+    }
+
+    const ack = {
+      [PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY]:
+        SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION,
+      [PARTICIPANT_ACK_FIELD.STATUS]: ackStatus,
+      [PARTICIPANT_ACK_FIELD.ACKNOWLEDGED_AT]: Date.now(),
+    };
+
+    if (checkpoint) {
+      ack[PARTICIPANT_ACK_FIELD.CHECKPOINT] = checkpoint;
+    }
+
+    const result = await splitWorkflow.acknowledgeSourceParticipant(
+      workflowId,
+      ack,
+    );
+
+    this.logger.info(
+      PARTITION_SERVICE_LOG_MSG.SPLIT_REPLICATION_ACK_EMITTED,
+      {
+        partitionId: this.partitionId,
+        workflowId,
+        ackStatus,
+        result: result?.result,
+      },
+    );
+
+    return result;
   }
 
   /**
@@ -3599,6 +3949,43 @@ class PartitionService extends EventEmitter {
   }
 
   /**
+   * Yield one event-loop turn during source snapshot backfill so a split does
+   * not monopolize unrelated partitions on the same node.
+   * @return {Promise<void>}
+   * @private
+   */
+  async yieldSplitBackfillTurn() {
+    await new Promise((resolve) => {
+      if (typeof setImmediate === 'function') {
+        setImmediate(resolve);
+        return;
+      }
+      setTimeout(resolve, NUM.ZERO);
+    });
+  }
+
+  /**
+   * Create a row iterator for split snapshot backfill.
+   * Prefer iterate() so large source snapshots are streamed.
+   * @param {Database|Object} snapshotDb - Snapshot handle.
+   * @param {Object} metadata - Normalized split metadata.
+   * @return {Iterable<Object>}
+   * @private
+   */
+  createSplitSnapshotRowIterator(snapshotDb, metadata) {
+    const sql = `SELECT * FROM ${this.tableName} ` +
+      `ORDER BY ${metadata.primaryKeyColumn}`;
+    const statement = snapshotDb.prepare(sql);
+    if (statement && typeof statement.iterate === 'function') {
+      return statement.iterate();
+    }
+    if (statement && typeof statement.all === 'function') {
+      return statement.all();
+    }
+    return [];
+  }
+
+  /**
    * Copy the source snapshot into child partitions using idempotent upserts.
    * @param {Database|Object} snapshotDb - Snapshot handle.
    * @param {Object} metadata - Normalized split metadata.
@@ -3608,12 +3995,18 @@ class PartitionService extends EventEmitter {
   async backfillSplitSnapshot(snapshotDb, metadata) {
     const columns = snapshotDb.prepare(`PRAGMA table_info(${this.tableName})`).all()
       .map((column) => column.name);
-    const sql = `SELECT * FROM ${this.tableName} ` +
-      `ORDER BY ${metadata.primaryKeyColumn}`;
-    const rows = snapshotDb.prepare(sql).all();
+    const rows = this.createSplitSnapshotRowIterator(snapshotDb, metadata);
+    let processedRowCount = NUM.ZERO;
 
     for (const row of rows) {
       await this.applySplitSnapshotRow(row, columns, metadata);
+      processedRowCount += NUM.ONE;
+      if (
+        this.splitSnapshotBackfillYieldEveryRows > NUM.ZERO &&
+        processedRowCount % this.splitSnapshotBackfillYieldEveryRows === NUM.ZERO
+      ) {
+        await this.yieldSplitBackfillTurn();
+      }
     }
   }
 
@@ -3647,29 +4040,40 @@ class PartitionService extends EventEmitter {
    * @private
    */
   async markSplitCutoverActive(metadata) {
-    if (!this.cdcIntegrationService) {
-      throw new Error(PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_STATE_REQUIRED);
+    const splitWorkflow =
+      this.sqlQueryEngine?.managedSplitWorkflow;
+    if (!splitWorkflow ||
+        typeof splitWorkflow.advanceSplitPhase !== 'function') {
+      throw new Error(
+        PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_STATE_REQUIRED,
+      );
     }
 
-    await this.cdcIntegrationService.updateSystemTableRow(
-      TABLES.TABLES,
-      {table_id: this.tableId},
+    const workflowId = metadata.workflowId;
+    if (!workflowId) {
+      throw new Error(
+        PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_STATE_REQUIRED,
+      );
+    }
+
+    await splitWorkflow.advanceSplitPhase(
+      workflowId,
+      PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
       {
-        active_partition_version: metadata.targetPartitionVersion,
-        pending_partition_version: null,
-        partition_count: metadata.targetPartitionIds.length,
-        partition_transition_state:
-          PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
-        updated_at: Date.now(),
+        [PARTITION_TRANSITION_METADATA_FIELD.CUTOVER_APPLIED_AT]:
+          Date.now(),
       },
     );
 
-    this.logger.info(PARTITION_SERVICE_LOG_MSG.SPLIT_REPLICATION_CUTOVER_UPDATED, {
-      partitionId: this.partitionId,
-      tableId: this.tableId,
-      targetPartitionVersion: metadata.targetPartitionVersion,
-      targetPartitionIds: metadata.targetPartitionIds,
-    });
+    this.logger.info(
+      PARTITION_SERVICE_LOG_MSG.SPLIT_REPLICATION_CUTOVER_UPDATED,
+      {
+        partitionId: this.partitionId,
+        tableId: this.tableId,
+        targetPartitionVersion: metadata.targetPartitionVersion,
+        targetPartitionIds: metadata.targetPartitionIds,
+      },
+    );
   }
 
   /**
@@ -3692,7 +4096,7 @@ class PartitionService extends EventEmitter {
     }
 
     if (splitReplication.phase === PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING ||
-        splitReplication.phase === 'split_catchup') {
+        splitReplication.phase === PARTITION_TRANSITION_STATE.SPLIT_CATCHUP) {
       splitReplication.pendingEntries.push(this.cloneSplitEntry(entry));
       return;
     }
@@ -4707,6 +5111,12 @@ class PartitionService extends EventEmitter {
     if (this.learnerPromotionTimer) {
       clearTimeout(this.learnerPromotionTimer);
       this.learnerPromotionTimer = null;
+    }
+    this.peerReconciliationScheduled = false;
+    if (this.systemTableCache &&
+        typeof this.systemTableCache.offCacheChange === PARTITION_SERVICE_TYPE.FUNCTION &&
+        this.systemTableCacheChangeListener) {
+      this.systemTableCache.offCacheChange(this.systemTableCacheChangeListener);
     }
 
     // Close log adapter first to prevent database access after close

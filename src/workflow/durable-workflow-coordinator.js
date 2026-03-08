@@ -1,6 +1,9 @@
 import {
   WORKFLOW_ERROR_MSG,
   WORKFLOW_TRANSITION_FIELD,
+  PARTICIPANT_ACK_RESULT,
+  PARTICIPANT_ACK_FIELD,
+  ACK_REJECTION_DIAGNOSTIC_FIELD,
   buildTransitionIdempotencyKey,
 } from './workflow-constants.js';
 
@@ -12,11 +15,15 @@ class DurableWorkflowCoordinator {
    * @param {Object} options - Coordinator options.
    * @param {Function} [options.persistWorkflow] - Persist workflow callback.
    * @param {Function} [options.persistParticipant] - Persist participant callback.
+   * @param {Function} [options.onAckRejection] - Diagnostic callback invoked
+   *   when a participant acknowledgement is rejected (stale fence, duplicate,
+   *   or participant not found). Receives a typed diagnostic record.
    * @param {Function} [options.now] - Clock function.
    */
   constructor(options = {}) {
     this.persistWorkflow = options.persistWorkflow || (async () => {});
     this.persistParticipant = options.persistParticipant || (async () => {});
+    this.onAckRejection = options.onAckRejection || null;
     this.now = options.now || (() => Date.now());
     this.workflowsById = new Map();
     this.workflowsByOwnerKey = new Map();
@@ -225,6 +232,114 @@ class DurableWorkflowCoordinator {
     workflow.participants.set(participant.participantKey, participant);
     await this.persistParticipant(participant);
     return participant;
+  }
+
+  /**
+   * Process a typed participant acknowledgement with fence validation.
+   *
+   * Validates workflow identity, participant identity, and fence token
+   * before persisting the acknowledgement. Returns a typed result so the
+   * caller can distinguish accepted, stale, duplicate, and not-found
+   * outcomes without catching exceptions.
+   *
+   * @param {string} workflowId - Workflow ID.
+   * @param {Object} ack - Acknowledgement payload.
+   * @param {string} ack.participantKey - Participant key.
+   * @param {string} ack.status - New participant status.
+   * @param {number} [ack.fenceToken] - Epoch or lease token.
+   * @param {Object} [ack.checkpoint] - Resumable checkpoint data.
+   * @return {Promise<Object>} Typed acknowledgement result with
+   *   `result` (PARTICIPANT_ACK_RESULT), `participantKey`, and
+   *   optional `reason`.
+   */
+  async acknowledgeParticipant(workflowId, ack) {
+    const participantKey =
+      ack?.[PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY] || '';
+    if (!participantKey) {
+      throw new Error(WORKFLOW_ERROR_MSG.PARTICIPANT_KEY_REQUIRED);
+    }
+    const ackStatus = ack?.[PARTICIPANT_ACK_FIELD.STATUS] || '';
+    if (!ackStatus) {
+      throw new Error(WORKFLOW_ERROR_MSG.ACK_STATUS_REQUIRED);
+    }
+
+    const workflow = this.requireWorkflow(workflowId);
+    const participant = workflow.participants.get(participantKey);
+    if (!participant) {
+      const notFoundResult = {
+        result: PARTICIPANT_ACK_RESULT.PARTICIPANT_NOT_FOUND,
+        participantKey,
+        reason: WORKFLOW_ERROR_MSG.participantNotFound(participantKey),
+      };
+      this.emitAckRejectionDiagnostic(workflowId, participantKey, {
+        rejectionResult: PARTICIPANT_ACK_RESULT.PARTICIPANT_NOT_FOUND,
+        reason: notFoundResult.reason,
+        receivedStatus: ackStatus,
+      });
+      return notFoundResult;
+    }
+
+    // Fence token validation: reject stale acknowledgements.
+    const ackFence = ack?.[PARTICIPANT_ACK_FIELD.FENCE_TOKEN];
+    if (ackFence !== undefined && ackFence !== null) {
+      const currentFence = participant.fenceToken;
+      if (currentFence !== undefined && currentFence !== null &&
+          ackFence < currentFence) {
+        const staleResult = {
+          result: PARTICIPANT_ACK_RESULT.STALE_FENCE,
+          participantKey,
+          reason: WORKFLOW_ERROR_MSG.STALE_FENCE_TOKEN,
+          currentFenceToken: currentFence,
+          receivedFenceToken: ackFence,
+        };
+        this.emitAckRejectionDiagnostic(workflowId, participantKey, {
+          rejectionResult: PARTICIPANT_ACK_RESULT.STALE_FENCE,
+          reason: WORKFLOW_ERROR_MSG.STALE_FENCE_TOKEN,
+          receivedStatus: ackStatus,
+          currentFenceToken: currentFence,
+          receivedFenceToken: ackFence,
+        });
+        return staleResult;
+      }
+      participant.fenceToken = ackFence;
+    }
+
+    // Duplicate detection: same status already acknowledged.
+    if (participant.status === ackStatus &&
+        participant.acknowledgedAt !== undefined) {
+      const duplicateResult = {
+        result: PARTICIPANT_ACK_RESULT.DUPLICATE,
+        participantKey,
+        reason: WORKFLOW_ERROR_MSG.DUPLICATE_TRANSITION,
+      };
+      this.emitAckRejectionDiagnostic(workflowId, participantKey, {
+        rejectionResult: PARTICIPANT_ACK_RESULT.DUPLICATE,
+        reason: WORKFLOW_ERROR_MSG.DUPLICATE_TRANSITION,
+        receivedStatus: ackStatus,
+        currentStatus: participant.status,
+      });
+      return duplicateResult;
+    }
+
+    // Apply acknowledgement.
+    const now = this.now();
+    participant.status = ackStatus;
+    participant.acknowledgedAt = now;
+    participant.updatedAt = now;
+
+    // Persist checkpoint data alongside participant state.
+    const checkpoint = ack?.[PARTICIPANT_ACK_FIELD.CHECKPOINT];
+    if (checkpoint !== undefined && checkpoint !== null) {
+      participant.checkpoint = checkpoint;
+    }
+
+    await this.persistParticipant(participant);
+
+    return {
+      result: PARTICIPANT_ACK_RESULT.ACCEPTED,
+      participantKey,
+      acknowledgedAt: now,
+    };
   }
 
   /**
@@ -512,6 +627,44 @@ class DurableWorkflowCoordinator {
   markTransitionCommitted(operationId, stepId) {
     const key = buildTransitionIdempotencyKey(operationId, stepId);
     this.committedTransitions.add(key);
+  }
+
+  /**
+   * Emit a typed diagnostic record for a rejected acknowledgement.
+   *
+   * Invokes the onAckRejection callback (if wired) with a frozen
+   * diagnostic record containing workflow identity, participant key,
+   * rejection result, reason, and fence/status context.
+   *
+   * @param {string} workflowId - Workflow ID.
+   * @param {string} participantKey - Participant key.
+   * @param {Object} context - Rejection context fields.
+   * @return {Object|null} The emitted diagnostic record, or null.
+   * @private
+   */
+  emitAckRejectionDiagnostic(workflowId, participantKey, context = {}) {
+    if (typeof this.onAckRejection !== 'function') {
+      return null;
+    }
+    const record = Object.freeze({
+      [ACK_REJECTION_DIAGNOSTIC_FIELD.WORKFLOW_ID]: workflowId,
+      [ACK_REJECTION_DIAGNOSTIC_FIELD.PARTICIPANT_KEY]: participantKey,
+      [ACK_REJECTION_DIAGNOSTIC_FIELD.REJECTION_RESULT]:
+        context.rejectionResult || null,
+      [ACK_REJECTION_DIAGNOSTIC_FIELD.REASON]:
+        context.reason || null,
+      [ACK_REJECTION_DIAGNOSTIC_FIELD.RECEIVED_STATUS]:
+        context.receivedStatus || null,
+      [ACK_REJECTION_DIAGNOSTIC_FIELD.CURRENT_STATUS]:
+        context.currentStatus || null,
+      [ACK_REJECTION_DIAGNOSTIC_FIELD.RECEIVED_FENCE_TOKEN]:
+        context.receivedFenceToken ?? null,
+      [ACK_REJECTION_DIAGNOSTIC_FIELD.CURRENT_FENCE_TOKEN]:
+        context.currentFenceToken ?? null,
+      [ACK_REJECTION_DIAGNOSTIC_FIELD.TIMESTAMP]: this.now(),
+    });
+    this.onAckRejection(record);
+    return record;
   }
 
   /**

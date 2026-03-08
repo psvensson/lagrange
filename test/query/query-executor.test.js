@@ -753,6 +753,133 @@ test('QueryExecutor - findPartitionLeaderAddress fails closed without canonical 
     t.end();
   });
 
+test('QueryExecutor - findPartitionLeaderAddress allows a fresh bootstrap ' +
+  'leader fallback before leader_node_id converges', (t) => {
+  const systemCache = {
+    partitions: [
+      {
+        partition_id: 'p1',
+        leader_node_id: null,
+        created_at: 100,
+        updated_at: 100,
+      },
+    ],
+    services: [
+      {
+        service_id: 'p1-r1',
+        service_type: 'partition',
+        partition_id: 'p1',
+        node_id: 'node1',
+        raft_role: 'follower',
+        address: 'node1/partition/p1-r1',
+        status: 'active',
+      },
+      {
+        service_id: 'p1-r2',
+        service_type: 'partition',
+        partition_id: 'p1',
+        node_id: 'node2',
+        raft_role: 'leader',
+        address: 'node2/partition/p1-r2',
+        status: 'active',
+      },
+      {
+        service_id: 'p1-r3',
+        service_type: 'partition',
+        partition_id: 'p1',
+        node_id: 'node3',
+        raft_role: 'follower',
+        address: 'node3/partition/p1-r3',
+        status: 'active',
+      },
+    ],
+    get: function(type, key) {
+      if (type === 'partitions') {
+        return this.partitions.find((partition) => partition.partition_id === key) || null;
+      }
+      return null;
+    },
+    filter: function(type, predicate) {
+      if (type === 'services') {
+        return this.services.filter(predicate);
+      }
+      if (type === 'partitions') {
+        return this.partitions.filter(predicate);
+      }
+      return [];
+    },
+  };
+
+  const executor = new QueryExecutor({
+    messageRouter: createMockMessageRouter(),
+    systemCache,
+  });
+
+  const address = executor.findPartitionLeaderAddress('p1');
+
+  t.equal(address, 'node2/partition/p1-r2');
+  t.end();
+});
+
+test('QueryExecutor - fresh bootstrap fallback still fails closed when leader ' +
+  'service metadata is ambiguous', (t) => {
+  const systemCache = {
+    partitions: [
+      {
+        partition_id: 'p1',
+        leader_node_id: null,
+        created_at: 100,
+        updated_at: 100,
+      },
+    ],
+    services: [
+      {
+        service_id: 'p1-r1',
+        service_type: 'partition',
+        partition_id: 'p1',
+        node_id: 'node1',
+        raft_role: 'leader',
+        address: 'node1/partition/p1-r1',
+        status: 'active',
+      },
+      {
+        service_id: 'p1-r2',
+        service_type: 'partition',
+        partition_id: 'p1',
+        node_id: 'node2',
+        raft_role: 'leader',
+        address: 'node2/partition/p1-r2',
+        status: 'active',
+      },
+    ],
+    get: function(type, key) {
+      if (type === 'partitions') {
+        return this.partitions.find((partition) => partition.partition_id === key) || null;
+      }
+      return null;
+    },
+    filter: function(type, predicate) {
+      if (type === 'services') {
+        return this.services.filter(predicate);
+      }
+      if (type === 'partitions') {
+        return this.partitions.filter(predicate);
+      }
+      return [];
+    },
+  };
+
+  const executor = new QueryExecutor({
+    messageRouter: createMockMessageRouter(),
+    systemCache,
+  });
+
+  const address = executor.findPartitionLeaderAddress('p1');
+
+  t.equal(address, null);
+  t.end();
+});
+
 test('QueryExecutor - executeOnPartition fails closed on stale service leader hints',
   async (t) => {
     let deliveries = 0;
@@ -817,6 +944,97 @@ test('QueryExecutor - executeOnPartition fails closed on stale service leader hi
     t.equal(result.error, ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE);
     t.equal(deliveries, 0, 'write path should not dispatch using stale service hints');
   });
+
+test('QueryExecutor - executeOnPartition dispatches writes during the fresh ' +
+  'bootstrap leader window', async (t) => {
+  let deliveries = 0;
+  let lastAddress = null;
+  const systemCache = {
+    partitions: [
+      {
+        partition_id: 'p1',
+        leader_node_id: null,
+        created_at: 100,
+        updated_at: 100,
+      },
+    ],
+    services: [
+      {
+        service_id: 'p1-r1',
+        service_type: 'partition',
+        partition_id: 'p1',
+        node_id: 'node1',
+        raft_role: 'follower',
+        address: 'node1/partition/p1-r1',
+        status: 'active',
+      },
+      {
+        service_id: 'p1-r2',
+        service_type: 'partition',
+        partition_id: 'p1',
+        node_id: 'node2',
+        raft_role: 'leader',
+        address: 'node2/partition/p1-r2',
+        status: 'active',
+      },
+      {
+        service_id: 'p1-r3',
+        service_type: 'partition',
+        partition_id: 'p1',
+        node_id: 'node3',
+        raft_role: 'follower',
+        address: 'node3/partition/p1-r3',
+        status: 'active',
+      },
+    ],
+    get: function(type, key) {
+      if (type === 'partitions') {
+        return this.partitions.find((partition) => partition.partition_id === key) || null;
+      }
+      return null;
+    },
+    filter: function(type, predicate) {
+      if (type === 'services') {
+        return this.services.filter(predicate);
+      }
+      if (type === 'partitions') {
+        return this.partitions.filter(predicate);
+      }
+      return [];
+    },
+  };
+  const messageRouter = {
+    deliver: async (address) => {
+      deliveries += 1;
+      lastAddress = address;
+      return {
+        acknowledged: true,
+        success: true,
+        rows: [],
+      };
+    },
+  };
+
+  const executor = new QueryExecutor({
+    messageRouter,
+    systemCache,
+  });
+  executor.leaderRetryAttempts = 1;
+  executor.leaderRetryDelayMs = 1;
+
+  const result = await executor.executeOnPartition(
+    'p1',
+    'INSERT INTO users (id) VALUES (\'1\')',
+    [],
+    false,
+    false,
+    false,
+  );
+
+  t.equal(result.success, true);
+  t.equal(lastAddress, 'node2/partition/p1-r2');
+  t.equal(deliveries, 1, 'write path should dispatch through the visible bootstrap leader');
+});
 
 test('QueryExecutor - findPartitionLeaderAddress prefers canonical partition leader ' +
   'over stale service raft_role metadata', (t) => {

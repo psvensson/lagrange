@@ -36,6 +36,17 @@ function resolveOptionalTimeoutMs(value) {
   return normalizedValue;
 }
 
+function resolveOptionalLane(value) {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const normalized = value.trim().toLowerCase();
+  if (normalized.length === ZERO) {
+    return null;
+  }
+  return normalized;
+}
+
 function isAdminMessageDispatchable(type) {
   return type === ADMIN_MESSAGE_TYPE.QUERY ||
     type === ADMIN_MESSAGE_TYPE.PARTITION_CALLBACK ||
@@ -120,6 +131,7 @@ function adaptAdminMessageToServiceMessage(message, context = {}) {
     [SERVICE_MESSAGE_FIELD.METADATA]: {
       adminMessageType: messageType,
       clientId: context.clientId || null,
+      lane: resolveOptionalLane(context.lane || message.lane),
     },
     [SERVICE_MESSAGE_FIELD.TENANT_ID]: context.tenantId || null,
     [SERVICE_MESSAGE_FIELD.PRINCIPAL]: context.principal || null,

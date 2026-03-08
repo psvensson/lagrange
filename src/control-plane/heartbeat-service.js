@@ -23,6 +23,8 @@ import {
   TRANSPORT_DEFAULT,
 } from '../constants/transport.js';
 import {assertCritical} from '../utils/assert.js';
+import {AuthoritativeControlPlaneView} from
+  './authoritative-control-plane-view.js';
 import {
   HEARTBEAT_CONFIG_KEY,
   HEARTBEAT_DEFAULT,
@@ -40,9 +42,54 @@ const ZERO = 0;
 const ONE = 1;
 const MS_PER_MINUTE = 60000;
 const MIN_REGRESSION_SAMPLE_COUNT = 2;
+const REPORTER_VISIBILITY_QUERY_TIMEOUT_MS = 1000;
 
 const ENDPOINT_ID_PREFIX = 'ep-';
 const ENDPOINT_ID_SUFFIX = '-ws';
+
+function normalizeHeartbeatPublicationTimestamp(value) {
+  if (typeof value === TYPEOF.STRING && value.length > ZERO) {
+    return value;
+  }
+  const timestampMs = Number(value);
+  if (!Number.isFinite(timestampMs)) {
+    return null;
+  }
+  return new Date(timestampMs).toISOString();
+}
+
+function normalizeHeartbeatPublicationDiagnostics(source, fallbackPath = null) {
+  const value = source && typeof source === TYPEOF.OBJECT ? source : {};
+  const targetAddress = typeof value.targetAddress === TYPEOF.STRING &&
+    value.targetAddress.length > ZERO ?
+    value.targetAddress :
+    null;
+  const addressParts = targetAddress ? targetAddress.split('/') : [];
+  const targetNodeId = typeof value.targetNodeId === TYPEOF.STRING &&
+    value.targetNodeId.length > ZERO ?
+    value.targetNodeId :
+    (addressParts[ZERO] || null);
+  const targetServiceType = typeof value.targetServiceType === TYPEOF.STRING &&
+    value.targetServiceType.length > ZERO ?
+    value.targetServiceType :
+    (addressParts[ONE] || null);
+  const targetServiceId = typeof value.targetServiceId === TYPEOF.STRING &&
+    value.targetServiceId.length > ZERO ?
+    value.targetServiceId :
+    (addressParts.slice(2).join('/') || null);
+  const publicationPath = typeof value.publicationPath === TYPEOF.STRING &&
+    value.publicationPath.length > ZERO ?
+    value.publicationPath :
+    fallbackPath;
+
+  return {
+    publicationPath,
+    targetAddress,
+    targetNodeId,
+    targetServiceType,
+    targetServiceId,
+  };
+}
 
 /**
  * Estimate usage-percent slope (percent per minute) with linear regression.
@@ -99,6 +146,10 @@ class HeartbeatService extends EventEmitter {
     this.nodeStateReporter = typeof options.nodeStateReporter === 'function' ?
       options.nodeStateReporter :
       null;
+    this.verifyReporterVisibilityOnSuccess =
+      options.verifyReporterVisibilityOnSuccess === true;
+    this.fallbackToCdcOnReporterVisibilityGap =
+      options.fallbackToCdcOnReporterVisibilityGap === true;
     this.now = typeof options.now === 'function' ?
       options.now :
       () => Date.now();
@@ -114,6 +165,8 @@ class HeartbeatService extends EventEmitter {
     this.clearTimeoutFn = typeof options.clearTimeoutFn === 'function' ?
       options.clearTimeoutFn :
       clearTimeout;
+    this.authoritativeControlPlaneView =
+      options.authoritativeControlPlaneView || null;
 
     const config = ConfigurationManager.getInstance();
     this.heartbeatIntervalMs =
@@ -139,6 +192,11 @@ class HeartbeatService extends EventEmitter {
         HEARTBEAT_DEFAULT.NODE_METADATA_MAX_STALENESS_MS;
     this.heartbeatAttemptTimeoutMs =
       this.resolveHeartbeatAttemptTimeoutMs(options.heartbeatAttemptTimeoutMs);
+    this.reporterVisibilityQueryTimeoutMs =
+      Number.isFinite(options.reporterVisibilityQueryTimeoutMs) &&
+        options.reporterVisibilityQueryTimeoutMs > ZERO ?
+        Math.floor(options.reporterVisibilityQueryTimeoutMs) :
+        REPORTER_VISIBILITY_QUERY_TIMEOUT_MS;
 
     this.heartbeatTimer = null;
     this.heartbeatConsecutiveFailures = NUM.ZERO;
@@ -151,6 +209,19 @@ class HeartbeatService extends EventEmitter {
     this.lastNodeHeartbeatWriteSignature = null;
     this.lastEndpointUpsertAt = null;
     this.lastEndpointUpsertSignature = null;
+    this.heartbeatPublicationDiagnostics = {
+      lastAttemptAt: null,
+      lastSuccessAt: null,
+      lastFailureAt: null,
+      lastFailureStage: null,
+      lastFailureReason: null,
+      publicationPath: null,
+      targetAddress: null,
+      targetNodeId: null,
+      targetServiceType: null,
+      targetServiceId: null,
+      consecutiveFailures: NUM.ZERO,
+    };
     this.quietModeSuppressedCounts = {
       nodeHeartbeatWrites: NUM.ZERO,
       endpointUpserts: NUM.ZERO,
@@ -255,6 +326,100 @@ class HeartbeatService extends EventEmitter {
   }
 
   /**
+   * Resolve one bounded query timeout for heartbeat write-side SQL.
+   * Keeps write routing below the outer heartbeat-attempt watchdog so
+   * failed writes do not continue consuming resources after the attempt
+   * has already been marked as timed out.
+   * @return {number}
+   * @private
+   */
+  resolveHeartbeatWriteQueryTimeoutMs() {
+    return Math.max(
+      ONE,
+      this.heartbeatAttemptTimeoutMs -
+        HEARTBEAT_DEFAULT.ATTEMPT_TIMEOUT_SAFETY_MARGIN_MS,
+    );
+  }
+
+  /**
+   * Split heartbeat write budget so reporter fallback leaves time for CDC.
+   * @param {number|null|undefined} heartbeatWriteQueryTimeoutMs
+   * @return {number}
+   * @private
+   */
+  resolveNodeStateReporterTimeoutMs(heartbeatWriteQueryTimeoutMs) {
+    const writeTimeoutMs = Number(heartbeatWriteQueryTimeoutMs);
+    if (!Number.isFinite(writeTimeoutMs) || writeTimeoutMs <= ZERO) {
+      return ONE;
+    }
+    return Math.max(ONE, Math.floor(writeTimeoutMs / 2));
+  }
+
+  /**
+   * Return true when one node-state reporter error was raised by the local
+   * reporter timeout watchdog.
+   * @param {Error|Object|null} error
+   * @return {boolean}
+   * @private
+   */
+  isNodeStateReporterTimeoutError(error) {
+    return error?.code === 'node_state_reporter_timeout';
+  }
+
+  /**
+   * Execute node-state reporter with an explicit timeout budget.
+   * @param {Object} payload
+   * @param {number} timeoutMs
+   * @return {Promise<Object>}
+   * @private
+   */
+  async callNodeStateReporterWithTimeout(payload, timeoutMs) {
+    const boundedTimeoutMs = Number(timeoutMs);
+    if (!Number.isFinite(boundedTimeoutMs) || boundedTimeoutMs <= ZERO) {
+      return this.nodeStateReporter(payload);
+    }
+
+    let timeoutHandle = null;
+    let settled = false;
+    return new Promise((resolve, reject) => {
+      const finalize = (callback, value) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        if (timeoutHandle) {
+          this.clearTimeoutFn(timeoutHandle);
+          timeoutHandle = null;
+        }
+        callback(value);
+      };
+
+      timeoutHandle = this.setTimeoutFn(() => {
+        const timeoutError = new Error(
+          `Node-state reporter timed out after ${boundedTimeoutMs}ms`,
+        );
+        timeoutError.code = 'node_state_reporter_timeout';
+        timeoutError.publicationDiagnostics = {
+          publicationPath: 'node_state_reporter',
+        };
+        finalize(reject, timeoutError);
+      }, boundedTimeoutMs);
+      if (typeof timeoutHandle?.unref === TYPEOF.FUNCTION) {
+        timeoutHandle.unref();
+      }
+
+      Promise.resolve()
+        .then(() => this.nodeStateReporter(payload))
+        .then((result) => {
+          finalize(resolve, result);
+        })
+        .catch((error) => {
+          finalize(reject, error);
+        });
+    });
+  }
+
+  /**
    * Set the node-state reporter used for control-plane mediated heartbeats.
    * @param {Function|null} reporter - Async reporter callback.
    */
@@ -325,6 +490,7 @@ class HeartbeatService extends EventEmitter {
             previousFailures: this.heartbeatConsecutiveFailures,
           });
           this.heartbeatConsecutiveFailures = NUM.ZERO;
+          this.heartbeatPublicationDiagnostics.consecutiveFailures = NUM.ZERO;
         }
 
         this.emit(HEARTBEAT_EVENT.HEARTBEAT_SENT, {
@@ -380,10 +546,12 @@ class HeartbeatService extends EventEmitter {
       id: this.heartbeatAttemptSequence + ONE,
       timedOut: false,
       timeoutHandle: null,
+      startedAtMs: this.now(),
     };
     this.heartbeatAttemptSequence = attempt.id;
     this.activeHeartbeatAttempt = attempt;
     this.heartbeatInFlight = true;
+    this.recordHeartbeatPublicationAttempt(attempt.startedAtMs);
 
     attempt.timeoutHandle = this.setTimeoutFn(() => {
       if (attempt.timedOut) {
@@ -473,6 +641,8 @@ class HeartbeatService extends EventEmitter {
       updateRow.memory_usage_percent,
       now,
     );
+    const heartbeatWriteQueryTimeoutMs =
+      this.resolveHeartbeatWriteQueryTimeoutMs();
 
     const quietModeActive = this.isQuietModeActive();
     const nodeWriteDecision = this.resolveNodeHeartbeatWriteDecision(
@@ -496,7 +666,12 @@ class HeartbeatService extends EventEmitter {
     }
 
     if (shouldWriteNodeHeartbeat) {
-      await this.writeNodeHeartbeat(updateRow, capabilities, now);
+      await this.writeNodeHeartbeat(
+        updateRow,
+        capabilities,
+        now,
+        heartbeatWriteQueryTimeoutMs,
+      );
       this.lastNodeHeartbeatWriteAt = now;
       this.lastNodeHeartbeatWriteSignature =
         this.buildNodeHeartbeatWriteSignature(updateRow);
@@ -517,6 +692,10 @@ class HeartbeatService extends EventEmitter {
       }
       await this.cdcIntegrationService.upsertSystemTableRow(
         SYSTEM_TABLE_NAME.NODE_ENDPOINTS, endpointRow,
+        {
+          skipCacheWait: true,
+          queryTimeoutMs: heartbeatWriteQueryTimeoutMs,
+        },
       );
       this.lastEndpointUpsertAt = now;
       this.lastEndpointUpsertSignature =
@@ -531,14 +710,30 @@ class HeartbeatService extends EventEmitter {
    * @param {Object} updateRow
    * @param {Array<string>|string|null} capabilities
    * @param {number} now
+   * @param {number} [queryTimeoutMs]
    * @return {Promise<void>}
    * @private
    */
-  async writeNodeHeartbeat(updateRow, capabilities, now) {
+  async writeNodeHeartbeat(
+    updateRow,
+    capabilities,
+    now,
+    queryTimeoutMs = null,
+  ) {
+    const heartbeatWriteQueryTimeoutMs = Number.isFinite(queryTimeoutMs) &&
+      queryTimeoutMs > ZERO ?
+      Math.floor(queryTimeoutMs) :
+      this.resolveHeartbeatWriteQueryTimeoutMs();
+    const reporterTimeoutMs = this.resolveNodeStateReporterTimeoutMs(
+      heartbeatWriteQueryTimeoutMs,
+    );
     let reporterError = null;
+    let reporterFallbackPath = null;
+    let reporterDiagnostics = null;
+    let cdcWriteQueryTimeoutMs = heartbeatWriteQueryTimeoutMs;
     if (typeof this.nodeStateReporter === 'function') {
       try {
-        await this.nodeStateReporter({
+        const reporterResult = await this.callNodeStateReporterWithTimeout({
           nodeId: this.nodeId,
           nodeAddress: updateRow.node_address,
           state: updateRow.connection_state,
@@ -546,18 +741,91 @@ class HeartbeatService extends EventEmitter {
           heartbeatAt: now,
           readyLeaseExpiresAt: updateRow.ready_lease_expires_at,
           nodeRow: {...updateRow},
-        });
-        return;
+        }, reporterTimeoutMs);
+        reporterDiagnostics = normalizeHeartbeatPublicationDiagnostics(
+          reporterResult,
+          'node_state_reporter',
+        );
+        if (!this.verifyReporterVisibilityOnSuccess) {
+          this.recordHeartbeatPublicationSuccess(reporterDiagnostics, now);
+          return;
+        }
+
+        const reporterVisible = await this.verifyReporterHeartbeatVisibility(
+          now,
+        );
+        if (!reporterVisible) {
+          if (!this.fallbackToCdcOnReporterVisibilityGap) {
+            this.recordHeartbeatPublicationSuccess(
+              {
+                ...reporterDiagnostics,
+                publicationPath: 'node_state_reporter_unverified',
+              },
+              now,
+            );
+            return;
+          }
+          reporterFallbackPath = 'cdc_update_after_reporter_visibility_gap';
+          this.recordHeartbeatPublicationTarget(reporterDiagnostics);
+        } else {
+          this.recordHeartbeatPublicationSuccess(reporterDiagnostics, now);
+          return;
+        }
       } catch (error) {
         reporterError = error;
+        if (this.isNodeStateReporterTimeoutError(error)) {
+          cdcWriteQueryTimeoutMs = reporterTimeoutMs;
+        }
+        reporterDiagnostics = normalizeHeartbeatPublicationDiagnostics(
+          error?.publicationDiagnostics || error,
+          'node_state_reporter',
+        );
+        this.recordHeartbeatPublicationTarget(reporterDiagnostics);
       }
     }
 
     try {
-      await this.cdcIntegrationService.updateSystemTableRow(
+      const updateResult = await this.cdcIntegrationService.updateSystemTableRow(
         SYSTEM_TABLE_NAME.NODES,
         {node_id: this.nodeId},
         updateRow,
+        {
+          // Heartbeats are liveness signals and must not wait for local cache
+          // convergence on the write path.
+          skipCacheWait: true,
+          queryTimeoutMs: cdcWriteQueryTimeoutMs,
+        },
+      );
+      const affectedRows = Number(updateResult?.partitionResult?.affectedRows);
+      if (affectedRows === NUM.ZERO) {
+        const existingNodeRow =
+          this.systemTableCache.get(SYSTEM_TABLE_NAME.NODES, this.nodeId) || {};
+        await this.cdcIntegrationService.upsertSystemTableRow(
+          SYSTEM_TABLE_NAME.NODES,
+          {
+            ...existingNodeRow,
+            node_id: this.nodeId,
+            created_at:
+              existingNodeRow.created_at ||
+              updateRow.created_at ||
+              now,
+            ...updateRow,
+          },
+          {
+            skipCacheWait: true,
+            queryTimeoutMs: cdcWriteQueryTimeoutMs,
+          },
+        );
+      }
+      this.recordHeartbeatPublicationSuccess(
+        {
+          publicationPath:
+            reporterFallbackPath ||
+            (reporterError ?
+              'cdc_update_after_reporter_failure' :
+              'cdc_update'),
+        },
+        now,
       );
     } catch (error) {
       if (reporterError) {
@@ -566,6 +834,69 @@ class HeartbeatService extends EventEmitter {
       }
       throw error;
     }
+  }
+
+  /**
+   * Verify that a successful node-state reporter heartbeat became visible in
+   * the canonical nodes row before we treat delivery as sufficient.
+   * @param {number} expectedHeartbeatAt
+   * @return {Promise<boolean>}
+   * @private
+   */
+  async verifyReporterHeartbeatVisibility(expectedHeartbeatAt) {
+    const authoritativeControlPlaneView =
+      this.getAuthoritativeControlPlaneView();
+    if (!authoritativeControlPlaneView) {
+      return true;
+    }
+
+    try {
+      const result = await authoritativeControlPlaneView.readRows(
+        SYSTEM_TABLE_NAME.NODES,
+        `SELECT * FROM ${SYSTEM_TABLE_NAME.NODES} WHERE node_id = ?`,
+        [this.nodeId],
+        {
+          queryTimeoutMs: this.reporterVisibilityQueryTimeoutMs,
+        },
+      );
+      if (!result?.success) {
+        return false;
+      }
+      const rows = Array.isArray(result.rows) ? result.rows : [];
+      const nodeRow = rows.find((row) => {
+        return row?.[COLUMN.NODE_ID] === this.nodeId ||
+          row?.node_id === this.nodeId;
+      }) || rows[ZERO] || null;
+      const lastHeartbeat = Number(
+        nodeRow?.[COLUMN.LAST_HEARTBEAT] ??
+          nodeRow?.last_heartbeat,
+      );
+      return Number.isFinite(lastHeartbeat) &&
+        lastHeartbeat >= expectedHeartbeatAt;
+    } catch (_error) {
+      return false;
+    }
+  }
+
+  /**
+   * Resolve the shared authoritative control-plane view.
+   * @return {AuthoritativeControlPlaneView|null}
+   * @private
+   */
+  getAuthoritativeControlPlaneView() {
+    if (this.authoritativeControlPlaneView) {
+      return this.authoritativeControlPlaneView;
+    }
+    if (!this.cdcIntegrationService) {
+      return null;
+    }
+    this.authoritativeControlPlaneView = new AuthoritativeControlPlaneView({
+      nodeId: this.nodeId,
+      cdcIntegrationService: this.cdcIntegrationService,
+      now: this.now,
+      queryTimeoutMs: this.reporterVisibilityQueryTimeoutMs,
+    });
+    return this.authoritativeControlPlaneView;
   }
 
   /**
@@ -676,19 +1007,19 @@ class HeartbeatService extends EventEmitter {
       };
     }
 
-    const signature = this.buildNodeHeartbeatWriteSignature(updateRow);
-    if (this.lastNodeHeartbeatWriteSignature !== signature) {
-      return {
-        shouldWrite: true,
-        reason: 'signature_changed',
-      };
-    }
-
     const elapsedMs = now - this.lastNodeHeartbeatWriteAt;
     if (elapsedMs >= this.nodeMetadataMaxStalenessMs) {
       return {
         shouldWrite: true,
         reason: 'max_staleness',
+      };
+    }
+
+    const signature = this.buildNodeHeartbeatWriteSignature(updateRow);
+    if (this.lastNodeHeartbeatWriteSignature !== signature) {
+      return {
+        shouldWrite: true,
+        reason: 'signature_changed',
       };
     }
 
@@ -853,6 +1184,12 @@ class HeartbeatService extends EventEmitter {
    */
   recordFailure(stage, errorMessage) {
     this.heartbeatConsecutiveFailures++;
+    this.heartbeatPublicationDiagnostics.lastFailureAt =
+      normalizeHeartbeatPublicationTimestamp(this.now());
+    this.heartbeatPublicationDiagnostics.lastFailureStage = stage;
+    this.heartbeatPublicationDiagnostics.lastFailureReason = errorMessage;
+    this.heartbeatPublicationDiagnostics.consecutiveFailures =
+      this.heartbeatConsecutiveFailures;
 
     const logData = {
       nodeId: this.nodeId,
@@ -892,6 +1229,81 @@ class HeartbeatService extends EventEmitter {
    */
   getState() {
     return this.state;
+  }
+
+  /**
+   * Return the latest heartbeat publication diagnostics.
+   * @return {Object}
+   */
+  getHeartbeatPublicationDiagnostics() {
+    return Object.freeze({
+      ...this.heartbeatPublicationDiagnostics,
+    });
+  }
+
+  /**
+   * Mark the beginning of one heartbeat publication attempt.
+   * @param {number} startedAtMs
+   * @private
+   */
+  recordHeartbeatPublicationAttempt(startedAtMs) {
+    this.heartbeatPublicationDiagnostics.lastAttemptAt =
+      normalizeHeartbeatPublicationTimestamp(startedAtMs);
+    this.heartbeatPublicationDiagnostics.consecutiveFailures =
+      this.heartbeatConsecutiveFailures;
+  }
+
+  /**
+   * Update publication target details without changing attempt outcome.
+   * @param {Object|null} diagnostics
+   * @private
+   */
+  recordHeartbeatPublicationTarget(diagnostics) {
+    const normalized = normalizeHeartbeatPublicationDiagnostics(diagnostics);
+    const resetTarget =
+      normalized.publicationPath === 'cdc_update' &&
+      !normalized.targetAddress;
+    if (normalized.publicationPath) {
+      this.heartbeatPublicationDiagnostics.publicationPath =
+        normalized.publicationPath;
+    }
+    if (resetTarget) {
+      this.heartbeatPublicationDiagnostics.targetAddress = null;
+      this.heartbeatPublicationDiagnostics.targetNodeId = null;
+      this.heartbeatPublicationDiagnostics.targetServiceType = null;
+      this.heartbeatPublicationDiagnostics.targetServiceId = null;
+      return;
+    }
+    if (normalized.targetAddress) {
+      this.heartbeatPublicationDiagnostics.targetAddress =
+        normalized.targetAddress;
+    }
+    if (normalized.targetNodeId) {
+      this.heartbeatPublicationDiagnostics.targetNodeId =
+        normalized.targetNodeId;
+    }
+    if (normalized.targetServiceType) {
+      this.heartbeatPublicationDiagnostics.targetServiceType =
+        normalized.targetServiceType;
+    }
+    if (normalized.targetServiceId) {
+      this.heartbeatPublicationDiagnostics.targetServiceId =
+        normalized.targetServiceId;
+    }
+  }
+
+  /**
+   * Record a successful heartbeat publication target and timestamp.
+   * @param {Object|null} diagnostics
+   * @param {number} now
+   * @private
+   */
+  recordHeartbeatPublicationSuccess(diagnostics, now) {
+    this.recordHeartbeatPublicationTarget(diagnostics);
+    this.heartbeatPublicationDiagnostics.lastSuccessAt =
+      normalizeHeartbeatPublicationTimestamp(now);
+    this.heartbeatPublicationDiagnostics.consecutiveFailures =
+      this.heartbeatConsecutiveFailures;
   }
 }
 

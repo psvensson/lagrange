@@ -9,6 +9,8 @@ import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
+  compareNodeHeartbeatWatermarks,
+  getNodeHeartbeatWatermark,
   wasNodeRecordReadyWhenWritten,
 } from '../node/node-readiness-policy.js';
 import {
@@ -83,6 +85,7 @@ class ReplicaDispatchService extends EventEmitter {
       new ControlPlaneReadinessService({
         nodeId: this.nodeId,
         systemTableCache: this.systemTableCache,
+        messageRouter: this.messageRouter,
         storageAccountingService: this.storageAccountingService,
         cdcGroupPropagationService: this.cdcGroupPropagationService,
       });
@@ -91,7 +94,10 @@ class ReplicaDispatchService extends EventEmitter {
     this.messageGroupHandlers = new Map();
     this.dispatchInFlight = new Set();
     this.retryInFlightNodes = new Set();
+    this.nodeStateUpdateWatermarks = new Map();
     this.nodeReadyRetryWatermarks = new Map();
+    this.nodeStateUpdateQueueAssignments = new Map();
+    this.nextNodeStateUpdateQueueIndex = NUM.ZERO;
     this.cacheChangeListener = null;
     this.coordinatorOperationCreatedListener = null;
     this.state = DISPATCH_STATE.CREATED;
@@ -99,6 +105,10 @@ class ReplicaDispatchService extends EventEmitter {
     this.readyLeaseMs =
       config.get(CONTROL_PLANE_CONFIG_KEY.READY_LEASE_MS) ||
       DEFAULT_READY_LEASE_MS;
+    this.nodeStateUpdateQueryTimeoutMs = Math.max(
+      NUM.ONE,
+      Math.floor(this.readyLeaseMs / NUM.THREE),
+    );
 
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
@@ -109,6 +119,23 @@ class ReplicaDispatchService extends EventEmitter {
       reconcileFn: (ownerKey, _reasons, context) =>
         this.reconcileOperationDispatch(ownerKey, context),
     });
+
+    this.nodeStateUpdateQueueShardCount =
+      this.normalizeNodeStateUpdateQueueShardCount(
+        options.nodeStateUpdateQueueShardCount,
+      );
+    this.nodeStateUpdateQueues = Array.from(
+      {length: this.nodeStateUpdateQueueShardCount},
+      (_unused, shardIndex) => {
+        return new OwnerKeyReconcileQueue({
+          name: this.buildNodeStateUpdateQueueName(shardIndex),
+          reconcileFn: (ownerKey, _reasons, context) =>
+            this.reconcileNodeStateUpdate(ownerKey, context),
+        });
+      },
+    );
+    // Keep the first shard exposed for compatibility with existing diagnostics.
+    this.nodeStateUpdateQueue = this.nodeStateUpdateQueues[NUM.ZERO];
 
     this.nodeReadyRetryQueue = new OwnerKeyReconcileQueue({
       name: DISPATCH_QUEUE_NAME.NODE_READY,
@@ -232,7 +259,7 @@ class ReplicaDispatchService extends EventEmitter {
 
     // NODE_STATE_UPDATE is idempotent — process on any replica
     if (payload.type === ControlPlaneMessageType.NODE_STATE_UPDATE) {
-      await this.handleNodeStateUpdate(payload);
+      this.enqueueNodeStateUpdate(payload);
       if (messageId &&
           typeof mgService.acknowledgeMessage === TYPEOF.FUNCTION) {
         await mgService.acknowledgeMessage(messageId);
@@ -330,6 +357,53 @@ class ReplicaDispatchService extends EventEmitter {
     }
 
   /**
+   * Enqueue one node-state update onto the dedicated owner-key lane.
+   * This keeps heartbeat acknowledgements decoupled from the system-table
+   * writer under sustained load while still coalescing to the latest
+   * watermark per node.
+   * @param {Object} payload - Node state update payload.
+   * @return {boolean}
+   * @private
+   */
+  enqueueNodeStateUpdate(payload) {
+    const nodeId = payload?.[ControlPlaneField.NODE_ID];
+    const state = payload?.[ControlPlaneField.STATE];
+    if (!nodeId || !state) {
+      return false;
+    }
+    if (!CONTROL_PLANE_ALLOWED_STATES.includes(state)) {
+      return false;
+    }
+
+    const nextWatermark = this.getNodeStateUpdateWatermark(payload);
+    const previousWatermark = this.nodeStateUpdateWatermarks.get(nodeId) || null;
+    if (!this.isNodeStateUpdateWatermarkNewer(previousWatermark, nextWatermark)) {
+      this.logger.debug(DISPATCH_LOG_MSG.NODE_STATE_UPDATE_SKIPPED, {
+        nodeId,
+        reason: 'stale_or_duplicate_enqueue',
+      });
+      return false;
+    }
+
+    if (nextWatermark) {
+      this.nodeStateUpdateWatermarks.set(nodeId, nextWatermark);
+    }
+
+    const nodeStateUpdateQueue =
+      this.resolveNodeStateUpdateQueue(nodeId);
+    const enqueued = nodeStateUpdateQueue.enqueue(
+      nodeId,
+      RECONCILE_REASON.NODE_STATE_UPDATE_MESSAGE,
+      {payload},
+    );
+    this.logger.debug(DISPATCH_LOG_MSG.ENQUEUE_NODE_STATE_UPDATE, {
+      nodeId,
+      enqueued,
+    });
+    return enqueued;
+  }
+
+  /**
    * Handle NODE_STATE_UPDATE messages.
    * @param {Object} payload - Node state update payload.
    * @private
@@ -352,12 +426,29 @@ class ReplicaDispatchService extends EventEmitter {
     }
 
     const existing = await this.getNodeRow(nodeId);
+    const payloadWatermark = this.getNodeStateUpdateWatermark(payload);
     const now = Date.now();
-    const heartbeatAt = Number.isFinite(payload[ControlPlaneField.HEARTBEAT_AT]) ?
-      payload[ControlPlaneField.HEARTBEAT_AT] :
+    const existingConnectionState = String(
+      existing?.[COLUMN.CONNECTION_STATE] || '',
+    ).toLowerCase();
+    const existingReadyLeaseExpiresAt = Number(
+      existing?.[COLUMN.READY_LEASE_EXPIRES_AT],
+    );
+    const requestedHeartbeatAt = Number(payload[ControlPlaneField.HEARTBEAT_AT]);
+    // Apply-time liveness timestamp prevents delayed messages from
+    // immediately writing an already-stale heartbeat.
+    const heartbeatAt = Number.isFinite(requestedHeartbeatAt) ?
+      Math.max(requestedHeartbeatAt, now) :
       now;
     const requestedLeaseExpiry = payload[ControlPlaneField.READY_LEASE_EXPIRES_AT];
-    const readyLeaseExpiresAt = state === STATE.READY ?
+    const promotedToReadyFromConnected = state === STATE.CONNECTED &&
+      existingConnectionState === STATE.READY &&
+      Number.isFinite(existingReadyLeaseExpiresAt) &&
+      existingReadyLeaseExpiresAt > now;
+    const nextState = promotedToReadyFromConnected ?
+      STATE.READY :
+      state;
+    const readyLeaseExpiresAt = nextState === STATE.READY ?
       (
         Number.isFinite(requestedLeaseExpiry) &&
           requestedLeaseExpiry > heartbeatAt ?
@@ -365,6 +456,35 @@ class ReplicaDispatchService extends EventEmitter {
           heartbeatAt + this.readyLeaseMs
       ) :
       null;
+    const existingWatermark = getNodeHeartbeatWatermark(existing);
+    const effectiveReadyWatermark = {
+      lastHeartbeat: heartbeatAt,
+      readyLeaseExpiresAt,
+      connectionState: nextState,
+    };
+    const staleCheckWatermark = state === STATE.READY ?
+      effectiveReadyWatermark :
+      payloadWatermark;
+    if (!this.isNodeStateUpdateWatermarkNewer(
+      existingWatermark,
+      staleCheckWatermark,
+    )) {
+      if (state === STATE.READY &&
+          wasNodeRecordReadyWhenWritten(existing, {
+            requireActiveStatus: true,
+          })) {
+        this.nodeReadyRetryQueue.enqueue(
+          nodeId,
+          RECONCILE_REASON.NODE_STATE_UPDATE_READY,
+          {nodeRow: existing},
+        );
+      }
+      this.logger.debug(DISPATCH_LOG_MSG.NODE_STATE_UPDATE_SKIPPED, {
+        nodeId,
+        reason: 'stale_against_existing_row',
+      });
+      return;
+    }
     const payloadCapabilities = payload[ControlPlaneField.CAPABILITIES];
     const capabilities = Array.isArray(payloadCapabilities) ?
       JSON.stringify(payloadCapabilities) :
@@ -406,26 +526,54 @@ class ReplicaDispatchService extends EventEmitter {
           nodeRow[COLUMN.STATUS].length > NUM.ZERO ?
           nodeRow[COLUMN.STATUS] :
           (existing[COLUMN.STATUS] || SERVICE_STATUS.ACTIVE),
-      [COLUMN.CONNECTION_STATE]: state,
+      [COLUMN.CONNECTION_STATE]: nextState,
       [COLUMN.CAPABILITIES]: capabilities,
       [COLUMN.LAST_HEARTBEAT]: heartbeatAt,
       [COLUMN.READY_LEASE_EXPIRES_AT]: readyLeaseExpiresAt,
-      [COLUMN.CREATED_AT]:
-        Number.isFinite(nodeRow?.[COLUMN.CREATED_AT]) ?
-          nodeRow[COLUMN.CREATED_AT] :
-          (existing[COLUMN.CREATED_AT] || heartbeatAt),
     };
 
-    await this.cdcIntegrationService.upsertSystemTableRow(
+    const updateResult = await this.cdcIntegrationService.updateSystemTableRow(
       SYSTEM_TABLE_NAME.NODES,
+      {[COLUMN.NODE_ID]: nodeId},
       baseRow,
+      {
+        skipCacheWait: true,
+        queryTimeoutMs: this.nodeStateUpdateQueryTimeoutMs,
+      },
     );
+    const updateAffectedRows = Number(
+      updateResult?.partitionResult?.affectedRows,
+    );
+    if (updateAffectedRows === NUM.ZERO) {
+      await this.cdcIntegrationService.upsertSystemTableRow(
+        SYSTEM_TABLE_NAME.NODES,
+        {
+          ...existing,
+          [COLUMN.NODE_ID]: nodeId,
+          [COLUMN.CREATED_AT]:
+            Number.isFinite(nodeRow?.[COLUMN.CREATED_AT]) ?
+              nodeRow[COLUMN.CREATED_AT] :
+              (existing[COLUMN.CREATED_AT] || heartbeatAt),
+          ...baseRow,
+        },
+        {
+          skipCacheWait: true,
+          queryTimeoutMs: this.nodeStateUpdateQueryTimeoutMs,
+        },
+      );
+    }
 
-    if (state === STATE.READY) {
+    if (nextState === STATE.READY) {
       this.nodeReadyRetryQueue.enqueue(
         nodeId,
         RECONCILE_REASON.NODE_STATE_UPDATE_READY,
-        {nodeRow: baseRow},
+        {
+          nodeRow: {
+            ...existing,
+            [COLUMN.NODE_ID]: nodeId,
+            ...baseRow,
+          },
+        },
       );
       return;
     }
@@ -489,19 +637,15 @@ class ReplicaDispatchService extends EventEmitter {
       return;
     }
 
-    const claimed = await this.claimPendingDispatch(row.operation_id);
-    if (!claimed) {
+    const operation = await this.rebalanceCoordinator
+      .claimDispatchTransition(row.operation_id);
+    if (!operation) {
       this.logger.debug(DISPATCH_LOG_MSG.CLAIM_SKIPPED, {
         operationId: row.operation_id,
         nodeId: this.nodeId,
       });
       return;
     }
-
-    row.workflow_step = WORKFLOW_STEP.SENDING;
-    row[COLUMN.UPDATED_AT] = Date.now();
-
-    const operation = this.buildOperationFromRow(row);
 
     this.dispatchInFlight.add(operation.operationId);
     try {
@@ -659,6 +803,23 @@ class ReplicaDispatchService extends EventEmitter {
   }
 
   /**
+   * Reconcile callback for the node-state update queue.
+   * Applies the latest queued payload for one node.
+   * @param {string} nodeId - The node to reconcile.
+   * @param {Object} [context] - Context from the enqueue call.
+   * @return {Promise<void>}
+   * @private
+   */
+  async reconcileNodeStateUpdate(nodeId, context) {
+    const payload = context?.payload || null;
+    if (!payload ||
+        payload[ControlPlaneField.NODE_ID] !== nodeId) {
+      return;
+    }
+    await this.handleNodeStateUpdate(payload);
+  }
+
+  /**
    * Handle cache updates and retry dispatch when key rows become available.
    * @param {string} tableName - Updated table name.
    * @param {string|Object} operationOrRecord - Operation or updated row.
@@ -757,19 +918,28 @@ class ReplicaDispatchService extends EventEmitter {
    * @private
    */
   isNodeReadyRetryWatermarkNewer(previous, next) {
-    if (!next) {
-      return !previous;
-    }
     if (!previous) {
       return true;
     }
+    if (!next) {
+      return true;
+    }
+
+    if (next.readyLeaseExpiresAt > previous.readyLeaseExpiresAt) {
+      return true;
+    }
+    if (next.readyLeaseExpiresAt < previous.readyLeaseExpiresAt) {
+      return false;
+    }
+
     if (next.heartbeatAt > previous.heartbeatAt) {
       return true;
     }
     if (next.heartbeatAt < previous.heartbeatAt) {
       return false;
     }
-    return next.readyLeaseExpiresAt > previous.readyLeaseExpiresAt;
+
+    return false;
   }
 
   /**
@@ -790,49 +960,131 @@ class ReplicaDispatchService extends EventEmitter {
   }
 
   /**
-   * Claim a pending operation for dispatch via atomic conditional update.
-   * Only one claimant can transition PENDING -> SENDING.
-   * @param {string} operationId - Operation ID.
-   * @return {Promise<boolean>} True if claim succeeded.
+   * Build a comparable watermark from one NODE_STATE_UPDATE payload.
+   * @param {Object} payload - Control-plane node-state payload.
+   * @return {Object|null}
    * @private
    */
-  async claimPendingDispatch(operationId) {
-    if (!this.cdcIntegrationService ||
-        typeof this.cdcIntegrationService.updateSystemTableRow !==
-          TYPEOF.FUNCTION) {
-      throw new Error(DISPATCH_ERROR_MSG.MISSING_CDC_UPDATE);
+  getNodeStateUpdateWatermark(payload) {
+    if (!payload || typeof payload !== TYPEOF.OBJECT) {
+      return null;
     }
 
-    const claimResult = await this.cdcIntegrationService.updateSystemTableRow(
-      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-      {
-        [COLUMN.OPERATION_ID]: operationId,
-        workflow_step: WORKFLOW_STEP.PENDING,
-      },
-      {
-        workflow_step: WORKFLOW_STEP.SENDING,
-        [COLUMN.UPDATED_AT]: Date.now(),
-      },
+    const payloadNodeRow = payload[ControlPlaneField.NODE_ROW];
+    const watermarkRow = payloadNodeRow &&
+      typeof payloadNodeRow === TYPEOF.OBJECT ?
+      {...payloadNodeRow} :
+      {};
+    const heartbeatAt = Number(payload[ControlPlaneField.HEARTBEAT_AT]);
+    const readyLeaseExpiresAt = Number(
+      payload[ControlPlaneField.READY_LEASE_EXPIRES_AT],
     );
-
-    const affectedRows = this.getClaimAffectedRows(claimResult?.partitionResult);
-    return affectedRows === NUM.ONE;
+    if (Number.isFinite(heartbeatAt)) {
+      watermarkRow[COLUMN.LAST_HEARTBEAT] = heartbeatAt;
+    }
+    if (Number.isFinite(readyLeaseExpiresAt)) {
+      watermarkRow[COLUMN.READY_LEASE_EXPIRES_AT] = readyLeaseExpiresAt;
+    }
+    if (typeof payload[ControlPlaneField.STATE] === TYPEOF.STRING) {
+      watermarkRow[COLUMN.CONNECTION_STATE] = payload[ControlPlaneField.STATE];
+    }
+    const watermark = getNodeHeartbeatWatermark(watermarkRow);
+    if (!watermark) {
+      return null;
+    }
+    if (watermark.lastHeartbeat === null &&
+        watermark.readyLeaseExpiresAt === null &&
+        watermark.connectionState === null) {
+      return null;
+    }
+    return watermark;
   }
 
   /**
-   * Extract affected-row count from CDC update result payload.
-   * @param {Object} partitionResult - Partition update result.
-   * @return {number} Affected rows count.
+   * Accept only forward node-state watermark progression.
+   * @param {Object|null} previous - Previous watermark.
+   * @param {Object|null} next - Candidate watermark.
+   * @return {boolean}
    * @private
    */
-  getClaimAffectedRows(partitionResult) {
-    if (typeof partitionResult?.affectedRows === TYPEOF.NUMBER) {
-      return partitionResult.affectedRows;
+  isNodeStateUpdateWatermarkNewer(previous, next) {
+    if (!previous) {
+      return true;
     }
-    if (typeof partitionResult?.changes === TYPEOF.NUMBER) {
-      return partitionResult.changes;
+    if (!next) {
+      return true;
     }
-    return NUM.ZERO;
+    if (previous.lastHeartbeat === null &&
+        next.lastHeartbeat !== null) {
+      return true;
+    }
+    if (previous.lastHeartbeat !== null &&
+        next.lastHeartbeat === null) {
+      return false;
+    }
+    if (previous.readyLeaseExpiresAt === null &&
+        next.readyLeaseExpiresAt !== null) {
+      return true;
+    }
+    if (previous.readyLeaseExpiresAt !== null &&
+        next.readyLeaseExpiresAt === null) {
+      return false;
+    }
+    return compareNodeHeartbeatWatermarks(previous, next) > 0;
+  }
+
+  /**
+   * Normalize node-state queue shard count to a safe positive integer.
+   * @param {*} value - Candidate shard count.
+   * @return {number}
+   * @private
+   */
+  normalizeNodeStateUpdateQueueShardCount(value) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) {
+      return 4;
+    }
+    return Math.max(NUM.ONE, Math.floor(numeric));
+  }
+
+  /**
+   * Build one queue name for a node-state update shard.
+   * @param {number} shardIndex - Zero-based shard index.
+   * @return {string}
+   * @private
+   */
+  buildNodeStateUpdateQueueName(shardIndex) {
+    if (this.nodeStateUpdateQueueShardCount <= NUM.ONE) {
+      return DISPATCH_QUEUE_NAME.NODE_STATE_UPDATE;
+    }
+    return `${DISPATCH_QUEUE_NAME.NODE_STATE_UPDATE}-${shardIndex}`;
+  }
+
+  /**
+   * Resolve one node-state update reconcile shard for a node.
+   * Assignments are stable for process lifetime to preserve owner-key ordering.
+   * @param {string} nodeId - Node ID.
+   * @return {OwnerKeyReconcileQueue}
+   * @private
+   */
+  resolveNodeStateUpdateQueue(nodeId) {
+    if (!Array.isArray(this.nodeStateUpdateQueues) ||
+        this.nodeStateUpdateQueues.length <= NUM.ONE) {
+      return this.nodeStateUpdateQueue;
+    }
+
+    const assignedQueueIndex =
+      this.nodeStateUpdateQueueAssignments.get(nodeId);
+    if (Number.isFinite(assignedQueueIndex)) {
+      return this.nodeStateUpdateQueues[assignedQueueIndex];
+    }
+
+    const queueIndex =
+      this.nextNodeStateUpdateQueueIndex %
+      this.nodeStateUpdateQueues.length;
+    this.nextNodeStateUpdateQueueIndex += NUM.ONE;
+    this.nodeStateUpdateQueueAssignments.set(nodeId, queueIndex);
+    return this.nodeStateUpdateQueues[queueIndex];
   }
 
   /**
@@ -897,7 +1149,9 @@ class ReplicaDispatchService extends EventEmitter {
   }
 
   /**
-   * Check if a node is ready.
+   * Check whether a node is ready for internal topology dispatch work.
+   * Dispatch is an internal topology consumer and gates on repairEligible
+   * only (Req 4.2). Serve-only dimensions do not block dispatch.
    * @readModel DISPATCH_NODE_READINESS — READ_MODEL_SOURCE.SYSTEM_TABLE_CACHE
    * @param {string} nodeId - Node ID.
    * @return {boolean} True if node is ready.
@@ -917,11 +1171,8 @@ class ReplicaDispatchService extends EventEmitter {
     }
 
     return readiness.dimensions[
-      CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY
-    ] === true &&
-      readiness.dimensions[
-        CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY
-      ] === true;
+      CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE
+    ] === true;
   }
 
   /**
@@ -943,7 +1194,10 @@ class ReplicaDispatchService extends EventEmitter {
     const readiness =
       this.controlPlaneReadinessService.getNodeReadinessSync(nodeId);
     const snapshot =
-      ControlPlaneReadinessService.compactSnapshotSummary(readiness);
+      ControlPlaneReadinessService.compactSnapshotSummary(
+        readiness,
+        CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+      );
     return {ready, snapshot};
   }
 
@@ -1099,9 +1353,15 @@ class ReplicaDispatchService extends EventEmitter {
     this.messageGroupServices.clear();
     this.dispatchInFlight.clear();
     this.retryInFlightNodes.clear();
+    this.nodeStateUpdateWatermarks.clear();
     this.nodeReadyRetryWatermarks.clear();
+    this.nodeStateUpdateQueueAssignments.clear();
+    this.nextNodeStateUpdateQueueIndex = NUM.ZERO;
 
     this.operationDispatchQueue.shutdown();
+    for (const nodeStateUpdateQueue of this.nodeStateUpdateQueues) {
+      nodeStateUpdateQueue.shutdown();
+    }
     this.nodeReadyRetryQueue.shutdown();
 
     this.state = DISPATCH_STATE.STOPPED;

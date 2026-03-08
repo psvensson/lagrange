@@ -79,6 +79,7 @@ function createReadiness(nodeId, overrides = {}) {
     lifecycleState: overrides.lifecycleState || 'running',
     publication: Object.freeze({mode: 'grouped'}),
     capacity: null,
+    observedAt: overrides.observedAt || '2026-03-06T00:00:00.000Z',
     dimensions: Object.freeze({
       processAlive: true,
       clusterMemberHealthy: true,
@@ -87,6 +88,8 @@ function createReadiness(nodeId, overrides = {}) {
       placementEligible: true,
       controlPlaneWritable: true,
       metadataPublicationHealthy: true,
+      [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+      [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: true,
       ...(overrides.dimensions || {}),
     }),
     reasons: Object.freeze(overrides.reasons || []),
@@ -104,19 +107,37 @@ function createReadinessService(readinessByNodeId) {
   };
 }
 
+function createTransactionCoordinator() {
+  return {
+    async begin() {
+      return {success: true};
+    },
+    async commit() {
+      return {success: true};
+    },
+    async rollback() {
+      return {success: true};
+    },
+  };
+}
+
 // --- compactSnapshotSummary ---
 
 test('compactSnapshotSummary extracts key fields from full snapshot',
   async (t) => {
     const snapshot = createReadiness(TEST_NODE_ID, {
       lifecycleState: 'running',
+      observedAt: '2026-03-06T00:00:00.000Z',
       reasons: [
         {code: 'storage_budget_unavailable', dimension: 'placementEligible'},
       ],
     });
 
     const summary =
-      ControlPlaneReadinessService.compactSnapshotSummary(snapshot);
+      ControlPlaneReadinessService.compactSnapshotSummary(
+        snapshot,
+        CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+      );
 
     t.equal(
       summary[READINESS_SNAPSHOT_KEY.NODE_ID],
@@ -134,6 +155,14 @@ test('compactSnapshotSummary extracts key fields from full snapshot',
     t.equal(
       summary[READINESS_SNAPSHOT_KEY.LIFECYCLE_STATE],
       'running',
+    );
+    t.equal(
+      summary[READINESS_SNAPSHOT_KEY.OBSERVED_AT],
+      '2026-03-06T00:00:00.000Z',
+    );
+    t.equal(
+      summary[READINESS_SNAPSHOT_KEY.DECISION_DIMENSION],
+      CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
     );
   });
 
@@ -205,6 +234,18 @@ test('admission result includes readinessSnapshots per candidate node',
         READINESS_SNAPSHOT_KEY.DIMENSIONS
       ],
     );
+    t.equal(
+      result.readinessSnapshots[TEST_NODE_ID][
+        READINESS_SNAPSHOT_KEY.DECISION_DIMENSION
+      ],
+      CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+    );
+    t.equal(
+      result.readinessSnapshots[TEST_NODE_ID][
+        READINESS_SNAPSHOT_KEY.OBSERVED_AT
+      ],
+      readiness.observedAt,
+    );
   });
 
 // --- RebalanceCoordinator persists readiness snapshot in stepsHistory ---
@@ -220,6 +261,26 @@ test('coordinator createOperation persists readiness snapshot in initial step',
     const readinessService = createReadinessService({
       [targetNodeId]: readiness,
     });
+    const storageAccountingService = {
+      estimateReplicaBytes() {
+        return TEST_ESTIMATED_BYTES;
+      },
+    };
+    const storageAdmissionService = {
+      async checkAdd() {
+        return {
+          allowed: true,
+          decisionType: STORAGE_ADMISSION_DECISION_TYPE.ADMITTED,
+          readinessSnapshots: {
+            [targetNodeId]:
+              ControlPlaneReadinessService.compactSnapshotSummary(
+                readiness,
+                CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+              ),
+          },
+        };
+      },
+    };
 
     let persistedStepsHistory = null;
     const coordinator = new RebalanceCoordinator({
@@ -255,6 +316,8 @@ test('coordinator createOperation persists readiness snapshot in initial step',
         },
       },
       controlPlaneReadinessService: readinessService,
+      storageAccountingService,
+      storageAdmissionService,
       enableTimeouts: false,
     });
     coordinator.initialize();
@@ -330,6 +393,25 @@ test('dispatch service emits readiness snapshot with dispatch event',
         offCacheChange() {},
       },
       rebalanceCoordinator: {
+        async claimDispatchTransition(opId) {
+          return {
+            operationId: opId,
+            type: 'ADD',
+            partitionId: 'partition-1',
+            entityType: 'partition',
+            entityId: 'partition-1',
+            replicaId: 'partition-1-r1',
+            sourceNodeId: 'node-local',
+            targetNodeId,
+            status: 'in_progress',
+            workflowStep: WORKFLOW_STEP.SENDING,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            completedAt: null,
+            errorMessage: null,
+            stepsHistory: [],
+          };
+        },
         async executeOperation() {
           return {success: true};
         },
@@ -342,9 +424,6 @@ test('dispatch service emits readiness snapshot with dispatch event',
     dispatchService.on(DISPATCH_EVENT.OPERATION_DISPATCHED, (event) => {
       dispatchedEvent = event;
     });
-
-    // Stub claimPendingDispatch to succeed
-    dispatchService.claimPendingDispatch = async () => true;
 
     const row = {
       operation_id: 'op-dispatch-1',
@@ -425,6 +504,7 @@ test('coordinator updateStep persists readiness snapshot in step entry',
         },
       },
       controlPlaneReadinessService: readinessService,
+      transactionCoordinator: createTransactionCoordinator(),
       enableTimeouts: false,
     });
     coordinator.initialize();

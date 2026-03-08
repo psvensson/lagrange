@@ -27,6 +27,35 @@ function createCreateTableAst() {
   };
 }
 
+function createObservableSystemCache(tableRows = [], partitionRows = []) {
+  const listeners = new Set();
+  return {
+    getAll(tableName) {
+      if (tableName === 'tables') {
+        return tableRows;
+      }
+      if (tableName === 'partitions') {
+        return partitionRows;
+      }
+      return [];
+    },
+    onCacheChange(listener) {
+      listeners.add(listener);
+    },
+    offCacheChange(listener) {
+      return listeners.delete(listener);
+    },
+    emit(tableName, operation, record) {
+      for (const listener of listeners) {
+        listener(tableName, operation, record);
+      }
+    },
+    listenerCount() {
+      return listeners.size;
+    },
+  };
+}
+
 test('TableCreationService - triggers split/merge evaluation after CREATE TABLE',
   async (t) => {
     let evaluationCalls = 0;
@@ -139,6 +168,120 @@ test('TableCreationService - stops periodic split/merge evaluation on shutdown',
     t.equal(stopCalls, 1);
   });
 
+test('TableCreationService - triggers split/merge evaluation on table policy cache updates',
+  async (t) => {
+    let evaluationCalls = 0;
+    const cache = createObservableSystemCache([
+      {
+        table_id: 'tbl-users',
+        table_policies: '{"splitStorageThreshold":16384}',
+      },
+    ]);
+    const service = new TableCreationService({
+      systemCache: cache,
+      partitionSplitMergeManager: {
+        async evaluateAllPartitions() {
+          evaluationCalls += 1;
+        },
+      },
+    });
+
+    cache.emit('tables', 'UPDATE', {
+      table_id: 'tbl-users',
+      table_policies: '{"splitStorageThreshold":16384}',
+    });
+    await Promise.resolve();
+    t.equal(
+      evaluationCalls,
+      0,
+      'unchanged policy values should not trigger evaluation',
+    );
+
+    cache.emit('tables', 'UPDATE', {
+      table_id: 'tbl-users',
+      table_policies: '{"splitStorageThreshold":1024}',
+    });
+    await Promise.resolve();
+    t.equal(
+      evaluationCalls,
+      1,
+      'policy updates should trigger split/merge evaluation',
+    );
+
+    await service.shutdown();
+  });
+
+test('TableCreationService - triggers coalesced split/merge evaluation on ' +
+  'partition size cache updates', async (t) => {
+  const evaluationRequests = [];
+  const cache = createObservableSystemCache([], [
+    {
+      partition_id: 'users-p1',
+      size_bytes: 1024,
+    },
+  ]);
+  const service = new TableCreationService({
+    systemCache: cache,
+    partitionSplitMergeManager: {
+      requestEvaluation(context) {
+        evaluationRequests.push(context);
+      },
+    },
+  });
+
+  cache.emit('partitions', 'UPDATE', {
+    partition_id: 'users-p1',
+    size_bytes: 1024,
+  });
+  await Promise.resolve();
+  t.equal(
+    evaluationRequests.length,
+    0,
+    'unchanged partition sizes should not trigger evaluation',
+  );
+
+  cache.emit('partitions', 'UPDATE', {
+    partition_id: 'users-p1',
+    size_bytes: 32768,
+  });
+  await Promise.resolve();
+  t.equal(
+    evaluationRequests.length,
+    1,
+    'partition size growth should trigger split/merge evaluation',
+  );
+  t.same(
+    evaluationRequests[0],
+    {
+      reasonCode: 'partition_size_changed',
+      partitionId: 'users-p1',
+    },
+    'partition size triggers should preserve the canonical request context',
+  );
+
+  await service.shutdown();
+});
+
+test('TableCreationService - detaches table policy cache listener on shutdown',
+  async (t) => {
+    const cache = createObservableSystemCache([
+      {
+        table_id: 'tbl-users',
+        table_policies: '{}',
+      },
+    ]);
+    const service = new TableCreationService({
+      systemCache: cache,
+      partitionSplitMergeManager: {
+        async evaluateAllPartitions() {},
+      },
+    });
+
+    t.equal(cache.listenerCount(), 1);
+    await service.shutdown();
+    t.equal(cache.listenerCount(), 0);
+  });
+
 test('TableCreationService - writes partition metadata with logical table_name',
   async (t) => {
     const writes = [];
@@ -179,6 +322,48 @@ test('TableCreationService - writes partition metadata with logical table_name',
       'table metadata should start with active partition version 1',
     );
   });
+
+test('TableCreationService - re-provisions initial partition on ' +
+  'CREATE TABLE IF NOT EXISTS retries', async (t) => {
+  const provisionCalls = [];
+  const service = new TableCreationService({
+    systemCache: {
+      find(tableName, predicate) {
+        if (tableName === 'tables') {
+          return [{
+            table_id: 'tbl-users',
+            table_name: 'users',
+          }].find(predicate) || null;
+        }
+        if (tableName === 'partitions') {
+          return [{
+            partition_id: 'tbl-users-p1',
+            table_id: 'tbl-users',
+            table_name: 'users',
+            replica_count: 3,
+          }].find(predicate) || null;
+        }
+        return null;
+      },
+    },
+    partitionProvisioner: async (context) => {
+      provisionCalls.push(context);
+    },
+  });
+
+  const result = await service.createTable({
+    ...createCreateTableAst(),
+    ifNotExists: true,
+  });
+
+  t.equal(result.success, true);
+  t.equal(result.skipped, true);
+  t.equal(provisionCalls.length, 1,
+    'existing table retries should reconcile initial partition provisioning');
+  t.equal(provisionCalls[0]?.tableId, 'tbl-users');
+  t.equal(provisionCalls[0]?.partitionId, 'tbl-users-p1');
+  t.equal(provisionCalls[0]?.replicaCount, 3);
+});
 
 test('TableCreationService - provisions initial partition when callback is configured',
   async (t) => {

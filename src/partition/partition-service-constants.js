@@ -263,6 +263,12 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
   SPLIT_REPLICATION_MIRROR_FAILED: 'Partition split mirror delivery failed',
   SPLIT_REPLICATION_CUTOVER_UPDATED:
     'Partition split cutover metadata updated',
+  SPLIT_REPLICATION_ACK_EMITTED:
+    'Partition split source acknowledgement emitted',
+  SPLIT_REPLICATION_ACK_FAILED:
+    'Partition split source acknowledgement failed',
+  SPLIT_REPLICATION_RECONSTRUCTED:
+    'Partition split execution state reconstructed from durable workflow',
   SPLIT_REPLICATION_SIZE_PERSIST_FAILED:
     'Partition size persistence failed',
   REDIRECTING_WRITE_TO_LEADER: 'Redirecting write to leader',
