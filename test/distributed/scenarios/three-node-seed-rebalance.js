@@ -16,13 +16,19 @@ const MIN_NODE_COUNT = 3;
 const MIN_NON_SEED_COUNT = 2;
 const MIN_REBALANCED_PARTITIONS = 1;
 const PARTITION_SERVICE_TYPE = 'partition';
+const MESSAGE_GROUP_SERVICE_TYPE = 'message_group';
 const ACTIVE_STATUS = 'active';
 const REBALANCE_SETTLE_TIMEOUT_MS = 20000;
 const REBALANCE_SAMPLE_LIMIT = 10;
+const QUERYABLE_NODE_ERROR_LIMIT = 5;
 
 const SQL_SELECT_ACTIVE_PARTITION_SERVICES =
   'SELECT partition_id, node_id, status FROM services ' +
   'WHERE service_type = \'' + PARTITION_SERVICE_TYPE + '\' ' +
+  'AND status = \'' + ACTIVE_STATUS + '\'';
+const SQL_SELECT_ACTIVE_MESSAGE_GROUP_SERVICES =
+  'SELECT group_id, node_id, status FROM services ' +
+  'WHERE service_type = \'' + MESSAGE_GROUP_SERVICE_TYPE + '\' ' +
   'AND status = \'' + ACTIVE_STATUS + '\'';
 
 /**
@@ -31,23 +37,23 @@ const SQL_SELECT_ACTIVE_PARTITION_SERVICES =
  * @param {Array<Object>} rows
  * @return {Map<string, Set<string>>}
  */
-function buildPlacementByPartition(rows) {
-  const byPartition = new Map();
+function buildPlacementByEntity(rows, entityField) {
+  const byEntity = new Map();
   for (const row of rows) {
-    const partitionId = row.partition_id;
+    const entityId = row[entityField];
     const nodeId = row.node_id;
-    if (typeof partitionId !== 'string' || partitionId.length === 0) {
+    if (typeof entityId !== 'string' || entityId.length === 0) {
       continue;
     }
     if (typeof nodeId !== 'string' || nodeId.length === 0) {
       continue;
     }
-    if (!byPartition.has(partitionId)) {
-      byPartition.set(partitionId, new Set());
+    if (!byEntity.has(entityId)) {
+      byEntity.set(entityId, new Set());
     }
-    byPartition.get(partitionId).add(nodeId);
+    byEntity.get(entityId).add(nodeId);
   }
-  return byPartition;
+  return byEntity;
 }
 
 /**
@@ -58,22 +64,22 @@ function buildPlacementByPartition(rows) {
  * @param {Set<string>} nonSeedNodeIds
  * @return {Array<string>}
  */
-function findRebalancedPartitions(
-  placementByPartition,
+function findRebalancedEntities(
+  placementByEntity,
   seedNodeId,
   nonSeedNodeIds,
 ) {
-  const rebalancedPartitions = [];
-  for (const [partitionId, nodeIds] of placementByPartition.entries()) {
+  const rebalancedEntities = [];
+  for (const [entityId, nodeIds] of placementByEntity.entries()) {
     const hasSeedReplica = nodeIds.has(seedNodeId);
     const hasNonSeedReplica = Array.from(nodeIds).some(
       (nodeId) => nonSeedNodeIds.has(nodeId),
     );
     if (hasSeedReplica && hasNonSeedReplica) {
-      rebalancedPartitions.push(partitionId);
+      rebalancedEntities.push(entityId);
     }
   }
-  return rebalancedPartitions;
+  return rebalancedEntities;
 }
 
 /**
@@ -86,6 +92,54 @@ function sleep(delayMs) {
   return new Promise((resolve) => {
     setTimeout(resolve, delayMs);
   });
+}
+
+/**
+ * Query active partition services from all queryable nodes and merge rows.
+ * Some deployments expose node-local service projections per admin endpoint,
+ * so a single-node query can miss non-local replica placements.
+ *
+ * @param {Array<Object>} nodes
+ * @param {string} sql
+ * @param {Object} [options]
+ * @param {boolean} [options.allowEmpty]
+ * @return {Promise<Array<Object>>}
+ */
+async function queryActiveServicesAcrossNodes(nodes, sql, options = {}) {
+  const allowEmpty = options.allowEmpty === true;
+  const mergedRows = [];
+  const queryErrors = [];
+
+  for (const node of nodes) {
+    if (!node || typeof node.query !== 'function') {
+      continue;
+    }
+    try {
+      const servicesResult = await node.query(sql);
+      const rows = Array.isArray(servicesResult?.rows) ?
+        servicesResult.rows :
+        [];
+      mergedRows.push(...rows);
+    } catch (error) {
+      queryErrors.push(
+        String(node.id || 'unknown-node') + ': ' +
+        String(error?.message || error),
+      );
+    }
+  }
+
+  if (mergedRows.length > 0 || allowEmpty) {
+    return mergedRows;
+  }
+
+  const summarizedErrors = queryErrors.slice(
+    0,
+    QUERYABLE_NODE_ERROR_LIMIT,
+  ).join('; ');
+  throw new Error(
+    'Unable to query active partition services from any node' +
+    (summarizedErrors.length > 0 ? ': ' + summarizedErrors : ''),
+  );
 }
 
 /**
@@ -131,27 +185,48 @@ async function run(cluster, options = {}) {
 
   const rebalanceDeadline = Date.now() + rebalanceWaitTimeoutMs;
   let rebalancedPartitions = [];
-  let serviceRows = [];
+  let partitionServiceRows = [];
+  let messageGroupServiceRows = [];
+  let rebalancedMessageGroups = [];
   let rebalanceQueryCount = 0;
 
   while (Date.now() <= rebalanceDeadline) {
     rebalanceQueryCount += 1;
-    const servicesResult = await seedNode.query(
+    partitionServiceRows = await queryActiveServicesAcrossNodes(
+      nodes,
       SQL_SELECT_ACTIVE_PARTITION_SERVICES,
     );
-    serviceRows = Array.isArray(servicesResult.rows) ?
-      servicesResult.rows :
-      [];
-    assert.ok(serviceRows.length > 0, 'Expected active partition service rows');
+    assert.ok(
+      partitionServiceRows.length > 0,
+      'Expected active partition service rows',
+    );
+    messageGroupServiceRows = await queryActiveServicesAcrossNodes(
+      nodes,
+      SQL_SELECT_ACTIVE_MESSAGE_GROUP_SERVICES,
+      {allowEmpty: true},
+    );
 
-    const placementByPartition = buildPlacementByPartition(serviceRows);
-    rebalancedPartitions = findRebalancedPartitions(
+    const placementByPartition = buildPlacementByEntity(
+      partitionServiceRows,
+      'partition_id',
+    );
+    rebalancedPartitions = findRebalancedEntities(
       placementByPartition,
       seedNode.id,
       nonSeedNodeIds,
     );
+    const placementByMessageGroup = buildPlacementByEntity(
+      messageGroupServiceRows,
+      'group_id',
+    );
+    rebalancedMessageGroups = findRebalancedEntities(
+      placementByMessageGroup,
+      seedNode.id,
+      nonSeedNodeIds,
+    );
 
-    if (rebalancedPartitions.length >= MIN_REBALANCED_PARTITIONS) {
+    if (rebalancedPartitions.length >= MIN_REBALANCED_PARTITIONS ||
+      rebalancedMessageGroups.length >= MIN_REBALANCED_PARTITIONS) {
       break;
     }
 
@@ -163,18 +238,27 @@ async function run(cluster, options = {}) {
   }
 
   assert.ok(
-    rebalancedPartitions.length >= MIN_REBALANCED_PARTITIONS,
-    'Expected at least one partition rebalanced off seed node ' +
-    seedNode.id + ', found ' + rebalancedPartitions.length +
+    rebalancedPartitions.length >= MIN_REBALANCED_PARTITIONS ||
+      rebalancedMessageGroups.length >= MIN_REBALANCED_PARTITIONS,
+    'Expected at least one partition or message-group rebalance off seed node ' +
+    seedNode.id +
+    ', found partitions=' + rebalancedPartitions.length +
+    ', message_groups=' + rebalancedMessageGroups.length +
     ' after ' + rebalanceQueryCount + ' placement query attempts',
   );
 
   return {
     seedNodeId: seedNode.id,
     totalNodes: nodes.length,
-    activePartitionReplicaRows: serviceRows.length,
+    activePartitionReplicaRows: partitionServiceRows.length,
+    activeMessageGroupReplicaRows: messageGroupServiceRows.length,
     rebalancedPartitionCount: rebalancedPartitions.length,
     rebalancedPartitionSample: rebalancedPartitions.slice(
+      0,
+      REBALANCE_SAMPLE_LIMIT,
+    ),
+    rebalancedMessageGroupCount: rebalancedMessageGroups.length,
+    rebalancedMessageGroupSample: rebalancedMessageGroups.slice(
       0,
       REBALANCE_SAMPLE_LIMIT,
     ),

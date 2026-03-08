@@ -131,6 +131,7 @@ const SPLIT_MERGE_EVENT = Object.freeze({
 const SPLIT_MERGE_REASON = Object.freeze({
   BUSY: 'busy',
   CONTROL_PLANE_BACKPRESSURE: 'control_plane_backpressure',
+  MANAGED_SPLIT_RETRY_DUE: 'managed_split_retry_due',
   INSUFFICIENT_CAPACITY: 'insufficient_capacity',
   CAPACITY_AVAILABLE: 'capacity_available',
 });

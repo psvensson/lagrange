@@ -444,6 +444,20 @@ class RebalanceCoordinator extends EventEmitter {
    * @private
    */
   async queryIncompleteOperations() {
+    const mapAndSortOperations = (rows) => rows
+      .map((row) => this.rowToOperation(row))
+      .filter((operation) => !this.isOperationTerminal(operation))
+      .sort((left, right) => {
+        const leftUpdatedAt = Number(left?.updatedAt) || NUM.ZERO;
+        const rightUpdatedAt = Number(right?.updatedAt) || NUM.ZERO;
+        if (leftUpdatedAt !== rightUpdatedAt) {
+          return leftUpdatedAt - rightUpdatedAt;
+        }
+        return String(left?.operationId || '').localeCompare(
+          String(right?.operationId || ''),
+        );
+      });
+
     const cachedRows = this.filterReplicaOperationRowsFromCache((row) => {
       if (!row || row.source_node_id !== this.nodeId) {
         return false;
@@ -458,19 +472,10 @@ class RebalanceCoordinator extends EventEmitter {
           row.type === OperationType.REPLACE);
     });
     if (cachedRows !== null) {
-      return cachedRows
-        .map((row) => this.rowToOperation(row))
-        .filter((operation) => !this.isOperationTerminal(operation))
-        .sort((left, right) => {
-          const leftUpdatedAt = Number(left?.updatedAt) || NUM.ZERO;
-          const rightUpdatedAt = Number(right?.updatedAt) || NUM.ZERO;
-          if (leftUpdatedAt !== rightUpdatedAt) {
-            return leftUpdatedAt - rightUpdatedAt;
-          }
-          return String(left?.operationId || '').localeCompare(
-            String(right?.operationId || ''),
-          );
-        });
+      const cachedOperations = mapAndSortOperations(cachedRows);
+      if (cachedOperations.length > NUM.ZERO) {
+        return cachedOperations;
+      }
     }
 
     const queryStartedAtMs = Date.now();
@@ -519,19 +524,7 @@ class RebalanceCoordinator extends EventEmitter {
       }
     }
 
-    return result.rows
-      .map((row) => this.rowToOperation(row))
-      .filter((operation) => !this.isOperationTerminal(operation))
-      .sort((left, right) => {
-        const leftUpdatedAt = Number(left?.updatedAt) || NUM.ZERO;
-        const rightUpdatedAt = Number(right?.updatedAt) || NUM.ZERO;
-        if (leftUpdatedAt !== rightUpdatedAt) {
-          return leftUpdatedAt - rightUpdatedAt;
-        }
-        return String(left?.operationId || '').localeCompare(
-          String(right?.operationId || ''),
-        );
-      });
+    return mapAndSortOperations(result.rows);
   }
 
   /**
@@ -3328,6 +3321,45 @@ class RebalanceCoordinator extends EventEmitter {
         operation.workflowStep === WORKFLOW_STEP.ACTIVE) {
       await this.executeOperation(operation);
       return true;
+    }
+
+    if (operation.workflowStep === WORKFLOW_STEP.STOPPING &&
+        (operation.type === OperationType.REMOVE ||
+          operation.type === OperationType.REPLACE)) {
+      const removingReplicaId = operation.type === OperationType.REPLACE ?
+        this.getReplaceSourceReplicaId(operation) :
+        operation.replicaId;
+      const removingNodeId = operation.type === OperationType.REPLACE ?
+        operation.sourceNodeId :
+        operation.targetNodeId;
+      if (!removingReplicaId) {
+        await this.failOperation(
+          operation,
+          'Replica missing during STOPPING reconciliation',
+        );
+        return true;
+      }
+
+      const actualStatus = await this.getActualReplicaStatus(
+        removingReplicaId,
+        operation.partitionId,
+        removingNodeId,
+      );
+
+      if (actualStatus === null) {
+        await this.completeOperation(operation);
+        return true;
+      }
+
+      if (actualStatus === ReplicaStatus.FAILED) {
+        await this.failOperation(
+          operation,
+          'Replica failed during remove reconciliation',
+        );
+        return true;
+      }
+
+      return false;
     }
 
     if (operation.workflowStep !== WORKFLOW_STEP.CREATING &&

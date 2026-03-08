@@ -212,6 +212,16 @@ src/
 test/
 ```
 
+Guard commands:
+
+```bash
+# Validate staged files against system-guideline rules
+npm run guard:guidelines:staged
+
+# Validate distributed scenarios do not mutate table_policies outside the owner helper
+npm run guard:scenario-policy:file
+```
+
 ---
 
 ## Roadmap

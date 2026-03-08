@@ -2137,6 +2137,21 @@ class PartitionService extends EventEmitter {
             });
           }
         } catch (error) {
+          if (this.isIdempotentInsertReplayConstraint(error, command)) {
+            this.trackAppliedEntryKey(entryKey);
+            this.logger.warn(PARTITION_SERVICE_LOG_MSG.APPLYING_COMMITTED_ENTRY, {
+              partitionId: this.partitionId,
+              commandType: command.type,
+              skippedReplay: true,
+              replayConstraintSuppressed: true,
+              error: error.message,
+            });
+            this.emit(PARTITION_SERVICE_EVENT.ENTRY_COMMITTED, {
+              partitionId: this.partitionId,
+              command,
+            });
+            return;
+          }
           this.logger.error(PARTITION_SERVICE_ERROR_MSG.APPLY_COMMITTED_FAILED, {
             partitionId: this.partitionId,
             error: error.message,
@@ -3258,6 +3273,38 @@ class PartitionService extends EventEmitter {
       command.sql,
       params,
     ].join('|');
+  }
+
+  /**
+   * Treat duplicate-key INSERT failures as idempotent replay.
+   * Raft recovery can reapply previously-committed INSERT entries after restart.
+   * @param {*} error
+   * @param {Object} command
+   * @return {boolean}
+   * @private
+   */
+  isIdempotentInsertReplayConstraint(error, command) {
+    if (!error || !command?.sql) {
+      return false;
+    }
+    const sqlUpper = String(command.sql).trim().toUpperCase();
+    const isInsertStatement = sqlUpper.startsWith(SQL.INSERT_INTO) ||
+      sqlUpper.startsWith(SQL.INSERT_OR_REPLACE_INTO) ||
+      sqlUpper.startsWith(SQL.INSERT_OR_IGNORE_INTO);
+    if (!isInsertStatement) {
+      return false;
+    }
+    const code = String(error.code || '').toUpperCase();
+    if (code === 'SQLITE_CONSTRAINT_PRIMARYKEY') {
+      return true;
+    }
+    if (code.startsWith('SQLITE_CONSTRAINT')) {
+      const message = String(error.message || '');
+      if (message.toUpperCase().includes('UNIQUE CONSTRAINT FAILED')) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**

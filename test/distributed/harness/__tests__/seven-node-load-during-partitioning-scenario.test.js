@@ -11,6 +11,12 @@ const SQL_UPDATE_TABLE_POLICIES = 'UPDATE tables SET table_policies';
 const LOAD_OPERATIONS =
   Object.freeze(['INSERT', 'SELECT', 'UPDATE', 'DELETE']);
 const MOCK_TABLE_ID = 'tbl-logs-001';
+const TABLE_POLICIES_JSON = JSON.stringify({
+  splitStorageThreshold: 16384,
+  splitTrafficThreshold: 120,
+  mergeStorageThreshold: 1,
+  mergeTrafficThreshold: 1,
+});
 
 function partitionRowsForStage(stage) {
   if (stage <= 1) {
@@ -75,7 +81,14 @@ describe('seven-node-load-during-partitioning scenario', () => {
             return {rows: []};
           }
           if (sql.includes(SQL_FROM_TABLES)) {
-            return {rows: [{table_id: MOCK_TABLE_ID}]};
+            return {
+              rows: [{
+                table_id: MOCK_TABLE_ID,
+                table_policies: tablePoliciesApplied ?
+                  TABLE_POLICIES_JSON :
+                  '{}',
+              }],
+            };
           }
           if (sql.includes(SQL_FROM_PARTITIONS)) {
             sampleStage = Math.min(sampleStage + 1, 4);
@@ -176,12 +189,14 @@ describe('seven-node-load-during-partitioning scenario', () => {
   it('fails early with structured diagnostics when split attempts never start',
     async () => {
       let metricTotal = 0;
+      let tablePoliciesApplied = false;
 
       const seedNode = {
         id: 'seed-1',
         role: 'seed',
         query: async (sql) => {
           if (sql.includes(SQL_UPDATE_TABLE_POLICIES)) {
+            tablePoliciesApplied = true;
             return {rows: []};
           }
           if (sql.includes('control_snapshot_local')) {
@@ -200,7 +215,14 @@ describe('seven-node-load-during-partitioning scenario', () => {
             };
           }
           if (sql.includes(SQL_FROM_TABLES)) {
-            return {rows: [{table_id: MOCK_TABLE_ID}]};
+            return {
+              rows: [{
+                table_id: MOCK_TABLE_ID,
+                table_policies: tablePoliciesApplied ?
+                  TABLE_POLICIES_JSON :
+                  '{}',
+              }],
+            };
           }
           if (sql.includes(SQL_FROM_PARTITIONS)) {
             return {rows: [{partition_id: 'logs-p1'}]};

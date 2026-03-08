@@ -13,8 +13,13 @@ import {
   resolveSevenNodeReadWriteLoadTransactionRecoveryScenarioConfig,
 } from '../harness/scenario-config.js';
 import {
+  BENCHMARK_WORKLOAD_PROFILE,
+  prepareBenchmarkPartitioningTable,
+  assertSplitPolicyPrecondition,
+  resolvePartitioningLoadTableName,
   rowsFromResult,
   sleep,
+  waitForPartitionGrowthAndSpread,
 } from './table-distribution-helpers.js';
 
 const ZERO = 0;
@@ -22,6 +27,10 @@ const IN_FLIGHT_TX_STATUS_ACTIVE = 'ACTIVE';
 const IN_FLIGHT_TX_STATUS_PREPARED = 'PREPARED';
 const TERMINAL_TX_STATUS_ROLLED_BACK = 'ROLLED_BACK';
 const TERMINAL_TX_STATUS_COMMITTED = 'COMMITTED';
+const STATUS_QUERY_TIMEOUT_MS = 30000;
+const STATUS_QUERY_LANE = 'default';
+const SEEDED_VISIBILITY_TIMEOUT_MS = 15000;
+const SEEDED_VISIBILITY_POLL_INTERVAL_MS = 250;
 
 const SQL_INSERT_TRANSACTION =
   'INSERT INTO ' + TABLES.SQL_TRANSACTIONS +
@@ -30,6 +39,27 @@ const SQL_INSERT_TRANSACTION =
 const SQL_SELECT_TRANSACTION_STATUSES =
   'SELECT transaction_id, status FROM ' + TABLES.SQL_TRANSACTIONS +
   ' WHERE transaction_id IN (?, ?)';
+
+/**
+ * Execute one timeout-aware scenario control query.
+ * @param {Object} node
+ * @param {string} sql
+ * @param {Array<*>} [params]
+ * @return {Promise<Object>}
+ */
+async function executeScenarioQuery(node, sql, params = []) {
+  if (typeof node?.queryWithTimeout === 'function') {
+    return node.queryWithTimeout(
+      sql,
+      params,
+      {
+        timeoutMs: STATUS_QUERY_TIMEOUT_MS,
+        lane: STATUS_QUERY_LANE,
+      },
+    );
+  }
+  return node.query(sql, params);
+}
 
 /**
  * Pick seed node with deterministic fallback.
@@ -79,7 +109,8 @@ function buildSyntheticTransactions(nowMs) {
  */
 async function seedSyntheticTransactions(seedNode, seeded) {
   for (const row of seeded.rows) {
-    await seedNode.query(
+    await executeScenarioQuery(
+      seedNode,
       SQL_INSERT_TRANSACTION,
       [
         row.transactionId,
@@ -93,18 +124,19 @@ async function seedSyntheticTransactions(seedNode, seeded) {
 }
 
 /**
- * Query transaction statuses by transaction IDs.
- * @param {Object} seedNode
+ * Query transaction statuses by transaction IDs from one node.
+ * @param {Object} node
  * @param {Object} seeded
  * @return {Promise<Map<string, string>>}
  */
-async function queryTransactionStatuses(seedNode, seeded) {
-  const result = await seedNode.query(
+async function queryTransactionStatuses(node, seeded) {
+  const queryResult = await executeScenarioQuery(
+    node,
     SQL_SELECT_TRANSACTION_STATUSES,
     [seeded.activeTransactionId, seeded.preparedTransactionId],
   );
   const statuses = new Map();
-  for (const row of rowsFromResult(result)) {
+  for (const row of rowsFromResult(queryResult)) {
     const transactionId = String(row?.transaction_id || row?.transactionId || '');
     const status = String(row?.status || '');
     if (transactionId.length === ZERO || status.length === ZERO) {
@@ -116,38 +148,155 @@ async function queryTransactionStatuses(seedNode, seeded) {
 }
 
 /**
+ * Merge node-local transaction statuses. Terminal states outrank in-flight states.
+ * @param {Map<string, string>} merged
+ * @param {Map<string, string>} incoming
+ * @return {void}
+ */
+function mergeTransactionStatuses(merged, incoming) {
+  const statusRank = {
+    [TERMINAL_TX_STATUS_ROLLED_BACK]: 4,
+    [TERMINAL_TX_STATUS_COMMITTED]: 4,
+    [IN_FLIGHT_TX_STATUS_PREPARED]: 3,
+    [IN_FLIGHT_TX_STATUS_ACTIVE]: 2,
+  };
+  for (const [transactionId, status] of incoming.entries()) {
+    const existing = merged.get(transactionId);
+    const existingRank = statusRank[existing] || 0;
+    const incomingRank = statusRank[status] || 1;
+    if (!existing || incomingRank >= existingRank) {
+      merged.set(transactionId, status);
+    }
+  }
+}
+
+/**
+ * Query transaction statuses across all queryable nodes and merge snapshots.
+ * @param {Array<Object>} nodes
+ * @param {Object} seeded
+ * @return {Promise<Map<string, string>>}
+ */
+async function queryTransactionStatusesAcrossNodes(nodes, seeded) {
+  const mergedStatuses = new Map();
+  const errors = [];
+  let queriedNodeCount = 0;
+
+  for (const node of nodes) {
+    if (!node || (typeof node.query !== 'function' &&
+      typeof node.queryWithTimeout !== 'function')) {
+      continue;
+    }
+    try {
+      const statuses = await queryTransactionStatuses(node, seeded);
+      mergeTransactionStatuses(mergedStatuses, statuses);
+      queriedNodeCount += 1;
+    } catch (error) {
+      errors.push(
+        String(node.id || 'unknown-node') + ': ' +
+        String(error?.message || error),
+      );
+    }
+  }
+
+  if (queriedNodeCount <= ZERO) {
+    throw new Error(
+      'Unable to query transaction statuses from any node' +
+      (errors.length > ZERO ? ': ' + errors.join('; ') : ''),
+    );
+  }
+  return mergedStatuses;
+}
+
+/**
+ * Wait until seeded rows are visible before restarting seed.
+ * @param {Array<Object>} nodes
+ * @param {Object} seeded
+ * @return {Promise<Object>}
+ */
+async function waitForSeededTransactionVisibility(nodes, seeded) {
+  const deadline = Date.now() + SEEDED_VISIBILITY_TIMEOUT_MS;
+  let attemptCount = 0;
+  let latestStatuses = new Map();
+
+  while (Date.now() <= deadline) {
+    attemptCount += 1;
+    latestStatuses = await queryTransactionStatusesAcrossNodes(nodes, seeded);
+    if (latestStatuses.has(seeded.activeTransactionId) &&
+      latestStatuses.has(seeded.preparedTransactionId)) {
+      return {
+        attemptCount,
+        statuses: {
+          [seeded.activeTransactionId]:
+            latestStatuses.get(seeded.activeTransactionId) || null,
+          [seeded.preparedTransactionId]:
+            latestStatuses.get(seeded.preparedTransactionId) || null,
+        },
+      };
+    }
+    if (Date.now() >= deadline) {
+      break;
+    }
+    await sleep(SEEDED_VISIBILITY_POLL_INTERVAL_MS);
+  }
+
+  throw new Error(
+    'Timed out waiting for seeded transaction rows to become visible before restart. ' +
+    seeded.activeTransactionId + '=' +
+    String(latestStatuses.get(seeded.activeTransactionId) || null) + ', ' +
+    seeded.preparedTransactionId + '=' +
+    String(latestStatuses.get(seeded.preparedTransactionId) || null) +
+    ', attempts=' + attemptCount,
+  );
+}
+
+/**
  * Wait until seeded synthetic transactions reach replayed terminal states.
- * @param {Object} seedNode
+ * @param {Array<Object>} nodes
  * @param {Object} seeded
  * @param {Object} options
  * @param {number} options.timeoutMs
  * @param {number} options.pollIntervalMs
  * @return {Promise<Object>}
  */
-async function waitForReplayTerminalStatuses(seedNode, seeded, options) {
+async function waitForReplayTerminalStatuses(nodes, seeded, options) {
   const timeoutMs = options.timeoutMs;
   const pollIntervalMs = options.pollIntervalMs;
   const deadline = Date.now() + timeoutMs;
   let sampleCount = 0;
+  let attemptCount = 0;
+  let transientQueryErrors = 0;
+  let lastQueryError = null;
   let latestStatuses = new Map();
 
   while (Date.now() <= deadline) {
-    latestStatuses = await queryTransactionStatuses(seedNode, seeded);
-    sampleCount += 1;
+    attemptCount += 1;
+    try {
+      latestStatuses = await queryTransactionStatusesAcrossNodes(nodes, seeded);
+      sampleCount += 1;
+      lastQueryError = null;
 
-    const activeStatus = latestStatuses.get(seeded.activeTransactionId);
-    const preparedStatus = latestStatuses.get(seeded.preparedTransactionId);
-    if (activeStatus === TERMINAL_TX_STATUS_ROLLED_BACK &&
-      preparedStatus === TERMINAL_TX_STATUS_COMMITTED) {
-      return {
-        sampleCount,
-        statuses: {
-          [seeded.activeTransactionId]: activeStatus,
-          [seeded.preparedTransactionId]: preparedStatus,
-        },
-      };
+      const activeStatus = latestStatuses.get(seeded.activeTransactionId);
+      const preparedStatus = latestStatuses.get(seeded.preparedTransactionId);
+      if (activeStatus === TERMINAL_TX_STATUS_ROLLED_BACK &&
+        preparedStatus === TERMINAL_TX_STATUS_COMMITTED) {
+        return {
+          sampleCount,
+          attemptCount,
+          transientQueryErrors,
+          statuses: {
+            [seeded.activeTransactionId]: activeStatus,
+            [seeded.preparedTransactionId]: preparedStatus,
+          },
+        };
+      }
+    } catch (error) {
+      transientQueryErrors += 1;
+      lastQueryError = String(error?.message || error);
     }
 
+    if (Date.now() >= deadline) {
+      break;
+    }
     await sleep(pollIntervalMs);
   }
 
@@ -159,7 +308,10 @@ async function waitForReplayTerminalStatuses(seedNode, seeded, options) {
     seeded.activeTransactionId + '=' + String(activeStatus) + ', ' +
     seeded.preparedTransactionId + '=' + String(preparedStatus) +
     ', expected ' + TERMINAL_TX_STATUS_ROLLED_BACK + ' and ' +
-    TERMINAL_TX_STATUS_COMMITTED + ', samples=' + sampleCount,
+    TERMINAL_TX_STATUS_COMMITTED + ', samples=' + sampleCount +
+    ', attempts=' + attemptCount +
+    ', transientQueryErrors=' + transientQueryErrors +
+    ', lastQueryError=' + String(lastQueryError || 'none'),
   );
 }
 
@@ -175,6 +327,11 @@ async function run(cluster, options = {}) {
     loadOpsPerSec,
     loadDuration,
     loadOperations,
+    tableName,
+    minAdditionalPartitions,
+    minDistinctReplicaNodes,
+    distributionTimeoutMs,
+    distributionPollIntervalMs,
     preRestartDelayMs,
     convergenceTimeoutMs,
     transactionReplayTimeoutMs,
@@ -192,6 +349,15 @@ async function run(cluster, options = {}) {
 
   const seedNode = getSeedNode(nodes);
   assert.ok(seedNode, 'Seed node should be available');
+  const effectiveTableName = resolvePartitioningLoadTableName(
+    cluster,
+    tableName,
+    {
+      explicitTableName:
+        typeof options.tableName === 'string' &&
+        options.tableName.length > ZERO,
+    },
+  );
 
   const initialConvergence = await cluster.waitForConvergence({
     settleTimeoutMs: CONVERGENCE_DEFAULTS.settleTimeoutMs,
@@ -199,19 +365,43 @@ async function run(cluster, options = {}) {
     targetVoterCount: CONVERGENCE_DEFAULTS.targetVoterCount,
   });
 
+  const tablePreparation = await prepareBenchmarkPartitioningTable(
+    seedNode,
+    {tableName: effectiveTableName},
+  );
+  assertSplitPolicyPrecondition(tablePreparation, {
+    scenarioName: 'seven-node-read-write-load-transaction-recovery',
+  });
+
   const loadRun = cluster.startLoad({
     opsPerSec: loadOpsPerSec,
     duration: loadDuration,
     operations: loadOperations,
+    tableName: effectiveTableName,
+    workloadProfile: BENCHMARK_WORKLOAD_PROFILE,
   });
 
+  let distribution = null;
   let seededTransactions = null;
+  let seededVisibility = null;
   let convergenceAfterRestart = null;
   let replayValidation = null;
   try {
+    distribution = await waitForPartitionGrowthAndSpread(seedNode, {
+      tableName: effectiveTableName,
+      timeoutMs: distributionTimeoutMs,
+      pollIntervalMs: distributionPollIntervalMs,
+      minAdditionalPartitions,
+      minDistinctReplicaNodes,
+    });
+
     await sleep(preRestartDelayMs);
     seededTransactions = buildSyntheticTransactions(Date.now());
     await seedSyntheticTransactions(seedNode, seededTransactions);
+    seededVisibility = await waitForSeededTransactionVisibility(
+      nodes,
+      seededTransactions,
+    );
 
     await cluster.restartNode(seedNode.id);
 
@@ -227,7 +417,7 @@ async function run(cluster, options = {}) {
     );
 
     replayValidation = await waitForReplayTerminalStatuses(
-      seedNode,
+      nodes,
       seededTransactions,
       {
         timeoutMs: transactionReplayTimeoutMs,
@@ -256,14 +446,18 @@ async function run(cluster, options = {}) {
 
   return {
     seedNodeId: seedNode.id,
+    tableName: effectiveTableName,
+    tablePreparation,
     convergenceTiming: {
       initial: initialConvergence,
       postRestart: convergenceAfterRestart,
     },
+    distribution,
     seededTransactions: {
       activeTransactionId: seededTransactions.activeTransactionId,
       preparedTransactionId: seededTransactions.preparedTransactionId,
     },
+    seededVisibility,
     replayValidation,
     loadMetrics: metrics,
     successRate,

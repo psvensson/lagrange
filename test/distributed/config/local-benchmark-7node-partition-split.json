@@ -15,7 +15,11 @@
     "cpus": "1.0"
   },
   "partition": {
-    "evaluationIntervalMs": 60000
+    "evaluationIntervalMs": 60000,
+    "splitThresholdBytes": 1048576,
+    "splitThresholdQpm": 120,
+    "mergeThresholdBytes": 1048576,
+    "mergeThresholdQpm": 1
   },
   "benchmark": {
     "baselineImage": "postgres:16",

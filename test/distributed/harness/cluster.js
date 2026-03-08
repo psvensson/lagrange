@@ -2446,7 +2446,48 @@ class Cluster {
 
   startLoad(options) {
     const nodes = Array.from(this._nodes.values());
-    const generator = new LoadGenerator(nodes, options);
+    const requestedOptions =
+      options && typeof options === 'object' ?
+        options :
+        {};
+    const benchmarkConfig =
+      this._config?.benchmark && typeof this._config.benchmark === 'object' ?
+        this._config.benchmark :
+        null;
+    const resolvedOptions = {
+      ...requestedOptions,
+    };
+    if (benchmarkConfig) {
+      if (resolvedOptions.maxInFlight === undefined &&
+          Number.isInteger(benchmarkConfig.loadMaxInFlight) &&
+          benchmarkConfig.loadMaxInFlight > ZERO) {
+        resolvedOptions.maxInFlight = benchmarkConfig.loadMaxInFlight;
+      }
+      if (resolvedOptions.queryTimeoutMs === undefined &&
+          Number.isInteger(benchmarkConfig.loadQueryTimeoutMs) &&
+          benchmarkConfig.loadQueryTimeoutMs > ZERO) {
+        resolvedOptions.queryTimeoutMs = benchmarkConfig.loadQueryTimeoutMs;
+      }
+      if (resolvedOptions.nodeMaxInFlight === undefined &&
+          Number.isInteger(benchmarkConfig.loadNodeMaxInFlight) &&
+          benchmarkConfig.loadNodeMaxInFlight > ZERO) {
+        resolvedOptions.nodeMaxInFlight =
+          benchmarkConfig.loadNodeMaxInFlight;
+      }
+      if (resolvedOptions.nodeFailureThreshold === undefined &&
+          Number.isInteger(benchmarkConfig.nodeFailureThreshold) &&
+          benchmarkConfig.nodeFailureThreshold > ZERO) {
+        resolvedOptions.nodeFailureThreshold =
+          benchmarkConfig.nodeFailureThreshold;
+      }
+      if (resolvedOptions.nodeFailureCooldownMs === undefined &&
+          Number.isInteger(benchmarkConfig.nodeFailureCooldownMs) &&
+          benchmarkConfig.nodeFailureCooldownMs > ZERO) {
+        resolvedOptions.nodeFailureCooldownMs =
+          benchmarkConfig.nodeFailureCooldownMs;
+      }
+    }
+    const generator = new LoadGenerator(nodes, resolvedOptions);
     const run = generator.start();
     this._activeLoadRuns.add(run);
     let stopped = false;
@@ -2457,7 +2498,7 @@ class Cluster {
       PLAYBACK_SCOPE_LOAD,
       LOAD_RUN_ENTITY,
       {
-        options: options || {},
+        options: resolvedOptions,
       },
     );
 

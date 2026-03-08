@@ -109,3 +109,48 @@ test(
     await partition.shutdown();
   },
 );
+
+test(
+  'PartitionService suppresses duplicate-key INSERT failures during committed replay recovery',
+  async (t) => {
+    const partition = new PartitionService({
+      partitionId: 'test-partition',
+      tableId: 'dedupe_table',
+      tableName: 'dedupe_table',
+      replicaId: 'replica-1',
+      replicaIds: ['replica-1'],
+      schema: {
+        columns: [
+          {name: 'id', type: 'TEXT', primaryKey: true},
+        ],
+      },
+      dbPath: ':memory:',
+    });
+
+    await partition.initialize();
+
+    partition.db.prepare('INSERT INTO dedupe_table (id) VALUES (?)').run('row-3');
+
+    const replayedEntry = {
+      entryId: 'entry-replay-after-restart',
+      type: 'INSERT',
+      sql: 'INSERT INTO dedupe_table (id) VALUES (?)',
+      params: ['row-3'],
+      proposedBy: 'replica-1',
+      proposedAt: 3,
+      timestamp: '3',
+    };
+
+    t.doesNotThrow(() => {
+      partition.applyCommittedEntry(replayedEntry);
+    }, 'replayed duplicate INSERT should not crash partition service');
+
+    const rowCount = partition.db
+      .prepare('SELECT COUNT(*) AS count FROM dedupe_table WHERE id = ?')
+      .get('row-3')
+      .count;
+    t.equal(rowCount, 1, 'duplicate replay should preserve single row state');
+
+    await partition.shutdown();
+  },
+);

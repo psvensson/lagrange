@@ -4,8 +4,12 @@ import {
   QUERY_LOG_MSG,
 } from '../query/query-constants.js';
 import {
+  CONTROL_PLANE_READINESS_REASON,
+} from '../control-plane/control-plane-readiness-constants.js';
+import {
   STORAGE_ADMISSION_DECISION_TYPE,
   STORAGE_ADMISSION_OPERATION_TYPE,
+  STORAGE_ADMISSION_REASON,
 } from '../rebalancer/storage-admission-constants.js';
 import {TIMEOUT_BUDGET_DEFAULT} from '../control-plane/timeout-budget.js';
 import {DurableWorkflowCoordinator} from '../workflow/durable-workflow-coordinator.js';
@@ -410,30 +414,35 @@ class ManagedSplitWorkflow {
         };
       }
 
-      let splitPlan;
-      try {
-        splitPlan = await this.buildManagedSplitPlan(
-          partitionInfo,
-          tableName,
-          tableId,
-          primaryKeyColumn,
-        );
-      } catch (error) {
-        const deferredExecution =
-          await this.handleRetryableSplitPlanningFailure({
-            workflowId,
-            partitionId,
-            tableId,
+      let splitPlan = this.resolvePersistedSplitPlan(
+        existingTransition,
+        partitionInfo,
+      );
+      if (!splitPlan) {
+        try {
+          splitPlan = await this.buildManagedSplitPlan(
+            partitionInfo,
             tableName,
-            targetVersion,
-            admission: compactAdmission,
-            retryMetadata,
-            error,
-          });
-        if (deferredExecution) {
-          return deferredExecution;
+            tableId,
+            primaryKeyColumn,
+          );
+        } catch (error) {
+          const deferredExecution =
+            await this.handleRetryableSplitPlanningFailure({
+              workflowId,
+              partitionId,
+              tableId,
+              tableName,
+              targetVersion,
+              admission: compactAdmission,
+              retryMetadata,
+              error,
+            });
+          if (deferredExecution) {
+            return deferredExecution;
+          }
+          throw error;
         }
-        throw error;
       }
       const childProvisioningTargetNodeIdsByPartitionId =
         this.planChildProvisioningTargetNodeIds({
@@ -527,10 +536,10 @@ class ManagedSplitWorkflow {
         updated_at: now,
       };
 
-      await this.insertPartitionMetadataAtomically(
+      await this.ensureChildPartitionMetadata({
         leftPartitionMetadata,
         rightPartitionMetadata,
-      );
+      });
       await Promise.all([
         this.waitForTablePartitionMetadata(
           tableId,
@@ -615,6 +624,26 @@ class ManagedSplitWorkflow {
           ],
       };
     } catch (error) {
+      const activeWorkflow = this.workflowCoordinator.getWorkflowById(
+        workflowId,
+      );
+      const deferredExecution =
+        await this.handleRetryablePostAdmissionExecutionFailure({
+          workflowId,
+          partitionId,
+          tableId,
+          tableName,
+          targetVersion,
+          retryMetadata,
+          admission:
+            activeWorkflow?.metadata?.[
+              PARTITION_TRANSITION_METADATA_FIELD.ADMISSION
+            ] || null,
+          error,
+        });
+      if (deferredExecution) {
+        return deferredExecution;
+      }
       await this.persistExecutionFailure(workflowId, error);
       throw error;
     } finally {
@@ -1055,6 +1084,196 @@ class ManagedSplitWorkflow {
   isRetryableSplitPlanningError(error) {
     return String(error?.message || '') ===
       SPLIT_MERGE_LOG_MSG.INSUFFICIENT_ROWS_FOR_SPLIT;
+  }
+
+  /**
+   * Reconstruct one split plan from durable transition metadata so deferred
+   * retries can resume with the same split identifiers.
+   * @param {Object|null} existingTransition
+   * @param {Object} sourcePartitionInfo
+   * @return {Object|null}
+   * @private
+   */
+  resolvePersistedSplitPlan(existingTransition, sourcePartitionInfo) {
+    if (!this.isRetryableAdmissionState(existingTransition?.state)) {
+      return null;
+    }
+
+    const splitKey = existingTransition?.metadata?.[
+      PARTITION_TRANSITION_METADATA_FIELD.SPLIT_KEY
+    ];
+    const targetPartitionIds = Array.isArray(
+      existingTransition?.metadata?.[
+        PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_IDS
+      ],
+    ) ?
+      existingTransition.metadata[
+        PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_IDS
+      ] :
+      null;
+    if (!splitKey ||
+        !targetPartitionIds ||
+        targetPartitionIds.length !== 2 ||
+        !targetPartitionIds[0] ||
+        !targetPartitionIds[1]) {
+      return null;
+    }
+
+    const [leftPartitionId, rightPartitionId] = targetPartitionIds;
+    const sourceRange = this.resolvePartitionKeyRange(sourcePartitionInfo);
+    const leftPartitionInfo = this.getPartitionInfo(leftPartitionId);
+    const rightPartitionInfo = this.getPartitionInfo(rightPartitionId);
+    const leftRange = this.resolvePartitionKeyRange(
+      leftPartitionInfo,
+      {
+        start: sourceRange.start,
+        end: splitKey,
+      },
+    );
+    const rightRange = this.resolvePartitionKeyRange(
+      rightPartitionInfo,
+      {
+        start: splitKey,
+        end: sourceRange.end,
+      },
+    );
+
+    return {
+      medianKey: splitKey,
+      leftPartition: {
+        partitionId: String(leftPartitionId),
+        keyRange: leftRange,
+      },
+      rightPartition: {
+        partitionId: String(rightPartitionId),
+        keyRange: rightRange,
+      },
+    };
+  }
+
+  /**
+   * Resolve one partition key range with optional fallback defaults.
+   * @param {Object|null} partitionInfo
+   * @param {Object} fallbackRange
+   * @return {{start: *, end: *}}
+   * @private
+   */
+  resolvePartitionKeyRange(partitionInfo, fallbackRange = {}) {
+    return {
+      start: partitionInfo?.partition_key_start ??
+        partitionInfo?.partitionKeyStart ??
+        fallbackRange.start ??
+        null,
+      end: partitionInfo?.partition_key_end ??
+        partitionInfo?.partitionKeyEnd ??
+        fallbackRange.end ??
+        null,
+    };
+  }
+
+  /**
+   * Persist one retryable split deferral for transient child provisioning
+   * failures discovered after split admission has already been accepted.
+   * @param {Object} options
+   * @return {Promise<Object|null>}
+   * @private
+   */
+  async handleRetryablePostAdmissionExecutionFailure(options) {
+    if (!this.isRetryablePostAdmissionExecutionError(options.error)) {
+      return null;
+    }
+
+    const decisionType = this.resolveRetryableExecutionDecisionType(
+      options.error,
+    );
+    const deferredState = this.resolveAdmissionDeniedState(decisionType);
+    const workflow = this.workflowCoordinator.getWorkflowById(
+      options.workflowId,
+    );
+    const retry = this.buildScheduledRetryMetadata(
+      options.retryMetadata,
+      deferredState,
+    );
+    const errorMessage = options.error?.message ||
+      QUERY_ERROR_MSG.TABLE_SPLIT_START_FAILED;
+    const deferredMetadata = {
+      ...(workflow?.metadata || {}),
+      [PARTITION_TRANSITION_METADATA_FIELD.ADMISSION]:
+        options.admission,
+      [PARTITION_TRANSITION_METADATA_FIELD.RETRY]:
+        retry,
+      [PARTITION_TRANSITION_METADATA_FIELD.FAILURE]: {
+        classification: 'split_child_provisioning_deferred',
+        message: errorMessage,
+        failedAt: new Date(this.now()).toISOString(),
+        retryable: true,
+        decisionType,
+      },
+    };
+
+    if (workflow) {
+      await this.workflowCoordinator.updateWorkflow(options.workflowId, {
+        status: deferredState,
+        metadata: deferredMetadata,
+      });
+    }
+
+    return {
+      success: false,
+      partitionId: options.partitionId,
+      tableId: options.tableId,
+      tableName: options.tableName,
+      workflowId: options.workflowId,
+      targetVersion: options.targetVersion,
+      state: deferredState,
+      admission: options.admission,
+      retry,
+      error: errorMessage,
+    };
+  }
+
+  /**
+   * Determine whether one split execution failure should be retried.
+   * @param {Error} error
+   * @return {boolean}
+   * @private
+   */
+  isRetryablePostAdmissionExecutionError(error) {
+    const message = String(error?.message || '').toLowerCase();
+    if (!message) {
+      return false;
+    }
+
+    return message.includes(
+      QUERY_ERROR_MSG.TABLE_PARTITION_PROVISION_INSUFFICIENT_TARGETS_PREFIX
+        .toLowerCase(),
+    ) ||
+      message.includes(STORAGE_ADMISSION_REASON.CONTROL_PLANE_WRITE_UNHEALTHY) ||
+      message.includes(CONTROL_PLANE_READINESS_REASON.CLUSTER_MEMBER_UNHEALTHY) ||
+      message.includes(STORAGE_ADMISSION_REASON.METADATA_PUBLICATION_DEGRADED) ||
+      message.includes(STORAGE_ADMISSION_REASON.METADATA_PUBLICATION_REPAIR_ONLY);
+  }
+
+  /**
+   * Resolve one decision type for retryable post-admission failures.
+   * @param {Error} error
+   * @return {string}
+   * @private
+   */
+  resolveRetryableExecutionDecisionType(error) {
+    const message = String(error?.message || '').toLowerCase();
+    if (message.includes(STORAGE_ADMISSION_REASON.CONTROL_PLANE_WRITE_UNHEALTHY) ||
+        message.includes(CONTROL_PLANE_READINESS_REASON.CLUSTER_MEMBER_UNHEALTHY) ||
+        message.includes(STORAGE_ADMISSION_REASON.METADATA_PUBLICATION_DEGRADED) ||
+        message.includes(STORAGE_ADMISSION_REASON.METADATA_PUBLICATION_REPAIR_ONLY)) {
+      return STORAGE_ADMISSION_DECISION_TYPE.DEFERRED;
+    }
+    if (message.includes(
+      STORAGE_ADMISSION_REASON.INSUFFICIENT_PLACEMENT_ELIGIBLE_NODES,
+    )) {
+      return STORAGE_ADMISSION_DECISION_TYPE.BLOCKED;
+    }
+    return STORAGE_ADMISSION_DECISION_TYPE.DEFERRED;
   }
 
   /**
@@ -1665,6 +1884,130 @@ class ManagedSplitWorkflow {
     }
 
     return null;
+  }
+
+  /**
+   * Ensure child partition metadata rows exist with the expected identity.
+   * Retries after deferred execution reuse existing rows instead of reinserting.
+   * @param {Object} options
+   * @return {Promise<void>}
+   * @private
+   */
+  async ensureChildPartitionMetadata(options = {}) {
+    const leftPartitionMetadata = options.leftPartitionMetadata;
+    const rightPartitionMetadata = options.rightPartitionMetadata;
+    const leftPartitionId = String(leftPartitionMetadata?.partition_id || '');
+    const rightPartitionId = String(rightPartitionMetadata?.partition_id || '');
+    const leftExistingPartition = this.resolveChildPartitionMetadataRow(
+      leftPartitionId,
+    );
+    const rightExistingPartition = this.resolveChildPartitionMetadataRow(
+      rightPartitionId,
+    );
+    const leftExists = !!leftExistingPartition;
+    const rightExists = !!rightExistingPartition;
+
+    if (!leftExists && !rightExists) {
+      await this.insertPartitionMetadataAtomically(
+        leftPartitionMetadata,
+        rightPartitionMetadata,
+      );
+      return;
+    }
+
+    if (leftExists !== rightExists) {
+      throw new Error(
+        'Managed split child partition metadata is inconsistent: exactly one ' +
+        'child row exists',
+      );
+    }
+
+    this.assertExistingChildPartitionMetadataMatches(
+      leftPartitionMetadata,
+      leftExistingPartition,
+    );
+    this.assertExistingChildPartitionMetadataMatches(
+      rightPartitionMetadata,
+      rightExistingPartition,
+    );
+  }
+
+  /**
+   * Resolve one existing child metadata row by partition identity.
+   * @param {string} partitionId
+   * @return {Object|null}
+   * @private
+   */
+  resolveChildPartitionMetadataRow(partitionId) {
+    if (!partitionId) {
+      return null;
+    }
+    const partition = this.getPartitionInfo(partitionId);
+    const resolvedPartitionId = String(
+      partition?.partition_id ?? partition?.partitionId ?? '',
+    );
+    if (!resolvedPartitionId || resolvedPartitionId !== partitionId) {
+      return null;
+    }
+    return partition;
+  }
+
+  /**
+   * Assert an existing child row matches expected split metadata fields.
+   * @param {Object} expected
+   * @param {Object} existing
+   * @return {void}
+   * @private
+   */
+  assertExistingChildPartitionMetadataMatches(expected, existing) {
+    const mismatches = [];
+    const compareField = (label, expectedValue, existingValue) => {
+      if (expectedValue !== existingValue) {
+        mismatches.push({
+          field: label,
+          expected: expectedValue,
+          actual: existingValue,
+        });
+      }
+    };
+
+    compareField(
+      'partition_id',
+      expected.partition_id,
+      existing.partition_id ?? existing.partitionId ?? null,
+    );
+    compareField(
+      'table_id',
+      expected.table_id,
+      existing.table_id ?? existing.tableId ?? null,
+    );
+    compareField(
+      'table_name',
+      expected.table_name,
+      existing.table_name ?? existing.tableName ?? null,
+    );
+    compareField(
+      'partition_key_start',
+      expected.partition_key_start,
+      existing.partition_key_start ?? existing.partitionKeyStart ?? null,
+    );
+    compareField(
+      'partition_key_end',
+      expected.partition_key_end,
+      existing.partition_key_end ?? existing.partitionKeyEnd ?? null,
+    );
+    compareField(
+      'partition_version',
+      expected.partition_version,
+      existing.partition_version ?? existing.partitionVersion ?? null,
+    );
+
+    if (mismatches.length > 0) {
+      throw new Error(
+        `Managed split child partition metadata mismatch for ` +
+        `${expected.partition_id}: ${JSON.stringify(mismatches)}`,
+      );
+    }
   }
 
   /**

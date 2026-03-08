@@ -42,6 +42,7 @@ const TIMEOUT_ERROR_PATTERN = /timeout|timed out|deadline exceeded|etimedout/i;
 const LOAD_TABLE_NAME = 'logs';
 const LOAD_TABLE_BENCHMARK_EVENTS = 'benchmark_events';
 const LOAD_NODE_ID = 'load-generator';
+const LOAD_LOG_ID_PREFIX = 'load-';
 const LOG_LEVEL_INFO = 'info';
 const INSERT_OP = 'INSERT';
 const SELECT_OP = 'SELECT';
@@ -143,14 +144,18 @@ function buildSqlStatement(operation, counter, options = {}) {
     }
   }
 
-  const logId = `load-${counter}`;
+  const logIdPrefix = typeof options.logIdPrefix === 'string' &&
+    options.logIdPrefix.length > ZERO ?
+    options.logIdPrefix :
+    LOAD_LOG_ID_PREFIX;
+  const logId = `${logIdPrefix}${counter}`;
   const timestamp = Date.now();
   switch (operation) {
   case INSERT_OP:
     return `INSERT INTO ${tableName} ` +
       '(log_id, timestamp, level, node_id, message, created_at) VALUES (' +
       `'${logId}', ${timestamp}, '${LOG_LEVEL_INFO}', ` +
-      `'${LOAD_NODE_ID}', 'load-${counter}', ${timestamp})`;
+      `'${LOAD_NODE_ID}', '${logId}', ${timestamp})`;
   case SELECT_OP:
     return `SELECT * FROM ${tableName} ` +
       `WHERE log_id = '${logId}' LIMIT 1`;
@@ -354,6 +359,10 @@ class LoadRun {
       options.eventIdPrefix.length > ZERO ?
       options.eventIdPrefix :
       BENCHMARK_EVENT_ID_PREFIX;
+    this._logIdPrefix = typeof options.logIdPrefix === 'string' &&
+      options.logIdPrefix.length > ZERO ?
+      options.logIdPrefix :
+      LOAD_LOG_ID_PREFIX;
     this._maxInFlight = options.maxInFlight ||
       this._availableNodes.length * IN_FLIGHT_PER_NODE;
     this._nodeFailureThreshold =
@@ -569,6 +578,7 @@ class LoadRun {
         tableName: this._tableName,
         workloadProfile: this._workloadProfile,
         eventIdPrefix: this._eventIdPrefix,
+        logIdPrefix: this._logIdPrefix,
       });
       this._counter++;
 
@@ -1315,6 +1325,10 @@ class LoadGenerator {
       WORKLOAD_PROFILE_BENCHMARK_EVENTS ?
       BENCHMARK_EVENT_ID_PREFIX + randomUUID() + '-' :
       BENCHMARK_EVENT_ID_PREFIX;
+    const logIdPrefix = this._workloadProfile ===
+      WORKLOAD_PROFILE_BENCHMARK_EVENTS ?
+      LOAD_LOG_ID_PREFIX :
+      LOAD_LOG_ID_PREFIX + randomUUID() + '-';
     const run = new LoadRun(this._nodes, {
       opsPerSec: this._opsPerSec,
       durationMs,
@@ -1322,6 +1336,7 @@ class LoadGenerator {
       tableName: this._tableName,
       workloadProfile: this._workloadProfile,
       eventIdPrefix,
+      logIdPrefix,
       nodeFailureThreshold: this._nodeFailureThreshold,
       nodeFailureCooldownMs: this._nodeFailureCooldownMs,
       queryTimeoutMs: this._queryTimeoutMs,

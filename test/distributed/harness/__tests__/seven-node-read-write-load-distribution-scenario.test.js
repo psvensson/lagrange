@@ -6,7 +6,16 @@ import {
 
 const SQL_FROM_PARTITIONS = 'FROM partitions';
 const SQL_FROM_SERVICES = 'FROM services';
+const SQL_FROM_TABLES = 'FROM tables';
+const SQL_CREATE_TABLE_IF_NOT_EXISTS = 'CREATE TABLE IF NOT EXISTS';
+const SQL_UPDATE_TABLE_POLICIES = 'UPDATE tables SET table_policies';
 const LOAD_OPERATIONS = Object.freeze(['INSERT', 'SELECT', 'UPDATE', 'DELETE']);
+const TABLE_POLICIES_JSON = JSON.stringify({
+  splitStorageThreshold: 16384,
+  splitTrafficThreshold: 120,
+  mergeStorageThreshold: 1,
+  mergeTrafficThreshold: 1,
+});
 
 function partitionRowsForStage(stage) {
   if (stage <= 1) {
@@ -63,6 +72,20 @@ describe('seven-node-read-write-load-distribution scenario', () => {
       id: 'seed-1',
       role: 'seed',
       query: async (sql) => {
+        if (sql.includes(SQL_CREATE_TABLE_IF_NOT_EXISTS)) {
+          return {rows: []};
+        }
+        if (sql.includes(SQL_UPDATE_TABLE_POLICIES)) {
+          return {rows: []};
+        }
+        if (sql.includes(SQL_FROM_TABLES)) {
+          return {
+            rows: [{
+              table_id: 'tbl-benchmark-events-1',
+              table_policies: TABLE_POLICIES_JSON,
+            }],
+          };
+        }
         if (sql.includes(SQL_FROM_PARTITIONS)) {
           sampleStage = Math.min(sampleStage + 1, 4);
           return {rows: partitionRowsForStage(sampleStage)};
@@ -124,6 +147,16 @@ describe('seven-node-read-write-load-distribution scenario', () => {
       calls[1][1].operations,
       LOAD_OPERATIONS,
       'scenario should run mixed read/write load operations',
+    );
+    assert.equal(
+      calls[1][1].tableName,
+      'benchmark_events',
+      'scenario should default to benchmark load table',
+    );
+    assert.equal(
+      calls[1][1].workloadProfile,
+      'benchmark_events_mixed',
+      'scenario should use benchmark workload profile',
     );
     assert.deepEqual(calls[2], 'assertConsistency');
   });

@@ -2371,6 +2371,163 @@ describe('postgres-baseline-comparison scenario', () => {
       );
     });
 
+  it('does not abort preload gate while in-flight operations stay within ' +
+    'their timeout budget', async () => {
+      const loadCalls = [];
+      let inFlightProbeCount = 0;
+      const benchmarkTableProbeSql =
+        'SELECT count(*) FROM benchmark_events WHERE 1 = 0';
+      const provider = {
+        createContainer: async (_options) => ({
+          containerId: 'benchmark-postgres-1',
+          ip: '172.18.0.80',
+          name: 'benchmark-postgres-1',
+        }),
+        execInContainer: async (_containerId, cmd) => {
+          const command = String(cmd[2] || '');
+          if (command.includes('pg_isready')) {
+            return {exitCode: 0, stdout: 'accepting connections', stderr: ''};
+          }
+          if (command.includes('pg_stat_replication')) {
+            return {exitCode: 0, stdout: '0\n', stderr: ''};
+          }
+          return {exitCode: 0, stdout: '', stderr: ''};
+        },
+        stopContainer: async () => {},
+        removeContainer: async () => {},
+      };
+
+      const seedNode = {
+        id: 'seed-1',
+        role: 'seed',
+        query: async (sql) => {
+          const statement = String(sql);
+          if (statement === 'SELECT 1') {
+            return {rows: [{value: 1}]};
+          }
+          if (statement === benchmarkTableProbeSql) {
+            return {rows: [{count: 0}]};
+          }
+          if (statement.includes('FROM tables')) {
+            return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+          }
+          if (statement.startsWith('UPDATE partitions SET table_name')) {
+            return {rows: [], changes: 1};
+          }
+          if (statement.includes('FROM partitions')) {
+            return {rows: [{partition_id: 'p1'}]};
+          }
+          return {rows: []};
+        },
+        queryWithTimeout: async function(sql, params = [], _options = {}) {
+          if (String(sql) === NODE_CLIENT_CONTROL_SNAPSHOT_SQL) {
+            inFlightProbeCount += 1;
+            const inFlightCount = inFlightProbeCount < 7 ? 1 : 0;
+            return {
+              rows: [buildControlSnapshotPayload(this.id, {
+                replicaOperations: {
+                  inFlightCount,
+                  statusHistogram: inFlightCount > 0 ?
+                    {removing: inFlightCount} :
+                    {},
+                  operationTimelineById: inFlightCount > 0 ?
+                    {
+                      'op-removing-1': [{
+                        eventType: 'state',
+                        operationId: 'op-removing-1',
+                        step: 'STOPPING',
+                        status: 'removing',
+                        timestampMs: 1000,
+                        inFlight: true,
+                        ageMs: inFlightProbeCount * 5,
+                        timeoutMs: 200,
+                        staleTimeout: false,
+                      }],
+                    } :
+                    {},
+                },
+              })],
+            };
+          }
+          return this.query(sql, params);
+        },
+      };
+
+      const cluster = {
+        _config: {
+          benchmark: {
+            baselineImage: 'postgres:16',
+            durationSeconds: 5,
+            clients: 2,
+            jobs: 1,
+            loadOpsPerSec: 40,
+            loadDuration: '5s',
+            loadMaxInFlight: 64,
+            tableName: 'benchmark_events',
+            replicationFactor: 1,
+            syncReplicaAcks: 0,
+            quiescentTimeoutMs: 500,
+            quiescentPollIntervalMs: 5,
+            quiescentStableWindowMs: 0,
+            quiescentNoProgressTimeoutMs: 20,
+          },
+          convergence: {
+            settleTimeoutMs: 1000,
+            quietWindowMs: 100,
+            targetVoterCount: 3,
+          },
+          resourceLimits: {
+            memory: '1g',
+            cpus: '1.0',
+          },
+          timeouts: {
+            nodeStartup: 1000,
+          },
+        },
+        _scenarioOverrides: {
+          postgresBaselineComparison: {
+            createPostgresPool: () => ({
+              query: async () => ({rows: []}),
+              end: async () => {},
+            }),
+            createLoadGenerator: (nodes) => {
+              loadCalls.push(nodes.map((node) => node.id));
+              return {
+                start: () => ({
+                  waitComplete: async () => ({
+                    total: 10,
+                    success: 10,
+                    failed: 0,
+                    errors: 0,
+                    opsPerSec: 10,
+                    latency: {avg: 1, p50: 1, p95: 2, p99: 2},
+                  }),
+                }),
+              };
+            },
+          },
+        },
+        _providers: [provider],
+        _hostAssignment: [0],
+        _networkName: 'test-net',
+        getNodes: () => asNodeHandles([seedNode]),
+        waitForConvergence: async () => ({settledAfterMs: 1}),
+        assertConsistency: async () => {},
+      };
+
+      const result = await run(cluster);
+      assert.equal(result.loadMetrics?.failed, 0);
+      assert.ok(
+        inFlightProbeCount >= 7,
+        'gate should keep polling until in-flight operations drain',
+      );
+      assert.equal(
+        loadCalls.length,
+        2,
+        'scenario should continue once in-flight operations settle',
+      );
+    });
+
   it('uses alternate snapshot node when seed snapshot lane is timing out',
     async () => {
       const loadCalls = [];

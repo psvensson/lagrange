@@ -1730,6 +1730,29 @@ test('AdminWebSocketAPI - local control snapshot exposes structured control-plan
   async (t) => {
     const workflowId = 'split-table-1-partition-1-v2';
     const readinessRequests = [];
+    const splitEvaluationDiagnostics = {
+      state: 'IDLE',
+      evaluationIntervalMs: 60000,
+      reactiveEvaluationDebounceMs: 1000,
+      inFlight: false,
+      requestedEvaluationPending: false,
+      requestedAtMs: 1709510460100,
+      requestedReasonCodes: ['write_activity'],
+      requestedPartitionIds: ['table-1-p1'],
+      lastStartedAtMs: 1709510460200,
+      lastCompletedAtMs: 1709510460300,
+      lastDurationMs: 100,
+      lastError: null,
+      lastSummary: {
+        evaluated: true,
+        partitionsEvaluated: 3,
+        splitCandidateCount: 2,
+        executedSplitCount: 1,
+        splitDeferredCount: 1,
+        splitErrorCount: 0,
+        mergeCandidateCount: 0,
+      },
+    };
     const cache = createPopulatedCache();
     cache.applySystemTableChange(TABLES.TABLES, 'UPDATE', {
       id: 'table-1',
@@ -1831,6 +1854,11 @@ test('AdminWebSocketAPI - local control snapshot exposes structured control-plan
       },
       sqlQueryEngine: {
         executeRequest: async () => ({success: true, rows: []}),
+        partitionSplitMergeManager: {
+          getEvaluationDiagnostics() {
+            return splitEvaluationDiagnostics;
+          },
+        },
       },
     });
 
@@ -1894,6 +1922,16 @@ test('AdminWebSocketAPI - local control snapshot exposes structured control-plan
       diagnostics.timeoutClassifications[0].timeoutClassification.classification,
       'cache_visibility_timeout',
       'snapshot should expose persisted timeout classifications',
+    );
+    t.equal(
+      diagnostics.splitEvaluation.lastSummary.splitCandidateCount,
+      2,
+      'snapshot should expose split-evaluation candidate count from owner',
+    );
+    t.same(
+      diagnostics.splitEvaluation.requestedReasonCodes,
+      ['write_activity'],
+      'snapshot should expose pending split-evaluation request reasons',
     );
 
     const preflightResult =

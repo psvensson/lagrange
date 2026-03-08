@@ -12,39 +12,50 @@ import {
   resolveSevenNodeLoadDuringPartitioningScenarioConfig,
 } from '../harness/scenario-config.js';
 import {
-  escapeSql,
+  BENCHMARK_WORKLOAD_PROFILE,
+  prepareBenchmarkPartitioningTable,
+  assertSplitPolicyPrecondition,
+  resolvePartitioningLoadTableName,
   sleep,
   queryTableDistribution,
   rowsFromResult,
 } from './table-distribution-helpers.js';
 
 const ZERO = 0;
-const SPLIT_STORAGE_THRESHOLD_BYTES = 16384;
-const SPLIT_TRAFFIC_THRESHOLD_QPM = 120;
-const MERGE_STORAGE_THRESHOLD_BYTES = 1;
-const MERGE_TRAFFIC_THRESHOLD_QPM = 1;
-
-const TABLE_SPLIT_POLICIES = Object.freeze({
-  splitStorageThreshold: SPLIT_STORAGE_THRESHOLD_BYTES,
-  splitTrafficThreshold: SPLIT_TRAFFIC_THRESHOLD_QPM,
-  mergeStorageThreshold: MERGE_STORAGE_THRESHOLD_BYTES,
-  mergeTrafficThreshold: MERGE_TRAFFIC_THRESHOLD_QPM,
-});
-
-const SQL_SELECT_TABLE_ID_PREFIX =
-  'SELECT table_id FROM tables WHERE table_name = \'';
-const SQL_SELECT_TABLE_ID_SUFFIX = '\'';
-const SQL_UPDATE_TABLE_POLICIES_PREFIX =
-  'UPDATE tables SET table_policies = \'';
-const SQL_UPDATE_TABLE_POLICIES_MID =
-  '\' WHERE table_id = \'';
-const SQL_UPDATE_TABLE_POLICIES_SUFFIX = '\'';
 const SQL_CONTROL_SNAPSHOT =
   'SELECT * FROM control_snapshot_local()';
 const FAILURE_PHASE_PARTITIONING = 'partitioning_under_load';
 const FAILURE_ROOT_CAUSE_CLASS_PROGRESSION = 'progression';
 const FAILURE_REASON_NO_SPLIT_ATTEMPTS = 'no_split_attempt_evidence';
 const FAILURE_REASON_NO_PARTITIONING_EVIDENCE = 'no_partitioning_evidence';
+const PARTITION_EVALUATION_INTERVAL_MIN_MS = 60000;
+const SPLIT_ATTEMPT_TIMEOUT_MIN_HEADROOM_MS = 1000;
+
+/**
+ * Resolve one sane split-attempt timeout floor from cluster settings.
+ * Prevents false-fast split-attempt failures when evaluation cadence is
+ * slower than scenario default timing.
+ * @param {Object} cluster
+ * @param {number} pollIntervalMs
+ * @return {number}
+ */
+function resolveSplitAttemptTimeoutFloor(cluster, pollIntervalMs) {
+  const configuredIntervalMs = Number(
+    cluster?._config?.partition?.evaluationIntervalMs,
+  );
+  const evaluationIntervalMs = Number.isFinite(configuredIntervalMs) &&
+    configuredIntervalMs > ZERO ?
+    Math.floor(configuredIntervalMs) :
+    PARTITION_EVALUATION_INTERVAL_MIN_MS;
+  const pollHeadroomMs = Number.isFinite(pollIntervalMs) &&
+    pollIntervalMs > ZERO ?
+    Math.floor(pollIntervalMs) :
+    SPLIT_ATTEMPT_TIMEOUT_MIN_HEADROOM_MS;
+  return evaluationIntervalMs + Math.max(
+    pollHeadroomMs,
+    SPLIT_ATTEMPT_TIMEOUT_MIN_HEADROOM_MS,
+  );
+}
 
 /**
  * Pick seed node with deterministic fallback.
@@ -85,49 +96,6 @@ function trackAdditionalPartitions(
     }
     additionalPartitionIds.add(partitionId);
   }
-}
-
-/**
- * Query the table_id for a given table name.
- * @param {Object} seedNode
- * @param {string} tableName
- * @return {Promise<string|null>}
- */
-async function queryTableId(seedNode, tableName) {
-  const sql = SQL_SELECT_TABLE_ID_PREFIX +
-    escapeSql(tableName) +
-    SQL_SELECT_TABLE_ID_SUFFIX;
-  const result = await seedNode.query(sql);
-  const rows = rowsFromResult(result);
-  for (const row of rows) {
-    const value = row?.table_id || row?.tableId;
-    if (typeof value === 'string' && value.length > ZERO) {
-      return value;
-    }
-  }
-  return null;
-}
-
-/**
- * Apply low split thresholds as table policies on the target table.
- * @param {Object} seedNode
- * @param {string} tableName
- * @return {Promise<string>}
- */
-async function applyTableSplitPolicies(seedNode, tableName) {
-  const tableId = await queryTableId(seedNode, tableName);
-  assert.ok(
-    tableId,
-    'Could not resolve table_id for "' + tableName +
-    '" — table must exist before applying split policies',
-  );
-  const policySql = SQL_UPDATE_TABLE_POLICIES_PREFIX +
-    escapeSql(JSON.stringify(TABLE_SPLIT_POLICIES)) +
-    SQL_UPDATE_TABLE_POLICIES_MID +
-    escapeSql(tableId) +
-    SQL_UPDATE_TABLE_POLICIES_SUFFIX;
-  await seedNode.query(policySql);
-  return tableId;
 }
 
 /**
@@ -325,6 +293,15 @@ async function run(cluster, options = {}) {
     minOpsAfterPartitioning,
     minSuccessRate,
   } = resolveSevenNodeLoadDuringPartitioningScenarioConfig(options);
+  const hasExplicitSplitAttemptTimeout = Number.isFinite(
+    options?.splitAttemptTimeoutMs,
+  );
+  const effectiveSplitAttemptTimeoutMs = hasExplicitSplitAttemptTimeout ?
+    splitAttemptTimeoutMs :
+    Math.max(
+      splitAttemptTimeoutMs,
+      resolveSplitAttemptTimeoutFloor(cluster, partitioningPollIntervalMs),
+    );
 
   const nodes = cluster.getNodes();
   assert.equal(
@@ -336,6 +313,15 @@ async function run(cluster, options = {}) {
 
   const seedNode = getSeedNode(nodes);
   assert.ok(seedNode, 'Seed node should be available');
+  const effectiveTableName = resolvePartitioningLoadTableName(
+    cluster,
+    tableName,
+    {
+      explicitTableName:
+        typeof options.tableName === 'string' &&
+        options.tableName.length > ZERO,
+    },
+  );
 
   const convergence = await cluster.waitForConvergence({
     settleTimeoutMs: CONVERGENCE_DEFAULTS.settleTimeoutMs,
@@ -343,29 +329,37 @@ async function run(cluster, options = {}) {
     targetVoterCount: CONVERGENCE_DEFAULTS.targetVoterCount,
   });
 
-  const tableId = await applyTableSplitPolicies(seedNode, tableName);
+  const tablePreparation = await prepareBenchmarkPartitioningTable(seedNode, {
+    tableName: effectiveTableName,
+  });
+  assertSplitPolicyPrecondition(tablePreparation, {
+    scenarioName: 'seven-node-load-during-partitioning',
+  });
+  const tableId = tablePreparation.tableId;
 
   const loadRun = cluster.startLoad({
     opsPerSec: loadOpsPerSec,
     duration: loadDuration,
     operations: loadOperations,
+    tableName: effectiveTableName,
+    workloadProfile: BENCHMARK_WORKLOAD_PROFILE,
   });
 
   let partitioningEvidence = null;
   try {
     const baseline = await queryTableDistribution(
-      seedNode, {tableName},
+      seedNode, {tableName: effectiveTableName},
     );
     assert.ok(
       baseline.partitionCount > ZERO,
-      'No partitions found for table "' + tableName +
+      'No partitions found for table "' + effectiveTableName +
       '" at scenario start',
     );
 
     const baselinePartitionIds = new Set(baseline.partitionIds);
     const additionalPartitionIds = new Set();
     const deadline = Date.now() + partitioningTimeoutMs;
-    const splitAttemptDeadline = Date.now() + splitAttemptTimeoutMs;
+    const splitAttemptDeadline = Date.now() + effectiveSplitAttemptTimeoutMs;
 
     let sampleCount = ZERO;
     let metricsAtFirstPartitioning = null;
@@ -377,12 +371,12 @@ async function run(cluster, options = {}) {
     while (Date.now() <= deadline) {
       sampleCount += 1;
       latestDistribution = await queryTableDistribution(
-        seedNode, {tableName},
+        seedNode, {tableName: effectiveTableName},
       );
       latestMetrics = loadRun.getMetrics();
       latestSplitProgress = await querySplitProgressDiagnostics(
         seedNode,
-        tableName,
+        effectiveTableName,
         tableId,
       );
 
@@ -404,7 +398,7 @@ async function run(cluster, options = {}) {
             ', additionalPartitions=' + additionalPartitionIds.size +
             ', spread=' + latestDistribution.replicaNodeCount +
             ', metrics.total=' + latestMetrics.total,
-          timeoutMs: splitAttemptTimeoutMs,
+          timeoutMs: effectiveSplitAttemptTimeoutMs,
           sampleCount,
           baselinePartitionCount: baseline.partitionCount,
           additionalPartitionCount: additionalPartitionIds.size,
@@ -505,7 +499,8 @@ async function run(cluster, options = {}) {
 
   return {
     expectedNodeCount,
-    tableName,
+    tableName: effectiveTableName,
+    tablePreparation,
     convergenceTiming: convergence,
     partitioningEvidence,
     loadMetrics: metrics,

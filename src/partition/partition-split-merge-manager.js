@@ -38,6 +38,29 @@ const DEFAULT_MERGE_TRAFFIC_THRESHOLD = SPLIT_MERGE_DEFAULT.MERGE_TRAFFIC_THRESH
 const DEFAULT_EVALUATION_INTERVAL_MS = SPLIT_MERGE_DEFAULT.EVALUATION_INTERVAL_MS;
 const DEFAULT_MAX_AUTO_EXECUTE_SPLITS_PER_EVALUATION = 1;
 const DEFAULT_REACTIVE_EVALUATION_DEBOUNCE_MS = 1000;
+const DEFAULT_EVALUATION_TRIGGER = 'direct_call';
+const REACTIVE_EVALUATION_TRIGGER = 'reactive_request';
+const PERIODIC_EVALUATION_TRIGGER = 'periodic_timer';
+
+/**
+ * Clone one list of string-like values into a stable diagnostics array.
+ * @param {Array<*>} values
+ * @return {Array<string>}
+ */
+function cloneStringArray(values) {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+  const cloned = [];
+  for (const value of values) {
+    const normalizedValue = String(value || '');
+    if (!normalizedValue || cloned.includes(normalizedValue)) {
+      continue;
+    }
+    cloned.push(normalizedValue);
+  }
+  return cloned;
+}
 
 /**
  * PartitionSplitMergeManager handles automatic partition splitting and merging
@@ -120,7 +143,19 @@ class PartitionSplitMergeManager extends EventEmitter {
           DEFAULT_REACTIVE_EVALUATION_DEBOUNCE_MS;
       this.requestedEvaluation = null;
       this.requestedEvaluationTimer = null;
+      this.deferredRetryEvaluation = null;
+      this.deferredRetryEvaluationDueAtMs = null;
+      this.deferredRetryEvaluationTimer = null;
       this.isShutdown = false;
+      this.lastEvaluationRequestedAtMs = null;
+      this.lastEvaluationStartedAtMs = null;
+      this.lastEvaluationCompletedAtMs = null;
+      this.lastEvaluationDurationMs = null;
+      this.lastEvaluationError = null;
+      this.lastEvaluationSummary = null;
+      this.lastEvaluationTrigger = null;
+      this.lastEvaluationReasonCodes = [];
+      this.lastEvaluationPartitionIds = [];
 
       // Logging
       const loggingService = LoggingService.getInstance();
@@ -380,6 +415,85 @@ class PartitionSplitMergeManager extends EventEmitter {
   }
 
   /**
+   * Resolve one deferred managed-split retry timestamp from execution output.
+   * @param {Object} execution - Managed split execution result.
+   * @return {number|null} Epoch milliseconds for next retry, or null.
+   * @private
+   */
+  resolveManagedSplitExecutionRetryDueAtMs(execution) {
+    const nextAttemptAt = String(
+      execution?.retry?.nextAttemptAt ||
+      execution?.nextAttemptAt ||
+      '',
+    );
+    if (!nextAttemptAt) {
+      return null;
+    }
+    const retryDueAtMs = Date.parse(nextAttemptAt);
+    return Number.isFinite(retryDueAtMs) ? retryDueAtMs : null;
+  }
+
+  /**
+   * Flush deferred managed-split retry scheduling state and trigger
+   * one reactive evaluation request.
+   * @return {void}
+   * @private
+   */
+  flushDeferredRetryEvaluation() {
+    const request = this.deferredRetryEvaluation;
+    this.deferredRetryEvaluation = null;
+    this.deferredRetryEvaluationDueAtMs = null;
+    this.deferredRetryEvaluationTimer = null;
+    this.requestEvaluation(request || {
+      reasonCode: SPLIT_MERGE_REASON.MANAGED_SPLIT_RETRY_DUE,
+    });
+  }
+
+  /**
+   * Schedule a reactive evaluation when a deferred managed split becomes due.
+   * @param {string} partitionId - Candidate partition ID.
+   * @param {Object} execution - Managed split execution result.
+   * @return {void}
+   * @private
+   */
+  scheduleDeferredManagedSplitRetry(partitionId, execution) {
+    if (this.isShutdown) {
+      return;
+    }
+
+    const retryDueAtMs =
+      this.resolveManagedSplitExecutionRetryDueAtMs(execution);
+    if (!Number.isFinite(retryDueAtMs)) {
+      return;
+    }
+    const nowMs = Date.now();
+    const normalizedDueAtMs = Math.max(nowMs, retryDueAtMs);
+    this.deferredRetryEvaluation = this.mergeRequestedEvaluationContext(
+      this.deferredRetryEvaluation,
+      {
+        reasonCode: SPLIT_MERGE_REASON.MANAGED_SPLIT_RETRY_DUE,
+        partitionId,
+      },
+    );
+    if (this.deferredRetryEvaluationTimer &&
+        Number.isFinite(this.deferredRetryEvaluationDueAtMs) &&
+        this.deferredRetryEvaluationDueAtMs <= normalizedDueAtMs) {
+      return;
+    }
+    if (this.deferredRetryEvaluationTimer) {
+      clearTimeout(this.deferredRetryEvaluationTimer);
+      this.deferredRetryEvaluationTimer = null;
+    }
+
+    this.deferredRetryEvaluationDueAtMs = normalizedDueAtMs;
+    const retryDelayMs = Math.max(NUM.ZERO, normalizedDueAtMs - nowMs);
+    this.deferredRetryEvaluationTimer = setTimeout(() => {
+      this.flushDeferredRetryEvaluation();
+    }, retryDelayMs);
+    this.deferredRetryEvaluationTimer.unref?.();
+  }
+
+  /**
    * Record one managed split execution in the canonical outcome bucket.
    * @param {Object} results - Evaluation results accumulator.
    * @param {string} partitionId - Candidate partition ID.
@@ -402,12 +516,25 @@ class PartitionSplitMergeManager extends EventEmitter {
         partitionId,
         state: execution.state || null,
         workflowId: execution.workflowId || null,
+        error: execution.error || null,
+        retryScheduled: execution.retryScheduled === true,
+        nextAttemptAt:
+          execution?.retry?.nextAttemptAt ||
+          execution?.nextAttemptAt ||
+          null,
+        admissionDecisionType: execution?.admission?.decisionType || null,
+        admissionBlockingReasons: Array.isArray(
+          execution?.admission?.blockingReasons,
+        ) ?
+          execution.admission.blockingReasons :
+          [],
       });
       results.splitDeferred.push({
         partitionId,
         reason: execution.state || PARTITION_TRANSITION_STATE.DEFERRED,
         execution,
       });
+      this.scheduleDeferredManagedSplitRetry(partitionId, execution);
       this.emit(SPLIT_MERGE_EVENT.SPLIT_DEFERRED, {
         partitionId,
         reason: execution.state || PARTITION_TRANSITION_STATE.DEFERRED,
@@ -945,7 +1072,9 @@ class PartitionSplitMergeManager extends EventEmitter {
     });
 
     this.evaluationTimer = setInterval(() => {
-      this.evaluateAllPartitions().catch((error) => {
+      this.evaluateAllPartitions({
+        triggerReason: PERIODIC_EVALUATION_TRIGGER,
+      }).catch((error) => {
         this.logger.error(SPLIT_MERGE_LOG_MSG.PERIODIC_EVAL_FAILED, {
           error: error.message,
         });
@@ -981,6 +1110,7 @@ class PartitionSplitMergeManager extends EventEmitter {
       this.requestedEvaluation,
       context,
     );
+    this.setRequestedEvaluationDiagnostics(this.requestedEvaluation);
     if (this.requestedEvaluationTimer) {
       return;
     }
@@ -1040,6 +1170,120 @@ class PartitionSplitMergeManager extends EventEmitter {
   }
 
   /**
+   * Resolve one stable trigger label for evaluation diagnostics.
+   * @param {Object} preflightOptions
+   * @return {string}
+   * @private
+   */
+  resolveEvaluationTrigger(preflightOptions = {}) {
+    const trigger = String(
+      preflightOptions?.triggerReason ||
+      preflightOptions?.reasonCode ||
+      preflightOptions?.reason ||
+      DEFAULT_EVALUATION_TRIGGER,
+    );
+    return trigger.length > NUM.ZERO ? trigger : DEFAULT_EVALUATION_TRIGGER;
+  }
+
+  /**
+   * Capture pending reactive-request diagnostics.
+   * @param {Object|null} request
+   * @return {void}
+   * @private
+   */
+  setRequestedEvaluationDiagnostics(request) {
+    const normalizedRequest = request &&
+      typeof request === 'object' ?
+      request :
+      null;
+    this.lastEvaluationRequestedAtMs = Date.now();
+    this.lastEvaluationReasonCodes = cloneStringArray(
+      normalizedRequest?.reasonCodes,
+    );
+    this.lastEvaluationPartitionIds = cloneStringArray(
+      normalizedRequest?.partitionIds,
+    );
+  }
+
+  /**
+   * Clear pending reactive-request diagnostics after dispatch.
+   * @return {void}
+   * @private
+   */
+  clearRequestedEvaluationDiagnostics() {
+    this.lastEvaluationRequestedAtMs = null;
+    this.lastEvaluationReasonCodes = [];
+    this.lastEvaluationPartitionIds = [];
+  }
+
+  /**
+   * Record evaluation-start diagnostics.
+   * @param {Object} preflightOptions
+   * @return {number}
+   * @private
+   */
+  recordEvaluationStart(preflightOptions = {}) {
+    const startedAtMs = Date.now();
+    this.lastEvaluationTrigger =
+      this.resolveEvaluationTrigger(preflightOptions);
+    this.lastEvaluationStartedAtMs = startedAtMs;
+    this.lastEvaluationError = null;
+    return startedAtMs;
+  }
+
+  /**
+   * Record evaluation success diagnostics.
+   * @param {Object} results
+   * @param {number} startedAtMs
+   * @return {void}
+   * @private
+   */
+  recordEvaluationSuccess(results, startedAtMs) {
+    const completedAtMs = Date.now();
+    this.lastEvaluationCompletedAtMs = completedAtMs;
+    this.lastEvaluationDurationMs = Number.isFinite(startedAtMs) ?
+      Math.max(NUM.ZERO, completedAtMs - startedAtMs) :
+      null;
+    const normalized = results && typeof results === 'object' ? results : {};
+    this.lastEvaluationSummary = {
+      evaluated: normalized.evaluated === true,
+      partitionsEvaluated: Number(normalized.partitionsEvaluated || NUM.ZERO),
+      splitCandidateCount: Array.isArray(normalized.splitCandidates) ?
+        normalized.splitCandidates.length :
+        NUM.ZERO,
+      executedSplitCount: Array.isArray(normalized.executedSplits) ?
+        normalized.executedSplits.length :
+        NUM.ZERO,
+      splitDeferredCount: Array.isArray(normalized.splitDeferred) ?
+        normalized.splitDeferred.length :
+        NUM.ZERO,
+      splitErrorCount: Array.isArray(normalized.splitErrors) ?
+        normalized.splitErrors.length :
+        NUM.ZERO,
+      mergeCandidateCount: Array.isArray(normalized.mergeCandidates) ?
+        normalized.mergeCandidates.length :
+        NUM.ZERO,
+    };
+    this.lastEvaluationError = null;
+  }
+
+  /**
+   * Record evaluation failure diagnostics.
+   * @param {Error|*} error
+   * @param {number} startedAtMs
+   * @return {void}
+   * @private
+   */
+  recordEvaluationFailure(error, startedAtMs) {
+    const completedAtMs = Date.now();
+    this.lastEvaluationCompletedAtMs = completedAtMs;
+    this.lastEvaluationDurationMs = Number.isFinite(startedAtMs) ?
+      Math.max(NUM.ZERO, completedAtMs - startedAtMs) :
+      null;
+    this.lastEvaluationError = String(error?.message || error || '');
+  }
+
+  /**
    * Drain one pending evaluation request once the manager is idle.
    * @return {Promise<void>}
    * @private
@@ -1047,6 +1291,7 @@ class PartitionSplitMergeManager extends EventEmitter {
   async flushRequestedEvaluation() {
     const request = this.requestedEvaluation;
     this.requestedEvaluation = null;
+    this.clearRequestedEvaluationDiagnostics();
     if (!request) {
       return;
     }
@@ -1057,7 +1302,10 @@ class PartitionSplitMergeManager extends EventEmitter {
     }
 
     try {
-      await this.evaluateAllPartitions();
+      await this.evaluateAllPartitions({
+        ...request,
+        triggerReason: REACTIVE_EVALUATION_TRIGGER,
+      });
     } catch (error) {
       this.logger.error(SPLIT_MERGE_LOG_MSG.REQUESTED_EVAL_FAILED, {
         error: error.message,
@@ -1092,6 +1340,8 @@ class PartitionSplitMergeManager extends EventEmitter {
       }
 
       this.state = OperationState.EVALUATING;
+      const evaluationStartedAtMs =
+        this.recordEvaluationStart(preflightOptions);
 
       try {
         const results = {
@@ -1106,6 +1356,10 @@ class PartitionSplitMergeManager extends EventEmitter {
 
         const partitions = await this.loadEvaluationPartitions();
         if (partitions.length === NUM.ZERO) {
+          this.recordEvaluationSuccess(
+            results,
+            evaluationStartedAtMs,
+          );
           return results;
         }
         results.partitionsEvaluated = partitions.length;
@@ -1264,7 +1518,17 @@ class PartitionSplitMergeManager extends EventEmitter {
 
         this.emit(
           SPLIT_MERGE_EVENT.EVALUATION_COMPLETED, results);
+        this.recordEvaluationSuccess(
+          results,
+          evaluationStartedAtMs,
+        );
         return results;
+      } catch (error) {
+        this.recordEvaluationFailure(
+          error,
+          evaluationStartedAtMs,
+        );
+        throw error;
       } finally {
         this.state = OperationState.IDLE;
       }
@@ -1291,6 +1555,34 @@ class PartitionSplitMergeManager extends EventEmitter {
       evaluationIntervalMs: this.evaluationIntervalMs,
       maxAutoExecuteSplitsPerEvaluation:
         this.maxAutoExecuteSplitsPerEvaluation,
+    };
+  }
+
+  /**
+   * Get split/merge evaluation diagnostics for control-plane snapshots.
+   * @return {Object}
+   */
+  getEvaluationDiagnostics() {
+    return {
+      state: this.state,
+      evaluationIntervalMs: this.evaluationIntervalMs,
+      reactiveEvaluationDebounceMs: this.reactiveEvaluationDebounceMs,
+      inFlight: this.state === OperationState.EVALUATING,
+      deferredRetryEvaluationPending: this.deferredRetryEvaluation !== null,
+      deferredRetryEvaluationDueAtMs: this.deferredRetryEvaluationDueAtMs,
+      requestedEvaluationPending: this.requestedEvaluation !== null,
+      requestedAtMs: this.lastEvaluationRequestedAtMs,
+      requestedReasonCodes: [...this.lastEvaluationReasonCodes],
+      requestedPartitionIds: [...this.lastEvaluationPartitionIds],
+      lastTrigger: this.lastEvaluationTrigger,
+      lastStartedAtMs: this.lastEvaluationStartedAtMs,
+      lastCompletedAtMs: this.lastEvaluationCompletedAtMs,
+      lastDurationMs: this.lastEvaluationDurationMs,
+      lastError: this.lastEvaluationError,
+      lastSummary: this.lastEvaluationSummary &&
+        typeof this.lastEvaluationSummary === 'object' ?
+        {...this.lastEvaluationSummary} :
+        null,
     };
   }
 
@@ -1332,7 +1624,14 @@ class PartitionSplitMergeManager extends EventEmitter {
       clearTimeout(this.requestedEvaluationTimer);
       this.requestedEvaluationTimer = null;
     }
+    if (this.deferredRetryEvaluationTimer) {
+      clearTimeout(this.deferredRetryEvaluationTimer);
+      this.deferredRetryEvaluationTimer = null;
+    }
+    this.deferredRetryEvaluation = null;
+    this.deferredRetryEvaluationDueAtMs = null;
     this.requestedEvaluation = null;
+    this.clearRequestedEvaluationDiagnostics();
     this.removeAllListeners();
     this.logger.info(SPLIT_MERGE_LOG_MSG.MANAGER_SHUTDOWN);
   }

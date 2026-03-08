@@ -627,6 +627,69 @@ test('PartitionSplitMergeManager - records deferred managed split executions as 
     manager.shutdown();
   });
 
+test('PartitionSplitMergeManager - schedules deferred managed split retries ' +
+  'from persisted retry windows', async (t) => {
+  let executionCalls = 0;
+  let evaluationCalls = 0;
+  const retryDueAt = new Date(Date.now() + 15).toISOString();
+
+  const manager = new PartitionSplitMergeManager({
+    reactiveEvaluationDebounceMs: 0,
+    listPartitions: async () => ([
+      {
+        partition_id: 'users-p1',
+        table_id: 'tbl-users',
+        partition_key_start: null,
+        partition_key_end: null,
+        size_bytes: 128,
+      },
+    ]),
+    getPartitionMetrics: async (_partitionId, partition) => ({
+      sizeBytes: partition.size_bytes,
+    }),
+    executeSplitCandidate: async (partitionId) => {
+      executionCalls += 1;
+      if (executionCalls === 1) {
+        return {
+          success: false,
+          partitionId,
+          state: 'deferred',
+          retryScheduled: true,
+          nextAttemptAt: retryDueAt,
+        };
+      }
+      return {
+        success: true,
+        partitionId,
+      };
+    },
+    tablePolicyService: {
+      async getPolicyForPartition() {
+        return {splitStorageThreshold: 64};
+      },
+    },
+  });
+  const evaluateAllPartitions = manager.evaluateAllPartitions.bind(manager);
+  manager.evaluateAllPartitions = async (...args) => {
+    evaluationCalls += 1;
+    return evaluateAllPartitions(...args);
+  };
+
+  const firstPass = await manager.evaluateAllPartitions();
+  t.equal(firstPass.splitDeferred.length, 1);
+  t.equal(firstPass.executedSplits.length, 0);
+
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  await new Promise((resolve) => setImmediate(resolve));
+
+  t.equal(executionCalls, 2, 'retry window should trigger one follow-up split attempt');
+  t.ok(evaluationCalls >= 2, 'retry window should trigger a reactive re-evaluation');
+  const diagnostics = manager.getEvaluationDiagnostics();
+  t.equal(diagnostics.deferredRetryEvaluationPending, false);
+
+  manager.shutdown();
+});
+
 test('PartitionSplitMergeManager - limits automatic split execution per ' +
   'evaluation to preserve one control-plane execution lane', async (t) => {
     const executedPartitionIds = [];
@@ -748,6 +811,36 @@ test('PartitionSplitMergeManager - retries reactive evaluation once busy ' +
       1,
       'requested evaluation should run once the manager returns to idle',
     );
+
+    manager.shutdown();
+  });
+
+test('PartitionSplitMergeManager - exposes split evaluation diagnostics',
+  async (t) => {
+    const manager = new PartitionSplitMergeManager({
+      reactiveEvaluationDebounceMs: 0,
+    });
+
+    manager.requestEvaluation({
+      reasonCode: 'write_activity',
+      partitionId: 'users-p1',
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const diagnostics = manager.getEvaluationDiagnostics();
+    t.equal(diagnostics.lastTrigger, 'reactive_request');
+    t.equal(diagnostics.inFlight, false);
+    t.equal(diagnostics.requestedEvaluationPending, false);
+    t.equal(diagnostics.lastSummary.evaluated, true);
+    t.equal(diagnostics.lastSummary.partitionsEvaluated, 0);
+    t.equal(diagnostics.lastSummary.splitCandidateCount, 0);
+    t.equal(diagnostics.lastSummary.executedSplitCount, 0);
+    t.equal(diagnostics.lastSummary.splitDeferredCount, 0);
+    t.equal(diagnostics.lastSummary.mergeCandidateCount, 0);
+    t.same(diagnostics.requestedReasonCodes, []);
+    t.same(diagnostics.requestedPartitionIds, []);
 
     manager.shutdown();
   });

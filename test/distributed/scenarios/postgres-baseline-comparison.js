@@ -3997,6 +3997,71 @@ function buildReplicaOperationProgressSignature(
   return signatures.join('|');
 }
 
+function summarizeInFlightReplicaOperationTimeline(
+  operationTimelineByOperationId = {},
+) {
+  const summary = {
+    inFlightOperationCount: ZERO,
+    hasStaleInFlightOperation: false,
+    nearestInFlightTimeoutRemainingMs: null,
+  };
+  if (!operationTimelineByOperationId ||
+      typeof operationTimelineByOperationId !== 'object') {
+    return summary;
+  }
+
+  for (const timeline of Object.values(operationTimelineByOperationId)) {
+    if (!Array.isArray(timeline) || timeline.length === ZERO) {
+      continue;
+    }
+
+    let latestInFlightEntry = null;
+    for (let index = timeline.length - ONE; index >= ZERO; index--) {
+      const candidate = timeline[index];
+      if (candidate?.inFlight === true) {
+        latestInFlightEntry = candidate;
+        break;
+      }
+    }
+    if (!latestInFlightEntry) {
+      continue;
+    }
+
+    summary.inFlightOperationCount += ONE;
+    if (latestInFlightEntry.staleTimeout === true) {
+      summary.hasStaleInFlightOperation = true;
+    }
+
+    const timeoutMs = Number(latestInFlightEntry.timeoutMs);
+    const ageMs = Number(latestInFlightEntry.ageMs);
+    if (!Number.isFinite(timeoutMs) ||
+        timeoutMs <= ZERO ||
+        !Number.isFinite(ageMs) ||
+        ageMs < ZERO) {
+      continue;
+    }
+
+    const normalizedTimeoutMs = Math.floor(timeoutMs);
+    const normalizedAgeMs = Math.floor(ageMs);
+    if (normalizedAgeMs >= normalizedTimeoutMs) {
+      summary.hasStaleInFlightOperation = true;
+    }
+    const timeoutRemainingMs = Math.max(
+      ZERO,
+      normalizedTimeoutMs - normalizedAgeMs,
+    );
+    summary.nearestInFlightTimeoutRemainingMs =
+      summary.nearestInFlightTimeoutRemainingMs === null ?
+        timeoutRemainingMs :
+        Math.min(
+          summary.nearestInFlightTimeoutRemainingMs,
+          timeoutRemainingMs,
+        );
+  }
+
+  return summary;
+}
+
 async function waitForSutLoadQuiescence({
   nodeClient,
   loadNodes,
@@ -4046,6 +4111,11 @@ async function waitForSutLoadQuiescence({
     partitionGroupInFlight: {},
     operationTimelineByOperationId: {},
     operationTimelineSignature: null,
+    operationLiveness: {
+      inFlightOperationCount: ZERO,
+      hasStaleInFlightOperation: false,
+      nearestInFlightTimeoutRemainingMs: null,
+    },
   };
   const versionedReadinessByNodeId = {};
   const requiredNodeIds = loadNodes
@@ -4460,6 +4530,10 @@ async function waitForSutLoadQuiescence({
             {};
         const operationTimelineSignature =
           buildReplicaOperationProgressSignature(operationTimelineByOperationId);
+        const operationLiveness =
+          summarizeInFlightReplicaOperationTimeline(
+            operationTimelineByOperationId,
+          );
         const leaders = controlSnapshot?.leaders &&
           typeof controlSnapshot.leaders === 'object' ?
           controlSnapshot.leaders :
@@ -4502,6 +4576,7 @@ async function waitForSutLoadQuiescence({
           operationTimelineByOperationId;
         gateProgressState.operationTimelineSignature =
           operationTimelineSignature;
+        gateProgressState.operationLiveness = operationLiveness;
 
         return {
           ready: reasons.length === ZERO,
@@ -4565,7 +4640,21 @@ async function waitForSutLoadQuiescence({
       }
 
       const stalledMs = nowMs - lastProgressAtMs;
+      const operationLiveness = gateProgressState.operationLiveness &&
+        typeof gateProgressState.operationLiveness === 'object' ?
+        gateProgressState.operationLiveness :
+        null;
+      const suppressStallAbortForFreshInFlight =
+        Number.isInteger(inFlightCount) &&
+        inFlightCount > ZERO &&
+        Number.isInteger(operationLiveness?.inFlightOperationCount) &&
+        operationLiveness.inFlightOperationCount > ZERO &&
+        Number.isInteger(operationLiveness?.nearestInFlightTimeoutRemainingMs) &&
+        operationLiveness.hasStaleInFlightOperation !== true;
       if (stalledMs >= effectiveNoProgressTimeoutMs) {
+        if (suppressStallAbortForFreshInFlight) {
+          return null;
+        }
         return {
           abort: true,
           reason:

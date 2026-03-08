@@ -397,6 +397,7 @@ class AdminControlSnapshot {
       this.buildControlSnapshotReplicaOperationSummary(
         replicaOperationRows,
       );
+    const splitEvaluation = this.resolveSplitEvaluationDiagnostics();
 
     return {
       schemaVersion: CONTROL_PLANE_DIAGNOSTICS_SCHEMA_VERSION,
@@ -413,6 +414,7 @@ class AdminControlSnapshot {
       timeoutClassifications:
         workflowDiagnostics.timeoutClassifications,
       replicaOperations,
+      splitEvaluation,
     };
   }
 
@@ -533,6 +535,27 @@ class AdminControlSnapshot {
     try {
       const diagnostics =
         this.heartbeatService.getHeartbeatPublicationDiagnostics();
+      return diagnostics && typeof diagnostics === TYPEOF.OBJECT ?
+        diagnostics :
+        null;
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  /**
+   * Resolve split-evaluation diagnostics from the canonical owner.
+   * @return {Object|null}
+   * @private
+   */
+  resolveSplitEvaluationDiagnostics() {
+    const splitManager = this.sqlQueryEngine?.partitionSplitMergeManager;
+    if (!splitManager ||
+        typeof splitManager.getEvaluationDiagnostics !== TYPEOF.FUNCTION) {
+      return null;
+    }
+    try {
+      const diagnostics = splitManager.getEvaluationDiagnostics();
       return diagnostics && typeof diagnostics === TYPEOF.OBJECT ?
         diagnostics :
         null;

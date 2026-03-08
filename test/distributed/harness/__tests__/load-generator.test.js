@@ -348,6 +348,66 @@ test('benchmark workload uses a unique event-id prefix for each run', async () =
   );
 });
 
+test('default workload uses a unique log-id prefix for each run', async () => {
+  const recordedSql = [];
+  const node = {
+    id: 'default-node',
+    async query(sql) {
+      recordedSql.push(sql);
+      return {rows: []};
+    },
+  };
+  const extractLogIds = (statements) => statements
+    .filter((sql) => sql.startsWith('INSERT INTO logs '))
+    .map((sql) => {
+      const match = sql.match(/VALUES \('([^']+)'/);
+      return match ? match[1] : null;
+    })
+    .filter(Boolean);
+
+  const firstGenerator = new LoadGenerator([node], {
+    opsPerSec: 80,
+    duration: 120,
+    operations: ['INSERT'],
+    maxInFlight: 16,
+    nodeMaxInFlight: 2,
+  });
+  const firstRun = firstGenerator.start();
+  try {
+    await firstRun.waitComplete();
+  } finally {
+    firstRun.cancel();
+  }
+  const firstLogIds = extractLogIds(recordedSql.splice(ZERO));
+
+  const secondGenerator = new LoadGenerator([node], {
+    opsPerSec: 80,
+    duration: 120,
+    operations: ['INSERT'],
+    maxInFlight: 16,
+    nodeMaxInFlight: 2,
+  });
+  const secondRun = secondGenerator.start();
+  try {
+    await secondRun.waitComplete();
+  } finally {
+    secondRun.cancel();
+  }
+  const secondLogIds = extractLogIds(recordedSql.splice(ZERO));
+  const secondLogIdSet = new Set(secondLogIds);
+  const overlappingLogIds = firstLogIds.filter((logId) =>
+    secondLogIdSet.has(logId),
+  );
+
+  assert.ok(firstLogIds.length > ZERO, 'expected first run to issue INSERTs');
+  assert.ok(secondLogIds.length > ZERO, 'expected second run to issue INSERTs');
+  assert.deepEqual(
+    overlappingLogIds,
+    [],
+    'default workload log ids should not be reused across separate load runs',
+  );
+});
+
 test('node failover retries without counting operation-level errors', async () => {
   const failNode = createFailingNode('fail-1');
   const goodNode = createMockNode('good-1');

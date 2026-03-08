@@ -941,6 +941,190 @@ test('ManagedSplitWorkflow defers insufficient-row split planning so the ' +
   );
 });
 
+test('ManagedSplitWorkflow defers retryable post-admission provisioning ' +
+  'failures instead of persisting terminal failed state', async (t) => {
+  const {
+    workflow,
+    updateCalls,
+    insertCalls,
+  } = buildWorkflow({
+    provisionInitialTablePartition: async ({partitionId}) => {
+      if (partitionId === 'users-p-left') {
+        throw new Error(
+          'Unable to satisfy minimum routable provisioning cohort for ' +
+          'partition users-p-left: required=2, provisionable=0, target=3, ' +
+          'rejected=node-b:control_plane_write_unhealthy,' +
+          'cluster_member_unhealthy',
+        );
+      }
+    },
+    startSplitReplicationOnSourcePartition: async () => {
+      t.fail('source replication must not start on retryable provisioning deferral');
+    },
+  });
+
+  const result = await workflow.execute('users-p1');
+
+  t.equal(result.success, false);
+  t.equal(result.state, PARTITION_TRANSITION_STATE.DEFERRED);
+  t.equal(
+    insertCalls.length,
+    2,
+    'first attempt should already have inserted child metadata before deferring',
+  );
+  const failedUpdate = updateCalls.find((entry) =>
+    entry.data.partition_transition_state ===
+      PARTITION_TRANSITION_STATE.FAILED,
+  );
+  t.notOk(
+    failedUpdate,
+    'retryable provisioning failures must not persist terminal failed state',
+  );
+  const deferredUpdate = updateCalls.find((entry) =>
+    entry.data.partition_transition_state ===
+      PARTITION_TRANSITION_STATE.DEFERRED,
+  );
+  t.ok(deferredUpdate, 'retryable provisioning failures should persist deferred');
+  const deferredMetadata = JSON.parse(
+    deferredUpdate.data.partition_transition_metadata,
+  );
+  t.equal(
+    deferredMetadata[
+      PARTITION_TRANSITION_METADATA_FIELD.FAILURE
+    ].classification,
+    'split_child_provisioning_deferred',
+  );
+  t.equal(
+    deferredMetadata[
+      PARTITION_TRANSITION_METADATA_FIELD.FAILURE
+    ].retryable,
+    true,
+  );
+  t.equal(
+    deferredMetadata[
+      PARTITION_TRANSITION_METADATA_FIELD.FAILURE
+    ].decisionType,
+    STORAGE_ADMISSION_DECISION_TYPE.DEFERRED,
+  );
+  t.same(
+    deferredMetadata[
+      PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_IDS
+    ],
+    ['users-p-left', 'users-p-right'],
+    'deferred execution should preserve split child IDs for retry resume',
+  );
+  t.ok(
+    deferredMetadata[
+      PARTITION_TRANSITION_METADATA_FIELD.RETRY
+    ].nextAttemptAt,
+    'retryable provisioning deferral should schedule a retry window',
+  );
+});
+
+test('ManagedSplitWorkflow reuses persisted split plan and child metadata ' +
+  'on deferred retries instead of rebuilding a new split plan', async (t) => {
+  const existingWorkflowId = 'split-tbl-users-users-p1-v2';
+  const existingTransition = {
+    state: PARTITION_TRANSITION_STATE.DEFERRED,
+    metadata: {
+      [PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_ID]:
+        existingWorkflowId,
+      [PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_VERSION]: 2,
+      [PARTITION_TRANSITION_METADATA_FIELD.SPLIT_KEY]: 'm',
+      [PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_IDS]: [
+        'users-p-left',
+        'users-p-right',
+      ],
+    },
+  };
+  const sourcePartition = {
+    partition_id: 'users-p1',
+    table_id: 'tbl-users',
+    table_name: 'users',
+    partition_key_start: null,
+    partition_key_end: null,
+    partition_version: 1,
+    replica_count: 3,
+    leader_node_id: 'node-a',
+    size_bytes: 128,
+  };
+  const leftPartition = {
+    partition_id: 'users-p-left',
+    table_id: 'tbl-users',
+    table_name: 'users',
+    partition_key_start: null,
+    partition_key_end: 'm',
+    partition_version: 2,
+    replica_count: 3,
+    leader_node_id: null,
+    size_bytes: 0,
+  };
+  const rightPartition = {
+    partition_id: 'users-p-right',
+    table_id: 'tbl-users',
+    table_name: 'users',
+    partition_key_start: 'm',
+    partition_key_end: null,
+    partition_version: 2,
+    replica_count: 3,
+    leader_node_id: null,
+    size_bytes: 0,
+  };
+  const insertCalls = [];
+  const {
+    workflow,
+    provisionCalls,
+  } = buildWorkflow({
+    getPartitionInfo: (partitionId) => {
+      switch (partitionId) {
+      case 'users-p1':
+        return sourcePartition;
+      case 'users-p-left':
+        return leftPartition;
+      case 'users-p-right':
+        return rightPartition;
+      default:
+        return null;
+      }
+    },
+    getTableInfo: () => ({
+      table_id: 'tbl-users',
+      table_name: 'users',
+      partition_key: 'id',
+      active_partition_version: 1,
+      partition_transition_state: PARTITION_TRANSITION_STATE.DEFERRED,
+      partition_transition_metadata: JSON.stringify(existingTransition.metadata),
+    }),
+    parsePartitionTransition: () => existingTransition,
+    buildManagedSplitPlan: async () => {
+      t.fail('deferred retry should reuse persisted split plan metadata');
+    },
+    cdcIntegrationService: {
+      async updateSystemTableRow() {
+        return {success: true, affectedRows: 1};
+      },
+      async insertSystemTableRow(tableName, row) {
+        insertCalls.push({tableName, row});
+        return {success: true};
+      },
+    },
+  });
+
+  const result = await workflow.execute('users-p1');
+
+  t.equal(result.success, true);
+  t.equal(
+    insertCalls.length,
+    0,
+    'retry should not reinsert child partition metadata when rows already exist',
+  );
+  t.same(
+    provisionCalls.map((call) => call.partitionId),
+    ['users-p-left', 'users-p-right'],
+    'retry should provision the persisted split child IDs',
+  );
+});
+
 test('ManagedSplitWorkflow wraps partition metadata insertion in ' +
   'transaction boundary', async (t) => {
   const txCalls = [];

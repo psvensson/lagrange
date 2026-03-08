@@ -11,6 +11,10 @@ import {
   resolveSevenNodeTablePartitionDistributionScenarioConfig,
 } from '../harness/scenario-config.js';
 import {
+  BENCHMARK_WORKLOAD_PROFILE,
+  prepareBenchmarkPartitioningTable,
+  assertSplitPolicyPrecondition,
+  resolvePartitioningLoadTableName,
   waitForPartitionGrowthAndSpread,
 } from './table-distribution-helpers.js';
 
@@ -55,6 +59,15 @@ async function run(cluster, options = {}) {
 
   const seedNode = getSeedNode(nodes);
   assert.ok(seedNode, 'Seed node should be available');
+  const effectiveTableName = resolvePartitioningLoadTableName(
+    cluster,
+    tableName,
+    {
+      explicitTableName:
+        typeof options.tableName === 'string' &&
+        options.tableName.length > ZERO,
+    },
+  );
 
   const convergence = await cluster.waitForConvergence({
     settleTimeoutMs: CONVERGENCE_DEFAULTS.settleTimeoutMs,
@@ -62,16 +75,26 @@ async function run(cluster, options = {}) {
     targetVoterCount: CONVERGENCE_DEFAULTS.targetVoterCount,
   });
 
+  const tablePreparation = await prepareBenchmarkPartitioningTable(
+    seedNode,
+    {tableName: effectiveTableName},
+  );
+  assertSplitPolicyPrecondition(tablePreparation, {
+    scenarioName: 'seven-node-table-partition-distribution',
+  });
+
   const loadRun = cluster.startLoad({
     opsPerSec: loadOpsPerSec,
     duration: loadDuration,
     operations: [LOAD_OPERATION_INSERT],
+    tableName: effectiveTableName,
+    workloadProfile: BENCHMARK_WORKLOAD_PROFILE,
   });
 
   let distribution = null;
   try {
     distribution = await waitForPartitionGrowthAndSpread(seedNode, {
-      tableName,
+      tableName: effectiveTableName,
       timeoutMs: distributionTimeoutMs,
       pollIntervalMs: distributionPollIntervalMs,
       minAdditionalPartitions,
@@ -99,7 +122,8 @@ async function run(cluster, options = {}) {
 
   return {
     expectedNodeCount,
-    tableName,
+    tableName: effectiveTableName,
+    tablePreparation,
     convergenceTiming: convergence,
     distribution,
     loadMetrics: metrics,

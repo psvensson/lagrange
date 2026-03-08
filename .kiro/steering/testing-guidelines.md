@@ -226,6 +226,20 @@ structured signal set (phase reason counts, channel metrics, load metrics,
 consistency mismatches, and cluster-stage timing) instead of ad hoc log
 sampling.
 
+## Distributed Scenario Policy SQL Ownership Gate
+
+Distributed scenario code must route `tables.table_policies` mutations through
+the canonical owner helper in
+`test/distributed/scenarios/table-distribution-helpers.js`.
+
+Do not introduce raw policy-update SQL in other scenario files.
+
+Run this guard when changing distributed scenarios:
+
+```bash
+npm run guard:scenario-policy:file
+```
+
 ## Property-Based Test Iteration Limit
 
 Property-based tests using fast-check must limit iterations to keep test runs fast:
