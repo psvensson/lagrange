@@ -44,6 +44,22 @@ function resolveSevenNodeReadWriteLoadDistributionScenarioConfig(options = {}) {
   });
 }
 
+function resolveSevenNodeReadWriteLoadTransactionRecoveryScenarioConfig(
+  options = {},
+) {
+  const base = resolveSevenNodeReadWriteLoadDistributionScenarioConfig(options);
+  return Object.freeze({
+    ...base,
+    preRestartDelayMs: normalizeFiniteNumber(options.preRestartDelayMs, 5000),
+    convergenceTimeoutMs:
+      normalizeFiniteNumber(options.convergenceTimeoutMs, 60000),
+    transactionReplayTimeoutMs:
+      normalizeFiniteNumber(options.transactionReplayTimeoutMs, 30000),
+    transactionReplayPollIntervalMs:
+      normalizeFiniteNumber(options.transactionReplayPollIntervalMs, 250),
+  });
+}
+
 function resolveSevenNodeTablePartitionDistributionScenarioConfig(options = {}) {
   return Object.freeze({
     expectedNodeCount: normalizeFiniteNumber(options.expectedNodeCount, 7),
@@ -154,6 +170,7 @@ export {
   resolveSeedRestartUnderLoadScenarioConfig,
   resolveSevenNodeLoadDuringPartitioningScenarioConfig,
   resolveSevenNodeReadWriteLoadDistributionScenarioConfig,
+  resolveSevenNodeReadWriteLoadTransactionRecoveryScenarioConfig,
   resolveSevenNodeTablePartitionDistributionScenarioConfig,
   resolveTableDistributionQueryConfig,
   resolveThreeNodeSeedRebalanceScenarioConfig,
