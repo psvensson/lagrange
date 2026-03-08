@@ -3,7 +3,7 @@
 
 Lagrange evolves in stages:
 
-> Research system → Credible distributed database → Distributed execution platform
+> Research system -> Credible distributed database -> Distributed execution platform
 
 The roadmap preserves Lagrange's core advantage: data locality + programmable
 execution + strong distributed semantics.

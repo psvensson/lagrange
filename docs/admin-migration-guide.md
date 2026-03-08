@@ -53,7 +53,7 @@ Payload includes:
 
 ## Before / After
 
-### Direct table writes → MetaWriteExecutor
+### Direct table writes -> MetaWriteExecutor
 
 ```javascript
 // ❌ BEFORE: direct partition write
@@ -72,7 +72,7 @@ const result = handleCreateService({
 // result.sql and result.params are executed by SqlCore
 ```
 
-### Node-local admin handler → AdminApiAdapter
+### Node-local admin handler -> AdminApiAdapter
 
 ```javascript
 // ❌ BEFORE: custom WebSocket handler per action
@@ -95,7 +95,7 @@ const wasmResult = adaptAdminAction(
 );
 ```
 
-### Direct WASM management → sys-wasm-meta commands
+### Direct WASM management -> sys-wasm-meta commands
 
 ```javascript
 // ❌ BEFORE: direct INSERT into module_manifests
@@ -166,11 +166,11 @@ existing CLI WebSocket message contract.
 
 The contract validates both directions:
 
-**Incoming** (CLI → server):
+**Incoming** (CLI -> server):
 - `query` — requires `type`, `queryId`, `sql`; optional `params`
 - `refresh` — requires `type`
 
-**Outgoing** (server → CLI):
+**Outgoing** (server -> CLI):
 - `query_result` — requires `type`, `queryId`, `timestamp`
 - `cache_dump` — requires `type`, `timestamp`, `nodeId`, `data`
 - `cdc_event` — requires `type`, `timestamp`, `table`,

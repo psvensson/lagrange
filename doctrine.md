@@ -167,11 +167,11 @@ Every system concern has a single owner and a single execution path.
 
 Examples:
 
-- SQL planning and execution → `SqlCore`
-- runtime selection → `Runtime_Driver_Registry`
-- lifecycle orchestration → `Service_Runtime_Lifecycle`
-- placement planning → `MovePlanner`
-- durable workflows → `DurableWorkflowCoordinator`
+- SQL planning and execution -> `SqlCore`
+- runtime selection -> `Runtime_Driver_Registry`
+- lifecycle orchestration -> `Service_Runtime_Lifecycle`
+- placement planning -> `MovePlanner`
+- durable workflows -> `DurableWorkflowCoordinator`
 
 Parallel execution paths are forbidden.
 

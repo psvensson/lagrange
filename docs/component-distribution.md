@@ -236,9 +236,9 @@ with parameters for persistence via the SQL engine.
 compares new resolution results against an existing lock:
 
 - **Digest changed** — a dependency's digest differs from the
-  locked value → `DEPENDENCY_VERSION_MUTABLE` error
+  locked value -> `DEPENDENCY_VERSION_MUTABLE` error
 - **New dependency** — a dependency appears that was not in
-  the lock → `UNDECLARED_IMPORT` error
+  the lock -> `UNDECLARED_IMPORT` error
 
 ```javascript
 const result = validateLockConsistency(existingLock, newDeps);

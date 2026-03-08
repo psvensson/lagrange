@@ -1,6 +1,6 @@
 # Lagrange
 
-### Distributed SQL + Compute‑Near‑Data Runtime
+### Distributed SQL + Compute-Near-Data Runtime
 
 Lagrange is an experimental distributed database that **combines storage
 and execution in one system**.
@@ -22,23 +22,23 @@ data, dramatically reducing network traffic and coordination overhead.
 
 ------------------------------------------------------------------------
 
-# Why This Matters
+# Removing bottlnecks
 
 Most distributed systems move enormous amounts of data across networks
 just to process it.
 
 Typical stack:
 
-    App → API → Workers → Queue → Analytics Engine → Database
+    App -> API -> Workers -> Queue -> Analytics Engine -> Database
 
 Lagrange collapses these layers.
 
     Client
-       ↓
+       v
     Distributed SQL Engine
-       ↓
+       v
     Partition Execution (WASM)
-       ↓
+       v
     Results
 
 Instead of **moving data to compute**, Lagrange **moves compute to the
@@ -142,7 +142,7 @@ Distributed functions run as **WebAssembly modules**.
 
 Advantages:
 
--   language‑agnostic
+-   language-agnostic
 -   sandboxed
 -   deterministic
 -   portable artifacts
@@ -195,7 +195,7 @@ diagram collection.
 
 ------------------------------------------------------------------------
 
-# Why Developers Care
+# What's the difference?
 
 Most distributed applications end up stitching together databases, queues,
 workers, and analytics pipelines. Lagrange explores a different model:
@@ -219,7 +219,7 @@ natural path to distributed execution.
 
 # System Architecture
 
-High‑level cluster view:
+High-level cluster view:
 
     Cluster
      │
@@ -244,15 +244,15 @@ Each node contains:
 
 ------------------------------------------------------------------------
 
-# Compute‑Near‑Data Model
+# Compute-Near-Data Model
 
 Traditional distributed processing:
 
-    data → network → compute → network → results
+    data -> network -> compute -> network -> results
 
 Lagrange:
 
-    compute → data → results
+    compute -> data -> results
 
 Benefits:
 
@@ -339,9 +339,7 @@ Major development areas include:
 -   richer WASM runtime capabilities
 -   developer ecosystem tools
 
-See:
-
-    roadmap.md
+See [roadmap.md](roadmap.md) for details.
 
 ------------------------------------------------------------------------
 

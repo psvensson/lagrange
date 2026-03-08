@@ -91,14 +91,14 @@ They must NOT maintain their own copy, shadow, or derived version of that state.
 
 Concrete ownership assignments (see architecture.md for full list):
 
-- Node state → `NodeLifecycleStateMachine`
-- Replica state → `ReplicaStateMachine`
-- Epoch → `config.current_epoch` via CDC
-- Placement planning → `MovePlanner` (only)
-- Operation lifecycle → `RebalanceCoordinator` + `replica_operations`
-- Dispatch → `ReplicaDispatchService`
-- Failure detection → `FailureDetector` (single instance, no duplicates)
-- System cache → `SystemTableCache` (one per node, fed only by CDC)
+- Node state -> `NodeLifecycleStateMachine`
+- Replica state -> `ReplicaStateMachine`
+- Epoch -> `config.current_epoch` via CDC
+- Placement planning -> `MovePlanner` (only)
+- Operation lifecycle -> `RebalanceCoordinator` + `replica_operations`
+- Dispatch -> `ReplicaDispatchService`
+- Failure detection -> `FailureDetector` (single instance, no duplicates)
+- System cache -> `SystemTableCache` (one per node, fed only by CDC)
 
 ### 1.4.1 Injected Owners Must Be Used
 
@@ -361,30 +361,30 @@ Required pattern:
 
 Before generating or modifying code, answer these questions:
 
-1. Does a component already own this responsibility? → Use it.
-2. Does a function already exist that does this? → Call it.
-3. Does a constant/enum already exist for this value? → Import it.
-4. Am I adding a second way to do something that already has one way? → Stop.
-5. Am I adding state that another component already tracks? → Read from owner.
-6. Am I adding a field that means the same thing as an existing field? → Reuse.
-7. Am I accepting an owner dependency but not routing the behavior through it? → Stop.
-8. Am I mixing row creation and row updates in the same code path? → Stop.
-9. Am I writing fields owned by another component? → Stop.
-10. Am I reconstructing authoritative write state from cache when an owner exists? → Stop.
+1. Does a component already own this responsibility? -> Use it.
+2. Does a function already exist that does this? -> Call it.
+3. Does a constant/enum already exist for this value? -> Import it.
+4. Am I adding a second way to do something that already has one way? -> Stop.
+5. Am I adding state that another component already tracks? -> Read from owner.
+6. Am I adding a field that means the same thing as an existing field? -> Reuse.
+7. Am I accepting an owner dependency but not routing the behavior through it? -> Stop.
+8. Am I mixing row creation and row updates in the same code path? -> Stop.
+9. Am I writing fields owned by another component? -> Stop.
+10. Am I reconstructing authoritative write state from cache when an owner exists? -> Stop.
 11. Am I overloading one field/status to represent multiple owner lifecycles
-    (claim, workflow, entity state)? → Stop.
-12. Did I define active/terminal status sets but bypass them in decision logic? → Stop.
+    (claim, workflow, entity state)? -> Stop.
+12. Did I define active/terminal status sets but bypass them in decision logic? -> Stop.
 13. Am I publishing degraded diagnostics from a mode-specific path that is
-    disabled by current config? → Stop.
+    disabled by current config? -> Stop.
 14. Am I pre-truncating provisioning candidates or failing on the first denied
-    candidate instead of evaluating the full admissible cohort? → Stop.
+    candidate instead of evaluating the full admissible cohort? -> Stop.
 15. Am I classifying node readiness from lease expiry alone while ignoring
-    canonical transport/readiness-owner evidence? → Stop.
+    canonical transport/readiness-owner evidence? -> Stop.
 16. Am I mutating CDC-replicated system rows with broad non-primary predicates
-    instead of primary-key-addressed row transitions? → Stop.
+    instead of primary-key-addressed row transitions? -> Stop.
 17. Am I fixing a repeated control-plane problem locally instead of routing it
     through a shared higher-order primitive (authoritative view, eligibility
-    snapshot, operation lane, workflow step runner, timeout policy)? → Stop.
+    snapshot, operation lane, workflow step runner, timeout policy)? -> Stop.
 
 If the answer to any of 4/5/6/7/8/9/10/11/12/13/14/15/16/17 is yes, you are violating this contract.
 

@@ -807,8 +807,8 @@ AdminWebSocketAPI debug route adapter
 ### NodeLifecycleStateMachine
 - Unified state machine for all node lifecycle states using NODE_STATE enum
 - Supports sub-phases within STARTING (bootstrap) and JOINING states
-- Bootstrap sub-phases: INFRASTRUCTURE → MESSAGE_GROUPS → PARTITIONS → REGISTRATION → CACHE_HYDRATION
-- Joining sub-phases: CONTACTING_SEED → CONNECTING_WEBSOCKET → CREATING/JOINING_MG → WAITING_LEADERSHIP → QUERYING_STATE
+- Bootstrap sub-phases: INFRASTRUCTURE -> MESSAGE_GROUPS -> PARTITIONS -> REGISTRATION -> CACHE_HYDRATION
+- Joining sub-phases: CONTACTING_SEED -> CONNECTING_WEBSOCKET -> CREATING/JOINING_MG -> WAITING_LEADERSHIP -> QUERYING_STATE
 - Phase gates can be registered per sub-phase for validation
 - Terminal sub-phases auto-advance the parent state
 - Replaces the former independent BootstrapPhaseStateMachine, JoiningPhaseStateMachine, and EnhancedBootstrapStateMachine
@@ -1014,7 +1014,7 @@ PG Client (psql, pg driver, ORM)
                    ▼
 ┌─────────────────────────────────────────────┐
 │ PgWireAuthHandler                           │
-│ (authn → tenant/principal context)          │
+│ (authn -> tenant/principal context)          │
 └──────────────────┬──────────────────────────┘
                    │
                    ▼
@@ -1040,13 +1040,13 @@ Scaling `sys-postgres-wire` follows the unified rebalancer model:
 
 1. `replica_count` in `service_definitions` is cluster-global.
    The rebalancer spreads replicas across available nodes.
-2. Scale-up: increase `replica_count` → rebalancer plans `ADD`
-   operations → `RuntimeServiceHandler` materializes new replicas
-   via `ServiceLifecycleManager` → each replica binds a TCP
+2. Scale-up: increase `replica_count` -> rebalancer plans `ADD`
+   operations -> `RuntimeServiceHandler` materializes new replicas
+   via `ServiceLifecycleManager` -> each replica binds a TCP
    listener and publishes a `service_endpoints` row.
-3. Scale-down: decrease `replica_count` → rebalancer plans `REMOVE`
-   operations → replica stops listener, cleans up endpoint row.
-4. Node failure: rebalancer detects under-replication → plans
+3. Scale-down: decrease `replica_count` -> rebalancer plans `REMOVE`
+   operations -> replica stops listener, cleans up endpoint row.
+4. Node failure: rebalancer detects under-replication -> plans
    `REPLACE` operations on healthy nodes with elevated budget.
 5. Convergence: rebalancer stabilization period prevents thrashing;
    budget coordination limits concurrent operations.
@@ -1072,7 +1072,7 @@ Clients discover PG wire endpoints through `service_endpoints`:
 - Command metrics (`src/admin/admin-command-metrics.js`) tracks
   command rate, latency, and error counts
 - Trace context (`src/admin/admin-trace-context.js`) propagates
-  correlation IDs across adapter → meta service → SQL → lifecycle
+  correlation IDs across adapter -> meta service -> SQL -> lifecycle
 - Audit queries (`src/admin/admin-audit-queries.js`) for source
   mapping decisions and dependency lock inspection
 
@@ -1143,12 +1143,12 @@ SQLite-compatible Internal_AST nodes. The translation is a pure preprocessing
 step within the parse phase — no new execution paths are created.
 
 Active translations:
-- Positional parameters (`$1`, `$2`) → SQLite `?` with param reordering
-- Boolean literals (`TRUE`/`FALSE`) → integer `1`/`0`
-- Type casts (`::type`, `CAST AS pg_type`) → `CAST AS sqlite_affinity`
-- Function name mapping (PG → SQLite equivalents via extensible registry)
-- Date/time functions (`NOW()`, `EXTRACT`, `DATE_TRUNC`) → `strftime()`
-- `ILIKE` → `LOWER() LIKE LOWER()`
+- Positional parameters (`$1`, `$2`) -> SQLite `?` with param reordering
+- Boolean literals (`TRUE`/`FALSE`) -> integer `1`/`0`
+- Type casts (`::type`, `CAST AS pg_type`) -> `CAST AS sqlite_affinity`
+- Function name mapping (PG -> SQLite equivalents via extensible registry)
+- Date/time functions (`NOW()`, `EXTRACT`, `DATE_TRUNC`) -> `strftime()`
+- `ILIKE` -> `LOWER() LIKE LOWER()`
 - User-table `INSERT ON CONFLICT` may translate to SQLite conflict handling
   forms where semantics are preserved, but system-table lifecycle/status writes
   must keep partial-update semantics and must not use `INSERT OR REPLACE`.
@@ -1273,10 +1273,10 @@ direct SQLite equivalent.
 **Approach**:
 - **JSONB**: SQLite has `json_extract()`, `json_each()`, etc. since
   3.38. Map PG JSONB operators to SQLite JSON functions:
-  `col->>'key'` → `json_extract(col, '$.key')`,
-  `col @> '{"k":"v"}'` → `json_extract(col, '$.k') = 'v'`
+  `col->>'key'` -> `json_extract(col, '$.key')`,
+  `col @> '{"k":"v"}'` -> `json_extract(col, '$.k') = 'v'`
 - **ARRAY**: Store as JSON arrays in TEXT columns. Map PG array
-  operators to JSON functions: `ANY(array_col)` → `json_each()` join
+  operators to JSON functions: `ANY(array_col)` -> `json_each()` join
 - **UUID**: Store as TEXT with CHECK constraint for format validation.
   Map `gen_random_uuid()` to a custom SQLite function
 - **SERIAL/BIGSERIAL**: Map to `INTEGER PRIMARY KEY AUTOINCREMENT`
@@ -1347,17 +1347,17 @@ Classification decisions are recorded in `PlanDiagnostics` for observability.
 `SqlCore.executeRequest(SqlRequest)` is the single owner for execution-mode
 dispatch. All three adapters produce frozen `SqlRequest` objects and delegate:
 
-- `InternalSqlAdapter` → `SqlRequest(executionMode: sql_statement)`
-- `PostgresWireAdapter` → `SqlRequest(executionMode: sql_statement)`
-- `WasmCallAdapter` → `SqlRequest(executionMode: partition_callback)`
+- `InternalSqlAdapter` -> `SqlRequest(executionMode: sql_statement)`
+- `PostgresWireAdapter` -> `SqlRequest(executionMode: sql_statement)`
+- `WasmCallAdapter` -> `SqlRequest(executionMode: partition_callback)`
 
 No adapter owns dispatch logic. `executeRequest` switches on `executionMode`
 with dedicated branches:
 
-- `sql_statement` → `executeQuery` (standard SQL planning and execution)
-- `partition_callback` → `PartitionCallbackDispatcher` → `CallbackExecutionHost`
+- `sql_statement` -> `executeQuery` (standard SQL planning and execution)
+- `partition_callback` -> `PartitionCallbackDispatcher` -> `CallbackExecutionHost`
   (partition resolution, batch construction, per-partition callback invocation)
-- Plan-object modes → plan pipeline (`reduceByKey` / `useBroadcast`)
+- Plan-object modes -> plan pipeline (`reduceByKey` / `useBroadcast`)
 
 `partition_callback` is a first-class execution mode with its own dispatch
 path. It is never aliased to or folded into `sql_statement` execution.
@@ -1443,9 +1443,9 @@ callback execution.
 ### Strategy Selector
 Chooses movement strategy for joins and distributed work:
 
-1. If side dataset <= broadcast threshold → broadcast
-2. Else if inner side is pk/unique/bounded lookup → lookup
-3. Else → emit/shuffle
+1. If side dataset <= broadcast threshold -> broadcast
+2. Else if inner side is pk/unique/bounded lookup -> lookup
+3. Else -> emit/shuffle
 
 User hints can override the default, validated against guardrails. Strategy
 decisions are exposed in EXPLAIN and query telemetry.
@@ -1484,7 +1484,7 @@ Budget violations terminate the operation with a descriptive `BudgetLimitError`.
   service (`PartitionService` / `MessageGroupService`)
 
 ### Control Plane Services (Decomposed)
-The former monolithic ControlPlaneService is decomposed into four focused services, each with a CREATED → INITIALIZED → RUNNING → STOPPED lifecycle:
+The former monolithic ControlPlaneService is decomposed into four focused services, each with a CREATED -> INITIALIZED -> RUNNING -> STOPPED lifecycle:
 
 - **HeartbeatService** (`src/control-plane/heartbeat-service.js`) — periodic heartbeat updates, consecutive failure tracking
 - **LeaseService** (`src/control-plane/lease-service.js`) — lease-based readiness tracking, expired lease sweeping
@@ -1552,15 +1552,15 @@ Phase 5: Cache Hydration
 ### Joining Node Bootstrap
 
 ```
-1. HTTP Bootstrap Request → Contact seed node via /bootstrap endpoint
-2. Receive Complete Snapshots → Bootstrap response includes default cache-sync
+1. HTTP Bootstrap Request -> Contact seed node via /bootstrap endpoint
+2. Receive Complete Snapshots -> Bootstrap response includes default cache-sync
    tables (`logs` excluded)
-3. Cache Hydration → Populate local system cache from snapshots
-4. Leader Readiness Gate → Block until leader metadata is complete (including addresses)
-5. CDC Subscription → Subscribe to CDC events for default cache-sync tables
-6. Node Registration → Register self in nodes table (routes through SQL)
-7. Storage Budget → Resolve and persist node storage budget via NodeStorageBudgetService
-8. Ready → Node is ready to serve queries
+3. Cache Hydration -> Populate local system cache from snapshots
+4. Leader Readiness Gate -> Block until leader metadata is complete (including addresses)
+5. CDC Subscription -> Subscribe to CDC events for default cache-sync tables
+6. Node Registration -> Register self in nodes table (routes through SQL)
+7. Storage Budget -> Resolve and persist node storage budget via NodeStorageBudgetService
+8. Ready -> Node is ready to serve queries
 ```
 
 ## Data Flow
