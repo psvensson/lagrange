@@ -693,6 +693,18 @@ Schema migration execution is explicitly single-owner:
 3. `SQLQueryEngine` (`SqlCore`) owns SQL routing into the migration
    entrypoint (`MigrationPipeline`) and exposes migration observability
    through normal SELECT query paths.
+4. Stage progression is monotonic through
+   `pending -> dual_write -> dual_write_complete -> backfill ->
+   backfill_complete -> cutover_pending -> completed`, with terminal escape
+   states for `failed` and `cancelled` (via `cancelling`).
+5. Cutover is atomic: `MigrationCoordinator` composes
+   `DistributedTransactionCoordinator` to commit `tables.schema_definition`
+   and per-partition completion updates in one transaction.
+6. Recovery is startup-owned: `recoverMigrations()` is invoked on startup and
+   on leader-election recovery paths to resume non-terminal migrations.
+7. CDC visibility split is strict: `schema_migrations` is cluster-propagated
+   in `SystemTableCache`; `schema_migration_partitions` remains owner-local and
+   queryable from its owning partition.
 
 ## Node State Vocabulary
 

@@ -1,26 +1,14 @@
-# Lagrange AGPL Roadmap
+# Lagrange Product Roadmap
 
-This document is the implementation roadmap for the AGPL repository.
+This document is a cross-edition status board for Community, Pro, and
+Enterprise planning.
 
-Only items in this file may be used to create specs, tasks, or code changes in
-this repository.
+It is visibility-only. Do not use this file to create specs, tasks, or code in
+the AGPL repository. Use `roadmap.md` for AGPL implementation planning.
 
-Cross-edition product status lives in `product-roadmap.md`.
-Edition ownership and implementation-home rules live in `edition-matrix.md`.
-
-## Scope
-
-- In scope: Community / AGPL features and shared platform substrate whose
-  implementation home is this repository in `edition-matrix.md`
-- Out of scope: Pro and Enterprise backlog, even when those items are visible
-  elsewhere for status tracking
-
-Lagrange evolves in stages:
-
-> Research system -> Credible distributed database -> Distributed execution platform
-
-The roadmap preserves Lagrange's core advantage: data locality + programmable
-execution + strong distributed semantics.
+Paid-tier source-of-truth planning remains external to this repository. Statuses
+here are mirrored so progress can be shown without turning paid backlog into
+actionable work in this codebase.
 
 ## Status Legend
 
@@ -30,18 +18,38 @@ execution + strong distributed semantics.
 | 🔧     | In Progress  |
 | 🔲     | Not Started  |
 
+## Edition Legend
+
+| Symbol | Edition              |
+|--------|----------------------|
+| 🟢     | Community (AGPL)     |
+| 🟡     | Pro                  |
+| 🔴     | Enterprise           |
+
+## Editions
+
+Community (AGPL)
+- Full distributed SQL database
+- Programmable execution runtime
+- Cluster operation via CLI
+
+Pro
+- Automated backup and point-in-time recovery
+- Advanced observability
+- Operational tooling
+
+Enterprise
+- Multi-tenant security
+- Cross-region replication
+- Compliance features
+
 ---
 
 ## Phase 0.1 — Internal Coherence
 
 *"The system behaves predictably under stress."*
 
-Finishing the core database invariants. The foundations are strong: Raft
-partition groups, CDC propagation, deterministic control-plane workflows, and
-system-table cache. Before productization, a few foundational capabilities must
-be completed.
-
-### 0.1a. Topology Workflow Stabilization (March 2026)
+### 0.1a. Topology Workflow Stabilization — 🟢 Community
 
 | Item | Status | Notes |
 |------|--------|-------|
@@ -54,7 +62,7 @@ be completed.
 | Deterministic regression ladder enforcement | ✅ | Repros and focused suites run before 7-node harness confirmation |
 | Scenario policy SQL ownership guard | ✅ | `npm run guard:scenario-policy:file` enforces `table_policies` owner helper usage |
 
-### 1. Distributed Transactions
+### 1. Distributed Transactions — 🟢 Community
 
 | Item | Status | Notes |
 |------|--------|-------|
@@ -70,10 +78,7 @@ be completed.
 | Write conflict detection | ✅ | First-committer-wins conflict detection at prepare |
 | Timeout and cleanup | ✅ | Budget-based abort + participant hold timeout + recovery sweep |
 
-Goal achieved: multi-partition transactions with snapshot isolation and
-deterministic recovery/timeout handling.
-
-### 2. Schema Migration Workflow
+### 2. Schema Migration Workflow — 🟢 Community
 
 | Item | Status |
 |------|--------|
@@ -89,21 +94,25 @@ deterministic recovery/timeout handling.
 | Restart recovery of non-terminal migrations | ✅ |
 | Migration observability tables (`schema_migrations`, `schema_migration_partitions`) | ✅ |
 
-### 3. Operational Visibility
+### 3. Operational Visibility — 🟢 Community basics / 🟡 Pro advanced
 
-| Item | Status |
-|------|--------|
-| Metrics instrumentation | ✅ |
-| Admin CLI | ✅ |
-| Health probes | ✅ |
-| Diagnostics API | ✅ |
-| Live query subscriptions | ✅ |
-| EXPLAIN DISTRIBUTED | ✅ |
-| Cluster SQL diagnostics | 🔲 |
-| Partition diagnostics | 🔲 |
-| CDC diagnostics | 🔲 |
+| Item | Edition | Status |
+|------|---------|--------|
+| Metrics instrumentation | 🟢 | ✅ |
+| Admin CLI | 🟢 | ✅ |
+| Health probes | 🟢 | ✅ |
+| Diagnostics API | 🟢 | ✅ |
+| Live query subscriptions | 🟢 | ✅ |
+| EXPLAIN DISTRIBUTED | 🟢 | ✅ |
+| Cluster SQL diagnostics | 🟢 | 🔲 |
+| Partition diagnostics | 🟢 | 🔲 |
+| CDC diagnostics | 🟢 | 🔲 |
+| Prometheus export | 🟡 | 🔲 |
+| OpenTelemetry tracing | 🟡 | 🔲 |
+| Partition heatmaps | 🟡 | 🔲 |
+| Runtime execution traces | 🟡 | 🔲 |
 
-### 4. Failure Simulations
+### 4. Failure Simulations — 🟢 Community
 
 | Item | Status |
 |------|--------|
@@ -124,20 +133,13 @@ deterministic recovery/timeout handling.
 | Slow follower simulation | 🔲 |
 | In-cluster chaos injection | 🔲 |
 
-### Phase 0.1 Exit Criteria
-
-The system survives node failure, replica movement, rebalancing, and
-transaction retries without manual intervention.
-
 ---
 
 ## Phase 0.5 — External Usability
 
 *"Developers can realistically try this."*
 
-Focus shifts to developer experience.
-
-### 1. Cluster Deployment Experience
+### 1. Cluster Deployment Experience — 🟢 Community
 
 | Item | Status |
 |------|--------|
@@ -151,7 +153,7 @@ Focus shifts to developer experience.
 | `docker-compose` cluster | 🔲 |
 | Kubernetes Helm chart | 🔧 |
 
-### 2. Developer Workflow
+### 2. Developer Workflow — 🟢 Community
 
 | Item | Status |
 |------|--------|
@@ -165,7 +167,7 @@ Focus shifts to developer experience.
 | CLI wasm scale | 🔲 |
 | Getting-started tutorial | 🔲 |
 
-### 3. Debugging Tools
+### 3. Debugging Tools — 🟢 Community
 
 | Item | Status |
 |------|--------|
@@ -179,42 +181,47 @@ Focus shifts to developer experience.
 | Query execution tracing | 🔲 |
 | EXPLAIN EXECUTION | 🔲 |
 
-### Phase 0.5 Exit Criteria
-
-A developer can run a cluster, connect with `psql`, create tables, deploy WASM,
-run distributed execution, and observe results within 30 minutes.
-
 ---
 
 ## Phase 1.0 — Real Product
 
 *"Companies can run this in production."*
 
-### 1. System Service Foundations
-
-These items are intentionally in scope for the AGPL repository even when they
-also enable future paid system services.
+### 1. System Service Foundations — 🟢 Community core
 
 | Item | Status | Notes |
 |------|--------|-------|
 | Unified service lifecycle | ✅ | `ServiceLifecycleManager` + `ServiceReconciler` + `ServiceDispatcher` |
-| Built-in runtime services | ✅ | `sys-postgres-wire`, `sys-admin-meta`, `sys-wasm-meta` run on the service substrate |
+| Built-in runtime services | ✅ | `sys-postgres-wire`, `sys-admin-meta`, `sys-wasm-meta` |
 | `native_js` runtime | ✅ | Active runtime for first-party system services |
 | `wasm_component` runtime | ✅ | Available runtime for replicated services |
-| Service manifest schema definition | 🔲 | Identity, runtime, capabilities, compatibility for first-party and packaged services |
+| Service manifest schema definition | 🔲 | Identity, runtime, capabilities, compatibility |
 | Manifest validation rules | 🔲 | Required fields, version format, capability recognition, dependency validation |
 | Service catalog system tables | 🔲 | Desired/actual installed-service state and failure recording |
-| Installation reconciler | 🔲 | Fetch/validate/place/start-stop convergence for service revisions |
+| Installation reconciler | 🔲 | Fetch/validate/place/start-stop convergence |
 | Service lifecycle API | 🔲 | `onInstall`, `onStart`, `onStop`, `onUpgrade`, `onUninstall` |
-| Replicated service state API | 🔲 | Stable service-owned state surface above replicated storage |
+| Replicated service state API | 🔲 | Stable service-owned state surface |
 | CDC subscription API | 🔲 | Change-stream consumption for service workflows |
 | Admin surface registration | 🔲 | Services register SQL/CLI/HTTP control surfaces |
 | Capability enforcement | 🔲 | Kernel gates service access to privileged APIs |
-| Consistent snapshot API | 🔲 | Required for cluster-consistent reads and service barriers |
+| Consistent snapshot API | 🔲 | Required for backup barriers and cluster-consistent reads |
 | Topology API | 🔲 | Required for service placement and orchestration |
-| Event emission API | 🔲 | Structured progress and failure reporting for system services |
+| Event emission API | 🔲 | Structured progress and failure reporting |
 
-### 2. PostgreSQL Compatibility
+### 2. Backup / Restore / PITR — 🟡 Pro
+
+| Item | Status |
+|------|--------|
+| Bootstrap snapshots | ✅ |
+| Partition snapshots | ✅ |
+| External backup storage | 🔲 |
+| Incremental backup | 🔲 |
+| Restore to cluster | 🔲 |
+| Restore to new cluster | 🔲 |
+| Point-in-time recovery | 🔲 |
+| Cross-region replication | 🔲 🔴 |
+
+### 3. PostgreSQL Compatibility — 🟢 Community
 
 | Item | Status |
 |------|--------|
@@ -227,7 +234,35 @@ also enable future paid system services.
 | Window functions | 🔲 |
 | Sequences | 🔲 |
 
-### 3. Production Guarantees
+### 4. Observability Platform — 🟡 Pro
+
+| Item | Status |
+|------|--------|
+| Query correlation IDs | ✅ |
+| CDC lag monitoring | ✅ |
+| Diagnostics sampler | ✅ |
+| Metrics dimensions | ✅ |
+| Prometheus export | 🔲 |
+| OpenTelemetry tracing | 🔲 |
+| Partition heatmap | 🔲 |
+| Runtime execution traces | 🔲 |
+
+### 5. Security and Tenancy — 🔴 Enterprise
+
+| Item | Status |
+|------|--------|
+| PG authentication | ✅ |
+| Admin auth middleware | ✅ |
+| Service authorization | ✅ |
+| Audit context | ✅ |
+| Tenant context propagation | 🔧 |
+| RBAC | 🔲 |
+| Tenant isolation | 🔲 |
+| Resource quotas | 🔲 |
+| Encryption at rest | 🔲 |
+| TLS transport | 🔲 |
+
+### 6. Production Guarantees — 🟢 Community
 
 | Item | Status |
 |------|--------|
@@ -244,7 +279,7 @@ also enable future paid system services.
 
 *"The long-term vision: database + compute + service platform."*
 
-### 1. Multi-Stage Distributed Plans
+### 1. Multi-Stage Distributed Plans — 🟢 Community
 
 | Item | Status |
 |------|--------|
@@ -257,7 +292,7 @@ also enable future paid system services.
 | Cost-based optimizer | 🔲 |
 | Query hints | 🔲 |
 
-### 2. Advanced Runtime Services
+### 2. Advanced Runtime Services — 🟢 Community core / future service platform
 
 | Item | Status |
 |------|--------|
@@ -265,46 +300,47 @@ also enable future paid system services.
 | Vector search service | 🔲 |
 | Embedding service | 🔲 |
 
-### 3. External Kernel Platform API
+### 3. External Kernel Platform API — 🟢 Community core / 🔴 Enterprise extensions
 
-Phase 1.0 establishes the internal substrate for first-party system services.
-This phase externalizes that substrate into a small, stable API surface for
-installable replicated services.
-
-#### Phase A — Stable External Service Contract
+#### Phase A — Stable External Service Contract — 🟢 Community
 
 | Item | Status | Notes |
 |------|--------|-------|
 | Stable manifest registration contract | 🔲 | Versioned external contract for identity, runtime, capabilities, compatibility |
-| Stable service lifecycle API | 🔲 | Supported install/start/stop/upgrade hooks for third-party services |
+| Stable service lifecycle API | 🔲 | Supported install/start/stop/upgrade hooks |
 | Stable replicated service state API | 🔲 | Versioned service-owned state contract |
-| Stable CDC subscription API | 🔲 | Supported table change streams for external services |
+| Stable CDC subscription API | 🔲 | Supported table change streams |
 | Stable admin surface registration | 🔲 | Supported SQL/CLI/HTTP command registration contract |
 | Stable capability model | 🔲 | Public capability taxonomy and enforcement contract |
 
-#### Phase B — Advanced External Service APIs
+#### Phase B — Advanced External Service APIs — 🟢 Community
 
 | Item | Status | Notes |
 |------|--------|-------|
 | Upgrade / rollout API | 🔲 | Rolling, canary, all-at-once strategies |
-| External topology API | 🔲 | Supported node, partition, and leader introspection for installable services |
-| External event emission API | 🔲 | Public structured events contract from kernel and services |
+| External topology API | 🔲 | Supported node, partition, and leader introspection |
+| External event emission API | 🔲 | Public structured events contract |
 
-### 4. Installable Service Ecosystem
+#### Phase C — Enterprise Platform APIs — 🔴 Enterprise
 
-Builds on the earlier first-party service substrate. Focus here is artifact
-distribution, operator UX, and external installability at scale.
+| Item | Status | Notes |
+|------|--------|-------|
+| Policy provider API | 🔲 | RBAC, tenant isolation, quotas, placement rules |
+| Secrets and external references API | 🔲 | Cluster-resolved credentials and KMS integration |
 
-#### Artifact and Package Registry
+### 4. Installable Service Ecosystem — 🟢 Community core / 🟡🔴 advanced controls
+
+#### Artifact and Package Registry — 🟢 Community
 
 | Item | Status | Notes |
 |------|--------|-------|
 | OCI registry transport | 🔲 | Primary artifact distribution via OCI |
 | Registry configuration (`add` / `list` / `remove`) | 🔲 | Multiple registries with priority and auth |
 | Local artifact path (dev-install) | 🔲 | Fast local development workflow |
+| Air-gapped / mirror registry support | 🔲 | Enterprise local mirror path |
 | Trust and verification (digest, signature) | 🔲 | Artifact and manifest integrity checks |
 
-#### Manifest and Install UX
+#### Manifest and Install UX — 🟢 Community
 
 | Item | Status | Notes |
 |------|--------|-------|
@@ -317,7 +353,7 @@ distribution, operator UX, and external installability at scale.
 | Upgrade lifecycle with rollback | 🔲 | Versioned revisions, rollback to prior known-good |
 | Failure recording and queryability | 🔲 | Structured durable failure state |
 
-#### SQL / CLI Surface
+#### SQL / CLI Surface — 🟢 Community
 
 | Item | Status | Notes |
 |------|--------|-------|
@@ -326,12 +362,17 @@ distribution, operator UX, and external installability at scale.
 | `lagrange service install` / `upgrade` / `remove` / `list` / `status` CLI | 🔲 | CLI equivalents |
 | `lagrange registry add` / `list` CLI | 🔲 | Registry management |
 
----
+#### Licensing and Edition Gating — 🟡 Pro / 🔴 Enterprise
 
-## Long-Term Vision
+| Item | Status | Notes |
+|------|--------|-------|
+| Edition requirement enforcement | 🔲 | Services declare `community` / `pro` / `enterprise` |
+| License token / entitlement validation | 🔲 | Cluster validates entitlement before activation |
 
-Lagrange evolves toward a unified platform where data, computation, and
-coordination live in the same system:
+### 5. Data-Local AI Processing — visibility only until edition classification
 
-> Distributed database + distributed compute + programmable data locality +
-> distributed service platform
+| Item | Status |
+|------|--------|
+| Local summarization | 🔲 |
+| Local anomaly detection | 🔲 |
+| Local semantic filtering | 🔲 |
