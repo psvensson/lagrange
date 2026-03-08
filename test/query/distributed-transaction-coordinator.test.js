@@ -131,7 +131,7 @@ test('DistributedTransactionCoordinator - prepare failure reports stage and part
     t.equal(result.stage, TRANSACTION_STATUS.PREPARING);
     t.equal(result.failedParticipants.length, 1);
     t.equal(result.failedParticipants[0].partitionId, 'p2');
-    t.equal(coordinator.hasActiveTransaction('s5'), true);
+    t.equal(coordinator.hasActiveTransaction('s5'), false);
   });
 
 test('DistributedTransactionCoordinator - emits persistence callbacks', async (t) => {
@@ -269,7 +269,7 @@ test('DistributedTransactionCoordinator - recovery replay resumes commit lane',
       transactions: [{
         transaction_id: 'tx-recover-commit-1',
         session_id: 'recover-commit-1',
-        status: TRANSACTION_STATUS.PREPARING,
+        status: TRANSACTION_STATUS.PREPARED,
         created_at: 1,
         updated_at: 1,
       }],
@@ -297,7 +297,7 @@ test('DistributedTransactionCoordinator - recovery replay resumes commit lane',
     t.equal(recovery.totalRecovered, 1);
     t.equal(recovery.resumed, 1);
     t.equal(recovery.failed, 0);
-    t.same(prepareCalls, ['recover-commit-1:p1']);
+    t.same(prepareCalls, []);
     t.same(commitCalls.sort(), ['recover-commit-1:p1', 'recover-commit-1:p2']);
     t.ok(persistedStatuses.includes(TRANSACTION_STATUS.COMMITTED));
     t.equal(coordinator.hasActiveTransaction('recover-commit-1'), false);
@@ -346,6 +346,56 @@ test('DistributedTransactionCoordinator - recovery replay only commits pending p
     t.equal(recovery.failed, 0);
     t.same(commitCalls, ['recover-commit-2:p2']);
     t.equal(coordinator.hasActiveTransaction('recover-commit-2'), false);
+  });
+
+test('DistributedTransactionCoordinator - recovery replay rolls back preparing transactions',
+  async (t) => {
+    const commitCalls = [];
+    const rollbackCalls = [];
+    const coordinator = new DistributedTransactionCoordinator({
+      commitParticipant: async (sessionId, partitionId) => {
+        commitCalls.push(`${sessionId}:${partitionId}`);
+      },
+      rollbackParticipant: async (sessionId, partitionId) => {
+        rollbackCalls.push(`${sessionId}:${partitionId}`);
+      },
+    });
+
+    coordinator.recoverFromSystemTables({
+      transactions: [{
+        transaction_id: 'tx-recover-preparing-1',
+        session_id: 'recover-preparing-1',
+        status: TRANSACTION_STATUS.PREPARING,
+        created_at: 1,
+        updated_at: 1,
+      }],
+      participants: [
+        {
+          participant_id: 'tx-recover-preparing-1:p1',
+          transaction_id: 'tx-recover-preparing-1',
+          partition_id: 'p1',
+          status: TRANSACTION_STATUS.PREPARING,
+          created_at: 1,
+          updated_at: 1,
+        },
+        {
+          participant_id: 'tx-recover-preparing-1:p2',
+          transaction_id: 'tx-recover-preparing-1',
+          partition_id: 'p2',
+          status: TRANSACTION_STATUS.ACTIVE,
+          created_at: 1,
+          updated_at: 1,
+        },
+      ],
+    });
+
+    const recovery = await coordinator.resumeRecoveredTransactions();
+    t.equal(recovery.totalRecovered, 1);
+    t.equal(recovery.resumed, 1);
+    t.equal(recovery.failed, 0);
+    t.same(commitCalls, []);
+    t.same(rollbackCalls.sort(), ['recover-preparing-1:p1', 'recover-preparing-1:p2']);
+    t.equal(coordinator.hasActiveTransaction('recover-preparing-1'), false);
   });
 
 test('DistributedTransactionCoordinator - recovery replay resumes rollback lane',

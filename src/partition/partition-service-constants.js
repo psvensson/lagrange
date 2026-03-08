@@ -21,6 +21,8 @@ const PARTITION_SERVICE_DEFAULT = Object.freeze({
   LEARNER_PROMOTION_DELAY_MS: TIME_MS.SECOND * 30, // Min time before promotion (30s for stability)
   LEARNER_CATCH_UP_CHECK_INTERVAL_MS: TIME_MS.SECOND, // How often to check catch-up
   MAX_TRACKED_APPLIED_ENTRIES: NUM.THOUSAND * NUM.FIVE,
+  MAX_COMMITTED_WRITE_LOG_ENTRIES: NUM.THOUSAND,
+  PREPARED_STATE_HOLD_SWEEP_INTERVAL_MS: TIME_MS.SECOND,
 });
 
 const PARTITION_SERVICE_SQL = Object.freeze({
@@ -47,6 +49,7 @@ const PARTITION_SERVICE_SQL = Object.freeze({
     'VALUES (?, ?, ?, ?)',
   DELETE_RAFT_LOG_FROM: 'DELETE FROM _raft_log WHERE log_index >= ?',
   BEGIN_IMMEDIATE: 'BEGIN IMMEDIATE',
+  SAVEPOINT_PREPARE: 'SAVEPOINT prepare_transaction',
   COMMIT: 'COMMIT',
   ROLLBACK: 'ROLLBACK',
   UPDATE_SERVICE_RAFT_ROLE:
@@ -77,6 +80,7 @@ const PARTITION_SERVICE_MESSAGE_TYPE = Object.freeze({
   FORWARD_WRITE: 'FORWARD_WRITE',
   SYSTEM_TABLE_WRITE: 'SYSTEM_TABLE_WRITE',
   QUERY: 'QUERY',
+  TRANSACTION: 'TRANSACTION',
   START_SPLIT_REPLICATION: 'START_SPLIT_REPLICATION',
 });
 
@@ -92,6 +96,7 @@ const PARTITION_SERVICE_OPERATION = Object.freeze({
   UPSERT: 'UPSERT',
   QUERY: 'QUERY',
   BEGIN_TRANSACTION: 'BEGIN_TRANSACTION',
+  PREPARE_TRANSACTION: 'PREPARE_TRANSACTION',
   COMMIT: 'COMMIT',
   ROLLBACK: 'ROLLBACK',
   TRANSACTION_COMMIT: 'TRANSACTION_COMMIT',
@@ -275,6 +280,9 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
   APPLYING_COMMITTED_ENTRY: 'Applying committed entry',
   TRANSACTION_COMMIT_APPLIED: 'Transaction commit entry applied',
   BEGINNING_TRANSACTION: 'Beginning transaction',
+  PREPARING_TRANSACTION: 'Preparing transaction',
+  PREPARED_STATE_RECONSTRUCTED: 'Prepared transaction state reconstructed',
+  PREPARED_STATE_HOLD_TIMEOUT: 'Prepared transaction state hold timeout',
   COMMITTING_TRANSACTION: 'Committing transaction',
   ROLLING_BACK_TRANSACTION: 'Rolling back transaction',
   EXECUTING_QUERY: 'Executing query',
@@ -334,6 +342,10 @@ const PARTITION_SERVICE_ERROR_MSG = Object.freeze({
   NOT_INITIALIZED: 'PartitionService not initialized',
   TRANSACTION_ALREADY_ACTIVE: 'Transaction already active on this partition',
   BEGIN_TRANSACTION_FAILED: 'Failed to begin transaction',
+  PREPARE_CONFLICT: 'Prepare failed due to write conflict',
+  NO_ACTIVE_TRANSACTION_PREPARE: 'No active transaction to prepare',
+  SNAPSHOT_EXPIRED: 'Snapshot history expired for transaction epoch',
+  PREPARE_LOST: 'Prepared state lost after failover',
   NO_ACTIVE_TRANSACTION_COMMIT: 'No active transaction to commit',
   COMMIT_TRANSACTION_FAILED: 'Failed to commit transaction',
   NO_ACTIVE_TRANSACTION_ROLLBACK: 'No active transaction to rollback',

@@ -167,14 +167,19 @@ The distributed SQL layer is now single-path and owner-specific:
    `transitionStep()`, which persists `previousStep`, `nextStep`,
    `reason`, `timestamp`, and `ownerKey` on every transition.
 6. `DistributedTransactionCoordinator` is the only owner for distributed
-   transaction participant enlistment, prepare/commit/rollback state machine,
-   and recovery from `sql_transactions`, `sql_transaction_participants`,
-   and `sql_write_operations`. It composes `DurableWorkflowCoordinator` and
-   keeps transaction-only semantics such as 2PC stages and write-operation
-   journaling local. Control-plane owners (`RebalanceCoordinator`,
-   `ManagedSplitWorkflow`) use it to wrap step transitions that require
-   atomic multi-row commits. Idempotency is enforced by operation id and
-   step id via `DurableWorkflowCoordinator.isTransitionIdempotent()`.
+   transaction participant enlistment, 2PC phase transitions
+   (`PREPARING/PREPARED/COMMITTING/ROLLING_BACK`), prepare/commit/rollback
+   dispatch, timeout-budget enforcement, and recovery from
+   `sql_transactions`, `sql_transaction_participants`, and
+   `sql_write_operations`. It composes `DurableWorkflowCoordinator`, persists
+   commit/rollback decisions before participant fanout, runs recovery replay,
+   and runs periodic recovery sweeps for timed-out non-terminal workflows.
+   Transaction-only semantics (write-operation journaling, retry/backoff,
+   timeout classification) remain local to this owner. Control-plane owners
+   (`RebalanceCoordinator`, `ManagedSplitWorkflow`) use it to wrap step
+   transitions that require atomic multi-row commits. Idempotency is enforced
+   by operation id and step id via
+   `DurableWorkflowCoordinator.isTransitionIdempotent()`.
 7. `ManagedSplitWorkflow` is the only owner for managed partition-split
    lifecycle from admission through cleanup. It composes
    `DurableWorkflowCoordinator`, persists split workflow identity in
@@ -865,7 +870,17 @@ No other source file may call `applySystemTableChange` directly.
 - SQLite-backed Raft group for data storage
 - Uses liferaft library for Raft consensus
 - Generates CDC events on writes
-- Supports transactions (single-partition only)
+- Owns participant-side distributed transaction behavior (`BEGIN`, `PREPARE`,
+  `COMMIT`, `ROLLBACK`) for partition-local state
+- `prepareTransaction()` validates write conflicts and durably appends a
+  `PREPARE_TRANSACTION` Raft log entry before acknowledging prepare success
+- Reconstructs prepared transaction state from Raft log entries on leader
+  election and keeps prepared writes durable across failover
+- Enforces participant prepared-state hold timeout and emits typed
+  `PREPARE_LOST` responses after autonomous timeout release
+- Implements epoch-based snapshot isolation on reads (committed-before-epoch
+  visibility + read-your-own-writes) and first-committer-wins write-conflict
+  detection at prepare
 
 ### MessageGroupService
 - Reliable inter-service communication
@@ -1184,30 +1199,32 @@ in `QueryExecutor.aggregateSelectResults()` using a post-merge window
 evaluator. The evaluator would partition rows by the `PARTITION BY`
 clause, sort within each partition, and compute window values.
 
-#### Multi-Partition Transactions
+#### Multi-Partition Transactions (Implemented)
 
-**Gap**: PostgreSQL clients expect multi-statement transactions that span
-multiple tables (and therefore multiple partitions).
+Distributed multi-partition transactions are implemented with
+`DistributedTransactionCoordinator` as the single 2PC owner and
+`PartitionService` as the participant owner.
 
-**Challenge**: The system currently limits transactions to a single
-partition. True distributed transactions require two-phase commit (2PC)
-or a similar coordination protocol across partition leaders.
-
-**Approach**: Implement a lightweight 2PC coordinator in `SqlCore`:
-1. `BEGIN` creates a transaction context tracking all touched partitions
-2. Each write records the target partition in the transaction context
-3. `COMMIT` sends prepare messages to all partition leaders via
-   `MessageRouter`, waits for all acks, then sends commit messages
-4. `ROLLBACK` sends abort to all prepared partitions
-5. Timeout and failure recovery: if any partition fails to prepare,
-   abort all; if coordinator crashes after prepare, recovery log
-   (persisted in a dedicated partition) drives resolution
-6. Read-your-writes within a transaction: buffer uncommitted writes
-   at the coordinator and merge with partition reads
-
-This is a significant architectural addition. A phased approach would
-start with read-only multi-partition transactions (no 2PC needed),
-then add write support.
+Implementation summary:
+1. `BEGIN` assigns a monotonic `transactionEpoch` and a timeout budget
+   deadline; both are persisted in `sql_transactions`.
+2. Participant enlistment delivers `BEGIN` through `MessageRouter` with
+   the assigned epoch.
+3. `COMMIT` runs phase 1 prepare. Each participant executes
+   `prepareTransaction()`, validates write conflicts, and appends
+   `PREPARE_TRANSACTION` in its Raft log before prepare success.
+4. On all-prepare success, coordinator persists `COMMITTING` before any
+   participant commit message, then drives commit fanout with bounded
+   retry/backoff.
+5. On prepare failure or explicit rollback, coordinator persists
+   `ROLLING_BACK` before rollback fanout and drives all participants to
+   `ROLLED_BACK`.
+6. Recovery and timeout: restart replay uses persisted statuses
+   (`ACTIVE/PREPARING -> rollback`, `PREPARED/COMMITTING -> commit`);
+   periodic recovery sweep resolves timed-out non-terminal transactions.
+7. Snapshot model: participants enforce epoch-based snapshot isolation
+   (`commit_epoch < transaction_epoch` visibility), read-your-own-writes,
+   and first-committer-wins write-conflict detection via write sets.
 
 #### EXPLAIN / EXPLAIN ANALYZE
 

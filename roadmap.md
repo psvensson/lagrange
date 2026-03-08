@@ -53,20 +53,37 @@ Finishing the core database invariants. The foundations are strong: Raft partiti
 groups, CDC propagation, deterministic control-plane workflows, and system-table
 cache. Before productization, a few foundational capabilities must be completed.
 
+### 0.1a. Topology Workflow Stabilization (March 2026) — 🟢 Community
+
+| Item | Status | Notes |
+|------|--------|-------|
+| `replica_operations` single-writer cutover | ✅ | `RebalanceCoordinator` is the canonical writer/owner path |
+| Managed split durable-owner cutover | ✅ | `ManagedSplitWorkflow` owns split lifecycle and resume |
+| Readiness stratification for internal vs load lanes | ✅ | Internal topology paths use `repairEligible`; load/routing paths use `serveEligible` |
+| Atomic topology transitions fail closed without transaction owner | ✅ | Optional fallback semantics removed on atomic cut points |
+| Cache observation boundary enforcement | ✅ | Workflow advance requires owner commit and acknowledgement, not cache timing |
+| Owner-dependency fallback removal | ✅ | Active topology paths fail closed when required owners are missing |
+| Deterministic regression ladder enforcement | ✅ | Repros and focused suites run before 7-node harness confirmation |
+| Scenario policy SQL ownership guard | ✅ | `npm run guard:scenario-policy:file` enforces `table_policies` owner helper usage |
+
 ### 1. Distributed Transactions — 🟢 Community
 
 | Item | Status | Notes |
 |------|--------|-------|
 | DistributedTransactionCoordinator skeleton | ✅ | Owns 2PC state machine |
-| Transaction state tables | ✅ | sql_transactions, participants |
+| Transaction state tables | ✅ | `sql_transactions`, `sql_transaction_participants`, `sql_write_operations` |
 | Participant enlistment | ✅ | Idempotent operations |
-| Prepare phase | 🔧 | Multi-partition incomplete |
-| Commit phase | 🔧 | Atomic commit incomplete |
-| Rollback | 🔧 | Cross-partition incomplete |
-| Coordinator recovery | 🔧 | Replay in-flight transactions |
-| Snapshot isolation | 🔲 | Multi-partition read/write |
+| Prepare phase | ✅ | Real `PREPARE` dispatch + participant conflict checks |
+| Prepared-state durability | ✅ | `PREPARE_TRANSACTION` replicated in participant Raft log |
+| Commit phase | ✅ | Commit decision persisted before participant fanout |
+| Rollback | ✅ | Cross-partition rollback with idempotent participant handling |
+| Coordinator recovery | ✅ | Status-driven replay to terminal state after restart |
+| Snapshot isolation | ✅ | Epoch-based visibility + read-your-own-writes |
+| Write conflict detection | ✅ | First-committer-wins conflict detection at prepare |
+| Timeout and cleanup | ✅ | Budget-based abort + participant hold timeout + recovery sweep |
 
-Goal: multi-partition transactions with snapshot isolation.
+Goal achieved: multi-partition transactions with snapshot isolation and
+deterministic recovery/timeout handling.
 
 ### 2. Schema Migration Workflow — 🟢 Community
 

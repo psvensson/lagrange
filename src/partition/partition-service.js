@@ -108,6 +108,7 @@ import {
   PartitionRaftStorage,
   PartitionRaftLogEntry,
 } from './partition-raft-storage.js';
+import {TIMEOUT_BUDGET_DEFAULT} from '../control-plane/timeout-budget.js';
 
 /**
  * Partition state enumeration.
@@ -137,6 +138,7 @@ const WRITE_PHASE_FIELD_FORWARD_DELIVER_MS = 'forwardDeliverMs';
 const WRITE_PHASE_FIELD_APPLY_WRITE_MS = 'applyWriteMs';
 const WRITE_PHASE_FIELD_TOTAL_MS = 'totalMs';
 const SPLIT_SNAPSHOT_BACKFILL_YIELD_EVERY_ROWS = 64;
+const DEFAULT_TRANSACTION_SESSION_ID = 'default';
 
 
 /**
@@ -261,6 +263,27 @@ class PartitionService extends EventEmitter {
     this.hlcClock = new HLCClockService(this.replicaId);
 
     // Transaction state
+    this.activeTransactions = new Map();
+    this.preparedTransactions = new Map();
+    this.preparedStateLostSessions = new Set();
+    this.committedWriteLog = [];
+    this.rowCommitEpoch = new Map();
+    this.maxCommittedWriteLogEntries = Number.isFinite(
+      options.maxCommittedWriteLogEntries,
+    ) && options.maxCommittedWriteLogEntries > NUM.ZERO ?
+      Math.floor(options.maxCommittedWriteLogEntries) :
+      PARTITION_SERVICE_DEFAULT.MAX_COMMITTED_WRITE_LOG_ENTRIES;
+    this.preparedStateHoldTimeoutMs = Number.isFinite(
+      options.preparedStateHoldTimeoutMs,
+    ) && options.preparedStateHoldTimeoutMs > NUM.ZERO ?
+      Math.floor(options.preparedStateHoldTimeoutMs) :
+      TIMEOUT_BUDGET_DEFAULT.PREPARED_HOLD_TIMEOUT_MS;
+    this.preparedStateHoldSweepIntervalMs = Number.isFinite(
+      options.preparedStateHoldSweepIntervalMs,
+    ) && options.preparedStateHoldSweepIntervalMs > NUM.ZERO ?
+      Math.floor(options.preparedStateHoldSweepIntervalMs) :
+      PARTITION_SERVICE_DEFAULT.PREPARED_STATE_HOLD_SWEEP_INTERVAL_MS;
+    this.preparedStateHoldTimer = null;
     this.activeTransaction = null;
     this.transactionOperations = [];
 
@@ -1194,6 +1217,12 @@ class PartitionService extends EventEmitter {
           partitionId: this.partitionId,
           rebalancerActive: !this.isJoiningExistingGroup,
         });
+        const reconstruction = this.reconstructPreparedState();
+        this.logger.info(PARTITION_SERVICE_LOG_MSG.PREPARED_STATE_RECONSTRUCTED, {
+          partitionId: this.partitionId,
+          preparedTransactionCount: reconstruction.preparedTransactionCount,
+          prepareLostCount: reconstruction.prepareLostCount,
+        });
 
         this.emit(PARTITION_SERVICE_EVENT.LEADER_ELECTED, {
           leaderId: this.replicaId,
@@ -1303,6 +1332,7 @@ class PartitionService extends EventEmitter {
 
     // Start periodic size updates
     this.startPeriodicSizeUpdates();
+    this.startPreparedStateHoldTimeoutSweep();
 
     // Calculate initial size
     await this.updatePartitionSize();
@@ -1816,6 +1846,8 @@ class PartitionService extends EventEmitter {
       // Handle remote SQL query execution
       // Enables transparent query routing across the cluster
       return this.handleRemoteQuery(payload);
+    case PARTITION_SERVICE_MESSAGE_TYPE.TRANSACTION:
+      return this.handleTransactionMessage(payload);
     case PARTITION_SERVICE_MESSAGE_TYPE.START_SPLIT_REPLICATION:
       return this.handleStartSplitReplication(payload);
     default:
@@ -1827,6 +1859,58 @@ class PartitionService extends EventEmitter {
       return {
         acknowledged: false,
         error: PARTITION_SERVICE_ERROR_MSG.unknownMessage(payload.type),
+      };
+    }
+  }
+
+  /**
+   * Handle remote transaction control operations.
+   * @param {Object} payload - Transaction message payload.
+   * @return {Promise<Object>} Transaction operation response.
+   * @private
+   */
+  async handleTransactionMessage(payload) {
+    const operation = payload?.operation;
+    const sessionId = payload?.sessionId || null;
+    const transactionEpoch = Number.isFinite(payload?.transactionEpoch) ?
+      Math.floor(payload.transactionEpoch) :
+      null;
+
+    try {
+      let result;
+      switch (operation) {
+      case PARTITION_SERVICE_OPERATION.BEGIN_TRANSACTION:
+      case 'BEGIN':
+        result = await this.beginTransaction(sessionId, transactionEpoch);
+        break;
+      case PARTITION_SERVICE_OPERATION.PREPARE_TRANSACTION:
+      case 'PREPARE':
+        result = await this.prepareTransaction(sessionId);
+        break;
+      case PARTITION_SERVICE_OPERATION.COMMIT:
+        result = await this.commitTransaction(sessionId);
+        break;
+      case PARTITION_SERVICE_OPERATION.ROLLBACK:
+        result = await this.rollbackTransaction(sessionId);
+        break;
+      default:
+        return {
+          acknowledged: false,
+          success: false,
+          error: PARTITION_SERVICE_ERROR_MSG.unknownOperation(operation),
+        };
+      }
+
+      return {
+        acknowledged: true,
+        success: result?.success === true,
+        ...result,
+      };
+    } catch (error) {
+      return {
+        acknowledged: true,
+        success: false,
+        error: error.message,
       };
     }
   }
@@ -1921,7 +2005,7 @@ class PartitionService extends EventEmitter {
    * @private
    */
   async handleRemoteQuery(payload) {
-    const {sql, params, splitMirrorOrigin} = payload;
+    const {sql, params, splitMirrorOrigin, sessionId} = payload;
 
     if (!sql) {
       return {acknowledged: false, error: PARTITION_SERVICE_ERROR_MSG.MISSING_SQL_QUERY};
@@ -1964,6 +2048,7 @@ class PartitionService extends EventEmitter {
     try {
       const result = await this.executeQuery(sql, params || [], {
         splitMirrorOrigin: splitMirrorOrigin || null,
+        sessionId: sessionId || null,
       });
       return {
         acknowledged: true,
@@ -2177,39 +2262,513 @@ class PartitionService extends EventEmitter {
     });
   }
 
+  /**
+   * Resolve the canonical transaction session ID.
+   * @param {string|null} sessionId - Requested session ID.
+   * @return {string} Canonical session ID.
+   * @private
+   */
+  normalizeTransactionSessionId(sessionId) {
+    return typeof sessionId === 'string' && sessionId.length > NUM.ZERO ?
+      sessionId :
+      DEFAULT_TRANSACTION_SESSION_ID;
+  }
+
+  /**
+   * Resolve one active session ID for transaction operations.
+   * @param {string|null} sessionId - Requested session ID.
+   * @return {string|null} Active session ID or null.
+   * @private
+   */
+  resolveActiveTransactionSessionId(sessionId) {
+    if (typeof sessionId === 'string' && sessionId.length > NUM.ZERO) {
+      return sessionId;
+    }
+    if (this.activeTransactions.has(DEFAULT_TRANSACTION_SESSION_ID)) {
+      return DEFAULT_TRANSACTION_SESSION_ID;
+    }
+    if (this.activeTransactions.size === NUM.ONE) {
+      return this.activeTransactions.keys().next().value || null;
+    }
+    return null;
+  }
+
+  /**
+   * Synchronize legacy transaction aliases for compatibility.
+   * @private
+   */
+  syncLegacyTransactionAliases() {
+    const defaultState = this.activeTransactions.get(DEFAULT_TRANSACTION_SESSION_ID);
+    const fallbackState = this.activeTransactions.size === NUM.ONE ?
+      this.activeTransactions.values().next().value :
+      null;
+    const activeState = defaultState || fallbackState || null;
+    this.activeTransaction = activeState;
+    this.transactionOperations = activeState?.operations || [];
+  }
+
+  /**
+   * Resolve one transaction state by session.
+   * @param {string|null} sessionId - Requested session ID.
+   * @return {{sessionId: string, state: Object}|null} Resolved state.
+   * @private
+   */
+  resolveActiveTransactionState(sessionId = null) {
+    const resolvedSessionId = this.resolveActiveTransactionSessionId(sessionId);
+    if (!resolvedSessionId) {
+      return null;
+    }
+    const state = this.activeTransactions.get(resolvedSessionId) || null;
+    if (!state) {
+      return null;
+    }
+    return {
+      sessionId: resolvedSessionId,
+      state,
+    };
+  }
+
+  /**
+   * Resolve one prepared session ID for transaction operations.
+   * @param {string|null} sessionId - Requested session ID.
+   * @return {string|null} Prepared session ID or null.
+   * @private
+   */
+  resolvePreparedTransactionSessionId(sessionId) {
+    if (typeof sessionId === 'string' && sessionId.length > NUM.ZERO) {
+      return sessionId;
+    }
+    if (this.preparedTransactions.has(DEFAULT_TRANSACTION_SESSION_ID)) {
+      return DEFAULT_TRANSACTION_SESSION_ID;
+    }
+    if (this.preparedTransactions.size === NUM.ONE) {
+      return this.preparedTransactions.keys().next().value || null;
+    }
+    return null;
+  }
+
+  /**
+   * Resolve one prepared transaction state by session.
+   * @param {string|null} sessionId - Requested session ID.
+   * @return {{sessionId: string, state: Object}|null} Resolved state.
+   * @private
+   */
+  resolvePreparedTransactionState(sessionId = null) {
+    const resolvedSessionId = this.resolvePreparedTransactionSessionId(sessionId);
+    if (!resolvedSessionId) {
+      return null;
+    }
+    const state = this.preparedTransactions.get(resolvedSessionId) || null;
+    if (!state) {
+      return null;
+    }
+    return {
+      sessionId: resolvedSessionId,
+      state,
+    };
+  }
+
+  /**
+   * Build one prepare-lost response payload.
+   * @param {string} operation - Transaction operation.
+   * @param {string|null} sessionId - Session ID.
+   * @return {Object} Prepare-lost response payload.
+   * @private
+   */
+  buildPrepareLostResponse(operation, sessionId = null) {
+    return {
+      success: false,
+      operation,
+      partitionId: this.partitionId,
+      sessionId: this.normalizeTransactionSessionId(sessionId),
+      error: PARTITION_SERVICE_ERROR_MSG.PREPARE_LOST,
+    };
+  }
+
+  /**
+   * Reconstruct prepared transaction state from the persisted Raft log.
+   * @return {{preparedTransactionCount: number, prepareLostCount: number}}
+   *   Reconstruction summary.
+   */
+  reconstructPreparedState() {
+    const reconstructedPreparedTransactions = new Map();
+    const terminalSessions = new Set();
+    const prepareLostSessions = new Set();
+    const logEntries = this.storage?.getEntriesFrom(NUM.ONE) || [];
+
+    for (const logEntry of logEntries) {
+      const data = logEntry?.data || null;
+      if (!data || typeof data !== 'object') {
+        continue;
+      }
+      const sessionId = this.normalizeTransactionSessionId(data.sessionId || null);
+      if (!sessionId) {
+        continue;
+      }
+
+      if (data.type === PARTITION_SERVICE_OPERATION.PREPARE_TRANSACTION) {
+        if (!Array.isArray(data.writeSet)) {
+          prepareLostSessions.add(sessionId);
+          reconstructedPreparedTransactions.delete(sessionId);
+          continue;
+        }
+        reconstructedPreparedTransactions.set(sessionId, {
+          sessionId,
+          transactionEpoch: Number.isFinite(data.epoch) ?
+            data.epoch :
+            null,
+          startTime: Number.isFinite(data.proposedAt) ?
+            data.proposedAt :
+            Date.now(),
+          operations: [],
+          writeSet: new Set(data.writeSet),
+          readSet: new Set(),
+          raftLogIndex: Number.isFinite(logEntry?.index) ?
+            logEntry.index :
+            null,
+          preparedAt: Number.isFinite(data.proposedAt) ?
+            data.proposedAt :
+            Date.now(),
+        });
+        continue;
+      }
+
+      if (data.type === PARTITION_SERVICE_OPERATION.TRANSACTION_COMMIT ||
+          data.type === PARTITION_SERVICE_OPERATION.COMMIT ||
+          data.type === PARTITION_SERVICE_OPERATION.ROLLBACK) {
+        terminalSessions.add(sessionId);
+        reconstructedPreparedTransactions.delete(sessionId);
+        prepareLostSessions.delete(sessionId);
+      }
+    }
+
+    this.preparedTransactions.clear();
+    for (const [sessionId, state] of reconstructedPreparedTransactions.entries()) {
+      if (terminalSessions.has(sessionId)) {
+        continue;
+      }
+      this.preparedTransactions.set(sessionId, state);
+    }
+    for (const sessionId of terminalSessions) {
+      this.preparedStateLostSessions.delete(sessionId);
+    }
+    for (const sessionId of prepareLostSessions) {
+      this.preparedTransactions.delete(sessionId);
+      this.preparedStateLostSessions.add(sessionId);
+    }
+    this.syncLegacyTransactionAliases();
+
+    return {
+      preparedTransactionCount: this.preparedTransactions.size,
+      prepareLostCount: this.preparedStateLostSessions.size,
+    };
+  }
+
+  /**
+   * Resolve the primary-key column used for write-set tracking.
+   * @return {string|null} Primary-key column name.
+   * @private
+   */
+  resolveTransactionPrimaryKeyColumn() {
+    if (!this.schema || !Array.isArray(this.schema.columns)) {
+      return null;
+    }
+    const primaryKeyColumn = this.schema.columns.find((column) => column.primaryKey);
+    return primaryKeyColumn?.name || null;
+  }
+
+  /**
+   * Resolve one write-set key from a transaction entry.
+   * @param {Object} entry - Transaction write entry.
+   * @return {string|null} Write-set key.
+   * @private
+   */
+  resolveTransactionWriteSetKey(entry) {
+    const primaryKeyColumn = this.resolveTransactionPrimaryKeyColumn();
+    if (!primaryKeyColumn) {
+      return null;
+    }
+    const tableName = entry.tableName || this.tableName;
+    if (entry?.whereClause &&
+        Object.prototype.hasOwnProperty.call(entry.whereClause, primaryKeyColumn)) {
+      return `${tableName}:${entry.whereClause[primaryKeyColumn]}`;
+    }
+    if (entry?.data &&
+        Object.prototype.hasOwnProperty.call(entry.data, primaryKeyColumn)) {
+      return `${tableName}:${entry.data[primaryKeyColumn]}`;
+    }
+
+    try {
+      const routingKey = this.extractSplitRoutingKey(entry, primaryKeyColumn);
+      if (routingKey === undefined || routingKey === null) {
+        return null;
+      }
+      return `${tableName}:${routingKey}`;
+    } catch (_err) {
+      return null;
+    }
+  }
+
+  /**
+   * Track one transaction write-set key.
+   * @param {Object} transactionState - Active transaction state.
+   * @param {Object} entry - Transaction write entry.
+   * @private
+   */
+  trackTransactionWriteSetKey(transactionState, entry) {
+    const writeSetKey = this.resolveTransactionWriteSetKey(entry);
+    if (!writeSetKey) {
+      return;
+    }
+    transactionState.writeSet.add(writeSetKey);
+  }
+
+  /**
+   * Check whether a write set conflicts with later committed writes.
+   * @param {Set<string>} writeSet - Transaction write set.
+   * @param {number|null} transactionEpoch - Transaction snapshot epoch.
+   * @return {Object} Conflict check result.
+   */
+  checkWriteConflicts(writeSet, transactionEpoch) {
+    if (!(writeSet instanceof Set) || writeSet.size === NUM.ZERO) {
+      return {hasConflict: false, conflicts: []};
+    }
+    if (!Number.isFinite(transactionEpoch)) {
+      return {hasConflict: false, conflicts: []};
+    }
+
+    const conflicts = [];
+    for (const commitRecord of this.committedWriteLog) {
+      if (!Number.isFinite(commitRecord?.epoch) ||
+          commitRecord.epoch <= transactionEpoch) {
+        continue;
+      }
+      for (const key of writeSet) {
+        if (!commitRecord.writeSet.has(key)) {
+          continue;
+        }
+        conflicts.push({
+          key,
+          conflictingEpoch: commitRecord.epoch,
+        });
+      }
+    }
+
+    return {
+      hasConflict: conflicts.length > NUM.ZERO,
+      conflicts,
+    };
+  }
+
+  /**
+   * Resolve oldest retained commit epoch from the write log.
+   * @return {number|null} Oldest retained commit epoch.
+   * @private
+   */
+  getOldestRetainedCommitEpoch() {
+    let oldest = null;
+    for (const commitRecord of this.committedWriteLog) {
+      if (!Number.isFinite(commitRecord?.epoch)) {
+        continue;
+      }
+      if (oldest === null || commitRecord.epoch < oldest) {
+        oldest = commitRecord.epoch;
+      }
+    }
+    return oldest;
+  }
+
+  /**
+   * Determine whether a transaction snapshot epoch is no longer available.
+   * @param {number|null} transactionEpoch - Transaction snapshot epoch.
+   * @return {boolean} True when snapshot history has expired.
+   * @private
+   */
+  isSnapshotExpired(transactionEpoch) {
+    if (!Number.isFinite(transactionEpoch)) {
+      return false;
+    }
+    if (this.committedWriteLog.length < this.maxCommittedWriteLogEntries) {
+      return false;
+    }
+    const oldestRetainedEpoch = this.getOldestRetainedCommitEpoch();
+    if (!Number.isFinite(oldestRetainedEpoch)) {
+      return false;
+    }
+    return transactionEpoch < oldestRetainedEpoch;
+  }
+
+  /**
+   * Apply snapshot visibility filtering for transactional reads.
+   * @param {Object[]} rows - SQLite result rows.
+   * @param {Object} transactionState - Active transaction state.
+   * @return {Object[]} Snapshot-visible rows.
+   * @private
+   */
+  applySnapshotReadFilter(rows, transactionState) {
+    if (!transactionState || !Number.isFinite(transactionState.transactionEpoch)) {
+      return rows;
+    }
+
+    if (this.isSnapshotExpired(transactionState.transactionEpoch)) {
+      throw new Error(PARTITION_SERVICE_ERROR_MSG.SNAPSHOT_EXPIRED);
+    }
+
+    const primaryKeyColumn = this.resolveTransactionPrimaryKeyColumn();
+    if (!primaryKeyColumn) {
+      return rows;
+    }
+
+    const filteredRows = [];
+    for (const row of rows) {
+      const primaryKeyValue = row?.[primaryKeyColumn];
+      const writeSetKey = `${this.tableName}:${primaryKeyValue}`;
+      const isOwnWrite = transactionState.writeSet.has(writeSetKey);
+      const commitEpoch = this.rowCommitEpoch.get(writeSetKey);
+      const committedBeforeSnapshot = !Number.isFinite(commitEpoch) ||
+        commitEpoch < transactionState.transactionEpoch;
+      if (!isOwnWrite && !committedBeforeSnapshot) {
+        continue;
+      }
+      transactionState.readSet.add(writeSetKey);
+      filteredRows.push(row);
+    }
+    return filteredRows;
+  }
+
+  /**
+   * Trim retained commit history to the configured maximum.
+   * @private
+   */
+  pruneCommittedWriteLog() {
+    while (this.committedWriteLog.length > this.maxCommittedWriteLogEntries) {
+      this.committedWriteLog.shift();
+    }
+  }
+
+  /**
+   * Release prepared transaction state that exceeded the hold timeout.
+   * @param {number} [nowMs] - Clock override for deterministic tests.
+   * @return {number} Number of released prepared transactions.
+   */
+  enforcePreparedStateHoldTimeouts(nowMs = Date.now()) {
+    const expiredPreparedSessions = [];
+    for (const [sessionId, state] of this.preparedTransactions.entries()) {
+      if (!Number.isFinite(state?.preparedAt)) {
+        continue;
+      }
+      const holdDurationMs = nowMs - state.preparedAt;
+      if (holdDurationMs < this.preparedStateHoldTimeoutMs) {
+        continue;
+      }
+      expiredPreparedSessions.push({
+        sessionId,
+        holdDurationMs,
+        preparedAt: state.preparedAt,
+      });
+    }
+
+    if (expiredPreparedSessions.length === NUM.ZERO) {
+      return NUM.ZERO;
+    }
+
+    try {
+      this.db.exec(PARTITION_SERVICE_SQL.ROLLBACK);
+    } catch (error) {
+      this.logger.warn(PARTITION_SERVICE_ERROR_MSG.ROLLBACK_TRANSACTION_FAILED, {
+        partitionId: this.partitionId,
+        error: error.message,
+      });
+    }
+
+    for (const expiredSession of expiredPreparedSessions) {
+      this.preparedTransactions.delete(expiredSession.sessionId);
+      this.activeTransactions.delete(expiredSession.sessionId);
+      this.preparedStateLostSessions.add(expiredSession.sessionId);
+      this.logger.warn(PARTITION_SERVICE_LOG_MSG.PREPARED_STATE_HOLD_TIMEOUT, {
+        partitionId: this.partitionId,
+        transactionId: expiredSession.sessionId,
+        sessionId: expiredSession.sessionId,
+        holdDurationMs: expiredSession.holdDurationMs,
+        preparedAt: expiredSession.preparedAt,
+      });
+    }
+    this.syncLegacyTransactionAliases();
+    return expiredPreparedSessions.length;
+  }
+
+  /**
+   * Start periodic prepared-state hold-timeout enforcement.
+   * @private
+   */
+  startPreparedStateHoldTimeoutSweep() {
+    if (this.preparedStateHoldTimer) {
+      return;
+    }
+    this.preparedStateHoldTimer = setInterval(() => {
+      this.enforcePreparedStateHoldTimeouts(Date.now());
+    }, this.preparedStateHoldSweepIntervalMs);
+    this.preparedStateHoldTimer.unref();
+  }
+
+  /**
+   * Stop periodic prepared-state hold-timeout enforcement.
+   * @private
+   */
+  stopPreparedStateHoldTimeoutSweep() {
+    if (this.preparedStateHoldTimer) {
+      clearInterval(this.preparedStateHoldTimer);
+      this.preparedStateHoldTimer = null;
+    }
+  }
+
 
   /**
    * Begin a transaction on this partition.
    * Uses SQLite's transaction support for READ COMMITTED isolation.
+   * @param {string} [sessionId] - Transaction session ID.
+   * @param {number} [transactionEpoch] - Snapshot epoch for this transaction.
    * @return {Promise<Object>} Transaction result.
    */
-  async beginTransaction() {
+  async beginTransaction(sessionId = null, transactionEpoch = null) {
     if (!this.initialized) {
       throw new Error(PARTITION_SERVICE_ERROR_MSG.NOT_INITIALIZED);
     }
 
-    if (this.activeTransaction) {
+    const transactionSessionId = this.normalizeTransactionSessionId(sessionId);
+    if (this.activeTransactions.has(transactionSessionId) ||
+      this.activeTransactions.size > NUM.ZERO) {
       throw new Error(PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE);
     }
+    this.preparedStateLostSessions.delete(transactionSessionId);
 
     this.logger.debug(PARTITION_SERVICE_LOG_MSG.BEGINNING_TRANSACTION, {
       partitionId: this.partitionId,
+      sessionId: transactionSessionId,
+      transactionEpoch,
     });
 
     try {
       // Use SQLite's BEGIN for transaction support
       this.db.exec(PARTITION_SERVICE_SQL.BEGIN_IMMEDIATE);
-      this.activeTransaction = {
+      const transactionState = {
+        sessionId: transactionSessionId,
+        transactionEpoch,
         startTime: Date.now(),
         operations: [],
+        writeSet: new Set(),
+        readSet: new Set(),
       };
-      this.transactionOperations = [];
+      this.activeTransactions.set(transactionSessionId, transactionState);
+      this.syncLegacyTransactionAliases();
 
       return {
         success: true,
         operation: PARTITION_SERVICE_OPERATION.BEGIN_TRANSACTION,
         partitionId: this.partitionId,
         inTransaction: true,
+        sessionId: transactionSessionId,
+        transactionEpoch,
       };
     } catch (error) {
       this.logger.error(PARTITION_SERVICE_ERROR_MSG.BEGIN_TRANSACTION_FAILED, {
@@ -2221,42 +2780,151 @@ class PartitionService extends EventEmitter {
   }
 
   /**
-   * Commit the active transaction.
-   * Ensures durability through Raft replication before acknowledging.
-   * @return {Promise<Object>} Commit result.
+   * Prepare one active transaction on this partition.
+   * @param {string|null} sessionId - Transaction session ID.
+   * @return {Promise<Object>} Prepare result.
    */
-  async commitTransaction() {
+  async prepareTransaction(sessionId = null) {
     if (!this.initialized) {
       throw new Error(PARTITION_SERVICE_ERROR_MSG.NOT_INITIALIZED);
     }
 
-    if (!this.activeTransaction) {
+    const transaction = this.resolveActiveTransactionState(sessionId) ||
+      this.resolvePreparedTransactionState(sessionId);
+    if (!transaction) {
+      return {
+        success: false,
+        operation: PARTITION_SERVICE_OPERATION.PREPARE_TRANSACTION,
+        partitionId: this.partitionId,
+        error: PARTITION_SERVICE_ERROR_MSG.NO_ACTIVE_TRANSACTION_PREPARE,
+      };
+    }
+    const {
+      sessionId: transactionSessionId,
+      state: transactionState,
+    } = transaction;
+
+    this.logger.debug(PARTITION_SERVICE_LOG_MSG.PREPARING_TRANSACTION, {
+      partitionId: this.partitionId,
+      sessionId: transactionSessionId,
+      operationCount: transactionState.operations.length,
+      writeSetSize: transactionState.writeSet.size,
+    });
+
+    const conflictCheck = this.checkWriteConflicts(
+      transactionState.writeSet,
+      transactionState.transactionEpoch,
+    );
+    if (conflictCheck.hasConflict) {
+      return {
+        success: false,
+        operation: PARTITION_SERVICE_OPERATION.PREPARE_TRANSACTION,
+        partitionId: this.partitionId,
+        error: PARTITION_SERVICE_ERROR_MSG.PREPARE_CONFLICT,
+        conflicts: conflictCheck.conflicts,
+      };
+    }
+
+    const raftEntry = await this.replicatePreparedTransaction(
+      transactionSessionId,
+      transactionState,
+    );
+    this.activeTransactions.delete(transactionSessionId);
+    this.preparedTransactions.set(transactionSessionId, {
+      sessionId: transactionSessionId,
+      transactionEpoch: transactionState.transactionEpoch,
+      startTime: transactionState.startTime,
+      operations: transactionState.operations,
+      writeSet: transactionState.writeSet,
+      readSet: transactionState.readSet,
+      raftLogIndex: raftEntry?.index || null,
+      preparedAt: Date.now(),
+    });
+    this.syncLegacyTransactionAliases();
+
+    return {
+      success: true,
+      operation: PARTITION_SERVICE_OPERATION.PREPARE_TRANSACTION,
+      partitionId: this.partitionId,
+      prepared: true,
+      sessionId: transactionSessionId,
+      raftLogIndex: raftEntry?.index || null,
+    };
+  }
+
+  /**
+   * Commit the active transaction.
+   * Ensures durability through Raft replication before acknowledging.
+   * @return {Promise<Object>} Commit result.
+   */
+  async commitTransaction(sessionId = null) {
+    if (!this.initialized) {
+      throw new Error(PARTITION_SERVICE_ERROR_MSG.NOT_INITIALIZED);
+    }
+    const transactionSessionId = this.normalizeTransactionSessionId(sessionId);
+    if (this.preparedStateLostSessions.has(transactionSessionId)) {
+      return this.buildPrepareLostResponse(
+        PARTITION_SERVICE_OPERATION.COMMIT,
+        transactionSessionId,
+      );
+    }
+
+    const transaction = this.resolveActiveTransactionState(transactionSessionId) ||
+      this.resolvePreparedTransactionState(transactionSessionId);
+    if (!transaction) {
       throw new Error(PARTITION_SERVICE_ERROR_MSG.NO_ACTIVE_TRANSACTION_COMMIT);
     }
+    const {
+      sessionId: resolvedSessionId,
+      state: transactionState,
+    } = transaction;
 
     this.logger.debug(PARTITION_SERVICE_LOG_MSG.COMMITTING_TRANSACTION, {
       partitionId: this.partitionId,
-      operationCount: this.transactionOperations.length,
+      sessionId: resolvedSessionId,
+      operationCount: transactionState.operations.length,
     });
 
     try {
       // Replicate transaction operations through Raft for durability
-      const raftEntry = await this.replicateTransactionCommit();
+      const raftEntry = await this.replicateTransactionCommit(
+        transactionState.operations,
+        resolvedSessionId,
+        transactionState.transactionEpoch,
+      );
 
       // Commit in SQLite
       this.db.exec(PARTITION_SERVICE_SQL.COMMIT);
 
-      const duration = Date.now() - this.activeTransaction.startTime;
-      const operationCount = this.transactionOperations.length;
+      const duration = Date.now() - transactionState.startTime;
+      const operationCount = transactionState.operations.length;
 
       // Generate CDC events for all operations
-      for (const op of this.transactionOperations) {
+      for (const op of transactionState.operations) {
         await this.generateCDCEvent(op);
       }
 
-      // Clear transaction state
-      this.activeTransaction = null;
-      this.transactionOperations = [];
+      if (transactionState.writeSet.size > NUM.ZERO) {
+        const committedAt = Date.now();
+        for (const writeSetKey of transactionState.writeSet) {
+          this.rowCommitEpoch.set(
+            writeSetKey,
+            Number.isFinite(transactionState.transactionEpoch) ?
+              transactionState.transactionEpoch :
+              committedAt,
+          );
+        }
+        this.committedWriteLog.push({
+          epoch: transactionState.transactionEpoch,
+          writeSet: new Set(transactionState.writeSet),
+          committedAt,
+        });
+        this.pruneCommittedWriteLog();
+      }
+      this.activeTransactions.delete(resolvedSessionId);
+      this.preparedTransactions.delete(resolvedSessionId);
+      this.preparedStateLostSessions.delete(resolvedSessionId);
+      this.syncLegacyTransactionAliases();
 
       // Schedule size update
       this.scheduleSizeUpdate();
@@ -2269,10 +2937,12 @@ class PartitionService extends EventEmitter {
         durationMs: duration,
         operationCount,
         raftLogIndex: raftEntry?.index || null,
+        sessionId: resolvedSessionId,
       };
     } catch (error) {
       this.logger.error(PARTITION_SERVICE_ERROR_MSG.COMMIT_TRANSACTION_FAILED, {
         partitionId: this.partitionId,
+        sessionId: resolvedSessionId,
         error: error.message,
       });
 
@@ -2283,8 +2953,9 @@ class PartitionService extends EventEmitter {
         // Ignore rollback errors
       }
 
-      this.activeTransaction = null;
-      this.transactionOperations = [];
+      this.activeTransactions.delete(resolvedSessionId);
+      this.preparedTransactions.delete(resolvedSessionId);
+      this.syncLegacyTransactionAliases();
 
       throw error;
     }
@@ -2294,30 +2965,58 @@ class PartitionService extends EventEmitter {
    * Rollback the active transaction.
    * @return {Promise<Object>} Rollback result.
    */
-  async rollbackTransaction() {
+  async rollbackTransaction(sessionId = null) {
     if (!this.initialized) {
       throw new Error(PARTITION_SERVICE_ERROR_MSG.NOT_INITIALIZED);
     }
-
-    if (!this.activeTransaction) {
-      throw new Error(PARTITION_SERVICE_ERROR_MSG.NO_ACTIVE_TRANSACTION_ROLLBACK);
+    const transactionSessionId = this.normalizeTransactionSessionId(sessionId);
+    if (this.preparedStateLostSessions.has(transactionSessionId)) {
+      return this.buildPrepareLostResponse(
+        PARTITION_SERVICE_OPERATION.ROLLBACK,
+        transactionSessionId,
+      );
     }
+
+    const transaction = this.resolveActiveTransactionState(transactionSessionId) ||
+      this.resolvePreparedTransactionState(transactionSessionId);
+    if (!transaction) {
+      return {
+        success: true,
+        operation: PARTITION_SERVICE_OPERATION.ROLLBACK,
+        partitionId: this.partitionId,
+        rolledBack: true,
+        idempotent: true,
+        sessionId: transactionSessionId,
+      };
+    }
+    const {
+      sessionId: resolvedSessionId,
+      state: transactionState,
+    } = transaction;
 
     this.logger.debug(PARTITION_SERVICE_LOG_MSG.ROLLING_BACK_TRANSACTION, {
       partitionId: this.partitionId,
-      operationCount: this.transactionOperations.length,
+      sessionId: resolvedSessionId,
+      operationCount: transactionState.operations.length,
     });
 
     try {
+      const raftEntry = await this.replicateTransactionRollback(
+        resolvedSessionId,
+        transactionState.transactionEpoch,
+      );
+
       // Rollback in SQLite - this reverts all changes
       this.db.exec(PARTITION_SERVICE_SQL.ROLLBACK);
 
-      const duration = Date.now() - this.activeTransaction.startTime;
-      const operationCount = this.transactionOperations.length;
+      const duration = Date.now() - transactionState.startTime;
+      const operationCount = transactionState.operations.length;
 
       // Clear transaction state
-      this.activeTransaction = null;
-      this.transactionOperations = [];
+      this.activeTransactions.delete(resolvedSessionId);
+      this.preparedTransactions.delete(resolvedSessionId);
+      this.preparedStateLostSessions.delete(resolvedSessionId);
+      this.syncLegacyTransactionAliases();
 
       return {
         success: true,
@@ -2326,16 +3025,20 @@ class PartitionService extends EventEmitter {
         rolledBack: true,
         durationMs: duration,
         operationCount,
+        sessionId: resolvedSessionId,
+        raftLogIndex: raftEntry?.index || null,
       };
     } catch (error) {
       this.logger.error(PARTITION_SERVICE_ERROR_MSG.ROLLBACK_TRANSACTION_FAILED, {
         partitionId: this.partitionId,
+        sessionId: resolvedSessionId,
         error: error.message,
       });
 
       // Clear transaction state anyway
-      this.activeTransaction = null;
-      this.transactionOperations = [];
+      this.activeTransactions.delete(resolvedSessionId);
+      this.preparedTransactions.delete(resolvedSessionId);
+      this.syncLegacyTransactionAliases();
 
       throw error;
     }
@@ -2346,7 +3049,7 @@ class PartitionService extends EventEmitter {
    * @return {boolean} True if transaction is active.
    */
   isInTransaction() {
-    return this.activeTransaction !== null;
+    return this.activeTransactions.size > NUM.ZERO;
   }
 
   /**
@@ -2354,16 +3057,18 @@ class PartitionService extends EventEmitter {
    * @return {Promise<Object>} Raft log entry.
    * @private
    */
-  async replicateTransactionCommit() {
-    if (this.transactionOperations.length === NUM.ZERO) {
-      return null;
-    }
-
+  async replicateTransactionCommit(
+    operations = [],
+    sessionId = null,
+    transactionEpoch = null,
+  ) {
     const timestamp = this.hlcClock.now();
 
     const entry = {
       type: PARTITION_SERVICE_OPERATION.TRANSACTION_COMMIT,
-      operations: this.transactionOperations,
+      sessionId,
+      transactionEpoch,
+      operations: Array.isArray(operations) ? operations : [],
       timestamp: timestamp.toString(),
       proposedBy: this.replicaId,
       proposedAt: Date.now(),
@@ -2382,6 +3087,77 @@ class PartitionService extends EventEmitter {
       this.raftProvider.propose(this.raft, entry, (err) => {
         if (err) {
           this.logger.debug(PARTITION_SERVICE_ERROR_MSG.TRANSACTION_COMMIT_RAFT_FAILED, {
+            partitionId: this.partitionId,
+            error: err.message,
+          });
+        }
+      });
+    }
+
+    return logEntry;
+  }
+
+  /**
+   * Replicate one transaction rollback marker through Raft.
+   * @param {string} sessionId - Transaction session ID.
+   * @param {number|null} transactionEpoch - Transaction snapshot epoch.
+   * @return {Promise<Object>} Raft log entry.
+   * @private
+   */
+  async replicateTransactionRollback(sessionId = null, transactionEpoch = null) {
+    const timestamp = this.hlcClock.now();
+    const entry = {
+      type: PARTITION_SERVICE_OPERATION.ROLLBACK,
+      sessionId,
+      transactionEpoch,
+      timestamp: timestamp.toString(),
+      proposedBy: this.replicaId,
+      proposedAt: Date.now(),
+    };
+
+    const logEntry = this.storage.appendEntry(entry);
+
+    const isLiferaftLeader = this.raft && this.raft.state === LifeRaft.LEADER;
+    if (isLiferaftLeader) {
+      this.raftProvider.propose(this.raft, entry, (err) => {
+        if (err) {
+          this.logger.debug(PARTITION_SERVICE_ERROR_MSG.RAFT_COMMAND_FAILED, {
+            partitionId: this.partitionId,
+            error: err.message,
+          });
+        }
+      });
+    }
+
+    return logEntry;
+  }
+
+  /**
+   * Replicate prepared transaction state through Raft for durability.
+   * @param {string} sessionId - Transaction session ID.
+   * @param {Object} transactionState - Active transaction state.
+   * @return {Promise<Object>} Raft log entry.
+   * @private
+   */
+  async replicatePreparedTransaction(sessionId, transactionState) {
+    const timestamp = this.hlcClock.now();
+    const entry = {
+      type: PARTITION_SERVICE_OPERATION.PREPARE_TRANSACTION,
+      sessionId,
+      epoch: transactionState.transactionEpoch,
+      writeSet: [...transactionState.writeSet],
+      timestamp: timestamp.toString(),
+      proposedBy: this.replicaId,
+      proposedAt: Date.now(),
+    };
+
+    const logEntry = this.storage.appendEntry(entry);
+
+    const isLiferaftLeader = this.raft && this.raft.state === LifeRaft.LEADER;
+    if (isLiferaftLeader) {
+      this.raftProvider.propose(this.raft, entry, (err) => {
+        if (err) {
+          this.logger.debug(PARTITION_SERVICE_ERROR_MSG.RAFT_COMMAND_FAILED, {
             partitionId: this.partitionId,
             error: err.message,
           });
@@ -2415,32 +3191,38 @@ class PartitionService extends EventEmitter {
       if (isSelect) {
         const sqliteStartMs = Date.now();
         const rows = stmt.all(...params);
+        const transaction = this.resolveActiveTransactionState(
+          options.sessionId || null,
+        );
+        const visibleRows = transaction ?
+          this.applySnapshotReadFilter(rows, transaction.state) :
+          rows;
         const durationMs = Date.now() - sqliteStartMs;
         try {
           this.logger.info(METRICS_LOG_TAG.PARTITION_SQLITE, {
             partitionId: this.partitionId,
             operation: 'select',
             durationMs,
-            rowCount: rows.length,
+            rowCount: visibleRows.length,
           });
         } catch (_metricsErr) {
           // Metrics logging must not propagate to callers
         }
         return {
           success: true,
-          rows,
-          count: rows.length,
+          rows: visibleRows,
+          count: visibleRows.length,
           partitionId: this.partitionId,
         };
       } else {
         // For write operations within a transaction, execute directly
-        if (this.activeTransaction) {
+        if (this.activeTransactions.size > NUM.ZERO) {
           return this.executeTransactionWrite({
             type: PARTITION_SERVICE_OPERATION.QUERY,
             sql,
             params,
             splitMirrorOrigin: options.splitMirrorOrigin || null,
-          });
+          }, options.sessionId || null);
         }
         // For write operations outside transaction, go through Raft
         return this.proposeWrite({
@@ -2514,18 +3296,25 @@ class PartitionService extends EventEmitter {
   /**
    * Execute a write operation within an active transaction.
    * @param {Object} operation - Write operation.
+   * @param {string|null} sessionId - Transaction session ID.
    * @return {Promise<Object>} Operation result.
    * @private
    */
-  async executeTransactionWrite(operation) {
-    if (!this.activeTransaction) {
+  async executeTransactionWrite(operation, sessionId = null) {
+    const transaction = this.resolveActiveTransactionState(sessionId);
+    if (!transaction) {
       throw new Error(PARTITION_SERVICE_ERROR_MSG.NO_ACTIVE_TRANSACTION);
     }
+    const {
+      sessionId: transactionSessionId,
+      state: transactionState,
+    } = transaction;
 
     const timestamp = this.hlcClock.now();
 
     const entry = {
       ...operation,
+      sessionId: transactionSessionId,
       entryId: operation.entryId || randomUUID(),
       timestamp: timestamp.toString(),
       proposedBy: this.replicaId,
@@ -2537,10 +3326,13 @@ class PartitionService extends EventEmitter {
       const info = stmt.run(...(entry.params || []));
 
       // Track operation for later CDC generation and Raft replication
-      this.transactionOperations.push({
+      const trackedEntry = {
         ...entry,
         changes: info.changes,
-      });
+      };
+      transactionState.operations.push(trackedEntry);
+      this.trackTransactionWriteSetKey(transactionState, trackedEntry);
+      this.syncLegacyTransactionAliases();
 
       return {
         success: true,
@@ -2548,6 +3340,7 @@ class PartitionService extends EventEmitter {
         lastInsertRowid: info.lastInsertRowid,
         partitionId: this.partitionId,
         inTransaction: true,
+        sessionId: transactionSessionId,
       };
     } catch (error) {
       this.logger.error(PARTITION_SERVICE_ERROR_MSG.TRANSACTION_WRITE_FAILED, {
@@ -5180,6 +5973,7 @@ class PartitionService extends EventEmitter {
 
     // Stop periodic size updates
     this.stopPeriodicSizeUpdates();
+    this.stopPreparedStateHoldTimeoutSweep();
 
     this.roleMutationHelper.shutdown();
     this.leaderNodeMutationHelper.shutdown();

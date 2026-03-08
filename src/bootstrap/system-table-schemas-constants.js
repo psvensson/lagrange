@@ -842,6 +842,8 @@ const SQL_TRANSACTIONS_SCHEMA = {
     {name: 'transaction_id', type: COLUMN_TYPE.TEXT, primaryKey: true},
     {name: 'session_id', type: COLUMN_TYPE.TEXT, notNull: true},
     {name: 'status', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'transaction_epoch', type: COLUMN_TYPE.INTEGER},
+    {name: 'timeout_deadline', type: COLUMN_TYPE.INTEGER},
     {name: 'created_at', type: COLUMN_TYPE.INTEGER, notNull: true},
     {name: 'updated_at', type: COLUMN_TYPE.INTEGER, notNull: true},
   ],

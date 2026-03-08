@@ -231,9 +231,15 @@ class SQLQueryEngine {
       });
     this.transactionCoordinator = options.transactionCoordinator ||
       new DistributedTransactionCoordinator({
-        beginParticipant: async (sessionId, partitionId) =>
-          this.deliverTransactionOperation(sessionId, partitionId, QUERY_OPERATION.BEGIN),
-        prepareParticipant: async () => {},
+        beginParticipant: async (sessionId, partitionId, transactionEpoch) =>
+          this.deliverTransactionOperation(
+            sessionId,
+            partitionId,
+            QUERY_OPERATION.BEGIN,
+            {transactionEpoch},
+          ),
+        prepareParticipant: async (sessionId, partitionId) =>
+          this.deliverTransactionOperation(sessionId, partitionId, QUERY_OPERATION.PREPARE),
         commitParticipant: async (sessionId, partitionId) =>
           this.deliverTransactionOperation(sessionId, partitionId, QUERY_OPERATION.COMMIT),
         rollbackParticipant: async (sessionId, partitionId) =>
@@ -244,6 +250,9 @@ class SQLQueryEngine {
           this.persistDistributedTransactionParticipantRow(record),
         persistWriteOperation: async (record) =>
           this.persistDistributedWriteOperationRow(record),
+        epochSource: options.transactionEpochSource,
+        loadRecoveryStateForSweep: async () =>
+          this.loadDistributedTransactionRecoveryState(),
       });
     this.managedSplitWorkflow = options.managedSplitWorkflow || null;
 
@@ -352,6 +361,9 @@ class SQLQueryEngine {
       createEmptyTransactionRecoveryReplaySummary();
     this.recoverDistributedTransactionStateFromCache();
     void this.resumeRecoveredDistributedTransactions();
+    if (typeof this.transactionCoordinator.startRecoverySweep === 'function') {
+      this.transactionCoordinator.startRecoverySweep();
+    }
   }
 
   /**
@@ -433,6 +445,10 @@ class SQLQueryEngine {
    * @return {Promise<void>}
    */
   async shutdown() {
+    if (this.transactionCoordinator &&
+        typeof this.transactionCoordinator.stopRecoverySweep === 'function') {
+      this.transactionCoordinator.stopRecoverySweep();
+    }
     if (this.tableCreationService &&
         typeof this.tableCreationService.shutdown === 'function') {
       await this.tableCreationService.shutdown();
@@ -4651,6 +4667,20 @@ class SQLQueryEngine {
   }
 
   /**
+   * Load distributed transaction recovery rows from system cache snapshots.
+   * @return {{transactions: Object[], participants: Object[], writeOperations: Object[]}}
+   *   Recovery payload.
+   * @private
+   */
+  loadDistributedTransactionRecoveryState() {
+    return {
+      transactions: this.loadSystemTableRows(TABLES.SQL_TRANSACTIONS),
+      participants: this.loadSystemTableRows(TABLES.SQL_TRANSACTION_PARTICIPANTS),
+      writeOperations: this.loadSystemTableRows(TABLES.SQL_WRITE_OPERATIONS),
+    };
+  }
+
+  /**
    * Persist one distributed transaction row.
    * @param {Object} record - Transaction persistence payload.
    * @return {Promise<void>}
@@ -4667,6 +4697,8 @@ class SQLQueryEngine {
         transaction_id: record.transactionId,
         session_id: record.sessionId,
         status: record.status,
+        transaction_epoch: record.transactionEpoch,
+        timeout_deadline: record.timeoutDeadline,
         created_at: record.createdAt,
         updated_at: record.updatedAt,
       },
@@ -4951,22 +4983,33 @@ class SQLQueryEngine {
    * @param {string} sessionId - Session ID.
    * @param {string} partitionId - Partition ID.
    * @param {string} operation - Transaction operation.
+   * @param {Object} [options] - Delivery options.
+   * @param {number} [options.transactionEpoch] - Snapshot epoch.
    * @return {Promise<void>}
    * @private
    */
-  async deliverTransactionOperation(sessionId, partitionId, operation) {
+  async deliverTransactionOperation(sessionId, partitionId, operation, options = {}) {
     const serviceInfo = this.queryExecutor.findPartitionService(partitionId);
     if (!serviceInfo) {
       throw new Error(`${QUERY_ERROR_MSG.PARTITION_SERVICE_NOT_FOUND_PREFIX}${partitionId}`);
     }
-    const response = await this.messageRouter.deliver(serviceInfo.address, {
+    const payload = {
       type: QUERY_OPERATION.TRANSACTION,
       operation,
       sessionId,
+    };
+    if (Number.isFinite(options.transactionEpoch)) {
+      payload.transactionEpoch = Math.floor(options.transactionEpoch);
+    }
+    const response = await this.messageRouter.deliver(serviceInfo.address, {
+      ...payload,
     });
     if (!response.acknowledged || !response.success) {
       if (operation === QUERY_OPERATION.BEGIN) {
         throw new Error(response.error || QUERY_ERROR_MSG.BEGIN_FAILED);
+      }
+      if (operation === QUERY_OPERATION.PREPARE) {
+        throw new Error(response.error || QUERY_ERROR_MSG.PREPARE_FAILED);
       }
       if (operation === QUERY_OPERATION.COMMIT) {
         throw new Error(response.error || QUERY_ERROR_MSG.COMMIT_FAILED);
