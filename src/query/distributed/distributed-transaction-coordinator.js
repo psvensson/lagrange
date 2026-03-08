@@ -32,6 +32,12 @@ const TERMINAL_TRANSACTION_STATUS = Object.freeze(new Set([
   TRANSACTION_STATUS.ROLLED_BACK,
 ]));
 
+const RECOVERY_COMMIT_TRANSACTION_STATUS = Object.freeze(new Set([
+  TRANSACTION_STATUS.PREPARING,
+  TRANSACTION_STATUS.PREPARED,
+  TRANSACTION_STATUS.COMMITTING,
+]));
+
 /**
  * Distributed transaction coordinator with participant state persistence hooks.
  */
@@ -81,6 +87,7 @@ class DistributedTransactionCoordinator {
         now: this.now,
       });
     this.transactionsBySession = this.workflowCoordinator.workflowsByOwnerKey;
+    this.recoveredTransactionIds = new Set();
   }
 
   /**
@@ -250,74 +257,7 @@ class DistributedTransactionCoordinator {
         errorCode: QUERY_ERROR_CODE.NO_TRANSACTION,
       };
     }
-
-    tx.status = TRANSACTION_STATUS.PREPARING;
-    tx.updatedAt = this.now();
-    await this.persistTransactionRecord(tx);
-
-    const prepareFailures = await this.executeParticipantStage(
-      tx,
-      PARTICIPANT_STATUS.PREPARING,
-      PARTICIPANT_STATUS.PREPARED,
-      (partitionId) => this.prepareParticipant(sessionId, partitionId),
-    );
-    if (prepareFailures.length > 0) {
-      tx.status = TRANSACTION_STATUS.FAILED;
-      tx.updatedAt = this.now();
-      await this.persistTransactionRecord(tx);
-      return {
-        success: false,
-        operation: QUERY_OPERATION.COMMIT,
-        transactionId: tx.transactionId,
-        participants: this.getOrderedParticipantIds(tx),
-        failedParticipants: prepareFailures,
-        stage: TRANSACTION_STATUS.PREPARING,
-        errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
-        error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
-      };
-    }
-
-    tx.status = TRANSACTION_STATUS.PREPARED;
-    tx.updatedAt = this.now();
-    await this.persistTransactionRecord(tx);
-
-    tx.status = TRANSACTION_STATUS.COMMITTING;
-    tx.updatedAt = this.now();
-    await this.persistTransactionRecord(tx);
-
-    const commitFailures = await this.executeParticipantStage(
-      tx,
-      PARTICIPANT_STATUS.COMMITTING,
-      PARTICIPANT_STATUS.COMMITTED,
-      (partitionId) => this.commitParticipant(sessionId, partitionId),
-    );
-    if (commitFailures.length > 0) {
-      tx.status = TRANSACTION_STATUS.FAILED;
-      tx.updatedAt = this.now();
-      await this.persistTransactionRecord(tx);
-      return {
-        success: false,
-        operation: QUERY_OPERATION.COMMIT,
-        transactionId: tx.transactionId,
-        participants: this.getOrderedParticipantIds(tx),
-        failedParticipants: commitFailures,
-        stage: TRANSACTION_STATUS.COMMITTING,
-        errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
-        error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
-      };
-    }
-
-    tx.status = TRANSACTION_STATUS.COMMITTED;
-    tx.updatedAt = this.now();
-    await this.persistTransactionRecord(tx);
-    this.transactionsBySession.delete(sessionId);
-
-    return {
-      success: true,
-      operation: QUERY_OPERATION.COMMIT,
-      transactionId: tx.transactionId,
-      participants: this.getOrderedParticipantIds(tx),
-    };
+    return this.runCommitProtocol(tx);
   }
 
   /**
@@ -334,38 +274,7 @@ class DistributedTransactionCoordinator {
         errorCode: QUERY_ERROR_CODE.NO_TRANSACTION,
       };
     }
-
-    tx.status = TRANSACTION_STATUS.ROLLING_BACK;
-    tx.updatedAt = this.now();
-    await this.persistTransactionRecord(tx);
-
-    const rollbackFailures = await this.executeParticipantStage(
-      tx,
-      PARTICIPANT_STATUS.ROLLING_BACK,
-      PARTICIPANT_STATUS.ROLLED_BACK,
-      (partitionId) => this.rollbackParticipant(sessionId, partitionId),
-    );
-
-    tx.status = rollbackFailures.length > 0 ?
-      TRANSACTION_STATUS.FAILED :
-      TRANSACTION_STATUS.ROLLED_BACK;
-    tx.updatedAt = this.now();
-    await this.persistTransactionRecord(tx);
-    this.transactionsBySession.delete(sessionId);
-
-    return {
-      success: rollbackFailures.length === 0,
-      operation: QUERY_OPERATION.ROLLBACK,
-      transactionId: tx.transactionId,
-      participants: this.getOrderedParticipantIds(tx),
-      failedParticipants: rollbackFailures,
-      errorCode: rollbackFailures.length > 0 ?
-        QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE :
-        undefined,
-      error: rollbackFailures.length > 0 ?
-        QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE :
-        undefined,
-    };
+    return this.runRollbackProtocol(tx);
   }
 
   /**
@@ -435,6 +344,102 @@ class DistributedTransactionCoordinator {
   }
 
   /**
+   * Resume all transactions recovered from system-table snapshots.
+   * Transactions recovered in ACTIVE status are rolled back; transactions
+   * recovered mid-commit are advanced to COMMITTED.
+   *
+   * @return {Promise<Object>} Replay summary.
+   */
+  async resumeRecoveredTransactions() {
+    const recoveredWorkflowIds = Array.from(this.recoveredTransactionIds);
+    const results = [];
+
+    for (const workflowId of recoveredWorkflowIds) {
+      const tx = this.workflowCoordinator.getWorkflowById(workflowId);
+      if (!tx) {
+        this.recoveredTransactionIds.delete(workflowId);
+        continue;
+      }
+
+      const statusBefore = tx.status;
+      let protocolResult;
+      let replayPath = null;
+      let skipped = false;
+
+      await this.workflowCoordinator.runExclusive(tx.ownerKey, async () => {
+        if (TERMINAL_TRANSACTION_STATUS.has(tx.status)) {
+          skipped = true;
+          protocolResult = {
+            success: true,
+            operation: null,
+            transactionId: tx.transactionId,
+            participants: this.getOrderedParticipantIds(tx),
+            failedParticipants: [],
+          };
+          return;
+        }
+        if (tx.status === TRANSACTION_STATUS.FAILED) {
+          skipped = true;
+          protocolResult = {
+            success: false,
+            operation: null,
+            transactionId: tx.transactionId,
+            participants: this.getOrderedParticipantIds(tx),
+            failedParticipants: [],
+            errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
+            error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
+          };
+          return;
+        }
+        if (tx.status === TRANSACTION_STATUS.ACTIVE ||
+          tx.status === TRANSACTION_STATUS.ROLLING_BACK) {
+          replayPath = QUERY_OPERATION.ROLLBACK;
+          protocolResult = await this.runRollbackProtocol(tx);
+          return;
+        }
+        if (RECOVERY_COMMIT_TRANSACTION_STATUS.has(tx.status)) {
+          replayPath = QUERY_OPERATION.COMMIT;
+          protocolResult = await this.runCommitProtocol(tx);
+          return;
+        }
+        await this.setTransactionStatus(tx, TRANSACTION_STATUS.FAILED);
+        protocolResult = {
+          success: false,
+          operation: QUERY_OPERATION.ROLLBACK,
+          transactionId: tx.transactionId,
+          participants: this.getOrderedParticipantIds(tx),
+          failedParticipants: [],
+          errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
+          error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
+        };
+      });
+
+      results.push({
+        transactionId: tx.transactionId,
+        sessionId: tx.sessionId,
+        statusBefore,
+        statusAfter: tx.status,
+        replayPath,
+        skipped,
+        success: protocolResult?.success === true,
+        error: protocolResult?.error || null,
+        failedParticipants: protocolResult?.failedParticipants || [],
+      });
+      this.recoveredTransactionIds.delete(workflowId);
+    }
+
+    const resumed = results.filter((entry) =>
+      entry.success && !entry.skipped).length;
+    const failed = results.filter((entry) => !entry.success).length;
+    return {
+      totalRecovered: recoveredWorkflowIds.length,
+      resumed,
+      failed,
+      results,
+    };
+  }
+
+  /**
    * Recover coordinator state from canonical system-table rows.
    *
    * @param {Object} payload - Recovery payload.
@@ -498,6 +503,18 @@ class DistributedTransactionCoordinator {
         TERMINAL_TRANSACTION_STATUS.has(workflow.status),
     });
 
+    for (const row of transactionRows) {
+      const transactionId = row.transaction_id || row.transactionId;
+      if (!transactionId) {
+        continue;
+      }
+      const tx = this.workflowCoordinator.getWorkflowById(transactionId);
+      if (!tx) {
+        continue;
+      }
+      this.recoveredTransactionIds.add(transactionId);
+    }
+
     for (const row of writeOperationRows) {
       const transactionId = row.transaction_id || row.transactionId;
       if (!transactionId) {
@@ -523,12 +540,210 @@ class DistributedTransactionCoordinator {
   }
 
   /**
+   * Persist one transaction status transition.
+   * @param {Object} tx - Transaction state.
+   * @param {string} status - Next status.
+   * @return {Promise<void>}
+   * @private
+   */
+  async setTransactionStatus(tx, status) {
+    tx.status = status;
+    tx.updatedAt = this.now();
+    await this.persistTransactionRecord(tx);
+  }
+
+  /**
+   * Drive one transaction through the commit protocol.
+   * Supports replay from PREPARING/PREPARED/COMMITTING statuses.
+   *
+   * @param {Object} tx - Transaction state.
+   * @return {Promise<Object>} Commit result.
+   * @private
+   */
+  async runCommitProtocol(tx) {
+    if (tx.status === TRANSACTION_STATUS.ACTIVE ||
+      tx.status === TRANSACTION_STATUS.FAILED) {
+      await this.setTransactionStatus(tx, TRANSACTION_STATUS.PREPARING);
+    }
+
+    if (tx.status === TRANSACTION_STATUS.PREPARING) {
+      const prepareFailures = await this.executeParticipantStage(
+        tx,
+        PARTICIPANT_STATUS.PREPARING,
+        PARTICIPANT_STATUS.PREPARED,
+        (partitionId) => this.prepareParticipant(tx.sessionId, partitionId),
+        {participantKeys: this.getPrepareParticipantKeys(tx)},
+      );
+      if (prepareFailures.length > 0) {
+        await this.setTransactionStatus(tx, TRANSACTION_STATUS.FAILED);
+        return this.buildParticipantFailureResult(
+          tx,
+          QUERY_OPERATION.COMMIT,
+          TRANSACTION_STATUS.PREPARING,
+          prepareFailures,
+        );
+      }
+      await this.setTransactionStatus(tx, TRANSACTION_STATUS.PREPARED);
+    }
+
+    if (tx.status === TRANSACTION_STATUS.PREPARED) {
+      await this.setTransactionStatus(tx, TRANSACTION_STATUS.COMMITTING);
+    }
+
+    if (tx.status !== TRANSACTION_STATUS.COMMITTING) {
+      return this.buildParticipantFailureResult(
+        tx,
+        QUERY_OPERATION.COMMIT,
+        tx.status,
+        [],
+      );
+    }
+
+    const commitFailures = await this.executeParticipantStage(
+      tx,
+      PARTICIPANT_STATUS.COMMITTING,
+      PARTICIPANT_STATUS.COMMITTED,
+      (partitionId) => this.commitParticipant(tx.sessionId, partitionId),
+      {participantKeys: this.getCommitParticipantKeys(tx)},
+    );
+    if (commitFailures.length > 0) {
+      await this.setTransactionStatus(tx, TRANSACTION_STATUS.FAILED);
+      return this.buildParticipantFailureResult(
+        tx,
+        QUERY_OPERATION.COMMIT,
+        TRANSACTION_STATUS.COMMITTING,
+        commitFailures,
+      );
+    }
+
+    await this.setTransactionStatus(tx, TRANSACTION_STATUS.COMMITTED);
+    this.transactionsBySession.delete(tx.sessionId);
+    return {
+      success: true,
+      operation: QUERY_OPERATION.COMMIT,
+      transactionId: tx.transactionId,
+      participants: this.getOrderedParticipantIds(tx),
+    };
+  }
+
+  /**
+   * Drive one transaction through rollback.
+   * Supports replay from ACTIVE/ROLLING_BACK statuses.
+   *
+   * @param {Object} tx - Transaction state.
+   * @return {Promise<Object>} Rollback result.
+   * @private
+   */
+  async runRollbackProtocol(tx) {
+    if (tx.status !== TRANSACTION_STATUS.ROLLING_BACK) {
+      await this.setTransactionStatus(tx, TRANSACTION_STATUS.ROLLING_BACK);
+    }
+
+    const rollbackFailures = await this.executeParticipantStage(
+      tx,
+      PARTICIPANT_STATUS.ROLLING_BACK,
+      PARTICIPANT_STATUS.ROLLED_BACK,
+      (partitionId) => this.rollbackParticipant(tx.sessionId, partitionId),
+      {participantKeys: this.getRollbackParticipantKeys(tx)},
+    );
+
+    if (rollbackFailures.length > 0) {
+      await this.setTransactionStatus(tx, TRANSACTION_STATUS.FAILED);
+    } else {
+      await this.setTransactionStatus(tx, TRANSACTION_STATUS.ROLLED_BACK);
+    }
+    this.transactionsBySession.delete(tx.sessionId);
+
+    return {
+      success: rollbackFailures.length === 0,
+      operation: QUERY_OPERATION.ROLLBACK,
+      transactionId: tx.transactionId,
+      participants: this.getOrderedParticipantIds(tx),
+      failedParticipants: rollbackFailures,
+      errorCode: rollbackFailures.length > 0 ?
+        QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE :
+        undefined,
+      error: rollbackFailures.length > 0 ?
+        QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE :
+        undefined,
+    };
+  }
+
+  /**
+   * Build a consistent participant-failure result payload.
+   *
+   * @param {Object} tx - Transaction state.
+   * @param {string} operation - Operation type.
+   * @param {string} stage - Current stage.
+   * @param {Object[]} failedParticipants - Failed participant entries.
+   * @return {Object} Failure payload.
+   * @private
+   */
+  buildParticipantFailureResult(tx, operation, stage, failedParticipants) {
+    return {
+      success: false,
+      operation,
+      transactionId: tx.transactionId,
+      participants: this.getOrderedParticipantIds(tx),
+      failedParticipants,
+      stage,
+      errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
+      error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
+    };
+  }
+
+  /**
+   * Resolve prepare-stage participant keys.
+   * @param {Object} tx - Transaction state.
+   * @return {string[]} Participant keys.
+   * @private
+   */
+  getPrepareParticipantKeys(tx) {
+    return Array.from(tx.participants.values())
+      .filter((participant) =>
+        participant.status !== PARTICIPANT_STATUS.PREPARED &&
+        participant.status !== PARTICIPANT_STATUS.COMMITTED)
+      .map((participant) => participant.partitionId)
+      .sort();
+  }
+
+  /**
+   * Resolve commit-stage participant keys.
+   * @param {Object} tx - Transaction state.
+   * @return {string[]} Participant keys.
+   * @private
+   */
+  getCommitParticipantKeys(tx) {
+    return Array.from(tx.participants.values())
+      .filter((participant) =>
+        participant.status !== PARTICIPANT_STATUS.COMMITTED)
+      .map((participant) => participant.partitionId)
+      .sort();
+  }
+
+  /**
+   * Resolve rollback-stage participant keys.
+   * @param {Object} tx - Transaction state.
+   * @return {string[]} Participant keys.
+   * @private
+   */
+  getRollbackParticipantKeys(tx) {
+    return Array.from(tx.participants.values())
+      .filter((participant) =>
+        participant.status !== PARTICIPANT_STATUS.ROLLED_BACK)
+      .map((participant) => participant.partitionId)
+      .sort();
+  }
+
+  /**
    * Execute one participant stage and persist participant state updates.
    *
    * @param {Object} tx - Transaction state object.
    * @param {string} transientStatus - Status while stage is running.
    * @param {string} successStatus - Status on success.
    * @param {Function} operation - Async participant operation callback.
+   * @param {Object} [options] - Stage options.
+   * @param {string[]} [options.participantKeys] - Participant keys.
    * @return {Promise<Object[]>} Failed participant entries.
    * @private
    */
@@ -537,13 +752,20 @@ class DistributedTransactionCoordinator {
     transientStatus,
     successStatus,
     operation,
+    options = {},
   ) {
+    const stageOptions = {
+      failureStatus: PARTICIPANT_STATUS.FAILED,
+    };
+    if (Array.isArray(options.participantKeys)) {
+      stageOptions.participantKeys = options.participantKeys;
+    }
     const failedParticipants = await this.workflowCoordinator.executeParticipantStage(
       tx.workflowId,
       transientStatus,
       successStatus,
       (partitionId) => operation(partitionId),
-      {failureStatus: PARTICIPANT_STATUS.FAILED},
+      stageOptions,
     );
     return failedParticipants.map((entry) => ({
       partitionId: entry.participantKey,

@@ -239,6 +239,8 @@ const QUERY_LOG_MSG = Object.freeze({
   FOLLOWING_LEADER_REDIRECT: 'Following leader redirect',
   WRITE_OP_PERSIST_FAILED:
     'Non-transactional write operation persistence failed',
+  DISTRIBUTED_TX_RECOVERY_REPLAY_FAILED:
+    'Distributed transaction recovery replay failed',
   INIT_LOGGER_FAILED: 'initLogger failed',
 });
 

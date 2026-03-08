@@ -28,7 +28,7 @@ Complete the multi-partition 2PC path.
 | Prepare phase | 🔧 In Progress | Single-partition prepare works; multi-partition 2PC prepare incomplete |
 | Commit phase | 🔧 In Progress | Single-partition commit works; multi-partition atomic commit incomplete |
 | Rollback | 🔧 In Progress | Basic rollback exists; cross-partition rollback incomplete |
-| Recovery after coordinator failure | 🔲 Not Started | Requires durable participant state replay |
+| Recovery after coordinator failure | 🔧 In Progress | System-table recovery now replays in-flight transactions through coordinator commit/rollback protocols |
 | Snapshot isolation | 🔲 Not Started | Read-write multi-partition transactions with snapshot isolation |
 
 Target: read-write multi-partition transactions with snapshot isolation.

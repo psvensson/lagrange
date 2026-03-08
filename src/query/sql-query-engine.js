@@ -130,6 +130,15 @@ const PROVISIONING_REJECTION_SUMMARY_NONE = 'none';
 const PROVISIONING_REJECTION_REASON_UNKNOWN = 'admission_blocked';
 const WRITE_ACTIVITY_SPLIT_EVALUATION_MIN_INTERVAL_MS = 5000;
 
+function createEmptyTransactionRecoveryReplaySummary() {
+  return {
+    totalRecovered: 0,
+    resumed: 0,
+    failed: 0,
+    results: [],
+  };
+}
+
 /**
  * SQLQueryEngine is the main entry point for SQL query processing.
  * It coordinates parsing, partition resolution, and parallel execution.
@@ -338,7 +347,11 @@ class SQLQueryEngine {
     // Backward-compatible alias for callers/tests expecting transaction state map.
     this.activeTransactions = this.transactionCoordinator.transactionsBySession;
     this.transactionStateRecovered = false;
+    this.transactionRecoveryReplayPromise = null;
+    this.lastTransactionRecoveryReplayResult =
+      createEmptyTransactionRecoveryReplaySummary();
     this.recoverDistributedTransactionStateFromCache();
+    void this.resumeRecoveredDistributedTransactions();
   }
 
   /**
@@ -369,6 +382,7 @@ class SQLQueryEngine {
     this.queryExecutor.setSystemCache(cache);
     this.transactionStateRecovered = false;
     this.recoverDistributedTransactionStateFromCache();
+    void this.resumeRecoveredDistributedTransactions();
   }
 
   /**
@@ -4559,6 +4573,62 @@ class SQLQueryEngine {
       writeOperations,
     });
     this.transactionStateRecovered = true;
+  }
+
+  /**
+   * Replay recovered in-flight distributed transactions, if supported.
+   * @return {Promise<Object>} Replay summary.
+   * @private
+   */
+  resumeRecoveredDistributedTransactions() {
+    if (typeof this.transactionCoordinator.resumeRecoveredTransactions !==
+      'function') {
+      const summary = createEmptyTransactionRecoveryReplaySummary();
+      this.lastTransactionRecoveryReplayResult = summary;
+      return Promise.resolve(summary);
+    }
+    if (this.transactionRecoveryReplayPromise) {
+      return this.transactionRecoveryReplayPromise;
+    }
+
+    this.transactionRecoveryReplayPromise =
+      this.transactionCoordinator.resumeRecoveredTransactions()
+        .then((summary) => {
+          const normalizedSummary = summary ||
+            createEmptyTransactionRecoveryReplaySummary();
+          this.lastTransactionRecoveryReplayResult = normalizedSummary;
+          return normalizedSummary;
+        })
+        .catch((error) => {
+          this.logger.warn(QUERY_LOG_MSG.DISTRIBUTED_TX_RECOVERY_REPLAY_FAILED, {
+            error: error.message,
+          });
+          const summary = {
+            totalRecovered: 0,
+            resumed: 0,
+            failed: 1,
+            results: [],
+            error: error.message,
+          };
+          this.lastTransactionRecoveryReplayResult = summary;
+          return summary;
+        })
+        .finally(() => {
+          this.transactionRecoveryReplayPromise = null;
+        });
+
+    return this.transactionRecoveryReplayPromise;
+  }
+
+  /**
+   * Await currently running transaction recovery replay, if any.
+   * @return {Promise<Object>} Replay summary.
+   */
+  async waitForDistributedTransactionRecoveryReplay() {
+    if (!this.transactionRecoveryReplayPromise) {
+      return this.lastTransactionRecoveryReplayResult;
+    }
+    return this.transactionRecoveryReplayPromise;
   }
 
   /**

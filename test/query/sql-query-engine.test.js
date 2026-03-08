@@ -924,9 +924,17 @@ test('SQLQueryEngine - mirrors post-cutover writes back to the source partition'
     t.equal(deliveredWrites[1].splitMirrorOrigin, 'target');
   });
 
-test('SQLQueryEngine - recovers distributed transactions from system cache snapshots',
+test('SQLQueryEngine - recovers and replays distributed transactions from system cache snapshots',
   async (t) => {
-    const cache = createMockSystemCache([], []);
+    const cache = createMockSystemCache(
+      [],
+      [{
+        partition_id: 'p1',
+        table_name: 'users',
+        partition_key_start: null,
+        partition_key_end: null,
+      }],
+    );
     const transactionRows = [{
       transaction_id: 'tx-recovery-1',
       session_id: 'recovery-session',
@@ -973,8 +981,78 @@ test('SQLQueryEngine - recovers distributed transactions from system cache snaps
       messageRouter: createMockMessageRouter(),
     });
 
-    t.equal(engine.hasActiveTransaction('recovery-session'), true);
-    t.equal(engine.getTransactionPartition('recovery-session'), 'p1');
+    const replay = await engine.waitForDistributedTransactionRecoveryReplay();
+    t.equal(replay.totalRecovered, 1);
+    t.equal(replay.resumed, 1);
+    t.equal(replay.failed, 0);
+    t.equal(engine.hasActiveTransaction('recovery-session'), false);
+    t.equal(engine.getTransactionPartition('recovery-session'), null);
+  });
+
+test('SQLQueryEngine - startup recovery invokes coordinator replay hook once',
+  async (t) => {
+    const cache = createMockSystemCache([], []);
+    const transactionRows = [{
+      transaction_id: 'tx-recovery-hook-1',
+      session_id: 'recovery-hook-session',
+      status: 'PREPARING',
+      created_at: 1,
+      updated_at: 2,
+    }];
+    const participantRows = [{
+      participant_id: 'tx-recovery-hook-1:p1',
+      transaction_id: 'tx-recovery-hook-1',
+      partition_id: 'p1',
+      status: 'ACTIVE',
+      created_at: 1,
+      updated_at: 2,
+    }];
+    const writeOperationRows = [];
+    const originalGetAll = cache.getAll.bind(cache);
+    cache.getAll = function(type) {
+      if (type === TABLES.SQL_TRANSACTIONS) {
+        return transactionRows;
+      }
+      if (type === TABLES.SQL_TRANSACTION_PARTICIPANTS) {
+        return participantRows;
+      }
+      if (type === TABLES.SQL_WRITE_OPERATIONS) {
+        return writeOperationRows;
+      }
+      return originalGetAll(type);
+    };
+
+    const capturedRecoverPayloads = [];
+    let replayCalls = 0;
+    const transactionCoordinator = {
+      transactionsBySession: new Map(),
+      recoverFromSystemTables(payload) {
+        capturedRecoverPayloads.push(payload);
+      },
+      async resumeRecoveredTransactions() {
+        replayCalls += 1;
+        return {
+          totalRecovered: 1,
+          resumed: 1,
+          failed: 0,
+          results: [],
+        };
+      },
+    };
+
+    const engine = new SQLQueryEngine({
+      systemCache: cache,
+      messageRouter: createMockMessageRouter(),
+      transactionCoordinator,
+    });
+
+    const replay = await engine.waitForDistributedTransactionRecoveryReplay();
+    t.equal(capturedRecoverPayloads.length, 1);
+    t.equal(capturedRecoverPayloads[0].transactions.length, 1);
+    t.equal(capturedRecoverPayloads[0].participants.length, 1);
+    t.equal(replayCalls, 1);
+    t.equal(replay.totalRecovered, 1);
+    t.equal(replay.resumed, 1);
   });
 
 test('SQLQueryEngine - EXPLAIN DISTRIBUTED returns canonical plan output',
