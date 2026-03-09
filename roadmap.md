@@ -99,9 +99,9 @@ deterministic recovery/timeout handling.
 | Diagnostics API | ✅ |
 | Live query subscriptions | ✅ |
 | EXPLAIN DISTRIBUTED | ✅ |
-| Cluster SQL diagnostics | 🔲 |
-| Partition diagnostics | 🔲 |
-| CDC diagnostics | 🔲 |
+| Cluster SQL diagnostics | ✅ |
+| Partition diagnostics | ✅ |
+| CDC diagnostics | ✅ |
 
 ### 4. Failure Simulations
 

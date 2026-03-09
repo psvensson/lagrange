@@ -16,6 +16,9 @@ const ADMIN_ROUTE = Object.freeze({
   TEST_RUN_STOP: '/api/admin/test-runs/:runId/stop',
   TEST_RUN_STREAM: '/api/admin/test-runs/:runId/stream',
   SERVICE_DIAGNOSTICS: '/api/admin/diagnostics/services',
+  CDC_DIAGNOSTICS: '/api/admin/diagnostics/cdc',
+  PARTITION_DIAGNOSTICS: '/api/admin/diagnostics/partitions',
+  SQL_DIAGNOSTICS: '/api/admin/diagnostics/sql',
   PREFLIGHT_CRITICAL_PATH_SNAPSHOT:
     '/api/admin/diagnostics/preflight-critical-path-snapshot',
   CONTROL_SNAPSHOT: '/api/admin/control-snapshot',
@@ -202,6 +205,12 @@ const ADMIN_ERROR_MESSAGE = Object.freeze({
     'Control snapshot scope must be "local"',
   CONTROL_SNAPSHOT_UNAVAILABLE:
     'Control snapshot unavailable because system cache is not configured',
+  CDC_DIAGNOSTICS_UNAVAILABLE:
+    'CDC diagnostics unavailable because system cache is not configured',
+  PARTITION_DIAGNOSTICS_UNAVAILABLE:
+    'Partition diagnostics unavailable because system cache is not configured',
+  SQL_DIAGNOSTICS_UNAVAILABLE:
+    'SQL diagnostics unavailable because system cache is not configured',
   SERVICE_DISCOVERY_UNAVAILABLE:
     'Service discovery unavailable because system cache is not configured',
   LIVE_QUERY_MANAGER_UNAVAILABLE:
@@ -315,6 +324,12 @@ const ADMIN_PREFLIGHT_CRITICAL_PATH_SNAPSHOT = Object.freeze({
   TABLE_NAME: 'preflight_critical_path_snapshot_local',
 });
 
+const ADMIN_OPERATIONAL_DIAGNOSTICS = Object.freeze({
+  CDC_SCHEMA_VERSION: 1,
+  PARTITION_SCHEMA_VERSION: 1,
+  SQL_SCHEMA_VERSION: 1,
+});
+
 export {
   ADMIN_CONTENT_TYPE,
   ADMIN_CONFIG_KEY,
@@ -337,6 +352,7 @@ export {
   ADMIN_CONTROL_SNAPSHOT,
   ADMIN_SERVICE_DISCOVERY,
   ADMIN_PREFLIGHT_CRITICAL_PATH_SNAPSHOT,
+  ADMIN_OPERATIONAL_DIAGNOSTICS,
   ADMIN_ROUTE,
   ADMIN_STATUS,
   ADMIN_SUBSYSTEM,

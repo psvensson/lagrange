@@ -432,6 +432,15 @@ class AdminWebSocketAPI {
     this.fastify.get(ADMIN_ROUTE.SERVICE_DIAGNOSTICS, async (_request, reply) => {
       return this.handleServiceDiagnostics(reply);
     });
+    this.fastify.get(ADMIN_ROUTE.CDC_DIAGNOSTICS, async (_request, reply) => {
+      return this.handleCdcDiagnostics(reply);
+    });
+    this.fastify.get(ADMIN_ROUTE.PARTITION_DIAGNOSTICS, async (_request, reply) => {
+      return this.handlePartitionDiagnostics(reply);
+    });
+    this.fastify.get(ADMIN_ROUTE.SQL_DIAGNOSTICS, async (_request, reply) => {
+      return this.handleSqlDiagnostics(reply);
+    });
     this.fastify.get(
       ADMIN_ROUTE.PREFLIGHT_CRITICAL_PATH_SNAPSHOT,
       async (_request, reply) => {
@@ -2143,6 +2152,57 @@ class AdminWebSocketAPI {
   }
 
   /**
+   * Handle local CDC diagnostics route.
+   * @param {Object} reply
+   * @return {Promise<void>}
+   * @private
+   */
+  async handleCdcDiagnostics(reply) {
+    try {
+      const diagnostics = this.buildLocalCdcDiagnostics();
+      reply.code(HTTP_STATUS.OK).send(diagnostics);
+    } catch (error) {
+      reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE).send({
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * Handle local partition diagnostics route.
+   * @param {Object} reply
+   * @return {Promise<void>}
+   * @private
+   */
+  async handlePartitionDiagnostics(reply) {
+    try {
+      const diagnostics = this.buildLocalPartitionDiagnostics();
+      reply.code(HTTP_STATUS.OK).send(diagnostics);
+    } catch (error) {
+      reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE).send({
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * Handle local SQL diagnostics route.
+   * @param {Object} reply
+   * @return {Promise<void>}
+   * @private
+   */
+  async handleSqlDiagnostics(reply) {
+    try {
+      const diagnostics = this.buildLocalSqlDiagnostics();
+      reply.code(HTTP_STATUS.OK).send(diagnostics);
+    } catch (error) {
+      reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE).send({
+        error: error.message,
+      });
+    }
+  }
+
+  /**
    * Handle preflight critical-path snapshot diagnostics route.
    * @param {Object} reply
    * @return {Promise<void>}
@@ -2430,6 +2490,33 @@ class AdminWebSocketAPI {
    */
   buildLocalCdcTelemetry() {
     return this.controlSnapshot.buildLocalCdcTelemetry();
+  }
+
+  /**
+   * Delegate: build local CDC diagnostics.
+   * @return {Object}
+   */
+  buildLocalCdcDiagnostics() {
+    return this.controlSnapshot
+      .buildLocalCdcDiagnostics();
+  }
+
+  /**
+   * Delegate: build local partition diagnostics.
+   * @return {Object}
+   */
+  buildLocalPartitionDiagnostics() {
+    return this.controlSnapshot
+      .buildLocalPartitionDiagnostics();
+  }
+
+  /**
+   * Delegate: build local SQL diagnostics.
+   * @return {Object}
+   */
+  buildLocalSqlDiagnostics() {
+    return this.controlSnapshot
+      .buildLocalSqlDiagnostics();
   }
 
   /**

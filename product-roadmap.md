@@ -104,9 +104,9 @@ Enterprise
 | Diagnostics API | 🟢 | ✅ |
 | Live query subscriptions | 🟢 | ✅ |
 | EXPLAIN DISTRIBUTED | 🟢 | ✅ |
-| Cluster SQL diagnostics | 🟢 | 🔲 |
-| Partition diagnostics | 🟢 | 🔲 |
-| CDC diagnostics | 🟢 | 🔲 |
+| Cluster SQL diagnostics | 🟢 | ✅ |
+| Partition diagnostics | 🟢 | ✅ |
+| CDC diagnostics | 🟢 | ✅ |
 | Prometheus export | 🟡 | 🔲 |
 | OpenTelemetry tracing | 🟡 | 🔲 |
 | Partition heatmaps | 🟡 | 🔲 |

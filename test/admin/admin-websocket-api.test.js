@@ -8,6 +8,9 @@ import {AdminWebSocketAPI, MessageType, ErrorCode} from
   '../../src/admin/admin-websocket-api.js';
 import {
   ADMIN_CONTROL_SNAPSHOT,
+  ADMIN_ERROR_MESSAGE,
+  ADMIN_OPERATIONAL_DIAGNOSTICS,
+  ADMIN_ROUTE,
   CONSISTENCY_MISMATCH_KIND,
 } from '../../src/admin/admin-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
@@ -1526,6 +1529,278 @@ test('AdminWebSocketAPI - health endpoint', async (t) => {
 
   await api.shutdown();
 });
+
+test('AdminWebSocketAPI - local CDC diagnostics endpoint shape and readiness',
+  async (t) => {
+    const cache = createPopulatedCache();
+    cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
+      id: 'partition-2',
+      partition_id: 'partition-2',
+      table_id: 'table-1',
+      state: 'NORMAL',
+    });
+    const partitionServices = new Map([
+      ['partition-1', {
+        partitionId: 'partition-1',
+        getCDCSubscriptionDiagnostics: () => ({
+          subscriberCount: 1,
+          bufferedEvents: 0,
+          bufferReplayInFlight: false,
+        }),
+      }],
+      ['partition-2', {
+        partitionId: 'partition-2',
+        getCDCSubscriptionDiagnostics: () => ({
+          subscriberCount: 0,
+          bufferedEvents: 3,
+          bufferReplayInFlight: true,
+        }),
+      }],
+    ]);
+    const api = new AdminWebSocketAPI({
+      nodeId: 'test-node',
+      systemTableCache: cache,
+      partitionServices,
+      cdcIntegrationService: {
+        getAuthoritativeFallbackDiagnostics: () => ({
+          schemaVersion: 1,
+          nodeId: 'test-node',
+          windowMs: 60000,
+          totalCount: 7,
+          windowCount: 2,
+          windowRatePerMinute: 2,
+          phases: {
+            bootstrap: {windowCount: 0, totalCount: 0},
+            recovery: {windowCount: 0, totalCount: 0},
+            steady_state: {windowCount: 2, totalCount: 7},
+          },
+          outcomes: {
+            recovered: {windowCount: 2, totalCount: 7},
+            failed: {windowCount: 0, totalCount: 0},
+          },
+          byTable: {},
+          recentEvents: [],
+        }),
+      },
+    });
+
+    await api.initialize(0, {listen: false});
+    const response = await api.getFastify().inject({
+      method: 'GET',
+      url: ADMIN_ROUTE.CDC_DIAGNOSTICS,
+    });
+    const payload = response.json();
+
+    t.equal(response.statusCode, 200, 'should return 200');
+    t.equal(
+      payload.schemaVersion,
+      ADMIN_OPERATIONAL_DIAGNOSTICS.CDC_SCHEMA_VERSION,
+      'should expose CDC diagnostics schema version',
+    );
+    t.equal(payload.localPartitionCount, 2, 'should include local partition count');
+    t.equal(payload.diagnosticsAvailablePartitionCount, 2,
+      'should count available diagnostics');
+    t.equal(payload.readyLocalPartitionCount, 1,
+      'should count local partitions that are CDC-ready');
+    t.same(payload.noSubscriberPartitionIds, ['partition-2'],
+      'should flag partitions without subscribers');
+    t.same(payload.bufferedPartitionIds, ['partition-2'],
+      'should flag partitions with buffered CDC backlog');
+    t.equal(payload.telemetry.subscriberCount, 1,
+      'telemetry should aggregate local subscriber counts');
+    t.equal(payload.telemetry.bufferedEvents, 3,
+      'telemetry should aggregate buffered event backlog');
+    t.equal(payload.telemetry.authoritativeFallback.totalCount, 7,
+      'telemetry should include authoritative fallback diagnostics');
+
+    await api.shutdown();
+  });
+
+test('AdminWebSocketAPI - local partition diagnostics endpoint exposes leader and replica state',
+  async (t) => {
+    const cache = new SystemTableCache();
+    cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
+      partition_id: 'partition-1',
+      table_id: 'table-1',
+      table_name: 'events',
+      state: 'NORMAL',
+      leader_node_id: 'node-1',
+    });
+    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+      service_id: 'partition-1-r1',
+      service_type: 'partition',
+      partition_id: 'partition-1',
+      replica_id: 'partition-1-r1',
+      node_id: 'node-1',
+      raft_role: 'leader',
+      status: 'active',
+      address: 'node-1/partition/partition-1-r1',
+    });
+    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+      service_id: 'partition-1-r2',
+      service_type: 'partition',
+      partition_id: 'partition-1',
+      replica_id: 'partition-1-r2',
+      node_id: 'node-2',
+      raft_role: 'follower',
+      status: 'active',
+      address: 'node-2/partition/partition-1-r2',
+    });
+    cache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'INSERT', {
+      operation_id: 'op-1',
+      partition_id: 'partition-1',
+      status: 'creating',
+    });
+    const api = new AdminWebSocketAPI({
+      nodeId: 'test-node',
+      systemTableCache: cache,
+    });
+
+    await api.initialize(0, {listen: false});
+    const response = await api.getFastify().inject({
+      method: 'GET',
+      url: ADMIN_ROUTE.PARTITION_DIAGNOSTICS,
+    });
+    const payload = response.json();
+
+    t.equal(response.statusCode, 200, 'should return 200');
+    t.equal(
+      payload.schemaVersion,
+      ADMIN_OPERATIONAL_DIAGNOSTICS.PARTITION_SCHEMA_VERSION,
+      'should expose partition diagnostics schema version',
+    );
+    t.equal(payload.partitionCount, 1, 'should include partition count');
+    t.equal(payload.leaders['partition-1'], 'node-1',
+      'should include canonical partition leader');
+    t.equal(payload.replicaOperations.inFlightCount, 1,
+      'should include in-flight replica operation count');
+    t.equal(payload.partitionsById['partition-1'].voterCount, 2,
+      'should include per-partition voter count');
+    t.equal(payload.partitionsById['partition-1'].replicaCount, 2,
+      'should include per-partition replica count');
+    t.equal(payload.partitionsById['partition-1'].activeReplicaCount, 2,
+      'should include per-partition active replica count');
+    t.equal(
+      payload.partitionsById['partition-1'].replicaRoleDiagnostics
+        .inconsistentReplicaRoles,
+      false,
+      'should expose replica-role consistency status',
+    );
+
+    await api.shutdown();
+  });
+
+test('AdminWebSocketAPI - local SQL diagnostics endpoint exposes coordinator metrics',
+  async (t) => {
+    const cache = createPopulatedCache();
+    const api = new AdminWebSocketAPI({
+      nodeId: 'test-node',
+      systemTableCache: cache,
+      sqlQueryEngine: {
+        executeRequest: async () => ({success: true, rows: []}),
+        queryTimeoutMs: 1234,
+        queryExecutor: {
+          getLastCoordinatorMetrics: () => ({
+            totalLatencyMs: 42,
+            medianLatencyMs: 21,
+            stragglers: [],
+          }),
+        },
+        resolveProvisionTargetNodeIdsWithDiagnostics: () => ({
+          nodeIds: ['node-1'],
+          diagnostics: {
+            selectedNodeIds: ['node-1'],
+            resolvedNodeIds: ['node-1'],
+            usedDegradedFallback: false,
+          },
+        }),
+        lastTransactionRecoveryReplayResult: {
+          totalRecovered: 2,
+          resumed: 2,
+          failed: 0,
+          results: [],
+        },
+        lastWriteSplitEvaluationByTable: new Map([
+          ['table-1', {evaluated: true}],
+        ]),
+        partitionSplitMergeManager: {
+          getEvaluationDiagnostics: () => ({
+            state: 'IDLE',
+          }),
+        },
+      },
+    });
+
+    await api.initialize(0, {listen: false});
+    const response = await api.getFastify().inject({
+      method: 'GET',
+      url: ADMIN_ROUTE.SQL_DIAGNOSTICS,
+    });
+    const payload = response.json();
+
+    t.equal(response.statusCode, 200, 'should return 200');
+    t.equal(
+      payload.schemaVersion,
+      ADMIN_OPERATIONAL_DIAGNOSTICS.SQL_SCHEMA_VERSION,
+      'should expose SQL diagnostics schema version',
+    );
+    t.equal(payload.queryEngineAvailable, true,
+      'should report SQL query engine availability');
+    t.equal(payload.queryEngine.timeoutMs, 1234,
+      'should expose SQL query timeout budget');
+    t.equal(payload.queryEngine.fanoutMetricsAvailable, true,
+      'should indicate fanout coordinator metrics availability');
+    t.equal(payload.queryEngine.lastCoordinatorMetrics.totalLatencyMs, 42,
+      'should expose last coordinator total latency');
+    t.same(payload.queryEngine.provisionTargetDiagnostics.selectedNodeIds, ['node-1'],
+      'should include provision-target diagnostics');
+    t.equal(payload.queryEngine.trackedWriteSplitEvaluations, 1,
+      'should expose tracked write split evaluations');
+    t.equal(payload.splitEvaluation.state, 'IDLE',
+      'should expose split-evaluation diagnostics from SQL owner');
+
+    await api.shutdown();
+  });
+
+test('AdminWebSocketAPI - operational diagnostics routes fail closed without cache',
+  async (t) => {
+    const api = new AdminWebSocketAPI({
+      nodeId: 'test-node',
+      enableAdminStream: false,
+    });
+
+    await api.initialize(0, {listen: false});
+    const cdcResponse = await api.getFastify().inject({
+      method: 'GET',
+      url: ADMIN_ROUTE.CDC_DIAGNOSTICS,
+    });
+    const partitionResponse = await api.getFastify().inject({
+      method: 'GET',
+      url: ADMIN_ROUTE.PARTITION_DIAGNOSTICS,
+    });
+    const sqlResponse = await api.getFastify().inject({
+      method: 'GET',
+      url: ADMIN_ROUTE.SQL_DIAGNOSTICS,
+    });
+
+    t.equal(cdcResponse.statusCode, 503,
+      'CDC diagnostics should fail closed without system cache');
+    t.equal(cdcResponse.json().error, ADMIN_ERROR_MESSAGE.CDC_DIAGNOSTICS_UNAVAILABLE,
+      'CDC diagnostics should return unavailable error message');
+    t.equal(partitionResponse.statusCode, 503,
+      'partition diagnostics should fail closed without system cache');
+    t.equal(
+      partitionResponse.json().error,
+      ADMIN_ERROR_MESSAGE.PARTITION_DIAGNOSTICS_UNAVAILABLE,
+      'partition diagnostics should return unavailable error message',
+    );
+    t.equal(sqlResponse.statusCode, 503,
+      'SQL diagnostics should fail closed without system cache');
+    t.equal(sqlResponse.json().error, ADMIN_ERROR_MESSAGE.SQL_DIAGNOSTICS_UNAVAILABLE,
+      'SQL diagnostics should return unavailable error message');
+
+    await api.shutdown();
+  });
 
 test('AdminWebSocketAPI - local control snapshot endpoint shape and non-mutation',
   async (t) => {

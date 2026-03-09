@@ -228,6 +228,14 @@ Unified diagnostics surface:
 
 1. `GET /api/admin/diagnostics/services` exposes reconciler decision history
    and lifecycle adapter selection/metrics snapshots.
+2. `GET /api/admin/diagnostics/cdc` exposes node-local CDC subscription
+   readiness, backlog, and authoritative-fallback telemetry.
+3. `GET /api/admin/diagnostics/partitions` exposes canonical partition leader
+   identity, replica-role consistency, voter counts, and replica-operation
+   liveness.
+4. `GET /api/admin/diagnostics/sql` exposes node-local SQL execution telemetry
+   such as coordinator fanout metrics, provision-target diagnostics, and split
+   evaluation owner diagnostics.
 
 Unified lifecycle anti-patterns (forbidden):
 

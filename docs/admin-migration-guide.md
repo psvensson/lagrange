@@ -40,16 +40,21 @@ When no external dispatcher is injected, `AdminWebSocketAPI` creates a local
 dispatcher shim that executes the same canonical envelope operations without
 re-introducing legacy per-message handler branching.
 
-## Unified Lifecycle Diagnostics Endpoint
+## Unified Operational Diagnostics Endpoints
 
-Admin ingress exposes unified lifecycle diagnostics:
+Admin ingress exposes unified operational diagnostics:
 
 - `GET /api/admin/diagnostics/services`
+- `GET /api/admin/diagnostics/cdc`
+- `GET /api/admin/diagnostics/partitions`
+- `GET /api/admin/diagnostics/sql`
 
 Payload includes:
 
-1. `reconciler` cycle/action stats and recent decisions.
-2. `lifecycle` operation metrics and adapter selection counts.
+1. Lifecycle reconciler and adapter-selection diagnostics.
+2. Local CDC readiness/backlog and authoritative fallback telemetry.
+3. Canonical partition diagnostics (leaders, replica roles, voter counts).
+4. Node-local SQL diagnostics (fanout metrics and provision-target diagnostics).
 
 ## Before / After
 

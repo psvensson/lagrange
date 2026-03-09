@@ -31,6 +31,7 @@ import {
   ADMIN_CACHE_DUMP,
   ADMIN_CONTROL_SNAPSHOT,
   ADMIN_ERROR_MESSAGE,
+  ADMIN_OPERATIONAL_DIAGNOSTICS,
   CONSISTENCY_MISMATCH_KIND,
 } from './admin-constants.js';
 import {
@@ -43,6 +44,8 @@ const LEADER_RAFT_ROLE = 'leader';
 const SERVICE_TYPE_PARTITION = 'partition';
 const STATUS_ACTIVE = 'active';
 const PARTITION_STATE_NORMAL = 'NORMAL';
+const PARTITION_STATE_UNKNOWN = 'unknown';
+const SQL_DIAGNOSTICS_REPLICA_COUNT = NUM.THREE;
 const CONTROL_PLANE_DIAGNOSTICS_SCHEMA_VERSION = 1;
 const CONTROL_PLANE_DIAGNOSTICS_READINESS_CACHE_MAX_AGE_MS = 5000;
 const MANAGED_SPLIT_WORKFLOW_TYPE = 'managed_split';
@@ -51,6 +54,19 @@ const CDC_TELEMETRY_MODE = Object.freeze({
   STEADY: 'steady',
   CATCHUP: 'catchup',
 });
+
+/**
+ * Normalize one arbitrary value to a non-negative integer.
+ * @param {*} value
+ * @return {number}
+ */
+function toNonNegativeInteger(value) {
+  const parsedValue = Number(value);
+  if (!Number.isFinite(parsedValue) || parsedValue < NUM.ZERO) {
+    return NUM.ZERO;
+  }
+  return Math.floor(parsedValue);
+}
 
 // ── AdminControlSnapshot class ──────────────────────────────────────────────
 
@@ -646,8 +662,8 @@ class AdminControlSnapshot {
       metadata?.[PARTITION_TRANSITION_METADATA_FIELD.TOPOLOGY_SNAPSHOT] &&
       typeof metadata[PARTITION_TRANSITION_METADATA_FIELD.TOPOLOGY_SNAPSHOT] ===
         TYPEOF.OBJECT ?
-      metadata[PARTITION_TRANSITION_METADATA_FIELD.TOPOLOGY_SNAPSHOT] :
-      null;
+        metadata[PARTITION_TRANSITION_METADATA_FIELD.TOPOLOGY_SNAPSHOT] :
+        null;
 
     return {
       workflowId,
@@ -1065,6 +1081,378 @@ class AdminControlSnapshot {
         CDC_TELEMETRY_MODE.CATCHUP :
         CDC_TELEMETRY_MODE.STEADY,
       authoritativeFallback,
+    };
+  }
+
+  /**
+   * Build node-local CDC diagnostics payload.
+   * @return {Object}
+   */
+  buildLocalCdcDiagnostics() {
+    if (!this.systemTableCache ||
+      typeof this.systemTableCache.getAll !== TYPEOF.FUNCTION) {
+      throw new Error(
+        ADMIN_ERROR_MESSAGE.CDC_DIAGNOSTICS_UNAVAILABLE,
+      );
+    }
+    const capturedAt = this.nowFn();
+    const partitionRows =
+      this.systemTableCache.getAll(TABLES.PARTITIONS);
+    const clusterPartitionIds = uniqueSorted(
+      partitionRows
+        .map((row) =>
+          firstStringField(row, COLUMN.PARTITION_ID, 'partitionId', 'id'))
+        .filter(Boolean),
+    );
+    const partitionDiagnosticsById = {};
+    const missingDiagnosticsPartitionIds = [];
+    const noSubscriberPartitionIds = [];
+    const bufferedPartitionIds = [];
+    const partitionServices =
+      this.resolveLocalPartitionServices ?
+        this.resolveLocalPartitionServices() :
+        null;
+
+    if (partitionServices instanceof Map) {
+      for (const [partitionServiceKey, partitionService] of
+        partitionServices.entries()) {
+        const partitionId = firstStringField(
+          partitionService,
+          COLUMN.PARTITION_ID,
+          'partitionId',
+          'id',
+        ) || String(partitionServiceKey || '');
+        if (!partitionId) {
+          continue;
+        }
+
+        if (!partitionService ||
+            typeof partitionService.getCDCSubscriptionDiagnostics !==
+              TYPEOF.FUNCTION) {
+          partitionDiagnosticsById[partitionId] = {
+            diagnosticsAvailable: false,
+            ready: false,
+            subscriberCount: NUM.ZERO,
+            bufferedEvents: NUM.ZERO,
+            bufferReplayInFlight: false,
+          };
+          missingDiagnosticsPartitionIds.push(partitionId);
+          continue;
+        }
+
+        const diagnostics =
+          partitionService.getCDCSubscriptionDiagnostics();
+        if (!diagnostics ||
+            typeof diagnostics !== TYPEOF.OBJECT) {
+          partitionDiagnosticsById[partitionId] = {
+            diagnosticsAvailable: false,
+            ready: false,
+            subscriberCount: NUM.ZERO,
+            bufferedEvents: NUM.ZERO,
+            bufferReplayInFlight: false,
+          };
+          missingDiagnosticsPartitionIds.push(partitionId);
+          continue;
+        }
+
+        const subscriberCount =
+          toNonNegativeInteger(diagnostics.subscriberCount);
+        const bufferedEvents =
+          toNonNegativeInteger(diagnostics.bufferedEvents);
+        const bufferReplayInFlight =
+          diagnostics.bufferReplayInFlight === true;
+        const ready = subscriberCount > NUM.ZERO &&
+          bufferedEvents === NUM.ZERO &&
+          bufferReplayInFlight !== true;
+
+        partitionDiagnosticsById[partitionId] = {
+          diagnosticsAvailable: true,
+          ready,
+          subscriberCount,
+          bufferedEvents,
+          bufferReplayInFlight,
+          diagnostics,
+        };
+        if (subscriberCount <= NUM.ZERO) {
+          noSubscriberPartitionIds.push(partitionId);
+        }
+        if (bufferedEvents > NUM.ZERO ||
+            bufferReplayInFlight === true) {
+          bufferedPartitionIds.push(partitionId);
+        }
+      }
+    }
+
+    const localPartitionIds =
+      uniqueSorted(Object.keys(partitionDiagnosticsById));
+    const diagnosticsAvailablePartitionCount =
+      Object.values(partitionDiagnosticsById)
+        .filter((entry) => entry?.diagnosticsAvailable === true)
+        .length;
+    const readyLocalPartitionCount =
+      Object.values(partitionDiagnosticsById)
+        .filter((entry) => entry?.ready === true)
+        .length;
+
+    return {
+      schemaVersion: ADMIN_OPERATIONAL_DIAGNOSTICS.CDC_SCHEMA_VERSION,
+      nodeId: this.nodeId,
+      capturedAt,
+      telemetry: this.buildLocalCdcTelemetry(),
+      clusterPartitionCount: clusterPartitionIds.length,
+      clusterPartitionIds,
+      localPartitionCount: localPartitionIds.length,
+      localPartitionIds,
+      diagnosticsAvailablePartitionCount,
+      readyLocalPartitionCount,
+      missingDiagnosticsPartitionIds:
+        uniqueSorted(missingDiagnosticsPartitionIds),
+      noSubscriberPartitionIds:
+        uniqueSorted(noSubscriberPartitionIds),
+      bufferedPartitionIds:
+        uniqueSorted(bufferedPartitionIds),
+      partitionDiagnosticsById,
+    };
+  }
+
+  /**
+   * Build node-local partition diagnostics payload.
+   * @return {Object}
+   */
+  buildLocalPartitionDiagnostics() {
+    if (!this.systemTableCache ||
+      typeof this.systemTableCache.getAll !== TYPEOF.FUNCTION) {
+      throw new Error(
+        ADMIN_ERROR_MESSAGE.PARTITION_DIAGNOSTICS_UNAVAILABLE,
+      );
+    }
+    const capturedAt = this.nowFn();
+    const partitionRows =
+      this.systemTableCache.getAll(TABLES.PARTITIONS);
+    const serviceRows =
+      this.systemTableCache.getAll(TABLES.SERVICES);
+    const replicaOperationRows =
+      this.systemTableCache.getAll(TABLES.REPLICA_OPERATIONS);
+    const leaderSummary =
+      this.buildControlSnapshotLeaderSummary(
+        partitionRows,
+        serviceRows,
+      );
+    const voterCounts =
+      this.buildControlSnapshotVoterCounts(serviceRows);
+    const replicaOperations =
+      this.buildControlSnapshotReplicaOperationSummary(
+        replicaOperationRows,
+      );
+
+    const partitionMetadataById = {};
+    for (const partitionRow of partitionRows) {
+      const partitionId = firstStringField(
+        partitionRow,
+        COLUMN.PARTITION_ID,
+        'partitionId',
+        'id',
+      );
+      if (!partitionId) {
+        continue;
+      }
+      partitionMetadataById[partitionId] = {
+        tableId: firstStringField(partitionRow, COLUMN.TABLE_ID, 'tableId'),
+        tableName: firstStringField(partitionRow, 'table_name', 'tableName'),
+        state: firstStringField(partitionRow, COLUMN.STATE, 'partitionState'),
+      };
+    }
+
+    const replicasByPartitionId = {};
+    for (const serviceRow of serviceRows) {
+      const serviceType = firstStringField(
+        serviceRow,
+        COLUMN.SERVICE_TYPE,
+        'type',
+        'serviceType',
+      );
+      if (serviceType !== SERVICE_TYPE_PARTITION) {
+        continue;
+      }
+      const partitionId = firstStringField(
+        serviceRow,
+        COLUMN.PARTITION_ID,
+        'partitionId',
+        'id',
+      );
+      if (!partitionId) {
+        continue;
+      }
+
+      replicasByPartitionId[partitionId] =
+        replicasByPartitionId[partitionId] || [];
+      replicasByPartitionId[partitionId].push({
+        replicaId: firstStringField(
+          serviceRow,
+          COLUMN.REPLICA_ID,
+          COLUMN.SERVICE_ID,
+          'replicaId',
+          'id',
+        ),
+        nodeId: firstStringField(
+          serviceRow,
+          COLUMN.NODE_ID,
+          'nodeId',
+        ),
+        raftRole: firstStringField(
+          serviceRow,
+          COLUMN.RAFT_ROLE,
+          'raftRole',
+        ),
+        status: firstStringField(serviceRow, COLUMN.STATUS, 'status'),
+        address: firstStringField(serviceRow, COLUMN.ADDRESS, 'address'),
+      });
+    }
+
+    const partitionIds = uniqueSorted([
+      ...Object.keys(partitionMetadataById),
+      ...Object.keys(replicasByPartitionId),
+    ]);
+    const partitionsById = {};
+    for (const partitionId of partitionIds) {
+      const metadata =
+        partitionMetadataById[partitionId] || {};
+      const replicas =
+        replicasByPartitionId[partitionId] ||
+        ADMIN_CACHE_DUMP.EMPTY;
+      const activeReplicaCount = replicas
+        .filter((replica) =>
+          String(replica?.status || '').toLowerCase() === STATUS_ACTIVE)
+        .length;
+      partitionsById[partitionId] = {
+        partitionId,
+        tableId: metadata.tableId || null,
+        tableName: metadata.tableName || null,
+        state: metadata.state || PARTITION_STATE_UNKNOWN,
+        leaderNodeId:
+          leaderSummary.leaders[partitionId] || null,
+        voterCount:
+          toNonNegativeInteger(voterCounts[partitionId]),
+        replicaCount: replicas.length,
+        activeReplicaCount,
+        replicaRoles:
+          leaderSummary.replicaRoles[partitionId] || {},
+        replicaRoleDiagnostics:
+          leaderSummary.replicaRoleDiagnostics[partitionId] || {
+            canonicalLeaderNodeId: null,
+            source: TABLES.PARTITIONS,
+            inconsistentReplicaRoles: false,
+            replicaLeaderNodeIds: ADMIN_CACHE_DUMP.EMPTY,
+            issues: ADMIN_CACHE_DUMP.EMPTY,
+          },
+        replicas,
+      };
+    }
+
+    return {
+      schemaVersion: ADMIN_OPERATIONAL_DIAGNOSTICS.PARTITION_SCHEMA_VERSION,
+      nodeId: this.nodeId,
+      capturedAt,
+      partitionCount: partitionIds.length,
+      leaders: leaderSummary.leaders,
+      voterCounts,
+      replicaRoleDiagnostics:
+        leaderSummary.replicaRoleDiagnostics,
+      replicaOperations,
+      partitionsById,
+    };
+  }
+
+  /**
+   * Build node-local cluster SQL diagnostics payload.
+   * @return {Object}
+   */
+  buildLocalSqlDiagnostics() {
+    if (!this.systemTableCache ||
+      typeof this.systemTableCache.getAll !== TYPEOF.FUNCTION) {
+      throw new Error(
+        ADMIN_ERROR_MESSAGE.SQL_DIAGNOSTICS_UNAVAILABLE,
+      );
+    }
+    const capturedAt = this.nowFn();
+    const nodeRows =
+      this.systemTableCache.getAll(TABLES.NODES);
+    const partitionRows =
+      this.systemTableCache.getAll(TABLES.PARTITIONS);
+    const tableRows =
+      this.systemTableCache.getAll(TABLES.TABLES);
+    const sqlQueryEngine = this.sqlQueryEngine;
+    const queryEngineAvailable =
+      Boolean(sqlQueryEngine &&
+        typeof sqlQueryEngine.executeRequest ===
+          TYPEOF.FUNCTION);
+    const queryExecutor =
+      sqlQueryEngine?.queryExecutor || null;
+    const lastCoordinatorMetrics =
+      queryExecutor &&
+      typeof queryExecutor.getLastCoordinatorMetrics === TYPEOF.FUNCTION ?
+        queryExecutor.getLastCoordinatorMetrics() :
+        null;
+
+    let provisionTargetDiagnostics = null;
+    if (sqlQueryEngine &&
+        typeof sqlQueryEngine.resolveProvisionTargetNodeIdsWithDiagnostics ===
+          TYPEOF.FUNCTION) {
+      const diagnosticsResult =
+        sqlQueryEngine.resolveProvisionTargetNodeIdsWithDiagnostics(
+          SQL_DIAGNOSTICS_REPLICA_COUNT,
+        );
+      if (diagnosticsResult?.diagnostics &&
+          typeof diagnosticsResult.diagnostics === TYPEOF.OBJECT) {
+        provisionTargetDiagnostics = diagnosticsResult.diagnostics;
+      }
+    } else if (sqlQueryEngine &&
+      typeof sqlQueryEngine.resolveProvisionTargetNodeDiagnostics ===
+        TYPEOF.FUNCTION) {
+      provisionTargetDiagnostics =
+        sqlQueryEngine.resolveProvisionTargetNodeDiagnostics(
+          SQL_DIAGNOSTICS_REPLICA_COUNT,
+        );
+    }
+
+    const activeNodeCount = nodeRows
+      .filter((row) =>
+        String(firstStringField(row, COLUMN.STATUS, 'state') || '')
+          .toLowerCase() === STATUS_ACTIVE)
+      .length;
+
+    return {
+      schemaVersion: ADMIN_OPERATIONAL_DIAGNOSTICS.SQL_SCHEMA_VERSION,
+      nodeId: this.nodeId,
+      capturedAt,
+      queryEngineAvailable,
+      cluster: {
+        nodeCount: nodeRows.length,
+        activeNodeCount,
+        partitionCount: partitionRows.length,
+        tableCount: tableRows.length,
+      },
+      queryEngine: {
+        timeoutMs:
+          Number.isFinite(Number(sqlQueryEngine?.queryTimeoutMs)) ?
+            Number(sqlQueryEngine.queryTimeoutMs) :
+            null,
+        fanoutMetricsAvailable:
+          lastCoordinatorMetrics !== null,
+        lastCoordinatorMetrics,
+        provisionTargetDiagnostics,
+        transactionRecovery:
+          sqlQueryEngine?.lastTransactionRecoveryReplayResult &&
+            typeof sqlQueryEngine.lastTransactionRecoveryReplayResult ===
+              TYPEOF.OBJECT ?
+            sqlQueryEngine.lastTransactionRecoveryReplayResult :
+            null,
+        trackedWriteSplitEvaluations:
+          sqlQueryEngine?.lastWriteSplitEvaluationByTable instanceof Map ?
+            sqlQueryEngine.lastWriteSplitEvaluationByTable.size :
+            NUM.ZERO,
+      },
+      splitEvaluation: this.resolveSplitEvaluationDiagnostics(),
     };
   }
 
