@@ -36,18 +36,23 @@ The installation model must support:
 
 A registry stores service artifacts and associated manifests.
 
-Recommended primary transport:
+All installable service artifacts use OCI as the canonical and only
+packaging and distribution format for v0. OCI is used purely as a
+content-addressable distribution layer — it does not imply that all
+services run as containers. WASM components are shipped as OCI
+artifacts with a WASM-specific media type, then extracted and loaded
+in-process by the kernel. Container images are shipped as standard
+OCI images and handed to a container runtime.
 
--   OCI registry
-
-Reasons:
+Reasons for OCI-only:
 
 -   existing distribution ecosystem
 -   tags and digests
 -   authentication
 -   mirroring
 -   enterprise familiarity
--   compatibility with OCI containers and WASM-oriented artifacts
+-   one fetch path for all runtime kinds
+-   compatibility with both container images and WASM artifacts
 
 Example references:
 
@@ -84,14 +89,20 @@ upstream registry is temporarily unavailable.
 A service installation reconciler watches desired state and performs
 actions:
 
--   fetch artifact
+-   fetch OCI artifact (runtime-kind-agnostic; always an OCI pull)
 -   verify digest/signature
 -   validate compatibility
+-   extract payload based on `artifact.media_type`
 -   allocate runtime placement
--   start instances
+-   activate via the appropriate runtime driver (`wasm_component`
+    loads in-process; `oci_container` delegates to container runtime)
 -   stop instances
 -   roll forward
 -   roll back
+
+The reconciler's fetch and verification path is identical for all
+runtime kinds. Only the final activation step branches by
+`runtime.kind` declared in the manifest.
 
 This follows the same pattern as other Lagrange control-plane workflows.
 
@@ -99,8 +110,8 @@ This follows the same pattern as other Lagrange control-plane workflows.
 
 # Installation Sources
 
-Lagrange should support multiple artifact sources under one install
-model.
+Lagrange supports multiple artifact sources under one install model.
+All sources produce or serve OCI-compatible artifact layouts.
 
 ## Remote OCI registry
 
@@ -108,7 +119,8 @@ Primary production path.
 
 ## Local artifact path
 
-Development path.
+Development path. Produces an OCI-compatible directory layout so the
+install path remains uniform.
 
 Example:
 
@@ -118,7 +130,7 @@ lagrange service dev-install ./dist/backup-manager
 
 ## Local mirror / air-gapped registry
 
-Enterprise path.
+Enterprise path. A local OCI registry mirror.
 
 Example:
 
@@ -126,7 +138,8 @@ Example:
 lagrange registry add registry.internal.example.com
 ```
 
-The user experience should remain uniform regardless of source.
+The user experience remains uniform regardless of source because all
+sources speak OCI.
 
 ------------------------------------------------------------------------
 

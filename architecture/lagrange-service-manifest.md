@@ -51,10 +51,17 @@ installation:
     Privileged operations must be requested explicitly.
 
 4.  **Runtime-neutral**\
-    The same schema should support `native_js`, `wasm_component`, and
-    `oci_container`.
+    The same schema supports `wasm_component` and `oci_container`
+    for user-installable services. `native_js` is kernel-internal
+    only and not exposed through the registry.
 
-5.  **Cluster-safe**\
+5.  **OCI-first packaging**\
+    All installable service artifacts are packaged as OCI artifacts.
+    The `artifact.media_type` field distinguishes payload kind (WASM
+    binary vs container image). Runtime kind determines execution
+    strategy, not packaging format.
+
+6.  **Cluster-safe**\
     The kernel must be able to reject manifests that are incompatible,
     unsafe, or under-specified.
 
@@ -88,15 +95,25 @@ Example:
 
 Defines where the executable payload is located.
 
+All installable service artifacts use OCI as the packaging and
+distribution format. The `media_type` field tells the kernel what
+the OCI artifact contains so it can route to the correct activation
+path.
+
 Fields:
 
--   `type` --- `oci`, `wasm`, `bundle`, or future formats
--   `ref` --- registry reference or local source reference
--   `digest` --- immutable artifact digest
+-   `type` --- always `oci` for installable services
+-   `ref` --- OCI registry reference
+-   `digest` --- immutable artifact digest (required for remote refs)
+-   `media_type` --- payload kind inside the OCI artifact:
+    -   `application/vnd.oci.image.manifest.v1+json` — container image
+        (activated via container runtime)
+    -   `application/wasm` — WASM component binary (extracted and
+        loaded in-process)
 -   `size_bytes`
 -   `signature` --- optional signature metadata
 
-Example:
+Example (WASM component packaged as OCI):
 
 ``` json
 {
@@ -104,7 +121,22 @@ Example:
     "type": "oci",
     "ref": "registry.lagrange.dev/services/backup-manager:1.2.0",
     "digest": "sha256:abc123",
+    "media_type": "application/wasm",
     "size_bytes": 2487311
+  }
+}
+```
+
+Example (container image):
+
+``` json
+{
+  "artifact": {
+    "type": "oci",
+    "ref": "registry.lagrange.dev/services/analytics-worker:3.0.0",
+    "digest": "sha256:def456",
+    "media_type": "application/vnd.oci.image.manifest.v1+json",
+    "size_bytes": 89200000
   }
 }
 ```
@@ -113,21 +145,38 @@ Example:
 
 ## Runtime
 
-Defines how the artifact is executed.
+Defines how the artifact is executed. Runtime kind is an execution
+strategy, not a packaging choice — all artifacts are OCI-packaged.
 
 Fields:
 
--   `kind` --- `native_js`, `wasm_component`, `oci_container`
+-   `kind` --- `wasm_component` or `oci_container` for installable
+    services. `native_js` is kernel-internal only and not accepted
+    from external manifests.
 -   `entrypoint`
 -   `runtime_options`
 
-Example:
+Example (WASM component):
 
 ``` json
 {
   "runtime": {
-    "kind": "native_js",
-    "entrypoint": "./index.js"
+    "kind": "wasm_component",
+    "entrypoint": "backup-manager.wasm"
+  }
+}
+```
+
+Example (OCI container):
+
+``` json
+{
+  "runtime": {
+    "kind": "oci_container",
+    "runtime_options": {
+      "memoryLimitMb": 512,
+      "cpuLimit": 1.0
+    }
   }
 }
 ```
@@ -326,11 +375,12 @@ Example:
     "type": "oci",
     "ref": "registry.lagrange.dev/services/backup-manager:1.2.0",
     "digest": "sha256:abc123",
+    "media_type": "application/wasm",
     "size_bytes": 2487311
   },
   "runtime": {
-    "kind": "native_js",
-    "entrypoint": "./index.js"
+    "kind": "wasm_component",
+    "entrypoint": "backup-manager.wasm"
   },
   "replication": {
     "mode": "replicated_service",
@@ -386,9 +436,12 @@ The kernel should validate at least the following before activation:
 
 -   required fields present
 -   version format valid
+-   artifact type is `oci`
 -   artifact reference valid
 -   artifact digest present for remote references
--   runtime kind supported
+-   artifact `media_type` recognized and consistent with `runtime.kind`
+-   runtime kind is `wasm_component` or `oci_container` (reject
+    `native_js` from external manifests)
 -   capabilities recognized
 -   compatibility range satisfied
 -   configuration schema parseable

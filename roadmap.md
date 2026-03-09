@@ -120,9 +120,9 @@ deterministic recovery/timeout handling.
 | 7-node stress scenarios | ✅ |
 | Postgres baseline comparison | ✅ |
 | Invariant engine | ✅ |
-| Disk full simulation | 🔲 |
-| Slow follower simulation | 🔲 |
-| In-cluster chaos injection | 🔲 |
+| Disk full simulation | ✅ |
+| Slow follower simulation | ✅ |
+| In-cluster chaos injection | ✅ |
 
 ### Phase 0.1 Exit Criteria
 
@@ -132,8 +132,6 @@ transaction retries without manual intervention.
 ---
 
 ## Phase 0.5 — External Usability
-
-*"Developers can realistically try this."*
 
 Focus shifts to developer experience.
 
@@ -259,11 +257,16 @@ also enable future paid system services.
 
 ### 2. Advanced Runtime Services
 
-| Item | Status |
-|------|--------|
-| OCI container runtime | 🔧 |
-| Vector search service | 🔲 |
-| Embedding service | 🔲 |
+| Item | Status | Notes |
+|------|--------|-------|
+| OCI container runtime | 🔧 | Process-isolated execution for container-packaged services |
+| OCI artifact fetch and extraction | 🔲 | Shared prerequisite: pull OCI artifacts, route by `media_type` to WASM or container activation |
+| Artifact media type discrimination | 🔲 | Distinguish WASM binary vs container image in OCI artifacts |
+| Vector search service | 🔲 | |
+| Embedding service | 🔲 | |
+
+Note: `native_js` is kernel-internal only. User-installable services
+use `wasm_component` or `oci_container`, both packaged as OCI artifacts.
 
 ### 3. External Kernel Platform API
 
@@ -299,9 +302,9 @@ distribution, operator UX, and external installability at scale.
 
 | Item | Status | Notes |
 |------|--------|-------|
-| OCI registry transport | 🔲 | Primary artifact distribution via OCI |
+| OCI artifact transport | 🔲 | Canonical and only artifact distribution format; all runtime kinds packaged as OCI |
 | Registry configuration (`add` / `list` / `remove`) | 🔲 | Multiple registries with priority and auth |
-| Local artifact path (dev-install) | 🔲 | Fast local development workflow |
+| Local artifact path (dev-install) | 🔲 | OCI-compatible local directory layout for fast development |
 | Trust and verification (digest, signature) | 🔲 | Artifact and manifest integrity checks |
 
 #### Manifest and Install UX
@@ -312,6 +315,7 @@ distribution, operator UX, and external installability at scale.
 | Upgrade strategy declaration | 🔲 | Rolling, canary, all-at-once in manifest |
 | Health and probe definitions | 🔲 | Startup, readiness, liveness probes |
 | Dependency declaration | 🔲 | Service and kernel feature dependencies |
+| Media type / artifact kind discrimination | 🔲 | Manifest `artifact.media_type` routes WASM binary vs container image activation |
 | Install lifecycle (discover → resolve → validate → record → reconcile → observe) | 🔲 | Declarative desired-state convergence |
 | Remove lifecycle | 🔲 | Drain, stop, cleanup per policy |
 | Upgrade lifecycle with rollback | 🔲 | Versioned revisions, rollback to prior known-good |

@@ -47,6 +47,38 @@ logic.
 
 ------------------------------------------------------------------------
 
+# Artifact Packaging Model
+
+All installable services are packaged and distributed as **OCI
+artifacts**, regardless of runtime kind. OCI is the universal packaging
+and distribution format — it provides registries, tags, digests,
+signatures, mirroring, and authentication.
+
+The **runtime kind** declared in the manifest determines how the kernel
+executes the artifact, not how it is packaged:
+
+-   `wasm_component` — the OCI artifact contains a WASM binary
+    (media type `application/wasm`). The kernel extracts the binary
+    and loads it in-process for data-local execution with
+    sub-millisecond cold start and full debugging support.
+-   `oci_container` — the OCI artifact is a standard container image.
+    The kernel hands it to a container runtime for process-isolated
+    execution.
+-   `native_js` — kernel-internal only. Used for built-in system
+    services (SQL engine, admin handlers). Not user-installable via
+    the service registry.
+
+This separation means:
+
+-   One packaging format for all services (OCI).
+-   One registry, one fetch path, one trust/verification pipeline.
+-   Runtime kind is an execution strategy choice, not a packaging
+    choice.
+-   The reconciler's artifact fetch is runtime-kind-agnostic; only
+    the final activation step branches by `runtime.kind`.
+
+------------------------------------------------------------------------
+
 # The 12 Core Kernel APIs
 
 ## 1. Service Manifest Registration
@@ -70,7 +102,16 @@ Example:
 {
   "name": "backup-manager",
   "version": "1.2.0",
-  "runtime": "native_js",
+  "artifact": {
+    "type": "oci",
+    "ref": "registry.lagrange.dev/services/backup-manager:1.2.0",
+    "digest": "sha256:abc123",
+    "media_type": "application/wasm"
+  },
+  "runtime": {
+    "kind": "wasm_component",
+    "entrypoint": "backup-manager.wasm"
+  },
   "replicas": 3,
   "capabilities": [
     "cdc.subscribe",
