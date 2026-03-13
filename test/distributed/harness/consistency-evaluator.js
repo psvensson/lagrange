@@ -171,14 +171,19 @@ class ConsistencyEvaluatorV2 {
     for (const partitionId of partitionIds) {
       const byNode = {};
       const distinctLeaders = new Set();
+      let hasEmptyLeader = false;
       for (const snapshot of snapshots) {
         const leader = String(snapshot.leaders?.[partitionId] || '');
         byNode[snapshot.nodeId] = leader;
         if (leader.length > ZERO) {
           distinctLeaders.add(leader);
+        } else {
+          hasEmptyLeader = true;
         }
       }
-      if (distinctLeaders.size > ONE) {
+      const hasConflict = distinctLeaders.size > ONE ||
+        (distinctLeaders.size === ONE && hasEmptyLeader);
+      if (hasConflict) {
         mismatches.push({
           kind: CONSISTENCY_MISMATCH_KIND.LEADER,
           partitionId,

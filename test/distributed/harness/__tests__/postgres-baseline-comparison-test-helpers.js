@@ -245,6 +245,32 @@ function buildPreflightCriticalPathSnapshotPayload(node, overrides = {}) {
   };
 }
 
+/**
+ * Ensure a control snapshot result includes all cluster node
+ * IDs from `_discoveryNodeIds`. Test mocks often only include
+ * the local node in the `nodes` array, but in a real cluster
+ * every node's snapshot sees all active nodes. This prevents
+ * false "Active nodes disagree" failures from
+ * `assertConsistencyFromSnapshots`.
+ */
+function ensureSnapshotClusterNodes(result, adapted) {
+  if (!Array.isArray(adapted._clusterNodeIds)) {
+    return;
+  }
+  const row = Array.isArray(result?.rows) ? result.rows[0] : null;
+  if (!row || !Array.isArray(row.nodes)) {
+    return;
+  }
+  const existing = new Set(row.nodes.map((n) => String(n)));
+  for (const nodeId of adapted._clusterNodeIds) {
+    const normalized = String(nodeId);
+    if (!existing.has(normalized)) {
+      row.nodes.push(normalized);
+      existing.add(normalized);
+    }
+  }
+}
+
 function asNodeHandle(node) {
   const adapted = {...node};
   if (Array.isArray(node?.discoveryNodeIds)) {
@@ -266,13 +292,19 @@ function asNodeHandle(node) {
     if (normalizedSql === NODE_CLIENT_CONTROL_SNAPSHOT_SQL ||
         normalizedSql === NODE_CLIENT_CONTROL_SNAPSHOT_FORCE_REPAIR_SQL) {
       if (originalQueryWithTimeout) {
-        const result = await originalQueryWithTimeout(sql, params, options);
+        const result = await originalQueryWithTimeout(
+          sql, params, options,
+        );
         if (hasValidControlSnapshotResult(result)) {
+          ensureSnapshotClusterNodes(result, adapted);
           return result;
         }
       }
       return {
-        rows: [buildControlSnapshotPayload(adapted.id)],
+        rows: [buildControlSnapshotPayload(adapted.id,
+          Array.isArray(adapted._clusterNodeIds) ?
+            {nodes: adapted._clusterNodeIds} : {},
+        )],
       };
     }
 
@@ -335,11 +367,14 @@ function asNodeHandle(node) {
 
 function asNodeHandles(nodes) {
   const adaptedNodes = nodes.map((node) => asNodeHandle(node));
-  const allNodeIds = adaptedNodes.map((node) => String(node.id || 'unknown'));
+  const allNodeIds = adaptedNodes.map(
+    (node) => String(node.id || 'unknown'),
+  );
   for (const node of adaptedNodes) {
     if (!Array.isArray(node._discoveryNodeIds)) {
       node._discoveryNodeIds = allNodeIds;
     }
+    node._clusterNodeIds = allNodeIds;
   }
   return adaptedNodes;
 }

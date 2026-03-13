@@ -1,6 +1,9 @@
 import {test} from '../../../../src/test-helpers/tap.js';
 import assert from 'node:assert/strict';
-import {assertConsistency} from '../assertions.js';
+import {
+  assertConsistency,
+  assertConsistencyFromSnapshots,
+} from '../assertions.js';
 import {PORTS} from '../constants.js';
 
 const TEST_WS_ADDRESS = `ws://node-2:${PORTS.WS_TRANSPORT}`;
@@ -142,5 +145,91 @@ test('assertConsistency uses control snapshots when available', async () => {
 
   await assert.doesNotReject(async () => {
     await assertConsistency([nodeA, nodeB]);
+  });
+});
+
+test('assertConsistencyFromSnapshots passes with ' +
+  'consistent evaluator snapshots', async () => {
+  const snapshots = [
+    {
+      nodeId: 'node-a',
+      nodes: ['node-1', 'node-2', 'node-3'],
+      partitions: ['p1', 'p2'],
+      leaders: {p1: TEST_LEADER_ADDRESS, p2: TEST_WS_ADDRESS},
+    },
+    {
+      nodeId: 'node-b',
+      nodes: ['node-1', 'node-2', 'node-3'],
+      partitions: ['p2', 'p1'],
+      leaders: {p2: TEST_WS_ADDRESS, p1: TEST_LEADER_ADDRESS},
+    },
+  ];
+
+  assert.doesNotThrow(() => {
+    assertConsistencyFromSnapshots(snapshots);
+  });
+});
+
+test('assertConsistencyFromSnapshots throws on partition ' +
+  'set mismatch — uses evaluator snapshots as single ' +
+  'consistency owner', async () => {
+  const snapshots = [
+    {
+      nodeId: 'node-a',
+      nodes: ['node-1', 'node-2'],
+      partitions: ['p1', 'p2'],
+      leaders: {p1: TEST_LEADER_ADDRESS},
+    },
+    {
+      nodeId: 'node-b',
+      nodes: ['node-1', 'node-2'],
+      partitions: ['p1'],
+      leaders: {p1: TEST_LEADER_ADDRESS},
+    },
+  ];
+
+  assert.throws(
+    () => assertConsistencyFromSnapshots(snapshots),
+    /Partition assignments disagree/i,
+  );
+});
+
+test('assertConsistencyFromSnapshots throws on leader ' +
+  'identity mismatch', async () => {
+  const snapshots = [
+    {
+      nodeId: 'node-a',
+      nodes: ['node-1', 'node-2'],
+      partitions: ['p1'],
+      leaders: {p1: TEST_LEADER_ADDRESS},
+    },
+    {
+      nodeId: 'node-b',
+      nodes: ['node-1', 'node-2'],
+      partitions: ['p1'],
+      leaders: {p1: TEST_WS_ADDRESS},
+    },
+  ];
+
+  assert.throws(
+    () => assertConsistencyFromSnapshots(snapshots),
+    /Leader identities disagree/i,
+  );
+});
+
+test('assertConsistencyFromSnapshots is a no-op when ' +
+  'fewer than 2 snapshots provided', async () => {
+  assert.doesNotThrow(() => {
+    assertConsistencyFromSnapshots([
+      {
+        nodeId: 'node-a',
+        nodes: ['node-1'],
+        partitions: ['p1'],
+        leaders: {p1: TEST_LEADER_ADDRESS},
+      },
+    ]);
+  });
+  assert.doesNotThrow(() => {
+    assertConsistencyFromSnapshots([]);
   });
 });

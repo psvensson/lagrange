@@ -1533,6 +1533,7 @@ describe('postgres-baseline-comparison scenario', () => {
         removeContainer: async () => {},
       };
 
+      const sharedNodes = ['seed-1', 'joiner-1'];
       const seedNode = {
         id: 'seed-1',
         role: 'seed',
@@ -1549,15 +1550,31 @@ describe('postgres-baseline-comparison scenario', () => {
             return {rows: []};
           }
           if (statement.includes('FROM tables')) {
-            return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+            return {
+              rows: [{
+                table_id: 'tbl-benchmark',
+                updated_at: 1740589945123,
+              }],
+            };
           }
-          if (statement.startsWith('UPDATE partitions SET table_name')) {
+          if (statement.startsWith(
+            'UPDATE partitions SET table_name')) {
             return {rows: [], changes: 1};
           }
           if (statement.includes('FROM partitions')) {
             return {rows: [{partition_id: 'p1'}]};
           }
           return {rows: []};
+        },
+        queryWithTimeout: async function(sql, params = [], _opts = {}) {
+          if (String(sql) === NODE_CLIENT_CONTROL_SNAPSHOT_SQL) {
+            return {
+              rows: [buildControlSnapshotPayload(this.id, {
+                nodes: sharedNodes,
+              })],
+            };
+          }
+          return this.query(sql, params);
         },
       };
       const joinerNode = {
@@ -1571,11 +1588,23 @@ describe('postgres-baseline-comparison scenario', () => {
           if (statement === benchmarkTableProbeSql) {
             joinerTableProbeCount += 1;
             if (joinerTableProbeCount <= 5) {
-              throw new Error('Table not found: benchmark_events');
+              throw new Error(
+                'Table not found: benchmark_events',
+              );
             }
             return {rows: [{count: 0}]};
           }
           return {rows: []};
+        },
+        queryWithTimeout: async function(sql, params = [], _opts = {}) {
+          if (String(sql) === NODE_CLIENT_CONTROL_SNAPSHOT_SQL) {
+            return {
+              rows: [buildControlSnapshotPayload(this.id, {
+                nodes: sharedNodes,
+              })],
+            };
+          }
+          return this.query(sql, params);
         },
       };
 

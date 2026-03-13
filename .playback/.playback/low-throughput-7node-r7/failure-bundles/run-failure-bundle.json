@@ -1,0 +1,128 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-03-13T11:20:11.641Z",
+  "reportPath": ".playback/low-throughput-7node-r7.report.json",
+  "reportSummary": {
+    "total": 1,
+    "passed": 0,
+    "failed": 1,
+    "duration": 317129
+  },
+  "standardSummary": {
+    "historicalReportsConsidered": 7,
+    "scenariosComparedToPrevious": 1,
+    "scenariosComparedToPostgresBaseline": 0,
+    "diagnosticsCoverageSummary": {
+      "scenariosWithCoverage": 0,
+      "scenariosWithoutCoverage": 1,
+      "totalSamples": 0,
+      "coverageRate": 0,
+      "scenarios": [
+        {
+          "scenario": "seven-node-postgres-baseline-partition-split",
+          "status": "unavailable",
+          "reason": "not_reported",
+          "sampleCount": 0
+        }
+      ]
+    },
+    "writePathAttributionSummary": {
+      "scenariosWithDiagnostics": 0,
+      "topPhases": []
+    },
+    "scaleEfficiencySummary": {
+      "observationCount": 2,
+      "comparableGroupCount": 0,
+      "groups": [],
+      "topOpportunities": []
+    },
+    "scenarios": [
+      {
+        "scenario": "seven-node-postgres-baseline-partition-split",
+        "similarityKey": "seven-node-postgres-baseline-partition-split|default",
+        "current": {
+          "passed": false,
+          "clusterSize": 7,
+          "durationMs": 317129,
+          "performanceMetricsAvailable": false,
+          "validForPerformanceComparison": false,
+          "performanceInvalidReason": "metrics_unavailable",
+          "observedOpsPerSec": 0,
+          "observedP99LatencyMs": 0,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "previousSimilarRun": {
+          "reportTimestamp": "2026-03-08T12:06:33.699Z",
+          "reportPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/.playback/low-throughput-7node-r5.report.json",
+          "passed": false,
+          "clusterSize": 7,
+          "durationMs": 349951,
+          "performanceMetricsAvailable": false,
+          "validForPerformanceComparison": false,
+          "performanceInvalidReason": "metrics_unavailable",
+          "observedOpsPerSec": 0,
+          "observedP99LatencyMs": 0,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "deltaVsPrevious": {
+          "passedChanged": false,
+          "clusterSizeChanged": false,
+          "durationMs": -32822,
+          "durationRatio": -0.09379027349543222,
+          "opsPerSec": 0,
+          "opsPerSecRatio": null,
+          "opsPerSecPerNode": 0,
+          "opsPerSecPerNodeRatio": null,
+          "p99LatencyMs": 0,
+          "p99LatencyMsRatio": null
+        },
+        "postgresBaseline": null,
+        "parity": null,
+        "writePathTopPhases": []
+      }
+    ]
+  },
+  "benchmarkRegressionGate": {
+    "enabled": false,
+    "status": "skipped",
+    "reason": "disabled",
+    "settings": {
+      "enabled": false,
+      "maxThroughputRegressionRatio": 0.1,
+      "minimumThroughputRatioSutToBaseline": 0.1,
+      "baselineProvider": "liferaft",
+      "failIfBaselineMissing": false,
+      "approvedMitigationId": null,
+      "parityMismatchPolicy": "warn"
+    },
+    "currentProvider": "liferaft",
+    "baselineProvider": "liferaft",
+    "comparedScenarioCount": 0,
+    "failedScenarioCount": 0,
+    "mitigatedScenarioCount": 0,
+    "missingBaselineScenarios": [],
+    "comparisons": [],
+    "parityMismatchCount": 0,
+    "lowThroughputRatioCount": 0,
+    "warnings": []
+  },
+  "failedScenarioCount": 1,
+  "scenarios": [
+    {
+      "scenario": "seven-node-postgres-baseline-partition-split",
+      "summary": {
+        "passed": false,
+        "error": "postgres-baseline-comparison failed in phase verify: Cluster consistency assertion failed after 3 attempts: Leader identities disagree between 7493b0ab-a054-5fad-a91b-5e331db29304 and 35a891b8-c1a0-5064-9c6e-2acfba61c2a7. 7493b0ab-a054-5fad-a91b-5e331db29304: {\"code-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"config-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"contexts-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"debug_breakpoints-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"debug_sessions-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"debug_snapshots-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"indices-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"inter_group_latencies-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"latency_groups-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"live_queries-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"logs-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"message_groups-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"module_dependency_locks-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"module_manifests-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"node_endpoints-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"nodes-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"package_registry_mappings-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"package_registry_overrides-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"partitions-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"replica_operations-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"schema_migration_partitions-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"schema_migrations-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"service_definitions-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"service_endpoints-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"service_timers-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"services-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"sql_transaction_participants-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"sql_transactions-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"sql_write_operations-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"storage_reservations-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"tables-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"tbl-307b62c4-e28b-4ae0-b20b-c0e3bb209bfa-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"tbl-307b62c4-e28b-4ae0-b20b-c0e3bb209bfa_p_007e0ef7_left\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"tbl-307b62c4-e28b-4ae0-b20b-c0e3bb209bfa_p_b6422c8b_right\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"wasm_operations-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\"}. 35a891b8-c1a0-5064-9c6e-2acfba61c2a7: {\"code-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"config-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"contexts-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"debug_breakpoints-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"debug_sessions-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"debug_snapshots-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"indices-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"inter_group_latencies-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"latency_groups-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"live_queries-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"logs-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"message_groups-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"module_dependency_locks-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"module_manifests-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"node_endpoints-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"nodes-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"package_registry_mappings-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"package_registry_overrides-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"partitions-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"replica_operations-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"schema_migration_partitions-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"schema_migrations-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"service_definitions-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"service_endpoints-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"service_timers-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"services-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"sql_transaction_participants-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"sql_transactions-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"sql_write_operations-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"storage_reservations-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"tables-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"tbl-307b62c4-e28b-4ae0-b20b-c0e3bb209bfa-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"tbl-307b62c4-e28b-4ae0-b20b-c0e3bb209bfa_p_b6422c8b_right\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"wasm_operations-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\"}",
+        "phase": "verify",
+        "rootCauseClass": "discovery",
+        "dominantReason": "Cluster consistency assertion failed after 3 attempts: Leader identities disagree between 7493b0ab-a054-5fad-a91b-5e331db29304 and 35a891b8-c1a0-5064-9c6e-2acfba61c2a7. 7493b0ab-a054-5fad-a91b-5e331db29304: {\"code-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"config-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"contexts-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"debug_breakpoints-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"debug_sessions-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"debug_snapshots-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"indices-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"inter_group_latencies-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"latency_groups-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"live_queries-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"logs-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"message_groups-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"module_dependency_locks-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"module_manifests-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"node_endpoints-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"nodes-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"package_registry_mappings-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"package_registry_overrides-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"partitions-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"replica_operations-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"schema_migration_partitions-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"schema_migrations-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"service_definitions-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"service_endpoints-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"service_timers-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"services-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"sql_transaction_participants-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"sql_transactions-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"sql_write_operations-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"storage_reservations-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"tables-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"tbl-307b62c4-e28b-4ae0-b20b-c0e3bb209bfa-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"tbl-307b62c4-e28b-4ae0-b20b-c0e3bb209bfa_p_007e0ef7_left\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"tbl-307b62c4-e28b-4ae0-b20b-c0e3bb209bfa_p_b6422c8b_right\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"wasm_operations-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\"}. 35a891b8-c1a0-5064-9c6e-2acfba61c2a7: {\"code-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"config-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"contexts-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"debug_breakpoints-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"debug_sessions-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"debug_snapshots-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"indices-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"inter_group_latencies-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"latency_groups-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"live_queries-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"logs-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"message_groups-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"module_dependency_locks-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"module_manifests-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"node_endpoints-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"nodes-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"package_registry_mappings-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"package_registry_overrides-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"partitions-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"replica_operations-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"schema_migration_partitions-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"schema_migrations-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"service_definitions-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"service_endpoints-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"service_timers-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"services-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"sql_transaction_participants-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"sql_transactions-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"sql_write_operations-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"storage_reservations-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"tables-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"tbl-307b62c4-e28b-4ae0-b20b-c0e3bb209bfa-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"tbl-307b62c4-e28b-4ae0-b20b-c0e3bb209bfa_p_b6422c8b_right\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"wasm_operations-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\"}"
+      },
+      "jsonPath": ".playback/.playback/low-throughput-7node-r7/seven-node-postgres-baseline-partition-split/failure-bundle.json",
+      "markdownPath": ".playback/.playback/low-throughput-7node-r7/seven-node-postgres-baseline-partition-split/failure-bundle.md"
+    }
+  ]
+}

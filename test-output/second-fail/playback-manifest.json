@@ -1,8 +1,8 @@
 {
   "scenarioName": "second-fail",
-  "startedAt": 1773338941805,
-  "endedAt": 1773338942103,
-  "durationMs": 298,
+  "startedAt": 1773407517127,
+  "endedAt": 1773407517475,
+  "durationMs": 348,
   "files": {
     "events": "test-output/second-fail/events.ndjson",
     "samples": "test-output/second-fail/samples.ndjson",

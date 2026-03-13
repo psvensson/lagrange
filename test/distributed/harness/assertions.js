@@ -1108,6 +1108,86 @@ function sortObjectKeys(obj) {
 }
 
 /**
+ * Assert consistency from pre-collected control snapshots.
+ *
+ * Uses the same comparison logic as {@link assertConsistency}
+ * but operates on already-fetched evaluator snapshots instead
+ * of re-querying each node. This eliminates the CDC
+ * propagation race between the evaluator repair cycle and a
+ * redundant re-query.
+ *
+ * Each snapshot must have: nodeId, nodes (array),
+ * partitions (array), leaders (object).
+ *
+ * @param {Array<Object>} snapshots - Control snapshots from
+ *   the consistency evaluator (post-repair).
+ * @throws {Error} If fewer than 2 snapshots or any
+ *   disagreement is found.
+ */
+function assertConsistencyFromSnapshots(snapshots) {
+  const valid = Array.isArray(snapshots) ? snapshots : [];
+  if (valid.length < 2) {
+    return;
+  }
+
+  const normalized = valid.map((snapshot) => ({
+    nodeId: String(snapshot?.nodeId || VALUE_UNKNOWN),
+    activeNodes: Array.isArray(snapshot?.nodes) ?
+      [...snapshot.nodes].sort() : [],
+    partitions: Array.isArray(snapshot?.partitions) ?
+      [...snapshot.partitions].sort() : [],
+    leaders: snapshot?.leaders &&
+      typeof snapshot.leaders === 'object' ?
+      sortObjectKeys(snapshot.leaders) : {},
+  }));
+
+  const reference = normalized[0];
+  const refActiveStr = JSON.stringify(reference.activeNodes);
+  const refPartStr = JSON.stringify(reference.partitions);
+  const refLeaderStr = JSON.stringify(reference.leaders);
+
+  for (let i = 1; i < normalized.length; i++) {
+    const other = normalized[i];
+
+    const otherActiveStr =
+      JSON.stringify(other.activeNodes);
+    if (otherActiveStr !== refActiveStr) {
+      throw new Error(
+        'Active nodes disagree between ' +
+        reference.nodeId + ' and ' + other.nodeId +
+        '. ' + reference.nodeId + ': ' +
+        refActiveStr + '. ' +
+        other.nodeId + ': ' + otherActiveStr,
+      );
+    }
+
+    const otherPartStr =
+      JSON.stringify(other.partitions);
+    if (otherPartStr !== refPartStr) {
+      throw new Error(
+        'Partition assignments disagree between ' +
+        reference.nodeId + ' and ' + other.nodeId +
+        '. ' + reference.nodeId + ': ' +
+        refPartStr + '. ' +
+        other.nodeId + ': ' + otherPartStr,
+      );
+    }
+
+    const otherLeaderStr =
+      JSON.stringify(other.leaders);
+    if (otherLeaderStr !== refLeaderStr) {
+      throw new Error(
+        'Leader identities disagree between ' +
+        reference.nodeId + ' and ' + other.nodeId +
+        '. ' + reference.nodeId + ': ' +
+        refLeaderStr + '. ' +
+        other.nodeId + ': ' + otherLeaderStr,
+      );
+    }
+  }
+}
+
+/**
  * Assert data integrity across replicas. Queries the given
  * table on each reachable node and compares results.
  *
@@ -1179,6 +1259,7 @@ async function assertDataIntegrity(nodes, table, expectedRows) {
 export {
   waitForConvergence,
   assertConsistency,
+  assertConsistencyFromSnapshots,
   assertDataIntegrity,
   isVoterReady,
   countVotersPerPartition,

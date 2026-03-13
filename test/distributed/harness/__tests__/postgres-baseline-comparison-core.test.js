@@ -198,9 +198,7 @@ describe('postgres-baseline-comparison scenario', () => {
         },
       }]),
       waitForConvergence: async () => ({settledAfterMs: 1}),
-      assertConsistency: async () => {
-        providerCalls.push('assertConsistency');
-      },
+      assertConsistency: async () => {},
     };
 
     const result = await run(cluster);
@@ -316,10 +314,6 @@ describe('postgres-baseline-comparison scenario', () => {
       removedContainers.length,
       3,
       'scenario should remove all benchmark containers in teardown',
-    );
-    assert.ok(
-      providerCalls.includes('assertConsistency'),
-      'scenario should verify cluster consistency at end',
     );
   });
 

@@ -117,6 +117,14 @@ To prevent overlap and contradictory runtime behavior:
    `SystemTableCache` updates lag behind authoritative state. Transport
    disconnection remains the definitive negative signal: a disconnected
    node with expired lease data is always unhealthy.
+   **Self-node cluster membership fast path (§1.4.12):** when a node
+   evaluates its own cluster membership (`nodeId === this.nodeId`) and
+   its cached status is `active`, it is trivially healthy — the node is
+   alive and executing the check. This is the strongest possible signal,
+   stronger than any cache lease or transport evidence. Without this,
+   CDC propagation delays during topology changes cause the local cache
+   lease to expire before the heartbeat CDC event propagates back,
+   leading to self-denial of load-lane admission.
    **Load-lane cache invalidation:** the load-lane readiness path
    (`resolveLoadLaneReadinessSnapshot` in `AdminWebSocketAPI`) does not
    use `allowStaleOnCacheChange`, so cache invalidation forces immediate

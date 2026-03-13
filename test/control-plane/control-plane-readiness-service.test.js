@@ -231,7 +231,7 @@ test('ControlPlaneReadinessService records serve and repair eligibility flips',
       services: [createMessageGroupService('node-1')],
     });
     const readinessService = new ControlPlaneReadinessService({
-      nodeId: 'node-1',
+      nodeId: 'observer-node',
       systemTableCache: cache,
       storageAccountingService: createAccountingService({
         'node-1': {
@@ -3010,5 +3010,172 @@ async (t) => {
   t.not(first, second,
     'cache invalidation must force fresh evaluation when ' +
     'allowStaleOnCacheChange is false');
+  t.end();
+});
+
+// ── Self-node admission denial regression (§1.4.12) ────────────────
+// Reproduces: 7-node partition-split harness node 11601fe0 self-denial
+// during CDC propagation delay. The local node's cache has an expired
+// ready_lease_expires_at because the heartbeat CDC event has not
+// propagated back yet. The node must NOT deny its own cluster membership
+// when it is the one running the readiness check.
+
+test('isClusterMemberHealthy returns true for self-node with expired ' +
+  'lease and stale row connection_state ' +
+  '(uses ControlPlaneReadinessService.isClusterMemberHealthy, ' +
+  'verifies §1.4.12 self-node fast path)',
+async (t) => {
+  const now = 200000;
+  const selfNodeId = 'node-self';
+  // Simulate CDC propagation delay: the node row in cache has an
+  // expired lease AND a stale/missing connection_state. The
+  // messageRouter also returns null (no connection entry). This
+  // reproduces the 7-node harness scenario where node 11601fe0
+  // denied its own load-lane admission during a partition split.
+  const cache = createCache({
+    nodes: [{
+      ...createActiveNode(selfNodeId),
+      [COLUMN.LAST_HEARTBEAT]: now - 35000,
+      [COLUMN.READY_LEASE_EXPIRES_AT]: now - 10000,
+    }],
+    services: [createMessageGroupService(selfNodeId)],
+  });
+  const readinessService = new ControlPlaneReadinessService({
+    nodeId: selfNodeId,
+    systemTableCache: cache,
+    messageRouter: {
+      getConnectionState() {
+        return null;
+      },
+    },
+    storageAccountingService: createAccountingService({
+      [selfNodeId]: {
+        nodeId: selfNodeId,
+        budgetBytes: 1000,
+        pressureState: 'normal',
+      },
+    }),
+    cdcGroupPropagationService: createPublicationService({
+      currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+      reasonCode: null,
+      enteredAt: '2026-03-04T00:00:00.000Z',
+      recentTransitions: [],
+    }),
+    now: () => now,
+  });
+
+  const readiness = await readinessService
+    .getNodeReadiness(selfNodeId);
+
+  t.equal(readiness.dimensions.clusterMemberHealthy, true,
+    'self-node must remain cluster-member-healthy despite expired ' +
+    'lease and no transport evidence — the node is alive and ' +
+    'running the check (§1.4.12)');
+  t.equal(readiness.dimensions.serveEligible, true,
+    'self-node must remain serve-eligible when only the cache ' +
+    'lease is stale');
+  t.equal(readiness.dimensions.controlPlaneWritable, true,
+    'self-node must remain control-plane-writable when only the ' +
+    'cache lease is stale');
+  t.end();
+});
+
+test('isClusterMemberHealthy self-node fast path does not apply to ' +
+  'remote nodes ' +
+  '(uses ControlPlaneReadinessService.isClusterMemberHealthy, ' +
+  'verifies §1.4.12 self-node scope)',
+async (t) => {
+  const now = 200000;
+  const selfNodeId = 'node-self';
+  const remoteNodeId = 'node-remote';
+  const cache = createCache({
+    nodes: [{
+      ...createActiveNode(remoteNodeId),
+      [COLUMN.LAST_HEARTBEAT]: now - 35000,
+      [COLUMN.READY_LEASE_EXPIRES_AT]: now - 10000,
+    }],
+    services: [createMessageGroupService(remoteNodeId)],
+  });
+  const readinessService = new ControlPlaneReadinessService({
+    nodeId: selfNodeId,
+    systemTableCache: cache,
+    messageRouter: {
+      getConnectionState() {
+        return null;
+      },
+    },
+    storageAccountingService: createAccountingService({
+      [remoteNodeId]: {
+        nodeId: remoteNodeId,
+        budgetBytes: 1000,
+        pressureState: 'normal',
+      },
+    }),
+    cdcGroupPropagationService: createPublicationService({
+      currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+      reasonCode: null,
+      enteredAt: '2026-03-04T00:00:00.000Z',
+      recentTransitions: [],
+    }),
+    now: () => now,
+  });
+
+  const readiness = await readinessService
+    .getNodeReadiness(remoteNodeId);
+
+  t.equal(readiness.dimensions.clusterMemberHealthy, false,
+    'remote node with expired lease and no transport must be ' +
+    'cluster-member-unhealthy — self-node fast path must not ' +
+    'apply to other nodes');
+  t.end();
+});
+
+test('isClusterMemberHealthy self-node fast path requires active ' +
+  'status ' +
+  '(uses ControlPlaneReadinessService.isClusterMemberHealthy, ' +
+  'verifies §1.4.12 self-node scope)',
+async (t) => {
+  const now = 200000;
+  const selfNodeId = 'node-self-inactive';
+  const cache = createCache({
+    nodes: [{
+      ...createActiveNode(selfNodeId),
+      [COLUMN.STATUS]: 'shutting_down',
+      [COLUMN.LAST_HEARTBEAT]: now - 35000,
+      [COLUMN.READY_LEASE_EXPIRES_AT]: now - 10000,
+    }],
+    services: [createMessageGroupService(selfNodeId)],
+  });
+  const readinessService = new ControlPlaneReadinessService({
+    nodeId: selfNodeId,
+    systemTableCache: cache,
+    messageRouter: {
+      getConnectionState() {
+        return null;
+      },
+    },
+    storageAccountingService: createAccountingService({
+      [selfNodeId]: {
+        nodeId: selfNodeId,
+        budgetBytes: 1000,
+        pressureState: 'normal',
+      },
+    }),
+    cdcGroupPropagationService: createPublicationService({
+      currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+      reasonCode: null,
+      enteredAt: '2026-03-04T00:00:00.000Z',
+      recentTransitions: [],
+    }),
+    now: () => now,
+  });
+
+  const readiness = await readinessService
+    .getNodeReadiness(selfNodeId);
+
+  t.equal(readiness.dimensions.clusterMemberHealthy, false,
+    'self-node with non-active status must not use the self-node ' +
+    'fast path — shutting_down nodes are not healthy cluster ' +
+    'members');
   t.end();
 });

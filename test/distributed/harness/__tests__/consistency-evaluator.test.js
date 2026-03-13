@@ -157,3 +157,43 @@ test('ConsistencyEvaluatorV2 classifies sparse snapshot coverage as insufficient
     );
     assert.deepEqual(result.mismatches, []);
   });
+
+test('ConsistencyEvaluatorV2 classifies missing leader on one ' +
+  'node as leader mismatch (CDC propagation gap)', async () => {
+  const evaluator = new ConsistencyEvaluatorV2();
+
+  const result = evaluator.evaluate({
+    reachableNodeIds: ['node-1', 'node-2'],
+    snapshots: [
+      createSnapshot('node-1', {
+        partitions: ['partition-1', 'partition-2'],
+        leaders: {
+          'partition-1': 'leader-a',
+          'partition-2': 'leader-a',
+        },
+      }),
+      createSnapshot('node-2', {
+        partitions: ['partition-1', 'partition-2'],
+        leaders: {
+          'partition-1': 'leader-a',
+        },
+      }),
+    ],
+  });
+
+  assert.equal(result.verdict, 'inconsistent');
+  assert.equal(result.hardFailure, true);
+
+  const leaderMismatch = result.mismatches.find((entry) =>
+    entry.kind === 'leader_mismatch',
+  );
+  assert.ok(
+    leaderMismatch,
+    'should detect missing leader as leader mismatch',
+  );
+  assert.equal(leaderMismatch.partitionId, 'partition-2');
+  assert.deepEqual(leaderMismatch.byNode, {
+    'node-1': 'leader-a',
+    'node-2': '',
+  });
+});

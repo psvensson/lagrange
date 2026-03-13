@@ -401,8 +401,7 @@ describe('postgres-baseline-comparison scenario', () => {
     );
   });
 
-  it('retries final consistency assertion on transient failures', async () => {
-    let assertConsistencyCalls = 0;
+  it('uses evaluator snapshots for single-pass consistency verification', async () => {
     const provider = {
       createContainer: async (_options) => ({
         containerId: 'benchmark-postgres-1',
@@ -535,20 +534,19 @@ describe('postgres-baseline-comparison scenario', () => {
       _networkName: 'test-net',
       getNodes: () => asNodeHandles([seedNode]),
       waitForConvergence: async () => ({settledAfterMs: 1}),
-      assertConsistency: async () => {
-        assertConsistencyCalls++;
-        if (assertConsistencyCalls === 1) {
-          throw new Error('Cannot assert consistency: fewer than 2 queryable nodes');
-        }
-      },
+      assertConsistency: async () => {},
     };
 
     const result = await run(cluster);
-    assert.ok(result.loadMetrics, 'scenario should complete when consistency recovers');
+    assert.ok(
+      result.loadMetrics,
+      'scenario should complete with evaluator-based consistency',
+    );
     assert.equal(
-      assertConsistencyCalls,
-      2,
-      'scenario should retry consistency check after a transient failure',
+      result.details.benchmark.consistencyAssertionAttempts,
+      1,
+      'evaluator-based verify uses single-pass ' +
+        'assertConsistencyFromSnapshots',
     );
   });
 
@@ -575,6 +573,7 @@ describe('postgres-baseline-comparison scenario', () => {
         removeContainer: async () => {},
       };
 
+      const sharedNodes = ['seed-1', 'joiner-1'];
       const seedNode = {
         id: 'seed-1',
         role: 'seed',
@@ -583,7 +582,8 @@ describe('postgres-baseline-comparison scenario', () => {
           if (statement === 'SELECT 1') {
             return {rows: [{value: 1}]};
           }
-          if (statement === 'SELECT count(*) FROM benchmark_events WHERE 1 = 0') {
+          if (statement ===
+            'SELECT count(*) FROM benchmark_events WHERE 1 = 0') {
             return {rows: [{count: 0}]};
           }
           if (statement.includes('FROM replica_operations') &&
@@ -591,9 +591,15 @@ describe('postgres-baseline-comparison scenario', () => {
             return {rows: []};
           }
           if (statement.includes('FROM tables')) {
-            return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+            return {
+              rows: [{
+                table_id: 'tbl-benchmark',
+                updated_at: 1740589945123,
+              }],
+            };
           }
-          if (statement.startsWith('UPDATE partitions SET table_name')) {
+          if (statement.startsWith(
+            'UPDATE partitions SET table_name')) {
             return {rows: [], changes: 1};
           }
           if (statement.includes('FROM partitions')) {
@@ -606,12 +612,14 @@ describe('postgres-baseline-comparison scenario', () => {
           }
           return {rows: []};
         },
-        queryWithTimeout: async function(sql, params = [], _options = {}) {
+        queryWithTimeout: async function(sql, params = [], _opts = {}) {
           const statement = String(sql);
           if (statement === NODE_CLIENT_CONTROL_SNAPSHOT_SQL ||
-            statement === NODE_CLIENT_CONTROL_SNAPSHOT_FORCE_REPAIR_SQL) {
+            statement ===
+              NODE_CLIENT_CONTROL_SNAPSHOT_FORCE_REPAIR_SQL) {
             return {
               rows: [buildControlSnapshotPayload(this.id, {
+                nodes: sharedNodes,
                 partitions: ['p1', 'p2'],
                 leaders: {
                   p1: 'seed-1',
@@ -632,7 +640,8 @@ describe('postgres-baseline-comparison scenario', () => {
           if (statement === 'SELECT 1') {
             return {rows: [{value: 1}]};
           }
-          if (statement === 'SELECT count(*) FROM benchmark_events WHERE 1 = 0') {
+          if (statement ===
+            'SELECT count(*) FROM benchmark_events WHERE 1 = 0') {
             return {rows: [{count: 0}]};
           }
           if (statement.includes('FROM replica_operations') &&
@@ -640,9 +649,15 @@ describe('postgres-baseline-comparison scenario', () => {
             return {rows: []};
           }
           if (statement.includes('FROM tables')) {
-            return {rows: [{table_id: 'tbl-benchmark', updated_at: 1740589945123}]};
+            return {
+              rows: [{
+                table_id: 'tbl-benchmark',
+                updated_at: 1740589945123,
+              }],
+            };
           }
-          if (statement.startsWith('UPDATE partitions SET table_name')) {
+          if (statement.startsWith(
+            'UPDATE partitions SET table_name')) {
             return {rows: [], changes: 1};
           }
           if (statement.includes('FROM partitions')) {
@@ -655,20 +670,23 @@ describe('postgres-baseline-comparison scenario', () => {
           }
           return {rows: []};
         },
-        queryWithTimeout: async function(sql, params = [], _options = {}) {
+        queryWithTimeout: async function(sql, params = [], _opts = {}) {
           const statement = String(sql);
           if (statement === NODE_CLIENT_CONTROL_SNAPSHOT_SQL) {
             return {
               rows: [buildControlSnapshotPayload(this.id, {
+                nodes: sharedNodes,
                 partitions: ['p1'],
                 leaders: {p1: 'seed-1'},
               })],
             };
           }
-          if (statement === NODE_CLIENT_CONTROL_SNAPSHOT_FORCE_REPAIR_SQL) {
+          if (statement ===
+            NODE_CLIENT_CONTROL_SNAPSHOT_FORCE_REPAIR_SQL) {
             forcedSnapshotCalls++;
             return {
               rows: [buildControlSnapshotPayload(this.id, {
+                nodes: sharedNodes,
                 partitions: ['p1', 'p2'],
                 leaders: {
                   p1: 'seed-1',
@@ -768,6 +786,268 @@ describe('postgres-baseline-comparison scenario', () => {
         result.details.verification.verdict,
         'consistent',
         'verification should converge after forced snapshot refresh',
+      );
+    });
+
+  it('retries control snapshots with forced repair after leader ' +
+    'identity mismatch from CDC propagation gap', async () => {
+      let forcedSnapshotCalls = 0;
+      const provider = {
+        createContainer: async (_options) => ({
+          containerId: 'benchmark-postgres-1',
+          ip: '172.18.0.80',
+          name: 'benchmark-postgres-1',
+        }),
+        execInContainer: async (_containerId, cmd) => {
+          const command = String(cmd[2] || '');
+          if (command.includes('pg_isready')) {
+            return {
+              exitCode: 0,
+              stdout: 'accepting connections',
+              stderr: '',
+            };
+          }
+          if (command.includes('pg_stat_replication')) {
+            return {exitCode: 0, stdout: '0\n', stderr: ''};
+          }
+          return {exitCode: 0, stdout: '', stderr: ''};
+        },
+        stopContainer: async () => {},
+        removeContainer: async () => {},
+      };
+
+      const sharedNodes = ['seed-1', 'joiner-1'];
+      const sharedPartitions = ['p1', 'p2', 'p2-left'];
+      const fullLeaders = {
+        p1: 'seed-1',
+        p2: 'seed-1',
+        'p2-left': 'seed-1',
+      };
+      const laggingLeaders = {
+        p1: 'seed-1',
+        p2: 'seed-1',
+      };
+
+      const seedNode = {
+        id: 'seed-1',
+        role: 'seed',
+        query: async (sql) => {
+          const statement = String(sql);
+          if (statement === 'SELECT 1') {
+            return {rows: [{value: 1}]};
+          }
+          if (statement ===
+            'SELECT count(*) FROM benchmark_events ' +
+            'WHERE 1 = 0') {
+            return {rows: [{count: 0}]};
+          }
+          if (statement.includes('FROM replica_operations') &&
+            statement.includes('status NOT IN')) {
+            return {rows: []};
+          }
+          if (statement.includes('FROM tables')) {
+            return {
+              rows: [{
+                table_id: 'tbl-benchmark',
+                updated_at: 1740589945123,
+              }],
+            };
+          }
+          if (statement.startsWith(
+            'UPDATE partitions SET table_name')) {
+            return {rows: [], changes: 1};
+          }
+          if (statement.includes('FROM partitions')) {
+            return {
+              rows: sharedPartitions.map(
+                (partitionId) => ({partition_id: partitionId}),
+              ),
+            };
+          }
+          return {rows: []};
+        },
+        queryWithTimeout: async function(
+          sql, params = [], _opts = {},
+        ) {
+          const statement = String(sql);
+          if (statement ===
+            NODE_CLIENT_CONTROL_SNAPSHOT_SQL ||
+            statement ===
+              NODE_CLIENT_CONTROL_SNAPSHOT_FORCE_REPAIR_SQL) {
+            return {
+              rows: [buildControlSnapshotPayload(this.id, {
+                nodes: sharedNodes,
+                partitions: sharedPartitions,
+                leaders: fullLeaders,
+              })],
+            };
+          }
+          return this.query(statement, params);
+        },
+      };
+
+      const laggingNode = {
+        id: 'joiner-1',
+        role: 'joiner',
+        query: async (sql) => {
+          const statement = String(sql);
+          if (statement === 'SELECT 1') {
+            return {rows: [{value: 1}]};
+          }
+          if (statement ===
+            'SELECT count(*) FROM benchmark_events ' +
+            'WHERE 1 = 0') {
+            return {rows: [{count: 0}]};
+          }
+          if (statement.includes('FROM replica_operations') &&
+            statement.includes('status NOT IN')) {
+            return {rows: []};
+          }
+          if (statement.includes('FROM tables')) {
+            return {
+              rows: [{
+                table_id: 'tbl-benchmark',
+                updated_at: 1740589945123,
+              }],
+            };
+          }
+          if (statement.startsWith(
+            'UPDATE partitions SET table_name')) {
+            return {rows: [], changes: 1};
+          }
+          if (statement.includes('FROM partitions')) {
+            return {
+              rows: sharedPartitions.map(
+                (partitionId) => ({partition_id: partitionId}),
+              ),
+            };
+          }
+          return {rows: []};
+        },
+        queryWithTimeout: async function(
+          sql, params = [], _opts = {},
+        ) {
+          const statement = String(sql);
+          if (statement ===
+            NODE_CLIENT_CONTROL_SNAPSHOT_SQL) {
+            return {
+              rows: [buildControlSnapshotPayload(this.id, {
+                nodes: sharedNodes,
+                partitions: sharedPartitions,
+                leaders: laggingLeaders,
+              })],
+            };
+          }
+          if (statement ===
+            NODE_CLIENT_CONTROL_SNAPSHOT_FORCE_REPAIR_SQL) {
+            forcedSnapshotCalls++;
+            return {
+              rows: [buildControlSnapshotPayload(this.id, {
+                nodes: sharedNodes,
+                partitions: sharedPartitions,
+                leaders: fullLeaders,
+              })],
+            };
+          }
+          return this.query(statement, params);
+        },
+      };
+
+      const cluster = {
+        _config: {
+          benchmark: {
+            baselineImage: 'postgres:16',
+            durationSeconds: 5,
+            clients: 2,
+            jobs: 1,
+            baselineLoadNodeCount: 2,
+            loadOpsPerSec: 40,
+            loadDuration: '5s',
+            loadMaxInFlight: 64,
+            tableName: 'benchmark_events',
+            replicationFactor: 1,
+            syncReplicaAcks: 0,
+            quiescentTimeoutMs: 200,
+            quiescentPollIntervalMs: 5,
+            quiescentStableWindowMs: 0,
+            postLoadDrainTimeoutMs: 200,
+            postLoadDrainPollIntervalMs: 5,
+            postLoadDrainStableWindowMs: 0,
+          },
+          convergence: {
+            settleTimeoutMs: 1000,
+            quietWindowMs: 100,
+            targetVoterCount: 3,
+          },
+          resourceLimits: {
+            memory: '1g',
+            cpus: '1.0',
+          },
+          timeouts: {
+            nodeStartup: 1000,
+          },
+        },
+        _scenarioOverrides: {
+          postgresBaselineComparison: {
+            createPostgresPool: () => ({
+              query: async () => ({rows: []}),
+              end: async () => {},
+            }),
+            createLoadGenerator: (nodes) => {
+              const isBaselineLoad =
+                String(nodes?.[0]?.id || '').startsWith(
+                  'postgres-baseline-load-node-',
+                );
+              return {
+                start: () => ({
+                  waitComplete: async () => (
+                    isBaselineLoad ?
+                      {
+                        total: 100,
+                        success: 100,
+                        failed: 0,
+                        errors: 0,
+                        opsPerSec: 100,
+                        latency: {
+                          avg: 1, p50: 1, p95: 2, p99: 2,
+                        },
+                      } :
+                      {
+                        total: 100,
+                        success: 100,
+                        failed: 0,
+                        errors: 0,
+                        opsPerSec: 50,
+                        latency: {
+                          avg: 4, p50: 3, p95: 6, p99: 7,
+                        },
+                      }
+                  ),
+                }),
+              };
+            },
+          },
+        },
+        _providers: [provider],
+        _hostAssignment: [0],
+        _networkName: 'test-net',
+        getNodes: () => asNodeHandles([seedNode, laggingNode]),
+        waitForConvergence: async () => ({settledAfterMs: 1}),
+        assertConsistency: async () => {},
+      };
+
+      const result = await run(cluster);
+      assert.equal(
+        forcedSnapshotCalls,
+        1,
+        'verification should force authoritative refresh ' +
+          'on node with missing split-child leader',
+      );
+      assert.equal(
+        result.details.verification.verdict,
+        'consistent',
+        'verification should converge after forced ' +
+          'leader-mismatch snapshot refresh',
       );
     });
 
@@ -954,8 +1234,8 @@ describe('postgres-baseline-comparison scenario', () => {
 
   it('maps post-load drain timeout to soft warning policy when configured', async () => {
     let loadCompleted = false;
-    let assertConsistencyCalls = 0;
-    const benchmarkTableProbeSql = 'SELECT count(*) FROM benchmark_events WHERE 1 = 0';
+    const benchmarkTableProbeSql =
+      'SELECT count(*) FROM benchmark_events WHERE 1 = 0';
     const provider = {
       createContainer: async (_options) => ({
         containerId: 'benchmark-postgres-1',
@@ -1112,17 +1392,25 @@ describe('postgres-baseline-comparison scenario', () => {
       _networkName: 'test-net',
       getNodes: () => asNodeHandles([seedNode]),
       waitForConvergence: async () => ({settledAfterMs: 1}),
-      assertConsistency: async () => {
-        assertConsistencyCalls++;
-      },
+      assertConsistency: async () => {},
     };
 
     const result = await run(cluster);
-    assert.ok(result.loadMetrics, 'scenario should keep load metrics on soft warning');
-    assert.equal(assertConsistencyCalls, 1, 'consistency assertion should still execute');
-    assert.equal(result.details.verification.verdict, 'insufficient_evidence');
-    assert.equal(result.details.verification.confidence, 'medium');
-    assert.equal(result.details.policy.assertionStatus, 'passed_with_warnings');
+    assert.ok(
+      result.loadMetrics,
+      'scenario should keep load metrics on soft warning',
+    );
+    assert.equal(
+      result.details.verification.verdict,
+      'insufficient_evidence',
+    );
+    assert.equal(
+      result.details.verification.confidence, 'medium',
+    );
+    assert.equal(
+      result.details.policy.assertionStatus,
+      'passed_with_warnings',
+    );
   });
 
   it('fails when SUT load reports operation-level errors', async () => {

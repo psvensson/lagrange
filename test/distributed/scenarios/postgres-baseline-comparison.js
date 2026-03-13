@@ -36,6 +36,9 @@ import {
   collectLoadMetricHardFailures,
 } from '../harness/assertion-policy.js';
 import {ConsistencyEvaluatorV2} from '../harness/consistency-evaluator.js';
+import {
+  assertConsistencyFromSnapshots,
+} from '../harness/assertions.js';
 import {NodeClient} from '../harness/node-client.js';
 import {PhaseOrchestrator} from '../harness/phase-orchestrator.js';
 import {
@@ -458,9 +461,9 @@ const ROOT_CAUSE_SNAPSHOT_KIND_CONTROL_SNAPSHOT = 'control_snapshot';
 const SNAPSHOT_WARNING_PREFIX = 'snapshot_error:';
 const SNAPSHOT_REFRESH_WARNING_PREFIX = 'snapshot_refresh_error:';
 const SNAPSHOT_REFRESH_WARNING_UNRESOLVED =
-  'snapshot_refresh_unresolved_partition_set_mismatch';
+  'snapshot_refresh_unresolved_mismatch';
 const SNAPSHOT_REFRESH_WARNING_SKIPPED =
-  'snapshot_refresh_partition_set_mismatch_without_targets';
+  'snapshot_refresh_mismatch_without_targets';
 const BENCHMARK_TABLE_CREATE_TIMEOUT_HEADROOM_MS = 5000;
 const BENCHMARK_TABLE_CREATE_CONTROL_TIMEOUT_MS =
   QUERY_DEFAULTS.TABLE_CREATE_PROVISION_TIMEOUT_MS +
@@ -3747,6 +3750,34 @@ function resolvePartitionSetRefreshNodeIds(
   return [...signatureByNodeId.keys()].sort();
 }
 
+function resolveMismatchRefreshNodeIds(
+  mismatches,
+  verificationNodeIds,
+) {
+  const partitionSetMismatch =
+    resolvePartitionSetMismatchEntry(mismatches);
+  if (partitionSetMismatch) {
+    return resolvePartitionSetRefreshNodeIds(
+      partitionSetMismatch,
+      verificationNodeIds,
+    );
+  }
+  const nodeIds = Array.isArray(verificationNodeIds) ?
+    verificationNodeIds : [];
+  return nodeIds
+    .map((nodeId) => String(nodeId))
+    .filter((nodeId) => nodeId.length > ZERO)
+    .sort();
+}
+
+function resolveFirstMismatchKind(mismatches) {
+  const entries = Array.isArray(mismatches) ? mismatches : [];
+  if (entries.length === ZERO) {
+    return null;
+  }
+  return String(entries[ZERO]?.kind || '');
+}
+
 function replaceSnapshotsByNodeId(baseSnapshots, refreshedSnapshots) {
   const original = Array.isArray(baseSnapshots) ? baseSnapshots : [];
   const replacements = Array.isArray(refreshedSnapshots) ? refreshedSnapshots : [];
@@ -4917,40 +4948,6 @@ async function waitForSutLoadQuiescence({
   throw error;
 }
 
-async function assertClusterConsistencyWithRetry(cluster, options = {}) {
-  const timing = resolveScenarioTiming(options.timing);
-  const maxAttempts = Number.isInteger(options.maxAttempts) &&
-    options.maxAttempts > ZERO ?
-    options.maxAttempts :
-    BENCHMARK_DEFAULTS.consistencyAssertMaxAttempts;
-  const retryDelayMs = Number.isInteger(options.retryDelayMs) &&
-    options.retryDelayMs >= ZERO ?
-    options.retryDelayMs :
-    BENCHMARK_DEFAULTS.consistencyAssertRetryDelayMs;
-  let lastError = null;
-
-  for (let attempt = ONE; attempt <= maxAttempts; attempt++) {
-    try {
-      await cluster.assertConsistency();
-      return {attempts: attempt};
-    } catch (error) {
-      lastError = error;
-      if (attempt >= maxAttempts) {
-        break;
-      }
-      if (retryDelayMs > ZERO) {
-        await timing.sleep(retryDelayMs);
-      }
-    }
-  }
-
-  throw new Error(
-    'Cluster consistency assertion failed after ' +
-    maxAttempts +
-    ' attempts: ' +
-    String(lastError?.message || lastError),
-  );
-}
 
 function buildPsqlCommand(options = {}) {
   const host = String(options.host || LOCALHOST);
@@ -8853,9 +8850,10 @@ async function run(cluster) {
         });
       const snapshotRefresh =
         createVerificationSnapshotRefreshResult();
-      const partitionSetMismatch =
-        resolvePartitionSetMismatchEntry(evaluation.mismatches);
-      if (partitionSetMismatch &&
+      const hasMismatches =
+        Array.isArray(evaluation.mismatches) &&
+        evaluation.mismatches.length > ZERO;
+      if (hasMismatches &&
           state.verificationNodeIds.length > ONE) {
         const verificationNodeById = new Map();
         for (const node of verificationNodes) {
@@ -8866,10 +8864,10 @@ async function run(cluster) {
         }
         snapshotRefresh.attempted = true;
         snapshotRefresh.triggerMismatchKind =
-          CONSISTENCY_MISMATCH_KIND.PARTITION_SET;
+          resolveFirstMismatchKind(evaluation.mismatches);
         snapshotRefresh.targetNodeIds =
-          resolvePartitionSetRefreshNodeIds(
-            partitionSetMismatch,
+          resolveMismatchRefreshNodeIds(
+            evaluation.mismatches,
             state.verificationNodeIds,
           );
 
@@ -8913,13 +8911,9 @@ async function run(cluster) {
               reachableNodeIds: state.verificationNodeIds,
               snapshots,
             });
-            const refreshedPartitionSetMismatch =
-              resolvePartitionSetMismatchEntry(
-                evaluation.mismatches,
-              );
             snapshotRefresh.resolved =
-              refreshedPartitionSetMismatch === null;
-            if (refreshedPartitionSetMismatch) {
+              evaluation.mismatches.length === ZERO;
+            if (evaluation.mismatches.length > ZERO) {
               snapshotWarnings.push(
                 SNAPSHOT_REFRESH_WARNING_UNRESOLVED,
               );
@@ -8953,11 +8947,8 @@ async function run(cluster) {
         evidenceWarnings,
       };
 
-      state.consistencyResult = await assertClusterConsistencyWithRetry(cluster, {
-        maxAttempts: benchmarkConfig.consistencyAssertMaxAttempts,
-        retryDelayMs: benchmarkConfig.consistencyAssertRetryDelayMs,
-        timing: scenarioOverrides.timing,
-      });
+      assertConsistencyFromSnapshots(snapshots);
+      state.consistencyResult = {attempts: ONE};
       emitPhaseMeaningfulChange(phaseContext, 'verification consistency evaluated', {
         verdict: state.consistencyVerdict,
         snapshotCount: snapshots.length,

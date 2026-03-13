@@ -2012,21 +2012,36 @@ class ControlPlaneReadinessService {
       return true;
     }
 
-    if (String(nodeRow?.[COLUMN.STATUS] || '').toLowerCase() !==
-      SERVICE_STATUS.ACTIVE) {
+    const statusActive =
+      String(nodeRow?.[COLUMN.STATUS] || '').toLowerCase() ===
+        SERVICE_STATUS.ACTIVE;
+
+    if (!statusActive) {
       return false;
+    }
+
+    // §1.4.12 self-node fast path: a running node evaluating its own
+    // cluster membership is trivially healthy — it is alive and
+    // executing this check. This is the strongest possible signal,
+    // stronger than any cache lease or transport evidence. Without
+    // this, CDC propagation delays during topology changes (splits,
+    // rebalance) cause the local cache lease to expire before the
+    // heartbeat CDC event propagates back, leading to self-denial
+    // of load-lane admission.
+    if (nodeId === this.nodeId) {
+      return true;
     }
 
     if (!this.isNodeTransportConnected(nodeId, nodeRow)) {
       return false;
     }
 
-    // §1.4.12: Live transport connectivity is the strongest evidence that
-    // a node is reachable.  When the message router reports the node as
-    // connected, trust that signal over stale cache lease/heartbeat data.
-    // This prevents transient serveEligible=false during topology changes
-    // (splits, rebalance) where CDC-driven cache updates lag behind
-    // authoritative state.
+    // §1.4.12: Live transport connectivity is the strongest evidence
+    // that a remote node is reachable. When the message router
+    // reports the node as connected, trust that signal over stale
+    // cache lease/heartbeat data. This prevents transient
+    // serveEligible=false during topology changes where CDC-driven
+    // cache updates lag behind authoritative state.
     return true;
   }
 
