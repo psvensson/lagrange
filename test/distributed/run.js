@@ -160,6 +160,42 @@ const SCENARIO_PHASE_EVENT_TYPE_NO_PROGRESS_WARNING =
 const SCENARIO_PHASE_EVENT_TYPE_FAILED_NO_PROGRESS =
   'phase.failed_no_progress';
 
+const SUMMARY_SEPARATOR =
+  '─────────────────────────────────────────────────────';
+const SUMMARY_HEADER = '\n' + SUMMARY_SEPARATOR + '\n';
+const SUMMARY_FOOTER = SUMMARY_SEPARATOR + '\n';
+const SUMMARY_RESULT_PASS = '✓ PASS';
+const SUMMARY_RESULT_FAIL = '✗ FAIL';
+const SUMMARY_LABEL_DURATION = '  duration: ';
+const SUMMARY_LABEL_CLUSTER = '  cluster:  ';
+const SUMMARY_LABEL_LOAD = '  load:     ';
+const SUMMARY_LABEL_LATENCY = '  latency:  ';
+const SUMMARY_LABEL_VS_PREV = '  vs prev:  ';
+const SUMMARY_LABEL_PG_BASE = '  vs pg:    ';
+const SUMMARY_NODES_SUFFIX = ' nodes';
+const SUMMARY_OPS_SUFFIX = ' ops';
+const SUMMARY_SUCCESS_RATE_SUFFIX = ' success';
+const SUMMARY_OPS_PER_SEC_SUFFIX = ' ops/s';
+const SUMMARY_MS_SUFFIX = 'ms';
+const SUMMARY_LATENCY_P50 = 'p50=';
+const SUMMARY_LATENCY_P95 = ' p95=';
+const SUMMARY_LATENCY_P99 = ' p99=';
+const SUMMARY_PREV_PASS_CHANGED = 'status changed';
+const SUMMARY_PREV_SAME = 'same status';
+const SUMMARY_PREV_OPS_PREFIX = ', ops/s ';
+const SUMMARY_PREV_P99_PREFIX = ', p99 ';
+const SUMMARY_PG_THROUGHPUT_PREFIX = 'throughput ';
+const SUMMARY_PG_THROUGHPUT_SUFFIX = 'x pg';
+const SUMMARY_PG_SUT_PREFIX = ' (sut=';
+const SUMMARY_PG_BASELINE_PREFIX = ', pg=';
+const SUMMARY_PG_CLOSE_PAREN = ')';
+const SUMMARY_NO_PREV = '  vs prev:  no previous run found\n';
+const SUMMARY_NO_PG = '  vs pg:    no baseline available\n';
+const SUMMARY_PERCENT_MULTIPLIER = 100;
+const SUMMARY_FIXED_DECIMALS_RATE = 1;
+const SUMMARY_FIXED_DECIMALS_RATIO = 2;
+const SUMMARY_FIXED_DECIMALS_OPS = 1;
+
 function formatScenarioPhaseEventValue(value) {
   if (Array.isArray(value)) {
     return JSON.stringify(value);
@@ -1797,6 +1833,140 @@ async function loadScenarioModule(scenarioPath) {
 }
 
 /**
+ * Format a signed delta string with + or - prefix.
+ * @param {number|null} value
+ * @param {string} suffix
+ * @returns {string}
+ */
+function formatSignedDelta(value, suffix) {
+  if (value === null || !Number.isFinite(value)) {
+    return 'n/a';
+  }
+  const sign = value >= 0 ? '+' : '';
+  return sign + value.toFixed(SUMMARY_FIXED_DECIMALS_OPS) + suffix;
+}
+
+/**
+ * Print a concise run summary to stdout after the report is
+ * written. Shows per-scenario metrics, delta vs previous run,
+ * and postgres baseline comparison.
+ *
+ * @param {Object} reportPreview - { summary, standardSummary }
+ * @param {Array<Object>} scenarioEntries - report.scenarios
+ */
+function formatRunSummary(reportPreview, scenarioEntries) {
+  const lines = [SUMMARY_HEADER];
+  const summary = reportPreview.summary;
+  const stdScenarios = Array.isArray(
+    reportPreview.standardSummary?.scenarios,
+  ) ? reportPreview.standardSummary.scenarios : [];
+
+  lines.push(
+    'Run: ' + summary.passed + '/' + summary.total +
+    ' passed, ' + summary.failed + ' failed' +
+    ' (' + (summary.duration / 1000).toFixed(
+      SUMMARY_FIXED_DECIMALS_OPS,
+    ) + 's)\n',
+  );
+
+  for (let i = 0; i < stdScenarios.length; i++) {
+    const std = stdScenarios[i];
+    const entry = scenarioEntries[i] || null;
+    const current = std.current;
+    const result = current.passed ?
+      SUMMARY_RESULT_PASS : SUMMARY_RESULT_FAIL;
+
+    lines.push('\n' + result + ' ' + std.scenario + '\n');
+    lines.push(
+      SUMMARY_LABEL_DURATION +
+      (current.durationMs / 1000).toFixed(
+        SUMMARY_FIXED_DECIMALS_OPS,
+      ) + 's\n',
+    );
+    lines.push(
+      SUMMARY_LABEL_CLUSTER + current.clusterSize +
+      SUMMARY_NODES_SUFFIX + '\n',
+    );
+
+    const loadMetrics = entry?.loadMetrics;
+    if (loadMetrics && typeof loadMetrics === 'object') {
+      const total = Number(loadMetrics.total || 0);
+      const success = Number(loadMetrics.success || 0);
+      const rate = total > 0 ?
+        (success / total * SUMMARY_PERCENT_MULTIPLIER)
+          .toFixed(SUMMARY_FIXED_DECIMALS_RATE) :
+        '0.0';
+      lines.push(
+        SUMMARY_LABEL_LOAD +
+        total + SUMMARY_OPS_SUFFIX +
+        ', ' + rate + '%' + SUMMARY_SUCCESS_RATE_SUFFIX +
+        ', ' + Number(loadMetrics.opsPerSec || 0)
+          .toFixed(SUMMARY_FIXED_DECIMALS_OPS) +
+        SUMMARY_OPS_PER_SEC_SUFFIX + '\n',
+      );
+      const lat = loadMetrics.latency;
+      if (lat && typeof lat === 'object') {
+        lines.push(
+          SUMMARY_LABEL_LATENCY +
+          SUMMARY_LATENCY_P50 + (lat.p50 || 0) +
+          SUMMARY_MS_SUFFIX +
+          SUMMARY_LATENCY_P95 + (lat.p95 || 0) +
+          SUMMARY_MS_SUFFIX +
+          SUMMARY_LATENCY_P99 + (lat.p99 || 0) +
+          SUMMARY_MS_SUFFIX + '\n',
+        );
+      }
+    }
+
+    const delta = std.deltaVsPrevious;
+    const prev = std.previousSimilarRun;
+    if (prev) {
+      const statusPart = delta.passedChanged ?
+        SUMMARY_PREV_PASS_CHANGED : SUMMARY_PREV_SAME;
+      const opsDelta = formatSignedDelta(
+        delta.opsPerSec,
+        SUMMARY_OPS_PER_SEC_SUFFIX,
+      );
+      const p99Delta = formatSignedDelta(
+        delta.p99LatencyMs,
+        SUMMARY_MS_SUFFIX,
+      );
+      lines.push(
+        SUMMARY_LABEL_VS_PREV + statusPart +
+        SUMMARY_PREV_OPS_PREFIX + opsDelta +
+        SUMMARY_PREV_P99_PREFIX + p99Delta + '\n',
+      );
+    } else {
+      lines.push(SUMMARY_NO_PREV);
+    }
+
+    const pg = std.postgresBaseline;
+    if (pg && pg.throughputRatioSutToBaseline !== null) {
+      const ratio = pg.throughputRatioSutToBaseline
+        .toFixed(SUMMARY_FIXED_DECIMALS_RATIO);
+      const sutOps = pg.sutOpsPerSec !== null ?
+        pg.sutOpsPerSec.toFixed(SUMMARY_FIXED_DECIMALS_OPS) : '?';
+      const pgOps = pg.baselineTps !== null ?
+        pg.baselineTps.toFixed(SUMMARY_FIXED_DECIMALS_OPS) : '?';
+      lines.push(
+        SUMMARY_LABEL_PG_BASE +
+        SUMMARY_PG_THROUGHPUT_PREFIX + ratio +
+        SUMMARY_PG_THROUGHPUT_SUFFIX +
+        SUMMARY_PG_SUT_PREFIX + sutOps +
+        SUMMARY_PG_BASELINE_PREFIX + pgOps +
+        SUMMARY_OPS_PER_SEC_SUFFIX +
+        SUMMARY_PG_CLOSE_PAREN + '\n',
+      );
+    } else {
+      lines.push(SUMMARY_NO_PG);
+    }
+  }
+
+  lines.push('\n' + SUMMARY_FOOTER);
+  return lines.join('');
+}
+
+/**
  * Main entry point. Parses args, loads config, discovers
  * scenarios, runs them, writes report, and exits.
  */
@@ -1939,6 +2109,10 @@ async function main() {
     );
   }
 
+  process.stdout.write(
+    formatRunSummary(reportPreview, report.scenarios),
+  );
+
   const gateFailed = benchmarkRegressionGate.status === BENCHMARK_GATE_STATUS.FAILED;
   const hasRunFailures = hasFailures || gateFailed;
   if (args.verbose && gateFailed) {
@@ -1987,4 +2161,5 @@ export {
   resolveGitDirty,
   deriveRunOutputDir,
   loadHistoricalReports,
+  formatRunSummary,
 };

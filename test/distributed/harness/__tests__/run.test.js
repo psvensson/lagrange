@@ -29,6 +29,7 @@ import {
   loadHistoricalReports,
   loadScenarioModule,
   shouldPrintLiveLogEntry,
+  formatRunSummary,
 } from '../../run.js';
 import {CLI} from '../constants.js';
 import {DockerProvider} from '../docker-provider.js';
@@ -1025,5 +1026,167 @@ describe('shouldPrintLiveLogEntry', () => {
       }),
       false,
     );
+  });
+});
+
+describe('formatRunSummary', () => {
+  const SCENARIO_NAME = 'test-scenario';
+  const CLUSTER_SIZE = 7;
+  const DURATION_MS = 300000;
+  const TOTAL_OPS = 1777;
+  const SUCCESS_OPS = 1777;
+  const OPS_PER_SEC = 23.6;
+  const LATENCY_P50 = 47;
+  const LATENCY_P95 = 1116;
+  const LATENCY_P99 = 1575;
+
+  function buildPreview(overrides = {}) {
+    const current = {
+      passed: true,
+      clusterSize: CLUSTER_SIZE,
+      durationMs: DURATION_MS,
+      opsPerSec: OPS_PER_SEC,
+      p99LatencyMs: LATENCY_P99,
+      opsPerSecPerNode: OPS_PER_SEC / CLUSTER_SIZE,
+      ...(overrides.current || {}),
+    };
+    return {
+      summary: {
+        total: 1,
+        passed: 1,
+        failed: 0,
+        duration: DURATION_MS,
+        ...(overrides.summary || {}),
+      },
+      standardSummary: {
+        scenarios: [{
+          scenario: SCENARIO_NAME,
+          current,
+          previousSimilarRun: overrides.prev || null,
+          deltaVsPrevious: overrides.delta || null,
+          postgresBaseline: overrides.pg || null,
+        }],
+      },
+    };
+  }
+
+  function buildEntry(overrides = {}) {
+    return {
+      scenario: SCENARIO_NAME,
+      passed: true,
+      duration: DURATION_MS,
+      loadMetrics: {
+        total: TOTAL_OPS,
+        success: SUCCESS_OPS,
+        failed: 0,
+        errors: 0,
+        opsPerSec: OPS_PER_SEC,
+        latency: {
+          p50: LATENCY_P50,
+          p95: LATENCY_P95,
+          p99: LATENCY_P99,
+        },
+        ...(overrides.loadMetrics || {}),
+      },
+      ...(overrides.entry || {}),
+    };
+  }
+
+  it('includes pass result and load metrics', () => {
+    const preview = buildPreview();
+    const entries = [buildEntry()];
+    const output = formatRunSummary(preview, entries);
+    assert.match(output, /PASS/);
+    assert.match(output, /test-scenario/);
+    assert.match(output, /1777 ops/);
+    assert.match(output, /100\.0%/);
+    assert.match(output, /23\.6/);
+    assert.match(output, /p50=47ms/);
+    assert.match(output, /p95=1116ms/);
+    assert.match(output, /p99=1575ms/);
+    assert.match(output, /7 nodes/);
+  });
+
+  it('includes fail result', () => {
+    const preview = buildPreview({
+      summary: {total: 1, passed: 0, failed: 1, duration: DURATION_MS},
+      current: {passed: false},
+    });
+    const entries = [buildEntry({entry: {passed: false}})];
+    const output = formatRunSummary(preview, entries);
+    assert.match(output, /FAIL/);
+    assert.match(output, /0\/1 passed/);
+  });
+
+  it('shows delta vs previous run', () => {
+    const preview = buildPreview({
+      prev: {passed: true, durationMs: 280000},
+      delta: {
+        passedChanged: false,
+        opsPerSec: 2.5,
+        p99LatencyMs: -50,
+      },
+    });
+    const entries = [buildEntry()];
+    const output = formatRunSummary(preview, entries);
+    assert.match(output, /same status/);
+    assert.match(output, /\+2\.5/);
+    assert.match(output, /-50\.0ms/);
+  });
+
+  it('shows status changed for delta', () => {
+    const preview = buildPreview({
+      prev: {passed: false, durationMs: 280000},
+      delta: {
+        passedChanged: true,
+        opsPerSec: null,
+        p99LatencyMs: null,
+      },
+    });
+    const entries = [buildEntry()];
+    const output = formatRunSummary(preview, entries);
+    assert.match(output, /status changed/);
+  });
+
+  it('shows no previous run when absent', () => {
+    const preview = buildPreview();
+    const entries = [buildEntry()];
+    const output = formatRunSummary(preview, entries);
+    assert.match(output, /no previous run found/);
+  });
+
+  it('shows postgres baseline comparison', () => {
+    const preview = buildPreview({
+      pg: {
+        throughputRatioSutToBaseline: 0.98,
+        sutOpsPerSec: 23.6,
+        baselineTps: 24.0,
+      },
+    });
+    const entries = [buildEntry()];
+    const output = formatRunSummary(preview, entries);
+    assert.match(output, /0\.98x pg/);
+    assert.match(output, /sut=23\.6/);
+    assert.match(output, /pg=24\.0/);
+  });
+
+  it('shows no baseline when absent', () => {
+    const preview = buildPreview();
+    const entries = [buildEntry()];
+    const output = formatRunSummary(preview, entries);
+    assert.match(output, /no baseline available/);
+  });
+
+  it('handles missing load metrics gracefully', () => {
+    const preview = buildPreview();
+    const entries = [{
+      scenario: SCENARIO_NAME,
+      passed: true,
+      duration: DURATION_MS,
+      loadMetrics: null,
+    }];
+    const output = formatRunSummary(preview, entries);
+    assert.match(output, /PASS/);
+    assert.doesNotMatch(output, /ops,/);
   });
 });
