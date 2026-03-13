@@ -140,6 +140,14 @@ Distributed functions run as WebAssembly modules: language-agnostic,
 sandboxed, deterministic, and portable. Each module declares its entry
 function, dependency digests, and capability requirements.
 
+### Service Query Bridge
+
+Service replicas can query tables through the standard SQL execution path.
+During startup, each service replica receives a scoped query executor that
+routes through the same SQL engine used by `ctx.call()` and all other query
+entrypoints. Services read and write table data without needing a separate
+query path or direct partition access.
+
 ---
 
 ## Comparison
@@ -151,6 +159,7 @@ function, dependency digests, and capability requirements.
 | WASM execution | yes | no | no | partial |
 | Automatic partitioning | yes | yes | no | no |
 | Unified runtime | yes | no | no | no |
+| Service-to-table queries | yes | no | no | no |
 
 ---
 

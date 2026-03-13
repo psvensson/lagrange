@@ -1060,3 +1060,178 @@ describe('EndpointIntentError', () => {
     assert.ok(json.message.includes('missing port'));
   });
 });
+
+// --- Query executor factory injection tests ---
+
+import {QUERY_EXECUTOR_FACTORY_EVENT} from
+  '../../src/constants/runtime.js';
+
+const FACTORY_TEST_SERVICE_ID = 'svc-qe-1';
+const FACTORY_TEST_SQL = 'SELECT 1';
+const FACTORY_TEST_PARAMS = [42];
+
+describe('ServiceRuntimeLifecycle query executor factory', () => {
+  it('should reject non-function factory', () => {
+    const registry = makeRegistry(new StubNativeDriver());
+    const lifecycle = new ServiceRuntimeLifecycle(registry);
+    assert.throws(
+      () => lifecycle.setQueryExecutorFactory('not-a-fn'),
+      {message: 'query executor factory must be a function'},
+    );
+  });
+
+  it('should accept a valid factory function', () => {
+    const registry = makeRegistry(new StubNativeDriver());
+    const lifecycle = new ServiceRuntimeLifecycle(registry);
+    lifecycle.setQueryExecutorFactory((_serviceId) => async () => ({}));
+    // No throw means success
+  });
+
+  it('should emit FACTORY_SET event when factory is set', () => {
+    const registry = makeRegistry(new StubNativeDriver());
+    const lifecycle = new ServiceRuntimeLifecycle(registry);
+    let emitted = false;
+    lifecycle.on(
+      QUERY_EXECUTOR_FACTORY_EVENT.FACTORY_SET,
+      () => { emitted = true; },
+    );
+    lifecycle.setQueryExecutorFactory(
+      (_serviceId) => async () => ({}),
+    );
+    assert.ok(emitted);
+  });
+
+  it('should inject queryExecutor into replicaContext during ' +
+     'start — uses setQueryExecutorFactory owner path', async () => {
+    let capturedCtx = null;
+
+    class CapturingDriver extends RuntimeDriver {
+      constructor() {
+        super(RUNTIME_KIND.NATIVE_JS);
+      }
+      validateDescriptor(_d) {
+        return {valid: true};
+      }
+      async prepare(_d, _c) {
+        return {status: PREPARE_STATUS.READY};
+      }
+      async start(ctx) {
+        capturedCtx = ctx;
+        return {status: START_STATUS.RUNNING};
+      }
+      async stop(_c) {}
+      async health(_c) {
+        return {status: HEALTH_STATUS.HEALTHY};
+      }
+    }
+
+    const registry = makeRegistry(new CapturingDriver());
+    const lifecycle = new ServiceRuntimeLifecycle(registry);
+
+    const calls = [];
+    lifecycle.setQueryExecutorFactory((serviceId) => {
+      return async (sql, params) => {
+        calls.push({serviceId, sql, params});
+        return {rows: [{v: 1}]};
+      };
+    });
+
+    const def = nativeDef(FACTORY_TEST_SERVICE_ID);
+    await lifecycle.prepare(def, {});
+    await lifecycle.start(replicaCtx(def));
+
+    assert.ok(capturedCtx);
+    assert.equal(typeof capturedCtx.queryExecutor, 'function');
+
+    // Invoke the injected executor to verify it routes through
+    // the factory with the correct serviceId.
+    const result = await capturedCtx.queryExecutor(
+      FACTORY_TEST_SQL, FACTORY_TEST_PARAMS,
+    );
+    assert.deepEqual(result, {rows: [{v: 1}]});
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].serviceId, FACTORY_TEST_SERVICE_ID);
+    assert.equal(calls[0].sql, FACTORY_TEST_SQL);
+    assert.deepEqual(calls[0].params, FACTORY_TEST_PARAMS);
+  });
+
+  it('should emit EXECUTOR_INJECTED event during start', async () => {
+    const registry = makeRegistry(new StubNativeDriver());
+    const lifecycle = new ServiceRuntimeLifecycle(registry);
+    lifecycle.setQueryExecutorFactory(
+      (_serviceId) => async () => ({rows: []}),
+    );
+
+    const events = [];
+    lifecycle.on(
+      QUERY_EXECUTOR_FACTORY_EVENT.EXECUTOR_INJECTED,
+      (ev) => events.push(ev),
+    );
+
+    const def = nativeDef(FACTORY_TEST_SERVICE_ID);
+    await lifecycle.prepare(def, {});
+    await lifecycle.start(replicaCtx(def));
+
+    assert.equal(events.length, 1);
+    assert.equal(events[0].serviceId, FACTORY_TEST_SERVICE_ID);
+    assert.equal(events[0].runtimeKind, RUNTIME_KIND.NATIVE_JS);
+  });
+
+  it('should not inject queryExecutor when factory is not set',
+    async () => {
+      let capturedCtx = null;
+
+      class CapturingDriver extends RuntimeDriver {
+        constructor() {
+          super(RUNTIME_KIND.NATIVE_JS);
+        }
+        validateDescriptor(_d) {
+          return {valid: true};
+        }
+        async prepare(_d, _c) {
+          return {status: PREPARE_STATUS.READY};
+        }
+        async start(ctx) {
+          capturedCtx = ctx;
+          return {status: START_STATUS.RUNNING};
+        }
+        async stop(_c) {}
+        async health(_c) {
+          return {status: HEALTH_STATUS.HEALTHY};
+        }
+      }
+
+      const registry = makeRegistry(new CapturingDriver());
+      const lifecycle = new ServiceRuntimeLifecycle(registry);
+
+      const def = nativeDef(FACTORY_TEST_SERVICE_ID);
+      await lifecycle.prepare(def, {});
+      await lifecycle.start(replicaCtx(def));
+
+      assert.ok(capturedCtx);
+      assert.equal(capturedCtx.queryExecutor, undefined);
+    });
+
+  it('should scope executor to the correct serviceId per ' +
+     'replica', async () => {
+    const registry = makeRegistry(new StubNativeDriver());
+    const lifecycle = new ServiceRuntimeLifecycle(registry);
+
+    const factoryCalls = [];
+    lifecycle.setQueryExecutorFactory((serviceId) => {
+      factoryCalls.push(serviceId);
+      return async () => ({rows: []});
+    });
+
+    const defA = nativeDef('svc-a');
+    const defB = nativeDef('svc-b');
+    await lifecycle.prepare(defA, {});
+    await lifecycle.start(replicaCtx(defA));
+    await lifecycle.prepare(defB, {});
+    await lifecycle.start(replicaCtx(defB));
+
+    assert.equal(factoryCalls.length, 2);
+    assert.equal(factoryCalls[0], 'svc-a');
+    assert.equal(factoryCalls[1], 'svc-b');
+  });
+});

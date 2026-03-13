@@ -96,6 +96,13 @@ const MIN_PORT = 1;
 // --- Maximum valid port number ---
 const MAX_PORT = 65535;
 
+// --- Query executor factory event names ---
+
+const QUERY_EXECUTOR_FACTORY_EVENT = Object.freeze({
+  FACTORY_SET: 'lifecycle:query_executor_factory:set',
+  EXECUTOR_INJECTED: 'lifecycle:query_executor:injected',
+});
+
 // --- State projection event names (services table) ---
 
 const STATE_PROJECTION_EVENT = Object.freeze({
@@ -118,6 +125,7 @@ export {
   OPERATION_JOURNAL_EVENT,
   ENDPOINT_INTENT_FIELD,
   STATE_PROJECTION_EVENT,
+  QUERY_EXECUTOR_FACTORY_EVENT,
   RUNTIME_REPLICA_STATUS,
   MIN_PORT,
   MAX_PORT,

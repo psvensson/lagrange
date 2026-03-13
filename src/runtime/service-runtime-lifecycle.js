@@ -44,6 +44,7 @@ import {
   OPERATION_JOURNAL_EVENT,
   ENDPOINT_INTENT_FIELD,
   STATE_PROJECTION_EVENT,
+  QUERY_EXECUTOR_FACTORY_EVENT,
   RUNTIME_REPLICA_STATUS,
   MIN_PORT,
   MAX_PORT,
@@ -238,6 +239,46 @@ class ServiceRuntimeLifecycle extends EventEmitter {
      * @private
      */
     this._stateProjectionWriter = null;
+
+    /**
+     * Optional query executor factory for injecting table query
+     * capability into service replicas during start().
+     *
+     * When set, the lifecycle owner creates a service-scoped
+     * query executor and attaches it to the replicaContext before
+     * delegating to the driver. This is the single injection
+     * point for service-to-table query access.
+     *
+     * Signature: (serviceId) => async (sql, params) => result
+     *
+     * The factory is owned by SqlQueryEngine and produces closures
+     * that route through the standard query execution path.
+     *
+     * @type {Function|null}
+     * @private
+     */
+    this._queryExecutorFactory = null;
+  }
+
+  /**
+   * Set the query executor factory for service replica table access.
+   *
+   * The factory receives a serviceId and returns a scoped query
+   * executor function. The lifecycle owner injects the executor
+   * into replicaContext during start() so drivers and lifecycle
+   * modules can query tables through the standard SQL path.
+   *
+   * @param {Function} factory - (serviceId) => queryExecutorFn.
+   * @throws {TypeError} If factory is not a function.
+   */
+  setQueryExecutorFactory(factory) {
+    if (typeof factory !== TYPEOF.FUNCTION) {
+      throw new TypeError(
+        'query executor factory must be a function',
+      );
+    }
+    this._queryExecutorFactory = factory;
+    this.emit(QUERY_EXECUTOR_FACTORY_EVENT.FACTORY_SET, {});
   }
 
   /**
@@ -844,6 +885,18 @@ class ServiceRuntimeLifecycle extends EventEmitter {
       );
 
       causeId = getOrCreateCauseId(operation?.operationId);
+
+      // Inject service-scoped query executor into replica context
+      // so drivers and lifecycle modules can query tables through
+      // the standard SQL execution path.
+      if (this._queryExecutorFactory) {
+        replicaContext.queryExecutor =
+          this._queryExecutorFactory(serviceId);
+        this.emit(
+          QUERY_EXECUTOR_FACTORY_EVENT.EXECUTOR_INJECTED,
+          {runtimeKind, serviceId},
+        );
+      }
 
       const driver = this._resolveDriver(runtimeKind);
       const result = await driver.start(replicaContext);

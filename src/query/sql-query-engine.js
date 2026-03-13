@@ -381,6 +381,10 @@ class SQLQueryEngine {
     this.traceCollector = options.traceCollector || null;
     this.wasmExecutor = options.wasmExecutor || null;
 
+    // Wire query executor factory into lifecycle owner so service
+    // replicas can query tables through the standard SQL path.
+    this._wireQueryExecutorFactory(this.serviceRuntimeLifecycle);
+
     // Backward-compatible alias for callers/tests expecting transaction state map.
     this.activeTransactions = this.transactionCoordinator.transactionsBySession;
     this.transactionStateRecovered = false;
@@ -538,6 +542,29 @@ class SQLQueryEngine {
    */
   setServiceRuntimeLifecycle(lifecycle) {
     this.serviceRuntimeLifecycle = lifecycle;
+    this._wireQueryExecutorFactory(lifecycle);
+  }
+
+  /**
+   * Wire a service-scoped query executor factory into the
+   * lifecycle owner so service replicas can query tables
+   * through the standard SQL execution path.
+   *
+   * The factory produces closures that call executeQuery
+   * with a session scoped to the service identity.
+   *
+   * @param {Object} lifecycle - Service runtime lifecycle.
+   * @private
+   */
+  _wireQueryExecutorFactory(lifecycle) {
+    if (!lifecycle ||
+        typeof lifecycle.setQueryExecutorFactory !== 'function') {
+      return;
+    }
+    lifecycle.setQueryExecutorFactory(
+      (serviceId) => async (sql, params) =>
+        this.executeQuery(sql, params, {sessionId: serviceId}),
+    );
   }
 
   /**

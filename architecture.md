@@ -56,7 +56,8 @@ Load-ready and repair-only states are explicit:
 To prevent overlap and contradictory runtime behavior:
 
 1. **SQL Execution:** `SqlCore` (SQLQueryEngine) is the single SQL planner and
-   executor. All entrypoints (internal, external protocol, WASM DB.call)
+   executor. All entrypoints (internal, external protocol, WASM DB.call,
+   service replica `replicaContext.queryExecutor`)
    normalize into `SqlRequest` and delegate to SqlCore. No fallback engine.
 2. **Placement Planning:** `MovePlanner` is the only planner implementation.  
    `UnifiedRebalancer` may orchestrate, but must not duplicate planning logic.
@@ -64,6 +65,9 @@ To prevent overlap and contradictory runtime behavior:
    operation state. Workflow transitions must be monotonic and idempotent.
    Step transitions route through `DurableWorkflowCoordinator.transitionStep()`
    to persist canonical transition records.
+   Atomic `replica_operations` step transitions are serialized on one
+   coordinator-owned queue before opening system-partition transactions so
+   `replica_operations-p1` cannot see overlapping owner writes under load.
    Owner-managed `replica_operations` fields (`status`, `workflow_step`,
    `completed_at`, `error_message`, `steps_history`) are written only by
    `RebalanceCoordinator`.
@@ -95,6 +99,10 @@ To prevent overlap and contradictory runtime behavior:
    `RebalanceCoordinator`, `ManagedSplitWorkflow`, admission planning) use the
    shared `repairEligible` dimension from `ControlPlaneReadinessService`.
    Routing and benchmark admission use `serveEligible`.
+   Self-readiness may preserve `serveEligible` through one timed-out
+   `node_state_reporter` attempt when the last canonically visible local
+   heartbeat is still fresh; this prevents transient self-denial while the
+   bounded authoritative repair path is timing out under load.
 7. **Epoch Propagation:** `config.current_epoch` + CDC is the single epoch
    authority; no secondary epoch source.
 8. **Control-Plane Progression:** Event-triggered control-plane work (dispatch,
@@ -187,6 +195,10 @@ The distributed SQL layer is now single-path and owner-specific:
    transitions including cutover activation. `PartitionService` acts as
    a source-execution participant that delegates cutover transition
    persistence back to `ManagedSplitWorkflow.advanceSplitPhase()`.
+   Canonical source/child participants are registered on the workflow before
+   source-side replication begins, and async participant acknowledgements
+   rehydrate workflow state from the durable tables transition row when the
+   initiating owner execution has already returned.
    `SPLIT_OWNER_MANAGED_PHASES` in `partition-constants.js` enumerates
    every phase that only the workflow owner may persist.
 8. `SQLQueryEngine` remains the orchestration entrypoint and delegates to the
@@ -552,11 +564,13 @@ Replicated Meta Service Handler (sys-admin-meta / sys-wasm-meta)
       ▼
 Service_Runtime_Lifecycle
       │
-      ▼
-Runtime_Driver_Registry -> {Native_JS_Driver | Wasm_Component_Driver | OCI_Container_Driver}
+      ├──► Runtime_Driver_Registry -> {Native_JS_Driver | Wasm_Component_Driver | OCI_Container_Driver}
       │
-      ▼
-SQL/CDC mutation path + operation journal updates
+      ├──► SQL/CDC mutation path + operation journal updates
+      │
+      └──► Query executor injection (start only):
+           SQLQueryEngine.setQueryExecutorFactory() -> replicaContext.queryExecutor
+           Service replicas query tables through the standard SQL execution path.
 ```
 
 ### Runtime Anti-Patterns (Forbidden)
@@ -572,6 +586,9 @@ SQL/CDC mutation path + operation journal updates
 8. Marking closure tasks complete without production-path evidence.
 9. Standalone PG wire TCP listener outside the replicated service
    path (`sys-postgres-wire` is the only PG wire listener owner).
+10. Service replicas creating their own query routing, partition
+    resolution, or SQL execution path instead of using the injected
+    `replicaContext.queryExecutor` from `ServiceRuntimeLifecycle`.
 
 ### Migration Posture
 
@@ -935,6 +952,12 @@ No other source file may call `applySystemTableChange` directly.
 - Coordinates endpoint intent registration through one write path
 - Coordinates operation lifecycle transitions through SQL/CDC-owned records
 - Shared owner across `native_js`, `wasm_component`, and `oci_container`
+- Injects service-scoped query executors into replica contexts during `start()`
+  so service replicas can query tables through the standard SQL execution path.
+  The query executor factory is owned by `SQLQueryEngine` and wired via
+  `setQueryExecutorFactory()`. This is the single injection point for
+  service-to-table query access — no driver or lifecycle module may create
+  its own query path.
 
 ### Runtime Drivers (Target Model)
 - `Native_JS_Driver`:
@@ -1161,6 +1184,12 @@ All resolution decisions are audit-logged via `ModuleAuditLogger`.
 - Transaction support (BEGIN, COMMIT, ROLLBACK)
 - All system reads (outside cache/query internals) must go through this engine
 - No fallback or alternate SQL execution path exists
+- Owns the query executor factory for service replicas: during construction
+  or via `setServiceRuntimeLifecycle()`, wires a `queryExecutorFactory` into
+  `ServiceRuntimeLifecycle` so service replicas receive a service-scoped
+  `queryExecutor` closure that routes through `executeQuery()`. This is the
+  single owner of query execution for both user functions (`ctx.call()`) and
+  service replicas (`replicaContext.queryExecutor`).
 
 ### SQL Adapter Layer
 Three adapters normalize different entrypoints into canonical `SqlRequest`
@@ -1396,6 +1425,41 @@ by `NestedCallClassifier` (`src/query/nested-call-classifier.js`).
 Unbounded nested calls are rejected by default in v0 with a teachable error
 directing users to `ctx.emit(...)` + `ctx.call({kind: 'reduceByKey', ...})`.
 Classification decisions are recorded in `PlanDiagnostics` for observability.
+
+### Service Replica Query Bridge (Active)
+
+Service replicas can query tables through the standard SQL execution path
+via `replicaContext.queryExecutor`. This bridges the service runtime and
+query execution layers without introducing a parallel query path.
+
+Wiring:
+1. `SQLQueryEngine` owns a query executor factory that produces
+   service-scoped closures: `(serviceId) => async (sql, params) => result`.
+2. During construction or via `setServiceRuntimeLifecycle()`, the engine
+   wires this factory into `ServiceRuntimeLifecycle.setQueryExecutorFactory()`.
+3. During `ServiceRuntimeLifecycle.start()`, the factory is called with the
+   service's identity to produce a scoped executor, which is attached to
+   `replicaContext.queryExecutor` before the driver receives the context.
+4. Drivers and lifecycle modules (e.g. `PostgresWireRuntimeModule`) can use
+   `replicaContext.queryExecutor(sql, params)` to execute SQL queries.
+
+Ownership boundaries:
+- `SQLQueryEngine` owns query execution — the factory closure routes through
+  `executeQuery()`, the same path used by `ctx.call()` and all other SQL
+  entrypoints.
+- `ServiceRuntimeLifecycle` owns the injection point — it attaches the
+  executor to the replica context during `start()` and emits
+  `QUERY_EXECUTOR_FACTORY_EVENT.EXECUTOR_INJECTED` for observability.
+- Drivers and lifecycle modules are consumers only — they call the executor
+  but do not own query routing, caching, or partition resolution.
+
+This is distinct from `ctx.call()` in `ExecutionContext`:
+- `ctx.call()` is request-scoped, budget-bounded, and supports
+  iterator/stage/plan modes for user functions inside `runtime.run()`.
+- `replicaContext.queryExecutor` is service-scoped, long-lived, and provides
+  raw SQL execution for service replica internals.
+- Both route through `SQLQueryEngine.executeQuery()` — one query path, no
+  duplication.
 
 ### Execution-Mode Dispatch (Active)
 `SqlCore.executeRequest(SqlRequest)` is the single owner for execution-mode

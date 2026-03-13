@@ -533,15 +533,63 @@ If no meta leader is routable, routing fails with
    `debug_snapshots`) follow SQL/CDC ownership; no direct cache writes are
    allowed in debug paths.
 
-## 13. Non-Negotiable Anti-Patterns
+## 13. Service Replica Table Access
+
+Service replicas can query tables through the standard SQL execution path
+during their lifetime. When a service replica starts, the lifecycle owner
+injects a scoped query executor into the replica context.
+
+### How It Works
+
+During `ServiceRuntimeLifecycle.start()`, if a query executor factory has
+been wired by `SQLQueryEngine`, the lifecycle owner calls the factory with
+the service's identity and attaches the resulting executor to
+`replicaContext.queryExecutor`.
+
+Lifecycle modules and drivers receive this executor transparently:
+
+```javascript
+// Inside a lifecycle module's start() method:
+async start(replicaContext) {
+  const query = replicaContext.queryExecutor;
+  if (query) {
+    const result = await query(
+      'SELECT * FROM my_table WHERE id = ?', ['row-1']
+    );
+    // result.rows contains the query results
+  }
+  // ... rest of start logic
+}
+```
+
+For long-lived services that need ongoing query access, store the reference:
+
+```javascript
+async start(replicaContext) {
+  this._query = replicaContext.queryExecutor;
+  // Use this._query throughout the service lifetime
+}
+```
+
+### Ownership Rules
+
+- The query executor routes through `SQLQueryEngine.executeQuery()` — the
+  same path used by `ctx.call()`, PG wire, and all other SQL entrypoints.
+- Service replicas are consumers only. They must not create their own query
+  routing, partition resolution, or caching logic.
+- The executor is scoped to the service's identity for session tracking.
+
+## 14. Non-Negotiable Anti-Patterns
 
 1. Direct writes to metadata tables from runtime driver code.
 2. Direct service replica startup outside `ServiceLifecycleManager`.
 3. Ingress handlers that bypass canonical `Service_Message` translation.
 4. Parallel lifecycle owners for built-ins vs userland services.
 5. Local cache mutation outside CDC/bootstrap hydration ownership.
+6. Service replicas creating their own query routing or partition resolution
+   instead of using `replicaContext.queryExecutor`.
 
-## 14. Related Docs
+## 15. Related Docs
 
 1. `docs/component-distribution.md` (package identity, OCI refs, dependency locks)
 2. `docs/admin-migration-guide.md` (migration to meta-service owned admin paths)
