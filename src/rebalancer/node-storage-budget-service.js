@@ -177,6 +177,21 @@ class NodeStorageBudgetService {
   }
 
   /**
+   * Resolve one startup/storage-budget projection without persisting it.
+   * This keeps storage-budget ownership centralized while allowing callers
+   * with different row-lifecycle owners to reuse the canonical budget fields.
+   * @param {Object} nodeRow
+   * @return {{budgetRow: Object, resolution: Object}}
+   */
+  resolveBudgetRow(nodeRow) {
+    const resolution = this.resolveBudget(nodeRow);
+    return {
+      budgetRow: this.buildBudgetRow(nodeRow, resolution),
+      resolution,
+    };
+  }
+
+  /**
    * Resolve and persist the node storage budget in the nodes table.
    * @param {Object} options
    * @param {Object} options.nodeRow
@@ -202,8 +217,7 @@ class NodeStorageBudgetService {
       NODE_STORAGE_BUDGET_ERROR_MSG.MISSING_CDC,
     );
 
-    const resolution = this.resolveBudget(nodeRow);
-    const budgetRow = this.buildBudgetRow(nodeRow, resolution);
+    const {budgetRow, resolution} = this.resolveBudgetRow(nodeRow);
     const result = await this.cdcIntegrationService.upsertSystemTableRow(
       TABLES.NODES,
       budgetRow,

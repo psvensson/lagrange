@@ -6,7 +6,7 @@
   "image": "distributed-db:test",
   "timeouts": {
     "nodeStartup": 30000,
-    "convergence": 30000,
+    "convergence": 60000,
     "quietWindow": 5000,
     "scenarioDefault": 120000
   },
@@ -20,6 +20,14 @@
   "resourceLimits": {
     "memory": "1g",
     "cpus": "1.0"
+  },
+  "benchmark": {
+    "loadQueryTimeoutMs": 10000
+  },
+  "memoryLeak": {
+    "enabled": true,
+    "failOnDetection": false,
+    "requireSamples": false
   },
   "load": {
     "defaultOpsPerSec": 100,

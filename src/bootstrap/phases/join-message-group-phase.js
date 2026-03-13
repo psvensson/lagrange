@@ -214,6 +214,7 @@ class JoinMessageGroupPhase {
       groupId,
       replicaId,
       messageGroup,
+      {status: SERVICE_STATUS.STOPPED},
     );
 
     logger.info(JOINING_LOG_MSG.JOINED_EXISTING_GROUP, {

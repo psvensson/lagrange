@@ -216,6 +216,105 @@ test('coordinator SQL reads use shared control-plane timeout options',
     }
   });
 
+test(
+  'getActualReplicaStatus falls back to exact services cache observation ' +
+    'when authoritative reads miss',
+  async (t) => {
+    const gatewayCalls = [];
+    const observedServiceRow = {
+      service_id: 'partition-1-r2',
+      replica_id: 'partition-1-r2',
+      partition_id: 'partition-1',
+      node_id: 'node-2',
+      status: 'active',
+    };
+    const coordinator = new RebalanceCoordinator({
+      nodeId: 'node-1',
+      transactionCoordinator: buildTransactionCoordinator(),
+      systemTableCache: {
+        get(tableName, key) {
+          if (tableName !== 'services') {
+            return null;
+          }
+          return key === observedServiceRow.service_id ? observedServiceRow : null;
+        },
+        getAll(tableName) {
+          if (tableName !== 'services') {
+            return [];
+          }
+          return [observedServiceRow];
+        },
+        filter(tableName, predicate) {
+          return this.getAll(tableName).filter(predicate);
+        },
+      },
+      cdcIntegrationService: {
+        async waitForCacheUpdate() {},
+      },
+      controlPlaneSystemTableGateway: {
+        async readRows(tableName, sql, params, options) {
+          gatewayCalls.push({
+            tableName,
+            sql: String(sql),
+            params: [...(Array.isArray(params) ? params : [])],
+            options,
+          });
+          return {
+            success: true,
+            rows: [],
+            affectedRows: 0,
+          };
+        },
+        async executeQuery() {
+          return {
+            success: true,
+            rows: [],
+            affectedRows: 0,
+          };
+        },
+      },
+      messageRouter: {
+        async deliver() {
+          return {acknowledged: true, status: 'completed'};
+        },
+      },
+      tablePolicyService: {
+        async getPolicyForPartition() {
+          return {minReplicaCount: 1};
+        },
+      },
+      sqlQueryEngine: {
+        async executeQuery() {
+          throw new Error('raw SQL path should not be used');
+        },
+      },
+      enableTimeouts: false,
+    });
+
+    coordinator.initialize();
+    try {
+      const actualStatus = await coordinator.getActualReplicaStatus(
+        'partition-1-r2',
+        'partition-1',
+        'node-2',
+      );
+
+      t.equal(
+        actualStatus,
+        'active',
+        'exact observed services row should satisfy replica status when authoritative reads miss',
+      );
+      t.equal(
+        gatewayCalls.length,
+        2,
+        'coordinator should still attempt authoritative service status reads before using observed cache state',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  },
+);
+
 test('queryIncompleteOperations prefers authoritative local leader reads for replica_operations',
   async (t) => {
     const authoritativeReadCalls = [];
@@ -649,6 +748,163 @@ test('queryIncompleteOperations avoids legacy OR predicate timeout path',
       await coordinator.shutdown();
     }
   });
+
+test(
+  'checkTimeouts completes creating operations from exact cache-visible ' +
+    'services rows when authoritative reads miss',
+  async (t) => {
+    const nowMs = Date.now();
+    const staleUpdatedAtMs = nowMs - 70000;
+    const observedServiceRow = {
+      service_id: 'partition-1-r2',
+      replica_id: 'partition-1-r2',
+      partition_id: 'partition-1',
+      node_id: 'node-2',
+      status: 'active',
+    };
+    const operationRow = {
+      operation_id: 'op-cache-visible-active',
+      type: 'ADD',
+      partition_id: 'partition-1',
+      replica_id: 'partition-1-r2',
+      source_node_id: 'node-1',
+      target_node_id: 'node-2',
+      status: 'creating',
+      workflow_step: 'CREATING',
+      created_at: staleUpdatedAtMs - 5000,
+      updated_at: staleUpdatedAtMs,
+      completed_at: null,
+      error_message: null,
+      steps_history: JSON.stringify([
+        {step: 'PENDING', timestamp: staleUpdatedAtMs - 1000},
+        {step: 'SENDING', timestamp: staleUpdatedAtMs - 900},
+        {step: 'CREATING', timestamp: staleUpdatedAtMs - 800},
+      ]),
+      entity_type: 'partition',
+      entity_id: 'partition-1',
+    };
+    const gatewayCalls = [];
+
+    const sqlQueryEngine = {
+      async executeQuery(sql, params) {
+        if (sql.includes('UPDATE replica_operations SET')) {
+          operationRow.status = params[0];
+          operationRow.workflow_step = params[1];
+          operationRow.updated_at = params[2];
+          operationRow.completed_at = params[3];
+          operationRow.error_message = params[4];
+          operationRow.steps_history = params[5];
+          operationRow.replica_id = params[6];
+          return {
+            success: true,
+            affectedRows: 1,
+          };
+        }
+        if (sql.includes('FROM replica_operations')) {
+          return {
+            success: true,
+            rows: [{...operationRow}],
+            affectedRows: 0,
+          };
+        }
+        return {
+          success: true,
+          rows: [],
+          affectedRows: 0,
+        };
+      },
+    };
+
+    const coordinator = new RebalanceCoordinator({
+      nodeId: 'node-1',
+      transactionCoordinator: buildTransactionCoordinator(),
+      systemTableCache: {
+        get(tableName, key) {
+          if (tableName === 'replica_operations') {
+            return key === operationRow.operation_id ? operationRow : null;
+          }
+          if (tableName === 'services') {
+            return key === observedServiceRow.service_id ? observedServiceRow : null;
+          }
+          return null;
+        },
+        getAll(tableName) {
+          if (tableName === 'replica_operations') {
+            return [operationRow];
+          }
+          if (tableName === 'services') {
+            return [observedServiceRow];
+          }
+          return [];
+        },
+        filter(tableName, predicate) {
+          return this.getAll(tableName).filter(predicate);
+        },
+      },
+      cdcIntegrationService: {
+        async waitForCacheUpdate() {},
+      },
+      controlPlaneSystemTableGateway: {
+        async readRows(tableName, sql, params, options) {
+          gatewayCalls.push({
+            tableName,
+            sql: String(sql),
+            params: [...(Array.isArray(params) ? params : [])],
+            options,
+          });
+          return {
+            success: true,
+            rows: [],
+            affectedRows: 0,
+          };
+        },
+        async executeQuery(sql, params) {
+          return sqlQueryEngine.executeQuery(sql, params);
+        },
+      },
+      messageRouter: {
+        async deliver() {
+          return {acknowledged: true, status: 'completed'};
+        },
+      },
+      tablePolicyService: {
+        async getPolicyForPartition() {
+          return {minReplicaCount: 1};
+        },
+      },
+      sqlQueryEngine,
+      enableTimeouts: false,
+    });
+
+    coordinator.initialize();
+    try {
+      await coordinator.checkTimeouts();
+
+      t.equal(
+        operationRow.workflow_step,
+        'ACTIVE',
+        'timeout reconciliation should complete the ADD operation instead of failing it',
+      );
+      t.equal(
+        operationRow.status,
+        'active',
+        'completed ADD should persist active status from observed target service state',
+      );
+      t.equal(
+        operationRow.error_message,
+        null,
+        'cache-visible convergence should avoid timeout failure metadata',
+      );
+      t.equal(
+        gatewayCalls.length >= 2,
+        true,
+        'timeout reconciliation should still attempt authoritative service reads before using observed cache state',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  },
+);
 
 test('timeout checker backs off empty incomplete-operation scans', async (t) => {
   let incompleteQueryAttempts = 0;

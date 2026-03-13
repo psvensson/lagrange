@@ -278,6 +278,7 @@ also enable future paid system services.
 | OCI container runtime | 🔧 | Process-isolated execution for container-packaged services |
 | OCI artifact fetch and extraction | 🔲 | Shared prerequisite: pull OCI artifacts, route by `media_type` to WASM or container activation |
 | Artifact media type discrimination | 🔲 | Distinguish WASM binary vs container image in OCI artifacts |
+| Activation-cost-aware placement | 🔲 | Image presence tracking, activation class taxonomy, placement scoring, admission gating, workflow step, readiness dimension, developer feedback CLI/SQL. Spec: `.kiro/specs/activation-cost-aware-placement/`. Architecture: `architecture/future/activation-cost-aware-placement.md` |
 | Vector search service | 🔲 | |
 | Embedding service | 🔲 | |
 
@@ -355,3 +356,23 @@ coordination live in the same system:
 
 > Distributed database + distributed compute + programmable data locality +
 > distributed service platform
+
+### Native Artifact Store
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Artifact metadata tables (`artifacts`, `artifact_versions`, `artifact_objects`) | 🔲 | CDC-propagated system tables for artifact identity, versioning, and object tracking |
+| Blob-class chunk storage | 🔲 | Content-addressed immutable chunks in dedicated partitions with blob-optimized policies |
+| Artifact service (`sys-artifact-store`) | 🔲 | Built-in replicated system service owning publish, lookup, streaming, GC, and policy |
+| Chunk streaming via message group transport | 🔲 | Internal distribution of artifact bytes without external registry dependency |
+| Local chunk cache per node | 🔲 | Filesystem cache with integration into `node_image_presence` tracking |
+| Internal-source preference in `OciPullService` | 🔲 | Prefer internal chunk streaming over external registry pulls |
+| Reference-counted GC | 🔲 | Content-addressed deduplication with reference counting for safe cleanup |
+| OCI Distribution API compatibility | 🔲 | Optional: expose OCI-compatible pull API so external tools can interact with the cluster as a registry |
+
+Architecture: `architecture/future/native-artifact-store.md`
+
+Design principle: same cluster, same nodes, same replication — different
+object semantics for artifact bytes. No special registry nodes required.
+Artifact chunks are just another replicated system-managed dataset spread
+across the cluster according to policy.

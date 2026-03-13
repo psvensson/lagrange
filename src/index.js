@@ -8,6 +8,9 @@ import {createDynamicConfigStartupWiring} from
   './config/dynamic-config-startup-wiring.js';
 import {LoggingService} from './logging/logging-service.js';
 import {LogsTableService} from './logging/logs-table-service.js';
+import {
+  startLogsTablePersistenceOnReadiness,
+} from './logging/logs-persistence-startup.js';
 import {HLCClockService} from './hlc/hlc-clock-service.js';
 import {DataDirectoryManager} from './storage/data-directory-manager.js';
 import {BootstrapService} from './bootstrap/bootstrap-service.js';
@@ -411,38 +414,28 @@ async function connectLogsTablePersistence(
 }
 
 /**
- * Start logs table persistence hookup in the background.
- * Avoids blocking node readiness on buffered log flush duration.
+ * Start logs table persistence only after readiness remains stable.
  * @param {Object|null} cdcIntegrationService - CDC integration service.
  * @param {Object} logger - Entrypoint logger.
  * @param {Object} rolloutControls - Startup rollout control map.
- * @return {{getService: Function, promise: Promise<LogsTableService|null>}}
+ * @param {Object|null} readinessState - Readiness owner for traffic stability.
+ * @return {{getService: Function, promise: Promise<LogsTableService|null>, cancel: Function}}
  */
 function startLogsTablePersistence(
   cdcIntegrationService,
   logger,
   rolloutControls,
+  readinessState,
 ) {
-  let connectedService = null;
-
-  const promise = connectLogsTablePersistence(
-    cdcIntegrationService,
+  return startLogsTablePersistenceOnReadiness({
+    readinessState,
     logger,
-    rolloutControls,
-  ).then((service) => {
-    connectedService = service;
-    return service;
-  }).catch((error) => {
-    logger.warn(ENTRYPOINT_LOG_MSG.LOGS_TABLE_BACKGROUND_CONNECT_FAILED, {
-      error: error.message,
-    });
-    return null;
+    start: () => connectLogsTablePersistence(
+      cdcIntegrationService,
+      logger,
+      rolloutControls,
+    ),
   });
-
-  return {
-    getService: () => connectedService,
-    promise,
-  };
 }
 
 /**
@@ -460,6 +453,29 @@ async function shutdownLogsTablePersistence(logsTableService, logger) {
     await logsTableService.shutdown();
   } catch (error) {
     logger.warn(ENTRYPOINT_LOG_MSG.LOGS_TABLE_SHUTDOWN_FAILED, {
+      error: error.message,
+    });
+  }
+}
+
+/**
+ * Publish one best-effort terminal node row before tearing down the
+ * control-plane path during process shutdown.
+ * @param {Object|null} heartbeatService
+ * @param {Object} logger
+ * @param {string} nodeId
+ * @return {Promise<void>}
+ */
+async function publishNodeShutdownStatus(heartbeatService, logger, nodeId) {
+  if (typeof heartbeatService?.reportNodeShutdown !== 'function') {
+    return;
+  }
+
+  try {
+    await heartbeatService.reportNodeShutdown();
+  } catch (error) {
+    logger.warn('Failed to publish node shutdown status', {
+      nodeId,
       error: error.message,
     });
   }
@@ -719,6 +735,9 @@ async function main() {
         cdcIntegrationService: nodeJoiningService.cdcIntegrationService,
         nodeId: config.get(CONFIG_KEY.NODE_ID),
         rebalanceCoordinator: nodeJoiningService.rebalanceCoordinator,
+        controlPlaneReadinessService:
+          nodeJoiningService.rebalanceCoordinator
+            ?.controlPlaneReadinessService || null,
         runtimeDriverRegistry: nodeJoiningService.runtimeDriverRegistry,
         serviceRuntimeLifecycle: nodeJoiningService.serviceRuntimeLifecycle,
         wasmExecutor,
@@ -795,6 +814,7 @@ async function main() {
       nodeJoiningService.cdcIntegrationService,
       mainLogger,
       rolloutControls,
+      joinReadinessState,
     );
 
     // Keep the process running
@@ -822,6 +842,12 @@ async function main() {
           reasons: drainingSnapshot?.reasons || [],
           drainDeadlineMs,
         });
+        await publishNodeShutdownStatus(
+          nodeJoiningService.heartbeatService,
+          mainLogger,
+          config.get(CONFIG_KEY.NODE_ID),
+        );
+        joinLogsPersistence?.cancel();
         const joinLogsTableService = joinLogsPersistence ?
           (joinLogsPersistence.getService() || await joinLogsPersistence.promise) :
           null;
@@ -961,6 +987,9 @@ async function main() {
       cdcIntegrationService: bootstrapService.cdcIntegrationService,
       nodeId: config.get(CONFIG_KEY.NODE_ID),
       rebalanceCoordinator: bootstrapService.rebalanceCoordinator,
+      controlPlaneReadinessService:
+        bootstrapService.rebalanceCoordinator
+          ?.controlPlaneReadinessService || null,
       runtimeDriverRegistry: bootstrapService.runtimeDriverRegistry,
       serviceRuntimeLifecycle: bootstrapService.serviceRuntimeLifecycle,
       wasmExecutor,
@@ -1037,6 +1066,7 @@ async function main() {
       bootstrapService.cdcIntegrationService,
       mainLogger,
       rolloutControls,
+      readinessState,
     );
 
     // Keep the process running
@@ -1064,6 +1094,12 @@ async function main() {
           reasons: drainingSnapshot?.reasons || [],
           drainDeadlineMs,
         });
+        await publishNodeShutdownStatus(
+          bootstrapService.heartbeatService,
+          mainLogger,
+          config.get(CONFIG_KEY.NODE_ID),
+        );
+        seedLogsPersistence?.cancel();
         const seedLogsTableService = seedLogsPersistence ?
           (seedLogsPersistence.getService() || await seedLogsPersistence.promise) :
           null;

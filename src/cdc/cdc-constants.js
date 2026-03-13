@@ -57,6 +57,10 @@ const CDC_SQL = Object.freeze({
   ASSIGNMENT_PLACEHOLDER: ' = ?',
 });
 
+const CDC_SESSION = Object.freeze({
+  SYSTEM_WRITE_PREFIX: 'cdc-system-write',
+});
+
 const CDC_OPERATION_LABEL = Object.freeze({
   INSERT: CDC_OPERATION.INSERT,
   UPDATE_WHERE: 'UPDATE whereClause',
@@ -176,6 +180,7 @@ export {
   CDC_OPERATION_LABEL,
   CDC_PRIMARY_KEY,
   CDC_RETRY,
+  CDC_SESSION,
   CDC_SKIP_REASON,
   CDC_SOURCE,
   CDC_SQL,

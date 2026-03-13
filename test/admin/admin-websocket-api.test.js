@@ -20,6 +20,9 @@ import {LoggingService} from '../../src/logging/logging-service.js';
 import {createInProcWebSocketPair} from '../../src/test-helpers/inproc-ws.js';
 import {TraceCollector} from '../../src/debug/trace-collector.js';
 import {COLUMN, TABLES} from '../../src/constants/index.js';
+import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+} from '../../src/control-plane/control-plane-readiness-constants.js';
 
 // Initialize services for tests
 ConfigurationManager.getInstance().initialize();
@@ -1082,7 +1085,6 @@ test('AdminWebSocketAPI - load lane requests authoritative readiness refresh',
         nodeId: 'test-node',
         options: {
           allowAuthoritativeRefresh: true,
-          allowStaleOnCacheChange: true,
           requireFreshOnIneligible: true,
           decisionDimension: 'serveEligible',
           maxCachedAgeMs: 5000,
@@ -1158,7 +1160,6 @@ test('AdminWebSocketAPI - repeated load lane requests reuse cached readiness',
         nodeId: 'test-node',
         options: {
           allowAuthoritativeRefresh: true,
-          allowStaleOnCacheChange: true,
           requireFreshOnIneligible: true,
           decisionDimension: 'serveEligible',
           maxCachedAgeMs: 5000,
@@ -1167,13 +1168,13 @@ test('AdminWebSocketAPI - repeated load lane requests reuse cached readiness',
         nodeId: 'test-node',
         options: {
           allowAuthoritativeRefresh: true,
-          allowStaleOnCacheChange: true,
           requireFreshOnIneligible: true,
           decisionDimension: 'serveEligible',
           maxCachedAgeMs: 5000,
         },
       }],
-      'load-lane readiness should consistently request the cached snapshot window',
+      'load-lane readiness should consistently request the ' +
+        'cached snapshot window',
     );
 
     ws.close();
@@ -2001,6 +2002,77 @@ test('AdminWebSocketAPI - local control snapshot derives canonical leaders ' +
     await api.shutdown();
   });
 
+test(
+  'AdminWebSocketAPI - local control snapshot ignores stale ADD rows once exact target replica services are active',
+  async (t) => {
+    const cache = createPopulatedCache();
+    cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
+      partition_id: 'partition-1',
+      table_id: 'table-1',
+      table_name: 'events',
+      state: 'NORMAL',
+      leader_node_id: 'node-1',
+    });
+    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+      service_id: 'partition-1-r1',
+      service_type: 'partition',
+      partition_id: 'partition-1',
+      replica_id: 'partition-1-r1',
+      node_id: 'node-1',
+      raft_role: 'leader',
+      status: 'active',
+      address: 'node-1/partition/partition-1-r1',
+    });
+    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+      service_id: 'partition-1-r2',
+      service_type: 'partition',
+      partition_id: 'partition-1',
+      replica_id: 'partition-1-r2',
+      node_id: 'node-2',
+      raft_role: 'follower',
+      status: 'active',
+      address: 'node-2/partition/partition-1-r2',
+    });
+    cache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'INSERT', {
+      operation_id: 'op-add-stale-active-replica',
+      type: 'ADD',
+      partition_id: 'partition-1',
+      entity_type: 'partition',
+      entity_id: 'partition-1',
+      source_node_id: 'node-1',
+      target_node_id: 'node-2',
+      replica_id: 'partition-1-r2',
+      status: 'creating',
+      workflow_step: 'CREATING',
+      created_at: 1741000000000,
+      updated_at: 1741000001000,
+    });
+    const api = new AdminWebSocketAPI({
+      nodeId: 'test-node',
+      systemTableCache: cache,
+      sqlQueryEngine: createMockQueryEngine(),
+    });
+
+    const result = await api.buildControlSnapshotQueryResult();
+    const payload = result?.rows?.[0] || null;
+    const timeline =
+      payload?.replicaOperations?.operationTimelineById
+        ?.['op-add-stale-active-replica'] || [];
+    const currentStateEntry = timeline[timeline.length - 1] || null;
+
+    t.equal(
+      payload?.replicaOperations?.inFlightCount,
+      0,
+      'control snapshot should not count stale ADD rows once the exact target replica is active',
+    );
+    t.equal(
+      currentStateEntry?.inFlight,
+      false,
+      'replica-operation timeline should mark the current state as non-blocking after observed service convergence',
+    );
+  },
+);
+
 test('AdminWebSocketAPI - local control snapshot exposes structured control-plane diagnostics',
   async (t) => {
     const workflowId = 'split-table-1-partition-1-v2';
@@ -2390,6 +2462,89 @@ test(
       repairEngine.executeRequestCalls.includes(`SELECT * FROM ${TABLES.PARTITIONS}`),
       true,
       'control snapshot repair should query authoritative partitions rows',
+    );
+  },
+);
+
+test(
+  'AdminWebSocketAPI - local control snapshot repairs stale active node heartbeat rows',
+  async (t) => {
+    const nowMs = 1740589945123;
+    const staleHeartbeatMs = nowMs - 45000;
+    const freshHeartbeatMs = nowMs - 1000;
+    const writableCache = createAuthoritativeRepairCache('node-local');
+
+    writableCache.applySystemTableChange(TABLES.NODES, 'UPDATE', {
+      id: 'node-local',
+      node_id: 'node-local',
+      address: 'localhost:8080',
+      node_address: 'localhost:8080',
+      status: 'active',
+      connection_state: 'ready',
+      last_heartbeat: staleHeartbeatMs,
+      ready_lease_expires_at: staleHeartbeatMs + 15000,
+    });
+    writableCache.applySystemTableChange(TABLES.NODES, 'INSERT', {
+      id: 'node-peer',
+      node_id: 'node-peer',
+      address: 'localhost:8081',
+      node_address: 'localhost:8081',
+      status: 'active',
+      connection_state: 'ready',
+      last_heartbeat: staleHeartbeatMs,
+      ready_lease_expires_at: staleHeartbeatMs + 15000,
+    });
+
+    const authoritativeNodes = [
+      {
+        ...writableCache.get(TABLES.NODES, 'node-local'),
+        last_heartbeat: freshHeartbeatMs,
+        ready_lease_expires_at: freshHeartbeatMs + 15000,
+      },
+      {
+        ...writableCache.get(TABLES.NODES, 'node-peer'),
+        last_heartbeat: freshHeartbeatMs,
+        ready_lease_expires_at: freshHeartbeatMs + 15000,
+      },
+    ];
+    const repairEngine = createSystemTableRepairQueryEngine({
+      [TABLES.NODES]: authoritativeNodes,
+      [TABLES.PARTITIONS]: writableCache.getAll(TABLES.PARTITIONS),
+      [TABLES.SERVICES]: writableCache.getAll(TABLES.SERVICES),
+      [TABLES.TABLES]: writableCache.getAll(TABLES.TABLES),
+      [TABLES.NODE_ENDPOINTS]: writableCache.getAll(TABLES.NODE_ENDPOINTS),
+      [TABLES.SERVICE_DEFINITIONS]:
+        writableCache.getAll(TABLES.SERVICE_DEFINITIONS),
+      [TABLES.SERVICE_ENDPOINTS]:
+        writableCache.getAll(TABLES.SERVICE_ENDPOINTS),
+      [TABLES.REPLICA_OPERATIONS]:
+        writableCache.getAll(TABLES.REPLICA_OPERATIONS),
+    });
+
+    const api = new AdminWebSocketAPI({
+      nodeId: 'node-local',
+      systemTableCache: createReadOnlyCache(writableCache),
+      cacheMutationTarget: writableCache,
+      sqlQueryEngine: repairEngine,
+      nowFn: () => nowMs,
+    });
+
+    await api.buildControlSnapshotQueryResult();
+
+    t.equal(
+      repairEngine.executeRequestCalls.includes(`SELECT * FROM ${TABLES.NODES}`),
+      true,
+      'control snapshot repair should query authoritative nodes rows when active heartbeats are stale',
+    );
+    t.equal(
+      writableCache.get(TABLES.NODES, 'node-local')?.last_heartbeat,
+      freshHeartbeatMs,
+      'local node heartbeat should be refreshed from the authoritative repair rows',
+    );
+    t.equal(
+      writableCache.get(TABLES.NODES, 'node-peer')?.last_heartbeat,
+      freshHeartbeatMs,
+      'peer node heartbeat should be refreshed from the authoritative repair rows',
     );
   },
 );
@@ -2880,6 +3035,122 @@ test(
 );
 
 test(
+  'AdminWebSocketAPI - table-scoped discovery repair uses injected ' +
+    'cdcIntegrationService authoritative reads before routed SQL',
+  async (t) => {
+    const writableCache = createPopulatedCache();
+    writableCache.applySystemTableChange(TABLES.NODES, 'INSERT', {
+      id: 'node-2',
+      address: 'localhost:8081',
+      status: 'active',
+    });
+    writableCache.applySystemTableChange(TABLES.TABLES, 'INSERT', {
+      id: 'table-benchmark-events',
+      table_id: 'table-benchmark-events',
+      name: 'benchmark_events',
+      table_name: 'benchmark_events',
+    });
+    writableCache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
+      id: 'partition-benchmark-events-1',
+      partition_id: 'partition-benchmark-events-1',
+      table_id: 'table-benchmark-events',
+      table_name: 'benchmark_events',
+      keyStart: null,
+      keyEnd: null,
+    });
+    writableCache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+      id: 'service-benchmark-events-node-1',
+      service_type: 'partition',
+      partition_id: 'partition-benchmark-events-1',
+      node_id: 'node-1',
+      status: 'active',
+      raft_role: 'leader',
+      address: '10.0.0.1:7001',
+    });
+    writableCache.lastAppliedAtMsByTableName.set(
+      TABLES.SERVICE_ENDPOINTS,
+      Date.now(),
+    );
+    writableCache.lastAppliedAtMsByTableName.set(
+      TABLES.SERVICE_DEFINITIONS,
+      Date.now(),
+    );
+
+    const authoritativeCache = createPopulatedCache();
+    seedRoutedTableDiscoveryRows(authoritativeCache);
+    const authoritativeReadCalls = [];
+    const authoritativeReadOptions = [];
+    const sqlCalls = [];
+    const api = new AdminWebSocketAPI({
+      nodeId: 'test-node',
+      systemTableCache: createReadOnlyCache(writableCache),
+      cacheMutationTarget: writableCache,
+      sqlQueryEngine: {
+        async executeRequest(request) {
+          sqlCalls.push(String(request?.statement || ''));
+          return {
+            success: false,
+            error: 'routed_sql_should_not_be_used',
+          };
+        },
+      },
+      cdcIntegrationService: {
+        async executeAuthoritativeSystemTableRead(
+          tableName,
+          _sql,
+          _params,
+          options,
+        ) {
+          authoritativeReadCalls.push(tableName);
+          authoritativeReadOptions.push(options || null);
+          return {
+            success: true,
+            rows: authoritativeCache.getAll(tableName),
+            source: 'local_partition_replica',
+          };
+        },
+      },
+    });
+
+    const result = await api.buildServiceDiscoveryQueryResult({
+      tableName: 'benchmark_events',
+      tableId: 'table-benchmark-events',
+    });
+    const snapshot = result?.rows?.[0] || null;
+    const replicas = snapshot?.services?.[0]?.replicas || [];
+
+    t.equal(
+      snapshot?.serviceCount,
+      1,
+      'table-scoped discovery should repair the cache through the injected authoritative owner',
+    );
+    t.equal(
+      replicas.length,
+      2,
+      'authoritative owner repair should restore both postgres-wire replicas',
+    );
+    t.same(
+      [...new Set(authoritativeReadCalls)].sort(),
+      [...AUTHORITATIVE_REPAIR_TABLES].sort(),
+      'repair should read every authoritative system table through cdcIntegrationService',
+    );
+    t.equal(
+      authoritativeReadOptions.every((options) => {
+        return options?.queryOptions?.routingReadinessDimension ===
+          CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE;
+      }),
+      true,
+      'authoritative owner repair should request repairEligible routing for any SQL fallback',
+    );
+    t.equal(
+      sqlCalls.length,
+      0,
+      'repair must not bypass the injected authoritative owner with routed SQL',
+    );
+  },
+);
+
+test(
   'AdminWebSocketAPI - table-scoped discovery does not repair learner readiness gaps',
   async (t) => {
     const staleAppliedAtMs = Date.now() - 10000;
@@ -3262,6 +3533,10 @@ test(
     const replicas = Array.isArray(payload?.services?.[0]?.replicas) ?
       payload.services[0].replicas :
       [];
+    const readinessByNodeId = new Map(replicas.map((replica) => [
+      String(replica?.nodeId || ''),
+      replica?.readiness || null,
+    ]));
     const admissionByNodeId = new Map(replicas.map((replica) => [
       String(replica?.nodeId || ''),
       replica?.benchmarkAdmission || null,
@@ -3289,9 +3564,25 @@ test(
       'pending promotion should surface in-flight replica operation reason',
     );
     t.equal(
+      readinessByNodeId.get('node-1')?.topologyReady,
+      true,
+      'unaffected source replica should remain topology ready',
+    );
+    t.equal(
+      readinessByNodeId.get('node-1')?.benchmarkReady,
+      true,
+      'unaffected source replica should remain benchmark ready',
+    );
+    t.equal(
+      readinessByNodeId.get('node-1')?.reasons?.some((reason) =>
+        reason.code === 'replica_operations_in_flight'),
+      false,
+      'unaffected source replica should not inherit global replica-op blockers',
+    );
+    t.equal(
       admissionByNodeId.get('node-1')?.state,
-      'blocked',
-      'pending promotion source should still respect global in-flight gating',
+      'ready',
+      'pending promotion source should stay admitted when it is route-safe',
     );
     t.equal(
       admissionByNodeId.get('node-1')?.degradationState,
@@ -3682,6 +3973,72 @@ test(
 
     ws.close();
     await api.shutdown();
+  },
+);
+
+test(
+  'AdminWebSocketAPI - table-scoped discovery ignores stale ADD rows once exact target replica services are active',
+  async (t) => {
+    const cache = createPopulatedCache();
+    seedRoutedTableDiscoveryRows(cache);
+    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+      id: 'partition-benchmark-events-1-r2',
+      service_id: 'partition-benchmark-events-1-r2',
+      service_type: 'partition',
+      partition_id: 'partition-benchmark-events-1',
+      replica_id: 'partition-benchmark-events-1-r2',
+      node_id: 'node-2',
+      status: 'active',
+      raft_role: 'follower',
+      address: '10.0.0.2:7001',
+    });
+    cache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'INSERT', {
+      operation_id: 'op-add-stale-active-replica',
+      type: 'ADD',
+      partition_id: 'partition-benchmark-events-1',
+      entity_type: 'partition',
+      entity_id: 'partition-benchmark-events-1',
+      source_node_id: 'node-1',
+      target_node_id: 'node-2',
+      replica_id: 'partition-benchmark-events-1-r2',
+      status: 'creating',
+      workflow_step: 'CREATING',
+    });
+    const api = new AdminWebSocketAPI({
+      nodeId: 'test-node',
+      systemTableCache: cache,
+      sqlQueryEngine: createMockQueryEngine(),
+    });
+
+    const result = await api.buildServiceDiscoveryQueryResult({
+      tableName: 'benchmark_events',
+    });
+    const snapshot = result?.rows?.[0] || null;
+    const replicas = snapshot?.services?.[0]?.replicas || [];
+    const targetReplica = replicas.find((replica) =>
+      replica?.nodeId === 'node-2');
+
+    t.equal(
+      snapshot?.replicaOperations?.inFlightCount,
+      0,
+      'discovery summary should not count stale ADD rows once the exact target replica is active',
+    );
+    t.equal(
+      targetReplica?.readiness?.benchmarkReady,
+      true,
+      'target replica should stay benchmark ready once canonical services show the ADD completed',
+    );
+    t.equal(
+      targetReplica?.readiness?.reasons?.some((reason) =>
+        reason.code === 'replica_operation_in_flight'),
+      false,
+      'target replica should not surface stale in-flight replica-operation reasons',
+    );
+    t.equal(
+      targetReplica?.benchmarkAdmission?.state,
+      'ready',
+      'benchmark admission should not keep blocking on a stale ADD row after the target replica is active',
+    );
   },
 );
 

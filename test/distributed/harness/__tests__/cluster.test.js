@@ -91,6 +91,7 @@ import {
   NODE_ROLES,
   CONTAINER_ENV_KEYS,
   PORTS,
+  PLAYBACK_EVENT_TYPE,
   RAFT_PROVIDER_DEFAULTS,
   NODE_CLIENT_SERVICE_DISCOVERY_SQL,
   NODE_CLIENT_SERVICE_ID_ADMIN_META,
@@ -117,6 +118,7 @@ test('Unit: createCluster exposes every required method', async () => {
     'stop',
     'getNode',
     'getNodes',
+    'addNode',
     'randomNonSeed',
     'waitForConvergence',
     'assertConsistency',
@@ -129,7 +131,10 @@ test('Unit: createCluster exposes every required method', async () => {
     'partitionNetwork',
     'healPartition',
     'slowNetwork',
+    'clearNetworkSlowdown',
     'corruptDisk',
+    'fillDisk',
+    'releaseDiskPressure',
     'startLoad',
   ];
 
@@ -141,6 +146,99 @@ test('Unit: createCluster exposes every required method', async () => {
     );
   }
 });
+
+test('Unit: _runChaosAction emits typed fault-injected playback event',
+  async () => {
+    const cluster = createCluster({
+      size: 1,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+    });
+    const playbackEvents = [];
+    cluster._recordPlaybackEvent = (type, scope, entityId, details) => {
+      playbackEvents.push({type, scope, entityId, details});
+    };
+
+    await cluster._runChaosAction(
+      'slowNetwork',
+      'node-1',
+      {latency: 100, jitter: 10},
+      async () => null,
+    );
+
+    assert.ok(
+      playbackEvents.some((event) =>
+        event.type === PLAYBACK_EVENT_TYPE.CHAOS_ACTION_STARTED),
+      'chaos action should emit started event',
+    );
+    assert.ok(
+      playbackEvents.some((event) =>
+        event.type === PLAYBACK_EVENT_TYPE.CHAOS_ACTION_COMPLETED),
+      'chaos action should emit completed event',
+    );
+    assert.ok(
+      playbackEvents.some((event) =>
+        event.type === PLAYBACK_EVENT_TYPE.CHAOS_FAULT_INJECTED),
+      'fault injection action should emit injected event',
+    );
+  });
+
+test('Unit: _runChaosAction emits typed fault-recovered playback event',
+  async () => {
+    const cluster = createCluster({
+      size: 1,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+    });
+    const playbackEvents = [];
+    cluster._recordPlaybackEvent = (type, scope, entityId, details) => {
+      playbackEvents.push({type, scope, entityId, details});
+    };
+
+    await cluster._runChaosAction(
+      'healPartition',
+      'network',
+      null,
+      async () => null,
+    );
+
+    assert.ok(
+      playbackEvents.some((event) =>
+        event.type === PLAYBACK_EVENT_TYPE.CHAOS_FAULT_RECOVERED),
+      'recovery action should emit recovered event',
+    );
+  });
+
+test('Unit: _runChaosAction emits typed fault-failed playback event',
+  async () => {
+    const cluster = createCluster({
+      size: 1,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+    });
+    const playbackEvents = [];
+    cluster._recordPlaybackEvent = (type, scope, entityId, details) => {
+      playbackEvents.push({type, scope, entityId, details});
+    };
+
+    await assert.rejects(
+      cluster._runChaosAction(
+        'fillDisk',
+        'node-1',
+        {sizeMb: 8},
+        async () => {
+          throw new Error('injected test failure');
+        },
+      ),
+      /injected test failure/,
+    );
+
+    assert.ok(
+      playbackEvents.some((event) =>
+        event.type === PLAYBACK_EVENT_TYPE.CHAOS_FAULT_FAILED),
+      'failed chaos action should emit failed event',
+    );
+  });
 
 test('Unit: createCluster returns a Cluster instance', async () => {
   const cluster = createCluster({
@@ -1525,6 +1623,53 @@ test('Unit: _waitForBootstrapApi requires sustained success across stable window
     );
   });
 
+test('Unit: _waitForBootstrapApi allows stable-window completion after startup deadline',
+  async () => {
+    const cluster = createCluster({
+      size: 1,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+      timeouts: {
+        nodeStartup: 10,
+        bootstrapReadyStableWindowMs: 10,
+      },
+    });
+
+    let bootstrapCallCount = 0;
+    cluster._httpRequest = async () => {
+      bootstrapCallCount += 1;
+      if (bootstrapCallCount === 1) {
+        return 503;
+      }
+      return 200;
+    };
+
+    const originalDateNow = Date.now;
+    let fakeNowMs = 0;
+    Date.now = () => fakeNowMs;
+    cluster._sleep = async () => {
+      fakeNowMs += 5;
+    };
+    cluster._collectFailureLogs = async () => {
+      throw new Error('should not collect failure logs on success');
+    };
+
+    try {
+      await cluster._waitForBootstrapApi({
+        id: '00000000-0000-4000-8000-000000000001',
+        ip: '127.0.0.1',
+      });
+    } finally {
+      Date.now = originalDateNow;
+    }
+
+    assert.ok(
+      bootstrapCallCount >= 4,
+      'should continue probing long enough to satisfy stable window ' +
+      'after initial join-ready success',
+    );
+  });
+
 test('Unit: _waitForBootstrapApi exposes diagnostic status summary on timeout',
   async () => {
     const cluster = createCluster({
@@ -1749,7 +1894,7 @@ test('Unit: _probeClusterActiveState probes node status in parallel',
     assert.strictEqual(probeResult.allActive, true);
   });
 
-test('Unit: _probeClusterActiveState prefers lightweight bootstrap readiness probe',
+test('Unit: _probeClusterActiveState prefers traffic readiness probe',
   async () => {
     const cluster = createCluster({
       size: 2,
@@ -1757,16 +1902,26 @@ test('Unit: _probeClusterActiveState prefers lightweight bootstrap readiness pro
       image: 'distributed-db:test',
     });
 
+    let trafficProbeCalls = 0;
     let bootstrapProbeCalls = 0;
     let getStatusCalls = 0;
     const createNode = (nodeId) => ({
       id: nodeId,
       role: nodeId === 'node-a' ? NODE_ROLES.SEED : NODE_ROLES.JOINER,
+      async probeTrafficReadiness(_options) {
+        trafficProbeCalls += 1;
+        return {
+          status: 200,
+          phase: 'TRAFFIC_READY',
+          state: 'traffic_ready',
+          reasons: [],
+        };
+      },
       async probeBootstrapReadiness(_options) {
         bootstrapProbeCalls += 1;
         return {
           status: 200,
-          phase: 'TRAFFIC_READY',
+          phase: 'JOIN_READY',
           state: 'join_ready',
           reasons: [],
         };
@@ -1794,19 +1949,92 @@ test('Unit: _probeClusterActiveState prefers lightweight bootstrap readiness pro
     assert.strictEqual(
       probeResult.allActive,
       true,
-      'bootstrap readiness probe should satisfy ACTIVE gate when snapshot coverage is complete',
+      'traffic readiness probe should satisfy ACTIVE gate when snapshot coverage is complete',
+    );
+    assert.strictEqual(
+      trafficProbeCalls,
+      2,
+      'traffic readiness should be queried per node',
     );
     assert.strictEqual(
       bootstrapProbeCalls,
-      2,
-      'bootstrap readiness should be queried per node',
+      0,
+      'bootstrap join readiness should not drive ACTIVE gate when traffic probe exists',
     );
     assert.strictEqual(
       getStatusCalls,
       0,
-      'legacy status query path should not be used when bootstrap readiness probe exists',
+      'legacy status query path should not be used when traffic readiness probe exists',
     );
   });
+
+test(
+  'Unit: _probeClusterActiveState keeps ACTIVE gate closed while node is ' +
+    'join-ready but not traffic-ready',
+  async () => {
+    const cluster = createCluster({
+      size: 1,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+    });
+
+    const node = {
+      id: 'node-a',
+      role: NODE_ROLES.SEED,
+      async probeTrafficReadiness(_options) {
+        return {
+          status: 503,
+          phase: 'JOIN_READY',
+          state: 'join_ready',
+          reasons: ['READINESS_STABLE_WINDOW_PENDING'],
+        };
+      },
+      async probeBootstrapReadiness(_options) {
+        return {
+          status: 200,
+          phase: 'JOIN_READY',
+          state: 'join_ready',
+          reasons: [],
+        };
+      },
+      async getReachabilityDiagnostics(_options) {
+        return {
+          adminReady: true,
+          lastError: null,
+        };
+      },
+      async getControlSnapshot() {
+        return {
+          rows: [{
+            nodes: ['node-a'],
+          }],
+        };
+      },
+      async getLogs(_options) {
+        return '';
+      },
+    };
+
+    cluster._nodes.set('node-a', node);
+
+    const probeResult = await cluster._probeClusterActiveState(Date.now() + 1000);
+    assert.strictEqual(
+      probeResult.allActive,
+      false,
+      'ACTIVE gate should stay closed until traffic readiness succeeds',
+    );
+    assert.strictEqual(
+      probeResult.nodeDiagnostics[0].active,
+      false,
+      'node should remain inactive while only bootstrap join readiness is projected',
+    );
+    assert.strictEqual(
+      probeResult.nodeDiagnostics[0].phase,
+      'JOIN_READY',
+      'diagnostics should preserve readiness phase when traffic gate is still closed',
+    );
+  },
+);
 
 test(
   'Unit: _probeClusterActiveState keeps ACTIVE gate closed when bootstrap ' +
@@ -2476,6 +2704,7 @@ test('Unit: _startNode reuses existing local container when reuse is enabled', a
       Networks: {
         [cluster._networkName]: {
           IPAddress: '10.0.0.44',
+          Aliases: ['ddb-test-reuse-1-1'],
         },
       },
     },
@@ -2483,6 +2712,10 @@ test('Unit: _startNode reuses existing local container when reuse is enabled', a
   provider.createContainer = async () => {
     createContainerCalls++;
     throw new Error('createContainer should not be called for reused node');
+  };
+  let connectToNetworkArgs = null;
+  provider.connectToNetwork = async (networkId, containerId, aliases) => {
+    connectToNetworkArgs = {networkId, containerId, aliases};
   };
 
   const node = await cluster._startNode(
@@ -2506,6 +2739,11 @@ test('Unit: _startNode reuses existing local container when reuse is enabled', a
   assert.strictEqual(createContainerCalls, 0);
   assert.strictEqual(node.containerId, 'existing-container-id');
   assert.strictEqual(node.ip, '10.0.0.44');
+  assert.strictEqual(
+    connectToNetworkArgs,
+    null,
+    'already-connected reusable containers should not be reconnected',
+  );
 });
 
 test('Unit: _startNode recreates reusable joiner container on timeout env mismatch',
@@ -2618,20 +2856,35 @@ test('Unit: Cluster.start quiesces reusable containers before startup sequence',
     const joinerNodeId = cluster._buildNodeId(1);
     const seedContainerName = 'ddb-test-reuse-2-1';
     const joinerContainerName = 'ddb-test-reuse-2-2';
+    const strayContainerName = 'ddb-test-reuse-2-3';
     const seedContainerId = 'reuse-container-seed';
     const joinerContainerId = 'reuse-container-joiner';
+    const strayContainerId = 'reuse-container-stray';
     containerStateByName.set(seedContainerName, 'running');
     containerStateByName.set(joinerContainerName, 'running');
+    containerStateByName.set(strayContainerName, 'running');
     containerIpByName.set(seedContainerName, '10.0.2.1');
     containerIpByName.set(joinerContainerName, '10.0.2.2');
+    containerIpByName.set(strayContainerName, '10.0.2.3');
     const stoppedContainers = [];
 
+    provider.listContainers = async () => [
+      {Names: [`/${seedContainerName}`]},
+      {Names: [`/${joinerContainerName}`]},
+      {Names: [`/${strayContainerName}`]},
+    ];
     provider.inspectContainerIfExists = async (name) => {
       if (!containerStateByName.has(name)) {
         return null;
       }
       const env = [
-        `NODE_ID=${name === seedContainerName ? seedNodeId : joinerNodeId}`,
+        `NODE_ID=${
+          name === seedContainerName ?
+            seedNodeId :
+            name === joinerContainerName ?
+              joinerNodeId :
+              cluster._buildNodeId(2)
+        }`,
         'DATA_DIR=/data',
         `NODE_ADDRESS=${name}:8080`,
         'TRANSPORT_WS_HOST=0.0.0.0',
@@ -2647,7 +2900,9 @@ test('Unit: Cluster.start quiesces reusable containers before startup sequence',
       return {
         Id: name === seedContainerName ?
           seedContainerId :
-          joinerContainerId,
+          name === joinerContainerName ?
+            joinerContainerId :
+            strayContainerId,
         State: {Status: containerStateByName.get(name)},
         Config: {
           Env: env,
@@ -2658,6 +2913,7 @@ test('Unit: Cluster.start quiesces reusable containers before startup sequence',
           Networks: {
             'ddb-test-net-reuse-local-2': {
               IPAddress: containerIpByName.get(name),
+              Aliases: [name],
             },
           },
         },
@@ -2669,6 +2925,8 @@ test('Unit: Cluster.start quiesces reusable containers before startup sequence',
         containerStateByName.set(seedContainerName, 'exited');
       } else if (containerId === joinerContainerId) {
         containerStateByName.set(joinerContainerName, 'exited');
+      } else if (containerId === strayContainerId) {
+        containerStateByName.set(strayContainerName, 'exited');
       }
     };
     provider.startContainer = async (containerId) => {
@@ -2676,6 +2934,8 @@ test('Unit: Cluster.start quiesces reusable containers before startup sequence',
         containerStateByName.set(seedContainerName, 'running');
       } else if (containerId === joinerContainerId) {
         containerStateByName.set(joinerContainerName, 'running');
+      } else if (containerId === strayContainerId) {
+        containerStateByName.set(strayContainerName, 'running');
       }
     };
     provider.restartContainer = async () => {
@@ -2684,12 +2944,15 @@ test('Unit: Cluster.start quiesces reusable containers before startup sequence',
     provider.inspectContainer = async (containerId) => {
       const name = containerId === seedContainerId ?
         seedContainerName :
-        joinerContainerName;
+        containerId === joinerContainerId ?
+          joinerContainerName :
+          strayContainerName;
       return {
         NetworkSettings: {
           Networks: {
             [cluster._networkName]: {
               IPAddress: containerIpByName.get(name),
+              Aliases: [name],
             },
           },
         },
@@ -2704,11 +2967,101 @@ test('Unit: Cluster.start quiesces reusable containers before startup sequence',
 
     assert.deepStrictEqual(
       stoppedContainers,
-      [seedContainerId, joinerContainerId],
-      'reusable containers should be quiesced before startup',
+      [seedContainerId, joinerContainerId, strayContainerId],
+      'reusable containers should quiesce base and stray same-size nodes',
     );
 
     await cluster.stop();
+  });
+
+test('Unit: _startNode reconnects reusable container with hostname alias',
+  async () => {
+    const cluster = createCluster({
+      size: 1,
+      docker: {
+        socketPath: '/var/run/docker.sock',
+        reuseContainers: true,
+      },
+      image: 'distributed-db:test',
+    });
+
+    cluster._networkName = 'ddb-test-net-reuse-local-1';
+    cluster._networkId = 'net-reuse-1';
+
+    const reuseNodeId = cluster._buildNodeId(0);
+    const provider = cluster._providers[0];
+    let connectToNetworkArgs = null;
+    let inspectAfterStartCalls = 0;
+    provider.inspectContainerIfExists = async () => ({
+      Id: 'existing-container-id',
+      State: {Status: 'exited'},
+      Config: {
+        Env: [
+          `NODE_ID=${reuseNodeId}`,
+          'DATA_DIR=/data',
+          'NODE_ADDRESS=ddb-test-reuse-1-1:8080',
+          'TRANSPORT_WS_HOST=0.0.0.0',
+          `${RAFT_PROVIDER_DEFAULTS.envKey}=${RAFT_PROVIDER_DEFAULTS.provider}`,
+        ],
+        Entrypoint: ['sh', '-lc'],
+        Cmd: ['rm -rf /data/* && exec node --max-old-space-size=1536 /app/src/index.js'],
+      },
+      NetworkSettings: {
+        Networks: {
+          [cluster._networkName]: {
+            IPAddress: '10.0.0.55',
+            Aliases: [],
+          },
+        },
+      },
+    });
+    provider.startContainer = async () => {};
+    provider.disconnectFromNetwork = async () => {};
+    provider.inspectContainer = async () => {
+      inspectAfterStartCalls++;
+      return {
+        NetworkSettings: {
+          Networks: inspectAfterStartCalls === 1 ?
+            {
+              [cluster._networkName]: {
+                IPAddress: '10.0.0.55',
+                Aliases: [],
+              },
+            } :
+            {
+              [cluster._networkName]: {
+                IPAddress: '10.0.0.55',
+                Aliases: ['ddb-test-reuse-1-1'],
+              },
+            },
+        },
+      };
+    };
+    provider.connectToNetwork = async (networkId, containerId, aliases) => {
+      connectToNetworkArgs = {networkId, containerId, aliases};
+    };
+    provider.createContainer = async () => {
+      throw new Error('createContainer should not be called for reused node');
+    };
+
+    const node = await cluster._startNode(
+      reuseNodeId,
+      NODE_ROLES.SEED,
+      null,
+      0,
+    );
+
+    assert.deepStrictEqual(
+      connectToNetworkArgs,
+      {
+        networkId: 'net-reuse-1',
+        containerId: 'existing-container-id',
+        aliases: ['ddb-test-reuse-1-1'],
+      },
+      'reused containers should be reattached when the run-network endpoint is missing the hostname alias used in node addresses',
+    );
+    assert.strictEqual(node.containerId, 'existing-container-id');
+    assert.strictEqual(node.ip, '10.0.0.55');
   });
 
 test('Unit: _startNode propagates configured raft provider env', async () => {

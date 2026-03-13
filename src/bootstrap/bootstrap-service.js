@@ -82,6 +82,9 @@ import {
   MessageGroupServiceHandlerSetup,
 } from './shared/message-group-service-handler-setup.js';
 import {
+  activateMessageGroupServiceRows,
+} from './shared/message-group-service-activation.js';
+import {
   ReplicaCreationProgressReporter,
 } from '../utils/replica-creation-progress-reporter.js';
 import {createSeedPhaseOwners} from './owners/seed-phase-owners.js';
@@ -251,6 +254,8 @@ class BootstrapService extends EventEmitter {
     this.dispatchService = null;
     this.rebalanceCoordinator = null;
     this.controlPlaneBackgroundWritersActivated = false;
+    this.messageGroupServiceHandlerRegistered = false;
+    this.messageGroupServiceEndpointsPublished = false;
 
     // Unified runtime ownership wiring.
     const runtimeWiring = createRuntimeStartupWiring({
@@ -653,6 +658,7 @@ class BootstrapService extends EventEmitter {
 
       const messageGroupHandlerStartMs = Date.now();
       this.initializeMessageGroupServiceHandler();
+      this.messageGroupServiceHandlerRegistered = true;
       this.logger.info('metrics.bootstrap.post_pipeline.message_group_handler', {
         nodeId: this.nodeId,
         durationMs: Date.now() - messageGroupHandlerStartMs,
@@ -672,6 +678,7 @@ class BootstrapService extends EventEmitter {
         nodeId: this.nodeId,
         durationMs: Date.now() - registerSeedStartMs,
       });
+      await this.activateMessageGroupServiceRows();
 
       // Start latency topology lifecycle asynchronously so REST bootstrap API
       // can come up without being blocked by topology/rebalancer warm-up.
@@ -1587,6 +1594,17 @@ class BootstrapService extends EventEmitter {
     return this.seedRegistrationPhase.registerServices(now);
   }
 
+  async activateMessageGroupServiceRows() {
+    return activateMessageGroupServiceRows({
+      nodeId: this.nodeId,
+      systemTableWriter: this.cdcIntegrationService,
+      messageRouter: this.messageRouter,
+      handlerRegistered: this.messageGroupServiceHandlerRegistered,
+      endpointsPublished: this.messageGroupServiceEndpointsPublished,
+      messageGroupServices: this.messageGroupServices,
+    });
+  }
+
   /**
    * Register built-in runtime service definitions.
    * @return {Promise<void>}
@@ -1750,6 +1768,7 @@ class BootstrapService extends EventEmitter {
         replicaStateMachine: this.replicaStateMachine,
         systemTableCache: systemTableCache,
         cdcIntegrationService: cdcIntegrationService,
+        sqlQueryEngine: cdcIntegrationService?.sqlQueryEngine || null,
         tablePolicyService: this.tablePolicyService,
       });
 
@@ -2183,6 +2202,7 @@ class BootstrapService extends EventEmitter {
 
     if (result) {
       this.messageGroupServiceHandler = result.messageGroupServiceHandler;
+      this.messageGroupServiceHandlerRegistered = true;
     }
   }
 
@@ -2255,6 +2275,7 @@ class BootstrapService extends EventEmitter {
         },
       );
       await this.waitForReadyNodeInCache(this.nodeId);
+      this.messageGroupServiceEndpointsPublished = true;
     } catch (error) {
       this.logger.error(BootstrapLog.CONTROL_PLANE_REGISTER_FAILED, {
         nodeId: this.nodeId,

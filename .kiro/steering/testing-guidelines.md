@@ -486,3 +486,54 @@ npm test -- --grep "exact test name"
 
 Used for lifelike testing scenarios with multiple nodes and for efficiency testing.
 See; test/distributed/README.local.md
+
+## Availability Under Pressure Test Policy
+
+System guideline §1.10 requires that all subsystems remain correct under load.
+Tests MUST verify this property at the unit and integration layers, not only in
+the distributed harness.
+
+### When to add pressure tests
+
+For any component that:
+
+- Accepts work from a queue, event stream, or external caller
+- Makes decisions based on cached or eventually-consistent state
+- Participates in topology transitions (split, move, rebalance, election)
+- Applies timeouts or deadline budgets
+
+### Required coverage patterns
+
+1. **Slow-dependency resilience** — inject artificial latency into a dependency
+   (mock that resolves after a delay) and prove the component does not fail,
+   corrupt state, or drop work. It may be slower, but it must remain correct.
+2. **Concurrent-caller correctness** — submit multiple concurrent requests to
+   the same component and prove no race conditions, lost updates, or duplicate
+   side effects occur.
+3. **Backpressure propagation** — if the component has a bounded queue or
+   admission control, prove that exceeding capacity returns a structured
+   rejection (not a timeout or silent drop).
+4. **Stale-state tolerance** — inject stale cache data or delayed CDC
+   propagation and prove the component makes correct (possibly conservative)
+   decisions rather than incorrect ones.
+
+### Test structure
+
+- These tests belong alongside the existing unit or integration tests for the
+  component, not in a separate stress-test directory.
+- They MUST respect the standard duration limits (2s unit, 30s integration).
+  Use mocked time and injected latency, not real delays.
+- Name them clearly: include "under pressure", "slow dependency",
+  "concurrent callers", or "stale cache" in the test description.
+
+### Idempotency regression coverage
+
+For any state-mutating operation path (system guideline §1.13), add at least
+one test that:
+
+1. Executes the operation once and records the resulting state.
+2. Executes the same operation again with the same inputs.
+3. Asserts the state is identical after both executions.
+
+This applies to row creation, lifecycle transitions, workflow step advances,
+and any CDC-propagated mutation.

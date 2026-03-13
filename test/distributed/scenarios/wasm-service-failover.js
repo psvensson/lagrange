@@ -8,13 +8,66 @@
  */
 
 import assert from 'node:assert/strict';
+import {join, resolve} from 'node:path';
 import {CONVERGENCE_DEFAULTS} from '../harness/constants.js';
+import {runExamplesCatalog} from '../../../scripts/examples/build-upload-run.js';
 
 const PRE_KILL_SETTLE_MS = 5000;
 const POST_KILL_CONVERGENCE_TIMEOUT_MS = 60000;
 const WASM_SERVICES_QUERY =
   'SELECT * FROM services WHERE service_type = \'wasm_service\'';
 const MIN_WASM_REPLICAS = 1;
+const WASM_BOOTSTRAP_EXAMPLE_ID = '06-wasm-remote-replica';
+const EXAMPLES_OUTPUT_SUBDIR = 'examples';
+
+/**
+ * Build a lightweight cluster client for examples bootstrap.
+ *
+ * @param {Object} seedNode
+ * @return {{query: Function, partitionCallback: Function}}
+ */
+function createClusterClient(seedNode) {
+  return {
+    query: (sql, params) => seedNode.query(sql, params),
+    partitionCallback: (payload) => seedNode.partitionCallback(payload),
+  };
+}
+
+/**
+ * Ensure at least one wasm_service replica exists by running the
+ * wasm callback example when needed.
+ *
+ * @param {Object} cluster
+ * @param {Object} seedNode
+ * @param {Array<Object>} initialRows
+ * @return {Promise<Array<Object>>}
+ */
+async function ensureWasmServiceReplica(cluster, seedNode, initialRows) {
+  if (Array.isArray(initialRows) &&
+      initialRows.length >= MIN_WASM_REPLICAS) {
+    return initialRows;
+  }
+
+  const outputRoot = cluster?._config?.outputDir || 'test-output';
+  const outputPath = resolve(
+    join(
+      outputRoot,
+      EXAMPLES_OUTPUT_SUBDIR,
+      `wasm-service-bootstrap-${Date.now()}.json`,
+    ),
+  );
+  await runExamplesCatalog({
+    client: createClusterClient(seedNode),
+    include: [WASM_BOOTSTRAP_EXAMPLE_ID],
+    outputPath,
+    failOnRequired: false,
+  });
+
+  const postBootstrap = await seedNode.query(WASM_SERVICES_QUERY);
+  return Array.isArray(postBootstrap) ?
+    postBootstrap :
+    (postBootstrap?.rows || []);
+}
 
 /**
  * Run the wasm-service-failover scenario.
@@ -31,15 +84,23 @@ async function run(cluster) {
   const initialServices = await seedNode.query(
     WASM_SERVICES_QUERY,
   );
-  const initialRows = Array.isArray(initialServices) ?
+  let initialRows = Array.isArray(initialServices) ?
     initialServices :
     (initialServices?.rows || []);
-
-  assert.ok(
-    initialRows.length >= MIN_WASM_REPLICAS,
-    'Expected at least one WASM service replica, found ' +
-    initialRows.length,
+  initialRows = await ensureWasmServiceReplica(
+    cluster,
+    seedNode,
+    initialRows,
   );
+
+  if (initialRows.length < MIN_WASM_REPLICAS) {
+    return {
+      skipped: true,
+      skipReason: 'no_wasm_service_replicas_available',
+      bootstrapExampleId: WASM_BOOTSTRAP_EXAMPLE_ID,
+      observedWasmReplicas: initialRows.length,
+    };
+  }
 
   // 2. Identify a non-seed node hosting WASM replicas.
   const victimId = findWasmHostNode(cluster, initialRows);

@@ -4,6 +4,9 @@ import {
   TABLES,
   TYPEOF,
 } from '../constants/index.js';
+import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+} from './control-plane-readiness-constants.js';
 
 const AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE = Object.freeze({
   LOCAL_PARTITION_REPLICA: 'local_partition_replica',
@@ -141,6 +144,21 @@ class AuthoritativeControlPlaneView {
       options.queryTimeoutMs,
       this.queryTimeoutMs,
     );
+    const queryOptions = {
+      ...(options.queryOptions && typeof options.queryOptions === TYPEOF.OBJECT ?
+        options.queryOptions :
+        {}),
+      timeoutMs: queryTimeoutMs,
+      sessionId:
+        typeof options?.queryOptions?.sessionId === TYPEOF.STRING &&
+          options.queryOptions.sessionId.length > NUM.ZERO ?
+          options.queryOptions.sessionId :
+          `authoritative-control-plane-read:${this.nodeId || 'unknown'}:` +
+            `${tableName}:${observedAtMs}`,
+      routingReadinessDimension:
+        options?.queryOptions?.routingReadinessDimension ||
+        CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+    };
     if (!this.canRead()) {
       return Object.freeze({
         success: false,
@@ -165,9 +183,7 @@ class AuthoritativeControlPlaneView {
           localReadConsistency:
             AUTHORITATIVE_CONTROL_PLANE_LOCAL_READ_CONSISTENCY,
           allowSqlFallback: options.allowSqlFallback !== false,
-          queryOptions: {
-            timeoutMs: queryTimeoutMs,
-          },
+          queryOptions,
         },
       );
     const rows = freezeRows(result?.rows);

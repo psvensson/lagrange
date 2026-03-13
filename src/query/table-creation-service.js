@@ -37,6 +37,10 @@ class TableCreationService {
     this.tablePolicyByTableId = new Map();
     this.partitionSizeByPartitionId = new Map();
     this.cachePolicyChangeListener = null;
+    this.calculateQuorumReplicaCount =
+      typeof options.calculateQuorumReplicaCount === 'function' ?
+        options.calculateQuorumReplicaCount :
+        null;
     this.partitionProvisioner =
       typeof options.partitionProvisioner === 'function' ?
         options.partitionProvisioner :
@@ -513,6 +517,11 @@ class TableCreationService {
     }
 
     const {tableId, tableName, partitionId, replicaCount} = context;
+    const minimumRoutableReplicaCount =
+      Number.isInteger(context?.minimumRoutableReplicaCount) &&
+        context.minimumRoutableReplicaCount > 0 ?
+        context.minimumRoutableReplicaCount :
+        this.resolveDefaultMinimumRoutableReplicaCount(replicaCount);
     this.logger.debug(QUERY_LOG_MSG.TABLE_PARTITION_PROVISION_START, {
       tableId,
       tableName,
@@ -521,7 +530,10 @@ class TableCreationService {
     });
 
     try {
-      await this.partitionProvisioner(context);
+      await this.partitionProvisioner({
+        ...context,
+        minimumRoutableReplicaCount,
+      });
       this.logger.debug(QUERY_LOG_MSG.TABLE_PARTITION_PROVISION_SUCCESS, {
         tableId,
         tableName,
@@ -541,6 +553,26 @@ class TableCreationService {
       }
       throw error;
     }
+  }
+
+  /**
+   * Resolve the default minimum routable cohort for CREATE TABLE partition
+   * provisioning. CREATE TABLE only needs a writable quorum before the
+   * statement can return; remaining replicas may continue converging.
+   * @param {number} replicaCount
+   * @return {number|null}
+   * @private
+   */
+  resolveDefaultMinimumRoutableReplicaCount(replicaCount) {
+    if (typeof this.calculateQuorumReplicaCount !== 'function') {
+      return null;
+    }
+    const minimumRoutableReplicaCount =
+      this.calculateQuorumReplicaCount(replicaCount);
+    return Number.isInteger(minimumRoutableReplicaCount) &&
+      minimumRoutableReplicaCount > 0 ?
+      minimumRoutableReplicaCount :
+      null;
   }
 
   /**

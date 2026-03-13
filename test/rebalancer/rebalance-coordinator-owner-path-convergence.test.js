@@ -112,6 +112,25 @@ function createConvergenceCoordinator(options = {}) {
   for (const row of operationRows) {
     operationMap.set(row.operation_id, {...row});
   }
+  const cacheListeners = new Set();
+
+  function applyCacheChange(tableName, operation, row) {
+    if (tableName === SYSTEM_TABLE_NAME.SERVICES) {
+      const serviceId = row?.service_id || row?.replica_id;
+      const nextRows = serviceRows.filter((existing) => {
+        return (existing.service_id || existing.replica_id) !== serviceId;
+      });
+      if (operation !== 'DELETE') {
+        nextRows.push({...row});
+      }
+      serviceRows.length = 0;
+      serviceRows.push(...nextRows);
+    }
+
+    for (const listener of cacheListeners) {
+      listener(tableName, operation, row);
+    }
+  }
 
   const sqlEngine = {
     executeQuery: async (sql, params) => {
@@ -179,6 +198,12 @@ function createConvergenceCoordinator(options = {}) {
     nodeId: TEST_NODE_ID,
     transactionCoordinator: buildTransactionCoordinator(),
     systemTableCache: {
+      onCacheChange(listener) {
+        cacheListeners.add(listener);
+      },
+      offCacheChange(listener) {
+        return cacheListeners.delete(listener);
+      },
       getAll(tableName) {
         if (tableName === SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) {
           return Array.from(operationMap.values());
@@ -230,7 +255,14 @@ function createConvergenceCoordinator(options = {}) {
   });
   coordinator.initialize();
 
-  return {coordinator, emitter, recordedOwnerKeys, operationMap};
+  return {
+    coordinator,
+    emitter,
+    recordedOwnerKeys,
+    operationMap,
+    applyCacheChange,
+    cacheListeners,
+  };
 }
 
 test('Owner-path convergence: all progression entry points ' +
@@ -345,6 +377,55 @@ test('Owner-path convergence: all progression entry points ' +
   );
 
   await t.test(
+    'services cache progression routes through the same owner key ' +
+    'and completes creating ADD operations',
+    async (t) => {
+      const replicaId = 'partition-conv-1-r2';
+      const targetNodeId = 'node-target';
+      const opRow = buildOperationRow({
+        workflowStep: WORKFLOW_STEP.CREATING,
+        status: ReplicaStatus.CREATING,
+        replicaId,
+        targetNodeId,
+      });
+      const {
+        coordinator,
+        recordedOwnerKeys,
+        operationMap,
+        applyCacheChange,
+      } = createConvergenceCoordinator({
+        operationRows: [opRow],
+      });
+
+      try {
+        applyCacheChange(SYSTEM_TABLE_NAME.SERVICES, 'UPDATE', {
+          service_id: replicaId,
+          replica_id: replicaId,
+          partition_id: TEST_PARTITION_ID,
+          node_id: targetNodeId,
+          status: ReplicaStatus.ACTIVE,
+        });
+
+        await new Promise((resolve) => setImmediate(resolve));
+        await new Promise((resolve) => setImmediate(resolve));
+
+        const updated = operationMap.get(TEST_OPERATION_ID);
+        t.equal(
+          updated?.workflow_step,
+          WORKFLOW_STEP.ACTIVE,
+          'service-row progress should complete the creating ADD workflow',
+        );
+        t.ok(
+          recordedOwnerKeys.includes(buildOperationOwnerKey(TEST_OPERATION_ID)),
+          'services cache progression must route through the shared owner key',
+        );
+      } finally {
+        await coordinator.shutdown();
+      }
+    },
+  );
+
+  await t.test(
     'all three entry points use the same runExclusive ' +
     'mechanism for the same operation',
     async (t) => {
@@ -414,6 +495,23 @@ test('Owner-path convergence: all progression entry points ' +
       } finally {
         await coordinator.shutdown();
       }
+    },
+  );
+
+  await t.test(
+    'shutdown removes the services cache listener used for ' +
+    'event-triggered progression',
+    async (t) => {
+      const opRow = buildOperationRow({
+        workflowStep: WORKFLOW_STEP.CREATING,
+        status: ReplicaStatus.CREATING,
+      });
+      const {coordinator, cacheListeners} =
+        createConvergenceCoordinator({operationRows: [opRow]});
+
+      t.equal(cacheListeners.size, 1, 'coordinator should register one cache listener');
+      await coordinator.shutdown();
+      t.equal(cacheListeners.size, 0, 'coordinator should remove its cache listener on shutdown');
     },
   );
 

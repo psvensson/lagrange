@@ -11,6 +11,7 @@ import {MessageGroupServiceRowOwner} from
   '../message-group/message-group-service-row-owner.js';
 import {
   ENTITY_TYPE,
+  SERVICE_STATUS,
   SERVICE_TYPE,
   WORKFLOW_STEP,
 } from '../constants/index.js';
@@ -67,6 +68,7 @@ class MessageGroupServiceHandler extends EventEmitter {
       new MessageGroupServiceRowOwner({
         systemTableWriter: this.cdcIntegrationService,
       });
+    this.messageRouter = options.messageRouter || null;
     this.rpcClient = null;
 
     // Executor outcome emitter — replaces direct replica_operations writes.
@@ -257,11 +259,18 @@ class MessageGroupServiceHandler extends EventEmitter {
     try {
       await this.createMessageGroupReplica(replicaOptions);
       await this.startMessageGroupReplica(replicaOptions);
+      const service = this.resolveActiveReplicaService(replicaId);
+      if (!this.isReplicaHandlerRegistered(replicaId, service)) {
+        throw new Error(
+          MESSAGE_GROUP_SERVICE_HANDLER_ERROR_MSG.
+            REPLICA_HANDLER_NOT_REGISTERED(replicaId),
+        );
+      }
       await this.messageGroupServiceRowOwner.registerReplica({
         groupId,
         replicaId,
         nodeId: this.nodeId,
-        service: this.resolveActiveReplicaService(replicaId),
+        service,
       });
 
       this.localReplicas.set(replicaId, {
@@ -431,6 +440,13 @@ class MessageGroupServiceHandler extends EventEmitter {
     reason,
   }) {
     try {
+      await this.messageGroupServiceRowOwner.updateReplicaStatus({
+        groupId,
+        replicaId,
+        nodeId: this.nodeId,
+        service: this.resolveActiveReplicaService(replicaId),
+        status: SERVICE_STATUS.STOPPED,
+      });
       await this.stopMessageGroupReplica({
         groupId,
         replicaId,
@@ -586,6 +602,22 @@ class MessageGroupServiceHandler extends EventEmitter {
     return this.resolveLocalMessageGroupReplica(replicaId) || null;
   }
 
+  isReplicaHandlerRegistered(replicaId, service = null) {
+    if (!this.messageRouter || !isFunction(this.messageRouter.isRegistered)) {
+      return false;
+    }
+    const unifiedAddress =
+      service?.unifiedAddress ||
+      (isFunction(service?.getUnifiedAddress) ?
+        service.getUnifiedAddress() :
+        AddressManager.getInstance().format(
+          this.nodeId,
+          ENTITY_TYPE.MESSAGE_GROUP,
+          replicaId,
+        ));
+    return this.messageRouter.isRegistered(unifiedAddress);
+  }
+
   getKnownLocalReplica(replicaId, groupId) {
     const existing = this.localReplicas.get(replicaId);
     if (existing) {
@@ -651,6 +683,7 @@ class MessageGroupServiceHandler extends EventEmitter {
       );
       return;
     }
+    this.messageRouter = messageRouter;
 
     const handlerAddress =
       `${this.nodeId}/` +

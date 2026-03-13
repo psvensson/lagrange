@@ -4,7 +4,8 @@
  * Feature: distributed-testing-framework
  * Tests each primitive delegates to the correct Docker Provider method,
  * verifies network partition topology, heal restores connectivity,
- * slowNetwork generates correct tc commands, and corruptDisk uses dd.
+ * slowNetwork generates correct tc commands, clear restores network qdisc,
+ * disk pressure can be applied/released, and corruptDisk uses dd.
  *
  * **Validates: Requirements 4.1, 4.2, 4.7, 4.8**
  */
@@ -19,8 +20,30 @@ import {ChaosPrimitives} from '../chaos.js';
  */
 function createMockProvider() {
   const calls = [];
+  let inspectCount = 0;
+  const inspectResponses = [
+    {
+      Name: '/ddb-test-reuse-3-2',
+      Config: {
+        Env: [
+          'NODE_ADDRESS=ddb-test-reuse-3-2:8080',
+        ],
+      },
+      State: {Status: 'running'},
+      NetworkSettings: {
+        Networks: {
+          'cluster-main': {
+            NetworkID: MAIN_NETWORK_ID,
+            IPAddress: '172.18.0.2',
+            Aliases: ['ddb-test-reuse-3-2'],
+          },
+        },
+      },
+    },
+  ];
   return {
     calls,
+    inspectResponses,
     killContainer: async (id) => {
       calls.push({method: 'killContainer', args: [id]});
     },
@@ -36,6 +59,12 @@ function createMockProvider() {
     restartContainer: async (id) => {
       calls.push({method: 'restartContainer', args: [id]});
     },
+    inspectContainer: async (id) => {
+      calls.push({method: 'inspectContainer', args: [id]});
+      const index = Math.min(inspectCount, inspectResponses.length - 1);
+      inspectCount += 1;
+      return inspectResponses[index];
+    },
     execInContainer: async (id, cmd) => {
       calls.push({method: 'execInContainer', args: [id, cmd]});
     },
@@ -50,10 +79,10 @@ function createMockProvider() {
         args: [netId, containerId],
       });
     },
-    connectToNetwork: async (netId, containerId) => {
+    connectToNetwork: async (netId, containerId, aliases = []) => {
       calls.push({
         method: 'connectToNetwork',
-        args: [netId, containerId],
+        args: [netId, containerId, aliases],
       });
     },
     removeNetwork: async (netId) => {
@@ -125,17 +154,129 @@ test('unpauseNode delegates to dockerProvider.unpauseContainer', async () => {
   assert.strictEqual(provider.calls[0].args[0], 'container-aaa');
 });
 
-test('restartNode delegates to dockerProvider.restartContainer', async () => {
+test('restartNode republishes main-network alias after restart', async () => {
   const provider = createMockProvider();
   const nodes = createMockNodes();
   const chaos = new ChaosPrimitives(provider, nodes, MAIN_NETWORK_ID);
 
   await chaos.restartNode('node-2');
 
-  assert.strictEqual(provider.calls.length, 1);
   assert.strictEqual(provider.calls[0].method, 'restartContainer');
   assert.strictEqual(provider.calls[0].args[0], 'container-bbb');
+  assert.strictEqual(provider.calls[1].method, 'inspectContainer');
+  assert.strictEqual(provider.calls[1].args[0], 'container-bbb');
+  assert.strictEqual(provider.calls[2].method, 'disconnectFromNetwork');
+  assert.deepStrictEqual(provider.calls[2].args, [
+    MAIN_NETWORK_ID,
+    'container-bbb',
+  ]);
+  assert.strictEqual(provider.calls[3].method, 'connectToNetwork');
+  assert.deepStrictEqual(provider.calls[3].args, [
+    MAIN_NETWORK_ID,
+    'container-bbb',
+    ['ddb-test-reuse-3-2'],
+  ]);
+  assert.strictEqual(provider.calls[4].method, 'inspectContainer');
+  assert.strictEqual(provider.calls[4].args[0], 'container-bbb');
+  assert.strictEqual(nodes.get('node-2').ip, '172.18.0.2');
 });
+
+test('restartNode reconnects main-network alias when missing after restart', async () => {
+  const provider = createMockProvider();
+  provider.inspectResponses.splice(
+    0,
+    provider.inspectResponses.length,
+    {
+      Name: '/ddb-test-reuse-3-2',
+      Config: {
+        Env: [
+          'NODE_ADDRESS=ddb-test-reuse-3-2:8080',
+        ],
+      },
+      State: {Status: 'running'},
+      NetworkSettings: {
+        Networks: {
+          'cluster-main': {
+            NetworkID: MAIN_NETWORK_ID,
+            IPAddress: '172.18.0.22',
+            Aliases: [],
+          },
+        },
+      },
+    },
+    {
+      Name: '/ddb-test-reuse-3-2',
+      Config: {
+        Env: [
+          'NODE_ADDRESS=ddb-test-reuse-3-2:8080',
+        ],
+      },
+      State: {Status: 'running'},
+      NetworkSettings: {
+        Networks: {
+          'cluster-main': {
+            NetworkID: MAIN_NETWORK_ID,
+            IPAddress: '172.18.0.22',
+            Aliases: ['ddb-test-reuse-3-2'],
+          },
+        },
+      },
+    },
+  );
+  const nodes = createMockNodes();
+  const chaos = new ChaosPrimitives(provider, nodes, MAIN_NETWORK_ID);
+
+  await chaos.restartNode('node-2');
+
+  const disconnectCall = provider.calls.find(
+    (call) => call.method === 'disconnectFromNetwork',
+  );
+  const connectCall = provider.calls.find(
+    (call) => call.method === 'connectToNetwork',
+  );
+
+  assert.ok(disconnectCall, 'restart should detach stale main-network endpoint');
+  assert.deepStrictEqual(disconnectCall.args, [
+    MAIN_NETWORK_ID,
+    'container-bbb',
+  ]);
+  assert.ok(connectCall, 'restart should restore the hostname alias on reattach');
+  assert.deepStrictEqual(connectCall.args, [
+    MAIN_NETWORK_ID,
+    'container-bbb',
+    ['ddb-test-reuse-3-2'],
+  ]);
+  assert.strictEqual(nodes.get('node-2').ip, '172.18.0.22');
+});
+
+test('restartNode skips main-network reattach while an isolation partition is active',
+  async () => {
+    const provider = createMockProvider();
+    const nodes = createMockNodes();
+    const chaos = new ChaosPrimitives(provider, nodes, MAIN_NETWORK_ID);
+    chaos._isolationState = {
+      isoNetA: {id: 'iso-a'},
+      isoNetB: {id: 'iso-b'},
+      groupA: ['node-1'],
+      groupB: ['node-2', 'node-3'],
+    };
+
+    await chaos.restartNode('node-2');
+
+    assert.strictEqual(provider.calls[0].method, 'restartContainer');
+    assert.strictEqual(provider.calls[1].method, 'inspectContainer');
+    assert.strictEqual(
+      provider.calls.some((call) => call.method === 'disconnectFromNetwork'),
+      false,
+      'restart should not silently rejoin the main network during an isolation partition',
+    );
+    assert.strictEqual(
+      provider.calls.some((call) => call.method === 'connectToNetwork'),
+      false,
+      'restart should not republish the main-network alias while partition isolation is active',
+    );
+  },
+);
 
 // --- Unknown nodeId throws error ---
 
@@ -336,13 +477,44 @@ test('slowNetwork executes tc qdisc netem with latency and jitter', async () => 
   assert.ok(Array.isArray(cmd), 'command should be an array');
   assert.strictEqual(cmd[0], 'tc');
   assert.ok(cmd.includes('qdisc'), 'should include qdisc');
-  assert.ok(cmd.includes('add'), 'should include add');
+  assert.ok(cmd.includes('replace'), 'should include replace');
   assert.ok(cmd.includes('netem'), 'should include netem');
   assert.ok(cmd.includes('delay'), 'should include delay');
   assert.ok(cmd.includes('eth0'), 'should target eth0');
   assert.ok(cmd.includes('root'), 'should use root qdisc');
   assert.ok(cmd.includes('100ms'), 'should include latency value');
   assert.ok(cmd.includes('25ms'), 'should include jitter value');
+});
+
+test('clearNetworkSlowdown removes root qdisc', async () => {
+  const provider = createMockProvider();
+  const nodes = createMockNodes();
+  const chaos = new ChaosPrimitives(provider, nodes, MAIN_NETWORK_ID);
+
+  await chaos.clearNetworkSlowdown('node-2');
+
+  assert.strictEqual(provider.calls.length, 1);
+  const call = provider.calls[0];
+  assert.strictEqual(call.method, 'execInContainer');
+  assert.strictEqual(call.args[0], 'container-bbb');
+  assert.deepStrictEqual(call.args[1], [
+    'tc', 'qdisc', 'del', 'dev', 'eth0', 'root',
+  ]);
+});
+
+test('clearNetworkSlowdown is idempotent when qdisc is missing', async () => {
+  const provider = createMockProvider();
+  provider.execInContainer = async (id, cmd) => {
+    provider.calls.push({method: 'execInContainer', args: [id, cmd]});
+    throw new Error('Cannot find qdisc');
+  };
+  const nodes = createMockNodes();
+  const chaos = new ChaosPrimitives(provider, nodes, MAIN_NETWORK_ID);
+
+  await chaos.clearNetworkSlowdown('node-1');
+
+  assert.strictEqual(provider.calls.length, 1);
+  assert.strictEqual(provider.calls[0].method, 'execInContainer');
 });
 
 // --- corruptDisk generates correct dd command (Req 4.8) ---
@@ -382,4 +554,46 @@ test('corruptDisk executes dd command with correct path', async () => {
     cmd.includes('conv=notrunc'),
     'should use notrunc to corrupt in place',
   );
+});
+
+test('fillDisk writes one bounded payload file', async () => {
+  const provider = createMockProvider();
+  const nodes = createMockNodes();
+  const chaos = new ChaosPrimitives(provider, nodes, MAIN_NETWORK_ID);
+
+  await chaos.fillDisk('node-1', {sizeMb: 32});
+
+  assert.strictEqual(provider.calls.length, 2);
+  assert.deepStrictEqual(provider.calls[0], {
+    method: 'execInContainer',
+    args: ['container-aaa', ['mkdir', '-p', '/tmp/lagrange-chaos']],
+  });
+  assert.strictEqual(provider.calls[1].method, 'execInContainer');
+  const fillCmd = provider.calls[1].args[1];
+  assert.strictEqual(fillCmd[0], 'dd');
+  assert.ok(fillCmd.includes('if=/dev/zero'));
+  assert.ok(fillCmd.includes('of=/tmp/lagrange-chaos/disk-pressure-node-1.bin'));
+  assert.ok(fillCmd.includes('bs=1M'));
+  assert.ok(fillCmd.includes('count=32'));
+  assert.ok(fillCmd.includes('conv=fsync'));
+});
+
+test('releaseDiskPressure removes payload and flushes sync', async () => {
+  const provider = createMockProvider();
+  const nodes = createMockNodes();
+  const chaos = new ChaosPrimitives(provider, nodes, MAIN_NETWORK_ID);
+
+  await chaos.releaseDiskPressure('node-3', {
+    filePath: '/tmp/lagrange-chaos/custom-pressure.bin',
+  });
+
+  assert.strictEqual(provider.calls.length, 2);
+  assert.deepStrictEqual(provider.calls[0], {
+    method: 'execInContainer',
+    args: ['container-ccc', ['rm', '-f', '/tmp/lagrange-chaos/custom-pressure.bin']],
+  });
+  assert.deepStrictEqual(provider.calls[1], {
+    method: 'execInContainer',
+    args: ['container-ccc', ['sync']],
+  });
 });

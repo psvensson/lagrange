@@ -40,6 +40,7 @@ const IPV6_HOST_PREFIX = '[';
 const IPV6_HOST_SUFFIX = ']';
 const WEBSOCKET_CONNECT_TIMEOUT_CONFIG_KEY = 'timeout.websocketConnectMs';
 const WEBSOCKET_CONNECT_TIMEOUT_ERROR_CODE = 'WS_CONNECT_TIMEOUT';
+const RECONNECT_ADDRESS_SUPPRESSION_DEFAULT_MS = 5000;
 const QUEUE_WAIT_BUCKETS = Object.freeze([
   {upperBoundMs: 1, label: 'le_1ms'},
   {upperBoundMs: 5, label: 'le_5ms'},
@@ -335,6 +336,12 @@ class MessageRouter extends EventEmitter {
     this.resolveQueryMessageGroupService =
       options.resolveQueryMessageGroupService || null;
     this.pendingNodeConnections = new Map();
+    this.reconnectAddressSuppressionMs =
+      Number.isFinite(options.reconnectAddressSuppressionMs) &&
+      options.reconnectAddressSuppressionMs > TRANSPORT_NUM.ZERO ?
+        Math.floor(options.reconnectAddressSuppressionMs) :
+        RECONNECT_ADDRESS_SUPPRESSION_DEFAULT_MS;
+    this.suppressedReconnectAddresses = new Map();
   }
 
   /**
@@ -541,6 +548,15 @@ class MessageRouter extends EventEmitter {
    */
   handleIncomingConnection(ws, _req) {
     const connectionId = uuidv4();
+    const connectionInfo = {
+      connectionId,
+      ws,
+      state: ConnectionState.CONNECTED,
+      nodeId: null,
+      isIncoming: true,
+      retired: false,
+      createdAt: Date.now(),
+    };
 
     this.logger.debug(ROUTER_LOG_MSG.INCOMING_CONNECTION, {
       connectionId,
@@ -549,11 +565,14 @@ class MessageRouter extends EventEmitter {
 
     // Set up message handler
     ws.on(TRANSPORT_EVENT.MESSAGE, (data) => {
-      this.handleMessage(connectionId, ws, data);
+      this.handleMessage(connectionInfo.nodeId || connectionId, ws, data);
     });
 
     ws.on(TRANSPORT_EVENT.CLOSE, () => {
-      this.handleConnectionClose(connectionId);
+      this.handleConnectionClose(
+        connectionInfo.nodeId || connectionId,
+        connectionInfo.connectionId,
+      );
     });
 
     ws.on(TRANSPORT_EVENT.ERROR, (error) => {
@@ -564,14 +583,7 @@ class MessageRouter extends EventEmitter {
     });
 
     // Store connection temporarily until we know the peer node ID
-    this.nodeConnections.set(connectionId, {
-      connectionId,
-      ws,
-      state: ConnectionState.CONNECTED,
-      nodeId: null,
-      isIncoming: true,
-      createdAt: Date.now(),
-    });
+    this.nodeConnections.set(connectionId, connectionInfo);
 
     this.emit(TRANSPORT_EVENT.CONNECTION_ESTABLISHED, {
       connectionId,
@@ -656,6 +668,142 @@ class MessageRouter extends EventEmitter {
   }
 
   /**
+   * Extract one websocket port from an address.
+   * @param {string|null} address
+   * @return {number|null}
+   * @private
+   */
+  extractWebSocketPort(address) {
+    if (typeof address !== TRANSPORT_TYPEOF.STRING ||
+        address.length === TRANSPORT_NUM.ZERO) {
+      return null;
+    }
+    try {
+      const parsed = new URL(address);
+      const port = Number(parsed.port);
+      return Number.isFinite(port) && port > TRANSPORT_NUM.ZERO ?
+        port :
+        null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Build a directly-routable websocket address from an observed socket IP.
+   * @param {WebSocket|null} ws
+   * @param {string|null} candidateAddress
+   * @return {string|null}
+   * @private
+   */
+  buildObservedReconnectAddress(ws, candidateAddress = null) {
+    const observedHost = ws?._socket?.remoteAddress;
+    if (typeof observedHost !== TRANSPORT_TYPEOF.STRING ||
+        observedHost.length === TRANSPORT_NUM.ZERO) {
+      return null;
+    }
+    const port = this.extractWebSocketPort(candidateAddress) ||
+      Number(ws?._socket?.remotePort) ||
+      null;
+    if (!Number.isFinite(port) || port <= TRANSPORT_NUM.ZERO) {
+      return null;
+    }
+    return TRANSPORT_FORMAT.buildWebSocketAddress(
+      this.normalizeWebSocketHost(observedHost),
+      port,
+    );
+  }
+
+  /**
+   * Remember the most directly-routable reconnect address observed for one
+   * connection while retaining the configured resolver address as fallback.
+   * @param {Object|null} connectionInfo
+   * @param {WebSocket|null} ws
+   * @param {string|null} candidateAddress
+   * @return {void}
+   * @private
+   */
+  rememberReconnectAddress(connectionInfo, ws, candidateAddress = null) {
+    if (!connectionInfo || typeof connectionInfo !== TRANSPORT_TYPEOF.OBJECT) {
+      return;
+    }
+    if (typeof candidateAddress === TRANSPORT_TYPEOF.STRING &&
+        candidateAddress.length > TRANSPORT_NUM.ZERO &&
+        (!connectionInfo.configuredAddress ||
+          connectionInfo.configuredAddress.length === TRANSPORT_NUM.ZERO)) {
+      connectionInfo.configuredAddress = candidateAddress;
+    }
+    const observedAddress =
+      this.buildObservedReconnectAddress(ws, candidateAddress);
+    if (typeof observedAddress === TRANSPORT_TYPEOF.STRING &&
+        observedAddress.length > TRANSPORT_NUM.ZERO) {
+      connectionInfo.observedAddress = observedAddress;
+      connectionInfo.address = observedAddress;
+      return;
+    }
+    if (typeof candidateAddress === TRANSPORT_TYPEOF.STRING &&
+        candidateAddress.length > TRANSPORT_NUM.ZERO) {
+      connectionInfo.address = candidateAddress;
+    }
+  }
+
+  /**
+   * Clear an armed reconnect timer for one connection.
+   * @param {Object|null} connectionInfo
+   * @return {void}
+   * @private
+   */
+  clearReconnectTimeout(connectionInfo) {
+    if (!connectionInfo?.reconnectTimeout) {
+      return;
+    }
+    clearTimeout(connectionInfo.reconnectTimeout);
+    connectionInfo.reconnectTimeout = null;
+  }
+
+  /**
+   * Clear one heartbeat interval.
+   * @param {Object|null} connectionInfo
+   * @return {void}
+   * @private
+   */
+  clearPingInterval(connectionInfo) {
+    if (!connectionInfo?.pingInterval) {
+      return;
+    }
+    clearInterval(connectionInfo.pingInterval);
+    connectionInfo.pingInterval = null;
+  }
+
+  /**
+   * Retire a superseded connection object so it stops reconnecting.
+   * @param {Object|null} connectionInfo
+   * @return {void}
+   * @private
+   */
+  retireConnection(connectionInfo) {
+    if (!connectionInfo || typeof connectionInfo !== TRANSPORT_TYPEOF.OBJECT) {
+      return;
+    }
+    connectionInfo.retired = true;
+    this.clearReconnectTimeout(connectionInfo);
+    this.clearPingInterval(connectionInfo);
+  }
+
+  /**
+   * Return whether a connection object is still the active entry for its peer.
+   * @param {Object|null} connectionInfo
+   * @return {boolean}
+   * @private
+   */
+  isCurrentConnection(connectionInfo) {
+    if (!connectionInfo || typeof connectionInfo !== TRANSPORT_TYPEOF.OBJECT) {
+      return false;
+    }
+    return this.nodeConnections.get(connectionInfo.nodeId) === connectionInfo;
+  }
+
+  /**
    * Connect to a remote node via WebSocket.
    * @param {string} nodeId - Remote node ID.
    * @param {string} address - Remote node WebSocket address.
@@ -678,16 +826,23 @@ class MessageRouter extends EventEmitter {
       address,
       routerId: this.routerId,
     });
+    const existing = this.nodeConnections.get(nodeId) || null;
+    if (existing) {
+      this.retireConnection(existing);
+    }
 
     const connectionInfo = {
       connectionId: uuidv4(),
       nodeId,
       address,
+      configuredAddress: existing?.configuredAddress || address,
+      observedAddress: existing?.observedAddress || null,
       ws: null,
       state: ConnectionState.CONNECTING,
       reconnectAttempts: TRANSPORT_NUM.ZERO,
       isIncoming: false,
       isSelfConnection: options.isSelfConnection || false,
+      retired: false,
       createdAt: Date.now(),
     };
 
@@ -747,12 +902,31 @@ class MessageRouter extends EventEmitter {
           if (settled) {
             return;
           }
+          if (!connectionInfo.isSelfConnection &&
+              !this.isCurrentConnection(connectionInfo)) {
+            settled = true;
+            clearConnectTimeout();
+            connectionInfo.state = ConnectionState.CLOSED;
+            connectionInfo.ws = null;
+            try {
+              ws.terminate();
+            } catch {
+              // Best-effort cleanup for a superseded handshake.
+            }
+            resolve();
+            return;
+          }
           settled = true;
           connectionEstablished = true;
           clearConnectTimeout();
           connectionInfo.ws = ws;
           connectionInfo.state = ConnectionState.CONNECTED;
           connectionInfo.reconnectAttempts = TRANSPORT_NUM.ZERO;
+          this.rememberReconnectAddress(
+            connectionInfo,
+            ws,
+            connectionInfo.configuredAddress || connectionInfo.address,
+          );
 
           this.logger.info(ROUTER_LOG_MSG.CONNECTED, {
             nodeId: connectionInfo.nodeId,
@@ -855,9 +1029,21 @@ class MessageRouter extends EventEmitter {
       });
     });
 
+    if (!connectionInfo.isSelfConnection &&
+        !this.isCurrentConnection(connectionInfo)) {
+      connectionInfo.state = ConnectionState.CLOSED;
+      clientWs.terminate();
+      return;
+    }
+
     connectionInfo.ws = clientWs;
     connectionInfo.state = ConnectionState.CONNECTED;
     connectionInfo.reconnectAttempts = TRANSPORT_NUM.ZERO;
+    this.rememberReconnectAddress(
+      connectionInfo,
+      clientWs,
+      connectionInfo.configuredAddress || connectionInfo.address,
+    );
 
     this.logger.info(ROUTER_LOG_MSG.CONNECTED, {
       nodeId: connectionInfo.nodeId,
@@ -1010,6 +1196,8 @@ class MessageRouter extends EventEmitter {
     if (connection && connection.isIncoming) {
       connection.nodeId = nodeId;
       connection.nodeAddress = nodeAddress;
+      connection.configuredAddress = nodeAddress;
+      this.rememberReconnectAddress(connection, ws, nodeAddress);
 
       const existing = this.nodeConnections.get(nodeId);
       const isSelfConnection = existing?.isSelfConnection && nodeId === this.nodeId;
@@ -1017,9 +1205,15 @@ class MessageRouter extends EventEmitter {
         existing.state === ConnectionState.CONNECTED;
       const preferIncomingConnection =
         this.nodeId.localeCompare(nodeId) > TRANSPORT_NUM.ZERO;
+      const existingPreferredIncomingConnection =
+        existingConnected &&
+        preferIncomingConnection &&
+        existing?.isIncoming === true;
       const shouldAdoptIncomingConnection = !existing ||
         (!isSelfConnection &&
-          (!existingConnected || preferIncomingConnection));
+          (!existingConnected ||
+            (preferIncomingConnection &&
+              !existingPreferredIncomingConnection)));
 
       if (isSelfConnection) {
         this.logger.debug(ROUTER_LOG_MSG.KEEP_ORIGINAL_CONNECTION, {
@@ -1031,6 +1225,7 @@ class MessageRouter extends EventEmitter {
         if (existing &&
             existing.ws &&
             existing.connectionId !== connectionId) {
+          this.retireConnection(existing);
           try {
             existing.ws.terminate();
           } catch (error) {
@@ -1057,6 +1252,7 @@ class MessageRouter extends EventEmitter {
           nodeId,
           reason: 'existing_connection_preferred',
         });
+        this.retireConnection(connection);
         this.nodeConnections.delete(connectionId);
         try {
           ws.terminate();
@@ -1401,10 +1597,7 @@ class MessageRouter extends EventEmitter {
       connection.ws = null;
 
       // Stop ping interval
-      if (connection.pingInterval) {
-        clearInterval(connection.pingInterval);
-        connection.pingInterval = null;
-      }
+      this.clearPingInterval(connection);
 
       const disconnectError = new Error(
         ROUTER_ERROR_MSG.connectionClosed(nodeId),
@@ -1416,6 +1609,11 @@ class MessageRouter extends EventEmitter {
       this.emit(TRANSPORT_EVENT.CONNECTION_CLOSED, {nodeId});
 
       if (this.isShuttingDown) {
+        return;
+      }
+
+      if (connection.retired) {
+        connection.state = ConnectionState.CLOSED;
         return;
       }
 
@@ -1443,6 +1641,11 @@ class MessageRouter extends EventEmitter {
    */
   scheduleReconnect(connectionInfo) {
     if (this.isShuttingDown) {
+      return;
+    }
+    if (connectionInfo.retired || !this.isCurrentConnection(connectionInfo)) {
+      this.retireConnection(connectionInfo);
+      connectionInfo.state = ConnectionState.CLOSED;
       return;
     }
     if (connectionInfo.reconnectTimeout) {
@@ -1474,6 +1677,11 @@ class MessageRouter extends EventEmitter {
 
     connectionInfo.reconnectTimeout = setTimeout(async () => {
       connectionInfo.reconnectTimeout = null;
+      if (connectionInfo.retired || !this.isCurrentConnection(connectionInfo)) {
+        this.retireConnection(connectionInfo);
+        connectionInfo.state = ConnectionState.CLOSED;
+        return;
+      }
       try {
         await this.establishConnection(connectionInfo);
       } catch (error) {
@@ -2099,7 +2307,9 @@ class MessageRouter extends EventEmitter {
         if ((!connection || connection.state !== ConnectionState.CONNECTED) &&
             !this.isShuttingDown) {
           const reconnectAddress =
+            connection?.observedAddress ||
             connection?.address ||
+            connection?.configuredAddress ||
             this.resolveNodeAddressForDelivery(targetNodeId);
           if (reconnectAddress) {
             return this.tryDeliverAfterReconnect(
@@ -2224,6 +2434,141 @@ class MessageRouter extends EventEmitter {
   }
 
   /**
+   * Build one suppression key for a reconnect address.
+   * @param {string} targetNodeId
+   * @param {string} address
+   * @return {string|null}
+   * @private
+   */
+  getReconnectAddressSuppressionKey(targetNodeId, address) {
+    if (typeof targetNodeId !== TRANSPORT_TYPEOF.STRING ||
+        targetNodeId.length === TRANSPORT_NUM.ZERO ||
+        typeof address !== TRANSPORT_TYPEOF.STRING ||
+        address.length === TRANSPORT_NUM.ZERO) {
+      return null;
+    }
+    return `${targetNodeId}::${address}`;
+  }
+
+  /**
+   * Remove expired reconnect-address suppressions.
+   * @param {number} [nowMs]
+   * @return {void}
+   * @private
+   */
+  pruneReconnectAddressSuppressions(nowMs = Date.now()) {
+    for (const [key, expiresAt] of this.suppressedReconnectAddresses.entries()) {
+      if (!Number.isFinite(expiresAt) || expiresAt <= nowMs) {
+        this.suppressedReconnectAddresses.delete(key);
+      }
+    }
+  }
+
+  /**
+   * Return whether one reconnect address is temporarily suppressed.
+   * @param {string} targetNodeId
+   * @param {string} address
+   * @return {boolean}
+   * @private
+   */
+  isReconnectAddressSuppressed(targetNodeId, address) {
+    const key = this.getReconnectAddressSuppressionKey(targetNodeId, address);
+    if (!key) {
+      return false;
+    }
+    this.pruneReconnectAddressSuppressions();
+    const expiresAt = this.suppressedReconnectAddresses.get(key);
+    return Number.isFinite(expiresAt) && expiresAt > Date.now();
+  }
+
+  /**
+   * Temporarily suppress one reconnect address after a fatal DNS failure.
+   * @param {string} targetNodeId
+   * @param {string} address
+   * @return {void}
+   * @private
+   */
+  suppressReconnectAddress(targetNodeId, address) {
+    const key = this.getReconnectAddressSuppressionKey(targetNodeId, address);
+    if (!key) {
+      return;
+    }
+    const suppressionMs =
+      Number.isFinite(this.reconnectAddressSuppressionMs) &&
+      this.reconnectAddressSuppressionMs > TRANSPORT_NUM.ZERO ?
+        this.reconnectAddressSuppressionMs :
+        TRANSPORT_NUM.ZERO;
+    if (suppressionMs <= TRANSPORT_NUM.ZERO) {
+      return;
+    }
+    this.suppressedReconnectAddresses.set(
+      key,
+      Date.now() + suppressionMs,
+    );
+  }
+
+  /**
+   * Clear suppression for one reconnect address after a successful dial.
+   * @param {string} targetNodeId
+   * @param {string} address
+   * @return {void}
+   * @private
+   */
+  clearReconnectAddressSuppression(targetNodeId, address) {
+    const key = this.getReconnectAddressSuppressionKey(targetNodeId, address);
+    if (!key) {
+      return;
+    }
+    this.suppressedReconnectAddresses.delete(key);
+  }
+
+  /**
+   * Return whether one reconnect error indicates a stale DNS-owned address.
+   * @param {Error|null} error
+   * @return {boolean}
+   * @private
+   */
+  shouldSuppressReconnectAddress(error) {
+    const errorMessage = error?.message || null;
+    if (typeof errorMessage !== TRANSPORT_TYPEOF.STRING ||
+        errorMessage.length === TRANSPORT_NUM.ZERO) {
+      return false;
+    }
+    return errorMessage.includes('ENOTFOUND') ||
+      errorMessage.includes('EAI_AGAIN');
+  }
+
+  /**
+   * Resolve ordered reconnect addresses for one target node.
+   * Prefer the last directly-observed transport address, then the originally
+   * configured address, then the resolver-provided fallback.
+   * @param {string} targetNodeId
+   * @param {string|null} preferredAddress
+   * @return {Array<string>}
+   * @private
+   */
+  resolveReconnectAddresses(targetNodeId, preferredAddress = null) {
+    const addresses = [];
+    const pushUniqueAddress = (candidate) => {
+      if (typeof candidate !== TRANSPORT_TYPEOF.STRING ||
+          candidate.length === TRANSPORT_NUM.ZERO ||
+          this.isReconnectAddressSuppressed(targetNodeId, candidate) ||
+          addresses.includes(candidate)) {
+        return;
+      }
+      addresses.push(candidate);
+    };
+
+    const existing = this.nodeConnections.get(targetNodeId) || null;
+    pushUniqueAddress(preferredAddress);
+    pushUniqueAddress(existing?.observedAddress);
+    pushUniqueAddress(existing?.address);
+    pushUniqueAddress(existing?.configuredAddress);
+    pushUniqueAddress(this.resolveNodeAddressForDelivery(targetNodeId));
+    return addresses;
+  }
+
+  /**
    * Ensure a remote node connection exists for delivery recovery.
    * @param {string} targetNodeId
    * @param {string} address
@@ -2241,20 +2586,50 @@ class MessageRouter extends EventEmitter {
     }
 
     const connectionPromise = (async () => {
+      const reconnectAddresses =
+        this.resolveReconnectAddresses(targetNodeId, address);
+      let lastError = null;
       try {
-        await this.connectToNode(targetNodeId, address);
-      } catch (error) {
-        this.logger.warn('Failed to reconnect target node before delivery', {
-          targetNodeId,
-          address,
-          localNodeId: this.nodeId,
-          error: error?.message || String(error),
-        });
+        for (const reconnectAddress of reconnectAddresses) {
+          try {
+            await this.connectToNode(targetNodeId, reconnectAddress);
+            this.clearReconnectAddressSuppression(
+              targetNodeId,
+              reconnectAddress,
+            );
+            lastError = null;
+            break;
+          } catch (error) {
+            lastError = error;
+            if (this.shouldSuppressReconnectAddress(error)) {
+              this.suppressReconnectAddress(
+                targetNodeId,
+                reconnectAddress,
+              );
+            }
+            this.logger.warn('Failed to reconnect target node before delivery', {
+              targetNodeId,
+              address: reconnectAddress,
+              localNodeId: this.nodeId,
+              error: error?.message || String(error),
+            });
+          }
+        }
       } finally {
         this.pendingNodeConnections.delete(targetNodeId);
       }
 
       const connection = this.nodeConnections.get(targetNodeId) || null;
+      if (!connection || connection.state !== ConnectionState.CONNECTED) {
+        if (lastError && reconnectAddresses.length === TRANSPORT_NUM.ZERO) {
+          this.logger.warn('Failed to reconnect target node before delivery', {
+            targetNodeId,
+            address: null,
+            localNodeId: this.nodeId,
+            error: lastError?.message || String(lastError),
+          });
+        }
+      }
       return connection && connection.state === ConnectionState.CONNECTED ?
         connection :
         null;
@@ -2317,6 +2692,60 @@ class MessageRouter extends EventEmitter {
   }
 
   /**
+   * Reset one remote connection after an ACK timeout so subsequent deliveries
+   * do not keep reusing a stale socket during restart windows.
+   * @param {string} targetNodeId
+   * @param {Object|null} connection
+   * @param {string} messageId
+   * @param {string} targetAddress
+   * @return {void}
+   * @private
+   */
+  resetConnectionAfterAckTimeout(
+    targetNodeId,
+    connection,
+    messageId,
+    targetAddress,
+  ) {
+    if (!connection ||
+        connection.isIncoming === true ||
+        connection.isSelfConnection === true) {
+      return;
+    }
+
+    const activeConnection = this.nodeConnections.get(targetNodeId);
+    if (!activeConnection ||
+        activeConnection.connectionId !== connection.connectionId ||
+        activeConnection.state !== ConnectionState.CONNECTED) {
+      return;
+    }
+
+    this.logger.warn('Resetting target connection after ACK timeout', {
+      messageId,
+      targetAddress,
+      targetNodeId,
+      localNodeId: this.nodeId,
+      connectionId: activeConnection.connectionId,
+    });
+    const staleWs = activeConnection.ws;
+
+    this.handleConnectionClose(
+      targetNodeId,
+      activeConnection.connectionId,
+    );
+
+    try {
+      if (typeof staleWs?.terminate === TRANSPORT_TYPEOF.FUNCTION) {
+        staleWs.terminate();
+      } else if (typeof staleWs?.close === TRANSPORT_TYPEOF.FUNCTION) {
+        staleWs.close();
+      }
+    } catch (_closeErr) {
+      // Best-effort stale connection reset
+    }
+  }
+
+  /**
    * Send message through WebSocket connection.
    * @param {Object} connection - Connection info.
    * @param {string} targetAddress - Target address.
@@ -2340,6 +2769,12 @@ class MessageRouter extends EventEmitter {
       // Set up timeout
       const timeout = setTimeout(() => {
         this.pendingMessages.delete(messageId);
+        this.resetConnectionAfterAckTimeout(
+          targetNodeId,
+          connection,
+          messageId,
+          targetAddress,
+        );
         resolve({
           messageId,
           correlationId,

@@ -32,6 +32,15 @@ async function withCapturedReplicaFactory(service, t, assertFactory) {
   let capturedCreatePartitionService = null;
   const subscribedTables = [];
   const handshakeSubscriberIds = [];
+  const fallbackCdcIntegrationService = {
+    updateSystemTableRow: async () => true,
+    upsertSystemTableRow: async () => true,
+  };
+  const hasCustomCreateCdcIntegrationService =
+    Object.prototype.hasOwnProperty.call(
+      service,
+      'createCdcIntegrationService',
+    );
   const originalReplicaHandlerCreate = ReplicaHandlerSetup.create;
   const originalGetNodeService = NodeService.getInstance;
   const originalInitialize = PartitionService.prototype.initialize;
@@ -55,15 +64,22 @@ async function withCapturedReplicaFactory(service, t, assertFactory) {
         },
       }],
     ]);
-    if (typeof service.createCdcIntegrationService === 'function') {
+    if (typeof service.createCdcIntegrationService === 'function' &&
+        hasCustomCreateCdcIntegrationService) {
+      const originalCreateCdcIntegrationService =
+        service.createCdcIntegrationService.bind(service);
       service.createCdcIntegrationService = () => ({
-        updateSystemTableRow: async () => true,
-        upsertSystemTableRow: async () => true,
+        ...fallbackCdcIntegrationService,
+        ...(originalCreateCdcIntegrationService() || {}),
+      });
+    } else if (typeof service.createCdcIntegrationService === 'function') {
+      service.createCdcIntegrationService = () => ({
+        ...fallbackCdcIntegrationService,
       });
     } else {
       service.cdcIntegrationService = {
-        updateSystemTableRow: async () => true,
-        upsertSystemTableRow: async () => true,
+        ...fallbackCdcIntegrationService,
+        ...(service.cdcIntegrationService || {}),
       };
     }
 
@@ -216,3 +232,88 @@ test('NodeJoiningService dynamic user partition CDC subscription', async (t) => 
     );
   });
 });
+
+test('BootstrapService dynamic partition factory injects the current SQL engine',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const service = new BootstrapService({
+      nodeId: 'seed-node',
+      nodeAddress: 'ws://localhost:9001',
+    });
+    const sqlQueryEngine = {managedSplitWorkflow: {workflowId: 'wf-1'}};
+
+    service.cdcIntegrationService = {
+      sqlQueryEngine,
+      updateSystemTableRow: async () => true,
+      upsertSystemTableRow: async () => true,
+    };
+
+    await withCapturedReplicaFactory(service, t, async ({
+      createPartitionService,
+    }) => {
+      const partition = await createPartitionService({
+        partitionId: 'benchmark_events-p1',
+        tableId: 'benchmark_events',
+        tableName: 'benchmark_events',
+        schema: {columns: [{name: 'id', type: 'TEXT', primaryKey: true}]},
+        keyRange: {start: null, end: null},
+        replicaId: 'benchmark_events-r1',
+        replicaIds: ['benchmark_events-r1'],
+        peerAddresses: [],
+        nodeId: 'seed-node',
+        isJoiningExistingGroup: true,
+      });
+
+      t.equal(
+        partition.sqlQueryEngine,
+        sqlQueryEngine,
+        'bootstrap-created partitions should receive the current SQL engine',
+      );
+
+      await partition.shutdown();
+    });
+  });
+
+test('NodeJoiningService dynamic partition factory injects the current SQL engine',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const service = new NodeJoiningService({
+      nodeId: 'join-node',
+      nodeAddress: 'ws://localhost:9002',
+      seedNodeAddress: 'http://localhost:8080',
+    });
+    const sqlQueryEngine = {managedSplitWorkflow: {workflowId: 'wf-join'}};
+
+    service.createCdcIntegrationService = () => ({
+      sqlQueryEngine,
+      updateSystemTableRow: async () => true,
+      upsertSystemTableRow: async () => true,
+    });
+
+    await withCapturedReplicaFactory(service, t, async ({
+      createPartitionService,
+    }) => {
+      const partition = await createPartitionService({
+        partitionId: 'benchmark_events-p1',
+        tableId: 'benchmark_events',
+        tableName: 'benchmark_events',
+        schema: {columns: [{name: 'id', type: 'TEXT', primaryKey: true}]},
+        keyRange: {start: null, end: null},
+        replicaId: 'benchmark_events-r1',
+        replicaIds: ['benchmark_events-r1'],
+        peerAddresses: [],
+        nodeId: 'join-node',
+        isJoiningExistingGroup: true,
+      });
+
+      t.equal(
+        partition.sqlQueryEngine,
+        sqlQueryEngine,
+        'join-created partitions should receive the current SQL engine',
+      );
+
+      await partition.shutdown();
+    });
+  });

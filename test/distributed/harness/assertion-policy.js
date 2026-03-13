@@ -31,6 +31,44 @@ function normalizeInsufficientEvidencePolicy(policy) {
   return POLICY_DEFAULT_INSUFFICIENT_EVIDENCE;
 }
 
+function collectLoadMetricHardFailures(loadMetrics) {
+  const hardFailures = [];
+  if (!loadMetrics || typeof loadMetrics !== 'object' ||
+      !hasFiniteNumber(loadMetrics.total) ||
+      !hasFiniteNumber(loadMetrics.success) ||
+      !hasFiniteNumber(loadMetrics.failed) ||
+      !hasFiniteNumber(loadMetrics.errors) ||
+      !hasFiniteNumber(loadMetrics.opsPerSec)) {
+    hardFailures.push({
+      code: HARD_FAILURE_CODE_INVALID_LOAD_METRICS,
+      message: 'load metrics are missing or invalid',
+    });
+    return hardFailures;
+  }
+
+  if (Number(loadMetrics.success) <= ZERO) {
+    hardFailures.push({
+      code: HARD_FAILURE_CODE_ZERO_SUCCESS,
+      message: 'load run completed with zero successful operations',
+    });
+    return hardFailures;
+  }
+
+  if (Number(loadMetrics.failed) > ZERO) {
+    hardFailures.push({
+      code: HARD_FAILURE_CODE_LOAD_FAILED_OPERATIONS,
+      message: 'load run completed with failed operations',
+    });
+  }
+  if (Number(loadMetrics.errors) > ZERO) {
+    hardFailures.push({
+      code: HARD_FAILURE_CODE_LOAD_OPERATION_ERRORS,
+      message: 'load run completed with operation errors',
+    });
+  }
+  return hardFailures;
+}
+
 function evaluateAssertionPolicy(options = {}) {
   const policy = {
     [POLICY_KEY_INSUFFICIENT_EVIDENCE]: normalizeInsufficientEvidencePolicy(
@@ -42,35 +80,7 @@ function evaluateAssertionPolicy(options = {}) {
   const loadMetrics = options.loadMetrics || null;
   const invariantBreaches = summarizeInvariantBreaches(options.invariants);
 
-  if (!loadMetrics || typeof loadMetrics !== 'object' ||
-      !hasFiniteNumber(loadMetrics.total) ||
-      !hasFiniteNumber(loadMetrics.success) ||
-      !hasFiniteNumber(loadMetrics.failed) ||
-      !hasFiniteNumber(loadMetrics.errors) ||
-      !hasFiniteNumber(loadMetrics.opsPerSec)) {
-    hardFailures.push({
-      code: HARD_FAILURE_CODE_INVALID_LOAD_METRICS,
-      message: 'load metrics are missing or invalid',
-    });
-  } else if (Number(loadMetrics.success) <= ZERO) {
-    hardFailures.push({
-      code: HARD_FAILURE_CODE_ZERO_SUCCESS,
-      message: 'load run completed with zero successful operations',
-    });
-  } else {
-    if (Number(loadMetrics.failed) > ZERO) {
-      hardFailures.push({
-        code: HARD_FAILURE_CODE_LOAD_FAILED_OPERATIONS,
-        message: 'load run completed with failed operations',
-      });
-    }
-    if (Number(loadMetrics.errors) > ZERO) {
-      hardFailures.push({
-        code: HARD_FAILURE_CODE_LOAD_OPERATION_ERRORS,
-        message: 'load run completed with operation errors',
-      });
-    }
-  }
+  hardFailures.push(...collectLoadMetricHardFailures(loadMetrics));
 
   const consistencyVerdict = String(
     options.consistencyVerdict || CONSISTENCY_VERDICT.CONSISTENT,
@@ -140,4 +150,4 @@ function evaluateAssertionPolicy(options = {}) {
   };
 }
 
-export {evaluateAssertionPolicy};
+export {evaluateAssertionPolicy, collectLoadMetricHardFailures};

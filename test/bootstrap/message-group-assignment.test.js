@@ -117,6 +117,64 @@ test('MessageGroupAssignment - MOVE_REPLICA with all replicas on same node', asy
   t.equal(result.sourceNodeId, 'seed-node');
 });
 
+test('MessageGroupAssignment - excludes self-source MOVE_REPLICA candidates', async (t) => {
+  initializeTestEnvironment();
+
+  const assignment = new MessageGroupAssignment({
+    seedNodeAddress: 'ws://localhost:8080',
+  });
+
+  const messageGroups = [
+    {
+      group_id: 'mg-self',
+      replicas: [
+        {replica_id: 'mg-self-r0', node_id: 'joining-node', address: 'ws://joining/services/r0'},
+        {replica_id: 'mg-self-r1', node_id: 'joining-node', address: 'ws://joining/services/r1'},
+        {replica_id: 'mg-self-r2', node_id: 'seed-node', address: 'ws://seed/services/r2'},
+      ],
+    },
+    {
+      group_id: 'mg-seed',
+      replicas: [
+        {replica_id: 'mg-seed-r0', node_id: 'seed-node', address: 'ws://seed/services/r0'},
+        {replica_id: 'mg-seed-r1', node_id: 'seed-node', address: 'ws://seed/services/r1'},
+        {replica_id: 'mg-seed-r2', node_id: 'node-3', address: 'ws://node-3/services/r2'},
+      ],
+    },
+  ];
+
+  const result = assignment.determineAssignment('joining-node', messageGroups);
+
+  t.equal(result.strategy, AssignmentStrategy.MOVE_REPLICA);
+  t.equal(result.groupId, 'mg-seed');
+  t.equal(result.sourceNodeId, 'seed-node');
+  t.not(result.sourceNodeId, 'joining-node');
+});
+
+test('MessageGroupAssignment - falls back when only self-source MOVE_REPLICA exists',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const assignment = new MessageGroupAssignment({
+      seedNodeAddress: 'ws://localhost:8080',
+    });
+
+    const messageGroups = [{
+      group_id: 'mg-self',
+      replicas: [
+        {replica_id: 'mg-self-r0', node_id: 'joining-node', address: 'ws://joining/services/r0'},
+        {replica_id: 'mg-self-r1', node_id: 'joining-node', address: 'ws://joining/services/r1'},
+        {replica_id: 'mg-self-r2', node_id: 'seed-node', address: 'ws://seed/services/r2'},
+      ],
+    }];
+
+    const result = assignment.determineAssignment('joining-node', messageGroups);
+
+    t.equal(result.strategy, AssignmentStrategy.CREATE_SELF_HOSTED);
+    t.notOk(result.sourceNodeId);
+    t.notOk(result.replicaToMove);
+  });
+
 test('MessageGroupAssignment - findMovableReplica', async (t) => {
   initializeTestEnvironment();
 

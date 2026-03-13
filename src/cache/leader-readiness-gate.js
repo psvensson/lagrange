@@ -202,6 +202,56 @@ const getMissingSystemServiceLeaders = (systemTableCache, options = {}) => {
   };
 };
 
+const getBlockingSystemServiceLeaders = (
+    systemTableCache,
+    requiredTables = [],
+    options = {},
+) => {
+  const isTableWriteSatisfied =
+    typeof options.isTableWriteSatisfied === TYPEOF.FUNCTION ?
+      options.isTableWriteSatisfied :
+      isSystemTableWriteReady;
+  const missing = getMissingSystemServiceLeaders(systemTableCache, {
+    requireLeaderNodeId: options.requireLeaderNodeId === true,
+  });
+  const missingPartitionLeaders = [];
+  const missingPartitionLeaderNodes = [];
+  const missingPartitionLeaderAddresses = [];
+  const missingRequiredTables = [];
+
+  for (const tableName of requiredTables) {
+    const partitionId = getSystemPartitionId(tableName);
+    if (!partitionId || !hasPartitionRecord(systemTableCache, partitionId)) {
+      continue;
+    }
+
+    if (isTableWriteSatisfied(systemTableCache, tableName)) {
+      continue;
+    }
+
+    missingRequiredTables.push(tableName);
+    missingPartitionLeaders.push(partitionId);
+
+    if (missing.missingPartitionLeaderNodes.includes(partitionId)) {
+      missingPartitionLeaderNodes.push(partitionId);
+    }
+    if (missing.missingPartitionLeaderAddresses.includes(partitionId)) {
+      missingPartitionLeaderAddresses.push(partitionId);
+    }
+  }
+
+  return {
+    ...missing,
+    missingPartitionLeaders,
+    missingPartitionLeaderNodes,
+    missingPartitionLeaderAddresses,
+    missingMessageGroupLeaders: [],
+    missingMessageGroupLeaderNodes: [],
+    missingMessageGroupLeaderAddresses: [],
+    missingRequiredTables,
+  };
+};
+
 const getMissingSystemServiceLeaderCount = (missing = {}) =>
   (missing.missingPartitionLeaders?.length || NUM.ZERO) +
   (missing.missingMessageGroupLeaders?.length || NUM.ZERO) +
@@ -211,6 +261,7 @@ const getMissingSystemServiceLeaderCount = (missing = {}) =>
   (missing.missingMessageGroupLeaderAddresses?.length || NUM.ZERO);
 
 export {
+  getBlockingSystemServiceLeaders,
   getMissingSystemServiceLeaders,
   getMissingSystemServiceLeaderCount,
   isSystemTableWriteReady,

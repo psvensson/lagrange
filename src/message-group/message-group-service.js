@@ -8,18 +8,26 @@ import {EventEmitter} from 'events';
 import {v4 as uuidv4} from 'uuid';
 import LifeRaft from '@markwylde/liferaft';
 import {
+  CDC_OPERATION,
   ADDRESS,
   COLUMN,
   ENTITY_TYPE,
   METRICS_LOG_TAG,
   NUM,
+  SERVICE_TYPE,
+  STATE,
   STRING,
   TABLES,
   TIME_MS,
   TYPEOF,
 } from '../constants/index.js';
+import {getSystemCachePrimaryKeyFieldOrFallback} from
+  '../cache/system-cache-key-descriptor.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
+import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+} from '../control-plane/control-plane-readiness-constants.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {NodeService} from '../node/node-service.js';
 import {HLCClockService} from '../hlc/hlc-clock-service.js';
@@ -38,6 +46,7 @@ import {LiferaftProvider} from '../raft/liferaft-provider.js';
 import {AuthoritativeRowMutationHelper} from '../raft/authoritative-row-mutation-helper.js';
 import {wireReplicaLifecycleEvents} from '../raft/replica-leadership-state.js';
 import {AddressManager} from '../address/address-manager.js';
+import {ReplicaStatus} from '../rebalancer/replica-status.js';
 import {
   UnifiedRebalancer,
   EntityType as RebalancerEntityType,
@@ -62,6 +71,7 @@ import {CDCHandler} from './cdc-handler.js';
 import {getOrCreateCauseId, normalizeCauseId} from '../utils/cause-id.js';
 import {MessageGroupOperationLedger} from './message-group-operation-ledger.js';
 import {QUERY_MESSAGE_TYPE} from '../query/query-constants.js';
+import {TRANSPORT_ERROR_MSG} from '../constants/transport.js';
 
 // Note: isRaftPacket and RAFT_PACKET_TYPES are imported from shared module
 // src/raft/raft-packet-utils.js - Requirements: 9.1, 9.2, 9.3, 9.4
@@ -72,6 +82,14 @@ const LEADER_NODE_PERSIST_ERROR_MSG =
   'Failed to persist message group leader update';
 const FLUSH_SKIP_NOT_OWNER = 'not-owner';
 const FLUSH_SKIP_READY = 'ready';
+const CDC_FORWARD_MAX_RELAY_DEPTH = NUM.TWO;
+const FORWARD_TOPOLOGY_REPAIR_LOCAL_READ_CONSISTENCY = 'local_leader';
+const FORWARD_TOPOLOGY_REPAIR_DEFAULT = Object.freeze({
+  COOLDOWN_MS: 1000,
+  FAILURE_COOLDOWN_MS: 5000,
+  NO_CHANGE_COOLDOWN_MS: 2000,
+  QUERY_TIMEOUT_MS: 1500,
+});
 
 /**
  * MessageGroupService provides reliable inter-service communication.
@@ -156,6 +174,36 @@ class MessageGroupService extends EventEmitter {
     this.retryJitterFactor =
       config.get(CONFIG_KEY.MESSAGE_GROUP_RETRY_JITTER_FACTOR) ??
       MESSAGE_GROUP_SERVICE_DEFAULT.RETRY_JITTER_FACTOR;
+    this.forwardTargetSuppression = new Map();
+    this.forwardTargetSuppressionMs =
+      Number.isFinite(options.forwardTargetSuppressionMs) &&
+      options.forwardTargetSuppressionMs > NUM.ZERO ?
+        Math.floor(options.forwardTargetSuppressionMs) :
+        Math.min(this.retryMaxDelayMs, TIME_MS.SECOND * NUM.FIVE);
+    this.forwardTopologyRepairCooldownMs =
+      Number.isFinite(options.forwardTopologyRepairCooldownMs) &&
+      options.forwardTopologyRepairCooldownMs > NUM.ZERO ?
+        Math.floor(options.forwardTopologyRepairCooldownMs) :
+        FORWARD_TOPOLOGY_REPAIR_DEFAULT.COOLDOWN_MS;
+    this.forwardTopologyRepairFailureCooldownMs =
+      Number.isFinite(options.forwardTopologyRepairFailureCooldownMs) &&
+      options.forwardTopologyRepairFailureCooldownMs > NUM.ZERO ?
+        Math.floor(options.forwardTopologyRepairFailureCooldownMs) :
+        FORWARD_TOPOLOGY_REPAIR_DEFAULT.FAILURE_COOLDOWN_MS;
+    this.forwardTopologyRepairNoChangeCooldownMs =
+      Number.isFinite(options.forwardTopologyRepairNoChangeCooldownMs) &&
+      options.forwardTopologyRepairNoChangeCooldownMs > NUM.ZERO ?
+        Math.floor(options.forwardTopologyRepairNoChangeCooldownMs) :
+        FORWARD_TOPOLOGY_REPAIR_DEFAULT.NO_CHANGE_COOLDOWN_MS;
+    this.forwardTopologyRepairQueryTimeoutMs =
+      Number.isFinite(options.forwardTopologyRepairQueryTimeoutMs) &&
+      options.forwardTopologyRepairQueryTimeoutMs > NUM.ZERO ?
+        Math.floor(options.forwardTopologyRepairQueryTimeoutMs) :
+        FORWARD_TOPOLOGY_REPAIR_DEFAULT.QUERY_TIMEOUT_MS;
+    this.lastForwardTopologyRepairAtMs = NUM.ZERO;
+    this.lastForwardTopologyRepairCooldownMs =
+      this.forwardTopologyRepairCooldownMs;
+    this.forwardTopologyRepairInFlight = null;
 
     // Raft state - using liferaft library
     // Requirements: 5.1, 5.2, 5.3, 5.4, 5.5
@@ -179,6 +227,9 @@ class MessageGroupService extends EventEmitter {
 
     // System table cache - use shared cache from NodeService singleton
     // This ensures all services on the same node share the same cache
+    this.systemTableCacheChangeListener =
+      this.handleSystemTableCacheChange.bind(this);
+    this.peerReconciliationScheduled = false;
     const nodeService = NodeService.getInstance();
     this.systemTableCache = nodeService.getSystemTableCache();
     this.readOnlyCache = nodeService.getReadOnlySystemTableCache();
@@ -217,12 +268,27 @@ class MessageGroupService extends EventEmitter {
   }
 
   set systemTableCache(systemTableCache) {
+    const previousCache = this._systemTableCache || null;
+    if (previousCache &&
+        previousCache !== systemTableCache &&
+        typeof previousCache.offCacheChange === TYPEOF.FUNCTION &&
+        this.systemTableCacheChangeListener) {
+      previousCache.offCacheChange(this.systemTableCacheChangeListener);
+    }
+
     this._systemTableCache = systemTableCache;
     this.roleMutationHelper?.setSystemTableCache(systemTableCache);
     this.leaderNodeMutationHelper?.setSystemTableCache(systemTableCache);
     if (this.rebalancer) {
       this.rebalancer.systemTableCache = systemTableCache;
     }
+    if (systemTableCache &&
+        systemTableCache !== previousCache &&
+        typeof systemTableCache.onCacheChange === TYPEOF.FUNCTION &&
+        this.systemTableCacheChangeListener) {
+      systemTableCache.onCacheChange(this.systemTableCacheChangeListener);
+    }
+    this.scheduleRaftPeerReconciliation();
   }
 
   get cdcIntegrationService() {
@@ -330,6 +396,10 @@ class MessageGroupService extends EventEmitter {
         raft_role: role,
         updated_at: updatedAt,
       }),
+      buildUpdateOptions: () => ({
+        routingReadinessDimension:
+          CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+      }),
       buildExpectedCacheFields: (role) => ({raft_role: role}),
       readRowFromCache: (systemTableCache) =>
         systemTableCache?.get?.(TABLES.SERVICES, this.replicaId) || null,
@@ -369,6 +439,10 @@ class MessageGroupService extends EventEmitter {
       buildUpdateData: (leaderNodeId, updatedAt) => ({
         [COLUMN.LEADER_NODE_ID]: leaderNodeId,
         [COLUMN.UPDATED_AT]: updatedAt,
+      }),
+      buildUpdateOptions: () => ({
+        routingReadinessDimension:
+          CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
       }),
       buildExpectedCacheFields: (leaderNodeId) => ({
         [COLUMN.LEADER_NODE_ID]: leaderNodeId,
@@ -550,6 +624,151 @@ class MessageGroupService extends EventEmitter {
     });
   }
 
+  /**
+   * React to authoritative services cache changes for this message group.
+   * Existing replicas need this to discover newly added or moved peers.
+   * @param {string} tableName
+   * @param {string} _operation
+   * @param {Object} record
+   * @private
+   */
+  handleSystemTableCacheChange(tableName, _operation, record) {
+    if (tableName !== TABLES.SERVICES || !record) {
+      return;
+    }
+
+    if ((record?.[COLUMN.GROUP_ID] || record?.group_id) !== this.groupId ||
+        (record?.[COLUMN.SERVICE_TYPE] || record?.service_type) !==
+          SERVICE_TYPE.MESSAGE_GROUP) {
+      return;
+    }
+
+    this.scheduleRaftPeerReconciliation();
+  }
+
+  /**
+   * Coalesce peer reconciliation work triggered by cache updates.
+   * @private
+   */
+  scheduleRaftPeerReconciliation() {
+    if (this.peerReconciliationScheduled) {
+      return;
+    }
+
+    this.peerReconciliationScheduled = true;
+    setImmediate(() => {
+      this.peerReconciliationScheduled = false;
+      this.reconcileRaftPeersFromCache();
+    });
+  }
+
+  /**
+   * Join newly visible peers and replace moved peer addresses using the
+   * authoritative services cache. Missing rows are ignored conservatively.
+   * @private
+   */
+  reconcileRaftPeersFromCache() {
+    if (!this.raft ||
+        !this.systemTableCache ||
+        typeof this.systemTableCache.filter !== TYPEOF.FUNCTION) {
+      return;
+    }
+
+    const services = this.systemTableCache.filter(TABLES.SERVICES, (service) => {
+      return (service?.[COLUMN.GROUP_ID] || service?.group_id) === this.groupId &&
+        (service?.[COLUMN.SERVICE_TYPE] || service?.service_type) ===
+          SERVICE_TYPE.MESSAGE_GROUP;
+    });
+    if (services.length === NUM.ZERO) {
+      return;
+    }
+
+    const expectedAddressesByReplicaId = new Map();
+    for (const service of services) {
+      const replicaId = service?.[COLUMN.SERVICE_ID] ||
+        service?.service_id ||
+        service?.[COLUMN.REPLICA_ID] ||
+        service?.replica_id;
+      if (!replicaId || replicaId === this.replicaId) {
+        continue;
+      }
+
+      const status = service?.[COLUMN.STATUS] ||
+        service?.status ||
+        ReplicaStatus.ACTIVE;
+      if (status === ReplicaStatus.FAILED ||
+          status === ReplicaStatus.REMOVING ||
+          status === ReplicaStatus.REMOVED) {
+        continue;
+      }
+
+      const peerAddress =
+        typeof (service?.[COLUMN.ADDRESS] || service?.address) === TYPEOF.STRING &&
+          (service?.[COLUMN.ADDRESS] || service?.address).length > NUM.ZERO ?
+          (service?.[COLUMN.ADDRESS] || service?.address) :
+          (
+            typeof (service?.[COLUMN.NODE_ID] || service?.node_id) === TYPEOF.STRING &&
+            (service?.[COLUMN.NODE_ID] || service?.node_id).length > NUM.ZERO ?
+              this.addressManager.format(
+                service?.[COLUMN.NODE_ID] || service?.node_id,
+                ENTITY_TYPE.MESSAGE_GROUP,
+                replicaId,
+              ) :
+              null
+          );
+      if (!peerAddress) {
+        continue;
+      }
+
+      expectedAddressesByReplicaId.set(replicaId, peerAddress);
+      if (!this.replicaIds.includes(replicaId)) {
+        this.replicaIds.push(replicaId);
+      }
+    }
+
+    const currentNodes = Array.isArray(this.raft.nodes) ?
+      [...this.raft.nodes] :
+      [];
+    const currentAddresses = new Set(
+      currentNodes
+        .map((node) => node?.address)
+        .filter((address) =>
+          typeof address === TYPEOF.STRING && address.length > NUM.ZERO,
+        ),
+    );
+
+    for (const [replicaId, expectedAddress] of expectedAddressesByReplicaId.entries()) {
+      const staleAddresses = currentNodes
+        .map((node) => node?.address)
+        .filter((address) => {
+          if (typeof address !== TYPEOF.STRING ||
+              address.length === NUM.ZERO ||
+              address === expectedAddress) {
+            return false;
+          }
+          try {
+            const parsed = this.addressManager.parse(address);
+            return parsed.serviceType === ENTITY_TYPE.MESSAGE_GROUP &&
+              parsed.serviceId === replicaId;
+          } catch (_error) {
+            return false;
+          }
+        });
+
+      if (typeof this.raft.leave === TYPEOF.FUNCTION) {
+        for (const staleAddress of staleAddresses) {
+          this.raft.leave(staleAddress);
+          currentAddresses.delete(staleAddress);
+        }
+      }
+
+      if (!currentAddresses.has(expectedAddress)) {
+        this.raftProvider.joinPeer(this.raft, expectedAddress);
+        currentAddresses.add(expectedAddress);
+      }
+    }
+  }
+
 
   /**
    * Initialize the message group service.
@@ -686,6 +905,7 @@ class MessageGroupService extends EventEmitter {
     try {
       this.wireRaftEvents();
       this.joinPeerNodes();
+      this.reconcileRaftPeersFromCache();
       this.promoteIfSingleReplica();
     } catch (error) {
       this.logger.error('Failed during initialize, cleaning up raft', {
@@ -1394,11 +1614,11 @@ class MessageGroupService extends EventEmitter {
       );
     }
 
-    // Followers relay one hop to the current leader. This avoids local
-    // side-effects on non-leaders while still tolerating transient stale
-    // leader metadata on the original sender.
+    // Followers relay toward the current leader without applying locally.
+    // Allow one additional bounded hop so stale first-hop routing can
+    // converge during elections without creating open-ended loops.
     if (!this.isCurrentRaftLeader()) {
-      if (relayDepth >= NUM.ONE) {
+      if (relayDepth >= CDC_FORWARD_MAX_RELAY_DEPTH) {
         throw new Error(MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN);
       }
       await this.forwardCDCEventToLeader(tableName, operation, data, {
@@ -1746,15 +1966,17 @@ class MessageGroupService extends EventEmitter {
 
   /**
    * Build an ordered list of CDC forwarding targets.
-   * Prefers explicit leader metadata, then cache-backed peers, then
-   * bootstrap-time replica hints.
+   * Prefers cache-selected forward routes, then cache leader metadata, then
+   * stale local leader hints, then bootstrap-time replica hints.
+   * Suppressed targets are excluded until their local cooldown expires.
    * @param {?Object} cacheLeaderService
    * @param {?Object} cacheForwardService
-   * @return {Array<{serviceId: string, address: ?string}>}
+   * @return {{targets: Array<{serviceId: string, address: ?string}>, suppressedCount: number}}
    * @private
    */
   buildCDCForwardTargets(cacheLeaderService, cacheForwardService) {
     const targets = [];
+    let suppressedCount = NUM.ZERO;
     const targetsByServiceId = new Map();
     const addTarget = (serviceId, address = null) => {
       if (typeof serviceId !== TYPEOF.STRING ||
@@ -1780,18 +2002,22 @@ class MessageGroupService extends EventEmitter {
         address: normalizedAddress,
       };
       targetsByServiceId.set(serviceId, target);
+      if (this.isForwardTargetSuppressed(target)) {
+        suppressedCount += NUM.ONE;
+        return;
+      }
       targets.push(target);
     };
 
-    addTarget(this.leaderId);
-    addTarget(
-      cacheLeaderService?.[COLUMN.SERVICE_ID],
-      cacheLeaderService?.[COLUMN.ADDRESS],
-    );
     addTarget(
       cacheForwardService?.[COLUMN.SERVICE_ID],
       cacheForwardService?.[COLUMN.ADDRESS],
     );
+    addTarget(
+      cacheLeaderService?.[COLUMN.SERVICE_ID],
+      cacheLeaderService?.[COLUMN.ADDRESS],
+    );
+    addTarget(this.leaderId);
 
     if (Array.isArray(this.replicaIds)) {
       for (const peerId of this.replicaIds) {
@@ -1799,7 +2025,405 @@ class MessageGroupService extends EventEmitter {
       }
     }
 
-    return targets;
+    return {
+      targets,
+      suppressedCount,
+    };
+  }
+
+  /**
+   * Resolve suppression keys for one forward target.
+   * @param {Object} target
+   * @return {Array<string>}
+   * @private
+   */
+  getForwardTargetSuppressionKeys(target = {}) {
+    const keys = [];
+    if (typeof target.serviceId === TYPEOF.STRING &&
+        target.serviceId.length > NUM.ZERO) {
+      keys.push(`service:${target.serviceId}`);
+    }
+    if (typeof target.address === TYPEOF.STRING &&
+        target.address.length > NUM.ZERO) {
+      keys.push(`address:${target.address}`);
+    }
+    return keys;
+  }
+
+  /**
+   * Remove expired target suppressions.
+   * @param {number} [nowMs]
+   * @return {void}
+   * @private
+   */
+  pruneForwardTargetSuppressions(nowMs = this.now()) {
+    for (const [key, expiresAt] of this.forwardTargetSuppression.entries()) {
+      if (!Number.isFinite(expiresAt) || expiresAt <= nowMs) {
+        this.forwardTargetSuppression.delete(key);
+      }
+    }
+  }
+
+  /**
+   * Determine whether a forward target is temporarily suppressed.
+   * @param {Object} target
+   * @return {boolean}
+   * @private
+   */
+  isForwardTargetSuppressed(target = {}) {
+    const nowMs = this.now();
+    this.pruneForwardTargetSuppressions(nowMs);
+    return this.getForwardTargetSuppressionKeys(target).some((key) => {
+      const expiresAt = this.forwardTargetSuppression.get(key);
+      return Number.isFinite(expiresAt) && expiresAt > nowMs;
+    });
+  }
+
+  /**
+   * Temporarily suppress a forward target after a terminal routing failure.
+   * @param {Object} target
+   * @return {void}
+   * @private
+   */
+  suppressForwardTarget(target = {}) {
+    const suppressionMs = Number.isFinite(this.forwardTargetSuppressionMs) &&
+      this.forwardTargetSuppressionMs > NUM.ZERO ?
+      Math.floor(this.forwardTargetSuppressionMs) :
+      NUM.ZERO;
+    if (suppressionMs <= NUM.ZERO) {
+      return;
+    }
+    const expiresAt = this.now() + suppressionMs;
+    for (const key of this.getForwardTargetSuppressionKeys(target)) {
+      this.forwardTargetSuppression.set(key, expiresAt);
+    }
+  }
+
+  /**
+   * Clear any suppression when a target becomes routable again.
+   * @param {Object} target
+   * @return {void}
+   * @private
+   */
+  clearForwardTargetSuppression(target = {}) {
+    for (const key of this.getForwardTargetSuppressionKeys(target)) {
+      this.forwardTargetSuppression.delete(key);
+    }
+  }
+
+  /**
+   * Return true when one delivery rejection should trigger an authoritative
+   * message-group topology repair.
+   * @param {?string} errorMessage
+   * @return {boolean}
+   * @private
+   */
+  shouldRepairForwardTopology(errorMessage) {
+    return typeof errorMessage === TYPEOF.STRING &&
+      errorMessage.includes(MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN);
+  }
+
+  /**
+   * Return true when this replica can refresh group topology authoritatively.
+   * @return {boolean}
+   * @private
+   */
+  canRepairAuthoritativeForwardTopology() {
+    return Boolean(
+      this.systemTableCache &&
+      typeof this.systemTableCache.applySystemTableChange === TYPEOF.FUNCTION &&
+      this.cdcIntegrationService &&
+      typeof this.cdcIntegrationService.executeAuthoritativeSystemTableRead ===
+        TYPEOF.FUNCTION,
+    );
+  }
+
+  /**
+   * Refresh authoritative message-group topology with cooldown and per-replica
+   * deduplication so stale leader relays do not fan out repeated reads.
+   * @param {Object} [context]
+   * @return {Promise<boolean>}
+   * @private
+   */
+  async maybeRepairAuthoritativeForwardTopology(context = {}) {
+    if (!this.canRepairAuthoritativeForwardTopology()) {
+      return false;
+    }
+
+    if (this.forwardTopologyRepairInFlight) {
+      return this.forwardTopologyRepairInFlight;
+    }
+
+    const nowMs = this.now();
+    if ((nowMs - this.lastForwardTopologyRepairAtMs) <
+      this.lastForwardTopologyRepairCooldownMs) {
+      return false;
+    }
+
+    this.forwardTopologyRepairInFlight = (async () => {
+      try {
+        const repairResult =
+          await this.repairAuthoritativeForwardTopology(context);
+        if (repairResult.repaired === true) {
+          this.lastForwardTopologyRepairCooldownMs =
+            this.forwardTopologyRepairCooldownMs;
+        } else if (repairResult.outcome === 'unchanged') {
+          this.lastForwardTopologyRepairCooldownMs =
+            this.forwardTopologyRepairNoChangeCooldownMs;
+        } else {
+          this.lastForwardTopologyRepairCooldownMs =
+            this.forwardTopologyRepairFailureCooldownMs;
+        }
+        return repairResult.repaired === true;
+      } catch (error) {
+        this.lastForwardTopologyRepairCooldownMs =
+          this.forwardTopologyRepairFailureCooldownMs;
+        this.logger.warn('Authoritative message-group forward topology repair failed', {
+          groupId: this.groupId,
+          replicaId: this.replicaId,
+          staleServiceId: context?.serviceId || null,
+          staleAddress: context?.address || null,
+          error: error?.message || String(error),
+        });
+        return false;
+      } finally {
+        this.lastForwardTopologyRepairAtMs = this.now();
+        this.forwardTopologyRepairInFlight = null;
+      }
+    })();
+
+    return this.forwardTopologyRepairInFlight;
+  }
+
+  /**
+   * Read canonical group/service/node rows and apply them to the local cache.
+   * @param {Object} [context]
+   * @return {Promise<{repaired:boolean,outcome:string}>}
+   * @private
+   */
+  async repairAuthoritativeForwardTopology(context = {}) {
+    const queryOptions = {
+      localReadConsistency: FORWARD_TOPOLOGY_REPAIR_LOCAL_READ_CONSISTENCY,
+      allowSqlFallback: true,
+      queryOptions: {
+        timeoutMs: this.forwardTopologyRepairQueryTimeoutMs,
+        sessionId:
+          `message-group-forward-topology:${this.groupId}:${this.now()}`,
+      },
+    };
+    const [groupResult, serviceResult] = await Promise.all([
+      this.cdcIntegrationService.executeAuthoritativeSystemTableRead(
+        TABLES.MESSAGE_GROUPS,
+        `SELECT * FROM ${TABLES.MESSAGE_GROUPS} WHERE ${COLUMN.GROUP_ID} = ?`,
+        [this.groupId],
+        queryOptions,
+      ),
+      this.cdcIntegrationService.executeAuthoritativeSystemTableRead(
+        TABLES.SERVICES,
+        `SELECT * FROM ${TABLES.SERVICES} WHERE ${COLUMN.GROUP_ID} = ? ` +
+          `AND ${COLUMN.SERVICE_TYPE} = ?`,
+        [this.groupId, SERVICE_TYPE.MESSAGE_GROUP],
+        queryOptions,
+      ),
+    ]);
+
+    const groupRows = groupResult?.success === true &&
+      Array.isArray(groupResult.rows) ?
+      groupResult.rows :
+      [];
+    const serviceRows = serviceResult?.success === true &&
+      Array.isArray(serviceResult.rows) ?
+      serviceResult.rows :
+      [];
+    const nodeIds = [...new Set(serviceRows
+      .map((row) => row?.[COLUMN.NODE_ID] || row?.node_id || null)
+      .filter((nodeId) => {
+        return typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO;
+      }))];
+
+    let nodeRows = [];
+    if (nodeIds.length > NUM.ZERO) {
+      const placeholders = nodeIds.map(() => '?').join(', ');
+      const nodeResult =
+        await this.cdcIntegrationService.executeAuthoritativeSystemTableRead(
+          TABLES.NODES,
+          `SELECT * FROM ${TABLES.NODES} WHERE ${COLUMN.NODE_ID} ` +
+            `IN (${placeholders})`,
+          nodeIds,
+          queryOptions,
+        );
+      if (nodeResult?.success === true && Array.isArray(nodeResult.rows)) {
+        nodeRows = nodeResult.rows;
+      }
+    }
+
+    let repairedRowCount = NUM.ZERO;
+    repairedRowCount += this.applyAuthoritativeForwardTopologyRows(
+      TABLES.MESSAGE_GROUPS,
+      groupRows,
+    );
+    repairedRowCount += this.reconcileAuthoritativeForwardServiceRows(
+      serviceRows,
+    );
+    repairedRowCount += this.applyAuthoritativeForwardTopologyRows(
+      TABLES.NODES,
+      nodeRows,
+    );
+
+    if (repairedRowCount > NUM.ZERO) {
+      this.logger.warn('Repaired message-group forward topology from authoritative rows', {
+        groupId: this.groupId,
+        replicaId: this.replicaId,
+        staleServiceId: context?.serviceId || null,
+        staleAddress: context?.address || null,
+        repairedRowCount,
+        repairedGroupRowCount: groupRows.length,
+        repairedServiceRowCount: serviceRows.length,
+        repairedNodeRowCount: nodeRows.length,
+      });
+      return {
+        repaired: true,
+        outcome: 'repaired',
+      };
+    }
+
+    return {
+      repaired: false,
+      outcome: 'unchanged',
+    };
+  }
+
+  /**
+   * Upsert authoritative topology rows when they differ from the local cache.
+   * @param {string} tableName
+   * @param {Array<Object>} rows
+   * @return {number}
+   * @private
+   */
+  applyAuthoritativeForwardTopologyRows(tableName, rows = []) {
+    const cache = this.systemTableCache;
+    if (!cache || typeof cache.applySystemTableChange !== TYPEOF.FUNCTION) {
+      return NUM.ZERO;
+    }
+
+    const primaryKeyField = getSystemCachePrimaryKeyFieldOrFallback(tableName);
+    let repairedRowCount = NUM.ZERO;
+    for (const row of Array.isArray(rows) ? rows : []) {
+      if (!row || typeof row !== TYPEOF.OBJECT) {
+        continue;
+      }
+      const key = row?.[primaryKeyField];
+      if (typeof key !== TYPEOF.STRING || key.length === NUM.ZERO) {
+        continue;
+      }
+      const cachedRow = cache.get(tableName, key);
+      if (this.areForwardTopologyRowsEqual(cachedRow, row)) {
+        continue;
+      }
+      cache.applySystemTableChange(
+        tableName,
+        CDC_OPERATION.UPSERT,
+        row,
+      );
+      repairedRowCount += NUM.ONE;
+    }
+    return repairedRowCount;
+  }
+
+  /**
+   * Reconcile authoritative message-group service rows, including deleting
+   * local group service rows that no longer exist authoritatively.
+   * @param {Array<Object>} authoritativeRows
+   * @return {number}
+   * @private
+   */
+  reconcileAuthoritativeForwardServiceRows(authoritativeRows = []) {
+    const cache = this.systemTableCache;
+    if (!cache || typeof cache.applySystemTableChange !== TYPEOF.FUNCTION) {
+      return NUM.ZERO;
+    }
+
+    let repairedRowCount = this.applyAuthoritativeForwardTopologyRows(
+      TABLES.SERVICES,
+      authoritativeRows,
+    );
+    const authoritativeServiceIds = new Set(
+      authoritativeRows
+        .map((row) => row?.[COLUMN.SERVICE_ID] || row?.service_id || null)
+        .filter((serviceId) => {
+          return typeof serviceId === TYPEOF.STRING &&
+            serviceId.length > NUM.ZERO;
+        }),
+    );
+    const cachedRows = typeof cache.filter === TYPEOF.FUNCTION ?
+      cache.filter(TABLES.SERVICES, (row) => {
+        return row?.[COLUMN.GROUP_ID] === this.groupId &&
+          row?.[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP;
+      }) :
+      [];
+    for (const cachedRow of cachedRows) {
+      const serviceId = cachedRow?.[COLUMN.SERVICE_ID] || cachedRow?.service_id;
+      if (typeof serviceId !== TYPEOF.STRING ||
+        serviceId.length === NUM.ZERO ||
+        authoritativeServiceIds.has(serviceId)) {
+        continue;
+      }
+      cache.applySystemTableChange(
+        TABLES.SERVICES,
+        CDC_OPERATION.DELETE,
+        cachedRow,
+      );
+      repairedRowCount += NUM.ONE;
+    }
+    return repairedRowCount;
+  }
+
+  /**
+   * Compare one cached row to an authoritative replacement.
+   * @param {?Object} left
+   * @param {?Object} right
+   * @return {boolean}
+   * @private
+   */
+  areForwardTopologyRowsEqual(left, right) {
+    if (!left || !right ||
+      typeof left !== TYPEOF.OBJECT ||
+      typeof right !== TYPEOF.OBJECT) {
+      return false;
+    }
+    const keys = new Set([
+      ...Object.keys(left),
+      ...Object.keys(right),
+    ]);
+    for (const key of keys) {
+      if (left[key] !== right[key]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Determine whether a delivery error indicates a stale or unavailable
+   * forward target that should be temporarily suppressed.
+   * @param {?Object} deliveryResult
+   * @param {?string} errorMessage
+   * @return {boolean}
+   * @private
+   */
+  shouldSuppressForwardTarget(deliveryResult, errorMessage) {
+    if (typeof errorMessage !== TYPEOF.STRING || errorMessage.length === NUM.ZERO) {
+      return false;
+    }
+    return this.shouldRepairForwardTopology(errorMessage) ||
+      errorMessage === TRANSPORT_ERROR_MSG.MESSAGE_TIMEOUT ||
+      errorMessage.includes('ENOTFOUND') ||
+      errorMessage.includes('EAI_AGAIN') ||
+      errorMessage.includes('ECONNREFUSED') ||
+      errorMessage.includes('No connection to node') ||
+      (errorMessage.includes('Connection to node') &&
+        errorMessage.includes('closed')) ||
+      errorMessage.includes('No handler registered for address');
   }
 
   /**
@@ -1825,22 +2449,41 @@ class MessageGroupService extends EventEmitter {
       options.relayDepth :
       NUM.ZERO;
     const causeId = normalizeCauseId(options.causeId);
+    const isConnectedNode = (nodeId) => {
+      if (typeof this.transport?.getConnectionState !== TYPEOF.FUNCTION) {
+        return true;
+      }
+      return this.transport.getConnectionState(nodeId) === STATE.CONNECTED;
+    };
     const cacheLeaderService = resolveMessageGroupLeaderServiceFromCache(
       this.systemTableCache,
       this.groupId,
-      {excludeServiceId: this.replicaId},
+      {
+        excludeServiceId: this.replicaId,
+        isConnectedNode,
+      },
     );
     const cacheForwardService = resolveMessageGroupForwardServiceFromCache(
       this.systemTableCache,
       this.groupId,
-      {excludeServiceId: this.replicaId},
+      {
+        excludeServiceId: this.replicaId,
+        isConnectedNode,
+      },
     );
-    const forwardTargets = this.buildCDCForwardTargets(
+    const {
+      targets: forwardTargets,
+      suppressedCount,
+    } = this.buildCDCForwardTargets(
       cacheLeaderService,
       cacheForwardService,
     );
     if (forwardTargets.length === NUM.ZERO) {
-      throw new Error(MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN);
+      const error = new Error(MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN);
+      if (suppressedCount > NUM.ZERO) {
+        error.retryable = false;
+      }
+      throw error;
     }
 
     const payload = {
@@ -1877,10 +2520,32 @@ class MessageGroupService extends EventEmitter {
         const deliveryResult = await this.transport.deliver(leaderAddress, payload);
         const deliveryAcked = deliveryResult?.acknowledged === true;
         const deliverySucceeded = deliveryResult?.success !== false;
+        const deliveryErrorMessage =
+          typeof deliveryResult?.error === TYPEOF.STRING &&
+          deliveryResult.error.length > NUM.ZERO ?
+            deliveryResult.error :
+            null;
         const deliveryRejectedByHandler = deliveryResult?.noHandler === true ||
-          (typeof deliveryResult?.error === TYPEOF.STRING &&
-            deliveryResult.error.length > NUM.ZERO);
+          deliveryErrorMessage !== null;
         if (!deliveryAcked || !deliverySucceeded || deliveryRejectedByHandler) {
+          const shouldRepairTopology =
+            this.shouldRepairForwardTopology(deliveryErrorMessage);
+          if (this.shouldSuppressForwardTarget(
+            deliveryResult,
+            deliveryErrorMessage,
+          )) {
+            this.suppressForwardTarget({
+              serviceId: target.serviceId,
+              address: leaderAddress,
+            });
+          }
+          if (shouldRepairTopology) {
+            await this.maybeRepairAuthoritativeForwardTopology({
+              serviceId: target.serviceId,
+              address: leaderAddress,
+              errorMessage: deliveryErrorMessage,
+            });
+          }
           this.logger.warn('CDC forward to leader rejected', {
             groupId: this.groupId,
             replicaId: this.replicaId,
@@ -1891,23 +2556,43 @@ class MessageGroupService extends EventEmitter {
             relayDepth,
             causeId,
             durationMs: this.now() - forwardStartMs,
-            acknowledged: deliveryResult?.acknowledged === true,
-            success: deliveryResult?.success !== false,
+            acknowledged: deliveryAcked,
+            success: deliverySucceeded,
             noHandler: deliveryResult?.noHandler === true,
-            error: deliveryResult?.error || null,
+            error: deliveryErrorMessage,
           });
-          const deliveryError =
-            typeof deliveryResult?.error === TYPEOF.STRING &&
-            deliveryResult.error.length > NUM.ZERO ?
-              `: ${deliveryResult.error}` :
+          const deliveryError = deliveryErrorMessage !== null ?
+              `: ${deliveryErrorMessage}` :
               '';
           lastDeliveryError = new Error(
             `${MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_DELIVERY_REJECTED}${deliveryError}`,
           );
           continue;
         }
+        this.clearForwardTargetSuppression({
+          serviceId: target.serviceId,
+          address: leaderAddress,
+        });
         return;
       } catch (error) {
+        const shouldRepairTopology =
+          this.shouldRepairForwardTopology(error?.message || null);
+        if (this.shouldSuppressForwardTarget(
+          null,
+          error?.message || null,
+        )) {
+          this.suppressForwardTarget({
+            serviceId: target.serviceId,
+            address: leaderAddress,
+          });
+        }
+        if (shouldRepairTopology) {
+          await this.maybeRepairAuthoritativeForwardTopology({
+            serviceId: target.serviceId,
+            address: leaderAddress,
+            errorMessage: error?.message || null,
+          });
+        }
         lastDeliveryError = error;
       }
     }
@@ -2278,6 +2963,13 @@ class MessageGroupService extends EventEmitter {
       groupId: this.groupId,
       replicaId: this.replicaId,
     });
+
+    this.peerReconciliationScheduled = false;
+    if (this.systemTableCache &&
+        typeof this.systemTableCache.offCacheChange === TYPEOF.FUNCTION &&
+        this.systemTableCacheChangeListener) {
+      this.systemTableCache.offCacheChange(this.systemTableCacheChangeListener);
+    }
 
     // End liferaft instance - clear all timers first
     if (this.raft) {

@@ -48,6 +48,7 @@ const PARTITION_STATE_UNKNOWN = 'unknown';
 const SQL_DIAGNOSTICS_REPLICA_COUNT = NUM.THREE;
 const CONTROL_PLANE_DIAGNOSTICS_SCHEMA_VERSION = 1;
 const CONTROL_PLANE_DIAGNOSTICS_READINESS_CACHE_MAX_AGE_MS = 5000;
+const CONTROL_SNAPSHOT_CACHE_STALE_THRESHOLD_MS = 5000;
 const MANAGED_SPLIT_WORKFLOW_TYPE = 'managed_split';
 const CONTROL_SNAPSHOT_REPAIR_REASON = 'control_snapshot';
 const CDC_TELEMETRY_MODE = Object.freeze({
@@ -240,6 +241,8 @@ class AdminControlSnapshot {
       return false;
     }
 
+    const capturedAt = this.nowFn();
+    const nodeRows = this.systemTableCache.getAll(TABLES.NODES);
     const tableRows = this.systemTableCache.getAll(TABLES.TABLES);
     const partitionRows = this.systemTableCache.getAll(TABLES.PARTITIONS);
     const topologyGap = this.hasControlSnapshotPartitionTopologyGap(
@@ -253,6 +256,11 @@ class AdminControlSnapshot {
         replicaOperationRows,
       );
     const evaluation = evaluateAuthoritativeRepairPolicy({
+      cacheStalenessMs: this.resolveControlSnapshotCacheStalenessMs(
+        nodeRows,
+        capturedAt,
+      ),
+      staleThresholdMs: CONTROL_SNAPSHOT_CACHE_STALE_THRESHOLD_MS,
       topologyGap,
       staleReplicaOpsInFlightCount:
         replicaOperationSummary.staleInFlightCount,
@@ -367,6 +375,61 @@ class AdminControlSnapshot {
     }
 
     return false;
+  }
+
+  /**
+   * Compute local cache staleness for active node heartbeat rows.
+   * Stale live-node rows indicate the control snapshot should rebuild from
+   * the authoritative owner path before consumers trust the local projection.
+   * @param {Array<Object>} nodeRows
+   * @param {number} capturedAtMs
+   * @return {number}
+   * @private
+   */
+  resolveControlSnapshotCacheStalenessMs(nodeRows = [], capturedAtMs = null) {
+    const observedAtMs = Number.isFinite(capturedAtMs) ?
+      capturedAtMs :
+      this.nowFn();
+    let maxStalenessMs = NUM.ZERO;
+
+    for (const nodeRow of Array.isArray(nodeRows) ? nodeRows : []) {
+      const status = String(firstStringField(
+        nodeRow,
+        COLUMN.STATUS,
+        'status',
+      ) || '').toLowerCase();
+      const connectionState = String(firstStringField(
+        nodeRow,
+        COLUMN.CONNECTION_STATE,
+        'connection_state',
+        'connectionState',
+      ) || '').toLowerCase();
+      const considerForStaleness = status === STATUS_ACTIVE ||
+        connectionState === 'ready' ||
+        connectionState === 'connected';
+      if (!considerForStaleness) {
+        continue;
+      }
+
+      const lastHeartbeatMs = Number(
+        nodeRow?.[COLUMN.LAST_HEARTBEAT] ??
+          nodeRow?.last_heartbeat ??
+          nodeRow?.updated_at ??
+          nodeRow?.updatedAt ??
+          nodeRow?.created_at ??
+          nodeRow?.createdAt,
+      );
+      if (!Number.isFinite(lastHeartbeatMs)) {
+        return Number.POSITIVE_INFINITY;
+      }
+
+      maxStalenessMs = Math.max(
+        maxStalenessMs,
+        Math.max(NUM.ZERO, observedAtMs - lastHeartbeatMs),
+      );
+    }
+
+    return maxStalenessMs;
   }
 
   /**
@@ -960,10 +1023,16 @@ class AdminControlSnapshot {
       options.partitionIds.size > NUM.ZERO ?
         options.partitionIds :
         null;
+    const serviceRows = Array.isArray(options.serviceRows) ?
+      options.serviceRows :
+      (typeof this.systemTableCache?.getAll === TYPEOF.FUNCTION ?
+        this.systemTableCache.getAll(TABLES.SERVICES) :
+        ADMIN_CACHE_DUMP.EMPTY);
     const livenessSummary = summarizeReplicaOperationLiveness(
       replicaOperationRows,
       {
         partitionIds: scopedPartitionIds,
+        serviceRows,
         nowMs: this.nowFn(),
         includeTimeline: true,
       },

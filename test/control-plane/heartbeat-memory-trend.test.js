@@ -7,6 +7,7 @@ import {
 } from '../../src/control-plane/heartbeat-service.js';
 import {HEARTBEAT_EVENT} from
   '../../src/control-plane/heartbeat-service-constants.js';
+import {SERVICE_STATUS, STATE} from '../../src/constants/index.js';
 import {TRANSPORT_DEFAULT} from '../../src/constants/transport.js';
 
 function initEnv() {
@@ -202,6 +203,66 @@ test('HeartbeatService sendHeartbeat uses injected clock', async (t) => {
     capturedUpdate.ready_lease_expires_at,
     now + service.readyLeaseMs,
     'ready lease expiry should come from injected clock',
+  );
+
+  ConfigurationManager.resetInstance();
+  LoggingService.resetInstance();
+});
+
+test('HeartbeatService sendHeartbeat uses injected control-plane system-table ' +
+  'gateway', async (t) => {
+  initEnv();
+
+  const gatewayCalls = [];
+  const service = new HeartbeatService({
+    nodeId: 'node-gateway',
+    nodeAddress: '10.0.0.15:8080',
+    cdcIntegrationService: {
+      updateSystemTableRow: async () => {
+        throw new Error('cdcIntegrationService should not handle heartbeat writes');
+      },
+      upsertSystemTableRow: async () => {
+        throw new Error('cdcIntegrationService should not handle heartbeat writes');
+      },
+    },
+    controlPlaneSystemTableGateway: {
+      async updateSystemTableRow(tableName, whereClause, row, options) {
+        gatewayCalls.push({
+          method: 'updateSystemTableRow',
+          tableName,
+          whereClause,
+          row,
+          options,
+        });
+        return {
+          success: true,
+          partitionResult: {affectedRows: 1},
+        };
+      },
+      async upsertSystemTableRow(tableName, row, options) {
+        gatewayCalls.push({
+          method: 'upsertSystemTableRow',
+          tableName,
+          row,
+          options,
+        });
+        return {success: true};
+      },
+    },
+    systemTableCache: createMockCache(),
+    now: () => 45678,
+  });
+
+  await service.sendHeartbeat(null, null);
+
+  t.equal(gatewayCalls.length, 2, 'gateway should own node and endpoint writes');
+  t.same(
+    gatewayCalls.map((call) => `${call.method}:${call.tableName}`),
+    [
+      'updateSystemTableRow:nodes',
+      'upsertSystemTableRow:node_endpoints',
+    ],
+    'heartbeat writes should route through the shared gateway',
   );
 
   ConfigurationManager.resetInstance();
@@ -1250,4 +1311,256 @@ test('HeartbeatService recovers from a hung heartbeat attempt after timeout',
       ConfigurationManager.resetInstance();
       LoggingService.resetInstance();
     }
+  });
+
+test('HeartbeatService reportNodeShutdown publishes stopped state through node-state reporter',
+  async (t) => {
+    initEnv();
+
+    const publications = [];
+    const existingNodeRow = {
+      node_id: 'node-shutdown-reporter',
+      node_address: '10.0.0.21:8080',
+      cpu_cores: 4,
+      memory_mb: 256,
+      disk_gb: 64,
+      cpu_usage_percent: 10,
+      memory_usage_percent: 20,
+      disk_usage_percent: 30,
+      status: SERVICE_STATUS.ACTIVE,
+      connection_state: STATE.READY,
+      capabilities: '["partition_replica"]',
+      last_heartbeat: 111,
+      ready_lease_expires_at: 222,
+      created_at: 100,
+    };
+    const service = new HeartbeatService({
+      nodeId: 'node-shutdown-reporter',
+      nodeAddress: '10.0.0.21:8080',
+      cdcIntegrationService: {
+        updateSystemTableRow: async () => {
+          t.fail('shutdown publication should not fall back to CDC');
+        },
+        upsertSystemTableRow: async () => {
+          t.fail('shutdown publication should not upsert rows');
+        },
+      },
+      systemTableCache: {
+        get: (_tableName, key) =>
+          key === 'node-shutdown-reporter' ? existingNodeRow : null,
+      },
+      nodeStateReporter: async (payload) => {
+        publications.push(payload);
+        return {
+          publicationPath: 'node_shutdown_reporter',
+          targetAddress: 'seed-node/message-group/mg-1-r1',
+        };
+      },
+      now: () => 12345,
+    });
+
+    const published = await service.reportNodeShutdown();
+
+    t.equal(published, true, 'shutdown publication should report success');
+    t.equal(publications.length, 1, 'should publish one shutdown update');
+    t.equal(publications[0].state, STATE.DISCONNECTED,
+      'should publish a disconnected shutdown state');
+    t.equal(publications[0].readyLeaseExpiresAt, null,
+      'should clear the ready lease on shutdown publication');
+    t.equal(publications[0].nodeRow.status, SERVICE_STATUS.STOPPED,
+      'should mark the node row stopped during shutdown');
+    t.equal(publications[0].nodeRow.connection_state, STATE.DISCONNECTED,
+      'should mark the node row disconnected during shutdown');
+    t.equal(publications[0].nodeRow.ready_lease_expires_at, null,
+      'should persist a null ready lease in the shutdown row');
+
+    ConfigurationManager.resetInstance();
+    LoggingService.resetInstance();
+  });
+
+test('HeartbeatService reportNodeShutdown falls back to CDC update after reporter failure',
+  async (t) => {
+    initEnv();
+
+    const updates = [];
+    const service = new HeartbeatService({
+      nodeId: 'node-shutdown-cdc',
+      nodeAddress: '10.0.0.22:8080',
+      cdcIntegrationService: {
+        updateSystemTableRow: async (tableName, whereClause, updateRow, options) => {
+          updates.push({tableName, whereClause, updateRow, options});
+          return {
+            success: true,
+            partitionResult: {affectedRows: 1},
+          };
+        },
+        upsertSystemTableRow: async () => {
+          t.fail('shutdown publication should not create missing rows');
+        },
+      },
+      systemTableCache: {
+        get: (_tableName, key) => {
+          if (key !== 'node-shutdown-cdc') {
+            return null;
+          }
+          return {
+            node_id: 'node-shutdown-cdc',
+            node_address: '10.0.0.22:8080',
+            cpu_cores: 8,
+            memory_mb: 512,
+            disk_gb: 128,
+            status: SERVICE_STATUS.ACTIVE,
+            connection_state: STATE.READY,
+            capabilities: '["partition_replica"]',
+            last_heartbeat: 500,
+            ready_lease_expires_at: 600,
+          };
+        },
+      },
+      nodeStateReporter: async () => {
+        throw new Error('reporter unavailable');
+      },
+      now: () => 22334,
+    });
+
+    const published = await service.reportNodeShutdown();
+
+    t.equal(published, true, 'shutdown publication should fall back to CDC');
+    t.equal(updates.length, 1, 'should issue one CDC shutdown update');
+    t.equal(updates[0].tableName, 'nodes', 'shutdown update should target nodes table');
+    t.same(updates[0].whereClause, {node_id: 'node-shutdown-cdc'},
+      'shutdown update should target the current node id');
+    t.equal(updates[0].updateRow.status, SERVICE_STATUS.STOPPED,
+      'shutdown update should mark node status stopped');
+    t.equal(updates[0].updateRow.connection_state, STATE.DISCONNECTED,
+      'shutdown update should clear readiness connection state');
+    t.equal(updates[0].updateRow.ready_lease_expires_at, null,
+      'shutdown update should clear ready lease expiry');
+    t.equal(updates[0].options?.skipCacheWait, true,
+      'shutdown update should avoid cache-waiting on process exit');
+
+    ConfigurationManager.resetInstance();
+    LoggingService.resetInstance();
+  });
+
+test('HeartbeatService reportNodeShutdown falls back to CDC update when reporter ' +
+  'shutdown publication is not canonically visible',
+async (t) => {
+  initEnv();
+
+  const updates = [];
+  let authoritativeReads = 0;
+  const service = new HeartbeatService({
+    nodeId: 'node-shutdown-visibility-gap',
+    nodeAddress: '10.0.0.24:8080',
+    cdcIntegrationService: {
+      updateSystemTableRow: async (tableName, whereClause, updateRow, options) => {
+        updates.push({tableName, whereClause, updateRow, options});
+        return {
+          success: true,
+          partitionResult: {affectedRows: 1},
+        };
+      },
+      upsertSystemTableRow: async () => {
+        t.fail('shutdown publication should not create missing rows');
+      },
+      executeAuthoritativeSystemTableRead: async () => {
+        authoritativeReads += 1;
+        return {
+          success: true,
+          rows: [{
+            node_id: 'node-shutdown-visibility-gap',
+            status: SERVICE_STATUS.ACTIVE,
+            connection_state: STATE.READY,
+            last_heartbeat: 777,
+            ready_lease_expires_at: 888,
+          }],
+        };
+      },
+    },
+    systemTableCache: {
+      get: (_tableName, key) => {
+        if (key !== 'node-shutdown-visibility-gap') {
+          return null;
+        }
+        return {
+          node_id: 'node-shutdown-visibility-gap',
+          node_address: '10.0.0.24:8080',
+          cpu_cores: 8,
+          memory_mb: 512,
+          disk_gb: 128,
+          status: SERVICE_STATUS.ACTIVE,
+          connection_state: STATE.READY,
+          capabilities: '["partition_replica"]',
+          last_heartbeat: 500,
+          ready_lease_expires_at: 600,
+        };
+      },
+    },
+    nodeStateReporter: async () => {
+      return {
+        publicationPath: 'node_shutdown_reporter',
+        targetAddress: 'seed-node/message-group/mg-1-r1',
+      };
+    },
+    now: () => 22335,
+  });
+
+  const published = await service.reportNodeShutdown();
+
+  t.equal(published, true,
+    'shutdown publication should fall back when reporter ack is not durable');
+  t.equal(authoritativeReads, 1,
+    'shutdown publication should verify canonical visibility after reporter success');
+  t.equal(updates.length, 1,
+    'shutdown publication should repair the authoritative nodes row after visibility gap');
+  t.equal(updates[0].updateRow.status, SERVICE_STATUS.STOPPED,
+    'shutdown fallback should persist stopped node status');
+  t.equal(updates[0].updateRow.connection_state, STATE.DISCONNECTED,
+    'shutdown fallback should persist disconnected connection state');
+  t.equal(updates[0].updateRow.ready_lease_expires_at, null,
+    'shutdown fallback should clear ready lease expiry');
+  t.equal(
+    service.getHeartbeatPublicationDiagnostics().publicationPath,
+    'node_shutdown_cdc_after_reporter_visibility_gap',
+    'shutdown visibility gap should classify the fallback path explicitly',
+  );
+
+  ConfigurationManager.resetInstance();
+  LoggingService.resetInstance();
+});
+
+test('HeartbeatService reportNodeShutdown skips publication when node row is absent',
+  async (t) => {
+    initEnv();
+
+    let updateCalls = 0;
+    const service = new HeartbeatService({
+      nodeId: 'node-shutdown-missing',
+      nodeAddress: '10.0.0.23:8080',
+      cdcIntegrationService: {
+        updateSystemTableRow: async () => {
+          updateCalls++;
+          return {
+            success: true,
+            partitionResult: {affectedRows: 1},
+          };
+        },
+        upsertSystemTableRow: async () => {
+          t.fail('missing node row should not be synthesized on shutdown');
+        },
+      },
+      systemTableCache: {
+        get: () => null,
+      },
+      now: () => 33445,
+    });
+
+    const published = await service.reportNodeShutdown();
+
+    t.equal(published, false, 'shutdown publication should skip when row is absent');
+    t.equal(updateCalls, 0, 'shutdown publication should not write without a cached row');
+
+    ConfigurationManager.resetInstance();
+    LoggingService.resetInstance();
   });

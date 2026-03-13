@@ -439,6 +439,56 @@ test('LogsTableService connectToLoggingService flushes buffer', async (t) => {
   LoggingService.resetInstance();
 });
 
+test('LogsTableService connectToLoggingService throttles large startup buffer drains',
+  async (t) => {
+    LogsTableService.resetInstance();
+    LoggingService.resetInstance();
+
+    const loggingService = LoggingService.getInstance();
+    loggingService.initialize({nodeId: 'test-node'});
+
+    for (let index = 0; index <
+      LOGS_TABLE_DEFAULT.STARTUP_THROTTLED_BACKGROUND_FLUSH_THRESHOLD;
+      index += 1) {
+      loggingService.info(`Buffered message ${index}`);
+    }
+
+    let capturedOptions = null;
+    loggingService.onLogsTableReady = async (_writeCallback, options = {}) => {
+      capturedOptions = {...options};
+      return loggingService.getBufferSize();
+    };
+
+    const service = LogsTableService.getInstance();
+    service.initialize({
+      cdcIntegrationService: {
+        upsertSystemTableRow: async () => {},
+      },
+    });
+
+    const flushedCount = await service.connectToLoggingService();
+
+    t.equal(
+      flushedCount,
+      LOGS_TABLE_DEFAULT.STARTUP_THROTTLED_BACKGROUND_FLUSH_THRESHOLD,
+      'should report the buffered startup drain size',
+    );
+    t.equal(
+      capturedOptions.chunkSize,
+      LOGS_TABLE_DEFAULT.STARTUP_THROTTLED_BACKGROUND_FLUSH_CHUNK_SIZE,
+      'should reduce startup drain chunk size for large buffers',
+    );
+    t.equal(
+      capturedOptions.yieldMs,
+      LOGS_TABLE_DEFAULT.STARTUP_THROTTLED_BACKGROUND_FLUSH_YIELD_MS,
+      'should increase startup drain yield for large buffers',
+    );
+
+    await service.shutdown();
+    LogsTableService.resetInstance();
+    LoggingService.resetInstance();
+  });
+
 test('LogsTableService shutdown flushes pending', async (t) => {
   LogsTableService.resetInstance();
 

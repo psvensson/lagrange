@@ -42,6 +42,8 @@ const HEARTBEAT_LOG_MSG = Object.freeze({
   INITIALIZED: 'HeartbeatService initialized',
   STARTED: 'HeartbeatService started',
   STOPPED: 'HeartbeatService stopped',
+  SHUTDOWN_STATUS_PUBLISHED: 'HeartbeatService published shutdown status',
+  SHUTDOWN_STATUS_SKIPPED: 'HeartbeatService skipped shutdown status publication',
   HEARTBEAT_FAILED: 'Heartbeat failed',
   HEARTBEAT_CONSECUTIVE_FAILURES: 'Heartbeat failing repeatedly',
   HEARTBEAT_RECOVERED: 'Heartbeat recovered after failures',

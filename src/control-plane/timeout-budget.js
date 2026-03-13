@@ -1,6 +1,7 @@
 const TIMEOUT_BUDGET_CLASSIFICATION = Object.freeze({
   LOCAL_SCHEDULER_STARVATION: 'local_scheduler_starvation',
   REMOTE_CALL_TIMEOUT: 'remote_call_timeout',
+  QUERY_TIMEOUT: 'query_timeout',
   PUBLICATION_WAIT_TIMEOUT: 'publication_wait_timeout',
   CACHE_VISIBILITY_TIMEOUT: 'cache_visibility_timeout',
   REBALANCE_OPERATION_TIMEOUT: 'rebalance_operation_timeout',

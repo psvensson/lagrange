@@ -25,6 +25,9 @@ import {
 import {
   ControlPlaneReadinessService,
 } from '../control-plane/control-plane-readiness-service.js';
+import {
+  ControlPlaneSystemTableGateway,
+} from '../control-plane/control-plane-system-table-gateway.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {
   REBALANCER_CONFIG_KEY,
@@ -177,6 +180,13 @@ class UnifiedRebalancer extends EventEmitter {
       REBALANCER_ERROR_MSG.ROUTER_REQUIRED,
     );
     this.sqlQueryEngine = options.sqlQueryEngine || null;
+    this.controlPlaneSystemTableGateway =
+      options.controlPlaneSystemTableGateway ||
+      new ControlPlaneSystemTableGateway({
+        nodeId: this.nodeId,
+        sqlQueryEngine: this.sqlQueryEngine,
+        cdcIntegrationService: this.cdcIntegrationService,
+      });
 
     // RebalanceCoordinator for delegated operation execution (Requirements 2.5)
     this.rebalanceCoordinator = assertCritical(
@@ -922,12 +932,7 @@ class UnifiedRebalancer extends EventEmitter {
      * @return {Promise<number>} Configured rebalance budget.
      */
     async getConfiguredRebalanceBudget() {
-      assertCritical(
-        this.sqlQueryEngine && this.sqlQueryEngine.executeQuery,
-        REBALANCER_ERROR_MSG.SQL_ENGINE_REQUIRED,
-      );
-
-      const result = await this.sqlQueryEngine.executeQuery(
+      const result = await this.controlPlaneSystemTableGateway.executeQuery(
         SQL_BUDGET.SELECT_REBALANCE_BUDGET,
         [REBALANCER_CONFIG_KEY.REBALANCE_BUDGET],
       );
@@ -948,12 +953,7 @@ class UnifiedRebalancer extends EventEmitter {
      * @return {Promise<number>} In-flight operation count.
      */
     async getGlobalInFlightOperationCount() {
-      assertCritical(
-        this.sqlQueryEngine && this.sqlQueryEngine.executeQuery,
-        REBALANCER_ERROR_MSG.SQL_ENGINE_REQUIRED,
-      );
-
-      const result = await this.sqlQueryEngine.executeQuery(
+      const result = await this.controlPlaneSystemTableGateway.executeQuery(
         SQL_BUDGET.SELECT_IN_FLIGHT_COUNT,
         [],
       );

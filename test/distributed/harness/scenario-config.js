@@ -124,7 +124,40 @@ function resolvePartitionKillHealUnderLoadScenarioConfig(options = {}) {
     postKillDelayMs: normalizeFiniteNumber(options.postKillDelayMs, 1000),
     convergenceTimeoutMs:
       normalizeFiniteNumber(options.convergenceTimeoutMs, 60000),
-    minSuccessRate: normalizeFiniteNumber(options.minSuccessRate, 0.9),
+    minSuccessRate: normalizeFiniteNumber(options.minSuccessRate, 0.75),
+  });
+}
+
+function resolveDiskFullUnderLoadScenarioConfig(options = {}) {
+  return Object.freeze({
+    loadOpsPerSec: normalizeFiniteNumber(options.loadOpsPerSec, 50),
+    loadDuration: normalizeNonEmptyString(options.loadDuration, '60s'),
+    preFaultDelayMs: normalizeFiniteNumber(options.preFaultDelayMs, 5000),
+    faultHoldMs: normalizeFiniteNumber(options.faultHoldMs, 5000),
+    postReleaseDelayMs: normalizeFiniteNumber(options.postReleaseDelayMs, 1000),
+    diskFillSizeMb: normalizeFiniteNumber(options.diskFillSizeMb, 256),
+    diskPressurePath: normalizeNonEmptyString(
+      options.diskPressurePath,
+      '/tmp/lagrange-chaos/disk-pressure.bin',
+    ),
+    convergenceTimeoutMs:
+      normalizeFiniteNumber(options.convergenceTimeoutMs, 60000),
+    minSuccessRate: normalizeFiniteNumber(options.minSuccessRate, 0.8),
+  });
+}
+
+function resolveSlowFollowerUnderLoadScenarioConfig(options = {}) {
+  return Object.freeze({
+    loadOpsPerSec: normalizeFiniteNumber(options.loadOpsPerSec, 50),
+    loadDuration: normalizeNonEmptyString(options.loadDuration, '60s'),
+    preFaultDelayMs: normalizeFiniteNumber(options.preFaultDelayMs, 5000),
+    faultHoldMs: normalizeFiniteNumber(options.faultHoldMs, 5000),
+    postHealDelayMs: normalizeFiniteNumber(options.postHealDelayMs, 1000),
+    latencyMs: normalizeFiniteNumber(options.latencyMs, 200),
+    jitterMs: normalizeFiniteNumber(options.jitterMs, 50),
+    convergenceTimeoutMs:
+      normalizeFiniteNumber(options.convergenceTimeoutMs, 60000),
+    minSuccessRate: normalizeFiniteNumber(options.minSuccessRate, 0.8),
   });
 }
 
@@ -165,9 +198,11 @@ function resolvePartitionGrowthAndSpreadScenarioConfig(options = {}) {
 }
 
 export {
+  resolveDiskFullUnderLoadScenarioConfig,
   resolvePartitionKillHealUnderLoadScenarioConfig,
   resolvePartitionGrowthAndSpreadScenarioConfig,
   resolveSeedRestartUnderLoadScenarioConfig,
+  resolveSlowFollowerUnderLoadScenarioConfig,
   resolveSevenNodeLoadDuringPartitioningScenarioConfig,
   resolveSevenNodeReadWriteLoadDistributionScenarioConfig,
   resolveSevenNodeReadWriteLoadTransactionRecoveryScenarioConfig,

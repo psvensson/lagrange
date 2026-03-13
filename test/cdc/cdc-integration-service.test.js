@@ -17,6 +17,9 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {createReadOnlyCache} from '../../src/cache/read-only-system-table-cache.js';
+import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+} from '../../src/control-plane/control-plane-readiness-constants.js';
 
 // Initialize configuration and logging for tests
 beforeEach(() => {
@@ -498,6 +501,53 @@ test('CDCIntegrationService - steady-state system table writes prefer local part
     );
   });
 
+test('CDCIntegrationService - steady-state system table writes skip local followers and use routed SQL',
+  async (t) => {
+    const mockSqlEngine = createMockSqlQueryEngine();
+    const localWrites = [];
+    const service = new CDCIntegrationService({
+      nodeId: 'test-node',
+      sqlQueryEngine: mockSqlEngine,
+      partitionServicesProvider: () => createLocalSystemTablePartitionServices(
+        SYSTEM_TABLE_NAME.NODES,
+        {
+          isLeader: false,
+          async executeQuery(sql, params) {
+            localWrites.push({sql, params});
+            return {
+              success: true,
+              changes: 1,
+            };
+          },
+        },
+      ),
+    });
+    service.initialize();
+
+    await service.updateSystemTableRow(
+      SYSTEM_TABLE_NAME.NODES,
+      {node_id: 'node-1'},
+      {status: 'ready'},
+      {skipCacheWait: true},
+    );
+
+    t.equal(
+      localWrites.length,
+      0,
+      'should not execute steady-state writes through a local follower',
+    );
+    t.equal(
+      mockSqlEngine.executedQueries.length,
+      1,
+      'should fall back to routed SQL when only follower-local replicas are present',
+    );
+    t.equal(
+      mockSqlEngine.executedQueries[0]?.options?.routingReadinessDimension,
+      CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+      'fallback routed SQL should stay on repairEligible readiness',
+    );
+  });
+
 test('CDCIntegrationService - authoritative cache repair prefers local partition replicas',
   async (t) => {
     const operationId = 'op-local-repair';
@@ -801,6 +851,35 @@ test('CDCIntegrationService - updateSystemTableRow forwards query timeout to SQL
       mockSqlEngine.executedQueries[0]?.options?.timeoutMs,
       4321,
       'should pass query timeout through routed SQL execution options',
+    );
+  },
+);
+
+test('CDCIntegrationService - routed system-table writes default to repairEligible',
+  async (t) => {
+    const mockSqlEngine = createMockSqlQueryEngine();
+    const service = new CDCIntegrationService({
+      nodeId: 'test-node',
+      sqlQueryEngine: mockSqlEngine,
+    });
+    service.initialize();
+
+    await service.updateSystemTableRow(
+      SYSTEM_TABLE_NAME.NODES,
+      {node_id: 'node-1'},
+      {
+        status: 'active',
+      },
+      {
+        skipCacheWait: true,
+      },
+    );
+
+    t.equal(mockSqlEngine.executedQueries.length, 1, 'should execute one query');
+    t.equal(
+      mockSqlEngine.executedQueries[0]?.options?.routingReadinessDimension,
+      CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+      'internal system-table writes should route through repairEligible readiness by default',
     );
   },
 );
@@ -2506,6 +2585,53 @@ test('CDCIntegrationService - executeSQL routes to SQL engine in normal mode',
     t.ok(
       mockSqlEngine.executedQueries[0].sql.includes('INSERT INTO'),
       'should execute INSERT query',
+    );
+    t.end();
+  });
+
+test('CDCIntegrationService - steady-state writes use isolated SQL sessions',
+  async (t) => {
+    const observedSessions = [];
+    const mockSqlEngine = {
+      executedQueries: [],
+      async executeQuery(sql, params = [], options = {}) {
+        this.executedQueries.push({sql, params, options});
+        observedSessions.push(options.sessionId || null);
+        if (!options.sessionId || options.sessionId === 'default') {
+          return {
+            success: false,
+            error: 'Transaction already active for this session',
+          };
+        }
+        return {
+          success: true,
+          affectedRows: 1,
+        };
+      },
+    };
+    const service = new CDCIntegrationService({
+      nodeId: 'test-node',
+      sqlQueryEngine: mockSqlEngine,
+    });
+    service.initialize();
+
+    const result = await service.insertSystemTableRow(
+      SYSTEM_TABLE_NAME.SERVICES,
+      {
+        service_id: 'service-1',
+        address: 'node1/service/1',
+      },
+      {skipCacheWait: true},
+    );
+
+    t.equal(result.success, true, 'should succeed with an isolated session');
+    t.equal(observedSessions.length, 1, 'should execute one routed SQL write');
+    t.type(observedSessions[0], 'string', 'should provide a SQL session id');
+    t.not(observedSessions[0], 'default', 'should not reuse the default session');
+    t.match(
+      observedSessions[0],
+      /^cdc-system-write:/,
+      'should use the CDC system-write session prefix',
     );
     t.end();
   });

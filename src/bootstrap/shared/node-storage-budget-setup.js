@@ -162,6 +162,74 @@ class NodeStorageBudgetSetup {
 
     return outcome;
   }
+
+  /**
+   * Resolve the canonical budget row for startup without persisting it.
+   * Use this when another owner is responsible for the nodes-row lifecycle.
+   *
+   * @param {Object} options - Configuration options.
+   * @param {NodeStorageBudgetService} options.budgetService -
+   *   Initialized budget service (required).
+   * @param {Object} options.nodeRow - Node row data (required).
+   * @param {string} options.nodeId - Node ID for diagnostics.
+   * @return {Promise<Object>} Resolution result with {budgetRow, resolution}.
+   * @throws {DependencyError} If required dependencies missing.
+   */
+  static async resolveWithoutPersist(options) {
+    const {budgetService, nodeRow, nodeId} = options;
+
+    if (!nodeRow) {
+      throw new DependencyError(
+        'NodeStorageBudgetSetup', ERROR_MSG.NODE_ROW_REQUIRED,
+      );
+    }
+
+    const loggingService = LoggingService.getInstance();
+    const setupLogger = loggingService.isInitialized() ?
+      loggingService.forSubsystem(
+        SUBSYSTEM.NODE_STORAGE_BUDGET_SETUP,
+      ) : console;
+    const capacityLogger = loggingService.isInitialized() ?
+      loggingService.forSubsystem(
+        STORAGE_CAPACITY_SUBSYSTEM,
+      ) : console;
+
+    setupLogger.info(LOG_MSG.RESOLVING, {nodeId});
+
+    const outcome = budgetService.resolveBudgetRow(nodeRow);
+
+    if (outcome.resolution.isValid) {
+      capacityLogger.info(
+        STORAGE_CAPACITY_LOG_MSG.BUDGET_RESOLVED, {
+          nodeId,
+          budgetBytes: outcome.resolution.budgetBytes,
+          budgetSource: outcome.resolution.source,
+          diskBytes: outcome.resolution.diskBytes,
+          phase: 'startup',
+        },
+      );
+      setupLogger.info(LOG_MSG.RESOLVED, {
+        nodeId,
+        budgetBytes: outcome.resolution.budgetBytes,
+        budgetSource: outcome.resolution.source,
+      });
+    } else {
+      capacityLogger.warn(
+        STORAGE_CAPACITY_LOG_MSG.BUDGET_MISSING, {
+          nodeId,
+          error: outcome.resolution.error,
+          diskBytes: outcome.resolution.diskBytes,
+          phase: 'startup',
+        },
+      );
+      setupLogger.warn(LOG_MSG.FAILED, {
+        nodeId,
+        error: outcome.resolution.error,
+      });
+    }
+
+    return outcome;
+  }
 }
 
 export {NodeStorageBudgetSetup};

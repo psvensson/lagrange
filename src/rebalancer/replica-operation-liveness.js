@@ -9,12 +9,14 @@ const UNKNOWN_STATUS = 'unknown';
 const UNKNOWN_PARTITION_GROUP_ID = 'unknown';
 const UNKNOWN_WORKFLOW_STEP = 'UNKNOWN';
 const REPLICA_OPERATION_STATUS_FAILED = 'failed';
+const REPLICA_OPERATION_STATUS_ACTIVE = 'active';
 const WORKFLOW_STEP_FAILED = 'FAILED';
 const OPERATION_TIMELINE_EVENT_STEP = 'step';
 const OPERATION_TIMELINE_EVENT_STATE = 'state';
 const DEFAULT_TIMELINE_ENTRIES_PER_OPERATION = 16;
 const HOURS_PER_DAY = NUM.THREE * NUM.EIGHT;
 const MINUTES_PER_HOUR = NUM.THIRTY * NUM.TWO;
+const SERVICE_TYPE_PARTITION = 'partition';
 const STALE_TIMEOUT_CLASSIFICATION_LOOKBACK_MS =
   TIME_MS.MINUTE *
   HOURS_PER_DAY *
@@ -136,6 +138,13 @@ function normalizeReplicaOperationRecord(row, options = {}) {
       'source_node_id',
       'sourceNodeId',
     ) || ''),
+    replicaId: String(firstStringField(
+      row,
+      'replica_id',
+      'replicaId',
+      'service_id',
+      'serviceId',
+    ) || ''),
     targetNodeId: String(firstStringField(
       row,
       'target_node_id',
@@ -171,7 +180,69 @@ function isReplicaOperationTerminalSuccess(record) {
   return record.status === 'removed';
 }
 
-function isReplicaOperationInFlight(record) {
+function hasObservedActiveTargetReplica(record, options = {}) {
+  if (record?.type !== OperationType.ADD) {
+    return false;
+  }
+
+  const replicaId = String(record?.replicaId || '');
+  const partitionId = String(record?.partitionGroupId || '');
+  const targetNodeId = String(record?.targetNodeId || '');
+  if (!replicaId || !partitionId || !targetNodeId) {
+    return false;
+  }
+
+  const serviceRows = Array.isArray(options.serviceRows) ?
+    options.serviceRows :
+    [];
+  for (const serviceRow of serviceRows) {
+    const serviceType = String(firstStringField(
+      serviceRow,
+      'service_type',
+      'serviceType',
+      'type',
+    ) || '').toLowerCase();
+    if (serviceType && serviceType !== SERVICE_TYPE_PARTITION) {
+      continue;
+    }
+    if (String(firstStringField(
+      serviceRow,
+      'status',
+    ) || '').toLowerCase() !== REPLICA_OPERATION_STATUS_ACTIVE) {
+      continue;
+    }
+    if (String(firstStringField(
+      serviceRow,
+      'node_id',
+      'nodeId',
+    ) || '') !== targetNodeId) {
+      continue;
+    }
+    if (String(firstStringField(
+      serviceRow,
+      'partition_id',
+      'partitionId',
+      'id',
+    ) || '') !== partitionId) {
+      continue;
+    }
+    const serviceReplicaId = firstStringField(
+      serviceRow,
+      'replica_id',
+      'replicaId',
+      'service_id',
+      'serviceId',
+      'id',
+    );
+    if (serviceReplicaId === replicaId) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function isReplicaOperationInFlight(record, options = {}) {
   if (!record || typeof record !== 'object') {
     return false;
   }
@@ -179,7 +250,10 @@ function isReplicaOperationInFlight(record) {
   if (REPLICA_OPERATION_IN_FLIGHT_EXCLUDED_STATUSES.has(normalizedStatus)) {
     return false;
   }
-  return !isReplicaOperationTerminalSuccess(record);
+  if (isReplicaOperationTerminalSuccess(record)) {
+    return false;
+  }
+  return !hasObservedActiveTargetReplica(record, options);
 }
 
 function resolveStepTimeoutMs(workflowStep, options = {}) {
@@ -197,7 +271,7 @@ function resolveStepTimeoutMs(workflowStep, options = {}) {
 }
 
 function isReplicaOperationStale(record, options = {}) {
-  if (!isReplicaOperationInFlight(record)) {
+  if (!isReplicaOperationInFlight(record, options)) {
     return false;
   }
   const nowMs = Number.isFinite(options.nowMs) ?
@@ -288,7 +362,7 @@ function buildReplicaOperationTimeline(record, options = {}) {
       timestampMs: record.updatedAt,
       ageMs: Number.isFinite(record.ageMs) ? record.ageMs : null,
       status: record.status || UNKNOWN_STATUS,
-      inFlight: isReplicaOperationInFlight(record),
+      inFlight: isReplicaOperationInFlight(record, options),
       staleTimeout: isReplicaOperationStale(record, options),
       timeoutMs: resolveStepTimeoutMs(record.workflowStep, options),
     });
@@ -339,7 +413,7 @@ function summarizeReplicaOperationLiveness(rows = [], options = {}) {
         });
     }
 
-    if (!isReplicaOperationInFlight(record)) {
+    if (!isReplicaOperationInFlight(record, options)) {
       continue;
     }
 

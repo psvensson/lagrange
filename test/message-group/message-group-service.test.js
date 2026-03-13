@@ -28,6 +28,9 @@ import {
 } from '../../src/constants/index.js';
 import LifeRaft from '@markwylde/liferaft';
 import {RAFT_EVENT} from '../../src/raft/constants.js';
+import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+} from '../../src/control-plane/control-plane-readiness-constants.js';
 
 // Port counter for unique ports per test
 let testPortCounter = 24000;
@@ -325,6 +328,102 @@ test('MessageGroupService - buildPeerAddress logs structured diagnostics ' +
   }
 });
 
+test(
+  'MessageGroupService - cache reconciliation refreshes moved peers and joins new replicas',
+  async (t) => {
+    const {router, nodeId, cleanup} = await createTestTransport();
+    try {
+      const systemTableCache = new SystemTableCache();
+      systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, {
+        service_id: 'mg-1-r1',
+        service_type: SERVICE_TYPE.MESSAGE_GROUP,
+        node_id: nodeId,
+        group_id: 'mg-1',
+        replica_id: 'mg-1-r1',
+        status: SERVICE_STATUS.ACTIVE,
+      });
+      systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, {
+        service_id: 'mg-1-r2',
+        service_type: SERVICE_TYPE.MESSAGE_GROUP,
+        node_id: 'node-new',
+        group_id: 'mg-1',
+        replica_id: 'mg-1-r2',
+        status: SERVICE_STATUS.ACTIVE,
+      });
+
+      const joinedAddresses = [];
+      const leftAddresses = [];
+      const service = new MessageGroupService({
+        groupId: 'mg-1',
+        replicaId: 'mg-1-r1',
+        nodeId,
+        replicaIds: ['mg-1-r1', 'mg-1-r2'],
+        peerAddresses: ['node-old/message-group/mg-1-r2'],
+        transport: router,
+      });
+
+      service.raft = {
+        nodes: [{address: 'node-old/message-group/mg-1-r2'}],
+        leave(address) {
+          leftAddresses.push(address);
+          this.nodes = this.nodes.filter((node) => node?.address !== address);
+        },
+      };
+      service.raftProvider = {
+        joinPeer(_raft, address) {
+          joinedAddresses.push(address);
+          service.raft.nodes.push({address});
+        },
+      };
+
+      service.systemTableCache = systemTableCache;
+      await new Promise((resolve) => setImmediate(resolve));
+
+      t.equal(
+        service.buildPeerAddress('mg-1-r2'),
+        'node-new/message-group/mg-1-r2',
+        'cache-backed ownership should override stale bootstrap peer hints',
+      );
+      t.same(
+        leftAddresses,
+        ['node-old/message-group/mg-1-r2'],
+        'stale raft peer address should be replaced when ownership moves',
+      );
+      t.same(
+        joinedAddresses,
+        ['node-new/message-group/mg-1-r2'],
+        'reconciliation should join the moved peer from cache rows',
+      );
+
+      systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, {
+        service_id: 'mg-1-r3',
+        service_type: SERVICE_TYPE.MESSAGE_GROUP,
+        node_id: 'node-3',
+        group_id: 'mg-1',
+        replica_id: 'mg-1-r3',
+        status: SERVICE_STATUS.ACTIVE,
+      });
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+
+      t.same(
+        joinedAddresses,
+        [
+          'node-new/message-group/mg-1-r2',
+          'node-3/message-group/mg-1-r3',
+        ],
+        'newly visible peers should be joined from later cache rows',
+      );
+      t.ok(
+        service.replicaIds.includes('mg-1-r3'),
+        'replicaIds should expand to include cache-discovered peers',
+      );
+    } finally {
+      await cleanup();
+    }
+  },
+);
+
 test('MessageGroupService - persists raft role updates to services table', async (t) => {
   const {router, nodeId, cleanup} = await createTestTransport();
   const updates = [];
@@ -376,6 +475,11 @@ test('MessageGroupService - persists raft role updates to services table', async
       roleUpdate?.options?.expectedCacheFields,
       {raft_role: RaftRole.LEADER},
       'raft role cache wait should only require the stable role field',
+    );
+    t.equal(
+      roleUpdate?.options?.routingReadinessDimension,
+      CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+      'raft role persistence should route through repairEligible readiness',
     );
 
     await service.shutdown();
@@ -495,6 +599,11 @@ test('MessageGroupService - persists leader node updates to message groups table
       leaderUpdate?.options?.expectedCacheFields,
       {[COLUMN.LEADER_NODE_ID]: nodeId},
       'leader cache wait should only require canonical leader identity',
+    );
+    t.equal(
+      leaderUpdate?.options?.routingReadinessDimension,
+      CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+      'leader node persistence should route through repairEligible readiness',
     );
 
     await service.shutdown();

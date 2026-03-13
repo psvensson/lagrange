@@ -186,9 +186,15 @@ class RouterMessageHandler {
         existing.state === ConnectionState.CONNECTED;
       const preferIncomingConnection =
         this.nodeId.localeCompare(nodeId) > 0;
+      const existingPreferredIncomingConnection =
+        existingConnected &&
+        preferIncomingConnection &&
+        existing?.isIncoming === true;
       const shouldAdoptIncomingConnection = !existing ||
         (!isSelfConnection &&
-          (!existingConnected || preferIncomingConnection));
+          (!existingConnected ||
+            (preferIncomingConnection &&
+              !existingPreferredIncomingConnection)));
 
       if (isSelfConnection) {
         this.logger.debug(ROUTER_LOG_MSG.KEEP_ORIGINAL_CONNECTION, {

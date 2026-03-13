@@ -129,9 +129,9 @@ Enterprise
 | 7-node stress scenarios | ✅ |
 | Postgres baseline comparison | ✅ |
 | Invariant engine | ✅ |
-| Disk full simulation | 🔲 |
-| Slow follower simulation | 🔲 |
-| In-cluster chaos injection | 🔲 |
+| Disk full simulation | ✅ |
+| Slow follower simulation | ✅ |
+| In-cluster chaos injection | ✅ |
 
 ---
 

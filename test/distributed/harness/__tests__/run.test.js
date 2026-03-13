@@ -25,6 +25,7 @@ import {
   resolveFastLocalMode,
   buildImage,
   deriveRunOutputDir,
+  formatScenarioPhaseEventLine,
   loadHistoricalReports,
   loadScenarioModule,
   shouldPrintLiveLogEntry,
@@ -291,6 +292,42 @@ describe('normalizeScenarioPayload', () => {
       artifactPath: 'test-output/examples/run-1.json',
     };
     assert.deepEqual(normalizeScenarioPayload(payload), payload);
+  });
+});
+
+describe('formatScenarioPhaseEventLine', () => {
+  it('formats phase progress lines with scenario, phase, message, and details', () => {
+    const line = formatScenarioPhaseEventLine('postgres-baseline-comparison', {
+      type: 'phase.progress',
+      phase: 'load',
+      message: 'system-under-test load heartbeat',
+      details: {
+        label: 'sut',
+        success: 25,
+        errors: 1,
+      },
+    });
+
+    assert.equal(
+      line,
+      '[phase] postgres-baseline-comparison load progress: ' +
+        'system-under-test load heartbeat ' +
+        'label=sut success=25 errors=1',
+    );
+  });
+
+  it('formats phase end lines with status and duration', () => {
+    const line = formatScenarioPhaseEventLine('postgres-baseline-comparison', {
+      type: 'phase.end',
+      phase: 'verify',
+      status: 'fail',
+      durationMs: 3210,
+    });
+
+    assert.equal(
+      line,
+      '[phase] postgres-baseline-comparison verify end: status=fail durationMs=3210',
+    );
   });
 });
 

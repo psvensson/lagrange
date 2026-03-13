@@ -13,6 +13,9 @@ import Database from 'better-sqlite3';
 import LifeRaft from '@markwylde/liferaft';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
+import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+} from '../control-plane/control-plane-readiness-constants.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {HLCClockService} from '../hlc/hlc-clock-service.js';
 import {UnifiedRebalancer, EntityType} from '../rebalancer/unified-rebalancer.js';
@@ -320,7 +323,11 @@ class PartitionService extends EventEmitter {
     this.ownsRebalanceCoordinator = false;
     this.systemTableCache = options.systemTableCache || null;
     this.cdcIntegrationService = options.cdcIntegrationService || null;
+    this.sqlQueryEngine = options.sqlQueryEngine || null;
     this.tablePolicyService = options.tablePolicyService || null;
+    if (this.rebalanceCoordinator) {
+      this.rebalanceCoordinator.sqlQueryEngine = this.sqlQueryEngine;
+    }
     // Message group service for sending CREATE_REPLICA/REMOVE_REPLICA messages
     this.messageGroupService = options.messageGroupService || null;
     // MessageRouter for cross-node lifecycle messages (CREATE_REPLICA/REMOVE_REPLICA)
@@ -511,6 +518,10 @@ class PartitionService extends EventEmitter {
         raft_role: role,
         updated_at: updatedAt,
       }),
+      buildUpdateOptions: () => ({
+        routingReadinessDimension:
+          CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+      }),
       buildExpectedCacheFields: (role) => ({raft_role: role}),
       readRowFromCache: (systemTableCache) =>
         systemTableCache?.get?.(TABLES.SERVICES, this.replicaId) || null,
@@ -550,6 +561,10 @@ class PartitionService extends EventEmitter {
       buildUpdateData: (leaderNodeId, updatedAt) => ({
         [COLUMN.LEADER_NODE_ID]: leaderNodeId,
         [COLUMN.UPDATED_AT]: updatedAt,
+      }),
+      buildUpdateOptions: () => ({
+        routingReadinessDimension:
+          CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
       }),
       buildExpectedCacheFields: (leaderNodeId) => ({
         [COLUMN.LEADER_NODE_ID]: leaderNodeId,
@@ -3320,14 +3335,18 @@ class PartitionService extends EventEmitter {
           partitionId: this.partitionId,
         };
       } else {
-        // For write operations within a transaction, execute directly
-        if (this.activeTransactions.size > NUM.ZERO) {
+        // Only reuse the transactional write path when this request resolves
+        // to the active transaction session for the partition.
+        const transaction = this.resolveActiveTransactionState(
+          options.sessionId || null,
+        );
+        if (transaction) {
           return this.executeTransactionWrite({
             type: PARTITION_SERVICE_OPERATION.QUERY,
             sql,
             params,
             splitMirrorOrigin: options.splitMirrorOrigin || null,
-          }, options.sessionId || null);
+          }, transaction.sessionId);
         }
         // For write operations outside transaction, go through Raft
         return this.proposeWrite({

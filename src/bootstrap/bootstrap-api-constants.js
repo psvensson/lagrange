@@ -22,6 +22,7 @@ const BOOTSTRAP_API_DEFAULT = Object.freeze({
   MG_ID_LENGTH: NUM.EIGHT,
   WS_HOST: HOST.LOCALHOST,
   MOVE_REPLICA_ASSIGNMENT_LEASE_MS: NUM.THIRTY_THOUSAND,
+  MOVE_REPLICA_ASSIGNMENT_SWEEP_INTERVAL_MS: NUM.THOUSAND,
   SERVICE_REGISTRATION_CACHE_VISIBILITY_TIMEOUT_MS: NUM.FIVE_THOUSAND,
   SERVICE_REGISTRATION_CACHE_VISIBILITY_POLL_INTERVAL_MS: NUM.TEN,
 });
@@ -62,8 +63,12 @@ const BOOTSTRAP_API_LOG_MSG = Object.freeze({
     'MOVE_REPLICA handoff operation failed',
   MOVE_REPLICA_ASSIGNMENT_RESERVED:
     'Reserved MOVE_REPLICA assignment for joining node',
+  MOVE_REPLICA_ASSIGNMENT_RENEWED:
+    'Renewed MOVE_REPLICA assignment reservation for original target node',
   MOVE_REPLICA_ASSIGNMENT_EXPIRED:
     'Expired stale MOVE_REPLICA assignment reservation',
+  MOVE_REPLICA_ASSIGNMENT_SWEEP_FAILED:
+    'Failed to sweep MOVE_REPLICA assignment reservations',
   MOVE_REPLICA_ASSIGNMENT_CONFLICT:
     'MOVE_REPLICA assignment reservation conflict detected',
   MOVE_REPLICA_ASSIGNMENT_VALIDATION_FAILED:
@@ -84,6 +89,8 @@ const BOOTSTRAP_API_LOG_MSG = Object.freeze({
   SHUTDOWN: 'Bootstrap API shutdown',
   SERVER_CLOSE_ERROR: 'Bootstrap server close error',
   READY_NODES_FOR_BOOTSTRAP: 'Ready nodes for bootstrap response',
+  IDEMPOTENT_NODE_REJOIN_ALLOWED:
+    'Allowing idempotent re-registration of node with unchanged address',
   STALE_NODE_REJOIN_ALLOWED:
     'Allowing re-registration of dead node',
 });
@@ -117,6 +124,8 @@ const BOOTSTRAP_API_ERROR = Object.freeze({
     'assignment_id lease has expired for MOVE_REPLICA handoff',
   ASSIGNMENT_TOKEN_MISMATCH:
     'assignment_id does not match requested node_id/replica_id',
+  ASSIGNMENT_TOKEN_LOOKUP_UNAVAILABLE:
+    'assignment_id lookup is temporarily unavailable',
   REPLICA_OWNER_CONFLICT:
     'active replica owner conflict for message-group replica',
   SERVICE_REGISTRATION_CACHE_VISIBILITY_TIMEOUT: (serviceId, nodeId, timeoutMs) =>
@@ -131,6 +140,8 @@ const BOOTSTRAP_API_REGISTER_SERVICE_ERROR_CODE = Object.freeze({
   ASSIGNMENT_TOKEN_UNKNOWN: 'ASSIGNMENT_TOKEN_UNKNOWN',
   ASSIGNMENT_TOKEN_EXPIRED: 'ASSIGNMENT_TOKEN_EXPIRED',
   ASSIGNMENT_TOKEN_MISMATCH: 'ASSIGNMENT_TOKEN_MISMATCH',
+  ASSIGNMENT_TOKEN_LOOKUP_UNAVAILABLE:
+    'ASSIGNMENT_TOKEN_LOOKUP_UNAVAILABLE',
   REPLICA_OWNER_CONFLICT: 'REPLICA_OWNER_CONFLICT',
 });
 

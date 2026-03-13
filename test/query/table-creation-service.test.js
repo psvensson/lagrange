@@ -405,6 +405,38 @@ test('TableCreationService - provisions initial partition when callback is confi
   );
   });
 
+test('TableCreationService - provisions CREATE TABLE partitions with a ' +
+  'quorum-sized minimum routable cohort', async (t) => {
+  let provisionContext = null;
+  const service = new TableCreationService({
+    systemCache: {
+      find() {
+        return null;
+      },
+    },
+    cdcIntegrationService: {
+      async insertSystemTableRow() {
+        return {success: true};
+      },
+    },
+    calculateQuorumReplicaCount(replicaCount) {
+      return Math.floor(replicaCount / 2) + 1;
+    },
+    partitionProvisioner: async (context) => {
+      provisionContext = context;
+    },
+  });
+
+  const result = await service.createTable(createCreateTableAst());
+
+  t.equal(result.success, true);
+  t.equal(
+    provisionContext?.minimumRoutableReplicaCount,
+    2,
+    'CREATE TABLE should require only a quorum-sized routable cohort before returning',
+  );
+});
+
 test('TableCreationService - surfaces initial partition provisioning failures',
   async (t) => {
     const service = new TableCreationService({

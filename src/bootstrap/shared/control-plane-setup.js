@@ -265,8 +265,11 @@ class ControlPlaneSetup {
       nodeAddress,
       cdcIntegrationService,
       systemTableCache,
+      verifyReporterVisibilityOnSuccess: true,
+      fallbackToCdcOnReporterVisibilityGap: true,
     });
     heartbeatService.initialize();
+    controlPlaneReadinessService.heartbeatService = heartbeatService;
 
     const leaseService = new LeaseService({
       nodeId,

@@ -366,6 +366,7 @@ class CreateMessageGroupPhase {
     groupId,
     replicaId,
     service,
+    options = {},
   ) {
     const nowFn = this.delegates.getNow();
     const sleep = this.delegates.getSleep();
@@ -391,6 +392,7 @@ class CreateMessageGroupPhase {
         nodeId: this.nodeId,
         service,
         timestamp: now,
+        status: options.status || SERVICE_STATUS.ACTIVE,
         extraFields: assignmentId ?
           {
             [JOIN_BACKFILL_QUERY.ASSIGNMENT_ID_FIELD]:
@@ -622,6 +624,7 @@ class CreateMessageGroupPhase {
         groupId,
         replicaId,
         svc,
+        {status: SERVICE_STATUS.STOPPED},
       );
     }
 

@@ -384,6 +384,30 @@ describe('ControlPlaneSetup', () => {
         );
       });
 
+    it('should enable canonical heartbeat visibility verification when ' +
+      'using the control-plane reporter path',
+    async () => {
+      const result = await ControlPlaneSetup.create({
+        nodeId: 'test-node',
+        nodeAddress: 'localhost:8080',
+        messageRouter: mockMessageRouter,
+        cdcIntegrationService: mockCdcIntegrationService,
+        systemTableCache: mockSystemTableCache,
+        tablePolicyService: mockTablePolicyService,
+      });
+
+      createdServices.push(result);
+
+      assert.strictEqual(
+        result.heartbeatService.verifyReporterVisibilityOnSuccess,
+        true,
+      );
+      assert.strictEqual(
+        result.heartbeatService.fallbackToCdcOnReporterVisibilityGap,
+        true,
+      );
+    });
+
     it('should attach message group services when provided',
       async () => {
         const createMockMgService = (serviceId) => ({

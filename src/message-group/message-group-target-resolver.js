@@ -3,6 +3,7 @@ import {
   NUM,
   SERVICE_STATUS,
   SERVICE_TYPE,
+  STATE,
   TABLES,
   TYPEOF,
 } from '../constants/index.js';
@@ -25,14 +26,71 @@ function findRow(cache, tableName, predicate) {
   return filterRows(cache, tableName, predicate)[NUM.ZERO] || null;
 }
 
+function hasNodeReadinessRows(cache) {
+  if (!cache) {
+    return false;
+  }
+  if (typeof cache.getAll === TYPEOF.FUNCTION) {
+    return (cache.getAll(TABLES.NODES) || []).length > NUM.ZERO;
+  }
+  if (typeof cache.filter === TYPEOF.FUNCTION) {
+    return (cache.filter(TABLES.NODES, () => true) || []).length > NUM.ZERO;
+  }
+  return false;
+}
+
+function isReadyNode(cache, nodeId) {
+  if (typeof nodeId !== TYPEOF.STRING || nodeId.length === NUM.ZERO) {
+    return false;
+  }
+  if (!hasNodeReadinessRows(cache)) {
+    return true;
+  }
+  if (typeof cache?.getReadyNodes === TYPEOF.FUNCTION) {
+    const readyNodes = cache.getReadyNodes();
+    if (Array.isArray(readyNodes)) {
+      return readyNodes.includes(nodeId);
+    }
+  }
+
+  const nodeRow = findRow(cache, TABLES.NODES, (row) => {
+    return row?.[COLUMN.NODE_ID] === nodeId;
+  });
+  if (!nodeRow) {
+    return false;
+  }
+
+  const readyLeaseExpiresAt = Number(nodeRow?.[COLUMN.READY_LEASE_EXPIRES_AT]);
+  return nodeRow?.[COLUMN.CONNECTION_STATE] === STATE.READY &&
+    Number.isFinite(readyLeaseExpiresAt) &&
+    readyLeaseExpiresAt > Date.now();
+}
+
 function getActiveMessageGroupServiceCandidates(cache, groupId) {
   return filterRows(cache, TABLES.SERVICES, (row) => {
     return row?.[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP &&
       row?.[COLUMN.GROUP_ID] === groupId &&
       row?.[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE &&
+      isReadyNode(cache, row?.[COLUMN.NODE_ID]) &&
       typeof row?.[COLUMN.ADDRESS] === TYPEOF.STRING &&
       row[COLUMN.ADDRESS].length > NUM.ZERO;
   });
+}
+
+function preferConnectedCandidates(candidates, options = {}) {
+  const isConnectedNode = typeof options.isConnectedNode === TYPEOF.FUNCTION ?
+    options.isConnectedNode :
+    null;
+  if (!isConnectedNode) {
+    return candidates;
+  }
+
+  const connectedCandidates = candidates.filter((row) => {
+    return isConnectedNode(row?.[COLUMN.NODE_ID]) === true;
+  });
+  return connectedCandidates.length > NUM.ZERO ?
+    connectedCandidates :
+    candidates;
 }
 
 function isExcludedCandidate(row, options = {}) {
@@ -42,6 +100,13 @@ function isExcludedCandidate(row, options = {}) {
     (excludeServiceId && row?.[COLUMN.SERVICE_ID] === excludeServiceId) ||
     (excludeNodeId && row?.[COLUMN.NODE_ID] === excludeNodeId),
   );
+}
+
+function findExplicitLeaderCandidate(candidates, options = {}) {
+  return candidates.find((row) => {
+    return row?.[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER &&
+      !isExcludedCandidate(row, options);
+  }) || null;
 }
 
 function getCanonicalLeaderNodeId(cache, groupId) {
@@ -67,14 +132,42 @@ function resolveCanonicalLeaderServiceCandidate(
     return null;
   }
 
-  return candidates.find((row) => {
+  const matchingCandidates = candidates.filter((row) => {
     return row?.[COLUMN.NODE_ID] === leaderNodeId &&
       !isExcludedCandidate(row, options);
-  }) || null;
+  });
+
+  if (matchingCandidates.length === NUM.ZERO) {
+    return null;
+  }
+
+  const canonicalExplicitLeader = findExplicitLeaderCandidate(
+    matchingCandidates,
+    options,
+  );
+  if (canonicalExplicitLeader) {
+    return canonicalExplicitLeader;
+  }
+
+  const explicitLeader = findExplicitLeaderCandidate(candidates, options);
+  if (explicitLeader &&
+    explicitLeader?.[COLUMN.NODE_ID] !== leaderNodeId) {
+    return null;
+  }
+
+  if (matchingCandidates.length === NUM.ONE) {
+    return matchingCandidates[NUM.ZERO];
+  }
+
+  return null;
 }
 
 function resolveMessageGroupLeaderServiceFromCache(cache, groupId, options = {}) {
-  const candidates = getActiveMessageGroupServiceCandidates(cache, groupId);
+  const candidates = preferConnectedCandidates(
+    getActiveMessageGroupServiceCandidates(cache, groupId),
+    options,
+  );
+  const leaderNodeId = getCanonicalLeaderNodeId(cache, groupId);
   const canonicalLeader = resolveCanonicalLeaderServiceCandidate(
     cache,
     groupId,
@@ -86,18 +179,24 @@ function resolveMessageGroupLeaderServiceFromCache(cache, groupId, options = {})
     return canonicalLeader;
   }
 
-  if (getCanonicalLeaderNodeId(cache, groupId)) {
+  const explicitLeader = findExplicitLeaderCandidate(candidates, options);
+
+  if (explicitLeader) {
+    return explicitLeader;
+  }
+
+  if (leaderNodeId) {
     return null;
   }
 
-  return candidates.find((row) => {
-    return row[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER &&
-      !isExcludedCandidate(row, options);
-  }) || null;
+  return null;
 }
 
 function resolveMessageGroupForwardServiceFromCache(cache, groupId, options = {}) {
-  const candidates = getActiveMessageGroupServiceCandidates(cache, groupId)
+  const candidates = preferConnectedCandidates(
+    getActiveMessageGroupServiceCandidates(cache, groupId),
+    options,
+  )
     .filter((row) => {
       return !isExcludedCandidate(row, options);
     });

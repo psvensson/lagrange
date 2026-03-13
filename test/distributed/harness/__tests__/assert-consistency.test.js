@@ -57,6 +57,30 @@ function buildQueryableNode(nodeId, leaderAddress = TEST_LEADER_ADDRESS) {
   };
 }
 
+function buildControlSnapshotNode(nodeId, snapshotOverrides = {}) {
+  return {
+    id: nodeId,
+    async isReachable() {
+      return true;
+    },
+    async getControlSnapshot() {
+      return {
+        rows: [{
+          nodes: ['node-1', 'node-2', 'node-3'],
+          partitions: ['p1'],
+          leaders: {
+            p1: TEST_LEADER_ADDRESS,
+          },
+          ...snapshotOverrides,
+        }],
+      };
+    },
+    async query() {
+      throw new Error('raw consistency SQL should not run when control snapshot is available');
+    },
+  };
+}
+
 test('assertConsistency ignores nodes that fail query collection', async () => {
   const healthyA = buildQueryableNode('node-a');
   const healthyB = buildQueryableNode('node-b');
@@ -110,4 +134,13 @@ test('assertConsistency still fails on real state disagreement', async () => {
     assertConsistency([nodeA, nodeB]),
     /Leader identities disagree/i,
   );
+});
+
+test('assertConsistency uses control snapshots when available', async () => {
+  const nodeA = buildControlSnapshotNode('node-a');
+  const nodeB = buildControlSnapshotNode('node-b');
+
+  await assert.doesNotReject(async () => {
+    await assertConsistency([nodeA, nodeB]);
+  });
 });

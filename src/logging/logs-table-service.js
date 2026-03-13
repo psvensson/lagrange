@@ -191,19 +191,27 @@ class LogsTableService extends EventEmitter {
       throw new Error(LOGGING_ERROR_MSG.LOGGING_SERVICE_REQUIRED);
     }
 
+    const bufferedEntries = loggingService.getBufferSize();
+    const useThrottledStartupDrain =
+      bufferedEntries >=
+      LOGS_TABLE_DEFAULT.STARTUP_THROTTLED_BACKGROUND_FLUSH_THRESHOLD;
     const backgroundChunkSize = Math.max(
       MIN_CHUNK_SIZE,
-      Math.min(
-        this.batchSize,
-        LOGS_TABLE_DEFAULT.BACKGROUND_FLUSH_CHUNK_SIZE,
-      ),
+      useThrottledStartupDrain ?
+        LOGS_TABLE_DEFAULT.STARTUP_THROTTLED_BACKGROUND_FLUSH_CHUNK_SIZE :
+        Math.min(
+          this.batchSize,
+          LOGS_TABLE_DEFAULT.BACKGROUND_FLUSH_CHUNK_SIZE,
+        ),
     );
     const backgroundYieldMs = Math.max(
       MIN_YIELD_MS,
-      LOGS_TABLE_DEFAULT.BACKGROUND_FLUSH_YIELD_MS,
+      useThrottledStartupDrain ?
+        LOGS_TABLE_DEFAULT.STARTUP_THROTTLED_BACKGROUND_FLUSH_YIELD_MS :
+        LOGS_TABLE_DEFAULT.BACKGROUND_FLUSH_YIELD_MS,
     );
     this.logger.log(LOGS_TABLE_CONNECT_METRIC, {
-      bufferedEntries: loggingService.getBufferSize(),
+      bufferedEntries,
       flushMode: LOGS_TABLE_FLUSH_MODE,
       chunkSize: backgroundChunkSize,
       yieldMs: backgroundYieldMs,

@@ -15,6 +15,9 @@ import {
 } from '../constants/index.js';
 import {assertCritical} from '../utils/assert.js';
 import {
+  ControlPlaneSystemTableGateway,
+} from './control-plane-system-table-gateway.js';
+import {
   ENDPOINT_SUBSYSTEM,
   ENDPOINT_SVC_ERROR_MSG,
   ENDPOINT_SVC_EVENT,
@@ -40,6 +43,13 @@ class EndpointService extends EventEmitter {
     this.cdcIntegrationService = options.cdcIntegrationService || null;
     this.systemTableCache = options.systemTableCache || null;
     this.sqlQueryEngine = options.sqlQueryEngine || null;
+    this.controlPlaneSystemTableGateway =
+      options.controlPlaneSystemTableGateway ||
+      new ControlPlaneSystemTableGateway({
+        nodeId: this.nodeId,
+        sqlQueryEngine: this.sqlQueryEngine,
+        cdcIntegrationService: this.cdcIntegrationService,
+      });
     this.state = ENDPOINT_SVC_STATE.CREATED;
 
     const loggingService = LoggingService.getInstance();
@@ -85,8 +95,9 @@ class EndpointService extends EventEmitter {
 
     const now = Date.now();
     let existing = null;
-    if (this.sqlQueryEngine) {
-      const queryResult = await this.sqlQueryEngine.executeQuery(
+    if (this.controlPlaneSystemTableGateway) {
+      const queryResult = await this.controlPlaneSystemTableGateway.readRows(
+        SYSTEM_TABLE_NAME.NODE_ENDPOINTS,
         SQL_SELECT_ENDPOINT_BY_ID,
         [endpointData.endpointId],
       );
@@ -107,7 +118,7 @@ class EndpointService extends EventEmitter {
       if (endpointData.metadata) {
         updates[COLUMN.METADATA] = JSON.stringify(endpointData.metadata);
       }
-      result = await this.cdcIntegrationService.updateSystemTableRow(
+      result = await this.controlPlaneSystemTableGateway.updateSystemTableRow(
         SYSTEM_TABLE_NAME.NODE_ENDPOINTS,
         {[COLUMN.ENDPOINT_ID]: endpointData.endpointId},
         updates,
@@ -128,7 +139,7 @@ class EndpointService extends EventEmitter {
         [COLUMN.CREATED_AT]: now,
         [COLUMN.UPDATED_AT]: now,
       };
-      result = await this.cdcIntegrationService.insertSystemTableRow(
+      result = await this.controlPlaneSystemTableGateway.insertSystemTableRow(
         SYSTEM_TABLE_NAME.NODE_ENDPOINTS, row,
       );
     }
@@ -153,10 +164,11 @@ class EndpointService extends EventEmitter {
   async removeEndpoint(endpointId) {
     assertCritical(endpointId, ENDPOINT_SVC_ERROR_MSG.MISSING_ENDPOINT_ID);
 
-    const result = await this.cdcIntegrationService.deleteSystemTableRow(
+    const result = await this.controlPlaneSystemTableGateway
+      .deleteSystemTableRow(
       SYSTEM_TABLE_NAME.NODE_ENDPOINTS,
       {[COLUMN.ENDPOINT_ID]: endpointId},
-    );
+      );
 
     this.logger.debug(ENDPOINT_SVC_LOG_MSG.REMOVED, {
       endpointId,
@@ -172,8 +184,9 @@ class EndpointService extends EventEmitter {
    * @return {Promise<Object|null>} Endpoint data or null.
    */
   async getEndpoint(endpointId) {
-    if (this.sqlQueryEngine) {
-      const result = await this.sqlQueryEngine.executeQuery(
+    if (this.controlPlaneSystemTableGateway) {
+      const result = await this.controlPlaneSystemTableGateway.readRows(
+        SYSTEM_TABLE_NAME.NODE_ENDPOINTS,
         SQL_SELECT_ENDPOINT_BY_ID,
         [endpointId],
       );

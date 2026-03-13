@@ -8,6 +8,9 @@ import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {
+  INITIAL_PARTITION_IDS,
+} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {
   COLUMN,
   SERVICE_TYPE,
   SERVICE_STATUS,
@@ -28,31 +31,59 @@ const TEST_NODE_ADDRESS = 'ws://127.0.0.1:9090';
 const TEST_PARTITION_ID = 'partitions-p1';
 const TEST_GROUP_ID = 'mg-1';
 const TEST_LEADER_NODE_ID = 'seed-node';
+const NODES_PARTITION_ID = INITIAL_PARTITION_IDS[TABLES.NODES];
+const NODE_ENDPOINTS_PARTITION_ID = INITIAL_PARTITION_IDS[TABLES.NODE_ENDPOINTS];
+const SERVICES_PARTITION_ID = INITIAL_PARTITION_IDS[TABLES.SERVICES];
 
-const createCacheWithMissingLeaderAddresses = () => {
+const createSeedBootstrapCache = ({
+  missingRequiredPartitionAddress = false,
+  includeMessageGroupLeader = true,
+} = {}) => {
   const tables = {
-    [TABLES.PARTITIONS]: [{
-      [COLUMN.PARTITION_ID]: TEST_PARTITION_ID,
-      [COLUMN.LEADER_NODE_ID]: TEST_LEADER_NODE_ID,
-    }],
+    [TABLES.PARTITIONS]: [
+      {
+        [COLUMN.PARTITION_ID]: NODES_PARTITION_ID,
+        [COLUMN.LEADER_NODE_ID]: TEST_LEADER_NODE_ID,
+      },
+      {
+        [COLUMN.PARTITION_ID]: NODE_ENDPOINTS_PARTITION_ID,
+        [COLUMN.LEADER_NODE_ID]: TEST_LEADER_NODE_ID,
+      },
+      {
+        [COLUMN.PARTITION_ID]: SERVICES_PARTITION_ID,
+        [COLUMN.LEADER_NODE_ID]: TEST_LEADER_NODE_ID,
+      },
+    ],
     [TABLES.MESSAGE_GROUPS]: [{
       [COLUMN.GROUP_ID]: TEST_GROUP_ID,
       [COLUMN.LEADER_NODE_ID]: TEST_LEADER_NODE_ID,
     }],
     [TABLES.SERVICES]: [
       {
-        [COLUMN.SERVICE_ID]: 'svc-partition-leader',
+        [COLUMN.SERVICE_ID]: 'svc-nodes-leader',
         [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
-        [COLUMN.PARTITION_ID]: TEST_PARTITION_ID,
+        [COLUMN.PARTITION_ID]: NODES_PARTITION_ID,
         [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEADER,
         [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
         [COLUMN.NODE_ID]: TEST_LEADER_NODE_ID,
-        [COLUMN.ADDRESS]: null,
+        [COLUMN.ADDRESS]: missingRequiredPartitionAddress ?
+          null :
+          `${TEST_LEADER_NODE_ID}/partition/${NODES_PARTITION_ID}`,
       },
       {
-        [COLUMN.SERVICE_ID]: 'svc-message-group-leader',
-        [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.MESSAGE_GROUP,
-        [COLUMN.GROUP_ID]: TEST_GROUP_ID,
+        [COLUMN.SERVICE_ID]: 'svc-node-endpoints-leader',
+        [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
+        [COLUMN.PARTITION_ID]: NODE_ENDPOINTS_PARTITION_ID,
+        [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEADER,
+        [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+        [COLUMN.NODE_ID]: TEST_LEADER_NODE_ID,
+        [COLUMN.ADDRESS]:
+          `${TEST_LEADER_NODE_ID}/partition/${NODE_ENDPOINTS_PARTITION_ID}`,
+      },
+      {
+        [COLUMN.SERVICE_ID]: 'svc-services-leader',
+        [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
+        [COLUMN.PARTITION_ID]: SERVICES_PARTITION_ID,
         [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEADER,
         [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
         [COLUMN.NODE_ID]: TEST_LEADER_NODE_ID,
@@ -60,6 +91,28 @@ const createCacheWithMissingLeaderAddresses = () => {
       },
     ],
   };
+
+  if (includeMessageGroupLeader) {
+    tables[TABLES.SERVICES].push({
+      [COLUMN.SERVICE_ID]: 'svc-message-group-leader',
+      [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.MESSAGE_GROUP,
+      [COLUMN.GROUP_ID]: TEST_GROUP_ID,
+      [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEADER,
+      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+      [COLUMN.NODE_ID]: TEST_LEADER_NODE_ID,
+      [COLUMN.ADDRESS]: `${TEST_LEADER_NODE_ID}/message-group/${TEST_GROUP_ID}`,
+    });
+  } else {
+    tables[TABLES.SERVICES].push({
+      [COLUMN.SERVICE_ID]: 'svc-message-group-stopped',
+      [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.MESSAGE_GROUP,
+      [COLUMN.GROUP_ID]: TEST_GROUP_ID,
+      [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEADER,
+      [COLUMN.STATUS]: SERVICE_STATUS.STOPPED,
+      [COLUMN.NODE_ID]: TEST_LEADER_NODE_ID,
+      [COLUMN.ADDRESS]: `${TEST_LEADER_NODE_ID}/message-group/${TEST_GROUP_ID}`,
+    });
+  }
 
   return {
     getAll: (tableName) => tables[tableName] || [],
@@ -70,13 +123,16 @@ const createCacheWithMissingLeaderAddresses = () => {
   };
 };
 
-test('BootstrapService readiness waiter blocks when leader addresses are missing', async (t) => {
+test('BootstrapService readiness waiter blocks when required system-table leader addresses are missing', async (t) => {
   const bootstrapService = new BootstrapService({
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
     config: TEST_CONFIG,
   });
-  bootstrapService.systemTableCache = createCacheWithMissingLeaderAddresses();
+  bootstrapService.systemTableCache = createSeedBootstrapCache({
+    missingRequiredPartitionAddress: true,
+    includeMessageGroupLeader: false,
+  });
 
   let error = null;
   try {
@@ -88,14 +144,29 @@ test('BootstrapService readiness waiter blocks when leader addresses are missing
   t.ok(error, 'waiter should timeout instead of passing when addresses are missing');
   t.same(
     error?.missingLeaders?.missingPartitionLeaderAddresses || [],
-    [TEST_PARTITION_ID],
-    'timeout diagnostics should include missing partition leader addresses',
+    [NODES_PARTITION_ID],
+    'timeout diagnostics should include the missing required partition leader address',
   );
   t.same(
     error?.missingLeaders?.missingMessageGroupLeaderAddresses || [],
-    [TEST_GROUP_ID],
-    'timeout diagnostics should include missing message group leader addresses',
+    [],
+    'waiter should ignore message-group activation gaps before seed publication completes',
   );
+});
+
+test('BootstrapService readiness waiter ignores missing message-group leaders before activation', async (t) => {
+  const bootstrapService = new BootstrapService({
+    nodeId: TEST_NODE_ID,
+    nodeAddress: TEST_NODE_ADDRESS,
+    config: TEST_CONFIG,
+  });
+  bootstrapService.systemTableCache = createSeedBootstrapCache({
+    missingRequiredPartitionAddress: false,
+    includeMessageGroupLeader: false,
+  });
+
+  await bootstrapService.waitForSystemServiceLeadersInCache();
+  t.pass('seed bootstrap waiter should only block on required system-table write leaders');
 });
 
 test('NodeJoiningService join waiter allows missing leader_node_id metadata', async (t) => {

@@ -7,10 +7,20 @@
 import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
-import {NUM, SERVICE_STATUS, STATE, STRING, TYPEOF} from '../constants/index.js';
+import {
+  NUM,
+  SERVICE_STATUS,
+  STATE,
+  STRING,
+  TABLES,
+  TYPEOF,
+} from '../constants/index.js';
 import {emitInvariant} from '../invariants/invariant-emitter.js';
 import {INVARIANT_ID} from '../invariants/invariant-catalog.js';
 import {assertCritical} from '../utils/assert.js';
+import {
+  ControlPlaneSystemTableGateway,
+} from './control-plane-system-table-gateway.js';
 import {
   LEASE_CONFIG_KEY,
   LEASE_DEFAULT_OPTIONS,
@@ -44,6 +54,12 @@ class LeaseService extends EventEmitter {
     this.nodeLeaseOwner = options.nodeLeaseOwner || null;
     this.systemTableCache = options.systemTableCache;
     this.sqlQueryEngine = options.sqlQueryEngine;
+    this.controlPlaneSystemTableGateway =
+      options.controlPlaneSystemTableGateway ||
+      new ControlPlaneSystemTableGateway({
+        nodeId: this.nodeId,
+        sqlQueryEngine: this.sqlQueryEngine,
+      });
     this.messageGroupServices =
       options.messageGroupServices ?? createDefaultMessageGroupServices();
     this.now = typeof options.now === TYPEOF.FUNCTION ?
@@ -159,8 +175,9 @@ class LeaseService extends EventEmitter {
 
     const now = this.now();
     let nodes = [];
-    if (this.sqlQueryEngine) {
-      const result = await this.sqlQueryEngine.executeQuery(
+    if (this.controlPlaneSystemTableGateway) {
+      const result = await this.controlPlaneSystemTableGateway.readRows(
+        TABLES.NODES,
         LEASE_SQL.SELECT_ALL_NODES,
         LEASE_EMPTY_QUERY_PARAMS,
       );

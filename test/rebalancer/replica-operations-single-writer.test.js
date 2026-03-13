@@ -53,6 +53,7 @@ import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {
   REBALANCE_COORDINATOR_EVENT,
+  REBALANCER_SKIP_REASON,
 } from '../../src/rebalancer/rebalancer-constants.js';
 import {DurableWorkflowCoordinator} from
   '../../src/workflow/durable-workflow-coordinator.js';
@@ -133,6 +134,7 @@ function createTestCoordinator(options = {}) {
   const {
     operation = null,
     persistResults = {success: true, rows: [], affectedRows: 1},
+    messageRouter = null,
   } = options;
 
   const emitter = new ExecutorOutcomeEmitter({logger: console});
@@ -150,7 +152,7 @@ function createTestCoordinator(options = {}) {
         return {minReplicaCount: 1};
       },
     },
-    messageRouter: {
+    messageRouter: messageRouter || {
       async deliver() {
         return {acknowledged: true, status: 'initiated'};
       },
@@ -354,5 +356,61 @@ async (t) => {
     claimed,
     null,
     'claim must return null during shutdown',
+  );
+});
+
+test('dispatchOperation shares the owner-key execution with ' +
+  'concurrent inline executeOperation calls',
+async (t) => {
+  const operation = buildTestOperation({
+    workflowStep: WORKFLOW_STEP.PENDING,
+  });
+  let releaseDispatch = null;
+  let dispatchStartedResolve = null;
+  const dispatchStarted = new Promise((resolve) => {
+    dispatchStartedResolve = resolve;
+  });
+
+  const {coordinator, persisted} = createTestCoordinator({
+    operation,
+    messageRouter: {
+      async deliver() {
+        dispatchStartedResolve();
+        await new Promise((resolve) => {
+          releaseDispatch = resolve;
+        });
+        return {acknowledged: true, status: 'initiated'};
+      },
+    },
+  });
+
+  const queuedDispatchPromise = coordinator.dispatchOperation(
+    TEST_OPERATION_ID,
+  );
+  await dispatchStarted;
+
+  const inlineResult = await coordinator.executeOperation(operation);
+  t.same(
+    inlineResult,
+    {
+      success: false,
+      skipped: true,
+      reason: REBALANCER_SKIP_REASON.OPERATION_ALREADY_EXECUTING,
+      operationId: TEST_OPERATION_ID,
+    },
+    'concurrent inline execution should observe the shared owner-key lock',
+  );
+
+  releaseDispatch();
+  const dispatchResult = await queuedDispatchPromise;
+  t.equal(
+    dispatchResult?.success,
+    true,
+    'queued dispatch should complete successfully',
+  );
+  t.equal(
+    persisted.length,
+    2,
+    'dispatch owner path should persist each step transition only once',
   );
 });

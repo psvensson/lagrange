@@ -30,6 +30,7 @@ import {
 import {
   JOINING_ERROR_MSG,
   JOINING_LOG_MSG,
+  JOIN_BACKFILL_SCOPE,
   JOINING_UNIFIED_RECONCILE,
 } from '../node-joining-constants.js';
 import {
@@ -40,7 +41,6 @@ import {
   SERVICE_STATUS,
   STATE,
   TABLES,
-  TIME_MS,
   TRANSPORT_TYPE,
   TYPEOF,
 } from '../../constants/index.js';
@@ -67,6 +67,16 @@ const LOG_META_ENDPOINT_REGISTER_FAILED =
   'Failed to register built-in meta service endpoints';
 const LOG_NODE_REGISTER_ERROR_PREFIX =
   'Failed to register node: ';
+const LOG_BLOCKING_BACKFILL_START =
+  'Starting blocking join backfill for discovery-critical propagated tables';
+const LOG_BLOCKING_BACKFILL_COMPLETE =
+  'Completed blocking join backfill for discovery-critical propagated tables';
+const LOG_BLOCKING_BACKFILL_FAILED =
+  'Blocking join backfill failed for discovery-critical propagated tables';
+const LOG_OPPORTUNISTIC_BACKFILL_COMPLETE =
+  'Completed opportunistic join backfill for non-critical propagated tables';
+const LOG_OPPORTUNISTIC_BACKFILL_FAILED =
+  'Opportunistic join backfill failed for non-critical propagated tables';
 
 /**
  * Handles the query-system-state phase of the join process.
@@ -83,6 +93,7 @@ class QuerySystemStatePhase {
     this.nodeId = options.nodeId;
     this.nodeAddress = options.nodeAddress;
     this.delegates = options.delegates || {};
+    this.opportunisticBackfillPromise = null;
   }
 
   /**
@@ -180,7 +191,7 @@ class QuerySystemStatePhase {
         systemTableCache,
       );
 
-      // Register this node in the cluster's nodes table
+      // Publish canonical node admission through the control-plane owner path.
       await this.delegates.registerNodeInCluster();
 
       // Persist CREATE_SELF_HOSTED message-group metadata.
@@ -209,8 +220,7 @@ class QuerySystemStatePhase {
         },
         cdcReadinessTimeoutMs,
       );
-      await this.delegates
-        .backfillPropagatedCacheTablesFromAuthoritativeState();
+      await this.backfillBlockingDiscoveryTables();
 
       // Hand hydrated desired/actual state to unified reconciler.
       await this.delegates.triggerJoinReconciler(
@@ -237,6 +247,90 @@ class QuerySystemStatePhase {
     logger.info(JOINING_LOG_MSG.STATE_QUERY_COMPLETE, {
       nodeId: this.nodeId,
     });
+  }
+
+  /**
+   * Backfill discovery-critical propagated tables as part of the blocking
+   * join path.
+   * @return {Promise<void>}
+   * @private
+   */
+  async backfillBlockingDiscoveryTables() {
+    const logger = this.delegates.getLogger();
+    const tables = JOIN_BACKFILL_SCOPE.BLOCKING_TABLES;
+
+    logger.info(LOG_BLOCKING_BACKFILL_START, {
+      nodeId: this.nodeId,
+      tableCount: tables.length,
+      tableNames: tables,
+    });
+
+    try {
+      await this.delegates
+        .backfillPropagatedCacheTablesFromAuthoritativeState(
+          tables,
+        );
+      logger.info(LOG_BLOCKING_BACKFILL_COMPLETE, {
+        nodeId: this.nodeId,
+        tableCount: tables.length,
+        tableNames: tables,
+      });
+    } catch (error) {
+      logger.error(LOG_BLOCKING_BACKFILL_FAILED, {
+        nodeId: this.nodeId,
+        tableCount: tables.length,
+        tableNames: tables,
+        error: error.message,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Start best-effort backfill for non-critical propagated tables.
+   * Failures are logged but do not abort the join-critical path.
+   * @return {Promise<void>|null}
+   * @private
+   */
+  startJoinOpportunisticBackfill() {
+    if (this.opportunisticBackfillPromise) {
+      return this.opportunisticBackfillPromise;
+    }
+
+    const tables = JOIN_BACKFILL_SCOPE.OPPORTUNISTIC_TABLES;
+    if (!Array.isArray(tables) || tables.length === NUM.ZERO) {
+      return null;
+    }
+
+    const logger = this.delegates.getLogger();
+    const promise = Promise.resolve(
+      this.delegates.backfillPropagatedCacheTablesFromAuthoritativeState(
+        tables,
+      ),
+    )
+      .then(() => {
+        logger.info(LOG_OPPORTUNISTIC_BACKFILL_COMPLETE, {
+          nodeId: this.nodeId,
+          tableCount: tables.length,
+          tableNames: tables,
+        });
+      })
+      .catch((error) => {
+        logger.warn(LOG_OPPORTUNISTIC_BACKFILL_FAILED, {
+          nodeId: this.nodeId,
+          tableCount: tables.length,
+          tableNames: tables,
+          error: error.message,
+        });
+      })
+      .finally(() => {
+        if (this.opportunisticBackfillPromise === promise) {
+          this.opportunisticBackfillPromise = null;
+        }
+      });
+
+    this.opportunisticBackfillPromise = promise;
+    return promise;
   }
 
   /**
@@ -453,8 +547,6 @@ class QuerySystemStatePhase {
       [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
       [COLUMN.CAPABILITIES]: JSON.stringify([]),
       [COLUMN.LAST_HEARTBEAT]: now,
-      [COLUMN.READY_LEASE_EXPIRES_AT]:
-        now + TIME_MS.CONTROL_PLANE_READY_LEASE,
       [COLUMN.CREATED_AT]: now,
     };
 
@@ -462,13 +554,27 @@ class QuerySystemStatePhase {
       const budgetService =
         this.delegates.getNodeStorageBudgetService();
       const {budgetRow, resolution} =
-        await NodeStorageBudgetSetup.resolveAndPersist({
+        await NodeStorageBudgetSetup.resolveWithoutPersist({
           budgetService,
           nodeRow: nodeData,
           nodeId: this.nodeId,
-          upsertOptions: joinTimeUpsertOptions,
         });
-      this.seedJoinTimeCacheRow(TABLES.NODES, budgetRow);
+      await this.delegates.sendControlPlaneNodeStateUpdate({
+        state: STATE.CONNECTED,
+        capabilities: this.delegates.getNodeCapabilities(),
+        heartbeatAt: now,
+        nodeRow: budgetRow,
+      });
+      if (typeof this.delegates.setJoinMembershipPublished ===
+        TYPEOF.FUNCTION) {
+        this.delegates.setJoinMembershipPublished(true);
+      }
+      this.seedJoinTimeCacheRow(TABLES.NODES, {
+        ...budgetRow,
+        [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
+        [COLUMN.LAST_HEARTBEAT]: now,
+        [COLUMN.READY_LEASE_EXPIRES_AT]: null,
+      });
 
       logger.info(LOG_NODE_REGISTERED, {
         nodeId: this.nodeId,
@@ -495,10 +601,34 @@ class QuerySystemStatePhase {
           metaEndpointRow,
         );
       }
+      if (
+        typeof this.delegates.setMessageGroupServiceEndpointsPublished ===
+        TYPEOF.FUNCTION
+      ) {
+        this.delegates.setMessageGroupServiceEndpointsPublished(true);
+      }
     } catch (error) {
       const wrappedError = new Error(
         `${LOG_NODE_REGISTER_ERROR_PREFIX}${error.message}`,
       );
+      wrappedError.cause = error;
+      if (typeof error?.code === TYPEOF.STRING &&
+        error.code.length > NUM.ZERO) {
+        wrappedError.code = error.code;
+      } else if (typeof error?.errorCode === TYPEOF.STRING &&
+        error.errorCode.length > NUM.ZERO) {
+        wrappedError.code = error.errorCode;
+      }
+      if (Number.isFinite(error?.retryAfterMs)) {
+        wrappedError.retryAfterMs = Math.floor(error.retryAfterMs);
+      }
+      if (error?.retryable === false) {
+        wrappedError.retryable = false;
+      }
+      if (error?.publicationDiagnostics &&
+        typeof error.publicationDiagnostics === TYPEOF.OBJECT) {
+        wrappedError.publicationDiagnostics = error.publicationDiagnostics;
+      }
       logger.error(LOG_NODE_REGISTER_FAILED, {
         nodeId: this.nodeId,
         error: wrappedError.message,

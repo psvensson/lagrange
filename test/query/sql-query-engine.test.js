@@ -6,7 +6,22 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
-import {TABLES} from '../../src/constants/index.js';
+import {
+  QUERY_ROUTING_DIAGNOSTIC_REASON,
+} from '../../src/query/query-constants.js';
+import {
+  COLUMN,
+  SERVICE_STATUS,
+  SERVICE_TYPE,
+  STATE,
+  TABLES,
+} from '../../src/constants/index.js';
+import {
+  CONTROL_PLANE_PUBLICATION_MODE,
+} from '../../src/control-plane/control-plane-readiness-constants.js';
+import {
+  ControlPlaneReadinessService,
+} from '../../src/control-plane/control-plane-readiness-service.js';
 import {
   PARTITION_TRANSITION_METADATA_FIELD,
   PARTITION_TRANSITION_STATE,
@@ -58,7 +73,8 @@ function createMockSystemCache(tables, partitions, services, nodes = []) {
     status: 'active',
   }));
   const resolvedPartitions = partitions.map((partition) => {
-    if (partition.leader_node_id || partition.leaderNodeId) {
+    if (Object.prototype.hasOwnProperty.call(partition, 'leader_node_id') ||
+        Object.prototype.hasOwnProperty.call(partition, 'leaderNodeId')) {
       return partition;
     }
     const leaderService = resolvedServices.find((service) =>
@@ -79,6 +95,9 @@ function createMockSystemCache(tables, partitions, services, nodes = []) {
     get: function(type, key) {
       if (type === 'tables') {
         return this.tables.find((t) => t.table_name === key);
+      }
+      if (type === 'nodes') {
+        return nodes.find((node) => node[COLUMN.NODE_ID] === key) || null;
       }
       return null;
     },
@@ -130,6 +149,69 @@ function createAdmittedSplitAdmissionService() {
     },
   };
 }
+
+test('SQLQueryEngine - seeds bootstrap routing overlay snapshots for ' +
+  'system-table partition lookup during restart cache gaps', async (t) => {
+  const cache = createMockSystemCache([], [], [], []);
+  const engine = new SQLQueryEngine({
+    systemCache: cache,
+    messageRouter: createMockMessageRouter(),
+    nodeId: 'join-node',
+  });
+
+  const seededCount = engine.seedBootstrapRoutingOverlayFromSnapshots({
+    [TABLES.PARTITIONS]: [
+      {
+        partition_id: 'nodes-p1',
+        table_name: TABLES.NODES,
+        created_at: 1,
+        updated_at: 1,
+      },
+      {
+        partition_id: 'users-p1',
+        table_name: 'users',
+        created_at: 1,
+        updated_at: 1,
+      },
+    ],
+    [TABLES.SERVICES]: [
+      {
+        service_id: 'nodes-p1-r1',
+        service_type: SERVICE_TYPE.PARTITION,
+        partition_id: 'nodes-p1',
+        node_id: 'seed-node',
+        raft_role: 'leader',
+        address: 'seed-node/partition/nodes-p1-r1',
+        status: SERVICE_STATUS.ACTIVE,
+      },
+      {
+        service_id: 'users-p1-r1',
+        service_type: SERVICE_TYPE.PARTITION,
+        partition_id: 'users-p1',
+        node_id: 'seed-node',
+        raft_role: 'leader',
+        address: 'seed-node/partition/users-p1-r1',
+        status: SERVICE_STATUS.ACTIVE,
+      },
+    ],
+  });
+
+  t.equal(seededCount, 1, 'should seed overlay only for system-table partitions');
+
+  const partitions = engine.getTablePartitions(TABLES.NODES);
+  t.equal(partitions.length, 1,
+    'system-table partition lookup should use bootstrap overlay when cache is empty');
+  t.equal(partitions[0].partition_id, 'nodes-p1',
+    'overlay partition should preserve canonical partition id');
+  t.equal(partitions[0].leader_node_id, 'seed-node',
+    'overlay partition should expose the canonical leader node');
+
+  const services = engine.queryExecutor.getRoutablePartitionServices('nodes-p1');
+  t.equal(services.length, 1,
+    'query executor should see routable services from the same overlay owner path');
+  t.equal(services[0].address, 'seed-node/partition/nodes-p1-r1',
+    'overlay service should remain routable during the cache gap');
+});
 
 test('SQLQueryEngine - executes SELECT query', async (t) => {
   // Set up mock partition data
@@ -1132,6 +1214,79 @@ test('SQLQueryEngine - distributed diagnostics schema is stable for SELECT',
     ]);
 
     mockPartitionData.clear();
+  });
+
+test('SQLQueryEngine - transactional UPDATE forwards sessionId to distributed writes',
+  async (t) => {
+    const cache = createMockSystemCache(
+      [{table_name: 'users', primaryKey: 'id'}],
+      [{
+        partition_id: 'p1',
+        table_name: 'users',
+        partition_key_start: null,
+        partition_key_end: null,
+      }],
+    );
+    const capturedExecutionOptions = [];
+    const transactionCoordinator = {
+      getTransaction(sessionId) {
+        if (sessionId === 'tx-update-1') {
+          return {participants: []};
+        }
+        return null;
+      },
+      async enlistParticipants() {
+        return {success: true};
+      },
+      async recordWriteOperation() {},
+      async markWriteOperationResult() {},
+    };
+    const distributedWriteCoordinator = {
+      createWritePlan(_ast, _params, options = {}) {
+        const operationId = `write-${options.sessionId || 'missing'}`;
+        return {
+          operationId,
+          idempotencyKey: operationId,
+          statementType: 'UPDATE',
+          partitionStatements: new Map([
+            ['p1', {
+              ast: {type: 'UPDATE', table: 'users'},
+              role: 'primary',
+              executionOptions: {},
+            }],
+          ]),
+        };
+      },
+      async executePlan(_plan, _params, executionOptions = {}) {
+        capturedExecutionOptions.push({...executionOptions});
+        return {
+          success: true,
+          affectedRows: 1,
+          rows: [],
+          retryCount: 0,
+        };
+      },
+    };
+
+    const engine = new SQLQueryEngine({
+      systemCache: cache,
+      messageRouter: createMockMessageRouter(),
+      transactionCoordinator,
+      distributedWriteCoordinator,
+    });
+
+    const result = await engine.executeQuery(
+      'UPDATE users SET status = \'active\' WHERE id = \'alice\'',
+      [],
+      {sessionId: 'tx-update-1'},
+    );
+
+    t.equal(result.success, true, 'transactional update should succeed');
+    t.equal(
+      capturedExecutionOptions[0]?.sessionId,
+      'tx-update-1',
+      'transactional writes should forward the SQL session id',
+    );
   });
 
 test('SQLQueryEngine - remains correct before and after partition split updates',
@@ -2241,6 +2396,135 @@ test('SQLQueryEngine - provisionInitialTablePartition waits for created ' +
   }
 });
 
+test('SQLQueryEngine - provisionInitialTablePartition only waits for service ' +
+  'row visibility before final full-cohort routing checks', async (t) => {
+  const partitionId = 'tbl-service-visibility-owner-boundary-p1';
+  const localNodeId = 'node-a';
+  const targetNodeIds = [localNodeId, 'node-b', 'node-c'];
+  const services = [];
+  const waitCalls = [];
+  const replicaIdByNodeId = {
+    'node-a': `${partitionId}-r1`,
+    'node-b': `${partitionId}-r2`,
+    'node-c': `${partitionId}-r3`,
+  };
+  const nodeIdByReplicaId = Object.fromEntries(
+    Object.entries(replicaIdByNodeId).map(([nodeId, replicaId]) =>
+      [replicaId, nodeId],
+    ),
+  );
+
+  const cache = {
+    onCacheChange() {},
+    offCacheChange() {},
+    get(type, key) {
+      if (type === TABLES.SERVICES) {
+        return services.find((row) => row.service_id === key) || null;
+      }
+      return null;
+    },
+    filter(type, predicate) {
+      if (type === TABLES.SERVICES) {
+        return services.filter(predicate);
+      }
+      return [];
+    },
+    getAll(type) {
+      if (type === TABLES.SERVICES) {
+        return services;
+      }
+      return [];
+    },
+  };
+
+  const rebalanceCoordinator = {
+    async createOperation(move) {
+      return {
+        operationId: `op-${move.nodeId}`,
+        replicaId: replicaIdByNodeId[move.nodeId],
+        ...move,
+      };
+    },
+    async executeOperation() {
+      return {success: true};
+    },
+  };
+
+  const engine = new SQLQueryEngine({
+    nodeId: localNodeId,
+    systemCache: cache,
+    messageRouter: createMockMessageRouter(),
+    rebalanceCoordinator,
+    cdcIntegrationService: {
+      async waitForCacheUpdate(tableName, key, expectPresent, options = {}) {
+        waitCalls.push({tableName, key, expectPresent, options});
+        if (tableName !== TABLES.SERVICES || expectPresent !== true) {
+          return;
+        }
+        if (!services.some((row) => row.service_id === key)) {
+          services.push({
+            service_id: key,
+            replica_id: key,
+            partition_id: partitionId,
+            service_type: 'partition',
+            status: 'active',
+            node_id: nodeIdByReplicaId[key],
+            address: `${nodeIdByReplicaId[key]}/partition/${key}`,
+          });
+        }
+      },
+    },
+    tablePartitionProvisioningTimeoutMs: 30,
+    tablePartitionProvisioningPollIntervalMs: 1,
+  });
+  engine.queryExecutor.isRoutablePartitionService = (service) =>
+    service?.node_id !== localNodeId;
+  engine.waitForCondition = async () => {
+    throw new Error('per-replica routability wait should not run');
+  };
+  engine.waitForRoutablePartitionServiceCount = async () => {};
+  engine.waitForPartitionLeaderService = async () => {};
+
+  await t.resolves(
+    engine.provisionInitialTablePartition({
+      partitionId,
+      replicaCount: 3,
+      targetNodeIds,
+    }),
+    'full-cohort bootstrap should defer routability to the final cohort wait',
+  );
+
+  t.same(
+    waitCalls.map((call) => ({
+      tableName: call.tableName,
+      key: call.key,
+      expectPresent: call.expectPresent,
+      expectedFields: call.options?.expectedFields || null,
+    })),
+    [
+      {
+        tableName: TABLES.SERVICES,
+        key: replicaIdByNodeId['node-a'],
+        expectPresent: true,
+        expectedFields: null,
+      },
+      {
+        tableName: TABLES.SERVICES,
+        key: replicaIdByNodeId['node-b'],
+        expectPresent: true,
+        expectedFields: null,
+      },
+      {
+        tableName: TABLES.SERVICES,
+        key: replicaIdByNodeId['node-c'],
+        expectPresent: true,
+        expectedFields: null,
+      },
+    ],
+    'per-replica waits should only hydrate service rows before the later routing owners run',
+  );
+});
+
 test('SQLQueryEngine - provisionInitialTablePartition dispatches full initial ' +
   'replica set before per-replica cache waits consume timeout budget', async (t) => {
   const partitionId = 'tbl-provision-dispatch-order-p1';
@@ -2372,6 +2656,141 @@ test('SQLQueryEngine - provisionInitialTablePartition dispatches full initial ' 
     cacheWaitCalls.length,
     2,
     'each replica should still wait for authoritative service-row visibility',
+  );
+});
+
+test('SQLQueryEngine - provisionInitialTablePartition suppresses duplicate ' +
+  'coordinator-created dispatch when executing planned replicas inline',
+async (t) => {
+  const tableId = 'tbl-inline-provision-dispatch';
+  const partitionId = 'tbl-inline-provision-dispatch-p1';
+  const localNodeId = 'node-a';
+  const nodes = [
+    {node_id: localNodeId, status: 'active'},
+  ];
+  const tables = [{table_id: tableId, table_name: 'users_inline_dispatch'}];
+  const partitions = [{
+    partition_id: partitionId,
+    table_id: tableId,
+    leader_node_id: null,
+    created_at: 100,
+    updated_at: 100,
+  }];
+  const services = [];
+  const createOperationFlags = [];
+  const executedInlineFlags = [];
+
+  const cache = {
+    onCacheChange() {},
+    offCacheChange() {},
+    has(type, key) {
+      if (type === TABLES.TABLES) {
+        return tables.some((row) => row.table_id === key);
+      }
+      if (type === TABLES.PARTITIONS) {
+        return partitions.some((row) => row.partition_id === key);
+      }
+      return false;
+    },
+    get(type, key) {
+      if (type !== TABLES.TABLES) {
+        return null;
+      }
+      return tables.find((row) =>
+        row.table_id === key || row.table_name === key,
+      ) || null;
+    },
+    filter(type, predicate) {
+      if (type === TABLES.NODES) {
+        return nodes.filter(predicate);
+      }
+      if (type === TABLES.TABLES) {
+        return tables.filter(predicate);
+      }
+      if (type === TABLES.PARTITIONS) {
+        return partitions.filter(predicate);
+      }
+      if (type === TABLES.SERVICES) {
+        return services.filter(predicate);
+      }
+      return [];
+    },
+    getAll(type) {
+      if (type === TABLES.NODES) {
+        return nodes;
+      }
+      if (type === TABLES.TABLES) {
+        return tables;
+      }
+      if (type === TABLES.PARTITIONS) {
+        return partitions;
+      }
+      if (type === TABLES.SERVICES) {
+        return services;
+      }
+      return [];
+    },
+  };
+
+  const rebalanceCoordinator = {
+    async createOperation(move) {
+      createOperationFlags.push(move.emitOperationCreated === false);
+      return {
+        operationId: `op-${move.nodeId}`,
+        replicaId: `${partitionId}-r1`,
+        targetNodeId: move.nodeId,
+        emitOperationCreated: move.emitOperationCreated !== false,
+        ...move,
+      };
+    },
+    async executeOperation(operation) {
+      executedInlineFlags.push(operation.emitOperationCreated === false);
+      if (operation.emitOperationCreated !== false) {
+        return {
+          success: false,
+          error: 'Transaction already active on this partition',
+        };
+      }
+      services.push({
+        service_id: operation.replicaId,
+        replica_id: operation.replicaId,
+        partition_id: operation.partitionId,
+        service_type: 'partition',
+        status: 'active',
+        node_id: operation.targetNodeId || operation.nodeId,
+        raft_role: 'leader',
+        address: `${operation.targetNodeId || operation.nodeId}/partition/${operation.replicaId}`,
+      });
+      return {success: true};
+    },
+  };
+
+  const engine = new SQLQueryEngine({
+    nodeId: localNodeId,
+    systemCache: cache,
+    messageRouter: createMockMessageRouter(),
+    rebalanceCoordinator,
+    tablePartitionProvisioningTimeoutMs: 200,
+    tablePartitionProvisioningPollIntervalMs: 5,
+  });
+  engine.waitForRoutablePartitionServiceCount = async () => {};
+  engine.waitForPartitionLeaderService = async () => {};
+
+  await engine.provisionInitialTablePartition({
+    tableId,
+    partitionId,
+    replicaCount: 1,
+  });
+
+  t.same(
+    createOperationFlags,
+    [true],
+    'inline provisioning should suppress the coordinator-created dispatch event',
+  );
+  t.same(
+    executedInlineFlags,
+    [true],
+    'inline provisioning should execute replicas with duplicate dispatch suppressed',
   );
 });
 
@@ -2868,6 +3287,329 @@ test('SQLQueryEngine - provisionInitialTablePartition downscales when ' +
     failedOperationIds,
     [],
     'successful provisional operations should not be failed when degraded bootstrap can continue',
+  );
+});
+
+test('SQLQueryEngine - provisionInitialTablePartition preserves a quorum ' +
+  'floor when convergence timing leaves only one RF3 target provisionable',
+async (t) => {
+  const partitionId = 'tbl-admission-quorum-floor-timeout-p1';
+  const localNodeId = 'node-a';
+  const checkedTargetNodeIds = [];
+  const createdTargetNodeIds = [];
+  const nodes = [
+    {node_id: localNodeId, status: 'active'},
+    {node_id: 'node-b', status: 'active'},
+    {node_id: 'node-c', status: 'active'},
+  ];
+
+  const cache = {
+    onCacheChange() {},
+    offCacheChange() {},
+    filter(type, predicate) {
+      if (type === TABLES.NODES) {
+        return nodes.filter(predicate);
+      }
+      return [];
+    },
+    getAll(type) {
+      if (type === TABLES.NODES) {
+        return nodes;
+      }
+      return [];
+    },
+  };
+
+  const rebalanceCoordinator = {
+    async checkProvisioningAdmission(move) {
+      checkedTargetNodeIds.push(move.nodeId);
+      const allowed = move.nodeId === localNodeId;
+      return {
+        allowed,
+        decisionType: allowed ? 'admitted' : 'deferred',
+        admissionResult: {
+          allowed,
+          decisionType: allowed ? 'admitted' : 'deferred',
+          ...(allowed ? {} : {
+            blockingReasons: ['storage_budget_unavailable'],
+            ineligibleNodes: [{
+              nodeId: move.nodeId,
+              failedDimensions: ['storageBudgetAvailable'],
+              reasonCodes: ['storage_budget_unavailable'],
+            }],
+          }),
+        },
+      };
+    },
+    async createOperation(move) {
+      createdTargetNodeIds.push(move.nodeId);
+      return {
+        operationId: `op-${move.nodeId}`,
+        createdAt: Date.now(),
+        ...move,
+      };
+    },
+    async executeOperation() {
+      throw new Error('executeOperation should not be called');
+    },
+  };
+
+  const engine = new SQLQueryEngine({
+    nodeId: localNodeId,
+    systemCache: cache,
+    messageRouter: createMockMessageRouter(),
+    rebalanceCoordinator,
+    tablePartitionTargetNodeConvergenceTimeoutMs: 1,
+    tablePartitionProvisioningPollIntervalMs: 1,
+  });
+  engine.waitForRoutablePartitionServiceCount = async () => {};
+  engine.waitForPartitionLeaderService = async () => {};
+
+  await t.rejects(
+    engine.provisionInitialTablePartition({
+      partitionId,
+      replicaCount: 3,
+    }),
+    /Unable to satisfy minimum routable provisioning cohort/,
+  );
+
+  t.same(
+    uniqueNodeIds(checkedTargetNodeIds),
+    [localNodeId, 'node-b', 'node-c'],
+    'admission convergence should still probe the full RF3 cohort',
+  );
+  t.same(
+    createdTargetNodeIds,
+    [],
+    'initial provisioning should not silently downscale to a single replica after convergence timeout',
+  );
+});
+
+test('SQLQueryEngine - provisionInitialTablePartition downscales RF3 ' +
+  'create-phase shortfall only to quorum, not to one replica', async (t) => {
+  const partitionId = 'tbl-admission-race-quorum-floor-p1';
+  const localNodeId = 'node-a';
+  const checkedTargetNodeIds = [];
+  const createdTargetNodeIds = [];
+  const executedTargetNodeIds = [];
+  const failedOperationIds = [];
+  const nodes = [
+    {node_id: localNodeId, status: 'active'},
+    {node_id: 'node-b', status: 'active'},
+    {node_id: 'node-c', status: 'active'},
+  ];
+  const services = [];
+
+  const cache = {
+    filter(type, predicate) {
+      if (type === TABLES.NODES) {
+        return nodes.filter(predicate);
+      }
+      if (type === TABLES.SERVICES) {
+        return services.filter(predicate);
+      }
+      return [];
+    },
+    getAll(type) {
+      if (type === TABLES.NODES) {
+        return nodes;
+      }
+      if (type === TABLES.SERVICES) {
+        return services;
+      }
+      return [];
+    },
+  };
+
+  const rebalanceCoordinator = {
+    async checkProvisioningAdmission(move) {
+      checkedTargetNodeIds.push(move.nodeId);
+      return {
+        allowed: true,
+        decisionType: 'admitted',
+        admissionResult: {
+          allowed: true,
+          decisionType: 'admitted',
+        },
+      };
+    },
+    async createOperation(move) {
+      createdTargetNodeIds.push(move.nodeId);
+      if (move.nodeId === 'node-c') {
+        const error = new Error(`Provisioning admission denied on ${move.nodeId}`);
+        error.admissionResult = {
+          allowed: false,
+          decisionType: 'deferred',
+          blockingReasons: ['control_plane_write_unhealthy'],
+          ineligibleNodes: [{
+            nodeId: move.nodeId,
+            failedDimensions: ['controlPlaneWritable'],
+            reasonCodes: ['control_plane_write_unhealthy'],
+          }],
+        };
+        throw error;
+      }
+      return {
+        operationId: `op-${move.nodeId}`,
+        createdAt: Date.now(),
+        ...move,
+      };
+    },
+    async failOperation(operation) {
+      failedOperationIds.push(operation.operationId);
+    },
+    async executeOperation(operation) {
+      const targetNodeId = operation.targetNodeId || operation.nodeId;
+      executedTargetNodeIds.push(targetNodeId);
+      services.push({
+        partition_id: operation.partitionId,
+        service_type: 'partition',
+        status: 'active',
+        node_id: targetNodeId,
+        raft_role: targetNodeId === localNodeId ? 'leader' : 'follower',
+        address: `${targetNodeId}/partition/${operation.partitionId}`,
+      });
+      return {success: true};
+    },
+  };
+
+  const engine = new SQLQueryEngine({
+    nodeId: localNodeId,
+    systemCache: cache,
+    messageRouter: createMockMessageRouter(),
+    rebalanceCoordinator,
+  });
+  engine.waitForRoutablePartitionServiceCount = async () => {};
+  engine.waitForPartitionLeaderService = async () => {};
+
+  await engine.provisionInitialTablePartition({
+    partitionId,
+    replicaCount: 3,
+  });
+
+  t.same(
+    uniqueNodeIds(checkedTargetNodeIds),
+    [localNodeId, 'node-b', 'node-c'],
+    'admission probe should still evaluate the full RF3 cohort first',
+  );
+  t.same(
+    createdTargetNodeIds,
+    [localNodeId, 'node-b', 'node-c'],
+    'create phase should still attempt all admitted RF3 targets until shortfall is known',
+  );
+  t.same(
+    executedTargetNodeIds,
+    [localNodeId, 'node-b'],
+    'RF3 provisioning may degrade to the two-node quorum cohort',
+  );
+  t.same(
+    failedOperationIds,
+    [],
+    'successful quorum-sized provisional operations should remain active',
+  );
+});
+
+test('SQLQueryEngine - provisionInitialTablePartition rejects RF3 ' +
+  'create-phase shortfall below quorum', async (t) => {
+  const partitionId = 'tbl-admission-race-below-quorum-p1';
+  const localNodeId = 'node-a';
+  const checkedTargetNodeIds = [];
+  const createdTargetNodeIds = [];
+  const failedOperationIds = [];
+  const nodes = [
+    {node_id: localNodeId, status: 'active'},
+    {node_id: 'node-b', status: 'active'},
+    {node_id: 'node-c', status: 'active'},
+  ];
+
+  const cache = {
+    filter(type, predicate) {
+      if (type === TABLES.NODES) {
+        return nodes.filter(predicate);
+      }
+      return [];
+    },
+    getAll(type) {
+      if (type === TABLES.NODES) {
+        return nodes;
+      }
+      return [];
+    },
+  };
+
+  const rebalanceCoordinator = {
+    async checkProvisioningAdmission(move) {
+      checkedTargetNodeIds.push(move.nodeId);
+      return {
+        allowed: true,
+        decisionType: 'admitted',
+        admissionResult: {
+          allowed: true,
+          decisionType: 'admitted',
+        },
+      };
+    },
+    async createOperation(move) {
+      createdTargetNodeIds.push(move.nodeId);
+      if (move.nodeId !== localNodeId) {
+        const error = new Error(`Provisioning admission denied on ${move.nodeId}`);
+        error.admissionResult = {
+          allowed: false,
+          decisionType: 'deferred',
+          blockingReasons: ['storage_budget_unavailable'],
+          ineligibleNodes: [{
+            nodeId: move.nodeId,
+            failedDimensions: ['storageBudgetAvailable'],
+            reasonCodes: ['storage_budget_unavailable'],
+          }],
+        };
+        throw error;
+      }
+      return {
+        operationId: `op-${move.nodeId}`,
+        createdAt: Date.now(),
+        ...move,
+      };
+    },
+    async failOperation(operation) {
+      failedOperationIds.push(operation.operationId);
+    },
+    async executeOperation() {
+      throw new Error('executeOperation should not be called');
+    },
+  };
+
+  const engine = new SQLQueryEngine({
+    nodeId: localNodeId,
+    systemCache: cache,
+    messageRouter: createMockMessageRouter(),
+    rebalanceCoordinator,
+  });
+  engine.waitForRoutablePartitionServiceCount = async () => {};
+  engine.waitForPartitionLeaderService = async () => {};
+
+  await t.rejects(
+    engine.provisionInitialTablePartition({
+      partitionId,
+      replicaCount: 3,
+    }),
+    /Unable to satisfy minimum routable provisioning cohort/,
+  );
+
+  t.same(
+    uniqueNodeIds(checkedTargetNodeIds),
+    [localNodeId, 'node-b', 'node-c'],
+    'admission probe should still evaluate all RF3 targets',
+  );
+  t.same(
+    createdTargetNodeIds,
+    [localNodeId, 'node-b', 'node-c'],
+    'create phase should discover the shortfall before failing',
+  );
+  t.same(
+    failedOperationIds,
+    ['op-node-a'],
+    'single provisional replica should be aborted when the RF3 quorum floor is not met',
   );
 });
 
@@ -4500,8 +5242,8 @@ test('SQLQueryEngine - provisionInitialTablePartition fails when the full ' +
   );
 });
 
-test('SQLQueryEngine - provisionInitialTablePartition waits for routable ' +
-  'service state with cache repair', async (t) => {
+test('SQLQueryEngine - provisionInitialTablePartition defers active service ' +
+  'enforcement to the routable cohort wait after metadata repair', async (t) => {
   const tableId = 'tbl-routable-cache-repair';
   const partitionId = 'tbl-routable-cache-repair-p1';
   const replicaId = `${partitionId}-r1`;
@@ -4525,6 +5267,7 @@ test('SQLQueryEngine - provisionInitialTablePartition waits for routable ' +
     address: `${localNodeId}/partition/${replicaId}`,
   }];
   const cacheWaitCalls = [];
+  let sleepCalls = 0;
 
   const cache = {
     onCacheChange() {},
@@ -4609,14 +5352,6 @@ test('SQLQueryEngine - provisionInitialTablePartition waits for routable ' +
         expectPresent,
         options,
       });
-      if (tableName === TABLES.SERVICES &&
-          key === replicaId &&
-          options?.expectedFields?.status === 'active') {
-        services[0] = {
-          ...services[0],
-          status: 'active',
-        };
-      }
     },
   };
 
@@ -4629,7 +5364,14 @@ test('SQLQueryEngine - provisionInitialTablePartition waits for routable ' +
     tablePartitionProvisioningTimeoutMs: 40,
     tablePartitionProvisioningPollIntervalMs: 5,
   });
-  engine.waitForRoutablePartitionServiceCount = async () => {};
+  engine.sleep = async () => {
+    sleepCalls += 1;
+    services[0] = {
+      ...services[0],
+      status: 'active',
+      raft_role: 'leader',
+    };
+  };
   engine.waitForPartitionLeaderService = async () => {};
 
   await engine.provisionInitialTablePartition({
@@ -4639,17 +5381,18 @@ test('SQLQueryEngine - provisionInitialTablePartition waits for routable ' +
   });
 
   t.equal(
-    cacheWaitCalls.some((call) =>
-      call.tableName === TABLES.SERVICES &&
-      call.key === replicaId &&
-      call.options?.expectedFields?.status === 'active'),
-    true,
-    'provisioning should require routable active status before continuing',
+    cacheWaitCalls.length,
+    0,
+    'visible service rows should skip authoritative metadata repair and defer active enforcement to the routable wait',
   );
   t.equal(
     services[0]?.status,
     'active',
-    'cache repair should promote the service row to active for routable checks',
+    'the later routable cohort wait should still require the service row to become active',
+  );
+  t.ok(
+    sleepCalls > 0,
+    'provisioning should keep polling the routable cohort after metadata visibility is repaired',
   );
 });
 
@@ -5376,6 +6119,146 @@ test('SQLQueryEngine - waitForPartitionLeaderService accepts a fresh ' +
   );
 });
 
+test('SQLQueryEngine - waitForPartitionLeaderService accepts one bootstrap ' +
+  'leader hint while service roles lag behind heartbeat publication',
+async (t) => {
+  const now = 510000;
+  const partitionId = 'tbl-bootstrap-hint-p1';
+  const localNodeId = 'node-a';
+  const cache = createMockSystemCache(
+    [],
+    [{
+      partition_id: partitionId,
+      table_id: 'tbl-bootstrap-hint',
+      table_name: 'tbl-bootstrap-hint',
+      leader_node_id: null,
+      created_at: now - 1000,
+      updated_at: now - 1000,
+    }],
+    [
+      {
+        service_id: `${partitionId}-r1`,
+        service_type: 'partition',
+        partition_id: partitionId,
+        node_id: localNodeId,
+        raft_role: null,
+        address: `${localNodeId}/partition/${partitionId}-r1`,
+        status: 'active',
+      },
+      {
+        service_id: `${partitionId}-r2`,
+        service_type: 'partition',
+        partition_id: partitionId,
+        node_id: 'node-b',
+        raft_role: 'follower',
+        address: `node-b/partition/${partitionId}-r2`,
+        status: 'active',
+      },
+      {
+        service_id: `${partitionId}-r3`,
+        service_type: 'partition',
+        partition_id: partitionId,
+        node_id: 'node-c',
+        raft_role: 'follower',
+        address: `node-c/partition/${partitionId}-r3`,
+        status: 'active',
+      },
+    ],
+    [
+      {
+        [COLUMN.NODE_ID]: localNodeId,
+        [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+        [COLUMN.CONNECTION_STATE]: STATE.READY,
+        [COLUMN.LAST_HEARTBEAT]: now - 34000,
+        [COLUMN.READY_LEASE_EXPIRES_AT]: now - 19000,
+        [COLUMN.CPU_USAGE_PERCENT]: 10,
+        [COLUMN.MEMORY_USAGE_PERCENT]: 20,
+        [COLUMN.DISK_USAGE_PERCENT]: 30,
+      },
+      {
+        [COLUMN.NODE_ID]: 'node-b',
+        [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+        [COLUMN.CONNECTION_STATE]: STATE.READY,
+        [COLUMN.LAST_HEARTBEAT]: now - 34000,
+        [COLUMN.READY_LEASE_EXPIRES_AT]: now - 19000,
+        [COLUMN.CPU_USAGE_PERCENT]: 10,
+        [COLUMN.MEMORY_USAGE_PERCENT]: 20,
+        [COLUMN.DISK_USAGE_PERCENT]: 30,
+      },
+      {
+        [COLUMN.NODE_ID]: 'node-c',
+        [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+        [COLUMN.CONNECTION_STATE]: STATE.READY,
+        [COLUMN.LAST_HEARTBEAT]: now - 34000,
+        [COLUMN.READY_LEASE_EXPIRES_AT]: now - 19000,
+        [COLUMN.CPU_USAGE_PERCENT]: 10,
+        [COLUMN.MEMORY_USAGE_PERCENT]: 20,
+        [COLUMN.DISK_USAGE_PERCENT]: 30,
+      },
+    ],
+  );
+  const readinessService = new ControlPlaneReadinessService({
+    nodeId: localNodeId,
+    systemTableCache: cache,
+    messageRouter: {
+      getConnectionState(nodeId) {
+        return [localNodeId, 'node-b', 'node-c'].includes(nodeId) ?
+          STATE.CONNECTED :
+          STATE.DISCONNECTED;
+      },
+    },
+    storageAccountingService: {
+      async getCapacitySnapshotForNode(nodeId) {
+        return {
+          nodeId,
+          budgetBytes: 1000,
+          pressureState: 'normal',
+        };
+      },
+    },
+    cdcGroupPropagationService: {
+      getPublicationModeDiagnostics() {
+        return {
+          currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+          reasonCode: null,
+          enteredAt: '2026-03-12T00:00:00.000Z',
+          recentTransitions: [],
+        };
+      },
+    },
+    now: () => now,
+  });
+  const engine = new SQLQueryEngine({
+    nodeId: localNodeId,
+    systemCache: cache,
+    messageRouter: createMockMessageRouter(),
+    controlPlaneReadinessService: readinessService,
+    tablePartitionProvisioningTimeoutMs: 80,
+    tablePartitionProvisioningPollIntervalMs: 5,
+    nowFn: () => now,
+  });
+  engine.waitForCondition = async () => {
+    throw new Error('leader wait should not poll once bootstrap leader hint is usable');
+  };
+
+  await t.resolves(
+    engine.waitForPartitionLeaderService(
+      partitionId,
+      null,
+      {
+        partitionMetadata: cache.partitions[0],
+        bootstrapLeaderNodeId: localNodeId,
+      },
+    ),
+    'bootstrap leader hint should satisfy leader wait before raft_role metadata converges',
+  );
+  t.equal(
+    engine.queryExecutor.findPartitionLeaderAddress(partitionId),
+    `${localNodeId}/partition/${partitionId}-r1`,
+    'leader wait should expose the hinted bootstrap leader route',
+  );
+});
+
 test('SQLQueryEngine - waitForCondition honors a predicate that flips exactly ' +
   'at the timeout boundary', async (t) => {
   const engine = new SQLQueryEngine();
@@ -5461,6 +6344,209 @@ test('SQLQueryEngine - waitForRoutablePartitionServiceCount succeeds when the ' 
     ),
     'already-satisfied routable cohorts should not fail on nested budget allocation',
   );
+});
+
+test('SQLQueryEngine - waitForRoutablePartitionServiceCount accepts fresh ' +
+  'bootstrap services while transport-connected heartbeat publication lags',
+async (t) => {
+  const now = 520000;
+  const partitionId = 'tbl-bootstrap-routable-p1';
+  const nodeIds = ['node-a', 'node-b', 'node-c'];
+  const cache = createMockSystemCache(
+    [],
+    [{
+      partition_id: partitionId,
+      table_id: 'tbl-bootstrap-routable',
+      table_name: 'tbl-bootstrap-routable',
+      leader_node_id: null,
+      created_at: now - 1000,
+      updated_at: now - 1000,
+    }],
+    nodeIds.map((nodeId, index) => ({
+      service_id: `${partitionId}-r${index + 1}`,
+      service_type: 'partition',
+      partition_id: partitionId,
+      node_id: nodeId,
+      raft_role: index === 0 ? 'leader' : 'follower',
+      address: `${nodeId}/partition/${partitionId}-r${index + 1}`,
+      status: 'active',
+    })),
+    nodeIds.map((nodeId) => ({
+      [COLUMN.NODE_ID]: nodeId,
+      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+      [COLUMN.CONNECTION_STATE]: STATE.READY,
+      [COLUMN.LAST_HEARTBEAT]: now - 34000,
+      [COLUMN.READY_LEASE_EXPIRES_AT]: now - 19000,
+      [COLUMN.CPU_USAGE_PERCENT]: 10,
+      [COLUMN.MEMORY_USAGE_PERCENT]: 20,
+      [COLUMN.DISK_USAGE_PERCENT]: 30,
+    })),
+  );
+  const readinessService = new ControlPlaneReadinessService({
+    nodeId: 'node-a',
+    systemTableCache: cache,
+    messageRouter: {
+      getConnectionState(nodeId) {
+        return nodeIds.includes(nodeId) ? STATE.CONNECTED : STATE.DISCONNECTED;
+      },
+    },
+    storageAccountingService: {
+      async getCapacitySnapshotForNode(nodeId) {
+        return {
+          nodeId,
+          budgetBytes: 1000,
+          pressureState: 'normal',
+        };
+      },
+    },
+    cdcGroupPropagationService: {
+      getPublicationModeDiagnostics() {
+        return {
+          currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+          reasonCode: null,
+          enteredAt: '2026-03-12T00:00:00.000Z',
+          recentTransitions: [],
+        };
+      },
+    },
+    now: () => now,
+  });
+  const engine = new SQLQueryEngine({
+    nodeId: 'node-a',
+    systemCache: cache,
+    messageRouter: createMockMessageRouter(),
+    controlPlaneReadinessService: readinessService,
+    tablePartitionProvisioningTimeoutMs: 80,
+    tablePartitionProvisioningPollIntervalMs: 5,
+    nowFn: () => now,
+  });
+  engine.waitForCondition = async () => {
+    throw new Error('bootstrap-routable services should satisfy the count wait without polling');
+  };
+
+  await t.resolves(
+    engine.waitForRoutablePartitionServiceCount(partitionId, 3),
+    'fresh bootstrap services should count as routable while transport stays connected',
+  );
+});
+
+test('SQLQueryEngine - waitForRoutablePartitionServiceCount awaits one ' +
+  'query-executor readiness repair before polling stale routing snapshots',
+async (t) => {
+  const partitionId = 'tbl-routable-repair-await-p1';
+  const routingSnapshot = {
+    partitionId,
+    reasonCode:
+      QUERY_ROUTING_DIAGNOSTIC_REASON.ALL_SERVICES_FILTERED_BY_READINESS,
+    activeAddressedServiceCount: 2,
+    routingReadinessDimension: 'serveEligible',
+    deniedByNodeId: {
+      'node-a': {
+        decisionDimension: 'serveEligible',
+        reasonCodes: ['cluster_member_unhealthy'],
+        failedDimensions: ['clusterMemberHealthy'],
+      },
+    },
+  };
+  let routableNodeIds = [];
+  let repairCalls = 0;
+
+  const engine = new SQLQueryEngine({
+    tablePartitionProvisioningPollIntervalMs: 5,
+  });
+  engine.getRoutablePartitionServiceNodeIds = () => routableNodeIds;
+  engine.queryExecutor = {
+    getPartitionRoutingSnapshot(receivedPartitionId) {
+      t.equal(
+        receivedPartitionId,
+        partitionId,
+        'routable wait should inspect the canonical routing snapshot for the partition',
+      );
+      return routingSnapshot;
+    },
+    async maybeAwaitDeniedPartitionRoutingRepair(snapshot) {
+      repairCalls += 1;
+      t.equal(
+        snapshot,
+        routingSnapshot,
+        'routable wait should route readiness repair through the query-executor owner',
+      );
+      routableNodeIds = ['node-a'];
+      return true;
+    },
+  };
+  engine.waitForCondition = async () => {
+    throw new Error('routable poll should not run before awaited repair');
+  };
+
+  await t.resolves(
+    engine.waitForRoutablePartitionServiceCount(partitionId, 1),
+    'a successful owner repair should satisfy the routable cohort wait without falling through to raw polling',
+  );
+  t.equal(repairCalls, 1);
+});
+
+test('SQLQueryEngine - waitForRoutablePartitionServiceCount retries routing ' +
+  'repair while polling when the first repair does not converge',
+async (t) => {
+  const partitionId = 'tbl-routable-repair-repoll-p1';
+  const routingSnapshot = {
+    partitionId,
+    reasonCode:
+      QUERY_ROUTING_DIAGNOSTIC_REASON.ALL_SERVICES_FILTERED_BY_READINESS,
+    activeAddressedServiceCount: 2,
+    routingReadinessDimension: 'serveEligible',
+    deniedByNodeId: {
+      'node-a': {
+        decisionDimension: 'serveEligible',
+        reasonCodes: ['cluster_member_unhealthy'],
+        failedDimensions: ['clusterMemberHealthy'],
+      },
+    },
+  };
+  let routableNodeIds = [];
+  let repairCalls = 0;
+
+  const engine = new SQLQueryEngine({
+    tablePartitionProvisioningPollIntervalMs: 5,
+  });
+  engine.getRoutablePartitionServiceNodeIds = () => routableNodeIds;
+  engine.queryExecutor = {
+    getPartitionRoutingSnapshot(receivedPartitionId) {
+      t.equal(
+        receivedPartitionId,
+        partitionId,
+        'repolled repair should inspect the same canonical routing snapshot',
+      );
+      return routingSnapshot;
+    },
+    async maybeAwaitDeniedPartitionRoutingRepair(snapshot) {
+      repairCalls += 1;
+      t.equal(
+        snapshot,
+        routingSnapshot,
+        'repolled repair should stay routed through the query-executor owner',
+      );
+      if (repairCalls >= 2) {
+        routableNodeIds = ['node-a'];
+        return true;
+      }
+      return false;
+    },
+  };
+  engine.waitForCondition = async (predicate) => {
+    t.equal(
+      await predicate(),
+      true,
+      'poll predicate should re-run readiness repair while the wait loop is active',
+    );
+  };
+
+  await t.resolves(
+    engine.waitForRoutablePartitionServiceCount(partitionId, 1),
+    'a later routing repair during polling should still satisfy the wait',
+  );
+  t.equal(repairCalls, 2);
 });
 
 test('SQLQueryEngine - waitForPartitionLeaderService succeeds when leader route ' +

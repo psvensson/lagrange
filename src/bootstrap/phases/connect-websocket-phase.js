@@ -22,10 +22,45 @@ import {
   TYPEOF,
 } from '../../constants/index.js';
 import {ENTRYPOINT_DEFAULT} from '../../constants/entrypoint.js';
+import {CONNECTION_STATE} from '../../constants/transport.js';
 
 const OWNER_MESSAGE_ROUTER_SETUP = 'MessageRouterSetup';
 const ERR_MISSING_NODE_ADDRESS = 'Missing node_address';
 const ERR_CANNOT_DERIVE_WS_ADDRESS = 'Could not derive WebSocket address';
+const LOG_SEED_WS_FALLBACK =
+  '[JOIN-DEBUG] Proceeding with peer mesh after seed websocket retry exhaustion';
+const MESH_CONNECTED_OR_IN_FLIGHT_STATES = new Set([
+  CONNECTION_STATE.CONNECTED,
+  CONNECTION_STATE.CONNECTING,
+  CONNECTION_STATE.RECONNECTING,
+]);
+
+function resolveInitializedQueryMessageGroupService(getService) {
+  if (typeof getService !== TYPEOF.FUNCTION) {
+    return null;
+  }
+  const service = getService();
+  return service?.initialized === true ? service : null;
+}
+
+function getConnectedPeerNodeIds(messageRouter, localNodeId) {
+  if (!messageRouter || typeof messageRouter !== TYPEOF.OBJECT) {
+    return [];
+  }
+
+  const connectedNodeIds = typeof messageRouter.getConnectedNodes ===
+      TYPEOF.FUNCTION ?
+    messageRouter.getConnectedNodes() :
+    Array.from(messageRouter.nodeConnections?.entries?.() || [])
+      .filter(([, connection]) => connection?.state === STATE.CONNECTED)
+      .map(([nodeId]) => nodeId);
+
+  return connectedNodeIds.filter((nodeId) => {
+    return typeof nodeId === TYPEOF.STRING &&
+      nodeId.length > NUM.ZERO &&
+      nodeId !== localNodeId;
+  });
+}
 
 /**
  * Handles the connect-websocket phase of the join process.
@@ -80,7 +115,9 @@ class ConnectWebSocketPhase {
     if (typeof messageRouter.setQueryMessageGroupServiceResolver ===
         TYPEOF.FUNCTION) {
       messageRouter.setQueryMessageGroupServiceResolver(() =>
-        this.delegates.getLeaderMessageGroupService(),
+        resolveInitializedQueryMessageGroupService(
+          () => this.delegates.getLeaderMessageGroupService(),
+        ),
       );
     }
     this.delegates.setTransport(messageRouter);
@@ -105,8 +142,9 @@ class ConnectWebSocketPhase {
       seedNodeId,
     });
 
+    let seedConnectionError = null;
     try {
-      await messageRouter.connectToNode(seedNodeId, seedWsAddress);
+      await this.connectToSeedNode(messageRouter, seedNodeId, seedWsAddress);
 
       logger.info(JOINING_LOG_MSG.SEED_WS_CONNECTED, {
         nodeId: this.nodeId,
@@ -118,24 +156,57 @@ class ConnectWebSocketPhase {
           ),
       });
     } catch (error) {
-      logger.error(JOINING_LOG_MSG.SEED_WS_CONNECT_FAILED, {
-        nodeId: this.nodeId,
-        seedWsAddress,
-        seedNodeId,
-        error: error.message,
-        stack: error.stack,
-      });
-      throw error;
+      seedConnectionError = error;
     }
 
     // Connect to all cluster nodes for full mesh connectivity
     // This ensures Raft messages can flow between all nodes
     await this.connectToClusterNodes();
 
-    await this.delegates.sendControlPlaneNodeStateUpdate({
-      state: STATE.CONNECTED,
-      capabilities: this.delegates.getNodeCapabilities(),
-    });
+    const connectedPeerNodeIds = getConnectedPeerNodeIds(
+      messageRouter,
+      this.nodeId,
+    );
+    if (seedConnectionError && connectedPeerNodeIds.length === NUM.ZERO) {
+      logger.error(JOINING_LOG_MSG.SEED_WS_CONNECT_FAILED, {
+        nodeId: this.nodeId,
+        seedWsAddress,
+        seedNodeId,
+        error: seedConnectionError.message,
+        stack: seedConnectionError.stack,
+      });
+      throw seedConnectionError;
+    }
+    if (seedConnectionError) {
+      logger.warn(LOG_SEED_WS_FALLBACK, {
+        nodeId: this.nodeId,
+        seedNodeId,
+        seedWsAddress,
+        connectedPeerNodeIds,
+        error: seedConnectionError.message,
+      });
+    }
+
+    try {
+      await this.delegates.sendControlPlaneNodeStateUpdate({
+        state: STATE.CONNECTED,
+        capabilities: this.delegates.getNodeCapabilities(),
+      });
+    } catch (error) {
+      const cause = error?.cause || error;
+      const shouldDeferConnectedPublication =
+        typeof this.delegates.shouldRetryControlPlaneNodeStateUpdate ===
+          TYPEOF.FUNCTION &&
+        this.delegates.shouldRetryControlPlaneNodeStateUpdate(cause);
+      if (!shouldDeferConnectedPublication) {
+        throw error;
+      }
+      logger.warn(JOINING_LOG_MSG.CONNECTED_STATE_UPDATE_DEFERRED, {
+        nodeId: this.nodeId,
+        seedNodeId,
+        error: error.message,
+      });
+    }
 
     logger.debug(JOINING_LOG_MSG.WS_INFRA_READY, {
       nodeId: this.nodeId,
@@ -146,6 +217,120 @@ class ConnectWebSocketPhase {
         messageRouter.hasSelfConnection() : false,
       owner: OWNER_MESSAGE_ROUTER_SETUP,
     });
+  }
+
+  /**
+   * Connect to the seed node with bounded retry semantics.
+   * Rolling restarts can temporarily make the seed WebSocket unavailable even
+   * after bootstrap HTTP is reachable, so a single timeout should not abort
+   * the full join while the existing join retry window still has budget left.
+   * @param {Object} messageRouter
+   * @param {string} seedNodeId
+   * @param {string} seedWsAddress
+   * @return {Promise<void>}
+   * @private
+   */
+  async connectToSeedNode(messageRouter, seedNodeId, seedWsAddress) {
+    const logger = this.delegates.getLogger();
+    const now = typeof this.delegates.getNow === TYPEOF.FUNCTION ?
+      this.delegates.getNow() :
+      () => Date.now();
+    const sleep = typeof this.delegates.getSleep === TYPEOF.FUNCTION ?
+      this.delegates.getSleep() :
+      (delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs));
+    const resolveJoinRetryPolicy =
+      typeof this.delegates.resolveJoinRetryPolicy === TYPEOF.FUNCTION ?
+        this.delegates.resolveJoinRetryPolicy :
+        null;
+    const computeRetryDelayMs =
+      typeof this.delegates.computeSeedContactRetryDelayMs === TYPEOF.FUNCTION ?
+        this.delegates.computeSeedContactRetryDelayMs :
+        null;
+
+    if (!resolveJoinRetryPolicy || typeof sleep !== TYPEOF.FUNCTION) {
+      await messageRouter.connectToNode(seedNodeId, seedWsAddress);
+      return;
+    }
+
+    const retryPolicy = resolveJoinRetryPolicy();
+    const retryTimeoutMs = Number.isFinite(retryPolicy?.retryTimeoutMs) ?
+      Math.max(NUM.ONE, Math.floor(retryPolicy.retryTimeoutMs)) :
+      NUM.ZERO;
+    const initialDelayMs = Number.isFinite(retryPolicy?.initialDelayMs) ?
+      Math.max(NUM.ONE, Math.floor(retryPolicy.initialDelayMs)) :
+      NUM.HUNDRED;
+    const maxDelayMs = Number.isFinite(retryPolicy?.maxDelayMs) ?
+      Math.max(initialDelayMs, Math.floor(retryPolicy.maxDelayMs)) :
+      initialDelayMs;
+    const backoffMultiplier =
+      Number.isFinite(retryPolicy?.backoffMultiplier) &&
+      retryPolicy.backoffMultiplier > NUM.ONE ?
+        retryPolicy.backoffMultiplier :
+        NUM.TWO;
+
+    if (retryTimeoutMs <= NUM.ZERO) {
+      await messageRouter.connectToNode(seedNodeId, seedWsAddress);
+      return;
+    }
+
+    const startMs = now();
+    const deadlineMs = startMs + retryTimeoutMs;
+    let baseDelayMs = initialDelayMs;
+    let attempt = NUM.ZERO;
+    let lastError = null;
+
+    while (true) {
+      attempt += NUM.ONE;
+      try {
+        await messageRouter.connectToNode(seedNodeId, seedWsAddress);
+        return;
+      } catch (error) {
+        lastError = error;
+        const elapsedMs = Math.max(NUM.ZERO, now() - startMs);
+        const remainingMs = deadlineMs - now();
+
+        if (getConnectedPeerNodeIds(messageRouter, this.nodeId).length === NUM.ZERO) {
+          await this.connectToClusterNodes();
+        }
+        if (getConnectedPeerNodeIds(messageRouter, this.nodeId).length > NUM.ZERO) {
+          break;
+        }
+
+        if (remainingMs <= NUM.ZERO) {
+          break;
+        }
+
+        const nextDelayMs = computeRetryDelayMs ?
+          computeRetryDelayMs({
+            baseDelayMs,
+            maxDelayMs,
+            retryAfterMs: null,
+          }) :
+          Math.min(baseDelayMs, maxDelayMs);
+        const boundedDelayMs = Math.max(
+          NUM.ONE,
+          Math.min(remainingMs, nextDelayMs),
+        );
+
+        logger.warn(JOINING_LOG_MSG.SEED_WS_RETRYING, {
+          nodeId: this.nodeId,
+          seedNodeId,
+          seedWsAddress,
+          attempt,
+          elapsedMs,
+          nextDelayMs: boundedDelayMs,
+          error: error.message,
+        });
+
+        await sleep(boundedDelayMs);
+        baseDelayMs = Math.min(
+          Math.max(NUM.ONE, Math.floor(baseDelayMs * backoffMultiplier)),
+          maxDelayMs,
+        );
+      }
+    }
+
+    throw lastError;
   }
 
   /**
@@ -199,7 +384,7 @@ class ConnectWebSocketPhase {
           messageRouter.nodeConnections?.get(targetNodeId)?.state ||
             null;
 
-      if (connectionState === STATE.CONNECTED) {
+      if (MESH_CONNECTED_OR_IN_FLIGHT_STATES.has(connectionState)) {
         return;
       }
 

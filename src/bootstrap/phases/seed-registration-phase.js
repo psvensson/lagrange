@@ -20,6 +20,10 @@ import {
 } from '../system-table-writer.js';
 import {MessageGroupServiceRowOwner} from
   '../../message-group/message-group-service-row-owner.js';
+import {PartitionServiceRowOwner} from
+  '../../partition/partition-service-row-owner.js';
+import {activatePartitionServiceRows} from
+  '../shared/partition-service-activation.js';
 import {
   registerBuiltInMetaServiceDefinitions,
   registerBuiltInMetaServiceEndpoints,
@@ -153,6 +157,11 @@ class SeedRegistrationPhase {
         systemTableWriter,
         now: () => now,
       });
+    const partitionServiceRowOwner =
+      new PartitionServiceRowOwner({
+        systemTableWriter,
+        now: () => now,
+      });
 
     // Register message group replicas
     for (const [replicaId, service] of
@@ -182,6 +191,7 @@ class SeedRegistrationPhase {
           nodeId,
           service,
           timestamp: now,
+          status: SERVICE_STATUS.STOPPED,
         });
       } catch (error) {
         logger.error(
@@ -195,33 +205,15 @@ class SeedRegistrationPhase {
     // Register partition replicas
     for (const [replicaId, service] of
       d.getPartitionServices()) {
-      const isLeader = service.isLeader === true;
-      const currentRole = service.getRole ?
-        service.getRole() : service.role;
-      const raftRole = isLeader ?
-        RAFT_ROLE.LEADER :
-        currentRole || RAFT_ROLE.FOLLOWER;
-      const serviceData = {
-        service_id: replicaId,
-        service_type: SERVICE_TYPE.PARTITION,
-        node_id: nodeId,
-        partition_id: service.partitionId,
-        group_id: null,
-        replica_id: replicaId,
-        raft_role: raftRole,
-        status: SERVICE_STATUS.ACTIVE,
-        address: `${nodeId}${ADDRESS.SEPARATOR}` +
-          `${ENTITY_TYPE.PARTITION}${ADDRESS.SEPARATOR}` +
-          `${replicaId}`,
-        created_at: now,
-        updated_at: now,
-      };
-
       try {
-        await systemTableWriter.upsertSystemTableRow(
-          SYSTEM_TABLE_NAME.SERVICES,
-          serviceData,
-        );
+        await partitionServiceRowOwner.registerReplica({
+          partitionId: service.partitionId,
+          replicaId,
+          nodeId,
+          service,
+          timestamp: now,
+          status: SERVICE_STATUS.STOPPED,
+        });
       } catch (error) {
         logger.error(
           BOOTSTRAP_LOG_MSG.PARTITION_SERVICE_REGISTER_FAILED,
@@ -230,6 +222,16 @@ class SeedRegistrationPhase {
         throw error;
       }
     }
+
+    await activatePartitionServiceRows({
+      nodeId,
+      systemTableWriter,
+      messageRouter: typeof d.getMessageRouter === 'function' ?
+        d.getMessageRouter() :
+        null,
+      partitionServices: d.getPartitionServices(),
+      now: () => now,
+    });
 
     logger.debug(BOOTSTRAP_LOG_MSG.SERVICES_REGISTERED, {
       messageGroupServices: d.getMessageGroupServices().size,

@@ -108,6 +108,85 @@ test('BootstrapService - executePhase routes work through class A scheduler', as
   await bootstrap.shutdown();
 });
 
+test('BootstrapService - activates message-group rows after seed registration',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const order = [];
+    const bootstrap = new BootstrapService({
+      nodeId: 'bootstrap-activate-node',
+      nodeAddress: 'ws://localhost:12001',
+      wsPort: 12001,
+    });
+
+    bootstrap.phaseInfrastructure = async () => {
+      order.push('infrastructure');
+    };
+    bootstrap.phaseMessageGroups = async () => {
+      order.push('message-groups');
+    };
+    bootstrap.phasePartitions = async () => {
+      order.push('partitions');
+    };
+    bootstrap.phaseRegistration = async () => {
+      order.push('registration');
+    };
+    bootstrap.phaseCacheHydration = async () => {
+      order.push('cache-hydration');
+    };
+    bootstrap.initializeReplicaHandler = () => {
+      order.push('replica-handler');
+    };
+    bootstrap.initializeMessageGroupServiceHandler = () => {
+      order.push('message-group-handler');
+      bootstrap.messageGroupServiceHandlerRegistered = true;
+    };
+    bootstrap.initializeControlPlaneService = async () => {
+      order.push('control-plane');
+    };
+    bootstrap.registerSeedNodeWithControlPlane = async () => {
+      order.push('seed-registration');
+      bootstrap.messageGroupServiceEndpointsPublished = true;
+    };
+    bootstrap.activateMessageGroupServiceRows = async () => {
+      order.push('activate-message-group-rows');
+    };
+    bootstrap.initializeRuntimeServiceHandler = () => {
+      order.push('runtime-handler');
+    };
+    bootstrap.startLatencyTopologyLifecycle = () => {
+      order.push('latency-topology');
+    };
+    bootstrap.activateControlPlaneBackgroundWriters = () => {
+      order.push('background-writers');
+    };
+    bootstrap.logger = {
+      info() {},
+      debug() {},
+      warn() {},
+      error() {},
+    };
+
+    const result = await bootstrap.bootstrap();
+
+    t.equal(result.success, true, 'bootstrap should succeed');
+    t.equal(
+      bootstrap.messageGroupServiceEndpointsPublished,
+      true,
+      'bootstrap should mark endpoint publication complete before activation',
+    );
+    t.ok(
+      order.indexOf('message-group-handler') <
+        order.indexOf('seed-registration'),
+      'handler registration should complete before seed control-plane registration',
+    );
+    t.ok(
+      order.indexOf('seed-registration') <
+        order.indexOf('activate-message-group-rows'),
+      'message-group rows should activate after seed control-plane registration',
+    );
+  });
+
 test('Bootstrap sequence - self-connection established before services', async (t) => {
   initializeTestEnvironment();
 

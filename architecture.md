@@ -94,7 +94,11 @@ To prevent overlap and contradictory runtime behavior:
    rows first: `partitions.leader_node_id` for partition leaders and
    `message_groups.leader_node_id` for message-group leaders. `services`
    metadata is supporting replica detail only (`address`, `status`,
-   `raft_role`) and may be used for diagnostics only, not routing.
+   `raft_role`) and must not replace canonical leader identity. When the
+   owner row names a leader but the local cache is missing that leader's
+   service row, write execution may do one bounded authoritative node/service
+   repair and then use a routable partition replica only as redirect transport
+   to the canonical leader.
 6. **Readiness Gating:** internal topology consumers (`ReplicaDispatchService`,
    `RebalanceCoordinator`, `ManagedSplitWorkflow`, admission planning) use the
    shared `repairEligible` dimension from `ControlPlaneReadinessService`.
@@ -103,6 +107,22 @@ To prevent overlap and contradictory runtime behavior:
    `node_state_reporter` attempt when the last canonically visible local
    heartbeat is still fresh; this prevents transient self-denial while the
    bounded authoritative repair path is timing out under load.
+   **Transport-reconciled cluster membership (§1.4.12):**
+   `isClusterMemberHealthy` reconciles stale cache lease/heartbeat data
+   with live transport connectivity from the `MessageRouter`. When a node
+   row has an active status and the transport layer reports the node as
+   connected, the node is considered healthy regardless of cache-side
+   lease expiry. This prevents transient `serveEligible=false` during
+   topology changes (partition splits, rebalance) where CDC-driven
+   `SystemTableCache` updates lag behind authoritative state. Transport
+   disconnection remains the definitive negative signal: a disconnected
+   node with expired lease data is always unhealthy.
+   **Load-lane cache invalidation:** the load-lane readiness path
+   (`resolveLoadLaneReadinessSnapshot` in `AdminWebSocketAPI`) does not
+   use `allowStaleOnCacheChange`, so cache invalidation forces immediate
+   re-evaluation rather than serving a stale snapshot. This ensures
+   load-lane admission reflects the latest readiness state after topology
+   changes.
 7. **Epoch Propagation:** `config.current_epoch` + CDC is the single epoch
    authority; no secondary epoch source.
 8. **Control-Plane Progression:** Event-triggered control-plane work (dispatch,
@@ -1735,6 +1755,27 @@ Client SQL Query (any entrypoint)
                                     ▼
                               Return Results
 ```
+
+### Query Routing Resilience During Topology Transitions
+
+Per §1.10 and §1.12, the query path must remain functional during partition
+splits, moves, and leader elections. `QueryExecutor.executeOnPartition()`
+implements bounded retry and candidate fallthrough for read queries:
+
+- Read queries get configurable retry attempts (default 3, via
+  `QUERY_READ_RETRY_ATTEMPTS` config key) instead of the previous single
+  attempt. Write queries retain their existing leader-retry behavior.
+- When no service candidates are found for a read but the partition record
+  exists, the executor retries with a delay to allow routing repair and
+  cache convergence to discover candidates.
+- Within each attempt, the candidate loop iterates all eligible replicas.
+  Transient failures (non-success responses, transport errors) cause the
+  executor to try the next candidate rather than hard-failing.
+- If all candidates in an attempt fail, the executor retries the full
+  attempt (re-resolving candidates) up to the configured limit.
+- The admin API timeout path uses `QUERY_TIMEOUT` classification (not
+  generic `REMOTE_CALL_TIMEOUT`) so timeout diagnostics distinguish
+  query-plane timeouts from control-plane remote call timeouts.
 
 ### CDC Event Flow
 

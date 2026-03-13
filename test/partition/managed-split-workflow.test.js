@@ -49,6 +49,20 @@ function buildWorkflow(options = {}) {
   const admissionCalls = options.admissionCalls || [];
   const probeProvisioningCalls = options.probeProvisioningCalls || [];
   const provisionCalls = options.provisionCalls || [];
+  const durableTableRows = Array.isArray(options.durableTableRows) ?
+    options.durableTableRows :
+    null;
+  const defaultTableInfo = {
+    table_id: 'tbl-users',
+    table_name: 'users',
+    partition_key: 'id',
+    active_partition_version: 1,
+    partition_transition_state: null,
+    partition_transition_metadata: null,
+  };
+  const resolvedTableInfo = durableTableRows && durableTableRows.length > 0 ?
+    durableTableRows[0] :
+    (options.tableInfo || defaultTableInfo);
   const transactionCoordinator =
     Object.prototype.hasOwnProperty.call(options, 'transactionCoordinator') ?
       options.transactionCoordinator :
@@ -58,6 +72,11 @@ function buildWorkflow(options = {}) {
     cdcIntegrationService: options.cdcIntegrationService || {
       async updateSystemTableRow(tableName, whereClause, data, updateOptions) {
         updateCalls.push({tableName, whereClause, data, options: updateOptions});
+        if (tableName === TABLES.TABLES &&
+            durableTableRows &&
+            durableTableRows.length > 0) {
+          Object.assign(durableTableRows[0], data);
+        }
         return {success: true, affectedRows: 1};
       },
       async insertSystemTableRow(tableName, row) {
@@ -75,14 +94,9 @@ function buildWorkflow(options = {}) {
       leader_node_id: 'node-a',
       size_bytes: 128,
     })),
-    getTableInfo: options.getTableInfo || (() => ({
-      table_id: 'tbl-users',
-      table_name: 'users',
-      partition_key: 'id',
-      active_partition_version: 1,
-      partition_transition_state: null,
-      partition_transition_metadata: null,
-    })),
+    getTableInfo: options.getTableInfo || (() => resolvedTableInfo),
+    listTableInfos: options.listTableInfos ||
+      (() => durableTableRows ? durableTableRows : [resolvedTableInfo]),
     parsePartitionTransition: options.parsePartitionTransition || (() => null),
     isLocalManagedSplitLeader: options.isLocalManagedSplitLeader ||
       (() => true),
@@ -243,6 +257,63 @@ test('ManagedSplitWorkflow persists admission_pending before planning and ' +
         preparingUpdate.data.partition_transition_metadata,
     },
     'workflow should wait for the transition fields to become visible in cache',
+  );
+});
+
+test('ManagedSplitWorkflow accepts and persists async source ' +
+  'acknowledgements after execute returns', async (t) => {
+  const durableTableRows = [{
+    table_id: 'tbl-users',
+    table_name: 'users',
+    partition_key: 'id',
+    active_partition_version: 1,
+    partition_transition_state: null,
+    partition_transition_metadata: null,
+    created_at: 1000,
+    updated_at: 1000,
+  }];
+  const updateCalls = [];
+  const {workflow} = buildWorkflow({
+    updateCalls,
+    durableTableRows,
+    parsePartitionTransition: (tableInfo) => {
+      if (!tableInfo?.partition_transition_state ||
+          !tableInfo?.partition_transition_metadata) {
+        return null;
+      }
+      return {
+        state: tableInfo.partition_transition_state,
+        metadata: JSON.parse(tableInfo.partition_transition_metadata),
+      };
+    },
+  });
+
+  const result = await workflow.execute('users-p1');
+  const ackResult = await workflow.acknowledgeSourceParticipant(
+    result.workflowId,
+    {
+      [PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY]:
+        SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION,
+      [PARTICIPANT_ACK_FIELD.STATUS]:
+        SPLIT_ACK_STATUS.SNAPSHOT_STARTED,
+    },
+  );
+
+  t.equal(
+    ackResult.result,
+    PARTICIPANT_ACK_RESULT.ACCEPTED,
+    'source acknowledgements should still be accepted after execute returns',
+  );
+  const latestTransitionUpdate = updateCalls[updateCalls.length - 1];
+  const persistedMetadata = JSON.parse(
+    latestTransitionUpdate.data.partition_transition_metadata,
+  );
+  t.equal(
+    persistedMetadata[
+      PARTITION_TRANSITION_METADATA_FIELD.PARTICIPANTS
+    ][SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION].status,
+    SPLIT_ACK_STATUS.SNAPSHOT_STARTED,
+    'source acknowledgement should be durably persisted in transition metadata',
   );
 });
 
@@ -1456,6 +1527,7 @@ import {
 } from '../../src/partition/split-ack-constants.js';
 import {
   PARTICIPANT_ACK_FIELD,
+  PARTICIPANT_ACK_RESULT,
 } from '../../src/workflow/workflow-constants.js';
 
 test('persistWorkflowTransition includes participant state in ' +
@@ -1617,13 +1689,12 @@ test('persistWorkflowTransition includes source checkpoint in ' +
   );
 });
 
-test('persistWorkflowTransition omits participants and ' +
-  'sourceCheckpoint when no participants exist ' +
-  '(backward compatible)', async (t) => {
+test('persistWorkflowTransition persists canonical split participants and ' +
+  'omits sourceCheckpoint before acknowledgements arrive', async (t) => {
   const updateCalls = [];
   const {workflow} = buildWorkflow({updateCalls});
 
-  // Execute a normal split — no participants are added.
+  // Execute a normal split before any participant acknowledgements arrive.
   await workflow.execute('users-p1');
 
   // Find the backfilling transition (last phase in executeInternal).
@@ -1637,10 +1708,23 @@ test('persistWorkflowTransition omits participants and ' +
   const persisted = JSON.parse(
     backfillUpdate.data.partition_transition_metadata,
   );
+  const participants =
+    persisted[PARTITION_TRANSITION_METADATA_FIELD.PARTICIPANTS];
+  t.ok(participants, 'metadata must include the canonical split participants');
   t.equal(
-    persisted[PARTITION_TRANSITION_METADATA_FIELD.PARTICIPANTS],
-    undefined,
-    'metadata must not include participants when none exist',
+    participants[SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION].status,
+    null,
+    'source participant should exist before acknowledgements are emitted',
+  );
+  t.equal(
+    participants[SPLIT_PARTICIPANT_PREFIX.LEFT_CHILD].status,
+    null,
+    'left child participant should exist before acknowledgements are emitted',
+  );
+  t.equal(
+    participants[SPLIT_PARTICIPANT_PREFIX.RIGHT_CHILD].status,
+    null,
+    'right child participant should exist before acknowledgements are emitted',
   );
   t.equal(
     persisted[PARTITION_TRANSITION_METADATA_FIELD.SOURCE_CHECKPOINT],

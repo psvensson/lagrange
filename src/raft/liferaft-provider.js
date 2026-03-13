@@ -166,6 +166,9 @@ class LiferaftProvider {
         };
       } catch (error) {
         lastError = error;
+        if (error?.retryable === false) {
+          throw error;
+        }
       }
 
       if (attempt >= maxAttempts) {

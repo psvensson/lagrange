@@ -19,6 +19,17 @@ import {PartitionService} from '../../src/partition/partition-service.js';
 import {CACHE_HYDRATION_TABLES} from '../../src/cache/cache-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {ReplicaHandlerSetup} from '../../src/bootstrap/shared/replica-handler-setup.js';
+import {
+  ControlPlaneKernelIngress,
+} from '../../src/control-plane/control-plane-kernel-ingress.js';
+import {
+  JOIN_CHECKPOINT,
+  JoinSessionStore,
+} from '../../src/bootstrap/join-session-store.js';
+import {
+  JOINING_ERROR_MSG,
+  JOINING_LOG_MSG,
+} from '../../src/bootstrap/node-joining-constants.js';
 import {WORK_CLASS} from '../../src/runtime/work-class-scheduler.js';
 import {ENTRYPOINT_DEFAULT} from '../../src/constants/entrypoint.js';
 import {
@@ -27,6 +38,7 @@ import {
   ENDPOINT_STATUS,
   SERVICE_TYPE,
   SERVICE_STATUS,
+  STATE,
   TABLES,
   TRANSPORT_TYPE,
 } from '../../src/constants/index.js';
@@ -86,6 +98,39 @@ test('NodeJoiningService - getStatus', async (t) => {
   t.equal(status.messageGroupCount, 0);
   t.equal(status.lastError, null);
 });
+
+test('NodeJoiningService - classifies transient control-plane publication failures',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const service = new NodeJoiningService({
+      nodeId: 'joining-node-classifier',
+      nodeAddress: 'ws://localhost:9090',
+      seedNodeAddress: 'http://localhost:8080',
+    });
+
+    t.equal(
+      service.shouldRetryControlPlaneNodeStateUpdate(
+        new Error('Connection to node seed-node-1 closed'),
+      ),
+      true,
+      'closed target connections should defer connected publication',
+    );
+    t.equal(
+      service.shouldRetryControlPlaneNodeStateUpdate(
+        new Error(JOINING_ERROR_MSG.CONTROL_PLANE_TARGET_MISSING),
+      ),
+      true,
+      'temporarily missing ingress targets should defer connected publication',
+    );
+    t.equal(
+      service.shouldRetryControlPlaneNodeStateUpdate(
+        new Error('validation failed'),
+      ),
+      false,
+      'non-transport publication failures should still fail fast',
+    );
+  });
 
 test('NodeJoiningService - executePhase routes work through class A scheduler', async (t) => {
   initializeTestEnvironment();
@@ -648,7 +693,7 @@ test('NodeJoiningService - retry diagnostics include attempt, elapsed, code, and
       'retry diagnostics should report computed delay');
   });
 
-test('NodeJoiningService - resolves control plane target from services metadata first',
+test('NodeJoiningService - resolves control plane target from kernel bootstrap ingress',
   async (t) => {
     initializeTestEnvironment();
 
@@ -668,7 +713,7 @@ test('NodeJoiningService - resolves control plane target from services metadata 
         replicaToMove: 'mg-1-r1',
         peerAddresses: [
           'seed-node-1/message-group/mg-1-r1',
-          'seed-node-1/message-group/mg-1-r3',
+          'seed-node-1/message-group/mg-1-r2',
         ],
       },
     };
@@ -679,40 +724,16 @@ test('NodeJoiningService - resolves control plane target from services metadata 
       },
     };
 
-    const nodeService = NodeService.getInstance();
-    nodeService.initialize({nodeId: 'joining-node-1'});
-    const cache = nodeService.getSystemTableCache();
-    cache.applySystemTableChange('services', 'INSERT', {
-      service_id: 'mg-1-r1',
-      group_id: 'mg-1',
-      node_id: 'joining-node-1',
-      service_type: 'message_group',
-      address: 'joining-node-1/message-group/mg-1-r1',
-      status: 'active',
-      raft_role: 'follower',
-    });
-    cache.applySystemTableChange('services', 'INSERT', {
-      service_id: 'mg-1-r2',
-      group_id: 'mg-1',
-      node_id: 'seed-node-1',
-      service_type: 'message_group',
-      address: 'seed-node-1/message-group/mg-1-r2',
-      status: 'active',
-      raft_role: 'leader',
-    });
-
-    const target = service.resolveControlPlaneTargetAddress({
-      allowBootstrapHints: false,
-    });
+    const target = service.resolveControlPlaneTargetAddress();
 
     t.equal(
       target,
       'seed-node-1/message-group/mg-1-r2',
-      'should use authoritative services metadata target instead of stale cached target',
+      'should use kernel bootstrap ingress instead of requiring services metadata',
     );
   });
 
-test('NodeJoiningService - falls back to bootstrap hints when authoritative target missing',
+test('NodeJoiningService - uses kernel bootstrap ingress when no local target exists',
   async (t) => {
     initializeTestEnvironment();
 
@@ -794,17 +815,17 @@ test('NodeJoiningService - does not self-target move-replica heartbeats ' +
   t.equal(
     service.resolveControlPlaneTargetAddress({allowBootstrapHints: false}),
     null,
-    'authoritative target resolution should refuse self-loop heartbeats',
+    'local-only resolution should refuse self-loop admission targets',
   );
   t.equal(
     service.resolveControlPlaneTargetAddress(),
     'seed-node-1/message-group/mg-1-r3',
-    'move-replica heartbeats should fall back to seed bootstrap hints instead of self-targeting',
+    'move-replica admission should use seed ingress instead of self-targeting',
   );
 });
 
-test('NodeJoiningService - prefers local target for NODE_STATE_UPDATE ' +
-  'when authoritative metadata has a local active replica', async (t) => {
+test('NodeJoiningService - prefers local kernel ingress for NODE_STATE_UPDATE',
+  async (t) => {
   initializeTestEnvironment();
 
   const service = new NodeJoiningService({
@@ -840,28 +861,11 @@ test('NodeJoiningService - prefers local target for NODE_STATE_UPDATE ' +
     },
   };
 
-  const nodeService = NodeService.getInstance();
-  nodeService.initialize({nodeId: 'joining-node-local'});
-  const cache = nodeService.getSystemTableCache();
-  cache.applySystemTableChange('services', 'INSERT', {
-    service_id: 'mg-1-r2',
-    group_id: 'mg-1',
-    node_id: 'joining-node-local',
-    service_type: 'message_group',
-    address: 'joining-node-local/message-group/mg-1-r2',
-    status: 'active',
-    raft_role: 'follower',
-    updated_at: 20,
-  });
-  cache.applySystemTableChange('services', 'INSERT', {
-    service_id: 'mg-1-r3',
-    group_id: 'mg-1',
-    node_id: 'seed-node-1',
-    service_type: 'message_group',
-    address: 'seed-node-1/message-group/mg-1-r3',
-    status: 'active',
-    raft_role: 'leader',
-    updated_at: 10,
+  service.messageGroupServices.set('mg-1-r2', {
+    groupId: 'mg-1',
+    unifiedAddress: 'joining-node-local/message-group/mg-1-r2',
+    isLeaderReplica: () => true,
+    getLeaderId: () => 'mg-1-r2',
   });
 
   await service.sendControlPlaneNodeStateUpdate({state: 'connected'});
@@ -871,8 +875,222 @@ test('NodeJoiningService - prefers local target for NODE_STATE_UPDATE ' +
       targetAddress: 'joining-node-local/message-group/mg-1-r2',
       state: 'connected',
     },
-  ], 'NODE_STATE_UPDATE should use the local active replica before remote routes');
+  ], 'NODE_STATE_UPDATE should use the local kernel ingress before remote routes');
 });
+
+test('NodeJoiningService - resolves ordered control-plane target candidates ' +
+  'for NODE_STATE_UPDATE', async (t) => {
+  initializeTestEnvironment();
+
+  const service = new NodeJoiningService({
+    nodeId: 'joining-node-candidates',
+    nodeAddress: 'ws://localhost:9094',
+    seedNodeAddress: 'http://localhost:8080',
+  });
+
+  service.bootstrapResponse = {
+    seedNodeId: 'seed-node-1',
+    messageGroupAssignment: {
+      strategy: AssignmentStrategy.MOVE_REPLICA,
+      groupId: 'mg-1',
+      replicaToMove: 'mg-1-r1',
+      peerAddresses: [
+        'seed-node-2/message-group/mg-1-r4',
+        'seed-node-1/message-group/mg-1-r3',
+      ],
+    },
+  };
+  service.messageRouter = {
+    getConnectionState(nodeId) {
+      return nodeId === 'joining-node-candidates' ||
+        nodeId === 'seed-node-1' ||
+        nodeId === 'seed-node-2' ?
+        'connected' :
+        'disconnected';
+    },
+  };
+  service.messageGroupServices.set('mg-1-r2', {
+    groupId: 'mg-1',
+    unifiedAddress: 'joining-node-candidates/message-group/mg-1-r2',
+    isLeaderReplica: () => true,
+    getLeaderId: () => 'mg-1-r2',
+  });
+
+  t.same(
+    service.resolveControlPlaneTargetAddressCandidates({
+      allowBootstrapHints: true,
+      allowSelfTarget: true,
+    }),
+    [
+      'joining-node-candidates/message-group/mg-1-r2',
+      'seed-node-1/message-group/mg-1-r3',
+      'seed-node-2/message-group/mg-1-r4',
+    ],
+    'candidate resolution should prefer local ingress, then seed ingress, then remote ingress',
+  );
+});
+
+test('NodeJoiningService - retries NODE_STATE_UPDATE on stale control-plane target',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const service = new NodeJoiningService({
+      nodeId: 'joining-node-retry',
+      nodeAddress: 'ws://localhost:9095',
+      seedNodeAddress: 'http://localhost:8080',
+    });
+
+    service.bootstrapResponse = {
+      seedNodeId: 'seed-node-1',
+      messageGroupAssignment: {
+        strategy: AssignmentStrategy.MOVE_REPLICA,
+        groupId: 'mg-1',
+      },
+    };
+
+    const deliveries = [];
+    service.controlPlaneKernelIngress = {
+      resolveTargetCandidates: () => [
+        'stale-node/message-group/mg-1-r9',
+        'seed-node-1/message-group/mg-1-r3',
+      ],
+    };
+    service.messageRouter = {
+      async deliver(targetAddress) {
+        deliveries.push(targetAddress);
+        if (targetAddress === 'stale-node/message-group/mg-1-r9') {
+          return {
+            acknowledged: false,
+            error: 'No connection to node stale-node',
+          };
+        }
+        return {acknowledged: true};
+      },
+    };
+
+    await service.sendControlPlaneNodeStateUpdate({state: STATE.READY});
+
+    t.same(deliveries, [
+      'stale-node/message-group/mg-1-r9',
+      'seed-node-1/message-group/mg-1-r3',
+    ], 'should retry NODE_STATE_UPDATE against the fallback target');
+    t.equal(
+      service.controlPlaneTargetAddress,
+      'seed-node-1/message-group/mg-1-r3',
+      'should retain the successful control-plane target after retry',
+    );
+  });
+
+test('NodeJoiningService - reuses confirmed control-plane ingress after stale-target retry',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const service = new NodeJoiningService({
+      nodeId: 'joining-node-confirmed-ingress',
+      nodeAddress: 'ws://localhost:90955',
+      seedNodeAddress: 'http://localhost:8080',
+    });
+
+    service.bootstrapResponse = {
+      seedNodeId: 'seed-node-1',
+      messageGroupAssignment: {
+        strategy: AssignmentStrategy.MOVE_REPLICA,
+        groupId: 'mg-1',
+        peerAddresses: [
+          'stale-node/message-group/mg-1-r9',
+          'seed-node-1/message-group/mg-1-r3',
+        ],
+      },
+    };
+    service.messageRouter = {
+      getConnectionState(nodeId) {
+        return nodeId === 'stale-node' ||
+          nodeId === 'seed-node-1' ?
+          'connected' :
+          'disconnected';
+      },
+    };
+    service.controlPlaneKernelIngress = new ControlPlaneKernelIngress({
+      nodeId: service.nodeId,
+      ingressLeaseMs: 5000,
+      targetSuppressionMs: 5000,
+      getBootstrapResponse: () => service.bootstrapResponse,
+      getMessageRouter: () => service.messageRouter,
+    });
+    service.controlPlaneKernelIngress
+      .noteSuccessfulTarget('stale-node/message-group/mg-1-r9');
+
+    const deliveries = [];
+    service.messageRouter.deliver = async (targetAddress) => {
+      deliveries.push(targetAddress);
+      if (targetAddress === 'stale-node/message-group/mg-1-r9') {
+        return {
+          acknowledged: false,
+          error: 'No connection to node stale-node',
+        };
+      }
+      return {acknowledged: true};
+    };
+
+    await service.sendControlPlaneNodeStateUpdate({state: STATE.READY});
+    await service.sendControlPlaneNodeStateUpdate({state: STATE.READY});
+
+    t.same(deliveries, [
+      'stale-node/message-group/mg-1-r9',
+      'seed-node-1/message-group/mg-1-r3',
+      'seed-node-1/message-group/mg-1-r3',
+    ], 'subsequent publications should reuse the confirmed fallback ingress');
+    t.equal(
+      service.controlPlaneKernelIngress.getConfirmedIngressLease()?.targetAddress,
+      'seed-node-1/message-group/mg-1-r3',
+      'successful retry should promote the fallback ingress into the kernel lease owner',
+    );
+  });
+
+test('NodeJoiningService - does not retry NODE_STATE_UPDATE on non-transport failures',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const service = new NodeJoiningService({
+      nodeId: 'joining-node-no-retry',
+      nodeAddress: 'ws://localhost:9096',
+      seedNodeAddress: 'http://localhost:8080',
+    });
+
+    service.bootstrapResponse = {
+      seedNodeId: 'seed-node-1',
+      messageGroupAssignment: {
+        strategy: AssignmentStrategy.MOVE_REPLICA,
+        groupId: 'mg-1',
+      },
+    };
+
+    const deliveries = [];
+    service.controlPlaneKernelIngress = {
+      resolveTargetCandidates: () => [
+        'seed-node-2/message-group/mg-1-r4',
+        'seed-node-1/message-group/mg-1-r3',
+      ],
+    };
+    service.messageRouter = {
+      async deliver(targetAddress) {
+        deliveries.push(targetAddress);
+        return {
+          acknowledged: false,
+          error: 'validation failed',
+        };
+      },
+    };
+
+    await t.rejects(
+      service.sendControlPlaneNodeStateUpdate({state: STATE.READY}),
+      /validation failed/,
+      'should surface non-transport publication failures without fallback retry',
+    );
+    t.same(deliveries, [
+      'seed-node-2/message-group/mg-1-r4',
+    ], 'should stop after the first non-retryable target failure');
+  });
 
 test('NodeJoiningService - reconnects disconnected cluster peers during mesh connect',
   async (t) => {
@@ -1022,7 +1240,9 @@ test('NodeJoiningService - ready state update triggers mesh reconciliation witho
     });
 
     const callOrder = [];
-    service.resolveControlPlaneTargetAddress = () => 'seed-node/message-group/mg-1-r1';
+    service.resolveControlPlaneTargetAddressCandidates = () => [
+      'seed-node/message-group/mg-1-r1',
+    ];
     service.messageRouter = {
       nodeConnections: new Map([
         ['seed-node', {state: 'connected'}],
@@ -1084,7 +1304,9 @@ test('NodeJoiningService - steady ready heartbeats skip redundant mesh reconcili
     }
 
     const callOrder = [];
-    service.resolveControlPlaneTargetAddress = () => 'seed-node/message-group/mg-1-r1';
+    service.resolveControlPlaneTargetAddressCandidates = () => [
+      'seed-node/message-group/mg-1-r1',
+    ];
     service.messageRouter = {
       nodeConnections: new Map([
         ['seed-node', {state: 'connected'}],
@@ -1114,6 +1336,138 @@ test('NodeJoiningService - steady ready heartbeats skip redundant mesh reconcili
     t.same(callOrder, [
       'deliver:seed-node/message-group/mg-1-r1:ready',
     ], 'should skip mesh reconciliation when the ready heartbeat sees the same connected mesh');
+  });
+
+test('NodeJoiningService - steady ready heartbeats ignore stopped peers in mesh reconciliation',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const service = new NodeJoiningService({
+      nodeId: 'joining-node-7',
+      nodeAddress: 'ws://localhost:9096',
+      seedNodeAddress: 'http://localhost:8080',
+    });
+
+    const nodeService = NodeService.getInstance();
+    const systemTableCache = nodeService.getSystemTableCache();
+    for (const row of [
+      {
+        node_id: 'joining-node-7',
+        node_address: 'localhost:9096',
+        status: 'active',
+      },
+      {
+        node_id: 'seed-node',
+        node_address: 'localhost:8080',
+        status: 'active',
+      },
+      {
+        node_id: 'stopped-peer',
+        node_address: 'localhost:8086',
+        status: 'stopped',
+      },
+    ]) {
+      systemTableCache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT, row);
+    }
+
+    const callOrder = [];
+    service.resolveControlPlaneTargetAddressCandidates = () => [
+      'seed-node/message-group/mg-1-r1',
+    ];
+    service.messageRouter = {
+      nodeConnections: new Map([
+        ['seed-node', {state: 'connected'}],
+        ['stopped-peer', {state: 'disconnected'}],
+      ]),
+      getConnectionState(nodeId) {
+        return this.nodeConnections.get(nodeId)?.state || null;
+      },
+      async connectToNode(nodeId, wsAddress) {
+        callOrder.push(`connect:${nodeId}:${wsAddress}`);
+        this.nodeConnections.set(nodeId, {state: 'connected'});
+      },
+      async deliver(targetAddress, message) {
+        callOrder.push(`deliver:${targetAddress}:${message.state}`);
+        return {acknowledged: true};
+      },
+      getConnectedNodes() {
+        return ['seed-node'];
+      },
+    };
+
+    await service.connectToClusterNodes();
+    t.equal(
+      service.shouldReconnectClusterMesh(),
+      false,
+      'stopped peers should not keep mesh reconciliation armed',
+    );
+    callOrder.length = 0;
+
+    await service.sendControlPlaneNodeStateUpdate({state: 'ready'});
+
+    t.same(callOrder, [
+      'deliver:seed-node/message-group/mg-1-r1:ready',
+    ], 'ready heartbeats should ignore stopped peers when deciding whether to reconcile mesh');
+  });
+
+test('NodeJoiningService - shouldReconnectClusterMesh ignores peers already connecting or reconnecting',
+  async (t) => {
+    initializeTestEnvironment();
+
+    for (const peerConnectionState of ['connecting', 'reconnecting']) {
+      const service = new NodeJoiningService({
+        nodeId: `joining-node-${peerConnectionState}`,
+        nodeAddress: 'ws://localhost:9097',
+        seedNodeAddress: 'http://localhost:8080',
+      });
+
+      const nodeService = NodeService.getInstance();
+      const systemTableCache = nodeService.getSystemTableCache();
+      systemTableCache.clear?.();
+      for (const row of [
+        {
+          node_id: `joining-node-${peerConnectionState}`,
+          node_address: 'localhost:9097',
+          status: 'active',
+        },
+        {
+          node_id: 'seed-node',
+          node_address: 'localhost:8080',
+          status: 'active',
+        },
+        {
+          node_id: 'late-peer',
+          node_address: 'localhost:8087',
+          status: 'active',
+        },
+      ]) {
+        systemTableCache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.INSERT, row);
+      }
+
+      service.messageRouter = {
+        nodeConnections: new Map([
+          ['seed-node', {state: 'connected'}],
+          ['late-peer', {state: peerConnectionState}],
+        ]),
+        getConnectionState(nodeId) {
+          return this.nodeConnections.get(nodeId)?.state || null;
+        },
+        async connectToNode() {
+          throw new Error('unexpected reconnect attempt');
+        },
+        getConnectedNodes() {
+          return ['seed-node'];
+        },
+      };
+
+      await service.connectToClusterNodes();
+
+      t.equal(
+        service.shouldReconnectClusterMesh(),
+        false,
+        `mesh reconciliation should treat ${peerConnectionState} as already in progress`,
+      );
+    }
   });
 
 test('NodeJoiningService - fails without seed node address', async (t) => {
@@ -1207,20 +1561,30 @@ test('NodeJoiningService - full join with CREATE_SELF_HOSTED', async (t) => {
     };
     service.phaseCreateSelfHostedMessageGroup = async function() {
       const replicaId = 'mg-join-r1';
+      const unifiedAddress = `${this.nodeId}/message-group/${replicaId}`;
       this.messageGroupServices.set(replicaId, {
         groupId: 'mg-1',
-        unifiedAddress: `${this.nodeId}/message-group/${replicaId}`,
+        unifiedAddress,
         isLeaderReplica: () => true,
         getLeaderId: () => replicaId,
       });
+      this.messageRouter.register(unifiedAddress, async () => ({acknowledged: true}));
     };
 
     // Mock phases that require system tables (not available in this unit test)
     service.phaseQuerySystemState = async function() {
-      // Skip actual system table queries - just mark as complete
+      this.messageGroupServiceEndpointsPublished = true;
     };
     service.initializeReplicaHandler = function() {
       // Skip replica handler initialization
+    };
+    service.createCdcIntegrationService = function() {
+      this.cdcIntegrationService = {
+        upsertSystemTableRow: async () => ({success: true}),
+        updateSystemTableRow: async () => ({success: true}),
+        deleteSystemTableRow: async () => ({success: true}),
+      };
+      return this.cdcIntegrationService;
     };
     service.initializeControlPlaneService = async function() {
       // Skip control plane service initialization
@@ -1281,6 +1645,7 @@ test('NodeJoiningService - signals readiness after querying state', async (t) =>
   const order = [];
   const reporterAssignments = [];
   service.heartbeatService = {
+    stop() {},
     setNodeStateReporter(reporter) {
       reporterAssignments.push(reporter);
     },
@@ -1330,6 +1695,9 @@ test('NodeJoiningService - signals readiness after querying state', async (t) =>
   service.phaseQuerySystemState = async () => {
     order.push('query');
   };
+  service.activateMessageGroupServiceRows = async () => {
+    order.push('activate-message-group-rows');
+  };
   service.signalReadyForReplicas = async () => {
     order.push('ready');
   };
@@ -1338,13 +1706,270 @@ test('NodeJoiningService - signals readiness after querying state', async (t) =>
 
   t.equal(result.success, true, 'join should succeed');
   t.equal(order.includes('query'), true, 'should query system state');
+  t.equal(order.includes('activate-message-group-rows'), true,
+    'should activate message-group rows before ready publication');
   t.equal(order.includes('ready'), true, 'should signal readiness');
-  t.equal(order.indexOf('query') < order.indexOf('ready'), true,
-    'should signal readiness after state query');
+  t.equal(order.indexOf('query') < order.indexOf('activate-message-group-rows'),
+    true, 'should activate rows after state query');
+  t.equal(order.indexOf('activate-message-group-rows') < order.indexOf('ready'),
+    true, 'should signal readiness after row activation');
   t.same(
     reporterAssignments,
     [],
     'should not force control-plane reporter teardown after the initial ready signal',
+  );
+});
+
+test('NodeJoiningService - activates message-group rows after membership write',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const order = [];
+    const service = new NodeJoiningService({
+      nodeId: 'joining-node-activate-1',
+      nodeAddress: 'ws://localhost:9098',
+      seedNodeAddress: 'http://localhost:8080',
+    });
+
+    service.lifecycleStateMachine.transition = () => {};
+    service.getLeaderMessageGroupService = () => ({});
+    service.phaseContactSeed = async () => {
+      service.bootstrapResponse = {
+        success: true,
+        seedNodeId: 'seed-node-1',
+        seedNodeWsAddress: 'ws://localhost:8080',
+        messageGroupAssignment: {
+          strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
+          groupId: 'mg-1',
+          replicaCount: 1,
+        },
+        systemTableSnapshots: {
+          nodes: [],
+          partitions: [],
+          services: [],
+          tables: [],
+          message_groups: [],
+          replica_operations: [],
+        },
+      };
+      service.seedNodeId = 'seed-node-1';
+      service.seedNodeWsAddress = 'ws://localhost:8080';
+    };
+    service.phaseConnectWebSocket = async () => {
+      service.messageRouter = {
+        deliver: async () => ({acknowledged: true}),
+      };
+    };
+    service.phaseCreateSelfHostedMessageGroup = async () => {
+      service.messageGroupServices.set('mg-1-r0', {
+        groupId: 'mg-1',
+        unifiedAddress: 'joining-node-activate-1/message-group/mg-1-r0',
+        isLeaderReplica: () => true,
+        getLeaderId: () => 'mg-1-r0',
+      });
+    };
+    service.phaseJoinExistingMessageGroup = async () => {};
+    service.phaseWaitForLeadership = async () => {};
+    service.createCdcIntegrationService = () => {
+      service.cdcIntegrationService = {
+        updateSystemTableRow: async () => ({success: true}),
+      };
+      return service.cdcIntegrationService;
+    };
+    service.ensureLatencyTopologyOwners = () => {};
+    service.initializeReplicaHandler = () => {};
+    service.initializeMessageGroupServiceHandler = () => {
+      service.messageGroupServiceHandlerRegistered = true;
+    };
+    service.initializeControlPlaneService = async () => {
+      service.heartbeatService = {ready: true};
+    };
+    service.initializeRuntimeServiceHandler = () => {};
+    service.phaseQuerySystemState = async () => {
+      order.push('query');
+    };
+    service.activateMessageGroupServiceRows = async () => {
+      order.push('activate-message-group-rows');
+    };
+    service.startJoinOpportunisticBackfill = () => {
+      order.push('opportunistic-backfill');
+      return Promise.resolve();
+    };
+    service.waitForCanonicalJoinReadinessConvergence = async () => {
+      order.push('readiness');
+    };
+    service.signalReadyForReplicas = async () => {
+      order.push('ready-signal');
+    };
+    service.activateControlPlaneBackgroundWriters = () => {};
+    service.startLatencyTopologyLifecycle = () => {};
+
+    const result = await service.join();
+
+    t.equal(result.success, true, 'join should succeed');
+    t.same(
+      order,
+      [
+        'query',
+        'activate-message-group-rows',
+        'opportunistic-backfill',
+        'readiness',
+        'ready-signal',
+      ],
+      'service rows should activate before background repair and ready publication',
+    );
+  });
+
+test('NodeJoiningService - resumes same join session without replaying ' +
+  'completed startup checkpoints', async (t) => {
+  initializeTestEnvironment();
+
+  const joinSessionStore = new JoinSessionStore({
+    storage: new Map(),
+    now: () => Date.now(),
+  });
+  const phaseCalls = [];
+  let queryAttempts = 0;
+  const service = new NodeJoiningService({
+    nodeId: 'joining-node-resume-1',
+    nodeAddress: 'ws://localhost:9097',
+    seedNodeAddress: 'http://localhost:8080',
+    joinSessionId: 'session-resume-1',
+    joinSessionStore,
+  });
+
+  service.handleJoiningFailure = async (error) => ({
+    success: false,
+    error: error.message,
+  });
+  service.lifecycleStateMachine.transition = () => {};
+  service.getLeaderMessageGroupService = () => ({});
+  service.phaseContactSeed = async () => {
+    phaseCalls.push('contact');
+    service.bootstrapResponse = {
+      success: true,
+      seedNodeId: 'seed-node-1',
+      seedNodeWsAddress: 'ws://localhost:8080',
+      messageGroupAssignment: {
+        strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
+        groupId: 'mg-1',
+        replicaCount: 1,
+      },
+      systemTableSnapshots: {
+        nodes: [],
+        partitions: [],
+        services: [],
+        tables: [],
+        message_groups: [],
+        replica_operations: [],
+      },
+    };
+    service.seedNodeId = 'seed-node-1';
+    service.seedNodeWsAddress = 'ws://localhost:8080';
+  };
+  service.phaseConnectWebSocket = async () => {
+    phaseCalls.push('connect');
+    service.messageRouter = {
+      deliver: async () => ({acknowledged: true}),
+    };
+    service.controlPlaneTargetAddress = 'seed-node-1/message-group/mg-1-r0';
+  };
+  service.phaseCreateSelfHostedMessageGroup = async () => {
+    phaseCalls.push('message-group');
+    service.messageGroupServices.set('mg-1-r0', {
+      groupId: 'mg-1',
+      unifiedAddress: 'joining-node-resume-1/message-group/mg-1-r0',
+      isLeaderReplica: () => true,
+      getLeaderId: () => 'mg-1-r0',
+    });
+  };
+  service.phaseJoinExistingMessageGroup = async () => {};
+  service.phaseWaitForLeadership = async () => {
+    phaseCalls.push('leadership');
+  };
+  service.createCdcIntegrationService = () => {
+    phaseCalls.push('cdc');
+    service.cdcIntegrationService = {
+      ready: true,
+      updateSystemTableRow: async () => ({success: true}),
+    };
+    return service.cdcIntegrationService;
+  };
+  service.ensureLatencyTopologyOwners = () => {
+    phaseCalls.push('latency-owners');
+    service.latencyTopology = {ready: true};
+  };
+  service.initializeReplicaHandler = () => {
+    phaseCalls.push('replica-handler');
+  };
+  service.initializeMessageGroupServiceHandler = () => {
+    phaseCalls.push('message-group-handler');
+  };
+  service.initializeControlPlaneService = async () => {
+    phaseCalls.push('control-plane');
+    service.heartbeatService = {ready: true};
+  };
+  service.initializeRuntimeServiceHandler = () => {
+    phaseCalls.push('runtime-handler');
+  };
+  service.phaseQuerySystemState = async () => {
+    phaseCalls.push('query');
+    queryAttempts += 1;
+    if (queryAttempts === 1) {
+      throw new Error('query failed');
+    }
+  };
+  service.waitForCanonicalJoinReadinessConvergence = async () => {
+    phaseCalls.push('readiness');
+  };
+  service.activateMessageGroupServiceRows = async () => {
+    phaseCalls.push('activate-message-group-rows');
+  };
+  service.signalReadyForReplicas = async () => {
+    phaseCalls.push('ready-signal');
+  };
+  service.activateControlPlaneBackgroundWriters = () => {
+    phaseCalls.push('activate');
+  };
+  service.startLatencyTopologyLifecycle = () => {
+    phaseCalls.push('latency-start');
+  };
+
+  const firstResult = await service.join();
+  t.equal(firstResult.success, false, 'first join attempt should fail at query state');
+  t.match(firstResult.error, /query failed/,
+    'failure should surface the query-state error');
+
+  const secondResult = await service.join();
+  t.equal(secondResult.success, true, 'second join attempt should resume and succeed');
+  t.same(phaseCalls, [
+    'contact',
+    'connect',
+    'message-group',
+    'leadership',
+    'cdc',
+    'latency-owners',
+    'replica-handler',
+    'message-group-handler',
+    'control-plane',
+    'runtime-handler',
+    'query',
+    'query',
+    'activate-message-group-rows',
+    'readiness',
+    'ready-signal',
+    'activate',
+    'latency-start',
+  ], 'same-session retry should skip completed startup checkpoints');
+
+  const persistedSession = await joinSessionStore.loadSession({
+    nodeId: 'joining-node-resume-1',
+    sessionId: 'session-resume-1',
+  });
+  t.equal(
+    persistedSession?.checkpoint,
+    JOIN_CHECKPOINT.FINALIZED,
+    'successful retry should persist the finalized join checkpoint',
   );
 });
 
@@ -1389,22 +2014,41 @@ test(
     service.phaseConnectWebSocket = async () => {
       service.messageRouter = {
         deliver: async () => ({acknowledged: true}),
+        isRegistered: (address) =>
+          address === 'joining-node-join-gate-1/message-group/mg-join-r1',
       };
       service.controlPlaneTargetAddress = 'seed-node-1/message-group/mg-1-r0';
     };
-    service.phaseCreateSelfHostedMessageGroup = async () => {};
+    service.phaseCreateSelfHostedMessageGroup = async () => {
+      service.messageGroupServices.set('mg-join-r1', {
+        groupId: 'mg-1',
+        unifiedAddress: 'joining-node-join-gate-1/message-group/mg-join-r1',
+        isLeaderReplica: () => true,
+        getLeaderId: () => 'mg-join-r1',
+      });
+    };
     service.phaseJoinExistingMessageGroup = async () => {};
     service.phaseWaitForLeadership = async () => {};
     service.initializeReplicaHandler = () => {};
-    service.initializeMessageGroupServiceHandler = () => {};
+    service.initializeMessageGroupServiceHandler = () => {
+      service.messageGroupServiceHandlerRegistered = true;
+    };
     service.initializeControlPlaneService = async () => {};
-    service.createCdcIntegrationService = () => ({});
+    service.createCdcIntegrationService = () => {
+      service.cdcIntegrationService = {
+        upsertSystemTableRow: async () => ({success: true}),
+        updateSystemTableRow: async () => ({success: true}),
+      };
+      return service.cdcIntegrationService;
+    };
     service.ensureLatencyTopologyOwners = () => ({});
     service.rpcClient = {
       shutdown: async () => {},
     };
     service.initializeRuntimeServiceHandler = () => {};
-    service.phaseQuerySystemState = async () => {};
+    service.phaseQuerySystemState = async () => {
+      service.messageGroupServiceEndpointsPublished = true;
+    };
     service.signalReadyForReplicas = async () => {};
     service.systemCacheHydrated = true;
     service.joinReadinessSnapshotProvider = async () => {
@@ -1451,6 +2095,83 @@ test('NodeJoiningService - canonical join readiness reason classification is det
       reasons,
       ['routing_not_ready', 'schema_version_unknown', 'topology_not_ready'],
       'classification should use stable precedence for canonical reasons',
+    );
+  });
+
+test('NodeJoiningService - canonical readiness accepts local kernel ingress',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const service = new NodeJoiningService({
+      nodeId: 'joining-node-local-ingress',
+      nodeAddress: 'ws://localhost:9090',
+      seedNodeAddress: 'http://localhost:8080',
+    });
+    service.bootstrapResponse = {
+      messageGroupAssignment: {
+        groupId: 'mg-1',
+        peerAddresses: ['seed-node/message-group/mg-1-r1'],
+      },
+    };
+    service.messageRouter = {
+      getConnectionState() {
+        return STATE.DISCONNECTED;
+      },
+    };
+    service.messageGroupServices.set('mg-local-r1', {
+      groupId: 'mg-1',
+      unifiedAddress:
+        'joining-node-local-ingress/message-group/mg-local-r1',
+      isLeaderReplica: () => true,
+    });
+
+    const snapshot = service.buildCanonicalJoinReadinessSnapshot({
+      systemTableCache: new SystemTableCache(),
+      tableName: TABLES.SERVICES,
+    });
+
+    t.equal(
+      snapshot.controlPlaneTargetAddress,
+      'joining-node-local-ingress/message-group/mg-local-r1',
+      'local kernel ingress should be preferred for readiness checks',
+    );
+    t.equal(
+      snapshot.routingReady,
+      true,
+      'local control-plane ingress should satisfy routing readiness',
+    );
+  },
+);
+
+test('NodeJoiningService - canonical readiness snapshot tracks active required node IDs',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const service = new NodeJoiningService({
+      nodeId: 'joining-node-required-node-ids',
+      nodeAddress: 'ws://localhost:9090',
+      seedNodeAddress: 'http://localhost:8080',
+    });
+    const cache = new SystemTableCache();
+
+    cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, {
+      [COLUMN.NODE_ID]: 'seed-node',
+      [COLUMN.STATUS]: 'active',
+    });
+    cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, {
+      [COLUMN.NODE_ID]: 'joining-node-required-node-ids',
+      [COLUMN.STATUS]: 'active',
+    });
+
+    const snapshot = service.buildCanonicalJoinReadinessSnapshot({
+      systemTableCache: cache,
+      tableName: TABLES.SERVICES,
+    });
+
+    t.same(
+      snapshot.requiredNodeIds.sort(),
+      ['joining-node-required-node-ids', 'seed-node'],
+      'canonical readiness snapshot should retain active node diagnostics',
     );
   });
 
@@ -1564,6 +2285,83 @@ test('NodeJoiningService - canonical join timeout preserves topology diagnostics
       errorEvents.at(-1)?.context?.timeoutKind,
       'no_progress',
       'timeout log should classify stagnant readiness explicitly',
+    );
+  });
+
+test('NodeJoiningService - canonical readiness blocked log includes control-plane diagnostics',
+  async (t) => {
+    initializeTestEnvironment();
+
+    let now = 0;
+    const warnEvents = [];
+    const service = new NodeJoiningService({
+      nodeId: 'joining-node-join-gate-blocked',
+      nodeAddress: 'ws://localhost:9090',
+      seedNodeAddress: 'http://localhost:8080',
+      now: () => now,
+      sleep: async (delayMs = 0) => {
+        now += delayMs;
+      },
+      config: {
+        joinReadinessTimeoutMs: 6,
+        joinReadinessPollIntervalMs: 2,
+      },
+    });
+    service.systemCacheHydrated = true;
+    service.logger = {
+      debug() {},
+      info() {},
+      warn(message, context) {
+        warnEvents.push({message, context});
+      },
+      error() {},
+    };
+    service.joinReadinessSnapshotProvider = async () => ({
+      routingReady: false,
+      topologyReady: false,
+      requiredSchemaVersion: '1740589945123:7:seed-1',
+      appliedSchemaVersion: '1740589945123:7:seed-1',
+      missingNodeEndpointNodeIds: ['joining-node-join-gate-blocked'],
+      missingPostgresWireNodeIds: ['seed-node'],
+      controlPlaneTargetAddress: 'seed-node/message-group/mg-1-r1',
+      controlPlaneTargetCandidates: [
+        'joining-node-join-gate-blocked/message-group/mg-local-r1',
+        'seed-node/message-group/mg-1-r1',
+      ],
+      controlPlaneTargetConnectionStates: {
+        'joining-node-join-gate-blocked/message-group/mg-local-r1': 'self',
+        'seed-node/message-group/mg-1-r1': STATE.DISCONNECTED,
+      },
+    });
+
+    try {
+      await service.waitForCanonicalJoinReadinessConvergence();
+    } catch (_error) {
+      // Expected timeout for the blocked readiness snapshot.
+    }
+
+    t.equal(
+      warnEvents[0]?.message,
+      JOINING_LOG_MSG.CANONICAL_READINESS_BLOCKED,
+      'blocked canonical readiness should emit a progress log',
+    );
+    t.same(
+      warnEvents[0]?.context?.reasons,
+      ['routing_not_ready', 'topology_not_ready'],
+      'blocked progress log should classify the current readiness reasons',
+    );
+    t.equal(
+      warnEvents[0]?.context?.controlPlaneTargetAddress,
+      'seed-node/message-group/mg-1-r1',
+      'blocked progress log should include the selected control-plane target',
+    );
+    t.same(
+      warnEvents[0]?.context?.controlPlaneTargetCandidates,
+      [
+        'joining-node-join-gate-blocked/message-group/mg-local-r1',
+        'seed-node/message-group/mg-1-r1',
+      ],
+      'blocked progress log should include all target candidates',
     );
   });
 
@@ -2096,9 +2894,9 @@ test('NodeJoiningService - registerNodeInCluster seeds local discovery-critical 
         upsertSystemTableRow: async () => ({success: true}),
         sqlQueryEngine: {},
       };
+      service.sendControlPlaneNodeStateUpdate = async () => {};
       service.getNodeStorageBudgetService = () => ({
-        registerNodeBudget: async ({nodeRow}) => ({
-          result: {success: true},
+        resolveBudgetRow: (nodeRow) => ({
           budgetRow: {
             ...nodeRow,
             [COLUMN.STORAGE_BUDGET_BYTES]: 1024,
@@ -2119,9 +2917,19 @@ test('NodeJoiningService - registerNodeInCluster seeds local discovery-critical 
         cache.get(TABLES.NODES, 'join-cache-seed-node'),
         'join should seed the local nodes cache row',
       );
+      t.equal(
+        cache.get(TABLES.NODES, 'join-cache-seed-node')?.[COLUMN.CONNECTION_STATE],
+        STATE.CONNECTED,
+        'join should seed the local nodes cache with the connected admission state',
+      );
       t.ok(
         cache.get(TABLES.NODE_ENDPOINTS, 'ep-join-cache-seed-node-ws'),
         'join should seed the local node_endpoints cache row',
+      );
+      t.equal(
+        service.messageGroupServiceEndpointsPublished,
+        true,
+        'join should mark endpoint publication complete for later activation',
       );
       t.same(
         cache.filter(TABLES.SERVICE_ENDPOINTS, (row) =>
@@ -2399,12 +3207,14 @@ test('NodeJoiningService - emits events', async (t) => {
     service.triggerJoinReconciler = async function() {};
     service.phaseCreateSelfHostedMessageGroup = async function() {
       const replicaId = 'mg-join-r1';
+      const unifiedAddress = `${this.nodeId}/message-group/${replicaId}`;
       this.messageGroupServices.set(replicaId, {
         groupId: 'mg-1',
-        unifiedAddress: `${this.nodeId}/message-group/${replicaId}`,
+        unifiedAddress,
         isLeaderReplica: () => true,
         getLeaderId: () => replicaId,
       });
+      this.messageRouter.register(unifiedAddress, async () => ({acknowledged: true}));
     };
     service.phaseWaitForLeadership = async function() {};
     service.getLeaderMessageGroupService = function() {
@@ -2413,8 +3223,18 @@ test('NodeJoiningService - emits events', async (t) => {
     };
 
     // Mock phases that require system tables (not available in this unit test)
-    service.phaseQuerySystemState = async function() {};
+    service.phaseQuerySystemState = async function() {
+      this.messageGroupServiceEndpointsPublished = true;
+    };
     service.initializeReplicaHandler = function() {};
+    service.createCdcIntegrationService = function() {
+      this.cdcIntegrationService = {
+        upsertSystemTableRow: async () => ({success: true}),
+        updateSystemTableRow: async () => ({success: true}),
+        deleteSystemTableRow: async () => ({success: true}),
+      };
+      return this.cdcIntegrationService;
+    };
     service.initializeControlPlaneService = async function() {};
     service.initializeRuntimeServiceHandler = function() {};
     service.signalReadyForReplicas = async function() {};

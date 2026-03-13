@@ -289,6 +289,56 @@ test('createOperation - creates reservation for REPLACE operation',
     t.end();
   });
 
+test('createOperation uses isolated SQL sessions for operation and reservation writes',
+  async (t) => {
+    initializeConfig();
+    const observedSessions = [];
+    const baseEngine = createTrackingSqlEngine();
+    const sqlEngine = {
+      async executeQuery(sql, params, options = {}) {
+        if (sql.includes('INSERT INTO replica_operations') ||
+            sql.includes('INSERT INTO storage_reservations')) {
+          observedSessions.push(options.sessionId || null);
+          if (!options.sessionId || options.sessionId === 'default') {
+            return {
+              success: false,
+              error: 'Transaction already active for this session',
+            };
+          }
+        }
+        return baseEngine.executeQuery(sql, params, options);
+      },
+    };
+    const {coordinator} = createCoordinatorWithStorage({sqlQueryEngine: sqlEngine});
+
+    try {
+      const operation = await coordinator.createOperation({
+        type: OperationType.ADD,
+        partitionId: 'partition-session-test',
+        nodeId: 'target-node-1',
+      });
+
+      t.ok(operation, 'operation should be created');
+      t.equal(
+        observedSessions.length,
+        2,
+        'should execute isolated sessions for operation and reservation inserts',
+      );
+      t.not(
+        observedSessions[0],
+        'default',
+        'operation insert should not reuse the default session',
+      );
+      t.not(
+        observedSessions[1],
+        'default',
+        'reservation insert should not reuse the default session',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  });
+
 test('createOperation - no reservation for REMOVE operation',
   async (t) => {
     initializeConfig();

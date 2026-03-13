@@ -23,7 +23,7 @@ import {
   CDC_LIFECYCLE_LOG_MSG,
 } from '../../constants/cdc-lifecycle-constants.js';
 import {
-  getMissingSystemServiceLeaders,
+  getBlockingSystemServiceLeaders,
   getMissingSystemServiceLeaderCount,
 } from '../../cache/leader-readiness-gate.js';
 import {isNodeRecordReady} from '../../node/node-readiness-policy.js';
@@ -48,6 +48,9 @@ import {
   TABLES,
   CDC_OPERATION,
 } from '../../constants/index.js';
+import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+} from '../../control-plane/control-plane-readiness-constants.js';
 
 const LOG_HYDRATION_STEP_COMPLETE = 'Cache hydration step complete';
 const HYDRATION_STEP = Object.freeze({
@@ -61,6 +64,11 @@ const HYDRATION_STEP = Object.freeze({
   WIRE_PARTITIONS: 'wirePartitionServicesForNormalMode',
   WIRE_MESSAGE_GROUPS: 'wireMessageGroupServicesForNormalMode',
 });
+const SEED_REQUIRED_WRITE_TABLES = Object.freeze([
+  TABLES.NODES,
+  TABLES.NODE_ENDPOINTS,
+  TABLES.SERVICES,
+]);
 const SQL_SELECT_ALL_FROM_TABLE = (tableName) =>
   `SELECT * FROM ${tableName}`;
 const LOG_CDC_INITIALIZED = 'CDC integration initialized by owner';
@@ -200,6 +208,10 @@ class SeedCacheHydrationPhase {
       messageRouter: d.getMessageRouter(),
       nodeId: d.getNodeId(),
       rebalanceCoordinator: d.getRebalanceCoordinator(),
+      controlPlaneReadinessService:
+        d.getRebalanceCoordinator()?.controlPlaneReadinessService || null,
+      defaultRoutingReadinessDimension:
+        CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
       migrationAutoWire: false,
     });
     wireMigrationWorkflowOwners({
@@ -679,7 +691,9 @@ class SeedCacheHydrationPhase {
   }
 
   /**
-   * Wait for system leadership info to appear in cache.
+   * Wait for the blocking system-table write leaders required to finish
+   * seed bootstrap publication. Message-group service rows may remain
+   * non-active until the post-pipeline activation barrier completes.
    * @return {Promise<void>}
    */
   async waitForSystemServiceLeadersInCache() {
@@ -698,9 +712,10 @@ class SeedCacheHydrationPhase {
 
     const startTime = Date.now();
     while (Date.now() - startTime < timeoutMs) {
-      const missing = getMissingSystemServiceLeaders(cache, {
-        requireLeaderNodeId: true,
-      });
+      const missing = getBlockingSystemServiceLeaders(
+        cache,
+        SEED_REQUIRED_WRITE_TABLES,
+      );
       const missingCount =
         getMissingSystemServiceLeaderCount(missing);
 
@@ -712,9 +727,10 @@ class SeedCacheHydrationPhase {
       delay = Math.min(delay * backoffMultiplier, maxDelay);
     }
 
-    const missing = getMissingSystemServiceLeaders(cache, {
-      requireLeaderNodeId: true,
-    });
+    const missing = getBlockingSystemServiceLeaders(
+      cache,
+      SEED_REQUIRED_WRITE_TABLES,
+    );
     const allMissing = [
       ...missing.missingPartitionLeaders,
       ...missing.missingMessageGroupLeaders,

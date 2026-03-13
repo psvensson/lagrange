@@ -64,7 +64,7 @@ test('examples runner - packageExample computes deterministic identity and diges
     const packaged = await packageExample(exampleDir);
 
     t.equal(packaged.id, '01-basic');
-    t.equal(packaged.functionId, 'example-01-basic-v1_0_0');
+    t.equal(packaged.functionId, 'example-01-basic-v1-0-0');
     t.equal(packaged.callbackExport, 'run');
     t.ok(String(packaged.digest).startsWith('sha256:'));
     t.equal(packaged.expected.minRows, 1);

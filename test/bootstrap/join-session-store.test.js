@@ -55,8 +55,8 @@ test('JoinSessionStore - rejects checkpoint regression and duplicate side-effect
     await store.advanceCheckpoint({
       nodeId: 'node-b',
       sessionId: 'session-2',
-      checkpoint: JOIN_CHECKPOINT.LEASE_ASSIGNED,
-      phase: 'lease',
+      checkpoint: JOIN_CHECKPOINT.READY_LEASE_ASSIGNED,
+      phase: 'ready-lease',
     });
 
     await t.rejects(
@@ -74,6 +74,6 @@ test('JoinSessionStore - rejects checkpoint regression and duplicate side-effect
       nodeId: 'node-b',
       sessionId: 'session-2',
     });
-    t.equal(duplicate.checkpoint, JOIN_CHECKPOINT.LEASE_ASSIGNED,
+    t.equal(duplicate.checkpoint, JOIN_CHECKPOINT.READY_LEASE_ASSIGNED,
       'duplicate create/load should keep latest checkpoint state');
   });

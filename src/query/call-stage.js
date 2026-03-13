@@ -41,7 +41,7 @@ function buildStageContext(execCtx, planDiagnostics) {
     lookup: (table, keys) => execCtx.lookup(table, keys),
     broadcast: (ref, dataset) => execCtx.broadcast(ref, dataset),
     useBroadcast: (ref) => execCtx.useBroadcast(ref),
-    call: async (query, params, handler, opts) => {
+    call: (query, params, handler, opts) => {
       if (typeof query === TYPEOF.STRING) {
         const result = classifyNestedCall(query);
         if (planDiagnostics) {
@@ -60,13 +60,23 @@ function buildStageContext(execCtx, planDiagnostics) {
       }
       budgetEnforcer.recordNestedCall();
       budgetEnforcer.incrementInflight();
+      let callResult;
       try {
-        return await execCtx.call(
+        callResult = execCtx.call(
           query, params, handler, opts,
         );
-      } finally {
+      } catch (error) {
         budgetEnforcer.decrementInflight();
+        throw error;
       }
+      if (callResult &&
+          typeof callResult.then === TYPEOF.FUNCTION) {
+        return Promise.resolve(callResult).finally(() => {
+          budgetEnforcer.decrementInflight();
+        });
+      }
+      budgetEnforcer.decrementInflight();
+      return callResult;
     },
     isCancelled: () => execCtx.isCancelled(),
     throwIfCancelled: () => execCtx.throwIfCancelled(),

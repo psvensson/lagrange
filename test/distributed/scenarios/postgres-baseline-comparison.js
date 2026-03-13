@@ -31,7 +31,10 @@ import {
   SCENARIO_PHASE,
 } from '../harness/constants.js';
 import {LoadGenerator} from '../harness/load-generator.js';
-import {evaluateAssertionPolicy} from '../harness/assertion-policy.js';
+import {
+  evaluateAssertionPolicy,
+  collectLoadMetricHardFailures,
+} from '../harness/assertion-policy.js';
 import {ConsistencyEvaluatorV2} from '../harness/consistency-evaluator.js';
 import {NodeClient} from '../harness/node-client.js';
 import {PhaseOrchestrator} from '../harness/phase-orchestrator.js';
@@ -233,6 +236,7 @@ const BENCHMARK_PRELOAD_MAX_REPLICA_OPS_IN_FLIGHT_DEFAULT = 0;
 const BENCHMARK_REBALANCE_HYSTERESIS_MIN_DELTA_DEFAULT = 2;
 const BENCHMARK_LOAD_REBALANCE_MONITOR_POLL_INTERVAL_MS_DEFAULT = 250;
 const BENCHMARK_CRITICAL_REBALANCING_SUSTAINED_SAMPLES_DEFAULT = 3;
+const LOAD_PROGRESS_HEARTBEAT_INTERVAL_MS = 10000;
 const HEARTBEAT_FRESHNESS_SCHEMA_VERSION = 1;
 const HEARTBEAT_FRESHNESS_STATUS_OK = 'ok';
 const HEARTBEAT_FRESHNESS_STATUS_FAILED = 'failed';
@@ -312,6 +316,9 @@ const PHASE_REASON_SUMMARY_MAX_ENTRIES = 5;
 const STARTUP_DECISION_SCHEMA_VERSION = 1;
 const FAILURE_ARTIFACT_SCHEMA_VERSION = 1;
 const SATURATION_SCHEMA_VERSION = 1;
+const BASELINE_STATUS_SKIPPED = 'skipped';
+const BASELINE_SKIP_REASON_SUT_HARD_LOAD_FAILURE =
+  'sut_hard_load_failure';
 const READINESS_TIMELINE_EVENT_POLL_SNAPSHOT = 'poll_snapshot';
 const READINESS_TIMELINE_EVENT_REASON_TRANSITION = 'reason_transition';
 const SATURATION_PATTERN_CDC_FORWARD_TIMEOUT =
@@ -1196,11 +1203,123 @@ function resolveScenarioOverrides(cluster) {
     typeof overrides?.getCdcTelemetryByNode === 'function' ?
       overrides.getCdcTelemetryByNode :
       null;
+  const phaseEventSink =
+    typeof overrides?.phaseEventSink === 'function' ?
+      overrides.phaseEventSink :
+      null;
   return {
     createPostgresPool,
     createLoadGenerator,
     getCdcTelemetryByNode,
+    phaseEventSink,
+    progressHeartbeatIntervalMs: resolveProgressHeartbeatIntervalMs(
+      overrides?.progressHeartbeatIntervalMs,
+    ),
     timing: resolveScenarioTiming(overrides?.timing),
+  };
+}
+
+function resolveProgressHeartbeatIntervalMs(value) {
+  return Number.isInteger(value) && value > ZERO ?
+    value :
+    LOAD_PROGRESS_HEARTBEAT_INTERVAL_MS;
+}
+
+function emitScenarioPhaseEvent(phaseEventSink, event) {
+  if (typeof phaseEventSink !== 'function' ||
+      !event || typeof event !== 'object') {
+    return;
+  }
+  try {
+    phaseEventSink({...event});
+  } catch (_error) {
+    // Progress sinks are observational only.
+  }
+}
+
+function buildLoadProgressDetails(label, heartbeatCount, metrics = {}) {
+  return {
+    label,
+    heartbeatCount,
+    total: normalizeNonNegativeInteger(metrics.total),
+    success: normalizeNonNegativeInteger(metrics.success),
+    failed: normalizeNonNegativeInteger(metrics.failed),
+    errors: normalizeNonNegativeInteger(metrics.errors),
+    attemptErrors: normalizeNonNegativeInteger(metrics.attemptErrors),
+    opsPerSec: Number.isFinite(metrics.opsPerSec) ?
+      metrics.opsPerSec :
+      ZERO,
+    dispatchedOperations: normalizeNonNegativeInteger(
+      metrics.dispatchedOperations,
+    ),
+    targetOperations: normalizeNonNegativeInteger(
+      metrics.targetOperations,
+    ),
+    undispatchedOperations: normalizeNonNegativeInteger(
+      metrics.undispatchedOperations,
+    ),
+    rejectedOperations: normalizeNonNegativeInteger(
+      metrics.rejectedOperations,
+    ),
+  };
+}
+
+function startLoadProgressReporter({
+  loadRun,
+  intervalMs,
+  label,
+  onProgress,
+}) {
+  if (typeof onProgress !== 'function' ||
+      typeof loadRun?.getMetrics !== 'function') {
+    return {
+      stop() {},
+    };
+  }
+
+  const heartbeatIntervalMs = resolveProgressHeartbeatIntervalMs(intervalMs);
+  let stopped = false;
+  let heartbeatCount = ZERO;
+  let timerId = null;
+
+  const scheduleNextHeartbeat = () => {
+    if (stopped) {
+      return;
+    }
+    timerId = setTimeout(() => {
+      timerId = null;
+      if (stopped) {
+        return;
+      }
+      let metrics = null;
+      try {
+        metrics = loadRun.getMetrics();
+      } catch (_error) {
+        scheduleNextHeartbeat();
+        return;
+      }
+      heartbeatCount += ONE;
+      onProgress(
+        label + ' heartbeat',
+        buildLoadProgressDetails(label, heartbeatCount, metrics),
+      );
+      scheduleNextHeartbeat();
+    }, heartbeatIntervalMs);
+    if (typeof timerId.unref === 'function') {
+      timerId.unref();
+    }
+  };
+
+  scheduleNextHeartbeat();
+
+  return {
+    stop() {
+      stopped = true;
+      if (timerId !== null) {
+        clearTimeout(timerId);
+        timerId = null;
+      }
+    },
   };
 }
 
@@ -1457,6 +1576,8 @@ async function runBaselineSharedLoad({
   nodeFailureThreshold,
   nodeFailureCooldownMs,
   tableName,
+  onProgress,
+  progressHeartbeatIntervalMs,
 }) {
   const loadNodes = buildBaselineLoadNodes(pool, loadNodeCount);
   const loadGenerator = createLoadGenerator(loadNodes, {
@@ -1487,7 +1608,17 @@ async function runBaselineSharedLoad({
       {}),
   });
   const baselineRun = loadGenerator.start();
-  return baselineRun.waitComplete();
+  const progressReporter = startLoadProgressReporter({
+    loadRun: baselineRun,
+    intervalMs: progressHeartbeatIntervalMs,
+    label: 'baseline load',
+    onProgress,
+  });
+  try {
+    return await baselineRun.waitComplete();
+  } finally {
+    progressReporter.stop();
+  }
 }
 
 async function runSutSharedLoad({
@@ -1508,6 +1639,8 @@ async function runSutSharedLoad({
   requiredSchemaVersion,
   benchmarkConfig,
   runtimeAdmissionOwnership = null,
+  onProgress,
+  progressHeartbeatIntervalMs,
 }) {
   let rebalancingPressureMonitor = null;
   const routedLoadNodes = loadNodes.map((node) => ({
@@ -1560,6 +1693,12 @@ async function runSutSharedLoad({
       {}),
   });
   const loadRun = loadGenerator.start();
+  const progressReporter = startLoadProgressReporter({
+    loadRun,
+    intervalMs: progressHeartbeatIntervalMs,
+    label: 'system-under-test load',
+    onProgress,
+  });
   rebalancingPressureMonitor = startLoadRebalancingPressureMonitor({
     nodeClient,
     seedNode,
@@ -1579,6 +1718,7 @@ async function runSutSharedLoad({
   } catch (error) {
     loadError = error;
   } finally {
+    progressReporter.stop();
     rebalancingPressure = rebalancingPressureMonitor ?
       await rebalancingPressureMonitor.stop() :
       buildLoadRebalancingPressureState({
@@ -1978,9 +2118,7 @@ function detectDiscoveryReadinessContradictions(readinessState) {
   }
 
   if (readinessState.topologyReady === true &&
-      ((readinessState.replicaOpsInFlight !== null &&
-          readinessState.replicaOpsInFlight > ZERO) ||
-        readinessState.leadershipStable !== true ||
+      (readinessState.leadershipStable !== true ||
         hasTopologyBlocker)) {
     contradictions.push(DISCOVERY_READINESS_REASON_STATE_CONTRADICTION);
   }
@@ -6580,6 +6718,8 @@ async function resolveBaselineMetrics({
   provider,
   networkName,
   benchmarkTableName,
+  onProgress,
+  progressHeartbeatIntervalMs,
 }) {
   const effectiveBaselineLoadNodeCount =
     Number.isInteger(baselineLoadNodeCountOverride) &&
@@ -6616,9 +6756,20 @@ async function resolveBaselineMetrics({
   let baselineLoadNodeCount = baselineBenchmarkConfig.baselineLoadNodeCount;
   let baselinePoolMaxConnections = baselineBenchmarkConfig.loadMaxInFlight;
 
+  if (baselineMetrics) {
+    onProgress?.('reusing cached baseline metrics', {
+      cacheHit: true,
+      cacheReason: cacheMetadata.reason || BASELINE_CACHE_HIT_REASON,
+    });
+  }
+
   if (!baselineMetrics) {
     let baselinePool = null;
     try {
+      onProgress?.('preparing baseline comparison environment', {
+        cacheHit: false,
+        replicationFactor: baselineBenchmarkConfig.replicationFactor,
+      });
       const benchmarkRunId = Date.now();
       const primaryContainerName =
         BENCHMARK_CONTAINER_NAME_PREFIX + benchmarkRunId + BENCHMARK_PRIMARY_SUFFIX;
@@ -6646,6 +6797,9 @@ async function resolveBaselineMetrics({
         database: baselineBenchmarkConfig.database,
         timeoutMs: baselineBenchmarkConfig.readyTimeoutMs,
         pollIntervalMs: baselineBenchmarkConfig.readyPollIntervalMs,
+      });
+      onProgress?.('baseline primary ready', {
+        replicationFactor: baselineBenchmarkConfig.replicationFactor,
       });
       await configurePrimaryReplication(
         provider,
@@ -6700,6 +6854,12 @@ async function resolveBaselineMetrics({
         baselinePrimaryContainerId,
         baselineBenchmarkConfig,
       );
+      onProgress?.('baseline replicas synchronized', {
+        replicaCount: Math.max(
+          ZERO,
+          baselineBenchmarkConfig.replicationFactor - ONE,
+        ),
+      });
       const loadNodeCount = Math.max(ONE, baselineBenchmarkConfig.baselineLoadNodeCount);
       const poolMaxConnections = Math.max(ONE, baselineBenchmarkConfig.loadMaxInFlight);
       baselineLoadNodeCount = loadNodeCount;
@@ -6716,6 +6876,10 @@ async function resolveBaselineMetrics({
       });
 
       await ensurePostgresBenchmarkTable(baselinePool, benchmarkTableName);
+      onProgress?.('starting baseline load run', {
+        baselineLoadNodeCount: loadNodeCount,
+        loadOpsPerSec: baselineBenchmarkConfig.loadOpsPerSec,
+      });
       baselineMetrics = await runBaselineSharedLoad({
         pool: baselinePool,
         createLoadGenerator: scenarioOverrides.createLoadGenerator,
@@ -6729,6 +6893,8 @@ async function resolveBaselineMetrics({
         nodeFailureThreshold: baselineBenchmarkConfig.nodeFailureThreshold,
         nodeFailureCooldownMs: baselineBenchmarkConfig.nodeFailureCooldownMs,
         tableName: benchmarkTableName,
+        onProgress,
+        progressHeartbeatIntervalMs,
       });
       try {
         cacheMetadata = await storeBaselineMetricsInCache(
@@ -7889,6 +8055,7 @@ async function run(cluster) {
   const orchestrator = new PhaseOrchestrator({
     onEvent: (event) => {
       phaseEvents.push(event);
+      emitScenarioPhaseEvent(scenarioOverrides.phaseEventSink, event);
     },
   });
 
@@ -8332,6 +8499,13 @@ async function run(cluster) {
         requiredSchemaVersion: state.requiredSchemaVersion,
         benchmarkConfig,
         runtimeAdmissionOwnership: state.runtimeAdmissionOwnership,
+        onProgress: (message, details) => emitPhaseProgress(
+          phaseContext,
+          message,
+          details,
+        ),
+        progressHeartbeatIntervalMs:
+          scenarioOverrides.progressHeartbeatIntervalMs,
       });
       state.loadMetrics = normalizeLoadMetrics(sutLoadResult.metrics);
       state.rebalancingPressure.load = sutLoadResult.rebalancingPressure;
@@ -8381,6 +8555,26 @@ async function run(cluster) {
                 state.heartbeatFreshnessResult,
               ),
           ],
+        };
+      }
+      const hardLoadFailures = collectLoadMetricHardFailures(state.loadMetrics);
+      if (hardLoadFailures.length > ZERO) {
+        return {
+          status: PHASE_STATUS.FAIL,
+          artifacts: {
+            sutLoadNodeIds: state.effectiveSutLoadNodes.map((node) => node.id),
+            loadMetrics: state.loadMetrics,
+            rebalancingPressure: state.rebalancingPressure.load,
+            saturation: state.saturation,
+            baselineSkipped: {
+              status: BASELINE_STATUS_SKIPPED,
+              reason: BASELINE_SKIP_REASON_SUT_HARD_LOAD_FAILURE,
+              hardFailureCodes: hardLoadFailures.map((failure) =>
+                String(failure.code || 'unknown')),
+            },
+          },
+          errors: hardLoadFailures.map((failure) =>
+            String(failure.message || failure)),
         };
       }
       state.overloadPolicyResult = evaluateOverloadPolicy(
@@ -8437,6 +8631,13 @@ async function run(cluster) {
         provider,
         networkName,
         benchmarkTableName,
+        onProgress: (message, details) => emitPhaseProgress(
+          phaseContext,
+          message,
+          details,
+        ),
+        progressHeartbeatIntervalMs:
+          scenarioOverrides.progressHeartbeatIntervalMs,
       });
       state.baselineMetrics = baseline.baselineMetrics;
       state.baselineCacheMetadata = baseline.baselineCacheMetadata;

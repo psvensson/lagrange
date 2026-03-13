@@ -21,22 +21,22 @@ test('JoinCoordinator - replays idempotently and skips completed checkpoints',
 
     const steps = [
       {
-        checkpoint: JOIN_CHECKPOINT.MEMBERSHIP_WRITTEN,
-        phase: 'membership',
+        checkpoint: JOIN_CHECKPOINT.SEED_CONTACTED,
+        phase: 'seed',
         run: async () => {
           counters.membership += 1;
         },
       },
       {
-        checkpoint: JOIN_CHECKPOINT.LEASE_ASSIGNED,
-        phase: 'lease',
+        checkpoint: JOIN_CHECKPOINT.JOIN_INFRASTRUCTURE_READY,
+        phase: 'infrastructure',
         run: async () => {
           counters.lease += 1;
         },
       },
       {
-        checkpoint: JOIN_CHECKPOINT.HANDSHAKE_COMPLETED,
-        phase: 'handshake',
+        checkpoint: JOIN_CHECKPOINT.MEMBERSHIP_WRITTEN,
+        phase: 'membership',
         run: async () => {
           counters.handshake += 1;
         },
@@ -78,15 +78,15 @@ test('JoinCoordinator - resumes from persisted checkpoint after mid-join failure
 
     const steps = [
       {
-        checkpoint: JOIN_CHECKPOINT.MEMBERSHIP_WRITTEN,
-        phase: 'membership',
+        checkpoint: JOIN_CHECKPOINT.SEED_CONTACTED,
+        phase: 'seed',
         run: async () => {
           counters.membership += 1;
         },
       },
       {
-        checkpoint: JOIN_CHECKPOINT.LEASE_ASSIGNED,
-        phase: 'lease',
+        checkpoint: JOIN_CHECKPOINT.JOIN_INFRASTRUCTURE_READY,
+        phase: 'infrastructure',
         run: async () => {
           counters.lease += 1;
           if (leaseFail) {
@@ -97,8 +97,8 @@ test('JoinCoordinator - resumes from persisted checkpoint after mid-join failure
         },
       },
       {
-        checkpoint: JOIN_CHECKPOINT.HANDSHAKE_COMPLETED,
-        phase: 'handshake',
+        checkpoint: JOIN_CHECKPOINT.MEMBERSHIP_WRITTEN,
+        phase: 'membership',
         run: async () => {
           counters.handshake += 1;
         },
@@ -127,4 +127,51 @@ test('JoinCoordinator - resumes from persisted checkpoint after mid-join failure
       lease: 2,
       handshake: 1,
     }, 'resume should continue from failed checkpoint without replaying completed membership');
+  });
+
+test('JoinCoordinator - reruns a completed checkpoint when local state is missing',
+  async (t) => {
+    const store = new JoinSessionStore({
+      now: () => Date.now(),
+    });
+    let localInfrastructureReady = false;
+    let rerunCount = 0;
+    const coordinator = new JoinCoordinator({
+      joinSessionStore: store,
+    });
+
+    await coordinator.run({
+      nodeId: 'node-e',
+      sessionId: 'session-5',
+      steps: [
+        {
+          checkpoint: JOIN_CHECKPOINT.JOIN_INFRASTRUCTURE_READY,
+          phase: 'infrastructure',
+          run: async () => {
+            rerunCount += 1;
+            localInfrastructureReady = true;
+          },
+        },
+      ],
+    });
+
+    localInfrastructureReady = false;
+    await coordinator.run({
+      nodeId: 'node-e',
+      sessionId: 'session-5',
+      steps: [
+        {
+          checkpoint: JOIN_CHECKPOINT.JOIN_INFRASTRUCTURE_READY,
+          phase: 'infrastructure',
+          shouldRerun: () => localInfrastructureReady === false,
+          run: async () => {
+            rerunCount += 1;
+            localInfrastructureReady = true;
+          },
+        },
+      ],
+    });
+
+    t.equal(rerunCount, 2,
+      'completed checkpoint should rerun when explicit local-state guard requires it');
   });

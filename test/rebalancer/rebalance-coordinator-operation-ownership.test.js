@@ -253,6 +253,64 @@ test('RebalanceCoordinator executeOperation uses injected workflow coordinator s
     }
   });
 
+test('RebalanceCoordinator executeReplicaOperationsRead uses injected ' +
+  'control-plane system-table gateway', async (t) => {
+  const gatewayCalls = [];
+  const coordinator = new RebalanceCoordinator({
+    nodeId: 'node-local',
+    transactionCoordinator: createTransactionCoordinator(),
+    systemTableCache: {
+      get() {
+        return null;
+      },
+    },
+    cdcIntegrationService: {
+      async waitForCacheUpdate() {},
+    },
+    controlPlaneSystemTableGateway: {
+      async readRows(tableName, sql, params) {
+        gatewayCalls.push({tableName, sql, params});
+        return {success: true, rows: [{operation_id: 'op-gateway'}]};
+      },
+    },
+    tablePolicyService: {
+      async getPolicyForPartition() {
+        return {minReplicaCount: 1};
+      },
+    },
+    messageRouter: {
+      async deliver() {
+        return {acknowledged: true, status: 'completed'};
+      },
+    },
+    sqlQueryEngine: {
+      async executeQuery() {
+        throw new Error('raw SQL path should not be used');
+      },
+    },
+    ...createStorageOwners(),
+    enableTimeouts: false,
+  });
+  coordinator.initialize();
+
+  try {
+    const result = await coordinator.executeReplicaOperationsRead(
+      'SELECT * FROM replica_operations WHERE operation_id = ?',
+      ['op-gateway'],
+    );
+
+    t.equal(result.success, true, 'gateway read should succeed');
+    t.equal(gatewayCalls.length, 1, 'gateway should own the read');
+    t.equal(
+      gatewayCalls[0].tableName,
+      'replica_operations',
+      'replica_operations reads should go through the gateway',
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
 test('RebalanceCoordinator checkTimeouts reconciles only local-owner operations',
   async (t) => {
     const now = Date.now();

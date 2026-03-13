@@ -65,6 +65,8 @@ const MESSAGE_GROUP_SERVICE_HANDLER_ERROR_MSG = Object.freeze({
     'MessageGroupServiceHandler requires cdcIntegrationService',
   CACHE_REQUIRED:
     'MessageGroupServiceHandler requires systemTableCache',
+  REPLICA_HANDLER_NOT_REGISTERED: (replicaId) =>
+    `Message-group replica handler was not registered for ${replicaId}`,
 });
 
 const MESSAGE_GROUP_SERVICE_HANDLER_WORKFLOW = Object.freeze({

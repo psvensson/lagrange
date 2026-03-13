@@ -351,6 +351,56 @@ test('LeaseService sweepExpiredLeases uses injected clock for expiry decisions',
     } finally {
       service.stop();
       ConfigurationManager.resetInstance();
-      LoggingService.resetInstance();
-    }
+    LoggingService.resetInstance();
+  }
+});
+
+test('LeaseService sweepExpiredLeases uses injected control-plane ' +
+  'system-table gateway', async (t) => {
+  initEnv();
+
+  const now = Date.now();
+  const gatewayCalls = [];
+  const service = new LeaseService({
+    nodeId: 'node-gateway',
+    nodeLeaseOwner: createNodeLeaseOwner(
+      async () => ({success: true, partitionResult: {affectedRows: 1}}),
+    ),
+    systemTableCache: {
+      getAll: () => [],
+    },
+    controlPlaneSystemTableGateway: {
+      async readRows(tableName, sql, params) {
+        gatewayCalls.push({tableName, sql, params});
+        return {
+          success: true,
+          rows: [{
+            node_id: 'node-expired',
+            ready_lease_expires_at: now - 1000,
+            last_heartbeat: now - 2000,
+          }],
+        };
+      },
+    },
+    sqlQueryEngine: {
+      async executeQuery() {
+        throw new Error('raw SQL path should not be used');
+      },
+    },
+    messageGroupServices: new Set([
+      {isLeaderReplica: () => true},
+    ]),
+    now: () => now,
   });
+  service.initialize();
+
+  const expiredIds = await service.sweepExpiredLeases();
+
+  t.same(expiredIds, ['node-expired'], 'gateway rows should drive the sweep');
+  t.equal(gatewayCalls.length, 1, 'gateway should own the lease read');
+  t.equal(
+    gatewayCalls[0].tableName,
+    'nodes',
+    'lease sweeps should read nodes through the gateway',
+  );
+});

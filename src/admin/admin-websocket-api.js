@@ -1093,7 +1093,6 @@ class AdminWebSocketAPI {
           this.nodeId,
           {
             allowAuthoritativeRefresh: true,
-            allowStaleOnCacheChange: true,
             requireFreshOnIneligible: true,
             decisionDimension:
               CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
@@ -2656,7 +2655,7 @@ class AdminWebSocketAPI {
           reject(createTimeoutBudgetError({
             message: ADMIN_ERROR_MESSAGE.queryTimeout(timeoutMs),
             budget: timeoutBudget,
-            classification: TIMEOUT_BUDGET_CLASSIFICATION.REMOTE_CALL_TIMEOUT,
+            classification: TIMEOUT_BUDGET_CLASSIFICATION.QUERY_TIMEOUT,
             nestedOperation: 'admin_sql_query',
             now: this.nowFn,
           }));
@@ -2698,6 +2697,15 @@ class AdminWebSocketAPI {
       queryId,
       timestamp: Date.now(),
     };
+    const operation = typeof result?.operation === TYPEOF.STRING ?
+      result.operation.trim().toLowerCase() :
+      EMPTY_STRING;
+    const isWriteOperation = operation === 'insert' ||
+      operation === 'update' ||
+      operation === 'delete';
+    const hasAffectedRows = Number.isFinite(Number(result?.affectedRows));
+    const hasRowPayload = result.rows !== undefined ||
+      result.results !== undefined;
 
     if (result.success === false) {
       message.error = result.error;
@@ -2713,7 +2721,19 @@ class AdminWebSocketAPI {
       message.hostResult = result.hostResult || null;
       message.callbackModuleRef = result.callbackModuleRef || null;
       message.callbackExport = result.callbackExport || null;
-    } else if (result.rows !== undefined || result.results !== undefined) {
+    } else if (isWriteOperation || hasAffectedRows) {
+      message.operation = result.operation || null;
+      const parsedAffectedRows = Number(result.affectedRows);
+      message.affectedRows = Number.isFinite(parsedAffectedRows) ?
+        parsedAffectedRows :
+        ADMIN_QUERY_RESULT.AFFECTED_ROWS_DEFAULT;
+      message.partitions = result.partitions || ADMIN_CACHE_DUMP.EMPTY;
+      message.tableName = result.tableName || null;
+      if (hasRowPayload) {
+        message.results = result.rows || result.results || ADMIN_CACHE_DUMP.EMPTY;
+        message.count = message.results.length;
+      }
+    } else if (hasRowPayload) {
       // SELECT query result - handle both 'rows' and 'results' field names
       message.results = result.rows || result.results || ADMIN_CACHE_DUMP.EMPTY;
       message.count = result.count !== undefined ?

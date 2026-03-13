@@ -40,7 +40,7 @@ test('AdminWebSocketAPI classifies timed out queries with structured ' +
     );
     t.equal(
       error.timeoutClassification.originalClassification,
-      TIMEOUT_BUDGET_CLASSIFICATION.REMOTE_CALL_TIMEOUT,
+      TIMEOUT_BUDGET_CLASSIFICATION.QUERY_TIMEOUT,
     );
     t.equal(error.timeoutClassification.boundaryHit, true);
     t.equal(error.timeoutClassification.configuredBudgetMs, 30000);
@@ -143,3 +143,48 @@ test('AdminWebSocketAPI cancels in-flight SQL request when timeout fires',
       globalThis.clearTimeout = originalClearTimeout;
     }
   });
+
+
+test('executeSqlRequestWithTimeout uses QUERY_TIMEOUT classification ' +
+  'instead of generic REMOTE_CALL_TIMEOUT (§1.11)', async (t) => {
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
+  let nowMs = 5000;
+
+  globalThis.setTimeout = (callback, timeoutMs) => {
+    nowMs += timeoutMs;
+    globalThis.queueMicrotask(callback);
+    return 1;
+  };
+  globalThis.clearTimeout = () => {};
+
+  const api = new AdminWebSocketAPI({
+    sqlQueryEngine: {
+      async executeRequest() {
+        return new Promise(() => {});
+      },
+    },
+    nowFn: () => nowMs,
+  });
+
+  try {
+    const error = await t.rejects(
+      api.executeSqlRequestWithTimeout(
+        {statement: 'SELECT 1'}, 10000,
+      ),
+    );
+    t.equal(
+      error.timeoutClassification.originalClassification,
+      TIMEOUT_BUDGET_CLASSIFICATION.QUERY_TIMEOUT,
+      'query timeout should use QUERY_TIMEOUT, not REMOTE_CALL_TIMEOUT',
+    );
+    t.equal(
+      error.timeoutClassification.nestedOperation,
+      'admin_sql_query',
+      'nested operation should identify the query path',
+    );
+  } finally {
+    globalThis.setTimeout = originalSetTimeout;
+    globalThis.clearTimeout = originalClearTimeout;
+  }
+});

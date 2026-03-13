@@ -1,3 +1,4 @@
+import {CACHE_HYDRATION_TABLES} from '../cache/cache-constants.js';
 import {DEFAULT_HEARTBEAT_INTERVAL_MS} from '../control-plane/control-plane-constants.js';
 import {NUM, RUNTIME_KIND, TABLES, TIME_MS} from '../constants/index.js';
 import {DEFAULT_REPLICA_STAGGER_DELAY_MS} from './bootstrap-constants.js';
@@ -78,6 +79,19 @@ const JOIN_READINESS_REPAIR = Object.freeze({
   MIN_INTERVAL_MS: TIME_MS.SECOND,
 });
 
+const JOIN_BACKFILL_SCOPE = (() => {
+  const blockingTables = JOIN_READINESS_REPAIR.TABLES;
+  const blockingTableSet = new Set(blockingTables);
+  return Object.freeze({
+    BLOCKING_TABLES: blockingTables,
+    OPPORTUNISTIC_TABLES: Object.freeze(
+      CACHE_HYDRATION_TABLES.filter((tableName) => {
+        return !blockingTableSet.has(tableName);
+      }),
+    ),
+  });
+})();
+
 const JOINING_LOG_MSG = Object.freeze({
   STARTING: 'Starting node joining process',
   COMPLETED: 'Node joining completed successfully',
@@ -87,6 +101,7 @@ const JOINING_LOG_MSG = Object.freeze({
   READY_SIGNAL_NOT_ACK: 'Seed node did not acknowledge readiness',
   READY_SIGNAL_RETRYING: 'Retrying readiness signal to seed node',
   READY_SIGNAL_FAILED: 'Failed to signal readiness to seed node',
+  CANONICAL_READINESS_BLOCKED: 'Join canonical readiness still blocked',
   CONTROL_PLANE_BACKGROUND_WRITERS_ACTIVE:
     'Control plane background writers activated for joining node',
   HEARTBEAT_FAILED: 'Failed to send heartbeat to control plane',
@@ -128,9 +143,15 @@ const JOINING_LOG_MSG = Object.freeze({
   RUNTIME_WIRING_READY: 'Runtime startup wiring initialized',
   SEED_WS_CONNECTING: '[JOIN-DEBUG] Connecting to seed node via WebSocket',
   SEED_WS_CONNECTED: '[JOIN-DEBUG] Connected to seed node via WebSocket',
+  SEED_WS_RETRYING:
+    '[JOIN-DEBUG] Retrying seed node WebSocket connection',
   SEED_WS_CONNECT_FAILED: '[JOIN-DEBUG] Failed to connect to seed node via WebSocket',
   SEED_WS_MISSING: '[JOIN-DEBUG] No seed node WebSocket address provided',
   NODE_STATE_UPDATE_SENT: 'Sent NODE_STATE_UPDATE to control plane',
+  CONNECTED_STATE_UPDATE_DEFERRED:
+    'Deferring connected NODE_STATE_UPDATE until later join phases',
+  NODE_STATE_UPDATE_RETRYING:
+    'Retrying NODE_STATE_UPDATE against a different control-plane target',
   NODE_STATE_UPDATE_FAILED: 'Failed to send NODE_STATE_UPDATE to control plane',
   WS_INFRA_READY: 'WebSocket infrastructure setup complete',
   STATE_QUERY_START: 'Querying system state',
@@ -269,6 +290,7 @@ const JOIN_REPLICA_DEFAULT = Object.freeze({
 
 export {
   JOIN_BACKFILL_QUERY,
+  JOIN_BACKFILL_SCOPE,
   JOIN_REPLICA_DEFAULT,
   JOINING_CLEANUP_RESULT,
   JOINING_CLEANUP_STEP,

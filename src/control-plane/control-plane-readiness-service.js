@@ -12,6 +12,7 @@ import {
   TYPEOF,
 } from '../constants/index.js';
 import {
+  compareNodeHeartbeatWatermarks,
   isNodeRecordReady,
   wasNodeRecordReadyWhenWritten,
 } from '../node/node-readiness-policy.js';
@@ -44,9 +45,11 @@ const AUTHORITATIVE_READINESS_REPAIR = Object.freeze({
 const READINESS_TRANSITION_HISTORY_LIMIT = 32;
 const READINESS_ERROR_MSG = Object.freeze({
   STORAGE_ACCOUNTING_OWNER_REQUIRED:
-    'ControlPlaneReadinessService requires storageAccountingService for strict readiness evaluation',
+    'ControlPlaneReadinessService requires ' +
+    'storageAccountingService for strict readiness evaluation',
   PUBLICATION_OWNER_REQUIRED:
-    'ControlPlaneReadinessService requires cdcGroupPropagationService for strict readiness evaluation',
+    'ControlPlaneReadinessService requires ' +
+    'cdcGroupPropagationService for strict readiness evaluation',
 });
 
 function buildReason(
@@ -78,6 +81,17 @@ function normalizePositiveInteger(value, fallback = NUM.ZERO) {
     fallback;
 }
 
+function normalizeDiagnosticTimestampMs(value) {
+  if (Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === TYPEOF.STRING && value.length > NUM.ZERO) {
+    const parsed = Date.parse(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
 class ControlPlaneReadinessService {
   /**
    * @param {Object} options
@@ -94,6 +108,7 @@ class ControlPlaneReadinessService {
       options.systemTableCache ||
       null;
     this.cdcGroupPropagationService = options.cdcGroupPropagationService || null;
+    this.heartbeatService = options.heartbeatService || null;
     this.strictOwnerDependencies = options.strictOwnerDependencies === true;
     this.clusterMemberStaleHeartbeatMaxAgeMs =
       Number.isFinite(options.clusterMemberStaleHeartbeatMaxAgeMs) &&
@@ -333,14 +348,36 @@ class ControlPlaneReadinessService {
    * Synchronous readiness snapshot for a single node.
    * Computes all dimensions that do not require async capacity lookup.
    * `placementEligible` is conservatively false when capacity is
-   * unavailable synchronously.
+   * unavailable synchronously, but `serveEligible` remains a pure
+   * traffic-admission signal so routing does not fail closed on
+   * unavailable placement accounting alone.
    * @param {string} nodeId
+   * @param {Object} [options]
    * @return {Object|null} Frozen readiness snapshot or null.
    */
-  getNodeReadinessSync(nodeId) {
+  getNodeReadinessSync(nodeId, options = {}) {
     const observedAt = normalizeIsoTimestamp(this.now());
     const nodeRow = this.getNodeRow(nodeId);
     const publication = this.getPublicationDiagnostics(observedAt);
+    const serviceRows = this.getNodeServiceRows(nodeId);
+    const fresherStoredSnapshot = this.getFresherStoredReadinessSnapshot(
+      nodeId,
+      nodeRow,
+      publication,
+    );
+
+    if (fresherStoredSnapshot) {
+      this.maybeStartBackgroundSyncReadinessRefresh(
+        {
+          nodeId,
+          nodeRow,
+          serviceRows,
+          snapshot: fresherStoredSnapshot,
+        },
+        options,
+      );
+      return fresherStoredSnapshot;
+    }
 
     if (!nodeRow) {
       const missingReadiness = this.buildMissingNodeReadiness(
@@ -356,14 +393,24 @@ class ControlPlaneReadinessService {
         dimensions: missingReadiness.dimensions,
         reasons: missingReadiness.reasons,
       });
-      return Object.freeze({
+      const snapshot = Object.freeze({
         ...missingReadiness,
         recentTransitions: this.getReadinessTransitionHistory(nodeId),
       });
+      this.storeReadinessSnapshot(nodeId, snapshot);
+      this.maybeStartBackgroundSyncReadinessRefresh(
+        {
+          nodeId,
+          nodeRow,
+          serviceRows,
+          snapshot,
+        },
+        options,
+      );
+      return snapshot;
     }
 
     const lifecycleState = this.getLifecycleState(nodeId, nodeRow);
-    const serviceRows = this.getNodeServiceRows(nodeId);
     const nodeEvidence = this.buildNodeEvidence(nodeId, nodeRow);
     const dimensions = this.buildDimensions({
       nodeId,
@@ -385,7 +432,7 @@ class ControlPlaneReadinessService {
       observedAt,
     });
 
-    return Object.freeze({
+    const snapshot = Object.freeze({
       ...createEligibilitySnapshot({
         nodeId,
         lifecycleState,
@@ -405,6 +452,120 @@ class ControlPlaneReadinessService {
         reasons,
       }),
     });
+    this.storeReadinessSnapshot(nodeId, snapshot);
+    this.maybeStartBackgroundSyncReadinessRefresh(
+      {
+        nodeId,
+        nodeRow,
+        serviceRows,
+        snapshot,
+      },
+      options,
+    );
+    return snapshot;
+  }
+
+  /**
+   * Reuse one previously-computed readiness snapshot when it is fresher than
+   * the currently visible cache row. This bridges short read-cache lag after a
+   * canonical owner-path refresh without reopening the sync call path to I/O.
+   * @param {string} nodeId
+   * @param {Object|null} nodeRow
+   * @param {Object|null} publication
+   * @return {Object|null}
+   * @private
+   */
+  getFresherStoredReadinessSnapshot(nodeId, nodeRow, publication) {
+    const storedSnapshot =
+      this.lastReadinessSnapshotByNodeId.get(nodeId) || null;
+    const capturedAtMs =
+      this.lastReadinessSnapshotAtMsByNodeId.get(nodeId) || null;
+    if (!storedSnapshot ||
+        !this.isStoredReadinessSnapshotFresh(
+          storedSnapshot,
+          capturedAtMs,
+        )) {
+      return null;
+    }
+
+    const storedWatermark =
+      this.buildStoredReadinessSnapshotWatermark(storedSnapshot);
+    if (!storedWatermark) {
+      return null;
+    }
+
+    if (nodeRow &&
+        compareNodeHeartbeatWatermarks(nodeRow, storedWatermark) <= NUM.ZERO) {
+      return null;
+    }
+
+    return Object.freeze({
+      ...storedSnapshot,
+      publication: publication && typeof publication === TYPEOF.OBJECT ?
+        Object.freeze({...publication}) :
+        null,
+      recentTransitions: this.getReadinessTransitionHistory(nodeId),
+    });
+  }
+
+  /**
+   * Return true when one stored readiness snapshot is still safe to reuse for
+   * hot-path sync consumers.
+   * @param {Object|null} snapshot
+   * @param {number|null} capturedAtMs
+   * @return {boolean}
+   * @private
+   */
+  isStoredReadinessSnapshotFresh(snapshot, capturedAtMs) {
+    if (!snapshot || !Number.isFinite(capturedAtMs)) {
+      return false;
+    }
+
+    const now = this.now();
+    if ((now - capturedAtMs) > this.clusterMemberStaleHeartbeatMaxAgeMs) {
+      return false;
+    }
+
+    const readyLeaseExpiresAt = Number(
+      snapshot?.nodeEvidence?.readyLeaseExpiresAt,
+    );
+    if (Number.isFinite(readyLeaseExpiresAt) &&
+        readyLeaseExpiresAt <= now) {
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * Build a comparable node watermark from one stored readiness snapshot.
+   * @param {Object|null} snapshot
+   * @return {Object|null}
+   * @private
+   */
+  buildStoredReadinessSnapshotWatermark(snapshot) {
+    const nodeEvidence = snapshot?.nodeEvidence;
+    if (!nodeEvidence || typeof nodeEvidence !== TYPEOF.OBJECT) {
+      return null;
+    }
+
+    const watermark = {};
+    const lastHeartbeat = Number(nodeEvidence.lastHeartbeat);
+    if (Number.isFinite(lastHeartbeat)) {
+      watermark.lastHeartbeat = lastHeartbeat;
+    }
+    const readyLeaseExpiresAt = Number(nodeEvidence.readyLeaseExpiresAt);
+    if (Number.isFinite(readyLeaseExpiresAt)) {
+      watermark.readyLeaseExpiresAt = readyLeaseExpiresAt;
+    }
+    if (typeof nodeEvidence.rowConnectionState === TYPEOF.STRING &&
+        nodeEvidence.rowConnectionState.length > NUM.ZERO) {
+      watermark.connectionState = nodeEvidence.rowConnectionState;
+    }
+
+    return Object.keys(watermark).length > NUM.ZERO ?
+      Object.freeze(watermark) :
+      null;
   }
 
   /**
@@ -575,6 +736,129 @@ class ControlPlaneReadinessService {
   }
 
   /**
+   * Start one background owner-path refresh for sync callers when the visible
+   * snapshot is ineligible for the requested decision and connected evidence
+   * suggests the cache may be stale.
+   * @param {Object} context
+   * @param {Object} [options]
+   * @private
+   */
+  maybeStartBackgroundSyncReadinessRefresh(context = {}, options = {}) {
+    if (options.allowAuthoritativeRefresh !== true) {
+      return;
+    }
+    if (!this.shouldBypassCachedSnapshot(context.snapshot, options)) {
+      return;
+    }
+    if (!this.shouldRepairAuthoritativeNodeEvidence(context)) {
+      return;
+    }
+    this.maybeStartBackgroundReadinessRefresh(
+      context.nodeId,
+      options,
+    );
+  }
+
+  /**
+   * Resolve local heartbeat publication diagnostics when available.
+   * @return {Object|null}
+   * @private
+   */
+  getHeartbeatPublicationDiagnostics() {
+    if (!this.heartbeatService ||
+        typeof this.heartbeatService.getHeartbeatPublicationDiagnostics !==
+          TYPEOF.FUNCTION) {
+      return null;
+    }
+    try {
+      const diagnostics =
+        this.heartbeatService.getHeartbeatPublicationDiagnostics();
+      return diagnostics && typeof diagnostics === TYPEOF.OBJECT ?
+        diagnostics :
+        null;
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  /**
+   * Treat fresh local node_state_reporter success as self-liveness evidence
+   * when the local cache lags the control-plane round-trip for this node.
+   * @param {string} nodeId
+   * @return {boolean}
+   * @private
+   */
+  hasFreshLocalReporterSuccess(nodeId) {
+    if (nodeId !== this.nodeId) {
+      return false;
+    }
+
+    const diagnostics = this.getHeartbeatPublicationDiagnostics();
+    if (!diagnostics ||
+        diagnostics.publicationPath !== 'node_state_reporter') {
+      return false;
+    }
+
+    const lastSuccessAtMs =
+      normalizeDiagnosticTimestampMs(diagnostics.lastSuccessAt);
+    if (!Number.isFinite(lastSuccessAtMs)) {
+      return false;
+    }
+
+    const lastFailureAtMs =
+      normalizeDiagnosticTimestampMs(diagnostics.lastFailureAt);
+    if (Number(diagnostics.consecutiveFailures) > NUM.ZERO ||
+        (Number.isFinite(lastFailureAtMs) &&
+          lastFailureAtMs > lastSuccessAtMs)) {
+      return this.shouldGraceTimedOutLocalReporterFailure({
+        diagnostics,
+        lastSuccessAtMs,
+        lastFailureAtMs,
+      });
+    }
+
+    return (this.now() - lastSuccessAtMs) <=
+      this.clusterMemberStaleHeartbeatMaxAgeMs;
+  }
+
+  /**
+   * Keep self-readiness open through one timed-out reporter attempt when the
+   * last canonically visible reporter heartbeat is still fresh. This prevents
+   * load-lane self denial while the bounded authoritative repair path is
+   * timing out under transient control-plane pressure.
+   * @param {Object} context
+   * @param {Object} context.diagnostics
+   * @param {number} context.lastSuccessAtMs
+   * @param {number} context.lastFailureAtMs
+   * @return {boolean}
+   * @private
+   */
+  shouldGraceTimedOutLocalReporterFailure(context = {}) {
+    const diagnostics = context?.diagnostics || {};
+    const lastSuccessAtMs = Number(context?.lastSuccessAtMs);
+    const lastFailureAtMs = Number(context?.lastFailureAtMs);
+    if (!Number.isFinite(lastSuccessAtMs)) {
+      return false;
+    }
+
+    if ((this.now() - lastSuccessAtMs) >
+        this.authoritativeReadinessRepairStaleHeartbeatMaxAgeMs) {
+      return false;
+    }
+
+    if (!Number.isFinite(lastFailureAtMs) ||
+        lastFailureAtMs <= lastSuccessAtMs) {
+      return false;
+    }
+
+    if (String(diagnostics?.lastFailureStage || '') !== 'attempt_timeout') {
+      return false;
+    }
+
+    return Number(diagnostics?.consecutiveFailures) <= NUM.ONE;
+  }
+
+  /**
    * Resolve publication diagnostics from the canonical publication owner.
    * @param {string} observedAt
    * @return {Object}
@@ -646,9 +930,16 @@ class ControlPlaneReadinessService {
       controlPlaneWritable &&
       publicationHealthy;
 
+    const transportState = this.getNodeTransportState(
+      context.nodeId,
+      context.nodeRow,
+    );
+    const transportNotExplicitlyNegative =
+      transportState.routerState !== STATE.DISCONNECTED;
+
     const serveEligible = repairEligible &&
       loadReady &&
-      this.isCapacityPlacementEligible(context.capacity);
+      transportNotExplicitlyNegative;
 
     return Object.freeze({
       [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: processAlive,
@@ -1076,12 +1367,7 @@ class ControlPlaneReadinessService {
         options.requireFreshOnIneligible !== true) {
       return false;
     }
-    const decisionDimension = typeof options.decisionDimension === TYPEOF.STRING &&
-      options.decisionDimension.length > NUM.ZERO ?
-      options.decisionDimension :
-      CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE;
-    return decisionDimension ===
-      CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE;
+    return true;
   }
 
   /**
@@ -1115,13 +1401,15 @@ class ControlPlaneReadinessService {
       return false;
     }
 
+    const hasFreshLocalReporterSuccess =
+      this.hasFreshLocalReporterSuccess(nodeId);
     const nodeEvidence = this.buildNodeEvidence(nodeId, nodeRow);
     if (this.shouldRepairAuthoritativeStaleHeartbeat(nodeEvidence)) {
-      return true;
+      return !hasFreshLocalReporterSuccess;
     }
 
     if (!this.isClusterMemberHealthy(nodeId, nodeRow)) {
-      return true;
+      return !hasFreshLocalReporterSuccess;
     }
 
     return !this.hasRoutableService(serviceRows) ||
@@ -1225,7 +1513,7 @@ class ControlPlaneReadinessService {
     const snapshot = await authoritativeControlPlaneView.readNodeSnapshot(
       nodeId,
       {
-        allowSqlFallback: false,
+        allowSqlFallback: true,
         queryTimeoutMs: this.authoritativeReadinessRepairQueryTimeoutMs,
       },
     );
@@ -1649,10 +1937,18 @@ class ControlPlaneReadinessService {
         routerState :
         null;
 
-    const connected = normalizedRowState === STATE.CONNECTED ||
-      normalizedRowState === STATE.READY ||
+    let connected = false;
+    if (normalizedRouterState === STATE.DISCONNECTED) {
+      connected = false;
+    } else if (
       normalizedRouterState === STATE.CONNECTED ||
-      normalizedRouterState === STATE.READY;
+      normalizedRouterState === STATE.READY
+    ) {
+      connected = true;
+    } else {
+      connected = normalizedRowState === STATE.CONNECTED ||
+        normalizedRowState === STATE.READY;
+    }
 
     return Object.freeze({
       connected,
@@ -1725,16 +2021,13 @@ class ControlPlaneReadinessService {
       return false;
     }
 
-    if (wasNodeRecordReadyWhenWritten(nodeRow, {now}) &&
-        this.isRecentHeartbeat(nodeRow)) {
-      return true;
-    }
-
-    if (!hasLeaseField && this.isRecentHeartbeat(nodeRow)) {
-      return true;
-    }
-
-    return false;
+    // §1.4.12: Live transport connectivity is the strongest evidence that
+    // a node is reachable.  When the message router reports the node as
+    // connected, trust that signal over stale cache lease/heartbeat data.
+    // This prevents transient serveEligible=false during topology changes
+    // (splits, rebalance) where CDC-driven cache updates lag behind
+    // authoritative state.
+    return true;
   }
 
   /**

@@ -83,6 +83,13 @@ There must be exactly ONE code path for any given operation. Specifically:
 - No "legacy" code sitting alongside "new" code.
 - When something changes, it changes completely. Remove the old path.
 
+The one scoped exception is explicit recovery sweeps (see §1.8): the cache is
+the steady-state read model, and SQL reads are permitted for authoritative
+writes, recovery sweeps, and diagnostics reconciliation. This is not a
+fallback — it is a separate, explicitly owned recovery path that re-enters the
+canonical owner queue. Do not generalize this exception into ad-hoc "try cache
+then try SQL" patterns.
+
 ### 1.4 Single Source of Truth for State
 
 Each piece of state (node status, replica role, epoch, etc.) is owned by exactly
@@ -385,8 +392,17 @@ Before generating or modifying code, answer these questions:
 17. Am I fixing a repeated control-plane problem locally instead of routing it
     through a shared higher-order primitive (authoritative view, eligibility
     snapshot, operation lane, workflow step runner, timeout policy)? -> Stop.
+18. Am I introducing a code path where load or contention causes a correctness
+    failure instead of a throughput reduction? -> Stop.
+19. Am I letting callers discover overload only via timeout instead of
+    structured backpressure (queue-full, retry-after, rejection)? -> Stop.
+20. Am I returning a hard failure to a query client during a topology
+    transition when retryable replicas or structured retry semantics
+    exist? -> Stop.
+21. Am I designing a state mutation that produces a different outcome on
+    retry than on first execution? -> Stop.
 
-If the answer to any of 4/5/6/7/8/9/10/11/12/13/14/15/16/17 is yes, you are violating this contract.
+If the answer to any of 4–21 is yes, you are violating this contract.
 
 ### 1.5.1 Owner Wiring and Fallback Elimination Procedure
 
@@ -539,6 +555,125 @@ operational noise.
   breaches MUST fail deterministic test gates and remain serializable into
   diagnostics and harness artifacts.
 
+### 1.10 Availability Under Load Is Non-Negotiable
+
+Every subsystem MUST continue to function correctly under load. Slowness is
+acceptable; breakage is not.
+
+- Operations may take longer under contention, backpressure, or topology
+  change. That is expected and tolerable.
+- Operations MUST NOT fail, return incorrect results, or silently drop work
+  because the system is under load.
+- Timeouts are a last resort, not a normal outcome. If a code path routinely
+  times out under moderate load, that is a correctness bug requiring a fix —
+  not an operational tuning knob.
+- Control-plane pressure (splits, rebalance, leader elections) MUST NOT cause
+  data-plane or query-plane failures. The query path may slow down while the
+  control plane is busy, but it must not break.
+- Readiness, admission, and routing decisions MUST remain correct during
+  topology transitions. Transient internal state lag (cache propagation delay,
+  lease expiry race) MUST NOT surface as user-visible errors.
+
+It is FORBIDDEN to:
+
+- Treat load-induced failures as acceptable operational noise.
+- Add timeouts that convert slow-but-progressing work into hard errors without
+  structured retry or backpressure.
+- Allow stale internal signals to override live evidence of system health
+  (see §1.4.12).
+- Design code paths where throughput pressure causes correctness violations
+  rather than throughput reduction.
+
+Design principle: always correct, sometimes slower.
+
+### 1.11 Backpressure and Flow Control
+
+When a subsystem is overloaded, it MUST apply explicit backpressure rather than
+silently dropping work or letting callers time out.
+
+Required patterns:
+
+1. **Bounded queues with rejection** — work queues MUST have a capacity limit.
+   When full, new work MUST be rejected with a structured reason, not silently
+   dropped or left to time out.
+2. **Propagate pressure to callers** — when a downstream dependency is slow or
+   at capacity, the upstream component MUST propagate that signal (queue depth,
+   rejection, retry-after) rather than accumulating unbounded in-flight work.
+3. **Shed load at the edge** — when the system cannot keep up, prefer rejecting
+   new work at the entry point (admin API, query admission) with a retryable
+   error over accepting it and failing deep inside the stack.
+4. **Control-plane and query-plane isolation** — control-plane pressure (split,
+   rebalance, leader election) MUST NOT starve query-plane resources. If they
+   share execution resources, explicit priority or capacity reservation MUST
+   prevent mutual starvation.
+
+It is FORBIDDEN to:
+
+- Accept unbounded in-flight work with no queue limit or admission control.
+- Let callers discover overload only via timeout expiry.
+- Treat "queue full" or "at capacity" as an unexpected error instead of a
+  normal backpressure signal with structured retry semantics.
+
+### 1.12 Query Routing During Topology Transitions
+
+During partition splits, moves, or leader elections, the query path MUST remain
+functional. Queries may be slower but MUST NOT fail due to transient topology
+state.
+
+Required patterns:
+
+1. **Retry to available replicas** — when a partition leader is unavailable
+   during a topology transition, the query router MUST retry to another
+   replica or the new leader rather than returning a hard failure.
+2. **Structured retryable errors** — if no replica can serve the query, return
+   a structured retryable error to the client (not a generic timeout) so the
+   client can retry with backoff.
+3. **Bounded retry window** — query-path retries MUST be bounded by the
+   caller's timeout budget. Do not retry indefinitely.
+4. **Stale routing tolerance** — the routing layer MUST tolerate briefly stale
+   partition maps during topology changes. A query routed to a stale leader
+   MUST be redirected, not failed.
+
+It is FORBIDDEN to:
+
+- Return a hard failure to the client because a partition is mid-split or
+  mid-move when other replicas exist.
+- Treat a stale routing table entry as a terminal error during topology
+  transitions.
+- Queue queries indefinitely waiting for a topology transition to complete.
+
+### 1.13 Idempotency
+
+All state-mutating operations MUST be idempotent. Applying the same operation
+twice MUST produce the same result as applying it once.
+
+This is a foundational requirement for a distributed system with retries,
+message redelivery, and recovery sweeps.
+
+Required patterns:
+
+1. **Unique operation identity** — state-mutating operations MUST carry a
+   unique identifier (operation ID, idempotency key, or equivalent) so
+   duplicate applications can be detected.
+2. **Monotonic transitions** — state transitions MUST be monotonic. Replaying
+   a transition that has already been applied MUST be a no-op, not a second
+   mutation.
+3. **Write-if-not-exists for creation** — row creation MUST use
+   insert-if-not-exists semantics (or equivalent) so duplicate creation
+   attempts do not corrupt existing state.
+4. **Deterministic outcomes** — given the same inputs and current state, an
+   operation MUST produce the same outcome regardless of how many times it
+   executes.
+
+It is FORBIDDEN to:
+
+- Design operations where a retry produces a different outcome than the
+  original execution.
+- Rely on caller discipline to prevent duplicate delivery instead of making
+  the receiver resilient to it.
+- Use non-idempotent mutations (counters, append-only without dedup) in
+  paths that can be retried.
+
 ---
 
 ## 2. Data Architecture
@@ -667,7 +802,10 @@ is a bug.
 
 - Do NOT use try/catch for control flow or conditional logic.
 - Caught errors MUST be either re-thrown or clearly logged. Never swallowed.
-- Transient errors (no leader, cache unavailable) trigger retries with backoff.
+- Transient errors (no leader, cache unavailable) trigger retries with backoff,
+  but retries MUST be bounded by the caller's timeout budget (see §1.9).
+  Unbounded retry loops that eventually exhaust a timeout are §1.10 violations,
+  not acceptable retry behavior.
 
 ### 4.4 Style
 
@@ -737,6 +875,16 @@ This section exists because LLMs tend to generate these patterns. Do not:
 - Start nested waits with fresh timeout constants after part of the budget is
   already consumed.
 - Treat exact-boundary timeout clusters as expected runtime behavior.
+- Accept load-induced query failures as normal when the system is under
+  control-plane pressure (splits, rebalance, elections).
+- Convert slow-but-progressing operations into hard timeout errors without
+  structured retry or backpressure.
+- Accept unbounded in-flight work with no queue limit, then wonder why
+  callers time out under load.
+- Return a hard query failure because a partition is mid-split when other
+  replicas can serve the request.
+- Design a write operation where retrying it produces a different result
+  than the first execution.
 
 When you catch yourself about to do any of these: stop, search, reuse.
 
@@ -750,7 +898,7 @@ In that case, bring it to attention and come with a suggestion instead of just p
 
 The platform should preserve a small external ontology.
 
-7.1 Tables and Services Are Primary User Concepts
+### 7.1 Tables and Services Are Primary User Concepts
 
 Prefer expressing durable user state as tables.
 
@@ -758,7 +906,7 @@ Prefer expressing durable user execution as services.
 
 Do not introduce new user-visible entity categories unless explicitly required by the platform design.
 
-7.2 Internal Machinery Must Not Leak
+### 7.2 Internal Machinery Must Not Leak
 
 It is FORBIDDEN to expose internal implementation concepts as ordinary user-facing control surfaces unless explicitly intended by the architecture.
 
@@ -780,7 +928,7 @@ control-plane reconcile queues
 
 Users may observe diagnostics about these mechanisms, but must not be required to manage them directly in ordinary workflows.
 
-7.3 Policy Over Direct Physical Control
+### 7.3 Policy Over Direct Physical Control
 
 Expose desired behavior through policies and declarative intent.
 
@@ -788,7 +936,7 @@ Do not add APIs that require users to directly assign partitions, leaders, repli
 
 If a new API directly manipulates internal placement or lifecycle machinery, treat it as an architectural exception and justify it explicitly.
 
-7.4 Runtime Variety Must Preserve One Service Concept
+### 7.4 Runtime Variety Must Preserve One Service Concept
 
 Different runtime kinds (native_js, wasm_component, oci_container) are implementation choices for services, not separate user-visible ontological classes.
 

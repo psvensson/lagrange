@@ -617,3 +617,50 @@ test('PBT: estimateReplicaBytes always >= minimumReplicaBytes + overhead',
     t.pass('Estimation floor invariant holds');
     t.end();
   });
+
+test('getCapacitySnapshots - SQL fallback uses injected control-plane ' +
+  'system-table gateway', async (t) => {
+  initializeConfig();
+
+  const gatewayCalls = [];
+  const gatewayRows = {
+    [TABLES.NODES]: [{
+      [COLUMN.NODE_ID]: 'node-gateway',
+      [COLUMN.STORAGE_BUDGET_BYTES]: NUM.HUNDRED,
+    }],
+    [TABLES.PARTITIONS]: [],
+    [TABLES.SERVICES]: [],
+    [TABLES.STORAGE_RESERVATIONS]: [],
+  };
+  const service = new StorageCapacityAccountingService({
+    controlPlaneSystemTableGateway: {
+      async readRows(tableName, sql) {
+        gatewayCalls.push({tableName, sql});
+        return {
+          success: true,
+          rows: gatewayRows[tableName] || [],
+        };
+      },
+    },
+    sqlQueryEngine: {
+      async executeQuery() {
+        throw new Error('raw SQL path should not be used');
+      },
+    },
+  });
+  service.initialize();
+
+  const snapshots = await service.getCapacitySnapshots();
+
+  t.equal(snapshots.length, NUM.ONE, 'gateway rows should build a snapshot');
+  t.same(
+    gatewayCalls.map((call) => call.tableName),
+    [
+      TABLES.NODES,
+      TABLES.PARTITIONS,
+      TABLES.SERVICES,
+      TABLES.STORAGE_RESERVATIONS,
+    ],
+    'gateway should own fallback reads for storage accounting',
+  );
+});

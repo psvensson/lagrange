@@ -28,6 +28,7 @@ import {isLoadReadyReplicaRaftRole} from
   '../node/replica-state-machine-constants.js';
 import {
   DEFAULT_STEP_TIMEOUT_MS_BY_WORKFLOW_STEP,
+  isReplicaOperationInFlight,
   isReplicaOperationStale,
   isReplicaOperationTerminalSuccess,
   normalizeReplicaOperationRecord,
@@ -37,6 +38,9 @@ import {getSystemCachePrimaryKeyField} from
 import {isTableCdcReadinessRelevant} from '../cache/cdc-table-policy.js';
 import {createSqlRequest} from '../query/sql-request.js';
 import {EXECUTION_MODE} from '../query/sql-adapter-constants.js';
+import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+} from '../control-plane/control-plane-readiness-constants.js';
 import {evaluateAuthoritativeRepairPolicy} from
   './admin-authoritative-repair-policy.js';
 import {
@@ -513,9 +517,7 @@ class AdminServiceDiscovery {
         !this.cacheMutationTarget ||
         typeof this.cacheMutationTarget.applySystemTableChange !==
           TYPEOF.FUNCTION ||
-        !this.sqlQueryEngine ||
-        typeof this.sqlQueryEngine.executeRequest !==
-          TYPEOF.FUNCTION) {
+        !this.canReadAuthoritativeDiscoveryRows()) {
       return false;
     }
     if (!snapshot || typeof snapshot !== TYPEOF.OBJECT) {
@@ -661,6 +663,7 @@ class AdminServiceDiscovery {
         this.buildControlSnapshotReplicaOperationSummary(
           replicaOperationRows, {
             partitionIds: tablePartitionContext.partitionIds,
+            serviceRows,
           },
         ) :
         {
@@ -675,6 +678,7 @@ class AdminServiceDiscovery {
         replicaOperationRows,
         {
           partitionIds: tablePartitionContext.partitionIds,
+          serviceRows,
         },
       );
 
@@ -776,6 +780,35 @@ class AdminServiceDiscovery {
     return this.partitionServices instanceof Map ?
       this.partitionServices :
       null;
+  }
+
+  /**
+   * Return true when the injected authoritative system-table read owner is
+   * available.
+   * @return {boolean}
+   */
+  hasAuthoritativeDiscoveryReadOwner() {
+    return Boolean(
+      this.cdcIntegrationService &&
+      typeof this.cdcIntegrationService.executeAuthoritativeSystemTableRead ===
+        TYPEOF.FUNCTION,
+    );
+  }
+
+  /**
+   * Return true when authoritative discovery repair can read canonical rows.
+   * @return {boolean}
+   */
+  canReadAuthoritativeDiscoveryRows() {
+    if (this.hasAuthoritativeDiscoveryReadOwner()) {
+      return true;
+    }
+    const hasLocalSource =
+      this.resolveLocalPartitionServices() instanceof Map;
+    const hasSqlFallback =
+      typeof this.executeSqlRequestWithTimeout ===
+      TYPEOF.FUNCTION;
+    return hasLocalSource || hasSqlFallback;
   }
 
   /**
@@ -1009,9 +1042,58 @@ class AdminServiceDiscovery {
   }
 
   /**
+   * Read one authoritative system-table row set through the injected CDC
+   * owner when available.
+   * @param {string} tableName
+   * @param {Object} options
+   * @return {Promise<{tableName:string,rows:Object[]}|null>}
+   * @private
+   */
+  async readAuthoritativeSystemTableRowsViaOwner(
+    tableName, options = {},
+  ) {
+    if (!this.hasAuthoritativeDiscoveryReadOwner()) {
+      return null;
+    }
+
+    const now = options.nowMs || Date.now();
+    const queryResult =
+      await this.cdcIntegrationService.executeAuthoritativeSystemTableRead(
+        tableName,
+        `SELECT * FROM ${tableName}`,
+        ADMIN_CACHE_DUMP.EMPTY,
+        {
+          queryOptions: {
+            timeoutMs:
+              AUTHORITATIVE_DISCOVERY_REPAIR.QUERY_TIMEOUT_MS,
+            sessionId:
+              `${String(options.reason || 'repair')}` +
+              `:${tableName}:${now}`,
+            routingReadinessDimension:
+              CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+          },
+        },
+      );
+    if (queryResult?.success === false) {
+      throw new Error(
+        queryResult.error ||
+          'authoritative_query_failed',
+      );
+    }
+
+    return {
+      tableName,
+      rows: Array.isArray(queryResult?.rows) ?
+        queryResult.rows :
+        ADMIN_CACHE_DUMP.EMPTY,
+    };
+  }
+
+  /**
    * Resolve one authoritative row set for bounded discovery repair.
-   * Prefers direct local partition reads so control snapshots do not
-   * depend on the hot routed SQL lane.
+   * Prefers the injected CDC authoritative-read owner, then falls back to
+   * direct local partition reads so control snapshots do not depend on the
+   * hot routed SQL lane when the owner is unavailable.
    * @param {string} tableName
    * @param {Object} options
    * @return {Promise<{tableName: string, rows: Object[]}>}
@@ -1019,6 +1101,15 @@ class AdminServiceDiscovery {
   async readAuthoritativeSystemTableRows(
     tableName, options = {},
   ) {
+    const ownerRows =
+      await this.readAuthoritativeSystemTableRowsViaOwner(
+        tableName,
+        options,
+      );
+    if (ownerRows) {
+      return ownerRows;
+    }
+
     const localRows =
       this.queryLocalAuthoritativeSystemTableRows(tableName);
     if (localRows.available) {
@@ -1498,7 +1589,6 @@ class AdminServiceDiscovery {
     const topologyReady = localReplicaReady &&
       localCdcReady &&
       !operationDegraded &&
-      readinessContext.replicaOpsInFlight === NUM.ZERO &&
       readinessContext.leadershipStable === true;
     const benchmarkReady =
       routingReady && schemaReady && topologyReady;
@@ -1526,13 +1616,6 @@ class AdminServiceDiscovery {
           .SCHEMA_PARTITION_UNAVAILABLE,
         detail: 'table "' + readinessContext.tableName +
           '" not query-ready on node',
-      });
-    }
-    if (readinessContext.replicaOpsInFlight > NUM.ZERO) {
-      reasons.push({
-        code: SERVICE_DISCOVERY_READINESS_REASON
-          .REPLICA_OPERATIONS_IN_FLIGHT,
-        detail: String(readinessContext.replicaOpsInFlight),
       });
     }
     if (operationDegraded &&
@@ -1716,6 +1799,9 @@ class AdminServiceDiscovery {
       options.partitionIds instanceof Set ?
         options.partitionIds :
         null;
+    const serviceRows = Array.isArray(options.serviceRows) ?
+      options.serviceRows :
+      ADMIN_CACHE_DUMP.EMPTY;
     for (const row of replicaOperationRows) {
       if (!this.isReplicaOperationRelevantToDiscoveryScope(
         row,
@@ -1734,17 +1820,27 @@ class AdminServiceDiscovery {
       if (!operationId || nodeIds.length === NUM.ZERO) {
         continue;
       }
+      const observedConverged =
+        normalizedOperation.status !== 'failed' &&
+        !isReplicaOperationTerminalSuccess(normalizedOperation) &&
+        !isReplicaOperationInFlight(
+          normalizedOperation,
+          {
+            serviceRows,
+          },
+        );
       if (isReplicaOperationTerminalSuccess(
         normalizedOperation,
-      )) {
+      ) || observedConverged) {
         continue;
       }
       const staleTimeout = isReplicaOperationStale(
         normalizedOperation,
         {
+          serviceRows,
           stepTimeoutMsByWorkflowStep:
             DEFAULT_STEP_TIMEOUT_MS_BY_WORKFLOW_STEP,
-          nowMs: Date.now(),
+          nowMs: this.nowFn(),
         },
       );
       const timeoutMs = Number(
@@ -1913,12 +2009,7 @@ class AdminServiceDiscovery {
         tableCount: NUM.ZERO,
       };
     }
-    const hasLocalSource =
-      this.resolveLocalPartitionServices() instanceof Map;
-    const hasSqlFallback =
-      typeof this.executeSqlRequestWithTimeout ===
-      TYPEOF.FUNCTION;
-    if (!hasLocalSource && !hasSqlFallback) {
+    if (!this.canReadAuthoritativeDiscoveryRows()) {
       return {
         applied: false,
         skipped: true,

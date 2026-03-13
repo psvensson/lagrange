@@ -108,7 +108,7 @@ test('checkForConflicts allows re-registration when ' +
     systemTableCache: cache,
   });
 
-  const result = api.checkForConflicts(
+  const result = await api.checkForConflicts(
     REJOIN_NODE_ID,
     REJOIN_NODE_ADDRESS,
   );
@@ -136,7 +136,7 @@ test('checkForConflicts allows re-registration when ' +
     systemTableCache: cache,
   });
 
-  const result = api.checkForConflicts(
+  const result = await api.checkForConflicts(
     REJOIN_NODE_ID,
     REJOIN_NODE_ADDRESS,
   );
@@ -164,7 +164,7 @@ test('checkForConflicts allows re-registration when ' +
     systemTableCache: cache,
   });
 
-  const result = api.checkForConflicts(
+  const result = await api.checkForConflicts(
     REJOIN_NODE_ID,
     REJOIN_NODE_ADDRESS,
   );
@@ -193,9 +193,9 @@ test('checkForConflicts rejects re-registration when ' +
     systemTableCache: cache,
   });
 
-  const result = api.checkForConflicts(
+  const result = await api.checkForConflicts(
     REJOIN_NODE_ID,
-    REJOIN_NODE_ADDRESS,
+    'ws://localhost:9091',
   );
   t.ok(
     result !== null,
@@ -204,6 +204,35 @@ test('checkForConflicts rejects re-registration when ' +
   t.ok(
     result.includes('already registered'),
     'error should mention already registered',
+  );
+});
+
+test('checkForConflicts allows idempotent re-registration when ' +
+  'existing live node keeps the same address', async (t) => {
+  initializeTestEnvironment();
+
+  const liveNode = {
+    [COLUMN.NODE_ID]: REJOIN_NODE_ID,
+    [COLUMN.NODE_ADDRESS]: REJOIN_NODE_ADDRESS,
+    [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+    [COLUMN.READY_LEASE_EXPIRES_AT]: Date.now() + 60000,
+  };
+
+  const cache = createCacheWithExistingNode(liveNode);
+  const api = new BootstrapAPI({
+    seedNodeId: SEED_NODE_ID,
+    seedNodeAddress: SEED_NODE_ADDRESS,
+    systemTableCache: cache,
+  });
+
+  const result = await api.checkForConflicts(
+    REJOIN_NODE_ID,
+    REJOIN_NODE_ADDRESS,
+  );
+  t.equal(
+    result,
+    null,
+    'same-node restarts should be treated as idempotent re-registration',
   );
 });
 
@@ -227,7 +256,7 @@ test('checkForConflicts still rejects address conflict ' +
   });
 
   const newNodeId = '770e8400-e29b-41d4-a716-446655440002';
-  const result = api.checkForConflicts(
+  const result = await api.checkForConflicts(
     newNodeId,
     REJOIN_NODE_ADDRESS,
   );
@@ -261,7 +290,7 @@ test('checkForConflicts skips address conflict check ' +
   });
 
   const newNodeId = '770e8400-e29b-41d4-a716-446655440002';
-  const result = api.checkForConflicts(
+  const result = await api.checkForConflicts(
     newNodeId,
     REJOIN_NODE_ADDRESS,
   );
@@ -270,3 +299,48 @@ test('checkForConflicts skips address conflict check ' +
     'should allow when address is held by a dead node',
   );
 });
+
+test('checkForConflicts allows re-registration when authoritative nodes row is stopped',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const liveCacheRow = {
+      [COLUMN.NODE_ID]: REJOIN_NODE_ID,
+      [COLUMN.NODE_ADDRESS]: REJOIN_NODE_ADDRESS,
+      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+      [COLUMN.READY_LEASE_EXPIRES_AT]: Date.now() + 60000,
+    };
+
+    const cache = createCacheWithExistingNode(liveCacheRow);
+    const api = new BootstrapAPI({
+      seedNodeId: SEED_NODE_ID,
+      seedNodeAddress: SEED_NODE_ADDRESS,
+      systemTableCache: cache,
+      authoritativeControlPlaneView: {
+        canRead() {
+          return true;
+        },
+        async readRows() {
+          return {
+            success: true,
+            rows: [{
+              [COLUMN.NODE_ID]: REJOIN_NODE_ID,
+              [COLUMN.NODE_ADDRESS]: REJOIN_NODE_ADDRESS,
+              [COLUMN.STATUS]: NODE_STATE.STOPPED,
+              [COLUMN.READY_LEASE_EXPIRES_AT]: null,
+            }],
+          };
+        },
+      },
+    });
+
+    const result = await api.checkForConflicts(
+      REJOIN_NODE_ID,
+      REJOIN_NODE_ADDRESS,
+    );
+    t.equal(
+      result,
+      null,
+      'should prefer authoritative stopped row over stale cache row',
+    );
+  });

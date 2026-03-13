@@ -196,6 +196,8 @@ class SeedPartitionsPhase {
         messageGroupService: d.getLeaderMessageGroupService(),
         messageRouter: d.getMessageRouter(),
         rebalanceCoordinator: d.getRebalanceCoordinator(),
+        cdcIntegrationService: d.getCdcIntegrationService(),
+        sqlQueryEngine: d.getCdcIntegrationService()?.sqlQueryEngine || null,
         deferElection: Boolean(options.deferElection),
         suppressLifecycleLogs: true,
         onInitializationStage: (stageEvent) =>

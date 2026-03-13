@@ -12,7 +12,16 @@ import {
   ControlPlaneField,
   ControlPlaneMessageType,
 } from '../../src/control-plane/control-plane-constants.js';
-import {SERVICE_STATUS, STATE} from '../../src/constants/index.js';
+import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+} from '../../src/control-plane/control-plane-readiness-constants.js';
+import {RECONCILE_REASON} from '../../src/workflow/reconcile-queue-constants.js';
+import {
+  COLUMN,
+  SERVICE_STATUS,
+  STATE,
+  WORKFLOW_STEP,
+} from '../../src/constants/index.js';
 
 function initEnv() {
   ConfigurationManager.resetInstance();
@@ -32,6 +41,9 @@ function createService(options = {}) {
   const cacheNodes = Array.isArray(options.cacheNodes) ?
     options.cacheNodes :
     (cacheNode ? [cacheNode] : []);
+  const cacheReplicaOperations = Array.isArray(options.cacheReplicaOperations) ?
+    options.cacheReplicaOperations :
+    [];
   const cacheByNodeId = new Map();
   for (const node of cacheNodes) {
     if (!node || !node.node_id) {
@@ -40,11 +52,20 @@ function createService(options = {}) {
     cacheByNodeId.set(node.node_id, node);
   }
   const cdcIntegrationService = options.cdcIntegrationService;
+  const controlPlaneReadinessService =
+    options.controlPlaneReadinessService;
+  const controlPlaneSystemTableGateway =
+    options.controlPlaneSystemTableGateway;
+  const rebalanceCoordinator = options.rebalanceCoordinator || {
+    executeOperation: async () => ({success: true}),
+  };
 
   const service = new ReplicaDispatchService({
     nodeId: 'node-1',
     messageRouter: {},
     cdcIntegrationService,
+    controlPlaneSystemTableGateway,
+    controlPlaneReadinessService,
     nodeStateUpdateQueueShardCount: options.nodeStateUpdateQueueShardCount,
     systemTableCache: {
       get: (tableName, nodeId) => {
@@ -53,11 +74,17 @@ function createService(options = {}) {
         }
         return cacheByNodeId.get(nodeId) || null;
       },
-      getAll: (_tableName) => [],
+      getAll: (tableName) => {
+        if (tableName === 'replica_operations') {
+          return cacheReplicaOperations;
+        }
+        if (tableName === 'nodes') {
+          return cacheNodes;
+        }
+        return [];
+      },
     },
-    rebalanceCoordinator: {
-      executeOperation: async () => ({success: true}),
-    },
+    rebalanceCoordinator,
   });
   service.initialize();
   return service;
@@ -222,6 +249,231 @@ test('ReplicaDispatchService fallback upsert preserves storage budget fields',
 
     service.stop();
   });
+
+test('ReplicaDispatchService ready-node retry re-enters operationDispatchQueue',
+  async (t) => {
+    initEnv();
+
+    const now = Date.now();
+    const readyNode = {
+      node_id: 'node-2',
+      status: SERVICE_STATUS.ACTIVE,
+      connection_state: STATE.READY,
+      last_heartbeat: now,
+      ready_lease_expires_at: now + 60000,
+    };
+    const pendingRow = {
+      operation_id: 'op-ready-retry-1',
+      target_node_id: 'node-2',
+      workflow_step: WORKFLOW_STEP.PENDING,
+      type: 'ADD',
+    };
+    const dispatchCalls = [];
+    const enqueueCalls = [];
+    const service = createService({
+      cacheNodes: [readyNode],
+      cacheReplicaOperations: [pendingRow],
+      cdcIntegrationService: {
+        updateSystemTableRow: async () => ({success: true}),
+        upsertSystemTableRow: async () => ({success: true}),
+      },
+      rebalanceCoordinator: {
+        dispatchOperation: async (operationId) => {
+          dispatchCalls.push(operationId);
+          return {success: true};
+        },
+      },
+      controlPlaneReadinessService: {
+        getNodeReadinessSync(nodeId) {
+          return {
+            nodeId,
+            dimensions: {
+              [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+            },
+          };
+        },
+      },
+    });
+    const originalOperationDispatchQueue = service.operationDispatchQueue;
+    service.operationDispatchQueue = {
+      enqueue(operationId, reason, context) {
+        enqueueCalls.push({operationId, reason, context});
+      },
+    };
+
+    await service.retryPendingDispatchesForReadyNode({
+      nodeId: 'node-2',
+      nodeRow: readyNode,
+    });
+
+    t.same(
+      enqueueCalls,
+      [{
+        operationId: 'op-ready-retry-1',
+        reason: RECONCILE_REASON.NODE_READY_DISPATCH_RETRY,
+        context: {row: pendingRow},
+      }],
+      'ready-node retries must route pending operations through the canonical operation queue',
+    );
+    t.same(
+      dispatchCalls,
+      [],
+      'ready-node retries must not dispatch operations inline',
+    );
+
+    service.operationDispatchQueue = originalOperationDispatchQueue;
+    service.stop();
+  });
+
+test('ReplicaDispatchService upserts startup storage budget fields from ' +
+  'NODE_STATE_UPDATE payload when the node row is first inserted',
+async (t) => {
+  initEnv();
+
+  const now = Date.now();
+  const updates = [];
+  const upserts = [];
+
+  const service = createService({
+    cdcIntegrationService: {
+      updateSystemTableRow: async (tableName, whereClause, row, options) => {
+        updates.push({tableName, whereClause, row, options});
+        return {
+          success: true,
+          partitionResult: {affectedRows: 0},
+        };
+      },
+      upsertSystemTableRow: async (tableName, row, options) => {
+        upserts.push({tableName, row, options});
+        return {success: true};
+      },
+    },
+  });
+
+  await service.handleNodeStateUpdate({
+    [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+    [ControlPlaneField.NODE_ID]: 'node-joiner',
+    [ControlPlaneField.NODE_ADDRESS]: 'localhost:8099',
+    [ControlPlaneField.STATE]: STATE.CONNECTED,
+    [ControlPlaneField.CAPABILITIES]: ['partition_replica'],
+    [ControlPlaneField.HEARTBEAT_AT]: now,
+    [ControlPlaneField.NODE_ROW]: {
+      [COLUMN.NODE_ID]: 'node-joiner',
+      [COLUMN.NODE_ADDRESS]: 'localhost:8099',
+      [COLUMN.CPU_CORES]: 8,
+      [COLUMN.MEMORY_MB]: 16384,
+      [COLUMN.DISK_GB]: 500,
+      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+      [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
+      [COLUMN.LAST_HEARTBEAT]: now,
+      [COLUMN.CREATED_AT]: now - 1000,
+      [COLUMN.STORAGE_BUDGET_BYTES]: 107374182400,
+      [COLUMN.STORAGE_BUDGET_SOURCE]: 'backfill',
+      [COLUMN.STORAGE_BUDGET_UPDATED_AT]: now - 500,
+    },
+  });
+
+  t.equal(updates.length, 1, 'attempts update before fallback upsert');
+  t.equal(upserts.length, 1, 'falls back to upsert when the node row is absent');
+  t.equal(
+    upserts[0].row.storage_budget_bytes,
+    107374182400,
+    'first-insert NODE_STATE_UPDATE should persist storage budget bytes from the payload node row',
+  );
+  t.equal(
+    upserts[0].row.storage_budget_source,
+    'backfill',
+    'first-insert NODE_STATE_UPDATE should persist storage budget source from the payload node row',
+  );
+  t.equal(
+    upserts[0].row.storage_budget_updated_at,
+    now - 500,
+    'first-insert NODE_STATE_UPDATE should persist storage budget updated timestamp from the payload node row',
+  );
+
+  service.stop();
+});
+
+test('ReplicaDispatchService NODE_STATE_UPDATE uses injected control-plane ' +
+  'system-table gateway', async (t) => {
+  initEnv();
+
+  const gatewayCalls = [];
+  const cacheNode = {
+    node_id: 'node-gateway',
+    node_address: 'localhost:8090',
+    cpu_cores: 8,
+    memory_mb: 16384,
+    disk_gb: 500,
+    cpu_usage_percent: 10,
+    memory_usage_percent: 20,
+    disk_usage_percent: 30,
+    status: SERVICE_STATUS.ACTIVE,
+    connection_state: STATE.CONNECTED,
+    capabilities: '[]',
+    last_heartbeat: Date.now() - 1000,
+    ready_lease_expires_at: null,
+    created_at: Date.now() - 10000,
+  };
+
+  const service = createService({
+    cacheNode,
+    cdcIntegrationService: {
+      updateSystemTableRow: async () => {
+        throw new Error('cdcIntegrationService should not handle node writes');
+      },
+      upsertSystemTableRow: async () => {
+        throw new Error('cdcIntegrationService should not handle node writes');
+      },
+    },
+    controlPlaneSystemTableGateway: {
+      async updateSystemTableRow(tableName, whereClause, row, options) {
+        gatewayCalls.push({
+          method: 'updateSystemTableRow',
+          tableName,
+          whereClause,
+          row,
+          options,
+        });
+        return {
+          success: true,
+          partitionResult: {affectedRows: 1},
+        };
+      },
+      async upsertSystemTableRow(tableName, row, options) {
+        gatewayCalls.push({
+          method: 'upsertSystemTableRow',
+          tableName,
+          row,
+          options,
+        });
+        return {success: true};
+      },
+    },
+  });
+
+  await service.handleNodeStateUpdate({
+    [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+    [ControlPlaneField.NODE_ID]: 'node-gateway',
+    [ControlPlaneField.NODE_ADDRESS]: 'localhost:8090',
+    [ControlPlaneField.STATE]: STATE.READY,
+    [ControlPlaneField.HEARTBEAT_AT]: Date.now(),
+  });
+
+  t.equal(gatewayCalls.length, 1, 'gateway should own the node-state write');
+  t.equal(
+    gatewayCalls[0].method,
+    'updateSystemTableRow',
+    'dispatch should route NODE_STATE_UPDATE through the gateway',
+  );
+  t.equal(
+    gatewayCalls[0].tableName,
+    'nodes',
+    'dispatch gateway writes should target the nodes table',
+  );
+
+  service.stop();
+});
 
 test('ReplicaDispatchService ignores stale CONNECTED regression after READY',
   async (t) => {

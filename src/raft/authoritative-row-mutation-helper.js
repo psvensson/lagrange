@@ -43,6 +43,7 @@ class AuthoritativeRowMutationHelper {
       tableName,
       buildWhereClause,
       buildUpdateData,
+      buildUpdateOptions = () => ({}),
       readValueFromCache,
       readRowFromCache = null,
       buildExpectedCacheFields = null,
@@ -79,6 +80,7 @@ class AuthoritativeRowMutationHelper {
     this.tableName = tableName;
     this.buildWhereClause = buildWhereClause;
     this.buildUpdateData = buildUpdateData;
+    this.buildUpdateOptions = buildUpdateOptions;
     this.readValueFromCache = readValueFromCache;
     this.readRowFromCache = readRowFromCache;
     this.buildExpectedCacheFields = buildExpectedCacheFields;
@@ -202,21 +204,33 @@ class AuthoritativeRowMutationHelper {
     const cachedRow = typeof this.readRowFromCache === TYPEOF.FUNCTION ?
       this.readRowFromCache(this.systemTableCache) :
       null;
-    const whereClause = this.buildWhereClause(value, {
+    const mutationContext = {
       cachedRow,
       persistedValue: this.persistedValue,
-    });
+    };
+    const whereClause = this.buildWhereClause(value, mutationContext);
+    const updateOptionsCandidate = typeof this.buildUpdateOptions === TYPEOF.FUNCTION ?
+      this.buildUpdateOptions(value, updateData, mutationContext) :
+      null;
+    const updateOptions = updateOptionsCandidate &&
+      typeof updateOptionsCandidate === TYPEOF.OBJECT ?
+      updateOptionsCandidate :
+      {};
     const expectedCacheFields =
       typeof this.buildExpectedCacheFields === TYPEOF.FUNCTION ?
         this.buildExpectedCacheFields(value, updateData) :
         null;
+    const writeOptions = {
+      ...updateOptions,
+      ...(expectedCacheFields ? {expectedCacheFields} : {}),
+    };
 
     try {
       const partitionResult = await this.cdcIntegrationService.updateSystemTableRow(
         this.tableName,
         whereClause,
         updateData,
-        expectedCacheFields ? {expectedCacheFields} : {},
+        writeOptions,
       );
       const affectedRows = extractAffectedRows(partitionResult);
       if (affectedRows !== null && affectedRows <= 0) {

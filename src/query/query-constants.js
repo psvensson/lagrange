@@ -79,6 +79,8 @@ const QUERY_ERROR_MSG = Object.freeze({
   PARTITION_SERVICE_NOT_FOUND: 'Partition service not found',
   PARTITION_SERVICE_NOT_FOUND_PREFIX: 'Partition service not found: ',
   QUERY_ROUTING_FAILED: 'Query routing failed',
+  READ_CANDIDATES_EXHAUSTED:
+    'All read candidates exhausted with transient errors',
   SYSTEM_CACHE_NOT_AVAILABLE: 'System cache not available for table',
   SYSTEM_CACHE_FILTER_UNSUPPORTED: 'System cache does not support filter',
   SYSTEM_CACHE_UNSUPPORTED: 'System cache does not support filter or getAll',
@@ -203,8 +205,12 @@ const QUERY_LOG_MSG = Object.freeze({
   PARTITION_SERVICE_NOT_FOUND: 'Partition service not found',
   QUERY_ROUTING_FAILED: 'Query routing failed',
   NO_HANDLER_FOR_PARTITION: 'No handler registered for partition service',
+  READ_CANDIDATE_TRANSIENT_FAILURE:
+    'Read candidate failed with transient error, trying next',
   SYSTEM_CACHE_FILTER_UNSUPPORTED: 'System cache does not support filter',
   NO_ACTIVE_SERVICE_FOR_PARTITION: 'No active service found for partition',
+  PARTITION_ROUTING_CANDIDATES_FILTERED:
+    'Partition routing candidates filtered by readiness',
   NO_LEADER_SERVICE_FOR_PARTITION: 'No leader service found for partition',
   CANONICAL_LEADER_METADATA_MISSING_FOR_PARTITION:
     'Canonical partition leader metadata missing',
@@ -265,6 +271,18 @@ const QUERY_ROUTER_LOG_MSG = Object.freeze({
   FOLLOWING_REDIRECT: 'Following leader redirect',
   RETRY_ATTEMPT: 'Retrying partition route',
   ROUTE_FAILED: 'Route to partition failed',
+});
+
+const QUERY_ROUTING_DIAGNOSTIC_REASON = Object.freeze({
+  OK: 'ok',
+  NO_SERVICE_ROWS: 'no_service_rows',
+  NO_ACTIVE_ADDRESSED_SERVICES: 'no_active_addressed_services',
+  ALL_SERVICES_FILTERED_BY_READINESS:
+    'all_services_filtered_by_readiness',
+  SERVICE_INACTIVE: 'service_inactive',
+  SERVICE_ADDRESS_MISSING: 'service_address_missing',
+  READINESS_UNAVAILABLE: 'readiness_unavailable',
+  NODE_NOT_ELIGIBLE: 'node_not_eligible',
 });
 
 const QUERY_SQL = Object.freeze({
@@ -368,6 +386,7 @@ const QUERY_CONFIG_KEY = Object.freeze({
   MAX_PARALLEL_PARTITIONS: CONFIG_KEY.QUERY_MAX_PARALLEL_PARTITIONS,
   LEADER_RETRY_ATTEMPTS: CONFIG_KEY.QUERY_LEADER_RETRY_ATTEMPTS,
   LEADER_RETRY_DELAY_MS: CONFIG_KEY.QUERY_LEADER_RETRY_DELAY_MS,
+  READ_RETRY_ATTEMPTS: CONFIG_KEY.QUERY_READ_RETRY_ATTEMPTS,
 
   COORDINATOR_MAX_PARALLEL_PARTITIONS:
     CONFIG_KEY.QUERY_COORDINATOR_MAX_PARALLEL_PARTITIONS,
@@ -392,6 +411,7 @@ const QUERY_DEFAULTS = Object.freeze({
   MAX_PARALLEL_PARTITIONS: NUM.THOUSAND,
   LEADER_RETRY_ATTEMPTS: NUM.FIVE,
   LEADER_RETRY_DELAY_MS: NUM.FIVE * NUM.TEN,
+  READ_RETRY_ATTEMPTS: NUM.THREE,
   NO_SERVICE_WARN_THROTTLE_MS: TIME_MS.SECOND * NUM.FIVE,
   TABLE_CREATE_PROVISION_TIMEOUT_MS: TIME_MS.SECOND * NUM.TEN * NUM.THREE,
   TABLE_CREATE_PROVISION_POLL_INTERVAL_MS: NUM.FIVE * NUM.TEN,
@@ -423,6 +443,7 @@ export {
   QUERY_RESPONSE_TYPE,
   QUERY_ROUTER_ERROR_MSG,
   QUERY_ROUTER_LOG_MSG,
+  QUERY_ROUTING_DIAGNOSTIC_REASON,
   QUERY_SESSION,
   QUERY_SQL,
   QUERY_SQL_FRAGMENT,

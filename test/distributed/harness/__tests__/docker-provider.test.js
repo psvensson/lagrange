@@ -189,6 +189,43 @@ test('Unit: createContainer passes correct env vars to Docker', async (t) => {
           `Env should contain "${entry}"`,
         );
       }
+      assert.deepStrictEqual(
+        capturedOpts.NetworkingConfig?.EndpointsConfig?.['test-net']?.Aliases,
+        ['test-node-1'],
+        'container create should publish a Docker network alias matching the container name',
+      );
+    },
+  );
+});
+
+test('Unit: connectToNetwork forwards aliases when provided', async (t) => {
+  await t.test(
+    'connectToNetwork passes EndpointConfig aliases to Docker network connect',
+    async () => {
+      const provider = new DockerProvider({socketPath: '/var/run/docker.sock'});
+      let capturedConnectOptions = null;
+      provider._docker.getNetwork = () => ({
+        connect: async (options) => {
+          capturedConnectOptions = options;
+        },
+      });
+
+      await provider.connectToNetwork(
+        'test-network-id',
+        'test-container-id',
+        ['ddb-test-reuse-5-4'],
+      );
+
+      assert.deepStrictEqual(
+        capturedConnectOptions,
+        {
+          Container: 'test-container-id',
+          EndpointConfig: {
+            Aliases: ['ddb-test-reuse-5-4'],
+          },
+        },
+        'network connect should preserve explicit aliases',
+      );
     },
   );
 });

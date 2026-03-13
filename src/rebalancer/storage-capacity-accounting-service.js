@@ -8,6 +8,9 @@ import {ConfigurationManager} from '../config/configuration-manager.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {assertCritical} from '../utils/assert.js';
 import {
+  ControlPlaneSystemTableGateway,
+} from '../control-plane/control-plane-system-table-gateway.js';
+import {
   COLUMN,
   NUM,
   SERVICE_TYPE,
@@ -40,6 +43,13 @@ class StorageCapacityAccountingService {
   constructor(options = {}) {
     this.systemTableCache = options.systemTableCache || null;
     this.sqlQueryEngine = options.sqlQueryEngine || null;
+    this.controlPlaneSystemTableGateway =
+      options.controlPlaneSystemTableGateway ||
+      new ControlPlaneSystemTableGateway({
+        sqlQueryEngine: this.sqlQueryEngine,
+      });
+    this.usesDefaultControlPlaneSystemTableGateway =
+      !options.controlPlaneSystemTableGateway;
     this.config = ConfigurationManager.getInstance();
 
     const loggingService = LoggingService.getInstance();
@@ -61,6 +71,16 @@ class StorageCapacityAccountingService {
     }
     if (options.sqlQueryEngine) {
       this.sqlQueryEngine = options.sqlQueryEngine;
+    }
+    if (options.controlPlaneSystemTableGateway) {
+      this.controlPlaneSystemTableGateway =
+        options.controlPlaneSystemTableGateway;
+      this.usesDefaultControlPlaneSystemTableGateway = false;
+    } else if (this.usesDefaultControlPlaneSystemTableGateway) {
+      this.controlPlaneSystemTableGateway =
+        new ControlPlaneSystemTableGateway({
+          sqlQueryEngine: this.sqlQueryEngine,
+        });
     }
 
     this.refreshConfig();
@@ -118,8 +138,14 @@ class StorageCapacityAccountingService {
    * @private
    */
   ensureDataSource() {
+    const hasReadableGateway =
+      typeof this.controlPlaneSystemTableGateway?.supportsReadRows ===
+        TYPEOF.FUNCTION ?
+        this.controlPlaneSystemTableGateway.supportsReadRows() :
+        typeof this.controlPlaneSystemTableGateway?.readRows ===
+          TYPEOF.FUNCTION;
     assertCritical(
-      this.systemTableCache || this.sqlQueryEngine,
+      this.systemTableCache || hasReadableGateway,
       STORAGE_CAPACITY_ERROR_MSG.ACCOUNTING_SOURCE_REQUIRED,
     );
   }
@@ -138,8 +164,7 @@ class StorageCapacityAccountingService {
       return this.systemTableCache.getAll(tableName) || [];
     }
 
-    if (!this.sqlQueryEngine ||
-        typeof this.sqlQueryEngine.executeQuery !== TYPEOF.FUNCTION) {
+    if (!this.controlPlaneSystemTableGateway) {
       return [];
     }
 
@@ -148,7 +173,11 @@ class StorageCapacityAccountingService {
       return [];
     }
 
-    const result = await this.sqlQueryEngine.executeQuery(query, []);
+    const result = await this.controlPlaneSystemTableGateway.readRows(
+      tableName,
+      query,
+      [],
+    );
     return result?.rows || [];
   }
 

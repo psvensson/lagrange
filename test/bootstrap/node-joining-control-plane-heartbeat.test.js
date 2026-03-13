@@ -41,10 +41,9 @@ test('NodeJoiningService sends READY heartbeats over NODE_STATE_UPDATE messages'
         return {acknowledged: true};
       },
     };
-    service.resolveControlPlaneTargetAddress = ({allowBootstrapHints} = {}) =>
-      allowBootstrapHints === false ?
-        null :
-        'seed-node/message-group/mg-1-r1';
+    service.resolveControlPlaneTargetAddressCandidates = () => [
+      'seed-node/message-group/mg-1-r1',
+    ];
 
     await service.sendControlPlaneNodeStateUpdate({
       state: STATE.READY,
@@ -98,10 +97,9 @@ test('NodeJoiningService treats unacknowledged control-plane heartbeats as failu
         error: 'Message timeout',
       }),
     };
-    service.resolveControlPlaneTargetAddress = ({allowBootstrapHints} = {}) =>
-      allowBootstrapHints === false ?
-        null :
-        'seed-node/message-group/mg-1-r1';
+    service.resolveControlPlaneTargetAddressCandidates = () => [
+      'seed-node/message-group/mg-1-r1',
+    ];
 
     await t.rejects(
       service.sendControlPlaneNodeStateUpdate({
@@ -136,10 +134,9 @@ test('NodeJoiningService does not block READY heartbeats on cluster mesh reconci
       connectAttempts++;
       await new Promise(() => {});
     };
-    service.resolveControlPlaneTargetAddress = ({allowBootstrapHints} = {}) =>
-      allowBootstrapHints === false ?
-        null :
-        'seed-node/message-group/mg-1-r1';
+    service.resolveControlPlaneTargetAddressCandidates = () => [
+      'seed-node/message-group/mg-1-r1',
+    ];
 
     const outcome = await Promise.race([
       service.sendControlPlaneNodeStateUpdate({

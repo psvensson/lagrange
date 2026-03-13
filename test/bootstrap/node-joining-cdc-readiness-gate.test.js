@@ -15,6 +15,8 @@ import {CDCPipelineReadinessGate} from
   '../../src/cdc/cdc-pipeline-readiness-gate.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {CACHE_HYDRATION_TABLES} from '../../src/cache/cache-constants.js';
+import {JOIN_BACKFILL_SCOPE} from
+  '../../src/bootstrap/node-joining-constants.js';
 
 const NODE_ID = 'readiness-gate-join-test-node';
 const NODE_ADDRESS = 'ws://127.0.0.1:19092';
@@ -215,6 +217,181 @@ test('phaseQuerySystemState succeeds when CDC pipeline is ready',
 
     await service.phaseQuerySystemState();
     t.pass('phaseQuerySystemState completed with ready CDC pipeline');
+  });
+
+test('phaseQuerySystemState limits join-time backfill to discovery-critical tables',
+  async (t) => {
+    const service = new NodeJoiningService({
+      nodeId: NODE_ID,
+      nodeAddress: NODE_ADDRESS,
+      seedNodeAddress: 'ws://127.0.0.1:19090',
+      config: {
+        cdcPipelineReadinessTimeoutMs: 2000,
+      },
+    });
+    const infoLogs = [];
+    service.logger = {
+      info: (message, context) => infoLogs.push({message, context}),
+      debug() {},
+      warn() {},
+      error() {},
+    };
+
+    const systemTableCache = createFullyHydratedCache();
+    applyCommonStubs(service, systemTableCache);
+
+    service.partitionServices = createPartitionServicesWithSubscribers();
+    service.messageGroupServices = createMessageGroupServicesWithLeader();
+
+    service.subscribeToCDCEvents = async () => {
+      service.cdcSubscriptionsActive = true;
+    };
+
+    const backfillCalls = [];
+    service.backfillPropagatedCacheTablesFromAuthoritativeState =
+      async (tableNames) => {
+        backfillCalls.push(tableNames);
+      };
+
+    await service.phaseQuerySystemState();
+    t.same(
+      backfillCalls,
+      [JOIN_BACKFILL_SCOPE.BLOCKING_TABLES],
+      'phaseQuerySystemState should only block on discovery-critical repair',
+    );
+    const opportunisticPromise = service.startJoinOpportunisticBackfill();
+    await opportunisticPromise;
+
+    t.same(
+      backfillCalls,
+      [
+        JOIN_BACKFILL_SCOPE.BLOCKING_TABLES,
+        JOIN_BACKFILL_SCOPE.OPPORTUNISTIC_TABLES,
+      ],
+      'join-time backfill should block on discovery-critical repair before best-effort follow-up',
+    );
+    const infoMessages = infoLogs.map(({message}) => message);
+    t.ok(
+      infoMessages.some((message) =>
+        /Starting blocking join backfill/.test(message)),
+      'logs should record the blocking backfill start',
+    );
+    t.ok(
+      infoMessages.some((message) =>
+        /Completed blocking join backfill/.test(message)),
+      'logs should record the blocking backfill completion',
+    );
+    t.ok(
+      infoMessages.some((message) =>
+        /Completed opportunistic join backfill/.test(message)),
+      'logs should record the opportunistic backfill completion separately',
+    );
+  });
+
+test('phaseQuerySystemState fails on blocking discovery backfill failure',
+  async (t) => {
+    const service = new NodeJoiningService({
+      nodeId: NODE_ID,
+      nodeAddress: NODE_ADDRESS,
+      seedNodeAddress: 'ws://127.0.0.1:19090',
+      config: {
+        cdcPipelineReadinessTimeoutMs: 2000,
+      },
+    });
+    const errorLogs = [];
+    service.logger = {
+      info() {},
+      debug() {},
+      warn() {},
+      error: (message, context) => errorLogs.push({message, context}),
+    };
+
+    const systemTableCache = createFullyHydratedCache();
+    applyCommonStubs(service, systemTableCache);
+
+    service.partitionServices = createPartitionServicesWithSubscribers();
+    service.messageGroupServices = createMessageGroupServicesWithLeader();
+
+    service.subscribeToCDCEvents = async () => {
+      service.cdcSubscriptionsActive = true;
+    };
+
+    service.backfillPropagatedCacheTablesFromAuthoritativeState =
+      async (tableNames) => {
+        if (tableNames === JOIN_BACKFILL_SCOPE.BLOCKING_TABLES) {
+          throw new Error('synthetic blocking backfill failure');
+        }
+      };
+
+    await t.rejects(
+      service.phaseQuerySystemState(),
+      /synthetic blocking backfill failure/,
+      'phaseQuerySystemState should fail when blocking discovery repair fails',
+    );
+    t.match(
+      errorLogs.map(({message}) => message),
+      [
+        /Blocking join backfill failed/,
+        /Failed to hydrate system table cache/,
+      ],
+      'blocking repair failure should be classified distinctly in diagnostics',
+    );
+  });
+
+test('phaseQuerySystemState tolerates opportunistic backfill failures after join readiness',
+  async (t) => {
+    const service = new NodeJoiningService({
+      nodeId: NODE_ID,
+      nodeAddress: NODE_ADDRESS,
+      seedNodeAddress: 'ws://127.0.0.1:19090',
+      config: {
+        cdcPipelineReadinessTimeoutMs: 2000,
+      },
+    });
+    const warnLogs = [];
+    service.logger = {
+      info() {},
+      debug() {},
+      warn: (message, context) => warnLogs.push({message, context}),
+      error() {},
+    };
+
+    const systemTableCache = createFullyHydratedCache();
+    applyCommonStubs(service, systemTableCache);
+
+    service.partitionServices = createPartitionServicesWithSubscribers();
+    service.messageGroupServices = createMessageGroupServicesWithLeader();
+
+    service.subscribeToCDCEvents = async () => {
+      service.cdcSubscriptionsActive = true;
+    };
+
+    const backfillCalls = [];
+    service.backfillPropagatedCacheTablesFromAuthoritativeState =
+      async (tableNames) => {
+        backfillCalls.push(tableNames);
+        if (tableNames === JOIN_BACKFILL_SCOPE.OPPORTUNISTIC_TABLES) {
+          throw new Error('synthetic opportunistic backfill failure');
+        }
+      };
+
+    await service.phaseQuerySystemState();
+    const opportunisticPromise = service.startJoinOpportunisticBackfill();
+    await opportunisticPromise;
+
+    t.same(
+      backfillCalls,
+      [
+        JOIN_BACKFILL_SCOPE.BLOCKING_TABLES,
+        JOIN_BACKFILL_SCOPE.OPPORTUNISTIC_TABLES,
+      ],
+      'join should block on discovery-critical backfill and downgrade opportunistic failures',
+    );
+    t.match(
+      warnLogs.map(({message}) => message),
+      [/Opportunistic join backfill failed/],
+      'background repair failure should be downgraded into opportunistic diagnostics',
+    );
   });
 
 test('phaseQuerySystemState fails on CDC readiness gate timeout',

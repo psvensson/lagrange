@@ -1,8 +1,6 @@
 /**
- * Tests that joining node registration sets an initial ready lease.
- * Bug: registerNodeInCluster omitted ready_lease_expires_at, causing
- * the lease sweep to mark the node as unavailable before the heartbeat
- * service could start, leaving the rebalancer with availableNodeCount=1.
+ * Tests that join-time membership publication does not assign the ready lease
+ * before the explicit ready-signal checkpoint runs.
  */
 
 import {test} from '../../src/test-helpers/tap.js';
@@ -12,7 +10,6 @@ import {
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
-import {TIME_MS} from '../../src/constants/time.js';
 
 function initializeTestEnvironment() {
   ConfigurationManager.resetInstance();
@@ -32,25 +29,25 @@ function initializeTestEnvironment() {
   NodeService.resetInstance();
 }
 
-test('registerNodeInCluster sets ready_lease_expires_at', async (t) => {
+test('registerNodeInCluster defers ready_lease_expires_at until ready signaling',
+  async (t) => {
   initializeTestEnvironment();
 
-  let capturedNodeData = null;
+  let capturedNodeStateUpdate = null;
 
   const mockCdcIntegrationService = {
     sqlQueryEngine: {},
-    upsertSystemTableRow: async (_table, row) => {
-      // Also capture from endpoint registration
-      return {success: true};
-    },
+    upsertSystemTableRow: async () => ({success: true}),
   };
 
   const mockBudgetService = {
-    registerNodeBudget: async ({nodeRow}) => {
-      capturedNodeData = nodeRow;
+    resolveBudgetRow: (nodeRow) => {
       return {
-        result: {success: true},
-        budgetRow: nodeRow,
+        budgetRow: {
+          ...nodeRow,
+          storage_budget_bytes: 100,
+          storage_budget_source: 'test',
+        },
         resolution: {
           isValid: true,
           budgetBytes: 100,
@@ -68,25 +65,21 @@ test('registerNodeInCluster sets ready_lease_expires_at', async (t) => {
 
   service.cdcIntegrationService = mockCdcIntegrationService;
   service.getNodeStorageBudgetService = () => mockBudgetService;
+  service.sendControlPlaneNodeStateUpdate = async (options) => {
+    capturedNodeStateUpdate = options;
+  };
 
-  const beforeMs = Date.now();
   await service.registerNodeInCluster();
-  const afterMs = Date.now();
 
-  t.ok(capturedNodeData, 'Node data was written');
-
-  const leaseExpiry = capturedNodeData.ready_lease_expires_at;
-  t.ok(
-    Number.isFinite(leaseExpiry),
-    'ready_lease_expires_at must be a finite number, got: ' +
-      String(leaseExpiry),
+  t.ok(capturedNodeStateUpdate, 'membership publication should be emitted');
+  t.equal(
+    capturedNodeStateUpdate.state,
+    'connected',
+    'join membership should publish CONNECTED before ready signaling',
   );
-
-  const minExpected = beforeMs + TIME_MS.CONTROL_PLANE_READY_LEASE;
-  const maxExpected = afterMs + TIME_MS.CONTROL_PLANE_READY_LEASE;
-  t.ok(
-    leaseExpiry >= minExpected && leaseExpiry <= maxExpected,
-    'Lease expiry should be now + CONTROL_PLANE_READY_LEASE (' +
-      TIME_MS.CONTROL_PLANE_READY_LEASE + 'ms)',
+  t.equal(
+    capturedNodeStateUpdate.nodeRow.ready_lease_expires_at,
+    undefined,
+    'join membership payload should not carry a ready lease before the ready checkpoint',
   );
-});
+  });

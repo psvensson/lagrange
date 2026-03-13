@@ -41,6 +41,33 @@ function sliceLogTail(logContent, maxLines = LOG_TAIL_LINE_COUNT) {
   return lines.slice(-Math.max(1, maxLines));
 }
 
+function parseStructuredLogLine(line) {
+  const jsonStart = String(line || '').indexOf('{');
+  if (jsonStart < ZERO) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(String(line).slice(jsonStart));
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch (_error) {
+    return null;
+  }
+}
+
+function resolveRoutingDiagnostics(logExcerpt) {
+  for (const line of [...(Array.isArray(logExcerpt) ? logExcerpt : [])].reverse()) {
+    const parsed = parseStructuredLogLine(line);
+    if (!parsed ||
+        parsed.subsystem !== 'query-executor' ||
+        !parsed.routingSnapshot ||
+        typeof parsed.routingSnapshot !== 'object') {
+      continue;
+    }
+    return parsed.routingSnapshot;
+  }
+  return null;
+}
+
 function resolveFailureDiagnostics(entry) {
   const diagnostics = entry?.details?.diagnostics;
   return diagnostics && typeof diagnostics === 'object' ? diagnostics : {};
@@ -611,6 +638,7 @@ function buildFocusedNodeDiagnostics(
     const logExcerpt = Array.isArray(logs?.excerptsByNodeId?.[nodeId]) ?
       logs.excerptsByNodeId[nodeId] :
       [];
+    const routingDiagnostics = resolveRoutingDiagnostics(logExcerpt);
     if (!perNodeMetrics[nodeId] &&
         matchingErrors.length === ZERO &&
         !controlSnapshotByNodeId[nodeId] &&
@@ -622,6 +650,7 @@ function buildFocusedNodeDiagnostics(
         !heartbeatPublication &&
         readinessTransitions.length === ZERO &&
         !timelineCorrelation &&
+        !routingDiagnostics &&
         !nodeLogPath &&
         logExcerpt.length === ZERO) {
       continue;
@@ -638,6 +667,7 @@ function buildFocusedNodeDiagnostics(
       heartbeatPublication,
       readinessTransitions,
       timelineCorrelation,
+      routingDiagnostics,
       logPath: nodeLogPath,
       logExcerpt,
     };
@@ -894,6 +924,40 @@ function formatNodeDiagnosticLoadMetrics(loadMetrics) {
   ].join(', ');
 }
 
+function formatRoutingDiagnostics(routingDiagnostics) {
+  if (!routingDiagnostics || typeof routingDiagnostics !== 'object') {
+    return UNKNOWN_VALUE;
+  }
+  const deniedByNodeId = routingDiagnostics.deniedByNodeId &&
+    typeof routingDiagnostics.deniedByNodeId === 'object' ?
+    Object.entries(routingDiagnostics.deniedByNodeId)
+      .map(([nodeId, summary]) => {
+        const reasonCodes = Array.isArray(summary?.reasonCodes) ?
+          summary.reasonCodes :
+          [];
+        return `${nodeId}[${formatList(reasonCodes)}]`;
+      }) :
+    [];
+  return [
+    'reason=' + String(routingDiagnostics.reasonCode || UNKNOWN_VALUE),
+    'decisionDimension=' + String(
+      routingDiagnostics.routingReadinessDimension || UNKNOWN_VALUE,
+    ),
+    'services=' + String(routingDiagnostics.serviceRowCount ?? UNKNOWN_VALUE),
+    'activeAddressed=' + String(
+      routingDiagnostics.activeAddressedServiceCount ?? UNKNOWN_VALUE,
+    ),
+    'routable=' + String(
+      routingDiagnostics.routableServiceCount ?? UNKNOWN_VALUE,
+    ),
+    'leaderKnown=' + String(routingDiagnostics.leaderKnown === true),
+    'canonicalLeaderNodeId=' + String(
+      routingDiagnostics.canonicalLeaderNodeId || UNKNOWN_VALUE,
+    ),
+    'deniedNodes=' + formatList(deniedByNodeId),
+  ].join(', ');
+}
+
 function formatAdminQueryTraceEntry(entry) {
   return [
     'outcome=' + String(entry?.outcome || UNKNOWN_VALUE),
@@ -1037,6 +1101,12 @@ function renderScenarioFailureBundleMarkdown(bundle) {
           lines.push(
             '- Timeline Correlation: ' +
               formatTimelineCorrelation(nodeDiagnostic.timelineCorrelation),
+          );
+        }
+        if (nodeDiagnostic?.routingDiagnostics) {
+          lines.push(
+            '- Routing Diagnostics: ' +
+              formatRoutingDiagnostics(nodeDiagnostic.routingDiagnostics),
           );
         }
         const readinessTransitions = Array.isArray(

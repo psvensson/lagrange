@@ -12,7 +12,10 @@ import {
   ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
-import {WORKFLOW_STEP} from '../../src/constants/index.js';
+import {
+  SERVICE_STATUS,
+  WORKFLOW_STEP,
+} from '../../src/constants/index.js';
 
 function initEnv() {
   process.env.NODE_ENV = 'test';
@@ -129,6 +132,7 @@ function createHandler(overrides = {}) {
     },
     resolveLocalMessageGroupReplica:
       overrides.resolveLocalMessageGroupReplica || null,
+    messageRouter: overrides.messageRouter || null,
   });
   handler.initialize();
 
@@ -160,7 +164,13 @@ describe('MessageGroupServiceHandler', () => {
 
   it('creates a message-group replica from cache-derived peer topology',
     async () => {
-      const {handler, cdc, calls} = createHandler();
+      const {handler, cdc, calls} = createHandler({
+        messageRouter: {
+          isRegistered(address) {
+            return address === 'test-node/message-group/mg-1-r4';
+          },
+        },
+      });
 
       const response = await handler.handleCreateReplica({
         [ReplicaOperationField.OPERATION_ID]: 'op-create-1',
@@ -203,8 +213,45 @@ describe('MessageGroupServiceHandler', () => {
       assert.equal(cdc.upserts[0].data.service_id, 'mg-1-r4');
       assert.equal(cdc.upserts[0].data.group_id, 'mg-1');
       assert.equal(cdc.upserts[0].data.node_id, 'test-node');
-      assert.equal(cdc.upserts[0].data.status, ReplicaStatus.ACTIVE);
+      assert.equal(cdc.upserts[0].data.status, SERVICE_STATUS.ACTIVE);
       assert.equal(cdc.operations[0].type, 'upsert');
+    });
+
+  it('fails closed when the local replica handler is not registered',
+    async () => {
+      const {handler, cdc, calls} = createHandler({
+        messageRouter: {
+          isRegistered() {
+            return false;
+          },
+        },
+      });
+
+      const response = await handler.handleCreateReplica({
+        [ReplicaOperationField.OPERATION_ID]: 'op-create-unregistered',
+        [ReplicaOperationField.ENTITY_ID]: 'mg-1',
+        [ReplicaOperationField.REPLICA_ID]: 'mg-1-r4',
+      });
+
+      assert.equal(
+        response.status,
+        ReplicaOperationResponseStatus.INITIATED,
+      );
+
+      await flushImmediate();
+      await flushImmediate();
+
+      assert.equal(calls.length, 2);
+      assert.equal(
+        handler.localReplicas.get('mg-1-r4')?.status,
+        ReplicaStatus.FAILED,
+      );
+      assert.equal(
+        cdc.upserts.length,
+        0,
+        'services row publication should fail closed until the replica handler is routable',
+      );
+      assert.equal(cdc.updates.length, 0);
     });
 
   it('removes an existing local message-group replica discovered via resolver',
@@ -236,11 +283,16 @@ describe('MessageGroupServiceHandler', () => {
         handler.localReplicas.get('mg-1-r1')?.status,
         ReplicaStatus.REMOVED,
       );
-      assert.equal(cdc.updates.length, 0);
+      assert.equal(cdc.updates.length, 1);
+      assert.equal(cdc.updates[0].tableName, 'services');
+      assert.equal(cdc.updates[0].keyObj.service_id, 'mg-1-r1');
+      assert.equal(cdc.updates[0].keyObj.service_type, 'message_group');
+      assert.equal(cdc.updates[0].updateData.status, 'stopped');
       assert.equal(cdc.deletes.length, 1);
       assert.equal(cdc.deletes[0].tableName, 'services');
       assert.equal(cdc.deletes[0].whereClause.service_id, 'mg-1-r1');
       assert.equal(cdc.deletes[0].whereClause.node_id, 'test-node');
-      assert.equal(cdc.operations[0].type, 'delete');
+      assert.equal(cdc.operations[0].type, 'update');
+      assert.equal(cdc.operations[1].type, 'delete');
     });
 });

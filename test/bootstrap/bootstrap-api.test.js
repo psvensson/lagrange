@@ -145,6 +145,40 @@ test('BootstrapAPI - health reports initializing before SQL engine is ready', as
   await api.shutdown();
 });
 
+test('BootstrapAPI - setSqlQueryEngine propagates to current partition services',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const observedEngines = [];
+    const partitionServices = new Map([
+      ['partition-1', {
+        setSqlQueryEngine(engine) {
+          observedEngines.push(engine);
+        },
+      }],
+    ]);
+    const sqlQueryEngine = {executeQuery: async () => ({success: true})};
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: createEmptySystemTableCache(),
+      partitionServices,
+    });
+
+    api.setSqlQueryEngine(sqlQueryEngine);
+
+    t.equal(
+      observedEngines.length,
+      1,
+      'setSqlQueryEngine should fan out to existing partition services',
+    );
+    t.equal(
+      observedEngines[0],
+      sqlQueryEngine,
+      'partition services should receive the exact engine instance',
+    );
+  });
+
 test('BootstrapAPI - keeps legacy /health available while readiness remains blocked',
   async (t) => {
     initializeTestEnvironment();
@@ -316,6 +350,131 @@ test('BootstrapAPI - bootstrap join readiness tolerates isolated leader metadata
     await api.shutdown();
   });
 
+test('BootstrapAPI - readyz allows isolated message-group leader lag', async (t) => {
+  initializeTestEnvironment();
+
+  const readinessState = new BootstrapReadinessState({
+    readyStableWindowMs: 0,
+  });
+  const api = new BootstrapAPI({
+    seedNodeId: 'seed-node-1',
+    seedNodeAddress: 'ws://localhost:8080',
+    systemTableCache: createEmptySystemTableCache(),
+    bootstrapService: {
+      phase: BOOTSTRAP_PHASE.COMPLETE,
+      messageRouter: {},
+    },
+    readinessState,
+    sqlQueryEngine: {
+      async executeQuery() {
+        return {success: true, rows: []};
+      },
+    },
+  });
+
+  api.getMissingServiceLeaders = () => {
+    return {
+      missingPartitionLeaders: [],
+      missingPartitionLeaderNodes: [],
+      missingPartitionLeaderAddresses: [],
+      missingMessageGroupLeaders: ['mg-1'],
+      missingMessageGroupLeaderNodes: ['mg-1'],
+      missingMessageGroupLeaderAddresses: ['mg-1'],
+    };
+  };
+
+  await api.initialize(0, {listen: false});
+
+  const leaderStatus = api.getLeaderReadinessStatusForProbe();
+  t.equal(leaderStatus.ready, true,
+    'message-group leader lag alone should not block traffic readiness');
+  t.same(
+    leaderStatus.nonBlockingMissingMessageGroupLeaders,
+    ['mg-1'],
+    'probe diagnostics should retain non-blocking message-group gaps',
+  );
+  t.same(
+    leaderStatus.missingMessageGroupLeaders,
+    [],
+    'blocking readiness subset should exclude message-group leader gaps',
+  );
+
+  const readyResponse = await api.getFastify().inject({
+    method: 'GET',
+    url: '/readyz',
+  });
+  t.equal(readyResponse.statusCode, 200,
+    'readyz should stay green when only message-group leaders are lagging');
+  const readyBody = JSON.parse(readyResponse.body);
+  t.equal(readyBody.ready, true,
+    'readyz should project ready=true when partition routing metadata is complete');
+  t.same(readyBody.reasons, [],
+    'readyz should not report message-group lag as a hard blocker');
+
+  await api.shutdown();
+});
+
+test('BootstrapAPI - readyz still blocks missing partition leader metadata', async (t) => {
+  initializeTestEnvironment();
+
+  const readinessState = new BootstrapReadinessState({
+    readyStableWindowMs: 0,
+  });
+  const api = new BootstrapAPI({
+    seedNodeId: 'seed-node-1',
+    seedNodeAddress: 'ws://localhost:8080',
+    systemTableCache: createEmptySystemTableCache(),
+    bootstrapService: {
+      phase: BOOTSTRAP_PHASE.COMPLETE,
+      messageRouter: {},
+    },
+    readinessState,
+    sqlQueryEngine: {
+      async executeQuery() {
+        return {success: true, rows: []};
+      },
+    },
+  });
+
+  api.getMissingServiceLeaders = () => {
+    return {
+      missingPartitionLeaders: ['nodes-p1'],
+      missingPartitionLeaderNodes: ['nodes-p1'],
+      missingPartitionLeaderAddresses: ['nodes-p1'],
+      missingMessageGroupLeaders: ['mg-1'],
+      missingMessageGroupLeaderNodes: ['mg-1'],
+      missingMessageGroupLeaderAddresses: ['mg-1'],
+    };
+  };
+
+  await api.initialize(0, {listen: false});
+
+  const leaderStatus = api.getLeaderReadinessStatusForProbe();
+  t.equal(leaderStatus.ready, false,
+    'missing partition leader metadata should still block readiness');
+  t.same(
+    leaderStatus.missingPartitionLeaders,
+    ['nodes-p1'],
+    'blocking readiness subset should retain partition leader gaps',
+  );
+
+  const readyResponse = await api.getFastify().inject({
+    method: 'GET',
+    url: '/readyz',
+  });
+  t.equal(readyResponse.statusCode, 503,
+    'readyz should remain blocked when partition leader metadata is missing');
+  const readyBody = JSON.parse(readyResponse.body);
+  t.equal(readyBody.ready, false,
+    'readyz should expose ready=false when partition routing is incomplete');
+  t.ok(
+    readyBody.reasons.includes(BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE),
+    'readyz should continue reporting the leader metadata blocker',
+  );
+
+  await api.shutdown();
+});
+
 test('BootstrapAPI - bootstrap join readiness keeps blocking when additional blockers exist',
   async (t) => {
     initializeTestEnvironment();
@@ -364,6 +523,59 @@ test('BootstrapAPI - bootstrap join readiness keeps blocking when additional blo
       readinessSnapshot.reasons.sort(),
       'bootstrap join readiness should preserve blocking reasons',
     );
+
+    await api.shutdown();
+  });
+
+test('BootstrapAPI - bootstrap join readiness allows stable-window-only join-ready projection',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const readinessSnapshot = {
+      ready: false,
+      phase: 'JOIN_READY',
+      state: 'warming',
+      reasons: [LIFECYCLE_REASON.READINESS_STABLE_WINDOW_PENDING],
+      retryAfterMs: 250,
+      timestamp: Date.now(),
+    };
+    const readinessState = {
+      evaluate() {
+        return readinessSnapshot;
+      },
+      getSnapshot() {
+        return readinessSnapshot;
+      },
+      recordProbeResult() {},
+    };
+
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: createEmptySystemTableCache(),
+      readinessState,
+    });
+
+    await api.initialize(0, {listen: false});
+
+    const strictReadyResponse = await api.getFastify().inject({
+      method: 'GET',
+      url: '/readyz',
+    });
+    t.equal(strictReadyResponse.statusCode, 503,
+      'strict readiness should remain blocked during the stable window');
+
+    const bootstrapReadyResponse = await api.getFastify().inject({
+      method: 'GET',
+      url: '/bootstrap/ready',
+    });
+    t.equal(bootstrapReadyResponse.statusCode, 200,
+      'bootstrap join readiness should stay green during stable-window-only warming');
+    const bootstrapReadyBody = JSON.parse(bootstrapReadyResponse.body);
+    t.equal(bootstrapReadyBody.ready, true,
+      'bootstrap join readiness should project ready=true during stable-window-only warming');
+    t.same(bootstrapReadyBody.reasons, [],
+      'bootstrap join readiness should clear stable-window-only reasons');
 
     await api.shutdown();
   });
@@ -888,6 +1100,47 @@ test('BootstrapAPI - blocks bootstrap until raft leaders are ready', async (t) =
 
   await api.shutdown();
 });
+
+test('BootstrapAPI - allows bootstrap when only message-group leaders are missing',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: createEmptySystemTableCache(),
+    });
+
+    api.getMissingServiceLeaders = () => {
+      return {
+        missingPartitionLeaders: [],
+        missingPartitionLeaderNodes: [],
+        missingPartitionLeaderAddresses: [],
+        missingMessageGroupLeaders: ['mg-1'],
+        missingMessageGroupLeaderNodes: ['mg-1'],
+        missingMessageGroupLeaderAddresses: ['mg-1'],
+      };
+    };
+
+    await api.initialize(0, {listen: false});
+
+    const response = await api.getFastify().inject({
+      method: 'POST',
+      url: '/bootstrap',
+      payload: {
+        nodeId: '550e8400-e29b-41d4-a716-446655440000',
+        nodeAddress: 'ws://localhost:9090',
+      },
+    });
+
+    t.equal(response.statusCode, 200,
+      'bootstrap should proceed when only message-group leaders are lagging');
+    const body = JSON.parse(response.body);
+    t.equal(body.success, true, 'should return success');
+    t.ok(body.messageGroupAssignment, 'should still include assignment metadata');
+
+    await api.shutdown();
+  });
 
 test('BootstrapAPI - waitForServiceLeaders returns promptly when leaders are missing',
   async (t) => {

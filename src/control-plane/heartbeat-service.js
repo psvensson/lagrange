@@ -26,6 +26,9 @@ import {assertCritical} from '../utils/assert.js';
 import {AuthoritativeControlPlaneView} from
   './authoritative-control-plane-view.js';
 import {
+  ControlPlaneSystemTableGateway,
+} from './control-plane-system-table-gateway.js';
+import {
   HEARTBEAT_CONFIG_KEY,
   HEARTBEAT_DEFAULT,
   HEARTBEAT_ERROR_MSG,
@@ -167,6 +170,13 @@ class HeartbeatService extends EventEmitter {
       clearTimeout;
     this.authoritativeControlPlaneView =
       options.authoritativeControlPlaneView || null;
+    this.controlPlaneSystemTableGateway =
+      options.controlPlaneSystemTableGateway ||
+      new ControlPlaneSystemTableGateway({
+        nodeId: this.nodeId,
+        cdcIntegrationService: this.cdcIntegrationService,
+        now: this.now,
+      });
 
     const config = ConfigurationManager.getInstance();
     this.heartbeatIntervalMs =
@@ -537,6 +547,151 @@ class HeartbeatService extends EventEmitter {
   }
 
   /**
+   * Publish one terminal node row before graceful shutdown tears down the
+   * control-plane path. This lets immediate rejoin reuse the same node ID
+   * without waiting for ready-lease expiry.
+   * @return {Promise<boolean>} True when a shutdown row was published.
+   */
+  async reportNodeShutdown() {
+    const now = this.now();
+    const existing = this.systemTableCache?.get(
+      SYSTEM_TABLE_NAME.NODES,
+      this.nodeId,
+    ) || null;
+    if (!existing) {
+      this.logger.info(HEARTBEAT_LOG_MSG.SHUTDOWN_STATUS_SKIPPED, {
+        nodeId: this.nodeId,
+        reason: 'node_row_missing_from_cache',
+      });
+      return false;
+    }
+
+    const shutdownRow = {
+      node_address: this.nodeAddress ||
+        existing?.node_address || STRING.UNKNOWN,
+      cpu_cores: Number.isFinite(existing?.cpu_cores) ?
+        existing.cpu_cores :
+        NUM.ZERO,
+      memory_mb: Number.isFinite(existing?.memory_mb) ?
+        existing.memory_mb :
+        NUM.ZERO,
+      disk_gb: Number.isFinite(existing?.disk_gb) ?
+        existing.disk_gb :
+        NUM.ZERO,
+      cpu_usage_percent: Number.isFinite(existing?.cpu_usage_percent) ?
+        existing.cpu_usage_percent :
+        NUM.ZERO,
+      memory_usage_percent: Number.isFinite(existing?.memory_usage_percent) ?
+        existing.memory_usage_percent :
+        NUM.ZERO,
+      disk_usage_percent: Number.isFinite(existing?.disk_usage_percent) ?
+        existing.disk_usage_percent :
+        NUM.ZERO,
+      status: SERVICE_STATUS.STOPPED,
+      connection_state: STATE.DISCONNECTED,
+      capabilities: existing?.capabilities || STRING.EMPTY_JSON_ARRAY,
+      last_heartbeat: now,
+      ready_lease_expires_at: null,
+    };
+    const shutdownNodeRow = {
+      ...existing,
+      node_id: this.nodeId,
+      ...shutdownRow,
+    };
+    const queryTimeoutMs = this.resolveHeartbeatWriteQueryTimeoutMs();
+    const reporterTimeoutMs =
+      this.resolveNodeStateReporterTimeoutMs(queryTimeoutMs);
+
+    this.recordHeartbeatPublicationAttempt(now);
+
+    let reporterError = null;
+    let reporterFallbackPath = null;
+    let reporterDiagnostics = null;
+    if (typeof this.nodeStateReporter === TYPEOF.FUNCTION) {
+      try {
+        const reporterResult = await this.callNodeStateReporterWithTimeout({
+          nodeId: this.nodeId,
+          nodeAddress: shutdownRow.node_address,
+          state: shutdownRow.connection_state,
+          capabilities: shutdownRow.capabilities,
+          heartbeatAt: now,
+          readyLeaseExpiresAt: null,
+          nodeRow: shutdownNodeRow,
+        }, reporterTimeoutMs);
+        reporterDiagnostics = normalizeHeartbeatPublicationDiagnostics(
+          reporterResult,
+          'node_shutdown_reporter',
+        );
+        const reporterVisible = await this.verifyReporterHeartbeatVisibility(
+          now,
+          {
+            expectedStatus: SERVICE_STATUS.STOPPED,
+            expectedConnectionState: STATE.DISCONNECTED,
+            expectedReadyLeaseCleared: true,
+          },
+        );
+        if (!reporterVisible) {
+          reporterFallbackPath =
+            'node_shutdown_cdc_after_reporter_visibility_gap';
+          this.recordHeartbeatPublicationTarget(reporterDiagnostics);
+        } else {
+          this.recordHeartbeatPublicationSuccess(reporterDiagnostics, now);
+          this.logger.info(HEARTBEAT_LOG_MSG.SHUTDOWN_STATUS_PUBLISHED, {
+            nodeId: this.nodeId,
+            publicationPath: reporterDiagnostics.publicationPath,
+          });
+          return true;
+        }
+      } catch (error) {
+        reporterError = error;
+        reporterDiagnostics = normalizeHeartbeatPublicationDiagnostics(
+          error?.publicationDiagnostics || error,
+          'node_shutdown_reporter',
+        );
+        this.recordHeartbeatPublicationTarget(reporterDiagnostics);
+      }
+    }
+
+    try {
+      const updateResult =
+        await this.controlPlaneSystemTableGateway.updateSystemTableRow(
+        SYSTEM_TABLE_NAME.NODES,
+        {node_id: this.nodeId},
+        shutdownRow,
+        {
+          skipCacheWait: true,
+          queryTimeoutMs,
+        },
+      );
+      const affectedRows = Number(updateResult?.partitionResult?.affectedRows);
+      if (affectedRows === NUM.ZERO) {
+        this.logger.info(HEARTBEAT_LOG_MSG.SHUTDOWN_STATUS_SKIPPED, {
+          nodeId: this.nodeId,
+          reason: 'node_row_missing_from_storage',
+        });
+        return false;
+      }
+
+      const publicationPath = reporterFallbackPath ||
+        (reporterError ?
+          'node_shutdown_cdc_after_reporter_failure' :
+          'node_shutdown_cdc_update');
+      this.recordHeartbeatPublicationSuccess({publicationPath}, now);
+      this.logger.info(HEARTBEAT_LOG_MSG.SHUTDOWN_STATUS_PUBLISHED, {
+        nodeId: this.nodeId,
+        publicationPath,
+      });
+      return true;
+    } catch (error) {
+      if (reporterError) {
+        error.message = `${error.message} (node-state reporter failed: ` +
+          `${reporterError.message})`;
+      }
+      throw error;
+    }
+  }
+
+  /**
    * Begin one guarded heartbeat attempt with a timeout watchdog.
    * @return {{id: number, timedOut: boolean, timeoutHandle: Object|null}}
    * @private
@@ -690,7 +845,7 @@ class HeartbeatService extends EventEmitter {
         this.recordQuietModeSuppressedWrite('endpointUpserts');
         return;
       }
-      await this.cdcIntegrationService.upsertSystemTableRow(
+      await this.controlPlaneSystemTableGateway.upsertSystemTableRow(
         SYSTEM_TABLE_NAME.NODE_ENDPOINTS, endpointRow,
         {
           skipCacheWait: true,
@@ -785,7 +940,8 @@ class HeartbeatService extends EventEmitter {
     }
 
     try {
-      const updateResult = await this.cdcIntegrationService.updateSystemTableRow(
+      const updateResult =
+        await this.controlPlaneSystemTableGateway.updateSystemTableRow(
         SYSTEM_TABLE_NAME.NODES,
         {node_id: this.nodeId},
         updateRow,
@@ -800,7 +956,7 @@ class HeartbeatService extends EventEmitter {
       if (affectedRows === NUM.ZERO) {
         const existingNodeRow =
           this.systemTableCache.get(SYSTEM_TABLE_NAME.NODES, this.nodeId) || {};
-        await this.cdcIntegrationService.upsertSystemTableRow(
+        await this.controlPlaneSystemTableGateway.upsertSystemTableRow(
           SYSTEM_TABLE_NAME.NODES,
           {
             ...existingNodeRow,
@@ -840,13 +996,19 @@ class HeartbeatService extends EventEmitter {
    * Verify that a successful node-state reporter heartbeat became visible in
    * the canonical nodes row before we treat delivery as sufficient.
    * @param {number} expectedHeartbeatAt
+   * @param {Object} [options]
+   * @param {string|null} [options.expectedStatus]
+   * @param {string|null} [options.expectedConnectionState]
+   * @param {boolean} [options.expectedReadyLeaseCleared]
    * @return {Promise<boolean>}
    * @private
    */
-  async verifyReporterHeartbeatVisibility(expectedHeartbeatAt) {
+  async verifyReporterHeartbeatVisibility(expectedHeartbeatAt, options = {}) {
     const authoritativeControlPlaneView =
       this.getAuthoritativeControlPlaneView();
-    if (!authoritativeControlPlaneView) {
+    if (!authoritativeControlPlaneView ||
+        typeof authoritativeControlPlaneView.canRead !== TYPEOF.FUNCTION ||
+        authoritativeControlPlaneView.canRead() !== true) {
       return true;
     }
 
@@ -871,8 +1033,34 @@ class HeartbeatService extends EventEmitter {
         nodeRow?.[COLUMN.LAST_HEARTBEAT] ??
           nodeRow?.last_heartbeat,
       );
-      return Number.isFinite(lastHeartbeat) &&
-        lastHeartbeat >= expectedHeartbeatAt;
+      if (!Number.isFinite(lastHeartbeat) ||
+          lastHeartbeat < expectedHeartbeatAt) {
+        return false;
+      }
+
+      if (typeof options.expectedStatus === TYPEOF.STRING &&
+          nodeRow?.[COLUMN.STATUS] !== options.expectedStatus &&
+          nodeRow?.status !== options.expectedStatus) {
+        return false;
+      }
+
+      if (typeof options.expectedConnectionState === TYPEOF.STRING &&
+          nodeRow?.[COLUMN.CONNECTION_STATE] !==
+            options.expectedConnectionState &&
+          nodeRow?.connection_state !== options.expectedConnectionState) {
+        return false;
+      }
+
+      if (options.expectedReadyLeaseCleared === true) {
+        const readyLeaseExpiresAt = nodeRow?.[COLUMN.READY_LEASE_EXPIRES_AT] ??
+          nodeRow?.ready_lease_expires_at;
+        if (readyLeaseExpiresAt !== null &&
+            readyLeaseExpiresAt !== undefined) {
+          return false;
+        }
+      }
+
+      return true;
     } catch (_error) {
       return false;
     }
@@ -913,7 +1101,7 @@ class HeartbeatService extends EventEmitter {
     };
 
     try {
-      return await this.cdcIntegrationService.updateSystemTableRow(
+      return await this.controlPlaneSystemTableGateway.updateSystemTableRow(
         SYSTEM_TABLE_NAME.NODES,
         whereClause,
         {

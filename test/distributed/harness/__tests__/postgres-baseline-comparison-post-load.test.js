@@ -1289,8 +1289,8 @@ describe('postgres-baseline-comparison scenario', () => {
         );
         assert.equal(
           error?.diagnostics?.failedPhase?.phase,
-          'verify',
-          'failure diagnostics should expose the failing phase',
+          'load',
+          'failure diagnostics should expose the earlier failing load phase',
         );
         assert.equal(
           error?.diagnostics?.loadMetrics?.errors,

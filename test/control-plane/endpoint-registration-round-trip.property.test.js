@@ -141,3 +141,71 @@ test('Property 15: Endpoint registration round-trip',
       {numRuns: 10},
     );
   });
+
+test('EndpointService uses injected control-plane system-table gateway ' +
+  'for reads and writes', async (t) => {
+  initEnv();
+
+  const calls = [];
+  const rows = new Map();
+  const gateway = {
+    async readRows(tableName, _sql, params) {
+      calls.push({kind: 'read', tableName, params});
+      const row = rows.get(params?.[0]) || null;
+      return {
+        success: true,
+        rows: row ? [row] : [],
+      };
+    },
+    async insertSystemTableRow(tableName, row) {
+      calls.push({kind: 'insert', tableName, row});
+      rows.set(row[COLUMN.ENDPOINT_ID], {...row});
+      return {success: true};
+    },
+    async deleteSystemTableRow(tableName, whereClause) {
+      calls.push({kind: 'delete', tableName, whereClause});
+      rows.delete(whereClause[COLUMN.ENDPOINT_ID]);
+      return {success: true};
+    },
+  };
+
+  const service = new EndpointService({
+    nodeId: 'local-node',
+    controlPlaneSystemTableGateway: gateway,
+    cdcIntegrationService: {
+      async insertSystemTableRow() {
+        throw new Error('raw CDC path should not be used');
+      },
+      async deleteSystemTableRow() {
+        throw new Error('raw CDC path should not be used');
+      },
+    },
+    systemTableCache: {
+      get: () => null,
+    },
+    sqlQueryEngine: {
+      async executeQuery() {
+        throw new Error('raw SQL path should not be used');
+      },
+    },
+  });
+  service.initialize();
+
+  await service.registerEndpoint({
+    endpointId: 'ep-gateway',
+    nodeId: 'node-gateway',
+    address: 'ws://127.0.0.1:8081',
+    transportType: TRANSPORT_TYPE.WEBSOCKET,
+    priority: 1,
+  });
+  const endpoint = await service.getEndpoint('ep-gateway');
+  await service.removeEndpoint('ep-gateway');
+
+  t.ok(endpoint, 'registered endpoint should be readable');
+  t.same(
+    calls.map((entry) => entry.kind),
+    ['read', 'insert', 'read', 'delete'],
+    'endpoint owner should use the shared gateway for control-plane access',
+  );
+  service.stop();
+});

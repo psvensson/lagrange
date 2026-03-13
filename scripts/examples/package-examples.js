@@ -24,13 +24,16 @@ import {
  * @return {string}
  */
 const FUNCTION_ID_PREFIX = 'example-';
+const MODULE_NAME_PREFIX = 'example-';
 const FUNCTION_NAME_PREFIX = 'examples.';
 const HASH_ALGORITHM_SHA256 = 'sha256';
 const DIGEST_ENCODING_HEX = 'hex';
 
 function normalizeVersion(version) {
   return String(version || EXAMPLE_DEFAULT.VERSION)
-    .replace(VERSION_SANITIZE_REGEX, '_');
+    .replace(VERSION_SANITIZE_REGEX, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
 }
 
 /**
@@ -52,6 +55,28 @@ function buildFunctionId(manifest) {
  */
 function buildFunctionName(manifest) {
   return `${FUNCTION_NAME_PREFIX}${manifest.id}`;
+}
+
+/**
+ * Build a wasm-safe module name for module_manifests.
+ * Keeps names lowercase/hyphenated and alpha-prefixed.
+ *
+ * @param {{id: string}} manifest
+ * @return {string}
+ */
+function buildModuleName(manifest) {
+  const sanitizedId = String(manifest?.id || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+  const suffixed = sanitizedId.length > 0 ?
+    sanitizedId :
+    'module';
+  if (suffixed.startsWith(MODULE_NAME_PREFIX)) {
+    return suffixed;
+  }
+  return `${MODULE_NAME_PREFIX}${suffixed}`;
 }
 
 /**
@@ -182,7 +207,7 @@ async function packageExample(exampleDir) {
     functionId: buildFunctionId(manifest),
     functionName: buildFunctionName(manifest),
     digest: computeDigest(packagedCode.codeBlob),
-    moduleName: manifest.id,
+    moduleName: buildModuleName(manifest),
   };
 }
 

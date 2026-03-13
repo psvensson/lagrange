@@ -93,6 +93,9 @@ import {
   createTimeoutBudgetError,
   getRemainingBudgetMs,
 } from '../control-plane/timeout-budget.js';
+import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+} from '../control-plane/control-plane-readiness-constants.js';
 import {AuthoritativeControlPlaneView} from
   '../control-plane/authoritative-control-plane-view.js';
 import {
@@ -173,6 +176,13 @@ class SQLQueryEngine {
     this.cdcIntegrationService = options.cdcIntegrationService || null;
     this.nodeId = options.nodeId || QUERY_SUBSYSTEM.SQL_QUERY_ENGINE;
     this.rebalanceCoordinator = options.rebalanceCoordinator || null;
+    this.controlPlaneReadinessService =
+      options.controlPlaneReadinessService ||
+      this.rebalanceCoordinator?.controlPlaneReadinessService ||
+      null;
+    this.defaultRoutingReadinessDimension =
+      options.defaultRoutingReadinessDimension ||
+      CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE;
     this.routingMetadataOverlay = options.routingMetadataOverlay || null;
     this.bootstrapRoutingOverlayEntries = new Map();
     this.lastWriteSplitEvaluationByTable = new Map();
@@ -220,6 +230,9 @@ class SQLQueryEngine {
     this.queryExecutor = new QueryExecutor({
       messageRouter: this.messageRouter,
       systemCache: this.systemCache,
+      controlPlaneReadinessService: this.controlPlaneReadinessService,
+      defaultRoutingReadinessDimension:
+        this.defaultRoutingReadinessDimension,
       nodeId: this.nodeId,
     });
     this.queryExecutor.setRoutingMetadataOverlay(
@@ -273,6 +286,8 @@ class SQLQueryEngine {
       systemCache: this.systemCache,
       cdcIntegrationService: this.cdcIntegrationService,
       partitionSplitMergeManager: this.partitionSplitMergeManager,
+      calculateQuorumReplicaCount: (replicaCount) =>
+        this.calculateQuorumReplicaCount(replicaCount),
       partitionProvisioner: tablePartitionProvisioner,
     });
 
@@ -317,6 +332,7 @@ class SQLQueryEngine {
         getCDCIntegrationService: () => this.cdcIntegrationService,
         getPartitionInfo: (partitionId) => this.getPartitionInfo(partitionId),
         getTableInfo: (tableNameOrId) => this.getTableInfo(tableNameOrId),
+        listTableInfos: () => this.systemCache?.getAll(TABLES.TABLES) || [],
         parsePartitionTransition: (tableInfo) =>
           this.parsePartitionTransition(tableInfo),
         isLocalManagedSplitLeader: (partitionInfo) =>
@@ -456,6 +472,30 @@ class SQLQueryEngine {
   }
 
   /**
+   * Set canonical readiness owner used for serve-routing decisions.
+   * @param {Object|null} readinessService
+   */
+  setControlPlaneReadinessService(readinessService) {
+    this.controlPlaneReadinessService = readinessService || null;
+    this.queryExecutor.setControlPlaneReadinessService(
+      this.controlPlaneReadinessService,
+    );
+  }
+
+  /**
+   * Set the default readiness dimension used for routed partition work.
+   * @param {string} readinessDimension
+   */
+  setDefaultRoutingReadinessDimension(readinessDimension) {
+    this.defaultRoutingReadinessDimension =
+      readinessDimension ||
+      CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE;
+    this.queryExecutor.setDefaultRoutingReadinessDimension(
+      this.defaultRoutingReadinessDimension,
+    );
+  }
+
+  /**
    * Set the CDC integration service.
    * @param {Object} service - CDC integration service.
    */
@@ -470,6 +510,11 @@ class SQLQueryEngine {
    */
   setRebalanceCoordinator(coordinator) {
     this.rebalanceCoordinator = coordinator || null;
+    if (this.rebalanceCoordinator?.controlPlaneReadinessService) {
+      this.setControlPlaneReadinessService(
+        this.rebalanceCoordinator.controlPlaneReadinessService,
+      );
+    }
   }
 
   /**
@@ -1620,10 +1665,16 @@ class SQLQueryEngine {
     const timeoutBudget = context?.timeoutBudget || this.createControlPlaneTimeoutBudget(
       this.tablePartitionProvisioningTimeoutMs,
     );
+    let provisionTargetDiagnostics = explicitTargetNodeIds.length === 0 ?
+      this.resolveProvisionTargetNodeIdsWithDiagnostics(
+        targetReplicaCount,
+      ).diagnostics :
+      null;
     let provisionTargetNodeIds =
       this.resolveProvisionTargetNodeIdsForContext(
         explicitTargetNodeIds,
         targetReplicaCount,
+        provisionTargetDiagnostics,
       );
     let admissionConvergence = null;
 
@@ -1649,20 +1700,29 @@ class SQLQueryEngine {
       });
       admissionConvergence =
         convergenceResult.admissionProbe || null;
+      provisionTargetDiagnostics =
+        convergenceResult.diagnostics || provisionTargetDiagnostics;
       provisionTargetNodeIds = this.resolveProvisionTargetNodeIdsForContext(
         explicitTargetNodeIds,
         targetReplicaCount,
-        convergenceResult.diagnostics,
+        provisionTargetDiagnostics,
       );
       const maximumProvisionableReplicaCount = Number.isInteger(
         admissionConvergence?.maximumProvisionableReplicaCount,
       ) ?
         admissionConvergence.maximumProvisionableReplicaCount :
         provisionTargetNodeIds.length;
+      const implicitFallbackMinimumReplicaCount =
+        this.resolveImplicitProvisioningFallbackReplicaCount(
+          targetReplicaCount,
+          provisionTargetDiagnostics?.activeNodeRowCount,
+        );
 
       if (convergenceResult.timedOut &&
           maximumProvisionableReplicaCount > 0 &&
-          maximumProvisionableReplicaCount < targetReplicaCount) {
+          maximumProvisionableReplicaCount < targetReplicaCount &&
+          maximumProvisionableReplicaCount >=
+            implicitFallbackMinimumReplicaCount) {
         targetReplicaCount = Math.max(
           1,
           maximumProvisionableReplicaCount,
@@ -1822,6 +1882,9 @@ class SQLQueryEngine {
           entityType: SERVICE_TYPE.PARTITION,
           entityId: partitionId,
           nodeId: targetNodeId,
+          // Initial partition provisioning executes these operations inline
+          // below, so skip the redundant coordinator-created dispatch trigger.
+          emitOperationCreated: false,
         });
         plannedOperations.push(operation);
 
@@ -1849,9 +1912,16 @@ class SQLQueryEngine {
 
     const maximumProvisionableReplicaCount =
       routableNodeIdSet.size + plannedOperations.length;
+    const implicitFallbackMinimumReplicaCount =
+      this.resolveImplicitProvisioningFallbackReplicaCount(
+        targetReplicaCount,
+        provisionTargetDiagnostics?.activeNodeRowCount,
+      );
     if (maximumProvisionableReplicaCount < minimumRoutableReplicaCount) {
       if (!hasExplicitMinimumRoutableReplicaCount &&
-          maximumProvisionableReplicaCount > 0) {
+          maximumProvisionableReplicaCount > 0 &&
+          maximumProvisionableReplicaCount >=
+            implicitFallbackMinimumReplicaCount) {
         const previousTargetReplicaCount = targetReplicaCount;
         const previousMinimumRoutableReplicaCount =
           minimumRoutableReplicaCount;
@@ -1907,6 +1977,11 @@ class SQLQueryEngine {
       partitionId,
       plannedOperations,
     );
+    const bootstrapLeaderNodeId =
+      this.resolveInitialPartitionBootstrapLeaderNodeId(
+        partitionId,
+        plannedOperations,
+      );
     this.logger.debug(QUERY_LOG_MSG.TABLE_PARTITION_PROVISION_START, {
       partitionId,
       targetReplicaCount,
@@ -1936,7 +2011,9 @@ class SQLQueryEngine {
           bootstrapPartitionMetadata;
       }
       const executionResult =
-        await this.rebalanceCoordinator.executeOperation(operation);
+        typeof this.rebalanceCoordinator.dispatchOperation === 'function' ?
+          await this.rebalanceCoordinator.dispatchOperation(operation) :
+          await this.rebalanceCoordinator.executeOperation(operation);
 
       if (executionResult && executionResult.success === false &&
           executionResult.skipped !== true) {
@@ -1971,7 +2048,6 @@ class SQLQueryEngine {
             this.waitForPartitionServiceMetadata(
               replicaId,
               timeoutBudget,
-              {requireRoutable: true},
             ),
           ),
         );
@@ -2004,6 +2080,7 @@ class SQLQueryEngine {
       timeoutBudget,
       {
         partitionMetadata: bootstrapPartitionMetadata,
+        bootstrapLeaderNodeId,
       },
     );
   }
@@ -2640,20 +2717,11 @@ class SQLQueryEngine {
    * Wait for one partition service row to become visible in local cache.
    * Uses CDC authoritative repair when available.
    * @param {string} replicaId - Partition service replica ID.
-   * @param {Object} [options]
-   * @param {boolean} [options.requireRoutable]
    * @return {Promise<void>}
    * @private
    */
-  async waitForPartitionServiceMetadata(
-    replicaId,
-    timeoutBudget = null,
-    options = {},
-  ) {
-    const requireRoutable = options?.requireRoutable === true;
-    const conditionFn = requireRoutable ?
-      () => this.hasRoutableServiceMetadata(replicaId) :
-      () => this.hasServiceMetadata(replicaId);
+  async waitForPartitionServiceMetadata(replicaId, timeoutBudget = null) {
+    const conditionFn = () => this.hasServiceMetadata(replicaId);
     if (conditionFn()) {
       return;
     }
@@ -2662,9 +2730,7 @@ class SQLQueryEngine {
       typeof this.cdcIntegrationService.waitForCacheUpdate === 'function' &&
       this.systemCache &&
       typeof this.systemCache.onCacheChange === 'function';
-    const nestedOperation = requireRoutable ?
-      'partition_service_routable_wait' :
-      'partition_service_metadata_wait';
+    const nestedOperation = 'partition_service_metadata_wait';
     const effectiveBudget = this.allocateControlPlaneTimeoutBudget({
       timeoutBudget,
       requestedBudgetMs: this.tablePartitionProvisioningTimeoutMs,
@@ -2687,14 +2753,11 @@ class SQLQueryEngine {
         replicaId,
         true,
         {
-          expectedFields: requireRoutable ?
-            {status: STATUS_ACTIVE} :
-            undefined,
           fallbackPhase: 'steady_state',
           timeoutMs: waitBudgetMs,
         },
       );
-      if (!requireRoutable || this.hasRoutableServiceMetadata(replicaId)) {
+      if (this.hasServiceMetadata(replicaId)) {
         return;
       }
     }
@@ -2746,7 +2809,6 @@ class SQLQueryEngine {
         await this.waitForPartitionServiceMetadata(
           replicaId,
           timeoutBudget,
-          {requireRoutable: true},
         );
       } catch (_error) {
         // Best-effort hydration: aggregate routable-count wait is authoritative.
@@ -2773,7 +2835,14 @@ class SQLQueryEngine {
     const hasRequiredRoutableCount = () =>
       this.getRoutablePartitionServiceNodeIds(partitionId).length >=
         requiredCount;
-    if (hasRequiredRoutableCount()) {
+    const checkRoutableCountWithRepair = async () => {
+      if (hasRequiredRoutableCount()) {
+        return true;
+      }
+      return await this.maybeAwaitPartitionRoutingRepair(partitionId) &&
+        hasRequiredRoutableCount();
+    };
+    if (await checkRoutableCountWithRepair()) {
       return;
     }
 
@@ -2787,7 +2856,7 @@ class SQLQueryEngine {
         QUERY_ERROR_MSG.TABLE_PARTITION_ROUTING_TIMEOUT_PREFIX + partitionId,
     });
     await this.waitForCondition(
-      hasRequiredRoutableCount,
+      checkRoutableCountWithRepair,
       getRemainingBudgetMs(effectiveBudget, {now: this.nowFn}),
       this.tablePartitionProvisioningPollIntervalMs,
       QUERY_ERROR_MSG.TABLE_PARTITION_ROUTING_TIMEOUT_PREFIX + partitionId,
@@ -2797,6 +2866,40 @@ class SQLQueryEngine {
         nestedOperation: 'partition_routing_wait',
       },
     );
+  }
+
+  /**
+   * Await one canonical routing-owner repair when stale readiness evidence
+   * filters all active partition services locally.
+   * @param {string} partitionId
+   * @return {Promise<boolean>}
+   * @private
+   */
+  async maybeAwaitPartitionRoutingRepair(partitionId) {
+    if (!partitionId ||
+        !this.queryExecutor ||
+        typeof this.queryExecutor.getPartitionRoutingSnapshot !== 'function' ||
+        typeof this.queryExecutor.maybeAwaitDeniedPartitionRoutingRepair !==
+          'function') {
+      return false;
+    }
+
+    let routingSnapshot = null;
+    try {
+      routingSnapshot = this.queryExecutor.getPartitionRoutingSnapshot(
+        partitionId,
+      );
+    } catch (_error) {
+      return false;
+    }
+
+    try {
+      return await this.queryExecutor.maybeAwaitDeniedPartitionRoutingRepair(
+        routingSnapshot,
+      );
+    } catch (_error) {
+      return false;
+    }
   }
 
   /**
@@ -2887,11 +2990,15 @@ class SQLQueryEngine {
     }
 
     if (typeof this.systemCache.has === 'function') {
-      return this.systemCache.has(TABLES.SERVICES, replicaId);
+      if (this.systemCache.has(TABLES.SERVICES, replicaId)) {
+        return true;
+      }
     }
 
     if (typeof this.systemCache.get === 'function') {
-      return Boolean(this.systemCache.get(TABLES.SERVICES, replicaId));
+      if (this.systemCache.get(TABLES.SERVICES, replicaId)) {
+        return true;
+      }
     }
 
     if (typeof this.systemCache.filter === 'function') {
@@ -2901,7 +3008,9 @@ class SQLQueryEngine {
           row.service_id === replicaId ||
           row.replica_id === replicaId,
       );
-      return Array.isArray(matches) && matches.length > 0;
+      if (Array.isArray(matches) && matches.length > 0) {
+        return true;
+      }
     }
 
     return false;
@@ -2923,13 +3032,11 @@ class SQLQueryEngine {
         return false;
       }
       if (this.queryExecutor &&
-          typeof this.queryExecutor.isRoutablePartitionService === 'function') {
+          typeof this.queryExecutor.isRoutablePartitionService ===
+            'function') {
         return this.queryExecutor.isRoutablePartitionService(service);
       }
-      const status = String(service.status || '').toLowerCase();
-      return status === STATUS_ACTIVE &&
-        typeof service.address === 'string' &&
-        service.address.length > 0;
+      return false;
     };
     const matchesReplicaId = (row) => row?.service_id === replicaId ||
       row?.replica_id === replicaId;
@@ -3141,12 +3248,11 @@ class SQLQueryEngine {
         return false;
       }
       if (this.queryExecutor &&
-          typeof this.queryExecutor.isRoutablePartitionService === 'function') {
+          typeof this.queryExecutor.isRoutablePartitionService ===
+            'function') {
         return this.queryExecutor.isRoutablePartitionService(service);
       }
-      return service.status === STATUS_ACTIVE &&
-        typeof service.address === 'string' &&
-        service.address.length > 0;
+      return false;
     };
     return serviceRows.filter((service) => isRoutableService(service));
   }
@@ -3176,7 +3282,21 @@ class SQLQueryEngine {
       return false;
     }
 
-    const routableServices =
+    const candidateServiceRows = Array.isArray(options?.serviceRows) ?
+      options.serviceRows :
+      null;
+    const routableServices = Array.isArray(candidateServiceRows) ?
+      candidateServiceRows.filter((service) => {
+        if (!service || typeof service !== 'object') {
+          return false;
+        }
+        if (this.queryExecutor &&
+            typeof this.queryExecutor.isRoutablePartitionService ===
+              'function') {
+          return this.queryExecutor.isRoutablePartitionService(service);
+        }
+        return false;
+      }) :
       this.getCachedRoutablePartitionServiceRows(partitionId);
     if (routableServices.length === 0) {
       return false;
@@ -3185,9 +3305,22 @@ class SQLQueryEngine {
     const leaderServices = routableServices.filter((service) =>
       String(service?.raft_role || '').toLowerCase() === 'leader',
     );
+    const hintedLeaderNodeId = String(
+      options?.bootstrapLeaderNodeId ||
+      options?.partitionMetadata?.leader_node_id ||
+      options?.partitionMetadata?.leaderNodeId ||
+      '',
+    );
     const chosenLeaderService = leaderServices.length === 1 ?
       leaderServices[0] :
-      (routableServices.length === 1 ? routableServices[0] : null);
+      (routableServices.length === 1 ?
+        routableServices[0] :
+        (hintedLeaderNodeId.length > 0 ?
+          (routableServices.find((service) => {
+            const nodeId = service?.node_id || service?.nodeId || null;
+            return nodeId === hintedLeaderNodeId;
+          }) || null) :
+          null));
     const leaderNodeId =
       chosenLeaderService?.node_id || chosenLeaderService?.nodeId || null;
     if (typeof leaderNodeId !== 'string' || leaderNodeId.length === 0) {
@@ -3226,6 +3359,64 @@ class SQLQueryEngine {
       expiresAtMs: nowMs + this.tablePartitionProvisioningTimeoutMs,
     });
     return true;
+  }
+
+  /**
+   * Seed short-lived bootstrap routing overlays from system-table snapshots.
+   * This bridges restart-time cache gaps until canonical partition metadata
+   * converges locally.
+   * @param {Object|null} systemTableSnapshots
+   * @return {number}
+   */
+  seedBootstrapRoutingOverlayFromSnapshots(systemTableSnapshots) {
+    if (!systemTableSnapshots ||
+        typeof systemTableSnapshots !== 'object') {
+      return 0;
+    }
+
+    const partitionRows = Array.isArray(systemTableSnapshots[TABLES.PARTITIONS]) ?
+      systemTableSnapshots[TABLES.PARTITIONS] :
+      [];
+    const serviceRows = Array.isArray(systemTableSnapshots[TABLES.SERVICES]) ?
+      systemTableSnapshots[TABLES.SERVICES] :
+      [];
+    let seededCount = 0;
+
+    for (const partitionRow of partitionRows) {
+      const partitionId = String(
+        partitionRow?.partition_id ||
+        partitionRow?.partitionId ||
+        '',
+      );
+      const tableRef = String(
+        partitionRow?.table_name ||
+        partitionRow?.tableName ||
+        partitionRow?.table_id ||
+        partitionRow?.tableId ||
+        '',
+      );
+      if (partitionId.length === 0 ||
+          tableRef.length === 0 ||
+          !this.isSystemTable(tableRef)) {
+        continue;
+      }
+
+      const partitionServiceRows = serviceRows.filter((serviceRow) => {
+        if (!serviceRow || typeof serviceRow !== 'object') {
+          return false;
+        }
+        return serviceRow.partition_id === partitionId &&
+          serviceRow.service_type === SERVICE_TYPE.PARTITION;
+      });
+      if (this.maybeInstallBootstrapLeaderOverlay(partitionId, {
+        partitionMetadata: partitionRow,
+        serviceRows: partitionServiceRows,
+      })) {
+        seededCount += 1;
+      }
+    }
+
+    return seededCount;
   }
 
   /**
@@ -3281,6 +3472,37 @@ class SQLQueryEngine {
   }
 
   /**
+   * Resolve fresh bootstrap overlay partitions for one table reference.
+   * @param {string|null} tableRef
+   * @param {number|null} activePartitionVersion
+   * @return {Object[]}
+   * @private
+   */
+  getBootstrapRoutingOverlayPartitionsForTable(
+    tableRef,
+    activePartitionVersion,
+  ) {
+    if (typeof tableRef !== 'string' || tableRef.length === 0) {
+      return [];
+    }
+
+    const partitions = [];
+    for (const partitionId of this.bootstrapRoutingOverlayEntries.keys()) {
+      const entry = this.getBootstrapRoutingOverlayEntry(partitionId);
+      const partition = entry?.partition || null;
+      if (!this.partitionMatchesTableRef(partition, tableRef) ||
+          !this.isPartitionVisibleForRouting(
+            partition,
+            activePartitionVersion,
+          )) {
+        continue;
+      }
+      partitions.push(partition);
+    }
+    return partitions;
+  }
+
+  /**
    * Resolve the minimum routable replica cohort required before provisioning
    * can continue.
    * @param {number|undefined|null} requestedMinimumReplicaCount
@@ -3301,6 +3523,35 @@ class SQLQueryEngine {
       1,
       Math.min(requestedMinimumReplicaCount, targetReplicaCount),
     );
+  }
+
+  /**
+   * Preserve one quorum-sized floor for implicit RF3+ provisioning fallback.
+   * Smaller cohorts still degrade to one replica so single-node bootstrap and
+   * legacy RF2 owner paths remain backward-compatible.
+   * @param {number} requestedReplicaCount
+   * @param {number|undefined|null} visibleActiveNodeCount
+   * @return {number}
+   * @private
+   */
+  resolveImplicitProvisioningFallbackReplicaCount(
+    requestedReplicaCount,
+    visibleActiveNodeCount,
+  ) {
+    const normalizedReplicaCount = Number.isInteger(requestedReplicaCount) &&
+      requestedReplicaCount > 0 ?
+      requestedReplicaCount :
+      1;
+    const normalizedVisibleActiveNodeCount =
+      Number.isInteger(visibleActiveNodeCount) &&
+      visibleActiveNodeCount > 0 ?
+        visibleActiveNodeCount :
+        0;
+    if (normalizedReplicaCount < 3 ||
+        normalizedVisibleActiveNodeCount <= 1) {
+      return 1;
+    }
+    return this.calculateQuorumReplicaCount(normalizedReplicaCount);
   }
 
   /**
@@ -3513,6 +3764,93 @@ class SQLQueryEngine {
       replicaIds,
       peerAddresses: [...new Set(peerAddresses)],
     };
+  }
+
+  /**
+   * Resolve the provisional bootstrap leader node for a freshly-created
+   * partition before canonical leader metadata converges.
+   * Prefer explicit leader service metadata, then the `-r1` replica, then the
+   * first known bootstrap cohort member.
+   * @param {string} partitionId
+   * @param {Array<Object>} plannedOperations
+   * @return {string|null}
+   * @private
+   */
+  resolveInitialPartitionBootstrapLeaderNodeId(
+    partitionId,
+    plannedOperations = [],
+  ) {
+    const currentServices = this.getPartitionServiceRows(partitionId);
+    const currentLeaderService = currentServices.find((service) =>
+      String(service?.raft_role || '').toLowerCase() === 'leader',
+    );
+    const currentLeaderNodeId =
+      currentLeaderService?.node_id ||
+      currentLeaderService?.nodeId ||
+      null;
+    if (typeof currentLeaderNodeId === 'string' &&
+        currentLeaderNodeId.length > 0) {
+      return currentLeaderNodeId;
+    }
+
+    const currentR1Service = currentServices.find((service) => {
+      const replicaId = String(
+        service?.service_id ||
+        service?.replica_id ||
+        '',
+      );
+      return /-r1$/.test(replicaId);
+    });
+    const currentR1NodeId =
+      currentR1Service?.node_id ||
+      currentR1Service?.nodeId ||
+      null;
+    if (typeof currentR1NodeId === 'string' &&
+        currentR1NodeId.length > 0) {
+      return currentR1NodeId;
+    }
+
+    const plannedR1Operation = plannedOperations.find((operation) => {
+      const replicaId = String(operation?.replicaId || '');
+      return /-r1$/.test(replicaId);
+    }) || null;
+    const plannedR1NodeId =
+      plannedR1Operation?.targetNodeId ||
+      plannedR1Operation?.nodeId ||
+      null;
+    if (typeof plannedR1NodeId === 'string' &&
+        plannedR1NodeId.length > 0) {
+      return plannedR1NodeId;
+    }
+
+    const firstCurrentNodeId = currentServices.find((service) => {
+      const nodeId = service?.node_id || service?.nodeId || null;
+      return typeof nodeId === 'string' && nodeId.length > 0;
+    })?.node_id ||
+      currentServices.find((service) => {
+        const nodeId = service?.node_id || service?.nodeId || null;
+        return typeof nodeId === 'string' && nodeId.length > 0;
+      })?.nodeId ||
+      null;
+    if (typeof firstCurrentNodeId === 'string' &&
+        firstCurrentNodeId.length > 0) {
+      return firstCurrentNodeId;
+    }
+
+    const firstPlannedNodeId =
+      plannedOperations.find((operation) => {
+        const nodeId = operation?.targetNodeId || operation?.nodeId || null;
+        return typeof nodeId === 'string' && nodeId.length > 0;
+      })?.targetNodeId ||
+      plannedOperations.find((operation) => {
+        const nodeId = operation?.targetNodeId || operation?.nodeId || null;
+        return typeof nodeId === 'string' && nodeId.length > 0;
+      })?.nodeId ||
+      null;
+    return typeof firstPlannedNodeId === 'string' &&
+      firstPlannedNodeId.length > 0 ?
+      firstPlannedNodeId :
+      null;
   }
 
   /**
@@ -4096,6 +4434,9 @@ class SQLQueryEngine {
       {
         preferLeader,
         distributedPlan,
+        routingReadinessDimension:
+          queryOptions.routingReadinessDimension ||
+          this.defaultRoutingReadinessDimension,
         timeoutMs: queryOptions.timeoutMs,
         cancellationToken:
           queryOptions.cancellationToken || null,
@@ -4231,6 +4572,12 @@ class SQLQueryEngine {
       params,
       null,
       true,
+      false,
+      false,
+      {
+        routingReadinessDimension:
+          this.defaultRoutingReadinessDimension,
+      },
     );
 
     const first = results[0];
@@ -4333,8 +4680,12 @@ class SQLQueryEngine {
     const executionStartTimeMs = Date.now();
     try {
       const writeExecutionOptions = {
+        sessionId,
         timeoutMs: queryOptions.timeoutMs,
         cancellationToken: queryOptions.cancellationToken || null,
+        routingReadinessDimension:
+          queryOptions.routingReadinessDimension ||
+          this.defaultRoutingReadinessDimension,
       };
       if (dualWriteMigration) {
         writeExecutionOptions.dualWriteMode = true;
@@ -4484,8 +4835,12 @@ class SQLQueryEngine {
     const executionStartTimeMs = Date.now();
     try {
       const writeExecutionOptions = {
+        sessionId,
         timeoutMs: queryOptions.timeoutMs,
         cancellationToken: queryOptions.cancellationToken || null,
+        routingReadinessDimension:
+          queryOptions.routingReadinessDimension ||
+          this.defaultRoutingReadinessDimension,
       };
       if (dualWriteMigration) {
         writeExecutionOptions.dualWriteMode = true;
@@ -4634,8 +4989,12 @@ class SQLQueryEngine {
     const executionStartTimeMs = Date.now();
     try {
       const writeExecutionOptions = {
+        sessionId,
         timeoutMs: queryOptions.timeoutMs,
         cancellationToken: queryOptions.cancellationToken || null,
+        routingReadinessDimension:
+          queryOptions.routingReadinessDimension ||
+          this.defaultRoutingReadinessDimension,
       };
       if (dualWriteMigration) {
         writeExecutionOptions.dualWriteMode = true;
@@ -5184,12 +5543,6 @@ class SQLQueryEngine {
       throw new Error(`${QUERY_ERROR_MSG.SYSTEM_CACHE_NOT_AVAILABLE}: ${tableName}`);
     }
 
-    const matchesTableRef = (partition, tableRef) =>
-      partition.table_name === tableRef ||
-      partition.tableName === tableRef ||
-      partition.table_id === tableRef ||
-      partition.tableId === tableRef;
-
     const tableInfo = this.getTableInfo(tableName);
     const tableId = tableInfo?.table_id || tableInfo?.tableId || null;
     const activePartitionVersion = this.resolveActivePartitionVersion(tableInfo);
@@ -5198,43 +5551,89 @@ class SQLQueryEngine {
     if (typeof this.systemCache.filter === 'function') {
       const directMatches =
         this.systemCache.filter(TABLES.PARTITIONS, (partition) =>
-          matchesTableRef(partition, tableName),
+          this.partitionMatchesTableRef(partition, tableName),
         ) || [];
       const visibleDirectMatches = directMatches.filter((partition) =>
         this.isPartitionVisibleForRouting(partition, activePartitionVersion),
       );
-      if (directMatches.length > 0 || !tableId || tableId === tableName) {
+      if (directMatches.length > 0) {
         return visibleDirectMatches;
+      }
+      const overlayDirectMatches = this.getBootstrapRoutingOverlayPartitionsForTable(
+        tableName,
+        activePartitionVersion,
+      );
+      if (overlayDirectMatches.length > 0 || !tableId || tableId === tableName) {
+        return overlayDirectMatches;
       }
 
       const tableIdMatches = this.systemCache.filter(TABLES.PARTITIONS, (partition) =>
-        matchesTableRef(partition, tableId),
+        this.partitionMatchesTableRef(partition, tableId),
       ) || [];
-      return tableIdMatches.filter((partition) =>
+      const visibleTableIdMatches = tableIdMatches.filter((partition) =>
         this.isPartitionVisibleForRouting(partition, activePartitionVersion),
+      );
+      if (visibleTableIdMatches.length > 0) {
+        return visibleTableIdMatches;
+      }
+      return this.getBootstrapRoutingOverlayPartitionsForTable(
+        tableId,
+        activePartitionVersion,
       );
     }
 
     if (typeof this.systemCache.getAll === 'function') {
       const all = this.systemCache.getAll(TABLES.PARTITIONS) || [];
       const directMatches = all.filter((partition) =>
-        matchesTableRef(partition, tableName),
+        this.partitionMatchesTableRef(partition, tableName),
       );
       const visibleDirectMatches = directMatches.filter((partition) =>
         this.isPartitionVisibleForRouting(partition, activePartitionVersion),
       );
-      if (directMatches.length > 0 || !tableId || tableId === tableName) {
+      if (directMatches.length > 0) {
         return visibleDirectMatches;
       }
+      const overlayDirectMatches = this.getBootstrapRoutingOverlayPartitionsForTable(
+        tableName,
+        activePartitionVersion,
+      );
+      if (overlayDirectMatches.length > 0 || !tableId || tableId === tableName) {
+        return overlayDirectMatches;
+      }
 
-      return all.filter((partition) =>
-        matchesTableRef(partition, tableId),
+      const visibleTableIdMatches = all.filter((partition) =>
+        this.partitionMatchesTableRef(partition, tableId),
       ).filter((partition) =>
         this.isPartitionVisibleForRouting(partition, activePartitionVersion),
+      );
+      if (visibleTableIdMatches.length > 0) {
+        return visibleTableIdMatches;
+      }
+      return this.getBootstrapRoutingOverlayPartitionsForTable(
+        tableId,
+        activePartitionVersion,
       );
     }
 
     throw new Error(`${QUERY_ERROR_MSG.SYSTEM_CACHE_UNSUPPORTED}: ${tableName}`);
+  }
+
+  /**
+   * Determine whether one partition row belongs to a table reference.
+   * @param {Object|null} partition
+   * @param {string|null} tableRef
+   * @return {boolean}
+   * @private
+   */
+  partitionMatchesTableRef(partition, tableRef) {
+    if (!partition || typeof partition !== 'object' ||
+        typeof tableRef !== 'string' || tableRef.length === 0) {
+      return false;
+    }
+    return partition.table_name === tableRef ||
+      partition.tableName === tableRef ||
+      partition.table_id === tableRef ||
+      partition.tableId === tableRef;
   }
 
   /**

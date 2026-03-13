@@ -62,6 +62,7 @@ const REQUEST_TIMEOUT_OPTION_DEFAULT_MS = ADMIN_QUERY_TIMEOUT_MS;
 const LOG_COLLECTION_TIMEOUT_MS = 1000;
 const BOOTSTRAP_HEALTH_PATH = '/health';
 const BOOTSTRAP_JOIN_READY_PATH = '/bootstrap/ready';
+const BOOTSTRAP_TRAFFIC_READY_PATH = '/readyz';
 const ADMIN_HEALTH_PATH = '/health';
 const ADMIN_STREAM_PATH = '/api/admin/stream';
 const HTTP_METHOD_GET = 'GET';
@@ -138,6 +139,15 @@ const STARTUP_GATE_STATE = Object.freeze({
   CLUSTER_ACTIVE: STARTUP_GATE_STATE_CLUSTER_ACTIVE,
 });
 const STARTUP_GATE_WAITING_EVENT_INTERVAL = 20;
+const CHAOS_FAULT_STATUS_INJECTED = 'injected';
+const CHAOS_FAULT_STATUS_RECOVERED = 'recovered';
+const CHAOS_RECOVERY_ACTIONS = new Set([
+  'unpauseNode',
+  'restartNode',
+  'healPartition',
+  'clearNetworkSlowdown',
+  'releaseDiskPressure',
+]);
 const CLUSTER_STAGE_SETUP_LOG_SUB_STARTING = 'setup.logs.subscription.starting';
 const CLUSTER_STAGE_SETUP_LOG_SUB_READY = 'setup.logs.subscription.ready';
 const CLUSTER_STAGE_SETUP_LOG_SUB_FAILED = 'setup.logs.subscription.failed';
@@ -158,6 +168,18 @@ const PROCESS_SIGNAL_EVENTS = Object.freeze([
 ]);
 const PROCESS_CLEANUP_REGISTRY = new Map();
 let processCleanupHandlersRegistered = false;
+
+/**
+ * Classify one chaos action as fault injection or recovery.
+ * @param {string} action
+ * @return {string}
+ */
+function resolveChaosFaultStatus(action) {
+  if (CHAOS_RECOVERY_ACTIONS.has(action)) {
+    return CHAOS_FAULT_STATUS_RECOVERED;
+  }
+  return CHAOS_FAULT_STATUS_INJECTED;
+}
 const DOCKER_HOST_CONFIG_BINDS_KEY = 'Binds';
 const CONTAINER_RUNNING_STATUS = 'running';
 const REUSE_NETWORK_NAME_SUFFIX = 'reuse-local';
@@ -527,6 +549,26 @@ function readContainerInspectEnvValue(inspect, key) {
     }
   }
   return null;
+}
+
+/**
+ * Determine whether one Docker network endpoint exposes the hostname alias
+ * used by the harness in node_address rows.
+ * @param {Object|null} endpointSettings
+ * @param {string} expectedAlias
+ * @returns {boolean}
+ */
+function hasDockerNetworkAlias(endpointSettings, expectedAlias) {
+  if (!endpointSettings || typeof endpointSettings !== 'object') {
+    return false;
+  }
+  if (typeof expectedAlias !== 'string' || expectedAlias.length === ZERO) {
+    return true;
+  }
+  const aliases = Array.isArray(endpointSettings.Aliases) ?
+    endpointSettings.Aliases :
+    [];
+  return aliases.includes(expectedAlias);
 }
 
 /**
@@ -1390,6 +1432,63 @@ class NodeHandle {
     return normalized;
   }
 
+  /**
+   * Probe full traffic readiness.
+   * @param {Object} [options]
+   * @param {number} [options.timeoutMs]
+   * @returns {Promise<Object>}
+   */
+  async probeTrafficReadiness(options = {}) {
+    const timeoutMs = resolvePositiveTimeoutMs(
+      options?.timeoutMs,
+      BOOTSTRAP_WAIT_REQUEST_TIMEOUT_MS,
+    );
+    const trafficReadyUrl =
+      'http://' + this.ip + ':' + PORTS.REST + BOOTSTRAP_TRAFFIC_READY_PATH;
+    const probeResponse = await httpRequest({
+      url: trafficReadyUrl,
+      timeoutMs,
+      method: HTTP_METHOD_GET,
+      includeBody: true,
+    });
+
+    const normalized = {
+      status: HTTP_ERROR_STATUS,
+      phase: null,
+      state: null,
+      reasons: [],
+      retryAfterMs: null,
+    };
+
+    if (typeof probeResponse === 'number') {
+      normalized.status = probeResponse;
+      return normalized;
+    }
+
+    if (!probeResponse || typeof probeResponse !== 'object') {
+      return normalized;
+    }
+
+    normalized.status = Number.isFinite(probeResponse.status) ?
+      Math.floor(probeResponse.status) :
+      HTTP_ERROR_STATUS;
+
+    const body = probeResponse.body;
+    if (!body || typeof body !== 'object') {
+      return normalized;
+    }
+
+    normalized.phase = typeof body.phase === 'string' ? body.phase : null;
+    normalized.state = typeof body.state === 'string' ? body.state : null;
+    normalized.reasons = Array.isArray(body.reasons) ?
+      body.reasons.map((reason) => String(reason)) :
+      [];
+    normalized.retryAfterMs = Number.isFinite(body.retryAfterMs) ?
+      Math.floor(body.retryAfterMs) :
+      null;
+    return normalized;
+  }
+
   _resolveAdminRoutingReadiness(discoverySnapshot) {
     const rows = Array.isArray(discoverySnapshot?.rows) ?
       discoverySnapshot.rows :
@@ -1905,9 +2004,50 @@ class Cluster {
       return;
     }
     const provider = this._providers[this._hostAssignment[0]];
+    const reusableContainerNames = [];
+    const reusableContainerNameSet = new Set();
+    const addContainerName = (containerName) => {
+      if (typeof containerName !== 'string' || containerName.length === 0) {
+        return;
+      }
+      if (reusableContainerNameSet.has(containerName)) {
+        return;
+      }
+      reusableContainerNameSet.add(containerName);
+      reusableContainerNames.push(containerName);
+    };
+
     for (let index = 0; index < this._config.size; index++) {
       const nodeId = this._buildNodeId(index);
-      const containerName = this._buildContainerName(nodeId, index);
+      addContainerName(this._buildContainerName(nodeId, index));
+    }
+
+    if (typeof provider.listContainers === 'function') {
+      const reusePrefix =
+        REUSE_CONTAINER_NAME_PREFIX + '-' + String(this._config.size) + '-';
+      let containers = [];
+      try {
+        containers = await provider.listContainers();
+      } catch (_listErr) {
+        containers = [];
+      }
+      for (const container of containers) {
+        const names = Array.isArray(container?.Names) ?
+          container.Names :
+          [];
+        for (const rawName of names) {
+          const normalizedName = typeof rawName === 'string' ?
+            rawName.replace(/^\/+/, '') :
+            '';
+          if (!normalizedName.startsWith(reusePrefix)) {
+            continue;
+          }
+          addContainerName(normalizedName);
+        }
+      }
+    }
+
+    for (const containerName of reusableContainerNames) {
       let inspect = null;
       try {
         inspect = await provider.inspectContainerIfExists(containerName);
@@ -2356,6 +2496,64 @@ class Cluster {
     return Array.from(this._nodes.values());
   }
 
+  /** Add one joiner node to an already running cluster. */
+  async addNode() {
+    if (!this._started) {
+      throw new Error('Cluster must be started before adding nodes');
+    }
+    const seedNode = Array.from(this._nodes.values())
+      .find((node) => node.role === NODE_ROLES.SEED) ||
+      this._nodes.values().next().value;
+    if (!seedNode) {
+      throw new Error('Cannot add node: seed node is unavailable');
+    }
+
+    const nodeIndex = this._nodes.size;
+    const joinerId = this._buildNodeId(nodeIndex);
+    this._recordClusterStage(
+      CLUSTER_STAGE_SETUP_JOINER_STARTING,
+      {
+        nodeId: joinerId,
+        ordinal: nodeIndex,
+      },
+    );
+    const joinerNode = await this._startNode(
+      joinerId,
+      NODE_ROLES.JOINER,
+      seedNode.ip,
+      nodeIndex,
+    );
+    this._nodes.set(joinerId, joinerNode);
+    this._recordPlaybackEvent(
+      PLAYBACK_EVENT_TYPE.NODE_CREATED,
+      PLAYBACK_SCOPE_NODE,
+      joinerId,
+      {
+        role: NODE_ROLES.JOINER,
+        ip: joinerNode.ip,
+        containerId: joinerNode.containerId,
+      },
+    );
+    this._recordPlaybackEvent(
+      PLAYBACK_EVENT_TYPE.NODE_STARTED,
+      PLAYBACK_SCOPE_NODE,
+      joinerId,
+      {
+        role: NODE_ROLES.JOINER,
+        seedIp: seedNode.ip,
+      },
+    );
+    this._recordClusterStage(
+      CLUSTER_STAGE_SETUP_JOINER_STARTED,
+      {
+        nodeId: joinerId,
+        ordinal: nodeIndex,
+      },
+    );
+    await this._waitForAllActive();
+    return joinerNode;
+  }
+
   /** Pick a random non-seed node ID. */
   randomNonSeed() {
     const joiners = Array.from(this._nodes.values())
@@ -2372,6 +2570,10 @@ class Cluster {
   async waitForConvergence(options) {
     const nodes = Array.from(this._nodes.values());
     return waitForConvergence(nodes, options);
+  }
+
+  async waitForAllActive() {
+    return this._waitForAllActive();
   }
 
   async assertConsistency() {
@@ -2435,12 +2637,39 @@ class Cluster {
     );
   }
 
+  async clearNetworkSlowdown(nodeId) {
+    return this._runChaosAction(
+      'clearNetworkSlowdown',
+      nodeId,
+      null,
+      () => this._chaos.clearNetworkSlowdown(nodeId),
+    );
+  }
+
   async corruptDisk(nodeId, path) {
     return this._runChaosAction(
       'corruptDisk',
       nodeId,
       {path},
       () => this._chaos.corruptDisk(nodeId, path),
+    );
+  }
+
+  async fillDisk(nodeId, options = {}) {
+    return this._runChaosAction(
+      'fillDisk',
+      nodeId,
+      options,
+      () => this._chaos.fillDisk(nodeId, options),
+    );
+  }
+
+  async releaseDiskPressure(nodeId, options = {}) {
+    return this._runChaosAction(
+      'releaseDiskPressure',
+      nodeId,
+      options,
+      () => this._chaos.releaseDiskPressure(nodeId, options),
     );
   }
 
@@ -2673,30 +2902,76 @@ class Cluster {
   }
 
   async _runChaosAction(action, entityId, details, operation) {
+    const normalizedDetails = details || {};
+    const faultStatus = resolveChaosFaultStatus(action);
     this._recordPlaybackEvent(
       PLAYBACK_EVENT_TYPE.CHAOS_ACTION_STARTED,
       PLAYBACK_SCOPE_CHAOS,
       entityId,
       {
         action,
-        details: details || {},
+        details: normalizedDetails,
       },
     );
-    const result = await operation();
-    this._recordPlaybackEvent(
-      PLAYBACK_EVENT_TYPE.CHAOS_ACTION_COMPLETED,
-      PLAYBACK_SCOPE_CHAOS,
-      entityId,
-      {
-        action,
-        details: details || {},
-      },
-    );
-    return result;
+    try {
+      const result = await operation();
+      this._recordPlaybackEvent(
+        PLAYBACK_EVENT_TYPE.CHAOS_ACTION_COMPLETED,
+        PLAYBACK_SCOPE_CHAOS,
+        entityId,
+        {
+          action,
+          details: normalizedDetails,
+        },
+      );
+      this._recordPlaybackEvent(
+        faultStatus === CHAOS_FAULT_STATUS_RECOVERED ?
+          PLAYBACK_EVENT_TYPE.CHAOS_FAULT_RECOVERED :
+          PLAYBACK_EVENT_TYPE.CHAOS_FAULT_INJECTED,
+        PLAYBACK_SCOPE_CHAOS,
+        entityId,
+        {
+          action,
+          status: faultStatus,
+          details: normalizedDetails,
+        },
+      );
+      return result;
+    } catch (error) {
+      this._recordPlaybackEvent(
+        PLAYBACK_EVENT_TYPE.CHAOS_FAULT_FAILED,
+        PLAYBACK_SCOPE_CHAOS,
+        entityId,
+        {
+          action,
+          status: faultStatus,
+          details: normalizedDetails,
+          error: error?.message || null,
+        },
+      );
+      throw error;
+    }
+  }
+
+  _resolveProviderIndexForNodeIndex(nodeIndex) {
+    const configuredProviderIndex = this._hostAssignment[nodeIndex];
+    if (Number.isInteger(configuredProviderIndex) &&
+        configuredProviderIndex >= 0 &&
+        configuredProviderIndex < this._providers.length) {
+      return configuredProviderIndex;
+    }
+
+    if (this._providers.length <= 0) {
+      throw new Error('No Docker providers configured for cluster');
+    }
+
+    const fallbackProviderIndex = nodeIndex % this._providers.length;
+    this._hostAssignment[nodeIndex] = fallbackProviderIndex;
+    return fallbackProviderIndex;
   }
 
   async _startNode(nodeId, role, seedIp, nodeIndex) {
-    const providerIdx = this._hostAssignment[nodeIndex];
+    const providerIdx = this._resolveProviderIndexForNodeIndex(nodeIndex);
     const provider = this._providers[providerIdx];
     const reuseContainers = this._isContainerReuseEnabled();
     const containerName = this._buildContainerName(nodeId, nodeIndex);
@@ -2755,13 +3030,25 @@ class Cluster {
 
           let refreshed = await provider.inspectContainer(containerId);
           const networks = refreshed?.NetworkSettings?.Networks;
-          const connectedToRunNetwork = networks &&
-            Object.prototype.hasOwnProperty.call(
-              networks,
-              this._networkName,
+          const runNetworkEndpoint = networks?.[this._networkName] || null;
+          const connectedToRunNetwork = Boolean(runNetworkEndpoint);
+          const hasRunNetworkAlias = hasDockerNetworkAlias(
+            runNetworkEndpoint,
+            containerName,
+          );
+          if (this._networkId &&
+              (!connectedToRunNetwork || !hasRunNetworkAlias)) {
+            if (connectedToRunNetwork && !hasRunNetworkAlias) {
+              await provider.disconnectFromNetwork(
+                this._networkId,
+                containerId,
+              );
+            }
+            await provider.connectToNetwork(
+              this._networkId,
+              containerId,
+              [containerName],
             );
-          if (!connectedToRunNetwork && this._networkId) {
-            await provider.connectToNetwork(this._networkId, containerId);
             refreshed = await provider.inspectContainer(containerId);
           }
 
@@ -2821,13 +3108,14 @@ class Cluster {
   }
 
   async _waitForBootstrapApi(seedNode) {
-    const timeout = this._config.timeouts?.nodeStartup ||
+    const startupTimeout = this._config.timeouts?.nodeStartup ||
       TIMEOUTS.NODE_STARTUP;
     const stableWindowMs = Math.max(
       0,
       this._config.timeouts?.bootstrapReadyStableWindowMs ??
         BOOTSTRAP_READY_STABLE_WINDOW_MS,
     );
+    const timeout = startupTimeout + stableWindowMs;
     const deadline = Date.now() + timeout;
     const bootstrapJoinReadyUrl =
       'http://' + seedNode.ip + ':' + PORTS.REST + BOOTSTRAP_JOIN_READY_PATH;
@@ -2931,6 +3219,7 @@ class Cluster {
       'Seed node bootstrap API did not become join-ready ' +
       'within ' + timeout + 'ms' +
       ' (attempts=' + pollResult.attempts +
+      ', startupTimeoutMs=' + startupTimeout +
       ', lastStatus=' + String(lastStatus) +
       ', lastPhase=' + lastPhase +
       ', lastState=' + lastState +
@@ -2996,7 +3285,66 @@ class Cluster {
         let phase = null;
         let reasons = [];
 
-        if (typeof node.probeBootstrapReadiness === 'function') {
+        if (typeof node.probeTrafficReadiness === 'function') {
+          const readiness = await withTimeout(
+            node.probeTrafficReadiness({
+              timeoutMs: probeTimeoutMs,
+            }),
+            probeTimeoutMs,
+            'Node readiness probe timed out for ' + node.id,
+          );
+          active = readiness.status >= HTTP_OK_LOWER &&
+            readiness.status <= HTTP_OK_UPPER;
+          phase = typeof readiness.phase === 'string' ?
+            readiness.phase :
+            null;
+          reasons = Array.isArray(readiness.reasons) ?
+            readiness.reasons :
+            [];
+          if (active) {
+            state = ACTIVE_STATE.toLowerCase();
+          } else if (typeof readiness.state === 'string' &&
+              readiness.state.length > 0) {
+            state = readiness.state.toLowerCase();
+          } else if (phase && phase.length > 0) {
+            state = phase.toLowerCase();
+          }
+          if (active &&
+              typeof node.getReachabilityDiagnostics === 'function') {
+            try {
+              const adminDiagnostics = await withTimeout(
+                node.getReachabilityDiagnostics({
+                  timeoutMs: probeTimeoutMs,
+                }),
+                probeTimeoutMs,
+                'Node admin readiness probe timed out for ' + node.id,
+              );
+              if (adminDiagnostics?.adminReady !== true) {
+                active = false;
+                state = INACTIVE_STATE;
+                const adminLastError =
+                  typeof adminDiagnostics?.lastError === 'string' &&
+                    adminDiagnostics.lastError.length > 0 ?
+                    adminDiagnostics.lastError :
+                    ACTIVE_PROBE_REASON_ADMIN_NOT_READY;
+                reasons = [
+                  ...reasons,
+                  ACTIVE_PROBE_REASON_ADMIN_NOT_READY +
+                    '=' +
+                    adminLastError,
+                ];
+              }
+            } catch (adminProbeError) {
+              active = false;
+              state = INACTIVE_STATE;
+              reasons = [
+                ...reasons,
+                ACTIVE_PROBE_REASON_ADMIN_PROBE_ERROR_PREFIX +
+                  normalizeProbeError(adminProbeError),
+              ];
+            }
+          }
+        } else if (typeof node.probeBootstrapReadiness === 'function') {
           const readiness = await withTimeout(
             node.probeBootstrapReadiness({
               timeoutMs: probeTimeoutMs,

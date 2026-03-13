@@ -20,13 +20,14 @@ import {
 import {
   COLUMN,
   ENDPOINT_STATUS,
+  NODE_STATE,
   NUM,
-  SERVICE_STATUS,
   STATE,
   TABLES,
   TRANSPORT_TYPE,
   TYPEOF,
 } from '../constants/index.js';
+import {CONNECTION_STATE} from '../constants/transport.js';
 import {ENDPOINT_SYNC_HEALTH} from '../runtime/endpoint-sync-constants.js';
 import {META_SERVICE_ID} from '../constants/wasm-meta.js';
 import {
@@ -37,6 +38,7 @@ import {
   JOIN_READINESS_DEFAULT_TABLE,
   JOIN_READINESS_REASON,
   JOIN_READINESS_REPAIR,
+  JOINING_LOG_MSG,
 } from './node-joining-constants.js';
 
 const JOIN_READINESS_REASON_PRECEDENCE = Object.freeze([
@@ -45,6 +47,16 @@ const JOIN_READINESS_REASON_PRECEDENCE = Object.freeze([
   JOIN_READINESS_REASON.SCHEMA_VERSION_LAG,
   JOIN_READINESS_REASON.TOPOLOGY_NOT_READY,
 ]);
+const MESH_ELIGIBLE_NODE_STATUSES = new Set([
+  String(NODE_STATE.ACTIVE).toLowerCase(),
+  String(NODE_STATE.READY).toLowerCase(),
+]);
+const MESH_CONNECTED_OR_IN_FLIGHT_STATES = new Set([
+  CONNECTION_STATE.CONNECTED,
+  CONNECTION_STATE.CONNECTING,
+  CONNECTION_STATE.RECONNECTING,
+]);
+const CANONICAL_JOIN_READINESS_LOG_INTERVAL_MS = 5000;
 
 /**
  * Evaluates join readiness convergence for a joining node.
@@ -59,6 +71,7 @@ class JoinReadinessEvaluator {
    * @param {Function} options.sleep - Sleep function.
    * @param {Object} options.delegates - Callbacks into the joining service.
    * @param {Function} options.delegates.resolveControlPlaneTargetAddress
+   * @param {Function} [options.delegates.resolveControlPlaneTargetAddressCandidates]
    * @param {Function} options.delegates.getMissingSystemServiceLeaders
    * @param {Function} options.delegates.getBlockingSystemServiceLeaders
    * @param {Function} options.delegates.backfillPropagatedCacheTables
@@ -80,6 +93,7 @@ class JoinReadinessEvaluator {
     this.lastCanonicalJoinRepairAtMs = NUM.ZERO;
     this.canonicalJoinRepairPromise = null;
     this.lastClusterMeshSignature = null;
+    this.lastCanonicalJoinBlockedLogAtMs = NUM.ZERO;
   }
 
   /**
@@ -130,8 +144,15 @@ class JoinReadinessEvaluator {
         missingPostgresWireNodeIds:
           lastEvaluation.missingPostgresWireNodeIds || [],
         snapshotError: lastSnapshotError?.message || null,
+        controlPlaneTargetAddress:
+          lastEvaluation.controlPlaneTargetAddress || null,
+        controlPlaneTargetCandidates:
+          lastEvaluation.controlPlaneTargetCandidates || [],
+        controlPlaneTargetConnectionStates:
+          lastEvaluation.controlPlaneTargetConnectionStates || null,
       });
-      if (progressSignature !== lastProgressSignature) {
+      const progressChanged = progressSignature !== lastProgressSignature;
+      if (progressChanged) {
         lastProgressSignature = progressSignature;
         lastProgressAtMs = this.now();
       }
@@ -150,6 +171,12 @@ class JoinReadinessEvaluator {
         );
         return;
       }
+      this.logCanonicalJoinReadinessBlocked(lastEvaluation, {
+        attempts,
+        elapsedMs: this.now() - startTime,
+        snapshotError: lastSnapshotError,
+        force: progressChanged,
+      });
 
       await this.repairCanonicalJoinReadinessIfNeeded(
         lastEvaluation,
@@ -185,6 +212,12 @@ class JoinReadinessEvaluator {
         terminalEvaluation.missingNodeEndpointNodeIds,
       missingPostgresWireNodeIds:
         terminalEvaluation.missingPostgresWireNodeIds,
+      controlPlaneTargetAddress:
+        terminalEvaluation.controlPlaneTargetAddress,
+      controlPlaneTargetCandidates:
+        terminalEvaluation.controlPlaneTargetCandidates,
+      controlPlaneTargetConnectionStates:
+        terminalEvaluation.controlPlaneTargetConnectionStates,
       elapsedMs: this.now() - startTime,
       attempts,
       snapshotError: lastSnapshotError?.message || null,
@@ -215,6 +248,12 @@ class JoinReadinessEvaluator {
           terminalEvaluation.missingNodeEndpointNodeIds,
         missingPostgresWireNodeIds:
           terminalEvaluation.missingPostgresWireNodeIds,
+        controlPlaneTargetAddress:
+          terminalEvaluation.controlPlaneTargetAddress,
+        controlPlaneTargetCandidates:
+          terminalEvaluation.controlPlaneTargetCandidates,
+        controlPlaneTargetConnectionStates:
+          terminalEvaluation.controlPlaneTargetConnectionStates,
         snapshotError: lastSnapshotError?.message || null,
         timeoutKind: error.joinReadiness.timeoutKind,
         lastProgressElapsedMs:
@@ -385,13 +424,9 @@ class JoinReadinessEvaluator {
       NodeService.getInstance().getSystemTableCache();
     const tableName =
       context.tableName || this.resolveJoinReadinessTableName();
-    const targetAddress =
-      this.delegates.resolveControlPlaneTargetAddress(
-        {allowBootstrapHints: false},
-      ) ||
-      this.delegates.resolveControlPlaneTargetAddress(
-        {allowBootstrapHints: true},
-      );
+    const targetCandidates =
+      this.resolveJoinReadinessTargetCandidates();
+    const targetAddress = targetCandidates[NUM.ZERO] || null;
     const routingReady =
       this.isControlPlaneAddressReachable(targetAddress);
     const topology =
@@ -412,6 +447,12 @@ class JoinReadinessEvaluator {
       tableName,
       routingReady,
       topologyReady: topology.ready,
+      controlPlaneTargetAddress: targetAddress,
+      controlPlaneTargetCandidates: targetCandidates,
+      controlPlaneTargetConnectionStates:
+        this.resolveControlPlaneTargetConnectionStates(
+          targetCandidates,
+        ),
       requiredSchemaVersion,
       appliedSchemaVersion,
       requiredNodeIds:
@@ -453,6 +494,84 @@ class JoinReadinessEvaluator {
     }
     return messageRouter.getConnectionState(targetNodeId) ===
       STATE.CONNECTED;
+  }
+
+  /**
+   * Resolve ordered control-plane target candidates for readiness checks.
+   * Local ingress is included because READY publication is allowed to route
+   * through a live local kernel path when available.
+   * @return {Array<string>}
+   */
+  resolveJoinReadinessTargetCandidates() {
+    if (
+      typeof this.delegates.resolveControlPlaneTargetAddressCandidates ===
+      TYPEOF.FUNCTION
+    ) {
+      const candidates =
+        this.delegates.resolveControlPlaneTargetAddressCandidates({
+          allowBootstrapHints: true,
+          allowSelfTarget: true,
+        });
+      return Array.isArray(candidates) ?
+        [...new Set(candidates.filter((value) =>
+          typeof value === TYPEOF.STRING && value.length > NUM.ZERO,
+        ))] :
+        [];
+    }
+
+    const candidates = [
+      this.delegates.resolveControlPlaneTargetAddress({
+        allowBootstrapHints: false,
+        allowSelfTarget: true,
+      }),
+      this.delegates.resolveControlPlaneTargetAddress({
+        allowBootstrapHints: true,
+        allowSelfTarget: true,
+      }),
+    ];
+    return [...new Set(candidates.filter((value) =>
+      typeof value === TYPEOF.STRING && value.length > NUM.ZERO,
+    ))];
+  }
+
+  /**
+   * Resolve per-target router connection states for diagnostics.
+   * @param {Array<string>} targetCandidates
+   * @return {Object|null}
+   */
+  resolveControlPlaneTargetConnectionStates(targetCandidates) {
+    if (!Array.isArray(targetCandidates) ||
+        targetCandidates.length === NUM.ZERO) {
+      return null;
+    }
+
+    const messageRouter = this.delegates.getMessageRouter();
+    const connectionStates = {};
+    for (const targetAddress of targetCandidates) {
+      if (typeof targetAddress !== TYPEOF.STRING ||
+          targetAddress.length === NUM.ZERO) {
+        continue;
+      }
+      const match = targetAddress.match(/^([^/]+)\//);
+      const targetNodeId = match ? match[NUM.ONE] : null;
+      if (!targetNodeId) {
+        connectionStates[targetAddress] = null;
+        continue;
+      }
+      if (targetNodeId === this.nodeId) {
+        connectionStates[targetAddress] = 'self';
+        continue;
+      }
+      if (typeof messageRouter?.getConnectionState !== TYPEOF.FUNCTION) {
+        connectionStates[targetAddress] = null;
+        continue;
+      }
+      connectionStates[targetAddress] =
+        messageRouter.getConnectionState(targetNodeId) || null;
+    }
+    return Object.keys(connectionStates).length > NUM.ZERO ?
+      connectionStates :
+      null;
   }
 
   /**
@@ -644,13 +763,55 @@ class JoinReadinessEvaluator {
       if (nodeId.length === NUM.ZERO) {
         continue;
       }
-      if (status !==
-          String(SERVICE_STATUS.ACTIVE).toLowerCase()) {
+      if (status !== String(NODE_STATE.ACTIVE).toLowerCase()) {
         continue;
       }
       activeNodeIds.push(nodeId);
     }
     return activeNodeIds;
+  }
+
+  /**
+   * Resolve one node id from a mesh-connectivity row shape.
+   * @param {Object|null} row
+   * @return {string}
+   */
+  resolveMeshConnectivityNodeId(row) {
+    return String(
+      row?.[COLUMN.NODE_ID] ||
+        row?.node_id ||
+        row?.nodeId ||
+        '',
+    );
+  }
+
+  /**
+   * Resolve one node status from a mesh-connectivity row shape.
+   * @param {Object|null} row
+   * @return {string}
+   */
+  resolveMeshConnectivityNodeStatus(row) {
+    return String(
+      row?.[COLUMN.STATUS] || row?.status || '',
+    ).toLowerCase();
+  }
+
+  /**
+   * Determine whether a node row should participate in mesh reconciliation.
+   * Nodes without a status are retained so bootstrap snapshots remain usable
+   * before canonical readiness data has fully propagated.
+   * @param {Object|null} row
+   * @return {boolean}
+   */
+  isMeshEligibleNodeRow(row) {
+    const nodeId = this.resolveMeshConnectivityNodeId(row);
+    if (nodeId.length === NUM.ZERO) {
+      return false;
+    }
+
+    const status = this.resolveMeshConnectivityNodeStatus(row);
+    return status.length === NUM.ZERO ||
+      MESH_ELIGIBLE_NODE_STATUSES.has(status);
   }
 
   /**
@@ -666,13 +827,7 @@ class JoinReadinessEvaluator {
         typeof systemTableCache.getAll === TYPEOF.FUNCTION) {
       const cacheRows =
         (systemTableCache.getAll(TABLES.NODES) || []).filter((row) => {
-          const nodeId = String(
-            row?.[COLUMN.NODE_ID] ||
-              row?.node_id ||
-              row?.nodeId ||
-              '',
-          );
-          return nodeId.length > NUM.ZERO;
+          return this.isMeshEligibleNodeRow(row);
         });
       if (cacheRows.length > NUM.ZERO) {
         return {
@@ -686,7 +841,9 @@ class JoinReadinessEvaluator {
     const snapshotRows = Array.isArray(
       bootstrapResponse?.systemTableSnapshots?.nodes,
     ) ?
-      bootstrapResponse.systemTableSnapshots.nodes :
+      bootstrapResponse.systemTableSnapshots.nodes.filter((row) => {
+        return this.isMeshEligibleNodeRow(row);
+      }) :
       [];
     return {
       source: 'bootstrap_snapshot',
@@ -706,13 +863,10 @@ class JoinReadinessEvaluator {
 
     const members = nodeRows
       .map((row) => {
-        const nodeId = String(
-          row?.[COLUMN.NODE_ID] ||
-            row?.node_id ||
-            row?.nodeId ||
-            '',
-        );
-        if (nodeId.length === NUM.ZERO || nodeId === this.nodeId) {
+        const nodeId = this.resolveMeshConnectivityNodeId(row);
+        if (nodeId.length === NUM.ZERO ||
+            nodeId === this.nodeId ||
+            !this.isMeshEligibleNodeRow(row)) {
           return null;
         }
         const nodeAddress = String(
@@ -721,9 +875,7 @@ class JoinReadinessEvaluator {
             row?.nodeAddress ||
             '',
         );
-        const status = String(
-          row?.[COLUMN.STATUS] || row?.status || '',
-        ).toLowerCase();
+        const status = this.resolveMeshConnectivityNodeStatus(row);
         return `${nodeId}|${nodeAddress}|${status}`;
       })
       .filter(Boolean)
@@ -761,15 +913,12 @@ class JoinReadinessEvaluator {
     }
 
     return nodesSnapshot.some((node) => {
-      const nodeId = String(
-        node?.[COLUMN.NODE_ID] ||
-          node?.node_id ||
-          node?.nodeId ||
-          '',
-      );
+      const nodeId = this.resolveMeshConnectivityNodeId(node);
       return nodeId.length > NUM.ZERO &&
         nodeId !== this.nodeId &&
-        messageRouter.getConnectionState(nodeId) !== STATE.CONNECTED;
+        !MESH_CONNECTED_OR_IN_FLIGHT_STATES.has(
+          messageRouter.getConnectionState(nodeId),
+        );
     });
   }
 
@@ -821,8 +970,10 @@ class JoinReadinessEvaluator {
     }
 
     const activeNodes = systemTableCache.filter(TABLES.NODES, (row) => {
-      const status = String(row?.status || '').toLowerCase();
-      return status === SERVICE_STATUS.ACTIVE;
+      const status = String(
+        row?.[COLUMN.STATUS] || row?.status || '',
+      ).toLowerCase();
+      return status === String(NODE_STATE.ACTIVE).toLowerCase();
     });
 
     const nodeIds = [...new Set(activeNodes
@@ -955,6 +1106,23 @@ class JoinReadinessEvaluator {
             value.length > NUM.ZERO,
           ) :
           [],
+      controlPlaneTargetAddress:
+        typeof source.controlPlaneTargetAddress === TYPEOF.STRING &&
+        source.controlPlaneTargetAddress.length > NUM.ZERO ?
+          source.controlPlaneTargetAddress :
+          null,
+      controlPlaneTargetCandidates:
+        Array.isArray(source.controlPlaneTargetCandidates) ?
+          source.controlPlaneTargetCandidates.filter((value) =>
+            typeof value === TYPEOF.STRING &&
+            value.length > NUM.ZERO,
+          ) :
+          [],
+      controlPlaneTargetConnectionStates:
+        source.controlPlaneTargetConnectionStates &&
+        typeof source.controlPlaneTargetConnectionStates === TYPEOF.OBJECT ?
+          source.controlPlaneTargetConnectionStates :
+          null,
       observedSchemaByNodeId:
         source.observedSchemaByNodeId &&
         typeof source.observedSchemaByNodeId === TYPEOF.OBJECT ?
@@ -998,6 +1166,66 @@ class JoinReadinessEvaluator {
       };
     }
     return diagnostics;
+  }
+
+  /**
+   * Emit throttled diagnostics while canonical readiness remains blocked.
+   * @param {Object|null} evaluation
+   * @param {Object} options
+   * @param {number} options.attempts
+   * @param {number} options.elapsedMs
+   * @param {Error|null} [options.snapshotError]
+   * @param {boolean} [options.force=false]
+   * @return {void}
+   */
+  logCanonicalJoinReadinessBlocked(evaluation, options = {}) {
+    if (!evaluation || evaluation.ready === true) {
+      return;
+    }
+
+    const nowMs = this.now();
+    const force = options.force === true;
+    if (!force &&
+        this.lastCanonicalJoinBlockedLogAtMs > NUM.ZERO &&
+        nowMs - this.lastCanonicalJoinBlockedLogAtMs <
+          CANONICAL_JOIN_READINESS_LOG_INTERVAL_MS) {
+      return;
+    }
+
+    this.lastCanonicalJoinBlockedLogAtMs = nowMs;
+    this.delegates.getLogger().warn(
+      JOINING_LOG_MSG.CANONICAL_READINESS_BLOCKED,
+      {
+        nodeId: this.nodeId,
+        attempts: Number.isFinite(options.attempts) ?
+          options.attempts :
+          null,
+        elapsedMs: Number.isFinite(options.elapsedMs) ?
+          options.elapsedMs :
+          null,
+        reasons: evaluation.reasons,
+        routingReady: evaluation.routingReady,
+        topologyReady: evaluation.topologyReady,
+        requiredSchemaVersion: evaluation.requiredSchemaVersion,
+        appliedSchemaVersion: evaluation.appliedSchemaVersion,
+        missingLeaders: evaluation.missingLeaders,
+        inFlightReplicaOperations:
+          evaluation.inFlightReplicaOperations,
+        inFlightReplicaOperationDetails:
+          evaluation.inFlightReplicaOperationDetails,
+        missingNodeEndpointNodeIds:
+          evaluation.missingNodeEndpointNodeIds,
+        missingPostgresWireNodeIds:
+          evaluation.missingPostgresWireNodeIds,
+        controlPlaneTargetAddress:
+          evaluation.controlPlaneTargetAddress,
+        controlPlaneTargetCandidates:
+          evaluation.controlPlaneTargetCandidates,
+        controlPlaneTargetConnectionStates:
+          evaluation.controlPlaneTargetConnectionStates,
+        snapshotError: options.snapshotError?.message || null,
+      },
+    );
   }
 
   /**

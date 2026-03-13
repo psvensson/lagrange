@@ -116,6 +116,50 @@ class MessageGroupServiceRowOwner {
     return row;
   }
 
+  async activateReplica(options = {}) {
+    return this.updateReplicaStatus({
+      ...options,
+      status: SERVICE_STATUS.ACTIVE,
+    });
+  }
+
+  async updateReplicaStatus(options = {}) {
+    if (
+      !this.systemTableWriter ||
+      typeof this.systemTableWriter.upsertSystemTableRow !== TYPEOF.FUNCTION
+    ) {
+      throw new Error(
+        MESSAGE_GROUP_SERVICE_ROW_OWNER_ERROR.UPSERT_REQUIRED,
+      );
+    }
+
+    const row = MessageGroupServiceRowOwner.buildServiceRow({
+      ...options,
+      timestamp: options.timestamp ?? this.now(),
+    });
+    if (typeof this.systemTableWriter.updateSystemTableRow !== TYPEOF.FUNCTION) {
+      await this.systemTableWriter.upsertSystemTableRow(
+        SYSTEM_TABLE_NAME.SERVICES,
+        row,
+      );
+      return row;
+    }
+
+    const {
+      created_at: _createdAt,
+      ...updates
+    } = row;
+    await this.systemTableWriter.updateSystemTableRow(
+      SYSTEM_TABLE_NAME.SERVICES,
+      {
+        service_id: row.service_id,
+        service_type: row.service_type,
+      },
+      updates,
+    );
+    return row;
+  }
+
   async removeReplica(options = {}) {
     if (
       !this.systemTableWriter ||

@@ -36,6 +36,9 @@ import {
   PARTITION_TRANSITION_METADATA_FIELD,
   PARTITION_TRANSITION_STATE,
 } from '../../src/partition/partition-constants.js';
+import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+} from '../../src/control-plane/control-plane-readiness-constants.js';
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -1838,6 +1841,11 @@ test('PartitionService - persists raft role updates to services table', async (t
     {raft_role: RaftRole.LEADER},
     'cache visibility should only depend on the raft role',
   );
+  t.equal(
+    roleUpdate?.options?.routingReadinessDimension,
+    CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+    'raft role persistence should route through repairEligible readiness',
+  );
 
   await partition.shutdown();
 });
@@ -2015,6 +2023,11 @@ test('PartitionService - persists leader node updates to partitions table', asyn
     leaderUpdate?.options?.expectedCacheFields,
     {leader_node_id: 'seed-node'},
     'cache visibility should only depend on leader identity',
+  );
+  t.equal(
+    leaderUpdate?.options?.routingReadinessDimension,
+    CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+    'leader node persistence should route through repairEligible readiness',
   );
 
   await partition.shutdown();
@@ -3091,6 +3104,50 @@ test('PartitionService - handleRemoteQuery executes reads on follower', async (t
   t.equal(result.rows.length, 1, 'should return data');
   t.equal(result.rows[0].name, 'Alice', 'should return correct data');
 
+  partition.shutdown();
+});
+
+test('PartitionService - executeQuery keeps non-transactional writes out of unrelated active transactions', async (t) => {
+  const partition = new PartitionService({
+    partitionId: 'test-partition',
+    tableId: 'test-table',
+    replicaId: 'replica-1',
+    replicaIds: ['replica-1'],
+    nodeId: 'node-1',
+    dbPath: ':memory:',
+  });
+
+  await partition.initialize();
+  partition.db.exec('CREATE TABLE test_data (id INTEGER PRIMARY KEY, name TEXT)');
+
+  const beginResult = await partition.beginTransaction('tx-active', 101);
+  t.equal(beginResult.success, true, 'setup transaction should begin');
+
+  const proposedWrites = [];
+  partition.proposeWrite = async (operation) => {
+    proposedWrites.push(operation);
+    return {
+      success: true,
+      changes: 1,
+      partitionId: partition.partitionId,
+    };
+  };
+
+  const result = await partition.executeQuery(
+    'INSERT INTO test_data (id, name) VALUES (?, ?)',
+    [1, 'Alice'],
+    {sessionId: 'rebalance-coordinator:op-1'},
+  );
+
+  t.equal(result.success, true, 'non-transactional write should still succeed');
+  t.equal(proposedWrites.length, 1, 'write should use the normal propose path');
+  t.equal(
+    partition.activeTransactions.get('tx-active')?.operations.length,
+    0,
+    'unrelated active transaction should not capture the write',
+  );
+
+  await partition.rollbackTransaction('tx-active');
   partition.shutdown();
 });
 

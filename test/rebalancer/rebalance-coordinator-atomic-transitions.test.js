@@ -2,8 +2,17 @@ import {test} from '../../src/test-helpers/tap.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+} from '../../src/control-plane/control-plane-readiness-constants.js';
+import {
   OPERATION_TRANSITION_REASON,
 } from '../../src/rebalancer/rebalancer-constants.js';
+import {
+  QUERY_ERROR_MSG,
+} from '../../src/query/query-constants.js';
+import {
+  PARTITION_SERVICE_ERROR_MSG,
+} from '../../src/partition/partition-service-constants.js';
 import {DurableWorkflowCoordinator} from
   '../../src/workflow/durable-workflow-coordinator.js';
 import {
@@ -112,6 +121,102 @@ test('updateStep wraps transition and persist in transaction boundary',
       await coordinator.shutdown();
     }
   });
+
+test('updateStep persists through the opened transaction session',
+  async (t) => {
+    const expectedSessionId = `op-atomic-test:${WORKFLOW_STEP.SENDING}`;
+    const observedSessions = [];
+    const observedRoutingDimensions = [];
+    const txCoordinator = new DistributedTransactionCoordinator({
+      beginParticipant: async () => {},
+      prepareParticipant: async () => {},
+      commitParticipant: async () => {},
+      rollbackParticipant: async () => {},
+      now: () => 1000,
+    });
+
+    const coordinator = createMinimalCoordinator({
+      transactionCoordinator: txCoordinator,
+      sqlQueryEngine: {
+        async executeQuery(sql, _params, options = {}) {
+          if (sql.includes('UPDATE replica_operations')) {
+            observedSessions.push(options.sessionId || null);
+            observedRoutingDimensions.push(
+              options.routingReadinessDimension || null,
+            );
+            if (options.sessionId !== expectedSessionId) {
+              return {
+                success: false,
+                error: 'Transaction already active for this session',
+              };
+            }
+          }
+          return {success: true, rows: [], changes: 1};
+        },
+      },
+    });
+    coordinator.initialize();
+
+    try {
+      const operation = createTestOperation();
+      await coordinator.updateStep(operation, WORKFLOW_STEP.SENDING);
+
+      t.same(
+        observedSessions,
+        [expectedSessionId],
+        'persisted update should use the transaction session for the step',
+      );
+      t.same(
+        observedRoutingDimensions,
+        [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE],
+        'owner mutation routing should stay on repairEligible for internal topology work',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  });
+
+test('getInFlightOperations keeps replica_operations owner reads on ' +
+  'repairEligible routing', async (t) => {
+  const observedRoutingDimensions = [];
+  const coordinator = createMinimalCoordinator({
+    cdcIntegrationService: {
+      async waitForCacheUpdate() {},
+      async executeAuthoritativeSystemTableRead(
+        _tableName,
+        _sql,
+        _params,
+        options = {},
+      ) {
+        observedRoutingDimensions.push(
+          options?.queryOptions?.routingReadinessDimension || null,
+        );
+        return {success: true, rows: []};
+      },
+    },
+    sqlQueryEngine: {
+      async executeQuery() {
+        t.fail(
+          'authoritative replica_operations read should satisfy the owner query in this regression',
+        );
+      },
+    },
+  });
+  coordinator.initialize();
+
+  try {
+    const operations = await coordinator.getInFlightOperations();
+
+    t.same(operations, [], 'fixture authoritative read should return no in-flight operations');
+    t.same(
+      observedRoutingDimensions,
+      [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE],
+      'replica_operations owner reads must stay on repairEligible routing',
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
 
 test('completeOperation wraps transition and persist in transaction ' +
   'boundary', async (t) => {
@@ -292,6 +397,201 @@ test('executeAtomicTransition fails closed when transaction coordinator ' +
       persistCalled,
       false,
       'row persistence must not run when the transaction coordinator is missing',
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
+test('persistNewOperation retries transient routable partition timeouts ' +
+  'on the canonical owner mutation path', async (t) => {
+  const partitionId = 'replica_operations-p1';
+  const observedSessions = [];
+  let executeCalls = 0;
+  const coordinator = createMinimalCoordinator({
+    sqlQueryEngine: {
+      async executeQuery(_sql, _params, options = {}) {
+        executeCalls += 1;
+        observedSessions.push(options.sessionId || null);
+        if (executeCalls === 1) {
+          return {
+            success: false,
+            error:
+              QUERY_ERROR_MSG.TABLE_PARTITION_ROUTING_TIMEOUT_PREFIX +
+              partitionId,
+          };
+        }
+        return {success: true, rows: [], changes: 1};
+      },
+    },
+  });
+  coordinator.waitForOperationPersistRetry = async () => {};
+  coordinator.initialize();
+
+  try {
+    const operation = createTestOperation();
+    const inserted = await coordinator.persistNewOperation(operation);
+
+    t.equal(inserted, true, 'owner mutation should retry and persist successfully');
+    t.equal(executeCalls, 2, 'routable partition timeout should trigger one retry');
+    t.equal(
+      observedSessions[0],
+      observedSessions[1],
+      'owner mutation retry should reuse the same canonical session',
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
+test('persistOperationUpdate retries transient partition transaction ' +
+  'contention on the canonical owner mutation path', async (t) => {
+  const expectedSessionId = `op-atomic-test:${WORKFLOW_STEP.SENDING}`;
+  let executeCalls = 0;
+  const observedSessions = [];
+  const coordinator = createMinimalCoordinator({
+    sqlQueryEngine: {
+      async executeQuery(sql, _params, options = {}) {
+        if (!sql.includes('UPDATE replica_operations')) {
+          return {success: true, rows: [], changes: 1};
+        }
+        executeCalls += 1;
+        observedSessions.push(options.sessionId || null);
+        if (executeCalls === 1) {
+          return {
+            success: false,
+            error: PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE,
+          };
+        }
+        return {success: true, rows: [], changes: 1};
+      },
+    },
+  });
+  coordinator.waitForOperationPersistRetry = async () => {};
+  coordinator.initialize();
+
+  try {
+    const operation = createTestOperation();
+    await coordinator.updateStep(operation, WORKFLOW_STEP.SENDING);
+
+    t.equal(
+      operation.workflowStep,
+      WORKFLOW_STEP.SENDING,
+      'step transition should succeed after retrying transient partition transaction contention',
+    );
+    t.equal(
+      executeCalls,
+      2,
+      'partition transaction contention should trigger one retry',
+    );
+    t.same(
+      observedSessions,
+      [expectedSessionId, expectedSessionId],
+      'retry should reuse the same canonical transition session',
+    );
+  } finally {
+    await coordinator.shutdown();
+  }
+});
+
+test('executeAtomicTransition serializes cross-operation transitions ' +
+  'on the replica_operations owner lane', async (t) => {
+  let activeSessionId = null;
+  const beginCalls = [];
+  const persistSessions = [];
+  let releaseFirstPersist;
+  const firstPersistEntered = new Promise((resolve) => {
+    releaseFirstPersist = resolve;
+  });
+  let blockFirstPersist = true;
+
+  const coordinator = createMinimalCoordinator({
+    transactionCoordinator: {
+      async begin(sessionId) {
+        beginCalls.push(sessionId);
+        if (activeSessionId) {
+          return {
+            success: false,
+            error: PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE,
+          };
+        }
+        activeSessionId = sessionId;
+        return {success: true};
+      },
+      async commit(sessionId) {
+        if (activeSessionId === sessionId) {
+          activeSessionId = null;
+        }
+        return {success: true};
+      },
+      async rollback(sessionId) {
+        if (activeSessionId === sessionId) {
+          activeSessionId = null;
+        }
+        return {success: true};
+      },
+    },
+    sqlQueryEngine: {
+      async executeQuery(sql, _params, options = {}) {
+        if (sql.includes('UPDATE replica_operations')) {
+          persistSessions.push(options.sessionId || null);
+          if (blockFirstPersist) {
+            blockFirstPersist = false;
+            await firstPersistEntered;
+          }
+        }
+        return {success: true, rows: [], changes: 1};
+      },
+    },
+  });
+  coordinator.initialize();
+
+  try {
+    const firstOperation = createTestOperation({
+      operationId: 'op-atomic-first',
+      replicaId: 'partition-1-r1',
+    });
+    const secondOperation = createTestOperation({
+      operationId: 'op-atomic-second',
+      replicaId: 'partition-1-r2',
+      targetNodeId: 'node-remote-2',
+    });
+
+    const firstTransition = coordinator.updateStep(
+      firstOperation,
+      WORKFLOW_STEP.SENDING,
+    );
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const secondTransition = coordinator.updateStep(
+      secondOperation,
+      WORKFLOW_STEP.SENDING,
+    );
+    await new Promise((resolve) => setImmediate(resolve));
+
+    releaseFirstPersist();
+    await Promise.all([firstTransition, secondTransition]);
+
+    t.same(
+      beginCalls,
+      [
+        `op-atomic-first:${WORKFLOW_STEP.SENDING}`,
+        `op-atomic-second:${WORKFLOW_STEP.SENDING}`,
+      ],
+      'cross-operation transitions should begin sequentially without partition contention',
+    );
+    t.same(
+      persistSessions,
+      [
+        `op-atomic-first:${WORKFLOW_STEP.SENDING}`,
+        `op-atomic-second:${WORKFLOW_STEP.SENDING}`,
+      ],
+      'replica_operations updates should persist one transition at a time on the owner lane',
+    );
+    t.equal(
+      secondOperation.workflowStep,
+      WORKFLOW_STEP.SENDING,
+      'the second transition should succeed after the first one commits',
     );
   } finally {
     await coordinator.shutdown();

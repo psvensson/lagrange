@@ -32,6 +32,9 @@ import {
   createTimeoutBudget,
   createTimeoutBudgetError,
 } from '../control-plane/timeout-budget.js';
+import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+} from '../control-plane/control-plane-readiness-constants.js';
 import {HLCClockService} from '../hlc/hlc-clock-service.js';
 import {
   SYSTEM_TABLE_NAME,
@@ -53,6 +56,7 @@ import {
   CDC_OPERATION_LABEL,
   CDC_PRIMARY_KEY,
   CDC_RETRY,
+  CDC_SESSION,
   CDC_SKIP_REASON,
   CDC_SOURCE,
   CDC_SQL,
@@ -907,7 +911,9 @@ class CDCIntegrationService extends EventEmitter {
       return {handled: false};
     }
 
-    const localServices = this.resolveLocalSystemTableServices(tableName);
+    const localServices = this.resolveLocalSystemTableServices(tableName, {
+      consistency: LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.LOCAL_LEADER,
+    });
     if (localServices.length === NUM.ZERO) {
       return {handled: false};
     }
@@ -1123,6 +1129,21 @@ class CDCIntegrationService extends EventEmitter {
   }
 
   /**
+   * Resolve the canonical SQL session for one routed steady-state system-table
+   * write so owner-managed CDC writes never share the default user session.
+   * @param {Object} [options={}]
+   * @return {string}
+   * @private
+   */
+  resolveSystemWriteSessionId(options = {}) {
+    if (typeof options.sessionId === TYPEOF.STRING &&
+        options.sessionId.length > NUM.ZERO) {
+      return options.sessionId;
+    }
+    return `${CDC_SESSION.SYSTEM_WRITE_PREFIX}:${uuidv4()}`;
+  }
+
+  /**
    * Execute a SQL query through the query engine or directly to local partition.
    *
    * Routing Logic:
@@ -1162,7 +1183,12 @@ class CDCIntegrationService extends EventEmitter {
     );
     const tableName = this.extractTableNameFromSQL(sql);
     const queryTimeoutMs = Number(options?.queryTimeoutMs);
-    const queryOptions = {};
+    const queryOptions = {
+      sessionId: this.resolveSystemWriteSessionId(options),
+      routingReadinessDimension:
+        options?.routingReadinessDimension ||
+        CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+    };
     if (Number.isFinite(queryTimeoutMs) && queryTimeoutMs > NUM.ZERO) {
       queryOptions.timeoutMs = Math.floor(queryTimeoutMs);
     }
@@ -2209,6 +2235,7 @@ class CDCIntegrationService extends EventEmitter {
       const result = await this.executeSQL(sql, values, {
         queryTimeoutMs: options?.queryTimeoutMs,
         cancellationToken: options?.cancellationToken || null,
+        routingReadinessDimension: options?.routingReadinessDimension,
       });
       const sqlDurationMs = Date.now() - sqlStartMs;
 
@@ -2327,6 +2354,7 @@ class CDCIntegrationService extends EventEmitter {
       const result = await this.executeSQL(sql, [...setValues, ...whereValues], {
         queryTimeoutMs: options?.queryTimeoutMs,
         cancellationToken: options?.cancellationToken || null,
+        routingReadinessDimension: options?.routingReadinessDimension,
       });
       const sqlDurationMs = Date.now() - sqlStartMs;
 
@@ -2451,6 +2479,7 @@ class CDCIntegrationService extends EventEmitter {
       const result = await this.executeSQL(sql, values, {
         queryTimeoutMs: options?.queryTimeoutMs,
         cancellationToken: options?.cancellationToken || null,
+        routingReadinessDimension: options?.routingReadinessDimension,
       });
 
       if (!result.success) {
@@ -2547,6 +2576,7 @@ class CDCIntegrationService extends EventEmitter {
       const result = await this.executeSQL(sql, values, {
         queryTimeoutMs: options?.queryTimeoutMs,
         cancellationToken: options?.cancellationToken || null,
+        routingReadinessDimension: options?.routingReadinessDimension,
       });
 
       if (!result.success) {

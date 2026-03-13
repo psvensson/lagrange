@@ -20,12 +20,14 @@ import {
   SERVICE_TYPE,
   TABLES,
 } from '../../src/constants/index.js';
+import {TRANSPORT_ERROR_MSG} from '../../src/constants/transport.js';
 import LifeRaft from '@markwylde/liferaft';
 import {
   MessageGroupService,
 } from '../../src/message-group/message-group-service.js';
 import {
   MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE,
+  MESSAGE_GROUP_CDC_ERROR_MSG,
 } from '../../src/message-group/constants.js';
 import {MessageRouter} from '../../src/transport/message-router.js';
 
@@ -505,6 +507,111 @@ test(
 );
 
 test(
+  'applyCDCEvent on non-leader MG prefers explicit services leader over stale canonical group leader',
+  async (t) => {
+    const port = testPortCounter++;
+    const nodeId = `test-node-${port}`;
+    const router = new MessageRouter({nodeId, wsPort: port});
+    await router.initialize({startServer: true});
+
+    let shutdownCalled = false;
+    const cleanup = async () => {
+      if (shutdownCalled) return;
+      shutdownCalled = true;
+      try {
+        if (mg && mg.raft) {
+          await mg.shutdown();
+        }
+      } catch (_e) {
+        // best-effort
+      }
+      await router.shutdown();
+    };
+
+    let mg;
+    try {
+      mg = new MessageGroupService({
+        groupId: 'mg-stale-canonical-leader',
+        replicaId: 'mg-stale-canonical-leader-r1',
+        nodeId,
+        transport: router,
+      });
+      await mg.initialize();
+      mg.replicaIds = [
+        'mg-stale-canonical-leader-r1',
+        'mg-stale-canonical-leader-r2',
+        'mg-stale-canonical-leader-r3',
+      ];
+      await mg.subscribeToCDC(TABLES.PARTITIONS);
+
+      mg.isLeader = false;
+      mg.role = 'follower';
+      mg.leaderId = null;
+      if (mg.raft) {
+        Object.defineProperty(mg.raft, 'state', {
+          value: LifeRaft.FOLLOWER,
+          writable: true,
+          configurable: true,
+        });
+      }
+
+      mg.systemTableCache.applySystemTableChange(
+        TABLES.MESSAGE_GROUPS,
+        CDC_OPERATION.UPSERT,
+        {
+          group_id: 'mg-stale-canonical-leader',
+          leader_node_id: 'stale-node',
+        },
+      );
+      mg.systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, {
+        service_id: 'mg-stale-canonical-leader-r2',
+        service_type: SERVICE_TYPE.MESSAGE_GROUP,
+        group_id: 'mg-stale-canonical-leader',
+        replica_id: 'mg-stale-canonical-leader-r2',
+        node_id: 'stale-node',
+        status: SERVICE_STATUS.ACTIVE,
+        raft_role: 'follower',
+        address: 'stale-node/message-group/mg-stale-canonical-leader-r2',
+        updated_at: Date.now(),
+      });
+      mg.systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, {
+        service_id: 'mg-stale-canonical-leader-r3',
+        service_type: SERVICE_TYPE.MESSAGE_GROUP,
+        group_id: 'mg-stale-canonical-leader',
+        replica_id: 'mg-stale-canonical-leader-r3',
+        node_id: 'fresh-node',
+        status: SERVICE_STATUS.ACTIVE,
+        raft_role: 'leader',
+        address: 'fresh-node/message-group/mg-stale-canonical-leader-r3',
+        updated_at: Date.now() + 1,
+      });
+
+      const forwardedPayloads = [];
+      router.deliver = async (address, payload, options) => {
+        forwardedPayloads.push({address, payload, options});
+        return {acknowledged: true, success: true};
+      };
+
+      await mg.applyCDCEvent(
+        TABLES.PARTITIONS,
+        'INSERT',
+        {partition_id: 'p-stale-canonical-leader'},
+        {timestamp: '1234567890:6'},
+      );
+
+      t.equal(forwardedPayloads.length, 1, 'should forward exactly once');
+      t.equal(
+        forwardedPayloads[0]?.address,
+        'fresh-node/message-group/mg-stale-canonical-leader-r3',
+        'should route to the explicit services leader instead of the stale canonical leader node',
+      );
+    } finally {
+      await cleanup();
+    }
+  },
+);
+
+test(
   'applyCDCEvent on non-leader MG forwards to freshest peer when leader role metadata lags',
   async (t) => {
     const port = testPortCounter++;
@@ -672,6 +779,118 @@ test(
         forwardedPayloads[0]?.address,
         'remote-node-2/message-group/mg-bootstrap-peer-forward-r2',
         'should fall back to bootstrap peer hints when cache metadata is absent',
+      );
+    } finally {
+      await cleanup();
+    }
+  },
+);
+
+test(
+  'applyCDCEvent on non-leader MG prefers a connected relay target during restart windows',
+  async (t) => {
+    const port = testPortCounter++;
+    const nodeId = `test-node-${port}`;
+    const router = new MessageRouter({nodeId, wsPort: port});
+    await router.initialize({startServer: true});
+
+    let shutdownCalled = false;
+    const cleanup = async () => {
+      if (shutdownCalled) return;
+      shutdownCalled = true;
+      try {
+        if (mg && mg.raft) {
+          await mg.shutdown();
+        }
+      } catch (_e) {
+        // best-effort
+      }
+      await router.shutdown();
+    };
+
+    let mg;
+    try {
+      mg = new MessageGroupService({
+        groupId: 'mg-connected-relay',
+        replicaId: 'mg-connected-relay-r1',
+        nodeId,
+        transport: router,
+      });
+      await mg.initialize();
+      mg.replicaIds = [
+        'mg-connected-relay-r1',
+        'mg-connected-relay-r2',
+        'mg-connected-relay-r3',
+      ];
+      await mg.subscribeToCDC(TABLES.PARTITIONS);
+
+      mg.isLeader = false;
+      mg.role = 'follower';
+      mg.leaderId = 'mg-connected-relay-r2';
+      if (mg.raft) {
+        Object.defineProperty(mg.raft, 'state', {
+          value: LifeRaft.FOLLOWER,
+          writable: true,
+          configurable: true,
+        });
+      }
+
+      mg.systemTableCache.applySystemTableChange(TABLES.MESSAGE_GROUPS, CDC_OPERATION.UPSERT, {
+        group_id: 'mg-connected-relay',
+        leader_node_id: 'node-leader',
+      });
+      mg.systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, {
+        service_id: 'mg-connected-relay-r2',
+        service_type: SERVICE_TYPE.MESSAGE_GROUP,
+        group_id: 'mg-connected-relay',
+        replica_id: 'mg-connected-relay-r2',
+        node_id: 'node-leader',
+        status: SERVICE_STATUS.ACTIVE,
+        raft_role: 'leader',
+        address: 'node-leader/message-group/mg-connected-relay-r2',
+        updated_at: Date.now() + 2,
+      });
+      mg.systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, {
+        service_id: 'mg-connected-relay-r3',
+        service_type: SERVICE_TYPE.MESSAGE_GROUP,
+        group_id: 'mg-connected-relay',
+        replica_id: 'mg-connected-relay-r3',
+        node_id: 'node-relay',
+        status: SERVICE_STATUS.ACTIVE,
+        raft_role: 'follower',
+        address: 'node-relay/message-group/mg-connected-relay-r3',
+        updated_at: Date.now() + 1,
+      });
+
+      const originalGetConnectionState = router.getConnectionState.bind(router);
+      router.getConnectionState = (targetNodeId) => {
+        if (targetNodeId === 'node-relay') {
+          return 'connected';
+        }
+        if (targetNodeId === 'node-leader') {
+          return 'disconnected';
+        }
+        return originalGetConnectionState(targetNodeId);
+      };
+
+      const forwardedPayloads = [];
+      router.deliver = async (address, payload, options) => {
+        forwardedPayloads.push({address, payload, options});
+        return {acknowledged: true, success: true};
+      };
+
+      await mg.applyCDCEvent(
+        TABLES.PARTITIONS,
+        'INSERT',
+        {partition_id: 'p-connected-relay'},
+        {timestamp: '1234567890:9'},
+      );
+
+      t.equal(forwardedPayloads.length, 1, 'should forward exactly once');
+      t.equal(
+        forwardedPayloads[0]?.address,
+        'node-relay/message-group/mg-connected-relay-r3',
+        'should prefer a connected relay target over a disconnected canonical leader',
       );
     } finally {
       await cleanup();
@@ -949,6 +1168,838 @@ test(
 );
 
 test(
+  'applyCDCEvent repairs authoritative message-group topology after stale relay rejects leader forwarding',
+  async (t) => {
+    const port = testPortCounter++;
+    const nodeId = `test-node-${port}`;
+    const router = new MessageRouter({nodeId, wsPort: port});
+    await router.initialize({startServer: true});
+
+    let shutdownCalled = false;
+    const cleanup = async () => {
+      if (shutdownCalled) return;
+      shutdownCalled = true;
+      try {
+        if (mg && mg.raft) {
+          await mg.shutdown();
+        }
+      } catch (_e) {
+        // best-effort
+      }
+      await router.shutdown();
+    };
+
+    let mg;
+    try {
+      const groupId = 'mg-forward-topology-repair';
+      const staleReplicaId = `${groupId}-r2`;
+      const freshReplicaId = `${groupId}-r3`;
+      const staleAddress = `stale-node/message-group/${staleReplicaId}`;
+      const freshAddress = `fresh-node/message-group/${freshReplicaId}`;
+      const nowMs = Date.now();
+      const authoritativeReadCalls = [];
+
+      mg = new MessageGroupService({
+        groupId,
+        replicaId: `${groupId}-r1`,
+        nodeId,
+        transport: router,
+        cdcIntegrationService: {
+          executeAuthoritativeSystemTableRead: async (
+            tableName,
+            sql,
+            params,
+          ) => {
+            authoritativeReadCalls.push({tableName, sql, params});
+            if (tableName === TABLES.MESSAGE_GROUPS) {
+              return {
+                success: true,
+                rows: [{
+                  group_id: groupId,
+                  leader_node_id: 'fresh-node',
+                  updated_at: nowMs + 20,
+                }],
+              };
+            }
+            if (tableName === TABLES.SERVICES) {
+              return {
+                success: true,
+                rows: [
+                  {
+                    service_id: staleReplicaId,
+                    group_id: groupId,
+                    node_id: 'stale-node',
+                    service_type: SERVICE_TYPE.MESSAGE_GROUP,
+                    status: SERVICE_STATUS.ACTIVE,
+                    address: staleAddress,
+                    raft_role: 'follower',
+                    updated_at: nowMs + 21,
+                  },
+                  {
+                    service_id: freshReplicaId,
+                    group_id: groupId,
+                    node_id: 'fresh-node',
+                    service_type: SERVICE_TYPE.MESSAGE_GROUP,
+                    status: SERVICE_STATUS.ACTIVE,
+                    address: freshAddress,
+                    raft_role: 'leader',
+                    updated_at: nowMs + 22,
+                  },
+                ],
+              };
+            }
+            if (tableName === TABLES.NODES) {
+              return {
+                success: true,
+                rows: [
+                  {
+                    node_id: 'stale-node',
+                    status: SERVICE_STATUS.ACTIVE,
+                    connection_state: 'ready',
+                    last_heartbeat: nowMs,
+                    ready_lease_expires_at: nowMs + 60000,
+                  },
+                  {
+                    node_id: 'fresh-node',
+                    status: SERVICE_STATUS.ACTIVE,
+                    connection_state: 'ready',
+                    last_heartbeat: nowMs + 1,
+                    ready_lease_expires_at: nowMs + 60000,
+                  },
+                ],
+              };
+            }
+            return {
+              success: false,
+              rows: [],
+            };
+          },
+        },
+      });
+      await mg.initialize();
+      mg.replicaIds = [
+        `${groupId}-r1`,
+        staleReplicaId,
+        freshReplicaId,
+      ];
+      await mg.subscribeToCDC(TABLES.PARTITIONS);
+
+      mg.isLeader = false;
+      mg.role = 'follower';
+      mg.leaderId = staleReplicaId;
+      mg.retryMaxAttempts = 2;
+      mg.retryInitialDelayMs = 1;
+      mg.retryBackoffMultiplier = 1;
+      mg.forwardTargetSuppressionMs = 1000;
+      mg.computeCdcForwardRetryDelayMs = () => 0;
+      if (mg.raft) {
+        Object.defineProperty(mg.raft, 'state', {
+          value: LifeRaft.FOLLOWER,
+          writable: true,
+          configurable: true,
+        });
+      }
+
+      const cache = NodeService.getInstance().getSystemTableCache();
+      cache.applySystemTableChange(TABLES.MESSAGE_GROUPS, CDC_OPERATION.UPSERT, {
+        group_id: groupId,
+        leader_node_id: 'stale-node',
+        updated_at: nowMs,
+      });
+      cache.applySystemTableChange(TABLES.NODES, CDC_OPERATION.UPSERT, {
+        node_id: 'stale-node',
+        status: SERVICE_STATUS.ACTIVE,
+        connection_state: 'ready',
+        last_heartbeat: nowMs,
+        ready_lease_expires_at: nowMs + 60000,
+      });
+      cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, {
+        service_id: staleReplicaId,
+        group_id: groupId,
+        node_id: 'stale-node',
+        service_type: SERVICE_TYPE.MESSAGE_GROUP,
+        status: SERVICE_STATUS.ACTIVE,
+        address: staleAddress,
+        raft_role: 'leader',
+        updated_at: nowMs,
+      });
+
+      const attempts = [];
+      router.deliver = async (address) => {
+        attempts.push(address);
+        if (address === staleAddress) {
+          return {
+            acknowledged: true,
+            success: true,
+            error: MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN,
+          };
+        }
+        if (address === freshAddress) {
+          return {
+            acknowledged: true,
+            success: true,
+          };
+        }
+        throw new Error(`unexpected forward target ${address}`);
+      };
+
+      await mg.applyCDCEvent(
+        TABLES.PARTITIONS,
+        'INSERT',
+        {partition_id: 'p-forward-topology-repair'},
+        {timestamp: '1234567890:20'},
+      );
+
+      t.same(
+        attempts,
+        [staleAddress, freshAddress],
+        'authoritative topology repair should redirect the retry budget to the fresh leader',
+      );
+      t.equal(
+        authoritativeReadCalls.some((call) => {
+          return call.tableName === TABLES.MESSAGE_GROUPS;
+        }),
+        true,
+        'stale leader rejection should trigger authoritative message_group repair',
+      );
+      t.equal(
+        authoritativeReadCalls.some((call) => {
+          return call.tableName === TABLES.SERVICES;
+        }),
+        true,
+        'stale leader rejection should query authoritative service rows',
+      );
+      t.equal(
+        authoritativeReadCalls.some((call) => {
+          return call.tableName === TABLES.NODES;
+        }),
+        true,
+        'stale leader rejection should query authoritative node rows',
+      );
+      t.equal(
+        cache.get(TABLES.MESSAGE_GROUPS, groupId)?.leader_node_id,
+        'fresh-node',
+        'authoritative repair should refresh the canonical group leader node',
+      );
+      t.equal(
+        cache.get(TABLES.SERVICES, freshReplicaId)?.address,
+        freshAddress,
+        'authoritative repair should hydrate the fresh leader service row',
+      );
+    } finally {
+      await cleanup();
+    }
+  },
+);
+
+test(
+  'applyCDCEvent retries no-handler forward targets while handlers finish starting',
+  async (t) => {
+    const port = testPortCounter++;
+    const nodeId = `test-node-${port}`;
+    const router = new MessageRouter({nodeId, wsPort: port});
+    await router.initialize({startServer: true});
+
+    let shutdownCalled = false;
+    const cleanup = async () => {
+      if (shutdownCalled) return;
+      shutdownCalled = true;
+      try {
+        if (mg && mg.raft) {
+          await mg.shutdown();
+        }
+      } catch (_e) {
+        // best-effort
+      }
+      await router.shutdown();
+    };
+
+    let mg;
+    try {
+      mg = new MessageGroupService({
+        groupId: 'mg-forward-suppress',
+        replicaId: 'mg-forward-suppress-r1',
+        nodeId,
+        transport: router,
+      });
+      await mg.initialize();
+      mg.replicaIds = [
+        'mg-forward-suppress-r1',
+        'mg-forward-suppress-r2',
+      ];
+      await mg.subscribeToCDC(TABLES.PARTITIONS);
+
+      mg.isLeader = false;
+      mg.role = 'follower';
+      mg.leaderId = 'mg-forward-suppress-r2';
+      mg.peerAddresses = [
+        'remote-node/message-group/mg-forward-suppress-r2',
+      ];
+      mg.retryMaxAttempts = 2;
+      mg.retryInitialDelayMs = 10;
+      mg.retryBackoffMultiplier = 1;
+
+      let deliverAttempts = 0;
+      router.deliver = async (address) => {
+        deliverAttempts += 1;
+        if (deliverAttempts === 1) {
+          return {
+            acknowledged: true,
+            noHandler: true,
+            error: `No handler for address: ${address}`,
+          };
+        }
+        return {
+          acknowledged: true,
+          success: true,
+        };
+      };
+
+      await mg.applyCDCEvent(
+        TABLES.PARTITIONS,
+        'INSERT',
+        {partition_id: 'p-forward-suppress-1'},
+        {timestamp: '1234567890:21'},
+      );
+      t.equal(
+        deliverAttempts,
+        2,
+        'retry budget should retry the same target after a transient no-handler response',
+      );
+    } finally {
+      await cleanup();
+    }
+  },
+);
+
+test(
+  'applyCDCEvent temporarily suppresses no-connection forward targets across commands',
+  async (t) => {
+    const port = testPortCounter++;
+    const nodeId = `test-node-${port}`;
+    let nowMs = 0;
+    const router = new MessageRouter({nodeId, wsPort: port});
+    await router.initialize({startServer: true});
+
+    let shutdownCalled = false;
+    const cleanup = async () => {
+      if (shutdownCalled) return;
+      shutdownCalled = true;
+      try {
+        if (mg && mg.raft) {
+          await mg.shutdown();
+        }
+      } catch (_e) {
+        // best-effort
+      }
+      await router.shutdown();
+    };
+
+    let mg;
+    try {
+      mg = new MessageGroupService({
+        groupId: 'mg-no-connection-suppress',
+        replicaId: 'mg-no-connection-suppress-r1',
+        nodeId,
+        transport: router,
+        now: () => nowMs,
+      });
+      await mg.initialize();
+      mg.replicaIds = [
+        'mg-no-connection-suppress-r1',
+        'mg-no-connection-suppress-r2',
+        'mg-no-connection-suppress-r3',
+      ];
+      await mg.subscribeToCDC(TABLES.PARTITIONS);
+
+      mg.isLeader = false;
+      mg.role = 'follower';
+      mg.leaderId = 'mg-no-connection-suppress-r2';
+      mg.peerAddresses = [
+        'remote-node-2/message-group/mg-no-connection-suppress-r2',
+        'remote-node-3/message-group/mg-no-connection-suppress-r3',
+      ];
+      mg.retryMaxAttempts = 1;
+      mg.forwardTargetSuppressionMs = 1000;
+
+      const attempts = [];
+      router.deliver = async (address) => {
+        attempts.push(address);
+        if (address ===
+          'remote-node-2/message-group/mg-no-connection-suppress-r2') {
+          return {
+            acknowledged: false,
+            error: 'No connection to node remote-node-2',
+          };
+        }
+        return {
+          acknowledged: true,
+          success: true,
+        };
+      };
+
+      await mg.applyCDCEvent(
+        TABLES.PARTITIONS,
+        'INSERT',
+        {partition_id: 'p-no-connection-suppress-1'},
+        {timestamp: '1234567890:24'},
+      );
+      t.same(
+        attempts,
+        [
+          'remote-node-2/message-group/mg-no-connection-suppress-r2',
+          'remote-node-3/message-group/mg-no-connection-suppress-r3',
+        ],
+        'first command should fall through to an alternate peer after a no-connection rejection',
+      );
+
+      attempts.length = 0;
+      await mg.applyCDCEvent(
+        TABLES.PARTITIONS,
+        'INSERT',
+        {partition_id: 'p-no-connection-suppress-2'},
+        {timestamp: '1234567890:25'},
+      );
+      t.same(
+        attempts,
+        ['remote-node-3/message-group/mg-no-connection-suppress-r3'],
+        'suppressed stale target should be skipped on the next command',
+      );
+
+      nowMs += 1001;
+
+      attempts.length = 0;
+      await mg.applyCDCEvent(
+        TABLES.PARTITIONS,
+        'INSERT',
+        {partition_id: 'p-no-connection-suppress-3'},
+        {timestamp: '1234567890:26'},
+      );
+      t.same(
+        attempts,
+        [
+          'remote-node-2/message-group/mg-no-connection-suppress-r2',
+          'remote-node-3/message-group/mg-no-connection-suppress-r3',
+        ],
+        'no-connection suppression should expire so the preferred target can be retried',
+      );
+    } finally {
+      await cleanup();
+    }
+  },
+);
+
+test(
+  'applyCDCEvent temporarily suppresses timeout forward targets across commands',
+  async (t) => {
+    const port = testPortCounter++;
+    const nodeId = `test-node-${port}`;
+    let nowMs = 0;
+    const router = new MessageRouter({nodeId, wsPort: port});
+    await router.initialize({startServer: true});
+
+    let shutdownCalled = false;
+    const cleanup = async () => {
+      if (shutdownCalled) return;
+      shutdownCalled = true;
+      try {
+        if (mg && mg.raft) {
+          await mg.shutdown();
+        }
+      } catch (_e) {
+        // best-effort
+      }
+      await router.shutdown();
+    };
+
+    let mg;
+    try {
+      mg = new MessageGroupService({
+        groupId: 'mg-timeout-suppress',
+        replicaId: 'mg-timeout-suppress-r1',
+        nodeId,
+        transport: router,
+        now: () => nowMs,
+      });
+      await mg.initialize();
+      mg.replicaIds = [
+        'mg-timeout-suppress-r1',
+        'mg-timeout-suppress-r2',
+        'mg-timeout-suppress-r3',
+      ];
+      await mg.subscribeToCDC(TABLES.PARTITIONS);
+
+      mg.isLeader = false;
+      mg.role = 'follower';
+      mg.leaderId = 'mg-timeout-suppress-r2';
+      mg.peerAddresses = [
+        'remote-node-2/message-group/mg-timeout-suppress-r2',
+        'remote-node-3/message-group/mg-timeout-suppress-r3',
+      ];
+      mg.retryMaxAttempts = 1;
+      mg.forwardTargetSuppressionMs = 1000;
+
+      const attempts = [];
+      router.deliver = async (address) => {
+        attempts.push(address);
+        if (address === 'remote-node-2/message-group/mg-timeout-suppress-r2') {
+          return {
+            acknowledged: false,
+            success: true,
+            error: TRANSPORT_ERROR_MSG.MESSAGE_TIMEOUT,
+          };
+        }
+        return {
+          acknowledged: true,
+          success: true,
+        };
+      };
+
+      await mg.applyCDCEvent(
+        TABLES.PARTITIONS,
+        'INSERT',
+        {partition_id: 'p-timeout-suppress-1'},
+        {timestamp: '1234567890:31'},
+      );
+      t.same(
+        attempts,
+        [
+          'remote-node-2/message-group/mg-timeout-suppress-r2',
+          'remote-node-3/message-group/mg-timeout-suppress-r3',
+        ],
+        'first command should fall through to an alternate peer after timeout',
+      );
+
+      attempts.length = 0;
+      await mg.applyCDCEvent(
+        TABLES.PARTITIONS,
+        'INSERT',
+        {partition_id: 'p-timeout-suppress-2'},
+        {timestamp: '1234567890:32'},
+      );
+      t.same(
+        attempts,
+        ['remote-node-3/message-group/mg-timeout-suppress-r3'],
+        'suppressed timeout target should be skipped on the next command',
+      );
+
+      nowMs += 1001;
+
+      attempts.length = 0;
+      await mg.applyCDCEvent(
+        TABLES.PARTITIONS,
+        'INSERT',
+        {partition_id: 'p-timeout-suppress-3'},
+        {timestamp: '1234567890:33'},
+      );
+      t.same(
+        attempts,
+        [
+          'remote-node-2/message-group/mg-timeout-suppress-r2',
+          'remote-node-3/message-group/mg-timeout-suppress-r3',
+        ],
+        'timeout suppression should expire so the preferred target can be retried',
+      );
+    } finally {
+      await cleanup();
+    }
+  },
+);
+
+test(
+  'applyCDCEvent fails fast when every known peer is already suppressed',
+  async (t) => {
+    const port = testPortCounter++;
+    const nodeId = `test-node-${port}`;
+    const router = new MessageRouter({nodeId, wsPort: port});
+    await router.initialize({startServer: true});
+
+    let shutdownCalled = false;
+    const cleanup = async () => {
+      if (shutdownCalled) return;
+      shutdownCalled = true;
+      try {
+        if (mg && mg.raft) {
+          await mg.shutdown();
+        }
+      } catch (_e) {
+        // best-effort
+      }
+      await router.shutdown();
+    };
+
+    let mg;
+    try {
+      mg = new MessageGroupService({
+        groupId: 'mg-all-suppressed',
+        replicaId: 'mg-all-suppressed-r1',
+        nodeId,
+        transport: router,
+      });
+      await mg.initialize();
+      mg.replicaIds = [
+        'mg-all-suppressed-r1',
+        'mg-all-suppressed-r2',
+        'mg-all-suppressed-r3',
+      ];
+      await mg.subscribeToCDC(TABLES.PARTITIONS);
+
+      mg.isLeader = false;
+      mg.role = 'follower';
+      mg.leaderId = 'mg-all-suppressed-r2';
+      mg.peerAddresses = [
+        'remote-node-2/message-group/mg-all-suppressed-r2',
+        'remote-node-3/message-group/mg-all-suppressed-r3',
+      ];
+      mg.retryMaxAttempts = 3;
+      mg.forwardTargetSuppressionMs = 1000;
+      const retryDelayAttempts = [];
+      mg.computeCdcForwardRetryDelayMs = (attempt) => {
+        retryDelayAttempts.push(attempt);
+        return 0;
+      };
+      mg.suppressForwardTarget({
+        serviceId: 'mg-all-suppressed-r2',
+        address: 'remote-node-2/message-group/mg-all-suppressed-r2',
+      });
+      mg.suppressForwardTarget({
+        serviceId: 'mg-all-suppressed-r3',
+        address: 'remote-node-3/message-group/mg-all-suppressed-r3',
+      });
+
+      let deliverAttempts = 0;
+      router.deliver = async () => {
+        deliverAttempts += 1;
+        return {
+          acknowledged: true,
+          success: true,
+        };
+      };
+
+      await t.rejects(
+        mg.applyCDCEvent(
+          TABLES.PARTITIONS,
+          'INSERT',
+          {partition_id: 'p-all-suppressed'},
+          {timestamp: '1234567890:40'},
+        ),
+        /leader is unknown/i,
+        'suppressed peers should not be retried as a fallback authority',
+      );
+      t.equal(
+        deliverAttempts,
+        0,
+        'delivery should fail closed before retrying already suppressed peers',
+      );
+      t.same(
+        retryDelayAttempts,
+        [],
+        'fully suppressed leader sets should fail without consuming the outer retry budget',
+      );
+    } finally {
+      await cleanup();
+    }
+  },
+);
+
+test(
+  'applyCDCEvent does not redeliver fully suppressed timeout peers across retry budget',
+  async (t) => {
+    const port = testPortCounter++;
+    const nodeId = `test-node-${port}`;
+    const router = new MessageRouter({nodeId, wsPort: port});
+    await router.initialize({startServer: true});
+
+    let shutdownCalled = false;
+    const cleanup = async () => {
+      if (shutdownCalled) return;
+      shutdownCalled = true;
+      try {
+        if (mg && mg.raft) {
+          await mg.shutdown();
+        }
+      } catch (_e) {
+        // best-effort
+      }
+      await router.shutdown();
+    };
+
+    let mg;
+    try {
+      mg = new MessageGroupService({
+        groupId: 'mg-retry-suppressed',
+        replicaId: 'mg-retry-suppressed-r1',
+        nodeId,
+        transport: router,
+      });
+      await mg.initialize();
+      mg.replicaIds = [
+        'mg-retry-suppressed-r1',
+        'mg-retry-suppressed-r2',
+        'mg-retry-suppressed-r3',
+      ];
+      await mg.subscribeToCDC(TABLES.PARTITIONS);
+
+      mg.isLeader = false;
+      mg.role = 'follower';
+      mg.leaderId = 'mg-retry-suppressed-r2';
+      mg.peerAddresses = [
+        'remote-node-2/message-group/mg-retry-suppressed-r2',
+        'remote-node-3/message-group/mg-retry-suppressed-r3',
+      ];
+      mg.retryMaxAttempts = 2;
+      mg.retryInitialDelayMs = 1;
+      mg.retryBackoffMultiplier = 1;
+      mg.forwardTargetSuppressionMs = 1000;
+
+      const attempts = [];
+      router.deliver = async (address) => {
+        attempts.push(address);
+        return {
+          acknowledged: false,
+          success: true,
+          error: TRANSPORT_ERROR_MSG.MESSAGE_TIMEOUT,
+        };
+      };
+
+      await t.rejects(
+        mg.applyCDCEvent(
+          TABLES.PARTITIONS,
+          'INSERT',
+          {partition_id: 'p-retry-suppressed'},
+          {timestamp: '1234567890:41'},
+        ),
+        /leader is unknown|Message timeout/i,
+        'retry budget should not redeliver peers that are already suppressed by the first timeout wave',
+      );
+      t.same(
+        attempts,
+        [
+          'remote-node-2/message-group/mg-retry-suppressed-r2',
+          'remote-node-3/message-group/mg-retry-suppressed-r3',
+        ],
+        'suppressed peers should not be retried again during the same command budget',
+      );
+    } finally {
+      await cleanup();
+    }
+  },
+);
+
+test(
+  'applyCDCEvent temporarily suppresses ENOTFOUND forward targets across commands',
+  async (t) => {
+    const port = testPortCounter++;
+    const nodeId = `test-node-${port}`;
+    let nowMs = 0;
+    const router = new MessageRouter({nodeId, wsPort: port});
+    await router.initialize({startServer: true});
+
+    let shutdownCalled = false;
+    const cleanup = async () => {
+      if (shutdownCalled) return;
+      shutdownCalled = true;
+      try {
+        if (mg && mg.raft) {
+          await mg.shutdown();
+        }
+      } catch (_e) {
+        // best-effort
+      }
+      await router.shutdown();
+    };
+
+    let mg;
+    try {
+      mg = new MessageGroupService({
+        groupId: 'mg-enotfound-suppress',
+        replicaId: 'mg-enotfound-suppress-r1',
+        nodeId,
+        transport: router,
+        now: () => nowMs,
+      });
+      await mg.initialize();
+      mg.replicaIds = [
+        'mg-enotfound-suppress-r1',
+        'mg-enotfound-suppress-r2',
+        'mg-enotfound-suppress-r3',
+      ];
+      await mg.subscribeToCDC(TABLES.PARTITIONS);
+
+      mg.isLeader = false;
+      mg.role = 'follower';
+      mg.leaderId = 'mg-enotfound-suppress-r2';
+      mg.peerAddresses = [
+        'stale-host/message-group/mg-enotfound-suppress-r2',
+        'remote-node-3/message-group/mg-enotfound-suppress-r3',
+      ];
+      mg.retryMaxAttempts = 1;
+      mg.forwardTargetSuppressionMs = 1000;
+
+      const attempts = [];
+      router.deliver = async (address) => {
+        attempts.push(address);
+        if (address === 'stale-host/message-group/mg-enotfound-suppress-r2') {
+          throw new Error('getaddrinfo ENOTFOUND stale-host');
+        }
+        return {
+          acknowledged: true,
+          success: true,
+        };
+      };
+
+      await mg.applyCDCEvent(
+        TABLES.PARTITIONS,
+        'INSERT',
+        {partition_id: 'p-enotfound-suppress-1'},
+        {timestamp: '1234567890:42'},
+      );
+      t.same(
+        attempts,
+        [
+          'stale-host/message-group/mg-enotfound-suppress-r2',
+          'remote-node-3/message-group/mg-enotfound-suppress-r3',
+        ],
+        'first command should fall through after a stale DNS lookup failure',
+      );
+
+      attempts.length = 0;
+      await mg.applyCDCEvent(
+        TABLES.PARTITIONS,
+        'INSERT',
+        {partition_id: 'p-enotfound-suppress-2'},
+        {timestamp: '1234567890:43'},
+      );
+      t.same(
+        attempts,
+        ['remote-node-3/message-group/mg-enotfound-suppress-r3'],
+        'stale DNS target should be suppressed on the next command',
+      );
+
+      nowMs += 1001;
+
+      attempts.length = 0;
+      await mg.applyCDCEvent(
+        TABLES.PARTITIONS,
+        'INSERT',
+        {partition_id: 'p-enotfound-suppress-3'},
+        {timestamp: '1234567890:44'},
+      );
+      t.same(
+        attempts,
+        [
+          'stale-host/message-group/mg-enotfound-suppress-r2',
+          'remote-node-3/message-group/mg-enotfound-suppress-r3',
+        ],
+        'stale DNS suppression should expire so the preferred target can be retried',
+      );
+    } finally {
+      await cleanup();
+    }
+  },
+);
+
+test(
   'latency CDC received by non-leader relay-forwards once without local apply',
   async (t) => {
     const port = testPortCounter++;
@@ -1029,6 +2080,179 @@ test(
       const cache = NodeService.getInstance().getSystemTableCache();
       const cached = cache.get(TABLES.PARTITIONS, 'relay-partition');
       t.equal(cached, undefined, 'non-leader should not apply relayed CDC locally');
+    } finally {
+      await cleanup();
+    }
+  },
+);
+
+test(
+  'latency CDC received by stale follower relay-forwards one extra hop to current leader',
+  async (t) => {
+    const port = testPortCounter++;
+    const nodeId = `test-node-${port}`;
+    const router = new MessageRouter({nodeId, wsPort: port});
+    await router.initialize({startServer: true});
+
+    let shutdownCalled = false;
+    const cleanup = async () => {
+      if (shutdownCalled) return;
+      shutdownCalled = true;
+      try {
+        if (mg && mg.raft) {
+          await mg.shutdown();
+        }
+      } catch (_e) {
+        // best-effort
+      }
+      await router.shutdown();
+    };
+
+    let mg;
+    try {
+      mg = new MessageGroupService({
+        groupId: 'mg-relay-stale',
+        replicaId: 'mg-relay-stale-r2',
+        nodeId,
+        transport: router,
+      });
+      await mg.initialize();
+      mg.replicaIds = [
+        'mg-relay-stale-r1',
+        'mg-relay-stale-r2',
+        'mg-relay-stale-r3',
+      ];
+      await mg.subscribeToCDC(TABLES.PARTITIONS);
+
+      mg.isLeader = false;
+      mg.role = 'follower';
+      mg.leaderId = 'mg-relay-stale-r3';
+      mg.peerAddresses = [
+        'remote-node/message-group/mg-relay-stale-r1',
+        'remote-node/message-group/mg-relay-stale-r2',
+        'remote-node/message-group/mg-relay-stale-r3',
+      ];
+      if (mg.raft) {
+        Object.defineProperty(mg.raft, 'state', {
+          value: LifeRaft.FOLLOWER,
+          writable: true,
+          configurable: true,
+        });
+      }
+
+      const forwardedPayloads = [];
+      router.deliver = async (address, payload) => {
+        forwardedPayloads.push({address, payload});
+        return {acknowledged: true, status: 'latency_cdc_propagated'};
+      };
+
+      const result = await mg.handleApplicationMessage({
+        messageId: 'relay-stale-msg-1',
+        payload: {
+          type: MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE.LATENCY_CDC_PROPAGATION,
+          tableName: TABLES.PARTITIONS,
+          operation: 'INSERT',
+          data: {partition_id: 'relay-stale-partition'},
+          timestamp: '1234567890:12',
+          relayDepth: 1,
+        },
+        sourceGroup: 'mg-relay-stale',
+        sourceReplica: 'mg-relay-stale-r1',
+      });
+
+      t.equal(result.acknowledged, true, 'stale relay path should acknowledge message');
+      t.equal(
+        forwardedPayloads.length,
+        1,
+        'stale follower should relay one additional hop to the current leader',
+      );
+      t.equal(
+        forwardedPayloads[0].address,
+        'remote-node/message-group/mg-relay-stale-r3',
+        'stale follower should target its current leader on the extra hop',
+      );
+      t.equal(
+        forwardedPayloads[0].payload.relayDepth,
+        2,
+        'extra relay should increment depth and remain bounded',
+      );
+    } finally {
+      await cleanup();
+    }
+  },
+);
+
+test(
+  'latency CDC relay still fails closed once extra-hop budget is exhausted',
+  async (t) => {
+    const port = testPortCounter++;
+    const nodeId = `test-node-${port}`;
+    const router = new MessageRouter({nodeId, wsPort: port});
+    await router.initialize({startServer: true});
+
+    let shutdownCalled = false;
+    const cleanup = async () => {
+      if (shutdownCalled) return;
+      shutdownCalled = true;
+      try {
+        if (mg && mg.raft) {
+          await mg.shutdown();
+        }
+      } catch (_e) {
+        // best-effort
+      }
+      await router.shutdown();
+    };
+
+    let mg;
+    try {
+      mg = new MessageGroupService({
+        groupId: 'mg-relay-budget',
+        replicaId: 'mg-relay-budget-r2',
+        nodeId,
+        transport: router,
+      });
+      await mg.initialize();
+      mg.replicaIds = [
+        'mg-relay-budget-r1',
+        'mg-relay-budget-r2',
+        'mg-relay-budget-r3',
+      ];
+      await mg.subscribeToCDC(TABLES.PARTITIONS);
+
+      mg.isLeader = false;
+      mg.role = 'follower';
+      mg.leaderId = 'mg-relay-budget-r3';
+      mg.peerAddresses = [
+        'remote-node/message-group/mg-relay-budget-r1',
+        'remote-node/message-group/mg-relay-budget-r2',
+        'remote-node/message-group/mg-relay-budget-r3',
+      ];
+      if (mg.raft) {
+        Object.defineProperty(mg.raft, 'state', {
+          value: LifeRaft.FOLLOWER,
+          writable: true,
+          configurable: true,
+        });
+      }
+
+      await t.rejects(
+        mg.handleApplicationMessage({
+          messageId: 'relay-budget-msg-1',
+          payload: {
+            type: MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE.LATENCY_CDC_PROPAGATION,
+            tableName: TABLES.PARTITIONS,
+            operation: 'INSERT',
+            data: {partition_id: 'relay-budget-partition'},
+            timestamp: '1234567890:13',
+            relayDepth: 2,
+          },
+          sourceGroup: 'mg-relay-budget',
+          sourceReplica: 'mg-relay-budget-r1',
+        }),
+        /leader is unknown/i,
+        'relay path should still fail closed after the bounded extra hop',
+      );
     } finally {
       await cleanup();
     }

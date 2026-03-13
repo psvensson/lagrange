@@ -3,9 +3,9 @@
  *
  * **Property 4: Join failure cleanup**
  * *For any* join phase at which a joining node bootstrap can fail,
- * executing the cleanup procedure SHALL result in zero partial entries
- * remaining in the nodes and services system tables that were created
- * during the failed join attempt.
+ * executing the cleanup procedure SHALL withdraw partial membership through
+ * the canonical owner paths without issuing duplicate direct row deletes from
+ * the failed joiner.
  *
  * **Validates: Requirements 7.2**
  *
@@ -17,7 +17,7 @@ import fc from 'fast-check';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {JOINING_PHASE} from '../../src/bootstrap/bootstrap-constants.js';
 import {NodeState} from '../../src/node/node-lifecycle-state-machine.js';
-import {TABLES, COLUMN} from '../../src/constants/index.js';
+import {TABLES, COLUMN, STATE} from '../../src/constants/index.js';
 
 /**
  * Joining phases that represent real failure points.
@@ -33,7 +33,7 @@ const FAILURE_PHASES = Object.values(JOINING_PHASE).filter(
 
 /**
  * Phases that include the QUERYING_STATE cleanup step,
- * meaning node/service table entries should be deleted.
+ * meaning node membership may need to be withdrawn.
  */
 const PHASES_WITH_QUERYING_STATE_CLEANUP = FAILURE_PHASES.filter(
   (p) => p === JOINING_PHASE.QUERYING_STATE,
@@ -67,8 +67,9 @@ function createTrackedJoiningService(cleanupContext) {
 
   // Tracking state for verifying cleanup completeness
   const tracking = {
-    deletedNodeIds: new Set(),
-    deletedServiceIds: new Set(),
+    directNodeDeletes: 0,
+    directServiceDeletes: 0,
+    nodeStateUpdates: [],
     messageGroupsShutdown: new Set(),
     routerShutdown: false,
     transportShutdown: false,
@@ -88,13 +89,17 @@ function createTrackedJoiningService(cleanupContext) {
   service.cdcIntegrationService = {
     deleteSystemTableRow: async (table, where) => {
       if (table === TABLES.NODES && where[COLUMN.NODE_ID]) {
-        tracking.deletedNodeIds.add(where[COLUMN.NODE_ID]);
+        tracking.directNodeDeletes += 1;
       }
       if (table === TABLES.SERVICES && where[COLUMN.SERVICE_ID]) {
-        tracking.deletedServiceIds.add(where[COLUMN.SERVICE_ID]);
+        tracking.directServiceDeletes += 1;
       }
     },
   };
+  service.sendControlPlaneNodeStateUpdate = async (options) => {
+    tracking.nodeStateUpdates.push(options);
+  };
+  service.joinMembershipPublished = Boolean(cleanupContext.registeredNodeId);
 
   // Mock message group services
   const messageGroupServices = new Map();
@@ -131,11 +136,12 @@ function createTrackedJoiningService(cleanupContext) {
 test('Property 4: Join failure cleanup', async (t) => {
   /**
    * Property: For any valid failure phase, after cleanup, all
-   * created service IDs should have been deleted and the node
-   * should have been removed from the nodes table (if registered).
+ * registered node membership should be withdrawn through the
+ * NODE_STATE_UPDATE owner path, and cleanup should not issue
+ * direct row deletions for nodes/services.
    */
   t.test(
-    'cleanup leaves zero partial entries for any failure phase',
+    'cleanup withdraws membership without direct node/service deletes',
     async (t) => {
       await fc.assert(
         fc.asyncProperty(
@@ -157,30 +163,26 @@ test('Property 4: Join failure cleanup', async (t) => {
               failedPhase, context,
             );
 
-            // Every created service must have been deleted
-            for (const svcId of context.createdServiceIds) {
-              if (!tracking.deletedServiceIds.has(svcId)) {
-                return false;
-              }
-            }
-
-            // If a node was registered, it must have been deleted
             if (context.registeredNodeId) {
-              if (!tracking.deletedNodeIds.has(
-                context.registeredNodeId,
-              )) {
+              const disconnectedUpdate = tracking.nodeStateUpdates.find(
+                (update) => update?.state === STATE.DISCONNECTED,
+              );
+              if (!disconnectedUpdate) {
                 return false;
               }
+            } else if (tracking.nodeStateUpdates.length > 0) {
+              return false;
             }
 
-            return true;
+            return tracking.directNodeDeletes === 0 &&
+              tracking.directServiceDeletes === 0;
           },
         ),
         {numRuns: 10},
       );
 
       t.pass(
-        'cleanup leaves zero partial entries for any failure phase',
+        'cleanup withdraws membership without direct node/service deletes',
       );
     });
 

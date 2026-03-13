@@ -36,6 +36,14 @@ const MESSAGE_ROUTER_SETUP_OWNER = 'MessageRouterSetup';
 const RECONCILER_INIT_REQUIRED =
   'Bootstrap reconciler must be initialized before reconciliation';
 
+function resolveInitializedQueryMessageGroupService(getService) {
+  if (typeof getService !== TYPEOF.FUNCTION) {
+    return null;
+  }
+  const service = getService();
+  return service?.initialized === true ? service : null;
+}
+
 /**
  * Format bootstrap replica options mismatch message.
  * @param {string} serviceId
@@ -127,7 +135,9 @@ class SeedInfrastructurePhase {
     if (typeof messageRouter.setQueryMessageGroupServiceResolver ===
         TYPEOF.FUNCTION) {
       messageRouter.setQueryMessageGroupServiceResolver(() =>
-        d.getLeaderMessageGroupService(),
+        resolveInitializedQueryMessageGroupService(
+          () => d.getLeaderMessageGroupService(),
+        ),
       );
     }
     d.setMessageRouter(messageRouter);

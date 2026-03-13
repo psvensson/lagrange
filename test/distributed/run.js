@@ -68,6 +68,7 @@ const RUNNER_STAGE_ARTIFACTS_DIR_PREFIX = 'Artifacts dir: ';
 const RUNNER_STAGE_DETERMINISTIC_DEBUG_PREFIX = 'Deterministic debug mode: ';
 const BUILD_PROGRESS_LOG_PREFIX = 'docker-build: ';
 const DOCKER_COMMAND_LOG_PREFIX = 'docker-cmd: ';
+const SCENARIO_PHASE_LOG_PREFIX = '[phase] ';
 const BUILD_PROGRESS_ID_KEY = 'id';
 const BUILD_PROGRESS_STATUS_KEY = 'status';
 const BUILD_PROGRESS_PROGRESS_KEY = 'progress';
@@ -149,6 +150,129 @@ const FAST_LOCAL_LOG_PREFIX =
 const SEEDED_PRNG_MULTIPLIER = 1664525;
 const SEEDED_PRNG_INCREMENT = 1013904223;
 const SEEDED_PRNG_MODULUS = 4294967296;
+const SCENARIO_PHASE_EVENT_TYPE_START = 'phase.start';
+const SCENARIO_PHASE_EVENT_TYPE_END = 'phase.end';
+const SCENARIO_PHASE_EVENT_TYPE_PROGRESS = 'phase.progress';
+const SCENARIO_PHASE_EVENT_TYPE_LAST_MEANINGFUL_CHANGE =
+  'phase.last_meaningful_change';
+const SCENARIO_PHASE_EVENT_TYPE_NO_PROGRESS_WARNING =
+  'phase.no_progress_warning';
+const SCENARIO_PHASE_EVENT_TYPE_FAILED_NO_PROGRESS =
+  'phase.failed_no_progress';
+
+function formatScenarioPhaseEventValue(value) {
+  if (Array.isArray(value)) {
+    return JSON.stringify(value);
+  }
+  if (value && typeof value === 'object') {
+    return JSON.stringify(value);
+  }
+  return String(value);
+}
+
+function formatScenarioPhaseEventDetails(details) {
+  if (!details || typeof details !== 'object' || Array.isArray(details)) {
+    return '';
+  }
+  return Object.entries(details)
+    .filter(([, value]) => value !== undefined)
+    .map(([key, value]) => `${key}=${formatScenarioPhaseEventValue(value)}`)
+    .join(' ');
+}
+
+function formatScenarioPhaseEventLine(scenarioName, event) {
+  if (!event || typeof event !== 'object') {
+    return '';
+  }
+  const scenario = String(scenarioName || 'scenario');
+  const phase = String(event.phase || 'unknown');
+  const type = String(event.type || '');
+  const message = typeof event.message === 'string' ? event.message : '';
+  const detailSuffix = formatScenarioPhaseEventDetails(event.details);
+
+  switch (type) {
+  case SCENARIO_PHASE_EVENT_TYPE_START:
+    return `${SCENARIO_PHASE_LOG_PREFIX}${scenario} ${phase} start`;
+  case SCENARIO_PHASE_EVENT_TYPE_END:
+    return `${SCENARIO_PHASE_LOG_PREFIX}${scenario} ${phase} end: ` +
+      `status=${String(event.status || 'unknown')} ` +
+      `durationMs=${Number(event.durationMs || 0)}`;
+  case SCENARIO_PHASE_EVENT_TYPE_PROGRESS:
+    return `${SCENARIO_PHASE_LOG_PREFIX}${scenario} ${phase} progress: ` +
+      `${message}` +
+      (detailSuffix ? ` ${detailSuffix}` : '');
+  case SCENARIO_PHASE_EVENT_TYPE_LAST_MEANINGFUL_CHANGE:
+    return `${SCENARIO_PHASE_LOG_PREFIX}${scenario} ${phase} change: ` +
+      `${message}` +
+      (detailSuffix ? ` ${detailSuffix}` : '');
+  case SCENARIO_PHASE_EVENT_TYPE_NO_PROGRESS_WARNING:
+    return `${SCENARIO_PHASE_LOG_PREFIX}${scenario} ${phase} warning: ` +
+      `${message}` +
+      (detailSuffix ? ` ${detailSuffix}` : '');
+  case SCENARIO_PHASE_EVENT_TYPE_FAILED_NO_PROGRESS:
+    return `${SCENARIO_PHASE_LOG_PREFIX}${scenario} ${phase} stalled: ` +
+      `${message}` +
+      (detailSuffix ? ` ${detailSuffix}` : '');
+  default:
+    return '';
+  }
+}
+
+function composeScenarioPhaseEventSinks(existingSink, nextSink) {
+  if (typeof existingSink !== 'function') {
+    return typeof nextSink === 'function' ? nextSink : null;
+  }
+  if (typeof nextSink !== 'function') {
+    return existingSink;
+  }
+  return (event) => {
+    try {
+      existingSink(event);
+    } catch (_error) {
+      // Progress sinks must not affect scenario execution.
+    }
+    nextSink(event);
+  };
+}
+
+function createScenarioPhaseEventSink(verbose, scenarioName) {
+  if (!verbose) {
+    return null;
+  }
+  return (event) => {
+    const line = formatScenarioPhaseEventLine(scenarioName, event);
+    if (!line) {
+      return;
+    }
+    process.stdout.write(line + '\n');
+  };
+}
+
+function installScenarioPhaseEventSink(cluster, scenarioName, sink) {
+  if (!cluster || typeof sink !== 'function') {
+    return;
+  }
+  const scenarioOverrides =
+    cluster._scenarioOverrides && typeof cluster._scenarioOverrides === 'object' ?
+      cluster._scenarioOverrides :
+      {};
+  const benchmarkOverrides =
+    scenarioOverrides.postgresBaselineComparison &&
+      typeof scenarioOverrides.postgresBaselineComparison === 'object' ?
+      scenarioOverrides.postgresBaselineComparison :
+      {};
+
+  cluster._scenarioOverrides = {
+    ...scenarioOverrides,
+    postgresBaselineComparison: {
+      ...benchmarkOverrides,
+      phaseEventSink: composeScenarioPhaseEventSinks(
+        benchmarkOverrides.phaseEventSink,
+        sink,
+      ),
+    },
+  };
+}
 
 function resolveClusterSize(config) {
   return Number.isInteger(config?.size) && config.size > 0 ?
@@ -1173,6 +1297,11 @@ async function runScenarios(config, scenarios, options) {
         cluster.setScenarioName(scenario.name);
       }
       await cluster.start();
+      installScenarioPhaseEventSink(
+        cluster,
+        scenario.name,
+        createScenarioPhaseEventSink(options.verbose, scenario.name),
+      );
 
       if (options.verbose) {
         const collector = cluster.getLogCollector();
@@ -1854,6 +1983,7 @@ export {
   resolveDeterministicDebugConfig,
   applyDeterministicDebugConfig,
   buildReportMetadata,
+  formatScenarioPhaseEventLine,
   resolveGitDirty,
   deriveRunOutputDir,
   loadHistoricalReports,

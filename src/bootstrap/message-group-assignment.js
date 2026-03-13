@@ -42,6 +42,8 @@ class MessageGroupAssignment {
    * @param {Object} [options={}] - Optional assignment filters.
    * @param {Set<string>} [options.excludedReplicaIds] - Replica IDs that are
    *   temporarily unavailable for MOVE_REPLICA selection.
+   * @param {Set<string>} [options.excludedSourceNodeIds] - Source nodes that
+   *   must not be selected for MOVE_REPLICA assignments.
    * @return {Object} Assignment instructions.
    */
   determineAssignment(newNodeId, messageGroups, options = {}) {
@@ -55,7 +57,18 @@ class MessageGroupAssignment {
     });
 
     // Strategy 1: Find a message group with 2+ replicas on the same node
-    const movableReplica = this.findMovableReplica(messageGroups, options);
+    const excludedSourceNodeIds = new Set(
+      options.excludedSourceNodeIds instanceof Set ?
+        options.excludedSourceNodeIds :
+        [],
+    );
+    if (typeof newNodeId === 'string' && newNodeId.length > NUM.ZERO) {
+      excludedSourceNodeIds.add(newNodeId);
+    }
+    const movableReplica = this.findMovableReplica(messageGroups, {
+      ...options,
+      excludedSourceNodeIds,
+    });
 
     if (movableReplica) {
       this.logger.info(MESSAGE_GROUP_ASSIGNMENT_LOG_MSG.USING_MOVE_REPLICA, {
@@ -96,11 +109,16 @@ class MessageGroupAssignment {
    * @param {Object} [options={}] - Optional candidate filters.
    * @param {Set<string>} [options.excludedReplicaIds] - Replica IDs excluded
    *   from MOVE_REPLICA consideration.
+   * @param {Set<string>} [options.excludedSourceNodeIds] - Source nodes
+   *   excluded from MOVE_REPLICA consideration.
    * @return {Object|null} Movable replica info or null.
    */
   findMovableReplica(messageGroups, options = {}) {
     const excludedReplicaIds = options.excludedReplicaIds instanceof Set ?
       options.excludedReplicaIds :
+      null;
+    const excludedSourceNodeIds = options.excludedSourceNodeIds instanceof Set ?
+      options.excludedSourceNodeIds :
       null;
 
     for (const group of messageGroups) {
@@ -124,6 +142,9 @@ class MessageGroupAssignment {
 
       // Find node with 2+ replicas
       for (const [nodeId, nodeReplicas] of replicasByNode) {
+        if (excludedSourceNodeIds?.has(nodeId)) {
+          continue;
+        }
         if (nodeReplicas.length >= MESSAGE_GROUP_ASSIGNMENT_DEFAULT.MIN_REPLICAS_ON_NODE_FOR_MOVE) {
           const nonLeaderReplicas = nodeReplicas.filter((replica) =>
             replica.raft_role !== RAFT_ROLE.LEADER,

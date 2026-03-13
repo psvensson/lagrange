@@ -21,6 +21,9 @@ import {
 import {
   ControlPlaneReadinessService,
 } from '../control-plane/control-plane-readiness-service.js';
+import {
+  ControlPlaneSystemTableGateway,
+} from '../control-plane/control-plane-system-table-gateway.js';
 import {DurableWorkflowCoordinator} from '../workflow/durable-workflow-coordinator.js';
 import {OperationLane} from '../workflow/operation-lane.js';
 import {
@@ -81,6 +84,12 @@ import {
   EXECUTOR_OUTCOME_ACTION,
   EXECUTOR_OUTCOME_ACTION_MAP,
 } from './executor-outcome-constants.js';
+import {
+  QUERY_ERROR_MSG,
+} from '../query/query-constants.js';
+import {
+  PARTITION_SERVICE_ERROR_MSG,
+} from '../partition/partition-service-constants.js';
 import {
   ExecutorOutcomeEmitter,
   OUTCOME_EVENT_NAME,
@@ -175,7 +184,27 @@ const OPERATION_SINGLE_FLIGHT_SCOPE = Object.freeze({
   OPERATION: 'operation',
 });
 const OPERATION_SINGLE_FLIGHT_KEY_SEPARATOR = ':';
-const CONTROL_PLANE_QUERY_OPTIONS = buildControlPlaneQueryOptions();
+const CONTROL_PLANE_QUERY_OPTIONS = Object.freeze({
+  ...buildControlPlaneQueryOptions(),
+  routingReadinessDimension:
+    CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+});
+const RETRYABLE_OPERATION_PERSIST_ERROR_PREFIXES = Object.freeze([
+  QUERY_ERROR_MSG.TABLE_PARTITION_ROUTING_TIMEOUT_PREFIX,
+]);
+const RETRYABLE_OPERATION_PERSIST_ERROR_MESSAGES = Object.freeze([
+  PARTITION_SERVICE_ERROR_MSG.TRANSACTION_ALREADY_ACTIVE,
+]);
+const OBSERVED_PROGRESS_RELEVANT_SERVICE_STATUSES = Object.freeze(new Set([
+  ReplicaStatus.SYNCING,
+  ReplicaStatus.ACTIVE,
+  ReplicaStatus.FAILED,
+]));
+const OBSERVED_PROGRESS_RELEVANT_WORKFLOW_STEPS = Object.freeze(new Set([
+  WORKFLOW_STEP.CREATING,
+  WORKFLOW_STEP.SYNCING,
+  WORKFLOW_STEP.STOPPING,
+]));
 
 /**
  * RebalanceCoordinator manages the complete rebalancing workflow.
@@ -212,6 +241,13 @@ class RebalanceCoordinator extends EventEmitter {
       options.cdcIntegrationService,
       REBALANCE_COORDINATOR_ERROR_MSG.CDC_REQUIRED,
     );
+    this.controlPlaneSystemTableGateway =
+      options.controlPlaneSystemTableGateway ||
+      new ControlPlaneSystemTableGateway({
+        nodeId: this.nodeId,
+        sqlQueryEngine: options.sqlQueryEngine || null,
+        cdcIntegrationService: this.cdcIntegrationService,
+      });
     this.messageRouter = assertCritical(
       options.messageRouter,
       REBALANCE_COORDINATOR_ERROR_MSG.ROUTER_MISSING,
@@ -326,10 +362,12 @@ class RebalanceCoordinator extends EventEmitter {
     this.transactionCoordinator = options.transactionCoordinator || null;
     this.recentOperationIntents = new Map();
     this.lastIncompleteOperationQueryWarningAtMs = NUM.ZERO;
+    this.replicaOperationTransitionQueue = Promise.resolve();
 
     this.executorOutcomeEmitter = options.executorOutcomeEmitter ||
       new ExecutorOutcomeEmitter({logger: this.logger});
     this._boundOutcomeHandler = null;
+    this.cacheChangeListener = null;
 
     this.isShuttingDown = false;
     this.initialized = false;
@@ -354,6 +392,12 @@ class RebalanceCoordinator extends EventEmitter {
       OUTCOME_EVENT_NAME,
       this._boundOutcomeHandler,
     );
+    if (typeof this.systemTableCache.onCacheChange === 'function') {
+      this.cacheChangeListener = (tableName, operation, record) => {
+        this.handleObservedReplicaStateChange(tableName, operation, record);
+      };
+      this.systemTableCache.onCacheChange(this.cacheChangeListener);
+    }
 
     this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.INITIALIZED, {
       nodeId: this.nodeId,
@@ -874,6 +918,141 @@ class RebalanceCoordinator extends EventEmitter {
   }
 
   /**
+   * Return true when one operation can advance from observed replica progress.
+   * Cache events remain observation only; actual state is re-read through the
+   * canonical reconcile path before any transition.
+   * @param {Object} operation
+   * @return {boolean}
+   * @private
+   */
+  isObservedProgressOperationCandidate(operation) {
+    if (!operation ||
+        this.isOperationTerminal(operation) ||
+        !this.isOperationLocallyOwned(operation)) {
+      return false;
+    }
+
+    if (OBSERVED_PROGRESS_RELEVANT_WORKFLOW_STEPS.has(operation.workflowStep)) {
+      return true;
+    }
+
+    return operation.type === OperationType.REPLACE &&
+      operation.workflowStep === WORKFLOW_STEP.ACTIVE;
+  }
+
+  /**
+   * Filter candidate operation ids for one observed services row.
+   * @param {Object} serviceRow
+   * @param {string} cacheOperation
+   * @return {string[]}
+   * @private
+   */
+  findObservedProgressOperationIds(serviceRow, cacheOperation) {
+    if (!serviceRow || typeof serviceRow !== 'object') {
+      return [];
+    }
+
+    if (cacheOperation !== 'DELETE') {
+      const status = String(serviceRow.status || '').toLowerCase();
+      if (!OBSERVED_PROGRESS_RELEVANT_SERVICE_STATUSES.has(status)) {
+        return [];
+      }
+    }
+
+    const targetNodeId = String(
+      serviceRow.node_id || serviceRow.nodeId || '',
+    );
+    const replicaId = String(
+      serviceRow.service_id ||
+        serviceRow.serviceId ||
+        serviceRow.replica_id ||
+        serviceRow.replicaId ||
+        '',
+    );
+    const partitionId = String(
+      serviceRow.partition_id || serviceRow.partitionId || '',
+    );
+    if (targetNodeId.length === NUM.ZERO ||
+        (replicaId.length === NUM.ZERO && partitionId.length === NUM.ZERO)) {
+      return [];
+    }
+
+    const matchingRows = this.filterReplicaOperationRowsFromCache((row) => {
+      const operation = this.rowToOperation(row);
+      if (!this.isObservedProgressOperationCandidate(operation)) {
+        return false;
+      }
+      if (operation.targetNodeId !== targetNodeId) {
+        return false;
+      }
+      if (replicaId.length > NUM.ZERO && operation.replicaId === replicaId) {
+        return true;
+      }
+      return partitionId.length > NUM.ZERO &&
+        operation.partitionId === partitionId;
+    }) || [];
+
+    return [...new Set(matchingRows
+      .map((row) => row?.operation_id || row?.operationId || null)
+      .filter((operationId) =>
+        typeof operationId === 'string' && operationId.length > NUM.ZERO,
+      ))];
+  }
+
+  /**
+   * Reconcile one observed replica-progress event through the canonical owner.
+   * @param {string} operationId
+   * @return {Promise<boolean>}
+   * @private
+   */
+  async reconcileObservedProgressOperation(operationId) {
+    if (typeof operationId !== 'string' || operationId.length === NUM.ZERO) {
+      return false;
+    }
+    const operation = await this.queryOperationById(operationId);
+    if (!this.isObservedProgressOperationCandidate(operation)) {
+      return false;
+    }
+    return this.reconcileOperationProgress(operation);
+  }
+
+  /**
+   * Observe services cache progress and re-enter the owner reconcile lane.
+   * @param {string} tableName
+   * @param {string} cacheOperation
+   * @param {Object} record
+   * @return {void}
+   * @private
+   */
+  handleObservedReplicaStateChange(tableName, cacheOperation, record) {
+    if (this.isShuttingDown || !this.initialized ||
+        tableName !== SYSTEM_TABLE_NAME.SERVICES) {
+      return;
+    }
+
+    const operationIds = this.findObservedProgressOperationIds(
+      record,
+      cacheOperation,
+    );
+    for (const operationId of operationIds) {
+      this.operationWorkflowRunExclusive(
+        this.getOperationOwnerSingleFlightKey(operationId),
+        () => this.reconcileObservedProgressOperation(operationId),
+      ).catch((error) => {
+        this.logger.error(
+          REBALANCE_COORDINATOR_LOG_MSG.OBSERVED_PROGRESS_TRANSITION_FAILED,
+          {
+            operationId,
+            tableName,
+            cacheOperation,
+            error: error.message,
+          },
+        );
+      });
+    }
+  }
+
+  /**
    * Resolve in-flight replica IDs for an entity from authoritative SQL.
    * Single read-model path — no cache fallback.
    * @readModel COORDINATOR_OPERATION_DEDUP —
@@ -1214,6 +1393,48 @@ class RebalanceCoordinator extends EventEmitter {
     return operation;
   }
 
+  /**
+   * Dispatch one operation through the coordinator-owned single-flight lane.
+   * This is the canonical owner entry point for PENDING dispatch and any
+   * retry of an already-claimed SENDING operation.
+   *
+   * Accepts either an operation id, a SQL row, or a canonical operation
+   * payload. Callers that carry extra in-memory metadata (for example initial
+   * bootstrap peer lists) should pass the canonical operation object so that
+   * this owner path can preserve it.
+   *
+   * @param {string|Object} operationInput - Operation id or payload.
+   * @return {Promise<Object>} Execution result or typed skip.
+   */
+  async dispatchOperation(operationInput) {
+    if (this.isShuttingDown || !this.initialized) {
+      return {
+        success: false,
+        skipped: true,
+        reason: 'shutdown_in_progress',
+        operationId: this.getOperationIdFromInput(operationInput),
+      };
+    }
+
+    const operationId = this.getOperationIdFromInput(operationInput);
+    const singleFlightKey = operationId ?
+      this.getExecuteOperationSingleFlightKey(operationId) :
+      null;
+    if (!singleFlightKey) {
+      return {
+        success: false,
+        skipped: true,
+        reason: 'operation_id_required',
+        operationId: null,
+      };
+    }
+
+    return this.operationWorkflowRunExclusive(
+      singleFlightKey,
+      () => this.dispatchOperationInternal(operationInput),
+    );
+  }
+
 
 
 
@@ -1229,6 +1450,8 @@ class RebalanceCoordinator extends EventEmitter {
    * @param {string} [move.entityId] - Entity ID for canonical operations.
    * @param {string} move.nodeId - Target node ID.
    * @param {string} [move.replicaId] - Replica ID (for REMOVE operations).
+   * @param {boolean} [move.emitOperationCreated] - Emit the local
+   *   coordinator-created dispatch trigger after persistence.
    * @return {Promise<Object>} Created or existing operation record.
    */
   async createOperation(move) {
@@ -1337,6 +1560,7 @@ class RebalanceCoordinator extends EventEmitter {
    */
   async createOperationInternal(move) {
     const normalizedMoveType = this.normalizeMoveType(move?.type);
+    const shouldEmitOperationCreated = move?.emitOperationCreated !== false;
     const entityType = move.entityType || SERVICE_TYPE.PARTITION;
     const entityId = move.entityId || move.partitionId;
     const partitionId = move.partitionId || entityId;
@@ -1456,7 +1680,9 @@ class RebalanceCoordinator extends EventEmitter {
     // Create storage reservation atomically (Req 4.1)
     await this.createReservationForOperation(operation);
 
-    this.emit(REBALANCE_COORDINATOR_EVENT.OPERATION_CREATED, {operation});
+    if (shouldEmitOperationCreated) {
+      this.emit(REBALANCE_COORDINATOR_EVENT.OPERATION_CREATED, {operation});
+    }
 
     return operation;
   }
@@ -1727,6 +1953,9 @@ class RebalanceCoordinator extends EventEmitter {
         operation.entityType,
         operation.entityId,
       ],
+      {
+        ownerId: operation.operationId,
+      },
     );
 
     if (!result.success) {
@@ -1752,7 +1981,7 @@ class RebalanceCoordinator extends EventEmitter {
    * @return {Promise<void>}
    * @private
    */
-  async persistOperationUpdate(operation) {
+  async persistOperationUpdate(operation, options = {}) {
     const result = await this.executeOperationMutationWithRetry(
       SQL.UPDATE_OPERATION,
       [
@@ -1765,6 +1994,10 @@ class RebalanceCoordinator extends EventEmitter {
         operation.replicaId,
         operation.operationId,
       ],
+      {
+        ownerId: operation.operationId,
+        sessionId: options.sessionId,
+      },
     );
 
     if (!result.success) {
@@ -1827,13 +2060,14 @@ class RebalanceCoordinator extends EventEmitter {
    * @return {Promise<Object>} SQL query result.
    * @private
    */
-  async executeOperationMutationWithRetry(sql, params) {
+  async executeOperationMutationWithRetry(sql, params, options = {}) {
     const startedAt = Date.now();
+    const queryOptions = this.buildOperationMutationQueryOptions(options);
     while (true) {
-      const result = await this.sqlQueryEngine.executeQuery(
+      const result = await this.controlPlaneSystemTableGateway.executeQuery(
         sql,
         params,
-        CONTROL_PLANE_QUERY_OPTIONS,
+        queryOptions,
       );
       if (result.success || !this.isRetryableOperationPersistError(result.error)) {
         return result;
@@ -1860,7 +2094,11 @@ class RebalanceCoordinator extends EventEmitter {
     return typeof errorMessage === 'string' &&
       (
         errorMessage.includes(ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE) ||
-        errorMessage.includes(ERRORS.PARTITION_SERVICE_NOT_FOUND)
+        errorMessage.includes(ERRORS.PARTITION_SERVICE_NOT_FOUND) ||
+        RETRYABLE_OPERATION_PERSIST_ERROR_MESSAGES.includes(errorMessage) ||
+        RETRYABLE_OPERATION_PERSIST_ERROR_PREFIXES.some((prefix) =>
+          errorMessage.startsWith(prefix),
+        )
       );
   }
 
@@ -1872,6 +2110,38 @@ class RebalanceCoordinator extends EventEmitter {
    */
   async waitForOperationPersistRetry(delayMs) {
     await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+
+  /**
+   * Build query options for one owner-managed mutation.
+   * Coordinator writes must not inherit the default SQL session.
+   * @param {Object} [options={}] - Mutation routing options.
+   * @return {Object}
+   * @private
+   */
+  buildOperationMutationQueryOptions(options = {}) {
+    return {
+      ...CONTROL_PLANE_QUERY_OPTIONS,
+      sessionId: this.resolveOperationMutationSessionId(options),
+    };
+  }
+
+  /**
+   * Resolve the SQL session for one owner-managed mutation.
+   * @param {Object} [options={}] - Mutation routing options.
+   * @return {string}
+   * @private
+   */
+  resolveOperationMutationSessionId(options = {}) {
+    if (typeof options.sessionId === 'string' &&
+        options.sessionId.length > NUM.ZERO) {
+      return options.sessionId;
+    }
+    const ownerId = typeof options.ownerId === 'string' &&
+        options.ownerId.length > NUM.ZERO ?
+      options.ownerId :
+      uuidv4();
+    return `${REBALANCER_SUBSYSTEM.COORDINATOR}:${ownerId}`;
   }
 
   // --- Reservation lifecycle (Req 4.1, 4.2, 4.3, 4.4, 4.5) ---
@@ -1920,7 +2190,12 @@ class RebalanceCoordinator extends EventEmitter {
    * @return {Promise<Object>} Transition result.
    * @private
    */
-  async transitionActiveReservationById(reservationId, nextStatus, now) {
+  async transitionActiveReservationById(
+    reservationId,
+    nextStatus,
+    now,
+    options = {},
+  ) {
     const result = await this.executeOperationMutationWithRetry(
       SQL.UPDATE_RESERVATION_STATUS_BY_ID,
       [
@@ -1930,6 +2205,10 @@ class RebalanceCoordinator extends EventEmitter {
         reservationId,
         RESERVATION_STATUS.ACTIVE,
       ],
+      {
+        ownerId: options.ownerId || reservationId,
+        sessionId: options.sessionId,
+      },
     );
     if (!result.success) {
       return {
@@ -1956,7 +2235,7 @@ class RebalanceCoordinator extends EventEmitter {
    * @return {Promise<void>}
    * @private
    */
-  async createReservationForOperation(operation) {
+  async createReservationForOperation(operation, options = {}) {
     if (!this.isStorageIncreasingOperation(operation.type)) {
       return;
     }
@@ -1994,6 +2273,10 @@ class RebalanceCoordinator extends EventEmitter {
         now,
         expiresAt,
       ],
+      {
+        ownerId: operation.operationId,
+        sessionId: options.sessionId,
+      },
     );
 
     if (!result.success) {
@@ -2039,7 +2322,8 @@ class RebalanceCoordinator extends EventEmitter {
       return;
     }
 
-    const activeResult = await this.sqlQueryEngine.executeQuery(
+    const activeResult = await this.controlPlaneSystemTableGateway.readRows(
+      SYSTEM_TABLE_NAME.STORAGE_RESERVATIONS,
       SQL.SELECT_ACTIVE_RESERVATIONS_BY_OPERATION,
       [operation.operationId, RESERVATION_STATUS.ACTIVE],
       CONTROL_PLANE_QUERY_OPTIONS,
@@ -2113,7 +2397,8 @@ class RebalanceCoordinator extends EventEmitter {
     let orphansReleased = NUM.ZERO;
 
     // 1. Expire reservations past TTL, keyed by reservation_id.
-    const staleResult = await this.sqlQueryEngine.executeQuery(
+    const staleResult = await this.controlPlaneSystemTableGateway.readRows(
+      SYSTEM_TABLE_NAME.STORAGE_RESERVATIONS,
       SQL.SELECT_EXPIRED_ACTIVE_RESERVATIONS,
       [RESERVATION_STATUS.ACTIVE, now],
       CONTROL_PLANE_QUERY_OPTIONS,
@@ -2159,7 +2444,8 @@ class RebalanceCoordinator extends EventEmitter {
     }
 
     // 2. Release orphan reservations (operation is terminal)
-    const activeResult = await this.sqlQueryEngine.executeQuery(
+    const activeResult = await this.controlPlaneSystemTableGateway.readRows(
+      SYSTEM_TABLE_NAME.STORAGE_RESERVATIONS,
       SQL.SELECT_ACTIVE_RESERVATIONS,
       [RESERVATION_STATUS.ACTIVE],
       CONTROL_PLANE_QUERY_OPTIONS,
@@ -2255,6 +2541,111 @@ class RebalanceCoordinator extends EventEmitter {
       singleFlightKey,
       () => this.executeOperationInternal(operation),
     );
+  }
+
+  /**
+   * Resolve an operation id from one supported caller payload.
+   * @param {string|Object} operationInput - Operation id, row, or payload.
+   * @return {string|null}
+   * @private
+   */
+  getOperationIdFromInput(operationInput) {
+    if (typeof operationInput === 'string' && operationInput.length > NUM.ZERO) {
+      return operationInput;
+    }
+    if (!operationInput || typeof operationInput !== 'object') {
+      return null;
+    }
+    if (typeof operationInput.operationId === 'string' &&
+        operationInput.operationId.length > NUM.ZERO) {
+      return operationInput.operationId;
+    }
+    if (typeof operationInput.operation_id === 'string' &&
+        operationInput.operation_id.length > NUM.ZERO) {
+      return operationInput.operation_id;
+    }
+    return null;
+  }
+
+  /**
+   * Normalize one dispatch input to a canonical operation object.
+   * @param {string|Object} operationInput - Operation id, row, or payload.
+   * @return {Promise<Object|null>}
+   * @private
+   */
+  async resolveDispatchOperation(operationInput) {
+    if (typeof operationInput === 'string' && operationInput.length > NUM.ZERO) {
+      return this.queryOperationById(operationInput);
+    }
+    if (!operationInput || typeof operationInput !== 'object') {
+      return null;
+    }
+    if (typeof operationInput.operationId === 'string' &&
+        operationInput.operationId.length > NUM.ZERO) {
+      return operationInput;
+    }
+    if (typeof operationInput.operation_id === 'string' &&
+        operationInput.operation_id.length > NUM.ZERO) {
+      return this.rowToOperation(operationInput);
+    }
+    return null;
+  }
+
+  /**
+   * Execute one dispatch attempt after ownership has been serialized.
+   * @param {string|Object} operationInput - Operation id, row, or payload.
+   * @return {Promise<Object>}
+   * @private
+   */
+  async dispatchOperationInternal(operationInput) {
+    const operation = await this.resolveDispatchOperation(operationInput);
+    const operationId = this.getOperationIdFromInput(operationInput);
+
+    if (!operation) {
+      return {
+        success: false,
+        skipped: true,
+        reason: 'operation_not_found',
+        operationId,
+      };
+    }
+
+    if (!this.isOperationLocallyOwned(operation)) {
+      return {
+        success: false,
+        skipped: true,
+        reason: REBALANCER_SKIP_REASON.OPERATION_OWNED_BY_ANOTHER_NODE,
+        operationId: operation.operationId,
+      };
+    }
+
+    const replaceRemovePhase = this.isReplaceRemovePhase(operation);
+    const dispatchableWorkflowStep = operation.workflowStep;
+    if (replaceRemovePhase) {
+      if (dispatchableWorkflowStep !== WORKFLOW_STEP.ACTIVE) {
+        return {
+          success: false,
+          skipped: true,
+          reason: 'operation_not_dispatchable',
+          operationId: operation.operationId,
+        };
+      }
+    } else if (dispatchableWorkflowStep === WORKFLOW_STEP.PENDING) {
+      await this.updateStep(
+        operation,
+        WORKFLOW_STEP.SENDING,
+        OPERATION_TRANSITION_REASON.DISPATCH_SENDING,
+      );
+    } else if (dispatchableWorkflowStep !== WORKFLOW_STEP.SENDING) {
+      return {
+        success: false,
+        skipped: true,
+        reason: 'operation_not_dispatchable',
+        operationId: operation.operationId,
+      };
+    }
+
+    return this.executeOperationInternal(operation);
   }
 
   /**
@@ -2494,46 +2885,66 @@ class RebalanceCoordinator extends EventEmitter {
    * @param {string} reason - Transition reason code.
    * @param {Function} persistFn - Async function that persists the
    *   operation row after the in-memory state is updated.
+   *   Receives the transaction session id opened for the transition.
    * @return {Promise<void>}
    * @private
    */
   async executeAtomicTransition(operation, step, reason, persistFn) {
-    this.ensureOperationWorkflow(operation);
+    return this.runReplicaOperationTransitionExclusive(
+      async () => {
+        this.ensureOperationWorkflow(operation);
 
-    if (this.operationWorkflowCoordinator
-      .isTransitionIdempotent(operation.operationId, step)) {
-      return;
-    }
+        if (this.operationWorkflowCoordinator
+          .isTransitionIdempotent(operation.operationId, step)) {
+          return;
+        }
 
-    const txCoordinator = this.transactionCoordinator;
-    if (!txCoordinator ||
-        typeof txCoordinator.begin !== 'function' ||
-        typeof txCoordinator.commit !== 'function' ||
-        typeof txCoordinator.rollback !== 'function') {
-      throw new Error(
-        REBALANCE_COORDINATOR_ERROR_MSG.TRANSACTION_COORDINATOR_REQUIRED,
-      );
-    }
+        const txCoordinator = this.transactionCoordinator;
+        if (!txCoordinator ||
+            typeof txCoordinator.begin !== 'function' ||
+            typeof txCoordinator.commit !== 'function' ||
+            typeof txCoordinator.rollback !== 'function') {
+          throw new Error(
+            REBALANCE_COORDINATOR_ERROR_MSG.TRANSACTION_COORDINATOR_REQUIRED,
+          );
+        }
 
-    const sessionId = `${operation.operationId}:${step}`;
-    const beginResult = await txCoordinator.begin(sessionId);
-    if (!beginResult.success) {
-      throw new Error(beginResult.error);
-    }
-    try {
-      await this.operationWorkflowCoordinator.transitionStep(
-        operation.operationId,
-        {nextStep: step, reason},
-      );
-      await persistFn();
-      const commitResult = await txCoordinator.commit(sessionId);
-      if (!commitResult.success) {
-        throw new Error(commitResult.error);
-      }
-    } catch (error) {
-      await txCoordinator.rollback(sessionId);
-      throw error;
-    }
+        const sessionId = `${operation.operationId}:${step}`;
+        const beginResult = await txCoordinator.begin(sessionId);
+        if (!beginResult.success) {
+          throw new Error(beginResult.error);
+        }
+        try {
+          await this.operationWorkflowCoordinator.transitionStep(
+            operation.operationId,
+            {nextStep: step, reason},
+          );
+          await persistFn(sessionId);
+          const commitResult = await txCoordinator.commit(sessionId);
+          if (!commitResult.success) {
+            throw new Error(commitResult.error);
+          }
+        } catch (error) {
+          await txCoordinator.rollback(sessionId);
+          throw error;
+        }
+      },
+    );
+  }
+
+  /**
+   * Serialize replica_operations step transitions on the canonical owner
+   * queue so system-partition transactions cannot collide under load.
+   * @param {Function} executionFactory
+   * @return {Promise<*>}
+   * @private
+   */
+  runReplicaOperationTransitionExclusive(executionFactory) {
+    const queuedExecution = this.replicaOperationTransitionQueue
+      .catch(() => {})
+      .then(async () => executionFactory());
+    this.replicaOperationTransitionQueue = queuedExecution.catch(() => {});
+    return queuedExecution;
   }
 
   /**
@@ -2567,7 +2978,7 @@ class RebalanceCoordinator extends EventEmitter {
         CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
       );
 
-    const persistFn = async () => {
+    const persistFn = async (sessionId) => {
       operation.workflowStep = step;
       operation.updatedAt = now;
       const stepEntry = {
@@ -2583,7 +2994,7 @@ class RebalanceCoordinator extends EventEmitter {
       }
       operation.stepsHistory.push(stepEntry);
       operation.status = WORKFLOW_STEP_TO_STATUS[step] || operation.status;
-      await this.persistOperationUpdate(operation);
+      await this.persistOperationUpdate(operation, {sessionId});
     };
 
     await this.executeAtomicTransition(
@@ -2637,7 +3048,7 @@ class RebalanceCoordinator extends EventEmitter {
         CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
       );
 
-    const persistFn = async () => {
+    const persistFn = async (sessionId) => {
       operation.workflowStep = finalStep;
       operation.status = WORKFLOW_STEP_TO_STATUS[finalStep];
       operation.updatedAt = now;
@@ -2654,7 +3065,7 @@ class RebalanceCoordinator extends EventEmitter {
           readinessSnapshot;
       }
       operation.stepsHistory.push(stepEntry);
-      await this.persistOperationUpdate(operation);
+      await this.persistOperationUpdate(operation, {sessionId});
     };
 
     await this.executeAtomicTransition(
@@ -2978,7 +3389,7 @@ class RebalanceCoordinator extends EventEmitter {
         CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
       );
 
-    const persistFn = async () => {
+    const persistFn = async (sessionId) => {
       operation.workflowStep = WORKFLOW_STEP.FAILED;
       operation.status = ReplicaStatus.FAILED;
       operation.updatedAt = now;
@@ -3000,7 +3411,7 @@ class RebalanceCoordinator extends EventEmitter {
           readinessSnapshot;
       }
       operation.stepsHistory.push(failedStepEntry);
-      await this.persistOperationUpdate(operation);
+      await this.persistOperationUpdate(operation, {sessionId});
     };
 
     await this.executeAtomicTransition(
@@ -3783,6 +4194,111 @@ class RebalanceCoordinator extends EventEmitter {
   }
 
   /**
+   * Resolve observed replica status from the local services cache boundary.
+   * This is only used after authoritative service reads miss, so owner-path
+   * progression can converge on exact observed target rows instead of timing
+   * out behind stale visibility.
+   * @param {string} replicaId
+   * @param {string} partitionId
+   * @param {string} targetNodeId
+   * @return {string|null}
+   * @private
+   */
+  getObservedReplicaStatusFromCache(replicaId, partitionId, targetNodeId) {
+    if (!this.systemTableCache) {
+      return null;
+    }
+
+    const normalizedReplicaId = typeof replicaId === 'string' ?
+      replicaId :
+      '';
+    const normalizedPartitionId = typeof partitionId === 'string' ?
+      partitionId :
+      '';
+    const normalizedTargetNodeId = typeof targetNodeId === 'string' ?
+      targetNodeId :
+      '';
+
+    const normalizeRowStatus = (row) => {
+      const status = row?.status;
+      return typeof status === 'string' && status.length > NUM.ZERO ?
+        status :
+        null;
+    };
+    const rowMatchesTarget = (row) => {
+      if (!row || typeof row !== 'object') {
+        return false;
+      }
+
+      const rowNodeId = String(row.node_id || row.nodeId || '');
+      if (normalizedTargetNodeId.length > NUM.ZERO &&
+          rowNodeId.length > NUM.ZERO &&
+          rowNodeId !== normalizedTargetNodeId) {
+        return false;
+      }
+
+      const rowPartitionId = String(row.partition_id || row.partitionId || '');
+      if (normalizedPartitionId.length > NUM.ZERO &&
+          rowPartitionId.length > NUM.ZERO &&
+          rowPartitionId !== normalizedPartitionId) {
+        return false;
+      }
+
+      return true;
+    };
+    const readAllServiceRows = () => {
+      if (typeof this.systemTableCache.getAll === 'function') {
+        return this.systemTableCache.getAll(SYSTEM_TABLE_NAME.SERVICES) || [];
+      }
+      if (typeof this.systemTableCache.filter === 'function') {
+        return this.systemTableCache.filter(
+          SYSTEM_TABLE_NAME.SERVICES,
+          () => true,
+        ) || [];
+      }
+      return [];
+    };
+
+    if (normalizedReplicaId.length > NUM.ZERO &&
+        typeof this.systemTableCache.get === 'function') {
+      const cachedRow = this.systemTableCache.get(
+        SYSTEM_TABLE_NAME.SERVICES,
+        normalizedReplicaId,
+      );
+      if (rowMatchesTarget(cachedRow)) {
+        const observedStatus = normalizeRowStatus(cachedRow);
+        if (observedStatus) {
+          return observedStatus;
+        }
+      }
+    }
+
+    const serviceRows = readAllServiceRows();
+    if (normalizedReplicaId.length > NUM.ZERO) {
+      const exactReplicaRow = serviceRows.find((row) => {
+        const rowReplicaId = String(
+          row?.service_id || row?.serviceId || row?.replica_id || row?.replicaId || '',
+        );
+        return rowReplicaId === normalizedReplicaId && rowMatchesTarget(row);
+      });
+      const observedStatus = normalizeRowStatus(exactReplicaRow);
+      if (observedStatus) {
+        return observedStatus;
+      }
+    }
+
+    const partitionNodeRow = serviceRows.find((row) => {
+      const rowNodeId = String(row?.node_id || row?.nodeId || '');
+      const rowPartitionId = String(
+        row?.partition_id || row?.partitionId || '',
+      );
+      return rowNodeId === normalizedTargetNodeId &&
+        rowPartitionId === normalizedPartitionId;
+    });
+    return normalizeRowStatus(partitionNodeRow);
+  }
+
+  /**
    * Get actual replica status via SQL engine.
    * Per system guidelines: all system information access via SQL engine.
    * Requirements: 7.3
@@ -3797,7 +4313,8 @@ class RebalanceCoordinator extends EventEmitter {
    */
   async getActualReplicaStatus(replicaId, partitionId, targetNodeId) {
     if (replicaId) {
-      const result = await this.sqlQueryEngine.executeQuery(
+      const result = await this.controlPlaneSystemTableGateway.readRows(
+        SYSTEM_TABLE_NAME.SERVICES,
         SQL.SELECT_REPLICA_STATUS,
         [replicaId],
         CONTROL_PLANE_QUERY_OPTIONS,
@@ -3809,7 +4326,8 @@ class RebalanceCoordinator extends EventEmitter {
     }
 
     // Secondary lookup by partition + node when replicaId yields no row
-    const result = await this.sqlQueryEngine.executeQuery(
+    const result = await this.controlPlaneSystemTableGateway.readRows(
+      SYSTEM_TABLE_NAME.SERVICES,
       SQL.SELECT_REPLICA_BY_PARTITION_NODE,
       [partitionId, targetNodeId],
       CONTROL_PLANE_QUERY_OPTIONS,
@@ -3819,7 +4337,11 @@ class RebalanceCoordinator extends EventEmitter {
       return result.rows[NUM.ZERO].status;
     }
 
-    return null;
+    return this.getObservedReplicaStatusFromCache(
+      replicaId,
+      partitionId,
+      targetNodeId,
+    );
   }
 
   /**
@@ -4025,26 +4547,8 @@ class RebalanceCoordinator extends EventEmitter {
    * @private
    */
   async executeReplicaOperationsRead(sql, params = []) {
-    if (this.cdcIntegrationService &&
-        typeof this.cdcIntegrationService.executeAuthoritativeSystemTableRead ===
-          'function') {
-      const result =
-        await this.cdcIntegrationService.executeAuthoritativeSystemTableRead(
-          SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-          sql,
-          params,
-          {
-            localReadConsistency: 'local_leader',
-            replicaFallbackConsistency: 'any_replica',
-            queryOptions: CONTROL_PLANE_QUERY_OPTIONS,
-          },
-        );
-      if (result?.success) {
-        return result;
-      }
-    }
-
-    return this.sqlQueryEngine.executeQuery(
+    return this.controlPlaneSystemTableGateway.readRows(
+      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
       sql,
       params,
       CONTROL_PLANE_QUERY_OPTIONS,
@@ -4108,6 +4612,11 @@ class RebalanceCoordinator extends EventEmitter {
         this._boundOutcomeHandler,
       );
       this._boundOutcomeHandler = null;
+    }
+    if (this.cacheChangeListener &&
+        typeof this.systemTableCache.offCacheChange === 'function') {
+      this.systemTableCache.offCacheChange(this.cacheChangeListener);
+      this.cacheChangeListener = null;
     }
 
     let inFlightOperationCount = NUM.ZERO;

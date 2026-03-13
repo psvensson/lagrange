@@ -5,7 +5,7 @@
  * Mirrors the stage context built by `buildStageContext` in
  * call-stage.js, exposing the same bounded primitives and
  * nested-call guardrails. Reuses the existing
- * `classifyNestedCall` classifier and delegates all
+ * stage-level guardrails via `call-stage` and delegates all
  * primitive calls to the parent ExecutionContext.
  *
  * No ad-hoc cross-partition RPC surfaces are exposed.
@@ -15,11 +15,6 @@
  */
 
 import {TYPEOF} from '../../constants/index.js';
-import {classifyNestedCall} from '../nested-call-classifier.js';
-import {
-  NESTED_CALL_CLASSIFICATION,
-  NESTED_CALL_ERROR_MSG,
-} from '../runtime-constants.js';
 
 /**
  * Build a bounded callback context that exposes the same
@@ -40,12 +35,12 @@ import {
  *   execCtx - Parent execution context whose primitives are
  *   delegated to.
  * @param {import('../plan-diagnostics.js').PlanDiagnostics}
- *   [planDiagnostics] - Optional diagnostics collector for
- *   nested call classification decisions.
+ *   [planDiagnostics] - Reserved for compatibility.
  * @param {Object} [debugApi] - Optional debug API surface.
  * @return {Readonly<Object>} Frozen callback context.
  */
 function buildCallbackContext(execCtx, planDiagnostics, debugApi) {
+  void planDiagnostics;
   const budgetEnforcer = execCtx.getBudgetEnforcer();
   const callbackContext = {
     emit: (key, value, meta) =>
@@ -58,32 +53,26 @@ function buildCallbackContext(execCtx, planDiagnostics, debugApi) {
       execCtx.broadcast(ref, dataset),
     useBroadcast: (ref) =>
       execCtx.useBroadcast(ref),
-    call: async (query, params, handler, opts) => {
-      if (typeof query === TYPEOF.STRING) {
-        const result = classifyNestedCall(query);
-        if (planDiagnostics) {
-          planDiagnostics.recordClassification(
-            query,
-            result.classification,
-            result.reason,
-          );
-        }
-        if (result.classification ===
-            NESTED_CALL_CLASSIFICATION.UNBOUNDED) {
-          throw new Error(
-            NESTED_CALL_ERROR_MSG.UNBOUNDED_REJECTED,
-          );
-        }
-      }
+    call: (query, params, handler, opts) => {
       budgetEnforcer.recordNestedCall();
       budgetEnforcer.incrementInflight();
+      let callResult;
       try {
-        return await execCtx.call(
+        callResult = execCtx.call(
           query, params, handler, opts,
         );
-      } finally {
+      } catch (error) {
         budgetEnforcer.decrementInflight();
+        throw error;
       }
+      if (callResult &&
+          typeof callResult.then === TYPEOF.FUNCTION) {
+        return Promise.resolve(callResult).finally(() => {
+          budgetEnforcer.decrementInflight();
+        });
+      }
+      budgetEnforcer.decrementInflight();
+      return callResult;
     },
     isCancelled: () => execCtx.isCancelled(),
     throwIfCancelled: () => execCtx.throwIfCancelled(),

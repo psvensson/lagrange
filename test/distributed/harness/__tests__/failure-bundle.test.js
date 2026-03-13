@@ -371,7 +371,34 @@ describe('failure-bundle', () => {
     async () => {
       const scenarioDir = join(outputDir, 'postgres-baseline-comparison');
       await mkdir(scenarioDir, {recursive: true});
-      await writeFile(join(scenarioDir, 'node-1.log'), 'line-1\nline-2\nline-3\n');
+      await writeFile(
+        join(scenarioDir, 'node-1.log'),
+        [
+          'line-1',
+          '2026-03-07T00:00:04.000Z [node-1] info: ' +
+            '{"level":40,"time":"2026-03-07T00:00:04.000Z",' +
+            '"nodeId":"node-1","pid":1,"subsystem":"query-executor",' +
+            `"msg":"Partition routing candidates filtered by readiness",` +
+            '"partitionId":"users-p1",' +
+            '"routingSnapshot":{' +
+              '"reasonCode":"all_services_filtered_by_readiness",' +
+              '"routingReadinessDimension":"serveEligible",' +
+              '"serviceRowCount":1,' +
+              '"activeAddressedServiceCount":1,' +
+              '"routableServiceCount":0,' +
+              '"leaderKnown":true,' +
+              '"canonicalLeaderNodeId":"node-1",' +
+              '"deniedByNodeId":{' +
+                '"node-1":{' +
+                  '"decisionDimension":"serveEligible",' +
+                  '"reasonCodes":["cluster_member_unhealthy"],' +
+                  '"failedDimensions":["clusterMemberHealthy","controlPlaneWritable","serveEligible"]' +
+                '}' +
+              '}' +
+            '}}',
+          'line-3',
+        ].join('\n') + '\n',
+      );
       await writeFile(join(scenarioDir, '_timeline.log'), 'timeline\n');
       await writeFile(join(scenarioDir, '_analysis.json'), '{"summary":"ok"}\n');
 
@@ -443,6 +470,15 @@ describe('failure-bundle', () => {
         scenarioBundle.nodeDiagnostics['node-1'].readinessTransitions[0].serveEligible,
         false,
       );
+      assert.equal(
+        scenarioBundle.nodeDiagnostics['node-1'].routingDiagnostics.reasonCode,
+        'all_services_filtered_by_readiness',
+      );
+      assert.equal(
+        scenarioBundle.nodeDiagnostics['node-1']
+          .routingDiagnostics.deniedByNodeId['node-1'].reasonCodes[0],
+        'cluster_member_unhealthy',
+      );
       assert.match(
         scenarioBundle.nodeDiagnostics['node-1'].errors[0],
         /node=node-1/i,
@@ -469,6 +505,7 @@ describe('failure-bundle', () => {
       assert.match(markdown, /## Control Plane Diagnostics/);
       assert.match(markdown, /Heartbeat Publication/);
       assert.match(markdown, /Timeline Correlation/);
+      assert.match(markdown, /Routing Diagnostics/);
       assert.match(markdown, /cache_visibility_timeout/);
       assert.match(markdown, /operation=queryLoad/);
     });

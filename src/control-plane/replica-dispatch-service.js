@@ -19,6 +19,9 @@ import {
 import {
   ControlPlaneReadinessService,
 } from './control-plane-readiness-service.js';
+import {
+  ControlPlaneSystemTableGateway,
+} from './control-plane-system-table-gateway.js';
 import {OperationType} from '../rebalancer/replica-status.js';
 import {REBALANCE_COORDINATOR_EVENT} from '../rebalancer/rebalancer-constants.js';
 import {
@@ -70,6 +73,12 @@ class ReplicaDispatchService extends EventEmitter {
     this.nodeId = options.nodeId || null;
     this.messageRouter = options.messageRouter || null;
     this.cdcIntegrationService = options.cdcIntegrationService || null;
+    this.controlPlaneSystemTableGateway =
+      options.controlPlaneSystemTableGateway ||
+      new ControlPlaneSystemTableGateway({
+        nodeId: this.nodeId,
+        cdcIntegrationService: this.cdcIntegrationService,
+      });
     this.systemTableCache = options.systemTableCache || null;
     this.rebalanceCoordinator = options.rebalanceCoordinator || null;
     this.storageAccountingService =
@@ -493,6 +502,8 @@ class ReplicaDispatchService extends EventEmitter {
           payloadCapabilities :
           (existing.capabilities || STRING.EMPTY_JSON_ARRAY)
       );
+    const persistedBudgetFields =
+      this.resolveNodeStateUpdateBudgetFields(nodeRow);
 
     const baseRow = {
       [COLUMN.NODE_ID]: nodeId,
@@ -530,9 +541,11 @@ class ReplicaDispatchService extends EventEmitter {
       [COLUMN.CAPABILITIES]: capabilities,
       [COLUMN.LAST_HEARTBEAT]: heartbeatAt,
       [COLUMN.READY_LEASE_EXPIRES_AT]: readyLeaseExpiresAt,
+      ...persistedBudgetFields,
     };
 
-    const updateResult = await this.cdcIntegrationService.updateSystemTableRow(
+    const updateResult =
+      await this.controlPlaneSystemTableGateway.updateSystemTableRow(
       SYSTEM_TABLE_NAME.NODES,
       {[COLUMN.NODE_ID]: nodeId},
       baseRow,
@@ -545,7 +558,7 @@ class ReplicaDispatchService extends EventEmitter {
       updateResult?.partitionResult?.affectedRows,
     );
     if (updateAffectedRows === NUM.ZERO) {
-      await this.cdcIntegrationService.upsertSystemTableRow(
+      await this.controlPlaneSystemTableGateway.upsertSystemTableRow(
         SYSTEM_TABLE_NAME.NODES,
         {
           ...existing,
@@ -579,6 +592,44 @@ class ReplicaDispatchService extends EventEmitter {
     }
 
     this.clearNodeReadyRetryWatermark(nodeId);
+  }
+
+  /**
+   * Extract durable startup-owned storage-budget fields from one node-state
+   * payload. Heartbeat-only NODE_STATE_UPDATE messages omit these fields, so
+   * this preserves budget ownership without letting routine heartbeats clear it.
+   * @param {Object|null} nodeRow
+   * @return {Object}
+   * @private
+   */
+  resolveNodeStateUpdateBudgetFields(nodeRow) {
+    if (!nodeRow || typeof nodeRow !== TYPEOF.OBJECT) {
+      return {};
+    }
+
+    const budgetFields = {};
+    const storageBudgetBytes = Number(nodeRow?.[COLUMN.STORAGE_BUDGET_BYTES]);
+    if (Number.isFinite(storageBudgetBytes) && storageBudgetBytes > NUM.ZERO) {
+      budgetFields[COLUMN.STORAGE_BUDGET_BYTES] =
+        Math.floor(storageBudgetBytes);
+    }
+
+    const storageBudgetSource = nodeRow?.[COLUMN.STORAGE_BUDGET_SOURCE];
+    if (typeof storageBudgetSource === TYPEOF.STRING &&
+        storageBudgetSource.length > NUM.ZERO) {
+      budgetFields[COLUMN.STORAGE_BUDGET_SOURCE] = storageBudgetSource;
+    }
+
+    const storageBudgetUpdatedAt = Number(
+      nodeRow?.[COLUMN.STORAGE_BUDGET_UPDATED_AT],
+    );
+    if (Number.isFinite(storageBudgetUpdatedAt) &&
+        storageBudgetUpdatedAt > NUM.ZERO) {
+      budgetFields[COLUMN.STORAGE_BUDGET_UPDATED_AT] =
+        Math.floor(storageBudgetUpdatedAt);
+    }
+
+    return budgetFields;
   }
 
   /**
@@ -637,33 +688,47 @@ class ReplicaDispatchService extends EventEmitter {
       return;
     }
 
-    const operation = await this.rebalanceCoordinator
-      .claimDispatchTransition(row.operation_id);
-    if (!operation) {
-      this.logger.debug(DISPATCH_LOG_MSG.CLAIM_SKIPPED, {
-        operationId: row.operation_id,
-        nodeId: this.nodeId,
-      });
-      return;
-    }
-
-    this.dispatchInFlight.add(operation.operationId);
+    const operationId = row.operation_id;
+    this.dispatchInFlight.add(operationId);
     try {
-      await this.rebalanceCoordinator.executeOperation(operation);
+      let dispatchResult = null;
+      if (typeof this.rebalanceCoordinator.dispatchOperation ===
+        TYPEOF.FUNCTION) {
+        dispatchResult = await this.rebalanceCoordinator.dispatchOperation(
+          operationId,
+        );
+      } else {
+        const operation = await this.rebalanceCoordinator
+          .claimDispatchTransition(operationId);
+        if (!operation) {
+          this.logger.debug(DISPATCH_LOG_MSG.CLAIM_SKIPPED, {
+            operationId,
+            nodeId: this.nodeId,
+          });
+          return;
+        }
+        dispatchResult = await this.rebalanceCoordinator
+          .executeOperation(operation);
+      }
+
+      if (!dispatchResult || dispatchResult.success !== true) {
+        return;
+      }
 
       this.emit(DISPATCH_EVENT.OPERATION_DISPATCHED, {
-        operationId: operation.operationId,
+        operationId,
         targetNodeId,
         readinessSnapshot: dispatchReadiness.snapshot,
       });
     } finally {
-      this.dispatchInFlight.delete(operation.operationId);
+      this.dispatchInFlight.delete(operationId);
     }
   }
 
   /**
    * Retry pending dispatches for operations targeting a ready node.
-   * Uses the same dispatchOperationRow claim path to avoid duplicate ownership.
+   * Re-enters the canonical per-operation queue so ready-node retries cannot
+   * create a second inline dispatch owner path.
    * @param {string} nodeId - Ready node ID.
    * @return {Promise<void>}
    * @private
@@ -686,7 +751,14 @@ class ReplicaDispatchService extends EventEmitter {
       });
 
       for (const row of pendingRows) {
-        await this.dispatchOperationRow(row);
+        if (!row?.operation_id) {
+          continue;
+        }
+        this.operationDispatchQueue.enqueue(
+          row.operation_id,
+          RECONCILE_REASON.NODE_READY_DISPATCH_RETRY,
+          {row},
+        );
       }
     } finally {
       this.retryInFlightNodes.delete(nodeId);
@@ -776,7 +848,12 @@ class ReplicaDispatchService extends EventEmitter {
     if (row.type === OperationType.REPLACE &&
         row.workflow_step === WORKFLOW_STEP.ACTIVE) {
       const operation = this.buildOperationFromRow(row);
-      await this.rebalanceCoordinator.executeOperation(operation);
+      if (typeof this.rebalanceCoordinator.dispatchOperation ===
+        TYPEOF.FUNCTION) {
+        await this.rebalanceCoordinator.dispatchOperation(operation);
+      } else {
+        await this.rebalanceCoordinator.executeOperation(operation);
+      }
       return;
     }
 

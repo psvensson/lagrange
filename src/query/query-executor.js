@@ -32,6 +32,7 @@ import {
   QUERY_LOG_MSG,
   QUERY_MESSAGE_TYPE,
   QUERY_OPERATOR,
+  QUERY_ROUTING_DIAGNOSTIC_REASON,
   QUERY_AST_NODE,
   QUERY_RESPONSE_TYPE,
   QUERY_SQL,
@@ -42,10 +43,18 @@ import {DistributedMergeEngine} from './distributed/distributed-merge-engine.js'
 import {ParallelQueryCoordinator} from './distributed/parallel-query-coordinator.js';
 import {DISTRIBUTED_JOIN_STRATEGY} from './distributed/distributed-query-plan-constants.js';
 import {MIGRATION_PARTITION_OPERATION} from '../migration/migration-constants.js';
+import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+} from '../control-plane/control-plane-readiness-constants.js';
+import {
+  compactEligibilitySnapshot,
+  evaluateEligibilityDecision,
+} from '../control-plane/eligibility-snapshot.js';
 
 const QUERY_MESSAGE_FIELD_SPLIT_MIRROR_ORIGIN = 'splitMirrorOrigin';
 const QUERY_MESSAGE_FIELD_MIGRATION_OPERATION = 'migrationOperation';
 const QUERY_MESSAGE_FIELD_MIGRATION_ID = 'migrationId';
+const QUERY_MESSAGE_FIELD_SESSION_ID = 'sessionId';
 const LEADER_GAP_REASON_OWNER_MISSING = 'owner_missing';
 const LEADER_GAP_REASON_SERVICE_MISSING = 'service_missing';
 
@@ -68,6 +77,11 @@ class QueryExecutor {
     this.messageRouter = options.messageRouter || null;
     this.systemCache = options.systemCache || null;
     this.routingMetadataOverlay = options.routingMetadataOverlay || null;
+    this.controlPlaneReadinessService =
+      options.controlPlaneReadinessService || null;
+    this.defaultRoutingReadinessDimension =
+      options.defaultRoutingReadinessDimension ||
+      CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE;
     this.nodeId = options.nodeId || QUERY_SUBSYSTEM.QUERY_EXECUTOR;
     this.hlcClock = new HLCClockService(this.nodeId);
     this.mergeEngine = options.mergeEngine || new DistributedMergeEngine();
@@ -99,10 +113,15 @@ class QueryExecutor {
     const config = ConfigurationManager.getInstance();
     this.queryTimeoutMs = config.get(QUERY_CONFIG_KEY.QUERY_TIMEOUT_MS) ||
       QUERY_DEFAULTS.QUERY_TIMEOUT_MS;
-    this.leaderRetryAttempts = config.get(QUERY_CONFIG_KEY.LEADER_RETRY_ATTEMPTS) ||
+    this.leaderRetryAttempts =
+      config.get(QUERY_CONFIG_KEY.LEADER_RETRY_ATTEMPTS) ||
       QUERY_DEFAULTS.LEADER_RETRY_ATTEMPTS;
-    this.leaderRetryDelayMs = config.get(QUERY_CONFIG_KEY.LEADER_RETRY_DELAY_MS) ||
+    this.leaderRetryDelayMs =
+      config.get(QUERY_CONFIG_KEY.LEADER_RETRY_DELAY_MS) ||
       QUERY_DEFAULTS.LEADER_RETRY_DELAY_MS;
+    this.readRetryAttempts =
+      config.get(QUERY_CONFIG_KEY.READ_RETRY_ATTEMPTS) ||
+      QUERY_DEFAULTS.READ_RETRY_ATTEMPTS;
     this.noServiceWarnThrottleMs =
       QUERY_DEFAULTS.NO_SERVICE_WARN_THROTTLE_MS;
   }
@@ -150,6 +169,24 @@ class QueryExecutor {
    */
   setRoutingMetadataOverlay(overlay) {
     this.routingMetadataOverlay = overlay || null;
+  }
+
+  /**
+   * Set canonical readiness owner used for serve-routing decisions.
+   * @param {Object|null} readinessService
+   */
+  setControlPlaneReadinessService(readinessService) {
+    this.controlPlaneReadinessService = readinessService || null;
+  }
+
+  /**
+   * Set the default readiness dimension for routed partition work.
+   * @param {string} readinessDimension
+   */
+  setDefaultRoutingReadinessDimension(readinessDimension) {
+    this.defaultRoutingReadinessDimension =
+      readinessDimension ||
+      CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE;
   }
 
   /**
@@ -878,6 +915,9 @@ class QueryExecutor {
         forRead,
         preferLeader,
         preferSameLatencyGroup,
+        routingReadinessDimension:
+          executionOptions.routingReadinessDimension ||
+          this.defaultRoutingReadinessDimension,
         splitMirrorOrigin: executionOptions.splitMirrorOrigin || null,
         timestamp: _timestamp,
         timeoutMs: executionOptions.timeoutMs,
@@ -942,19 +982,65 @@ class QueryExecutor {
       };
     }
 
-    const maxAttempts = forRead ? NUM.ONE : this.getWriteRetryAttemptLimit();
+    const maxAttempts = forRead ?
+      this.getReadRetryAttemptLimit() :
+      this.getWriteRetryAttemptLimit();
     let lastError = null;
+    let awaitedRoutingRepair = false;
+    let allowWriteLeaderGapFallback = false;
+    const routingReadinessDimension =
+      executionOptions.routingReadinessDimension ||
+      this.defaultRoutingReadinessDimension;
 
     for (let attempt = NUM.ONE; attempt <= maxAttempts; attempt++) {
       this.throwIfCancelled(cancellationToken);
-      let serviceCandidates = this.getPartitionServiceCandidates(
+      let {
+        candidates: serviceCandidates,
+        routingSnapshot,
+      } = this.resolvePartitionServiceCandidates(
         partitionId,
         forRead,
         preferLeader,
         preferSameLatencyGroup,
+        routingReadinessDimension,
+        allowWriteLeaderGapFallback,
       );
+      if (!awaitedRoutingRepair &&
+          serviceCandidates.length === NUM.ZERO &&
+          await this.maybeAwaitDeniedPartitionRoutingRepair(routingSnapshot)) {
+        awaitedRoutingRepair = true;
+        allowWriteLeaderGapFallback = !forRead;
+        this.throwIfCancelled(cancellationToken);
+        ({
+          candidates: serviceCandidates,
+          routingSnapshot,
+        } = this.resolvePartitionServiceCandidates(
+          partitionId,
+          forRead,
+          preferLeader,
+          preferSameLatencyGroup,
+          routingReadinessDimension,
+          allowWriteLeaderGapFallback,
+        ));
+      } else if (!forRead &&
+          !allowWriteLeaderGapFallback &&
+          this.shouldUseWriteLeaderGapFallback(routingSnapshot)) {
+        allowWriteLeaderGapFallback = true;
+        ({
+          candidates: serviceCandidates,
+          routingSnapshot,
+        } = this.resolvePartitionServiceCandidates(
+          partitionId,
+          forRead,
+          preferLeader,
+          preferSameLatencyGroup,
+          routingReadinessDimension,
+          allowWriteLeaderGapFallback,
+        ));
+      }
       if (serviceCandidates.length === 0) {
-        const hasRoutableService = this.hasRoutablePartitionService(partitionId);
+        const hasRoutableService = routingSnapshot.routableServiceCount >
+          NUM.ZERO;
         const hasPartitionRecord = this.hasPartitionRecord(partitionId);
 
         if (!forRead) {
@@ -985,16 +1071,7 @@ class QueryExecutor {
             };
           }
           if (!hasRoutableService) {
-            const now = Date.now();
-            const lastAt = this.noServiceWarnLastAt.get(partitionId);
-            if (!Number.isFinite(lastAt) ||
-                now - lastAt >= this.noServiceWarnThrottleMs) {
-              this.noServiceWarnLastAt.set(partitionId, now);
-              this.logger.warn(
-                QUERY_LOG_MSG.NO_SERVICE_FOR_PARTITION,
-                {partitionId},
-              );
-            }
+            this.logNoServiceForPartition(partitionId, routingSnapshot);
             return {
               partitionId,
               success: false,
@@ -1003,16 +1080,18 @@ class QueryExecutor {
             };
           }
         } else {
-          const now = Date.now();
-          const lastAt = this.noServiceWarnLastAt.get(partitionId);
-          if (!Number.isFinite(lastAt) ||
-              now - lastAt >= this.noServiceWarnThrottleMs) {
-            this.noServiceWarnLastAt.set(partitionId, now);
-            this.logger.warn(
-              QUERY_LOG_MSG.NO_SERVICE_FOR_PARTITION,
-              {partitionId},
-            );
+          // §1.10/§1.12: Reads get bounded retries so routing
+          // repair and cache convergence can discover candidates.
+          if (hasPartitionRecord && attempt < maxAttempts) {
+            lastError =
+              QUERY_ERROR_MSG.PARTITION_SERVICE_NOT_FOUND;
+            await this.delay(this.leaderRetryDelayMs);
+            this.throwIfCancelled(cancellationToken);
+            continue;
           }
+          this.logNoServiceForPartition(
+            partitionId, routingSnapshot,
+          );
           return {
             partitionId,
             success: false,
@@ -1036,6 +1115,11 @@ class QueryExecutor {
             sql,
             params,
           };
+          if (typeof executionOptions.sessionId === 'string' &&
+              executionOptions.sessionId.length > NUM.ZERO) {
+            request[QUERY_MESSAGE_FIELD_SESSION_ID] =
+              executionOptions.sessionId;
+          }
           if (executionOptions.splitMirrorOrigin) {
             request[QUERY_MESSAGE_FIELD_SPLIT_MIRROR_ORIGIN] =
               executionOptions.splitMirrorOrigin;
@@ -1076,6 +1160,8 @@ class QueryExecutor {
                 type: QUERY_MESSAGE_TYPE.QUERY,
                 sql,
                 params,
+                [QUERY_MESSAGE_FIELD_SESSION_ID]:
+                  executionOptions.sessionId || null,
                 [QUERY_MESSAGE_FIELD_SPLIT_MIRROR_ORIGIN]:
                   executionOptions.splitMirrorOrigin || null,
                 [QUERY_MESSAGE_FIELD_MIGRATION_OPERATION]:
@@ -1120,6 +1206,17 @@ class QueryExecutor {
             continue;
           }
 
+          // §1.12: For reads, treat transient failures as reasons
+          // to try the next candidate rather than hard-failing.
+          if (forRead) {
+            this.logger.debug(
+              QUERY_LOG_MSG.READ_CANDIDATE_TRANSIENT_FAILURE,
+              {partitionId, address},
+            );
+            lastError = errorMessage;
+            continue;
+          }
+
           return {
             partitionId,
             success: false,
@@ -1128,6 +1225,17 @@ class QueryExecutor {
           };
         } catch (error) {
           if (!forRead && this.isLeaderUnavailable(error.message)) {
+            lastError = error.message;
+            continue;
+          }
+
+          // §1.12: For reads, catch transient transport errors
+          // and try the next candidate.
+          if (forRead) {
+            this.logger.debug(
+              QUERY_LOG_MSG.READ_CANDIDATE_TRANSIENT_FAILURE,
+              {partitionId, address, error: error.message},
+            );
             lastError = error.message;
             continue;
           }
@@ -1141,7 +1249,7 @@ class QueryExecutor {
         }
       }
 
-      if (!forRead && attempt < maxAttempts) {
+      if (attempt < maxAttempts) {
         await this.delay(this.leaderRetryDelayMs);
         this.throwIfCancelled(cancellationToken);
       }
@@ -1162,10 +1270,26 @@ class QueryExecutor {
    */
   getWriteRetryAttemptLimit() {
     const maxRecoveryAttempts = NUM.TEN * NUM.FOUR;
-    const retryDelayMs = Math.max(this.leaderRetryDelayMs || NUM.ZERO, NUM.ONE);
-    const timeoutBoundAttempts = Math.ceil(this.queryTimeoutMs / retryDelayMs);
-    const boundedAttempts = Math.min(timeoutBoundAttempts, maxRecoveryAttempts);
+    const retryDelayMs =
+      Math.max(this.leaderRetryDelayMs || NUM.ZERO, NUM.ONE);
+    const timeoutBoundAttempts =
+      Math.ceil(this.queryTimeoutMs / retryDelayMs);
+    const boundedAttempts =
+      Math.min(timeoutBoundAttempts, maxRecoveryAttempts);
     return Math.max(this.leaderRetryAttempts, boundedAttempts);
+  }
+
+  /**
+   * Get read retry attempt limit for transient topology gaps.
+   * §1.10/§1.12: Reads get bounded retries so transient failures
+   * during topology transitions (splits, rebalance) can be
+   * recovered by trying the next candidate or waiting for routing
+   * repair.
+   * @return {number} Maximum attempts.
+   * @private
+   */
+  getReadRetryAttemptLimit() {
+    return this.readRetryAttempts;
   }
 
   /**
@@ -1220,35 +1344,50 @@ class QueryExecutor {
     forRead = false,
     preferLeader = false,
     preferSameLatencyGroup = false,
+    routingReadinessDimension = this.defaultRoutingReadinessDimension,
+  ) {
+    return this.resolvePartitionServiceCandidates(
+      partitionId,
+      forRead,
+      preferLeader,
+      preferSameLatencyGroup,
+      routingReadinessDimension,
+    ).candidates;
+  }
+
+  /**
+   * Resolve ordered candidates together with the routing snapshot used to build
+   * them so request paths can reuse the same owner evidence for retries.
+   * @param {string} partitionId
+   * @param {boolean} forRead
+   * @param {boolean} preferLeader
+   * @param {boolean} preferSameLatencyGroup
+   * @param {string} routingReadinessDimension
+   * @param {boolean} allowWriteLeaderGapFallback
+   * @return {{candidates: Array<Object>, routingSnapshot: Object}}
+   * @private
+   */
+  resolvePartitionServiceCandidates(
+    partitionId,
+    forRead = false,
+    preferLeader = false,
+    preferSameLatencyGroup = false,
+    routingReadinessDimension = this.defaultRoutingReadinessDimension,
+    allowWriteLeaderGapFallback = false,
   ) {
     const prioritizeLeader = preferLeader || !forRead;
-    const overlayServices = this.getOverlayPartitionServices(partitionId);
-    const hasOverlayServices = overlayServices.length > 0;
-
-    if (!this.systemCache && !hasOverlayServices) {
-      this.logger.warn(LOG_MSG.SYSTEM_CACHE_PARTITION_LOOKUP_UNAVAILABLE, {partitionId});
-      return [];
-    }
-
-    if (!hasOverlayServices && typeof this.systemCache?.filter !== 'function') {
-      this.logger.warn(QUERY_LOG_MSG.SYSTEM_CACHE_FILTER_UNSUPPORTED, {partitionId});
-      return [];
-    }
-
-    const services = this.getRoutablePartitionServices(partitionId);
+    const routingSnapshot = this.getPartitionRoutingSnapshot(
+      partitionId,
+      routingReadinessDimension,
+    );
+    const services = routingSnapshot.routableServices;
 
     if (services.length === 0) {
-      const now = Date.now();
-      const lastWarnAt = this.noServiceWarnLastAt.get(partitionId);
-      if (!Number.isFinite(lastWarnAt) ||
-          now - lastWarnAt >= this.noServiceWarnThrottleMs) {
-        this.noServiceWarnLastAt.set(partitionId, now);
-        this.logger.warn(
-          QUERY_LOG_MSG.NO_ACTIVE_SERVICE_FOR_PARTITION,
-          {partitionId},
-        );
-      }
-      return [];
+      this.logPartitionRoutingDenial(routingSnapshot);
+      return {
+        candidates: [],
+        routingSnapshot,
+      };
     }
 
     const localGroupId = this.resolveNodeLatencyGroupId(this.nodeId);
@@ -1257,7 +1396,7 @@ class QueryExecutor {
       localGroupId,
       forRead && preferSameLatencyGroup,
     );
-    const canonicalLeaderNodeId = this.getPartitionLeaderNodeId(partitionId);
+    const canonicalLeaderNodeId = routingSnapshot.canonicalLeaderNodeId;
     const bootstrapLeaderServices = !forRead && !canonicalLeaderNodeId ?
       this.getFreshBootstrapLeaderServices(partitionId, orderedServices) :
       [];
@@ -1287,24 +1426,49 @@ class QueryExecutor {
       if (!canonicalLeaderNodeId) {
         if (bootstrapLeaderServices.length > NUM.ZERO) {
           bootstrapLeaderServices.forEach(addService);
-          return candidates;
+          return {
+            candidates,
+            routingSnapshot,
+          };
         }
         this.logCanonicalLeaderRoutingGap(partitionId, {
           reason: LEADER_GAP_REASON_OWNER_MISSING,
           services: orderedServices,
+          routingSnapshot,
         });
-        return [];
+        return {
+          candidates: [],
+          routingSnapshot,
+        };
       }
       if (canonicalLeaderServices.length === NUM.ZERO) {
+        const fallbackServices = allowWriteLeaderGapFallback ?
+          this.getWriteLeaderGapFallbackServices(orderedServices) :
+          [];
         this.logCanonicalLeaderRoutingGap(partitionId, {
           reason: LEADER_GAP_REASON_SERVICE_MISSING,
           canonicalLeaderNodeId,
           services: orderedServices,
+          fallbackServices,
+          routingSnapshot,
         });
-        return [];
+        if (fallbackServices.length > NUM.ZERO) {
+          fallbackServices.forEach(addService);
+          return {
+            candidates,
+            routingSnapshot,
+          };
+        }
+        return {
+          candidates: [],
+          routingSnapshot,
+        };
       }
       canonicalLeaderServices.forEach(addService);
-      return candidates;
+      return {
+        candidates,
+        routingSnapshot,
+      };
     }
 
     if (prioritizeLeader) {
@@ -1318,7 +1482,68 @@ class QueryExecutor {
 
     orderedServices.forEach(addService);
 
-    return candidates;
+    return {
+      candidates,
+      routingSnapshot,
+    };
+  }
+
+  /**
+   * Build one owner-style snapshot for partition routing diagnostics.
+   * @param {string} partitionId
+   * @param {string} [routingReadinessDimension]
+   * @return {Object}
+   */
+  getPartitionRoutingSnapshot(
+    partitionId,
+    routingReadinessDimension = this.defaultRoutingReadinessDimension,
+  ) {
+    const serviceRows = this.getPartitionServiceRows(partitionId);
+    const canonicalLeaderNodeId = this.getPartitionLeaderNodeId(partitionId);
+    const evaluatedServices = serviceRows.map((service) => ({
+      service,
+      routing: this.evaluatePartitionServiceRoutability(
+        service,
+        routingReadinessDimension,
+      ),
+    }));
+    const activeAddressedServices = evaluatedServices
+      .filter((entry) => {
+        return entry.routing.reasonCode !==
+            QUERY_ROUTING_DIAGNOSTIC_REASON.SERVICE_INACTIVE &&
+          entry.routing.reasonCode !==
+            QUERY_ROUTING_DIAGNOSTIC_REASON.SERVICE_ADDRESS_MISSING;
+      })
+      .map((entry) => entry.service);
+    const routableServices = evaluatedServices
+      .filter((entry) => entry.routing.routable === true)
+      .map((entry) => entry.service);
+    const canonicalLeaderServiceCount = canonicalLeaderNodeId ?
+      serviceRows.filter((service) => service?.node_id === canonicalLeaderNodeId)
+        .length :
+      NUM.ZERO;
+
+    return Object.freeze({
+      partitionId,
+      routingReadinessDimension,
+      reasonCode: this.resolvePartitionRoutingReasonCode(
+        serviceRows,
+        activeAddressedServices,
+        routableServices,
+      ),
+      canonicalLeaderNodeId,
+      leaderKnown: canonicalLeaderNodeId !== null,
+      serviceRowCount: serviceRows.length,
+      activeAddressedServiceCount: activeAddressedServices.length,
+      routableServiceCount: routableServices.length,
+      canonicalLeaderServiceCount,
+      serviceRows: Object.freeze([...serviceRows]),
+      routableServices: Object.freeze([...routableServices]),
+      deniedByNodeId: this.buildRoutingDeniedNodeSummary(
+        evaluatedServices,
+        routingReadinessDimension,
+      ),
+    });
   }
 
   /**
@@ -1363,19 +1588,72 @@ class QueryExecutor {
   }
 
   /**
-   * Get write-routable partition services from system cache.
-   * @param {string} partitionId - Partition ID.
-   * @return {Array<Object>} Routable services for the partition.
+   * Order redirect-safe write fallback replicas for canonical leader-service
+   * visibility gaps. Local replicas go first, then stale leader hints, then
+   * the remaining routable replicas.
+   * @param {Object[]} services
+   * @return {Object[]}
    * @private
    */
-  getRoutablePartitionServices(partitionId) {
+  getWriteLeaderGapFallbackServices(services = []) {
+    const fallbackServices = [];
+    const seen = new Set();
+    const addService = (service) => {
+      if (!service) {
+        return;
+      }
+      const dedupeKey =
+        service.service_id || service.replica_id || service.address;
+      if (!dedupeKey || seen.has(dedupeKey)) {
+        return;
+      }
+      seen.add(dedupeKey);
+      fallbackServices.push(service);
+    };
+
+    services
+      .filter((service) => service?.node_id === this.nodeId)
+      .forEach(addService);
+    services
+      .filter((service) => service?.raft_role === RAFT_ROLE.LEADER)
+      .forEach(addService);
+    services.forEach(addService);
+
+    return fallbackServices;
+  }
+
+  /**
+   * Resolve partition service rows from cache and overlay metadata.
+   * @param {string} partitionId - Partition ID.
+   * @return {Array<Object>} Partition service rows.
+   * @private
+   */
+  getPartitionServiceRows(partitionId) {
+    const overlayServices = this.getOverlayPartitionServices(partitionId);
+    const hasOverlayServices = overlayServices.length > 0;
+
+    if (!this.systemCache && !hasOverlayServices) {
+      this.logger.warn(
+        LOG_MSG.SYSTEM_CACHE_PARTITION_LOOKUP_UNAVAILABLE,
+        {partitionId},
+      );
+      return [];
+    }
+
+    if (!hasOverlayServices && typeof this.systemCache?.filter !== 'function') {
+      this.logger.warn(
+        QUERY_LOG_MSG.SYSTEM_CACHE_FILTER_UNSUPPORTED,
+        {partitionId},
+      );
+      return [];
+    }
+
     const services = [];
 
     if (this.systemCache && typeof this.systemCache.filter === 'function') {
       const cacheRows = this.systemCache.filter(TABLES.SERVICES, (service) =>
         service.partition_id === partitionId &&
-        service.service_type === SERVICE_TYPE.PARTITION &&
-        this.isRoutablePartitionService(service),
+        service.service_type === SERVICE_TYPE.PARTITION,
       ) || [];
       services.push(...cacheRows);
     }
@@ -1383,8 +1661,7 @@ class QueryExecutor {
     const overlayRows = this.getOverlayPartitionServices(partitionId)
       .filter((service) =>
         service.partition_id === partitionId &&
-        service.service_type === SERVICE_TYPE.PARTITION &&
-        this.isRoutablePartitionService(service),
+        service.service_type === SERVICE_TYPE.PARTITION,
       );
     services.push(...overlayRows);
 
@@ -1407,13 +1684,278 @@ class QueryExecutor {
   }
 
   /**
+   * Resolve one typed routing reason from the partition service snapshot.
+   * @param {Object[]} serviceRows
+   * @param {Object[]} activeAddressedServices
+   * @param {Object[]} routableServices
+   * @return {string}
+   * @private
+   */
+  resolvePartitionRoutingReasonCode(
+    serviceRows,
+    activeAddressedServices,
+    routableServices,
+  ) {
+    if (serviceRows.length === NUM.ZERO) {
+      return QUERY_ROUTING_DIAGNOSTIC_REASON.NO_SERVICE_ROWS;
+    }
+    if (activeAddressedServices.length === NUM.ZERO) {
+      return QUERY_ROUTING_DIAGNOSTIC_REASON.NO_ACTIVE_ADDRESSED_SERVICES;
+    }
+    if (routableServices.length === NUM.ZERO) {
+      return QUERY_ROUTING_DIAGNOSTIC_REASON
+        .ALL_SERVICES_FILTERED_BY_READINESS;
+    }
+    return QUERY_ROUTING_DIAGNOSTIC_REASON.OK;
+  }
+
+  /**
+   * Build per-node denial summaries for one routing snapshot.
+   * @param {Array<Object>} evaluatedServices
+   * @param {string} routingReadinessDimension
+   * @return {Object}
+   * @private
+   */
+  buildRoutingDeniedNodeSummary(
+    evaluatedServices,
+    routingReadinessDimension,
+  ) {
+    const deniedByNodeId = {};
+
+    for (const entry of Array.isArray(evaluatedServices) ? evaluatedServices : []) {
+      const service = entry?.service || null;
+      const routing = entry?.routing || null;
+      const nodeId = String(service?.node_id || service?.nodeId || '');
+      if (!nodeId ||
+          !routing ||
+          routing.routable === true ||
+          !routing.readinessSummary) {
+        continue;
+      }
+
+      const existing = deniedByNodeId[nodeId] || {
+        decisionDimension: routingReadinessDimension,
+        observedAt: routing.readinessSummary.observedAt || null,
+        lifecycleState: routing.readinessSummary.lifecycleState || null,
+        reasonCodes: [],
+        failedDimensions: [],
+      };
+      for (const reasonCode of routing.readinessSummary.reasonCodes) {
+        if (!existing.reasonCodes.includes(reasonCode)) {
+          existing.reasonCodes.push(reasonCode);
+        }
+      }
+      for (const failedDimension of routing.readinessSummary.failedDimensions) {
+        if (!existing.failedDimensions.includes(failedDimension)) {
+          existing.failedDimensions.push(failedDimension);
+        }
+      }
+      deniedByNodeId[nodeId] = existing;
+    }
+
+    return Object.freeze(deniedByNodeId);
+  }
+
+  /**
+   * Build a compact routing snapshot summary suitable for logs.
+   * @param {Object|null} routingSnapshot
+   * @return {Object|null}
+   * @private
+   */
+  summarizePartitionRoutingSnapshot(routingSnapshot) {
+    if (!routingSnapshot || typeof routingSnapshot !== 'object') {
+      return null;
+    }
+    return {
+      reasonCode: routingSnapshot.reasonCode || null,
+      routingReadinessDimension:
+        routingSnapshot.routingReadinessDimension || null,
+      serviceRowCount: Number(routingSnapshot.serviceRowCount || NUM.ZERO),
+      activeAddressedServiceCount: Number(
+        routingSnapshot.activeAddressedServiceCount || NUM.ZERO,
+      ),
+      routableServiceCount: Number(
+        routingSnapshot.routableServiceCount || NUM.ZERO,
+      ),
+      canonicalLeaderServiceCount: Number(
+        routingSnapshot.canonicalLeaderServiceCount || NUM.ZERO,
+      ),
+      leaderKnown: routingSnapshot.leaderKnown === true,
+      canonicalLeaderNodeId: routingSnapshot.canonicalLeaderNodeId || null,
+      deniedByNodeId: routingSnapshot.deniedByNodeId || {},
+    };
+  }
+
+  /**
+   * Emit typed diagnostics when partition routing has no usable candidates.
+   * @param {Object|null} routingSnapshot
+   * @private
+   */
+  logPartitionRoutingDenial(routingSnapshot) {
+    const reasonCode = String(
+      routingSnapshot?.reasonCode ||
+      QUERY_ROUTING_DIAGNOSTIC_REASON.NO_SERVICE_ROWS,
+    );
+    const warnKey = String(routingSnapshot?.partitionId || '') + ':' + reasonCode;
+    const now = Date.now();
+    const lastWarnAt = this.noServiceWarnLastAt.get(warnKey);
+    if (Number.isFinite(lastWarnAt) &&
+        now - lastWarnAt < this.noServiceWarnThrottleMs) {
+      return;
+    }
+    this.noServiceWarnLastAt.set(warnKey, now);
+    const message = reasonCode === QUERY_ROUTING_DIAGNOSTIC_REASON
+      .ALL_SERVICES_FILTERED_BY_READINESS ?
+      QUERY_LOG_MSG.PARTITION_ROUTING_CANDIDATES_FILTERED :
+      QUERY_LOG_MSG.NO_ACTIVE_SERVICE_FOR_PARTITION;
+    this.logger.warn(message, {
+      partitionId: routingSnapshot?.partitionId || null,
+      routingSnapshot: this.summarizePartitionRoutingSnapshot(
+        routingSnapshot,
+      ),
+    });
+  }
+
+  /**
+   * Await one authoritative readiness repair when routing denial indicates the
+   * local cache filtered all active candidates based on stale node evidence.
+   * @param {Object|null} routingSnapshot
+   * @return {Promise<boolean>}
+   * @private
+   */
+  async maybeAwaitDeniedPartitionRoutingRepair(routingSnapshot) {
+    if (!routingSnapshot ||
+        !this.controlPlaneReadinessService ||
+        typeof this.controlPlaneReadinessService.getNodeReadiness !==
+          'function') {
+      return false;
+    }
+
+    const deniedNodeIds = routingSnapshot.reasonCode ===
+      QUERY_ROUTING_DIAGNOSTIC_REASON.ALL_SERVICES_FILTERED_BY_READINESS &&
+      routingSnapshot.activeAddressedServiceCount > NUM.ZERO ?
+      Object.keys(routingSnapshot.deniedByNodeId || {}) :
+      [];
+    const repairNodeIds = new Set(deniedNodeIds);
+    if (this.shouldRepairCanonicalLeaderServiceGap(routingSnapshot)) {
+      repairNodeIds.add(routingSnapshot.canonicalLeaderNodeId);
+    }
+    if (repairNodeIds.size === NUM.ZERO) {
+      return false;
+    }
+
+    await Promise.all([...repairNodeIds].map(async (nodeId) => {
+      try {
+        await this.controlPlaneReadinessService.getNodeReadiness(
+          nodeId,
+          {
+            allowAuthoritativeRefresh: true,
+            requireFreshOnIneligible: true,
+            decisionDimension: routingSnapshot.routingReadinessDimension,
+          },
+        );
+      } catch (_error) {
+        return null;
+      }
+      return null;
+    }));
+    return true;
+  }
+
+  /**
+   * Return true when write execution can safely fall back to already-routable
+   * replicas because the canonical leader identity is known but its service
+   * row is temporarily missing locally.
+   * @param {Object|null} routingSnapshot
+   * @return {boolean}
+   * @private
+   */
+  shouldUseWriteLeaderGapFallback(routingSnapshot) {
+    return Boolean(
+      routingSnapshot &&
+      routingSnapshot.leaderKnown === true &&
+      typeof routingSnapshot.canonicalLeaderNodeId === 'string' &&
+      routingSnapshot.canonicalLeaderNodeId.length > NUM.ZERO &&
+      Number(routingSnapshot.canonicalLeaderServiceCount) === NUM.ZERO &&
+      Number(routingSnapshot.routableServiceCount) > NUM.ZERO,
+    );
+  }
+
+  /**
+   * Return true when authoritative node/service repair should refresh the
+   * canonical leader node because its service rows are missing locally while
+   * peer replicas remain visible.
+   * @param {Object|null} routingSnapshot
+   * @return {boolean}
+   * @private
+   */
+  shouldRepairCanonicalLeaderServiceGap(routingSnapshot) {
+    return Boolean(
+      routingSnapshot &&
+      routingSnapshot.leaderKnown === true &&
+      typeof routingSnapshot.canonicalLeaderNodeId === 'string' &&
+      routingSnapshot.canonicalLeaderNodeId.length > NUM.ZERO &&
+      Number(routingSnapshot.canonicalLeaderServiceCount) === NUM.ZERO &&
+      Number(routingSnapshot.activeAddressedServiceCount) > NUM.ZERO,
+    );
+  }
+
+  /**
+   * Emit the generic no-service warning only when typed routing diagnostics did
+   * not already capture a more specific readiness-filtered denial.
+   * @param {string} partitionId
+   * @param {Object|null} routingSnapshot
+   * @private
+   */
+  logNoServiceForPartition(partitionId, routingSnapshot = null) {
+    if (routingSnapshot?.reasonCode ===
+        QUERY_ROUTING_DIAGNOSTIC_REASON
+          .ALL_SERVICES_FILTERED_BY_READINESS) {
+      return;
+    }
+    const now = Date.now();
+    const lastAt = this.noServiceWarnLastAt.get(partitionId);
+    if (Number.isFinite(lastAt) &&
+        now - lastAt < this.noServiceWarnThrottleMs) {
+      return;
+    }
+    this.noServiceWarnLastAt.set(partitionId, now);
+    this.logger.warn(
+      QUERY_LOG_MSG.NO_SERVICE_FOR_PARTITION,
+      {partitionId},
+    );
+  }
+
+  /**
+   * Get write-routable partition services from system cache.
+   * @param {string} partitionId - Partition ID.
+   * @return {Array<Object>} Routable services for the partition.
+   * @private
+   */
+  getRoutablePartitionServices(
+    partitionId,
+    routingReadinessDimension = this.defaultRoutingReadinessDimension,
+  ) {
+    return this.getPartitionRoutingSnapshot(
+      partitionId,
+      routingReadinessDimension,
+    ).routableServices;
+  }
+
+  /**
    * Check whether a partition has write-routable services in the system cache.
    * @param {string} partitionId - Partition ID.
    * @return {boolean} True when routable services exist.
    * @private
    */
-  hasRoutablePartitionService(partitionId) {
-    return this.getRoutablePartitionServices(partitionId).length > NUM.ZERO;
+  hasRoutablePartitionService(
+    partitionId,
+    routingReadinessDimension = this.defaultRoutingReadinessDimension,
+  ) {
+    return this.getPartitionRoutingSnapshot(
+      partitionId,
+      routingReadinessDimension,
+    ).routableServiceCount > NUM.ZERO;
   }
 
   /**
@@ -1482,10 +2024,165 @@ class QueryExecutor {
    * @return {boolean} True when row can be used for routing.
    * @private
    */
-  isRoutablePartitionService(service) {
-    return service.status === SERVICE_STATUS.ACTIVE &&
-      typeof service.address === 'string' &&
-      service.address.length > NUM.ZERO;
+  isRoutablePartitionService(
+    service,
+    routingReadinessDimension = this.defaultRoutingReadinessDimension,
+  ) {
+    return this.evaluatePartitionServiceRoutability(
+      service,
+      routingReadinessDimension,
+    ).routable === true;
+  }
+
+  /**
+   * Evaluate one partition service row against the canonical readiness owner.
+   * @param {Object} service
+   * @param {string} routingReadinessDimension
+   * @return {Object}
+   * @private
+   */
+  evaluatePartitionServiceRoutability(
+    service,
+    routingReadinessDimension = this.defaultRoutingReadinessDimension,
+  ) {
+    if (service.status !== SERVICE_STATUS.ACTIVE) {
+      return {
+        routable: false,
+        reasonCode: QUERY_ROUTING_DIAGNOSTIC_REASON.SERVICE_INACTIVE,
+        readinessSummary: null,
+      };
+    }
+    if (typeof service.address !== 'string' ||
+        service.address.length === NUM.ZERO) {
+      return {
+        routable: false,
+        reasonCode: QUERY_ROUTING_DIAGNOSTIC_REASON.SERVICE_ADDRESS_MISSING,
+        readinessSummary: null,
+      };
+    }
+
+    const nodeId = service?.node_id || service?.nodeId || null;
+    if (!nodeId ||
+        !this.controlPlaneReadinessService ||
+        typeof this.controlPlaneReadinessService.getNodeReadinessSync !==
+          'function') {
+      return {
+        routable: true,
+        reasonCode: QUERY_ROUTING_DIAGNOSTIC_REASON.OK,
+        readinessSummary: null,
+      };
+    }
+
+    const readiness =
+      this.controlPlaneReadinessService.getNodeReadinessSync(
+        nodeId,
+        {
+          allowAuthoritativeRefresh: true,
+          requireFreshOnIneligible: true,
+          decisionDimension: routingReadinessDimension,
+        },
+      );
+    if (!readiness || !readiness.dimensions) {
+      return {
+        routable: false,
+        reasonCode: QUERY_ROUTING_DIAGNOSTIC_REASON.READINESS_UNAVAILABLE,
+        readinessSummary: null,
+      };
+    }
+
+    const decision = evaluateEligibilityDecision(
+      readiness,
+      routingReadinessDimension,
+    );
+    const compactSnapshot = compactEligibilitySnapshot(
+      readiness,
+      routingReadinessDimension,
+    );
+    const bootstrapGraceRoutable =
+      decision.eligible !== true &&
+      this.shouldAllowFreshBootstrapRoutingGrace(
+        service,
+        readiness,
+        decision,
+      );
+
+    return {
+      routable: decision.eligible === true || bootstrapGraceRoutable,
+      reasonCode: decision.eligible === true || bootstrapGraceRoutable ?
+        QUERY_ROUTING_DIAGNOSTIC_REASON.OK :
+        QUERY_ROUTING_DIAGNOSTIC_REASON.NODE_NOT_ELIGIBLE,
+      readinessSummary: compactSnapshot ? {
+        decisionDimension: compactSnapshot.decisionDimension ||
+          routingReadinessDimension,
+        observedAt: compactSnapshot.observedAt || null,
+        lifecycleState: compactSnapshot.lifecycleState || null,
+        reasonCodes: compactSnapshot.reasonCodes || Object.freeze([]),
+        failedDimensions: decision.failedDimensions || Object.freeze([]),
+      } : null,
+    };
+  }
+
+  /**
+   * Admit one fresh bootstrap partition service when cache heartbeat
+   * publication lags but transport and service evidence remain positive.
+   * This grace stays bounded to the initial creation window where
+   * `leader_node_id` has not converged yet.
+   * @param {Object} service
+   * @param {Object|null} readiness
+   * @param {Object|null} decision
+   * @return {boolean}
+   * @private
+   */
+  shouldAllowFreshBootstrapRoutingGrace(service, readiness, decision) {
+    const partitionId = String(
+      service?.partition_id ||
+      service?.partitionId ||
+      '',
+    );
+    if (partitionId.length === NUM.ZERO) {
+      return false;
+    }
+
+    const partition = this.getPartitionRecord(partitionId);
+    if (!this.isBootstrapRoutingGraceWindow(partition)) {
+      return false;
+    }
+
+    const dimensions = readiness?.dimensions;
+    const nodeEvidence = readiness?.nodeEvidence;
+    if (!dimensions ||
+        typeof dimensions !== 'object' ||
+        !nodeEvidence ||
+        typeof nodeEvidence !== 'object') {
+      return false;
+    }
+
+    if (dimensions[CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE] !== true ||
+        dimensions[CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY] !== true ||
+        dimensions[CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY] !== true ||
+        dimensions[
+          CONTROL_PLANE_READINESS_DIMENSION
+            .METADATA_PUBLICATION_HEALTHY
+        ] !== true ||
+        nodeEvidence.transportConnected !== true ||
+        nodeEvidence.readyWhenWritten !== true) {
+      return false;
+    }
+
+    const allowedFailedDimensions = new Set([
+      CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY,
+      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE,
+      CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+      CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
+      CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE,
+    ]);
+    const failedDimensions = Array.isArray(decision?.failedDimensions) ?
+      decision.failedDimensions :
+      [];
+    return failedDimensions.length > NUM.ZERO &&
+      failedDimensions.every((dimension) =>
+        allowedFailedDimensions.has(dimension),
+      );
   }
 
   /**
@@ -1588,7 +2285,7 @@ class QueryExecutor {
    * @private
    */
   isFreshPartitionBootstrapWindow(partition) {
-    if (!partition) {
+    if (!partition || !this.isBootstrapRoutingGraceWindow(partition)) {
       return false;
     }
     const leaderNodeId =
@@ -1596,10 +2293,20 @@ class QueryExecutor {
       partition?.leader_node_id ??
       partition?.leaderNodeId ??
       null;
-    if (typeof leaderNodeId === 'string' && leaderNodeId.length > NUM.ZERO) {
+    return typeof leaderNodeId !== 'string' || leaderNodeId.length === NUM.ZERO;
+  }
+
+  /**
+   * Identify the short-lived partition bootstrap grace window before the
+   * partition owner row is updated post-creation.
+   * @param {Object|null} partition
+   * @return {boolean}
+   * @private
+   */
+  isBootstrapRoutingGraceWindow(partition) {
+    if (!partition) {
       return false;
     }
-
     const createdAt =
       partition?.[COLUMN.CREATED_AT] ??
       partition?.created_at ??
@@ -1640,6 +2347,11 @@ class QueryExecutor {
       .filter((service) => service?.raft_role === RAFT_ROLE.LEADER)
       .map((service) => service?.node_id)
       .filter((nodeId) => typeof nodeId === 'string' && nodeId.length > NUM.ZERO))];
+    const fallbackNodeIds = [...new Set((Array.isArray(options.fallbackServices) ?
+      options.fallbackServices :
+      [])
+      .map((service) => service?.node_id)
+      .filter((nodeId) => typeof nodeId === 'string' && nodeId.length > NUM.ZERO))];
 
     if (reason === LEADER_GAP_REASON_SERVICE_MISSING) {
       this.logger.warn(
@@ -1649,6 +2361,10 @@ class QueryExecutor {
           leaderNodeId: options.canonicalLeaderNodeId || null,
           routableNodeIds,
           staleLeaderNodeIds,
+          fallbackNodeIds,
+          routingSnapshot: this.summarizePartitionRoutingSnapshot(
+            options.routingSnapshot,
+          ),
         },
       );
       return;
@@ -1660,6 +2376,9 @@ class QueryExecutor {
         partitionId,
         routableNodeIds,
         staleLeaderNodeIds,
+        routingSnapshot: this.summarizePartitionRoutingSnapshot(
+          options.routingSnapshot,
+        ),
       },
     );
   }

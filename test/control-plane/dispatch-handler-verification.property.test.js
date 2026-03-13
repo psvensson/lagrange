@@ -216,6 +216,7 @@ function createMockDispatchService(options = {}) {
       if (!tracking.claimOperationId) {
         tracking.claimOperationId = op.operationId;
       }
+      return {success: true};
     },
   };
 

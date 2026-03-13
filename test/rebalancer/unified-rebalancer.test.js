@@ -228,6 +228,8 @@ function createTestRebalancer(options = {}) {
     tables = [],
     replicaOperations = [],
     connectionState = 'connected',
+    sqlQueryEngine = null,
+    controlPlaneSystemTableGateway = null,
   } = options;
 
   const mockCache = createMockCache(
@@ -239,7 +241,7 @@ function createTestRebalancer(options = {}) {
   );
   const mockMessageRouter = createMockMessageRouter(connectionState);
   const mockCoordinator = createMockCoordinator();
-  const mockSqlQueryEngine = {
+  const mockSqlQueryEngine = sqlQueryEngine || {
     async executeQuery() {
       return {success: true, rows: []};
     },
@@ -256,6 +258,7 @@ function createTestRebalancer(options = {}) {
     messageRouter: mockMessageRouter,
     rebalanceCoordinator: mockCoordinator,
     sqlQueryEngine: mockSqlQueryEngine,
+    controlPlaneSystemTableGateway,
     controlPlaneReadinessService: mockReadinessService,
   });
 }
@@ -471,6 +474,36 @@ test('UnifiedRebalancer - Basic Initialization', async (t) => {
 
     rebalancer.shutdown();
   });
+});
+
+test('UnifiedRebalancer budget queries use injected control-plane ' +
+  'system-table gateway', async (t) => {
+  initializeTestEnvironment();
+
+  const gatewayCalls = [];
+  const rebalancer = createTestRebalancer({
+    sqlQueryEngine: {
+      async executeQuery() {
+        throw new Error('raw SQL path should not be used');
+      },
+    },
+    controlPlaneSystemTableGateway: {
+      async executeQuery(sql, params) {
+        gatewayCalls.push({sql, params});
+        if (sql.includes('SELECT config_value FROM config')) {
+          return {success: true, rows: [{config_value: '7'}]};
+        }
+        return {success: true, rows: [{total_count: 2}]};
+      },
+    },
+  });
+
+  const configuredBudget = await rebalancer.getConfiguredRebalanceBudget();
+  const inFlightCount = await rebalancer.getGlobalInFlightOperationCount();
+
+  t.equal(configuredBudget, 7, 'gateway should provide config-backed budget');
+  t.equal(inFlightCount, 2, 'gateway should provide in-flight count');
+  t.equal(gatewayCalls.length, 2, 'gateway should own both budget reads');
 });
 
 

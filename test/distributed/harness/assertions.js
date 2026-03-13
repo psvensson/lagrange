@@ -82,6 +82,7 @@ const OPERATION_FIELD_CANDIDATE_TIMESTAMPS = Object.freeze([
   'created_at',
   'timestamp',
 ]);
+const CONTROL_SNAPSHOT_FIELD_NODES = 'nodes';
 const CONTROL_SNAPSHOT_FIELD_PARTITIONS = 'partitions';
 const CONTROL_SNAPSHOT_FIELD_LEADERS = 'leaders';
 const CONTROL_SNAPSHOT_FIELD_VOTER_COUNTS = 'voterCounts';
@@ -329,6 +330,21 @@ function extractControlSnapshotPayload(result, nodeId) {
   return rows[0];
 }
 
+function extractControlSnapshotNodeIds(snapshot) {
+  const nodeIds = new Set();
+  const nodes = Array.isArray(snapshot?.[CONTROL_SNAPSHOT_FIELD_NODES]) ?
+    snapshot[CONTROL_SNAPSHOT_FIELD_NODES] :
+    [];
+  for (const nodeId of nodes) {
+    const normalizedNodeId = String(nodeId || '').trim();
+    if (normalizedNodeId.length === 0) {
+      continue;
+    }
+    nodeIds.add(normalizedNodeId);
+  }
+  return nodeIds;
+}
+
 function extractControlSnapshotPartitionIds(snapshot) {
   const partitionIds = new Set();
   const partitions = Array.isArray(snapshot?.[CONTROL_SNAPSHOT_FIELD_PARTITIONS]) ?
@@ -446,6 +462,7 @@ async function queryControlSnapshot(node) {
   return {
     nodeId: String(node?.id || VALUE_UNKNOWN),
     servicesRows: [],
+    activeNodeIds: extractControlSnapshotNodeIds(snapshot),
     expectedPartitionIds: extractControlSnapshotPartitionIds(snapshot),
     operationRows: extractControlSnapshotOperationRows(snapshot),
     error: null,
@@ -455,6 +472,74 @@ async function queryControlSnapshot(node) {
     inFlightReplicaOperationStatuses: inFlightSummary.statusCounts,
     partitionMembership: extractControlSnapshotPartitionMembership(snapshot),
   };
+}
+
+async function queryNodeConsistencyStateViaSql(node) {
+  const [nodesResult, partResult, svcResult] =
+    await Promise.all([
+      node.query(NODES_QUERY),
+      node.query(PARTITIONS_QUERY),
+      node.query(SERVICES_QUERY),
+    ]);
+
+  const activeNodes = ((nodesResult && nodesResult.rows) || [])
+    .map((row) => row.node_id)
+    .sort();
+
+  const partitions = ((partResult && partResult.rows) || [])
+    .map((row) => row.partition_id)
+    .sort();
+
+  const leaders = {};
+  const svcRows = (svcResult && svcResult.rows) || [];
+  for (const row of svcRows) {
+    if (!isVoterReady(row)) continue;
+    const role = row.raft_role.toLowerCase();
+    if (role === 'leader') {
+      leaders[row.partition_id] = row.address;
+    }
+  }
+
+  return {
+    nodeId: node.id,
+    activeNodes,
+    partitions,
+    leaders,
+  };
+}
+
+async function queryNodeConsistencyState(node) {
+  let controlSnapshotError = null;
+
+  if (typeof node?.getControlSnapshot === 'function') {
+    try {
+      const snapshotState = await queryControlSnapshot(node);
+      return {
+        nodeId: String(node?.id || VALUE_UNKNOWN),
+        activeNodes: Array.from(snapshotState.activeNodeIds || []).sort(),
+        partitions: Array.from(snapshotState.expectedPartitionIds || []).sort(),
+        leaders: Object.fromEntries(
+          Array.from(snapshotState.leaders || [])
+            .sort(([left], [right]) => left.localeCompare(right)),
+        ),
+      };
+    } catch (error) {
+      controlSnapshotError = error;
+    }
+  }
+
+  try {
+    return await queryNodeConsistencyStateViaSql(node);
+  } catch (error) {
+    if (!controlSnapshotError) {
+      throw error;
+    }
+    throw new Error(
+      String(controlSnapshotError?.message || controlSnapshotError) +
+        '; raw consistency fallback failed: ' +
+        String(error?.message || error),
+    );
+  }
 }
 
 /**
@@ -937,16 +1022,8 @@ async function assertConsistency(nodes) {
   const nodeStates = [];
   const queryFailures = [];
   for (const node of reachable) {
-    let nodesResult;
-    let partResult;
-    let svcResult;
     try {
-      [nodesResult, partResult, svcResult] =
-        await Promise.all([
-          node.query(NODES_QUERY),
-          node.query(PARTITIONS_QUERY),
-          node.query(SERVICES_QUERY),
-        ]);
+      nodeStates.push(await queryNodeConsistencyState(node));
     } catch (error) {
       queryFailures.push({
         nodeId: node.id,
@@ -954,31 +1031,6 @@ async function assertConsistency(nodes) {
       });
       continue;
     }
-
-    const activeNodes = ((nodesResult && nodesResult.rows) || [])
-      .map((r) => r.node_id)
-      .sort();
-
-    const partitions = ((partResult && partResult.rows) || [])
-      .map((r) => r.partition_id)
-      .sort();
-
-    const leaders = {};
-    const svcRows = (svcResult && svcResult.rows) || [];
-    for (const row of svcRows) {
-      if (!isVoterReady(row)) continue;
-      const role = row.raft_role.toLowerCase();
-      if (role === 'leader') {
-        leaders[row.partition_id] = row.address;
-      }
-    }
-
-    nodeStates.push({
-      nodeId: node.id,
-      activeNodes,
-      partitions,
-      leaders,
-    });
   }
 
   if (nodeStates.length < 2) {

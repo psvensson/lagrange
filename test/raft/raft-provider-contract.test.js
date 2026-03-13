@@ -202,3 +202,42 @@ test('LiferaftProvider proposeWithLeaderRouting throws when propose keeps timing
       /timed out/i,
     );
   });
+
+test('LiferaftProvider proposeWithLeaderRouting stops after first non-retryable forward error',
+  async (t) => {
+    const provider = new LiferaftProvider();
+    let forwardCalls = 0;
+    const retryAttempts = [];
+    const raftNode = {
+      state: LifeRaft.FOLLOWER,
+    };
+
+    await t.rejects(
+      provider.proposeWithLeaderRouting(
+        raftNode,
+        {type: 'CDC'},
+        {
+          maxAttempts: 3,
+          computeRetryDelayMs: (attempt) => {
+            retryAttempts.push(attempt);
+            return 0;
+          },
+          forwardToLeader: async () => {
+            forwardCalls += 1;
+            const error = new Error('leader target set exhausted');
+            error.retryable = false;
+            throw error;
+          },
+        },
+      ),
+      /leader target set exhausted/i,
+      'non-retryable forward failures should bypass the remaining retry budget',
+    );
+
+    t.equal(forwardCalls, 1, 'non-retryable forward failure should run once');
+    t.same(
+      retryAttempts,
+      [],
+      'non-retryable forward failure should not schedule retry delays',
+    );
+  });

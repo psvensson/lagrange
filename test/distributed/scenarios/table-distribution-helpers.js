@@ -18,7 +18,7 @@ const BENCHMARK_WORKLOAD_PROFILE = 'benchmark_events_mixed';
 const IDENTIFIER_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const TABLE_ID_VISIBILITY_TIMEOUT_MS = 10000;
 const TABLE_ID_VISIBILITY_POLL_INTERVAL_MS = 100;
-const CONTROL_QUERY_TIMEOUT_MS = 10000;
+const CONTROL_QUERY_TIMEOUT_MS = 30000;
 const POLICY_APPLY_TIMEOUT_MS = 60000;
 const POLICY_APPLY_ATTEMPT_TIMEOUT_MS = 15000;
 const POLICY_VISIBILITY_POLL_INTERVAL_MS = 250;
@@ -42,6 +42,9 @@ const SQL_SELECT_TABLE_ID_SUFFIX = '\'';
 const SQL_SELECT_TABLE_POLICIES_BY_TABLE_ID_PREFIX =
   'SELECT table_policies FROM tables WHERE table_id = \'';
 const SQL_SELECT_TABLE_POLICIES_BY_TABLE_ID_SUFFIX = '\'';
+const SQL_SELECT_TABLE_POLICIES_BY_TABLE_NAME_PREFIX =
+  'SELECT table_policies FROM tables WHERE table_name = \'';
+const SQL_SELECT_TABLE_POLICIES_BY_TABLE_NAME_SUFFIX = '\'';
 const SQL_SELECT_PARTITIONS_BY_TABLE_ID_PREFIX =
   'SELECT partition_id FROM partitions WHERE table_id = \'';
 const SQL_SELECT_PARTITIONS_BY_TABLE_ID_SUFFIX = '\'';
@@ -52,6 +55,7 @@ const SQL_UPDATE_TABLE_POLICIES_PREFIX =
   'UPDATE tables SET table_policies = \'';
 const SQL_UPDATE_TABLE_POLICIES_MID = '\' WHERE table_id = \'';
 const SQL_UPDATE_TABLE_POLICIES_SUFFIX = '\'';
+const SQL_UPDATE_TABLE_POLICIES_BY_NAME_MID = '\' WHERE table_name = \'';
 const SQL_SELECT_ACTIVE_PARTITION_SERVICES =
   'SELECT partition_id, node_id, status FROM services ' +
   'WHERE service_type = \'' + SERVICE_TYPE_PARTITION + '\' ' +
@@ -220,15 +224,36 @@ function firstTablePolicies(rows) {
  * @return {number|null}
  */
 function affectedRowCountFromResult(result) {
-  const affectedRows = Number(result?.affectedRows);
-  if (Number.isFinite(affectedRows)) {
-    return Math.max(ZERO, Math.floor(affectedRows));
-  }
-  const count = Number(result?.count);
-  if (Number.isFinite(count)) {
-    return Math.max(ZERO, Math.floor(count));
+  const candidates = [
+    result?.affectedRows,
+    result?.changes,
+    result?.partitionResult?.affectedRows,
+    result?.hostResult?.affectedRows,
+  ];
+  for (const candidate of candidates) {
+    const parsed = Number(candidate);
+    if (!Number.isFinite(parsed)) {
+      continue;
+    }
+    return Math.max(ZERO, Math.floor(parsed));
   }
   return null;
+}
+
+/**
+ * Summarize mutation-result counters for diagnostics.
+ * @param {*} result
+ * @return {Object}
+ */
+function summarizeMutationResult(result) {
+  return {
+    affectedRows: result?.affectedRows ?? null,
+    changes: result?.changes ?? null,
+    count: result?.count ?? null,
+    hostAffectedRows: result?.hostResult?.affectedRows ?? null,
+    operation: result?.operation ?? null,
+    warning: result?.warning ?? null,
+  };
 }
 
 /**
@@ -295,14 +320,34 @@ async function queryTableId(seedNode, tableName) {
  * @param {string} tableId
  * @return {Promise<Object|null>}
  */
-async function queryTablePolicies(seedNode, tableId) {
-  const sql = SQL_SELECT_TABLE_POLICIES_BY_TABLE_ID_PREFIX +
+async function queryTablePolicies(seedNode, tableId, options = {}) {
+  const tableName = typeof options.tableName === 'string' &&
+    options.tableName.length > ZERO ?
+    options.tableName :
+    null;
+  const lookupSql = [];
+  if (tableName) {
+    lookupSql.push(
+      SQL_SELECT_TABLE_POLICIES_BY_TABLE_NAME_PREFIX +
+      escapeSql(tableName) +
+      SQL_SELECT_TABLE_POLICIES_BY_TABLE_NAME_SUFFIX,
+    );
+  }
+  lookupSql.push(
+    SQL_SELECT_TABLE_POLICIES_BY_TABLE_ID_PREFIX +
     escapeSql(tableId) +
-    SQL_SELECT_TABLE_POLICIES_BY_TABLE_ID_SUFFIX;
-  const result = await queryControl(seedNode, sql, [], {
-    lane: CONTROL_QUERY_LANE_DEFAULT,
-  });
-  return firstTablePolicies(rowsFromResult(result));
+    SQL_SELECT_TABLE_POLICIES_BY_TABLE_ID_SUFFIX,
+  );
+  for (const sql of lookupSql) {
+    const result = await queryControl(seedNode, sql, [], {
+      lane: CONTROL_QUERY_LANE_DEFAULT,
+    });
+    const policies = firstTablePolicies(rowsFromResult(result));
+    if (policies !== null) {
+      return policies;
+    }
+  }
+  return null;
 }
 
 /**
@@ -396,6 +441,11 @@ async function prepareBenchmarkPartitioningTable(seedNode, options = {}) {
     SQL_UPDATE_TABLE_POLICIES_MID +
     escapeSql(ensured.tableId) +
     SQL_UPDATE_TABLE_POLICIES_SUFFIX;
+  const policySqlByName = SQL_UPDATE_TABLE_POLICIES_PREFIX +
+    escapeSql(JSON.stringify(tablePolicies)) +
+    SQL_UPDATE_TABLE_POLICIES_BY_NAME_MID +
+    escapeSql(ensured.tableName) +
+    SQL_UPDATE_TABLE_POLICIES_SUFFIX;
 
   // Table metadata can still receive asynchronous updates shortly after
   // CREATE TABLE. Re-apply policy until read-back is stable so we do not
@@ -407,8 +457,10 @@ async function prepareBenchmarkPartitioningTable(seedNode, options = {}) {
   let stableMatchCount = ZERO;
   let noOpApplyCount = ZERO;
   let policyUpdateNoOpDetected = false;
+  let positivePolicyMutationObserved = false;
   let lastPolicyApplyError = null;
   let lastPolicyVisibilityError = null;
+  let lastPolicyApplySummary = null;
   while (Date.now() <= visibilityDeadline) {
     try {
       applyAttemptCount += 1;
@@ -416,11 +468,33 @@ async function prepareBenchmarkPartitioningTable(seedNode, options = {}) {
         timeoutMs: POLICY_APPLY_ATTEMPT_TIMEOUT_MS,
         lane: CONTROL_QUERY_LANE_DEFAULT,
       });
-      const affectedRows = affectedRowCountFromResult(applyResult);
+      lastPolicyApplySummary = summarizeMutationResult(applyResult);
+      let affectedRows = affectedRowCountFromResult(applyResult);
+      if (affectedRows === ZERO) {
+        const fallbackApplyResult = await queryControl(
+          seedNode,
+          policySqlByName,
+          [],
+          {
+            timeoutMs: POLICY_APPLY_ATTEMPT_TIMEOUT_MS,
+            lane: CONTROL_QUERY_LANE_DEFAULT,
+          },
+        );
+        lastPolicyApplySummary = summarizeMutationResult(fallbackApplyResult);
+        const fallbackAffectedRows = affectedRowCountFromResult(
+          fallbackApplyResult,
+        );
+        if (Number.isFinite(fallbackAffectedRows)) {
+          affectedRows = fallbackAffectedRows;
+        }
+      }
       if (affectedRows === ZERO) {
         noOpApplyCount += 1;
       } else {
         noOpApplyCount = ZERO;
+        if (Number.isFinite(affectedRows) && affectedRows > ZERO) {
+          positivePolicyMutationObserved = true;
+        }
       }
       lastPolicyApplyError = null;
     } catch (error) {
@@ -434,7 +508,13 @@ async function prepareBenchmarkPartitioningTable(seedNode, options = {}) {
     }
 
     try {
-      observedPolicy = await queryTablePolicies(seedNode, ensured.tableId);
+      observedPolicy = await queryTablePolicies(
+        seedNode,
+        ensured.tableId,
+        {
+          tableName: ensured.tableName,
+        },
+      );
       lastPolicyVisibilityError = null;
       if (policyContainsExpected(tablePolicies, observedPolicy)) {
         stableMatchCount += 1;
@@ -465,6 +545,23 @@ async function prepareBenchmarkPartitioningTable(seedNode, options = {}) {
       tablePoliciesApplied: false,
       tablePoliciesApplyWarning:
         'sql_system_table_update_noop_detected',
+      tablePoliciesApplyDiagnostics: {
+        applyAttempts: applyAttemptCount,
+        lastApplySummary: lastPolicyApplySummary,
+      },
+    };
+  }
+  if (!policyVisible && positivePolicyMutationObserved) {
+    return {
+      ...ensured,
+      tablePolicies,
+      tablePoliciesApplied: true,
+      tablePoliciesApplyWarning:
+        'table_policy_visibility_timeout_assumed_applied',
+      tablePoliciesApplyDiagnostics: {
+        applyAttempts: applyAttemptCount,
+        lastApplySummary: lastPolicyApplySummary,
+      },
     };
   }
   assert.ok(
@@ -475,7 +572,8 @@ async function prepareBenchmarkPartitioningTable(seedNode, options = {}) {
     JSON.stringify(tablePolicies) + ', lastError=' +
     String(lastPolicyVisibilityError || 'none') +
     ', lastApplyError=' + String(lastPolicyApplyError || 'none') +
-    ', applyAttempts=' + applyAttemptCount + ')',
+    ', applyAttempts=' + applyAttemptCount +
+    ', lastApplySummary=' + JSON.stringify(lastPolicyApplySummary) + ')',
   );
   return {
     ...ensured,

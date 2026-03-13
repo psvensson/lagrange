@@ -23,6 +23,7 @@ function initializeTestEnvironment() {
 }
 
 function createSystemCacheFixture() {
+  const now = Date.now();
   const rows = {
     services: [
       {
@@ -56,7 +57,15 @@ function createSystemCacheFixture() {
         status: SERVICE_STATUS.ACTIVE,
       },
     ],
-    nodes: [],
+    nodes: [
+      {
+        node_id: 'seed-node-1',
+        status: SERVICE_STATUS.ACTIVE,
+        connection_state: 'ready',
+        last_heartbeat: now,
+        ready_lease_expires_at: now + 60_000,
+      },
+    ],
     partitions: [],
     tables: [],
     message_groups: [],
@@ -224,6 +233,7 @@ async function bootstrapMoveReplicaAssignment(t, options = {}) {
     systemTableCache: cache,
     messageGroupServices,
     moveReplicaAssignmentLeaseMs: options.assignmentLeaseMs,
+    moveReplicaAssignmentSweepIntervalMs: options.assignmentSweepIntervalMs,
   });
   await api.initialize(0, {listen: false});
   api.setSqlQueryEngine(sqlQueryEngine);
@@ -302,7 +312,7 @@ test('BootstrapAPI register-service rejects missing and unknown assignment token
   );
 });
 
-test('BootstrapAPI register-service rejects expired and mismatched assignment token', async (t) => {
+test('BootstrapAPI register-service rejects mismatched assignment token and revives matching expired reservation', async (t) => {
   const mismatchFixture = await bootstrapMoveReplicaAssignment(t, {
     joiningNodeId: '550e8400-e29b-41d4-a716-446655440322',
   });
@@ -326,10 +336,38 @@ test('BootstrapAPI register-service rejects expired and mismatched assignment to
     'ownership mismatch should emit stable reason code',
   );
 
-  const expiredFixture = await bootstrapMoveReplicaAssignment(t, {
+  const revivedFixture = await bootstrapMoveReplicaAssignment(t, {
     joiningNodeId: '550e8400-e29b-41d4-a716-446655440323',
     assignmentLeaseMs: 5,
   });
+  await new Promise((resolve) => setTimeout(resolve, 25));
+  const revivedResponse = await revivedFixture.api.getFastify().inject({
+    method: 'POST',
+    url: '/register-service',
+    payload: buildRegisterPayload(
+      revivedFixture.joiningNodeId,
+      revivedFixture.assignment,
+      {assignment_id: revivedFixture.assignment.assignmentId},
+    ),
+  });
+  t.equal(
+    revivedResponse.statusCode,
+    200,
+    'register-service should revive the reserved handoff when source ownership still matches',
+  );
+});
+
+test('BootstrapAPI register-service still rejects expired reservation after source ownership drift', async (t) => {
+  const expiredFixture = await bootstrapMoveReplicaAssignment(t, {
+    joiningNodeId: '550e8400-e29b-41d4-a716-446655440324',
+    assignmentLeaseMs: 5,
+  });
+
+  const sourceReplica = expiredFixture.rows.services.find((row) =>
+    row.service_id === expiredFixture.assignment.replicaToMove,
+  );
+  sourceReplica.node_id = 'unexpected-owner-node';
+
   await new Promise((resolve) => setTimeout(resolve, 25));
   const expiredResponse = await expiredFixture.api.getFastify().inject({
     method: 'POST',
@@ -343,14 +381,194 @@ test('BootstrapAPI register-service rejects expired and mismatched assignment to
   t.equal(
     expiredResponse.statusCode,
     409,
-    'register-service should fail closed when assignment lease is expired',
+    'register-service should fail closed when the expired reservation no longer matches source ownership',
   );
   t.equal(
     expiredResponse.json().code,
     'ASSIGNMENT_TOKEN_EXPIRED',
-    'expired token rejection should emit stable reason code',
+    'expired reservation rejection should emit stable reason code',
   );
 });
+
+test('BootstrapAPI expires MOVE_REPLICA reservation when source node loses readiness before lease expiry',
+  async (t) => {
+    const fixture = await bootstrapMoveReplicaAssignment(t, {
+      joiningNodeId: '550e8400-e29b-41d4-a716-446655440327',
+      assignmentLeaseMs: 60_000,
+    });
+
+    const sourceNode = fixture.rows.nodes.find((row) =>
+      row.node_id === fixture.assignment.sourceNodeId,
+    );
+    t.ok(sourceNode, 'fixture should include source node readiness row');
+
+    sourceNode.ready_lease_expires_at = Date.now() - 1;
+    sourceNode.connection_state = 'disconnected';
+
+    await fixture.api.expireMoveReplicaAssignmentReservations();
+
+    const reservationRow = fixture.rows.replica_operations.find((row) =>
+      row.operation_id === fixture.assignment.assignmentId,
+    );
+    t.equal(
+      reservationRow?.status,
+      'failed',
+      'reservation should fail fast when its recorded source node is no longer ready',
+    );
+    t.equal(
+      reservationRow?.workflow_step,
+      'FAILED',
+      'reservation should persist FAILED workflow step when source ownership is lost',
+    );
+    t.equal(
+      reservationRow?.error_message,
+      'assignment source owner unavailable',
+      'reservation failure should preserve the source-owner invalidation reason',
+    );
+  });
+
+test('BootstrapAPI background sweep clears stranded MOVE_REPLICA reservation without a follow-up bootstrap request',
+  async (t) => {
+    const fixture = await bootstrapMoveReplicaAssignment(t, {
+      joiningNodeId: '550e8400-e29b-41d4-a716-446655440328',
+      assignmentLeaseMs: 60_000,
+      assignmentSweepIntervalMs: 5,
+    });
+
+    const sourceNode = fixture.rows.nodes.find((row) =>
+      row.node_id === fixture.assignment.sourceNodeId,
+    );
+    t.ok(sourceNode, 'fixture should include source node readiness row');
+
+    sourceNode.ready_lease_expires_at = Date.now() - 1;
+    sourceNode.connection_state = 'disconnected';
+
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    const reservationRow = fixture.rows.replica_operations.find((row) =>
+      row.operation_id === fixture.assignment.assignmentId,
+    );
+    t.equal(
+      reservationRow?.status,
+      'failed',
+      'background sweep should fail stranded reservation after source readiness loss',
+    );
+  });
+
+test('BootstrapAPI background sweep preserves expired but revivable MOVE_REPLICA reservation',
+  async (t) => {
+    const fixture = await bootstrapMoveReplicaAssignment(t, {
+      joiningNodeId: '550e8400-e29b-41d4-a716-446655440329',
+      assignmentLeaseMs: 5,
+      assignmentSweepIntervalMs: 5,
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    const reservationRow = fixture.rows.replica_operations.find((row) =>
+      row.operation_id === fixture.assignment.assignmentId,
+    );
+    t.equal(
+      reservationRow?.status,
+      'creating',
+      'background sweep should not terminalize a merely expired reservation',
+    );
+
+    const revivedResponse = await fixture.api.getFastify().inject({
+      method: 'POST',
+      url: '/register-service',
+      payload: buildRegisterPayload(
+        fixture.joiningNodeId,
+        fixture.assignment,
+        {assignment_id: fixture.assignment.assignmentId},
+      ),
+    });
+    t.equal(
+      revivedResponse.statusCode,
+      200,
+      'expired reservation should still be revivable after background sweep',
+    );
+  });
+
+test('BootstrapAPI register-service recovers assignment token from cache when reservation storage lookup is unavailable',
+  async (t) => {
+    const fixture = await bootstrapMoveReplicaAssignment(t, {
+      joiningNodeId: '550e8400-e29b-41d4-a716-446655440330',
+    });
+    const {api, assignment, joiningNodeId} = fixture;
+
+    api.moveReplicaAssignmentReservations.clear();
+    const originalExecute = api.executeBootstrapControlPlaneQuery.bind(api);
+    api.executeBootstrapControlPlaneQuery = async (sql, params = []) => {
+      const statement = String(sql);
+      if (statement.includes('FROM replica_operations') &&
+          statement.includes('WHERE operation_id = ?') &&
+          params[0] === assignment.assignmentId) {
+        return {
+          success: false,
+          error: 'replica_operations partition temporarily unavailable',
+        };
+      }
+      return originalExecute(sql, params);
+    };
+
+    const response = await api.getFastify().inject({
+      method: 'POST',
+      url: '/register-service',
+      payload: buildRegisterPayload(joiningNodeId, assignment, {
+        assignment_id: assignment.assignmentId,
+      }),
+    });
+    t.equal(
+      response.statusCode,
+      200,
+      'register-service should use cached reservation state when storage lookup is unavailable after restart',
+    );
+  });
+
+test('BootstrapAPI register-service returns retryable 503 when assignment token lookup is unavailable',
+  async (t) => {
+    const fixture = await bootstrapMoveReplicaAssignment(t, {
+      joiningNodeId: '550e8400-e29b-41d4-a716-446655440331',
+    });
+    const {api, assignment, joiningNodeId, rows} = fixture;
+
+    api.moveReplicaAssignmentReservations.clear();
+    rows.replica_operations = rows.replica_operations.filter((row) =>
+      row.operation_id !== assignment.assignmentId,
+    );
+    const originalExecute = api.executeBootstrapControlPlaneQuery.bind(api);
+    api.executeBootstrapControlPlaneQuery = async (sql, params = []) => {
+      const statement = String(sql);
+      if (statement.includes('FROM replica_operations') &&
+          statement.includes('WHERE operation_id = ?') &&
+          params[0] === assignment.assignmentId) {
+        return {
+          success: false,
+          error: 'replica_operations partition temporarily unavailable',
+        };
+      }
+      return originalExecute(sql, params);
+    };
+
+    const response = await api.getFastify().inject({
+      method: 'POST',
+      url: '/register-service',
+      payload: buildRegisterPayload(joiningNodeId, assignment, {
+        assignment_id: assignment.assignmentId,
+      }),
+    });
+    t.equal(
+      response.statusCode,
+      503,
+      'register-service should return a retryable response when token lookup cannot be completed',
+    );
+    t.equal(
+      response.json().code,
+      'ASSIGNMENT_TOKEN_LOOKUP_UNAVAILABLE',
+      'retryable lookup failure should emit a stable error code',
+    );
+  });
 
 test('BootstrapAPI does not expire committed MOVE_REPLICA operations on subsequent bootstrap',
   async (t) => {

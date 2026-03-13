@@ -103,6 +103,44 @@ function createMinimalCache(nodes = []) {
   };
 }
 
+function createQueryRoutingCache({services = [], partitions = []} = {}) {
+  const serviceRows = services.map((service) => ({...service}));
+  const partitionRows = partitions.map((partition) => ({...partition}));
+  return {
+    get: (table, key) => {
+      if (table === SYSTEM_TABLE_NAME.PARTITIONS) {
+        return partitionRows.find((partition) =>
+          partition.partition_id === key,
+        ) || null;
+      }
+      if (table === SYSTEM_TABLE_NAME.SERVICES) {
+        return serviceRows.find((service) =>
+          service.service_id === key || service.replica_id === key,
+        ) || null;
+      }
+      return null;
+    },
+    filter: (table, predicate) => {
+      if (table === SYSTEM_TABLE_NAME.PARTITIONS) {
+        return partitionRows.filter(predicate);
+      }
+      if (table === SYSTEM_TABLE_NAME.SERVICES) {
+        return serviceRows.filter(predicate);
+      }
+      return [];
+    },
+    getAll: (table) => {
+      if (table === SYSTEM_TABLE_NAME.PARTITIONS) {
+        return partitionRows;
+      }
+      if (table === SYSTEM_TABLE_NAME.SERVICES) {
+        return serviceRows;
+      }
+      return [];
+    },
+  };
+}
+
 function createPublicationOwner() {
   return {
     getPublicationModeDiagnostics: () => ({
@@ -403,6 +441,203 @@ test('RebalanceCoordinator.isNodeReadyForRouting consumes canonical',
           'default readiness service should use cache',
         );
       });
+  });
+
+// ── Query Routing ───────────────────────────────────────────────────
+
+test('QueryExecutor routability consumes canonical serve readiness',
+  async (t) => {
+    initEnv();
+    const {QueryExecutor} = await import(
+      '../../src/query/query-executor.js'
+    );
+
+    const serviceRow = {
+      service_id: 'partition-service-1',
+      replica_id: 'partition-service-1',
+      service_type: 'partition',
+      partition_id: FIXTURE_PARTITION_ID,
+      node_id: FIXTURE_NODE_ID,
+      status: SERVICE_STATUS.ACTIVE,
+      address: `${FIXTURE_NODE_ID}/partition/${FIXTURE_PARTITION_ID}`,
+    };
+    const cache = createQueryRoutingCache({
+      services: [serviceRow],
+      partitions: [{
+        partition_id: FIXTURE_PARTITION_ID,
+        leader_node_id: FIXTURE_NODE_ID,
+      }],
+    });
+    const readinessMap = new Map();
+    readinessMap.set(
+      FIXTURE_NODE_ID,
+      buildReadiness(FIXTURE_NODE_ID, true),
+    );
+    const readinessService =
+      createControlledReadinessService(readinessMap);
+
+    const executor = new QueryExecutor({
+      nodeId: FIXTURE_NODE_ID,
+      systemCache: cache,
+      controlPlaneReadinessService: readinessService,
+    });
+
+    t.equal(
+      executor.getRoutablePartitionServices(FIXTURE_PARTITION_ID).length,
+      1,
+      'routing should allow the service when canonical readiness says serve-eligible',
+    );
+
+    readinessMap.set(
+      FIXTURE_NODE_ID,
+      buildReadiness(FIXTURE_NODE_ID, false),
+    );
+
+    t.equal(
+      executor.getRoutablePartitionServices(FIXTURE_PARTITION_ID).length,
+      0,
+      'routing should reject the service when canonical readiness says not serve-eligible',
+    );
+  });
+
+test('SQLQueryEngine routable service metadata consumes canonical serve readiness',
+  async (t) => {
+    initEnv();
+    const {SQLQueryEngine} = await import(
+      '../../src/query/sql-query-engine.js'
+    );
+
+    const serviceRow = {
+      service_id: 'partition-service-2',
+      replica_id: 'partition-service-2',
+      service_type: 'partition',
+      partition_id: FIXTURE_PARTITION_ID,
+      node_id: FIXTURE_NODE_ID,
+      status: SERVICE_STATUS.ACTIVE,
+      address: `${FIXTURE_NODE_ID}/partition/${FIXTURE_PARTITION_ID}`,
+    };
+    const cache = createQueryRoutingCache({
+      services: [serviceRow],
+      partitions: [{
+        partition_id: FIXTURE_PARTITION_ID,
+        leader_node_id: FIXTURE_NODE_ID,
+      }],
+    });
+    const readinessMap = new Map();
+    readinessMap.set(
+      FIXTURE_NODE_ID,
+      buildReadiness(FIXTURE_NODE_ID, true),
+    );
+    const readinessService =
+      createControlledReadinessService(readinessMap);
+
+    const engine = new SQLQueryEngine({
+      nodeId: FIXTURE_NODE_ID,
+      systemCache: cache,
+      controlPlaneReadinessService: readinessService,
+    });
+
+    t.equal(
+      engine.hasRoutableServiceMetadata(serviceRow.service_id),
+      true,
+      'query engine should surface the service when canonical readiness says serve-eligible',
+    );
+
+    readinessMap.set(
+      FIXTURE_NODE_ID,
+      buildReadiness(FIXTURE_NODE_ID, false),
+    );
+
+    t.equal(
+      engine.hasRoutableServiceMetadata(serviceRow.service_id),
+      false,
+      'query engine should hide the service when canonical readiness says not serve-eligible',
+    );
+  });
+
+test('QueryExecutor can route bootstrap-owned work via repair-eligible readiness',
+  async (t) => {
+    initEnv();
+    const {QueryExecutor} = await import(
+      '../../src/query/query-executor.js'
+    );
+
+    const serviceRow = {
+      service_id: 'partition-service-3',
+      replica_id: 'partition-service-3',
+      service_type: 'partition',
+      partition_id: FIXTURE_PARTITION_ID,
+      node_id: FIXTURE_NODE_ID,
+      status: SERVICE_STATUS.ACTIVE,
+      address: `${FIXTURE_NODE_ID}/partition/${FIXTURE_PARTITION_ID}`,
+    };
+    const cache = createQueryRoutingCache({
+      services: [serviceRow],
+      partitions: [{
+        partition_id: FIXTURE_PARTITION_ID,
+        leader_node_id: FIXTURE_NODE_ID,
+      }],
+    });
+    const readinessMap = new Map();
+    const readiness = buildReadiness(FIXTURE_NODE_ID, true);
+    readiness.dimensions[
+      CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE
+    ] = false;
+    readiness.dimensions[
+      CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY
+    ] = false;
+    readiness.dimensions[
+      CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE
+    ] = false;
+    readinessMap.set(FIXTURE_NODE_ID, readiness);
+    const readinessService =
+      createControlledReadinessService(readinessMap);
+
+    const executor = new QueryExecutor({
+      nodeId: FIXTURE_NODE_ID,
+      systemCache: cache,
+      controlPlaneReadinessService: readinessService,
+      messageRouter: {
+        deliver: async () => ({
+          acknowledged: true,
+          success: true,
+          rows: [],
+          changes: 1,
+        }),
+      },
+    });
+
+    const blocked = await executor.executeOnPartition(
+      FIXTURE_PARTITION_ID,
+      'SELECT 1',
+      [],
+      false,
+      false,
+      false,
+    );
+    t.equal(
+      blocked.success,
+      false,
+      'default serve-eligible routing should still block non-servable nodes',
+    );
+
+    const repairEligible = await executor.executeOnPartition(
+      FIXTURE_PARTITION_ID,
+      'SELECT 1',
+      [],
+      false,
+      false,
+      false,
+      {
+        routingReadinessDimension:
+          CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+      },
+    );
+    t.equal(
+      repairEligible.success,
+      true,
+      'bootstrap-owned routing should be able to use repair-eligible readiness',
+    );
   });
 
 // ── Rebalancer isNodeReady ──────────────────────────────────────────

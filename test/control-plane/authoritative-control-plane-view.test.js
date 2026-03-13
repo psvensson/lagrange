@@ -4,6 +4,9 @@ import {
   AUTHORITATIVE_CONTROL_PLANE_VIEW_SOURCE,
   AuthoritativeControlPlaneView,
 } from '../../src/control-plane/authoritative-control-plane-view.js';
+import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+} from '../../src/control-plane/control-plane-readiness-constants.js';
 
 const FIXTURE_NODE_ID = 'node-a';
 const FIXTURE_LOCAL_NODE_ID = 'node-local';
@@ -60,6 +63,16 @@ test('AuthoritativeControlPlaneView reads canonical node/service evidence ' +
       call.options.allowSqlFallback,
       true,
       'authoritative reads may route through the canonical SQL path',
+    );
+    t.equal(
+      call.options.queryOptions?.routingReadinessDimension,
+      CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+      'authoritative fallback should stay on repairEligible routing',
+    );
+    t.match(
+      String(call.options.queryOptions?.sessionId || ''),
+      /^authoritative-control-plane-read:/,
+      'authoritative fallback should isolate the SQL session',
     );
     t.equal(
       call.options.replicaFallbackConsistency,

@@ -13,6 +13,7 @@ import {
   INITIAL_PARTITION_IDS,
 } from '../system-table-schemas-constants.js';
 import {
+  getBlockingSystemServiceLeaders as getBlockingLeaders,
   getMissingSystemServiceLeaders as getMissingLeaders,
   getMissingSystemServiceLeaderCount,
   isSystemTableWriteReady,
@@ -238,41 +239,6 @@ class WaitForLeadershipPhase {
   }
 
   /**
-   * Check whether the cache currently includes a partition row for
-   * a table. Minimal synthetic caches in tests may omit unrelated
-   * system partitions.
-   * @param {Object} systemTableCache - System table cache.
-   * @param {string} tableName - System table name.
-   * @return {boolean} True when table partition is present in cache.
-   */
-  hasSystemTablePartition(systemTableCache, tableName) {
-    const partitionId = INITIAL_PARTITION_IDS[tableName];
-    if (!partitionId) {
-      return false;
-    }
-
-    if (typeof systemTableCache?.filter === TYPEOF.FUNCTION) {
-      const partitions = systemTableCache.filter(
-        TABLES.PARTITIONS,
-        (partition) =>
-          partition?.[COLUMN.PARTITION_ID] === partitionId,
-      );
-      return partitions.length > NUM.ZERO;
-    }
-
-    if (typeof systemTableCache?.getAll === TYPEOF.FUNCTION) {
-      const partitions =
-        systemTableCache.getAll(TABLES.PARTITIONS) || [];
-      return partitions.some(
-        (partition) =>
-          partition?.[COLUMN.PARTITION_ID] === partitionId,
-      );
-    }
-
-    return false;
-  }
-
-  /**
    * Find missing service leaders using system table cache.
    * @param {Object} systemTableCache - System table cache.
    * @return {Object} Missing leader lists.
@@ -290,68 +256,19 @@ class WaitForLeadershipPhase {
    * Keep join-time readiness gates focused on system-table write
    * routing. Message-group leader rows can legitimately lag during
    * MOVE_REPLICA handoffs.
-   * @param {Object} missing - Missing leader diagnostics.
+   * @param {Object} _missing - Missing leader diagnostics.
    * @param {Object} systemTableCache - System table cache.
    * @return {Object} Blocking subset for state-query readiness.
    */
-  getBlockingSystemServiceLeaders(missing, systemTableCache) {
-    const requiredTables = this.getRequiredSystemWriteTables();
-    const missingPartitionLeaders = [];
-    const missingPartitionLeaderNodes = [];
-    const missingPartitionLeaderAddresses = [];
-    const missingRequiredTables = [];
-
-    for (const tableName of requiredTables) {
-      if (
-        !this.hasSystemTablePartition(
-          systemTableCache,
-          tableName,
-        )
-      ) {
-        continue;
-      }
-
-      if (
-        this.isSystemTableWriteRoutable(
-          systemTableCache,
-          tableName,
-        )
-      ) {
-        continue;
-      }
-
-      missingRequiredTables.push(tableName);
-
-      const partitionId = INITIAL_PARTITION_IDS[tableName];
-      if (!partitionId) {
-        continue;
-      }
-      missingPartitionLeaders.push(partitionId);
-
-      if (
-        missing.missingPartitionLeaderNodes
-          ?.includes(partitionId)
-      ) {
-        missingPartitionLeaderNodes.push(partitionId);
-      }
-      if (
-        missing.missingPartitionLeaderAddresses
-          ?.includes(partitionId)
-      ) {
-        missingPartitionLeaderAddresses.push(partitionId);
-      }
-    }
-
-    return {
-      ...missing,
-      missingPartitionLeaders,
-      missingPartitionLeaderNodes,
-      missingPartitionLeaderAddresses,
-      missingMessageGroupLeaders: [],
-      missingMessageGroupLeaderNodes: [],
-      missingMessageGroupLeaderAddresses: [],
-      missingRequiredTables,
-    };
+  getBlockingSystemServiceLeaders(_missing, systemTableCache) {
+    return getBlockingLeaders(
+      systemTableCache,
+      this.getRequiredSystemWriteTables(),
+      {
+        isTableWriteSatisfied: (cache, tableName) =>
+          this.isSystemTableWriteRoutable(cache, tableName),
+      },
+    );
   }
 }
 

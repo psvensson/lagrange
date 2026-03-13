@@ -19,10 +19,9 @@ import {
 } from './node-joining-constants.js';
 import {
   ADDRESS,
-  COLUMN,
   ENTITY_TYPE,
   NUM,
-  TABLES,
+  STATE,
   TYPEOF,
 } from '../constants/index.js';
 
@@ -95,7 +94,10 @@ class JoinCleanupHandler {
     const messageGroupServices =
       this.delegates.getMessageGroupServices();
     const cleanupContext = {
-      registeredNodeId: this.nodeId,
+      registeredNodeId:
+        this.delegates.getJoinMembershipPublished?.() === true ?
+          this.nodeId :
+          null,
       createdServiceIds: Array.from(messageGroupServices.keys()),
       createdMessageGroupIds: bootstrapResponse
         ?.messageGroupAssignment?.groupId ?
@@ -218,8 +220,6 @@ class JoinCleanupHandler {
    */
   async _cleanupQueryingState(cleanupContext) {
     const logger = this.delegates.getLogger();
-    const cdcIntegrationService =
-      this.delegates.getCdcIntegrationService();
     try {
       logger.info(
         JOINING_LOG_MSG.FAILED_JOIN_CLEANUP_QUERYING_STATE, {
@@ -228,54 +228,32 @@ class JoinCleanupHandler {
           serviceCount: cleanupContext.createdServiceIds.length,
         });
 
-      // Remove self from nodes table
+      // Withdraw the node through the canonical control-plane owner path
+      // instead of deleting rows directly from a half-joined node.
       if (
         cleanupContext.registeredNodeId &&
-        cdcIntegrationService &&
-        typeof cdcIntegrationService
-          .deleteSystemTableRow === TYPEOF.FUNCTION
+        typeof this.delegates.sendControlPlaneNodeStateUpdate ===
+          TYPEOF.FUNCTION
       ) {
         try {
-          await cdcIntegrationService.deleteSystemTableRow(
-            TABLES.NODES,
-            {[COLUMN.NODE_ID]: cleanupContext.registeredNodeId},
-          );
+          await this.delegates.sendControlPlaneNodeStateUpdate({
+            state: STATE.DISCONNECTED,
+            heartbeatAt: this.delegates.getNow()(),
+          });
         } catch (nodeErr) {
           logger.warn(
             JOINING_LOG_MSG
               .FAILED_JOIN_CLEANUP_QUERYING_STATE_ERROR,
             {
               nodeId: this.nodeId,
-              detail: 'node removal',
+              detail: 'node withdrawal',
               error: nodeErr.message,
             });
         }
       }
-
-      // Remove service entries created during join
-      for (const serviceId of cleanupContext.createdServiceIds) {
-        try {
-          if (
-            cdcIntegrationService &&
-            typeof cdcIntegrationService
-              .deleteSystemTableRow === TYPEOF.FUNCTION
-          ) {
-            await cdcIntegrationService.deleteSystemTableRow(
-              TABLES.SERVICES,
-              {[COLUMN.SERVICE_ID]: serviceId},
-            );
-          }
-        } catch (svcErr) {
-          logger.warn(
-            JOINING_LOG_MSG
-              .FAILED_JOIN_CLEANUP_QUERYING_STATE_ERROR,
-            {
-              nodeId: this.nodeId,
-              detail: 'service removal',
-              serviceId,
-              error: svcErr.message,
-            });
-        }
+      if (typeof this.delegates.setJoinMembershipPublished ===
+        TYPEOF.FUNCTION) {
+        this.delegates.setJoinMembershipPublished(false);
       }
 
       logger.info(
@@ -360,8 +338,6 @@ class JoinCleanupHandler {
     const messageGroupServices =
       this.delegates.getMessageGroupServices();
     const messageRouter = this.delegates.getMessageRouter();
-    const cdcIntegrationService =
-      this.delegates.getCdcIntegrationService();
     try {
       logger.info(
         JOINING_LOG_MSG.FAILED_JOIN_CLEANUP_MESSAGE_GROUP, {
@@ -396,30 +372,6 @@ class JoinCleanupHandler {
             `${ENTITY_TYPE.MESSAGE_GROUP}` +
             `${ADDRESS.SEPARATOR}${replicaId}`;
           messageRouter.unregister(address);
-        }
-      }
-
-      // Remove service entries for message group replicas
-      for (const serviceId of cleanupContext.createdServiceIds) {
-        try {
-          if (
-            cdcIntegrationService &&
-            typeof cdcIntegrationService
-              .deleteSystemTableRow === TYPEOF.FUNCTION
-          ) {
-            await cdcIntegrationService.deleteSystemTableRow(
-              TABLES.SERVICES,
-              {[COLUMN.SERVICE_ID]: serviceId},
-            );
-          }
-        } catch (svcErr) {
-          logger.warn(
-            JOINING_LOG_MSG
-              .FAILED_JOIN_CLEANUP_MESSAGE_GROUP_ERROR, {
-              nodeId: this.nodeId,
-              serviceId,
-              error: svcErr.message,
-            });
         }
       }
 

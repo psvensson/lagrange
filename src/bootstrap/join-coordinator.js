@@ -28,10 +28,14 @@ class JoinCoordinator {
     for (const step of steps) {
       this.assertValidStep(step);
 
-      if (this.joinSessionStore.isCheckpointSatisfied(
+      const checkpointSatisfied = this.joinSessionStore.isCheckpointSatisfied(
         session.checkpoint,
         step.checkpoint,
-      )) {
+      );
+      const shouldRerun = checkpointSatisfied &&
+        typeof step.shouldRerun === 'function' &&
+        step.shouldRerun(session) === true;
+      if (checkpointSatisfied && !shouldRerun) {
         continue;
       }
 
@@ -66,6 +70,10 @@ class JoinCoordinator {
     }
     if (typeof step.run !== 'function') {
       throw new Error('join step run must be a function');
+    }
+    if (step.shouldRerun !== undefined &&
+        typeof step.shouldRerun !== 'function') {
+      throw new Error('join step shouldRerun must be a function');
     }
     if (typeof step.checkpoint !== 'string' || step.checkpoint.length === 0) {
       throw new Error(JOIN_SESSION_ERROR.INVALID_CHECKPOINT);

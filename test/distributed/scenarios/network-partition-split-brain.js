@@ -13,15 +13,34 @@ import {CONVERGENCE_DEFAULTS} from '../harness/constants.js';
 
 const PARTITION_HOLD_MS = 10000;
 const POST_HEAL_CONVERGENCE_TIMEOUT_MS = 60000;
+const CONSISTENCY_TIMEOUT_MS = 15000;
+const CONSISTENCY_POLL_INTERVAL_MS = 500;
 const MIN_GROUP_SIZE = 1;
-const SPLIT_BRAIN_PATTERN = 'split_brain';
 
 /**
  * Run the network-partition-split-brain scenario.
  *
  * @param {Object} cluster - Cluster handle from the harness.
+ * @param {Object} [options]
  */
-async function run(cluster) {
+async function run(cluster, options = {}) {
+  const partitionHoldMs = Number.isFinite(options.partitionHoldMs) ?
+    Number(options.partitionHoldMs) :
+    PARTITION_HOLD_MS;
+  const postHealConvergenceTimeoutMs = Number.isFinite(
+    options.postHealConvergenceTimeoutMs,
+  ) ?
+    Number(options.postHealConvergenceTimeoutMs) :
+    POST_HEAL_CONVERGENCE_TIMEOUT_MS;
+  const consistencyTimeoutMs = Number.isFinite(options.consistencyTimeoutMs) ?
+    Number(options.consistencyTimeoutMs) :
+    CONSISTENCY_TIMEOUT_MS;
+  const consistencyPollIntervalMs = Number.isFinite(
+    options.consistencyPollIntervalMs,
+  ) ?
+    Number(options.consistencyPollIntervalMs) :
+    CONSISTENCY_POLL_INTERVAL_MS;
+
   // 1. Get all node IDs and split into two groups.
   const nodes = cluster.getNodes();
   assert.ok(
@@ -46,33 +65,80 @@ async function run(cluster) {
   await cluster.partitionNetwork(groupA, groupB);
 
   // 3. Hold the partition to allow Raft leader elections.
-  await new Promise((r) => setTimeout(r, PARTITION_HOLD_MS));
+  await sleep(partitionHoldMs);
 
   // 4. Heal the partition to restore full connectivity.
   await cluster.healPartition();
 
   // 5. Wait for the cluster to converge after healing.
   const convergence = await cluster.waitForConvergence({
-    settleTimeoutMs: POST_HEAL_CONVERGENCE_TIMEOUT_MS,
+    settleTimeoutMs: postHealConvergenceTimeoutMs,
     quietWindowMs: CONVERGENCE_DEFAULTS.quietWindowMs,
     targetVoterCount: CONVERGENCE_DEFAULTS.targetVoterCount,
   });
 
   assert.ok(
     convergence.settledAfterMs <=
-      POST_HEAL_CONVERGENCE_TIMEOUT_MS,
+      postHealConvergenceTimeoutMs,
     'Cluster did not converge after partition heal: ' +
     convergence.settledAfterMs + 'ms',
   );
 
   // 6. Assert consistency across all nodes post-heal.
-  await cluster.assertConsistency();
+  await waitForConsistency(
+    cluster,
+    consistencyTimeoutMs,
+    consistencyPollIntervalMs,
+  );
 
   return {
     convergenceTiming: convergence,
     groupA,
     groupB,
   };
+}
+
+/**
+ * Sleep helper.
+ * @param {number} delayMs
+ * @return {Promise<void>}
+ */
+function sleep(delayMs) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, delayMs);
+  });
+}
+
+/**
+ * Wait until consistency assertions stop failing.
+ * @param {Object} cluster
+ * @param {number} timeoutMs
+ * @param {number} pollIntervalMs
+ * @return {Promise<void>}
+ */
+async function waitForConsistency(
+  cluster,
+  timeoutMs = CONSISTENCY_TIMEOUT_MS,
+  pollIntervalMs = CONSISTENCY_POLL_INTERVAL_MS,
+) {
+  const deadline = Date.now() + Math.max(0, timeoutMs);
+  let lastError = null;
+  while (Date.now() <= deadline) {
+    try {
+      await cluster.assertConsistency();
+      return;
+    } catch (error) {
+      lastError = error;
+    }
+    if (pollIntervalMs > 0) {
+      await sleep(pollIntervalMs);
+    } else {
+      await Promise.resolve();
+    }
+  }
+  throw lastError || new Error(
+    'Consistency check did not pass within timeout',
+  );
 }
 
 export {run};

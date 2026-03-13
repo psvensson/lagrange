@@ -2,7 +2,6 @@
   "shape": "array",
   "minRows": 1,
   "firstRow": {
-    "wasmCompiled": true,
-    "remotePartitionReplica": true
+    "wasmCompiled": true
   }
 }

@@ -366,7 +366,11 @@ class DockerProvider {
       HostConfig: hostConfig,
       NetworkingConfig: {
         EndpointsConfig: {
-          [network]: {},
+          [network]: {
+            Aliases: typeof name === 'string' && name.length > ZERO ?
+              [name] :
+              [],
+          },
         },
       },
     });
@@ -792,19 +796,34 @@ class DockerProvider {
    * Connect a container to a network.
    * @param {string} networkId
    * @param {string} containerId
+   * @param {Array<string>} [aliases]
    */
-  async connectToNetwork(networkId, containerId) {
+  async connectToNetwork(networkId, containerId, aliases = []) {
     this._emitOperation(DOCKER_OP_CONNECT_NETWORK, {
       stage: 'starting',
       networkId,
       containerId,
+      aliases,
     });
     const network = this._docker.getNetwork(networkId);
-    await network.connect({Container: containerId});
+    const normalizedAliases = Array.isArray(aliases) ?
+      aliases.filter((alias) => typeof alias === 'string' && alias.length > ZERO) :
+      [];
+    await network.connect({
+      Container: containerId,
+      ...(normalizedAliases.length > ZERO ?
+        {
+          EndpointConfig: {
+            Aliases: normalizedAliases,
+          },
+        } :
+        {}),
+    });
     this._emitOperation(DOCKER_OP_CONNECT_NETWORK, {
       stage: 'completed',
       networkId,
       containerId,
+      aliases: normalizedAliases,
     });
   }
 

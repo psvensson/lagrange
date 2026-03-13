@@ -659,6 +659,147 @@ t.test('MessageRouter unit tests', async (t) => {
       );
     });
 
+  t.test('scheduleReconnect suppresses a stale timer after the peer connection is superseded',
+    async (t) => {
+      const router = new MessageRouter({nodeId: 'reconnect-superseded-node'});
+      await router.initialize({startServer: false});
+      t.teardown(async () => {
+        await router.shutdown();
+      });
+
+      router.reconnectIntervalMs = 5;
+      router.reconnectBackoffMultiplier = 1;
+      router.reconnectMaxAttempts = 2;
+
+      const staleConnection = {
+        connectionId: 'reconnect-stale',
+        nodeId: 'remote-node',
+        address: 'ws://remote-node:8082',
+        ws: null,
+        state: ConnectionState.DISCONNECTED,
+        reconnectAttempts: 0,
+        reconnectTimeout: null,
+        isIncoming: false,
+        isSelfConnection: false,
+        retired: false,
+        createdAt: Date.now(),
+      };
+      router.nodeConnections.set(staleConnection.nodeId, staleConnection);
+
+      let attempts = 0;
+      router.establishConnection = async () => {
+        attempts++;
+      };
+
+      router.scheduleReconnect(staleConnection);
+      router.nodeConnections.set(staleConnection.nodeId, {
+        connectionId: 'incoming-current',
+        nodeId: 'remote-node',
+        address: 'ws://remote-node:8082',
+        ws: {},
+        state: ConnectionState.CONNECTED,
+        reconnectAttempts: 0,
+        reconnectTimeout: null,
+        isIncoming: true,
+        isSelfConnection: false,
+        retired: false,
+        createdAt: Date.now(),
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      t.equal(attempts, 0, 'superseded reconnect timer should not redial');
+      t.equal(
+        staleConnection.state,
+        ConnectionState.CLOSED,
+        'superseded connection should be marked closed',
+      );
+      t.equal(
+        staleConnection.reconnectTimeout,
+        null,
+        'superseded reconnect timer should be cleared after the callback runs',
+      );
+      t.equal(
+        staleConnection.retired,
+        true,
+        'superseded connection should be retired once the timer is suppressed',
+      );
+    });
+
+  t.test('connectToNode retires a replaced reconnecting entry before dialing a new connection',
+    async (t) => {
+      const router = new MessageRouter({nodeId: 'replace-reconnecting-node'});
+      await router.initialize({startServer: false});
+      t.teardown(async () => {
+        await router.shutdown();
+      });
+
+      let staleReconnectTimerFired = false;
+      const staleReconnectTimeout = setTimeout(() => {
+        staleReconnectTimerFired = true;
+      }, 15);
+      t.teardown(() => {
+        clearTimeout(staleReconnectTimeout);
+      });
+
+      const stalePingInterval = setInterval(() => {}, 1000);
+      t.teardown(() => {
+        clearInterval(stalePingInterval);
+      });
+
+      const staleConnection = {
+        connectionId: 'stale-reconnecting',
+        nodeId: 'remote-node',
+        address: 'ws://stale-node:8082',
+        configuredAddress: 'ws://stale-node:8082',
+        observedAddress: null,
+        ws: null,
+        state: ConnectionState.RECONNECTING,
+        reconnectAttempts: 1,
+        reconnectTimeout: staleReconnectTimeout,
+        pingInterval: stalePingInterval,
+        isIncoming: false,
+        isSelfConnection: false,
+        retired: false,
+        createdAt: Date.now(),
+      };
+      router.nodeConnections.set(staleConnection.nodeId, staleConnection);
+
+      router.establishConnection = async (connection) => {
+        connection.state = ConnectionState.CONNECTED;
+        connection.ws = {};
+      };
+
+      await router.connectToNode('remote-node', 'ws://fresh-node:8082');
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      t.equal(
+        staleReconnectTimerFired,
+        false,
+        'replaced reconnect timer should be cleared before it can fire',
+      );
+      t.equal(
+        staleConnection.retired,
+        true,
+        'replaced reconnecting entry should be retired',
+      );
+      t.equal(
+        staleConnection.reconnectTimeout,
+        null,
+        'replaced reconnecting entry should clear its timer',
+      );
+      t.equal(
+        staleConnection.pingInterval,
+        null,
+        'replaced reconnecting entry should clear its heartbeat interval',
+      );
+      t.not(
+        router.nodeConnections.get('remote-node')?.connectionId,
+        staleConnection.connectionId,
+        'active peer entry should no longer point at the stale reconnecting object',
+      );
+    });
+
   t.test('should emit nodeConnected on identification', async (t) => {
     const router = new MessageRouter({nodeId: 'local-node'});
     await router.initialize({startServer: false});
@@ -696,6 +837,123 @@ t.test('MessageRouter unit tests', async (t) => {
 
     await router.shutdown();
   });
+
+  t.test('should preserve an existing preferred incoming connection on duplicate identification',
+    async (t) => {
+      const router = new MessageRouter({nodeId: 'z-local-node'});
+      await router.initialize({startServer: false});
+
+      const existingWs = {
+        terminateCalled: false,
+        terminate() {
+          this.terminateCalled = true;
+        },
+      };
+      router.nodeConnections.set('a-remote-node', {
+        connectionId: 'existing-preferred-incoming',
+        nodeId: 'a-remote-node',
+        nodeAddress: 'ws://remote-node:9999',
+        ws: existingWs,
+        state: ConnectionState.CONNECTED,
+        reconnectAttempts: 0,
+        isIncoming: true,
+        isSelfConnection: false,
+        createdAt: Date.now(),
+      });
+
+      const duplicateWs = {
+        terminateCalled: false,
+        terminate() {
+          this.terminateCalled = true;
+        },
+      };
+      router.nodeConnections.set('incoming-duplicate', {
+        connectionId: 'incoming-duplicate',
+        nodeId: null,
+        nodeAddress: null,
+        ws: duplicateWs,
+        state: ConnectionState.CONNECTED,
+        reconnectAttempts: 0,
+        isIncoming: true,
+        isSelfConnection: false,
+        createdAt: Date.now(),
+      });
+
+      router.handleIdentification('incoming-duplicate', duplicateWs, {
+        type: RouterMessageType.IDENTIFY,
+        nodeId: 'a-remote-node',
+        nodeAddress: 'ws://remote-node:9999',
+      });
+
+      t.equal(
+        router.nodeConnections.get('a-remote-node')?.connectionId,
+        'existing-preferred-incoming',
+        'router should keep the already-connected preferred incoming link',
+      );
+      t.equal(
+        existingWs.terminateCalled,
+        false,
+        'router should not terminate the stable preferred incoming socket',
+      );
+      t.equal(
+        duplicateWs.terminateCalled,
+        true,
+        'router should terminate the duplicate incoming socket',
+      );
+      t.notOk(
+        router.nodeConnections.has('incoming-duplicate'),
+        'duplicate connection key should be removed after identification',
+      );
+
+      await router.shutdown();
+    });
+
+  t.test('should mark a rekeyed incoming connection disconnected when its socket closes',
+    async (t) => {
+      const router = new MessageRouter({nodeId: 'z-local-node'});
+      await router.initialize({startServer: false});
+
+      const ws = new EventEmitter();
+      ws.readyState = 1;
+      ws.terminate = () => {
+        ws.readyState = 3;
+      };
+
+      const closedEvents = [];
+      router.on('connectionClosed', (event) => {
+        closedEvents.push(event);
+      });
+
+      router.handleIncomingConnection(ws, null);
+      const incomingConnectionId = Array.from(router.nodeConnections.keys())[0];
+
+      router.handleIdentification(incomingConnectionId, ws, {
+        type: RouterMessageType.IDENTIFY,
+        nodeId: 'a-remote-node',
+        nodeAddress: 'ws://remote-node:9999',
+      });
+
+      t.equal(
+        router.nodeConnections.get('a-remote-node')?.state,
+        ConnectionState.CONNECTED,
+        'identified incoming connection should be tracked under the remote node ID',
+      );
+
+      ws.emit('close');
+
+      t.equal(
+        router.nodeConnections.get('a-remote-node')?.state,
+        ConnectionState.DISCONNECTED,
+        'closing a rekeyed incoming socket should update the live node entry',
+      );
+      t.same(
+        closedEvents,
+        [{nodeId: 'a-remote-node'}],
+        'connectionClosed should be emitted for the identified remote node',
+      );
+
+      await router.shutdown();
+    });
 
   t.test('should emit initialized event', async (t) => {
     const router = new MessageRouter({nodeId: 'event-test-node'});
@@ -1379,6 +1637,437 @@ t.test('MessageRouter unit tests', async (t) => {
         unhandled.length,
         0,
         'pending SERVICE_RESPONSE timeout should not surface as unhandled rejection',
+      );
+    });
+
+  t.test('ack timeout resets stale remote connection so the next delivery can reconnect',
+    async (t) => {
+      cleanupTestEnvironment();
+      const config = ConfigurationManager.getInstance();
+      config.initialize({
+        node: {id: 'node-a'},
+        logging: {level: 'error'},
+        transport: {
+          messageTimeoutMs: 100,
+        },
+      });
+      const logging = LoggingService.getInstance();
+      logging.initialize({level: 'error'});
+
+      const router = new MessageRouter({
+        nodeId: 'node-a',
+      });
+      await router.initialize({startServer: false});
+      t.teardown(async () => {
+        await router.shutdown().catch(() => {});
+      });
+
+      const staleWs = {
+        readyState: 1,
+        send: () => {},
+        terminateCalled: false,
+        terminate() {
+          this.terminateCalled = true;
+        },
+      };
+      router.nodeConnections.set('node-b', {
+        nodeId: 'node-b',
+        nodeAddress: 'ws://node-b:9999',
+        connectionId: 'node-b-stale',
+        ws: staleWs,
+        state: ConnectionState.CONNECTED,
+        isIncoming: false,
+        reconnectAttempts: 0,
+        reconnectTimeout: null,
+        pingInterval: null,
+        address: 'ws://node-b:9999',
+        isSelfConnection: false,
+      });
+
+      const firstResult = await router.deliver(
+        'node-b/service/no-ack',
+        {type: 'TEST'},
+      );
+
+      t.equal(
+        firstResult.acknowledged,
+        false,
+        'first delivery should fail when ACK times out',
+      );
+      t.match(
+        firstResult.error,
+        /Message timeout/i,
+        'first delivery should surface the ACK timeout',
+      );
+      t.equal(
+        router.nodeConnections.get('node-b')?.state,
+        ConnectionState.RECONNECTING,
+        'timed-out connection should enter reconnecting state',
+      );
+      t.equal(
+        staleWs.terminateCalled,
+        true,
+        'timed-out connection should terminate the stale socket',
+      );
+
+      router.setNodeAddressResolver((nodeId) => {
+        return nodeId === 'node-b' ? 'ws://node-b:9999' : null;
+      });
+      const connectCalls = [];
+      router.connectToNode = async (nodeId, address) => {
+        connectCalls.push({nodeId, address});
+        router.nodeConnections.set(nodeId, {
+          nodeId,
+          nodeAddress: address,
+          connectionId: 'node-b-fresh',
+          ws: {
+            readyState: 1,
+            send: () => {},
+          },
+          state: ConnectionState.CONNECTED,
+          isIncoming: false,
+          reconnectAttempts: 0,
+          reconnectTimeout: null,
+          pingInterval: null,
+          address,
+          isSelfConnection: false,
+        });
+      };
+      router.sendMessage = async (
+        _connection,
+        _targetAddress,
+        messageId,
+        _payload,
+        targetNodeId,
+        correlationId,
+      ) => {
+        return {
+          messageId,
+          correlationId,
+          acknowledged: true,
+          targetNodeId,
+          recovered: true,
+        };
+      };
+
+      const secondResult = await router.deliver(
+        'node-b/service/no-ack',
+        {type: 'TEST'},
+      );
+
+      t.same(
+        connectCalls,
+        [{nodeId: 'node-b', address: 'ws://node-b:9999'}],
+        'next delivery should force one reconnect attempt',
+      );
+      t.equal(
+        secondResult.acknowledged,
+        true,
+        'next delivery should succeed after reconnecting',
+      );
+      t.equal(
+        secondResult.recovered,
+        true,
+        'next delivery should use the recovered connection',
+      );
+    });
+
+  t.test('should fall back from observed reconnect address to configured resolver address',
+    async (t) => {
+      const router = new MessageRouter({
+        nodeId: 'node-a',
+      });
+      await router.initialize({startServer: false});
+      t.teardown(async () => {
+        await router.shutdown().catch(() => {});
+      });
+
+      router.setServiceNodeResolver((address) => {
+        const match = address.match(/^([^/]+)\//);
+        return match ? match[1] : null;
+      });
+      router.setNodeAddressResolver((nodeId) => {
+        return nodeId === 'node-b' ? 'ws://node-b:9999' : null;
+      });
+
+      router.nodeConnections.set('node-b', {
+        nodeId: 'node-b',
+        nodeAddress: 'ws://node-b:9999',
+        connectionId: 'node-b-stale-ip',
+        ws: null,
+        state: ConnectionState.DISCONNECTED,
+        isIncoming: false,
+        reconnectAttempts: 0,
+        reconnectTimeout: null,
+        pingInterval: null,
+        address: 'ws://172.19.0.8:9999',
+        configuredAddress: 'ws://node-b:9999',
+        observedAddress: 'ws://172.19.0.8:9999',
+        isSelfConnection: false,
+      });
+
+      const connectCalls = [];
+      router.connectToNode = async (nodeId, address) => {
+        connectCalls.push({nodeId, address});
+        if (address === 'ws://172.19.0.8:9999') {
+          throw new Error('connect ECONNREFUSED 172.19.0.8:9999');
+        }
+        router.nodeConnections.set(nodeId, {
+          nodeId,
+          nodeAddress: address,
+          connectionId: 'node-b-fresh-fallback',
+          ws: {
+            readyState: 1,
+            send: () => {},
+          },
+          state: ConnectionState.CONNECTED,
+          isIncoming: false,
+          reconnectAttempts: 0,
+          reconnectTimeout: null,
+          pingInterval: null,
+          address,
+          configuredAddress: 'ws://node-b:9999',
+          observedAddress: null,
+          isSelfConnection: false,
+        });
+      };
+      router.sendMessage = async (
+        _connection,
+        _targetAddress,
+        messageId,
+        _payload,
+        targetNodeId,
+        correlationId,
+      ) => {
+        return {
+          messageId,
+          correlationId,
+          acknowledged: true,
+          targetNodeId,
+          recovered: true,
+        };
+      };
+
+      const result = await router.deliver(
+        'node-b/service/fallback-reconnect',
+        {type: 'TEST'},
+      );
+
+      t.same(
+        connectCalls,
+        [
+          {nodeId: 'node-b', address: 'ws://172.19.0.8:9999'},
+          {nodeId: 'node-b', address: 'ws://node-b:9999'},
+        ],
+        'delivery recovery should retry the configured resolver address after an observed-address failure',
+      );
+      t.equal(
+        result.acknowledged,
+        true,
+        'delivery should succeed after reconnecting via the configured address',
+      );
+      t.equal(
+        result.recovered,
+        true,
+        'delivery should use the recovered connection after fallback',
+      );
+    });
+
+  t.test('should prefer the preserved observed reconnect address even after the active address regresses to the resolver hostname',
+    async (t) => {
+      const router = new MessageRouter({
+        nodeId: 'node-a',
+      });
+      await router.initialize({startServer: false});
+      t.teardown(async () => {
+        await router.shutdown().catch(() => {});
+      });
+
+      router.setServiceNodeResolver((address) => {
+        const match = address.match(/^([^/]+)\//);
+        return match ? match[1] : null;
+      });
+      router.setNodeAddressResolver((nodeId) => {
+        return nodeId === 'node-b' ? 'ws://node-b:9999' : null;
+      });
+
+      router.nodeConnections.set('node-b', {
+        nodeId: 'node-b',
+        nodeAddress: 'ws://node-b:9999',
+        connectionId: 'node-b-regressed-address',
+        ws: null,
+        state: ConnectionState.DISCONNECTED,
+        isIncoming: false,
+        reconnectAttempts: 0,
+        reconnectTimeout: null,
+        pingInterval: null,
+        address: 'ws://node-b:9999',
+        configuredAddress: 'ws://node-b:9999',
+        observedAddress: 'ws://172.19.0.8:9999',
+        isSelfConnection: false,
+      });
+
+      const connectCalls = [];
+      router.connectToNode = async (nodeId, address) => {
+        connectCalls.push({nodeId, address});
+        router.nodeConnections.set(nodeId, {
+          nodeId,
+          nodeAddress: address,
+          connectionId: 'node-b-fresh-observed',
+          ws: {
+            readyState: 1,
+            send: () => {},
+          },
+          state: ConnectionState.CONNECTED,
+          isIncoming: false,
+          reconnectAttempts: 0,
+          reconnectTimeout: null,
+          pingInterval: null,
+          address,
+          configuredAddress: 'ws://node-b:9999',
+          observedAddress: 'ws://172.19.0.8:9999',
+          isSelfConnection: false,
+        });
+      };
+      router.sendMessage = async (
+        _connection,
+        _targetAddress,
+        messageId,
+        _payload,
+        targetNodeId,
+        correlationId,
+      ) => {
+        return {
+          messageId,
+          correlationId,
+          acknowledged: true,
+          targetNodeId,
+          recovered: true,
+        };
+      };
+
+      const result = await router.deliver(
+        'node-b/service/prefer-observed-reconnect',
+        {type: 'TEST'},
+      );
+
+      t.same(
+        connectCalls,
+        [{nodeId: 'node-b', address: 'ws://172.19.0.8:9999'}],
+        'delivery recovery should use the preserved direct address before retrying the resolver hostname',
+      );
+      t.equal(
+        result.acknowledged,
+        true,
+        'delivery should succeed after reconnecting via the preserved observed address',
+      );
+      t.equal(
+        result.recovered,
+        true,
+        'delivery should use the recovered connection after the observed-address reconnect',
+      );
+    });
+
+  t.test('should suppress a stale reconnect address across deliveries after ENOTFOUND',
+    async (t) => {
+      const router = new MessageRouter({
+        nodeId: 'node-a',
+      });
+      await router.initialize({startServer: false});
+      t.teardown(async () => {
+        await router.shutdown().catch(() => {});
+      });
+
+      router.setServiceNodeResolver((address) => {
+        const match = address.match(/^([^/]+)\//);
+        return match ? match[1] : null;
+      });
+      router.setNodeAddressResolver((nodeId) => {
+        return nodeId === 'node-b' ? 'ws://node-b-fresh:9999' : null;
+      });
+
+      router.nodeConnections.set('node-b', {
+        nodeId: 'node-b',
+        nodeAddress: 'ws://node-b-stale:9999',
+        connectionId: 'node-b-stale-dns',
+        ws: null,
+        state: ConnectionState.DISCONNECTED,
+        isIncoming: false,
+        reconnectAttempts: 0,
+        reconnectTimeout: null,
+        pingInterval: null,
+        address: 'ws://node-b-stale:9999',
+        configuredAddress: 'ws://node-b-stale:9999',
+        observedAddress: 'ws://node-b-stale:9999',
+        isSelfConnection: false,
+      });
+
+      const connectCalls = [];
+      router.establishConnection = async (connectionInfo) => {
+        connectCalls.push(connectionInfo.address);
+        if (connectionInfo.address === 'ws://node-b-stale:9999') {
+          throw new Error('getaddrinfo ENOTFOUND node-b-stale');
+        }
+        connectionInfo.ws = {
+          readyState: 1,
+          send: () => {},
+        };
+        connectionInfo.state = ConnectionState.CONNECTED;
+        connectionInfo.reconnectAttempts = 0;
+        router.rememberReconnectAddress(
+          connectionInfo,
+          null,
+          connectionInfo.configuredAddress || connectionInfo.address,
+        );
+      };
+      router.sendMessage = async (
+        _connection,
+        _targetAddress,
+        messageId,
+        _payload,
+        targetNodeId,
+        correlationId,
+      ) => {
+        return {
+          messageId,
+          correlationId,
+          acknowledged: true,
+          targetNodeId,
+          recovered: true,
+        };
+      };
+
+      const firstResult = await router.deliver(
+        'node-b/service/stale-reconnect-suppression',
+        {type: 'TEST'},
+      );
+      t.equal(
+        firstResult.acknowledged,
+        true,
+        'first delivery should recover through the fresh resolver-owned address',
+      );
+
+      const activeConnection = router.nodeConnections.get('node-b');
+      activeConnection.state = ConnectionState.DISCONNECTED;
+      activeConnection.ws = null;
+
+      const secondResult = await router.deliver(
+        'node-b/service/stale-reconnect-suppression',
+        {type: 'TEST'},
+      );
+      t.equal(
+        secondResult.acknowledged,
+        true,
+        'second delivery should also recover',
+      );
+      t.same(
+        connectCalls,
+        [
+          'ws://node-b-stale:9999',
+          'ws://node-b-fresh:9999',
+          'ws://node-b-fresh:9999',
+        ],
+        'after ENOTFOUND, later deliveries should not start from the stale reconnect address again',
       );
     });
 });

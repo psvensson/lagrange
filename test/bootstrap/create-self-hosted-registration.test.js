@@ -73,8 +73,8 @@ test(
       return {success: true};
     };
 
-    service.registerMessageGroupService = async (groupId, replicaId, _svc) => {
-      registerCalls.push({groupId, replicaId});
+    service.registerMessageGroupService = async (groupId, replicaId, _svc, options) => {
+      registerCalls.push({groupId, replicaId, options});
     };
 
     await service.registerCreateSelfHostedMetadata();
@@ -97,6 +97,11 @@ test(
     t.same(
       registerCalls.map((call) => call.replicaId).sort(),
       ['mg-self-hosted-1-r0', 'mg-self-hosted-1-r1', 'mg-self-hosted-1-r2'],
+    );
+    t.same(
+      registerCalls.map((call) => call.options?.status),
+      ['stopped', 'stopped', 'stopped'],
+      'initial self-hosted replica rows should register as stopped until activation',
     );
   },
 );

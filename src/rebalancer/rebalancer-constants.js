@@ -263,6 +263,8 @@ const REBALANCE_COORDINATOR_LOG_MSG = Object.freeze({
     'Executor outcome transition failed',
   OUTCOME_UNKNOWN_ACTION:
     'Executor outcome ignored: unknown action mapping',
+  OBSERVED_PROGRESS_TRANSITION_FAILED:
+    'Observed replica progress transition failed',
 });
 
 const REBALANCE_COORDINATOR_ERROR_MSG = Object.freeze({
