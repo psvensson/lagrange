@@ -1,0 +1,579 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-03-14T07:59:20.228Z",
+  "reportPath": ".playback/rolling-restart-5n-fix14.report.json",
+  "scenario": "rolling-restart",
+  "summary": {
+    "passed": false,
+    "error": "Not all nodes reached ACTIVE state within 120000ms (attempts=7, elapsedMs=121006, nodeDiagnostics=7493b0ab-a054-5fad-a91b-5e331db29304=error:Node readiness probe timed out for 7493b0ab-a054-5fad-a91b-5e331db29304, 35a891b8-c1a0-5064-9c6e-2acfba61c2a7=active, 11601fe0-72d6-5853-8590-ec2881853e72=active, ebc4aa0b-06c6-506d-93ea-1dd2deca3f58=active, 8be8d30f-4499-5eed-865c-71b4d529a67a=inactive, snapshotCoverage=0/5, inactiveSummary=error:Node readiness probe timed out for 7493b0ab-a054-5fad-a91b-5e331db29304:3, state:warming:17, state:inactive:4)",
+    "phase": null,
+    "rootCauseClass": null,
+    "dominantReason": null
+  },
+  "reportSummary": {
+    "total": 1,
+    "passed": 0,
+    "failed": 1,
+    "duration": 324573
+  },
+  "standardSummary": {
+    "historicalReportsConsidered": 20,
+    "scenariosComparedToPrevious": 1,
+    "scenariosComparedToPostgresBaseline": 0,
+    "diagnosticsCoverageSummary": {
+      "scenariosWithCoverage": 0,
+      "scenariosWithoutCoverage": 1,
+      "totalSamples": 0,
+      "coverageRate": 0,
+      "scenarios": [
+        {
+          "scenario": "rolling-restart",
+          "status": "unavailable",
+          "reason": "not_reported",
+          "sampleCount": 0
+        }
+      ]
+    },
+    "writePathAttributionSummary": {
+      "scenariosWithDiagnostics": 0,
+      "topPhases": []
+    },
+    "scaleEfficiencySummary": {
+      "observationCount": 7,
+      "comparableGroupCount": 0,
+      "groups": [],
+      "topOpportunities": []
+    },
+    "scenarios": [
+      {
+        "scenario": "rolling-restart",
+        "similarityKey": "rolling-restart|default",
+        "current": {
+          "passed": false,
+          "clusterSize": 5,
+          "durationMs": 324573,
+          "performanceMetricsAvailable": false,
+          "validForPerformanceComparison": false,
+          "performanceInvalidReason": "metrics_unavailable",
+          "observedOpsPerSec": 0,
+          "observedP99LatencyMs": 0,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "previousSimilarRun": {
+          "reportTimestamp": "2026-03-14T07:21:05.362Z",
+          "reportPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/.playback/rolling-restart-3n-fix13.report.json",
+          "passed": false,
+          "clusterSize": 3,
+          "durationMs": 170198,
+          "performanceMetricsAvailable": true,
+          "validForPerformanceComparison": false,
+          "performanceInvalidReason": "correctness_failed",
+          "observedOpsPerSec": 37.399669835486996,
+          "observedP99LatencyMs": 3897,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "deltaVsPrevious": {
+          "passedChanged": false,
+          "clusterSizeChanged": true,
+          "durationMs": 154375,
+          "durationRatio": 0.9070318100095184,
+          "opsPerSec": 0,
+          "opsPerSecRatio": null,
+          "opsPerSecPerNode": 0,
+          "opsPerSecPerNodeRatio": null,
+          "p99LatencyMs": 0,
+          "p99LatencyMsRatio": null
+        },
+        "postgresBaseline": null,
+        "parity": null,
+        "writePathTopPhases": []
+      }
+    ]
+  },
+  "benchmarkRegressionGate": {
+    "enabled": false,
+    "status": "skipped",
+    "reason": "disabled",
+    "settings": {
+      "enabled": false,
+      "maxThroughputRegressionRatio": 0.1,
+      "minimumThroughputRatioSutToBaseline": null,
+      "baselineProvider": "liferaft",
+      "failIfBaselineMissing": false,
+      "approvedMitigationId": null,
+      "parityMismatchPolicy": "warn"
+    },
+    "currentProvider": "liferaft",
+    "baselineProvider": "liferaft",
+    "comparedScenarioCount": 0,
+    "failedScenarioCount": 0,
+    "mitigatedScenarioCount": 0,
+    "missingBaselineScenarios": [],
+    "comparisons": [],
+    "parityMismatchCount": 0,
+    "lowThroughputRatioCount": 0,
+    "warnings": []
+  },
+  "diagnostics": {
+    "failure": null,
+    "failedPhase": null,
+    "noProgress": null,
+    "invariantBreaches": {
+      "totalCount": 0,
+      "hardCount": 0,
+      "softCount": 0,
+      "failing": [],
+      "hardBreaches": [],
+      "softBreaches": []
+    },
+    "rootCauseBundle": null
+  },
+  "controlSnapshot": null,
+  "controlPlane": null,
+  "readiness": {
+    "nodeReasonsByNodeId": null,
+    "strictDiscoveryGate": null,
+    "sutLoadDiscovery": null,
+    "lastReadinessTimelineEntry": null
+  },
+  "topFailures": {
+    "reasonCounts": {},
+    "topReasons": [],
+    "affectedNodeIds": [],
+    "loadMetrics": null
+  },
+  "nodeDiagnostics": {},
+  "logs": {
+    "scenarioDirPath": ".playback/.playback/rolling-restart-5n-fix14/rolling-restart",
+    "timelinePath": ".playback/.playback/rolling-restart-5n-fix14/rolling-restart/_timeline.log",
+    "analysisPath": null,
+    "nodeLogPaths": {
+      "11601fe0-72d6-5853-8590-ec2881853e72": ".playback/.playback/rolling-restart-5n-fix14/rolling-restart/11601fe0-72d6-5853-8590-ec2881853e72.log",
+      "7493b0ab-a054-5fad-a91b-5e331db29304": ".playback/.playback/rolling-restart-5n-fix14/rolling-restart/7493b0ab-a054-5fad-a91b-5e331db29304.log",
+      "35a891b8-c1a0-5064-9c6e-2acfba61c2a7": ".playback/.playback/rolling-restart-5n-fix14/rolling-restart/35a891b8-c1a0-5064-9c6e-2acfba61c2a7.log",
+      "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58": ".playback/.playback/rolling-restart-5n-fix14/rolling-restart/ebc4aa0b-06c6-506d-93ea-1dd2deca3f58.log",
+      "8be8d30f-4499-5eed-865c-71b4d529a67a": ".playback/.playback/rolling-restart-5n-fix14/rolling-restart/8be8d30f-4499-5eed-865c-71b4d529a67a.log"
+    },
+    "excerptsByNodeId": {
+      "11601fe0-72d6-5853-8590-ec2881853e72": [
+        "2026-03-14T07:59:19.141Z [11601fe0-72d6-5853-8590-ec2881853e72] info: {\"level\":50,\"time\":\"2026-03-14T07:59:13.223Z\",\"nodeId\":\"11601fe0-72d6-5853-8590-ec2881853e72\",\"pid\":1,\"subsystem\":\"message-group\",\"messageId\":\"5b0e0809-a6f4-4e7d-9e63-1b33fb42877f\",\"targetService\":\"7493b0ab-a054-5fad-a91b-5e331db29304/partition/nodes-p1-r1\",\"error\":\"Message timeout\",\"nodeId\":\"11601fe0-72d6-5853-8590-ec2881853e72\",\"msg\":\"Failed to send message\"}",
+        "2026-03-14T07:59:19.141Z [11601fe0-72d6-5853-8590-ec2881853e72] info: {\"level\":50,\"time\":\"2026-03-14T07:59:13.225Z\",\"nodeId\":\"11601fe0-72d6-5853-8590-ec2881853e72\",\"pid\":1,\"subsystem\":\"message-group\",\"messageId\":\"c5380c32-14ac-44d1-ad7e-5f4b4f2112d4\",\"targetService\":\"7493b0ab-a054-5fad-a91b-5e331db29304/partition/nodes-p1-r1\",\"error\":\"Message timeout\",\"nodeId\":\"11601fe0-72d6-5853-8590-ec2881853e72\",\"msg\":\"Failed to send message\"}",
+        "2026-03-14T07:59:19.141Z [11601fe0-72d6-5853-8590-ec2881853e72] info: {\"level\":50,\"time\":\"2026-03-14T07:59:13.226Z\",\"nodeId\":\"11601fe0-72d6-5853-8590-ec2881853e72\",\"pid\":1,\"subsystem\":\"parallel-query-coordinator\",\"queryId\":\"q-209-1773475148225\",\"error\":\"Query timeout after 5000ms\",\"nodeId\":\"11601fe0-72d6-5853-8590-ec2881853e72\",\"msg\":\"Parallel query execution failed\"}",
+        "2026-03-14T07:59:19.141Z [11601fe0-72d6-5853-8590-ec2881853e72] info: {\"level\":50,\"time\":\"2026-03-14T07:59:13.226Z\",\"nodeId\":\"11601fe0-72d6-5853-8590-ec2881853e72\",\"pid\":1,\"subsystem\":\"message-group\",\"messageId\":\"a5ce3a09-6953-4a1b-be94-26d58bef5c88\",\"targetService\":\"7493b0ab-a054-5fad-a91b-5e331db29304/partition/nodes-p1-r1\",\"error\":\"Message timeout\",\"nodeId\":\"11601fe0-72d6-5853-8590-ec2881853e72\",\"msg\":\"Failed to send message\"}",
+        "2026-03-14T07:59:19.141Z [11601fe0-72d6-5853-8590-ec2881853e72] info: {\"level\":50,\"time\":\"2026-03-14T07:59:13.750Z\",\"nodeId\":\"11601fe0-72d6-5853-8590-ec2881853e72\",\"pid\":1,\"subsystem\":\"message-group\",\"messageId\":\"5106dc87-cda7-4135-bf5e-6f7770dff598\",\"targetService\":\"7493b0ab-a054-5fad-a91b-5e331db29304/partition/replica_operations-p1-r1\",\"error\":\"Message timeout\",\"nodeId\":\"11601fe0-72d6-5853-8590-ec2881853e72\",\"msg\":\"Failed to send message\"}",
+        "2026-03-14T07:59:19.141Z [11601fe0-72d6-5853-8590-ec2881853e72] info: {\"level\":50,\"time\":\"2026-03-14T07:59:13.752Z\",\"nodeId\":\"11601fe0-72d6-5853-8590-ec2881853e72\",\"pid\":1,\"subsystem\":\"parallel-query-coordinator\",\"queryId\":\"q-210-1773475148751\",\"error\":\"Query timeout after 5000ms\",\"nodeId\":\"11601fe0-72d6-5853-8590-ec2881853e72\",\"msg\":\"Parallel query execution failed\"}",
+        "2026-03-14T07:59:19.141Z [11601fe0-72d6-5853-8590-ec2881853e72] info: {\"level\":50,\"time\":\"2026-03-14T07:59:13.752Z\",\"nodeId\":\"11601fe0-72d6-5853-8590-ec2881853e72\",\"pid\":1,\"subsystem\":\"sql-query-engine\",\"sql\":\"SELECT * FROM replica_operations\\n    WHERE source_node_id = ?\\n    AND (\\n      workflow_step IN (?, ?\",\"error\":\"Query timeout after 5000ms\",\"nodeId\":\"11601fe0-72d6-5853-8590-ec2881853e72\",\"msg\":\"Query execution failed\"}",
+        "2026-03-14T07:59:19.141Z [11601fe0-72d6-5853-8590-ec2881853e72] info: {\"level\":50,\"time\":\"2026-03-14T07:59:13.752Z\",\"nodeId\":\"11601fe0-72d6-5853-8590-ec2881853e72\",\"pid\":1,\"subsystem\":\"message-group\",\"messageId\":\"b111477c-53f3-4682-a0f1-2efca3728193\",\"targetService\":\"7493b0ab-a054-5fad-a91b-5e331db29304/partition/replica_operations-p1-r1\",\"error\":\"Message timeout\",\"nodeId\":\"11601fe0-72d6-5853-8590-ec2881853e72\",\"msg\":\"Failed to send message\"}",
+        "2026-03-14T07:59:19.141Z [11601fe0-72d6-5853-8590-ec2881853e72] info: {\"level\":40,\"time\":\"2026-03-14T07:59:14.222Z\",\"nodeId\":\"11601fe0-72d6-5853-8590-ec2881853e72\",\"pid\":1,\"subsystem\":\"message-router\",\"messageId\":\"5106dc87-cda7-4135-bf5e-6f7770dff598\",\"nodeId\":\"11601fe0-72d6-5853-8590-ec2881853e72\",\"msg\":\"No pending service response request\"}",
+        "2026-03-14T07:59:19.141Z [11601fe0-72d6-5853-8590-ec2881853e72] info: {\"level\":40,\"time\":\"2026-03-14T07:59:14.222Z\",\"nodeId\":\"11601fe0-72d6-5853-8590-ec2881853e72\",\"pid\":1,\"subsystem\":\"message-router\",\"messageId\":\"b111477c-53f3-4682-a0f1-2efca3728193\",\"nodeId\":\"11601fe0-72d6-5853-8590-ec2881853e72\",\"msg\":\"No pending service response request\"}",
+        "2026-03-14T07:59:19.141Z [11601fe0-72d6-5853-8590-ec2881853e72] info: {\"level\":40,\"time\":\"2026-03-14T07:59:14.223Z\",\"nodeId\":\"11601fe0-72d6-5853-8590-ec2881853e72\",\"pid\":1,\"subsystem\":\"message-router\",\"messageId\":\"6874f795-8cee-4cfe-9a8b-a43d4b69a7c0\",\"nodeId\":\"11601fe0-72d6-5853-8590-ec2881853e72\",\"msg\":\"No pending service response request\"}",
+        "2026-03-14T07:59:19.141Z [11601fe0-72d6-5853-8590-ec2881853e72] info: {\"level\":40,\"time\":\"2026-03-14T07:59:14.223Z\",\"nodeId\":\"11601fe0-72d6-5853-8590-ec2881853e72\",\"pid\":1,\"subsystem\":\"message-router\",\"messageId\":\"108e2e33-9b0c-496f-9f1f-530b90aa1b66\",\"nodeId\":\"11601fe0-72d6-5853-8590-ec2881853e72\",\"msg\":\"No pending service response request\"}",
+        "2026-03-14T07:59:19.141Z [11601fe0-72d6-5853-8590-ec2881853e72] info: {\"level\":40,\"time\":\"2026-03-14T07:59:14.223Z\",\"nodeId\":\"11601fe0-72d6-5853-8590-ec2881853e72\",\"pid\":1,\"subsystem\":\"message-router\",\"messageId\":\"5b0e0809-a6f4-4e7d-9e63-1b33fb42877f\",\"nodeId\":\"11601fe0-72d6-5853-8590-ec2881853e72\",\"msg\":\"No pending service response request\"}",
+        "2026-03-14T07:59:19.141Z [11601fe0-72d6-5853-8590-ec2881853e72] info: {\"level\":40,\"time\":\"2026-03-14T07:59:14.223Z\",\"nodeId\":\"11601fe0-72d6-5853-8590-ec2881853e72\",\"pid\":1,\"subsystem\":\"message-router\",\"messageId\":\"c5380c32-14ac-44d1-ad7e-5f4b4f2112d4\",\"nodeId\":\"11601fe0-72d6-5853-8590-ec2881853e72\",\"msg\":\"No pending service response request\"}",
+        "2026-03-14T07:59:19.141Z [11601fe0-72d6-5853-8590-ec2881853e72] info: {\"level\":40,\"time\":\"2026-03-14T07:59:14.223Z\",\"nodeId\":\"11601fe0-72d6-5853-8590-ec2881853e72\",\"pid\":1,\"subsystem\":\"message-router\",\"messageId\":\"a5ce3a09-6953-4a1b-be94-26d58bef5c88\",\"nodeId\":\"11601fe0-72d6-5853-8590-ec2881853e72\",\"msg\":\"No pending service response request\"}",
+        "2026-03-14T07:59:19.141Z [11601fe0-72d6-5853-8590-ec2881853e72] info: {\"level\":50,\"time\":\"2026-03-14T07:59:14.274Z\",\"nodeId\":\"11601fe0-72d6-5853-8590-ec2881853e72\",\"pid\":1,\"subsystem\":\"message-router\",\"nodeId\":\"11601fe0-72d6-5853-8590-ec2881853e72\",\"error\":\"connect EHOSTUNREACH 172.20.0.6:8082\",\"msg\":\"WebSocket error\"}",
+        "2026-03-14T07:59:19.141Z [11601fe0-72d6-5853-8590-ec2881853e72] info: {\"level\":50,\"time\":\"2026-03-14T07:59:14.274Z\",\"nodeId\":\"11601fe0-72d6-5853-8590-ec2881853e72\",\"pid\":1,\"subsystem\":\"message-router\",\"nodeId\":\"11601fe0-72d6-5853-8590-ec2881853e72\",\"error\":\"WebSocket connection closed before open for node 8be8d30f-4499-5eed-865c-71b4d529a67a\",\"msg\":\"Reconnection failed\"}",
+        "2026-03-14T07:59:19.141Z [11601fe0-72d6-5853-8590-ec2881853e72] info: {\"level\":30,\"time\":\"2026-03-14T07:59:17.376Z\",\"nodeId\":\"11601fe0-72d6-5853-8590-ec2881853e72\",\"pid\":1,\"subsystem\":\"node-joining\",\"nodeId\":\"11601fe0-72d6-5853-8590-ec2881853e72\",\"targetAddress\":\"11601fe0-72d6-5853-8590-ec2881853e72/message-group/mg-8be8d30f-71b4d529a67a-r2\",\"state\":\"ready\",\"msg\":\"Sent NODE_STATE_UPDATE to control plane\"}",
+        "2026-03-14T07:59:19.141Z [11601fe0-72d6-5853-8590-ec2881853e72] info: {\"level\":30,\"time\":\"2026-03-14T07:59:17.493Z\",\"nodeId\":\"11601fe0-72d6-5853-8590-ec2881853e72\",\"pid\":1,\"subsystem\":\"heartbeat-service\",\"nodeId\":\"11601fe0-72d6-5853-8590-ec2881853e72\",\"previousFailures\":2,\"msg\":\"Heartbeat recovered after failures\"}",
+        "2026-03-14T07:59:19.141Z [11601fe0-72d6-5853-8590-ec2881853e72] info: {\"level\":40,\"time\":\"2026-03-14T07:59:18.406Z\",\"nodeId\":\"11601fe0-72d6-5853-8590-ec2881853e72\",\"pid\":1,\"subsystem\":\"control-plane-readiness\",\"nodeId\":\"11601fe0-72d6-5853-8590-ec2881853e72\",\"repairedRowCount\":2,\"repairedNodeRowCount\":1,\"repairedServiceRowCount\":1,\"msg\":\"Repaired readiness cache from authoritative node/service rows\"}"
+      ],
+      "7493b0ab-a054-5fad-a91b-5e331db29304": [
+        "2026-03-14T07:59:19.139Z [7493b0ab-a054-5fad-a91b-5e331db29304] info: {\"level\":40,\"time\":\"2026-03-14T07:58:56.015Z\",\"nodeId\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"pid\":1,\"subsystem\":\"cdc-group-propagation\",\"nodeId\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"tableName\":\"replica_operations\",\"operation\":\"INSERT\",\"attempt\":1,\"retryDelayMs\":50,\"failureCount\":1,\"msg\":\"Retrying CDC propagation delivery failures\"}",
+        "2026-03-14T07:59:19.139Z [7493b0ab-a054-5fad-a91b-5e331db29304] info: {\"level\":40,\"time\":\"2026-03-14T07:58:56.015Z\",\"nodeId\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"pid\":1,\"subsystem\":\"cdc-group-propagation\",\"nodeId\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"tableName\":\"partitions\",\"operation\":\"UPDATE\",\"attempt\":1,\"retryDelayMs\":50,\"failureCount\":1,\"msg\":\"Retrying CDC propagation delivery failures\"}",
+        "2026-03-14T07:59:19.139Z [7493b0ab-a054-5fad-a91b-5e331db29304] info: {\"level\":40,\"time\":\"2026-03-14T07:58:56.015Z\",\"nodeId\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"pid\":1,\"subsystem\":\"cdc-group-propagation\",\"nodeId\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"tableName\":\"partitions\",\"operation\":\"UPDATE\",\"attempt\":1,\"retryDelayMs\":50,\"failureCount\":1,\"msg\":\"Retrying CDC propagation delivery failures\"}",
+        "2026-03-14T07:59:19.139Z [7493b0ab-a054-5fad-a91b-5e331db29304] info: {\"level\":40,\"time\":\"2026-03-14T07:58:56.015Z\",\"nodeId\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"pid\":1,\"subsystem\":\"cdc-group-propagation\",\"nodeId\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"tableName\":\"replica_operations\",\"operation\":\"UPDATE\",\"attempt\":1,\"retryDelayMs\":50,\"failureCount\":1,\"msg\":\"Retrying CDC propagation delivery failures\"}",
+        "2026-03-14T07:59:19.139Z [7493b0ab-a054-5fad-a91b-5e331db29304] info: {\"level\":40,\"time\":\"2026-03-14T07:58:56.015Z\",\"nodeId\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"pid\":1,\"subsystem\":\"cdc-group-propagation\",\"nodeId\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"tableName\":\"nodes\",\"operation\":\"UPDATE\",\"attempt\":1,\"retryDelayMs\":50,\"failureCount\":1,\"msg\":\"Retrying CDC propagation delivery failures\"}",
+        "2026-03-14T07:59:19.139Z [7493b0ab-a054-5fad-a91b-5e331db29304] info: {\"level\":40,\"time\":\"2026-03-14T07:58:56.015Z\",\"nodeId\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"pid\":1,\"subsystem\":\"cdc-group-propagation\",\"nodeId\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"tableName\":\"partitions\",\"operation\":\"UPDATE\",\"attempt\":1,\"retryDelayMs\":50,\"failureCount\":1,\"msg\":\"Retrying CDC propagation delivery failures\"}",
+        "2026-03-14T07:59:19.139Z [7493b0ab-a054-5fad-a91b-5e331db29304] info: {\"level\":40,\"time\":\"2026-03-14T07:58:56.029Z\",\"nodeId\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"pid\":1,\"subsystem\":\"control-plane-readiness\",\"nodeId\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"repairedRowCount\":2,\"repairedNodeRowCount\":1,\"repairedServiceRowCount\":1,\"msg\":\"Repaired readiness cache from authoritative node/service rows\"}",
+        "2026-03-14T07:59:19.139Z [7493b0ab-a054-5fad-a91b-5e331db29304] info: {\"level\":30,\"time\":\"2026-03-14T07:58:56.097Z\",\"nodeId\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"pid\":1,\"subsystem\":\"admin-websocket-api\",\"nodeId\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"reason\":\"control_snapshot\",\"tableName\":null,\"tableId\":null,\"repairedTableCount\":8,\"repairedRowCount\":202,\"msg\":\"Authoritative discovery cache repair completed\"}",
+        "2026-03-14T07:59:19.139Z [7493b0ab-a054-5fad-a91b-5e331db29304] info: {\"level\":30,\"time\":\"2026-03-14T07:58:56.141Z\",\"nodeId\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"pid\":1,\"subsystem\":\"message-router\",\"nodeId\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"connectionId\":\"f908cec4-0fb8-4890-b5a0-27e4ddb87065\",\"msg\":\"Connection closed\"}",
+        "2026-03-14T07:59:19.139Z [7493b0ab-a054-5fad-a91b-5e331db29304] info: {\"level\":30,\"time\":\"2026-03-14T07:58:56.403Z\",\"nodeId\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"pid\":1,\"subsystem\":\"message-router\",\"nodeId\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"connectionId\":\"4fffe6e7-fb0e-4ed2-8e3c-2cddbac4e05d\",\"msg\":\"Connection closed\"}",
+        "2026-03-14T07:59:19.139Z [7493b0ab-a054-5fad-a91b-5e331db29304] info: {\"level\":50,\"time\":\"2026-03-14T07:58:57.146Z\",\"nodeId\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"pid\":1,\"subsystem\":\"message-router\",\"nodeId\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"error\":\"WebSocket was closed before the connection was established\",\"msg\":\"WebSocket error\"}",
+        "2026-03-14T07:59:19.139Z [7493b0ab-a054-5fad-a91b-5e331db29304] info: {\"level\":40,\"time\":\"2026-03-14T07:58:57.146Z\",\"nodeId\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"pid\":1,\"subsystem\":\"message-router\",\"targetNodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"address\":\"ws://172.20.0.6:8082\",\"localNodeId\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"error\":\"WebSocket connection timeout after 5000ms\",\"nodeId\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"msg\":\"Failed to reconnect target node before delivery\"}",
+        "2026-03-14T07:59:19.139Z [7493b0ab-a054-5fad-a91b-5e331db29304] info: {\"level\":40,\"time\":\"2026-03-14T07:58:57.146Z\",\"nodeId\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"pid\":1,\"subsystem\":\"message-router\",\"targetNodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"address\":\"ddb-test-reuse-5-5:8080\",\"localNodeId\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"error\":\"The URL's protocol must be one of \\\"ws:\\\", \\\"wss:\\\", \\\"http:\\\", \\\"https:\\\", or \\\"ws+unix:\\\"\",\"nodeId\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"msg\":\"Failed to reconnect target node before delivery\"}",
+        "2026-03-14T07:59:19.139Z [7493b0ab-a054-5fad-a91b-5e331db29304] info: {\"level\":50,\"time\":\"2026-03-14T07:58:57.161Z\",\"nodeId\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"pid\":1,\"subsystem\":\"message-router\",\"nodeId\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"error\":\"getaddrinfo ENOTFOUND ddb-test-reuse-5-5\",\"msg\":\"WebSocket error\"}",
+        "2026-03-14T07:59:19.139Z [7493b0ab-a054-5fad-a91b-5e331db29304] info: {\"level\":40,\"time\":\"2026-03-14T07:58:57.161Z\",\"nodeId\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"pid\":1,\"subsystem\":\"message-router\",\"targetNodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"address\":\"ws://ddb-test-reuse-5-5:8082\",\"localNodeId\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"error\":\"getaddrinfo ENOTFOUND ddb-test-reuse-5-5\",\"nodeId\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"msg\":\"Failed to reconnect target node before delivery\"}",
+        "2026-03-14T07:59:19.139Z [7493b0ab-a054-5fad-a91b-5e331db29304] info: {\"level\":40,\"time\":\"2026-03-14T07:58:57.162Z\",\"nodeId\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"pid\":1,\"subsystem\":\"message-router\",\"messageId\":\"8458b955-a1b0-4a64-bdc3-373c0c2ebf81\",\"targetAddress\":\"8be8d30f-4499-5eed-865c-71b4d529a67a/message-group/mg-8be8d30f-71b4d529a67a-r0\",\"targetNodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"localNodeId\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"connectionExists\":false,\"availableConnections\":[\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"b4c6bfae-2ba1-45d6-aed7-9b9d731e2eef\",\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"223a255c-001c-4654-8e63-710edb2a1911\",\"11601fe0-72d6-5853-8590-ec2881853e72\",\"c29d1bbc-d362-462e-bd61-702c036d077c\",\"bb3fa8a2-716f-420c-91f3-2e0990af2716\",\"ba64917e-45d8-4ba7-9fb4-cbd482761cae\",\"87268034-f8b8-49e2-adeb-dd99e67f1cfe\",\"310c48d1-0ea8-4078-812f-2e1516504ca0\",\"520a330d-239e-46d9-a985-eeef31315d15\",\"21777162-7a29-4038-a77f-1b0041e17cd5\",\"4a4b7739-5092-46ad-a397-24cce2346645\",\"7112cb1d-5b0b-4a1d-af80-d6b1bf275938\",\"554fdcc7-119c-4abc-9f46-f4c5b5461408\",\"2b6a12e6-90b9-47b3-b703-d3e3e00cf30c\",\"9f8656d8-678a-4dfd-994f-e95f0dee832d\",\"9e3c6e92-7ca6-4441-aa18-0fb5220cb032\",\"55aca6d7-60e9-4428-b243-000ec5166c22\",\"dfae38c6-5ced-427a-bfa7-eed99b591134\",\"7b14278d-bba8-4458-a22b-34646e16164f\",\"a9bccae4-25f1-4d58-90c6-c5780ed273b7\",\"b949d466-2e1e-42fa-9d75-773719871737\",\"fd070271-b43b-49a6-aca8-dd0e250564c4\",\"d1aaad93-c805-4e72-a097-59f808f285a7\",\"6653b26b-793e-4a33-b02e-4d55b7ce5999\",\"05f787b0-33ac-4b02-8e99-076a9ba0e17d\",\"bbf0b477-d9ca-494c-8189-c2c611f5c7e1\",\"5d19e893-315b-48ec-9944-2732df874b40\",\"856a58ee-6a6d-4acc-9fc7-a47745fc935d\",\"48cd699b-c011-469d-8f0e-a992b723add6\",\"d66e00ab-95a7-4a90-9fd1-5594139fe210\",\"96b6fbb4-79e3-4019-bcec-b88fc703440e\",\"3f106864-4f1e-4c30-bbf0-c7c9fa2b370c\",\"f6150c7b-6c8b-4a98-85f5-7dc0175a7771\",\"e62a3294-160b-4074-a1cd-056e3e2059f0\",\"2ca7e5df-cbf9-4c6e-9a44-bfb6d5ac791c\",\"0acc80a5-49f1-4d28-b00c-6280a5d08cd0\",\"29cade14-c3f9-43fa-8adc-a9959cb5cff1\",\"6906c397-525e-4755-be55-6a7fcf7f0e13\",\"10d2e4d6-cc80-4ca0-a58d-c370b0f14e46\",\"709a84e8-3acb-4bac-924d-50f7d52d8570\",\"a3abcf71-6c15-42a7-a714-5b9288bfa331\",\"ce69eed6-37f3-4d83-be9c-fa8889f66396\",\"b561a177-e462-41a7-a6bc-eb0cd22c0556\",\"0099cfb1-aab5-4bc8-be91-9b2f66f695a8\",\"bbf265cb-1e1f-4d33-99e4-1b1800f520c6\",\"054d8b37-0722-41e6-8437-d27fc2da801c\",\"cf067cbb-456f-4f97-ac2d-77440ca62bee\",\"a51e4f1a-defd-467b-8638-cc365bd64cf1\",\"5f135306-6856-489d-9b7d-cdede760a876\",\"b0071b5a-3774-4d87-9533-22137f1ab1d1\",\"16f0679b-3a3b-4309-b850-c14696004941\",\"3becf22e-c85c-4f21-bfbd-862ed48bbb1a\",\"6fae263e-7be2-4929-9b47-624e892c691d\",\"ed634205-5bbb-4de1-8bc9-d89297cd0fe4\",\"c1f5433e-f124-43b9-87bd-8afda471e1d6\",\"53225403-ac73-4574-b548-ddb9bdc85e46\",\"e1e9f322-c490-4893-9d8b-749cee1e631b\",\"110ed9cd-947d-48ed-be17-c9624c73b9e0\",\"aa90be55-bb54-4aff-8f5c-1a22166d203e\",\"a1610c0e-1686-4820-bd0b-e779025555ad\",\"1692ddb8-0769-499b-a809-b7b34a37dea0\",\"d3bc8e8e-9f55-438f-b4ce-ba3fa7e684a4\",\"435b18dd-3540-4ce5-9e62-1add5f5f8903\",\"1bc5f759-759b-45e6-b789-a928f6d9db52\",\"1f3e95a9-bded-410b-a33b-4fc075b9ae2a\",\"e4d140d5-77cf-420a-8e2b-d5d7aa17426b\",\"f908cec4-0fb8-4890-b5a0-27e4ddb87065\",\"4fffe6e7-fb0e-4ed2-8e3c-2cddbac4e05d\"],\"reconnectAddress\":\"ws://172.20.0.6:8082\",\"recoveredViaResolver\":true,\"nodeId\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"msg\":\"No connection to target node for message delivery\"}",
+        "2026-03-14T07:59:19.139Z [7493b0ab-a054-5fad-a91b-5e331db29304] info: {\"level\":40,\"time\":\"2026-03-14T07:58:57.162Z\",\"nodeId\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"pid\":1,\"subsystem\":\"message-router\",\"messageId\":\"132009a8-fb7d-4725-bb48-f402c132a284\",\"targetAddress\":\"8be8d30f-4499-5eed-865c-71b4d529a67a/message-group/mg-8be8d30f-71b4d529a67a-r0\",\"targetNodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"localNodeId\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"connectionExists\":false,\"availableConnections\":[\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"b4c6bfae-2ba1-45d6-aed7-9b9d731e2eef\",\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"223a255c-001c-4654-8e63-710edb2a1911\",\"11601fe0-72d6-5853-8590-ec2881853e72\",\"c29d1bbc-d362-462e-bd61-702c036d077c\",\"bb3fa8a2-716f-420c-91f3-2e0990af2716\",\"ba64917e-45d8-4ba7-9fb4-cbd482761cae\",\"87268034-f8b8-49e2-adeb-dd99e67f1cfe\",\"310c48d1-0ea8-4078-812f-2e1516504ca0\",\"520a330d-239e-46d9-a985-eeef31315d15\",\"21777162-7a29-4038-a77f-1b0041e17cd5\",\"4a4b7739-5092-46ad-a397-24cce2346645\",\"7112cb1d-5b0b-4a1d-af80-d6b1bf275938\",\"554fdcc7-119c-4abc-9f46-f4c5b5461408\",\"2b6a12e6-90b9-47b3-b703-d3e3e00cf30c\",\"9f8656d8-678a-4dfd-994f-e95f0dee832d\",\"9e3c6e92-7ca6-4441-aa18-0fb5220cb032\",\"55aca6d7-60e9-4428-b243-000ec5166c22\",\"dfae38c6-5ced-427a-bfa7-eed99b591134\",\"7b14278d-bba8-4458-a22b-34646e16164f\",\"a9bccae4-25f1-4d58-90c6-c5780ed273b7\",\"b949d466-2e1e-42fa-9d75-773719871737\",\"fd070271-b43b-49a6-aca8-dd0e250564c4\",\"d1aaad93-c805-4e72-a097-59f808f285a7\",\"6653b26b-793e-4a33-b02e-4d55b7ce5999\",\"05f787b0-33ac-4b02-8e99-076a9ba0e17d\",\"bbf0b477-d9ca-494c-8189-c2c611f5c7e1\",\"5d19e893-315b-48ec-9944-2732df874b40\",\"856a58ee-6a6d-4acc-9fc7-a47745fc935d\",\"48cd699b-c011-469d-8f0e-a992b723add6\",\"d66e00ab-95a7-4a90-9fd1-5594139fe210\",\"96b6fbb4-79e3-4019-bcec-b88fc703440e\",\"3f106864-4f1e-4c30-bbf0-c7c9fa2b370c\",\"f6150c7b-6c8b-4a98-85f5-7dc0175a7771\",\"e62a3294-160b-4074-a1cd-056e3e2059f0\",\"2ca7e5df-cbf9-4c6e-9a44-bfb6d5ac791c\",\"0acc80a5-49f1-4d28-b00c-6280a5d08cd0\",\"29cade14-c3f9-43fa-8adc-a9959cb5cff1\",\"6906c397-525e-4755-be55-6a7fcf7f0e13\",\"10d2e4d6-cc80-4ca0-a58d-c370b0f14e46\",\"709a84e8-3acb-4bac-924d-50f7d52d8570\",\"a3abcf71-6c15-42a7-a714-5b9288bfa331\",\"ce69eed6-37f3-4d83-be9c-fa8889f66396\",\"b561a177-e462-41a7-a6bc-eb0cd22c0556\",\"0099cfb1-aab5-4bc8-be91-9b2f66f695a8\",\"bbf265cb-1e1f-4d33-99e4-1b1800f520c6\",\"054d8b37-0722-41e6-8437-d27fc2da801c\",\"cf067cbb-456f-4f97-ac2d-77440ca62bee\",\"a51e4f1a-defd-467b-8638-cc365bd64cf1\",\"5f135306-6856-489d-9b7d-cdede760a876\",\"b0071b5a-3774-4d87-9533-22137f1ab1d1\",\"16f0679b-3a3b-4309-b850-c14696004941\",\"3becf22e-c85c-4f21-bfbd-862ed48bbb1a\",\"6fae263e-7be2-4929-9b47-624e892c691d\",\"ed634205-5bbb-4de1-8bc9-d89297cd0fe4\",\"c1f5433e-f124-43b9-87bd-8afda471e1d6\",\"53225403-ac73-4574-b548-ddb9bdc85e46\",\"e1e9f322-c490-4893-9d8b-749cee1e631b\",\"110ed9cd-947d-48ed-be17-c9624c73b9e0\",\"aa90be55-bb54-4aff-8f5c-1a22166d203e\",\"a1610c0e-1686-4820-bd0b-e779025555ad\",\"1692ddb8-0769-499b-a809-b7b34a37dea0\",\"d3bc8e8e-9f55-438f-b4ce-ba3fa7e684a4\",\"435b18dd-3540-4ce5-9e62-1add5f5f8903\",\"1bc5f759-759b-45e6-b789-a928f6d9db52\",\"1f3e95a9-bded-410b-a33b-4fc075b9ae2a\",\"e4d140d5-77cf-420a-8e2b-d5d7aa17426b\",\"f908cec4-0fb8-4890-b5a0-27e4ddb87065\",\"4fffe6e7-fb0e-4ed2-8e3c-2cddbac4e05d\"],\"reconnectAddress\":\"ws://172.20.0.6:8082\",\"recoveredViaResolver\":true,\"nodeId\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"msg\":\"No connection to target node for message delivery\"}",
+        "2026-03-14T07:59:19.139Z [7493b0ab-a054-5fad-a91b-5e331db29304] info: {\"level\":40,\"time\":\"2026-03-14T07:58:57.162Z\",\"nodeId\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"pid\":1,\"subsystem\":\"message-router\",\"messageId\":\"68f13ce8-2b13-4de4-8fec-3ba769c8cf47\",\"targetAddress\":\"8be8d30f-4499-5eed-865c-71b4d529a67a/message-group/mg-8be8d30f-71b4d529a67a-r0\",\"targetNodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"localNodeId\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"connectionExists\":false,\"availableConnections\":[\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"b4c6bfae-2ba1-45d6-aed7-9b9d731e2eef\",\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"223a255c-001c-4654-8e63-710edb2a1911\",\"11601fe0-72d6-5853-8590-ec2881853e72\",\"c29d1bbc-d362-462e-bd61-702c036d077c\",\"bb3fa8a2-716f-420c-91f3-2e0990af2716\",\"ba64917e-45d8-4ba7-9fb4-cbd482761cae\",\"87268034-f8b8-49e2-adeb-dd99e67f1cfe\",\"310c48d1-0ea8-4078-812f-2e1516504ca0\",\"520a330d-239e-46d9-a985-eeef31315d15\",\"21777162-7a29-4038-a77f-1b0041e17cd5\",\"4a4b7739-5092-46ad-a397-24cce2346645\",\"7112cb1d-5b0b-4a1d-af80-d6b1bf275938\",\"554fdcc7-119c-4abc-9f46-f4c5b5461408\",\"2b6a12e6-90b9-47b3-b703-d3e3e00cf30c\",\"9f8656d8-678a-4dfd-994f-e95f0dee832d\",\"9e3c6e92-7ca6-4441-aa18-0fb5220cb032\",\"55aca6d7-60e9-4428-b243-000ec5166c22\",\"dfae38c6-5ced-427a-bfa7-eed99b591134\",\"7b14278d-bba8-4458-a22b-34646e16164f\",\"a9bccae4-25f1-4d58-90c6-c5780ed273b7\",\"b949d466-2e1e-42fa-9d75-773719871737\",\"fd070271-b43b-49a6-aca8-dd0e250564c4\",\"d1aaad93-c805-4e72-a097-59f808f285a7\",\"6653b26b-793e-4a33-b02e-4d55b7ce5999\",\"05f787b0-33ac-4b02-8e99-076a9ba0e17d\",\"bbf0b477-d9ca-494c-8189-c2c611f5c7e1\",\"5d19e893-315b-48ec-9944-2732df874b40\",\"856a58ee-6a6d-4acc-9fc7-a47745fc935d\",\"48cd699b-c011-469d-8f0e-a992b723add6\",\"d66e00ab-95a7-4a90-9fd1-5594139fe210\",\"96b6fbb4-79e3-4019-bcec-b88fc703440e\",\"3f106864-4f1e-4c30-bbf0-c7c9fa2b370c\",\"f6150c7b-6c8b-4a98-85f5-7dc0175a7771\",\"e62a3294-160b-4074-a1cd-056e3e2059f0\",\"2ca7e5df-cbf9-4c6e-9a44-bfb6d5ac791c\",\"0acc80a5-49f1-4d28-b00c-6280a5d08cd0\",\"29cade14-c3f9-43fa-8adc-a9959cb5cff1\",\"6906c397-525e-4755-be55-6a7fcf7f0e13\",\"10d2e4d6-cc80-4ca0-a58d-c370b0f14e46\",\"709a84e8-3acb-4bac-924d-50f7d52d8570\",\"a3abcf71-6c15-42a7-a714-5b9288bfa331\",\"ce69eed6-37f3-4d83-be9c-fa8889f66396\",\"b561a177-e462-41a7-a6bc-eb0cd22c0556\",\"0099cfb1-aab5-4bc8-be91-9b2f66f695a8\",\"bbf265cb-1e1f-4d33-99e4-1b1800f520c6\",\"054d8b37-0722-41e6-8437-d27fc2da801c\",\"cf067cbb-456f-4f97-ac2d-77440ca62bee\",\"a51e4f1a-defd-467b-8638-cc365bd64cf1\",\"5f135306-6856-489d-9b7d-cdede760a876\",\"b0071b5a-3774-4d87-9533-22137f1ab1d1\",\"16f0679b-3a3b-4309-b850-c14696004941\",\"3becf22e-c85c-4f21-bfbd-862ed48bbb1a\",\"6fae263e-7be2-4929-9b47-624e892c691d\",\"ed634205-5bbb-4de1-8bc9-d89297cd0fe4\",\"c1f5433e-f124-43b9-87bd-8afda471e1d6\",\"53225403-ac73-4574-b548-ddb9bdc85e46\",\"e1e9f322-c490-4893-9d8b-749cee1e631b\",\"110ed9cd-947d-48ed-be17-c9624c73b9e0\",\"aa90be55-bb54-4aff-8f5c-1a22166d203e\",\"a1610c0e-1686-4820-bd0b-e779025555ad\",\"1692ddb8-0769-499b-a809-b7b34a37dea0\",\"d3bc8e8e-9f55-438f-b4ce-ba3fa7e684a4\",\"435b18dd-3540-4ce5-9e62-1add5f5f8903\",\"1bc5f759-759b-45e6-b789-a928f6d9db52\",\"1f3e95a9-bded-410b-a33b-4fc075b9ae2a\",\"e4d140d5-77cf-420a-8e2b-d5d7aa17426b\",\"f908cec4-0fb8-4890-b5a0-27e4ddb87065\",\"4fffe6e7-fb0e-4ed2-8e3c-2cddbac4e05d\"],\"reconnectAddress\":\"ws://172.20.0.6:8082\",\"recoveredViaResolver\":true,\"nodeId\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"msg\":\"No connection to target node for message delivery\"}",
+        "2026-03-14T07:59:19.139Z [7493b0ab-a054-5fad-a91b-5e331db29304] info: {\"level\":40,\"time\":\"2026-03-14T07:58:57.162Z\",\"nodeId\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"pid\":1,\"subsystem\":\"message-router\",\"messageId\":\"dd48fa67-bdf2-48a6-ba40-795e6013b999\",\"targetAddress\":\"8be8d30f-4499-5eed-865c-71b4d529a67a/message-group/mg-8be8d30f-71b4d529a67a-r0\",\"targetNodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"localNodeId\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"connectionExists\":false,\"availableConnections\":[\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"b4c6bfae-2ba1-45d6-aed7-9b9d731e2eef\",\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"223a255c-001c-4654-8e63-710edb2a1911\",\"11601fe0-72d6-5853-8590-ec2881853e72\",\"c29d1bbc-d362-462e-bd61-702c036d077c\",\"bb3fa8a2-716f-420c-91f3-2e0990af2716\",\"ba64917e-45d8-4ba7-9fb4-cbd482761cae\",\"87268034-f8b8-49e2-adeb-dd99e67f1cfe\",\"310c48d1-0ea8-4078-812f-2e1516504ca0\",\"520a330d-239e-46d9-a985-eeef31315d15\",\"21777162-7a29-4038-a77f-1b0041e17cd5\",\"4a4b7739-5092-46ad-a397-24cce2346645\",\"7112cb1d-5b0b-4a1d-af80-d6b1bf275938\",\"554fdcc7-119c-4abc-9f46-f4c5b5461408\",\"2b6a12e6-90b9-47b3-b703-d3e3e00cf30c\",\"9f8656d8-678a-4dfd-994f-e95f0dee832d\",\"9e3c6e92-7ca6-4441-aa18-0fb5220cb032\",\"55aca6d7-60e9-4428-b243-000ec5166c22\",\"dfae38c6-5ced-427a-bfa7-eed99b591134\",\"7b14278d-bba8-4458-a22b-34646e16164f\",\"a9bccae4-25f1-4d58-90c6-c5780ed273b7\",\"b949d466-2e1e-42fa-9d75-773719871737\",\"fd070271-b43b-49a6-aca8-dd0e250564c4\",\"d1aaad93-c805-4e72-a097-59f808f285a7\",\"6653b26b-793e-4a33-b02e-4d55b7ce5999\",\"05f787b0-33ac-4b02-8e99-076a9ba0e17d\",\"bbf0b477-d9ca-494c-8189-c2c611f5c7e1\",\"5d19e893-315b-48ec-9944-2732df874b40\",\"856a58ee-6a6d-4acc-9fc7-a47745fc935d\",\"48cd699b-c011-469d-8f0e-a992b723add6\",\"d66e00ab-95a7-4a90-9fd1-5594139fe210\",\"96b6fbb4-79e3-4019-bcec-b88fc703440e\",\"3f106864-4f1e-4c30-bbf0-c7c9fa2b370c\",\"f6150c7b-6c8b-4a98-85f5-7dc0175a7771\",\"e62a3294-160b-4074-a1cd-056e3e2059f0\",\"2ca7e5df-cbf9-4c6e-9a44-bfb6d5ac791c\",\"0acc80a5-49f1-4d28-b00c-6280a5d08cd0\",\"29cade14-c3f9-43fa-8adc-a9959cb5cff1\",\"6906c397-525e-4755-be55-6a7fcf7f0e13\",\"10d2e4d6-cc80-4ca0-a58d-c370b0f14e46\",\"709a84e8-3acb-4bac-924d-50f7d52d8570\",\"a3abcf71-6c15-42a7-a714-5b9288bfa331\",\"ce69eed6-37f3-4d83-be9c-fa8889f66396\",\"b561a177-e462-41a7-a6bc-eb0cd22c0556\",\"0099cfb1-aab5-4bc8-be91-9b2f66f695a8\",\"bbf265cb-1e1f-4d33-99e4-1b1800f520c6\",\"054d8b37-0722-41e6-8437-d27fc2da801c\",\"cf067cbb-456f-4f97-ac2d-77440ca62bee\",\"a51e4f1a-defd-467b-8638-cc365bd64cf1\",\"5f135306-6856-489d-9b7d-cdede760a876\",\"b0071b5a-3774-4d87-9533-22137f1ab1d1\",\"16f0679b-3a3b-4309-b850-c14696004941\",\"3becf22e-c85c-4f21-bfbd-862ed48bbb1a\",\"6fae263e-7be2-4929-9b47-624e892c691d\",\"ed634205-5bbb-4de1-8bc9-d89297cd0fe4\",\"c1f5433e-f124-43b9-87bd-8afda471e1d6\",\"53225403-ac73-4574-b548-ddb9bdc85e46\",\"e1e9f322-c490-4893-9d8b-749cee1e631b\",\"110ed9cd-947d-48ed-be17-c9624c73b9e0\",\"aa90be55-bb54-4aff-8f5c-1a22166d203e\",\"a1610c0e-1686-4820-bd0b-e779025555ad\",\"1692ddb8-0769-499b-a809-b7b34a37dea0\",\"d3bc8e8e-9f55-438f-b4ce-ba3fa7e684a4\",\"435b18dd-3540-4ce5-9e62-1add5f5f8903\",\"1bc5f759-759b-45e6-b789-a928f6d9db52\",\"1f3e95a9-bded-410b-a33b-4fc075b9ae2a\",\"e4d140d5-77cf-420a-8e2b-d5d7aa17426b\",\"f908cec4-0fb8-4890-b5a0-27e4ddb87065\",\"4fffe6e7-fb0e-4ed2-8e3c-2cddbac4e05d\"],\"reconnectAddress\":\"ws://172.20.0.6:8082\",\"recoveredViaResolver\":true,\"nodeId\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"msg\":\"No connection to target node for message delivery\"}",
+        "2026-03-14T07:59:19.139Z [7493b0ab-a054-5fad-a91b-5e331db29304] info: {\"level\":40,\"time\":\"2026-03-14T07:58:57.162Z\",\"nodeId\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"pid\":1,\"subsystem\":\"message-router\",\"messageId\":\"c1d61bfa-5553-4a39-8aa1-78638a0bc813\",\"targetAddress\":\"8be8d30f-4499-5eed-865c-71b4d529a67a/message-group/mg-8be8d30f-71b4d529a67a-r0\",\"targetNodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"localNodeId\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"connectionExists\":false,\"availableConnections\":[\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"b4c6bfae-2ba1-45d6-aed7-9b9d731e2eef\",\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"223a255c-001c-4654-8e63-710edb2a1911\",\"11601fe0-72d6-5853-8590-ec2881853e72\",\"c29d1bbc-d362-462e-bd61-702c036d077c\",\"bb3fa8a2-716f-420c-91f3-2e0990af2716\",\"ba64917e-45d8-4ba7-9fb4-cbd482761cae\",\"87268034-f8b8-49e2-adeb-dd99e67f1cfe\",\"310c48d1-0ea8-4078-812f-2e1516504ca0\",\"520a330d-239e-46d9-a985-eeef31315d15\",\"21777162-7a29-4038-a77f-1b0041e17cd5\",\"4a4b7739-5092-46ad-a397-24cce2346645\",\"7112cb1d-5b0b-4a1d-af80-d6b1bf275938\",\"554fdcc7-119c-4abc-9f46-f4c5b5461408\",\"2b6a12e6-90b9-47b3-b703-d3e3e00cf30c\",\"9f8656d8-678a-4dfd-994f-e95f0dee832d\",\"9e3c6e92-7ca6-4441-aa18-0fb5220cb032\",\"55aca6d7-60e9-4428-b243-000ec5166c22\",\"dfae38c6-5ced-427a-bfa7-eed99b591134\",\"7b14278d-bba8-4458-a22b-34646e16164f\",\"a9bccae4-25f1-4d58-90c6-c5780ed273b7\",\"b949d466-2e1e-42fa-9d75-773719871737\",\"fd070271-b43b-49a6-aca8-dd0e250564c4\",\"d1aaad93-c805-4e72-a097-59f808f285a7\",\"6653b26b-793e-4a33-b02e-4d55b7ce5999\",\"05f787b0-33ac-4b02-8e99-076a9ba0e17d\",\"bbf0b477-d9ca-494c-8189-c2c611f5c7e1\",\"5d19e893-315b-48ec-9944-2732df874b40\",\"856a58ee-6a6d-4acc-9fc7-a47745fc935d\",\"48cd699b-c011-469d-8f0e-a992b723add6\",\"d66e00ab-95a7-4a90-9fd1-5594139fe210\",\"96b6fbb4-79e3-4019-bcec-b88fc703440e\",\"3f106864-4f1e-4c30-bbf0-c7c9fa2b370c\",\"f6150c7b-6c8b-4a98-85f5-7dc0175a7771\",\"e62a3294-160b-4074-a1cd-056e3e2059f0\",\"2ca7e5df-cbf9-4c6e-9a44-bfb6d5ac791c\",\"0acc80a5-49f1-4d28-b00c-6280a5d08cd0\",\"29cade14-c3f9-43fa-8adc-a9959cb5cff1\",\"6906c397-525e-4755-be55-6a7fcf7f0e13\",\"10d2e4d6-cc80-4ca0-a58d-c370b0f14e46\",\"709a84e8-3acb-4bac-924d-50f7d52d8570\",\"a3abcf71-6c15-42a7-a714-5b9288bfa331\",\"ce69eed6-37f3-4d83-be9c-fa8889f66396\",\"b561a177-e462-41a7-a6bc-eb0cd22c0556\",\"0099cfb1-aab5-4bc8-be91-9b2f66f695a8\",\"bbf265cb-1e1f-4d33-99e4-1b1800f520c6\",\"054d8b37-0722-41e6-8437-d27fc2da801c\",\"cf067cbb-456f-4f97-ac2d-77440ca62bee\",\"a51e4f1a-defd-467b-8638-cc365bd64cf1\",\"5f135306-6856-489d-9b7d-cdede760a876\",\"b0071b5a-3774-4d87-9533-22137f1ab1d1\",\"16f0679b-3a3b-4309-b850-c14696004941\",\"3becf22e-c85c-4f21-bfbd-862ed48bbb1a\",\"6fae263e-7be2-4929-9b47-624e892c691d\",\"ed634205-5bbb-4de1-8bc9-d89297cd0fe4\",\"c1f5433e-f124-43b9-87bd-8afda471e1d6\",\"53225403-ac73-4574-b548-ddb9bdc85e46\",\"e1e9f322-c490-4893-9d8b-749cee1e631b\",\"110ed9cd-947d-48ed-be17-c9624c73b9e0\",\"aa90be55-bb54-4aff-8f5c-1a22166d203e\",\"a1610c0e-1686-4820-bd0b-e779025555ad\",\"1692ddb8-0769-499b-a809-b7b34a37dea0\",\"d3bc8e8e-9f55-438f-b4ce-ba3fa7e684a4\",\"435b18dd-3540-4ce5-9e62-1add5f5f8903\",\"1bc5f759-759b-45e6-b789-a928f6d9db52\",\"1f3e95a9-bded-410b-a33b-4fc075b9ae2a\",\"e4d140d5-77cf-420a-8e2b-d5d7aa17426b\",\"f908cec4-0fb8-4890-b5a0-27e4ddb87065\",\"4fffe6e7-fb0e-4ed2-8e3c-2cddbac4e05d\"],\"reconnectAddress\":\"ws://172.20.0.6:8082\",\"recoveredViaResolver\":true,\"nodeId\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"msg\":\"No connection to target node for message delivery\"}"
+      ],
+      "35a891b8-c1a0-5064-9c6e-2acfba61c2a7": [
+        "2026-03-14T07:59:19.140Z [35a891b8-c1a0-5064-9c6e-2acfba61c2a7] info: {\"level\":40,\"time\":\"2026-03-14T07:59:17.263Z\",\"nodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"pid\":1,\"subsystem\":\"message-router\",\"messageId\":\"6f12513d-ba42-4dc0-a79b-a374639eb316\",\"targetAddress\":\"8be8d30f-4499-5eed-865c-71b4d529a67a/message-group/mg-8be8d30f-71b4d529a67a-r0\",\"targetNodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"localNodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"connectionExists\":false,\"availableConnections\":[\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"dee0f41c-0d1d-4e20-8aad-0981da644f3b\",\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"11601fe0-72d6-5853-8590-ec2881853e72\",\"e13f6c8f-41d5-4333-b198-65d68b9161c6\",\"06b7a494-6c6e-4833-b6fe-68d6e901d1cd\",\"4ba5592d-6a80-493e-a011-f09d8f41a9b2\",\"7493b0ab-a054-5fad-a91b-5e331db29304\"],\"reconnectAddress\":\"ws://172.20.0.6:8082\",\"recoveredViaResolver\":true,\"nodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"msg\":\"No connection to target node for message delivery\"}",
+        "2026-03-14T07:59:19.140Z [35a891b8-c1a0-5064-9c6e-2acfba61c2a7] info: {\"level\":40,\"time\":\"2026-03-14T07:59:17.263Z\",\"nodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"pid\":1,\"subsystem\":\"message-router\",\"messageId\":\"7dbe5630-c44e-4777-bcdb-43260ab0dc29\",\"targetAddress\":\"8be8d30f-4499-5eed-865c-71b4d529a67a/message-group/mg-8be8d30f-71b4d529a67a-r0\",\"targetNodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"localNodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"connectionExists\":false,\"availableConnections\":[\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"dee0f41c-0d1d-4e20-8aad-0981da644f3b\",\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"11601fe0-72d6-5853-8590-ec2881853e72\",\"e13f6c8f-41d5-4333-b198-65d68b9161c6\",\"06b7a494-6c6e-4833-b6fe-68d6e901d1cd\",\"4ba5592d-6a80-493e-a011-f09d8f41a9b2\",\"7493b0ab-a054-5fad-a91b-5e331db29304\"],\"reconnectAddress\":\"ws://172.20.0.6:8082\",\"recoveredViaResolver\":true,\"nodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"msg\":\"No connection to target node for message delivery\"}",
+        "2026-03-14T07:59:19.140Z [35a891b8-c1a0-5064-9c6e-2acfba61c2a7] info: {\"level\":40,\"time\":\"2026-03-14T07:59:17.263Z\",\"nodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"pid\":1,\"subsystem\":\"message-router\",\"messageId\":\"078b6cf6-57df-4174-ab3c-f43d206d26fc\",\"targetAddress\":\"8be8d30f-4499-5eed-865c-71b4d529a67a/message-group/mg-8be8d30f-71b4d529a67a-r0\",\"targetNodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"localNodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"connectionExists\":false,\"availableConnections\":[\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"dee0f41c-0d1d-4e20-8aad-0981da644f3b\",\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"11601fe0-72d6-5853-8590-ec2881853e72\",\"e13f6c8f-41d5-4333-b198-65d68b9161c6\",\"06b7a494-6c6e-4833-b6fe-68d6e901d1cd\",\"4ba5592d-6a80-493e-a011-f09d8f41a9b2\",\"7493b0ab-a054-5fad-a91b-5e331db29304\"],\"reconnectAddress\":\"ws://172.20.0.6:8082\",\"recoveredViaResolver\":true,\"nodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"msg\":\"No connection to target node for message delivery\"}",
+        "2026-03-14T07:59:19.140Z [35a891b8-c1a0-5064-9c6e-2acfba61c2a7] info: {\"level\":40,\"time\":\"2026-03-14T07:59:17.263Z\",\"nodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"pid\":1,\"subsystem\":\"message-router\",\"messageId\":\"459737ca-c9f2-4824-acd5-2a3b626a9ff4\",\"targetAddress\":\"8be8d30f-4499-5eed-865c-71b4d529a67a/message-group/mg-8be8d30f-71b4d529a67a-r0\",\"targetNodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"localNodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"connectionExists\":false,\"availableConnections\":[\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"dee0f41c-0d1d-4e20-8aad-0981da644f3b\",\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"11601fe0-72d6-5853-8590-ec2881853e72\",\"e13f6c8f-41d5-4333-b198-65d68b9161c6\",\"06b7a494-6c6e-4833-b6fe-68d6e901d1cd\",\"4ba5592d-6a80-493e-a011-f09d8f41a9b2\",\"7493b0ab-a054-5fad-a91b-5e331db29304\"],\"reconnectAddress\":\"ws://172.20.0.6:8082\",\"recoveredViaResolver\":true,\"nodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"msg\":\"No connection to target node for message delivery\"}",
+        "2026-03-14T07:59:19.140Z [35a891b8-c1a0-5064-9c6e-2acfba61c2a7] info: {\"level\":40,\"time\":\"2026-03-14T07:59:17.263Z\",\"nodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"pid\":1,\"subsystem\":\"message-router\",\"messageId\":\"c2397c65-04d7-423c-a748-d97d4b8e1065\",\"targetAddress\":\"8be8d30f-4499-5eed-865c-71b4d529a67a/message-group/mg-8be8d30f-71b4d529a67a-r0\",\"targetNodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"localNodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"connectionExists\":false,\"availableConnections\":[\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"dee0f41c-0d1d-4e20-8aad-0981da644f3b\",\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"11601fe0-72d6-5853-8590-ec2881853e72\",\"e13f6c8f-41d5-4333-b198-65d68b9161c6\",\"06b7a494-6c6e-4833-b6fe-68d6e901d1cd\",\"4ba5592d-6a80-493e-a011-f09d8f41a9b2\",\"7493b0ab-a054-5fad-a91b-5e331db29304\"],\"reconnectAddress\":\"ws://172.20.0.6:8082\",\"recoveredViaResolver\":true,\"nodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"msg\":\"No connection to target node for message delivery\"}",
+        "2026-03-14T07:59:19.140Z [35a891b8-c1a0-5064-9c6e-2acfba61c2a7] info: {\"level\":40,\"time\":\"2026-03-14T07:59:17.263Z\",\"nodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"pid\":1,\"subsystem\":\"message-router\",\"messageId\":\"c64f22b4-7c4c-408c-8c1b-246c68660c34\",\"targetAddress\":\"8be8d30f-4499-5eed-865c-71b4d529a67a/message-group/mg-8be8d30f-71b4d529a67a-r0\",\"targetNodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"localNodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"connectionExists\":false,\"availableConnections\":[\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"dee0f41c-0d1d-4e20-8aad-0981da644f3b\",\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"11601fe0-72d6-5853-8590-ec2881853e72\",\"e13f6c8f-41d5-4333-b198-65d68b9161c6\",\"06b7a494-6c6e-4833-b6fe-68d6e901d1cd\",\"4ba5592d-6a80-493e-a011-f09d8f41a9b2\",\"7493b0ab-a054-5fad-a91b-5e331db29304\"],\"reconnectAddress\":\"ws://172.20.0.6:8082\",\"recoveredViaResolver\":true,\"nodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"msg\":\"No connection to target node for message delivery\"}",
+        "2026-03-14T07:59:19.140Z [35a891b8-c1a0-5064-9c6e-2acfba61c2a7] info: {\"level\":40,\"time\":\"2026-03-14T07:59:17.263Z\",\"nodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"pid\":1,\"subsystem\":\"message-router\",\"messageId\":\"cd17174d-21ab-4699-a3c2-76d9317331c7\",\"targetAddress\":\"8be8d30f-4499-5eed-865c-71b4d529a67a/message-group/mg-8be8d30f-71b4d529a67a-r0\",\"targetNodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"localNodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"connectionExists\":false,\"availableConnections\":[\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"dee0f41c-0d1d-4e20-8aad-0981da644f3b\",\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"11601fe0-72d6-5853-8590-ec2881853e72\",\"e13f6c8f-41d5-4333-b198-65d68b9161c6\",\"06b7a494-6c6e-4833-b6fe-68d6e901d1cd\",\"4ba5592d-6a80-493e-a011-f09d8f41a9b2\",\"7493b0ab-a054-5fad-a91b-5e331db29304\"],\"reconnectAddress\":\"ws://172.20.0.6:8082\",\"recoveredViaResolver\":true,\"nodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"msg\":\"No connection to target node for message delivery\"}",
+        "2026-03-14T07:59:19.140Z [35a891b8-c1a0-5064-9c6e-2acfba61c2a7] info: {\"level\":40,\"time\":\"2026-03-14T07:59:17.263Z\",\"nodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"pid\":1,\"subsystem\":\"message-router\",\"messageId\":\"ed11266b-fc89-4b61-b36e-1962a958a89a\",\"targetAddress\":\"8be8d30f-4499-5eed-865c-71b4d529a67a/message-group/mg-8be8d30f-71b4d529a67a-r0\",\"targetNodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"localNodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"connectionExists\":false,\"availableConnections\":[\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"dee0f41c-0d1d-4e20-8aad-0981da644f3b\",\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"11601fe0-72d6-5853-8590-ec2881853e72\",\"e13f6c8f-41d5-4333-b198-65d68b9161c6\",\"06b7a494-6c6e-4833-b6fe-68d6e901d1cd\",\"4ba5592d-6a80-493e-a011-f09d8f41a9b2\",\"7493b0ab-a054-5fad-a91b-5e331db29304\"],\"reconnectAddress\":\"ws://172.20.0.6:8082\",\"recoveredViaResolver\":true,\"nodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"msg\":\"No connection to target node for message delivery\"}",
+        "2026-03-14T07:59:19.140Z [35a891b8-c1a0-5064-9c6e-2acfba61c2a7] info: {\"level\":40,\"time\":\"2026-03-14T07:59:17.263Z\",\"nodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"pid\":1,\"subsystem\":\"message-router\",\"messageId\":\"06b04de7-fa15-4686-90db-9ff87676c8ec\",\"targetAddress\":\"8be8d30f-4499-5eed-865c-71b4d529a67a/message-group/mg-8be8d30f-71b4d529a67a-r0\",\"targetNodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"localNodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"connectionExists\":false,\"availableConnections\":[\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"dee0f41c-0d1d-4e20-8aad-0981da644f3b\",\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"11601fe0-72d6-5853-8590-ec2881853e72\",\"e13f6c8f-41d5-4333-b198-65d68b9161c6\",\"06b7a494-6c6e-4833-b6fe-68d6e901d1cd\",\"4ba5592d-6a80-493e-a011-f09d8f41a9b2\",\"7493b0ab-a054-5fad-a91b-5e331db29304\"],\"reconnectAddress\":\"ws://172.20.0.6:8082\",\"recoveredViaResolver\":true,\"nodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"msg\":\"No connection to target node for message delivery\"}",
+        "2026-03-14T07:59:19.140Z [35a891b8-c1a0-5064-9c6e-2acfba61c2a7] info: {\"level\":40,\"time\":\"2026-03-14T07:59:17.263Z\",\"nodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"pid\":1,\"subsystem\":\"message-router\",\"messageId\":\"92d39af5-607e-4a18-b3ed-79628129191e\",\"targetAddress\":\"8be8d30f-4499-5eed-865c-71b4d529a67a/message-group/mg-8be8d30f-71b4d529a67a-r0\",\"targetNodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"localNodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"connectionExists\":false,\"availableConnections\":[\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"dee0f41c-0d1d-4e20-8aad-0981da644f3b\",\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"11601fe0-72d6-5853-8590-ec2881853e72\",\"e13f6c8f-41d5-4333-b198-65d68b9161c6\",\"06b7a494-6c6e-4833-b6fe-68d6e901d1cd\",\"4ba5592d-6a80-493e-a011-f09d8f41a9b2\",\"7493b0ab-a054-5fad-a91b-5e331db29304\"],\"reconnectAddress\":\"ws://172.20.0.6:8082\",\"recoveredViaResolver\":true,\"nodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"msg\":\"No connection to target node for message delivery\"}",
+        "2026-03-14T07:59:19.140Z [35a891b8-c1a0-5064-9c6e-2acfba61c2a7] info: {\"level\":40,\"time\":\"2026-03-14T07:59:17.263Z\",\"nodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"pid\":1,\"subsystem\":\"message-router\",\"messageId\":\"f41c064e-bdd1-46a3-aa77-ab0ee36957c8\",\"targetAddress\":\"8be8d30f-4499-5eed-865c-71b4d529a67a/message-group/mg-8be8d30f-71b4d529a67a-r0\",\"targetNodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"localNodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"connectionExists\":false,\"availableConnections\":[\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"dee0f41c-0d1d-4e20-8aad-0981da644f3b\",\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"11601fe0-72d6-5853-8590-ec2881853e72\",\"e13f6c8f-41d5-4333-b198-65d68b9161c6\",\"06b7a494-6c6e-4833-b6fe-68d6e901d1cd\",\"4ba5592d-6a80-493e-a011-f09d8f41a9b2\",\"7493b0ab-a054-5fad-a91b-5e331db29304\"],\"reconnectAddress\":\"ws://172.20.0.6:8082\",\"recoveredViaResolver\":true,\"nodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"msg\":\"No connection to target node for message delivery\"}",
+        "2026-03-14T07:59:19.140Z [35a891b8-c1a0-5064-9c6e-2acfba61c2a7] info: {\"level\":40,\"time\":\"2026-03-14T07:59:17.263Z\",\"nodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"pid\":1,\"subsystem\":\"message-router\",\"messageId\":\"9575f320-947d-4506-b8cc-be2149fbce3a\",\"targetAddress\":\"8be8d30f-4499-5eed-865c-71b4d529a67a/message-group/mg-8be8d30f-71b4d529a67a-r0\",\"targetNodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"localNodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"connectionExists\":false,\"availableConnections\":[\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"dee0f41c-0d1d-4e20-8aad-0981da644f3b\",\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"11601fe0-72d6-5853-8590-ec2881853e72\",\"e13f6c8f-41d5-4333-b198-65d68b9161c6\",\"06b7a494-6c6e-4833-b6fe-68d6e901d1cd\",\"4ba5592d-6a80-493e-a011-f09d8f41a9b2\",\"7493b0ab-a054-5fad-a91b-5e331db29304\"],\"reconnectAddress\":\"ws://172.20.0.6:8082\",\"recoveredViaResolver\":true,\"nodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"msg\":\"No connection to target node for message delivery\"}",
+        "2026-03-14T07:59:19.140Z [35a891b8-c1a0-5064-9c6e-2acfba61c2a7] info: {\"level\":40,\"time\":\"2026-03-14T07:59:17.263Z\",\"nodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"pid\":1,\"subsystem\":\"message-router\",\"messageId\":\"a9a83b95-0497-40b9-aec0-adf6800b9a14\",\"targetAddress\":\"8be8d30f-4499-5eed-865c-71b4d529a67a/message-group/mg-8be8d30f-71b4d529a67a-r0\",\"targetNodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"localNodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"connectionExists\":false,\"availableConnections\":[\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"dee0f41c-0d1d-4e20-8aad-0981da644f3b\",\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"11601fe0-72d6-5853-8590-ec2881853e72\",\"e13f6c8f-41d5-4333-b198-65d68b9161c6\",\"06b7a494-6c6e-4833-b6fe-68d6e901d1cd\",\"4ba5592d-6a80-493e-a011-f09d8f41a9b2\",\"7493b0ab-a054-5fad-a91b-5e331db29304\"],\"reconnectAddress\":\"ws://172.20.0.6:8082\",\"recoveredViaResolver\":true,\"nodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"msg\":\"No connection to target node for message delivery\"}",
+        "2026-03-14T07:59:19.140Z [35a891b8-c1a0-5064-9c6e-2acfba61c2a7] info: {\"level\":40,\"time\":\"2026-03-14T07:59:17.263Z\",\"nodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"pid\":1,\"subsystem\":\"message-router\",\"messageId\":\"bd3a086d-9f72-4a4c-af3d-2c495d01a0a1\",\"targetAddress\":\"8be8d30f-4499-5eed-865c-71b4d529a67a/message-group/mg-8be8d30f-71b4d529a67a-r0\",\"targetNodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"localNodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"connectionExists\":false,\"availableConnections\":[\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"dee0f41c-0d1d-4e20-8aad-0981da644f3b\",\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"11601fe0-72d6-5853-8590-ec2881853e72\",\"e13f6c8f-41d5-4333-b198-65d68b9161c6\",\"06b7a494-6c6e-4833-b6fe-68d6e901d1cd\",\"4ba5592d-6a80-493e-a011-f09d8f41a9b2\",\"7493b0ab-a054-5fad-a91b-5e331db29304\"],\"reconnectAddress\":\"ws://172.20.0.6:8082\",\"recoveredViaResolver\":true,\"nodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"msg\":\"No connection to target node for message delivery\"}",
+        "2026-03-14T07:59:19.140Z [35a891b8-c1a0-5064-9c6e-2acfba61c2a7] info: {\"level\":40,\"time\":\"2026-03-14T07:59:17.263Z\",\"nodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"pid\":1,\"subsystem\":\"message-router\",\"messageId\":\"20158f7d-7e09-4774-97e1-b3e08fe24e8f\",\"targetAddress\":\"8be8d30f-4499-5eed-865c-71b4d529a67a/message-group/mg-8be8d30f-71b4d529a67a-r0\",\"targetNodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"localNodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"connectionExists\":false,\"availableConnections\":[\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"dee0f41c-0d1d-4e20-8aad-0981da644f3b\",\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"11601fe0-72d6-5853-8590-ec2881853e72\",\"e13f6c8f-41d5-4333-b198-65d68b9161c6\",\"06b7a494-6c6e-4833-b6fe-68d6e901d1cd\",\"4ba5592d-6a80-493e-a011-f09d8f41a9b2\",\"7493b0ab-a054-5fad-a91b-5e331db29304\"],\"reconnectAddress\":\"ws://172.20.0.6:8082\",\"recoveredViaResolver\":true,\"nodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"msg\":\"No connection to target node for message delivery\"}",
+        "2026-03-14T07:59:19.140Z [35a891b8-c1a0-5064-9c6e-2acfba61c2a7] info: {\"level\":40,\"time\":\"2026-03-14T07:59:17.263Z\",\"nodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"pid\":1,\"subsystem\":\"message-router\",\"messageId\":\"4384e115-39a5-467f-ab6f-232c01d84352\",\"targetAddress\":\"8be8d30f-4499-5eed-865c-71b4d529a67a/message-group/mg-8be8d30f-71b4d529a67a-r0\",\"targetNodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"localNodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"connectionExists\":false,\"availableConnections\":[\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"dee0f41c-0d1d-4e20-8aad-0981da644f3b\",\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"11601fe0-72d6-5853-8590-ec2881853e72\",\"e13f6c8f-41d5-4333-b198-65d68b9161c6\",\"06b7a494-6c6e-4833-b6fe-68d6e901d1cd\",\"4ba5592d-6a80-493e-a011-f09d8f41a9b2\",\"7493b0ab-a054-5fad-a91b-5e331db29304\"],\"reconnectAddress\":\"ws://172.20.0.6:8082\",\"recoveredViaResolver\":true,\"nodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"msg\":\"No connection to target node for message delivery\"}",
+        "2026-03-14T07:59:19.140Z [35a891b8-c1a0-5064-9c6e-2acfba61c2a7] info: {\"level\":40,\"time\":\"2026-03-14T07:59:17.263Z\",\"nodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"pid\":1,\"subsystem\":\"message-router\",\"messageId\":\"2d26daba-9a3f-47d9-81be-856b71e1f093\",\"targetAddress\":\"8be8d30f-4499-5eed-865c-71b4d529a67a/message-group/mg-8be8d30f-71b4d529a67a-r0\",\"targetNodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"localNodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"connectionExists\":false,\"availableConnections\":[\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"dee0f41c-0d1d-4e20-8aad-0981da644f3b\",\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"11601fe0-72d6-5853-8590-ec2881853e72\",\"e13f6c8f-41d5-4333-b198-65d68b9161c6\",\"06b7a494-6c6e-4833-b6fe-68d6e901d1cd\",\"4ba5592d-6a80-493e-a011-f09d8f41a9b2\",\"7493b0ab-a054-5fad-a91b-5e331db29304\"],\"reconnectAddress\":\"ws://172.20.0.6:8082\",\"recoveredViaResolver\":true,\"nodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"msg\":\"No connection to target node for message delivery\"}",
+        "2026-03-14T07:59:19.140Z [35a891b8-c1a0-5064-9c6e-2acfba61c2a7] info: {\"level\":40,\"time\":\"2026-03-14T07:59:17.263Z\",\"nodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"pid\":1,\"subsystem\":\"message-router\",\"messageId\":\"03db583f-b5dc-4d96-8eee-85ca811e6e81\",\"targetAddress\":\"8be8d30f-4499-5eed-865c-71b4d529a67a/message-group/mg-8be8d30f-71b4d529a67a-r0\",\"targetNodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"localNodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"connectionExists\":false,\"availableConnections\":[\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"dee0f41c-0d1d-4e20-8aad-0981da644f3b\",\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"11601fe0-72d6-5853-8590-ec2881853e72\",\"e13f6c8f-41d5-4333-b198-65d68b9161c6\",\"06b7a494-6c6e-4833-b6fe-68d6e901d1cd\",\"4ba5592d-6a80-493e-a011-f09d8f41a9b2\",\"7493b0ab-a054-5fad-a91b-5e331db29304\"],\"reconnectAddress\":\"ws://172.20.0.6:8082\",\"recoveredViaResolver\":true,\"nodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"msg\":\"No connection to target node for message delivery\"}",
+        "2026-03-14T07:59:19.140Z [35a891b8-c1a0-5064-9c6e-2acfba61c2a7] info: {\"level\":40,\"time\":\"2026-03-14T07:59:17.263Z\",\"nodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"pid\":1,\"subsystem\":\"message-router\",\"messageId\":\"62aa62d0-1557-466e-93ce-19bdab6f42f5\",\"targetAddress\":\"8be8d30f-4499-5eed-865c-71b4d529a67a/message-group/mg-8be8d30f-71b4d529a67a-r0\",\"targetNodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"localNodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"connectionExists\":false,\"availableConnections\":[\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"dee0f41c-0d1d-4e20-8aad-0981da644f3b\",\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"11601fe0-72d6-5853-8590-ec2881853e72\",\"e13f6c8f-41d5-4333-b198-65d68b9161c6\",\"06b7a494-6c6e-4833-b6fe-68d6e901d1cd\",\"4ba5592d-6a80-493e-a011-f09d8f41a9b2\",\"7493b0ab-a054-5fad-a91b-5e331db29304\"],\"reconnectAddress\":\"ws://172.20.0.6:8082\",\"recoveredViaResolver\":true,\"nodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"msg\":\"No connection to target node for message delivery\"}",
+        "2026-03-14T07:59:19.140Z [35a891b8-c1a0-5064-9c6e-2acfba61c2a7] info: {\"level\":40,\"time\":\"2026-03-14T07:59:18.219Z\",\"nodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"pid\":1,\"subsystem\":\"control-plane-readiness\",\"nodeId\":\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"repairedRowCount\":2,\"repairedNodeRowCount\":1,\"repairedServiceRowCount\":1,\"msg\":\"Repaired readiness cache from authoritative node/service rows\"}"
+      ],
+      "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58": [
+        "2026-03-14T07:59:19.142Z [ebc4aa0b-06c6-506d-93ea-1dd2deca3f58] info: {\"level\":50,\"time\":\"2026-03-14T07:59:14.131Z\",\"nodeId\":\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"pid\":1,\"subsystem\":\"sql-query-engine\",\"sql\":\"SELECT * FROM replica_operations\\n    WHERE source_node_id = ?\\n    AND (\\n      workflow_step IN (?, ?\",\"error\":\"Query timeout after 5000ms\",\"nodeId\":\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"msg\":\"Query execution failed\"}",
+        "2026-03-14T07:59:19.142Z [ebc4aa0b-06c6-506d-93ea-1dd2deca3f58] info: {\"level\":50,\"time\":\"2026-03-14T07:59:14.132Z\",\"nodeId\":\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"pid\":1,\"subsystem\":\"message-group\",\"messageId\":\"59eef91a-ec92-46f5-b35b-33f3d816f8a8\",\"targetService\":\"7493b0ab-a054-5fad-a91b-5e331db29304/partition/replica_operations-p1-r1\",\"error\":\"Message timeout\",\"nodeId\":\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"msg\":\"Failed to send message\"}",
+        "2026-03-14T07:59:19.142Z [ebc4aa0b-06c6-506d-93ea-1dd2deca3f58] info: {\"level\":40,\"time\":\"2026-03-14T07:59:14.627Z\",\"nodeId\":\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"pid\":1,\"subsystem\":\"message-router\",\"messageId\":\"c0d14258-f2c9-47a6-9eb6-c44f52f50ae0\",\"nodeId\":\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"msg\":\"No pending service response request\"}",
+        "2026-03-14T07:59:19.142Z [ebc4aa0b-06c6-506d-93ea-1dd2deca3f58] info: {\"level\":40,\"time\":\"2026-03-14T07:59:14.628Z\",\"nodeId\":\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"pid\":1,\"subsystem\":\"message-router\",\"messageId\":\"77417d74-9306-4f30-9fd9-f61583e2ace1\",\"nodeId\":\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"msg\":\"No pending service response request\"}",
+        "2026-03-14T07:59:19.142Z [ebc4aa0b-06c6-506d-93ea-1dd2deca3f58] info: {\"level\":40,\"time\":\"2026-03-14T07:59:14.628Z\",\"nodeId\":\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"pid\":1,\"subsystem\":\"message-router\",\"messageId\":\"cb8e2851-de5e-485b-9400-2298c32ca57c\",\"nodeId\":\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"msg\":\"No pending service response request\"}",
+        "2026-03-14T07:59:19.142Z [ebc4aa0b-06c6-506d-93ea-1dd2deca3f58] info: {\"level\":40,\"time\":\"2026-03-14T07:59:14.628Z\",\"nodeId\":\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"pid\":1,\"subsystem\":\"message-router\",\"messageId\":\"04594b45-53a3-4b7e-8e51-186cb29dae84\",\"nodeId\":\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"msg\":\"No pending service response request\"}",
+        "2026-03-14T07:59:19.142Z [ebc4aa0b-06c6-506d-93ea-1dd2deca3f58] info: {\"level\":40,\"time\":\"2026-03-14T07:59:14.628Z\",\"nodeId\":\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"pid\":1,\"subsystem\":\"message-router\",\"messageId\":\"a002357f-3fd9-479f-a4b3-42f57d9e5215\",\"nodeId\":\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"msg\":\"No pending service response request\"}",
+        "2026-03-14T07:59:19.142Z [ebc4aa0b-06c6-506d-93ea-1dd2deca3f58] info: {\"level\":40,\"time\":\"2026-03-14T07:59:14.628Z\",\"nodeId\":\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"pid\":1,\"subsystem\":\"message-router\",\"messageId\":\"59eef91a-ec92-46f5-b35b-33f3d816f8a8\",\"nodeId\":\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"msg\":\"No pending service response request\"}",
+        "2026-03-14T07:59:19.142Z [ebc4aa0b-06c6-506d-93ea-1dd2deca3f58] info: {\"level\":40,\"time\":\"2026-03-14T07:59:14.629Z\",\"nodeId\":\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"pid\":1,\"subsystem\":\"message-router\",\"messageId\":\"d1ad6905-3706-4c96-9b29-9b7c50a66f24\",\"nodeId\":\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"msg\":\"No pending service response request\"}",
+        "2026-03-14T07:59:19.142Z [ebc4aa0b-06c6-506d-93ea-1dd2deca3f58] info: {\"level\":40,\"time\":\"2026-03-14T07:59:14.629Z\",\"nodeId\":\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"pid\":1,\"subsystem\":\"message-router\",\"messageId\":\"b7ece5e8-1b0b-4839-a276-dd65252bd7aa\",\"nodeId\":\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"msg\":\"No pending service response request\"}",
+        "2026-03-14T07:59:19.142Z [ebc4aa0b-06c6-506d-93ea-1dd2deca3f58] info: {\"level\":30,\"time\":\"2026-03-14T07:59:14.631Z\",\"nodeId\":\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"pid\":1,\"subsystem\":\"heartbeat-service\",\"nodeId\":\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"previousFailures\":1,\"msg\":\"Heartbeat recovered after failures\"}",
+        "2026-03-14T07:59:19.142Z [ebc4aa0b-06c6-506d-93ea-1dd2deca3f58] info: {\"level\":30,\"time\":\"2026-03-14T07:59:16.699Z\",\"nodeId\":\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"pid\":1,\"subsystem\":\"node-joining\",\"nodeId\":\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"nodeSource\":\"system_table_cache\",\"otherNodeCount\":4,\"otherNodeIds\":[\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"11601fe0-72d6-5853-8590-ec2881853e72\",\"8be8d30f-4499-5eed-865c-71b4d529a67a\"],\"msg\":\"Connecting to other cluster nodes\"}",
+        "2026-03-14T07:59:19.142Z [ebc4aa0b-06c6-506d-93ea-1dd2deca3f58] info: {\"level\":30,\"time\":\"2026-03-14T07:59:16.700Z\",\"nodeId\":\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"pid\":1,\"subsystem\":\"node-joining\",\"nodeId\":\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"targetAddress\":\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58/message-group/mg-ebc4aa0b-1dd2deca3f58-r0\",\"state\":\"ready\",\"msg\":\"Sent NODE_STATE_UPDATE to control plane\"}",
+        "2026-03-14T07:59:19.142Z [ebc4aa0b-06c6-506d-93ea-1dd2deca3f58] info: {\"level\":50,\"time\":\"2026-03-14T07:59:16.711Z\",\"nodeId\":\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"pid\":1,\"subsystem\":\"message-router\",\"nodeId\":\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"error\":\"getaddrinfo ENOTFOUND ddb-test-reuse-5-5\",\"msg\":\"WebSocket error\"}",
+        "2026-03-14T07:59:19.142Z [ebc4aa0b-06c6-506d-93ea-1dd2deca3f58] info: {\"level\":40,\"time\":\"2026-03-14T07:59:16.711Z\",\"nodeId\":\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"pid\":1,\"subsystem\":\"node-joining\",\"nodeId\":\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"targetNodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"wsAddress\":\"ws://ddb-test-reuse-5-5:8082\",\"error\":\"getaddrinfo ENOTFOUND ddb-test-reuse-5-5\",\"msg\":\"Failed to connect to cluster node\"}",
+        "2026-03-14T07:59:19.142Z [ebc4aa0b-06c6-506d-93ea-1dd2deca3f58] info: {\"level\":30,\"time\":\"2026-03-14T07:59:16.712Z\",\"nodeId\":\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"pid\":1,\"subsystem\":\"node-joining\",\"nodeId\":\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"connectedNodes\":[\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"11601fe0-72d6-5853-8590-ec2881853e72\",\"35a891b8-c1a0-5064-9c6e-2acfba61c2a7\",\"7493b0ab-a054-5fad-a91b-5e331db29304\"],\"msg\":\"Cluster node connections complete\"}",
+        "2026-03-14T07:59:19.142Z [ebc4aa0b-06c6-506d-93ea-1dd2deca3f58] info: {\"level\":30,\"time\":\"2026-03-14T07:59:18.071Z\",\"nodeId\":\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"pid\":1,\"subsystem\":\"main\",\"nodeId\":\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"reason\":\"READINESS_STABLE_WINDOW_PENDING\",\"durationMs\":20969,\"totalDurationMs\":20969,\"timestamp\":1773475158071,\"msg\":\"Bootstrap readiness blocker duration observed\"}",
+        "2026-03-14T07:59:19.142Z [ebc4aa0b-06c6-506d-93ea-1dd2deca3f58] info: {\"level\":30,\"time\":\"2026-03-14T07:59:18.071Z\",\"nodeId\":\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"pid\":1,\"subsystem\":\"main\",\"nodeId\":\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"previousState\":\"warming\",\"previousReady\":false,\"state\":\"join_ready\",\"ready\":true,\"reasons\":[],\"timestamp\":1773475158071,\"msg\":\"Bootstrap readiness state transitioned\"}",
+        "2026-03-14T07:59:19.142Z [ebc4aa0b-06c6-506d-93ea-1dd2deca3f58] info: {\"level\":30,\"time\":\"2026-03-14T07:59:18.935Z\",\"nodeId\":\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"pid\":1,\"subsystem\":\"node-joining\",\"nodeId\":\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"tableCount\":11,\"totalRowsApplied\":0,\"tableRowCounts\":{\"tables\":32,\"schema_migrations\":0,\"indices\":0,\"service_definitions\":3,\"storage_reservations\":0,\"config\":66,\"sql_transactions\":0,\"sql_transaction_participants\":0,\"debug_sessions\":0,\"latency_groups\":1,\"inter_group_latencies\":0},\"msg\":\"Backfilled propagated cache tables from authoritative state\"}",
+        "2026-03-14T07:59:19.142Z [ebc4aa0b-06c6-506d-93ea-1dd2deca3f58] info: {\"level\":30,\"time\":\"2026-03-14T07:59:18.935Z\",\"nodeId\":\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"pid\":1,\"subsystem\":\"node-joining\",\"nodeId\":\"ebc4aa0b-06c6-506d-93ea-1dd2deca3f58\",\"tableCount\":11,\"tableNames\":[\"tables\",\"schema_migrations\",\"indices\",\"service_definitions\",\"storage_reservations\",\"config\",\"sql_transactions\",\"sql_transaction_participants\",\"debug_sessions\",\"latency_groups\",\"inter_group_latencies\"],\"msg\":\"Completed opportunistic join backfill for non-critical propagated tables\"}"
+      ],
+      "8be8d30f-4499-5eed-865c-71b4d529a67a": [
+        "2026-03-14T07:59:19.143Z [8be8d30f-4499-5eed-865c-71b4d529a67a] info: {\"level\":50,\"time\":\"2026-03-14T07:58:14.829Z\",\"nodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"pid\":1,\"subsystem\":\"node-joining\",\"nodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"replicaId\":\"mg-ebc4aa0b-1dd2deca3f58-r1\",\"groupId\":\"mg-ebc4aa0b-1dd2deca3f58\",\"attempts\":3,\"elapsedMs\":73572,\"error\":\"HTTP 409: {\\\"success\\\":false,\\\"error\\\":\\\"assignment_id does not reference an active MOVE_REPLICA assignment\\\",\\\"code\\\":\\\"ASSIGNMENT_TOKEN_UNKNOWN\\\"}\",\"msg\":\"Failed to register message group service in cluster\"}",
+        "2026-03-14T07:59:19.143Z [8be8d30f-4499-5eed-865c-71b4d529a67a] info: {\"level\":50,\"time\":\"2026-03-14T07:58:14.830Z\",\"nodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"pid\":1,\"subsystem\":\"node-joining\",\"nodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"phase\":\"joining_message_group\",\"duration\":73578,\"error\":\"HTTP 409: {\\\"success\\\":false,\\\"error\\\":\\\"assignment_id does not reference an active MOVE_REPLICA assignment\\\",\\\"code\\\":\\\"ASSIGNMENT_TOKEN_UNKNOWN\\\"}\",\"stack\":\"Error: HTTP 409: {\\\"success\\\":false,\\\"error\\\":\\\"assignment_id does not reference an active MOVE_REPLICA assignment\\\",\\\"code\\\":\\\"ASSIGNMENT_TOKEN_UNKNOWN\\\"}\\n    at NodeJoiningService.httpPost (file:///app/src/bootstrap/node-joining-service.js:2814:23)\\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\\n    at async CreateMessageGroupPhase.registerMessageGroupService (file:///app/src/bootstrap/phases/create-message-group-phase.js:433:26)\\n    at async JoinMessageGroupPhase.phaseJoinExistingMessageGroup (file:///app/src/bootstrap/phases/join-message-group-phase.js:213:5)\\n    at async Object.task (file:///app/src/bootstrap/node-joining-service.js:1446:9)\",\"msg\":\"Joining phase failed\"}",
+        "2026-03-14T07:59:19.143Z [8be8d30f-4499-5eed-865c-71b4d529a67a] info: {\"level\":50,\"time\":\"2026-03-14T07:58:14.830Z\",\"nodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"pid\":1,\"subsystem\":\"node-joining\",\"nodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"phase\":\"joining_message_group\",\"duration\":110600,\"error\":\"HTTP 409: {\\\"success\\\":false,\\\"error\\\":\\\"assignment_id does not reference an active MOVE_REPLICA assignment\\\",\\\"code\\\":\\\"ASSIGNMENT_TOKEN_UNKNOWN\\\"}\",\"stack\":\"Error: HTTP 409: {\\\"success\\\":false,\\\"error\\\":\\\"assignment_id does not reference an active MOVE_REPLICA assignment\\\",\\\"code\\\":\\\"ASSIGNMENT_TOKEN_UNKNOWN\\\"}\\n    at NodeJoiningService.httpPost (file:///app/src/bootstrap/node-joining-service.js:2814:23)\\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\\n    at async CreateMessageGroupPhase.registerMessageGroupService (file:///app/src/bootstrap/phases/create-message-group-phase.js:433:26)\\n    at async JoinMessageGroupPhase.phaseJoinExistingMessageGroup (file:///app/src/bootstrap/phases/join-message-group-phase.js:213:5)\\n    at async Object.task (file:///app/src/bootstrap/node-joining-service.js:1446:9)\",\"msg\":\"Node joining failed\"}",
+        "2026-03-14T07:59:19.143Z [8be8d30f-4499-5eed-865c-71b4d529a67a] info: {\"level\":30,\"time\":\"2026-03-14T07:58:14.830Z\",\"nodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"pid\":1,\"subsystem\":\"node-joining\",\"nodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"failedPhase\":\"joining_message_group\",\"createdServiceIds\":1,\"createdMessageGroupIds\":1,\"msg\":\"Starting failed join cleanup in reverse phase order\"}",
+        "2026-03-14T07:59:19.143Z [8be8d30f-4499-5eed-865c-71b4d529a67a] info: {\"level\":30,\"time\":\"2026-03-14T07:58:14.830Z\",\"nodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"pid\":1,\"subsystem\":\"node-joining\",\"nodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"messageGroupCount\":1,\"serviceCount\":1,\"msg\":\"Stopping message group replicas during failed join cleanup\"}",
+        "2026-03-14T07:59:19.143Z [8be8d30f-4499-5eed-865c-71b4d529a67a] info: {\"level\":30,\"time\":\"2026-03-14T07:58:14.831Z\",\"nodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"pid\":1,\"subsystem\":\"message-group\",\"groupId\":\"mg-ebc4aa0b-1dd2deca3f58\",\"replicaId\":\"mg-ebc4aa0b-1dd2deca3f58-r1\",\"nodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"msg\":\"Shutting down message group service\"}",
+        "2026-03-14T07:59:19.143Z [8be8d30f-4499-5eed-865c-71b4d529a67a] info: {\"level\":30,\"time\":\"2026-03-14T07:58:14.831Z\",\"nodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"pid\":1,\"subsystem\":\"node-joining\",\"nodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"msg\":\"Message group replicas stopped during failed join cleanup\"}",
+        "2026-03-14T07:59:19.143Z [8be8d30f-4499-5eed-865c-71b4d529a67a] info: {\"level\":30,\"time\":\"2026-03-14T07:58:14.831Z\",\"nodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"pid\":1,\"subsystem\":\"node-joining\",\"nodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"hasRouter\":true,\"msg\":\"Disconnecting from seed and stopping router during failed join cleanup\"}",
+        "2026-03-14T07:59:19.143Z [8be8d30f-4499-5eed-865c-71b4d529a67a] info: {\"level\":30,\"time\":\"2026-03-14T07:58:14.831Z\",\"nodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"pid\":1,\"subsystem\":\"message-router\",\"nodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"connectionId\":\"c956faf5-41bd-4548-86d7-ed979176b395\",\"msg\":\"Connection closed\"}",
+        "2026-03-14T07:59:19.143Z [8be8d30f-4499-5eed-865c-71b4d529a67a] info: {\"level\":30,\"time\":\"2026-03-14T07:58:14.832Z\",\"nodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"pid\":1,\"subsystem\":\"message-router\",\"nodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"connectionId\":\"5ce0419b-6877-47f6-a5a6-8e9246006182\",\"msg\":\"Connection closed\"}",
+        "2026-03-14T07:59:19.143Z [8be8d30f-4499-5eed-865c-71b4d529a67a] info: {\"level\":30,\"time\":\"2026-03-14T07:58:14.832Z\",\"nodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"pid\":1,\"subsystem\":\"message-router\",\"nodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"connectionId\":\"1f5ecd20-2c1c-4ea5-83a2-359d1ce67610\",\"msg\":\"Connection closed\"}",
+        "2026-03-14T07:59:19.143Z [8be8d30f-4499-5eed-865c-71b4d529a67a] info: {\"level\":30,\"time\":\"2026-03-14T07:58:14.832Z\",\"nodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"pid\":1,\"subsystem\":\"message-router\",\"nodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"connectionId\":\"c3257ca0-7613-4378-9cdb-cd1e62d57f2d\",\"isSelfConnection\":true,\"msg\":\"Connection closed\"}",
+        "2026-03-14T07:59:19.143Z [8be8d30f-4499-5eed-865c-71b4d529a67a] info: {\"level\":30,\"time\":\"2026-03-14T07:58:14.832Z\",\"nodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"pid\":1,\"subsystem\":\"node-joining\",\"nodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"msg\":\"Disconnected from seed and router stopped during failed join cleanup\"}",
+        "2026-03-14T07:59:19.143Z [8be8d30f-4499-5eed-865c-71b4d529a67a] info: {\"level\":30,\"time\":\"2026-03-14T07:58:14.832Z\",\"nodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"pid\":1,\"subsystem\":\"node-lifecycle-state-machine\",\"nodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"from\":\"discovering\",\"to\":\"stopped\",\"timestamp\":1773475094832,\"msg\":\"Node state transition\"}",
+        "2026-03-14T07:59:19.143Z [8be8d30f-4499-5eed-865c-71b4d529a67a] info: {\"level\":30,\"time\":\"2026-03-14T07:58:14.832Z\",\"nodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"pid\":1,\"subsystem\":\"node-joining\",\"nodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"failedPhase\":\"joining_message_group\",\"stepResults\":{\"message_group\":\"success\",\"connecting_websocket\":\"success\"},\"msg\":\"Failed join cleanup summary\"}",
+        "2026-03-14T07:59:19.143Z [8be8d30f-4499-5eed-865c-71b4d529a67a] info: {\"level\":30,\"time\":\"2026-03-14T07:58:14.832Z\",\"nodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"pid\":1,\"subsystem\":\"node-joining\",\"nodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"messageGroupServices\":1,\"partitionServices\":0,\"msg\":\"Cleaning up partially initialized services\"}",
+        "2026-03-14T07:59:19.143Z [8be8d30f-4499-5eed-865c-71b4d529a67a] info: {\"level\":30,\"time\":\"2026-03-14T07:58:14.832Z\",\"nodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"pid\":1,\"subsystem\":\"message-group\",\"groupId\":\"mg-ebc4aa0b-1dd2deca3f58\",\"replicaId\":\"mg-ebc4aa0b-1dd2deca3f58-r1\",\"nodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"msg\":\"Shutting down message group service\"}",
+        "2026-03-14T07:59:19.143Z [8be8d30f-4499-5eed-865c-71b4d529a67a] info: {\"level\":30,\"time\":\"2026-03-14T07:58:14.832Z\",\"nodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"pid\":1,\"subsystem\":\"node-joining\",\"nodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"msg\":\"Cleanup complete\"}",
+        "2026-03-14T07:59:19.143Z [8be8d30f-4499-5eed-865c-71b4d529a67a] info: {\"level\":50,\"time\":\"2026-03-14T07:58:14.832Z\",\"nodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"pid\":1,\"subsystem\":\"main\",\"error\":\"HTTP 409: {\\\"success\\\":false,\\\"error\\\":\\\"assignment_id does not reference an active MOVE_REPLICA assignment\\\",\\\"code\\\":\\\"ASSIGNMENT_TOKEN_UNKNOWN\\\"}\",\"phase\":\"failed\",\"nodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"msg\":\"Failed to join cluster\"}",
+        "2026-03-14T07:59:19.143Z [8be8d30f-4499-5eed-865c-71b4d529a67a] info: {\"level\":30,\"time\":\"2026-03-14T07:58:14.833Z\",\"nodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"pid\":1,\"subsystem\":\"bootstrap-api\",\"seedNodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"nodeId\":\"8be8d30f-4499-5eed-865c-71b4d529a67a\",\"msg\":\"Bootstrap API shutdown\"}"
+      ]
+    }
+  },
+  "playback": {
+    "scenarioName": "rolling-restart",
+    "startedAt": 1773474834566,
+    "endedAt": 1773475160222,
+    "durationMs": 325656,
+    "files": {
+      "events": ".playback/.playback/rolling-restart-5n-fix14/rolling-restart/events.ndjson",
+      "samples": ".playback/.playback/rolling-restart-5n-fix14/rolling-restart/samples.ndjson",
+      "snapshots": ".playback/.playback/rolling-restart-5n-fix14/rolling-restart/snapshots.ndjson",
+      "manifest": ".playback/.playback/rolling-restart-5n-fix14/rolling-restart/playback-manifest.json",
+      "viewer": ".playback/.playback/rolling-restart-5n-fix14/rolling-restart/playback-viewer.html"
+    },
+    "counts": {
+      "events": 186,
+      "samples": 150,
+      "snapshots": 80
+    },
+    "warnings": [
+      {
+        "code": "topology-capture-failed",
+        "message": "Failed to capture topology snapshot: Admin API query timed out for node 7493b0ab-a054-5fad-a91b-5e331db29304 on lane snapshot after 15000ms",
+        "timestamp": 1773475114666,
+        "details": {
+          "anchorNodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+          "error": "Admin API query timed out for node 7493b0ab-a054-5fad-a91b-5e331db29304 on lane snapshot after 15000ms",
+          "reachability": [
+            {
+              "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+              "timestamp": 1773475097655,
+              "reachable": true,
+              "adminReady": true,
+              "reachableBy": "admin_ws",
+              "bootstrapHealth": {
+                "attempted": true,
+                "ok": false,
+                "statusCode": -1,
+                "error": "http_status_-1",
+                "url": "http://172.20.0.2:8080/health",
+                "endpoint": null,
+                "query": null
+              },
+              "adminHealth": {
+                "attempted": true,
+                "ok": false,
+                "statusCode": -1,
+                "error": "http_status_-1",
+                "url": "http://172.20.0.2:8081/health",
+                "endpoint": null,
+                "query": null
+              },
+              "adminWs": {
+                "attempted": true,
+                "ok": true,
+                "statusCode": null,
+                "error": null,
+                "url": null,
+                "endpoint": "ws://172.20.0.2:8081/api/admin/stream",
+                "query": null
+              },
+              "sqlProbe": {
+                "attempted": false,
+                "ok": false,
+                "statusCode": null,
+                "error": null,
+                "url": null,
+                "endpoint": null,
+                "query": "SELECT node_id FROM nodes LIMIT 1"
+              },
+              "lastError": null
+            },
+            {
+              "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+              "timestamp": 1773475098657,
+              "reachable": true,
+              "adminReady": true,
+              "reachableBy": "admin_health",
+              "bootstrapHealth": {
+                "attempted": true,
+                "ok": true,
+                "statusCode": 200,
+                "error": null,
+                "url": "http://172.20.0.3:8080/health",
+                "endpoint": null,
+                "query": null
+              },
+              "adminHealth": {
+                "attempted": true,
+                "ok": true,
+                "statusCode": 200,
+                "error": null,
+                "url": "http://172.20.0.3:8081/health",
+                "endpoint": null,
+                "query": null
+              },
+              "adminWs": {
+                "attempted": false,
+                "ok": false,
+                "statusCode": null,
+                "error": null,
+                "url": null,
+                "endpoint": "ws://172.20.0.3:8081/api/admin/stream",
+                "query": null
+              },
+              "sqlProbe": {
+                "attempted": false,
+                "ok": false,
+                "statusCode": null,
+                "error": null,
+                "url": null,
+                "endpoint": null,
+                "query": "SELECT node_id FROM nodes LIMIT 1"
+              },
+              "lastError": null
+            },
+            {
+              "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+              "timestamp": 1773475098658,
+              "reachable": true,
+              "adminReady": true,
+              "reachableBy": "admin_health",
+              "bootstrapHealth": {
+                "attempted": true,
+                "ok": true,
+                "statusCode": 200,
+                "error": null,
+                "url": "http://172.20.0.4:8080/health",
+                "endpoint": null,
+                "query": null
+              },
+              "adminHealth": {
+                "attempted": true,
+                "ok": true,
+                "statusCode": 200,
+                "error": null,
+                "url": "http://172.20.0.4:8081/health",
+                "endpoint": null,
+                "query": null
+              },
+              "adminWs": {
+                "attempted": false,
+                "ok": false,
+                "statusCode": null,
+                "error": null,
+                "url": null,
+                "endpoint": "ws://172.20.0.4:8081/api/admin/stream",
+                "query": null
+              },
+              "sqlProbe": {
+                "attempted": false,
+                "ok": false,
+                "statusCode": null,
+                "error": null,
+                "url": null,
+                "endpoint": null,
+                "query": "SELECT node_id FROM nodes LIMIT 1"
+              },
+              "lastError": null
+            },
+            {
+              "nodeId": "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58",
+              "timestamp": 1773475098659,
+              "reachable": true,
+              "adminReady": false,
+              "reachableBy": "bootstrap_health",
+              "bootstrapHealth": {
+                "attempted": true,
+                "ok": true,
+                "statusCode": 200,
+                "error": null,
+                "url": "http://172.20.0.5:8080/health",
+                "endpoint": null,
+                "query": null
+              },
+              "adminHealth": {
+                "attempted": true,
+                "ok": false,
+                "statusCode": -1,
+                "error": "http_status_-1",
+                "url": "http://172.20.0.5:8081/health",
+                "endpoint": null,
+                "query": null
+              },
+              "adminWs": {
+                "attempted": true,
+                "ok": false,
+                "statusCode": null,
+                "error": "Admin API query failed for node ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 on lane default: connect ECONNREFUSED 172.20.0.5:8081",
+                "url": null,
+                "endpoint": "ws://172.20.0.5:8081/api/admin/stream",
+                "query": null
+              },
+              "sqlProbe": {
+                "attempted": true,
+                "ok": false,
+                "statusCode": null,
+                "error": "Admin API query failed for node ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 on lane probe: connect ECONNREFUSED 172.20.0.5:8081",
+                "url": null,
+                "endpoint": null,
+                "query": "SELECT node_id FROM nodes LIMIT 1"
+              },
+              "lastError": "Admin API query failed for node ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 on lane probe: connect ECONNREFUSED 172.20.0.5:8081"
+            },
+            {
+              "nodeId": "8be8d30f-4499-5eed-865c-71b4d529a67a",
+              "timestamp": 1773475098660,
+              "reachable": false,
+              "adminReady": false,
+              "reachableBy": null,
+              "bootstrapHealth": {
+                "attempted": true,
+                "ok": false,
+                "statusCode": -1,
+                "error": "http_status_-1",
+                "url": "http://172.20.0.6:8080/health",
+                "endpoint": null,
+                "query": null
+              },
+              "adminHealth": {
+                "attempted": true,
+                "ok": false,
+                "statusCode": -1,
+                "error": "http_status_-1",
+                "url": "http://172.20.0.6:8081/health",
+                "endpoint": null,
+                "query": null
+              },
+              "adminWs": {
+                "attempted": true,
+                "ok": false,
+                "statusCode": null,
+                "error": "Admin WebSocket probe timed out for node 8be8d30f-4499-5eed-865c-71b4d529a67a",
+                "url": null,
+                "endpoint": "ws://172.20.0.6:8081/api/admin/stream",
+                "query": null
+              },
+              "sqlProbe": {
+                "attempted": true,
+                "ok": false,
+                "statusCode": null,
+                "error": "Admin API query timed out for node 8be8d30f-4499-5eed-865c-71b4d529a67a on lane probe after 1ms",
+                "url": null,
+                "endpoint": null,
+                "query": "SELECT node_id FROM nodes LIMIT 1"
+              },
+              "lastError": "Admin API query timed out for node 8be8d30f-4499-5eed-865c-71b4d529a67a on lane probe after 1ms"
+            }
+          ]
+        }
+      },
+      {
+        "code": "service-query-failed-7493b0ab-a054-5fad-a91b-5e331db29304",
+        "message": "Failed to query services on node 7493b0ab-a054-5fad-a91b-5e331db29304: Admin API query timed out for node 7493b0ab-a054-5fad-a91b-5e331db29304 on lane snapshot after 15000ms",
+        "timestamp": 1773475114666,
+        "details": {
+          "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+          "error": "Admin API query timed out for node 7493b0ab-a054-5fad-a91b-5e331db29304 on lane snapshot after 15000ms",
+          "reachability": {
+            "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+            "timestamp": 1773475097655,
+            "reachable": true,
+            "adminReady": true,
+            "reachableBy": "admin_ws",
+            "bootstrapHealth": {
+              "attempted": true,
+              "ok": false,
+              "statusCode": -1,
+              "error": "http_status_-1",
+              "url": "http://172.20.0.2:8080/health",
+              "endpoint": null,
+              "query": null
+            },
+            "adminHealth": {
+              "attempted": true,
+              "ok": false,
+              "statusCode": -1,
+              "error": "http_status_-1",
+              "url": "http://172.20.0.2:8081/health",
+              "endpoint": null,
+              "query": null
+            },
+            "adminWs": {
+              "attempted": true,
+              "ok": true,
+              "statusCode": null,
+              "error": null,
+              "url": null,
+              "endpoint": "ws://172.20.0.2:8081/api/admin/stream",
+              "query": null
+            },
+            "sqlProbe": {
+              "attempted": false,
+              "ok": false,
+              "statusCode": null,
+              "error": null,
+              "url": null,
+              "endpoint": null,
+              "query": "SELECT node_id FROM nodes LIMIT 1"
+            },
+            "lastError": null
+          }
+        }
+      }
+    ]
+  },
+  "trace": null
+}

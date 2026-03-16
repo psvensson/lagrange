@@ -141,6 +141,9 @@ describe('seven-node-read-write-load-transaction-recovery scenario', () => {
         assertConsistency: async () => {
           calls.push('assertConsistency');
         },
+        waitForConsistencyConvergence: async () => {
+          calls.push('waitForConsistencyConvergence');
+        },
       };
 
       const result = await run(cluster, {
@@ -189,7 +192,7 @@ describe('seven-node-read-write-load-transaction-recovery scenario', () => {
       );
       assert.deepEqual(calls[2], ['restartNode', 'seed-1']);
       assert.deepEqual(calls[3], 'waitForConvergence');
-      assert.deepEqual(calls[4], 'assertConsistency');
+      assert.deepEqual(calls[4], 'waitForConsistencyConvergence');
     });
 
   it('retries transient replay-status query failures after restart',
@@ -305,6 +308,7 @@ describe('seven-node-read-write-load-transaction-recovery scenario', () => {
           restarted = true;
         },
         assertConsistency: async () => {},
+        waitForConsistencyConvergence: async () => {},
       };
 
       const result = await run(cluster, {

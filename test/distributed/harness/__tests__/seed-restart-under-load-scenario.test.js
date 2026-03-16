@@ -28,6 +28,9 @@ describe('seed-restart-under-load scenario', () => {
       assertConsistency: async () => {
         calls.push(['assertConsistency']);
       },
+      waitForConsistencyConvergence: async () => {
+        calls.push(['waitForConsistencyConvergence']);
+      },
     };
 
     const result = await run(cluster, {
@@ -40,6 +43,6 @@ describe('seed-restart-under-load scenario', () => {
     assert.ok(result.successRate >= 0.5);
     assert.deepEqual(calls[0], ['restartNode', 'seed-1']);
     assert.deepEqual(calls[1], ['waitForConvergence']);
-    assert.deepEqual(calls[2], ['assertConsistency']);
+    assert.deepEqual(calls[2], ['waitForConsistencyConvergence']);
   });
 });

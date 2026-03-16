@@ -89,6 +89,28 @@ SystemTableCache (every node)
 
 These limitations motivate the future native artifact store design.
 
+## Future Extension: Access-Pattern-Aware Placement
+
+This document focuses on **activation cost** as an additional placement
+dimension. A separate (future) dimension is **data-access affinity**:
+placing replicas of a service nearer to the partitions it reads/writes most.
+
+If/when implemented, the extension should follow existing ownership rules:
+
+- **Telemetry**: derive per-service/partition access statistics from query
+  execution metrics (high-churn data should remain non-propagated and
+  queryable on demand).
+- **Policy surface**: add policy knobs in `TablePolicyService` to control the
+  weight of access affinity relative to capacity and activation cost.
+- **Planner integration**: extend `MovePlanner.sortNodesBySuitability()` to
+  incorporate affinity scoring while keeping a single placement path.
+- **No parallel planner**: access-aware scoring must remain a dimension of the
+  existing planner, not a new placement mechanism.
+
+This is intentionally orthogonal to activation-cost scoring and should compose
+with it as a weighted dimension rather than replacing storage or activation
+gates.
+
 ### Phasing
 
 - Phase 0.5: CLI tooling (`service analyze`, dev-install feedback)

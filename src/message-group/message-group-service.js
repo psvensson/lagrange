@@ -59,6 +59,7 @@ import {
   MESSAGE_GROUP_OPERATION_LEDGER_NOW,
   MESSAGE_GROUP_SERVICE_DEFAULT,
   MESSAGE_GROUP_SERVICE_ERROR_MSG,
+  MESSAGE_GROUP_SERVICE_LOG_MSG,
   MESSAGE_GROUP_SUBSYSTEM,
   MESSAGE_STATUS as MessageStatus,
   RAFT_ROLE as RaftRole,
@@ -947,6 +948,37 @@ class MessageGroupService extends EventEmitter {
       onLeader: ({term}) => {
         this.updateRebalancerLeadership();
         this.operationLedger.currentTerm = term;
+
+        // Re-subscribe to CDC tables on leadership gain so the
+        // new leader's CDCHandler is active for all propagated
+        // tables. CDCHandler.subscribe is idempotent, so this
+        // is safe even if subscriptions already exist.
+        // Requirements: 6.1, 6.2
+        const existingSubscriptions =
+          this.cdcHandler.getSubscriptions();
+        if (existingSubscriptions.length > NUM.ZERO) {
+          this.logger.info(
+            MESSAGE_GROUP_SERVICE_LOG_MSG
+              .CDC_RESUBSCRIBE_ON_LEADER, {
+              term,
+              replicaId: this.replicaId,
+              groupId: this.groupId,
+              tableCount: existingSubscriptions.length,
+            },
+          );
+          for (const tableName of existingSubscriptions) {
+            this.subscribeToCDC(tableName);
+          }
+          this.logger.info(
+            MESSAGE_GROUP_SERVICE_LOG_MSG
+              .CDC_RESUBSCRIBE_ON_LEADER_COMPLETE, {
+              term,
+              replicaId: this.replicaId,
+              groupId: this.groupId,
+              tableCount: existingSubscriptions.length,
+            },
+          );
+        }
 
         this.logger.info('Became leader', {
           term,

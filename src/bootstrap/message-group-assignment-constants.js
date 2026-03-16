@@ -26,6 +26,8 @@ const MESSAGE_GROUP_ASSIGNMENT_LOG_MSG = Object.freeze({
   DETERMINING: 'Determining message group assignment',
   USING_MOVE_REPLICA: 'Using MOVE_REPLICA strategy',
   USING_CREATE_SELF_HOSTED: 'Using CREATE_SELF_HOSTED strategy',
+  EXISTING_MEMBERSHIP_DETECTED:
+    'Node already has message group membership, using CREATE_SELF_HOSTED',
 });
 
 const MESSAGE_GROUP_ASSIGNMENT_ERROR = Object.freeze({

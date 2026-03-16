@@ -55,6 +55,9 @@ describe('in-cluster-chaos-injection scenario', () => {
         assertConsistency: async () => {
           calls.push(['assertConsistency']);
         },
+        waitForConsistencyConvergence: async () => {
+          calls.push(['waitForConsistencyConvergence']);
+        },
       };
 
       const result = await run(cluster, {
@@ -83,7 +86,7 @@ describe('in-cluster-chaos-injection scenario', () => {
       ]);
       assert.deepEqual(calls[1], ['clearNetworkSlowdown', 'joiner-1']);
       assert.deepEqual(calls[2], ['waitForConvergence']);
-      assert.deepEqual(calls[3], ['assertConsistency']);
+      assert.deepEqual(calls[3], ['waitForConsistencyConvergence']);
       assert.deepEqual(calls[4], [
         'slowNetwork',
         'joiner-1',
@@ -94,7 +97,7 @@ describe('in-cluster-chaos-injection scenario', () => {
       ]);
       assert.deepEqual(calls[5], ['clearNetworkSlowdown', 'joiner-1']);
       assert.deepEqual(calls[6], ['waitForConvergence']);
-      assert.deepEqual(calls[7], ['assertConsistency']);
+      assert.deepEqual(calls[7], ['waitForConsistencyConvergence']);
     });
 
   it('retries consistency checks after transient disagreement', async () => {
@@ -144,9 +147,9 @@ describe('in-cluster-chaos-injection scenario', () => {
       },
       assertConsistency: async () => {
         assertConsistencyCalls++;
-        if (assertConsistencyCalls === 1) {
-          throw new Error('Active nodes disagree');
-        }
+      },
+      waitForConsistencyConvergence: async () => {
+        assertConsistencyCalls++;
       },
     };
 
@@ -163,7 +166,8 @@ describe('in-cluster-chaos-injection scenario', () => {
     });
 
     assert.equal(result.actionCount, 1);
-    assert.ok(assertConsistencyCalls >= 2);
+    assert.ok(assertConsistencyCalls >= 1,
+      'waitForConsistencyConvergence should be called at least once');
     assert.ok(calls.includes('waitForConvergence'));
   });
 

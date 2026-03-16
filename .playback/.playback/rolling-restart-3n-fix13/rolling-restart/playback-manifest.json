@@ -1,0 +1,19 @@
+{
+  "scenarioName": "rolling-restart",
+  "startedAt": 1773472694916,
+  "endedAt": 1773472865355,
+  "durationMs": 170439,
+  "files": {
+    "events": ".playback/.playback/rolling-restart-3n-fix13/rolling-restart/events.ndjson",
+    "samples": ".playback/.playback/rolling-restart-3n-fix13/rolling-restart/samples.ndjson",
+    "snapshots": ".playback/.playback/rolling-restart-3n-fix13/rolling-restart/snapshots.ndjson",
+    "manifest": ".playback/.playback/rolling-restart-3n-fix13/rolling-restart/playback-manifest.json",
+    "viewer": ".playback/.playback/rolling-restart-3n-fix13/rolling-restart/playback-viewer.html"
+  },
+  "counts": {
+    "events": 161,
+    "samples": 85,
+    "snapshots": 91
+  },
+  "warnings": []
+}

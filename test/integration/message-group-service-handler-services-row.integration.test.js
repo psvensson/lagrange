@@ -63,6 +63,22 @@ function createMockCdc(cache) {
   };
 }
 
+function createMockExecutorOutcomeEmitter(cache) {
+  return {
+    emitOutcome(_outcomeType, operationId, workflowStep) {
+      cache.applySystemTableChange(
+        SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+        'UPDATE',
+        {
+          operation_id: operationId,
+          workflow_step: workflowStep,
+          updated_at: Date.now(),
+        },
+      );
+    },
+  };
+}
+
 test('MessageGroupServiceHandler services-row integration', async (t) => {
   await t.test('publishes and removes services rows through the cache-visible CDC path',
     async (t) => {
@@ -85,6 +101,10 @@ test('MessageGroupServiceHandler services-row integration', async (t) => {
         nodeId,
         systemTableCache: cache,
         cdcIntegrationService,
+        executorOutcomeEmitter: createMockExecutorOutcomeEmitter(cache),
+        messageRouter: {
+          isRegistered: () => true,
+        },
         createMessageGroupReplica: async (options) => {
           localServices.set(options.replicaId, {
             replicaId: options.replicaId,

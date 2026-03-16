@@ -1,0 +1,513 @@
+{
+  "timestamp": "2026-03-14T06:48:57.214Z",
+  "summary": {
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "duration": 195084
+  },
+  "optimizationSummary": {
+    "totalPriorityItems": 3,
+    "scenariosWithPriorities": 1,
+    "topComponents": [
+      {
+        "component": "replication_write_path",
+        "count": 1,
+        "highestPriority": "critical",
+        "highestScore": 95
+      },
+      {
+        "component": "error_retry_path",
+        "count": 1,
+        "highestPriority": "high",
+        "highestScore": 80
+      },
+      {
+        "component": "convergence_control_plane",
+        "count": 1,
+        "highestPriority": "medium",
+        "highestScore": 60
+      }
+    ],
+    "topPartitions": []
+  },
+  "standardSummary": {
+    "historicalReportsConsidered": 10,
+    "scenariosComparedToPrevious": 0,
+    "scenariosComparedToPostgresBaseline": 0,
+    "diagnosticsCoverageSummary": {
+      "scenariosWithCoverage": 0,
+      "scenariosWithoutCoverage": 1,
+      "totalSamples": 0,
+      "coverageRate": 0,
+      "scenarios": [
+        {
+          "scenario": "seven-node-read-write-load-distribution",
+          "status": "unavailable",
+          "reason": "not_reported",
+          "sampleCount": 0
+        }
+      ]
+    },
+    "writePathAttributionSummary": {
+      "scenariosWithDiagnostics": 0,
+      "topPhases": []
+    },
+    "scaleEfficiencySummary": {
+      "observationCount": 4,
+      "comparableGroupCount": 0,
+      "groups": [],
+      "topOpportunities": []
+    },
+    "scenarios": [
+      {
+        "scenario": "seven-node-read-write-load-distribution",
+        "similarityKey": "seven-node-read-write-load-distribution|default",
+        "current": {
+          "passed": true,
+          "clusterSize": 7,
+          "durationMs": 195084,
+          "performanceMetricsAvailable": true,
+          "validForPerformanceComparison": true,
+          "performanceInvalidReason": null,
+          "observedOpsPerSec": 20.754639513877486,
+          "observedP99LatencyMs": 2187,
+          "opsPerSec": 20.754639513877486,
+          "p99LatencyMs": 2187,
+          "opsPerSecPerNode": 2.964948501982498
+        },
+        "previousSimilarRun": null,
+        "deltaVsPrevious": null,
+        "postgresBaseline": null,
+        "parity": null,
+        "writePathTopPhases": []
+      }
+    ]
+  },
+  "scenarios": [
+    {
+      "scenario": "seven-node-read-write-load-distribution",
+      "passed": true,
+      "duration": 195084,
+      "clusterSize": 7,
+      "startedAt": "2026-03-14T06:45:42.037Z",
+      "convergenceTiming": {
+        "settledAfterMs": 5075,
+        "leaderChanges": 0,
+        "maxOverTargetMs": 0
+      },
+      "analysisSummary": null,
+      "error": null,
+      "stackTrace": null,
+      "logs": null,
+      "playback": {
+        "scenarioName": "seven-node-read-write-load-distribution",
+        "startedAt": 1773470742038,
+        "endedAt": 1773470937211,
+        "durationMs": 195173,
+        "files": {
+          "events": ".playback/.playback/seven-node-read-write-load-distribution-fix12/seven-node-read-write-load-distribution/events.ndjson",
+          "samples": ".playback/.playback/seven-node-read-write-load-distribution-fix12/seven-node-read-write-load-distribution/samples.ndjson",
+          "snapshots": ".playback/.playback/seven-node-read-write-load-distribution-fix12/seven-node-read-write-load-distribution/snapshots.ndjson",
+          "manifest": ".playback/.playback/seven-node-read-write-load-distribution-fix12/seven-node-read-write-load-distribution/playback-manifest.json",
+          "viewer": ".playback/.playback/seven-node-read-write-load-distribution-fix12/seven-node-read-write-load-distribution/playback-viewer.html"
+        },
+        "counts": {
+          "events": 114,
+          "samples": 70,
+          "snapshots": 95
+        },
+        "warnings": []
+      },
+      "trace": null,
+      "traceAssertion": null,
+      "memoryLeak": {
+        "enabled": false,
+        "analyzed": false,
+        "leakDetected": false,
+        "sampleCount": 0,
+        "nodeCount": 0,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "nodes": [],
+        "warnings": [],
+        "config": {
+          "enabled": false,
+          "failOnDetection": false,
+          "requireSamples": false,
+          "minSamplesPerNode": 8,
+          "warmupFraction": 0.2,
+          "minWarmupMs": 30000,
+          "minAnalysisWindowMs": 60000,
+          "maxPositiveSlopeBytesPerMin": 1048576,
+          "minGrowthBytes": 16777216,
+          "minPositiveDeltaRatio": 0.65,
+          "captureHeapArtifacts": false,
+          "heapSnapshotNearLimitCount": 2
+        }
+      },
+      "memoryLeakAssertion": null,
+      "performanceDiagnostics": null,
+      "details": {
+        "expectedNodeCount": 7,
+        "tableName": "benchmark_events",
+        "tablePreparation": {
+          "tableName": "benchmark_events",
+          "tableId": "tbl-29e7db93-d9c9-4d81-a91d-6a7db6796329",
+          "createTimeoutError": null,
+          "tablePolicies": {
+            "splitStorageThreshold": 16384,
+            "splitTrafficThreshold": 120,
+            "mergeStorageThreshold": 1,
+            "mergeTrafficThreshold": 1
+          }
+        },
+        "convergenceTiming": {
+          "settledAfterMs": 5075,
+          "leaderChanges": 0,
+          "maxOverTargetMs": 0
+        },
+        "distribution": {
+          "tableName": "benchmark_events",
+          "sampleCount": 78,
+          "baselinePartitionCount": 1,
+          "currentPartitionCount": 3,
+          "additionalPartitionCount": 2,
+          "additionalPartitionIds": [
+            "tbl-29e7db93-d9c9-4d81-a91d-6a7db6796329_p_46446d7d_right",
+            "tbl-29e7db93-d9c9-4d81-a91d-6a7db6796329_p_b0f946dc_left"
+          ],
+          "replicaNodeCount": 5,
+          "replicaNodeIds": [
+            "11601fe0-72d6-5853-8590-ec2881853e72",
+            "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+            "37ab9190-8bcc-5378-ac57-9d012e3bf838",
+            "7493b0ab-a054-5fad-a91b-5e331db29304",
+            "8be8d30f-4499-5eed-865c-71b4d529a67a"
+          ]
+        },
+        "finalDistribution": {
+          "partitionCount": 3,
+          "replicaNodeCount": 5,
+          "replicaNodeIds": [
+            "11601fe0-72d6-5853-8590-ec2881853e72",
+            "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+            "37ab9190-8bcc-5378-ac57-9d012e3bf838",
+            "7493b0ab-a054-5fad-a91b-5e331db29304",
+            "8be8d30f-4499-5eed-865c-71b4d529a67a"
+          ]
+        },
+        "loadMetrics": {
+          "total": 1011,
+          "success": 971,
+          "failed": 40,
+          "errors": 40,
+          "latency": {
+            "avg": 503.72811534500516,
+            "p50": 383,
+            "p95": 1593,
+            "p99": 2187
+          },
+          "opsPerSec": 20.754639513877486,
+          "attemptErrors": 40,
+          "queueDelay": {
+            "avg": 1607.0279505396325,
+            "p50": 1240.93310546875,
+            "p95": 4790.05859375,
+            "p99": 5609.483154296875,
+            "max": 5959.4814453125
+          },
+          "distinctErrors": [
+            "Admin API query timed out for node 11601fe0-72d6-5853-8590-ec2881853e72 on lane default after 4000ms",
+            "Admin API query failed for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 on lane default: Query timeout after 4000ms",
+            "Admin API query failed for node 11601fe0-72d6-5853-8590-ec2881853e72 on lane default: Query timeout after 4000ms",
+            "Admin API query timed out for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 on lane default after 4000ms",
+            "Admin API query failed for node 11601fe0-72d6-5853-8590-ec2881853e72 on lane default: Distributed operation failed due to participant failures",
+            "Admin API query failed for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 on lane default: Distributed operation failed due to participant failures"
+          ],
+          "targetOperations": 16800,
+          "dispatchedOperations": 1025,
+          "undispatchedOperations": 15775,
+          "undispatchedByReason": {
+            "capacity": 0,
+            "durationTimeout": 0,
+            "cancelled": 15775
+          },
+          "perNode": {
+            "7493b0ab-a054-5fad-a91b-5e331db29304": {
+              "dispatched": 196,
+              "success": 194,
+              "attemptErrors": 0,
+              "admissionSignals": 0,
+              "queuePressureSignals": 39821,
+              "rejected": 0,
+              "rejectedByReason": {
+                "queueFull": 0
+              }
+            },
+            "35a891b8-c1a0-5064-9c6e-2acfba61c2a7": {
+              "dispatched": 29,
+              "success": 7,
+              "attemptErrors": 20,
+              "admissionSignals": 0,
+              "queuePressureSignals": 39992,
+              "rejected": 0,
+              "rejectedByReason": {
+                "queueFull": 0
+              }
+            },
+            "11601fe0-72d6-5853-8590-ec2881853e72": {
+              "dispatched": 26,
+              "success": 4,
+              "attemptErrors": 20,
+              "admissionSignals": 0,
+              "queuePressureSignals": 39997,
+              "rejected": 0,
+              "rejectedByReason": {
+                "queueFull": 0
+              }
+            },
+            "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58": {
+              "dispatched": 190,
+              "success": 188,
+              "attemptErrors": 0,
+              "admissionSignals": 0,
+              "queuePressureSignals": 39818,
+              "rejected": 0,
+              "rejectedByReason": {
+                "queueFull": 0
+              }
+            },
+            "8be8d30f-4499-5eed-865c-71b4d529a67a": {
+              "dispatched": 194,
+              "success": 192,
+              "attemptErrors": 0,
+              "admissionSignals": 0,
+              "queuePressureSignals": 39825,
+              "rejected": 0,
+              "rejectedByReason": {
+                "queueFull": 0
+              }
+            },
+            "ff60df70-c157-50cb-bfdf-f617df0e5cb4": {
+              "dispatched": 194,
+              "success": 192,
+              "attemptErrors": 0,
+              "admissionSignals": 0,
+              "queuePressureSignals": 39803,
+              "rejected": 0,
+              "rejectedByReason": {
+                "queueFull": 0
+              }
+            },
+            "37ab9190-8bcc-5378-ac57-9d012e3bf838": {
+              "dispatched": 196,
+              "success": 194,
+              "attemptErrors": 0,
+              "admissionSignals": 0,
+              "queuePressureSignals": 39810,
+              "rejected": 0,
+              "rejectedByReason": {
+                "queueFull": 0
+              }
+            }
+          },
+          "rejectedOperations": 0,
+          "rejectedByReason": {
+            "queueFull": 0
+          },
+          "queuePressure": {
+            "samples": 35421,
+            "pendingQueueDepth": {
+              "avg": 286.7664662206036,
+              "p95": 697,
+              "p99": 792,
+              "max": 835
+            }
+          }
+        },
+        "successRate": 0.960435212660732
+      },
+      "invariantBreaches": {
+        "totalCount": 0,
+        "hardCount": 0,
+        "softCount": 0,
+        "failing": [],
+        "hardBreaches": [],
+        "softBreaches": []
+      },
+      "exampleResults": null,
+      "loadMetrics": {
+        "total": 1011,
+        "success": 971,
+        "failed": 40,
+        "errors": 40,
+        "latency": {
+          "avg": 503.72811534500516,
+          "p50": 383,
+          "p95": 1593,
+          "p99": 2187
+        },
+        "opsPerSec": 20.754639513877486,
+        "attemptErrors": 40,
+        "queueDelay": {
+          "avg": 1607.0279505396325,
+          "p50": 1240.93310546875,
+          "p95": 4790.05859375,
+          "p99": 5609.483154296875,
+          "max": 5959.4814453125
+        },
+        "distinctErrors": [
+          "Admin API query timed out for node 11601fe0-72d6-5853-8590-ec2881853e72 on lane default after 4000ms",
+          "Admin API query failed for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 on lane default: Query timeout after 4000ms",
+          "Admin API query failed for node 11601fe0-72d6-5853-8590-ec2881853e72 on lane default: Query timeout after 4000ms",
+          "Admin API query timed out for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 on lane default after 4000ms",
+          "Admin API query failed for node 11601fe0-72d6-5853-8590-ec2881853e72 on lane default: Distributed operation failed due to participant failures",
+          "Admin API query failed for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 on lane default: Distributed operation failed due to participant failures"
+        ],
+        "targetOperations": 16800,
+        "dispatchedOperations": 1025,
+        "undispatchedOperations": 15775,
+        "undispatchedByReason": {
+          "capacity": 0,
+          "durationTimeout": 0,
+          "cancelled": 15775
+        },
+        "perNode": {
+          "7493b0ab-a054-5fad-a91b-5e331db29304": {
+            "dispatched": 196,
+            "success": 194,
+            "attemptErrors": 0,
+            "admissionSignals": 0
+          },
+          "35a891b8-c1a0-5064-9c6e-2acfba61c2a7": {
+            "dispatched": 29,
+            "success": 7,
+            "attemptErrors": 20,
+            "admissionSignals": 0
+          },
+          "11601fe0-72d6-5853-8590-ec2881853e72": {
+            "dispatched": 26,
+            "success": 4,
+            "attemptErrors": 20,
+            "admissionSignals": 0
+          },
+          "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58": {
+            "dispatched": 190,
+            "success": 188,
+            "attemptErrors": 0,
+            "admissionSignals": 0
+          },
+          "8be8d30f-4499-5eed-865c-71b4d529a67a": {
+            "dispatched": 194,
+            "success": 192,
+            "attemptErrors": 0,
+            "admissionSignals": 0
+          },
+          "ff60df70-c157-50cb-bfdf-f617df0e5cb4": {
+            "dispatched": 194,
+            "success": 192,
+            "attemptErrors": 0,
+            "admissionSignals": 0
+          },
+          "37ab9190-8bcc-5378-ac57-9d012e3bf838": {
+            "dispatched": 196,
+            "success": 194,
+            "attemptErrors": 0,
+            "admissionSignals": 0
+          }
+        },
+        "rejectedOperations": 0,
+        "rejectedByReason": {
+          "queueFull": 0
+        },
+        "queuePressure": {
+          "samples": 35421,
+          "pendingQueueDepth": {
+            "avg": 286.7664662206036,
+            "p95": 697,
+            "p99": 792,
+            "max": 835
+          }
+        }
+      },
+      "performanceMeasurement": {
+        "available": true,
+        "validForComparison": true,
+        "invalidReason": null,
+        "observedOpsPerSec": 20.754639513877486,
+        "observedP99LatencyMs": 2187
+      },
+      "partitionHotspots": null,
+      "optimizationPriorities": [
+        {
+          "component": "replication_write_path",
+          "signal": "dispatch_queue_pressure",
+          "priority": "critical",
+          "score": 95,
+          "reason": "Dispatch backlog and queue delay indicate scheduler pressure and insufficient load completion capacity.",
+          "evidence": {
+            "targetOperations": 16800,
+            "undispatchedOperations": 15775,
+            "undispatchedRatio": 0.9389880952380952,
+            "queueDelayP95Ms": 4790.05859375,
+            "queueDelayP99Ms": 5609.483154296875
+          }
+        },
+        {
+          "component": "error_retry_path",
+          "signal": "load_failure_rate",
+          "priority": "high",
+          "score": 80,
+          "reason": "Observed request failures suggest expensive retries or transient routing instability.",
+          "evidence": {
+            "total": 1011,
+            "failed": 40,
+            "errors": 40,
+            "failureRate": 0.0791295746785361
+          }
+        },
+        {
+          "component": "convergence_control_plane",
+          "signal": "convergence_settle_time",
+          "priority": "medium",
+          "score": 60,
+          "reason": "Convergence delay suggests extra work in replica movement, promotion, or membership updates.",
+          "evidence": {
+            "settledAfterMs": 5075,
+            "leaderChanges": 0
+          }
+        }
+      ]
+    }
+  ],
+  "benchmarkRegressionGate": {
+    "enabled": false,
+    "status": "skipped",
+    "reason": "disabled",
+    "settings": {
+      "enabled": false,
+      "maxThroughputRegressionRatio": 0.1,
+      "minimumThroughputRatioSutToBaseline": 0.1,
+      "baselineProvider": "liferaft",
+      "failIfBaselineMissing": false,
+      "approvedMitigationId": null,
+      "parityMismatchPolicy": "warn"
+    },
+    "currentProvider": "liferaft",
+    "baselineProvider": "liferaft",
+    "comparedScenarioCount": 0,
+    "failedScenarioCount": 0,
+    "mitigatedScenarioCount": 0,
+    "missingBaselineScenarios": [],
+    "comparisons": [],
+    "parityMismatchCount": 0,
+    "lowThroughputRatioCount": 0,
+    "warnings": []
+  },
+  "metadata": {
+    "raftProvider": "liferaft",
+    "configPath": "test/distributed/config/local-benchmark-7node.json",
+    "scenarioFilter": "seven-node-read-write-load-distribution"
+  }
+}

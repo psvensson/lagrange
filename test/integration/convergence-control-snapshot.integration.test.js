@@ -150,11 +150,10 @@ test('Convergence uses local control snapshot when distributed admin SQL reads f
         return;
       }
 
-      const originalExecuteRequest = sqlQueryEngine.executeRequest.bind(
-        sqlQueryEngine,
-      );
-      sqlQueryEngine.executeRequest = async (request) => {
-        const statement = String(request?.statement || '').toLowerCase();
+      const originalExecuteLocalQuery =
+        adminApi.executeLocalQueryEnvelope.bind(adminApi);
+      adminApi.executeLocalQueryEnvelope = async (payload, ctx) => {
+        const statement = String(payload?.sql || '').toLowerCase();
         if (statement.includes('from services') ||
           statement.includes('from partitions') ||
           statement.includes('from replica_operations')) {
@@ -164,10 +163,11 @@ test('Convergence uses local control snapshot when distributed admin SQL reads f
             error: PARTICIPANT_FAILURE_ERROR,
           };
         }
-        return originalExecuteRequest(request);
+        return originalExecuteLocalQuery(payload, ctx);
       };
       restoreExecuteRequest = () => {
-        sqlQueryEngine.executeRequest = originalExecuteRequest;
+        adminApi.executeLocalQueryEnvelope =
+          originalExecuteLocalQuery;
       };
 
       let servicesQueryError = null;

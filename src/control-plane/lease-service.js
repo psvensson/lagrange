@@ -62,6 +62,7 @@ class LeaseService extends EventEmitter {
       });
     this.messageGroupServices =
       options.messageGroupServices ?? createDefaultMessageGroupServices();
+    this.messageRouter = options.messageRouter || null;
     this.now = typeof options.now === TYPEOF.FUNCTION ?
       options.now :
       LEASE_NOW;
@@ -191,6 +192,14 @@ class LeaseService extends EventEmitter {
 
     const expiredIds = [];
     for (const node of expired) {
+      if (this.isNodeTransportConnected(node.node_id)) {
+        this.logger.info(
+          LEASE_LOG_MSG.SWEEP_SKIPPED_TRANSPORT_CONNECTED,
+          {nodeId: node.node_id},
+        );
+        continue;
+      }
+
       const updateResult =
         await this.nodeLeaseOwner.disconnectNodeDueToLeaseExpiry(
           node,
@@ -248,6 +257,27 @@ class LeaseService extends EventEmitter {
    */
   getState() {
     return this.state;
+  }
+
+  /**
+   * §1.4.12: Check whether the message router reports a node as
+   * transport-connected. When the router reports connected or ready,
+   * the node is reachable and the expired lease is likely caused by
+   * CDC propagation delay, not actual node failure.
+   * @param {string} nodeId - Node ID to check.
+   * @return {boolean} True when the router reports the node connected.
+   */
+  isNodeTransportConnected(nodeId) {
+    if (!this.messageRouter ||
+        typeof this.messageRouter.getConnectionState !==
+          TYPEOF.FUNCTION) {
+      return false;
+    }
+    const routerState = String(
+      this.messageRouter.getConnectionState(nodeId) || '',
+    ).toLowerCase();
+    return routerState === STATE.CONNECTED ||
+      routerState === STATE.READY;
   }
 }
 

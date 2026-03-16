@@ -838,6 +838,47 @@ t.test('MessageRouter unit tests', async (t) => {
     await router.shutdown();
   });
 
+  t.test('should normalize bare host:port to ws:// at ' +
+    'identification storage time ' +
+    '(uses normalizeToWebSocketAddress)', async (t) => {
+    const router = new MessageRouter({nodeId: 'local-node'});
+    await router.initialize({startServer: false});
+    t.teardown(async () => {
+      await router.shutdown().catch(() => {});
+    });
+
+    const connectionId = 'conn-bare-id';
+    router.nodeConnections.set(connectionId, {
+      connectionId,
+      nodeId: null,
+      nodeAddress: null,
+      ws: {},
+      state: ConnectionState.CONNECTED,
+      reconnectAttempts: 0,
+      isIncoming: true,
+      isSelfConnection: false,
+      createdAt: Date.now(),
+      configuredAddress: null,
+      observedAddress: null,
+    });
+
+    router.handleIdentification(connectionId, {}, {
+      type: RouterMessageType.IDENTIFY,
+      nodeId: 'remote-bare',
+      nodeAddress: 'ddb-test-node-3:8080',
+    });
+
+    const conn = router.nodeConnections.get('remote-bare');
+    t.ok(conn, 'connection should be re-keyed by nodeId');
+    t.equal(conn.nodeAddress, 'ws://ddb-test-node-3:8082',
+      'nodeAddress should be normalized to ws:// with ' +
+      'WS port offset');
+    t.equal(conn.configuredAddress,
+      'ws://ddb-test-node-3:8082',
+      'configuredAddress should be normalized to ws:// ' +
+      'with WS port offset');
+  });
+
   t.test('should preserve an existing preferred incoming connection on duplicate identification',
     async (t) => {
       const router = new MessageRouter({nodeId: 'z-local-node'});
@@ -2070,4 +2111,81 @@ t.test('MessageRouter unit tests', async (t) => {
         'after ENOTFOUND, later deliveries should not start from the stale reconnect address again',
       );
     });
+
+  t.test('should normalize bare host:port addresses to ws:// in ' +
+    'reconnect candidates (uses normalizeToWebSocketAddress)',
+  async (t) => {
+    const router = new MessageRouter({
+      nodeId: 'node-a',
+    });
+    await router.initialize({startServer: false});
+    t.teardown(async () => {
+      await router.shutdown().catch(() => {});
+    });
+
+    router.setServiceNodeResolver((address) => {
+      const match = address.match(/^([^/]+)\//);
+      return match ? match[1] : null;
+    });
+    router.setNodeAddressResolver(() => null);
+
+    // Simulate a connection whose configuredAddress is a bare REST
+    // address (no ws:// prefix) — this happens when the IDENTIFY
+    // message carries the node's REST API address.
+    router.nodeConnections.set('node-b', {
+      nodeId: 'node-b',
+      nodeAddress: 'ddb-test-node-5:8080',
+      connectionId: 'node-b-bare-addr',
+      ws: null,
+      state: ConnectionState.DISCONNECTED,
+      isIncoming: false,
+      reconnectAttempts: 0,
+      reconnectTimeout: null,
+      pingInterval: null,
+      address: 'ddb-test-node-5:8080',
+      configuredAddress: 'ddb-test-node-5:8080',
+      observedAddress: null,
+      isSelfConnection: false,
+    });
+
+    const connectCalls = [];
+    router.connectToNode = async (nodeId, address) => {
+      connectCalls.push({nodeId, address});
+      router.nodeConnections.set(nodeId, {
+        nodeId,
+        nodeAddress: address,
+        connectionId: 'node-b-recovered',
+        ws: {readyState: 1, send: () => {}},
+        state: ConnectionState.CONNECTED,
+        isIncoming: false,
+        reconnectAttempts: 0,
+        reconnectTimeout: null,
+        pingInterval: null,
+        address,
+        configuredAddress: address,
+        observedAddress: null,
+        isSelfConnection: false,
+      });
+    };
+    router.sendMessage = async (
+      _connection, _targetAddress, messageId,
+      _payload, targetNodeId, correlationId,
+    ) => ({
+      messageId, correlationId,
+      acknowledged: true, targetNodeId,
+      recovered: true,
+    });
+
+    const result = await router.deliver(
+      'node-b/service/bare-address-test',
+      {type: 'TEST'},
+    );
+
+    t.equal(result.acknowledged, true,
+      'delivery should succeed after normalizing the bare address');
+    t.equal(connectCalls.length, 1,
+      'should attempt exactly one reconnect');
+    t.equal(connectCalls[0].address, 'ws://ddb-test-node-5:8082',
+      'bare host:port should be normalized to ws:// with WS port offset');
+  });
 });

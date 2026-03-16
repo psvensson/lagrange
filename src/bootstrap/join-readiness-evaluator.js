@@ -461,6 +461,10 @@ class JoinReadinessEvaluator {
       inFlightReplicaOperations: topology.inFlightReplicaOperations,
       inFlightReplicaOperationDetails:
         topology.inFlightReplicaOperationDetails,
+      excludedSelfTargetedCount:
+        topology.excludedSelfTargetedCount,
+      excludedWarmingTargetCount:
+        topology.excludedWarmingTargetCount,
       missingNodeEndpointNodeIds:
         topology.missingNodeEndpointNodeIds,
       missingPostgresWireNodeIds:
@@ -582,6 +586,8 @@ class JoinReadinessEvaluator {
    *   missingLeaders: Object|null,
    *   inFlightReplicaOperations: number,
    *   inFlightReplicaOperationDetails: Array<Object>,
+   *   excludedSelfTargetedCount: number,
+   *   excludedWarmingTargetCount: number,
    *   missingNodeEndpointNodeIds: string[],
    *   missingPostgresWireNodeIds: string[],
    * }}
@@ -593,6 +599,8 @@ class JoinReadinessEvaluator {
         missingLeaders: null,
         inFlightReplicaOperations: NUM.ZERO,
         inFlightReplicaOperationDetails: [],
+        excludedSelfTargetedCount: NUM.ZERO,
+        excludedWarmingTargetCount: NUM.ZERO,
         missingNodeEndpointNodeIds: [],
         missingPostgresWireNodeIds: [],
       };
@@ -613,12 +621,18 @@ class JoinReadinessEvaluator {
       missingCount = Number.POSITIVE_INFINITY;
     }
 
-    const inFlightReplicaOperationDetails =
+    const operationDetails =
       this.collectCanonicalInFlightReplicaOperationDetails(
         systemTableCache,
       );
+    const inFlightReplicaOperationDetails =
+      operationDetails.inFlightOperations;
     const inFlightReplicaOperations =
       inFlightReplicaOperationDetails.length;
+    const excludedSelfTargetedCount =
+      operationDetails.excludedSelfTargetedCount;
+    const excludedWarmingTargetCount =
+      operationDetails.excludedWarmingTargetCount;
     const endpointVisibility =
       this.evaluateCanonicalJoinEndpointVisibility(systemTableCache);
 
@@ -629,6 +643,8 @@ class JoinReadinessEvaluator {
       missingLeaders,
       inFlightReplicaOperations,
       inFlightReplicaOperationDetails,
+      excludedSelfTargetedCount,
+      excludedWarmingTargetCount,
       missingNodeEndpointNodeIds:
         endpointVisibility.missingNodeEndpointNodeIds,
       missingPostgresWireNodeIds:
@@ -924,21 +940,47 @@ class JoinReadinessEvaluator {
 
   /**
    * Collect non-terminal replica operations from local cache.
+   * Self-targeted operations (where targetNodeId matches this node)
+   * and warming-node-targeted operations (where the target node is
+   * NOT in ACTIVE state) are excluded to prevent join-readiness
+   * deadlock.
    * @param {Object|null} systemTableCache
-   * @return {Array<Object>}
+   * @return {{
+   *   inFlightOperations: Array<Object>,
+   *   excludedSelfTargetedCount: number,
+   *   excludedWarmingTargetCount: number,
+   * }}
    */
   collectCanonicalInFlightReplicaOperationDetails(systemTableCache) {
     if (!systemTableCache ||
         typeof systemTableCache.getAll !== TYPEOF.FUNCTION) {
-      return [];
+      return {
+        inFlightOperations: [],
+        excludedSelfTargetedCount: NUM.ZERO,
+        excludedWarmingTargetCount: NUM.ZERO,
+      };
     }
+
+    const activeNodeIds = new Set(
+      this.getCanonicalJoinActiveNodeIds(systemTableCache),
+    );
 
     const rows =
       systemTableCache.getAll(TABLES.REPLICA_OPERATIONS) || [];
     const inFlightOperations = [];
+    let excludedSelfTargetedCount = NUM.ZERO;
+    let excludedWarmingTargetCount = NUM.ZERO;
     for (const row of rows) {
       const normalizedOperation = normalizeReplicaOperationRecord(row);
       if (isReplicaOperationInFlight(normalizedOperation)) {
+        if (normalizedOperation.targetNodeId === this.nodeId) {
+          excludedSelfTargetedCount++;
+          continue;
+        }
+        if (!activeNodeIds.has(normalizedOperation.targetNodeId)) {
+          excludedWarmingTargetCount++;
+          continue;
+        }
         inFlightOperations.push({
           operationId: normalizedOperation.operationId,
           type: normalizedOperation.type,
@@ -955,7 +997,11 @@ class JoinReadinessEvaluator {
         });
       }
     }
-    return inFlightOperations;
+    return {
+      inFlightOperations,
+      excludedSelfTargetedCount,
+      excludedWarmingTargetCount,
+    };
   }
 
   /**
@@ -1092,6 +1138,20 @@ class JoinReadinessEvaluator {
         Array.isArray(source.inFlightReplicaOperationDetails) ?
           source.inFlightReplicaOperationDetails :
           [],
+      excludedSelfTargetedCount:
+        Number.isFinite(source.excludedSelfTargetedCount) ?
+          Math.max(
+            NUM.ZERO,
+            Math.floor(source.excludedSelfTargetedCount),
+          ) :
+          NUM.ZERO,
+      excludedWarmingTargetCount:
+        Number.isFinite(source.excludedWarmingTargetCount) ?
+          Math.max(
+            NUM.ZERO,
+            Math.floor(source.excludedWarmingTargetCount),
+          ) :
+          NUM.ZERO,
       missingNodeEndpointNodeIds:
         Array.isArray(source.missingNodeEndpointNodeIds) ?
           source.missingNodeEndpointNodeIds.filter((value) =>
@@ -1213,6 +1273,10 @@ class JoinReadinessEvaluator {
           evaluation.inFlightReplicaOperations,
         inFlightReplicaOperationDetails:
           evaluation.inFlightReplicaOperationDetails,
+        excludedSelfTargetedCount:
+          evaluation.excludedSelfTargetedCount,
+        excludedWarmingTargetCount:
+          evaluation.excludedWarmingTargetCount,
         missingNodeEndpointNodeIds:
           evaluation.missingNodeEndpointNodeIds,
         missingPostgresWireNodeIds:

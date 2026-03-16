@@ -6,7 +6,7 @@
  */
 
 import assert from 'node:assert/strict';
-import {CONVERGENCE_DEFAULTS} from '../harness/constants.js';
+import {CONVERGENCE_DEFAULTS, TIMEOUTS} from '../harness/constants.js';
 import {
   resolveSevenNodeReadWriteLoadDistributionScenarioConfig,
 } from '../harness/scenario-config.js';
@@ -135,7 +135,9 @@ async function run(cluster, options = {}) {
     minDistinctReplicaNodes,
   );
 
-  await cluster.assertConsistency();
+  await cluster.waitForConsistencyConvergence({
+    timeoutMs: TIMEOUTS.CONSISTENCY_CONVERGENCE_POST_SPLIT,
+  });
 
   return {
     expectedNodeCount,

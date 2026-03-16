@@ -1,0 +1,560 @@
+{
+  "timestamp": "2026-03-14T06:53:43.919Z",
+  "summary": {
+    "total": 1,
+    "passed": 0,
+    "failed": 1,
+    "duration": 266381
+  },
+  "optimizationSummary": {
+    "totalPriorityItems": 0,
+    "scenariosWithPriorities": 0,
+    "topComponents": [],
+    "topPartitions": []
+  },
+  "standardSummary": {
+    "historicalReportsConsidered": 11,
+    "scenariosComparedToPrevious": 0,
+    "scenariosComparedToPostgresBaseline": 0,
+    "diagnosticsCoverageSummary": {
+      "scenariosWithCoverage": 0,
+      "scenariosWithoutCoverage": 1,
+      "totalSamples": 0,
+      "coverageRate": 0,
+      "scenarios": [
+        {
+          "scenario": "seven-node-table-partition-distribution",
+          "status": "unavailable",
+          "reason": "not_reported",
+          "sampleCount": 0
+        }
+      ]
+    },
+    "writePathAttributionSummary": {
+      "scenariosWithDiagnostics": 0,
+      "topPhases": []
+    },
+    "scaleEfficiencySummary": {
+      "observationCount": 4,
+      "comparableGroupCount": 0,
+      "groups": [],
+      "topOpportunities": []
+    },
+    "scenarios": [
+      {
+        "scenario": "seven-node-table-partition-distribution",
+        "similarityKey": "seven-node-table-partition-distribution|default",
+        "current": {
+          "passed": false,
+          "clusterSize": 7,
+          "durationMs": 266381,
+          "performanceMetricsAvailable": false,
+          "validForPerformanceComparison": false,
+          "performanceInvalidReason": "metrics_unavailable",
+          "observedOpsPerSec": 0,
+          "observedP99LatencyMs": 0,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "previousSimilarRun": null,
+        "deltaVsPrevious": null,
+        "postgresBaseline": null,
+        "parity": null,
+        "writePathTopPhases": []
+      }
+    ]
+  },
+  "scenarios": [
+    {
+      "scenario": "seven-node-table-partition-distribution",
+      "passed": false,
+      "duration": 266381,
+      "clusterSize": 7,
+      "startedAt": "2026-03-14T06:49:02.508Z",
+      "convergenceTiming": null,
+      "analysisSummary": null,
+      "error": "Leader identities disagree between 7493b0ab-a054-5fad-a91b-5e331db29304 and 11601fe0-72d6-5853-8590-ec2881853e72. 7493b0ab-a054-5fad-a91b-5e331db29304: {\"code-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"config-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"contexts-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"debug_breakpoints-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"debug_sessions-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"debug_snapshots-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"indices-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"inter_group_latencies-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"latency_groups-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"live_queries-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"logs-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"message_groups-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"module_dependency_locks-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"module_manifests-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"node_endpoints-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"nodes-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"package_registry_mappings-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"package_registry_overrides-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"partitions-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"replica_operations-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"schema_migration_partitions-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"schema_migrations-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"service_definitions-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"service_endpoints-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"service_timers-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"services-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"sql_transaction_participants-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"sql_transactions-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"sql_write_operations-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"storage_reservations-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"tables-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"tbl-738405c8-5bd3-4cfb-a861-0185970a4595-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"tbl-738405c8-5bd3-4cfb-a861-0185970a4595_p_0107ff5b_left\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"wasm_operations-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\"}. 11601fe0-72d6-5853-8590-ec2881853e72: {\"code-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"config-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"contexts-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"debug_breakpoints-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"debug_sessions-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"debug_snapshots-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"indices-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"inter_group_latencies-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"latency_groups-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"live_queries-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"logs-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"message_groups-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"module_dependency_locks-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"module_manifests-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"node_endpoints-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"nodes-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"package_registry_mappings-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"package_registry_overrides-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"partitions-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"replica_operations-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"schema_migration_partitions-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"schema_migrations-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"service_definitions-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"service_endpoints-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"service_timers-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"services-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"sql_transaction_participants-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"sql_transactions-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"sql_write_operations-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"storage_reservations-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"tables-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"tbl-738405c8-5bd3-4cfb-a861-0185970a4595-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"tbl-738405c8-5bd3-4cfb-a861-0185970a4595_p_0107ff5b_left\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"tbl-738405c8-5bd3-4cfb-a861-0185970a4595_p_a25df84d_right\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"wasm_operations-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\"}",
+      "stackTrace": "Error: Leader identities disagree between 7493b0ab-a054-5fad-a91b-5e331db29304 and 11601fe0-72d6-5853-8590-ec2881853e72. 7493b0ab-a054-5fad-a91b-5e331db29304: {\"code-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"config-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"contexts-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"debug_breakpoints-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"debug_sessions-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"debug_snapshots-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"indices-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"inter_group_latencies-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"latency_groups-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"live_queries-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"logs-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"message_groups-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"module_dependency_locks-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"module_manifests-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"node_endpoints-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"nodes-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"package_registry_mappings-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"package_registry_overrides-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"partitions-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"replica_operations-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"schema_migration_partitions-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"schema_migrations-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"service_definitions-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"service_endpoints-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"service_timers-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"services-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"sql_transaction_participants-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"sql_transactions-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"sql_write_operations-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"storage_reservations-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"tables-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"tbl-738405c8-5bd3-4cfb-a861-0185970a4595-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"tbl-738405c8-5bd3-4cfb-a861-0185970a4595_p_0107ff5b_left\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"wasm_operations-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\"}. 11601fe0-72d6-5853-8590-ec2881853e72: {\"code-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"config-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"contexts-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"debug_breakpoints-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"debug_sessions-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"debug_snapshots-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"indices-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"inter_group_latencies-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"latency_groups-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"live_queries-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"logs-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"message_groups-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"module_dependency_locks-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"module_manifests-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"node_endpoints-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"nodes-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"package_registry_mappings-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"package_registry_overrides-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"partitions-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"replica_operations-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"schema_migration_partitions-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"schema_migrations-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"service_definitions-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"service_endpoints-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"service_timers-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"services-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"sql_transaction_participants-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"sql_transactions-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"sql_write_operations-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"storage_reservations-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"tables-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"tbl-738405c8-5bd3-4cfb-a861-0185970a4595-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"tbl-738405c8-5bd3-4cfb-a861-0185970a4595_p_0107ff5b_left\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"tbl-738405c8-5bd3-4cfb-a861-0185970a4595_p_a25df84d_right\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"wasm_operations-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\"}\n    at assertConsistency (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/harness/assertions.js:1255:13)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async waitForConsistencyConvergence (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/harness/assertions.js:1297:7)\n    at async Module.run (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/scenarios/seven-node-table-partition-distribution.js:121:3)\n    at async runScenarios (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:1356:9)\n    at async main (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:2069:33)",
+      "logs": null,
+      "playback": {
+        "scenarioName": "seven-node-table-partition-distribution",
+        "startedAt": 1773470942510,
+        "endedAt": 1773471223914,
+        "durationMs": 281404,
+        "files": {
+          "events": ".playback/.playback/seven-node-table-partition-distribution-fix12/seven-node-table-partition-distribution/events.ndjson",
+          "samples": ".playback/.playback/seven-node-table-partition-distribution-fix12/seven-node-table-partition-distribution/samples.ndjson",
+          "snapshots": ".playback/.playback/seven-node-table-partition-distribution-fix12/seven-node-table-partition-distribution/snapshots.ndjson",
+          "manifest": ".playback/.playback/seven-node-table-partition-distribution-fix12/seven-node-table-partition-distribution/playback-manifest.json",
+          "viewer": ".playback/.playback/seven-node-table-partition-distribution-fix12/seven-node-table-partition-distribution/playback-viewer.html"
+        },
+        "counts": {
+          "events": 129,
+          "samples": 108,
+          "snapshots": 84
+        },
+        "warnings": [
+          {
+            "code": "topology-capture-failed",
+            "message": "Failed to capture topology snapshot: Admin API query timed out for node 7493b0ab-a054-5fad-a91b-5e331db29304 on lane snapshot after 15000ms",
+            "timestamp": 1773471166602,
+            "details": {
+              "anchorNodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+              "error": "Admin API query timed out for node 7493b0ab-a054-5fad-a91b-5e331db29304 on lane snapshot after 15000ms",
+              "reachability": [
+                {
+                  "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                  "timestamp": 1773471150594,
+                  "reachable": true,
+                  "adminReady": true,
+                  "reachableBy": "admin_ws",
+                  "bootstrapHealth": {
+                    "attempted": true,
+                    "ok": false,
+                    "statusCode": -1,
+                    "error": "http_status_-1",
+                    "url": "http://172.18.0.2:8080/health",
+                    "endpoint": null,
+                    "query": null
+                  },
+                  "adminHealth": {
+                    "attempted": true,
+                    "ok": false,
+                    "statusCode": -1,
+                    "error": "http_status_-1",
+                    "url": "http://172.18.0.2:8081/health",
+                    "endpoint": null,
+                    "query": null
+                  },
+                  "adminWs": {
+                    "attempted": true,
+                    "ok": true,
+                    "statusCode": null,
+                    "error": null,
+                    "url": null,
+                    "endpoint": "ws://172.18.0.2:8081/api/admin/stream",
+                    "query": null
+                  },
+                  "sqlProbe": {
+                    "attempted": false,
+                    "ok": false,
+                    "statusCode": null,
+                    "error": null,
+                    "url": null,
+                    "endpoint": null,
+                    "query": "SELECT node_id FROM nodes LIMIT 1"
+                  },
+                  "lastError": null
+                },
+                {
+                  "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                  "timestamp": 1773471151596,
+                  "reachable": true,
+                  "adminReady": true,
+                  "reachableBy": "admin_health",
+                  "bootstrapHealth": {
+                    "attempted": true,
+                    "ok": true,
+                    "statusCode": 200,
+                    "error": null,
+                    "url": "http://172.18.0.3:8080/health",
+                    "endpoint": null,
+                    "query": null
+                  },
+                  "adminHealth": {
+                    "attempted": true,
+                    "ok": true,
+                    "statusCode": 200,
+                    "error": null,
+                    "url": "http://172.18.0.3:8081/health",
+                    "endpoint": null,
+                    "query": null
+                  },
+                  "adminWs": {
+                    "attempted": false,
+                    "ok": false,
+                    "statusCode": null,
+                    "error": null,
+                    "url": null,
+                    "endpoint": "ws://172.18.0.3:8081/api/admin/stream",
+                    "query": null
+                  },
+                  "sqlProbe": {
+                    "attempted": false,
+                    "ok": false,
+                    "statusCode": null,
+                    "error": null,
+                    "url": null,
+                    "endpoint": null,
+                    "query": "SELECT node_id FROM nodes LIMIT 1"
+                  },
+                  "lastError": null
+                },
+                {
+                  "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                  "timestamp": 1773471151597,
+                  "reachable": true,
+                  "adminReady": true,
+                  "reachableBy": "admin_health",
+                  "bootstrapHealth": {
+                    "attempted": true,
+                    "ok": true,
+                    "statusCode": 200,
+                    "error": null,
+                    "url": "http://172.18.0.4:8080/health",
+                    "endpoint": null,
+                    "query": null
+                  },
+                  "adminHealth": {
+                    "attempted": true,
+                    "ok": true,
+                    "statusCode": 200,
+                    "error": null,
+                    "url": "http://172.18.0.4:8081/health",
+                    "endpoint": null,
+                    "query": null
+                  },
+                  "adminWs": {
+                    "attempted": false,
+                    "ok": false,
+                    "statusCode": null,
+                    "error": null,
+                    "url": null,
+                    "endpoint": "ws://172.18.0.4:8081/api/admin/stream",
+                    "query": null
+                  },
+                  "sqlProbe": {
+                    "attempted": false,
+                    "ok": false,
+                    "statusCode": null,
+                    "error": null,
+                    "url": null,
+                    "endpoint": null,
+                    "query": "SELECT node_id FROM nodes LIMIT 1"
+                  },
+                  "lastError": null
+                },
+                {
+                  "nodeId": "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58",
+                  "timestamp": 1773471151598,
+                  "reachable": true,
+                  "adminReady": true,
+                  "reachableBy": "admin_health",
+                  "bootstrapHealth": {
+                    "attempted": true,
+                    "ok": true,
+                    "statusCode": 200,
+                    "error": null,
+                    "url": "http://172.18.0.5:8080/health",
+                    "endpoint": null,
+                    "query": null
+                  },
+                  "adminHealth": {
+                    "attempted": true,
+                    "ok": true,
+                    "statusCode": 200,
+                    "error": null,
+                    "url": "http://172.18.0.5:8081/health",
+                    "endpoint": null,
+                    "query": null
+                  },
+                  "adminWs": {
+                    "attempted": false,
+                    "ok": false,
+                    "statusCode": null,
+                    "error": null,
+                    "url": null,
+                    "endpoint": "ws://172.18.0.5:8081/api/admin/stream",
+                    "query": null
+                  },
+                  "sqlProbe": {
+                    "attempted": false,
+                    "ok": false,
+                    "statusCode": null,
+                    "error": null,
+                    "url": null,
+                    "endpoint": null,
+                    "query": "SELECT node_id FROM nodes LIMIT 1"
+                  },
+                  "lastError": null
+                },
+                {
+                  "nodeId": "8be8d30f-4499-5eed-865c-71b4d529a67a",
+                  "timestamp": 1773471151599,
+                  "reachable": true,
+                  "adminReady": true,
+                  "reachableBy": "admin_health",
+                  "bootstrapHealth": {
+                    "attempted": true,
+                    "ok": true,
+                    "statusCode": 200,
+                    "error": null,
+                    "url": "http://172.18.0.6:8080/health",
+                    "endpoint": null,
+                    "query": null
+                  },
+                  "adminHealth": {
+                    "attempted": true,
+                    "ok": true,
+                    "statusCode": 200,
+                    "error": null,
+                    "url": "http://172.18.0.6:8081/health",
+                    "endpoint": null,
+                    "query": null
+                  },
+                  "adminWs": {
+                    "attempted": false,
+                    "ok": false,
+                    "statusCode": null,
+                    "error": null,
+                    "url": null,
+                    "endpoint": "ws://172.18.0.6:8081/api/admin/stream",
+                    "query": null
+                  },
+                  "sqlProbe": {
+                    "attempted": false,
+                    "ok": false,
+                    "statusCode": null,
+                    "error": null,
+                    "url": null,
+                    "endpoint": null,
+                    "query": "SELECT node_id FROM nodes LIMIT 1"
+                  },
+                  "lastError": null
+                },
+                {
+                  "nodeId": "ff60df70-c157-50cb-bfdf-f617df0e5cb4",
+                  "timestamp": 1773471151599,
+                  "reachable": true,
+                  "adminReady": true,
+                  "reachableBy": "admin_health",
+                  "bootstrapHealth": {
+                    "attempted": true,
+                    "ok": true,
+                    "statusCode": 200,
+                    "error": null,
+                    "url": "http://172.18.0.7:8080/health",
+                    "endpoint": null,
+                    "query": null
+                  },
+                  "adminHealth": {
+                    "attempted": true,
+                    "ok": true,
+                    "statusCode": 200,
+                    "error": null,
+                    "url": "http://172.18.0.7:8081/health",
+                    "endpoint": null,
+                    "query": null
+                  },
+                  "adminWs": {
+                    "attempted": false,
+                    "ok": false,
+                    "statusCode": null,
+                    "error": null,
+                    "url": null,
+                    "endpoint": "ws://172.18.0.7:8081/api/admin/stream",
+                    "query": null
+                  },
+                  "sqlProbe": {
+                    "attempted": false,
+                    "ok": false,
+                    "statusCode": null,
+                    "error": null,
+                    "url": null,
+                    "endpoint": null,
+                    "query": "SELECT node_id FROM nodes LIMIT 1"
+                  },
+                  "lastError": null
+                },
+                {
+                  "nodeId": "37ab9190-8bcc-5378-ac57-9d012e3bf838",
+                  "timestamp": 1773471151600,
+                  "reachable": true,
+                  "adminReady": true,
+                  "reachableBy": "admin_health",
+                  "bootstrapHealth": {
+                    "attempted": true,
+                    "ok": true,
+                    "statusCode": 200,
+                    "error": null,
+                    "url": "http://172.18.0.8:8080/health",
+                    "endpoint": null,
+                    "query": null
+                  },
+                  "adminHealth": {
+                    "attempted": true,
+                    "ok": true,
+                    "statusCode": 200,
+                    "error": null,
+                    "url": "http://172.18.0.8:8081/health",
+                    "endpoint": null,
+                    "query": null
+                  },
+                  "adminWs": {
+                    "attempted": false,
+                    "ok": false,
+                    "statusCode": null,
+                    "error": null,
+                    "url": null,
+                    "endpoint": "ws://172.18.0.8:8081/api/admin/stream",
+                    "query": null
+                  },
+                  "sqlProbe": {
+                    "attempted": false,
+                    "ok": false,
+                    "statusCode": null,
+                    "error": null,
+                    "url": null,
+                    "endpoint": null,
+                    "query": "SELECT node_id FROM nodes LIMIT 1"
+                  },
+                  "lastError": null
+                }
+              ]
+            }
+          },
+          {
+            "code": "service-query-failed-7493b0ab-a054-5fad-a91b-5e331db29304",
+            "message": "Failed to query services on node 7493b0ab-a054-5fad-a91b-5e331db29304: Admin API query timed out for node 7493b0ab-a054-5fad-a91b-5e331db29304 on lane snapshot after 15000ms",
+            "timestamp": 1773471166602,
+            "details": {
+              "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+              "error": "Admin API query timed out for node 7493b0ab-a054-5fad-a91b-5e331db29304 on lane snapshot after 15000ms",
+              "reachability": {
+                "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                "timestamp": 1773471150594,
+                "reachable": true,
+                "adminReady": true,
+                "reachableBy": "admin_ws",
+                "bootstrapHealth": {
+                  "attempted": true,
+                  "ok": false,
+                  "statusCode": -1,
+                  "error": "http_status_-1",
+                  "url": "http://172.18.0.2:8080/health",
+                  "endpoint": null,
+                  "query": null
+                },
+                "adminHealth": {
+                  "attempted": true,
+                  "ok": false,
+                  "statusCode": -1,
+                  "error": "http_status_-1",
+                  "url": "http://172.18.0.2:8081/health",
+                  "endpoint": null,
+                  "query": null
+                },
+                "adminWs": {
+                  "attempted": true,
+                  "ok": true,
+                  "statusCode": null,
+                  "error": null,
+                  "url": null,
+                  "endpoint": "ws://172.18.0.2:8081/api/admin/stream",
+                  "query": null
+                },
+                "sqlProbe": {
+                  "attempted": false,
+                  "ok": false,
+                  "statusCode": null,
+                  "error": null,
+                  "url": null,
+                  "endpoint": null,
+                  "query": "SELECT node_id FROM nodes LIMIT 1"
+                },
+                "lastError": null
+              }
+            }
+          }
+        ]
+      },
+      "trace": null,
+      "traceAssertion": null,
+      "memoryLeak": {
+        "enabled": false,
+        "analyzed": false,
+        "leakDetected": false,
+        "sampleCount": 0,
+        "nodeCount": 0,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "nodes": [],
+        "warnings": [],
+        "config": {
+          "enabled": false,
+          "failOnDetection": false,
+          "requireSamples": false,
+          "minSamplesPerNode": 8,
+          "warmupFraction": 0.2,
+          "minWarmupMs": 30000,
+          "minAnalysisWindowMs": 60000,
+          "maxPositiveSlopeBytesPerMin": 1048576,
+          "minGrowthBytes": 16777216,
+          "minPositiveDeltaRatio": 0.65,
+          "captureHeapArtifacts": false,
+          "heapSnapshotNearLimitCount": 2
+        }
+      },
+      "memoryLeakAssertion": null,
+      "performanceDiagnostics": null,
+      "details": null,
+      "invariantBreaches": {
+        "totalCount": 0,
+        "hardCount": 0,
+        "softCount": 0,
+        "failing": [],
+        "hardBreaches": [],
+        "softBreaches": []
+      },
+      "exampleResults": null,
+      "loadMetrics": null,
+      "performanceMeasurement": {
+        "available": false,
+        "validForComparison": false,
+        "invalidReason": "metrics_unavailable",
+        "observedOpsPerSec": null,
+        "observedP99LatencyMs": null
+      },
+      "partitionHotspots": null,
+      "optimizationPriorities": null,
+      "failureBundle": {
+        "jsonPath": ".playback/.playback/seven-node-table-partition-distribution-fix12/seven-node-table-partition-distribution/failure-bundle.json",
+        "markdownPath": ".playback/.playback/seven-node-table-partition-distribution-fix12/seven-node-table-partition-distribution/failure-bundle.md"
+      }
+    }
+  ],
+  "benchmarkRegressionGate": {
+    "enabled": false,
+    "status": "skipped",
+    "reason": "disabled",
+    "settings": {
+      "enabled": false,
+      "maxThroughputRegressionRatio": 0.1,
+      "minimumThroughputRatioSutToBaseline": 0.1,
+      "baselineProvider": "liferaft",
+      "failIfBaselineMissing": false,
+      "approvedMitigationId": null,
+      "parityMismatchPolicy": "warn"
+    },
+    "currentProvider": "liferaft",
+    "baselineProvider": "liferaft",
+    "comparedScenarioCount": 0,
+    "failedScenarioCount": 0,
+    "mitigatedScenarioCount": 0,
+    "missingBaselineScenarios": [],
+    "comparisons": [],
+    "parityMismatchCount": 0,
+    "lowThroughputRatioCount": 0,
+    "warnings": []
+  },
+  "failureBundle": {
+    "jsonPath": ".playback/.playback/seven-node-table-partition-distribution-fix12/failure-bundles/run-failure-bundle.json",
+    "markdownPath": ".playback/.playback/seven-node-table-partition-distribution-fix12/failure-bundles/run-failure-bundle.md"
+  },
+  "metadata": {
+    "raftProvider": "liferaft",
+    "configPath": "test/distributed/config/local-benchmark-7node.json",
+    "scenarioFilter": "seven-node-table-partition-distribution"
+  }
+}

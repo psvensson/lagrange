@@ -150,7 +150,7 @@ async function run(cluster) {
   );
 
   // 7. Assert cluster consistency.
-  await cluster.assertConsistency();
+  await cluster.waitForConsistencyConvergence();
 
   return {
     convergenceTiming: convergence,

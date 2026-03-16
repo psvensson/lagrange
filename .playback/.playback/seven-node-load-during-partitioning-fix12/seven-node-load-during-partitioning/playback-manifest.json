@@ -1,0 +1,19 @@
+{
+  "scenarioName": "seven-node-load-during-partitioning",
+  "startedAt": 1773470500373,
+  "endedAt": 1773470735755,
+  "durationMs": 235382,
+  "files": {
+    "events": ".playback/.playback/seven-node-load-during-partitioning-fix12/seven-node-load-during-partitioning/events.ndjson",
+    "samples": ".playback/.playback/seven-node-load-during-partitioning-fix12/seven-node-load-during-partitioning/samples.ndjson",
+    "snapshots": ".playback/.playback/seven-node-load-during-partitioning-fix12/seven-node-load-during-partitioning/snapshots.ndjson",
+    "manifest": ".playback/.playback/seven-node-load-during-partitioning-fix12/seven-node-load-during-partitioning/playback-manifest.json",
+    "viewer": ".playback/.playback/seven-node-load-during-partitioning-fix12/seven-node-load-during-partitioning/playback-viewer.html"
+  },
+  "counts": {
+    "events": 128,
+    "samples": 86,
+    "snapshots": 103
+  },
+  "warnings": []
+}

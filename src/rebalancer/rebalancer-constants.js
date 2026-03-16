@@ -334,6 +334,7 @@ const STABILIZATION_RESET_TRIGGER = Object.freeze({
   NODE_FAILED: 'node_failed',
   REPLICA_FAILED: MOVE_REASON.REPLICA_FAILED,
   POLICY_CHANGED: 'policy_changed',
+  SPLIT_COMPLETED: 'split_completed',
 });
 
 

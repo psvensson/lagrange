@@ -8,6 +8,13 @@
 import {NUM} from '../constants/index.js';
 
 /**
+ * Number of committed entries to retain after compaction.
+ * Keeps a window for slow followers to catch up via getEntriesAfter.
+ * @type {number}
+ */
+const IN_MEMORY_LOG_COMPACTION_RETENTION = 1000;
+
+/**
  * In-memory log adapter for liferaft.
  * Implements the liferaft Log interface with async methods.
  */
@@ -201,7 +208,7 @@ class InMemoryLogAdapter {
       term: this.node ? this.node.term : NUM.ZERO,
     };
 
-    if (entry.index <= NUM.ONE) {
+    if (!entry || entry.index <= NUM.ONE) {
       return defaultInfo;
     }
 
@@ -233,7 +240,30 @@ class InMemoryLogAdapter {
     entry.committed = true;
     this.committedIndex = index;
     this.entries.set(index, entry);
+    this.compactCommittedEntries();
     return entry;
+  }
+
+  /**
+   * Remove committed entries older than the retention window.
+   * Keeps the most recent IN_MEMORY_LOG_COMPACTION_RETENTION entries
+   * so slow followers can still catch up via getEntriesAfter.
+   * @private
+   */
+  compactCommittedEntries() {
+    if (this.entries.size <= IN_MEMORY_LOG_COMPACTION_RETENTION) {
+      return;
+    }
+    const cutoff =
+      this.committedIndex - IN_MEMORY_LOG_COMPACTION_RETENTION;
+    if (cutoff <= NUM.ZERO) {
+      return;
+    }
+    for (const key of this.entries.keys()) {
+      if (key <= cutoff) {
+        this.entries.delete(key);
+      }
+    }
   }
 
   /**
@@ -257,4 +287,4 @@ class InMemoryLogAdapter {
   }
 }
 
-export {InMemoryLogAdapter};
+export {InMemoryLogAdapter, IN_MEMORY_LOG_COMPACTION_RETENTION};

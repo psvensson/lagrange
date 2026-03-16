@@ -127,6 +127,9 @@ describe('seven-node-table-partition-distribution scenario', () => {
       assertConsistency: async () => {
         calls.push('assertConsistency');
       },
+      waitForConsistencyConvergence: async () => {
+        calls.push('waitForConsistencyConvergence');
+      },
     };
 
     const result = await run(cluster, {
@@ -157,6 +160,6 @@ describe('seven-node-table-partition-distribution scenario', () => {
       'benchmark_events_mixed',
       'scenario should use benchmark workload profile',
     );
-    assert.deepEqual(calls[2], 'assertConsistency');
+    assert.deepEqual(calls[2], 'waitForConsistencyConvergence');
   });
 });

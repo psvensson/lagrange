@@ -74,6 +74,13 @@ const MESSAGE_GROUP_SERVICE_ERROR_MSG = Object.freeze({
     'MessageGroupService rebalancer must implement setRebalanceCoordinator',
 });
 
+const MESSAGE_GROUP_SERVICE_LOG_MSG = Object.freeze({
+  CDC_RESUBSCRIBE_ON_LEADER:
+    'Re-subscribing to CDC tables on leadership gain',
+  CDC_RESUBSCRIBE_ON_LEADER_COMPLETE:
+    'CDC re-subscription on leadership gain complete',
+});
+
 const MESSAGE_GROUP_OPERATION_LEDGER = Object.freeze({
   DEFAULT_OPTIONS: Object.freeze({}),
   DEFAULT_VOTED_FOR: null,
@@ -90,6 +97,7 @@ export {
   MESSAGE_GROUP_OPERATION_LEDGER_NOW,
   MESSAGE_GROUP_SERVICE_DEFAULT,
   MESSAGE_GROUP_SERVICE_ERROR_MSG,
+  MESSAGE_GROUP_SERVICE_LOG_MSG,
   MESSAGE_GROUP_SUBSYSTEM,
   MESSAGE_STATUS,
   MESSAGE_GROUP_METADATA_TABLE,

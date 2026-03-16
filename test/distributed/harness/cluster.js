@@ -15,6 +15,7 @@ import {ENTRYPOINT_ENV} from '../../../src/constants/entrypoint.js';
 import {
   waitForConvergence,
   assertConsistency,
+  waitForConsistencyConvergence,
   assertDataIntegrity,
 } from './assertions.js';
 import {LogCollector} from './log-collector.js';
@@ -33,6 +34,7 @@ import {
   LOG_SUBSCRIPTION_CAPABILITY,
   RAFT_PROVIDER_DEFAULTS,
   NODE_CLIENT_CONTROL_SNAPSHOT_SQL,
+  NODE_CLIENT_CONTROL_SNAPSHOT_FORCE_REPAIR_SQL,
   NODE_CLIENT_SERVICE_DISCOVERY_SQL,
   NODE_CLIENT_SERVICE_ID_ADMIN_META,
   CONTAINER_LOG_TAIL_LINES,
@@ -41,7 +43,7 @@ import {
 const BOOTSTRAP_POLL_INTERVAL_MS = 500;
 const ACTIVE_POLL_INTERVAL_MS = 1000;
 const ACTIVE_WAIT_MIN_CLUSTER_SIZE = 1;
-const ACTIVE_WAIT_TIMEOUT_SCALE_PERCENT_PER_EXTRA_NODE = 15;
+const ACTIVE_WAIT_TIMEOUT_SCALE_PERCENT_PER_EXTRA_NODE = 25;
 const ACTIVE_WAIT_TIMEOUT_SCALE_PERCENT_DENOMINATOR = 100;
 const ACTIVE_WAIT_TIMEOUT_MAX_MULTIPLIER = 3;
 const ACTIVE_STATE = 'ACTIVE';
@@ -1365,8 +1367,11 @@ class NodeHandle {
       options?.timeoutMs,
       ADMIN_QUERY_TIMEOUT_MS,
     );
+    const sql = options?.forceRepair === true ?
+      NODE_CLIENT_CONTROL_SNAPSHOT_FORCE_REPAIR_SQL :
+      NODE_CLIENT_CONTROL_SNAPSHOT_SQL;
     return this.queryWithTimeout(
-      NODE_CLIENT_CONTROL_SNAPSHOT_SQL,
+      sql,
       [],
       {
         lane,
@@ -2579,6 +2584,11 @@ class Cluster {
   async assertConsistency() {
     const nodes = Array.from(this._nodes.values());
     return assertConsistency(nodes);
+  }
+
+  async waitForConsistencyConvergence(options) {
+    const nodes = Array.from(this._nodes.values());
+    return waitForConsistencyConvergence(nodes, options);
   }
 
   async assertDataIntegrity(table, expectedRows) {

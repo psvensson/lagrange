@@ -27,6 +27,7 @@ import {
   TRANSPORT_NUM,
   TRANSPORT_SUBSYSTEM,
   TRANSPORT_TYPEOF,
+  normalizeToWebSocketAddress,
 } from '../constants/transport.js';
 import {HOST, METRICS_LOG_TAG} from '../constants/index.js';
 
@@ -1194,10 +1195,14 @@ class MessageRouter extends EventEmitter {
     // Update connection with node ID
     const connection = this.nodeConnections.get(connectionId);
     if (connection && connection.isIncoming) {
+      const normalizedAddress =
+        normalizeToWebSocketAddress(nodeAddress) || nodeAddress;
       connection.nodeId = nodeId;
-      connection.nodeAddress = nodeAddress;
-      connection.configuredAddress = nodeAddress;
-      this.rememberReconnectAddress(connection, ws, nodeAddress);
+      connection.nodeAddress = normalizedAddress;
+      connection.configuredAddress = normalizedAddress;
+      this.rememberReconnectAddress(
+        connection, ws, normalizedAddress,
+      );
 
       const existing = this.nodeConnections.get(nodeId);
       const isSelfConnection = existing?.isSelfConnection && nodeId === this.nodeId;
@@ -2560,10 +2565,14 @@ class MessageRouter extends EventEmitter {
     };
 
     const existing = this.nodeConnections.get(targetNodeId) || null;
-    pushUniqueAddress(preferredAddress);
-    pushUniqueAddress(existing?.observedAddress);
-    pushUniqueAddress(existing?.address);
-    pushUniqueAddress(existing?.configuredAddress);
+    pushUniqueAddress(normalizeToWebSocketAddress(preferredAddress) ||
+      preferredAddress);
+    pushUniqueAddress(normalizeToWebSocketAddress(
+      existing?.observedAddress) || existing?.observedAddress);
+    pushUniqueAddress(normalizeToWebSocketAddress(existing?.address) ||
+      existing?.address);
+    pushUniqueAddress(normalizeToWebSocketAddress(
+      existing?.configuredAddress) || existing?.configuredAddress);
     pushUniqueAddress(this.resolveNodeAddressForDelivery(targetNodeId));
     return addresses;
   }

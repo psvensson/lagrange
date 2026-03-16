@@ -33,6 +33,8 @@ const LEASE_LOG_MSG = Object.freeze({
   STOPPED: 'LeaseService stopped',
   SWEEP_FAILED: 'Lease sweep failed',
   SWEEP_EXPIRED: 'Swept expired leases',
+  SWEEP_SKIPPED_TRANSPORT_CONNECTED:
+    'Skipped lease disconnect for transport-connected node',
 });
 
 const LEASE_ERROR_MSG = Object.freeze({

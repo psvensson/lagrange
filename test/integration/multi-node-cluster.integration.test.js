@@ -84,7 +84,7 @@ test('Multi-node cluster integration tests', async (t) => {
       connection_state: 'ready',
       capabilities: '[]',
       last_heartbeat: now,
-      ready_lease_expires_at: now + 1000,
+      ready_lease_expires_at: now + 60000,
       created_at: now,
     });
 
@@ -100,9 +100,9 @@ test('Multi-node cluster integration tests', async (t) => {
 
     const joiningService = new NodeJoiningService({
       nodeId: existingNodeId,
-      nodeAddress: existingNodeAddress,
+      nodeAddress: `ws://localhost:${getUniquePort()}`,
       seedNodeAddress: 'http://localhost:0',
-      wsPort: existingWsPort,
+      wsPort: getUniquePort(),
       config: {
         httpTimeoutMs: 2000,
         leadershipWaitTimeoutMs: 500,

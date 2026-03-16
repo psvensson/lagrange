@@ -85,11 +85,10 @@ async function run(cluster, options = {}) {
   );
 
   // 6. Assert consistency across all nodes post-heal.
-  await waitForConsistency(
-    cluster,
-    consistencyTimeoutMs,
-    consistencyPollIntervalMs,
-  );
+  await cluster.waitForConsistencyConvergence({
+    timeoutMs: consistencyTimeoutMs,
+    pollIntervalMs: consistencyPollIntervalMs,
+  });
 
   return {
     convergenceTiming: convergence,
@@ -107,38 +106,6 @@ function sleep(delayMs) {
   return new Promise((resolve) => {
     setTimeout(resolve, delayMs);
   });
-}
-
-/**
- * Wait until consistency assertions stop failing.
- * @param {Object} cluster
- * @param {number} timeoutMs
- * @param {number} pollIntervalMs
- * @return {Promise<void>}
- */
-async function waitForConsistency(
-  cluster,
-  timeoutMs = CONSISTENCY_TIMEOUT_MS,
-  pollIntervalMs = CONSISTENCY_POLL_INTERVAL_MS,
-) {
-  const deadline = Date.now() + Math.max(0, timeoutMs);
-  let lastError = null;
-  while (Date.now() <= deadline) {
-    try {
-      await cluster.assertConsistency();
-      return;
-    } catch (error) {
-      lastError = error;
-    }
-    if (pollIntervalMs > 0) {
-      await sleep(pollIntervalMs);
-    } else {
-      await Promise.resolve();
-    }
-  }
-  throw lastError || new Error(
-    'Consistency check did not pass within timeout',
-  );
 }
 
 export {run};

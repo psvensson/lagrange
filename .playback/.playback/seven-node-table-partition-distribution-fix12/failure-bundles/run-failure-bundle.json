@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-03-14T06:53:43.919Z",
+  "reportPath": ".playback/seven-node-table-partition-distribution-fix12.report.json",
+  "reportSummary": {
+    "total": 1,
+    "passed": 0,
+    "failed": 1,
+    "duration": 266381
+  },
+  "standardSummary": {
+    "historicalReportsConsidered": 11,
+    "scenariosComparedToPrevious": 0,
+    "scenariosComparedToPostgresBaseline": 0,
+    "diagnosticsCoverageSummary": {
+      "scenariosWithCoverage": 0,
+      "scenariosWithoutCoverage": 1,
+      "totalSamples": 0,
+      "coverageRate": 0,
+      "scenarios": [
+        {
+          "scenario": "seven-node-table-partition-distribution",
+          "status": "unavailable",
+          "reason": "not_reported",
+          "sampleCount": 0
+        }
+      ]
+    },
+    "writePathAttributionSummary": {
+      "scenariosWithDiagnostics": 0,
+      "topPhases": []
+    },
+    "scaleEfficiencySummary": {
+      "observationCount": 4,
+      "comparableGroupCount": 0,
+      "groups": [],
+      "topOpportunities": []
+    },
+    "scenarios": [
+      {
+        "scenario": "seven-node-table-partition-distribution",
+        "similarityKey": "seven-node-table-partition-distribution|default",
+        "current": {
+          "passed": false,
+          "clusterSize": 7,
+          "durationMs": 266381,
+          "performanceMetricsAvailable": false,
+          "validForPerformanceComparison": false,
+          "performanceInvalidReason": "metrics_unavailable",
+          "observedOpsPerSec": 0,
+          "observedP99LatencyMs": 0,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "previousSimilarRun": null,
+        "deltaVsPrevious": null,
+        "postgresBaseline": null,
+        "parity": null,
+        "writePathTopPhases": []
+      }
+    ]
+  },
+  "benchmarkRegressionGate": {
+    "enabled": false,
+    "status": "skipped",
+    "reason": "disabled",
+    "settings": {
+      "enabled": false,
+      "maxThroughputRegressionRatio": 0.1,
+      "minimumThroughputRatioSutToBaseline": 0.1,
+      "baselineProvider": "liferaft",
+      "failIfBaselineMissing": false,
+      "approvedMitigationId": null,
+      "parityMismatchPolicy": "warn"
+    },
+    "currentProvider": "liferaft",
+    "baselineProvider": "liferaft",
+    "comparedScenarioCount": 0,
+    "failedScenarioCount": 0,
+    "mitigatedScenarioCount": 0,
+    "missingBaselineScenarios": [],
+    "comparisons": [],
+    "parityMismatchCount": 0,
+    "lowThroughputRatioCount": 0,
+    "warnings": []
+  },
+  "failedScenarioCount": 1,
+  "scenarios": [
+    {
+      "scenario": "seven-node-table-partition-distribution",
+      "summary": {
+        "passed": false,
+        "error": "Leader identities disagree between 7493b0ab-a054-5fad-a91b-5e331db29304 and 11601fe0-72d6-5853-8590-ec2881853e72. 7493b0ab-a054-5fad-a91b-5e331db29304: {\"code-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"config-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"contexts-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"debug_breakpoints-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"debug_sessions-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"debug_snapshots-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"indices-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"inter_group_latencies-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"latency_groups-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"live_queries-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"logs-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"message_groups-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"module_dependency_locks-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"module_manifests-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"node_endpoints-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"nodes-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"package_registry_mappings-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"package_registry_overrides-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"partitions-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"replica_operations-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"schema_migration_partitions-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"schema_migrations-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"service_definitions-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"service_endpoints-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"service_timers-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"services-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"sql_transaction_participants-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"sql_transactions-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"sql_write_operations-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"storage_reservations-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"tables-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"tbl-738405c8-5bd3-4cfb-a861-0185970a4595-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"tbl-738405c8-5bd3-4cfb-a861-0185970a4595_p_0107ff5b_left\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"wasm_operations-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\"}. 11601fe0-72d6-5853-8590-ec2881853e72: {\"code-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"config-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"contexts-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"debug_breakpoints-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"debug_sessions-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"debug_snapshots-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"indices-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"inter_group_latencies-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"latency_groups-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"live_queries-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"logs-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"message_groups-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"module_dependency_locks-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"module_manifests-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"node_endpoints-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"nodes-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"package_registry_mappings-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"package_registry_overrides-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"partitions-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"replica_operations-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"schema_migration_partitions-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"schema_migrations-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"service_definitions-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"service_endpoints-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"service_timers-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"services-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"sql_transaction_participants-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"sql_transactions-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"sql_write_operations-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"storage_reservations-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"tables-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"tbl-738405c8-5bd3-4cfb-a861-0185970a4595-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"tbl-738405c8-5bd3-4cfb-a861-0185970a4595_p_0107ff5b_left\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"tbl-738405c8-5bd3-4cfb-a861-0185970a4595_p_a25df84d_right\":\"7493b0ab-a054-5fad-a91b-5e331db29304\",\"wasm_operations-p1\":\"7493b0ab-a054-5fad-a91b-5e331db29304\"}",
+        "phase": null,
+        "rootCauseClass": null,
+        "dominantReason": null
+      },
+      "jsonPath": ".playback/.playback/seven-node-table-partition-distribution-fix12/seven-node-table-partition-distribution/failure-bundle.json",
+      "markdownPath": ".playback/.playback/seven-node-table-partition-distribution-fix12/seven-node-table-partition-distribution/failure-bundle.md"
+    }
+  ]
+}

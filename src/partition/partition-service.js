@@ -306,6 +306,7 @@ class PartitionService extends EventEmitter {
 
     // State
     this.initialized = false;
+    this.isShutdown = false;
     this.isLeader = false;
 
     // PendingRequestTracker for lifecycle messages (replaces EventEmitter-based ACK handling)
@@ -2825,6 +2826,14 @@ class PartitionService extends EventEmitter {
     if (this.preparedStateHoldTimer) {
       return;
     }
+    if (this.isShutdown) {
+      this.logger.debug(
+        PARTITION_SERVICE_LOG_MSG.TIMER_SKIPPED_AFTER_SHUTDOWN, {
+          partitionId: this.partitionId,
+          timer: 'preparedStateHoldTimer',
+        });
+      return;
+    }
     this.preparedStateHoldTimer = setInterval(() => {
       this.enforcePreparedStateHoldTimeouts(Date.now());
     }, this.preparedStateHoldSweepIntervalMs);
@@ -4144,10 +4153,12 @@ class PartitionService extends EventEmitter {
       subscriberCount: this.cdcSubscribers.size,
     });
 
-    // Deliver to subscribers
+    // Deliver to subscribers — snapshot the set to avoid delivering
+    // to subscribers added concurrently during async delivery.
+    const subscriberSnapshot = [...this.cdcSubscribers];
     let deliveredCount = NUM.ZERO;
     let deliveryFailureCount = NUM.ZERO;
-    for (const subscriber of this.cdcSubscribers) {
+    for (const subscriber of subscriberSnapshot) {
       try {
         await this.deliverCDCEventToSubscriber(subscriber, cdcEvent);
         deliveredCount++;
@@ -4576,6 +4587,14 @@ class PartitionService extends EventEmitter {
    */
   startPeriodicSizeUpdates() {
     if (this.sizeUpdateTimer) {
+      return;
+    }
+    if (this.isShutdown) {
+      this.logger.debug(
+        PARTITION_SERVICE_LOG_MSG.TIMER_SKIPPED_AFTER_SHUTDOWN, {
+          partitionId: this.partitionId,
+          timer: 'sizeUpdateTimer',
+        });
       return;
     }
 
@@ -5808,6 +5827,14 @@ class PartitionService extends EventEmitter {
     if (this.learnerPromotionTimer) {
       return;
     }
+    if (this.isShutdown) {
+      this.logger.debug(
+        PARTITION_SERVICE_LOG_MSG.TIMER_SKIPPED_AFTER_SHUTDOWN, {
+          partitionId: this.partitionId,
+          timer: 'learnerPromotionTimer',
+        });
+      return;
+    }
 
     this.logger.debug(PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_SCHEDULED, {
       replicaId: this.replicaId,
@@ -6077,6 +6104,7 @@ class PartitionService extends EventEmitter {
    * @return {Promise<void>}
    */
   async shutdown() {
+    this.isShutdown = true;
     this.logger.info(PARTITION_SERVICE_LOG_MSG.SHUTTING_DOWN, {
       partitionId: this.partitionId,
       replicaId: this.replicaId,

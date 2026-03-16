@@ -1,0 +1,1565 @@
+{
+  "timestamp": "2026-03-14T06:45:35.759Z",
+  "summary": {
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "duration": 230125
+  },
+  "optimizationSummary": {
+    "totalPriorityItems": 3,
+    "scenariosWithPriorities": 1,
+    "topComponents": [
+      {
+        "component": "replication_write_path",
+        "count": 1,
+        "highestPriority": "critical",
+        "highestScore": 95
+      },
+      {
+        "component": "error_retry_path",
+        "count": 1,
+        "highestPriority": "high",
+        "highestScore": 80
+      },
+      {
+        "component": "convergence_control_plane",
+        "count": 1,
+        "highestPriority": "medium",
+        "highestScore": 60
+      }
+    ],
+    "topPartitions": []
+  },
+  "standardSummary": {
+    "historicalReportsConsidered": 9,
+    "scenariosComparedToPrevious": 0,
+    "scenariosComparedToPostgresBaseline": 0,
+    "diagnosticsCoverageSummary": {
+      "scenariosWithCoverage": 0,
+      "scenariosWithoutCoverage": 1,
+      "totalSamples": 0,
+      "coverageRate": 0,
+      "scenarios": [
+        {
+          "scenario": "seven-node-load-during-partitioning",
+          "status": "unavailable",
+          "reason": "not_reported",
+          "sampleCount": 0
+        }
+      ]
+    },
+    "writePathAttributionSummary": {
+      "scenariosWithDiagnostics": 0,
+      "topPhases": []
+    },
+    "scaleEfficiencySummary": {
+      "observationCount": 3,
+      "comparableGroupCount": 0,
+      "groups": [],
+      "topOpportunities": []
+    },
+    "scenarios": [
+      {
+        "scenario": "seven-node-load-during-partitioning",
+        "similarityKey": "seven-node-load-during-partitioning|default",
+        "current": {
+          "passed": true,
+          "clusterSize": 7,
+          "durationMs": 230125,
+          "performanceMetricsAvailable": true,
+          "validForPerformanceComparison": true,
+          "performanceInvalidReason": null,
+          "observedOpsPerSec": 18.922667346841173,
+          "observedP99LatencyMs": 2450,
+          "opsPerSec": 18.922667346841173,
+          "p99LatencyMs": 2450,
+          "opsPerSecPerNode": 2.7032381924058817
+        },
+        "previousSimilarRun": null,
+        "deltaVsPrevious": null,
+        "postgresBaseline": null,
+        "parity": null,
+        "writePathTopPhases": []
+      }
+    ]
+  },
+  "scenarios": [
+    {
+      "scenario": "seven-node-load-during-partitioning",
+      "passed": true,
+      "duration": 230125,
+      "clusterSize": 7,
+      "startedAt": "2026-03-14T06:41:40.372Z",
+      "convergenceTiming": {
+        "settledAfterMs": 5087,
+        "leaderChanges": 0,
+        "maxOverTargetMs": 0
+      },
+      "analysisSummary": null,
+      "error": null,
+      "stackTrace": null,
+      "logs": null,
+      "playback": {
+        "scenarioName": "seven-node-load-during-partitioning",
+        "startedAt": 1773470500373,
+        "endedAt": 1773470735755,
+        "durationMs": 235382,
+        "files": {
+          "events": ".playback/.playback/seven-node-load-during-partitioning-fix12/seven-node-load-during-partitioning/events.ndjson",
+          "samples": ".playback/.playback/seven-node-load-during-partitioning-fix12/seven-node-load-during-partitioning/samples.ndjson",
+          "snapshots": ".playback/.playback/seven-node-load-during-partitioning-fix12/seven-node-load-during-partitioning/snapshots.ndjson",
+          "manifest": ".playback/.playback/seven-node-load-during-partitioning-fix12/seven-node-load-during-partitioning/playback-manifest.json",
+          "viewer": ".playback/.playback/seven-node-load-during-partitioning-fix12/seven-node-load-during-partitioning/playback-viewer.html"
+        },
+        "counts": {
+          "events": 128,
+          "samples": 86,
+          "snapshots": 103
+        },
+        "warnings": []
+      },
+      "trace": null,
+      "traceAssertion": null,
+      "memoryLeak": {
+        "enabled": false,
+        "analyzed": false,
+        "leakDetected": false,
+        "sampleCount": 0,
+        "nodeCount": 0,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "nodes": [],
+        "warnings": [],
+        "config": {
+          "enabled": false,
+          "failOnDetection": false,
+          "requireSamples": false,
+          "minSamplesPerNode": 8,
+          "warmupFraction": 0.2,
+          "minWarmupMs": 30000,
+          "minAnalysisWindowMs": 60000,
+          "maxPositiveSlopeBytesPerMin": 1048576,
+          "minGrowthBytes": 16777216,
+          "minPositiveDeltaRatio": 0.65,
+          "captureHeapArtifacts": false,
+          "heapSnapshotNearLimitCount": 2
+        }
+      },
+      "memoryLeakAssertion": null,
+      "performanceDiagnostics": null,
+      "details": {
+        "expectedNodeCount": 7,
+        "tableName": "benchmark_partition_split_events",
+        "tablePreparation": {
+          "tableName": "benchmark_partition_split_events",
+          "tableId": "tbl-1e7e167f-ebfa-41bc-b1a5-c4e90914a3a7",
+          "createTimeoutError": null,
+          "tablePolicies": {
+            "splitStorageThreshold": 16384,
+            "splitTrafficThreshold": 120,
+            "mergeStorageThreshold": 1,
+            "mergeTrafficThreshold": 1
+          }
+        },
+        "convergenceTiming": {
+          "settledAfterMs": 5087,
+          "leaderChanges": 0,
+          "maxOverTargetMs": 0
+        },
+        "partitioningEvidence": {
+          "baselinePartitionCount": 1,
+          "additionalPartitionCount": 2,
+          "additionalPartitionIds": [
+            "tbl-1e7e167f-ebfa-41bc-b1a5-c4e90914a3a7_p_1bce0714_right",
+            "tbl-1e7e167f-ebfa-41bc-b1a5-c4e90914a3a7_p_3424a38b_left"
+          ],
+          "replicaNodeCount": 5,
+          "replicaNodeIds": [
+            "11601fe0-72d6-5853-8590-ec2881853e72",
+            "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+            "37ab9190-8bcc-5378-ac57-9d012e3bf838",
+            "7493b0ab-a054-5fad-a91b-5e331db29304",
+            "8be8d30f-4499-5eed-865c-71b4d529a67a"
+          ],
+          "metricsAtFirstPartitioning": 640,
+          "metricsAtSuccess": 1174,
+          "operationsAfterPartitioning": 534,
+          "sampleCount": 51,
+          "splitProgress": {
+            "available": true,
+            "capturedAt": 1773470676824,
+            "workflowSummary": {
+              "workflowCount": 1,
+              "decisionTypeCounts": {
+                "admitted": 1
+              },
+              "transitionStateCounts": {
+                "split_preparing": 1
+              },
+              "blockingReasonCounts": {},
+              "workflowIds": [
+                "split-tbl-1e7e167f-ebfa-41bc-b1a5-c4e90914a3a7-tbl-1e7e167f-ebfa-41bc-b1a5-c4e90914a3a7-p1-v2"
+              ]
+            },
+            "placementSummary": {
+              "totalNodes": 7,
+              "eligibleNodeCount": 0,
+              "ineligibleNodeCount": 7,
+              "reasonCounts": {
+                "storage_budget_unavailable": 7
+              }
+            },
+            "replicaOperationSummary": {
+              "inFlightCount": 3,
+              "statusHistogram": {
+                "active": 6,
+                "creating": 1,
+                "pending": 4
+              },
+              "partitionGroupInFlight": {
+                "tbl-1e7e167f-ebfa-41bc-b1a5-c4e90914a3a7_p_1bce0714_right": 3
+              },
+              "stepHistogram": {
+                "SENDING": 1,
+                "PENDING": 2
+              },
+              "oldestInFlightAgeMs": 13390,
+              "staleInFlightCount": 0,
+              "inFlightOperationIds": [
+                "58ad67a8-8c6e-4216-9129-5b73baa4bfc6",
+                "160a8150-cde4-4cfe-8100-8f101b2978f4",
+                "2cc62fd9-a82d-4d39-b9a1-45ed52693883"
+              ],
+              "operationTimelineById": {
+                "7ca9d680-d686-42fa-a15f-1c9b3cebfc05": [
+                  {
+                    "eventType": "step",
+                    "operationId": "7ca9d680-d686-42fa-a15f-1c9b3cebfc05",
+                    "step": "CREATING",
+                    "timestampMs": 1773470581383,
+                    "ageMs": 95441,
+                    "metadata": {
+                      "phase": "prepare_target",
+                      "status": "creating"
+                    }
+                  },
+                  {
+                    "eventType": "step",
+                    "operationId": "7ca9d680-d686-42fa-a15f-1c9b3cebfc05",
+                    "step": "SYNCING",
+                    "timestampMs": 1773470581387,
+                    "ageMs": 95437,
+                    "metadata": {
+                      "phase": "verify_target",
+                      "status": "syncing"
+                    }
+                  },
+                  {
+                    "eventType": "step",
+                    "operationId": "7ca9d680-d686-42fa-a15f-1c9b3cebfc05",
+                    "step": "STOPPING",
+                    "timestampMs": 1773470581389,
+                    "ageMs": 95435,
+                    "metadata": {
+                      "phase": "remove_source",
+                      "status": "removing"
+                    }
+                  },
+                  {
+                    "eventType": "step",
+                    "operationId": "7ca9d680-d686-42fa-a15f-1c9b3cebfc05",
+                    "step": "ACTIVE",
+                    "timestampMs": 1773470581397,
+                    "ageMs": 95427,
+                    "metadata": {
+                      "phase": "commit_metadata",
+                      "status": "active"
+                    }
+                  },
+                  {
+                    "eventType": "state",
+                    "operationId": "7ca9d680-d686-42fa-a15f-1c9b3cebfc05",
+                    "step": "ACTIVE",
+                    "timestampMs": 1773470581397,
+                    "ageMs": 95427,
+                    "status": "active",
+                    "inFlight": false,
+                    "staleTimeout": false,
+                    "timeoutMs": null
+                  }
+                ],
+                "c416eb29-86ed-4eec-949a-2c2227c33b42": [
+                  {
+                    "eventType": "step",
+                    "operationId": "c416eb29-86ed-4eec-949a-2c2227c33b42",
+                    "step": "CREATING",
+                    "timestampMs": 1773470581510,
+                    "ageMs": 95314,
+                    "metadata": {
+                      "phase": "prepare_target",
+                      "status": "creating"
+                    }
+                  },
+                  {
+                    "eventType": "step",
+                    "operationId": "c416eb29-86ed-4eec-949a-2c2227c33b42",
+                    "step": "SYNCING",
+                    "timestampMs": 1773470581514,
+                    "ageMs": 95310,
+                    "metadata": {
+                      "phase": "verify_target",
+                      "status": "syncing"
+                    }
+                  },
+                  {
+                    "eventType": "step",
+                    "operationId": "c416eb29-86ed-4eec-949a-2c2227c33b42",
+                    "step": "STOPPING",
+                    "timestampMs": 1773470581519,
+                    "ageMs": 95305,
+                    "metadata": {
+                      "phase": "remove_source",
+                      "status": "removing"
+                    }
+                  },
+                  {
+                    "eventType": "step",
+                    "operationId": "c416eb29-86ed-4eec-949a-2c2227c33b42",
+                    "step": "ACTIVE",
+                    "timestampMs": 1773470581528,
+                    "ageMs": 95296,
+                    "metadata": {
+                      "phase": "commit_metadata",
+                      "status": "active"
+                    }
+                  },
+                  {
+                    "eventType": "state",
+                    "operationId": "c416eb29-86ed-4eec-949a-2c2227c33b42",
+                    "step": "ACTIVE",
+                    "timestampMs": 1773470581528,
+                    "ageMs": 95296,
+                    "status": "active",
+                    "inFlight": false,
+                    "staleTimeout": false,
+                    "timeoutMs": null
+                  }
+                ],
+                "f5cda9b6-0a5a-42da-b798-6fbeba4e9fd5": [
+                  {
+                    "eventType": "step",
+                    "operationId": "f5cda9b6-0a5a-42da-b798-6fbeba4e9fd5",
+                    "step": "PENDING",
+                    "timestampMs": 1773470601660,
+                    "ageMs": 75164,
+                    "metadata": {
+                      "readinessSnapshot": {
+                        "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                        "dimensions": {
+                          "processAlive": true,
+                          "clusterMemberHealthy": true,
+                          "routingReady": true,
+                          "loadReady": true,
+                          "placementEligible": false,
+                          "controlPlaneWritable": true,
+                          "metadataPublicationHealthy": true,
+                          "repairEligible": true,
+                          "serveEligible": true
+                        },
+                        "reasonCodes": [
+                          "storage_budget_unavailable"
+                        ],
+                        "lifecycleState": "active",
+                        "observedAt": "2026-03-14T06:43:21.660Z",
+                        "decisionDimension": "repairEligible"
+                      }
+                    }
+                  },
+                  {
+                    "eventType": "step",
+                    "operationId": "f5cda9b6-0a5a-42da-b798-6fbeba4e9fd5",
+                    "step": "SENDING",
+                    "timestampMs": 1773470601662,
+                    "ageMs": 75162,
+                    "metadata": {
+                      "previousStep": "PENDING",
+                      "reason": "dispatch_sending",
+                      "ownerKey": "f5cda9b6-0a5a-42da-b798-6fbeba4e9fd5",
+                      "readinessSnapshot": {
+                        "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                        "dimensions": {
+                          "processAlive": true,
+                          "clusterMemberHealthy": true,
+                          "routingReady": true,
+                          "loadReady": true,
+                          "placementEligible": false,
+                          "controlPlaneWritable": true,
+                          "metadataPublicationHealthy": true,
+                          "repairEligible": true,
+                          "serveEligible": true
+                        },
+                        "reasonCodes": [
+                          "storage_budget_unavailable"
+                        ],
+                        "lifecycleState": "active",
+                        "observedAt": "2026-03-14T06:43:21.662Z",
+                        "decisionDimension": "repairEligible"
+                      }
+                    }
+                  },
+                  {
+                    "eventType": "step",
+                    "operationId": "f5cda9b6-0a5a-42da-b798-6fbeba4e9fd5",
+                    "step": "CREATING",
+                    "timestampMs": 1773470602795,
+                    "ageMs": 74029,
+                    "metadata": {
+                      "previousStep": "SENDING",
+                      "reason": "dispatch_creating",
+                      "ownerKey": "f5cda9b6-0a5a-42da-b798-6fbeba4e9fd5",
+                      "readinessSnapshot": {
+                        "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                        "dimensions": {
+                          "processAlive": true,
+                          "clusterMemberHealthy": true,
+                          "routingReady": true,
+                          "loadReady": true,
+                          "placementEligible": false,
+                          "controlPlaneWritable": true,
+                          "metadataPublicationHealthy": true,
+                          "repairEligible": true,
+                          "serveEligible": true
+                        },
+                        "reasonCodes": [
+                          "storage_budget_unavailable"
+                        ],
+                        "lifecycleState": "active",
+                        "observedAt": "2026-03-14T06:43:22.795Z",
+                        "decisionDimension": "repairEligible"
+                      }
+                    }
+                  },
+                  {
+                    "eventType": "step",
+                    "operationId": "f5cda9b6-0a5a-42da-b798-6fbeba4e9fd5",
+                    "step": "ACTIVE",
+                    "timestampMs": 1773470605909,
+                    "ageMs": 70915,
+                    "metadata": {
+                      "previousStep": "CREATING",
+                      "reason": "operation_completed",
+                      "ownerKey": "f5cda9b6-0a5a-42da-b798-6fbeba4e9fd5",
+                      "readinessSnapshot": {
+                        "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                        "dimensions": {
+                          "processAlive": true,
+                          "clusterMemberHealthy": true,
+                          "routingReady": true,
+                          "loadReady": true,
+                          "placementEligible": false,
+                          "controlPlaneWritable": true,
+                          "metadataPublicationHealthy": true,
+                          "repairEligible": true,
+                          "serveEligible": true
+                        },
+                        "reasonCodes": [
+                          "storage_budget_unavailable"
+                        ],
+                        "lifecycleState": "active",
+                        "observedAt": "2026-03-14T06:43:25.909Z",
+                        "decisionDimension": "repairEligible"
+                      }
+                    }
+                  },
+                  {
+                    "eventType": "state",
+                    "operationId": "f5cda9b6-0a5a-42da-b798-6fbeba4e9fd5",
+                    "step": "ACTIVE",
+                    "timestampMs": 1773470605909,
+                    "ageMs": 70915,
+                    "status": "active",
+                    "inFlight": false,
+                    "staleTimeout": false,
+                    "timeoutMs": null
+                  }
+                ],
+                "69473c5e-8207-4f4d-b31e-d320676f8a4e": [
+                  {
+                    "eventType": "step",
+                    "operationId": "69473c5e-8207-4f4d-b31e-d320676f8a4e",
+                    "step": "PENDING",
+                    "timestampMs": 1773470601668,
+                    "ageMs": 75156,
+                    "metadata": {
+                      "readinessSnapshot": {
+                        "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                        "dimensions": {
+                          "processAlive": true,
+                          "clusterMemberHealthy": true,
+                          "routingReady": true,
+                          "loadReady": true,
+                          "placementEligible": false,
+                          "controlPlaneWritable": true,
+                          "metadataPublicationHealthy": true,
+                          "repairEligible": true,
+                          "serveEligible": true
+                        },
+                        "reasonCodes": [
+                          "storage_budget_unavailable"
+                        ],
+                        "lifecycleState": "active",
+                        "observedAt": "2026-03-14T06:43:21.668Z",
+                        "decisionDimension": "repairEligible"
+                      }
+                    }
+                  },
+                  {
+                    "eventType": "step",
+                    "operationId": "69473c5e-8207-4f4d-b31e-d320676f8a4e",
+                    "step": "SENDING",
+                    "timestampMs": 1773470604189,
+                    "ageMs": 72635,
+                    "metadata": {
+                      "previousStep": "PENDING",
+                      "reason": "dispatch_sending",
+                      "ownerKey": "69473c5e-8207-4f4d-b31e-d320676f8a4e",
+                      "readinessSnapshot": {
+                        "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                        "dimensions": {
+                          "processAlive": true,
+                          "clusterMemberHealthy": true,
+                          "routingReady": true,
+                          "loadReady": true,
+                          "placementEligible": false,
+                          "controlPlaneWritable": true,
+                          "metadataPublicationHealthy": true,
+                          "repairEligible": true,
+                          "serveEligible": true
+                        },
+                        "reasonCodes": [
+                          "storage_budget_unavailable"
+                        ],
+                        "lifecycleState": "active",
+                        "observedAt": "2026-03-14T06:43:24.189Z",
+                        "decisionDimension": "repairEligible"
+                      }
+                    }
+                  },
+                  {
+                    "eventType": "step",
+                    "operationId": "69473c5e-8207-4f4d-b31e-d320676f8a4e",
+                    "step": "CREATING",
+                    "timestampMs": 1773470605849,
+                    "ageMs": 70975,
+                    "metadata": {
+                      "previousStep": "SENDING",
+                      "reason": "dispatch_creating",
+                      "ownerKey": "69473c5e-8207-4f4d-b31e-d320676f8a4e",
+                      "readinessSnapshot": {
+                        "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                        "dimensions": {
+                          "processAlive": true,
+                          "clusterMemberHealthy": true,
+                          "routingReady": true,
+                          "loadReady": true,
+                          "placementEligible": false,
+                          "controlPlaneWritable": true,
+                          "metadataPublicationHealthy": true,
+                          "repairEligible": true,
+                          "serveEligible": true
+                        },
+                        "reasonCodes": [
+                          "storage_budget_unavailable"
+                        ],
+                        "lifecycleState": "active",
+                        "observedAt": "2026-03-14T06:43:25.849Z",
+                        "decisionDimension": "repairEligible"
+                      }
+                    }
+                  },
+                  {
+                    "eventType": "step",
+                    "operationId": "69473c5e-8207-4f4d-b31e-d320676f8a4e",
+                    "step": "ACTIVE",
+                    "timestampMs": 1773470607103,
+                    "ageMs": 69721,
+                    "metadata": {
+                      "previousStep": "CREATING",
+                      "reason": "operation_completed",
+                      "ownerKey": "69473c5e-8207-4f4d-b31e-d320676f8a4e",
+                      "readinessSnapshot": {
+                        "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+                        "dimensions": {
+                          "processAlive": true,
+                          "clusterMemberHealthy": true,
+                          "routingReady": true,
+                          "loadReady": true,
+                          "placementEligible": false,
+                          "controlPlaneWritable": true,
+                          "metadataPublicationHealthy": true,
+                          "repairEligible": true,
+                          "serveEligible": true
+                        },
+                        "reasonCodes": [
+                          "storage_budget_unavailable"
+                        ],
+                        "lifecycleState": "active",
+                        "observedAt": "2026-03-14T06:43:27.103Z",
+                        "decisionDimension": "repairEligible"
+                      }
+                    }
+                  },
+                  {
+                    "eventType": "state",
+                    "operationId": "69473c5e-8207-4f4d-b31e-d320676f8a4e",
+                    "step": "ACTIVE",
+                    "timestampMs": 1773470607103,
+                    "ageMs": 69721,
+                    "status": "active",
+                    "inFlight": false,
+                    "staleTimeout": false,
+                    "timeoutMs": null
+                  }
+                ],
+                "03de19e5-908c-459e-b81f-413cb275c93c": [
+                  {
+                    "eventType": "step",
+                    "operationId": "03de19e5-908c-459e-b81f-413cb275c93c",
+                    "step": "PENDING",
+                    "timestampMs": 1773470601672,
+                    "ageMs": 75152,
+                    "metadata": {
+                      "readinessSnapshot": {
+                        "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                        "dimensions": {
+                          "processAlive": true,
+                          "clusterMemberHealthy": true,
+                          "routingReady": true,
+                          "loadReady": true,
+                          "placementEligible": false,
+                          "controlPlaneWritable": true,
+                          "metadataPublicationHealthy": true,
+                          "repairEligible": true,
+                          "serveEligible": true
+                        },
+                        "reasonCodes": [
+                          "storage_budget_unavailable"
+                        ],
+                        "lifecycleState": "active",
+                        "observedAt": "2026-03-14T06:43:21.672Z",
+                        "decisionDimension": "repairEligible"
+                      }
+                    }
+                  },
+                  {
+                    "eventType": "step",
+                    "operationId": "03de19e5-908c-459e-b81f-413cb275c93c",
+                    "step": "SENDING",
+                    "timestampMs": 1773470607095,
+                    "ageMs": 69729,
+                    "metadata": {
+                      "previousStep": "PENDING",
+                      "reason": "dispatch_sending",
+                      "ownerKey": "03de19e5-908c-459e-b81f-413cb275c93c",
+                      "readinessSnapshot": {
+                        "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                        "dimensions": {
+                          "processAlive": true,
+                          "clusterMemberHealthy": true,
+                          "routingReady": true,
+                          "loadReady": true,
+                          "placementEligible": false,
+                          "controlPlaneWritable": true,
+                          "metadataPublicationHealthy": true,
+                          "repairEligible": true,
+                          "serveEligible": true
+                        },
+                        "reasonCodes": [
+                          "storage_budget_unavailable"
+                        ],
+                        "lifecycleState": "active",
+                        "observedAt": "2026-03-14T06:43:27.095Z",
+                        "decisionDimension": "repairEligible"
+                      }
+                    }
+                  },
+                  {
+                    "eventType": "step",
+                    "operationId": "03de19e5-908c-459e-b81f-413cb275c93c",
+                    "step": "CREATING",
+                    "timestampMs": 1773470610053,
+                    "ageMs": 66771,
+                    "metadata": {
+                      "previousStep": "SENDING",
+                      "reason": "dispatch_creating",
+                      "ownerKey": "03de19e5-908c-459e-b81f-413cb275c93c",
+                      "readinessSnapshot": {
+                        "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                        "dimensions": {
+                          "processAlive": true,
+                          "clusterMemberHealthy": true,
+                          "routingReady": true,
+                          "loadReady": true,
+                          "placementEligible": false,
+                          "controlPlaneWritable": true,
+                          "metadataPublicationHealthy": true,
+                          "repairEligible": true,
+                          "serveEligible": true
+                        },
+                        "reasonCodes": [
+                          "storage_budget_unavailable"
+                        ],
+                        "lifecycleState": "active",
+                        "observedAt": "2026-03-14T06:43:30.053Z",
+                        "decisionDimension": "repairEligible"
+                      }
+                    }
+                  },
+                  {
+                    "eventType": "step",
+                    "operationId": "03de19e5-908c-459e-b81f-413cb275c93c",
+                    "step": "ACTIVE",
+                    "timestampMs": 1773470613546,
+                    "ageMs": 63278,
+                    "metadata": {
+                      "previousStep": "CREATING",
+                      "reason": "operation_completed",
+                      "ownerKey": "03de19e5-908c-459e-b81f-413cb275c93c",
+                      "readinessSnapshot": {
+                        "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+                        "dimensions": {
+                          "processAlive": true,
+                          "clusterMemberHealthy": true,
+                          "routingReady": true,
+                          "loadReady": true,
+                          "placementEligible": false,
+                          "controlPlaneWritable": true,
+                          "metadataPublicationHealthy": true,
+                          "repairEligible": true,
+                          "serveEligible": true
+                        },
+                        "reasonCodes": [
+                          "storage_budget_unavailable"
+                        ],
+                        "lifecycleState": "active",
+                        "observedAt": "2026-03-14T06:43:33.546Z",
+                        "decisionDimension": "repairEligible"
+                      }
+                    }
+                  },
+                  {
+                    "eventType": "state",
+                    "operationId": "03de19e5-908c-459e-b81f-413cb275c93c",
+                    "step": "ACTIVE",
+                    "timestampMs": 1773470613546,
+                    "ageMs": 63278,
+                    "status": "active",
+                    "inFlight": false,
+                    "staleTimeout": false,
+                    "timeoutMs": null
+                  }
+                ],
+                "036fcc1c-c86e-483b-8c37-4c9940c9d62f": [
+                  {
+                    "eventType": "step",
+                    "operationId": "036fcc1c-c86e-483b-8c37-4c9940c9d62f",
+                    "step": "PENDING",
+                    "timestampMs": 1773470635163,
+                    "ageMs": 41661,
+                    "metadata": {
+                      "readinessSnapshot": {
+                        "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                        "dimensions": {
+                          "processAlive": true,
+                          "clusterMemberHealthy": true,
+                          "routingReady": true,
+                          "loadReady": true,
+                          "placementEligible": false,
+                          "controlPlaneWritable": true,
+                          "metadataPublicationHealthy": true,
+                          "repairEligible": true,
+                          "serveEligible": true
+                        },
+                        "reasonCodes": [
+                          "storage_budget_unavailable"
+                        ],
+                        "lifecycleState": "active",
+                        "observedAt": "2026-03-14T06:43:55.163Z",
+                        "decisionDimension": "repairEligible"
+                      }
+                    }
+                  },
+                  {
+                    "eventType": "step",
+                    "operationId": "036fcc1c-c86e-483b-8c37-4c9940c9d62f",
+                    "step": "SENDING",
+                    "timestampMs": 1773470635165,
+                    "ageMs": 41659,
+                    "metadata": {
+                      "previousStep": "PENDING",
+                      "reason": "dispatch_sending",
+                      "ownerKey": "036fcc1c-c86e-483b-8c37-4c9940c9d62f",
+                      "readinessSnapshot": {
+                        "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                        "dimensions": {
+                          "processAlive": true,
+                          "clusterMemberHealthy": true,
+                          "routingReady": true,
+                          "loadReady": true,
+                          "placementEligible": false,
+                          "controlPlaneWritable": true,
+                          "metadataPublicationHealthy": true,
+                          "repairEligible": true,
+                          "serveEligible": true
+                        },
+                        "reasonCodes": [
+                          "storage_budget_unavailable"
+                        ],
+                        "lifecycleState": "active",
+                        "observedAt": "2026-03-14T06:43:55.165Z",
+                        "decisionDimension": "repairEligible"
+                      }
+                    }
+                  },
+                  {
+                    "eventType": "step",
+                    "operationId": "036fcc1c-c86e-483b-8c37-4c9940c9d62f",
+                    "step": "CREATING",
+                    "timestampMs": 1773470642041,
+                    "ageMs": 34783,
+                    "metadata": {
+                      "previousStep": "SENDING",
+                      "reason": "dispatch_creating",
+                      "ownerKey": "036fcc1c-c86e-483b-8c37-4c9940c9d62f",
+                      "readinessSnapshot": {
+                        "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                        "dimensions": {
+                          "processAlive": true,
+                          "clusterMemberHealthy": true,
+                          "routingReady": true,
+                          "loadReady": true,
+                          "placementEligible": false,
+                          "controlPlaneWritable": true,
+                          "metadataPublicationHealthy": true,
+                          "repairEligible": true,
+                          "serveEligible": true
+                        },
+                        "reasonCodes": [
+                          "storage_budget_unavailable"
+                        ],
+                        "lifecycleState": "active",
+                        "observedAt": "2026-03-14T06:44:02.041Z",
+                        "decisionDimension": "repairEligible"
+                      }
+                    }
+                  },
+                  {
+                    "eventType": "step",
+                    "operationId": "036fcc1c-c86e-483b-8c37-4c9940c9d62f",
+                    "step": "ACTIVE",
+                    "timestampMs": 1773470649556,
+                    "ageMs": 27268,
+                    "metadata": {
+                      "previousStep": "CREATING",
+                      "reason": "operation_completed",
+                      "ownerKey": "036fcc1c-c86e-483b-8c37-4c9940c9d62f",
+                      "readinessSnapshot": {
+                        "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                        "dimensions": {
+                          "processAlive": true,
+                          "clusterMemberHealthy": true,
+                          "routingReady": true,
+                          "loadReady": true,
+                          "placementEligible": false,
+                          "controlPlaneWritable": true,
+                          "metadataPublicationHealthy": true,
+                          "repairEligible": true,
+                          "serveEligible": true
+                        },
+                        "reasonCodes": [
+                          "storage_budget_unavailable"
+                        ],
+                        "lifecycleState": "active",
+                        "observedAt": "2026-03-14T06:44:09.556Z",
+                        "decisionDimension": "repairEligible"
+                      }
+                    }
+                  },
+                  {
+                    "eventType": "state",
+                    "operationId": "036fcc1c-c86e-483b-8c37-4c9940c9d62f",
+                    "step": "ACTIVE",
+                    "timestampMs": 1773470649556,
+                    "ageMs": 27268,
+                    "status": "active",
+                    "inFlight": false,
+                    "staleTimeout": false,
+                    "timeoutMs": null
+                  }
+                ],
+                "96cfc36c-7b3c-4cfe-8e8d-85882ae775a0": [
+                  {
+                    "eventType": "step",
+                    "operationId": "96cfc36c-7b3c-4cfe-8e8d-85882ae775a0",
+                    "step": "PENDING",
+                    "timestampMs": 1773470635167,
+                    "ageMs": 41657,
+                    "metadata": {
+                      "readinessSnapshot": {
+                        "nodeId": "37ab9190-8bcc-5378-ac57-9d012e3bf838",
+                        "dimensions": {
+                          "processAlive": true,
+                          "clusterMemberHealthy": true,
+                          "routingReady": true,
+                          "loadReady": true,
+                          "placementEligible": false,
+                          "controlPlaneWritable": true,
+                          "metadataPublicationHealthy": true,
+                          "repairEligible": true,
+                          "serveEligible": true
+                        },
+                        "reasonCodes": [
+                          "storage_budget_unavailable"
+                        ],
+                        "lifecycleState": "active",
+                        "observedAt": "2026-03-14T06:43:55.167Z",
+                        "decisionDimension": "repairEligible"
+                      }
+                    }
+                  },
+                  {
+                    "eventType": "step",
+                    "operationId": "96cfc36c-7b3c-4cfe-8e8d-85882ae775a0",
+                    "step": "SENDING",
+                    "timestampMs": 1773470646687,
+                    "ageMs": 30137,
+                    "metadata": {
+                      "previousStep": "PENDING",
+                      "reason": "dispatch_sending",
+                      "ownerKey": "96cfc36c-7b3c-4cfe-8e8d-85882ae775a0",
+                      "readinessSnapshot": {
+                        "nodeId": "37ab9190-8bcc-5378-ac57-9d012e3bf838",
+                        "dimensions": {
+                          "processAlive": true,
+                          "clusterMemberHealthy": true,
+                          "routingReady": true,
+                          "loadReady": true,
+                          "placementEligible": false,
+                          "controlPlaneWritable": true,
+                          "metadataPublicationHealthy": true,
+                          "repairEligible": true,
+                          "serveEligible": true
+                        },
+                        "reasonCodes": [
+                          "storage_budget_unavailable"
+                        ],
+                        "lifecycleState": "active",
+                        "observedAt": "2026-03-14T06:44:06.687Z",
+                        "decisionDimension": "repairEligible"
+                      }
+                    }
+                  },
+                  {
+                    "eventType": "step",
+                    "operationId": "96cfc36c-7b3c-4cfe-8e8d-85882ae775a0",
+                    "step": "CREATING",
+                    "timestampMs": 1773470653727,
+                    "ageMs": 23097,
+                    "metadata": {
+                      "previousStep": "SENDING",
+                      "reason": "dispatch_creating",
+                      "ownerKey": "96cfc36c-7b3c-4cfe-8e8d-85882ae775a0",
+                      "readinessSnapshot": {
+                        "nodeId": "37ab9190-8bcc-5378-ac57-9d012e3bf838",
+                        "dimensions": {
+                          "processAlive": true,
+                          "clusterMemberHealthy": true,
+                          "routingReady": true,
+                          "loadReady": true,
+                          "placementEligible": false,
+                          "controlPlaneWritable": true,
+                          "metadataPublicationHealthy": true,
+                          "repairEligible": true,
+                          "serveEligible": true
+                        },
+                        "reasonCodes": [
+                          "storage_budget_unavailable"
+                        ],
+                        "lifecycleState": "active",
+                        "observedAt": "2026-03-14T06:44:13.727Z",
+                        "decisionDimension": "repairEligible"
+                      }
+                    }
+                  },
+                  {
+                    "eventType": "state",
+                    "operationId": "96cfc36c-7b3c-4cfe-8e8d-85882ae775a0",
+                    "step": "CREATING",
+                    "timestampMs": 1773470653727,
+                    "ageMs": 23097,
+                    "status": "creating",
+                    "inFlight": false,
+                    "staleTimeout": false,
+                    "timeoutMs": 60000
+                  }
+                ],
+                "a0dde2f4-1ba6-483b-8348-627ba092bccd": [
+                  {
+                    "eventType": "step",
+                    "operationId": "a0dde2f4-1ba6-483b-8348-627ba092bccd",
+                    "step": "PENDING",
+                    "timestampMs": 1773470635170,
+                    "ageMs": 41654,
+                    "metadata": {
+                      "readinessSnapshot": {
+                        "nodeId": "8be8d30f-4499-5eed-865c-71b4d529a67a",
+                        "dimensions": {
+                          "processAlive": true,
+                          "clusterMemberHealthy": true,
+                          "routingReady": true,
+                          "loadReady": true,
+                          "placementEligible": false,
+                          "controlPlaneWritable": true,
+                          "metadataPublicationHealthy": true,
+                          "repairEligible": true,
+                          "serveEligible": true
+                        },
+                        "reasonCodes": [
+                          "storage_budget_unavailable"
+                        ],
+                        "lifecycleState": "active",
+                        "observedAt": "2026-03-14T06:43:55.170Z",
+                        "decisionDimension": "repairEligible"
+                      }
+                    }
+                  },
+                  {
+                    "eventType": "step",
+                    "operationId": "a0dde2f4-1ba6-483b-8348-627ba092bccd",
+                    "step": "SENDING",
+                    "timestampMs": 1773470663415,
+                    "ageMs": 13409,
+                    "metadata": {
+                      "previousStep": "PENDING",
+                      "reason": "dispatch_sending",
+                      "ownerKey": "a0dde2f4-1ba6-483b-8348-627ba092bccd",
+                      "readinessSnapshot": {
+                        "nodeId": "8be8d30f-4499-5eed-865c-71b4d529a67a",
+                        "dimensions": {
+                          "processAlive": true,
+                          "clusterMemberHealthy": true,
+                          "routingReady": true,
+                          "loadReady": true,
+                          "placementEligible": false,
+                          "controlPlaneWritable": true,
+                          "metadataPublicationHealthy": true,
+                          "repairEligible": true,
+                          "serveEligible": true
+                        },
+                        "reasonCodes": [
+                          "storage_budget_unavailable"
+                        ],
+                        "lifecycleState": "active",
+                        "observedAt": "2026-03-14T06:44:23.415Z",
+                        "decisionDimension": "repairEligible"
+                      }
+                    }
+                  },
+                  {
+                    "eventType": "state",
+                    "operationId": "a0dde2f4-1ba6-483b-8348-627ba092bccd",
+                    "step": "SENDING",
+                    "timestampMs": 1773470663415,
+                    "ageMs": 13409,
+                    "status": "pending",
+                    "inFlight": false,
+                    "staleTimeout": false,
+                    "timeoutMs": 30000
+                  }
+                ],
+                "58ad67a8-8c6e-4216-9129-5b73baa4bfc6": [
+                  {
+                    "eventType": "step",
+                    "operationId": "58ad67a8-8c6e-4216-9129-5b73baa4bfc6",
+                    "step": "PENDING",
+                    "timestampMs": 1773470663428,
+                    "ageMs": 13396,
+                    "metadata": {
+                      "readinessSnapshot": {
+                        "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                        "dimensions": {
+                          "processAlive": true,
+                          "clusterMemberHealthy": true,
+                          "routingReady": true,
+                          "loadReady": true,
+                          "placementEligible": false,
+                          "controlPlaneWritable": true,
+                          "metadataPublicationHealthy": true,
+                          "repairEligible": true,
+                          "serveEligible": true
+                        },
+                        "reasonCodes": [
+                          "storage_budget_unavailable"
+                        ],
+                        "lifecycleState": "active",
+                        "observedAt": "2026-03-14T06:44:23.428Z",
+                        "decisionDimension": "repairEligible"
+                      }
+                    }
+                  },
+                  {
+                    "eventType": "step",
+                    "operationId": "58ad67a8-8c6e-4216-9129-5b73baa4bfc6",
+                    "step": "SENDING",
+                    "timestampMs": 1773470663446,
+                    "ageMs": 13378,
+                    "metadata": {
+                      "previousStep": "PENDING",
+                      "reason": "dispatch_sending",
+                      "ownerKey": "58ad67a8-8c6e-4216-9129-5b73baa4bfc6",
+                      "readinessSnapshot": {
+                        "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+                        "dimensions": {
+                          "processAlive": true,
+                          "clusterMemberHealthy": true,
+                          "routingReady": true,
+                          "loadReady": true,
+                          "placementEligible": false,
+                          "controlPlaneWritable": true,
+                          "metadataPublicationHealthy": true,
+                          "repairEligible": true,
+                          "serveEligible": true
+                        },
+                        "reasonCodes": [
+                          "storage_budget_unavailable"
+                        ],
+                        "lifecycleState": "active",
+                        "observedAt": "2026-03-14T06:44:23.446Z",
+                        "decisionDimension": "repairEligible"
+                      }
+                    }
+                  },
+                  {
+                    "eventType": "state",
+                    "operationId": "58ad67a8-8c6e-4216-9129-5b73baa4bfc6",
+                    "step": "SENDING",
+                    "timestampMs": 1773470663446,
+                    "ageMs": 13378,
+                    "status": "pending",
+                    "inFlight": true,
+                    "staleTimeout": false,
+                    "timeoutMs": 30000
+                  }
+                ],
+                "160a8150-cde4-4cfe-8100-8f101b2978f4": [
+                  {
+                    "eventType": "step",
+                    "operationId": "160a8150-cde4-4cfe-8100-8f101b2978f4",
+                    "step": "PENDING",
+                    "timestampMs": 1773470663434,
+                    "ageMs": 13390,
+                    "metadata": {
+                      "readinessSnapshot": {
+                        "nodeId": "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58",
+                        "dimensions": {
+                          "processAlive": true,
+                          "clusterMemberHealthy": true,
+                          "routingReady": true,
+                          "loadReady": true,
+                          "placementEligible": false,
+                          "controlPlaneWritable": true,
+                          "metadataPublicationHealthy": true,
+                          "repairEligible": true,
+                          "serveEligible": true
+                        },
+                        "reasonCodes": [
+                          "storage_budget_unavailable"
+                        ],
+                        "lifecycleState": "active",
+                        "observedAt": "2026-03-14T06:44:23.434Z",
+                        "decisionDimension": "repairEligible"
+                      }
+                    }
+                  },
+                  {
+                    "eventType": "state",
+                    "operationId": "160a8150-cde4-4cfe-8100-8f101b2978f4",
+                    "step": "PENDING",
+                    "timestampMs": 1773470663434,
+                    "ageMs": 13390,
+                    "status": "pending",
+                    "inFlight": true,
+                    "staleTimeout": false,
+                    "timeoutMs": 30000
+                  }
+                ],
+                "2cc62fd9-a82d-4d39-b9a1-45ed52693883": [
+                  {
+                    "eventType": "step",
+                    "operationId": "2cc62fd9-a82d-4d39-b9a1-45ed52693883",
+                    "step": "PENDING",
+                    "timestampMs": 1773470663442,
+                    "ageMs": 13382,
+                    "metadata": {
+                      "readinessSnapshot": {
+                        "nodeId": "ff60df70-c157-50cb-bfdf-f617df0e5cb4",
+                        "dimensions": {
+                          "processAlive": true,
+                          "clusterMemberHealthy": true,
+                          "routingReady": true,
+                          "loadReady": true,
+                          "placementEligible": false,
+                          "controlPlaneWritable": true,
+                          "metadataPublicationHealthy": true,
+                          "repairEligible": true,
+                          "serveEligible": true
+                        },
+                        "reasonCodes": [
+                          "storage_budget_unavailable"
+                        ],
+                        "lifecycleState": "active",
+                        "observedAt": "2026-03-14T06:44:23.442Z",
+                        "decisionDimension": "repairEligible"
+                      }
+                    }
+                  },
+                  {
+                    "eventType": "state",
+                    "operationId": "2cc62fd9-a82d-4d39-b9a1-45ed52693883",
+                    "step": "PENDING",
+                    "timestampMs": 1773470663442,
+                    "ageMs": 13382,
+                    "status": "pending",
+                    "inFlight": true,
+                    "staleTimeout": false,
+                    "timeoutMs": 30000
+                  }
+                ]
+              },
+              "inFlightExcludedStatuses": [
+                "active",
+                "removed",
+                "failed"
+              ]
+            },
+            "publicationMode": {
+              "currentMode": "repair_only",
+              "reasonCode": "config_safe_mode",
+              "enteredAt": "2026-03-14T06:42:49.685Z",
+              "recentTransitions": []
+            }
+          }
+        },
+        "loadMetrics": {
+          "total": 1187,
+          "success": 1137,
+          "failed": 50,
+          "errors": 50,
+          "latency": {
+            "avg": 567.5795954265611,
+            "p50": 423,
+            "p95": 1664,
+            "p99": 2450
+          },
+          "opsPerSec": 18.922667346841173,
+          "attemptErrors": 50,
+          "queueDelay": {
+            "avg": 1921.3281911330264,
+            "p50": 956.467529296875,
+            "p95": 7622.113525390625,
+            "p99": 9917.102294921875,
+            "max": 10429.385498046875
+          },
+          "distinctErrors": [
+            "Admin API query timed out for node 11601fe0-72d6-5853-8590-ec2881853e72 on lane default after 4000ms",
+            "Admin API query timed out for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 on lane default after 4000ms",
+            "Admin API query failed for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 on lane default: Distributed operation failed due to participant failures",
+            "Admin API query failed for node 11601fe0-72d6-5853-8590-ec2881853e72 on lane default: Query timeout after 4000ms",
+            "Admin API query failed for node 11601fe0-72d6-5853-8590-ec2881853e72 on lane default: Distributed operation failed due to participant failures"
+          ],
+          "targetOperations": 33600,
+          "dispatchedOperations": 1200,
+          "undispatchedOperations": 32400,
+          "undispatchedByReason": {
+            "capacity": 0,
+            "durationTimeout": 0,
+            "cancelled": 32400
+          },
+          "perNode": {
+            "7493b0ab-a054-5fad-a91b-5e331db29304": {
+              "dispatched": 231,
+              "success": 230,
+              "attemptErrors": 0,
+              "admissionSignals": 0,
+              "queuePressureSignals": 49525,
+              "rejected": 0,
+              "rejectedByReason": {
+                "queueFull": 0
+              }
+            },
+            "35a891b8-c1a0-5064-9c6e-2acfba61c2a7": {
+              "dispatched": 34,
+              "success": 8,
+              "attemptErrors": 24,
+              "admissionSignals": 0,
+              "queuePressureSignals": 49724,
+              "rejected": 0,
+              "rejectedByReason": {
+                "queueFull": 0
+              }
+            },
+            "11601fe0-72d6-5853-8590-ec2881853e72": {
+              "dispatched": 31,
+              "success": 3,
+              "attemptErrors": 26,
+              "admissionSignals": 0,
+              "queuePressureSignals": 49728,
+              "rejected": 0,
+              "rejectedByReason": {
+                "queueFull": 0
+              }
+            },
+            "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58": {
+              "dispatched": 229,
+              "success": 227,
+              "attemptErrors": 0,
+              "admissionSignals": 0,
+              "queuePressureSignals": 49517,
+              "rejected": 0,
+              "rejectedByReason": {
+                "queueFull": 0
+              }
+            },
+            "8be8d30f-4499-5eed-865c-71b4d529a67a": {
+              "dispatched": 231,
+              "success": 229,
+              "attemptErrors": 0,
+              "admissionSignals": 0,
+              "queuePressureSignals": 49518,
+              "rejected": 0,
+              "rejectedByReason": {
+                "queueFull": 0
+              }
+            },
+            "ff60df70-c157-50cb-bfdf-f617df0e5cb4": {
+              "dispatched": 214,
+              "success": 212,
+              "attemptErrors": 0,
+              "admissionSignals": 0,
+              "queuePressureSignals": 49539,
+              "rejected": 0,
+              "rejectedByReason": {
+                "queueFull": 0
+              }
+            },
+            "37ab9190-8bcc-5378-ac57-9d012e3bf838": {
+              "dispatched": 230,
+              "success": 228,
+              "attemptErrors": 0,
+              "admissionSignals": 0,
+              "queuePressureSignals": 49520,
+              "rejected": 0,
+              "rejectedByReason": {
+                "queueFull": 0
+              }
+            }
+          },
+          "rejectedOperations": 0,
+          "rejectedByReason": {
+            "queueFull": 0
+          },
+          "queuePressure": {
+            "samples": 43862,
+            "pendingQueueDepth": {
+              "avg": 361.6615065432493,
+              "p95": 1173,
+              "p99": 1406,
+              "max": 1461
+            }
+          }
+        },
+        "successRate": 0.95787700084246
+      },
+      "invariantBreaches": {
+        "totalCount": 0,
+        "hardCount": 0,
+        "softCount": 0,
+        "failing": [],
+        "hardBreaches": [],
+        "softBreaches": []
+      },
+      "exampleResults": null,
+      "loadMetrics": {
+        "total": 1187,
+        "success": 1137,
+        "failed": 50,
+        "errors": 50,
+        "latency": {
+          "avg": 567.5795954265611,
+          "p50": 423,
+          "p95": 1664,
+          "p99": 2450
+        },
+        "opsPerSec": 18.922667346841173,
+        "attemptErrors": 50,
+        "queueDelay": {
+          "avg": 1921.3281911330264,
+          "p50": 956.467529296875,
+          "p95": 7622.113525390625,
+          "p99": 9917.102294921875,
+          "max": 10429.385498046875
+        },
+        "distinctErrors": [
+          "Admin API query timed out for node 11601fe0-72d6-5853-8590-ec2881853e72 on lane default after 4000ms",
+          "Admin API query timed out for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 on lane default after 4000ms",
+          "Admin API query failed for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 on lane default: Distributed operation failed due to participant failures",
+          "Admin API query failed for node 11601fe0-72d6-5853-8590-ec2881853e72 on lane default: Query timeout after 4000ms",
+          "Admin API query failed for node 11601fe0-72d6-5853-8590-ec2881853e72 on lane default: Distributed operation failed due to participant failures"
+        ],
+        "targetOperations": 33600,
+        "dispatchedOperations": 1200,
+        "undispatchedOperations": 32400,
+        "undispatchedByReason": {
+          "capacity": 0,
+          "durationTimeout": 0,
+          "cancelled": 32400
+        },
+        "perNode": {
+          "7493b0ab-a054-5fad-a91b-5e331db29304": {
+            "dispatched": 231,
+            "success": 230,
+            "attemptErrors": 0,
+            "admissionSignals": 0
+          },
+          "35a891b8-c1a0-5064-9c6e-2acfba61c2a7": {
+            "dispatched": 34,
+            "success": 8,
+            "attemptErrors": 24,
+            "admissionSignals": 0
+          },
+          "11601fe0-72d6-5853-8590-ec2881853e72": {
+            "dispatched": 31,
+            "success": 3,
+            "attemptErrors": 26,
+            "admissionSignals": 0
+          },
+          "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58": {
+            "dispatched": 229,
+            "success": 227,
+            "attemptErrors": 0,
+            "admissionSignals": 0
+          },
+          "8be8d30f-4499-5eed-865c-71b4d529a67a": {
+            "dispatched": 231,
+            "success": 229,
+            "attemptErrors": 0,
+            "admissionSignals": 0
+          },
+          "ff60df70-c157-50cb-bfdf-f617df0e5cb4": {
+            "dispatched": 214,
+            "success": 212,
+            "attemptErrors": 0,
+            "admissionSignals": 0
+          },
+          "37ab9190-8bcc-5378-ac57-9d012e3bf838": {
+            "dispatched": 230,
+            "success": 228,
+            "attemptErrors": 0,
+            "admissionSignals": 0
+          }
+        },
+        "rejectedOperations": 0,
+        "rejectedByReason": {
+          "queueFull": 0
+        },
+        "queuePressure": {
+          "samples": 43862,
+          "pendingQueueDepth": {
+            "avg": 361.6615065432493,
+            "p95": 1173,
+            "p99": 1406,
+            "max": 1461
+          }
+        }
+      },
+      "performanceMeasurement": {
+        "available": true,
+        "validForComparison": true,
+        "invalidReason": null,
+        "observedOpsPerSec": 18.922667346841173,
+        "observedP99LatencyMs": 2450
+      },
+      "partitionHotspots": null,
+      "optimizationPriorities": [
+        {
+          "component": "replication_write_path",
+          "signal": "dispatch_queue_pressure",
+          "priority": "critical",
+          "score": 95,
+          "reason": "Dispatch backlog and queue delay indicate scheduler pressure and insufficient load completion capacity.",
+          "evidence": {
+            "targetOperations": 33600,
+            "undispatchedOperations": 32400,
+            "undispatchedRatio": 0.9642857142857143,
+            "queueDelayP95Ms": 7622.113525390625,
+            "queueDelayP99Ms": 9917.102294921875
+          }
+        },
+        {
+          "component": "error_retry_path",
+          "signal": "load_failure_rate",
+          "priority": "high",
+          "score": 80,
+          "reason": "Observed request failures suggest expensive retries or transient routing instability.",
+          "evidence": {
+            "total": 1187,
+            "failed": 50,
+            "errors": 50,
+            "failureRate": 0.08424599831508003
+          }
+        },
+        {
+          "component": "convergence_control_plane",
+          "signal": "convergence_settle_time",
+          "priority": "medium",
+          "score": 60,
+          "reason": "Convergence delay suggests extra work in replica movement, promotion, or membership updates.",
+          "evidence": {
+            "settledAfterMs": 5087,
+            "leaderChanges": 0
+          }
+        }
+      ]
+    }
+  ],
+  "benchmarkRegressionGate": {
+    "enabled": false,
+    "status": "skipped",
+    "reason": "disabled",
+    "settings": {
+      "enabled": false,
+      "maxThroughputRegressionRatio": 0.1,
+      "minimumThroughputRatioSutToBaseline": 0.1,
+      "baselineProvider": "liferaft",
+      "failIfBaselineMissing": false,
+      "approvedMitigationId": null,
+      "parityMismatchPolicy": "warn"
+    },
+    "currentProvider": "liferaft",
+    "baselineProvider": "liferaft",
+    "comparedScenarioCount": 0,
+    "failedScenarioCount": 0,
+    "mitigatedScenarioCount": 0,
+    "missingBaselineScenarios": [],
+    "comparisons": [],
+    "parityMismatchCount": 0,
+    "lowThroughputRatioCount": 0,
+    "warnings": []
+  },
+  "metadata": {
+    "raftProvider": "liferaft",
+    "configPath": "test/distributed/config/local-benchmark-7node-partition-split.json",
+    "scenarioFilter": "seven-node-load-during-partitioning"
+  }
+}

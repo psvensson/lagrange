@@ -56,6 +56,25 @@ class MessageGroupAssignment {
           NUM.ZERO,
     });
 
+    // If the joining node already has a message group replica,
+    // it is a restarting node. Skip MOVE_REPLICA and go straight
+    // to CREATE_SELF_HOSTED so it rejoins its existing group
+    // with the same deterministic group ID.
+    if (this.hasExistingMembership(newNodeId, messageGroups)) {
+      const newGroupId = this.generateGroupId(newNodeId);
+
+      this.logger.info(
+        MESSAGE_GROUP_ASSIGNMENT_LOG_MSG.EXISTING_MEMBERSHIP_DETECTED,
+        {newNodeId, newGroupId},
+      );
+
+      return {
+        strategy: MESSAGE_GROUP_ASSIGNMENT_STRATEGY.CREATE_SELF_HOSTED,
+        groupId: newGroupId,
+        replicaCount: MESSAGE_GROUP_ASSIGNMENT_DEFAULT.REPLICA_COUNT,
+      };
+    }
+
     // Strategy 1: Find a message group with 2+ replicas on the same node
     const excludedSourceNodeIds = new Set(
       options.excludedSourceNodeIds instanceof Set ?
@@ -101,6 +120,35 @@ class MessageGroupAssignment {
       groupId: newGroupId,
       replicaCount: MESSAGE_GROUP_ASSIGNMENT_DEFAULT.REPLICA_COUNT,
     };
+  }
+
+  /**
+   * Check whether the joining node already has a replica in any
+   * existing message group. A node with existing membership is
+   * a restarting node and should rejoin its group via
+   * CREATE_SELF_HOSTED rather than receiving a MOVE_REPLICA
+   * assignment for a different group.
+   *
+   * Only returns true when the node's canonical self-hosted
+   * group (derived from its node ID) already exists in the
+   * cluster. Nodes that joined via MOVE_REPLICA without ever
+   * creating a self-hosted group are not considered to have
+   * canonical membership and remain eligible for MOVE_REPLICA.
+   * @param {string} nodeId - Joining node ID.
+   * @param {Array<Object>} messageGroups - Existing message groups.
+   * @return {boolean} True when the node's canonical group exists.
+   */
+  hasExistingMembership(nodeId, messageGroups) {
+    if (typeof nodeId !== 'string' || nodeId.length === NUM.ZERO) {
+      return false;
+    }
+    const canonicalGroupId = this.generateGroupId(nodeId);
+    for (const group of messageGroups) {
+      if (group.group_id === canonicalGroupId) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**

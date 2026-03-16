@@ -566,6 +566,10 @@ class UnifiedRebalancer extends EventEmitter {
    * @param {string} reason - Reason for state change.
    */
   recordStateChange(reason) {
+    if (this.isShuttingDown) {
+      return;
+    }
+
     this.lastStateChangeTime = Date.now();
 
     this.logger.debug(REBALANCER_LOG_MSG.STABILIZATION_RESET, {
@@ -2031,7 +2035,7 @@ class UnifiedRebalancer extends EventEmitter {
    * @param {string} reason - Reason for immediate check.
    */
   triggerImmediateCheck(reason) {
-      if (!this.isLeader) {
+      if (!this.isLeader || this.isShuttingDown) {
         return;
       }
 

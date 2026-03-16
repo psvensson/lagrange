@@ -51,6 +51,10 @@ import {createManagedSplitMetricsProvider} from
   './partition/managed-split-metrics-provider.js';
 import {PARTITION_SERVICE_EVENT} from
   './partition/partition-service-constants.js';
+import {SPLIT_MERGE_EVENT} from
+  './partition/partition-constants.js';
+import {STABILIZATION_RESET_TRIGGER} from
+  './rebalancer/rebalancer-constants.js';
 import {wireMigrationWorkflowOwners} from
   './migration/migration-composition.js';
 
@@ -178,6 +182,30 @@ function createSqlCallbackWasmExecutor() {
 }
 
 /**
+ * Find a partition service by partition ID from the partitionServices map.
+ * The map is keyed by replicaId; this iterates values and matches by the
+ * partitionId property. Read-only lookup — no new cache or index.
+ * @param {Map} partitionServices - Map keyed by replicaId.
+ * @param {string} partitionId - The partition ID to find.
+ * @return {Object|null} The matching partition service, or null.
+ */
+function resolvePartitionServiceByPartitionId(
+  partitionServices, partitionId,
+) {
+  if (!partitionServices || !partitionId ||
+      typeof partitionServices.values !== 'function') {
+    return null;
+  }
+  for (const service of partitionServices.values()) {
+    if (service && service.partitionId === partitionId) {
+      return service;
+    }
+  }
+  return null;
+}
+
+
+/**
  * Run migration recovery if the SQL engine has a migration coordinator.
  * @param {Object|null} sqlQueryEngine
  * @param {Object} logger
@@ -295,7 +323,13 @@ function createServiceDiagnosticsProvider(owner) {
       null;
     const resourceDiagnostics = resourceDiagnosticsSampler.getReport();
 
-    if (!lifecycleDiagnostics && !reconcilerDiagnostics && !resourceDiagnostics) {
+    const cdcSubscriptionStatus =
+      typeof owner?.getCdcSubscriptionStatus === 'function' ?
+        owner.getCdcSubscriptionStatus() :
+        null;
+
+    if (!lifecycleDiagnostics && !reconcilerDiagnostics &&
+      !resourceDiagnostics && !cdcSubscriptionStatus) {
       return null;
     }
 
@@ -303,6 +337,7 @@ function createServiceDiagnosticsProvider(owner) {
       lifecycle: lifecycleDiagnostics,
       reconciler: reconcilerDiagnostics,
       resources: resourceDiagnostics,
+      cdcSubscriptionStatus,
     };
   };
 }
@@ -768,6 +803,30 @@ async function main() {
           null,
       });
       sqlQueryEngine.setPartitionSplitMergeManager(partitionSplitMergeManager);
+
+      partitionSplitMergeManager.on(
+        SPLIT_MERGE_EVENT.SPLIT_COMPLETED,
+        (result) => {
+          const childPartitionIds = [
+            result?.leftPartition?.partitionId,
+            result?.rightPartition?.partitionId,
+          ].filter(Boolean);
+          for (const childPartitionId of childPartitionIds) {
+            const partitionService =
+              resolvePartitionServiceByPartitionId(
+                joinResult.partitionServices,
+                childPartitionId,
+              );
+            if (!partitionService?.rebalancer) {
+              continue;
+            }
+            partitionService.rebalancer.recordStateChange(
+              STABILIZATION_RESET_TRIGGER.SPLIT_COMPLETED,
+            );
+          }
+        },
+      );
+
       detachJoinMigrationRecovery = wireMigrationRecoveryOnLeaderElection({
         sqlQueryEngine,
         partitionServices: joinResult.partitionServices,
@@ -1018,6 +1077,30 @@ async function main() {
         bootstrapService.rebalanceCoordinator?.storageAccountingService || null,
     });
     sqlQueryEngine.setPartitionSplitMergeManager(partitionSplitMergeManager);
+
+    partitionSplitMergeManager.on(
+      SPLIT_MERGE_EVENT.SPLIT_COMPLETED,
+      (result) => {
+        const childPartitionIds = [
+          result?.leftPartition?.partitionId,
+          result?.rightPartition?.partitionId,
+        ].filter(Boolean);
+        for (const childPartitionId of childPartitionIds) {
+          const partitionService =
+            resolvePartitionServiceByPartitionId(
+              bootstrapResult.partitionServices,
+              childPartitionId,
+            );
+          if (!partitionService?.rebalancer) {
+            continue;
+          }
+          partitionService.rebalancer.recordStateChange(
+            STABILIZATION_RESET_TRIGGER.SPLIT_COMPLETED,
+          );
+        }
+      },
+    );
+
     detachSeedMigrationRecovery = wireMigrationRecoveryOnLeaderElection({
       sqlQueryEngine,
       partitionServices: bootstrapResult.partitionServices,

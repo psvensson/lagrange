@@ -86,7 +86,7 @@ async function run(cluster) {
   }
 
   // 8. Assert final cluster consistency.
-  await cluster.assertConsistency();
+  await cluster.waitForConsistencyConvergence();
 
   return {
     loadMetrics: metrics,

@@ -74,7 +74,9 @@ async function run(cluster, options = {}) {
     successRate.toFixed(3) + ' (expected >= ' + minSuccessRate + ')',
   );
 
-  await cluster.assertConsistency();
+  await cluster.waitForConsistencyConvergence({
+    timeoutMs: convergenceTimeoutMs,
+  });
 
   return {
     seedNodeId: seedNode.id,

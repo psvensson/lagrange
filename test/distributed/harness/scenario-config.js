@@ -33,7 +33,7 @@ function resolveSevenNodeReadWriteLoadDistributionScenarioConfig(options = {}) {
     minAdditionalPartitions:
       normalizeFiniteNumber(options.minAdditionalPartitions, 2),
     minDistinctReplicaNodes:
-      normalizeFiniteNumber(options.minDistinctReplicaNodes, 6),
+      normalizeFiniteNumber(options.minDistinctReplicaNodes, 5),
     distributionTimeoutMs:
       normalizeFiniteNumber(options.distributionTimeoutMs, 90000),
     distributionPollIntervalMs:
@@ -69,7 +69,7 @@ function resolveSevenNodeTablePartitionDistributionScenarioConfig(options = {}) 
     minAdditionalPartitions:
       normalizeFiniteNumber(options.minAdditionalPartitions, 2),
     minDistinctReplicaNodes:
-      normalizeFiniteNumber(options.minDistinctReplicaNodes, 6),
+      normalizeFiniteNumber(options.minDistinctReplicaNodes, 5),
     distributionTimeoutMs:
       normalizeFiniteNumber(options.distributionTimeoutMs, 90000),
     distributionPollIntervalMs:
@@ -193,7 +193,7 @@ function resolvePartitionGrowthAndSpreadScenarioConfig(options = {}) {
     minAdditionalPartitions:
       normalizeFiniteNumber(options.minAdditionalPartitions, 2),
     minDistinctReplicaNodes:
-      normalizeFiniteNumber(options.minDistinctReplicaNodes, 6),
+      normalizeFiniteNumber(options.minDistinctReplicaNodes, 5),
   });
 }
 

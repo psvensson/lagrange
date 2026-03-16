@@ -24,9 +24,9 @@ describe('network-partition-split-brain scenario', () => {
       }),
       assertConsistency: async () => {
         assertConsistencyCalls += 1;
-        if (assertConsistencyCalls === 1) {
-          throw new Error('Active nodes disagree');
-        }
+      },
+      waitForConsistencyConvergence: async () => {
+        assertConsistencyCalls += 1;
       },
     };
 
@@ -39,7 +39,8 @@ describe('network-partition-split-brain scenario', () => {
 
     assert.ok(Array.isArray(result.groupA));
     assert.ok(Array.isArray(result.groupB));
-    assert.ok(assertConsistencyCalls >= 2);
+    assert.ok(assertConsistencyCalls >= 1,
+      'waitForConsistencyConvergence should be called');
     assert.equal(calls[0][0], 'partitionNetwork');
     assert.equal(calls[1][0], 'healPartition');
   });

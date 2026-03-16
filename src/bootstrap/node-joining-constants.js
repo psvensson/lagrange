@@ -209,6 +209,18 @@ const JOINING_LOG_MSG = Object.freeze({
     'Failed join cleanup complete',
   FAILED_JOIN_CLEANUP_SUMMARY:
     'Failed join cleanup summary',
+  CDC_SUBSCRIPTION_RETRY: 'CDC subscription retry',
+  CDC_SUBSCRIPTION_RETRY_EXHAUSTED: 'CDC subscription retry exhausted',
+  CDC_RECOVERY_DIAGNOSTICS: 'CDC recovery diagnostics',
+  CDC_REESTABLISHMENT_COMPLETE: 'CDC re-establishment complete',
+  CDC_REESTABLISHMENT_TIMEOUT: 'CDC re-establishment timeout',
+  CDC_READINESS_GATE_WAITING:
+    'Waiting for CDC subscriptions before advertising readiness',
+  CDC_READINESS_GATE_PASSED:
+    'CDC subscriptions confirmed active before readiness advertisement',
+  CDC_READINESS_GATE_DEGRADED:
+    'CDC subscriptions not confirmed within timeout, ' +
+    'advertising readiness with degraded CDC status',
 });
 
 const JOINING_ERROR_MSG = Object.freeze({
@@ -288,7 +300,24 @@ const JOIN_REPLICA_DEFAULT = Object.freeze({
   LOG_REGISTRATION: true,
 });
 
+const CDC_REESTABLISHMENT = Object.freeze({
+  TIMEOUT_MS: 30000,
+  RETRY_DELAY_MS: 1000,
+  MAX_RETRIES: 10,
+  DIAGNOSTIC_INTERVAL_MS: 5000,
+  READINESS_GATE_POLL_MS: 500,
+});
+
+const CDC_SUBSCRIPTION_STATUS = Object.freeze({
+  SUBSCRIBED: 'subscribed',
+  PENDING: 'pending',
+  FAILED: 'failed',
+});
+
+
 export {
+  CDC_REESTABLISHMENT,
+  CDC_SUBSCRIPTION_STATUS,
   JOIN_BACKFILL_QUERY,
   JOIN_BACKFILL_SCOPE,
   JOIN_REPLICA_DEFAULT,

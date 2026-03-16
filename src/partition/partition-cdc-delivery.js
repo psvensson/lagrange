@@ -13,6 +13,7 @@ import {
   CDC_LIFECYCLE_LOG_MSG,
 } from '../constants/cdc-lifecycle-constants.js';
 import {getTableCdcPolicy} from '../cache/cdc-table-policy.js';
+import {buildEventIdentity} from './cdc-event-buffer.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
   PARTITION_SERVICE_CDC,
@@ -188,6 +189,14 @@ class PartitionCDCDelivery {
         this.owner.cdcBufferReplayInFlight) {
       return;
     }
+    if (this.owner.isShutdown) {
+      this.owner.logger.debug(
+        PARTITION_SERVICE_LOG_MSG.TIMER_SKIPPED_AFTER_SHUTDOWN, {
+          partitionId: this.owner.partitionId,
+          timer: 'cdcBufferReplayTimer',
+        });
+      return;
+    }
     if (this.owner.cdcSubscribers.size === NUM.ZERO ||
         !this.owner.cdcEventBuffer.hasEvents()) {
       return;
@@ -240,7 +249,8 @@ class PartitionCDCDelivery {
              this.owner.cdcEventBuffer.hasEvents()) {
         const replayedCount = await this.owner.cdcEventBuffer.replay(
           async (cdcEvent) => {
-            for (const subscriber of this.owner.cdcSubscribers) {
+            const subscribers = [...this.owner.cdcSubscribers];
+            for (const subscriber of subscribers) {
               await this.deliverCDCEventToSubscriber(subscriber, cdcEvent);
             }
             this.owner.cdcPipelineMetrics.increment(
@@ -351,6 +361,7 @@ class PartitionCDCDelivery {
       };
 
       await this.deliverCDCEventToSubscriber(subscriber, decoratedEvent);
+      this.owner.cdcEventBuffer.recordDelivered(cdcEvent);
       subscriptionState.lastDeliveredSequenceNumber =
         decoratedEvent.sequenceNumber;
       subscriptionState.lastDeliveredAt = Date.now();
@@ -415,11 +426,12 @@ class PartitionCDCDelivery {
     }
 
     const bufferedEventsAtHandshake = this.owner.cdcEventBuffer.size();
-    const catchupMode = bufferedEventsAtHandshake > NUM.ZERO ?
+    let catchupMode = bufferedEventsAtHandshake > NUM.ZERO ?
       PARTITION_SERVICE_CDC.CATCHUP_MODE_BACKFILL :
       PARTITION_SERVICE_CDC.CATCHUP_MODE_NONE;
     let bufferedEventsReplayed = NUM.ZERO;
     let catchupCompletedAt = Date.now();
+    const deliveredIdentities = new Set();
 
     if (catchupMode === PARTITION_SERVICE_CDC.CATCHUP_MODE_BACKFILL) {
       subscriptionState.streamMode =
@@ -438,9 +450,13 @@ class PartitionCDCDelivery {
           bufferedEventsAtHandshake,
         });
 
+      const trackingWrapper = async (cdcEvent) => {
+        deliveredIdentities.add(buildEventIdentity(cdcEvent));
+        await wrapper(cdcEvent);
+      };
       try {
         bufferedEventsReplayed =
-          await this.owner.cdcEventBuffer.replay(wrapper);
+          await this.owner.cdcEventBuffer.replay(trackingWrapper);
       } catch (error) {
         this.owner.cdcPipelineMetrics.increment(
           CDC_PIPELINE_METRIC.DELIVERY_FAILURES,
@@ -479,6 +495,46 @@ class PartitionCDCDelivery {
         });
     }
 
+    // Sliding window replay: deliver recent events that the new
+    // subscriber missed, deduplicating against buffer-replayed events.
+    // Skip for already-subscribed subscribers — they already received
+    // these events during their prior subscription.
+    // Delivers directly to subscriber (not through wrapper) to avoid
+    // re-recording events that are already in the sliding window.
+    let slidingWindowEventsReplayed = NUM.ZERO;
+    if (!existingWrapper) {
+      const recentEvents =
+        this.owner.cdcEventBuffer.getRecentEvents();
+      for (const cdcEvent of recentEvents) {
+        const identity = buildEventIdentity(cdcEvent);
+        if (deliveredIdentities.has(identity)) {
+          continue;
+        }
+        deliveredIdentities.add(identity);
+        const replayEvent = {
+          ...cdcEvent,
+          sequenceNumber: Number.isFinite(cdcEvent.sequenceNumber) ?
+            cdcEvent.sequenceNumber :
+            this.nextCDCEventSequenceNumber(),
+          streamMode: subscriptionState.streamMode,
+          subscriberId: subscriptionState.subscriberId,
+          subscriptionEpoch: subscriptionState.subscriptionEpoch,
+        };
+        await this.deliverCDCEventToSubscriber(
+          subscriber, replayEvent,
+        );
+        subscriptionState.lastDeliveredSequenceNumber =
+          replayEvent.sequenceNumber;
+        subscriptionState.lastDeliveredAt = Date.now();
+        slidingWindowEventsReplayed++;
+      }
+      if (catchupMode === PARTITION_SERVICE_CDC.CATCHUP_MODE_NONE &&
+          slidingWindowEventsReplayed > NUM.ZERO) {
+        catchupMode =
+          PARTITION_SERVICE_CDC.CATCHUP_MODE_SLIDING_WINDOW;
+      }
+    }
+
     subscriptionState.streamMode =
       PARTITION_SERVICE_CDC.STREAM_MODE_STEADY;
     subscriptionState.subscriptionEpoch = subscriptionEpoch;
@@ -495,6 +551,7 @@ class PartitionCDCDelivery {
         mode: catchupMode,
         bufferedEventsAtHandshake,
         bufferedEventsReplayed,
+        slidingWindowEventsReplayed,
         completed: this.owner.cdcEventBuffer.size() === NUM.ZERO,
         completedAt: catchupCompletedAt,
       },
@@ -513,6 +570,8 @@ class PartitionCDCDelivery {
         streamVersion: handshake.versionContext.streamVersion,
       });
 
+    this.owner.cdcBufferReplayDelayMs =
+      PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
     this.scheduleBufferedCDCReplay('post_subscription_handshake');
 
     return handshake;

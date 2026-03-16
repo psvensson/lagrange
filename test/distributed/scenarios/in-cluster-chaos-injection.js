@@ -38,42 +38,6 @@ function sleep(delayMs) {
 }
 
 /**
- * Wait until cluster consistency assertions stop failing.
- * This absorbs short-lived control-plane observation skew after recovery.
- *
- * @param {Object} cluster
- * @param {number} timeoutMs
- * @param {number} pollIntervalMs
- * @return {Promise<void>}
- */
-async function waitForConsistency(
-  cluster,
-  timeoutMs = DEFAULT_CONSISTENCY_TIMEOUT_MS,
-  pollIntervalMs = DEFAULT_CONSISTENCY_POLL_INTERVAL_MS,
-) {
-  const deadline = Date.now() + Math.max(ZERO, timeoutMs);
-  let lastError = null;
-
-  while (Date.now() <= deadline) {
-    try {
-      await cluster.assertConsistency();
-      return;
-    } catch (error) {
-      lastError = error;
-    }
-    if (pollIntervalMs > ZERO) {
-      await sleep(pollIntervalMs);
-    } else {
-      await Promise.resolve();
-    }
-  }
-
-  throw lastError || new Error(
-    'Consistency check did not pass within timeout',
-  );
-}
-
-/**
  * Create one deterministic RNG from a numeric seed.
  * @param {number} seed
  * @return {Function}
@@ -317,11 +281,10 @@ async function run(cluster, options = {}) {
       'Cluster did not converge after chaos recovery step ' +
       `${index + 1}: ${convergence.settledAfterMs}ms`,
     );
-    await waitForConsistency(
-      cluster,
-      config.consistencyTimeoutMs,
-      config.consistencyPollIntervalMs,
-    );
+    await cluster.waitForConsistencyConvergence({
+      timeoutMs: config.consistencyTimeoutMs,
+      pollIntervalMs: config.consistencyPollIntervalMs,
+    });
     actionTimeline.push({
       step: index + 1,
       phase: 'verify',

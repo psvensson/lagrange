@@ -11,6 +11,7 @@ import {test} from '../../../../src/test-helpers/tap.js';
 import assert from 'node:assert';
 import fc from 'fast-check';
 import {waitForConvergence} from '../assertions.js';
+import {hasConflictingLeaders} from '../assertions.js';
 import {CONVERGENCE_DEFAULTS} from '../constants.js';
 
 const CONTROL_SNAPSHOT_SCHEMA_VERSION = 1;
@@ -1078,4 +1079,44 @@ test('waitForConvergence — timeout diagnostics include in-flight operation cou
         {creating: 1},
       );
     }
+  });
+
+// --- hasConflictingLeaders tests ---
+
+test('hasConflictingLeaders returns false for identical maps',
+  async () => {
+    const leaders = {'p1': 'node-a', 'p2': 'node-b'};
+    assert.strictEqual(
+      hasConflictingLeaders(leaders, leaders), false,
+    );
+  });
+
+test('hasConflictingLeaders returns false when one map has extra keys',
+  async () => {
+    const a = {'p1': 'node-a', 'p2': 'node-b'};
+    const b = {'p1': 'node-a', 'p2': 'node-b', 'p3': 'node-c'};
+    assert.strictEqual(hasConflictingLeaders(a, b), false);
+    assert.strictEqual(hasConflictingLeaders(b, a), false);
+  });
+
+test('hasConflictingLeaders returns true for conflicting values',
+  async () => {
+    const a = {'p1': 'node-a', 'p2': 'node-b'};
+    const b = {'p1': 'node-a', 'p2': 'node-x'};
+    assert.strictEqual(hasConflictingLeaders(a, b), true);
+  });
+
+test('hasConflictingLeaders returns false for empty maps',
+  async () => {
+    assert.strictEqual(hasConflictingLeaders({}, {}), false);
+    assert.strictEqual(
+      hasConflictingLeaders({'p1': 'a'}, {}), false,
+    );
+  });
+
+test('hasConflictingLeaders returns false for disjoint keys',
+  async () => {
+    const a = {'p1': 'node-a'};
+    const b = {'p2': 'node-b'};
+    assert.strictEqual(hasConflictingLeaders(a, b), false);
   });

@@ -35,6 +35,9 @@ describe('partition-kill-heal-under-load scenario', () => {
       assertConsistency: async () => {
         calls.push(['assertConsistency']);
       },
+      waitForConsistencyConvergence: async () => {
+        calls.push(['waitForConsistencyConvergence']);
+      },
       randomNonSeed: () => 'joiner-1',
     };
 
@@ -52,6 +55,6 @@ describe('partition-kill-heal-under-load scenario', () => {
     assert.deepEqual(calls[1], ['killNode', 'joiner-1']);
     assert.deepEqual(calls[2], ['healPartition']);
     assert.deepEqual(calls[3], ['waitForConvergence']);
-    assert.deepEqual(calls[4], ['assertConsistency']);
+    assert.deepEqual(calls[4], ['waitForConsistencyConvergence']);
   });
 });

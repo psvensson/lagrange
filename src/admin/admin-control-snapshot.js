@@ -139,7 +139,11 @@ class AdminControlSnapshot {
       this.systemTableCache.getAll(TABLES.REPLICA_OPERATIONS);
     const capturedAt = this.nowFn();
 
-    const nodeIds = uniqueSorted(nodeRows
+    const activeNodeRows = nodeRows.filter((row) =>
+      String(
+        firstStringField(row, COLUMN.STATUS, 'state') || '',
+      ).toLowerCase() === STATUS_ACTIVE);
+    const nodeIds = uniqueSorted(activeNodeRows
       .map((row) => firstStringField(row, COLUMN.NODE_ID, 'id'))
       .filter(Boolean));
     const partitionIds = uniqueSorted(partitionRows

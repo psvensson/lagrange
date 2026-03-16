@@ -13,6 +13,10 @@ import {
   INITIAL_PARTITION_IDS,
   SYSTEM_TABLE_NAME,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
+import {
+  QUERY_ERROR_CODE,
+  QUERY_ERROR_MSG,
+} from '../../src/query/query-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
@@ -793,6 +797,134 @@ test('CDCIntegrationService - authoritative merge prefers fresher heartbeat rows
     t.same(result.rows[0], newerRow,
       'merged authoritative row should retain freshest heartbeat evidence');
   });
+
+test('CDCIntegrationService - authoritative read re-seeds bootstrap ' +
+  'overlay when SQL returns table-not-found (uses ' +
+  'installRecoveryRoutingOverlayEntry)', async (t) => {
+  // Regression: after seed restart, follower cache is empty and bootstrap
+  // overlay was deleted. executeAuthoritativeSystemTableRead must re-seed
+  // the overlay via installRecoveryRoutingOverlayEntry using connected
+  // nodes from the message router, then retry the query so the circular
+  // dependency (empty cache → no partitions → Table not found → repair
+  // fails → cache stays empty) is broken.
+  const tableName = SYSTEM_TABLE_NAME.NODES;
+  const expectedPartitionId = INITIAL_PARTITION_IDS[tableName];
+  const queryAttempts = [];
+  let installCalls = 0;
+  let installedServiceRows = null;
+
+  const mockSqlEngine = {
+    async executeQuery(sql, params = [], options = {}) {
+      queryAttempts.push({sql, params, options});
+      // First call: simulate empty cache + deleted overlay
+      if (queryAttempts.length === 1) {
+        return {
+          success: false,
+          error: `${QUERY_ERROR_MSG.TABLE_NOT_FOUND_PREFIX}${tableName}`,
+          errorCode: QUERY_ERROR_CODE.TABLE_NOT_FOUND,
+        };
+      }
+      // After overlay re-seed, the retry succeeds
+      return {
+        success: true,
+        rows: [{node_id: 'node-recovered', status: 'active'}],
+        count: 1,
+      };
+    },
+    installRecoveryRoutingOverlayEntry(partitionId, tbl, serviceRows) {
+      installCalls++;
+      installedServiceRows = serviceRows;
+      t.equal(partitionId, expectedPartitionId,
+        'overlay install should use the initial partition ID');
+      t.equal(tbl, tableName,
+        'overlay install should reference the correct table');
+      return true;
+    },
+  };
+
+  const connectedNodeIds = ['seed-node', 'peer-node-2'];
+  const mockMessageRouter = {
+    getConnectedNodes() {
+      return connectedNodeIds;
+    },
+  };
+
+  const service = new CDCIntegrationService({
+    nodeId: 'follower-node',
+    sqlQueryEngine: mockSqlEngine,
+    partitionServicesProvider: () => new Map(),
+  });
+  service.initialize();
+  service.setMessageRouter(mockMessageRouter);
+
+  const result = await service.executeAuthoritativeSystemTableRead(
+    tableName,
+    `SELECT * FROM ${tableName}`,
+  );
+
+  t.equal(result.success, true,
+    'authoritative read should succeed after overlay re-seed');
+  t.equal(result.rows.length, 1,
+    'should return the rows from the retried query');
+  t.equal(result.source, 'sql_query_engine',
+    'source should be sql_query_engine after retry');
+  t.equal(queryAttempts.length, 2,
+    'should attempt the query twice (fail + retry)');
+  t.equal(installCalls, 1,
+    'should install recovery overlay exactly once');
+  t.equal(installedServiceRows.length, connectedNodeIds.length,
+    'should create one service row per connected node');
+  t.equal(installedServiceRows[0].partition_id, expectedPartitionId,
+    'service row should carry the correct partition_id');
+  t.equal(installedServiceRows[0].node_id, connectedNodeIds[0],
+    'service row node_id should match connected node');
+  t.ok(installedServiceRows[0].address.includes(expectedPartitionId),
+    'service row address should contain the partition ID');
+});
+
+test('CDCIntegrationService - authoritative read does not re-seed ' +
+  'overlay for non-table-not-found errors', async (t) => {
+  // Ensure the overlay re-seed path only triggers for TABLE_NOT_FOUND,
+  // not for other SQL failures.
+  let installCalls = 0;
+  const mockSqlEngine = {
+    async executeQuery() {
+      return {
+        success: false,
+        error: 'Connection refused',
+        errorCode: QUERY_ERROR_CODE.INTERNAL_ERROR,
+      };
+    },
+    installRecoveryRoutingOverlayEntry() {
+      installCalls++;
+      return true;
+    },
+  };
+
+  const mockMessageRouter = {
+    getConnectedNodes() {
+      return ['some-node'];
+    },
+  };
+
+  const service = new CDCIntegrationService({
+    nodeId: 'follower-node',
+    sqlQueryEngine: mockSqlEngine,
+    partitionServicesProvider: () => new Map(),
+  });
+  service.initialize();
+  service.setMessageRouter(mockMessageRouter);
+
+  const result = await service.executeAuthoritativeSystemTableRead(
+    SYSTEM_TABLE_NAME.NODES,
+    'SELECT * FROM nodes',
+  );
+
+  t.equal(result.success, false,
+    'should return failure for non-table-not-found errors');
+  t.equal(installCalls, 0,
+    'should not re-seed overlay for non-table-not-found errors');
+});
 
 test('CDCIntegrationService - updateSystemTableRow', async (t) => {
   const mockSqlEngine = createMockSqlQueryEngine();

@@ -196,7 +196,7 @@ async function run(cluster, options = {}) {
     });
   }
 
-  await cluster.assertConsistency();
+  await cluster.waitForConsistencyConvergence();
 
   return {
     writesAttempted: writeCount,

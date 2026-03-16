@@ -117,6 +117,14 @@ To prevent overlap and contradictory runtime behavior:
    `SystemTableCache` updates lag behind authoritative state. Transport
    disconnection remains the definitive negative signal: a disconnected
    node with expired lease data is always unhealthy.
+   **Lease sweep transport guard (§1.4.12):** `LeaseService` consults
+   the `MessageRouter` before marking a node as disconnected during
+   expired-lease sweeps. When the router reports the node as connected
+   or ready, the sweep skips the disconnect — the expired lease is
+   caused by CDC propagation delay, not actual node failure. Without
+   this guard, the sweep poisons the `connection_state` field in the
+   cache, causing `isClusterMemberHealthy` to return false for all
+   nodes and blocking split child provisioning admission.
    **Self-node cluster membership fast path (§1.4.12):** when a node
    evaluates its own cluster membership (`nodeId === this.nodeId`) and
    its cached status is `active`, it is trivially healthy — the node is
@@ -1814,6 +1822,61 @@ Write Operation (INSERT/UPDATE/DELETE)
 │   (Update local cache)  │
 └─────────────────────────┘
 ```
+
+### CDC Continuity During Topology Transitions
+
+Steady-state CDC propagation is wired at bootstrap time. Topology
+transitions (partition split, node restart, message group failover)
+create windows where CDC subscribers may be absent or stale. The
+following contracts ensure CDC continuity across these transitions.
+
+#### Split Completion → Rebalance Trigger
+
+When `PartitionSplitMergeManager` emits `SPLIT_COMPLETED`, the
+composition root (`src/index.js`) triggers
+`rebalancer.recordStateChange(STABILIZATION_RESET_TRIGGER.SPLIT_COMPLETED)`
+on each child partition's `UnifiedRebalancer`. This resets the
+stabilization timer so the rebalancer evaluates replica spread after
+the cluster settles. The trigger is wired at the composition root
+(both seed and join paths), not inside the split workflow. If the
+child partition's rebalancer is not yet active (leader not elected),
+the existing `setLeader(true)` → `scheduleNextCheck()` path handles
+deferred activation.
+
+#### CDC Subscriber Registration Timing
+
+`createPartitionService` factories in both `BootstrapService` and
+`NodeJoiningService` ensure `subscribeToCDCWithHandshake()` completes
+before the factory returns. This guarantees CDC subscribers are
+registered before the first Raft-committed entry is processed.
+Buffered CDC events are replayed inline during the handshake catchup
+phase. After handshake (whether full or partial replay), the buffer
+replay delay resets to the initial value so follow-up replays use
+initial backoff rather than escalated delay.
+
+#### Restart CDC Re-establishment
+
+`NodeJoiningService.subscribeToCDCEvents()` uses a bounded retry loop
+for CDC subscription re-establishment on node restart. Constants in
+`src/bootstrap/node-joining-constants.js` control the retry budget:
+`CDC_REESTABLISHMENT.MAX_RETRIES`, `CDC_REESTABLISHMENT.RETRY_DELAY_MS`,
+and `CDC_REESTABLISHMENT.TIMEOUT_MS`. Periodic structured diagnostics
+are emitted during recovery showing per-table subscription status,
+message group leader identity, and elapsed time. Node readiness is
+gated on CDC subscription status via
+`awaitCdcSubscriptionsForReadiness()` — the node does not advertise
+readiness until subscriptions are confirmed active or the timeout
+budget expires.
+
+#### Message Group Failover CDC Continuity
+
+`MessageGroupService.wireRaftEvents()` re-subscribes to all
+CDC-propagated tables on leadership gain via
+`cdcHandler.getSubscriptions()` → `subscribeToCDC(tableName)`. This
+follows the same subscription path as initial setup (no parallel
+mechanism). CDC events buffered on source partitions during the
+failover window are replayed when the new leader's subscriber
+registers via the existing `cdcEventBuffer` replay mechanism.
 
 ### Meta Service Management Flow (Unified Runtime Target)
 

@@ -206,6 +206,7 @@ const PARTITION_SERVICE_CDC = Object.freeze({
   HANDSHAKE_STATUS_ALREADY_SUBSCRIBED: 'already_subscribed',
   CATCHUP_MODE_NONE: 'none',
   CATCHUP_MODE_BACKFILL: 'backfill',
+  CATCHUP_MODE_SLIDING_WINDOW: 'sliding_window',
   STREAM_MODE_CATCHUP: 'catchup',
   STREAM_MODE_STEADY: 'steady',
   SUBSCRIBER_ID_PREFIX: 'cdc-subscriber',
@@ -326,6 +327,8 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
   REPLICA_REMOVAL_SELF: 'Replica removal completed (self-removal)',
   RECEIVED_ACK: 'Received ACK in transport response',
   SHUTTING_DOWN: 'Shutting down partition service',
+  TIMER_SKIPPED_AFTER_SHUTDOWN:
+    'Timer creation skipped - partition service already shut down',
   MIGRATION_ALTER_TABLE_APPLIED: 'Applied migration ALTER TABLE command',
   MIGRATION_DEFAULT_REGISTERED: 'Registered migration column default',
 });

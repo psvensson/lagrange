@@ -18,16 +18,14 @@ import {LoggingService} from '../../logging/logging-service.js';
 import {NodeService} from '../../node/node-service.js';
 import {DependencyError} from '../bootstrap-errors.js';
 import {
-  ADDRESS,
   COLUMN,
   NUM,
-  PROTOCOL,
   SUBSYSTEM,
   TABLES,
   TYPEOF,
 } from '../../constants/index.js';
-import {ENTRYPOINT_DEFAULT} from '../../constants/entrypoint.js';
 import {ENDPOINT_STATUS, TRANSPORT_TYPE} from '../../constants/transport-types.js';
+import {normalizeToWebSocketAddress} from '../../constants/transport.js';
 
 /**
  * Subsystem identifier for logging.
@@ -51,30 +49,6 @@ const ERROR_MSG = Object.freeze({
   NODE_ID_REQUIRED: 'nodeId is required for MessageRouterSetup',
   initFailed: (message) => `MessageRouter initialization failed: ${message}`,
 });
-
-function deriveWsAddressFromNodeAddress(nodeAddress) {
-  if (!nodeAddress || typeof nodeAddress !== TYPEOF.STRING) {
-    return null;
-  }
-  if (nodeAddress.startsWith(PROTOCOL.WS) ||
-      nodeAddress.startsWith(PROTOCOL.WSS)) {
-    return nodeAddress;
-  }
-
-  const colonIndex = nodeAddress.lastIndexOf(ADDRESS.PORT_SEPARATOR);
-  if (colonIndex <= NUM.ZERO) {
-    return null;
-  }
-
-  const hostname = nodeAddress.substring(NUM.ZERO, colonIndex);
-  const restPort = Number(nodeAddress.substring(colonIndex + NUM.ONE));
-  if (!hostname || !Number.isFinite(restPort) || restPort <= NUM.ZERO) {
-    return null;
-  }
-
-  const wsPort = restPort + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET;
-  return `${PROTOCOL.WS}${hostname}${ADDRESS.PORT_SEPARATOR}${wsPort}`;
-}
 
 function createNodeWebSocketAddressResolver() {
   return (targetNodeId) => {
@@ -106,15 +80,14 @@ function createNodeWebSocketAddressResolver() {
       });
       const endpointAddress =
         sorted[NUM.ZERO]?.[COLUMN.ADDRESS] || null;
-      return deriveWsAddressFromNodeAddress(endpointAddress) ||
-        endpointAddress;
+      return normalizeToWebSocketAddress(endpointAddress);
     }
 
     const nodeRow = typeof cache.get === TYPEOF.FUNCTION ?
       cache.get(TABLES.NODES, targetNodeId) :
       null;
     const nodeAddress = nodeRow?.[COLUMN.NODE_ADDRESS] || null;
-    return deriveWsAddressFromNodeAddress(nodeAddress);
+    return normalizeToWebSocketAddress(nodeAddress);
   };
 }
 

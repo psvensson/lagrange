@@ -743,10 +743,18 @@ test(
     });
 
     let executeCount = 0;
+    // Node-aware transport mock: node-2 starts without transport
+    // connectivity (no ready lease yet). Once the ready lease is
+    // set, transport also becomes connected. Per §1.4.12 transport
+    // connectivity is the strongest evidence of node health.
+    let node2TransportConnected = false;
     const service = new ReplicaDispatchService({
       nodeId: 'node-1',
       messageRouter: {
-        getConnectionState: () => STATE.CONNECTED,
+        getConnectionState: (nodeId) =>
+          nodeId === 'node-2' && !node2TransportConnected ?
+            STATE.DISCONNECTED :
+            STATE.CONNECTED,
       },
       cdcIntegrationService: {
         upsertSystemTableRow: async () => ({success: true}),
@@ -836,6 +844,7 @@ test(
         ready_lease_expires_at: now + 30000,
       };
       nodeStore.set('node-2', readyNodeRow);
+      node2TransportConnected = true;
 
       await service.handleCdcApplied(leaderMessageGroup, {
         tableName: SYSTEM_TABLE_NAME.NODES,
@@ -891,6 +900,10 @@ test(
 
     let executeCount = 0;
     let cacheListener = null;
+    // Node-aware transport mock: node-2 starts without transport
+    // connectivity (no ready lease yet). Per §1.4.12 transport
+    // connectivity is the strongest evidence of node health.
+    let node2CacheTransportConnected = false;
     const systemTableCache = {
       onCacheChange: (listener) => {
         cacheListener = listener;
@@ -924,7 +937,7 @@ test(
     const service = new ReplicaDispatchService({
       nodeId: 'node-1',
       messageRouter: {
-        getConnectionState: () => STATE.CONNECTED,
+        getConnectionState: (nodeId) => nodeId === 'node-2' && !node2CacheTransportConnected ? STATE.DISCONNECTED : STATE.CONNECTED,
       },
       cdcIntegrationService: {
         upsertSystemTableRow: async () => ({success: true}),

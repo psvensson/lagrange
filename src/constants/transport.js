@@ -85,6 +85,45 @@ const TRANSPORT_FORMAT = Object.freeze({
     `${TRANSPORT_DEFAULT.LOCAL_ADDRESS_PREFIX}${nodeId}`,
 });
 
+/**
+ * Normalize a node address to a WebSocket address.
+ *
+ * If the address already starts with ws:// or wss://, return it as-is.
+ * If it is a bare host:port (REST API address), derive the WebSocket
+ * address by applying the standard WS_PORT_OFFSET.
+ * Returns null for addresses that cannot be normalized.
+ *
+ * @param {string} nodeAddress - Raw node address.
+ * @return {string|null} WebSocket address or null.
+ */
+function normalizeToWebSocketAddress(nodeAddress) {
+  if (!nodeAddress || typeof nodeAddress !== TYPEOF.STRING) {
+    return null;
+  }
+  if (nodeAddress.startsWith(PROTOCOL.WS) ||
+      nodeAddress.startsWith(PROTOCOL.WSS)) {
+    return nodeAddress;
+  }
+
+  const colonIndex = nodeAddress.lastIndexOf(ADDRESS.PORT_SEPARATOR);
+  if (colonIndex <= NUM.ZERO) {
+    return null;
+  }
+
+  const hostname = nodeAddress.substring(NUM.ZERO, colonIndex);
+  const restPort = Number(
+    nodeAddress.substring(colonIndex + NUM.ONE),
+  );
+  if (!hostname || !Number.isFinite(restPort) ||
+      restPort <= NUM.ZERO) {
+    return null;
+  }
+
+  const wsPort = restPort + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET;
+  return `${PROTOCOL.WS}${hostname}` +
+    `${ADDRESS.PORT_SEPARATOR}${wsPort}`;
+}
+
 const TRANSPORT_EVENT = Object.freeze({
   INITIALIZED: 'initialized',
   CONNECTION: 'connection',
@@ -323,4 +362,5 @@ export {
   RPC_DEFAULT,
   RPC_LOG_MSG,
   RPC_ERROR_MSG,
+  normalizeToWebSocketAddress,
 };

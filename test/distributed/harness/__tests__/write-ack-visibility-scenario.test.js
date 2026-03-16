@@ -15,7 +15,7 @@ describe('write-ack-visibility scenario', () => {
     async () => {
       const insertedIds = new Set();
       const delayedVisibility = new Map();
-      let consistencyChecks = 0;
+      let consistencyConvergenceCalls = 0;
 
       function makeNode(nodeId, delayed) {
         return {
@@ -61,8 +61,8 @@ describe('write-ack-visibility scenario', () => {
       const cluster = {
         getNodes: () => nodes,
         waitForConvergence: async () => ({settledAfterMs: 1}),
-        assertConsistency: async () => {
-          consistencyChecks += 1;
+        waitForConsistencyConvergence: async () => {
+          consistencyConvergenceCalls += 1;
         },
       };
 
@@ -73,7 +73,7 @@ describe('write-ack-visibility scenario', () => {
       });
 
       assert.equal(result.writesAttempted, 2);
-      assert.equal(consistencyChecks, 1);
+      assert.equal(consistencyConvergenceCalls, 1);
       assert.ok(result.maxPropagationMs >= 0);
       assert.equal(result.propagationSamples.length, 2);
     });

@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import {run} from '../../scenarios/node-join-under-load.js';
 
 describe('node-join-under-load scenario', () => {
-  it('retries consistency checks after transient disagreement', async () => {
-    let assertConsistencyCalls = 0;
+  it('calls waitForConsistencyConvergence after join and load', async () => {
+    let convergenceCalls = 0;
 
     const cluster = {
       startLoad: () => ({
@@ -20,11 +20,8 @@ describe('node-join-under-load scenario', () => {
       waitForConvergence: async () => ({
         settledAfterMs: 1,
       }),
-      assertConsistency: async () => {
-        assertConsistencyCalls += 1;
-        if (assertConsistencyCalls === 1) {
-          throw new Error('Active nodes disagree');
-        }
+      waitForConsistencyConvergence: async () => {
+        convergenceCalls += 1;
       },
     };
 
@@ -36,6 +33,6 @@ describe('node-join-under-load scenario', () => {
     });
 
     assert.equal(result.newNodeId, 'joiner-3');
-    assert.ok(assertConsistencyCalls >= 2);
+    assert.ok(convergenceCalls >= 1);
   });
 });

@@ -31,6 +31,9 @@ describe('disk-full-under-load scenario', () => {
       assertConsistency: async () => {
         calls.push(['assertConsistency']);
       },
+      waitForConsistencyConvergence: async () => {
+        calls.push(['waitForConsistencyConvergence']);
+      },
       randomNonSeed: () => 'joiner-1',
     };
 
@@ -65,7 +68,7 @@ describe('disk-full-under-load scenario', () => {
       },
     ]);
     assert.deepEqual(calls[2], ['waitForConvergence']);
-    assert.deepEqual(calls[3], ['assertConsistency']);
+    assert.deepEqual(calls[3], ['waitForConsistencyConvergence']);
   });
 
   it('still releases disk pressure when fault hold path throws', async () => {
@@ -93,6 +96,7 @@ describe('disk-full-under-load scenario', () => {
         throw new Error('convergence failed');
       },
       assertConsistency: async () => {},
+      waitForConsistencyConvergence: async () => {},
     };
 
     await assert.rejects(

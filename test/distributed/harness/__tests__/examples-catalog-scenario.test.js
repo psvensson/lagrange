@@ -15,10 +15,10 @@ function buildCallbackRows(callbackModuleRef) {
     return [{stageBatchSize: 2}];
   }
   if (callbackModuleRef.includes('03-plan-reduce-by-key')) {
-    return [{nodeCount: 1}];
+    return [{status: 'active'}];
   }
   if (callbackModuleRef.includes('04-nested-bounded-call')) {
-    return [{configRowsSeen: 1}];
+    return [{configRowsSeen: 0}];
   }
   if (callbackModuleRef.includes('05-guardrail-failure')) {
     return [{ok: true, error: 'blocked unbounded nested call'}];
@@ -28,6 +28,9 @@ function buildCallbackRows(callbackModuleRef) {
       wasmCompiled: true,
       remotePartitionReplica: true,
     }];
+  }
+  if (callbackModuleRef.includes('07-movielens-access-affinity')) {
+    return [{movieId: '1', avgRating: 4.5, ratingCount: 10}];
   }
   return [];
 }
@@ -39,6 +42,12 @@ describe('examples-catalog scenario', () => {
     try {
       const cluster = {
         _config: {outputDir},
+        _scenarioOverrides: {
+          examplesCatalog: {
+            expectedNodeCount: 1,
+            localReplicaRouting: false,
+          },
+        },
         getNodes: () => [{
           query: async () => ({ok: true}),
           partitionCallback: async (payload) => ({
@@ -53,17 +62,17 @@ describe('examples-catalog scenario', () => {
 
       const result = await run(cluster);
 
-      assert.equal(result.exampleResults.total, 6);
-      assert.equal(result.exampleResults.passed, 6);
+      assert.equal(result.exampleResults.total, 7);
+      assert.equal(result.exampleResults.passed, 7);
       assert.equal(result.exampleResults.failed, 0);
       assert.equal(result.exampleResults.requiredFailed, 0);
       assert.equal(Array.isArray(result.examples), true);
-      assert.equal(result.examples.length, 6);
+      assert.equal(result.examples.length, 7);
 
       const artifact = JSON.parse(
         await readFile(result.artifactPath, 'utf8'),
       );
-      assert.equal(artifact.summary.total, 6);
+      assert.equal(artifact.summary.total, 7);
       assert.equal(artifact.summary.failed, 0);
     } finally {
       await rm(outputDir, {recursive: true, force: true});

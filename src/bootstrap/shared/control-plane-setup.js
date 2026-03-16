@@ -276,6 +276,7 @@ class ControlPlaneSetup {
       nodeLeaseOwner: heartbeatService,
       systemTableCache,
       sqlQueryEngine: cdcIntegrationService.sqlQueryEngine,
+      messageRouter,
     });
     leaseService.initialize();
 

@@ -1934,45 +1934,47 @@ class RebalanceCoordinator extends EventEmitter {
    * @private
    */
   async persistNewOperation(operation) {
-    const result = await this.executeOperationMutationWithRetry(
-      SQL.INSERT_OPERATION,
-      [
-        operation.operationId,
-        operation.type,
-        operation.partitionId,
-        operation.replicaId,
-        operation.sourceNodeId,
-        operation.targetNodeId,
-        operation.status,
-        operation.workflowStep,
-        operation.createdAt,
-        operation.updatedAt,
-        operation.completedAt,
-        operation.errorMessage,
-        JSON.stringify(operation.stepsHistory),
-        operation.entityType,
-        operation.entityId,
-      ],
-      {
-        ownerId: operation.operationId,
-      },
-    );
+    return this.runReplicaOperationTransitionExclusive(async () => {
+      const result = await this.executeOperationMutationWithRetry(
+        SQL.INSERT_OPERATION,
+        [
+          operation.operationId,
+          operation.type,
+          operation.partitionId,
+          operation.replicaId,
+          operation.sourceNodeId,
+          operation.targetNodeId,
+          operation.status,
+          operation.workflowStep,
+          operation.createdAt,
+          operation.updatedAt,
+          operation.completedAt,
+          operation.errorMessage,
+          JSON.stringify(operation.stepsHistory),
+          operation.entityType,
+          operation.entityId,
+        ],
+        {
+          ownerId: operation.operationId,
+        },
+      );
 
-    if (!result.success) {
-      this.logger.error(REBALANCE_COORDINATOR_LOG_MSG.PERSIST_FAILED, {
-        operationId: operation.operationId,
-        error: result.error,
-      });
-      throw new Error(result.error);
-    }
+      if (!result.success) {
+        this.logger.error(REBALANCE_COORDINATOR_LOG_MSG.PERSIST_FAILED, {
+          operationId: operation.operationId,
+          error: result.error,
+        });
+        throw new Error(result.error);
+      }
 
-    if (typeof result.changes === 'number') {
+      if (typeof result.changes === 'number') {
+        await this.waitForReplicaOperationCacheVisibility(operation);
+        return result.changes > 0;
+      }
+
       await this.waitForReplicaOperationCacheVisibility(operation);
-      return result.changes > 0;
-    }
-
-    await this.waitForReplicaOperationCacheVisibility(operation);
-    return true;
+      return true;
+    });
   }
 
   /**

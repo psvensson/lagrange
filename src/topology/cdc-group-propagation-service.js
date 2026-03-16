@@ -80,6 +80,10 @@ class CDCGroupPropagationService extends EventEmitter {
       options.deliveryRetryMaxAttempts,
       CDC_GROUP_PROPAGATION_RETRY.MAX_ATTEMPTS,
     );
+    this.backgroundRetryMaxAttempts = this.resolvePositiveInteger(
+      options.backgroundRetryMaxAttempts,
+      CDC_GROUP_PROPAGATION_RETRY.BACKGROUND_MAX_ATTEMPTS,
+    );
     this.deliveryRetryDelayMs = this.resolvePositiveInteger(
       options.deliveryRetryDelayMs,
       CDC_GROUP_PROPAGATION_RETRY.INITIAL_DELAY_MS,
@@ -450,55 +454,73 @@ class CDCGroupPropagationService extends EventEmitter {
    * @private
    */
   scheduleBackgroundRetry(options) {
-    if (this.state !== CDC_GROUP_PROPAGATION_STATE.RUNNING) {
-      return;
-    }
-    if (!Array.isArray(options.targets) || options.targets.length === NUM.ZERO) {
-      return;
-    }
-
-    const attempt = Number.isFinite(options.attempt) && options.attempt > NUM.ZERO ?
-      Math.floor(options.attempt) :
-      NUM.ONE;
-    const retryDelayMs = this.computeRetryDelayMs(attempt);
-    this.logger.warn(CDC_GROUP_PROPAGATION_LOG_MSG.RETRYING_DELIVERY_FAILURES, {
-      nodeId: this.nodeId,
-      tableName: options.tableName,
-      operation: options.operation,
-      attempt,
-      retryDelayMs,
-      failureCount: options.targets.length,
-      background: true,
-    });
-
-    const retryTimer = setTimeout(async () => {
-      this.backgroundRetryTimers.delete(retryTimer);
       if (this.state !== CDC_GROUP_PROPAGATION_STATE.RUNNING) {
         return;
       }
-
-      const deliveryFailures = await this.deliverToTargets({
-        tableName: options.tableName,
-        operation: options.operation,
-        data: options.data,
-        sourceGroupId: options.sourceGroupId,
-        targets: options.targets,
-      });
-      if (deliveryFailures.length === NUM.ZERO) {
+      if (!Array.isArray(options.targets) || options.targets.length === NUM.ZERO) {
         return;
       }
-      const retryTargets = this.convertFailuresToRetryTargets(deliveryFailures);
-      this.scheduleBackgroundRetry({
-        tableName: options.tableName,
-        operation: options.operation,
-        data: options.data,
-        sourceGroupId: options.sourceGroupId,
-        targets: retryTargets,
-        attempt: attempt + NUM.ONE,
+
+      const {tableName, operation, data, sourceGroupId, targets} = options;
+
+      const attempt = Number.isFinite(options.attempt) && options.attempt > NUM.ZERO ?
+        Math.floor(options.attempt) :
+        NUM.ONE;
+      options = null;
+      const maxTotalAttempts =
+        this.deliveryRetryMaxAttempts + this.backgroundRetryMaxAttempts;
+      if (attempt >= maxTotalAttempts) {
+        this.logger.warn(
+          CDC_GROUP_PROPAGATION_LOG_MSG.DELIVERY_RETRY_EXHAUSTED, {
+            nodeId: this.nodeId,
+            tableName,
+            operation,
+            attempt,
+            maxTotalAttempts,
+            failureCount: targets.length,
+            background: true,
+          });
+        return;
+      }
+      const retryDelayMs = this.computeRetryDelayMs(attempt);
+      this.logger.warn(CDC_GROUP_PROPAGATION_LOG_MSG.RETRYING_DELIVERY_FAILURES, {
+        nodeId: this.nodeId,
+        tableName,
+        operation,
+        attempt,
+        retryDelayMs,
+        failureCount: targets.length,
+        background: true,
       });
-    }, retryDelayMs);
-    this.backgroundRetryTimers.add(retryTimer);
-  }
+
+      const retryTimer = setTimeout(async () => {
+        this.backgroundRetryTimers.delete(retryTimer);
+        if (this.state !== CDC_GROUP_PROPAGATION_STATE.RUNNING) {
+          return;
+        }
+
+        const deliveryFailures = await this.deliverToTargets({
+          tableName,
+          operation,
+          data,
+          sourceGroupId,
+          targets,
+        });
+        if (deliveryFailures.length === NUM.ZERO) {
+          return;
+        }
+        const retryTargets = this.convertFailuresToRetryTargets(deliveryFailures);
+        this.scheduleBackgroundRetry({
+          tableName,
+          operation,
+          data,
+          sourceGroupId,
+          targets: retryTargets,
+          attempt: attempt + NUM.ONE,
+        });
+      }, retryDelayMs);
+      this.backgroundRetryTimers.add(retryTimer);
+    }
 
   /**
    * Clear all pending background retry timers.

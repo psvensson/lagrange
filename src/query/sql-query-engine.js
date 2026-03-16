@@ -3420,6 +3420,58 @@ class SQLQueryEngine {
   }
 
   /**
+   * Install a recovery routing overlay entry for a system table
+   * partition. This bypasses the strict routability checks in
+   * maybeInstallBootstrapLeaderOverlay because during cache
+   * recovery after seed restart the cache is empty and no
+   * services pass readiness evaluation. The overlay makes the
+   * partition discoverable and provides candidate service
+   * addresses so the query executor can attempt delivery.
+   * @param {string} partitionId
+   * @param {string} tableName
+   * @param {Array<Object>} serviceRows
+   * @return {boolean}
+   */
+  installRecoveryRoutingOverlayEntry(
+    partitionId,
+    tableName,
+    serviceRows,
+  ) {
+    if (!partitionId || !tableName) {
+      return false;
+    }
+    if (!Array.isArray(serviceRows) ||
+        serviceRows.length === 0) {
+      return false;
+    }
+    const cachedPartition =
+      this.getCachedPartitionRecord(partitionId);
+    const cachedLeaderNodeId =
+      cachedPartition?.leader_node_id ||
+      cachedPartition?.leaderNodeId ||
+      null;
+    if (typeof cachedLeaderNodeId === 'string' &&
+        cachedLeaderNodeId.length > 0) {
+      return false;
+    }
+    const nowMs = this.nowFn();
+    const overlayPartition = {
+      partition_id: partitionId,
+      table_name: tableName,
+      leader_node_id: serviceRows[0]?.node_id || null,
+      created_at: nowMs,
+      updated_at: nowMs,
+    };
+    this.bootstrapRoutingOverlayEntries.set(partitionId, {
+      partition: overlayPartition,
+      services: serviceRows.map((s) => ({...s})),
+      expiresAtMs: nowMs +
+        this.tablePartitionProvisioningTimeoutMs,
+    });
+    return true;
+  }
+
+  /**
    * Resolve one bootstrap overlay entry when still valid.
    * @param {string} partitionId
    * @return {Object|null}

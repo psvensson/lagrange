@@ -124,6 +124,11 @@ test('MessageGroupAssignment - excludes self-source MOVE_REPLICA candidates', as
     seedNodeAddress: 'ws://localhost:8080',
   });
 
+  // joining-node has 2 replicas in mg-self but mg-self is NOT
+  // its canonical self-hosted group. The self-source exclusion
+  // still applies: joining-node must not be selected as the
+  // MOVE_REPLICA source, so the assignment falls through to
+  // mg-seed where seed-node has 2 replicas.
   const messageGroups = [
     {
       group_id: 'mg-self',
@@ -387,3 +392,241 @@ test('MessageGroupAssignment - node joining progression', async (t) => {
   t.equal(result.strategy, AssignmentStrategy.CREATE_SELF_HOSTED);
   t.ok(result.groupId.startsWith('mg-'));
 });
+
+
+// ---------------------------------------------------------------
+// Regression: restarting node with existing membership must get
+// CREATE_SELF_HOSTED, not MOVE_REPLICA for a different group.
+//
+// Bug: In a 5-node cluster after rebalancing, some group may have
+// 2+ replicas on one node. When a different node restarts,
+// determineAssignment picked MOVE_REPLICA from that group instead
+// of recognizing the restarting node already has its own group.
+// This caused ASSIGNMENT_TOKEN_UNKNOWN failures during rolling
+// restarts because the MOVE_REPLICA reservation expired before
+// the handoff completed.
+//
+// Uses MessageGroupAssignment.hasExistingMembership owner path.
+// ---------------------------------------------------------------
+test(
+  'MessageGroupAssignment - restarting node with existing ' +
+  'membership gets CREATE_SELF_HOSTED, not MOVE_REPLICA',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const assignment = new MessageGroupAssignment({
+      seedNodeAddress: 'ws://localhost:8080',
+    });
+
+    const restartingNodeId = 'restarting-node';
+    const expectedGroupId =
+      assignment.generateGroupId(restartingNodeId);
+
+    // Cluster state: restarting node has r0 on itself, r1 moved
+    // to node-2, r2 moved to node-3. Seed node still has 2
+    // replicas of its own group (movable candidate).
+    const messageGroups = [
+      {
+        group_id: expectedGroupId,
+        replicas: [
+          {
+            replica_id: `${expectedGroupId}-r0`,
+            node_id: restartingNodeId,
+            address: 'ws://restarting/services/r0',
+          },
+          {
+            replica_id: `${expectedGroupId}-r1`,
+            node_id: 'node-2',
+            address: 'ws://node-2/services/r1',
+          },
+          {
+            replica_id: `${expectedGroupId}-r2`,
+            node_id: 'node-3',
+            address: 'ws://node-3/services/r2',
+          },
+        ],
+      },
+      {
+        group_id: 'mg-seed',
+        replicas: [
+          {
+            replica_id: 'mg-seed-r0',
+            node_id: 'seed-node',
+            address: 'ws://seed/services/r0',
+          },
+          {
+            replica_id: 'mg-seed-r1',
+            node_id: 'seed-node',
+            address: 'ws://seed/services/r1',
+          },
+          {
+            replica_id: 'mg-seed-r2',
+            node_id: 'node-4',
+            address: 'ws://node-4/services/r2',
+          },
+        ],
+      },
+    ];
+
+    const result = assignment.determineAssignment(
+      restartingNodeId,
+      messageGroups,
+    );
+
+    t.equal(
+      result.strategy,
+      AssignmentStrategy.CREATE_SELF_HOSTED,
+      'restarting node must get CREATE_SELF_HOSTED, not MOVE_REPLICA',
+    );
+    t.equal(
+      result.groupId,
+      expectedGroupId,
+      'group ID must match the deterministic ID for the restarting node',
+    );
+    t.equal(result.replicaCount, 3);
+  },
+);
+
+test(
+  'MessageGroupAssignment - hasExistingMembership returns true ' +
+  'when canonical self-hosted group exists',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const assignment = new MessageGroupAssignment();
+
+    const canonicalGroupId =
+      assignment.generateGroupId('node-a');
+
+    const groups = [{
+      group_id: canonicalGroupId,
+      replicas: [
+        {replica_id: 'r0', node_id: 'node-a', address: 'a0'},
+        {replica_id: 'r1', node_id: 'node-b', address: 'a1'},
+        {replica_id: 'r2', node_id: 'node-c', address: 'a2'},
+      ],
+    }];
+
+    t.equal(
+      assignment.hasExistingMembership('node-a', groups),
+      true,
+      'should detect canonical self-hosted group',
+    );
+    t.equal(
+      assignment.hasExistingMembership('node-x', groups),
+      false,
+      'should return false when canonical group does not exist',
+    );
+    t.equal(
+      assignment.hasExistingMembership('', groups),
+      false,
+      'should return false for empty node ID',
+    );
+    t.equal(
+      assignment.hasExistingMembership(null, groups),
+      false,
+      'should return false for null node ID',
+    );
+    t.equal(
+      assignment.hasExistingMembership('node-a', []),
+      false,
+      'should return false for empty groups',
+    );
+  },
+);
+
+test(
+  'MessageGroupAssignment - node with MOVE_REPLICA membership ' +
+  'but no canonical group still gets MOVE_REPLICA',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const assignment = new MessageGroupAssignment({
+      seedNodeAddress: 'ws://localhost:8080',
+    });
+
+    // node-x has a replica in mg-seed (via previous MOVE_REPLICA)
+    // but does NOT have its own canonical self-hosted group.
+    // It should still be eligible for MOVE_REPLICA.
+    const messageGroups = [{
+      group_id: 'mg-seed',
+      replicas: [
+        {
+          replica_id: 'mg-seed-r0',
+          node_id: 'seed-node',
+          address: 'ws://seed/services/r0',
+        },
+        {
+          replica_id: 'mg-seed-r1',
+          node_id: 'seed-node',
+          address: 'ws://seed/services/r1',
+        },
+        {
+          replica_id: 'mg-seed-r2',
+          node_id: 'node-x',
+          address: 'ws://node-x/services/r2',
+        },
+      ],
+    }];
+
+    const result = assignment.determineAssignment(
+      'node-x',
+      messageGroups,
+    );
+
+    // node-x has no canonical group, so MOVE_REPLICA is still
+    // valid (seed has 2 replicas).
+    t.equal(
+      result.strategy,
+      AssignmentStrategy.MOVE_REPLICA,
+      'node without canonical group should still get MOVE_REPLICA',
+    );
+    t.equal(result.sourceNodeId, 'seed-node');
+  },
+);
+
+test(
+  'MessageGroupAssignment - new node without membership still ' +
+  'gets MOVE_REPLICA when available',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const assignment = new MessageGroupAssignment({
+      seedNodeAddress: 'ws://localhost:8080',
+    });
+
+    // Seed has 2 replicas, new node has no existing membership
+    const messageGroups = [{
+      group_id: 'mg-seed',
+      replicas: [
+        {
+          replica_id: 'mg-seed-r0',
+          node_id: 'seed-node',
+          address: 'ws://seed/services/r0',
+        },
+        {
+          replica_id: 'mg-seed-r1',
+          node_id: 'seed-node',
+          address: 'ws://seed/services/r1',
+        },
+        {
+          replica_id: 'mg-seed-r2',
+          node_id: 'node-2',
+          address: 'ws://node-2/services/r2',
+        },
+      ],
+    }];
+
+    const result = assignment.determineAssignment(
+      'brand-new-node',
+      messageGroups,
+    );
+
+    t.equal(
+      result.strategy,
+      AssignmentStrategy.MOVE_REPLICA,
+      'new node without membership should still get MOVE_REPLICA',
+    );
+    t.equal(result.sourceNodeId, 'seed-node');
+  },
+);

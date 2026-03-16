@@ -396,6 +396,47 @@ docker ps -aq --filter "name=ddb-test-reuse-" | xargs -r docker rm -f
 docker network ls --format '{{.Name}}' | rg '^ddb-test-net-reuse-local-' | xargs -r docker network rm
 ```
 
+## Running All Distributed Scenarios
+
+Run every distributed Docker scenario sequentially (3-node, 5-node, 7-node):
+
+```bash
+bash scripts/run-all-distributed-scenarios.sh --verbose
+```
+
+Reports are written to `test-output/reports/<scenario>-<timestamp>.report.json`.
+The script prints a pass/fail summary and exits with the number of failures.
+
+Extra flags are forwarded to `run.js`:
+
+```bash
+bash scripts/run-all-distributed-scenarios.sh --fast-local --verbose
+bash scripts/run-all-distributed-scenarios.sh --no-fast-local
+```
+
+## Re-running Only Failed Scenarios
+
+After a full run (or any run that produced reports), re-run only the scenarios
+whose latest report shows a failure:
+
+```bash
+bash scripts/rerun-failed-distributed-scenarios.sh --verbose
+```
+
+The script scans `test-output/reports/` for `*.report.json` files, finds the
+most recent report per scenario, and re-runs those that failed. Rerun reports
+are written with a `rerun-` prefix.
+
+Options:
+
+```bash
+# Preview which scenarios would be re-run without executing them
+bash scripts/rerun-failed-distributed-scenarios.sh --dry-run
+
+# Use a different report directory
+bash scripts/rerun-failed-distributed-scenarios.sh --report-dir path/to/reports --verbose
+```
+
 ## Harness Test Commands
 
 Run harness unit tests:

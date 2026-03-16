@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   assertConsistency,
   assertConsistencyFromSnapshots,
+  waitForConsistencyConvergence,
 } from '../assertions.js';
 import {PORTS} from '../constants.js';
 
@@ -231,5 +232,128 @@ test('assertConsistencyFromSnapshots is a no-op when ' +
   });
   assert.doesNotThrow(() => {
     assertConsistencyFromSnapshots([]);
+  });
+});
+
+test('waitForConsistencyConvergence resolves when nodes ' +
+  'agree on first attempt', async () => {
+  const nodeA = buildControlSnapshotNode('node-a');
+  const nodeB = buildControlSnapshotNode('node-b');
+
+  await assert.doesNotReject(async () => {
+    await waitForConsistencyConvergence(
+      [nodeA, nodeB],
+      {timeoutMs: 2000, pollIntervalMs: 50},
+    );
+  });
+});
+
+test('waitForConsistencyConvergence retries until nodes ' +
+  'converge within timeout', async () => {
+  let callCount = 0;
+  const convergenceThreshold = 3;
+  const divergentLeader = TEST_WS_ADDRESS;
+
+  const nodeA = buildControlSnapshotNode('node-a');
+  const nodeB = {
+    id: 'node-b',
+    async isReachable() {
+      return true;
+    },
+    async getControlSnapshot() {
+      callCount += 1;
+      const leader = callCount >= convergenceThreshold ?
+        TEST_LEADER_ADDRESS :
+        divergentLeader;
+      return {
+        rows: [{
+          nodes: ['node-1', 'node-2', 'node-3'],
+          partitions: ['p1'],
+          leaders: {p1: leader},
+        }],
+      };
+    },
+    async query() {
+      throw new Error('should not be called');
+    },
+  };
+
+  await assert.doesNotReject(async () => {
+    await waitForConsistencyConvergence(
+      [nodeA, nodeB],
+      {timeoutMs: 5000, pollIntervalMs: 50},
+    );
+  });
+  assert.ok(
+    callCount >= convergenceThreshold,
+    'Expected at least ' + convergenceThreshold +
+    ' probes, got ' + callCount,
+  );
+});
+
+test('waitForConsistencyConvergence throws last error ' +
+  'when timeout expires', async () => {
+  const nodeA = buildControlSnapshotNode('node-a');
+  const nodeB = buildControlSnapshotNode('node-b', {
+    leaders: {p1: TEST_WS_ADDRESS},
+  });
+
+  await assert.rejects(
+    waitForConsistencyConvergence(
+      [nodeA, nodeB],
+      {timeoutMs: 500, pollIntervalMs: 50},
+    ),
+    /Leader identities disagree/i,
+  );
+});
+
+test('assertConsistency derives leaders from ' +
+  'replicaRoles when partitions table leaders are ' +
+  'empty — uses services-derived leader identity ' +
+  'during cache hydration', async () => {
+  // Simulates post-seed-restart state: partitions table
+  // not yet hydrated so leaders={}, but services rows
+  // report raft_role leaders via replicaRoles.
+  const snapshotPayload = {
+    nodes: ['node-1', 'node-2', 'node-3'],
+    partitions: ['p1'],
+    leaders: {},
+    voterCounts: {p1: 3},
+    replicaRoles: {
+      p1: {
+        'replica-1': 'leader',
+        'replica-2': 'follower',
+        'replica-3': 'follower',
+      },
+    },
+  };
+
+  const nodeA = {
+    id: 'node-a',
+    async isReachable() {
+      return true;
+    },
+    async getControlSnapshot() {
+      return {rows: [snapshotPayload]};
+    },
+    async query() {
+      throw new Error('should not be called');
+    },
+  };
+  const nodeB = {
+    id: 'node-b',
+    async isReachable() {
+      return true;
+    },
+    async getControlSnapshot() {
+      return {rows: [snapshotPayload]};
+    },
+    async query() {
+      throw new Error('should not be called');
+    },
+  };
+
+  await assert.doesNotReject(async () => {
+    await assertConsistency([nodeA, nodeB]);
   });
 });

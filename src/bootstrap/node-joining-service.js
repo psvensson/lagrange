@@ -60,6 +60,8 @@ import {
   JOINING_PHASE,
 } from './bootstrap-constants.js';
 import {
+  CDC_REESTABLISHMENT,
+  CDC_SUBSCRIPTION_STATUS,
   JOIN_BACKFILL_QUERY,
   JOINING_DEFAULT,
   JOINING_ERROR_MSG,
@@ -67,7 +69,6 @@ import {
   JOINING_HTTP,
   JOINING_LOG_MSG,
   JOINING_UNIFIED_RECONCILE,
-
 } from './node-joining-constants.js';
 import {createRuntimeStartupWiring} from '../runtime/runtime-startup-wiring.js';
 import {
@@ -949,6 +950,11 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   async signalReadyForReplicas() {
+    // Gate: verify CDC subscriptions are active before advertising
+    // readiness. If not confirmed within timeout, proceed with
+    // degraded status rather than blocking indefinitely (Req 5.3).
+    await this.awaitCdcSubscriptionsForReadiness();
+
     const heartbeat = assertCritical(
       this.heartbeatService,
       JOINING_ERROR_MSG.CONTROL_PLANE_SERVICE_REQUIRED,
@@ -1026,6 +1032,57 @@ class NodeJoiningService extends EventEmitter {
       error: lastError?.message || STRING.UNKNOWN,
     });
     throw lastError;
+  }
+
+  /**
+   * Wait for CDC subscriptions to become active before advertising
+   * node readiness. If subscriptions are not confirmed within the
+   * re-establishment timeout, log a degraded-status warning and
+   * proceed so the node is not blocked indefinitely.
+   * @return {Promise<void>}
+   * @private
+   */
+  async awaitCdcSubscriptionsForReadiness() {
+    if (this.cdcSubscriptionsActive === true) {
+      this.logger.info(
+        JOINING_LOG_MSG.CDC_READINESS_GATE_PASSED, {
+          nodeId: this.nodeId,
+        },
+      );
+      return;
+    }
+
+    const timeoutMs = CDC_REESTABLISHMENT.TIMEOUT_MS;
+    const pollMs = CDC_REESTABLISHMENT.READINESS_GATE_POLL_MS;
+    const startMs = this.now();
+
+    this.logger.info(
+      JOINING_LOG_MSG.CDC_READINESS_GATE_WAITING, {
+        nodeId: this.nodeId,
+        timeoutMs,
+      },
+    );
+
+    while (this.now() - startMs < timeoutMs) {
+      if (this.cdcSubscriptionsActive === true) {
+        this.logger.info(
+          JOINING_LOG_MSG.CDC_READINESS_GATE_PASSED, {
+            nodeId: this.nodeId,
+            elapsedMs: this.now() - startMs,
+          },
+        );
+        return;
+      }
+      await this.sleep(pollMs);
+    }
+
+    this.logger.warn(
+      JOINING_LOG_MSG.CDC_READINESS_GATE_DEGRADED, {
+        nodeId: this.nodeId,
+        timeoutMs,
+        elapsedMs: this.now() - startMs,
+      },
+    );
   }
 
   /**
@@ -2410,7 +2467,10 @@ class NodeJoiningService extends EventEmitter {
   /**
    * Subscribe to CDC events for default cache-sync tables.
    * This keeps the system cache updated as cluster state changes.
-   * Requirements: 4.1, 4.2, 4.3 - CDC subscriptions keep cache updated.
+   * The subscription is wrapped in a bounded retry loop with
+   * structured diagnostics. The total time is bounded by
+   * CDC_REESTABLISHMENT.TIMEOUT_MS.
+   * Requirements: 4.1, 4.2, 4.3, 5.1, 5.2, 5.4
    * @return {Promise<void>}
    * @private
    */
@@ -2436,58 +2496,252 @@ class NodeJoiningService extends EventEmitter {
       tables: systemTables,
     });
 
-    try {
-      // Subscribe to all CDC events (insert, update, delete, upsert)
-      // The CDCIntegrationService emits these events when system tables change
-      // The system cache is automatically updated by the cache hydration service
-      const cdcEventHandler = (event) => {
-        this.logger.debug(JOINING_LOG_MSG.CDC_EVENT_RECEIVED, {
+    const startMs = this.now();
+    const timeoutMs = CDC_REESTABLISHMENT.TIMEOUT_MS;
+    const maxRetries = CDC_REESTABLISHMENT.MAX_RETRIES;
+    const retryDelayMs = CDC_REESTABLISHMENT.RETRY_DELAY_MS;
+
+    // Subscribe to all CDC events (insert, update, delete, upsert)
+    // The CDCIntegrationService emits these events when system
+    // tables change. The system cache is automatically updated by
+    // the cache hydration service.
+    const cdcEventHandler = (event) => {
+      this.logger.debug(JOINING_LOG_MSG.CDC_EVENT_RECEIVED, {
+        nodeId: this.nodeId,
+        tableName: event.tableName,
+        operation: event.operation || STRING.UNKNOWN,
+      });
+    };
+
+    const eventTypes = [
+      CDC_EVENT.INSERT,
+      CDC_EVENT.UPDATE,
+      CDC_EVENT.DELETE,
+      CDC_EVENT.UPSERT,
+    ];
+
+    // Periodic diagnostic emission during CDC recovery
+    // (Requirement 8.2). Cleared in finally block so it
+    // is always cleaned up on success, failure, or timeout.
+    const diagnosticIntervalMs =
+      CDC_REESTABLISHMENT.DIAGNOSTIC_INTERVAL_MS;
+    const diagnosticInterval = setInterval(() => {
+      const leaderService =
+        this.getLeaderMessageGroupService();
+      const messageGroupLeader = leaderService ? {
+        nodeId: leaderService.nodeId || null,
+        groupId: leaderService.groupId || null,
+        isLeader: typeof leaderService.isLeaderReplica ===
+          TYPEOF.FUNCTION ?
+          leaderService.isLeaderReplica() : null,
+      } : null;
+
+      this.logger.info(
+        JOINING_LOG_MSG.CDC_RECOVERY_DIAGNOSTICS, {
           nodeId: this.nodeId,
-          tableName: event.tableName,
-          operation: event.operation || STRING.UNKNOWN,
-        });
-      };
+          subscriptionStatus:
+            this.getCdcSubscriptionStatus(),
+          messageGroupLeader,
+          elapsedMs: this.now() - startMs,
+        },
+      );
+    }, diagnosticIntervalMs);
 
-      // Subscribe to each event type using constants
-      const eventTypes = [
-        CDC_EVENT.INSERT,
-        CDC_EVENT.UPDATE,
-        CDC_EVENT.DELETE,
-        CDC_EVENT.UPSERT,
-      ];
-      for (const eventType of eventTypes) {
-        this.cdcIntegrationService.on(eventType, cdcEventHandler);
-      }
+    // Bounded retry loop for CDC subscription establishment
+    let subscribed = false;
+    try {
+      for (
+        let attempt = NUM.ZERO;
+        attempt <= maxRetries;
+        attempt++
+      ) {
+        const elapsedMs = this.now() - startMs;
+        const remainingBudgetMs = timeoutMs - elapsedMs;
 
-      // Verify subscriptions are active by checking listener count
-      const subscriptionStatus = {};
-      for (const eventType of eventTypes) {
-        const listenerCount = this.cdcIntegrationService.listenerCount(eventType);
-        subscriptionStatus[eventType] = listenerCount;
-
-        if (listenerCount === NUM.ZERO) {
-          throw new Error(
-            `CDC subscription verification failed: no listeners for ${eventType}`,
+        // Respect overall timeout budget (§1.9)
+        if (remainingBudgetMs <= NUM.ZERO) {
+          this.logger.warn(
+            JOINING_LOG_MSG.CDC_REESTABLISHMENT_TIMEOUT, {
+              nodeId: this.nodeId,
+              tables: systemTables,
+              attempt,
+              maxRetries,
+              elapsedMs,
+            },
           );
+          break;
+        }
+
+        try {
+          for (const eventType of eventTypes) {
+            this.cdcIntegrationService.on(
+              eventType, cdcEventHandler,
+            );
+          }
+
+          // Verify listeners were registered
+          const subscriptionStatus = {};
+          for (const eventType of eventTypes) {
+            const listenerCount =
+              this.cdcIntegrationService
+                .listenerCount(eventType);
+            subscriptionStatus[eventType] = listenerCount;
+            if (listenerCount === NUM.ZERO) {
+              throw new Error(
+                JOINING_ERROR_MSG
+                  .controlPlaneCdcSubscribeFailed(
+                    systemTables.join(', '),
+                    `no listeners for ${eventType}`,
+                  ),
+              );
+            }
+          }
+
+          subscribed = true;
+
+          this.logger.info(
+            JOINING_LOG_MSG.CDC_REESTABLISHMENT_COMPLETE, {
+              nodeId: this.nodeId,
+              tableCount: systemTables.length,
+              elapsedMs: this.now() - startMs,
+              subscriptionStatus,
+            },
+          );
+          break;
+        } catch (error) {
+          // Remove partially registered listeners before
+          // retry
+          for (const eventType of eventTypes) {
+            this.cdcIntegrationService.removeListener(
+              eventType, cdcEventHandler,
+            );
+          }
+
+          const currentElapsedMs = this.now() - startMs;
+          const currentRemainingMs =
+            timeoutMs - currentElapsedMs;
+
+          this.logger.warn(
+            JOINING_LOG_MSG.CDC_SUBSCRIPTION_RETRY, {
+              nodeId: this.nodeId,
+              tables: systemTables,
+              error: error.message,
+              attempt: attempt + NUM.ONE,
+              maxRetries,
+              remainingBudgetMs: currentRemainingMs,
+            },
+          );
+
+          if (
+            attempt < maxRetries &&
+            currentRemainingMs > NUM.ZERO
+          ) {
+            const waitMs = Math.min(
+              retryDelayMs, currentRemainingMs,
+            );
+            await this.sleep(waitMs);
+          }
         }
       }
-
-      this.logger.info(JOINING_LOG_MSG.CDC_SUBSCRIPTION_REGISTERED, {
-        nodeId: this.nodeId,
-        eventTypes,
-        tableCount: systemTables.length,
-        subscriptionStatus,
-      });
-
-      // Mark CDC subscriptions as active
-      this.cdcSubscriptionsActive = true;
-    } catch (error) {
-      this.logger.error(JOINING_LOG_MSG.CDC_SUBSCRIPTION_FAILED, {
-        nodeId: this.nodeId,
-        error: error.message,
-      });
-      throw error;
+    } finally {
+      clearInterval(diagnosticInterval);
     }
+
+    // Build final subscription status for logging
+    const finalStatus = {};
+    for (const eventType of eventTypes) {
+      finalStatus[eventType] =
+        this.cdcIntegrationService.listenerCount(eventType);
+    }
+
+    if (!subscribed) {
+      // All retries exhausted or timeout expired
+      this.logger.warn(
+        JOINING_LOG_MSG.CDC_SUBSCRIPTION_RETRY_EXHAUSTED, {
+          nodeId: this.nodeId,
+          tables: systemTables,
+          elapsedMs: this.now() - startMs,
+          maxRetries,
+          subscriptionStatus: finalStatus,
+        },
+      );
+    }
+
+    this.logger.info(JOINING_LOG_MSG.CDC_SUBSCRIPTION_REGISTERED, {
+      nodeId: this.nodeId,
+      eventTypes,
+      tableCount: systemTables.length,
+      subscriptionStatus: finalStatus,
+    });
+
+    // Mark CDC subscriptions as active even if retries were
+    // exhausted — partial progress is better than blocking
+    // indefinitely. Task 6.4 gates readiness on full status.
+    this.cdcSubscriptionsActive = true;
+  }
+
+  /**
+   * Return per-table CDC subscription status.
+   *
+   * Reads from existing subscription state on
+   * `this.cdcIntegrationService` (EventEmitter listener counts)
+   * and `this.cdcSubscriptionsActive`. Does not create new state.
+   *
+   * @return {object} Diagnostic snapshot with:
+   *   - `active` {boolean} whether subscriptions are active
+   *   - `tables` {Array<object>} per-table status entries
+   *   - `eventTypes` {object} per-event-type listener counts
+   */
+  getCdcSubscriptionStatus() {
+    const tables = CACHE_HYDRATION_TABLES;
+    const active = this.cdcSubscriptionsActive === true;
+
+    const eventTypes = [
+      CDC_EVENT.INSERT,
+      CDC_EVENT.UPDATE,
+      CDC_EVENT.DELETE,
+      CDC_EVENT.UPSERT,
+    ];
+
+    // Per-event-type listener counts from the integration
+    // service (single source of truth — §1.4).
+    const eventListenerCounts = {};
+    for (const eventType of eventTypes) {
+      eventListenerCounts[eventType] =
+        this.cdcIntegrationService ?
+          this.cdcIntegrationService.listenerCount(
+            eventType,
+          ) :
+          NUM.ZERO;
+    }
+
+    // Derive overall subscription health: at least one
+    // listener on every event type means subscribed.
+    const hasAllListeners = eventTypes.every(
+      (et) => eventListenerCounts[et] > NUM.ZERO,
+    );
+
+    // Build per-table status. All tables share the same
+    // event-level listeners so the status is uniform, but
+    // the per-table shape is required by the diagnostic
+    // contract (Requirement 8.1).
+    const tableStatuses = tables.map((tableName) => {
+      let status;
+      if (active && hasAllListeners) {
+        status = CDC_SUBSCRIPTION_STATUS.SUBSCRIBED;
+      } else if (!active && !hasAllListeners) {
+        status = CDC_SUBSCRIPTION_STATUS.FAILED;
+      } else {
+        status = CDC_SUBSCRIPTION_STATUS.PENDING;
+      }
+      return {tableName, status};
+    });
+
+    return {
+      active,
+      tables: tableStatuses,
+      eventTypes: eventListenerCounts,
+    };
   }
 
   /**

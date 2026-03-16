@@ -22,7 +22,8 @@ import {EventEmitter} from 'events';
 import {v4 as uuidv4} from 'uuid';
 import {LoggingService} from '../logging/logging-service.js';
 import {
-  CDC_OPERATION, COLUMN, ERRORS, METRICS_LOG_TAG, NUM, SERVICE_STATUS, SQL, STATE,
+  CDC_OPERATION, COLUMN, ENTITY_TYPE, ERRORS, METRICS_LOG_TAG,
+  NUM, SERVICE_STATUS, SERVICE_TYPE, SQL, STATE,
   STRING, TIME_MS, TYPEOF, ADDRESS, PROTOCOL,
 } from '../constants/index.js';
 import {ENTRYPOINT_DEFAULT} from '../constants/entrypoint.js';
@@ -36,6 +37,9 @@ import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../control-plane/control-plane-readiness-constants.js';
 import {HLCClockService} from '../hlc/hlc-clock-service.js';
+import {
+  QUERY_ERROR_CODE,
+} from '../query/query-constants.js';
 import {
   SYSTEM_TABLE_NAME,
   INITIAL_PARTITION_IDS,
@@ -856,6 +860,31 @@ class CDCIntegrationService extends EventEmitter {
       options.queryOptions,
     );
     if (!queryResult?.success) {
+      const reseedResult =
+        this.maybeReseedBootstrapOverlay(tableName, queryResult);
+      if (reseedResult.reseeded) {
+        const retryResult = await this.sqlQueryEngine.executeQuery(
+          statement,
+          params,
+          options.queryOptions,
+        );
+        this.logger.info(
+          CDC_LOG_MSG.OVERLAY_RESEED_RETRY_RESULT,
+          {
+            nodeId: this.nodeId,
+            tableName,
+            retrySuccess: retryResult?.success ?? false,
+          },
+        );
+        if (retryResult?.success) {
+          return {
+            ...retryResult,
+            rows: Array.isArray(retryResult.rows) ?
+              retryResult.rows : [],
+            source: 'sql_query_engine',
+          };
+        }
+      }
       return queryResult || {
         success: false,
         error: 'authoritative_query_failed',
@@ -868,6 +897,67 @@ class CDCIntegrationService extends EventEmitter {
       source: 'sql_query_engine',
     };
   }
+
+  /**
+   * Re-seed the SQL query engine bootstrap routing overlay when a
+   * query fails with TABLE_NOT_FOUND or PARTITION_NOT_FOUND. This
+   * breaks the circular dependency after seed restart where empty
+   * cache + deleted overlay prevents authoritative discovery repair.
+   * Reuses the existing seedBootstrapRoutingOverlayFromSnapshots
+   * mechanism on the SQL query engine.
+   * @param {string} tableName
+   * @param {Object|null} queryResult
+   * @return {{reseeded: boolean}}
+   * @private
+   */
+  maybeReseedBootstrapOverlay(tableName, queryResult) {
+      const errorCode = queryResult?.errorCode || null;
+      if (errorCode !== QUERY_ERROR_CODE.TABLE_NOT_FOUND &&
+          errorCode !== QUERY_ERROR_CODE.PARTITION_NOT_FOUND) {
+        return {reseeded: false};
+      }
+      if (!this.sqlQueryEngine ||
+          typeof this.sqlQueryEngine
+            .installRecoveryRoutingOverlayEntry !==
+            TYPEOF.FUNCTION) {
+        return {reseeded: false};
+      }
+      const partitionId =
+        INITIAL_PARTITION_IDS[tableName] || null;
+      if (!partitionId) {
+        return {reseeded: false};
+      }
+      const connectedNodes = this.messageRouter ?
+        this.messageRouter.getConnectedNodes() : [];
+      if (connectedNodes.length === NUM.ZERO) {
+        return {reseeded: false};
+      }
+      this.logger.info(
+        CDC_LOG_MSG.OVERLAY_RESEED_ON_TABLE_NOT_FOUND,
+        {
+          nodeId: this.nodeId,
+          tableName,
+          partitionId,
+          connectedNodeCount: connectedNodes.length,
+          originalError: queryResult?.error || null,
+        },
+      );
+      const serviceRows = connectedNodes.map((nodeId) => ({
+        partition_id: partitionId,
+        service_type: SERVICE_TYPE.PARTITION,
+        status: SERVICE_STATUS.ACTIVE,
+        node_id: nodeId,
+        address: `${nodeId}${ADDRESS.SEPARATOR}` +
+          `${ENTITY_TYPE.PARTITION}${ADDRESS.SEPARATOR}` +
+          `${partitionId}`,
+      }));
+      const installed =
+        this.sqlQueryEngine
+          .installRecoveryRoutingOverlayEntry(
+            partitionId, tableName, serviceRows,
+          );
+      return {reseeded: installed};
+    }
 
   /**
    * Normalize one direct local system-table write result into the SQL-engine

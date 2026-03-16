@@ -1,0 +1,19 @@
+{
+  "scenarioName": "seven-node-read-write-load-distribution",
+  "startedAt": 1773470742038,
+  "endedAt": 1773470937211,
+  "durationMs": 195173,
+  "files": {
+    "events": ".playback/.playback/seven-node-read-write-load-distribution-fix12/seven-node-read-write-load-distribution/events.ndjson",
+    "samples": ".playback/.playback/seven-node-read-write-load-distribution-fix12/seven-node-read-write-load-distribution/samples.ndjson",
+    "snapshots": ".playback/.playback/seven-node-read-write-load-distribution-fix12/seven-node-read-write-load-distribution/snapshots.ndjson",
+    "manifest": ".playback/.playback/seven-node-read-write-load-distribution-fix12/seven-node-read-write-load-distribution/playback-manifest.json",
+    "viewer": ".playback/.playback/seven-node-read-write-load-distribution-fix12/seven-node-read-write-load-distribution/playback-viewer.html"
+  },
+  "counts": {
+    "events": 114,
+    "samples": 70,
+    "snapshots": 95
+  },
+  "warnings": []
+}

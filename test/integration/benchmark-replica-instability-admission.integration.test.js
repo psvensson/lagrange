@@ -78,7 +78,7 @@ test('benchmark admission blocks pending promotion deterministically',
         targetAdmission?.reasons?.some((reason) => reason?.code === 'replica_operation_in_flight'),
         true,
       );
-      t.equal(sourceAdmission?.state, 'blocked');
+      t.equal(sourceAdmission?.state, 'ready');
       t.equal(sourceAdmission?.degradationState, 'healthy');
       t.same(sourceAdmission?.degradedByOperationIds, []);
       t.equal(

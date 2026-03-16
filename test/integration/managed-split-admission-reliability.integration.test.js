@@ -44,6 +44,9 @@ const FIXTURE_NODE_ID = '550e8400-e29b-41d4-a716-446655449902';
 const SYNTHETIC_NODE_ID = '550e8400-e29b-41d4-a716-4466554499aa';
 const STORAGE_BUDGET_BYTES = 128 * 1024 * 1024 * 1024;
 const LEASE_EXTENSION_MS = 60000;
+const FIXTURE_CPU_CORES = NUM.FOUR;
+const FIXTURE_MEMORY_MB = NUM.FOUR * NUM.THOUSAND;
+const FIXTURE_DISK_GB = 128;
 
 function buildCreateTableSql(tableName) {
   return `
@@ -87,6 +90,17 @@ function parseTransitionMetadata(tableRow) {
   return JSON.parse(rawMetadata);
 }
 
+function buildSafeModePublicationOwner() {
+  return {
+    getPublicationModeDiagnostics: () => Object.freeze({
+      currentMode: CDC_GROUP_PUBLICATION_MODE.REPAIR_ONLY,
+      reasonCode: CDC_GROUP_PROPAGATION_REASON.CONFIG_SAFE_MODE,
+      enteredAt: new Date().toISOString(),
+      recentTransitions: Object.freeze([]),
+    }),
+  };
+}
+
 function installCanonicalAdmissionOwner(fixture) {
   const storageAccountingService = new StorageCapacityAccountingService({
     systemTableCache: fixture.systemTableCache,
@@ -95,6 +109,16 @@ function installCanonicalAdmissionOwner(fixture) {
     systemTableCache: fixture.systemTableCache,
   });
 
+  const realPropagationService =
+    fixture.bootstrapService.latencyTopology
+      ?.cdcGroupPropagationService || null;
+  // In a single-node bootstrap the real propagation service reports
+  // degraded mode (missing_local_group).  Use a safe-mode stub so the
+  // readiness evaluation treats publication as healthy during fixture
+  // table creation.  Tests that need degraded publication override
+  // getPublicationModeDiagnostics on this object after table creation.
+  const propagationService = buildSafeModePublicationOwner();
+
   const controlPlaneReadinessService = new ControlPlaneReadinessService({
     nodeId: FIXTURE_NODE_ID,
     systemTableCache: fixture.systemTableCache,
@@ -102,8 +126,7 @@ function installCanonicalAdmissionOwner(fixture) {
     messageRouter: fixture.bootstrapResult.messageRouter,
     storageAccountingService,
     cdcIntegrationService: fixture.bootstrapService.cdcIntegrationService,
-    cdcGroupPropagationService:
-      fixture.bootstrapService.latencyTopology?.cdcGroupPropagationService || null,
+    cdcGroupPropagationService: propagationService,
   });
   const storageAdmissionService = new StorageAdmissionService({
     nodeId: FIXTURE_NODE_ID,
@@ -118,6 +141,8 @@ function installCanonicalAdmissionOwner(fixture) {
     storageAccountingService;
   fixture.sqlQueryEngine.rebalanceCoordinator.storageAdmissionService =
     storageAdmissionService;
+  fixture.sqlQueryEngine.rebalanceCoordinator
+    .controlPlaneReadinessService = controlPlaneReadinessService;
   fixture.sqlQueryEngine.managedSplitWorkflow.storageAdmissionService =
     storageAdmissionService;
 
@@ -139,6 +164,7 @@ async function bootstrapManagedSplitFixture(tableName) {
   const config = ConfigurationManager.getInstance();
   config.setByPath('rebalancer.storageAdmissionMode', 'enforce');
   config.setByPath('latency.propagationMode', 'grouped');
+  config.setByPath('partition.defaultReplicaCount', 1);
 
   const wsPort = getUniquePort();
   const bootstrapService = new BootstrapService({
@@ -163,6 +189,41 @@ async function bootstrapManagedSplitFixture(tableName) {
       nodeId: FIXTURE_NODE_ID,
       rebalanceCoordinator: bootstrapService.rebalanceCoordinator,
     });
+
+    // Wire the canonical admission owner BEFORE table creation so the
+    // node passes placement-eligibility checks during provisioning.
+    const fixture = {
+      bootstrapService,
+      bootstrapResult,
+      systemTableCache,
+      sqlQueryEngine,
+    };
+    const admissionOwner = installCanonicalAdmissionOwner(fixture);
+
+    // Seed node readiness (heartbeat + lease + storage budget) so the
+    // node passes placement-eligibility checks.
+    const cdcIntegrationService = bootstrapService.cdcIntegrationService;
+    const now = Date.now();
+    await cdcIntegrationService.updateSystemTableRow(
+      TABLES.NODES,
+      {node_id: FIXTURE_NODE_ID},
+      {
+        last_heartbeat: now,
+        ready_lease_expires_at: now + LEASE_EXTENSION_MS,
+        storage_budget_bytes: STORAGE_BUDGET_BYTES,
+        storage_budget_source: 'integration_test',
+        storage_budget_updated_at: now,
+      },
+    );
+
+    // Wait for the readiness update to propagate through CDC.
+    await waitFor(() => {
+      const nodeRow = systemTableCache.get(
+        TABLES.NODES,
+        FIXTURE_NODE_ID,
+      );
+      return nodeRow?.storage_budget_bytes === STORAGE_BUDGET_BYTES;
+    }, ROUTING_TIMEOUT_MS, POLL_INTERVAL_MS);
 
     const createResult = await sqlQueryEngine.executeQuery(
       buildCreateTableSql(tableName),
@@ -196,6 +257,7 @@ async function bootstrapManagedSplitFixture(tableName) {
       bootstrapResult,
       systemTableCache,
       sqlQueryEngine,
+      admissionOwner,
     };
   } catch (error) {
     await bootstrapService.shutdown().catch(() => {});
@@ -239,37 +301,44 @@ async function seedProvisioningAdmissionFixture(fixture, tableName) {
   await cdcIntegrationService.upsertSystemTableRow(TABLES.NODES, {
     node_id: SYNTHETIC_NODE_ID,
     node_address: `ws://127.0.0.1:${getUniquePort()}`,
-    cpu_cores: localNodeRow.cpu_cores || 4,
-    memory_mb: localNodeRow.memory_mb || 4096,
-    disk_gb: localNodeRow.disk_gb || 128,
-    cpu_usage_percent: 0,
-    memory_usage_percent: 0,
-    disk_usage_percent: 0,
+    cpu_cores: localNodeRow.cpu_cores || FIXTURE_CPU_CORES,
+    memory_mb: localNodeRow.memory_mb || FIXTURE_MEMORY_MB,
+    disk_gb: localNodeRow.disk_gb || FIXTURE_DISK_GB,
+    cpu_usage_percent: NUM.ZERO,
+    memory_usage_percent: NUM.ZERO,
+    disk_usage_percent: NUM.ZERO,
     status: SERVICE_STATUS.ACTIVE,
-    connection_state: 'disconnected',
+    connection_state: STATE.DISCONNECTED,
     capabilities: '[]',
-    last_heartbeat: now - LEASE_EXTENSION_MS,
-    ready_lease_expires_at: now - 1000,
-    storage_budget_bytes: STORAGE_BUDGET_BYTES,
+    last_heartbeat: now,
+    ready_lease_expires_at: now + LEASE_EXTENSION_MS,
+    storage_budget_bytes: NUM.ZERO,
     storage_budget_source: 'integration_test',
     storage_budget_updated_at: now,
     created_at: now,
   });
 
+  const syntheticServiceId =
+    `${partitionRow.partition_id}-synthetic-follower`;
+  const syntheticReplicaId =
+    `${partitionRow.partition_id}-r-synthetic`;
+  const syntheticUnifiedAddress =
+    `${SYNTHETIC_NODE_ID}/${SERVICE_TYPE.PARTITION}/${syntheticServiceId}`;
+
   await cdcIntegrationService.upsertSystemTableRow(TABLES.SERVICES, {
-    service_id: `${partitionRow.partition_id}-synthetic-follower`,
+    service_id: syntheticServiceId,
     service_type: SERVICE_TYPE.PARTITION,
     node_id: SYNTHETIC_NODE_ID,
     partition_id: partitionRow.partition_id,
     group_id: sourceServiceRow.group_id || null,
-    replica_id: `${partitionRow.partition_id}-r-synthetic`,
+    replica_id: syntheticReplicaId,
     raft_role: 'follower',
     status: SERVICE_STATUS.ACTIVE,
     state_entered_at: now,
     previous_state: null,
     trigger_reason: 'integration_split_admission_fixture',
     error_message: null,
-    address: `ws://127.0.0.1:${getUniquePort()}`,
+    address: syntheticUnifiedAddress,
     created_at: now,
     updated_at: now,
   });
@@ -285,7 +354,21 @@ async function seedProvisioningAdmissionFixture(fixture, tableName) {
     throw new Error('Synthetic split-admission quorum fixture did not reach cache');
   }
 
-  return partitionRow;
+  // Raise the partition replica count to 3 so the split workflow
+  // requires a quorum of 2 eligible nodes for child provisioning.
+  // The table was created with replica_count=1 (single-node bootstrap)
+  // but the split admission tests need multi-node quorum semantics.
+  await cdcIntegrationService.updateSystemTableRow(
+    TABLES.PARTITIONS,
+    {partition_id: partitionRow.partition_id},
+    {replica_count: NUM.THREE},
+  );
+  await waitFor(() => {
+    const updated = getPartitionRow(systemTableCache, tableName);
+    return updated?.replica_count === NUM.THREE;
+  }, ROUTING_TIMEOUT_MS, POLL_INTERVAL_MS);
+
+  return getPartitionRow(systemTableCache, tableName);
 }
 
 test('managed split persists blocked split admission instead of generic failure',
@@ -512,27 +595,75 @@ test('managed split admission repairs stale connected node readiness from ' +
   const fixture = await bootstrapManagedSplitFixture(tableName);
 
   try {
-    await seedProvisioningAdmissionFixture(fixture, tableName);
+    // Create the synthetic node directly with a stale lease.
+    // Unlike Tests 1/2 which need seedProvisioningAdmissionFixture
+    // for source quorum routability, this test calls checkSplit
+    // directly and only needs a stale node in the cache so the
+    // readiness service triggers an authoritative repair.
+    // Creating the node stale from the start avoids the cache
+    // heartbeat-watermark regression protection that rejects
+    // attempts to lower last_heartbeat/ready_lease_expires_at
+    // on an existing row.
+    const staleNow = Date.now();
+    const cdcIntegrationService =
+      fixture.bootstrapService.cdcIntegrationService;
+    const localNodeRow = fixture.systemTableCache.get(
+      TABLES.NODES,
+      FIXTURE_NODE_ID,
+    );
+    await cdcIntegrationService.upsertSystemTableRow(TABLES.NODES, {
+      node_id: SYNTHETIC_NODE_ID,
+      node_address: `ws://127.0.0.1:${getUniquePort()}`,
+      cpu_cores: localNodeRow?.cpu_cores || FIXTURE_CPU_CORES,
+      memory_mb: localNodeRow?.memory_mb || FIXTURE_MEMORY_MB,
+      disk_gb: localNodeRow?.disk_gb || FIXTURE_DISK_GB,
+      cpu_usage_percent: NUM.ZERO,
+      memory_usage_percent: NUM.ZERO,
+      disk_usage_percent: NUM.ZERO,
+      status: SERVICE_STATUS.ACTIVE,
+      connection_state: STATE.DISCONNECTED,
+      capabilities: '[]',
+      last_heartbeat: staleNow - LEASE_EXTENSION_MS,
+      ready_lease_expires_at: staleNow - NUM.THOUSAND,
+      storage_budget_bytes: STORAGE_BUDGET_BYTES,
+      storage_budget_source: 'integration_test',
+      storage_budget_updated_at: staleNow,
+      created_at: staleNow,
+    });
+    const staleVisible = await waitFor(() => {
+      const nodeRow = fixture.systemTableCache.get(
+        TABLES.NODES,
+        SYNTHETIC_NODE_ID,
+      );
+      return nodeRow?.ready_lease_expires_at < staleNow;
+    }, ROUTING_TIMEOUT_MS, POLL_INTERVAL_MS);
+    if (!staleVisible) {
+      throw new Error(
+        'Stale synthetic node did not reach cache',
+      );
+    }
+
     const {storageAdmissionService, controlPlaneReadinessService} =
       installCanonicalAdmissionOwner(fixture);
+
     const originalGetConnectionState =
       fixture.bootstrapResult.messageRouter.getConnectionState.bind(
         fixture.bootstrapResult.messageRouter,
       );
     const originalAuthoritativeRead =
-      fixture.bootstrapService.cdcIntegrationService
+      cdcIntegrationService
         .executeAuthoritativeSystemTableRead
-        .bind(fixture.bootstrapService.cdcIntegrationService);
+        .bind(cdcIntegrationService);
     const now = Date.now();
     const freshSyntheticNodeRow = {
       node_id: SYNTHETIC_NODE_ID,
       node_address: `ws://127.0.0.1:${getUniquePort()}`,
-      cpu_cores: 4,
-      memory_mb: 4096,
-      disk_gb: 128,
-      cpu_usage_percent: 0,
-      memory_usage_percent: 0,
-      disk_usage_percent: 0,
+      cpu_cores: FIXTURE_CPU_CORES,
+      memory_mb: FIXTURE_MEMORY_MB,
+      disk_gb: FIXTURE_DISK_GB,
+      cpu_usage_percent: NUM.ZERO,
+      memory_usage_percent: NUM.ZERO,
+      disk_usage_percent: NUM.ZERO,
       status: SERVICE_STATUS.ACTIVE,
       connection_state: STATE.CONNECTED,
       capabilities: '[]',
@@ -552,7 +683,7 @@ test('managed split admission repairs stale connected node readiness from ' +
       }
       return originalGetConnectionState(nodeId);
     };
-    fixture.bootstrapService.cdcIntegrationService.executeAuthoritativeSystemTableRead =
+    cdcIntegrationService.executeAuthoritativeSystemTableRead =
       async (tableNameArg, sql, params, options) => {
         authoritativeReads.push({
           tableName: tableNameArg,
@@ -565,22 +696,25 @@ test('managed split admission repairs stale connected node readiness from ' +
           return {
             success: true,
             rows: [freshSyntheticNodeRow],
-            count: 1,
+            count: NUM.ONE,
             source: 'local_partition_replica',
           };
         }
-        return originalAuthoritativeRead(tableNameArg, sql, params, options);
+        return originalAuthoritativeRead(
+          tableNameArg, sql, params, options,
+        );
       };
 
     try {
       const result = await storageAdmissionService.checkSplit({
         targetNodeIds: [SYNTHETIC_NODE_ID],
         estimatedBytes: NUM.TEN,
-        requiredReplicaCount: 1,
+        requiredReplicaCount: NUM.ONE,
       });
 
       t.equal(result.allowed, true,
-        'authoritative readiness repair should recover the stale target node');
+        'authoritative readiness repair should recover the ' +
+        'stale target node');
       t.equal(
         result.readinessSnapshots?.[SYNTHETIC_NODE_ID]?.dimensions
           ?.repairEligible,
@@ -592,7 +726,8 @@ test('managed split admission repairs stale connected node readiness from ' +
           call.tableName === TABLES.NODES &&
             call.params?.[0] === SYNTHETIC_NODE_ID,
         ),
-        'admission should issue an authoritative nodes-table repair read',
+        'admission should issue an authoritative nodes-table ' +
+        'repair read',
       );
       t.equal(
         controlPlaneReadinessService.getNodeRow(SYNTHETIC_NODE_ID)
@@ -603,7 +738,7 @@ test('managed split admission repairs stale connected node readiness from ' +
     } finally {
       fixture.bootstrapResult.messageRouter.getConnectionState =
         originalGetConnectionState;
-      fixture.bootstrapService.cdcIntegrationService.executeAuthoritativeSystemTableRead =
+      cdcIntegrationService.executeAuthoritativeSystemTableRead =
         originalAuthoritativeRead;
     }
   } finally {

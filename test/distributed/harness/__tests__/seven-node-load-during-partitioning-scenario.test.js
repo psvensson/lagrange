@@ -141,6 +141,9 @@ describe('seven-node-load-during-partitioning scenario', () => {
         assertConsistency: async () => {
           calls.push('assertConsistency');
         },
+        waitForConsistencyConvergence: async () => {
+          calls.push('waitForConsistencyConvergence');
+        },
       };
 
       const result = await run(cluster, {
@@ -183,7 +186,7 @@ describe('seven-node-load-during-partitioning scenario', () => {
         LOAD_OPERATIONS,
         'scenario should begin with mixed load',
       );
-      assert.deepEqual(calls[2], 'assertConsistency');
+      assert.deepEqual(calls[2], 'waitForConsistencyConvergence');
     });
 
   it('fails early with structured diagnostics when split attempts never start',

@@ -317,14 +317,23 @@ test('Control plane dispatch integration', async (t) => {
         5000,
       );
 
-      const dispatched = await waitFor(() => deliveries.length >= 1, 3000, 25);
+      const expectedTarget =
+        `${targetNodeId}/service/replica-handler`;
+      const dispatched = await waitFor(
+        () => deliveries.some((d) => d.target === expectedTarget),
+        3000,
+        25,
+      );
       t.ok(dispatched, 'operation should be dispatched via CDC flow');
 
-      // Verify the operation was dispatched
-      t.ok(deliveries.length >= 1, 'should dispatch replica operation');
+      // Verify the operation was dispatched to the correct target
+      const replicaDelivery = deliveries.find(
+        (d) => d.target === expectedTarget,
+      );
+      t.ok(replicaDelivery, 'should dispatch replica operation');
       t.equal(
-        deliveries[0].target,
-        `${targetNodeId}/service/replica-handler`,
+        replicaDelivery.target,
+        expectedTarget,
         'should target replica-handler on target node',
       );
 

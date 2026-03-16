@@ -127,6 +127,10 @@ const CDC_LOG_MSG = Object.freeze({
   NEW_NODE_SKIP_SELF: 'Skipping connection to self node',
   NEW_NODE_SKIP_CONNECTED: 'Skipping already connected node',
   NEW_NODE_MISSING_ADDRESS: 'New node missing address, cannot connect',
+  OVERLAY_RESEED_ON_TABLE_NOT_FOUND:
+    'Re-seeding bootstrap routing overlay after table-not-found',
+  OVERLAY_RESEED_RETRY_RESULT:
+    'Bootstrap overlay re-seed retry completed',
 });
 
 const CDC_ERROR_MSG = Object.freeze({

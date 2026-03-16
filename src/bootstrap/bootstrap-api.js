@@ -1987,11 +1987,43 @@ class BootstrapAPI {
       return;
     }
 
+    // Allow a restarting node to reclaim its self-hosted message
+    // group. When a node restarts with CREATE_SELF_HOSTED, it
+    // generates deterministic replica IDs that may collide with
+    // replicas previously moved to other nodes. The canonical
+    // home node (whose ID derives the group ID) is allowed to
+    // reclaim those replicas.
+    if (this.isCanonicalGroupHomeNode(
+      serviceData?.[COLUMN.GROUP_ID], targetNodeId,
+    )) {
+      return;
+    }
+
     throw this.buildRegisterServiceValidationError(
       HTTP_STATUS.CONFLICT,
       BOOTSTRAP_API_ERROR.REPLICA_OWNER_CONFLICT,
       BOOTSTRAP_API_REGISTER_SERVICE_ERROR_CODE.REPLICA_OWNER_CONFLICT,
     );
+  }
+
+  /**
+   * Check whether a node is the canonical home for a self-hosted
+   * message group. The canonical group ID is deterministically
+   * derived from the node ID by MessageGroupAssignment, so a
+   * match proves the node originally created the group.
+   * @param {string|null} groupId - Group ID from the service row.
+   * @param {string|null} nodeId - Target node ID.
+   * @return {boolean} True if the node is the canonical home.
+   */
+  isCanonicalGroupHomeNode(groupId, nodeId) {
+    if (!groupId || !nodeId) {
+      return false;
+    }
+    const mgAssignment = new MessageGroupAssignment({
+      seedNodeAddress: this.seedNodeAddress,
+    });
+    const canonicalGroupId = mgAssignment.generateGroupId(nodeId);
+    return groupId === canonicalGroupId;
   }
 
   /**

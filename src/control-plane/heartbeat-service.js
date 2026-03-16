@@ -790,6 +790,7 @@ class HeartbeatService extends EventEmitter {
         (existing?.capabilities || STRING.EMPTY_JSON_ARRAY),
       last_heartbeat: now,
       ready_lease_expires_at: now + this.readyLeaseMs,
+      ...this.resolveHeartbeatBudgetFields(existing),
     };
 
     this.recordMemoryTrendSample(
@@ -1178,6 +1179,46 @@ class HeartbeatService extends EventEmitter {
       connectionState: updateRow.connection_state,
       capabilities: updateRow.capabilities,
     });
+  }
+
+  /**
+   * Extract storage budget fields from a cached node row so heartbeat
+   * writes and reporter payloads preserve budget across upsert paths.
+   *
+   * Uses the same guard pattern as
+   * ReplicaDispatchService.resolveNodeStateUpdateBudgetFields to
+   * include only valid, positive budget values.
+   *
+   * @param {Object|null} cachedRow
+   * @return {Object}
+   * @private
+   */
+  resolveHeartbeatBudgetFields(cachedRow) {
+    if (!cachedRow || typeof cachedRow !== TYPEOF.OBJECT) {
+      return {};
+    }
+    const fields = {};
+    const budgetBytes = Number(
+      cachedRow[COLUMN.STORAGE_BUDGET_BYTES],
+    );
+    if (Number.isFinite(budgetBytes) && budgetBytes > NUM.ZERO) {
+      fields[COLUMN.STORAGE_BUDGET_BYTES] =
+        Math.floor(budgetBytes);
+    }
+    const budgetSource = cachedRow[COLUMN.STORAGE_BUDGET_SOURCE];
+    if (typeof budgetSource === TYPEOF.STRING &&
+        budgetSource.length > NUM.ZERO) {
+      fields[COLUMN.STORAGE_BUDGET_SOURCE] = budgetSource;
+    }
+    const budgetUpdatedAt = Number(
+      cachedRow[COLUMN.STORAGE_BUDGET_UPDATED_AT],
+    );
+    if (Number.isFinite(budgetUpdatedAt) &&
+        budgetUpdatedAt > NUM.ZERO) {
+      fields[COLUMN.STORAGE_BUDGET_UPDATED_AT] =
+        Math.floor(budgetUpdatedAt);
+    }
+    return fields;
   }
 
   /**

@@ -31,6 +31,9 @@ describe('slow-follower-under-load scenario', () => {
       assertConsistency: async () => {
         calls.push(['assertConsistency']);
       },
+      waitForConsistencyConvergence: async () => {
+        calls.push(['waitForConsistencyConvergence']);
+      },
       randomNonSeed: () => 'joiner-1',
     };
 
@@ -62,7 +65,7 @@ describe('slow-follower-under-load scenario', () => {
       'joiner-1',
     ]);
     assert.deepEqual(calls[2], ['waitForConvergence']);
-    assert.deepEqual(calls[3], ['assertConsistency']);
+    assert.deepEqual(calls[3], ['waitForConsistencyConvergence']);
   });
 
   it('still clears slowdown when convergence checks fail', async () => {
@@ -90,6 +93,7 @@ describe('slow-follower-under-load scenario', () => {
         throw new Error('convergence failed');
       },
       assertConsistency: async () => {},
+      waitForConsistencyConvergence: async () => {},
     };
 
     await assert.rejects(

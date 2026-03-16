@@ -306,6 +306,13 @@ test('dispatch reads use cache-backed owner state only', async (t) => {
   );
   await service.retryPendingDispatchesForNode('node-a');
 
+  // Wait for the operationDispatchQueue microtask-scheduled drain
+  // to complete: scheduleDrain uses Promise.resolve().then(drain).
+  while (service.operationDispatchQueue.size > 0 ||
+         service.operationDispatchQueue.draining) {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
   t.equal(node.node_id, 'node-a', 'node read should come from cache');
   t.equal(
     operation.operation_id,

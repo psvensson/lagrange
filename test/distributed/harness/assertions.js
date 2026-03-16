@@ -9,7 +9,7 @@
  *   - leader change tracking with quiet window
  */
 
-import {CONVERGENCE_DEFAULTS} from './constants.js';
+import {CONVERGENCE_DEFAULTS, TIMEOUTS} from './constants.js';
 
 // --- SQL Queries ---
 const SERVICES_QUERY =
@@ -91,6 +91,83 @@ const CONTROL_SNAPSHOT_FIELD_IN_FLIGHT_COUNT = 'inFlightCount';
 const CONTROL_SNAPSHOT_FIELD_STATUS_HISTOGRAM = 'statusHistogram';
 const CONTROL_SNAPSHOT_FIELD_ROWS = 'rows';
 const CONTROL_SNAPSHOT_FIELD_PARTITION_MEMBERSHIP = 'partitionMembership';
+const CONTROL_SNAPSHOT_FIELD_REPLICA_ROLE_DIAGNOSTICS =
+  'replicaRoleDiagnostics';
+const REPLICA_ROLE_DIAGNOSTICS_LEADER_NODE_IDS =
+  'replicaLeaderNodeIds';
+const CONTROL_SNAPSHOT_FIELD_REPLICA_ROLES = 'replicaRoles';
+const REPLICA_ROLE_LEADER = 'leader';
+const LEADER_ADDRESS_PATH_SEPARATOR = '/';
+// Matches a UUID-style prefix (8-4-4-4-12 hex) at the start of
+// an address, used to detect bare-node-ID-prefixed replica paths
+// like `7493b0ab-1234-5678-9abc-def012345678/partition/p1-r1`.
+const UUID_PREFIX_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-/i;
+
+/**
+ * Normalize a leader address to its node-ID prefix.
+ *
+ * Control snapshots report leader identity as a bare node ID
+ * (from `partitions.leader_node_id`), while the SQL fallback
+ * path reports the full replica address
+ * (`nodeId/partition/partitionId-replicaId`). Comparing the
+ * two formats directly causes false mismatches.
+ *
+ * Only UUID-prefixed addresses are normalized (strip the
+ * `/partition/...` suffix). Protocol-based addresses like
+ * `ws://host:port` are returned as-is since both sources
+ * agree on that format.
+ *
+ * @param {string} address
+ * @returns {string}
+ */
+function normalizeLeaderAddress(address) {
+  const str = String(address || '');
+  if (!UUID_PREFIX_PATTERN.test(str)) {
+    return str;
+  }
+  const slashIndex = str.indexOf(LEADER_ADDRESS_PATH_SEPARATOR);
+  return slashIndex > 0 ? str.substring(0, slashIndex) : str;
+}
+
+/**
+ * Normalize all leader values in a leaders object to node-ID
+ * prefixes for format-agnostic comparison.
+ *
+ * @param {Object} leaders
+ * @returns {Object}
+ */
+function normalizeLeaders(leaders) {
+  const normalized = {};
+  for (const [partitionId, address] of Object.entries(leaders)) {
+    normalized[partitionId] = normalizeLeaderAddress(address);
+  }
+  return normalized;
+}
+
+/**
+ * Check whether two leader maps have conflicting non-empty leaders
+ * for the same partition. Missing leaders (one map has a partition
+ * key the other lacks) are NOT conflicts — they indicate CDC
+ * propagation lag for newly split partitions.
+ * @param {Object} leadersA
+ * @param {Object} leadersB
+ * @return {boolean} true if any shared partition has different
+ *   non-empty leader values
+ */
+function hasConflictingLeaders(leadersA, leadersB) {
+  const keysA = Object.keys(leadersA);
+  for (const partitionId of keysA) {
+    if (!(partitionId in leadersB)) {
+      continue;
+    }
+    const leaderA = leadersA[partitionId];
+    const leaderB = leadersB[partitionId];
+    if (leaderA !== leaderB) {
+      return true;
+    }
+  }
+  return false;
+}
 
 /**
  * Probe reachability with structured diagnostics when available.
@@ -363,20 +440,82 @@ function extractControlSnapshotPartitionIds(snapshot) {
 function extractControlSnapshotLeaders(snapshot) {
   const leaders = new Map();
   const leaderMap = snapshot?.[CONTROL_SNAPSHOT_FIELD_LEADERS];
-  if (!leaderMap ||
-    typeof leaderMap !== 'object' ||
-    Array.isArray(leaderMap)) {
-    return leaders;
+  if (leaderMap &&
+    typeof leaderMap === 'object' &&
+    !Array.isArray(leaderMap)) {
+    for (const [partitionId, leaderAddress] of
+      Object.entries(leaderMap)) {
+      const pid = String(partitionId || '').trim();
+      const addr = String(leaderAddress || '').trim();
+      if (pid.length > 0 && addr.length > 0) {
+        leaders.set(pid, addr);
+      }
+    }
   }
 
-  for (const [partitionId, leaderAddress] of Object.entries(leaderMap)) {
-    const normalizedPartitionId = String(partitionId || '').trim();
-    const normalizedLeaderAddress = String(leaderAddress || '').trim();
-    if (normalizedPartitionId.length === 0 ||
-      normalizedLeaderAddress.length === 0) {
-      continue;
+  // When the partitions table is not yet hydrated (e.g.
+  // after a seed restart), the canonical leaders map may be
+  // empty while services rows already report raft_role
+  // leaders. Fall back to replicaRoles to derive leader
+  // identity from services rows so convergence detection
+  // does not stall.
+  if (leaders.size === 0) {
+    const roles = snapshot?.[
+      CONTROL_SNAPSHOT_FIELD_REPLICA_ROLES
+    ];
+    if (roles &&
+      typeof roles === 'object' &&
+      !Array.isArray(roles)) {
+      for (const [partitionId, replicaMap] of
+        Object.entries(roles)) {
+        const pid = String(partitionId || '').trim();
+        if (pid.length === 0 || leaders.has(pid)) continue;
+        if (!replicaMap ||
+          typeof replicaMap !== 'object' ||
+          Array.isArray(replicaMap)) {
+          continue;
+        }
+        for (const [replicaId, role] of
+          Object.entries(replicaMap)) {
+          if (String(role || '').toLowerCase() ===
+            REPLICA_ROLE_LEADER &&
+            replicaId) {
+            leaders.set(pid, String(replicaId));
+            break;
+          }
+        }
+      }
     }
-    leaders.set(normalizedPartitionId, normalizedLeaderAddress);
+
+    // Secondary fallback: replicaRoleDiagnostics carries
+    // replicaLeaderNodeIds per partition (node IDs, not
+    // replica IDs). Only used when replicaRoles is absent.
+    if (leaders.size === 0) {
+      const diagnostics = snapshot?.[
+        CONTROL_SNAPSHOT_FIELD_REPLICA_ROLE_DIAGNOSTICS
+      ];
+      if (diagnostics &&
+        typeof diagnostics === 'object' &&
+        !Array.isArray(diagnostics)) {
+        for (const [partitionId, detail] of
+          Object.entries(diagnostics)) {
+          const pid = String(partitionId || '').trim();
+          if (pid.length === 0) continue;
+          const nodeIds = Array.isArray(
+            detail?.[
+              REPLICA_ROLE_DIAGNOSTICS_LEADER_NODE_IDS
+            ],
+          ) ?
+            detail[
+              REPLICA_ROLE_DIAGNOSTICS_LEADER_NODE_IDS
+            ] :
+            [];
+          if (nodeIds.length > 0) {
+            leaders.set(pid, String(nodeIds[0]));
+          }
+        }
+      }
+    }
   }
   return leaders;
 }
@@ -447,7 +586,7 @@ function extractControlSnapshotPartitionMembership(snapshot) {
   return partitionMembership;
 }
 
-async function queryControlSnapshot(node) {
+async function queryControlSnapshot(node, options = {}) {
   if (typeof node?.getControlSnapshot !== 'function') {
     throw new Error(
       CONTROL_SNAPSHOT_REQUIRED_ERROR_PREFIX +
@@ -455,7 +594,9 @@ async function queryControlSnapshot(node) {
     );
   }
 
-  const result = await node.getControlSnapshot();
+  const result = await node.getControlSnapshot({
+    forceRepair: options.forceRepair === true,
+  });
   const snapshot = extractControlSnapshotPayload(result, node?.id);
   const inFlightSummary = extractControlSnapshotInFlightSummary(snapshot);
 
@@ -508,12 +649,14 @@ async function queryNodeConsistencyStateViaSql(node) {
   };
 }
 
-async function queryNodeConsistencyState(node) {
+async function queryNodeConsistencyState(node, options = {}) {
   let controlSnapshotError = null;
 
   if (typeof node?.getControlSnapshot === 'function') {
     try {
-      const snapshotState = await queryControlSnapshot(node);
+      const snapshotState = await queryControlSnapshot(node, {
+        forceRepair: options.forceRepair === true,
+      });
       return {
         nodeId: String(node?.id || VALUE_UNKNOWN),
         activeNodes: Array.from(snapshotState.activeNodeIds || []).sort(),
@@ -552,6 +695,44 @@ async function queryNodeConsistencyState(node) {
  */
 async function queryReachableClusterSnapshot(nodes) {
   let lastError = null;
+  for (const node of nodes) {
+    try {
+      const report = await probeNodeReachability(node);
+      if (!report.reachable) {
+        continue;
+      }
+      const snapshot = await queryControlSnapshot(node);
+      // If the snapshot has no partition topology yet (e.g.
+      // node just restarted and its cache is still hydrating),
+      // try the next reachable node before accepting it.
+      // Also skip when voter counts show more partitions than
+      // the snapshot's partition list — indicates partial
+      // hydration of the partitions table.
+      const hasEmptyTopology =
+        snapshot.expectedPartitionIds.size === 0 &&
+        snapshot.leaders.size === 0;
+      const hasPartialTopology =
+        snapshot.voterCounts.size > 0 &&
+        snapshot.expectedPartitionIds.size > 0 &&
+        snapshot.voterCounts.size >
+          snapshot.expectedPartitionIds.size;
+      if (hasEmptyTopology || hasPartialTopology) {
+        lastError = 'Snapshot from ' + String(node?.id) +
+          ' has incomplete partition topology' +
+          ' (partitions=' +
+          snapshot.expectedPartitionIds.size +
+          ', voterCounts=' +
+          snapshot.voterCounts.size + ')';
+        continue;
+      }
+      return snapshot;
+    } catch (err) {
+      lastError = err?.message || String(err);
+    }
+  }
+  // All nodes either unreachable or returned incomplete
+  // snapshots. Re-query the first reachable node to return
+  // whatever partial data is available rather than nothing.
   for (const node of nodes) {
     try {
       const report = await probeNodeReachability(node);
@@ -637,6 +818,16 @@ async function waitForConvergence(nodes, options = {}) {
     latestInFlightReplicaOperationStatuses =
       snapshot.inFlightReplicaOperationStatuses;
     latestPartitionMembership = snapshot.partitionMembership;
+
+    // When the partitions table is not yet fully in the cache
+    // (e.g. after a seed restart) but services rows are
+    // available, derive expected partitions from voter-count
+    // keys so the convergence check does not stall on a
+    // partially hydrated partition set.
+    if (latestCounts.size > 0 &&
+        latestCounts.size > latestExpectedPartitionIds.size) {
+      latestExpectedPartitionIds = new Set(latestCounts.keys());
+    }
 
     // Detect leader changes.
     for (const [pid, addr] of latestLeaders) {
@@ -996,7 +1187,10 @@ function formatOperationHistoryEntry(entry) {
  * @param {Array<Object>} nodes - NodeHandle instances.
  * @throws {Error} If any disagreement is found.
  */
-async function assertConsistency(nodes) {
+async function assertConsistency(nodes, options = {}) {
+  const forceRepair = options.forceRepair === true;
+  const tolerateEmptyLeaders =
+    options.tolerateEmptyLeaders === true;
   const reachable = [];
   const reports = [];
   for (const node of nodes) {
@@ -1023,7 +1217,9 @@ async function assertConsistency(nodes) {
   const queryFailures = [];
   for (const node of reachable) {
     try {
-      nodeStates.push(await queryNodeConsistencyState(node));
+      nodeStates.push(
+        await queryNodeConsistencyState(node, {forceRepair}),
+      );
     } catch (error) {
       queryFailures.push({
         nodeId: node.id,
@@ -1052,9 +1248,10 @@ async function assertConsistency(nodes) {
   const reference = nodeStates[0];
   const refActiveStr = JSON.stringify(reference.activeNodes);
   const refPartStr = JSON.stringify(reference.partitions);
-  const refLeaderStr = JSON.stringify(
-    sortObjectKeys(reference.leaders),
+  const refLeaders = sortObjectKeys(
+    normalizeLeaders(reference.leaders),
   );
+  const refLeaderStr = JSON.stringify(refLeaders);
 
   for (let i = 1; i < nodeStates.length; i++) {
     const other = nodeStates[i];
@@ -1079,10 +1276,15 @@ async function assertConsistency(nodes) {
       );
     }
 
-    const otherLeaderStr = JSON.stringify(
-      sortObjectKeys(other.leaders),
+    const otherLeaders = sortObjectKeys(
+      normalizeLeaders(other.leaders),
     );
+    const otherLeaderStr = JSON.stringify(otherLeaders);
     if (otherLeaderStr !== refLeaderStr) {
+      if (tolerateEmptyLeaders &&
+          !hasConflictingLeaders(refLeaders, otherLeaders)) {
+        continue;
+      }
       throw new Error(
         'Leader identities disagree between ' +
         reference.nodeId + ' and ' + other.nodeId + '. ' +
@@ -1091,6 +1293,59 @@ async function assertConsistency(nodes) {
       );
     }
   }
+}
+
+/**
+ * Retry {@link assertConsistency} until all nodes agree or the
+ * convergence window expires. This absorbs short-lived CDC
+ * propagation skew that is expected after topology changes,
+ * restarts, and fault-injection recovery.
+ *
+ * @param {Array<Object>} nodes - Cluster node handles.
+ * @param {Object} [options]
+ * @param {number} [options.timeoutMs] - Max convergence window.
+ * @param {number} [options.pollIntervalMs] - Delay between retries.
+ * @returns {Promise<void>}
+ */
+async function waitForConsistencyConvergence(nodes, options = {}) {
+  const timeoutMs = Number.isFinite(options.timeoutMs) ?
+    options.timeoutMs :
+    TIMEOUTS.CONSISTENCY_CONVERGENCE;
+  const pollIntervalMs = Number.isFinite(options.pollIntervalMs) ?
+    options.pollIntervalMs :
+    TIMEOUTS.CONSISTENCY_CONVERGENCE_POLL_INTERVAL;
+  const forceRepairAfterMs = Number.isFinite(
+    options.forceRepairAfterMs,
+  ) ?
+    options.forceRepairAfterMs :
+    TIMEOUTS.CONSISTENCY_CONVERGENCE_FORCE_REPAIR_AFTER;
+  const deadline = Date.now() + Math.max(0, timeoutMs);
+  const forceRepairThreshold = Date.now() +
+    Math.max(0, forceRepairAfterMs);
+  let lastError = null;
+  let forceRepairAttempted = false;
+
+  while (Date.now() <= deadline) {
+    const forceRepair = Date.now() >= forceRepairThreshold;
+    if (forceRepair && !forceRepairAttempted) {
+      forceRepairAttempted = true;
+    }
+    try {
+      await assertConsistency(nodes, {
+        forceRepair,
+        tolerateEmptyLeaders: forceRepairAttempted,
+      });
+      return;
+    } catch (error) {
+      lastError = error;
+    }
+    await new Promise((r) => setTimeout(r, pollIntervalMs));
+  }
+
+  throw lastError || new Error(
+    'Consistency check did not converge within ' +
+    timeoutMs + 'ms',
+  );
 }
 
 /**
@@ -1138,7 +1393,7 @@ function assertConsistencyFromSnapshots(snapshots) {
       [...snapshot.partitions].sort() : [],
     leaders: snapshot?.leaders &&
       typeof snapshot.leaders === 'object' ?
-      sortObjectKeys(snapshot.leaders) : {},
+      sortObjectKeys(normalizeLeaders(snapshot.leaders)) : {},
   }));
 
   const reference = normalized[0];
@@ -1259,8 +1514,10 @@ async function assertDataIntegrity(nodes, table, expectedRows) {
 export {
   waitForConvergence,
   assertConsistency,
+  waitForConsistencyConvergence,
   assertConsistencyFromSnapshots,
   assertDataIntegrity,
+  hasConflictingLeaders,
   isVoterReady,
   countVotersPerPartition,
   extractLeaders,
