@@ -2,7 +2,7 @@
  * Shared helpers for computing and applying Raft timing settings.
  */
 
-import LifeRaft from '@markwylde/liferaft';
+import LifeRaft from './liferaft.js';
 import {NUM, STRING, TYPEOF} from '../constants/index.js';
 
 const RAFT_TIMING_DEFAULT = Object.freeze({

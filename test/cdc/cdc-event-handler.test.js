@@ -48,6 +48,8 @@ function createMockEventContext(overrides = {}) {
     epochManager: overrides.epochManager || null,
     rebalancer: overrides.rebalancer || null,
     messageRouter: overrides.messageRouter || null,
+    resolveNodeWebSocketAddress:
+      overrides.resolveNodeWebSocketAddress || (() => null),
     events,
     emit(eventName, data) {
       events.push({eventName, data});
@@ -729,7 +731,10 @@ test('handleNodeStateCDC - rejects missing status', async (t) => {
 
 test('handleNodeJoinedCDC - connects to new node (Req 3.6)', async (t) => {
   const messageRouter = createMockMessageRouter();
-  const context = createMockEventContext({messageRouter});
+  const context = createMockEventContext({
+    messageRouter,
+    resolveNodeWebSocketAddress: () => 'ws://new-node:8082',
+  });
 
   const handler = new CDCEventHandler({
     nodeId: 'test-node',
@@ -819,7 +824,10 @@ test('handleNodeJoinedCDC - reconnects when existing entry is disconnected', asy
   const messageRouter = createMockMessageRouter({
     connectionStates: {'existing-node': 'disconnected'},
   });
-  const context = createMockEventContext({messageRouter});
+  const context = createMockEventContext({
+    messageRouter,
+    resolveNodeWebSocketAddress: () => 'ws://existing-node:8082',
+  });
 
   const handler = new CDCEventHandler({
     nodeId: 'test-node',
@@ -966,7 +974,7 @@ test('handleNodeJoinedCDC - rejects missing node_id', async (t) => {
 });
 
 
-test('handleNodeJoinedCDC - rejects missing node_address', async (t) => {
+test('handleNodeJoinedCDC - rejects missing canonical websocket endpoint', async (t) => {
   const messageRouter = createMockMessageRouter();
   const context = createMockEventContext({messageRouter});
 
@@ -986,7 +994,10 @@ test('handleNodeJoinedCDC - rejects missing node_address', async (t) => {
   const result = await handler.handleNodeJoinedCDC(cdcEvent);
 
   t.equal(result.processed, false, 'should not process');
-  t.ok(result.error.includes('Missing node_address'), 'should have error message');
+  t.ok(
+    result.error.includes('Missing canonical node_endpoints websocket address'),
+    'should fail closed when canonical endpoint metadata is unavailable',
+  );
   t.end();
 });
 
@@ -995,7 +1006,10 @@ test('handleNodeJoinedCDC - handles connection failure gracefully', async (t) =>
     shouldFail: true,
     failureMessage: 'Connection refused',
   });
-  const context = createMockEventContext({messageRouter});
+  const context = createMockEventContext({
+    messageRouter,
+    resolveNodeWebSocketAddress: () => 'ws://new-node:8082',
+  });
 
   const handler = new CDCEventHandler({
     nodeId: 'test-node',

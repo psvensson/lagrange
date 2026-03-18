@@ -12,6 +12,9 @@ import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {EndpointService} from
   '../../src/control-plane/endpoint-service.js';
+import {
+  createSystemMetadataOwners,
+} from '../../src/control-plane/owners/index.js';
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -94,9 +97,28 @@ test('Property 15: Endpoint registration round-trip',
 
           const service = new EndpointService({
             nodeId: 'local-node',
-            cdcIntegrationService: mockCdc,
-            systemTableCache: mockCache,
-            sqlQueryEngine: mockSqlQueryEngine,
+            serviceEndpointsOwner: createSystemMetadataOwners({
+              controlPlaneSystemTableGateway: {
+                async readRows(_tableName, _sql, params) {
+                  return mockSqlQueryEngine.executeQuery(null, params);
+                },
+                async insertSystemTableRow(tableName, row) {
+                  return mockCdc.insertSystemTableRow(tableName, row);
+                },
+                async updateSystemTableRow(tableName, whereClause, updates) {
+                  const existingRow = store.get(whereClause[COLUMN.ENDPOINT_ID]);
+                  if (!existingRow) {
+                    return {success: true};
+                  }
+                  store.set(whereClause[COLUMN.ENDPOINT_ID], {
+                    ...existingRow,
+                    ...updates,
+                  });
+                  return {success: true};
+                },
+              },
+              systemTableCache: mockCache,
+            }).serviceEndpointsOwner,
           });
           service.initialize();
 
@@ -142,8 +164,8 @@ test('Property 15: Endpoint registration round-trip',
     );
   });
 
-test('EndpointService uses injected control-plane system-table gateway ' +
-  'for reads and writes', async (t) => {
+test('EndpointService uses injected serviceEndpointsOwner for reads and writes',
+  async (t) => {
   initEnv();
 
   const calls = [];
@@ -171,23 +193,9 @@ test('EndpointService uses injected control-plane system-table gateway ' +
 
   const service = new EndpointService({
     nodeId: 'local-node',
-    controlPlaneSystemTableGateway: gateway,
-    cdcIntegrationService: {
-      async insertSystemTableRow() {
-        throw new Error('raw CDC path should not be used');
-      },
-      async deleteSystemTableRow() {
-        throw new Error('raw CDC path should not be used');
-      },
-    },
-    systemTableCache: {
-      get: () => null,
-    },
-    sqlQueryEngine: {
-      async executeQuery() {
-        throw new Error('raw SQL path should not be used');
-      },
-    },
+    serviceEndpointsOwner: createSystemMetadataOwners({
+      controlPlaneSystemTableGateway: gateway,
+    }).serviceEndpointsOwner,
   });
   service.initialize();
 
@@ -205,7 +213,30 @@ test('EndpointService uses injected control-plane system-table gateway ' +
   t.same(
     calls.map((entry) => entry.kind),
     ['read', 'insert', 'read', 'delete'],
-    'endpoint owner should use the shared gateway for control-plane access',
+    'endpoint service should route through the injected owner boundary',
   );
   service.stop();
 });
+
+test('EndpointService requires the owner path and does not fall back to the gateway',
+  async (t) => {
+    initEnv();
+
+    const service = new EndpointService({
+      nodeId: 'local-node',
+      controlPlaneSystemTableGateway: {
+        async readRows() {
+          throw new Error('gateway fallback must not be used');
+        },
+      },
+    });
+
+    try {
+      service.initialize();
+      t.fail('endpoint service should fail closed without the owner path');
+    } catch (error) {
+      t.match(error.message, /serviceEndpointsOwner/);
+      t.equal(error.code, 'SYSTEM_METADATA_OWNER_REQUIRED');
+      t.equal(error.outcome, 'owner_not_ready');
+    }
+  });

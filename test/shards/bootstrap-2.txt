@@ -26,13 +26,10 @@ test/bootstrap/latency-topology-owner-delegation.test.js
 test/bootstrap/duplicate-replica-assignment.test.js
 test/bootstrap/bootstrap-phase-state-machine-integration.test.js
 test/bootstrap/bootstrap-mode.test.js
-test/bootstrap/join-handler.test.js
 test/bootstrap/bootstrap-state-tracker.test.js
 test/bootstrap/bootstrap-cleanup.property.test.js
 test/bootstrap/wasm-meta-table-schemas.test.js
 test/bootstrap/required-dependency-validation.property.test.js
-test/bootstrap/join-protocol-message-sequence.property.test.js
-test/bootstrap/joining-node-message-group-first.property.test.js
 test/bootstrap/system-leader-readiness-address-gate.test.js
 test/bootstrap/bootstrap-endpoint-table.property.test.js
 test/bootstrap/bootstrap-errors.property.test.js

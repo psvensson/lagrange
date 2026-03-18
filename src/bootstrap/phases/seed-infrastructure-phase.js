@@ -120,6 +120,7 @@ class SeedInfrastructurePhase {
       messageRouter = await MessageRouterSetup.create({
         nodeId: d.getNodeId(),
         nodeAddress: d.getNodeAddress(),
+        advertisedNodeWsAddress: d.getAdvertisedNodeWsAddress?.() || null,
         wsPort: wsPort,
       });
     } catch (error) {

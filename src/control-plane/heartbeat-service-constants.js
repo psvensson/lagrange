@@ -17,8 +17,10 @@ const HEARTBEAT_DEFAULT = Object.freeze({
   READY_LEASE_MS: TIME_MS.CONTROL_PLANE_READY_LEASE,
   ATTEMPT_TIMEOUT_SAFETY_MARGIN_MS: TIME_MS.SECOND,
   ENDPOINT_REFRESH_INTERVAL_MS: 300000,
-  NODE_METADATA_MIN_UPDATE_INTERVAL_MS: 500,
-  NODE_METADATA_MAX_STALENESS_MS: 5000,
+  NODE_METADATA_MIN_UPDATE_INTERVAL_MS: 10000,
+  NODE_METADATA_MAX_STALENESS_MS: 10000,
+  NODE_METADATA_USAGE_PERCENT_BUCKET_SIZE: 5,
+  REPORTER_VISIBILITY_RETRY_INTERVAL_MS: 30000,
 });
 
 const HEARTBEAT_MEMORY_TREND = Object.freeze({
@@ -57,6 +59,8 @@ const HEARTBEAT_ERROR_MSG = Object.freeze({
   MISSING_NODE_ADDRESS: 'HeartbeatService requires nodeAddress',
   MISSING_CDC: 'HeartbeatService requires cdcIntegrationService',
   MISSING_CACHE: 'HeartbeatService requires systemTableCache',
+  NODE_ROW_MISSING:
+    'HeartbeatService cannot publish a heartbeat because the node row is missing',
   NOT_INITIALIZED: 'HeartbeatService must be initialized before start',
   ALREADY_RUNNING: 'HeartbeatService is already running',
 });
@@ -70,6 +74,7 @@ const HEARTBEAT_EVENT = Object.freeze({
 const HEARTBEAT_QUIET_MODE_BYPASS_REASON = Object.freeze({
   NODE_HEARTBEAT_INITIAL_WRITE: 'node_heartbeat_initial_write',
   NODE_HEARTBEAT_MAX_STALENESS: 'node_heartbeat_max_staleness',
+  NODE_HEARTBEAT_STRUCTURAL_CHANGE: 'node_heartbeat_structural_change',
 });
 
 export {

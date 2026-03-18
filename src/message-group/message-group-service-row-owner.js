@@ -7,6 +7,7 @@ import {
   TYPEOF,
 } from '../constants/index.js';
 import {RAFT_ROLE} from '../raft/constants.js';
+import {normalizePublishedRaftRole} from '../raft/published-raft-role.js';
 
 const MESSAGE_GROUP_SERVICE_ROW_OWNER_ERROR = Object.freeze({
   GROUP_ID_REQUIRED: 'MessageGroupServiceRowOwner requires groupId',
@@ -16,6 +17,14 @@ const MESSAGE_GROUP_SERVICE_ROW_OWNER_ERROR = Object.freeze({
     'MessageGroupServiceRowOwner requires upsertSystemTableRow for registration',
   DELETE_REQUIRED:
     'MessageGroupServiceRowOwner requires deleteSystemTableRow for removal',
+});
+const SERVICE_ROW_UPDATE_OPTION = Object.freeze({
+  allowCoalescing: true,
+  allowPressureDefer: true,
+  deliveryPriority: 'background',
+  pressureRetryAfterMs: 250,
+  skipCacheWait: true,
+  workClass: 'background',
 });
 
 function assertRequiredString(value, errorMessage) {
@@ -33,10 +42,10 @@ function resolveMessageGroupRaftRole(service) {
   }
 
   if (typeof service?.getRole === TYPEOF.FUNCTION) {
-    return service.getRole() || RAFT_ROLE.FOLLOWER;
+    return normalizePublishedRaftRole(service.getRole());
   }
 
-  return service?.role || RAFT_ROLE.FOLLOWER;
+  return normalizePublishedRaftRole(service?.role);
 }
 
 class MessageGroupServiceRowOwner {
@@ -93,6 +102,13 @@ class MessageGroupServiceRowOwner {
     };
   }
 
+  buildDeferredUpdateOptions(serviceId) {
+    return {
+      ...SERVICE_ROW_UPDATE_OPTION,
+      coalescingKey: `services:${serviceId}`,
+    };
+  }
+
   async registerReplica(options = {}) {
     if (
       !this.systemTableWriter ||
@@ -141,6 +157,7 @@ class MessageGroupServiceRowOwner {
       await this.systemTableWriter.upsertSystemTableRow(
         SYSTEM_TABLE_NAME.SERVICES,
         row,
+        this.buildDeferredUpdateOptions(row.service_id),
       );
       return row;
     }
@@ -156,6 +173,7 @@ class MessageGroupServiceRowOwner {
         service_type: row.service_type,
       },
       updates,
+      this.buildDeferredUpdateOptions(row.service_id),
     );
     return row;
   }

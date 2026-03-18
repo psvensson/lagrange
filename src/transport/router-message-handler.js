@@ -27,15 +27,13 @@ class RouterMessageHandler {
    * @param {Object} options.logger - Logger instance.
    * @param {Map} options.handlers - Map of address to handler functions.
    * @param {Map} options.pendingMessages - Map of pending message promises.
-   * @param {Map} options.pendingPings - Map of pending ping promises.
-   * @param {Map} options.nodeConnections - Map of node connections.
-   * @param {string} options.nodeId - Local node ID.
-   * @param {Function} options.sendRaw - Function to send raw WebSocket messages.
-   * @param {Function} options.emit - Function to emit events.
-   * @param {Function} options.getJoinRequestHandler - Function to get join request handler.
-   * @param {Function} options.getJoinCompleteHandler - Function to get join complete handler.
-   * @param {Function} options.onServiceResponse - Callback for SERVICE_RESPONSE messages.
-   */
+ * @param {Map} options.pendingPings - Map of pending ping promises.
+ * @param {Map} options.nodeConnections - Map of node connections.
+ * @param {string} options.nodeId - Local node ID.
+ * @param {Function} options.sendRaw - Function to send raw WebSocket messages.
+ * @param {Function} options.emit - Function to emit events.
+ * @param {Function} options.onServiceResponse - Callback for SERVICE_RESPONSE messages.
+ */
   constructor(options) {
     this.logger = options.logger;
     this.handlers = options.handlers;
@@ -45,8 +43,6 @@ class RouterMessageHandler {
     this.nodeId = options.nodeId;
     this.sendRaw = options.sendRaw;
     this.emit = options.emit;
-    this.getJoinRequestHandler = options.getJoinRequestHandler;
-    this.getJoinCompleteHandler = options.getJoinCompleteHandler;
     this.onServiceResponse = options.onServiceResponse;
   }
 
@@ -108,18 +104,6 @@ class RouterMessageHandler {
       // Handle service message
       if (message.type === RouterMessageType.SERVICE_MESSAGE) {
         this.handleServiceMessage(ws, message);
-        return;
-      }
-
-      // Handle JOIN_REQUEST from joining nodes
-      if (message.type === RouterMessageType.JOIN_REQUEST) {
-        this.handleJoinRequest(ws, message);
-        return;
-      }
-
-      // Handle JOIN_COMPLETE from joining nodes
-      if (message.type === RouterMessageType.JOIN_COMPLETE) {
-        this.handleJoinComplete(ws, message);
         return;
       }
 
@@ -344,133 +328,6 @@ class RouterMessageHandler {
         });
       });
   }
-
-
-  /**
-   * Handle JOIN_REQUEST message from a joining node.
-   * Invokes the registered join request handler and sends JOIN_RESPONSE.
-   * @param {WebSocket} ws - WebSocket connection.
-   * @param {Object} message - JOIN_REQUEST message.
-   */
-  handleJoinRequest(ws, message) {
-    const joinRequestHandler = this.getJoinRequestHandler();
-
-    this.logger.info(ROUTER_LOG_MSG.JOIN_REQUEST_RECEIVED, {
-      nodeId: message.nodeId,
-      address: message.address,
-      hasHandler: !!joinRequestHandler,
-    });
-
-    if (!joinRequestHandler) {
-      this.sendRaw(ws, {
-        type: RouterMessageType.JOIN_RESPONSE,
-        success: false,
-        messageGroupAssignment: null,
-        error: ROUTER_ERROR_MSG.JOIN_HANDLER_NOT_REGISTERED,
-      });
-      return;
-    }
-
-    try {
-      const response = joinRequestHandler(message);
-
-      Promise.resolve(response)
-        .then((result) => {
-          this.sendRaw(ws, result);
-          this.logger.info(ROUTER_LOG_MSG.JOIN_RESPONSE_SENT, {
-            nodeId: message.nodeId,
-            success: result.success,
-          });
-        })
-        .catch((error) => {
-          this.logger.error(ROUTER_LOG_MSG.JOIN_REQUEST_FAILED, {
-            nodeId: message.nodeId,
-            error: error.message,
-          });
-          this.sendRaw(ws, {
-            type: RouterMessageType.JOIN_RESPONSE,
-            success: false,
-            messageGroupAssignment: null,
-            error: error.message,
-          });
-        });
-    } catch (error) {
-      this.logger.error(ROUTER_LOG_MSG.JOIN_REQUEST_FAILED, {
-        nodeId: message.nodeId,
-        error: error.message,
-      });
-      this.sendRaw(ws, {
-        type: RouterMessageType.JOIN_RESPONSE,
-        success: false,
-        messageGroupAssignment: null,
-        error: error.message,
-      });
-    }
-  }
-
-  /**
-   * Handle JOIN_COMPLETE message from a joining node.
-   * Invokes the registered join complete handler and sends JOIN_COMPLETE_ACK.
-   * @param {WebSocket} ws - WebSocket connection.
-   * @param {Object} message - JOIN_COMPLETE message.
-   */
-  handleJoinComplete(ws, message) {
-    const joinCompleteHandler = this.getJoinCompleteHandler();
-
-    this.logger.info(ROUTER_LOG_MSG.JOIN_COMPLETE_RECEIVED, {
-      nodeId: message.nodeId,
-      messageGroupReplicaId: message.messageGroupReplicaId,
-      ready: message.ready,
-      hasHandler: !!joinCompleteHandler,
-    });
-
-    if (!joinCompleteHandler) {
-      this.sendRaw(ws, {
-        type: RouterMessageType.JOIN_COMPLETE_ACK,
-        success: false,
-        nextSteps: [],
-        error: ROUTER_ERROR_MSG.JOIN_COMPLETE_HANDLER_NOT_REGISTERED,
-      });
-      return;
-    }
-
-    try {
-      const response = joinCompleteHandler(message);
-
-      Promise.resolve(response)
-        .then((result) => {
-          this.sendRaw(ws, result);
-          this.logger.info(ROUTER_LOG_MSG.JOIN_COMPLETE_ACK_SENT, {
-            nodeId: message.nodeId,
-            success: result.success,
-          });
-        })
-        .catch((error) => {
-          this.logger.error(ROUTER_LOG_MSG.JOIN_COMPLETE_FAILED, {
-            nodeId: message.nodeId,
-            error: error.message,
-          });
-          this.sendRaw(ws, {
-            type: RouterMessageType.JOIN_COMPLETE_ACK,
-            success: false,
-            nextSteps: [],
-            error: error.message,
-          });
-        });
-    } catch (error) {
-      this.logger.error(ROUTER_LOG_MSG.JOIN_COMPLETE_FAILED, {
-        nodeId: message.nodeId,
-        error: error.message,
-      });
-      this.sendRaw(ws, {
-        type: RouterMessageType.JOIN_COMPLETE_ACK,
-        success: false,
-        nextSteps: [],
-        error: error.message,
-      });
-    }
-  }
-
   /**
    * Handle acknowledgment message.
    * Passes through flat ACK structure without additional nesting.

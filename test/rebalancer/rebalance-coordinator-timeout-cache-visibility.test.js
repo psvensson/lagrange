@@ -499,6 +499,179 @@ test('queryIncompleteOperations prefers cache observation boundary before routed
     }
   });
 
+test(
+  'queryIncompleteOperations reuses empty cache observation boundary while router is backpressured',
+  async (t) => {
+    let sqlQueryCalls = 0;
+    const coordinator = new RebalanceCoordinator({
+      nodeId: 'node-1',
+      transactionCoordinator: buildTransactionCoordinator(),
+      systemTableCache: {
+        filter(tableName) {
+          if (tableName !== 'replica_operations') {
+            return [];
+          }
+          return [];
+        },
+        get() {
+          return null;
+        },
+      },
+      cdcIntegrationService: {
+        async waitForCacheUpdate() {},
+      },
+      messageRouter: {
+        async deliver() {
+          return {acknowledged: true, status: 'completed'};
+        },
+        getOutboundPressureSummary() {
+          return {backpressured: true};
+        },
+      },
+      tablePolicyService: {
+        async getPolicyForPartition() {
+          return {minReplicaCount: 1};
+        },
+      },
+      sqlQueryEngine: {
+        async executeQuery() {
+          sqlQueryCalls += 1;
+          throw new Error('routed SQL should not run while router is backpressured');
+        },
+      },
+      enableTimeouts: false,
+    });
+
+    coordinator.initialize();
+    try {
+      const operations = await coordinator.queryIncompleteOperations();
+      t.same(
+        operations,
+        [],
+        'empty cache observation boundary should be reused during router pressure',
+      );
+      t.equal(
+        sqlQueryCalls,
+        0,
+        'router pressure should suppress routed replica_operations scans',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  },
+);
+
+test(
+  'queryIncompleteOperations trusts an empty cache observation boundary without routed SQL',
+  async (t) => {
+    let sqlQueryCalls = 0;
+    const coordinator = new RebalanceCoordinator({
+      nodeId: 'node-1',
+      transactionCoordinator: buildTransactionCoordinator(),
+      systemTableCache: {
+        filter(tableName) {
+          if (tableName !== 'replica_operations') {
+            return [];
+          }
+          return [];
+        },
+        get() {
+          return null;
+        },
+      },
+      cdcIntegrationService: {
+        async waitForCacheUpdate() {},
+      },
+      messageRouter: {
+        async deliver() {
+          return {acknowledged: true, status: 'completed'};
+        },
+      },
+      tablePolicyService: {
+        async getPolicyForPartition() {
+          return {minReplicaCount: 1};
+        },
+      },
+      sqlQueryEngine: {
+        async executeQuery() {
+          sqlQueryCalls += 1;
+          throw new Error('routed SQL should not run for an empty cache answer');
+        },
+      },
+      enableTimeouts: false,
+    });
+
+    coordinator.initialize();
+    try {
+      const operations = await coordinator.queryIncompleteOperations();
+      t.same(
+        operations,
+        [],
+        'empty cache observation boundary should be treated as authoritative',
+      );
+      t.equal(
+        sqlQueryCalls,
+        0,
+        'empty cache observation boundary should bypass routed replica_operations scans',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  },
+);
+
+test(
+  'canStartRemoveOperation returns false without routed reads while router is backpressured',
+  async (t) => {
+    let sqlQueryCalls = 0;
+    const coordinator = new RebalanceCoordinator({
+      nodeId: 'node-1',
+      transactionCoordinator: buildTransactionCoordinator(),
+      systemTableCache: {},
+      cdcIntegrationService: {
+        async waitForCacheUpdate() {},
+      },
+      messageRouter: {
+        async deliver() {
+          return {acknowledged: true, status: 'completed'};
+        },
+        getOutboundPressureSummary() {
+          return {backpressured: true};
+        },
+      },
+      tablePolicyService: {
+        async getPolicyForPartition() {
+          return {minReplicaCount: 1};
+        },
+      },
+      sqlQueryEngine: {
+        async executeQuery() {
+          sqlQueryCalls += 1;
+          return {success: true, rows: []};
+        },
+      },
+      enableTimeouts: false,
+    });
+
+    coordinator.initialize();
+    try {
+      const canStart = await coordinator.canStartRemoveOperation();
+      t.equal(
+        canStart,
+        false,
+        'router pressure should pause remove scheduling admission',
+      );
+      t.equal(
+        sqlQueryCalls,
+        0,
+        'router pressure should avoid routed concurrent-remove count reads',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  },
+);
+
 test('queryExistingInFlightOperation falls back to cache when routed SQL read fails',
   async (t) => {
     let sqlQueryCalls = 0;

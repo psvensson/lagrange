@@ -54,6 +54,28 @@ function createMockCDCService() {
   };
 }
 
+function createMockMutationGateway(sqlQueryEngine = null) {
+  const operations = [];
+  const gateway = {
+    operations,
+    async submitMutation(mutation, options = {}) {
+      operations.push({...mutation, options});
+      return {
+        success: true,
+        partitionResult: {affectedRows: 1},
+        mutation,
+        options,
+      };
+    },
+  };
+  if (sqlQueryEngine) {
+    gateway.readRows = async (_tableName, sql, params = []) => {
+      return sqlQueryEngine.executeQuery(sql, params);
+    };
+  }
+  return gateway;
+}
+
 /**
  * Create a mock system table cache as a SQL query engine for testing.
  * @param {Object} data - Initial cache data.
@@ -115,6 +137,21 @@ test('FailureDetector - initialize', async (t) => {
   t.equal(detector.isInitialized(), true, 'should be initialized');
   t.end();
 });
+
+test('FailureDetector - initialize accepts control-plane mutation gateway',
+  async (t) => {
+    const mockGateway = createMockMutationGateway();
+    const mockEngine = createMockSqlEngine();
+    const detector = new FailureDetector({
+      nodeId: 'test-node',
+      sqlQueryEngine: mockEngine,
+      controlPlaneSystemTableGateway: mockGateway,
+    });
+
+    detector.initialize();
+
+    t.equal(detector.isInitialized(), true, 'should initialize with mutation gateway');
+  });
 
 test('FailureDetector - initialize requires nodeId', async (t) => {
   const detector = new FailureDetector({});
@@ -216,6 +253,35 @@ test('FailureDetector - detects node suspicion', async (t) => {
     'should update status to suspected');
   t.end();
 });
+
+test('FailureDetector - routes status mutations through control-plane ingress',
+  async (t) => {
+    const now = Date.now();
+    const mockEngine = createMockSqlEngine({
+      nodes: [{
+        node_id: 'node-1',
+        status: NodeStatus.ACTIVE,
+        last_heartbeat: now - 12000,
+      }],
+    });
+    const mockGateway = createMockMutationGateway(mockEngine);
+    const detector = new FailureDetector({
+      nodeId: 'test-node',
+      sqlQueryEngine: mockEngine,
+      controlPlaneSystemTableGateway: mockGateway,
+    });
+    detector.initialize();
+
+    await detector.checkNodeHealth();
+
+    t.equal(mockGateway.operations.length, 1, 'should submit one mutation');
+    t.equal(mockGateway.operations[0].operation, 'update', 'should use update mutation');
+    t.equal(
+      mockGateway.operations[0].options.deliveryPriority,
+      'critical',
+      'failure-detection writes should stay on the critical lane',
+    );
+  });
 
 test('FailureDetector - skips stale suspicion overwrite when heartbeat advanced after snapshot',
   async (t) => {

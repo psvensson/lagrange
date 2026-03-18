@@ -9,6 +9,14 @@
 
 import {NodeService} from '../node/node-service.js';
 import {
+  PRESSURE_WORK_CLASS,
+  PressureGovernor,
+} from '../control-plane/pressure-governor.js';
+import {
+  ControlPlaneMessageType,
+  getControlPlaneMessageRequiredTables,
+} from '../control-plane/control-plane-constants.js';
+import {
   getMissingSystemServiceLeaderCount,
 } from '../cache/leader-readiness-gate.js';
 import {
@@ -47,9 +55,11 @@ const JOIN_READINESS_REASON_PRECEDENCE = Object.freeze([
   JOIN_READINESS_REASON.SCHEMA_VERSION_LAG,
   JOIN_READINESS_REASON.TOPOLOGY_NOT_READY,
 ]);
-const MESH_ELIGIBLE_NODE_STATUSES = new Set([
-  String(NODE_STATE.ACTIVE).toLowerCase(),
-  String(NODE_STATE.READY).toLowerCase(),
+const MESH_INELIGIBLE_NODE_STATES = new Set([
+  String(NODE_STATE.DRAINING).toLowerCase(),
+  String(NODE_STATE.FAILED).toLowerCase(),
+  String(NODE_STATE.SHUTTING_DOWN).toLowerCase(),
+  String(NODE_STATE.STOPPED).toLowerCase(),
 ]);
 const MESH_CONNECTED_OR_IN_FLIGHT_STATES = new Set([
   CONNECTION_STATE.CONNECTED,
@@ -150,6 +160,10 @@ class JoinReadinessEvaluator {
           lastEvaluation.controlPlaneTargetCandidates || [],
         controlPlaneTargetConnectionStates:
           lastEvaluation.controlPlaneTargetConnectionStates || null,
+        topologySnapshotEpoch:
+          lastEvaluation.topologySnapshotEpoch ?? null,
+        appliedTopologyEpoch:
+          lastEvaluation.appliedTopologyEpoch ?? null,
       });
       const progressChanged = progressSignature !== lastProgressSignature;
       if (progressChanged) {
@@ -218,6 +232,10 @@ class JoinReadinessEvaluator {
         terminalEvaluation.controlPlaneTargetCandidates,
       controlPlaneTargetConnectionStates:
         terminalEvaluation.controlPlaneTargetConnectionStates,
+      topologySnapshotEpoch:
+        terminalEvaluation.topologySnapshotEpoch,
+      appliedTopologyEpoch:
+        terminalEvaluation.appliedTopologyEpoch,
       elapsedMs: this.now() - startTime,
       attempts,
       snapshotError: lastSnapshotError?.message || null,
@@ -254,6 +272,10 @@ class JoinReadinessEvaluator {
           terminalEvaluation.controlPlaneTargetCandidates,
         controlPlaneTargetConnectionStates:
           terminalEvaluation.controlPlaneTargetConnectionStates,
+        topologySnapshotEpoch:
+          terminalEvaluation.topologySnapshotEpoch,
+        appliedTopologyEpoch:
+          terminalEvaluation.appliedTopologyEpoch,
         snapshotError: lastSnapshotError?.message || null,
         timeoutKind: error.joinReadiness.timeoutKind,
         lastProgressElapsedMs:
@@ -321,6 +343,10 @@ class JoinReadinessEvaluator {
       return;
     }
 
+    if (this.isLocalRouterBackpressured()) {
+      return;
+    }
+
     const minIntervalMs = Math.max(
       JOIN_READINESS_REPAIR.MIN_INTERVAL_MS,
       Number.isFinite(pollIntervalMs) ?
@@ -335,7 +361,9 @@ class JoinReadinessEvaluator {
 
     this.lastCanonicalJoinRepairAtMs = now;
     const repairPromise = this.delegates
-      .backfillPropagatedCacheTables(JOIN_READINESS_REPAIR.TABLES)
+      .backfillPropagatedCacheTables(JOIN_READINESS_REPAIR.TABLES, {
+        blocking: true,
+      })
       .catch((error) => {
         this.delegates.getLogger().warn(
           'Canonical join readiness repair backfill failed',
@@ -357,6 +385,22 @@ class JoinReadinessEvaluator {
 
     this.canonicalJoinRepairPromise = repairPromise;
     await repairPromise;
+  }
+
+  /**
+   * Determine whether the local router is currently backpressured.
+   * @return {boolean}
+   * @private
+   */
+  isLocalRouterBackpressured() {
+    const messageRouter = this.delegates.getMessageRouter?.() || null;
+    return PressureGovernor.getShared({
+      nodeId: this.nodeId,
+      messageRouter,
+    }).isBackpressured({
+      workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+      resourceKeys: ['join:repair'],
+    });
   }
 
   /**
@@ -424,6 +468,10 @@ class JoinReadinessEvaluator {
       NodeService.getInstance().getSystemTableCache();
     const tableName =
       context.tableName || this.resolveJoinReadinessTableName();
+    const topologySnapshotEpoch =
+      this.resolveBootstrapTopologySnapshotEpoch();
+    const appliedTopologyEpoch =
+      this.resolveAppliedTopologyEpoch(systemTableCache);
     const targetCandidates =
       this.resolveJoinReadinessTargetCandidates();
     const targetAddress = targetCandidates[NUM.ZERO] || null;
@@ -446,13 +494,19 @@ class JoinReadinessEvaluator {
       nodeId: this.nodeId,
       tableName,
       routingReady,
-      topologyReady: topology.ready,
+      topologyReady: topology.ready &&
+        this.isBootstrapTopologyEpochSatisfied({
+          topologySnapshotEpoch,
+          appliedTopologyEpoch,
+        }),
       controlPlaneTargetAddress: targetAddress,
       controlPlaneTargetCandidates: targetCandidates,
       controlPlaneTargetConnectionStates:
         this.resolveControlPlaneTargetConnectionStates(
           targetCandidates,
         ),
+      topologySnapshotEpoch,
+      appliedTopologyEpoch,
       requiredSchemaVersion,
       appliedSchemaVersion,
       requiredNodeIds:
@@ -515,6 +569,10 @@ class JoinReadinessEvaluator {
         this.delegates.resolveControlPlaneTargetAddressCandidates({
           allowBootstrapHints: true,
           allowSelfTarget: true,
+          localTargetMode: 'any_replica',
+          requiredTables: getControlPlaneMessageRequiredTables(
+            ControlPlaneMessageType.NODE_STATE_UPDATE,
+          ),
         });
       return Array.isArray(candidates) ?
         [...new Set(candidates.filter((value) =>
@@ -527,10 +585,18 @@ class JoinReadinessEvaluator {
       this.delegates.resolveControlPlaneTargetAddress({
         allowBootstrapHints: false,
         allowSelfTarget: true,
+        localTargetMode: 'any_replica',
+        requiredTables: getControlPlaneMessageRequiredTables(
+          ControlPlaneMessageType.NODE_STATE_UPDATE,
+        ),
       }),
       this.delegates.resolveControlPlaneTargetAddress({
         allowBootstrapHints: true,
         allowSelfTarget: true,
+        localTargetMode: 'any_replica',
+        requiredTables: getControlPlaneMessageRequiredTables(
+          ControlPlaneMessageType.NODE_STATE_UPDATE,
+        ),
       }),
     ];
     return [...new Set(candidates.filter((value) =>
@@ -653,7 +719,10 @@ class JoinReadinessEvaluator {
   }
 
   /**
-   * Ensure local discovery-critical endpoint rows cover every ACTIVE node.
+   * Ensure local discovery-critical endpoint rows cover this joining node.
+   * Peer endpoint visibility converges independently and should not block the
+   * local node from becoming ready once authoritative topology is otherwise
+   * settled.
    * @param {Object|null} systemTableCache
    * @return {{
    *   ready: boolean,
@@ -671,15 +740,7 @@ class JoinReadinessEvaluator {
       };
     }
 
-    const activeNodeIds =
-      this.getCanonicalJoinActiveNodeIds(systemTableCache);
-    if (activeNodeIds.length === NUM.ZERO) {
-      return {
-        ready: false,
-        missingNodeEndpointNodeIds: [],
-        missingPostgresWireNodeIds: [],
-      };
-    }
+    const requiredNodeIds = [this.nodeId];
 
     const nodeEndpointRows =
       systemTableCache.getAll(TABLES.NODE_ENDPOINTS) || [];
@@ -741,10 +802,10 @@ class JoinReadinessEvaluator {
       visiblePostgresWireNodeIds.add(nodeId);
     }
 
-    const missingNodeEndpointNodeIds = activeNodeIds.filter(
+    const missingNodeEndpointNodeIds = requiredNodeIds.filter(
       (nodeId) => !visibleNodeEndpointNodeIds.has(nodeId),
     );
-    const missingPostgresWireNodeIds = activeNodeIds.filter(
+    const missingPostgresWireNodeIds = requiredNodeIds.filter(
       (nodeId) => !visiblePostgresWireNodeIds.has(nodeId),
     );
 
@@ -762,9 +823,11 @@ class JoinReadinessEvaluator {
    * @return {string[]}
    */
   getCanonicalJoinActiveNodeIds(systemTableCache) {
+    const fallbackNodeIds =
+      this.resolveBootstrapTopologySnapshotActiveNodeIds();
     if (!systemTableCache ||
         typeof systemTableCache.getAll !== TYPEOF.FUNCTION) {
-      return [];
+      return fallbackNodeIds;
     }
 
     const nodeRows = systemTableCache.getAll(TABLES.NODES) || [];
@@ -784,7 +847,10 @@ class JoinReadinessEvaluator {
       }
       activeNodeIds.push(nodeId);
     }
-    return activeNodeIds;
+    if (activeNodeIds.length > NUM.ZERO) {
+      return activeNodeIds;
+    }
+    return fallbackNodeIds;
   }
 
   /**
@@ -813,9 +879,29 @@ class JoinReadinessEvaluator {
   }
 
   /**
+   * Resolve lifecycle-state tokens relevant to peer mesh eligibility.
+   * Mesh reconciliation is a transport concern, so any non-terminal node with
+   * authoritative endpoint metadata should be considered connectable.
+   * @param {Object|null} row
+   * @return {string[]}
+   */
+  resolveMeshConnectivityLifecycleTokens(row) {
+    return Array.from(new Set([
+      row?.[COLUMN.STATUS],
+      row?.status,
+      row?.[COLUMN.CONNECTION_STATE],
+      row?.connection_state,
+      row?.connectionState,
+    ].map((value) => {
+      return String(value || '').toLowerCase();
+    }).filter((value) => value.length > NUM.ZERO)));
+  }
+
+  /**
    * Determine whether a node row should participate in mesh reconciliation.
-   * Nodes without a status are retained so bootstrap snapshots remain usable
-   * before canonical readiness data has fully propagated.
+   * Nodes without lifecycle state are retained so bootstrap snapshots remain
+   * usable before canonical readiness data has fully propagated. For steady
+   * state, only explicitly terminal lifecycle states are excluded.
    * @param {Object|null} row
    * @return {boolean}
    */
@@ -825,9 +911,15 @@ class JoinReadinessEvaluator {
       return false;
     }
 
-    const status = this.resolveMeshConnectivityNodeStatus(row);
-    return status.length === NUM.ZERO ||
-      MESH_ELIGIBLE_NODE_STATUSES.has(status);
+    const lifecycleTokens =
+      this.resolveMeshConnectivityLifecycleTokens(row);
+    if (lifecycleTokens.length === NUM.ZERO) {
+      return true;
+    }
+
+    return !lifecycleTokens.some((token) => {
+      return MESH_INELIGIBLE_NODE_STATES.has(token);
+    });
   }
 
   /**
@@ -837,6 +929,9 @@ class JoinReadinessEvaluator {
    * @return {{source: string, rows: Object[]}}
    */
   resolveMeshConnectivityNodeRows() {
+    const bootstrapActiveNodeIds = new Set(
+      this.resolveBootstrapTopologySnapshotActiveNodeIds(),
+    );
     const systemTableCache =
       NodeService.getInstance().getSystemTableCache();
     if (systemTableCache &&
@@ -858,6 +953,12 @@ class JoinReadinessEvaluator {
       bootstrapResponse?.systemTableSnapshots?.nodes,
     ) ?
       bootstrapResponse.systemTableSnapshots.nodes.filter((row) => {
+        if (bootstrapActiveNodeIds.size > NUM.ZERO) {
+          const nodeId =
+            this.resolveMeshConnectivityNodeId(row);
+          return nodeId.length > NUM.ZERO &&
+            bootstrapActiveNodeIds.has(nodeId);
+        }
         return this.isMeshEligibleNodeRow(row);
       }) :
       [];
@@ -891,8 +992,11 @@ class JoinReadinessEvaluator {
             row?.nodeAddress ||
             '',
         );
-        const status = this.resolveMeshConnectivityNodeStatus(row);
-        return `${nodeId}|${nodeAddress}|${status}`;
+        const lifecycleSignature =
+          this.resolveMeshConnectivityLifecycleTokens(row)
+            .sort()
+            .join('+');
+        return `${nodeId}|${nodeAddress}|${lifecycleSignature}`;
       })
       .filter(Boolean)
       .sort();
@@ -967,12 +1071,14 @@ class JoinReadinessEvaluator {
 
     const rows =
       systemTableCache.getAll(TABLES.REPLICA_OPERATIONS) || [];
+    const serviceRows =
+      systemTableCache.getAll(TABLES.SERVICES) || [];
     const inFlightOperations = [];
     let excludedSelfTargetedCount = NUM.ZERO;
     let excludedWarmingTargetCount = NUM.ZERO;
     for (const row of rows) {
       const normalizedOperation = normalizeReplicaOperationRecord(row);
-      if (isReplicaOperationInFlight(normalizedOperation)) {
+      if (isReplicaOperationInFlight(normalizedOperation, {serviceRows})) {
         if (normalizedOperation.targetNodeId === this.nodeId) {
           excludedSelfTargetedCount++;
           continue;
@@ -1010,23 +1116,8 @@ class JoinReadinessEvaluator {
    * @return {Array<string>}
    */
   resolveJoinReadinessRequiredNodeIds(systemTableCache) {
-    if (!systemTableCache ||
-        typeof systemTableCache.filter !== TYPEOF.FUNCTION) {
-      return [this.nodeId];
-    }
-
-    const activeNodes = systemTableCache.filter(TABLES.NODES, (row) => {
-      const status = String(
-        row?.[COLUMN.STATUS] || row?.status || '',
-      ).toLowerCase();
-      return status === String(NODE_STATE.ACTIVE).toLowerCase();
-    });
-
-    const nodeIds = [...new Set(activeNodes
-      .map((row) => row?.node_id || row?.nodeId)
-      .filter((value) =>
-        typeof value === TYPEOF.STRING && value.length > NUM.ZERO,
-      ),
+    const nodeIds = [...new Set(
+      this.getCanonicalJoinActiveNodeIds(systemTableCache),
     )];
 
     if (!nodeIds.includes(this.nodeId)) {
@@ -1122,6 +1213,14 @@ class JoinReadinessEvaluator {
       requiredSchemaVersion: requiredVersion,
       appliedSchemaVersion: appliedVersion,
       requiredNodeIds,
+      topologySnapshotEpoch:
+        Number.isFinite(source.topologySnapshotEpoch) ?
+          Math.max(NUM.ZERO, Math.floor(source.topologySnapshotEpoch)) :
+          null,
+      appliedTopologyEpoch:
+        Number.isFinite(source.appliedTopologyEpoch) ?
+          Math.max(NUM.ZERO, Math.floor(source.appliedTopologyEpoch)) :
+          null,
       missingLeaders:
         source.missingLeaders &&
         typeof source.missingLeaders === TYPEOF.OBJECT ?
@@ -1287,9 +1386,106 @@ class JoinReadinessEvaluator {
           evaluation.controlPlaneTargetCandidates,
         controlPlaneTargetConnectionStates:
           evaluation.controlPlaneTargetConnectionStates,
+        topologySnapshotEpoch:
+          evaluation.topologySnapshotEpoch,
+        appliedTopologyEpoch:
+          evaluation.appliedTopologyEpoch,
         snapshotError: options.snapshotError?.message || null,
       },
     );
+  }
+
+  /**
+   * Resolve the published bootstrap topology snapshot metadata.
+   * @return {Object|null}
+   * @private
+   */
+  resolveBootstrapTopologySnapshotMeta() {
+    const delegateMeta =
+      this.delegates.getBootstrapTopologySnapshotMeta?.();
+    if (delegateMeta && typeof delegateMeta === TYPEOF.OBJECT) {
+      return delegateMeta;
+    }
+
+    const bootstrapResponse = this.delegates.getBootstrapResponse?.();
+    const responseMeta = bootstrapResponse?.topologySnapshotMeta;
+    return responseMeta && typeof responseMeta === TYPEOF.OBJECT ?
+      responseMeta :
+      null;
+  }
+
+  /**
+   * Resolve active node IDs published with the bootstrap topology snapshot.
+   * @return {Array<string>}
+   * @private
+   */
+  resolveBootstrapTopologySnapshotActiveNodeIds() {
+    const topologySnapshotMeta =
+      this.resolveBootstrapTopologySnapshotMeta();
+    if (!Array.isArray(topologySnapshotMeta?.activeNodeIds)) {
+      return [];
+    }
+
+    return [...new Set(topologySnapshotMeta.activeNodeIds.filter((value) =>
+      typeof value === TYPEOF.STRING && value.length > NUM.ZERO,
+    ))];
+  }
+
+  /**
+   * Resolve the published bootstrap topology epoch.
+   * @return {number|null}
+   * @private
+   */
+  resolveBootstrapTopologySnapshotEpoch() {
+    const topologySnapshotMeta =
+      this.resolveBootstrapTopologySnapshotMeta();
+    if (Number.isFinite(topologySnapshotMeta?.topologyEpoch)) {
+      return Math.max(
+        NUM.ZERO,
+        Math.floor(topologySnapshotMeta.topologyEpoch),
+      );
+    }
+
+    const bootstrapResponse = this.delegates.getBootstrapResponse?.();
+    if (Number.isFinite(bootstrapResponse?.currentEpoch?.epoch)) {
+      return Math.max(
+        NUM.ZERO,
+        Math.floor(bootstrapResponse.currentEpoch.epoch),
+      );
+    }
+    return null;
+  }
+
+  /**
+   * Resolve the locally applied topology epoch watermark.
+   * @param {Object|null} systemTableCache
+   * @return {number}
+   * @private
+   */
+  resolveAppliedTopologyEpoch(systemTableCache) {
+    if (typeof systemTableCache?.getEpoch === TYPEOF.FUNCTION) {
+      const cacheEpoch = systemTableCache.getEpoch();
+      if (Number.isFinite(cacheEpoch)) {
+        return Math.max(NUM.ZERO, Math.floor(cacheEpoch));
+      }
+    }
+    return NUM.ZERO;
+  }
+
+  /**
+   * Determine whether the local cache has applied the bootstrap topology epoch.
+   * @param {Object} options
+   * @param {number|null} options.topologySnapshotEpoch
+   * @param {number} options.appliedTopologyEpoch
+   * @return {boolean}
+   * @private
+   */
+  isBootstrapTopologyEpochSatisfied(options = {}) {
+    if (!Number.isFinite(options.topologySnapshotEpoch)) {
+      return true;
+    }
+    return Number.isFinite(options.appliedTopologyEpoch) &&
+      options.appliedTopologyEpoch >= options.topologySnapshotEpoch;
   }
 
   /**

@@ -31,6 +31,14 @@ import {ReplicaHandlerSetup} from './shared/replica-handler-setup.js';
 import {CDCIntegrationSetup} from './shared/cdc-integration-setup.js';
 import {ControlPlaneSetup} from './shared/control-plane-setup.js';
 import {LatencyTopologySetup} from './shared/latency-topology-setup.js';
+import {
+  buildMessageGroupOwnerNotReadyError,
+  resolveOperationalMessageGroupSelection,
+} from './shared/message-group-selection.js';
+import {
+  detachBootstrapOwnedCdcSubscriber,
+  isBootstrapOwnedCdcPropagationActive,
+} from './shared/bootstrap-cdc-propagation-scope.js';
 import {PartitionService} from '../partition/partition-service.js';
 import {
   NodeLifecycleStateMachine,
@@ -55,6 +63,11 @@ import {wireMigrationWorkflowOwners} from '../migration/migration-composition.js
 import {TablePolicyService} from '../policy/table-policy-service.js';
 import {NodeStorageBudgetSetup} from './shared/node-storage-budget-setup.js';
 import {
+  PRESSURE_GOVERNOR_ACTION,
+  PRESSURE_WORK_CLASS,
+  PressureGovernor,
+} from '../control-plane/pressure-governor.js';
+import {
   BOOTSTRAP_EVENT,
   BOOTSTRAP_SUBSYSTEM,
   JOINING_PHASE,
@@ -68,6 +81,7 @@ import {
   JOINING_ERROR_NAME,
   JOINING_HTTP,
   JOINING_LOG_MSG,
+  JOIN_READINESS_REPAIR,
   JOINING_UNIFIED_RECONCILE,
 } from './node-joining-constants.js';
 import {createRuntimeStartupWiring} from '../runtime/runtime-startup-wiring.js';
@@ -112,6 +126,7 @@ import {
   ControlPlaneMessageType,
   ControlPlaneField,
   DEFAULT_NODE_CAPABILITIES,
+  getControlPlaneMessageRequiredTables,
 } from '../control-plane/control-plane-constants.js';
 import {
   ControlPlaneKernelIngress,
@@ -215,6 +230,7 @@ class NodeJoiningService extends EventEmitter {
     });
     this.nodeId = options.nodeId || uuidv4();
     this.nodeAddress = options.nodeAddress || null;
+    this.advertisedNodeWsAddress = options.advertisedNodeWsAddress || null;
     this.seedNodeAddress = options.seedNodeAddress || null;
     this.seedNodeWsAddress = options.seedNodeWsAddress || null;
     this.seedNodeId = null;
@@ -266,6 +282,7 @@ class NodeJoiningService extends EventEmitter {
       typeof options.joinReadinessSnapshotProvider === TYPEOF.FUNCTION ?
         options.joinReadinessSnapshotProvider :
         null;
+    this.bootstrapReadinessState = options.readinessState || null;
 
     // Allow tests to bypass real network I/O by providing an in-process HTTP POST.
     this.httpPostImpl = typeof options.httpPost === TYPEOF.FUNCTION ?
@@ -284,6 +301,7 @@ class NodeJoiningService extends EventEmitter {
     this.joinReplicaOptionsByServiceId = new Map();
     // Track message-group replicas created for deferred election start.
     this.joinMessageGroupReplicas = [];
+    this.inFlightBackfillsByKey = new Map();
     // Unified lifecycle owners for joining message-group startup.
     this.serviceLifecycleManager = null;
     this.serviceReconciler = null;
@@ -323,6 +341,8 @@ class NodeJoiningService extends EventEmitter {
     this.latencyTopology = null;
     // Track system cache hydration state for rebalancer initialization
     this.systemCacheHydrated = false;
+    this.bootstrapTopologySnapshotMeta = null;
+    this.bootstrapTopologySnapshotHydratedAtMs = null;
     // Track CDC subscription status
     this.cdcSubscriptionsActive = false;
     // Control plane target address for control messages
@@ -382,12 +402,17 @@ class NodeJoiningService extends EventEmitter {
           this.getMissingSystemServiceLeaders(cache),
         getBlockingSystemServiceLeaders: (missing, cache) =>
           this.getBlockingSystemServiceLeaders(missing, cache),
-        backfillPropagatedCacheTables: (tables) =>
+        backfillPropagatedCacheTables: (tables, backfillOptions) =>
           this.backfillPropagatedCacheTablesFromAuthoritativeState(
             tables,
+            backfillOptions,
           ),
         getMessageRouter: () => this.messageRouter,
         getBootstrapResponse: () => this.bootstrapResponse,
+        getBootstrapTopologySnapshotMeta: () =>
+          this.bootstrapTopologySnapshotMeta,
+        getBootstrapTopologySnapshotHydratedAtMs: () =>
+          this.bootstrapTopologySnapshotHydratedAtMs,
         getSystemCacheHydrated: () => this.systemCacheHydrated,
         getJoinReadinessSnapshotProvider: () =>
           this.joinReadinessSnapshotProvider,
@@ -430,6 +455,7 @@ class NodeJoiningService extends EventEmitter {
       delegates: {
         getWsPort: () => this.wsPort ?? this.config.wsPort,
         getNodeAddress: () => this.nodeAddress,
+        getAdvertisedNodeWsAddress: () => this.advertisedNodeWsAddress,
         getLogger: () => this.logger,
         getIdentifyPayload: () =>
           this.getIdentifyBootstrapPayload(),
@@ -452,8 +478,18 @@ class NodeJoiningService extends EventEmitter {
           this.initializeJoiningLifecycleOwners(),
         triggerJoinReconciler: (reason) =>
           this.triggerJoinReconciler(reason),
+        ensureBootstrapSnapshotHydrated: async () => {
+          if (this.systemCacheHydrated) {
+            return;
+          }
+          await this.hydrateSystemCacheFromBootstrap();
+          this.systemCacheHydrated = true;
+        },
         getSeedNodeWsAddress: () => this.seedNodeWsAddress,
         getSeedNodeId: () => this.seedNodeId,
+        getBootstrapResponse: () => this.bootstrapResponse,
+        getSystemTableCache: () =>
+          NodeService.getInstance().getSystemTableCache(),
         sendControlPlaneNodeStateUpdate: (opts) =>
           this.sendControlPlaneNodeStateUpdate(opts),
         shouldRetryControlPlaneNodeStateUpdate: (error) =>
@@ -558,12 +594,23 @@ class NodeJoiningService extends EventEmitter {
     this.querySystemStatePhase = new QuerySystemStatePhase({
       nodeId: this.nodeId,
       nodeAddress: this.nodeAddress,
+      advertisedNodeWsAddress: this.advertisedNodeWsAddress,
       delegates: {
         getLogger: () => this.logger,
         getConfig: () => this.config,
         getNow: () => this.now,
         getWsPort: () => this.wsPort ?? this.config.wsPort,
         getBootstrapResponse: () => this.bootstrapResponse,
+        setBootstrapTopologySnapshotMeta: (value) => {
+          this.bootstrapTopologySnapshotMeta =
+            value && typeof value === TYPEOF.OBJECT ?
+              value :
+              null;
+        },
+        setBootstrapTopologySnapshotHydratedAtMs: (value) => {
+          this.bootstrapTopologySnapshotHydratedAtMs =
+            Number.isFinite(value) ? value : null;
+        },
         getLifecycleStateMachine: () =>
           this.lifecycleStateMachine,
         getMessageRouter: () => this.messageRouter,
@@ -692,6 +739,8 @@ class NodeJoiningService extends EventEmitter {
             this.triggerJoinReconciler(reason),
           getBootstrapResponse: () =>
             this.bootstrapResponse,
+          getBootstrapReadinessState: () =>
+            this.bootstrapReadinessState,
           getSeedNodeAddress: () =>
             this.seedNodeAddress,
           getHttpPostImpl: () => this.httpPostImpl,
@@ -803,6 +852,12 @@ class NodeJoiningService extends EventEmitter {
    */
   completeSuccessfulJoin() {
     this.lifecycleStateMachine.transition(NodeState.READY);
+    for (const messageGroupService of this.messageGroupServices.values()) {
+      if (typeof messageGroupService?.completeJoinConvergence ===
+        TYPEOF.FUNCTION) {
+        messageGroupService.completeJoinConvergence();
+      }
+    }
     this.activateControlPlaneBackgroundWriters();
     this.startLatencyTopologyLifecycle();
     this.phase = JoiningPhase.COMPLETE;
@@ -1087,7 +1142,7 @@ class NodeJoiningService extends EventEmitter {
 
   /**
    * Disable control-plane heartbeat reporting when a caller explicitly wants
-   * to fall back to direct CDC heartbeats.
+   * direct CDC heartbeats to be the active publication path.
    * @return {void}
    * @private
    */
@@ -1461,6 +1516,11 @@ class NodeJoiningService extends EventEmitter {
   activateControlPlaneBackgroundWriters() {
     if (this.controlPlaneBackgroundWritersActivated) {
       return;
+    }
+
+    if (typeof this.heartbeatService
+      ?.setVerifyReporterVisibilityOnSuccess === TYPEOF.FUNCTION) {
+      this.heartbeatService.setVerifyReporterVisibilityOnSuccess(false);
     }
 
     if (this.leaseService) {
@@ -1848,32 +1908,35 @@ class NodeJoiningService extends EventEmitter {
 
   /**
    * Get the leader message group service for sending lifecycle messages.
-   * Returns the first leader, or a replica that has a known leader.
+   * Returns the first local ingress-ready leader, or an ingress-ready relay
+   * replica when the leader is remote.
    * @return {Object|null} Message group service or null.
    * @private
    */
-  getLeaderMessageGroupService() {
-    // First try to find a leader
-    for (const service of this.messageGroupServices.values()) {
-      if (service && service.isLeaderReplica && service.isLeaderReplica()) {
-        return service;
-      }
-    }
+  resolveOperationalMessageGroupSelection(options = {}) {
+    const requiredTables = Array.isArray(options.requiredTables) &&
+      options.requiredTables.length > 0 ?
+      options.requiredTables :
+      getControlPlaneMessageRequiredTables(
+        ControlPlaneMessageType.NODE_STATE_UPDATE,
+      );
+    return resolveOperationalMessageGroupSelection(
+      this.messageGroupServices,
+      {requiredTables},
+    );
+  }
 
-    // Fall back to any replica that knows the leader
-    for (const service of this.messageGroupServices.values()) {
-      if (service && typeof service.getLeaderId === TYPEOF.FUNCTION &&
-          service.getLeaderId()) {
-        return service;
-      }
-    }
-    // Fall back to any local message group service if leadership metadata is delayed
-    for (const service of this.messageGroupServices.values()) {
-      if (service) {
-        return service;
-      }
-    }
-    return null;
+  /**
+   * Get the operational message-group service for sending lifecycle messages.
+   * Returns the first local ingress-ready leader, or an ingress-ready relay
+   * replica when the leader is remote.
+   * @param {Object} [options]
+   * @param {Array<string>} [options.requiredTables]
+   * @return {Object|null} Message group service or null.
+   * @private
+   */
+  getLeaderMessageGroupService(options = {}) {
+    return this.resolveOperationalMessageGroupSelection(options).service;
   }
 
   /**
@@ -1884,11 +1947,12 @@ class NodeJoiningService extends EventEmitter {
    * @return {Object|null}
    */
   resolveCdcPropagationMessageGroup(preferredMessageGroupService) {
-    const leaderMessageGroupService = this.getLeaderMessageGroupService();
+    const leaderMessageGroupService = this
+      .resolveOperationalMessageGroupSelection().service;
     if (leaderMessageGroupService) {
       return leaderMessageGroupService;
     }
-    return preferredMessageGroupService || null;
+    return null;
   }
 
   /**
@@ -1939,9 +2003,21 @@ class NodeJoiningService extends EventEmitter {
       nodeId: this.nodeId,
       systemTableWriter: this.cdcIntegrationService,
       messageRouter: this.messageRouter,
+      deferTransientFailures: true,
       handlerRegistered: this.messageGroupServiceHandlerRegistered,
       endpointsPublished: this.messageGroupServiceEndpointsPublished,
       messageGroupServices: this.messageGroupServices,
+      onDeferredActivation: ({groupId, replicaId, error}) => {
+        this.logger.warn(
+          'Deferring message-group service row activation during join',
+          {
+            nodeId: this.nodeId,
+            groupId,
+            replicaId,
+            error: error?.message || String(error),
+          },
+        );
+      },
       resolveExtraFields: (replicaId) => {
         const assignment =
           this.bootstrapResponse?.messageGroupAssignment || null;
@@ -2160,11 +2236,16 @@ class NodeJoiningService extends EventEmitter {
     this.triggerBackgroundClusterMeshReconciliation(state);
 
     const targetCandidates =
-      // NODE_STATE_UPDATE is idempotent and can be accepted by any replica.
-      // Prefer local ingress when available to avoid remote route stalls.
+      // NODE_STATE_UPDATE is idempotent, but it still produces canonical
+      // metadata writes. Only target replicas that are already ready to carry
+      // that write set through the shared owner path.
       this.resolveControlPlaneTargetAddressCandidates({
         allowBootstrapHints: true,
         allowSelfTarget: true,
+        localTargetMode: 'any_replica',
+        requiredTables: getControlPlaneMessageRequiredTables(
+          ControlPlaneMessageType.NODE_STATE_UPDATE,
+        ),
       });
     if (targetCandidates.length === NUM.ZERO) {
       this.logger.warn(JOINING_LOG_MSG.READY_SIGNAL_TARGET_MISSING, {
@@ -2219,6 +2300,7 @@ class NodeJoiningService extends EventEmitter {
         const deliveryResult = await this.messageRouter.deliver(
           targetAddress,
           message,
+          {deliveryPriority: 'critical'},
         );
         if (deliveryResult?.acknowledged !== true) {
           throw new Error(
@@ -2285,16 +2367,20 @@ class NodeJoiningService extends EventEmitter {
   }
 
   /**
-   * Reconcile peer mesh connectivity without blocking the READY heartbeat path.
-   * Heartbeats are a liveness signal and should not wait on best-effort
-   * background connection maintenance.
+   * Reconcile peer mesh connectivity without blocking node-state publication.
+   * Control-plane publication is a liveness signal and should not wait on
+   * best-effort background connection maintenance.
    * @param {string} state - Node connection state being reported.
    * @return {void}
    * @private
    */
   triggerBackgroundClusterMeshReconciliation(state) {
-    if (state !== STATE.READY ||
-        !this.messageRouter ||
+    const normalizedState = String(state || '').toLowerCase();
+    if (!this.messageRouter ||
+        normalizedState === STATE.DISCONNECTED ||
+        normalizedState === 'failed' ||
+        normalizedState === 'shutting_down' ||
+        normalizedState === 'stopped' ||
         !this.shouldReconnectClusterMesh()) {
       return;
     }
@@ -2307,7 +2393,7 @@ class NodeJoiningService extends EventEmitter {
       .then(() => this.connectToClusterNodes())
       .catch((error) => {
         this.logger.warn(
-          'Failed to reconcile cluster mesh during READY NODE_STATE_UPDATE',
+          'Failed to reconcile cluster mesh during node-state publication',
           {
             nodeId: this.nodeId,
             state,
@@ -2511,6 +2597,7 @@ class NodeJoiningService extends EventEmitter {
         tableName: event.tableName,
         operation: event.operation || STRING.UNKNOWN,
       });
+      this.handleMeshConnectivityCDCEvent(event);
     };
 
     const eventTypes = [
@@ -2681,6 +2768,51 @@ class NodeJoiningService extends EventEmitter {
   }
 
   /**
+   * Determine whether one CDC event affects peer mesh-connectivity authority.
+   * Mesh connectivity should react to canonical peer membership and endpoint
+   * publication, not only to local join-state publication.
+   * @param {Object|null} event
+   * @return {boolean}
+   * @private
+   */
+  isMeshConnectivityCDCEvent(event) {
+    const tableName = String(event?.tableName || '');
+    if (tableName !== TABLES.NODES &&
+        tableName !== TABLES.NODE_ENDPOINTS) {
+      return false;
+    }
+
+    const operation = String(event?.operation || '').toLowerCase();
+    return operation === CDC_EVENT.INSERT ||
+      operation === CDC_EVENT.UPDATE ||
+      operation === CDC_EVENT.UPSERT ||
+      operation === CDC_EVENT.DELETE;
+  }
+
+  /**
+   * Trigger best-effort peer mesh reconciliation when authoritative peer
+   * visibility changes in CDC. This keeps peer dialing bound to the same
+   * owner-path regardless of whether connectivity changes originate from join,
+   * restart, or concurrent peer publication.
+   * @param {Object|null} event
+   * @return {void}
+   * @private
+   */
+  handleMeshConnectivityCDCEvent(event) {
+    if (!this.isMeshConnectivityCDCEvent(event) ||
+        !this.shouldReconnectClusterMesh()) {
+      return;
+    }
+
+    const normalizedOperation = String(
+      event?.operation || STRING.UNKNOWN,
+    ).toLowerCase();
+    this.triggerBackgroundClusterMeshReconciliation(
+      `cdc:${event.tableName}:${normalizedOperation}`,
+    );
+  }
+
+  /**
    * Return per-table CDC subscription status.
    *
    * Reads from existing subscription state on
@@ -2756,7 +2888,20 @@ class NodeJoiningService extends EventEmitter {
    */
   async backfillPropagatedCacheTablesFromAuthoritativeState(
     tableNames = CACHE_HYDRATION_TABLES,
+    options = {},
   ) {
+    const propagatedTables = this.normalizeAuthoritativeBackfillTableNames(
+      tableNames,
+    );
+    const requestKey =
+      this.buildAuthoritativeBackfillRequestKey(propagatedTables);
+    const existingBackfill = this.inFlightBackfillsByKey.get(requestKey);
+    if (existingBackfill) {
+      return existingBackfill;
+    }
+
+    const backfillOptions =
+      this.resolveAuthoritativeBackfillOptions(propagatedTables, options);
     const sqlQueryEngine = assertCritical(
       this.cdcIntegrationService?.sqlQueryEngine,
       JOINING_ERROR_MSG.STATE_QUERY_ENGINE_REQUIRED,
@@ -2765,40 +2910,145 @@ class NodeJoiningService extends EventEmitter {
       NodeService.getInstance().getSystemTableCache(),
       JOINING_ERROR_MSG.STATE_QUERY_CACHE_REQUIRED,
     );
-    const propagatedTables = Array.isArray(tableNames) &&
+    const backfillPromise = (async () => {
+      let totalRowsApplied = NUM.ZERO;
+      const tableRowCounts = {};
+
+      for (const tableName of propagatedTables) {
+        const rows = await this.resolveAuthoritativeBackfillRows(
+          sqlQueryEngine,
+          tableName,
+          backfillOptions,
+        );
+        tableRowCounts[tableName] = rows.length;
+        for (const row of rows) {
+          const operation = this.getSnapshotHydrationOperation(
+            systemTableCache,
+            tableName,
+            row,
+          );
+          if (!operation) {
+            continue;
+          }
+          systemTableCache.applySystemTableChange(tableName, operation, row);
+          totalRowsApplied += NUM.ONE;
+        }
+      }
+
+      this.logger.info('Backfilled propagated cache tables from authoritative state', {
+        nodeId: this.nodeId,
+        tableCount: propagatedTables.length,
+        totalRowsApplied,
+        tableRowCounts,
+        deliveryPriority: backfillOptions.deliveryPriority,
+        pressureDegraded: backfillOptions.pressureDegraded,
+        pressureAction: backfillOptions.pressureAction,
+        pressureReason: backfillOptions.pressureReason,
+        allowReplicaFanout: backfillOptions.allowReplicaFanout,
+      });
+    })()
+      .finally(() => {
+        if (this.inFlightBackfillsByKey.get(requestKey) === backfillPromise) {
+          this.inFlightBackfillsByKey.delete(requestKey);
+        }
+      });
+
+    this.inFlightBackfillsByKey.set(requestKey, backfillPromise);
+    return backfillPromise;
+  }
+
+  /**
+   * Normalize the authoritative backfill table list.
+   * @param {Array<string>|undefined|null} tableNames
+   * @return {Array<string>}
+   * @private
+   */
+  normalizeAuthoritativeBackfillTableNames(tableNames) {
+    return Array.isArray(tableNames) &&
       tableNames.length > NUM.ZERO ?
       [...new Set(tableNames)] :
-      CACHE_HYDRATION_TABLES;
+      [...CACHE_HYDRATION_TABLES];
+  }
 
-    let totalRowsApplied = NUM.ZERO;
-    const tableRowCounts = {};
+  /**
+   * Build a canonical in-flight key for one authoritative backfill request.
+   * @param {Array<string>} tableNames
+   * @return {string}
+   * @private
+   */
+  buildAuthoritativeBackfillRequestKey(tableNames) {
+    return [...tableNames].sort().join('|');
+  }
 
-    for (const tableName of propagatedTables) {
-      const rows = await this.resolveAuthoritativeBackfillRows(
-        sqlQueryEngine,
-        tableName,
-      );
-      tableRowCounts[tableName] = rows.length;
-      for (const row of rows) {
-        const operation = this.getSnapshotHydrationOperation(
-          systemTableCache,
-          tableName,
-          row,
-        );
-        if (!operation) {
-          continue;
-        }
-        systemTableCache.applySystemTableChange(tableName, operation, row);
-        totalRowsApplied += NUM.ONE;
-      }
-    }
-
-    this.logger.info('Backfilled propagated cache tables from authoritative state', {
+  /**
+   * Resolve one shared-pressure decision for authoritative join backfill.
+   * @param {Array<string>} tableNames
+   * @param {Object} [options={}]
+   * @return {Object}
+   * @private
+   */
+  evaluateAuthoritativeBackfillPressure(tableNames, options = {}) {
+    const blockingTableSet = new Set(JOIN_READINESS_REPAIR.TABLES);
+    const blocking = typeof options.blocking === TYPEOF.BOOLEAN ?
+      options.blocking :
+      tableNames.some((tableName) => blockingTableSet.has(tableName));
+    return PressureGovernor.getShared({
       nodeId: this.nodeId,
-      tableCount: propagatedTables.length,
-      totalRowsApplied,
-      tableRowCounts,
+      messageRouter: this.messageRouter,
+    }).evaluate({
+      workClass:
+        blocking ?
+          PRESSURE_WORK_CLASS.INTERACTIVE :
+          PRESSURE_WORK_CLASS.BACKGROUND,
+      resourceKeys: [
+        'join:backfill',
+        'control-plane:read',
+        ...tableNames.map((tableName) => `control-plane:table:${tableName}`),
+      ],
+      allowDegrade: false,
+      allowDefer: true,
+      retryAfterMs: options?.pressureRetryAfterMs,
     });
+  }
+
+  /**
+   * Resolve owner options for one authoritative backfill pass.
+   * @param {Array<string>} tableNames
+   * @param {Object} options
+   * @return {Object}
+   * @private
+   */
+  resolveAuthoritativeBackfillOptions(tableNames, options = {}) {
+    const blockingTableSet = new Set(JOIN_READINESS_REPAIR.TABLES);
+    const blocking = typeof options.blocking === TYPEOF.BOOLEAN ?
+      options.blocking :
+      tableNames.some((tableName) => blockingTableSet.has(tableName));
+    const pressureDecision = this.evaluateAuthoritativeBackfillPressure(
+      tableNames,
+      options,
+    );
+    const pressureDegraded = options.pressureDegraded === true ||
+      pressureDecision?.action !== PRESSURE_GOVERNOR_ACTION.ALLOW;
+    return {
+      blocking,
+      deliveryPriority:
+        typeof options.deliveryPriority === TYPEOF.STRING &&
+        options.deliveryPriority.length > NUM.ZERO ?
+          options.deliveryPriority :
+          (blocking ? 'critical' : 'background'),
+      preferBootstrapSnapshot:
+        typeof options.preferBootstrapSnapshot === TYPEOF.BOOLEAN ?
+          options.preferBootstrapSnapshot :
+          blocking,
+      allowReplicaFanout:
+        typeof options.allowReplicaFanout === TYPEOF.BOOLEAN ?
+          options.allowReplicaFanout :
+          !pressureDegraded,
+      pressureDegraded,
+      pressureAction: pressureDecision?.action || null,
+      pressureReason: pressureDecision?.reason || null,
+      pressureSummary: pressureDecision?.summary || null,
+    };
   }
 
   /**
@@ -2810,18 +3060,35 @@ class NodeJoiningService extends EventEmitter {
    * @return {Promise<Object[]>}
    * @private
    */
-  async resolveAuthoritativeBackfillRows(sqlQueryEngine, tableName) {
+  async resolveAuthoritativeBackfillRows(
+    sqlQueryEngine,
+    tableName,
+    options = {},
+  ) {
     const sql = `SELECT * FROM ${tableName}`;
     const rowSets = [];
+    const systemTableSnapshots =
+      this.bootstrapResponse?.systemTableSnapshots || null;
+    const hasBootstrapSnapshot =
+      systemTableSnapshots !== null &&
+      typeof systemTableSnapshots === TYPEOF.OBJECT &&
+      Object.prototype.hasOwnProperty.call(systemTableSnapshots, tableName);
     const bootstrapSnapshotRows = Array.isArray(
-      this.bootstrapResponse?.systemTableSnapshots?.[tableName],
+      systemTableSnapshots?.[tableName],
     ) ?
-      this.bootstrapResponse.systemTableSnapshots[tableName] :
+      systemTableSnapshots[tableName] :
       [];
-    if (bootstrapSnapshotRows.length > NUM.ZERO) {
+    if (hasBootstrapSnapshot) {
       rowSets.push(bootstrapSnapshotRows);
     }
-    const routedResult = await sqlQueryEngine.executeQuery(sql);
+    if (options.preferBootstrapSnapshot === true && hasBootstrapSnapshot) {
+      return this.mergeBackfillRowSets(tableName, rowSets);
+    }
+    const routedResult = await sqlQueryEngine.executeQuery(
+      sql,
+      [],
+      {deliveryPriority: options.deliveryPriority},
+    );
     if (routedResult?.success) {
       rowSets.push(Array.isArray(routedResult.rows) ? routedResult.rows : []);
     }
@@ -2830,6 +3097,7 @@ class NodeJoiningService extends EventEmitter {
       sqlQueryEngine,
       tableName,
       sql,
+      options,
     );
     if (replicaQuery && replicaQuery.rowSets.length > 0) {
       rowSets.push(...replicaQuery.rowSets);
@@ -2868,7 +3136,16 @@ class NodeJoiningService extends EventEmitter {
    * @return {Promise<{partitionId: string, rowSets: Object[][]}|null>}
    * @private
    */
-  async queryBackfillRowsAcrossReplicas(sqlQueryEngine, tableName, sql) {
+  async queryBackfillRowsAcrossReplicas(
+    sqlQueryEngine,
+    tableName,
+    sql,
+    options = {},
+  ) {
+    if (options.allowReplicaFanout === false) {
+      return null;
+    }
+
     const partitions =
       typeof sqlQueryEngine?.getTablePartitions === TYPEOF.FUNCTION ?
         sqlQueryEngine.getTablePartitions(tableName) :
@@ -2913,9 +3190,17 @@ class NodeJoiningService extends EventEmitter {
       return null;
     }
 
-    const replicaResults = await Promise.all(deliveryTargets.map((address) =>
-      this.queryBackfillReplicaAddress(messageRouter, address, sql),
-    ));
+    const replicaResults = [];
+    for (const address of deliveryTargets) {
+      replicaResults.push(
+        await this.queryBackfillReplicaAddress(
+          messageRouter,
+          address,
+          sql,
+          options,
+        ),
+      );
+    }
     const rowSets = replicaResults
       .filter((result) => result.success)
       .map((result) => result.rows);
@@ -2933,12 +3218,30 @@ class NodeJoiningService extends EventEmitter {
    * @return {Promise<{success: boolean, rows: Object[], error?: string}>}
    * @private
    */
-  async queryBackfillReplicaAddress(messageRouter, address, sql) {
+  async queryBackfillReplicaAddress(
+    messageRouter,
+    address,
+    sql,
+    options = {},
+    seenAddresses = new Set(),
+  ) {
+    if (seenAddresses.has(address)) {
+      return {
+        success: false,
+        rows: [],
+        error: `redirect loop detected for ${address}`,
+      };
+    }
+    const nextSeenAddresses = new Set(seenAddresses);
+    nextSeenAddresses.add(address);
+
     try {
       const response = await messageRouter.deliver(address, {
         type: JOIN_BACKFILL_QUERY.MESSAGE_TYPE,
         sql,
         params: [],
+      }, {
+        deliveryPriority: options.deliveryPriority,
       });
       if (response?.redirect === JOIN_BACKFILL_QUERY.RESPONSE_TYPE.LEADER_REDIRECT &&
           response?.leaderAddress) {
@@ -2946,6 +3249,8 @@ class NodeJoiningService extends EventEmitter {
           messageRouter,
           response.leaderAddress,
           sql,
+          options,
+          nextSeenAddresses,
         );
       }
       if (response?.acknowledged && response?.success) {
@@ -3241,13 +3546,7 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   initializeReplicaHandler() {
-    let messageGroupService = null;
-    for (const service of this.messageGroupServices.values()) {
-      if (service.isLeaderReplica() || service.getLeaderId()) {
-        messageGroupService = service;
-        break;
-      }
-    }
+    const messageGroupService = this.getLeaderMessageGroupService();
 
     if (!this.messageRouter) {
       this.logger.error(JOINING_LOG_MSG.REPLICA_HANDLER_ROUTER_MISSING, {
@@ -3283,6 +3582,7 @@ class NodeJoiningService extends EventEmitter {
         cdcIntegrationService: cdcIntegrationService,
         sqlQueryEngine: cdcIntegrationService?.sqlQueryEngine || null,
         tablePolicyService: this.tablePolicyService,
+        bootstrapReadinessState: this.bootstrapReadinessState,
       });
 
       await partition.initialize();
@@ -3290,21 +3590,63 @@ class NodeJoiningService extends EventEmitter {
       this.partitionServices.set(options.replicaId, partition);
 
       const tableName = options.tableName;
-      if (
-        tableName &&
-        messageGroupService &&
-        shouldAttachPartitionCdcPropagation(tableName)
-      ) {
-        await messageGroupService.subscribeToCDC(tableName);
+      const joinOwnedCdcPropagationActive =
+        isBootstrapOwnedCdcPropagationActive(
+          this.phase,
+          JoiningPhase.COMPLETE,
+        );
+      if (tableName &&
+          shouldAttachPartitionCdcPropagation(tableName) &&
+          joinOwnedCdcPropagationActive) {
+        const subscriptionSelection =
+          this.resolveOperationalMessageGroupSelection({
+            requiredTables: [tableName],
+          });
+        const subscriptionMessageGroupService =
+          subscriptionSelection.service;
+        if (!subscriptionMessageGroupService) {
+          throw buildMessageGroupOwnerNotReadyError(
+            subscriptionSelection,
+            {
+              message:
+                `Operational message-group ingress not ready ` +
+                `for ${tableName} CDC subscription`,
+            },
+          );
+        }
+
+        await subscriptionMessageGroupService.subscribeToCDC(tableName);
 
         const subscriberId = [
           'joining',
           this.nodeId,
           tableName,
           options.replicaId,
-          messageGroupService?.groupId || 'message-group',
+          subscriptionMessageGroupService?.groupId || 'message-group',
         ].join(':');
+        let joinCdcSubscriberDetached = false;
         const cdcSubscriber = async (cdcEvent) => {
+          if (!isBootstrapOwnedCdcPropagationActive(
+            this.phase,
+            JoiningPhase.COMPLETE,
+          )) {
+            if (!joinCdcSubscriberDetached) {
+              joinCdcSubscriberDetached =
+                detachBootstrapOwnedCdcSubscriber({
+                  partition,
+                  subscriber: cdcSubscriber,
+                  logger: this.logger,
+                  logMessage:
+                    'Detached join-owned CDC propagation subscriber after join completion',
+                  nodeId: this.nodeId,
+                  tableName,
+                  partitionId: options.partitionId,
+                  replicaId: options.replicaId,
+                  lifecyclePhase: this.phase,
+                });
+            }
+            return;
+          }
           if (cdcEvent.tableName === tableName) {
             this.logger.debug(JOINING_LOG_MSG.CDC_EVENT_RECEIVED, {
               tableName: cdcEvent.tableName,
@@ -3312,17 +3654,21 @@ class NodeJoiningService extends EventEmitter {
               partitionId: options.partitionId,
               replicaId: options.replicaId,
             });
+            const propagationSelection =
+              this.resolveOperationalMessageGroupSelection({
+                requiredTables: [tableName],
+              });
             const propagationMessageGroupService =
-              this.resolveCdcPropagationMessageGroup(messageGroupService);
+              propagationSelection.service;
             if (!propagationMessageGroupService) {
-              this.logger.warn(
-                CDC_LIFECYCLE_LOG_MSG.MESSAGE_GROUP_RESOLUTION_NULL, {
-                  tableName: cdcEvent.tableName,
-                  operation: cdcEvent.operation,
-                  reason: 'no_leader_message_group',
+              throw buildMessageGroupOwnerNotReadyError(
+                propagationSelection,
+                {
+                  message:
+                    `Operational message-group ingress not ready ` +
+                    `for ${tableName} CDC propagation`,
                 },
               );
-              return;
             }
 
             await this.propagatePartitionCDCEvent(
@@ -3429,6 +3775,7 @@ class NodeJoiningService extends EventEmitter {
     const controlPlane = await ControlPlaneSetup.create({
       nodeId: this.nodeId,
       nodeAddress: this.nodeAddress,
+      advertisedNodeWsAddress: this.advertisedNodeWsAddress,
       messageRouter: this.messageRouter,
       cdcIntegrationService,
       cdcGroupPropagationService:
@@ -3437,6 +3784,7 @@ class NodeJoiningService extends EventEmitter {
       tablePolicyService: this.tablePolicyService,
       messageGroupServices: this.messageGroupServices,
       rebalanceCoordinator: this.rebalanceCoordinator,
+      bootstrapReadinessState: this.bootstrapReadinessState,
     });
 
     this.heartbeatService = controlPlane.heartbeatService;
@@ -3792,12 +4140,7 @@ class NodeJoiningService extends EventEmitter {
    * @return {boolean} True if has operational message group.
    */
   hasOperationalMessageGroup() {
-    for (const service of this.messageGroupServices.values()) {
-      if (service.isLeaderReplica() || service.getLeaderId()) {
-        return true;
-      }
-    }
-    return false;
+    return this.getLeaderMessageGroupService() !== null;
   }
 
   /**
@@ -3826,17 +4169,45 @@ class NodeJoiningService extends EventEmitter {
       systemTableCache.filter(TABLES.SERVICES, (service) =>
         service?.[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP &&
         groupIds.has(service?.[COLUMN.GROUP_ID]) &&
-        service?.[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER &&
         service?.[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE,
       ) :
       (systemTableCache.getAll?.(TABLES.SERVICES) || []).filter((service) =>
         service?.[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP &&
         groupIds.has(service?.[COLUMN.GROUP_ID]) &&
-        service?.[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER &&
         service?.[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE,
       );
+    if (services.length === NUM.ZERO) {
+      return false;
+    }
 
-    return services.length > NUM.ZERO;
+    const groupRows = typeof systemTableCache.filter === TYPEOF.FUNCTION ?
+      systemTableCache.filter(TABLES.MESSAGE_GROUPS, (group) =>
+        groupIds.has(group?.[COLUMN.GROUP_ID]),
+      ) :
+      (systemTableCache.getAll?.(TABLES.MESSAGE_GROUPS) || []).filter((group) =>
+        groupIds.has(group?.[COLUMN.GROUP_ID]),
+      );
+    const activeServiceExistsForLeaderNode = groupRows.some((group) => {
+      const leaderNodeId =
+        group?.[COLUMN.LEADER_NODE_ID] ||
+        group?.leader_node_id ||
+        group?.leaderNodeId ||
+        null;
+      if (typeof leaderNodeId !== TYPEOF.STRING || leaderNodeId.length === NUM.ZERO) {
+        return false;
+      }
+      return services.some((service) =>
+        service?.[COLUMN.GROUP_ID] === group?.[COLUMN.GROUP_ID] &&
+        service?.[COLUMN.NODE_ID] === leaderNodeId,
+      );
+    });
+    if (activeServiceExistsForLeaderNode) {
+      return true;
+    }
+
+    return services.some((service) => {
+      return service?.[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER;
+    });
   }
 
   /**

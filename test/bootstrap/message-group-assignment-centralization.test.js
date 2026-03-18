@@ -180,6 +180,61 @@ test('BootstrapAPI delegates strategy to MessageGroupAssignment',
   },
 );
 
+test('BootstrapAPI excludes non-seed MOVE_REPLICA sources during bootstrap',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: createMockCacheWithServices([
+        {
+          service_id: 'mg-remote-r0',
+          service_type: SERVICE_TYPE.MESSAGE_GROUP,
+          node_id: 'node-2',
+          group_id: 'mg-remote',
+          replica_id: 'mg-remote-r0',
+          address: 'node-2/message-group/mg-remote-r0',
+          raft_role: RAFT_ROLE.FOLLOWER,
+          status: SERVICE_STATUS.ACTIVE,
+        },
+        {
+          service_id: 'mg-remote-r1',
+          service_type: SERVICE_TYPE.MESSAGE_GROUP,
+          node_id: 'node-2',
+          group_id: 'mg-remote',
+          replica_id: 'mg-remote-r1',
+          address: 'node-2/message-group/mg-remote-r1',
+          raft_role: RAFT_ROLE.FOLLOWER,
+          status: SERVICE_STATUS.ACTIVE,
+        },
+        {
+          service_id: 'mg-remote-r2',
+          service_type: SERVICE_TYPE.MESSAGE_GROUP,
+          node_id: 'node-3',
+          group_id: 'mg-remote',
+          replica_id: 'mg-remote-r2',
+          address: 'node-3/message-group/mg-remote-r2',
+          raft_role: RAFT_ROLE.FOLLOWER,
+          status: SERVICE_STATUS.ACTIVE,
+        },
+      ]),
+    });
+
+    const result = api.determineMessageGroupAssignment('new-node-1');
+
+    t.equal(
+      result.strategy,
+      BOOTSTRAP_ASSIGNMENT_STRATEGY.CREATE_SELF_HOSTED,
+      'bootstrap must not reserve MOVE_REPLICA from non-seed sources',
+    );
+    t.notOk(
+      result.sourceNodeId,
+      'bootstrap should not expose a remote source owner for handoff',
+    );
+  },
+);
+
 test('BootstrapAPI and MessageGroupAssignment produce same strategy',
   async (t) => {
     initializeTestEnvironment();

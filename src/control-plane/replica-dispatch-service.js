@@ -22,7 +22,12 @@ import {
 import {
   ControlPlaneSystemTableGateway,
 } from './control-plane-system-table-gateway.js';
-import {OperationType} from '../rebalancer/replica-status.js';
+import {getRegisteredControlPlaneSystemTableGateway} from
+  './control-plane-gateway-registry.js';
+import {
+  OperationType,
+  isCoordinatorOwnedOperationType,
+} from '../rebalancer/replica-status.js';
 import {REBALANCE_COORDINATOR_EVENT} from '../rebalancer/rebalancer-constants.js';
 import {
   COLUMN,
@@ -42,15 +47,18 @@ import {
   CONTROL_PLANE_CONFIG_KEY,
   DEFAULT_READY_LEASE_MS,
   CONTROL_PLANE_EVENT,
+  getControlPlaneMessageRequiredTables,
 } from './control-plane-constants.js';
 import {
   DISPATCH_ERROR_MSG,
+  DISPATCH_DEFAULT,
   DISPATCH_EVENT,
   DISPATCH_LOG_MSG,
   DISPATCH_QUEUE_NAME,
   DISPATCH_STATE,
   DISPATCH_SUBSYSTEM,
 } from './replica-dispatch-service-constants.js';
+import {PRESSURE_WORK_CLASS} from './pressure-governor.js';
 import {OwnerKeyReconcileQueue} from
   '../workflow/owner-key-reconcile-queue.js';
 import {RECONCILE_REASON} from
@@ -75,11 +83,12 @@ class ReplicaDispatchService extends EventEmitter {
     this.cdcIntegrationService = options.cdcIntegrationService || null;
     this.controlPlaneSystemTableGateway =
       options.controlPlaneSystemTableGateway ||
-      new ControlPlaneSystemTableGateway({
-        nodeId: this.nodeId,
-        cdcIntegrationService: this.cdcIntegrationService,
-      });
+      getRegisteredControlPlaneSystemTableGateway() ||
+      null;
     this.systemTableCache = options.systemTableCache || null;
+    this.nodesOwner = options.nodesOwner || null;
+    this.servicesOwner = options.servicesOwner || null;
+    this.replicaOperationsOwner = options.replicaOperationsOwner || null;
     this.rebalanceCoordinator = options.rebalanceCoordinator || null;
     this.storageAccountingService =
       options.storageAccountingService ||
@@ -94,9 +103,12 @@ class ReplicaDispatchService extends EventEmitter {
       new ControlPlaneReadinessService({
         nodeId: this.nodeId,
         systemTableCache: this.systemTableCache,
+        nodesOwner: this.nodesOwner,
+        servicesOwner: this.servicesOwner,
         messageRouter: this.messageRouter,
         storageAccountingService: this.storageAccountingService,
         cdcGroupPropagationService: this.cdcGroupPropagationService,
+        controlPlaneSystemTableGateway: this.controlPlaneSystemTableGateway,
       });
 
     this.messageGroupServices = new Set();
@@ -105,11 +117,18 @@ class ReplicaDispatchService extends EventEmitter {
     this.retryInFlightNodes = new Set();
     this.nodeStateUpdateWatermarks = new Map();
     this.nodeReadyRetryWatermarks = new Map();
+    this.nodeStateUpdateDeferredRetries = new Map();
     this.nodeStateUpdateQueueAssignments = new Map();
     this.nextNodeStateUpdateQueueIndex = NUM.ZERO;
     this.cacheChangeListener = null;
     this.coordinatorOperationCreatedListener = null;
     this.state = DISPATCH_STATE.CREATED;
+    this.setTimeoutFn = typeof options.setTimeoutFn === TYPEOF.FUNCTION ?
+      options.setTimeoutFn :
+      setTimeout;
+    this.clearTimeoutFn = typeof options.clearTimeoutFn === TYPEOF.FUNCTION ?
+      options.clearTimeoutFn :
+      clearTimeout;
     const config = ConfigurationManager.getInstance();
     this.readyLeaseMs =
       config.get(CONTROL_PLANE_CONFIG_KEY.READY_LEASE_MS) ||
@@ -118,6 +137,10 @@ class ReplicaDispatchService extends EventEmitter {
       NUM.ONE,
       Math.floor(this.readyLeaseMs / NUM.THREE),
     );
+    this.nodeStateUpdateRetryAfterMs =
+      this.normalizeNodeStateUpdateRetryAfterMs(
+        options.nodeStateUpdateRetryAfterMs,
+      );
 
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
@@ -266,8 +289,30 @@ class ReplicaDispatchService extends EventEmitter {
       return;
     }
 
-    // NODE_STATE_UPDATE is idempotent — process on any replica
+    const requiredTables =
+      this.resolveControlPlaneMessageRequiredTables(payload);
+
+    // NODE_STATE_UPDATE is idempotent, but it still produces shared metadata
+    // writes. Only process it locally when this replica is already ready to
+    // carry that write set through the canonical metadata ingress path.
     if (payload.type === ControlPlaneMessageType.NODE_STATE_UPDATE) {
+      const ingressReadiness =
+        this.resolveMessageGroupIngressReadiness(
+          mgService,
+          requiredTables,
+        );
+      if (ingressReadiness.ready !== true) {
+        await this.forwardToLeader(
+          mgService,
+          payload,
+          {requiredTables, ingressReadiness},
+        );
+        if (messageId &&
+            typeof mgService.acknowledgeMessage === TYPEOF.FUNCTION) {
+          await mgService.acknowledgeMessage(messageId);
+        }
+        return;
+      }
       this.enqueueNodeStateUpdate(payload);
       if (messageId &&
           typeof mgService.acknowledgeMessage === TYPEOF.FUNCTION) {
@@ -290,6 +335,21 @@ class ReplicaDispatchService extends EventEmitter {
         typeof mgService.acknowledgeMessage === TYPEOF.FUNCTION) {
       await mgService.acknowledgeMessage(messageId);
     }
+  }
+
+  resolveControlPlaneMessageRequiredTables(payload) {
+    return getControlPlaneMessageRequiredTables(payload?.type);
+  }
+
+  resolveMessageGroupIngressReadiness(mgService, requiredTables = []) {
+    if (!mgService ||
+        typeof mgService.getMetadataIngressReadiness !== TYPEOF.FUNCTION) {
+      return {
+        ready: false,
+        reason: 'message-group ingress readiness unavailable',
+      };
+    }
+    return mgService.getMetadataIngressReadiness({requiredTables});
   }
 
   /**
@@ -318,6 +378,9 @@ class ReplicaDispatchService extends EventEmitter {
 
       const row = event?.data;
       if (!row || !row.operation_id) {
+        return;
+      }
+      if (!isCoordinatorOwnedOperationType(row.type)) {
         return;
       }
 
@@ -396,6 +459,14 @@ class ReplicaDispatchService extends EventEmitter {
 
     if (nextWatermark) {
       this.nodeStateUpdateWatermarks.set(nodeId, nextWatermark);
+    }
+
+    if (this.replaceDeferredNodeStateUpdatePayload(nodeId, payload)) {
+      this.logger.debug(DISPATCH_LOG_MSG.NODE_STATE_UPDATE_DEFERRED, {
+        nodeId,
+        reason: 'deferred_retry_pending',
+      });
+      return false;
     }
 
     const nodeStateUpdateQueue =
@@ -549,31 +620,13 @@ class ReplicaDispatchService extends EventEmitter {
       SYSTEM_TABLE_NAME.NODES,
       {[COLUMN.NODE_ID]: nodeId},
       baseRow,
-      {
-        skipCacheWait: true,
-        queryTimeoutMs: this.nodeStateUpdateQueryTimeoutMs,
-      },
+      this.buildNodeStateUpdateWriteOptions(nodeId, nextState),
     );
     const updateAffectedRows = Number(
       updateResult?.partitionResult?.affectedRows,
     );
     if (updateAffectedRows === NUM.ZERO) {
-      await this.controlPlaneSystemTableGateway.upsertSystemTableRow(
-        SYSTEM_TABLE_NAME.NODES,
-        {
-          ...existing,
-          [COLUMN.NODE_ID]: nodeId,
-          [COLUMN.CREATED_AT]:
-            Number.isFinite(nodeRow?.[COLUMN.CREATED_AT]) ?
-              nodeRow[COLUMN.CREATED_AT] :
-              (existing[COLUMN.CREATED_AT] || heartbeatAt),
-          ...baseRow,
-        },
-        {
-          skipCacheWait: true,
-          queryTimeoutMs: this.nodeStateUpdateQueryTimeoutMs,
-        },
-      );
+      throw this.buildMissingNodeRowError(nodeId);
     }
 
     if (nextState === STATE.READY) {
@@ -656,6 +709,9 @@ class ReplicaDispatchService extends EventEmitter {
    */
   async dispatchOperationRow(row) {
     if (!row || !row.operation_id) {
+      return;
+    }
+    if (!isCoordinatorOwnedOperationType(row.type)) {
       return;
     }
 
@@ -773,11 +829,17 @@ class ReplicaDispatchService extends EventEmitter {
    * @private
    */
   async getPendingReplicaOpsForNode(nodeId) {
-    const cacheRows = this.getSystemTableRowsFromCache(
-      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
-    );
+    const cacheRows = this.replicaOperationsOwner &&
+      typeof this.replicaOperationsOwner.listReplicaOperationsFromCache ===
+        TYPEOF.FUNCTION ?
+      (await this.replicaOperationsOwner.listReplicaOperationsFromCache())
+        .rows || [] :
+      this.getSystemTableRowsFromCache(
+        SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+      );
     return cacheRows.filter((row) => {
-      return row?.target_node_id === nodeId &&
+      return isCoordinatorOwnedOperationType(row?.type) &&
+        row?.target_node_id === nodeId &&
         row?.workflow_step === WORKFLOW_STEP.PENDING;
     });
   }
@@ -802,7 +864,7 @@ class ReplicaDispatchService extends EventEmitter {
     const nodeRow = options.nodeRow &&
       typeof options.nodeRow === TYPEOF.OBJECT ?
       options.nodeRow :
-      this.getSystemTableRowFromCache(SYSTEM_TABLE_NAME.NODES, nodeId);
+      await this.getNodeRow(nodeId);
     if (nodeRow &&
         !wasNodeRecordReadyWhenWritten(nodeRow, {
           requireActiveStatus: true,
@@ -842,6 +904,9 @@ class ReplicaDispatchService extends EventEmitter {
     }
 
     if (!row || !row.operation_id) {
+      return;
+    }
+    if (!isCoordinatorOwnedOperationType(row.type)) {
       return;
     }
 
@@ -893,7 +958,22 @@ class ReplicaDispatchService extends EventEmitter {
         payload[ControlPlaneField.NODE_ID] !== nodeId) {
       return;
     }
-    await this.handleNodeStateUpdate(payload);
+    try {
+      await this.handleNodeStateUpdate(payload);
+      this.clearDeferredNodeStateUpdateRetry(nodeId);
+    } catch (error) {
+      if (!this.shouldDeferNodeStateUpdateRetry(error)) {
+        throw error;
+      }
+      const retryAfterMs =
+        this.deferNodeStateUpdateRetry(nodeId, payload, error);
+      this.logger.info(DISPATCH_LOG_MSG.NODE_STATE_UPDATE_DEFERRED, {
+        nodeId,
+        retryAfterMs,
+        error: error.message,
+        errorCode: error?.code || null,
+      });
+    }
   }
 
   /**
@@ -1125,6 +1205,199 @@ class ReplicaDispatchService extends EventEmitter {
   }
 
   /**
+   * Normalize one retry-after default for deferred node-state retries.
+   * @param {*} value
+   * @return {number}
+   * @private
+   */
+  normalizeNodeStateUpdateRetryAfterMs(value) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric) || numeric <= NUM.ZERO) {
+      return DISPATCH_DEFAULT.NODE_STATE_UPDATE_RETRY_AFTER_MS;
+    }
+    return Math.max(NUM.ONE, Math.floor(numeric));
+  }
+
+  /**
+   * Build canonical write options for NODE_STATE_UPDATE persistence.
+   * @param {string} nodeId
+   * @param {string} nextState
+   * @return {Object}
+   * @private
+   */
+  buildNodeStateUpdateWriteOptions(nodeId, nextState) {
+    const isReady = nextState === STATE.READY;
+    return {
+      allowCoalescing: true,
+      allowPressureDefer: true,
+      coalescingKey: `node-state:${nodeId}`,
+      deliveryPriority: isReady ? 'critical' : 'background',
+      pressureRetryAfterMs: this.nodeStateUpdateRetryAfterMs,
+      queryTimeoutMs: this.nodeStateUpdateQueryTimeoutMs,
+      skipCacheWait: true,
+      workClass: isReady ?
+        PRESSURE_WORK_CLASS.INTERACTIVE :
+        PRESSURE_WORK_CLASS.BACKGROUND,
+    };
+  }
+
+  /**
+   * Determine whether one node-state write failure should be retried through
+   * the owner queue instead of surfacing as a terminal reconcile error.
+   * @param {Error} error
+   * @return {boolean}
+   * @private
+   */
+  shouldDeferNodeStateUpdateRetry(error) {
+    if (!error) {
+      return false;
+    }
+    if (error?.code === 'NODE_ROW_MISSING') {
+      return false;
+    }
+    if (error?.deferRetry === true) {
+      return true;
+    }
+    if (Number.isFinite(error?.retryAfterMs) &&
+        error.retryAfterMs > NUM.ZERO) {
+      return true;
+    }
+    const message = error?.message || String(error);
+    if (typeof this.cdcIntegrationService?.isTransientCdcError ===
+      TYPEOF.FUNCTION &&
+      this.cdcIntegrationService.isTransientCdcError(message)) {
+      return true;
+    }
+    return (
+      message.includes('Connection to node') &&
+      message.includes('closed')
+    ) ||
+      message.includes('No connection to node') ||
+      message.includes('Query routing failed') ||
+      message.includes('Failed to forward write to leader') ||
+      message.includes('Message timeout');
+  }
+
+  /**
+   * Resolve one retry delay for deferred node-state writes.
+   * @param {Error} error
+   * @return {number}
+   * @private
+   */
+  resolveNodeStateUpdateRetryAfterMs(error) {
+    if (Number.isFinite(error?.retryAfterMs) &&
+        error.retryAfterMs > NUM.ZERO) {
+      return Math.max(NUM.ONE, Math.floor(error.retryAfterMs));
+    }
+    return this.nodeStateUpdateRetryAfterMs;
+  }
+
+  /**
+   * Store the latest node-state payload and arm one deferred retry timer.
+   * @param {string} nodeId
+   * @param {Object} payload
+   * @param {Error} error
+   * @return {number}
+   * @private
+   */
+  deferNodeStateUpdateRetry(nodeId, payload, error) {
+    if (!nodeId || !payload) {
+      return this.nodeStateUpdateRetryAfterMs;
+    }
+
+    const retryAfterMs = this.resolveNodeStateUpdateRetryAfterMs(error);
+    const desiredAttemptAt = Date.now() + retryAfterMs;
+    const existing = this.nodeStateUpdateDeferredRetries.get(nodeId);
+    if (existing) {
+      existing.payload = payload;
+      existing.errorMessage = error?.message || null;
+      if (desiredAttemptAt < existing.nextAttemptAt) {
+        if (existing.timeoutHandle) {
+          this.clearTimeoutFn(existing.timeoutHandle);
+        }
+        existing.nextAttemptAt = desiredAttemptAt;
+        existing.timeoutHandle = this.armDeferredNodeStateUpdateRetry(
+          nodeId,
+          retryAfterMs,
+        );
+      }
+      return retryAfterMs;
+    }
+
+    const deferredRetry = {
+      payload,
+      nextAttemptAt: desiredAttemptAt,
+      errorMessage: error?.message || null,
+      timeoutHandle: null,
+    };
+    deferredRetry.timeoutHandle = this.armDeferredNodeStateUpdateRetry(
+      nodeId,
+      retryAfterMs,
+    );
+    this.nodeStateUpdateDeferredRetries.set(nodeId, deferredRetry);
+    return retryAfterMs;
+  }
+
+  /**
+   * Arm the deferred retry timer for one node-state update owner key.
+   * @param {string} nodeId
+   * @param {number} delayMs
+   * @return {*}
+   * @private
+   */
+  armDeferredNodeStateUpdateRetry(nodeId, delayMs) {
+    return this.setTimeoutFn(() => {
+      const deferredRetry = this.nodeStateUpdateDeferredRetries.get(nodeId);
+      if (!deferredRetry) {
+        return;
+      }
+      this.nodeStateUpdateDeferredRetries.delete(nodeId);
+      this.resolveNodeStateUpdateQueue(nodeId).enqueue(
+        nodeId,
+        RECONCILE_REASON.NODE_STATE_UPDATE_MESSAGE,
+        {payload: deferredRetry.payload},
+      );
+      this.logger.debug(DISPATCH_LOG_MSG.NODE_STATE_UPDATE_DEFERRED_RETRY, {
+        nodeId,
+        retryAfterMs: delayMs,
+      });
+    }, delayMs);
+  }
+
+  /**
+   * Replace the deferred retry payload for one node without scheduling another
+   * immediate write attempt.
+   * @param {string} nodeId
+   * @param {Object} payload
+   * @return {boolean}
+   * @private
+   */
+  replaceDeferredNodeStateUpdatePayload(nodeId, payload) {
+    const deferredRetry = this.nodeStateUpdateDeferredRetries.get(nodeId);
+    if (!deferredRetry) {
+      return false;
+    }
+    deferredRetry.payload = payload;
+    return true;
+  }
+
+  /**
+   * Cancel and clear one deferred node-state retry slot.
+   * @param {string} nodeId
+   * @private
+   */
+  clearDeferredNodeStateUpdateRetry(nodeId) {
+    const deferredRetry = this.nodeStateUpdateDeferredRetries.get(nodeId);
+    if (!deferredRetry) {
+      return;
+    }
+    if (deferredRetry.timeoutHandle) {
+      this.clearTimeoutFn(deferredRetry.timeoutHandle);
+    }
+    this.nodeStateUpdateDeferredRetries.delete(nodeId);
+  }
+
+  /**
    * Build one queue name for a node-state update shard.
    * @param {number} shardIndex - Zero-based shard index.
    * @return {string}
@@ -1288,7 +1561,10 @@ class ReplicaDispatchService extends EventEmitter {
    * @private
    */
   async hasHandlerOnTarget(nodeId, entityType) {
-    const serviceRows = this.getSystemTableRowsFromCache(SYSTEM_TABLE_NAME.SERVICES);
+    const serviceRows = this.servicesOwner &&
+      typeof this.servicesOwner.listServicesFromCache === TYPEOF.FUNCTION ?
+      (await this.servicesOwner.listServicesFromCache()).rows || [] :
+      this.getSystemTableRowsFromCache(SYSTEM_TABLE_NAME.SERVICES);
     return serviceRows.some((row) => {
       return row?.[COLUMN.NODE_ID] === nodeId &&
         row?.[COLUMN.SERVICE_TYPE] === entityType &&
@@ -1303,10 +1579,30 @@ class ReplicaDispatchService extends EventEmitter {
    * @private
    */
   async getNodeRow(nodeId) {
+    if (this.nodesOwner &&
+        typeof this.nodesOwner.getNodeFromCache === TYPEOF.FUNCTION) {
+      const result = await this.nodesOwner.getNodeFromCache(nodeId);
+      return result?.rows?.[0] || {};
+    }
     return this.getSystemTableRowFromCache(
       SYSTEM_TABLE_NAME.NODES,
       nodeId,
     ) || {};
+  }
+
+  /**
+   * Build one typed missing-node-row error for steady-state updates.
+   * @param {string} nodeId
+   * @return {Error}
+   * @private
+   */
+  buildMissingNodeRowError(nodeId) {
+    const error = new Error(
+      `${DISPATCH_ERROR_MSG.NODE_ROW_MISSING}: ${nodeId}`,
+    );
+    error.code = 'NODE_ROW_MISSING';
+    error.nodeId = nodeId;
+    return error;
   }
 
   /**
@@ -1323,6 +1619,15 @@ class ReplicaDispatchService extends EventEmitter {
    * @private
    */
   async getReplicaOperationRow(operationId) {
+    if (this.replicaOperationsOwner &&
+        typeof this.replicaOperationsOwner.getReplicaOperationFromCache ===
+          TYPEOF.FUNCTION) {
+      const result =
+        await this.replicaOperationsOwner.getReplicaOperationFromCache(
+          operationId,
+        );
+      return result?.rows?.[0] || null;
+    }
     return this.getSystemTableRowFromCache(
       SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
       operationId,
@@ -1357,10 +1662,54 @@ class ReplicaDispatchService extends EventEmitter {
    * @param {Object} payload - Control message payload.
    * @private
    */
-  async forwardToLeader(mgService, payload) {
+  async forwardToLeader(mgService, payload, options = {}) {
+    const requiredTables = Array.isArray(options.requiredTables) ?
+      [...new Set(options.requiredTables.filter((tableName) =>
+        typeof tableName === TYPEOF.STRING && tableName.length > NUM.ZERO
+      ))] :
+      [];
+    if (requiredTables.length > NUM.ZERO) {
+      const readiness = options.ingressReadiness ||
+        this.resolveMessageGroupIngressReadiness(
+          mgService,
+          requiredTables,
+        );
+      if (typeof mgService?.forwardMetadataIngressPayloadToLeader !==
+          TYPEOF.FUNCTION) {
+        const error = new Error(
+          readiness.reason ||
+          DISPATCH_ERROR_MSG.METADATA_FORWARD_PATH_UNAVAILABLE,
+        );
+        if (Number.isFinite(readiness.retryAfterMs) &&
+            readiness.retryAfterMs > NUM.ZERO) {
+          error.deferRetry = true;
+          error.retryAfterMs = readiness.retryAfterMs;
+        }
+        throw error;
+      }
+      await mgService.forwardMetadataIngressPayloadToLeader(payload, {
+        requiredTables,
+        forwardedByNodeId: this.nodeId,
+      });
+      return;
+    }
+
     const leaderId = mgService.getLeaderId();
     if (!leaderId) {
-      return;
+      const readiness = options.ingressReadiness ||
+        this.resolveMessageGroupIngressReadiness(
+          mgService,
+          requiredTables,
+        );
+      const error = new Error(
+        readiness.reason || 'Control-plane leader is not ready',
+      );
+      if (Number.isFinite(readiness.retryAfterMs) &&
+          readiness.retryAfterMs > NUM.ZERO) {
+        error.deferRetry = true;
+        error.retryAfterMs = readiness.retryAfterMs;
+      }
+      throw error;
     }
 
     const forwardedBy = Array.isArray(
@@ -1432,6 +1781,9 @@ class ReplicaDispatchService extends EventEmitter {
     this.retryInFlightNodes.clear();
     this.nodeStateUpdateWatermarks.clear();
     this.nodeReadyRetryWatermarks.clear();
+    for (const nodeId of this.nodeStateUpdateDeferredRetries.keys()) {
+      this.clearDeferredNodeStateUpdateRetry(nodeId);
+    }
     this.nodeStateUpdateQueueAssignments.clear();
     this.nextNodeStateUpdateQueueIndex = NUM.ZERO;
 

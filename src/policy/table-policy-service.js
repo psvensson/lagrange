@@ -10,6 +10,12 @@ import {ConfigurationManager} from '../config/configuration-manager.js';
 import {NUM, TABLES} from '../constants/index.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
 import {
+  CONTROL_PLANE_MUTATION_OPERATION,
+  CONTROL_PLANE_READ_STRATEGY,
+  ControlPlaneSystemTableGateway,
+} from '../control-plane/control-plane-system-table-gateway.js';
+import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
+import {
   DEFAULT_MESSAGE_GROUP_POLICY,
   DEFAULT_TABLE_POLICY,
   MESSAGE_GROUP_POLICY_FIELD_TYPES,
@@ -62,6 +68,8 @@ class TablePolicyService extends EventEmitter {
     this.systemTableCache = options.systemTableCache || null;
     this.cdcIntegrationService = options.cdcIntegrationService || null;
     this.sqlQueryEngine = options.sqlQueryEngine || null;
+    this.controlPlaneSystemTableGateway =
+      options.controlPlaneSystemTableGateway || null;
 
     // Configuration
     const config = ConfigurationManager.getInstance();
@@ -178,18 +186,7 @@ class TablePolicyService extends EventEmitter {
       return cached.policy;
     }
 
-    // Get from SQL engine
-    let table = null;
-    if (this.sqlQueryEngine) {
-      const result = await this.sqlQueryEngine.executeQuery(
-        'SELECT * FROM tables WHERE table_id = ?',
-        [tableId],
-      );
-      table = result.rows?.[0] || null;
-    }
-    if (!table) {
-      table = this.lookupCachedTable(tableId);
-    }
+    const table = await this.readTableRow(tableId);
     if (!table) {
       this.logger.debug(
         POLICY_LOG_MSG.TABLE_NOT_FOUND_DEFAULT, {tableId},
@@ -230,17 +227,7 @@ class TablePolicyService extends EventEmitter {
    * @return {Promise<Object>} Table policy for the partition's table.
    */
   async getPolicyForPartition(partitionId) {
-    let partition = null;
-    if (this.sqlQueryEngine) {
-      const result = await this.sqlQueryEngine.executeQuery(
-        'SELECT * FROM partitions WHERE partition_id = ?',
-        [partitionId],
-      );
-      partition = result.rows?.[0] || null;
-    }
-    if (!partition) {
-      partition = this.lookupCachedPartition(partitionId);
-    }
+    const partition = await this.readPartitionRow(partitionId);
     if (!partition) {
       this.logger.debug(
         POLICY_LOG_MSG.PARTITION_NOT_FOUND_DEFAULT,
@@ -447,9 +434,17 @@ class TablePolicyService extends EventEmitter {
 
     try {
       // Update via CDC integration service
-      await this.cdcIntegrationService.updateSystemTableRow(TABLES.TABLES, tableId, {
-        table_policies: JSON.stringify(newPolicy),
-        updated_at: Date.now(),
+      await this.getControlPlaneSystemTableGateway().submitMutation({
+        operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+        tableName: TABLES.TABLES,
+        whereClause: {table_id: tableId},
+        data: {
+          table_policies: JSON.stringify(newPolicy),
+          updated_at: Date.now(),
+        },
+      }, {
+        workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+        deliveryPriority: 'critical',
       });
 
       // Invalidate cache
@@ -581,14 +576,7 @@ class TablePolicyService extends EventEmitter {
     // Prefer the propagated system cache when available. Joining nodes may
     // observe newly registered self-hosted message-group metadata here before
     // a routed SQL engine is available.
-    let group = this.lookupCachedMessageGroup(groupId);
-    if (!group && this.sqlQueryEngine) {
-      const result = await this.sqlQueryEngine.executeQuery(
-        'SELECT * FROM message_groups WHERE group_id = ?',
-        [groupId],
-      );
-      group = result.rows?.[0] || null;
-    }
+    const group = await this.readMessageGroupRow(groupId);
     if (!group) {
       this.logger.debug(
         POLICY_LOG_MSG.MESSAGE_GROUP_NOT_FOUND_DEFAULT, {groupId},
@@ -823,6 +811,93 @@ class TablePolicyService extends EventEmitter {
   invalidateCache(tableId) {
     this.policyCache.delete(tableId);
     this.logger.debug(POLICY_LOG_MSG.POLICY_CACHE_INVALIDATED, {tableId});
+  }
+
+  async readTableRow(tableId) {
+    if (this.systemTableCache) {
+      const result = await this.getControlPlaneSystemTableGateway().executeRead({
+        tableName: TABLES.TABLES,
+        strategy: CONTROL_PLANE_READ_STRATEGY.CACHE,
+        readFromCache: () => {
+          const row = this.lookupCachedTable(tableId);
+          return row ? [row] : [];
+        },
+      });
+      return result.rows?.[0] || null;
+    }
+    const result = await this.getControlPlaneSystemTableGateway().readRows(
+      TABLES.TABLES,
+      'SELECT * FROM tables WHERE table_id = ?',
+      [tableId],
+    );
+    return result.rows?.[0] || null;
+  }
+
+  async readPartitionRow(partitionId) {
+    if (this.systemTableCache) {
+      const result = await this.getControlPlaneSystemTableGateway().executeRead({
+        tableName: TABLES.PARTITIONS,
+        strategy: CONTROL_PLANE_READ_STRATEGY.CACHE,
+        readFromCache: () => {
+          const row = this.lookupCachedPartition(partitionId);
+          return row ? [row] : [];
+        },
+      });
+      return result.rows?.[0] || null;
+    }
+    const result = await this.getControlPlaneSystemTableGateway().readRows(
+      TABLES.PARTITIONS,
+      'SELECT * FROM partitions WHERE partition_id = ?',
+      [partitionId],
+    );
+    return result.rows?.[0] || null;
+  }
+
+  async readMessageGroupRow(groupId) {
+    if (this.systemTableCache) {
+      const result = await this.getControlPlaneSystemTableGateway().executeRead({
+        tableName: TABLES.MESSAGE_GROUPS,
+        strategy: CONTROL_PLANE_READ_STRATEGY.CACHE,
+        readFromCache: () => {
+          const row = this.lookupCachedMessageGroup(groupId);
+          return row ? [row] : [];
+        },
+      });
+      return result.rows?.[0] || null;
+    }
+    const result = await this.getControlPlaneSystemTableGateway().readRows(
+      TABLES.MESSAGE_GROUPS,
+      'SELECT * FROM message_groups WHERE group_id = ?',
+      [groupId],
+    );
+    return result.rows?.[0] || null;
+  }
+
+  getControlPlaneSystemTableGateway() {
+    if (this.controlPlaneSystemTableGateway) {
+      if (!this.controlPlaneSystemTableGateway.cdcIntegrationService &&
+          this.cdcIntegrationService) {
+        this.controlPlaneSystemTableGateway
+          .setCdcIntegrationService(this.cdcIntegrationService);
+      }
+      if (!this.controlPlaneSystemTableGateway.sqlQueryEngine &&
+          this.sqlQueryEngine) {
+        this.controlPlaneSystemTableGateway.setSqlQueryEngine(this.sqlQueryEngine);
+      }
+      if (!this.controlPlaneSystemTableGateway.systemTableCache &&
+          this.systemTableCache) {
+        this.controlPlaneSystemTableGateway.setSystemTableCache(
+          this.systemTableCache,
+        );
+      }
+      return this.controlPlaneSystemTableGateway;
+    }
+    this.controlPlaneSystemTableGateway = new ControlPlaneSystemTableGateway({
+      cdcIntegrationService: this.cdcIntegrationService,
+      sqlQueryEngine: this.sqlQueryEngine,
+      systemTableCache: this.systemTableCache,
+    });
+    return this.controlPlaneSystemTableGateway;
   }
 
   /**

@@ -19,6 +19,14 @@ import {STORAGE_DEFAULT} from '../storage/storage-constants.js';
 import {NUM, WORKFLOW_STEP} from '../constants/index.js';
 import {assertCritical} from '../utils/assert.js';
 import {
+  CONTROL_PLANE_MUTATION_OPERATION,
+  ControlPlaneSystemTableGateway,
+} from '../control-plane/control-plane-system-table-gateway.js';
+import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
+import {
+  createSystemMetadataGatewayRequiredError,
+} from '../control-plane/system-metadata-access-error.js';
+import {
   ReplicaStatus,
 } from '../rebalancer/replica-status.js';
 import {
@@ -132,6 +140,8 @@ class ReplicaHandler extends EventEmitter {
     this.nodeId = options.nodeId || REPLICA_HANDLER_DEFAULT.NODE_ID;
     this.systemTableCache = options.systemTableCache || null;
     this.cdcIntegrationService = options.cdcIntegrationService || null;
+    this.controlPlaneSystemTableGateway =
+      options.controlPlaneSystemTableGateway || null;
     this.rpcClient = options.rpcClient || null;
     this.createPartitionService = options.createPartitionService || null;
     this.dataDir = options.dataDir || REPLICA_HANDLER_DEFAULT.DATA_DIR;
@@ -150,6 +160,7 @@ class ReplicaHandler extends EventEmitter {
       new ReplicaStateMachine({
         nodeId: this.nodeId,
         cdcIntegrationService: this.cdcIntegrationService,
+        controlPlaneSystemTableGateway: this.controlPlaneSystemTableGateway,
       });
 
     // Track live service references by replica_id (needed for shutdown, voter-readiness)
@@ -162,6 +173,7 @@ class ReplicaHandler extends EventEmitter {
     this.operationTasks = new Set();
     this.shuttingDown = false;
     this.shutdownPromise = null;
+    this.hydratedMetadataByPartitionId = new Map();
 
     // Executor outcome emitter — replaces direct replica_operations writes.
     // The coordinator subscribes to outcomes via this emitter (Task 3.2).
@@ -981,10 +993,14 @@ class ReplicaHandler extends EventEmitter {
 
       // Delete service row from services table
       try {
-        await this.cdcIntegrationService.deleteSystemTableRow(
-          SYSTEM_TABLE_NAME.SERVICES,
-          {service_id: replicaId},
-        );
+        await this.getControlPlaneSystemTableGateway().submitMutation({
+          operation: CONTROL_PLANE_MUTATION_OPERATION.DELETE,
+          tableName: SYSTEM_TABLE_NAME.SERVICES,
+          whereClause: {service_id: replicaId},
+        }, {
+          workClass: PRESSURE_WORK_CLASS.CRITICAL,
+          deliveryPriority: 'critical',
+        });
       } catch (deleteError) {
         this.logger.warn(REPLICA_HANDLER_LOG_MSG.DELETE_SERVICE_ROW_FAILED, {
           replicaId,
@@ -1349,9 +1365,12 @@ class ReplicaHandler extends EventEmitter {
     while (Date.now() <= deadline) {
       this.throwIfShuttingDown();
       try {
-        return this.resolveReplicaContext(partitionId, replicaId, options);
+        const context = this.resolveReplicaContext(partitionId, replicaId, options);
+        this.clearHydratedMetadataSnapshot(partitionId);
+        return context;
       } catch (error) {
         if (!this.isTransientMetadataResolutionError(error)) {
+          this.clearHydratedMetadataSnapshot(partitionId);
           throw error;
         }
         lastError = error;
@@ -1376,6 +1395,7 @@ class ReplicaHandler extends EventEmitter {
       });
     }
 
+    this.clearHydratedMetadataSnapshot(partitionId);
     throw lastError || new Error(
       partitionMetadataMissingError(partitionId),
     );
@@ -1418,10 +1438,11 @@ class ReplicaHandler extends EventEmitter {
       payloadPartition?.table_id || null,
       options.bootstrapTableMetadata,
     );
+    const hydratedMetadata = this.getHydratedMetadataSnapshot(partitionId);
     const partition = this.systemTableCache.get(
       SYSTEM_TABLE_NAME.PARTITIONS,
       partitionId,
-    ) || payloadPartition;
+    ) || payloadPartition || hydratedMetadata?.partitionRow || null;
     if (!partition) {
       const partitionMetadataMissing = REPLICA_HANDLER_ERROR_MSG.PARTITION_METADATA_MISSING;
       throw new Error(partitionMetadataMissing(partitionId));
@@ -1430,7 +1451,7 @@ class ReplicaHandler extends EventEmitter {
     const table = this.systemTableCache.get(
       SYSTEM_TABLE_NAME.TABLES,
       partition.table_id,
-    ) || payloadTable;
+    ) || payloadTable || hydratedMetadata?.tableRow || null;
     if (!table) {
       const tableMetadataMissing = REPLICA_HANDLER_ERROR_MSG.TABLE_METADATA_MISSING;
       throw new Error(tableMetadataMissing(partition.table_id));
@@ -1451,11 +1472,15 @@ class ReplicaHandler extends EventEmitter {
       end: partition.partition_key_end || null,
     };
 
-    const services = this.systemTableCache.filter(
+    const cachedServices = this.systemTableCache.filter(
       SYSTEM_TABLE_NAME.SERVICES,
       (service) =>
         service.partition_id === partitionId &&
         service.service_type === REPLICA_HANDLER_SERVICE.TYPE,
+    );
+    const services = this.mergeHydratedServices(
+      cachedServices,
+      hydratedMetadata?.serviceRows || [],
     );
 
     const addressManager = AddressManager.getInstance();
@@ -1514,9 +1539,17 @@ class ReplicaHandler extends EventEmitter {
     }
 
     let leaderAddress = null;
-    const leaderService = services.find(
-      (service) => service.raft_role === RAFT_ROLE.LEADER,
-    );
+    const canonicalLeaderNodeId =
+      typeof partition.leader_node_id === 'string' &&
+      partition.leader_node_id.length > 0 ?
+        partition.leader_node_id :
+        null;
+    const leaderService = canonicalLeaderNodeId ?
+      services.find((service) =>
+        service.node_id === canonicalLeaderNodeId &&
+        service.status === ReplicaStatus.ACTIVE,
+      ) :
+      null;
     const isFreshBootstrapPartition = isFreshPartitionBootstrapWindow(partition);
     if (isFreshBootstrapPartition) {
       for (const requestedReplicaId of requestedReplicaIds) {
@@ -1535,7 +1568,7 @@ class ReplicaHandler extends EventEmitter {
     // partition row has a persisted leader_node_id. A single sibling leader
     // must not force later members of that first cohort into learner mode.
     const hasKnownLeader = !isFreshBootstrapPartition &&
-      Boolean(leaderService || partition.leader_node_id);
+      Boolean(canonicalLeaderNodeId);
 
     if (leaderService) {
       leaderAddress = leaderService.address ||
@@ -1577,60 +1610,48 @@ class ReplicaHandler extends EventEmitter {
         partitionId.length === NUM.ZERO) {
       return NUM.ZERO;
     }
-    if (!this.systemTableCache ||
-        typeof this.systemTableCache.applySystemTableChange !==
-          REPLICA_HANDLER_TYPEOF.FUNCTION) {
-      return NUM.ZERO;
-    }
-
-    const executeSql = this.resolveMetadataQueryExecutor();
-    if (!executeSql) {
+    const gateway = this.getControlPlaneSystemTableGateway();
+    if (!gateway) {
       return NUM.ZERO;
     }
 
     let hydratedRows = NUM.ZERO;
     try {
       const partitionRows = await this.querySystemTableRows(
-        executeSql,
+        gateway,
+        SYSTEM_TABLE_NAME.PARTITIONS,
         SYSTEM_TABLE_HYDRATION_SQL.PARTITION_BY_ID,
         [partitionId],
       );
       const partitionRow = partitionRows[NUM.ZERO] || null;
-      if (partitionRow) {
-        hydratedRows += this.applyHydratedSystemTableRow(
-          SYSTEM_TABLE_NAME.PARTITIONS,
-          partitionRow,
-        );
-      }
 
       const tableId = partitionRow?.table_id || null;
+      let tableRow = null;
       if (typeof tableId === REPLICA_HANDLER_TYPEOF.STRING &&
           tableId.length > NUM.ZERO) {
         const tableRows = await this.querySystemTableRows(
-          executeSql,
+          gateway,
+          SYSTEM_TABLE_NAME.TABLES,
           SYSTEM_TABLE_HYDRATION_SQL.TABLE_BY_ID,
           [tableId],
         );
-        const tableRow = tableRows[NUM.ZERO] || null;
-        if (tableRow) {
-          hydratedRows += this.applyHydratedSystemTableRow(
-            SYSTEM_TABLE_NAME.TABLES,
-            tableRow,
-          );
-        }
+        tableRow = tableRows[NUM.ZERO] || null;
       }
 
       const serviceRows = await this.querySystemTableRows(
-        executeSql,
+        gateway,
+        SYSTEM_TABLE_NAME.SERVICES,
         SYSTEM_TABLE_HYDRATION_SQL.PARTITION_SERVICES,
         [partitionId, REPLICA_HANDLER_SERVICE.TYPE],
       );
-      for (const serviceRow of serviceRows) {
-        hydratedRows += this.applyHydratedSystemTableRow(
-          SYSTEM_TABLE_NAME.SERVICES,
-          serviceRow,
-        );
-      }
+      this.setHydratedMetadataSnapshot(partitionId, {
+        partitionRow,
+        tableRow,
+        serviceRows,
+      });
+      hydratedRows += partitionRow ? NUM.ONE : NUM.ZERO;
+      hydratedRows += tableRow ? NUM.ONE : NUM.ZERO;
+      hydratedRows += serviceRows.length;
 
       if (hydratedRows > NUM.ZERO) {
         this.logger.debug(REPLICA_HANDLER_LOG_MSG.HYDRATED_METADATA_FROM_QUERY, {
@@ -1662,12 +1683,6 @@ class ReplicaHandler extends EventEmitter {
    * @private
    */
   applyBootstrapMetadataPayload(options = {}) {
-    if (!this.systemTableCache ||
-        typeof this.systemTableCache.applySystemTableChange !==
-          REPLICA_HANDLER_TYPEOF.FUNCTION) {
-      return;
-    }
-
     const partitionRow = this.normalizeBootstrapPartitionMetadata(
       options.partitionId,
       options.bootstrapPartitionMetadata,
@@ -1676,16 +1691,10 @@ class ReplicaHandler extends EventEmitter {
       partitionRow?.table_id || null,
       options.bootstrapTableMetadata,
     );
-
-    if (tableRow) {
-      this.applyHydratedSystemTableRow(SYSTEM_TABLE_NAME.TABLES, tableRow);
-    }
-    if (partitionRow) {
-      this.applyHydratedSystemTableRow(
-        SYSTEM_TABLE_NAME.PARTITIONS,
-        partitionRow,
-      );
-    }
+    this.setHydratedMetadataSnapshot(options.partitionId, {
+      partitionRow,
+      tableRow,
+    });
   }
 
   /**
@@ -1740,67 +1749,151 @@ class ReplicaHandler extends EventEmitter {
   }
 
   /**
-   * Resolve SQL query executor for authoritative metadata hydration.
-   * @return {Function|null}
-   * @private
-   */
-  resolveMetadataQueryExecutor() {
-    if (this.cdcIntegrationService &&
-        typeof this.cdcIntegrationService.executeSQL ===
-          REPLICA_HANDLER_TYPEOF.FUNCTION) {
-      return (sql, params = []) => this.cdcIntegrationService.executeSQL(
-        sql,
-        params,
-      );
-    }
-
-    const sqlQueryEngine = this.cdcIntegrationService?.sqlQueryEngine || null;
-    if (sqlQueryEngine &&
-        typeof sqlQueryEngine.executeQuery === REPLICA_HANDLER_TYPEOF.FUNCTION) {
-      return (sql, params = []) => sqlQueryEngine.executeQuery(sql, params);
-    }
-
-    return null;
-  }
-
-  /**
    * Execute a system-table query and normalize result to row array.
-   * @param {Function} executeSql - SQL execution callback.
+   * @param {ControlPlaneSystemTableGateway} gateway - Canonical read ingress.
+   * @param {string} tableName - System table name.
    * @param {string} sql - Query text.
    * @param {Array<*>} params - Positional params.
    * @return {Promise<Array<Object>>}
    * @private
    */
-  async querySystemTableRows(executeSql, sql, params = []) {
-    if (typeof executeSql !== REPLICA_HANDLER_TYPEOF.FUNCTION) {
-      return [];
+  async querySystemTableRows(gateway, tableName, sql, params = []) {
+    if (!gateway) {
+      throw createSystemMetadataGatewayRequiredError({
+        serviceName: 'ReplicaHandler',
+        tableName,
+        operation: 'read',
+      });
     }
-    const result = await executeSql(sql, params);
-    if (Array.isArray(result)) {
-      return result;
-    }
-    if (!result || typeof result !== REPLICA_HANDLER_TYPEOF.OBJECT) {
-      return [];
-    }
+    const result = await gateway.readRows(tableName, sql, params, {
+      workClass: PRESSURE_WORK_CLASS.CRITICAL,
+      allowPressureDefer: true,
+    });
     if (result.success === false) {
       throw new Error(result.error || 'system table query failed');
     }
     return Array.isArray(result.rows) ? result.rows : [];
   }
 
+  getControlPlaneSystemTableGateway() {
+    if (this.controlPlaneSystemTableGateway) {
+      const metadataSqlQueryEngine = this.getMetadataSqlQueryEngine();
+      if (!this.controlPlaneSystemTableGateway.sqlQueryEngine &&
+          metadataSqlQueryEngine) {
+        this.controlPlaneSystemTableGateway
+          .setSqlQueryEngine(metadataSqlQueryEngine);
+      }
+      if (!this.controlPlaneSystemTableGateway.cdcIntegrationService &&
+          this.cdcIntegrationService) {
+        this.controlPlaneSystemTableGateway
+          .setCdcIntegrationService(this.cdcIntegrationService);
+      }
+      if (!this.controlPlaneSystemTableGateway.systemTableCache &&
+          this.systemTableCache) {
+        this.controlPlaneSystemTableGateway
+          .setSystemTableCache(this.systemTableCache);
+      }
+      return this.controlPlaneSystemTableGateway;
+    }
+    this.controlPlaneSystemTableGateway = new ControlPlaneSystemTableGateway({
+      nodeId: this.nodeId,
+      sqlQueryEngine: this.getMetadataSqlQueryEngine(),
+      cdcIntegrationService: this.cdcIntegrationService,
+      systemTableCache: this.systemTableCache,
+    });
+    return this.controlPlaneSystemTableGateway;
+  }
+
   /**
-   * Apply hydrated system-table row into local cache.
-   * @param {string} tableName - System table name.
-   * @param {Object} row - Row payload.
-   * @return {number} 1 when applied; otherwise 0.
+   * @return {Object|null}
    * @private
    */
-  applyHydratedSystemTableRow(tableName, row) {
-    if (!row || typeof row !== REPLICA_HANDLER_TYPEOF.OBJECT) {
-      return NUM.ZERO;
+  getMetadataSqlQueryEngine() {
+    if (this.cdcIntegrationService?.sqlQueryEngine) {
+      return this.cdcIntegrationService.sqlQueryEngine;
     }
-    this.systemTableCache.applySystemTableChange(tableName, 'INSERT', row);
-    return NUM.ONE;
+    if (typeof this.cdcIntegrationService?.executeSQL ===
+      REPLICA_HANDLER_TYPEOF.FUNCTION) {
+      return {
+        executeQuery: (sql, params = []) => {
+          return this.cdcIntegrationService.executeSQL(sql, params);
+        },
+      };
+    }
+    return null;
+  }
+
+  /**
+   * @param {string} partitionId
+   * @return {Object|null}
+   * @private
+   */
+  getHydratedMetadataSnapshot(partitionId) {
+    if (typeof partitionId !== REPLICA_HANDLER_TYPEOF.STRING ||
+        partitionId.length === NUM.ZERO) {
+      return null;
+    }
+    return this.hydratedMetadataByPartitionId.get(partitionId) || null;
+  }
+
+  /**
+   * @param {string} partitionId
+   * @param {Object} snapshot
+   * @return {void}
+   * @private
+   */
+  setHydratedMetadataSnapshot(partitionId, snapshot = {}) {
+    if (typeof partitionId !== REPLICA_HANDLER_TYPEOF.STRING ||
+        partitionId.length === NUM.ZERO) {
+      return;
+    }
+    const existingSnapshot = this.getHydratedMetadataSnapshot(partitionId) || {};
+    const serviceRows = Array.isArray(snapshot.serviceRows) ?
+      snapshot.serviceRows.filter((row) => row && typeof row === REPLICA_HANDLER_TYPEOF.OBJECT) :
+      (existingSnapshot.serviceRows || []);
+    this.hydratedMetadataByPartitionId.set(partitionId, {
+      partitionRow: snapshot.partitionRow || existingSnapshot.partitionRow || null,
+      tableRow: snapshot.tableRow || existingSnapshot.tableRow || null,
+      serviceRows,
+    });
+  }
+
+  /**
+   * @param {string} partitionId
+   * @return {void}
+   * @private
+   */
+  clearHydratedMetadataSnapshot(partitionId) {
+    if (typeof partitionId !== REPLICA_HANDLER_TYPEOF.STRING ||
+        partitionId.length === NUM.ZERO) {
+      return;
+    }
+    this.hydratedMetadataByPartitionId.delete(partitionId);
+  }
+
+  /**
+   * @param {Array<Object>} cachedRows
+   * @param {Array<Object>} hydratedRows
+   * @return {Array<Object>}
+   * @private
+   */
+  mergeHydratedServices(cachedRows = [], hydratedRows = []) {
+    const mergedRows = new Map();
+    for (const row of Array.isArray(cachedRows) ? cachedRows : []) {
+      const serviceId = row?.service_id || row?.replica_id;
+      if (typeof serviceId === REPLICA_HANDLER_TYPEOF.STRING &&
+          serviceId.length > NUM.ZERO) {
+        mergedRows.set(serviceId, row);
+      }
+    }
+    for (const row of Array.isArray(hydratedRows) ? hydratedRows : []) {
+      const serviceId = row?.service_id || row?.replica_id;
+      if (typeof serviceId === REPLICA_HANDLER_TYPEOF.STRING &&
+          serviceId.length > NUM.ZERO) {
+        mergedRows.set(serviceId, row);
+      }
+    }
+    return Array.from(mergedRows.values());
   }
 
   /**

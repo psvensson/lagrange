@@ -95,7 +95,7 @@ const REBALANCER_DEFAULT = Object.freeze({
     MIN_STABILIZATION_MS: 1000,
     MAX_STABILIZATION_MS: 10000,
     DEFAULT_STABILIZATION_MS: 1000,
-    SYSTEM_PARTITION_START_DELAY_MS: 10 * 60 * 1000,
+    SYSTEM_PARTITION_START_DELAY_MS: 0,
     USER_PARTITION_START_DELAY_MS: 0,
   }),
 });
@@ -177,6 +177,16 @@ const REBALANCER_LOG_MSG = Object.freeze({
   CACHE_UNAVAILABLE: 'System table cache not available, skipping rebalance check',
   WAIT_STABILIZATION: 'Waiting for stabilization period to complete',
   WAIT_START_DELAY: 'Waiting for partition rebalance start delay to elapse',
+  WAIT_TOPOLOGY_SETTLING:
+    'Waiting for transitional cluster membership to settle before planning critical system rebalancing',
+  WAIT_LOCAL_SERVE_READINESS:
+    'Waiting for local control-plane serve readiness before planning critical system rebalancing',
+  WAIT_LOCAL_MUTATION_READINESS:
+    'Waiting for local control-plane mutation readiness before planning background rebalancing',
+  WAIT_TRAFFIC_READY:
+    'Waiting for bootstrap traffic-readiness before planning critical system rebalancing',
+  WAIT_TRANSPORT_BACKPRESSURE:
+    'Waiting for local transport backpressure to clear before planning',
   REBALANCE_ERROR: 'Error during rebalance check',
   EVALUATING_STATE: 'Evaluating rebalancing state',
   CRITICAL_STATE: 'Critical rebalancing state detected',
@@ -352,6 +362,7 @@ const REBALANCER_SKIP_REASON = Object.freeze({
   CACHE_UNAVAILABLE: 'cache_unavailable',
   START_DELAY: 'start_delay',
   SAFETY_BLOCKED: 'safety_blocked',
+  LOCAL_MUTATION_UNHEALTHY: 'local_mutation_unhealthy',
   OPERATION_ALREADY_EXECUTING: 'operation_already_executing',
   OPERATION_OWNED_BY_ANOTHER_NODE: 'operation_owned_by_another_node',
   AWAITING_READY_ADD_CAPACITY: 'awaiting_ready_add_capacity',

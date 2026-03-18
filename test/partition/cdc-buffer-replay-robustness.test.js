@@ -232,6 +232,106 @@ test('replay delay is not escalated after subscriber handshake',
     }
   });
 
+test('buffer replay honors subscriber retryAfter readiness hints',
+  async (t) => {
+    const partition = createTestPartition();
+    await partition.initialize();
+
+    const originalSetTimeout = globalThis.setTimeout;
+    const scheduledTimers = [];
+    globalThis.setTimeout = (fn, delay) => {
+      scheduledTimers.push({fn, delay});
+      return originalSetTimeout(fn, NUM.ZERO);
+    };
+
+    try {
+      partition.cdcEventBuffer.buffer(buildNodeCdcEvent('node-ready-hint', NUM.ZERO));
+
+      let ready = false;
+      const deliveredEvents = [];
+      const subscriber = {
+        canAcceptCDCEvent() {
+          return ready ?
+            {ready: true} :
+            {
+              ready: false,
+              retryAfterMs: 250,
+              reason: 'leader-transition',
+            };
+        },
+        async handleCDCEvent(cdcEvent) {
+          deliveredEvents.push(cdcEvent);
+        },
+      };
+
+      const handshake = await partition.subscribeToCDCWithHandshake(subscriber);
+
+      t.equal(
+        handshake.catchup.completed,
+        false,
+        'handshake catchup should remain incomplete while subscriber reports not-ready',
+      );
+      t.equal(
+        partition.cdcBufferReplayDelayMs,
+        250,
+        'buffer replay delay should honor subscriber retryAfter hints',
+      );
+      t.ok(
+        scheduledTimers.some((timer) => timer.delay === 250),
+        'follow-up replay should be scheduled using the subscriber retryAfter delay',
+      );
+      t.equal(
+        deliveredEvents.length,
+        0,
+        'not-ready subscribers should not receive replayed events prematurely',
+      );
+
+      ready = true;
+      await new Promise((resolve) => originalSetTimeout(resolve, NUM.TEN));
+
+      t.equal(
+        deliveredEvents.length,
+        1,
+        'buffered replay should resume once the subscriber becomes ready',
+      );
+      t.notOk(
+        partition.cdcEventBuffer.hasEvents(),
+        'buffer should drain after the subscriber becomes ready',
+      );
+    } finally {
+      globalThis.setTimeout = originalSetTimeout;
+      await partition.shutdown();
+    }
+  });
+
+test('buffer replay preserves downstream retryAfter hints above the legacy ' +
+  'one-second ceiling', async (t) => {
+  const partition = createTestPartition();
+  await partition.initialize();
+
+  try {
+    partition.cdcBufferReplayDelayMs =
+      PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
+    const deferredError = new Error('leader temporarily unavailable');
+    deferredError.retryAfterMs = 5000;
+
+    const replayDelayMs =
+      partition.cdcDelivery.resolveBufferedReplayDelayAfterError(deferredError);
+
+    t.equal(
+      replayDelayMs,
+      5000,
+      'partition replay should preserve downstream retryAfter hints instead of clipping to 1s',
+    );
+    t.ok(
+      replayDelayMs <= PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_MAX_DELAY_MS,
+      'replay delay should remain bounded by the configured max',
+    );
+  } finally {
+    await partition.shutdown();
+  }
+});
+
 test('cleanup CDC buffer replay robustness tests', async (t) => {
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();

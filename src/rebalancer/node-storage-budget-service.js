@@ -15,6 +15,11 @@ import {
   TYPEOF,
 } from '../constants/index.js';
 import {
+  CONTROL_PLANE_MUTATION_OPERATION,
+  ControlPlaneSystemTableGateway,
+} from '../control-plane/control-plane-system-table-gateway.js';
+import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
+import {
   STORAGE_BUDGET_CONFIG_KEY,
   STORAGE_BUDGET_SOURCE,
   STORAGE_BUDGET_VALIDATION,
@@ -39,6 +44,8 @@ class NodeStorageBudgetService {
   constructor(options = {}) {
     this.nodeId = options.nodeId || null;
     this.cdcIntegrationService = options.cdcIntegrationService || null;
+    this.controlPlaneSystemTableGateway =
+      options.controlPlaneSystemTableGateway || null;
     this.config = ConfigurationManager.getInstance();
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
@@ -57,6 +64,9 @@ class NodeStorageBudgetService {
     }
     if (options.cdcIntegrationService) {
       this.cdcIntegrationService = options.cdcIntegrationService;
+    }
+    if (options.controlPlaneSystemTableGateway) {
+      this.controlPlaneSystemTableGateway = options.controlPlaneSystemTableGateway;
     }
 
     assertCritical(this.nodeId, NODE_STORAGE_BUDGET_ERROR_MSG.MISSING_NODE_ID);
@@ -218,11 +228,15 @@ class NodeStorageBudgetService {
     );
 
     const {budgetRow, resolution} = this.resolveBudgetRow(nodeRow);
-    const result = await this.cdcIntegrationService.upsertSystemTableRow(
-      TABLES.NODES,
-      budgetRow,
-      upsertOptions,
-    );
+    const result = await this.getControlPlaneSystemTableGateway().submitMutation({
+      operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
+      tableName: TABLES.NODES,
+      row: budgetRow,
+    }, {
+      ...upsertOptions,
+      workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+      deliveryPriority: 'critical',
+    });
 
     if (!result?.success) {
       throw new Error(
@@ -247,6 +261,22 @@ class NodeStorageBudgetService {
     }
 
     return {result, budgetRow, resolution};
+  }
+
+  getControlPlaneSystemTableGateway() {
+    if (this.controlPlaneSystemTableGateway) {
+      if (!this.controlPlaneSystemTableGateway.cdcIntegrationService &&
+          this.cdcIntegrationService) {
+        this.controlPlaneSystemTableGateway
+          .setCdcIntegrationService(this.cdcIntegrationService);
+      }
+      return this.controlPlaneSystemTableGateway;
+    }
+    this.controlPlaneSystemTableGateway = new ControlPlaneSystemTableGateway({
+      nodeId: this.nodeId,
+      cdcIntegrationService: this.cdcIntegrationService,
+    });
+    return this.controlPlaneSystemTableGateway;
   }
 }
 

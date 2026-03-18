@@ -204,6 +204,22 @@ class StorageAdmissionService {
   }
 
   /**
+   * Reuse the canonical readiness snapshot window for background admission.
+   * Background planning should not force synchronous authoritative repair when
+   * a recent ineligible snapshot can be reused and refreshed in the background.
+   * @return {number}
+   * @private
+   */
+  resolveReadinessSnapshotCacheMaxAgeMs() {
+    const configured = Number(
+      this.controlPlaneReadinessService?.clusterMemberStaleHeartbeatMaxAgeMs,
+    );
+    return Number.isFinite(configured) && configured > NUM.ZERO ?
+      Math.floor(configured) :
+      10000;
+  }
+
+  /**
    * Check admission for an ADD operation.
    * @param {Object} options
    * @return {Promise<Object>}
@@ -312,6 +328,9 @@ class StorageAdmissionService {
         .getNodeReadiness(nodeId, {
           allowAuthoritativeRefresh: true,
           requireFreshOnIneligible: true,
+          preferBackgroundRefreshOnIneligible: true,
+          allowStaleOnCacheChange: true,
+          maxCachedAgeMs: this.resolveReadinessSnapshotCacheMaxAgeMs(),
           decisionDimension:
             CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
         });

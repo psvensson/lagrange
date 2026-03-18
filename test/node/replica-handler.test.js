@@ -281,6 +281,34 @@ test('ReplicaHandler', async (t) => {
   });
 
   t.test(
+    'querySystemTableRows throws typed gateway error when ingress is missing',
+    async (t) => {
+      const cache = createSeededCache();
+      const handler = new ReplicaHandler({
+        nodeId: 'test-node',
+        dataDir: tempDir,
+        systemTableCache: cache,
+        cdcIntegrationService: createMockCDCService(cache),
+        createPartitionService: createMockPartitionServiceFactory(),
+      });
+
+      try {
+        await handler.querySystemTableRows(
+          null,
+          SYSTEM_TABLE_NAME.PARTITIONS,
+          'SELECT * FROM partitions WHERE partition_id = ?',
+          ['partition-1'],
+        );
+        t.fail(
+          'ReplicaHandler should not silently treat missing metadata ingress as empty state',
+        );
+      } catch (error) {
+        t.equal(error.code, 'SYSTEM_METADATA_GATEWAY_REQUIRED');
+        t.equal(error.outcome, 'owner_not_ready');
+      }
+    });
+
+  t.test(
     'emitExecutorOutcome emits typed outcomes via executorOutcomeEmitter',
     async (t) => {
       const cache = createSeededCache();
@@ -950,8 +978,8 @@ test('ReplicaHandler', async (t) => {
       );
       t.equal(
         context.leaderAddress,
-        'node-2/partition/replica-2',
-        'live leader address can still be surfaced for catch-up without forcing learner mode',
+        null,
+        'without canonical leader_node_id the handler should not invent a leader address',
       );
 
       handler.shutdown();
@@ -1305,10 +1333,11 @@ test('ReplicaHandler', async (t) => {
       await created;
 
       const tableRow = cache.get(SYSTEM_TABLE_NAME.TABLES, tableId);
-      t.ok(tableRow, 'table metadata should be hydrated into local cache');
+      t.notOk(tableRow,
+        'authoritative metadata should stay on the handler path instead of mutating cache');
       const partitionRow = cache.get(SYSTEM_TABLE_NAME.PARTITIONS, partitionId);
-      t.equal(partitionRow?.table_id, tableId,
-        'partition metadata should be hydrated into local cache');
+      t.notOk(partitionRow,
+        'partition metadata should not be patched directly into cache');
 
       const serviceRow = cache.get(SYSTEM_TABLE_NAME.SERVICES, replicaId);
       t.equal(serviceRow?.status, ReplicaStatus.ACTIVE,
@@ -1399,11 +1428,11 @@ test('ReplicaHandler', async (t) => {
       await created;
 
       const tableRow = cache.get(SYSTEM_TABLE_NAME.TABLES, tableId);
-      t.equal(tableRow?.table_name, tableName,
-        'bootstrap table metadata should be hydrated into local cache');
+      t.notOk(tableRow,
+        'bootstrap table metadata should remain operation-scoped');
       const partitionRow = cache.get(SYSTEM_TABLE_NAME.PARTITIONS, partitionId);
-      t.equal(partitionRow?.table_id, tableId,
-        'bootstrap partition metadata should be hydrated into local cache');
+      t.notOk(partitionRow,
+        'bootstrap partition metadata should not patch cache directly');
 
       const serviceRow = cache.get(SYSTEM_TABLE_NAME.SERVICES, replicaId);
       t.equal(serviceRow?.status, ReplicaStatus.ACTIVE,

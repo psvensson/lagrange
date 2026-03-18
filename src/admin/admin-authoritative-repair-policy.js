@@ -1,4 +1,4 @@
-import {NUM} from '../constants/index.js';
+import {NUM, TABLES} from '../constants/index.js';
 
 const AUTHORITATIVE_REPAIR_TRIGGER = Object.freeze({
   CACHE_STALE_WATERMARK: 'cache_stale_watermark',
@@ -10,6 +10,45 @@ const AUTHORITATIVE_REPAIR_TRIGGER = Object.freeze({
   STALE_REPLICA_OPERATIONS_IN_FLIGHT:
     'stale_replica_operations_in_flight',
   PARTITION_TOPOLOGY_GAP: 'partition_topology_gap',
+});
+
+const DEFAULT_AUTHORITATIVE_REPAIR_TABLES = Object.freeze([
+  TABLES.NODES,
+  TABLES.PARTITIONS,
+  TABLES.SERVICES,
+  TABLES.TABLES,
+  TABLES.NODE_ENDPOINTS,
+  TABLES.SERVICE_DEFINITIONS,
+  TABLES.SERVICE_ENDPOINTS,
+  TABLES.REPLICA_OPERATIONS,
+]);
+
+const AUTHORITATIVE_REPAIR_TABLE_GROUP = Object.freeze({
+  TOPOLOGY: Object.freeze([
+    TABLES.PARTITIONS,
+    TABLES.SERVICES,
+    TABLES.TABLES,
+  ]),
+  DISCOVERY: Object.freeze([
+    TABLES.NODES,
+    TABLES.PARTITIONS,
+    TABLES.SERVICES,
+    TABLES.TABLES,
+    TABLES.NODE_ENDPOINTS,
+    TABLES.SERVICE_DEFINITIONS,
+    TABLES.SERVICE_ENDPOINTS,
+  ]),
+  SCOPED_DISCOVERY: Object.freeze([
+    TABLES.NODES,
+    TABLES.PARTITIONS,
+    TABLES.SERVICES,
+    TABLES.TABLES,
+    TABLES.SERVICE_DEFINITIONS,
+    TABLES.SERVICE_ENDPOINTS,
+  ]),
+  REPLICA_OPERATIONS: Object.freeze([
+    TABLES.REPLICA_OPERATIONS,
+  ]),
 });
 
 function normalizeNonNegativeInteger(value) {
@@ -37,6 +76,89 @@ function hasDiscoverySelectionGap(selectedNodeCount, serviceEndpointsCount) {
     normalizeNonNegativeInteger(serviceEndpointsCount);
   return normalizedSelectedNodeCount === NUM.ZERO &&
     normalizedServiceEndpointsCount > NUM.ZERO;
+}
+
+function addRepairTables(targetTableNames, tableNames) {
+  const normalizedTargetTableNames =
+    targetTableNames instanceof Set ?
+      targetTableNames :
+      new Set();
+  const normalizedTableNames = Array.isArray(tableNames) ?
+    tableNames :
+    DEFAULT_AUTHORITATIVE_REPAIR_TABLES;
+  for (const tableName of normalizedTableNames) {
+    if (typeof tableName === 'string' &&
+        tableName.length > NUM.ZERO) {
+      normalizedTargetTableNames.add(tableName);
+    }
+  }
+  return normalizedTargetTableNames;
+}
+
+function deriveAuthoritativeRepairTables(options = {}) {
+  const scopedQuery = options.scopedQuery === true;
+  const triggerCodes = Array.isArray(options.triggerCodes) ?
+    options.triggerCodes
+      .map((triggerCode) => String(triggerCode || ''))
+      .filter(Boolean) :
+    [];
+  const uniqueTriggerCodes = [...new Set(triggerCodes)];
+  const narrowedTriggerCodes = uniqueTriggerCodes.filter((triggerCode) =>
+    triggerCode !== AUTHORITATIVE_REPAIR_TRIGGER.CACHE_STALE_WATERMARK);
+  const effectiveTriggerCodes = narrowedTriggerCodes.length > NUM.ZERO ?
+    narrowedTriggerCodes :
+    uniqueTriggerCodes;
+  if (effectiveTriggerCodes.length === NUM.ZERO) {
+    return [...DEFAULT_AUTHORITATIVE_REPAIR_TABLES];
+  }
+
+  const repairTables = new Set();
+  for (const triggerCode of effectiveTriggerCodes) {
+    if (triggerCode ===
+        AUTHORITATIVE_REPAIR_TRIGGER.STALE_REPLICA_OPERATIONS_IN_FLIGHT) {
+      addRepairTables(
+        repairTables,
+        AUTHORITATIVE_REPAIR_TABLE_GROUP.REPLICA_OPERATIONS,
+      );
+      continue;
+    }
+    if (triggerCode ===
+        AUTHORITATIVE_REPAIR_TRIGGER.PARTITION_TOPOLOGY_GAP) {
+      addRepairTables(
+        repairTables,
+        AUTHORITATIVE_REPAIR_TABLE_GROUP.TOPOLOGY,
+      );
+      continue;
+    }
+    if (triggerCode ===
+          AUTHORITATIVE_REPAIR_TRIGGER
+            .DISCOVERY_EMPTY_WITH_SERVICES_PRESENT ||
+        triggerCode ===
+          AUTHORITATIVE_REPAIR_TRIGGER
+            .DISCOVERY_ZERO_SCOPED_REPLICAS ||
+        triggerCode ===
+          AUTHORITATIVE_REPAIR_TRIGGER
+            .DISCOVERY_NO_READY_REPLICAS ||
+        triggerCode ===
+          AUTHORITATIVE_REPAIR_TRIGGER
+            .DISCOVERY_CACHE_GAP_REASON) {
+      addRepairTables(
+        repairTables,
+        scopedQuery === true ?
+          AUTHORITATIVE_REPAIR_TABLE_GROUP.SCOPED_DISCOVERY :
+          AUTHORITATIVE_REPAIR_TABLE_GROUP.DISCOVERY,
+      );
+      continue;
+    }
+
+    return [...DEFAULT_AUTHORITATIVE_REPAIR_TABLES];
+  }
+
+  if (repairTables.size === NUM.ZERO) {
+    return [...DEFAULT_AUTHORITATIVE_REPAIR_TABLES];
+  }
+  return DEFAULT_AUTHORITATIVE_REPAIR_TABLES
+    .filter((tableName) => repairTables.has(tableName));
 }
 
 function evaluateAuthoritativeRepairPolicy(options = {}) {
@@ -117,6 +239,8 @@ function evaluateAuthoritativeRepairPolicy(options = {}) {
 
 export {
   AUTHORITATIVE_REPAIR_TRIGGER,
+  DEFAULT_AUTHORITATIVE_REPAIR_TABLES,
+  deriveAuthoritativeRepairTables,
   evaluateAuthoritativeRepairPolicy,
   hasDiscoverySelectionGap,
   isCacheStalenessOverThreshold,

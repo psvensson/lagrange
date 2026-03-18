@@ -191,6 +191,95 @@ test('UnifiedRebalancer planner single-path enforcement', async (t) => {
     );
   });
 
+  await t.test('evaluateState delegates assessment to MovePlanner without legacy local helpers',
+    async (t) => {
+      const {rebalancer} = createTestRebalancer({
+        nodes: [
+          {node_id: 'node-1', status: 'active', cpu_usage_percent: 60},
+          {node_id: 'node-2', status: 'active', cpu_usage_percent: 10},
+          {node_id: 'node-3', status: 'active', cpu_usage_percent: 20},
+        ],
+        services: [
+          {
+            service_id: 'partition-1-r1',
+            replica_id: 'partition-1-r1',
+            partition_id: 'partition-1',
+            service_type: 'partition',
+            node_id: 'node-1',
+            status: 'active',
+          },
+        ],
+      });
+
+      rebalancer.isCriticalState = () => {
+        throw new Error('legacy_isCriticalState_used');
+      };
+      rebalancer.isSuboptimalState = () => {
+        throw new Error('legacy_isSuboptimalState_used');
+      };
+      rebalancer.getPolicyTargetReplicaCount = () => {
+        throw new Error('legacy_getPolicyTargetReplicaCount_used');
+      };
+      rebalancer.getActionableTargetReplicaCount = () => {
+        throw new Error('legacy_getActionableTargetReplicaCount_used');
+      };
+
+      let thrown = null;
+      try {
+        await rebalancer.evaluateState();
+      } catch (error) {
+        thrown = error;
+      } finally {
+        rebalancer.shutdown();
+      }
+
+      t.equal(
+        thrown,
+        null,
+        'state evaluation should not call UnifiedRebalancer local assessment helpers',
+      );
+    });
+
+  await t.test('rebalance budget gating uses MovePlanner critical assessment only',
+    async (t) => {
+      const {rebalancer} = createTestRebalancer({
+        nodes: [
+          {node_id: 'node-1', status: 'active', cpu_usage_percent: 60},
+          {node_id: 'node-2', status: 'active', cpu_usage_percent: 10},
+          {node_id: 'node-3', status: 'active', cpu_usage_percent: 20},
+        ],
+        services: [
+          {
+            service_id: 'partition-1-r1',
+            replica_id: 'partition-1-r1',
+            partition_id: 'partition-1',
+            service_type: 'partition',
+            node_id: 'node-1',
+            status: 'active',
+          },
+        ],
+      });
+
+      rebalancer.isCriticalState = () => {
+        throw new Error('legacy_isCriticalState_used');
+      };
+
+      let thrown = null;
+      try {
+        await rebalancer.rebalance(TriggerType.PERIODIC);
+      } catch (error) {
+        thrown = error;
+      } finally {
+        rebalancer.shutdown();
+      }
+
+      t.equal(
+        thrown,
+        null,
+        'rebalance budget gating should not call UnifiedRebalancer local critical-state helper',
+      );
+    });
+
   await t.test('runtime planning does not generate duplicate ADDs to a single node', async (t) => {
     const {rebalancer, dispatchedMoves} = createTestRebalancer({
       nodes: [

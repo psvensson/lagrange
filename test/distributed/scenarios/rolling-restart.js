@@ -16,6 +16,7 @@ const PRE_RESTART_SETTLE_MS = 5000;
 const PER_NODE_CONVERGENCE_TIMEOUT_MS = 30000;
 const INTER_RESTART_DELAY_MS = 2000;
 const MIN_RESTART_SUCCESS_RATE = 0.63;
+const POST_RESTART_QUIET_WINDOW_MS = 60000;
 const ZERO = 0;
 
 /**
@@ -85,7 +86,14 @@ async function run(cluster) {
     await cluster.waitForAllActive();
   }
 
-  // 8. Assert final cluster consistency.
+  // 8. Post-restart quiet window — no load, let memory settle so the
+  //    playback recorder captures recovery samples for transient-pressure
+  //    vs sustained-leak classification.
+  await new Promise(
+    (r) => setTimeout(r, POST_RESTART_QUIET_WINDOW_MS),
+  );
+
+  // 9. Assert final cluster consistency.
   await cluster.waitForConsistencyConvergence();
 
   return {

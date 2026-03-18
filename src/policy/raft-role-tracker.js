@@ -8,6 +8,11 @@ import {EventEmitter} from 'events';
 import {LoggingService} from '../logging/logging-service.js';
 import {TABLES} from '../constants/index.js';
 import {
+  CONTROL_PLANE_MUTATION_OPERATION,
+  ControlPlaneSystemTableGateway,
+} from '../control-plane/control-plane-system-table-gateway.js';
+import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
+import {
   POLICY_ERROR_MSG,
   POLICY_EVENT,
   POLICY_LOG_MSG,
@@ -39,6 +44,8 @@ class RaftRoleTracker extends EventEmitter {
     this.cdcIntegrationService = options.cdcIntegrationService || null;
     this.systemTableCache = options.systemTableCache || null;
     this.sqlQueryEngine = options.sqlQueryEngine || null;
+    this.controlPlaneSystemTableGateway =
+      options.controlPlaneSystemTableGateway || null;
 
     // Track registered services
     this.trackedServices = new Map();
@@ -168,12 +175,18 @@ class RaftRoleTracker extends EventEmitter {
         raft_role: role,
         updated_at: Date.now(),
       };
-      await this.cdcIntegrationService.updateSystemTableRow(
-        TABLES.SERVICES,
-        serviceId,
-        updateData,
-        {expectedCacheFields: updateData},
-      );
+      await this.getControlPlaneSystemTableGateway().submitMutation({
+        operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+        tableName: TABLES.SERVICES,
+        whereClause: {service_id: serviceId},
+        data: updateData,
+      }, {
+        expectedCacheFields: updateData,
+        workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+        deliveryPriority: 'background',
+        allowPressureDefer: true,
+        coalescingKey: `services:raft-role:${serviceId}`,
+      });
 
       this.logger.info(POLICY_LOG_MSG.UPDATED_SERVICE_ROLE, {
         serviceId,
@@ -244,6 +257,23 @@ class RaftRoleTracker extends EventEmitter {
       TABLES.SERVICES,
       (row) => row?.raft_role === role,
     ) || [];
+  }
+
+  getControlPlaneSystemTableGateway() {
+    if (this.controlPlaneSystemTableGateway) {
+      if (!this.controlPlaneSystemTableGateway.cdcIntegrationService &&
+          this.cdcIntegrationService) {
+        this.controlPlaneSystemTableGateway
+          .setCdcIntegrationService(this.cdcIntegrationService);
+      }
+      return this.controlPlaneSystemTableGateway;
+    }
+    this.controlPlaneSystemTableGateway = new ControlPlaneSystemTableGateway({
+      cdcIntegrationService: this.cdcIntegrationService,
+      sqlQueryEngine: this.sqlQueryEngine,
+      systemTableCache: this.systemTableCache,
+    });
+    return this.controlPlaneSystemTableGateway;
   }
 
   /**

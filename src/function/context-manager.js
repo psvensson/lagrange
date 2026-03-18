@@ -8,6 +8,11 @@ import {v4 as uuidv4} from 'uuid';
 import {LoggingService} from '../logging/logging-service.js';
 import {TABLES} from '../constants/index.js';
 import {
+  CONTROL_PLANE_MUTATION_OPERATION,
+  ControlPlaneSystemTableGateway,
+} from '../control-plane/control-plane-system-table-gateway.js';
+import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
+import {
   FUNCTION_CONTEXT_TYPE,
   FUNCTION_ERROR_MSG,
   FUNCTION_LOG_MSG,
@@ -34,6 +39,8 @@ class ContextManager {
     this.systemTableCache = options.systemTableCache || null;
     this.cdcIntegrationService = options.cdcIntegrationService || null;
     this.sqlQueryEngine = options.sqlQueryEngine || null;
+    this.controlPlaneSystemTableGateway =
+      options.controlPlaneSystemTableGateway || null;
     this.logger = this.initLogger();
     this.initialized = false;
   }
@@ -71,6 +78,9 @@ class ContextManager {
     if (options.sqlQueryEngine) {
       this.sqlQueryEngine = options.sqlQueryEngine;
     }
+    if (options.controlPlaneSystemTableGateway) {
+      this.controlPlaneSystemTableGateway = options.controlPlaneSystemTableGateway;
+    }
 
     this.initialized = true;
 
@@ -104,8 +114,9 @@ class ContextManager {
 
     try {
       let contexts = [];
-      if (this.sqlQueryEngine) {
-        const result = await this.sqlQueryEngine.executeQuery(
+      if (this.canReadContexts()) {
+        const result = await this.getControlPlaneSystemTableGateway().readRows(
+          TABLES.CONTEXTS,
           'SELECT * FROM contexts WHERE context_type = ?' +
           ' AND context_name = ?',
           [contextType, contextName],
@@ -149,7 +160,7 @@ class ContextManager {
   async setContext(contextType, contextName, contextData, ownerId = null) {
     this.validateContextType(contextType);
 
-    if (!this.cdcIntegrationService) {
+    if (!this.cdcIntegrationService && !this.controlPlaneSystemTableGateway) {
       throw new Error(FUNCTION_ERROR_MSG.CDC_INTEGRATION_REQUIRED);
     }
 
@@ -157,8 +168,9 @@ class ContextManager {
 
     // Check if context already exists
     let existing = null;
-    if (this.sqlQueryEngine) {
-      const result = await this.sqlQueryEngine.executeQuery(
+    if (this.canReadContexts()) {
+      const result = await this.getControlPlaneSystemTableGateway().readRows(
+        TABLES.CONTEXTS,
         'SELECT * FROM contexts WHERE context_type = ?' +
         ' AND context_name = ?',
         [contextType, contextName],
@@ -170,15 +182,19 @@ class ContextManager {
 
     if (existing) {
       // Update existing context
-      await this.cdcIntegrationService.updateSystemTableRow(
-        TABLES.CONTEXTS,
-        {context_id: contextId},
-        {
+      await this.getControlPlaneSystemTableGateway().submitMutation({
+        operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+        tableName: TABLES.CONTEXTS,
+        whereClause: {context_id: contextId},
+        data: {
           context_data: JSON.stringify(contextData),
           owner_id: ownerId,
           updated_at: now,
         },
-      );
+      }, {
+        workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+        deliveryPriority: 'critical',
+      });
 
       this.logger.info(FUNCTION_LOG_MSG.CONTEXT_UPDATED, {
         contextId,
@@ -188,15 +204,22 @@ class ContextManager {
       });
     } else {
       // Insert new context
-      await this.cdcIntegrationService.insertSystemTableRow(TABLES.CONTEXTS, {
-        context_id: contextId,
-        id: contextId, // For cache compatibility
-        context_type: contextType,
-        context_name: contextName,
-        context_data: JSON.stringify(contextData),
-        owner_id: ownerId,
-        created_at: now,
-        updated_at: now,
+      await this.getControlPlaneSystemTableGateway().submitMutation({
+        operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
+        tableName: TABLES.CONTEXTS,
+        row: {
+          context_id: contextId,
+          id: contextId,
+          context_type: contextType,
+          context_name: contextName,
+          context_data: JSON.stringify(contextData),
+          owner_id: ownerId,
+          created_at: now,
+          updated_at: now,
+        },
+      }, {
+        workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+        deliveryPriority: 'critical',
       });
 
       this.logger.info(FUNCTION_LOG_MSG.CONTEXT_CREATED, {
@@ -224,13 +247,14 @@ class ContextManager {
   async deleteContext(contextType, contextName) {
     this.validateContextType(contextType);
 
-    if (!this.cdcIntegrationService) {
+    if (!this.cdcIntegrationService && !this.controlPlaneSystemTableGateway) {
       throw new Error(FUNCTION_ERROR_MSG.CDC_INTEGRATION_REQUIRED);
     }
 
     let existing = null;
-    if (this.sqlQueryEngine) {
-      const result = await this.sqlQueryEngine.executeQuery(
+    if (this.canReadContexts()) {
+      const result = await this.getControlPlaneSystemTableGateway().readRows(
+        TABLES.CONTEXTS,
         'SELECT * FROM contexts WHERE context_type = ?' +
         ' AND context_name = ?',
         [contextType, contextName],
@@ -246,8 +270,15 @@ class ContextManager {
       return false;
     }
 
-    await this.cdcIntegrationService.deleteSystemTableRow(TABLES.CONTEXTS, {
-      context_id: existing.context_id,
+    await this.getControlPlaneSystemTableGateway().submitMutation({
+      operation: CONTROL_PLANE_MUTATION_OPERATION.DELETE,
+      tableName: TABLES.CONTEXTS,
+      whereClause: {
+        context_id: existing.context_id,
+      },
+    }, {
+      workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+      deliveryPriority: 'critical',
     });
 
     this.logger.info(FUNCTION_LOG_MSG.CONTEXT_DELETED, {
@@ -267,8 +298,9 @@ class ContextManager {
   async getContextsByOwner(ownerId) {
     try {
       let contexts = [];
-      if (this.sqlQueryEngine) {
-        const result = await this.sqlQueryEngine.executeQuery(
+      if (this.canReadContexts()) {
+        const result = await this.getControlPlaneSystemTableGateway().readRows(
+          TABLES.CONTEXTS,
           'SELECT * FROM contexts WHERE owner_id = ?',
           [ownerId],
         );
@@ -303,8 +335,9 @@ class ContextManager {
 
     try {
       let contexts = [];
-      if (this.sqlQueryEngine) {
-        const result = await this.sqlQueryEngine.executeQuery(
+      if (this.canReadContexts()) {
+        const result = await this.getControlPlaneSystemTableGateway().readRows(
+          TABLES.CONTEXTS,
           'SELECT * FROM contexts WHERE context_type = ?',
           [contextType],
         );
@@ -335,6 +368,35 @@ class ContextManager {
    */
   isInitialized() {
     return this.initialized;
+  }
+
+  canReadContexts() {
+    return Boolean(
+      this.controlPlaneSystemTableGateway ||
+      this.sqlQueryEngine ||
+      this.cdcIntegrationService,
+    );
+  }
+
+  getControlPlaneSystemTableGateway() {
+    if (this.controlPlaneSystemTableGateway) {
+      if (!this.controlPlaneSystemTableGateway.cdcIntegrationService &&
+          this.cdcIntegrationService) {
+        this.controlPlaneSystemTableGateway
+          .setCdcIntegrationService(this.cdcIntegrationService);
+      }
+      if (!this.controlPlaneSystemTableGateway.sqlQueryEngine &&
+          this.sqlQueryEngine) {
+        this.controlPlaneSystemTableGateway.setSqlQueryEngine(this.sqlQueryEngine);
+      }
+      return this.controlPlaneSystemTableGateway;
+    }
+    this.controlPlaneSystemTableGateway = new ControlPlaneSystemTableGateway({
+      cdcIntegrationService: this.cdcIntegrationService,
+      sqlQueryEngine: this.sqlQueryEngine,
+      systemTableCache: this.systemTableCache,
+    });
+    return this.controlPlaneSystemTableGateway;
   }
 }
 

@@ -26,6 +26,10 @@ import {
   SERVICE_LIFECYCLE_STATE,
   UNIFIED_SERVICE_TYPE,
 } from '../../constants/index.js';
+import {
+  getBootstrapMessageGroupService as selectBootstrapMessageGroupService,
+  resolveOperationalMessageGroupSelection,
+} from '../shared/message-group-selection.js';
 
 /**
  * Format missing-replica assertion message for bootstrap lifecycle.
@@ -142,6 +146,10 @@ class SeedMessageGroupsPhase {
       peerAddresses: options.peerAddresses,
       transport: d.getMessageRouter(),
       deferElection: Boolean(options.deferElection),
+      bootstrapReadinessState:
+        typeof d.getBootstrapReadinessState === 'function' ?
+          d.getBootstrapReadinessState() :
+          null,
     });
 
     const unifiedAddress =
@@ -322,29 +330,40 @@ class SeedMessageGroupsPhase {
   }
 
   /**
-   * Get the leader message group service.
+   * Resolve the operational local message-group ingress.
+   * Bootstrap-only "any replica" selection must not leak into runtime.
+   * @param {Object} [options]
+   * @param {Array<string>} [options.requiredTables]
+   * @return {Object}
+   */
+  resolveOperationalMessageGroupSelection(options = {}) {
+    const d = this.delegates;
+    return resolveOperationalMessageGroupSelection(
+      d.getMessageGroupServices(),
+      options,
+    );
+  }
+
+  /**
+   * Get the operational message-group service for runtime traffic.
+   * @param {Object} [options]
+   * @param {Array<string>} [options.requiredTables]
    * @return {Object|null}
    */
-  getLeaderMessageGroupService() {
+  getLeaderMessageGroupService(options = {}) {
+    return this.resolveOperationalMessageGroupSelection(options).service;
+  }
+
+  /**
+   * Get a bootstrap-only message-group handle before leadership exists.
+   * This must only be used during formation-time wiring.
+   * @return {Object|null}
+   */
+  getBootstrapMessageGroupService() {
     const d = this.delegates;
-    for (const service of d.getMessageGroupServices().values()) {
-      if (service && service.isLeaderReplica &&
-          service.isLeaderReplica()) {
-        return service;
-      }
-    }
-    // Bootstrap exception: during seed bootstrap, elections are
-    // deferred until after partitions are created. Callers that
-    // need a message-group handle before leadership is established
-    // (e.g. partition CDC wiring) must receive any available
-    // replica. This is the only code path — there is no separate
-    // "leader" vs "fallback" branch at runtime.
-    for (const service of d.getMessageGroupServices().values()) {
-      if (service) {
-        return service;
-      }
-    }
-    return null;
+    return selectBootstrapMessageGroupService(
+      d.getMessageGroupServices(),
+    );
   }
 }
 

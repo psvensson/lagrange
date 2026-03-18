@@ -21,6 +21,15 @@ import {HeartbeatService} from '../../control-plane/heartbeat-service.js';
 import {LeaseService} from '../../control-plane/lease-service.js';
 import {EndpointService} from '../../control-plane/endpoint-service.js';
 import {
+  ControlPlaneSystemTableGateway,
+} from '../../control-plane/control-plane-system-table-gateway.js';
+import {
+  registerControlPlaneSystemTableGateway,
+} from '../../control-plane/control-plane-gateway-registry.js';
+import {
+  createSystemMetadataOwners,
+} from '../../control-plane/owners/index.js';
+import {
   ReplicaDispatchService,
 } from '../../control-plane/replica-dispatch-service.js';
 import {
@@ -105,6 +114,7 @@ class ControlPlaneSetup {
     const {
       nodeId,
       nodeAddress,
+      advertisedNodeWsAddress,
       messageRouter,
       cdcIntegrationService,
       systemTableCache,
@@ -112,6 +122,7 @@ class ControlPlaneSetup {
       messageGroupServices,
       rebalanceCoordinator: existingCoordinator,
       cdcGroupPropagationService,
+      bootstrapReadinessState,
     } = options;
 
     // Validate required dependencies
@@ -169,6 +180,7 @@ class ControlPlaneSetup {
     logger.info(LOG_MSG.CREATING, {
       nodeId,
       nodeAddress,
+      advertisedNodeWsAddress,
       hasMessageGroupServices: !!messageGroupServices,
       messageGroupCount: messageGroupServices ?
         messageGroupServices.size : 0,
@@ -233,6 +245,7 @@ class ControlPlaneSetup {
         storageAdmissionService,
         controlPlaneReadinessService,
         cdcGroupPropagationService: cdcGroupPropagationService || null,
+        bootstrapReadinessState: bootstrapReadinessState || null,
         executorOutcomeEmitter,
       });
       rebalanceCoordinator.initialize();
@@ -250,6 +263,10 @@ class ControlPlaneSetup {
       rebalanceCoordinator.controlPlaneReadinessService =
         controlPlaneReadinessService;
     }
+    if (!rebalanceCoordinator.bootstrapReadinessState &&
+        bootstrapReadinessState) {
+      rebalanceCoordinator.bootstrapReadinessState = bootstrapReadinessState;
+    }
     if (!rebalanceCoordinator.cdcGroupPropagationService &&
         cdcGroupPropagationService) {
       rebalanceCoordinator.cdcGroupPropagationService =
@@ -259,14 +276,33 @@ class ControlPlaneSetup {
       rebalanceCoordinator.transactionCoordinator = transactionCoordinator;
     }
 
+    const controlPlaneSystemTableGateway = new ControlPlaneSystemTableGateway({
+      nodeId,
+      sqlQueryEngine: cdcIntegrationService.sqlQueryEngine,
+      cdcIntegrationService,
+      messageRouter,
+    });
+    registerControlPlaneSystemTableGateway(controlPlaneSystemTableGateway);
+    const systemMetadataOwners = createSystemMetadataOwners({
+      controlPlaneSystemTableGateway,
+      systemTableCache,
+    });
+    if (!controlPlaneReadinessService.nodesOwner) {
+      controlPlaneReadinessService.nodesOwner = systemMetadataOwners.nodesOwner;
+    }
+    if (!controlPlaneReadinessService.servicesOwner) {
+      controlPlaneReadinessService.servicesOwner =
+        systemMetadataOwners.servicesOwner;
+    }
+
     // Create decomposed control plane services
     const heartbeatService = new HeartbeatService({
       nodeId,
       nodeAddress,
+      advertisedNodeWsAddress,
       cdcIntegrationService,
       systemTableCache,
       verifyReporterVisibilityOnSuccess: true,
-      fallbackToCdcOnReporterVisibilityGap: true,
     });
     heartbeatService.initialize();
     controlPlaneReadinessService.heartbeatService = heartbeatService;
@@ -282,9 +318,8 @@ class ControlPlaneSetup {
 
     const endpointService = new EndpointService({
       nodeId,
-      cdcIntegrationService,
-      systemTableCache,
-      sqlQueryEngine: cdcIntegrationService.sqlQueryEngine,
+      serviceEndpointsOwner: systemMetadataOwners.serviceEndpointsOwner,
+      controlPlaneSystemTableGateway,
     });
     endpointService.initialize();
 
@@ -298,6 +333,9 @@ class ControlPlaneSetup {
       controlPlaneReadinessService,
       storageAccountingService,
       cdcGroupPropagationService: cdcGroupPropagationService || null,
+      nodesOwner: systemMetadataOwners.nodesOwner,
+      servicesOwner: systemMetadataOwners.servicesOwner,
+      replicaOperationsOwner: systemMetadataOwners.replicaOperationsOwner,
     });
     dispatchService.initialize();
 
@@ -327,6 +365,7 @@ class ControlPlaneSetup {
       endpointService,
       dispatchService,
       rebalanceCoordinator,
+      systemMetadataOwners,
     };
   }
 

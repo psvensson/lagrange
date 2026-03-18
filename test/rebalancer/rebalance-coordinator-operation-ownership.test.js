@@ -187,6 +187,229 @@ test('RebalanceCoordinator createOperation uses injected workflow coordinator si
     }
   });
 
+test('RebalanceCoordinator createOperation defers background mutation when local control-plane publication is unhealthy',
+  async (t) => {
+    let executeQueryCalls = 0;
+    const coordinator = new RebalanceCoordinator({
+      nodeId: 'node-local',
+      transactionCoordinator: createTransactionCoordinator(),
+      systemTableCache: {
+        get() {
+          return null;
+        },
+      },
+      cdcIntegrationService: {
+        async waitForCacheUpdate() {},
+      },
+      controlPlaneReadinessService: {
+        getNodeReadinessSync() {
+          return {
+            nodeId: 'node-local',
+            lifecycleState: 'warming',
+            nodeEvidence: {
+              connectionState: 'ready',
+            },
+            capacity: {},
+            dimensions: {
+              controlPlaneWritable: false,
+              metadataPublicationHealthy: false,
+              repairEligible: true,
+            },
+            reasons: [
+              {code: 'control_plane_write_unhealthy'},
+              {code: 'metadata_publication_degraded'},
+            ],
+          };
+        },
+      },
+      tablePolicyService: {
+        async getPolicyForPartition() {
+          return {minReplicaCount: 1};
+        },
+      },
+      messageRouter: {
+        async deliver() {
+          return {acknowledged: true, status: 'completed'};
+        },
+      },
+      sqlQueryEngine: {
+        async executeQuery() {
+          executeQueryCalls += 1;
+          return {success: true, rows: [], changes: 1};
+        },
+      },
+      ...createStorageOwners(),
+      enableTimeouts: false,
+    });
+    coordinator.initialize();
+
+    try {
+      try {
+        await coordinator.createOperation({
+          type: 'ADD',
+          partitionId: 'partition-1',
+          entityType: 'partition',
+          entityId: 'partition-1',
+          nodeId: 'node-remote',
+          controlPlaneMutationWorkClass: 'background',
+        });
+        t.fail('background creation should be deferred while local publication is unhealthy');
+      } catch (error) {
+        t.equal(
+          error?.rebalanceSkipReason,
+          REBALANCER_SKIP_REASON.LOCAL_MUTATION_UNHEALTHY,
+          'background creation should expose a typed rebalance skip reason',
+        );
+        t.equal(
+          error?.admissionResult?.decisionType,
+          'deferred',
+          'background creation should defer rather than fail open',
+        );
+        t.same(
+          error?.admissionResult?.blockingReasons?.map((entry) => entry?.code),
+          [
+            'control_plane_write_unhealthy',
+            'metadata_publication_degraded',
+          ],
+          'defer diagnostics should carry readiness reason codes',
+        );
+      }
+      t.equal(
+        executeQueryCalls,
+        0,
+        'background mutation must not hit SQL when local publication is unhealthy',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  });
+
+test('RebalanceCoordinator createOperation enforces concurrent add budget when requested',
+  async (t) => {
+    const coordinator = new RebalanceCoordinator({
+      nodeId: 'node-local',
+      transactionCoordinator: createTransactionCoordinator(),
+      systemTableCache: {
+        get() {
+          return null;
+        },
+      },
+      cdcIntegrationService: {
+        async waitForCacheUpdate() {},
+      },
+      tablePolicyService: {
+        async getPolicyForPartition() {
+          return {minReplicaCount: 1};
+        },
+      },
+      messageRouter: {
+        async deliver() {
+          return {acknowledged: true, status: 'completed'};
+        },
+      },
+      sqlQueryEngine: {
+        async executeQuery() {
+          return {success: true, rows: [], changes: 1};
+        },
+      },
+      ...createStorageOwners(),
+      enableTimeouts: false,
+    });
+    coordinator.initialize();
+    coordinator.canStartAddOperation = async () => false;
+
+    try {
+      try {
+        await coordinator.createOperation({
+          type: 'ADD',
+          partitionId: 'partition-1',
+          entityType: 'partition',
+          entityId: 'partition-1',
+          nodeId: 'node-remote',
+          enforceConcurrentOperationBudget: true,
+        });
+        t.fail('requested create should fail with a typed budget error');
+      } catch (error) {
+        t.equal(
+          error?.rebalanceSkipReason,
+          REBALANCER_SKIP_REASON.BUDGET_EXCEEDED,
+          'requested create should fail with a typed budget error',
+        );
+      }
+    } finally {
+      await coordinator.shutdown();
+    }
+  });
+
+test('RebalanceCoordinator limits critical partitions to one add-like operation in flight',
+  async (t) => {
+    const coordinator = new RebalanceCoordinator({
+      nodeId: 'node-local',
+      transactionCoordinator: createTransactionCoordinator(),
+      systemTableCache: {
+        get() {
+          return null;
+        },
+      },
+      cdcIntegrationService: {
+        async waitForCacheUpdate() {},
+      },
+      tablePolicyService: {
+        async getPolicyForPartition() {
+          return {minReplicaCount: 1};
+        },
+      },
+      messageRouter: {
+        async deliver() {
+          return {acknowledged: true, status: 'completed'};
+        },
+      },
+      sqlQueryEngine: {
+        async executeQuery() {
+          return {success: true, rows: [], changes: 1};
+        },
+      },
+      ...createStorageOwners(),
+      enableTimeouts: false,
+    });
+    coordinator.initialize();
+    coordinator.getOperationsByEntity = async () => ([
+      {
+        operationId: 'op-critical-existing',
+        type: 'REPLACE',
+        workflowStep: WORKFLOW_STEP.CREATING,
+        status: 'creating',
+      },
+    ]);
+
+    try {
+      try {
+        await coordinator.createOperation({
+          type: 'REPLACE',
+          partitionId: 'config-p1',
+          entityType: 'partition',
+          entityId: 'config-p1',
+          nodeId: 'node-remote',
+          enforceConcurrentOperationBudget: true,
+        });
+        t.fail('critical partition should reject a second add-like operation');
+      } catch (error) {
+        t.equal(
+          error?.rebalanceSkipReason,
+          REBALANCER_SKIP_REASON.BUDGET_EXCEEDED,
+          'critical partition create should fail with a typed budget error',
+        );
+        t.equal(
+          error?.conflictingOperationId,
+          'op-critical-existing',
+          'error should expose the conflicting in-flight operation',
+        );
+      }
+    } finally {
+      await coordinator.shutdown();
+    }
+  });
+
 test('RebalanceCoordinator executeOperation uses injected workflow coordinator single-flight',
   async (t) => {
     const workflowCoordinator = createWorkflowCoordinatorSpy();

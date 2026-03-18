@@ -21,6 +21,14 @@ const MESSAGE_GROUP_SERVICE_ACTIVATION_ERROR = Object.freeze({
     `Message-group service activation requires replica handler ` +
     `registration for ${replicaId}`,
 });
+const TRANSIENT_ACTIVATION_ERROR_FRAGMENTS = Object.freeze([
+  'Distributed operation failed due to participant failures',
+  'Outbound queue for node',
+  'No connection to node',
+  'Connection to node',
+  'Message timeout',
+  'closed',
+]);
 
 function resolveReplicaUnifiedAddress(nodeId, replicaId, service) {
   if (service &&
@@ -35,6 +43,17 @@ function resolveReplicaUnifiedAddress(nodeId, replicaId, service) {
     nodeId,
     ENTITY_TYPE.MESSAGE_GROUP,
     replicaId,
+  );
+}
+
+function isTransientActivationError(error) {
+  if (error?.deferRetry === true ||
+      error?.code === 'CONTROL_PLANE_PRESSURE_DEGRADED') {
+    return true;
+  }
+  const message = error?.message || '';
+  return TRANSIENT_ACTIVATION_ERROR_FRAGMENTS.some((fragment) =>
+    message.includes(fragment),
   );
 }
 
@@ -97,14 +116,30 @@ async function activateMessageGroupServiceRows(options = {}) {
       );
     }
 
-    await owner.activateReplica({
-      groupId,
-      replicaId,
-      nodeId: options.nodeId,
-      service,
-      extraFields: resolveExtraFields(replicaId, service),
-    });
-    activatedCount += 1;
+    try {
+      await owner.activateReplica({
+        groupId,
+        replicaId,
+        nodeId: options.nodeId,
+        service,
+        extraFields: resolveExtraFields(replicaId, service),
+      });
+      activatedCount += 1;
+    } catch (error) {
+      if (options.deferTransientFailures === true &&
+          isTransientActivationError(error)) {
+        if (typeof options.onDeferredActivation === TYPEOF.FUNCTION) {
+          await Promise.resolve(options.onDeferredActivation({
+            groupId,
+            replicaId,
+            nodeId: options.nodeId,
+            error,
+          }));
+        }
+        continue;
+      }
+      throw error;
+    }
   }
 
   return activatedCount;

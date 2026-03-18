@@ -14,7 +14,7 @@ const PARTITION_SERVICE_DEFAULT = Object.freeze({
   KEY_RANGE_START: null,
   KEY_RANGE_END: null,
   CDC_BUFFER_REPLAY_INITIAL_DELAY_MS: 50,
-  CDC_BUFFER_REPLAY_MAX_DELAY_MS: TIME_MS.SECOND,
+  CDC_BUFFER_REPLAY_MAX_DELAY_MS: TIME_MS.SECOND * NUM.TEN,
   // Learner phase: new replicas joining existing groups start as non-voting learners
   // They receive log entries but don't vote until caught up
   // This prevents new replicas from disrupting existing leadership

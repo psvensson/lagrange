@@ -54,3 +54,40 @@ test('activateMessageGroupServiceRows requires per-replica handler registration'
       'activation should fail closed until every replica handler is routable',
     );
   });
+
+test('activateMessageGroupServiceRows can defer transient writer failures',
+  async (t) => {
+    const deferred = [];
+
+    await t.resolves(
+      activateMessageGroupServiceRows({
+        nodeId: 'node-a',
+        systemTableWriter: {
+          updateSystemTableRow: async () => {
+            throw new Error(
+              'Distributed operation failed due to participant failures',
+            );
+          },
+          upsertSystemTableRow: async () => {
+            throw new Error(
+              'Distributed operation failed due to participant failures',
+            );
+          },
+        },
+        messageRouter: {
+          isRegistered: () => true,
+        },
+        handlerRegistered: true,
+        endpointsPublished: true,
+        deferTransientFailures: true,
+        onDeferredActivation: (details) => deferred.push(details),
+        messageGroupServices: new Map([
+          ['mg-1-r1', {groupId: 'mg-1'}],
+        ]),
+      }),
+      'join-time activation should not fail hard on transient system-table pressure when deferral is enabled',
+    );
+
+    t.equal(deferred.length, 1, 'transient activation failure should be surfaced via deferred callback');
+    t.equal(deferred[0]?.replicaId, 'mg-1-r1', 'callback should identify the deferred replica');
+  });

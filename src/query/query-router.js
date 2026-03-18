@@ -258,6 +258,9 @@ class QueryRouter {
       localGroupId,
       preferSameLatencyGroup,
     );
+    const canonicalLeaderNodeId = this.resolveCanonicalPartitionLeaderNodeId(
+      partitionId,
+    );
     const candidates = [];
     const seen = new Set();
 
@@ -283,6 +286,12 @@ class QueryRouter {
     };
 
     if (preferLeader) {
+      if (typeof canonicalLeaderNodeId === 'string' &&
+          canonicalLeaderNodeId.length > NUM.ZERO) {
+        orderedServices
+          .filter((service) => service?.node_id === canonicalLeaderNodeId)
+          .forEach(addService);
+      }
       // Add leaders first
       const leaders = orderedServices.filter((s) => s.raft_role === RAFT_ROLE.LEADER);
       leaders.forEach(addService);
@@ -306,6 +315,39 @@ class QueryRouter {
     }
     const nodeRow = this.systemCache.get(TABLES.NODES, nodeId);
     return nodeRow?.[COLUMN.LATENCY_GROUP_ID] || null;
+  }
+
+  /**
+   * Resolve canonical leader node metadata for one partition.
+   * Prefer the owner-row leader_node_id when present and only fall back to
+   * services.raft_role when the owner row has not converged yet.
+   * @param {string} partitionId
+   * @return {string|null}
+   * @private
+   */
+  resolveCanonicalPartitionLeaderNodeId(partitionId) {
+    if (typeof partitionId !== 'string' || partitionId.length === NUM.ZERO) {
+      return null;
+    }
+
+    let partitionRow = null;
+    if (typeof this.systemCache?.get === 'function') {
+      partitionRow = this.systemCache.get(TABLES.PARTITIONS, partitionId) || null;
+    }
+    if (!partitionRow && typeof this.systemCache?.filter === 'function') {
+      partitionRow = (this.systemCache.filter(TABLES.PARTITIONS, (partition) => {
+        return partition?.[COLUMN.PARTITION_ID] === partitionId;
+      }) || [])[NUM.ZERO] || null;
+    }
+
+    const leaderNodeId =
+      partitionRow?.[COLUMN.LEADER_NODE_ID] ||
+      partitionRow?.leader_node_id ||
+      partitionRow?.leaderNodeId ||
+      null;
+    return typeof leaderNodeId === 'string' && leaderNodeId.length > NUM.ZERO ?
+      leaderNodeId :
+      null;
   }
 
   /**

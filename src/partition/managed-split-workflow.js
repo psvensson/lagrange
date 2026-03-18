@@ -4,6 +4,15 @@ import {
   QUERY_LOG_MSG,
 } from '../query/query-constants.js';
 import {
+  PRESSURE_GOVERNOR_ACTION,
+  PRESSURE_WORK_CLASS,
+  PressureGovernor,
+} from '../control-plane/pressure-governor.js';
+import {
+  CONTROL_PLANE_MUTATION_OPERATION,
+  ControlPlaneSystemTableGateway,
+} from '../control-plane/control-plane-system-table-gateway.js';
+import {
   CONTROL_PLANE_READINESS_REASON,
 } from '../control-plane/control-plane-readiness-constants.js';
 import {
@@ -69,6 +78,8 @@ class ManagedSplitWorkflow {
     this.storageAdmissionService = options.storageAdmissionService || null;
     this.createExecutionTimeoutBudget =
       options.createExecutionTimeoutBudget || null;
+    this.messageRouter = options.messageRouter || null;
+    this.pressureGovernor = options.pressureGovernor || null;
     this.estimateSplitAdmissionBytes =
       options.estimateSplitAdmissionBytes ||
       ((partitionInfo) => this.defaultEstimateSplitAdmissionBytes(partitionInfo));
@@ -126,17 +137,100 @@ class ManagedSplitWorkflow {
   /**
    * Execute one managed partition split.
    * @param {string} partitionId - Source partition ID.
+   * @param {Object} [executionOptions={}] - Optional admission metadata.
    * @return {Promise<Object>} Split orchestration result.
    */
-  execute(partitionId) {
+  execute(partitionId, executionOptions = {}) {
     if (!partitionId) {
       throw new Error(QUERY_ERROR_MSG.TABLE_SPLIT_PARTITION_NOT_FOUND);
     }
 
     return this.splitOperationLane.run(
-      {partitionId},
-      async () => this.executeInternal(partitionId),
+      {partitionId, ...executionOptions},
+      async (laneExecution) => this.executeInternal(partitionId, {
+        ...executionOptions,
+        timeoutBudget:
+          laneExecution?.timeoutBudget ||
+          executionOptions.timeoutBudget ||
+          null,
+      }),
     );
+  }
+
+  /**
+   * Resolve the shared pressure governor for this node.
+   * @return {PressureGovernor}
+   * @private
+   */
+  getPressureGovernor() {
+    if (this.pressureGovernor) {
+      this.pressureGovernor.configure?.({
+        messageRouter: this.messageRouter,
+      });
+      return this.pressureGovernor;
+    }
+    this.pressureGovernor = PressureGovernor.getShared({
+      nodeId: this.nodeId,
+      messageRouter: this.messageRouter,
+    });
+    return this.pressureGovernor;
+  }
+
+  /**
+   * Evaluate node-local pressure for split execution.
+   * @param {Object} [executionContext={}]
+   * @return {Object}
+   * @private
+   */
+  evaluatePressure(executionContext = {}) {
+    return this.getPressureGovernor().evaluate({
+      workClass: executionContext.workClass || PRESSURE_WORK_CLASS.BACKGROUND,
+      resourceKeys: [
+        'partition:split:workflow',
+        'control-plane:write',
+      ],
+      allowDegrade: false,
+      allowDefer: executionContext.allowPressureDefer !== false,
+      retryAfterMs: executionContext.pressureRetryAfterMs,
+    });
+  }
+
+  /**
+   * Build a typed split deferral without creating new durable control-plane
+   * writes while the local node is already hot.
+   * @param {Object} options
+   * @return {Object}
+   * @private
+   */
+  buildPressureDeferredResult(options = {}) {
+    const retryAfterMs = Number.isFinite(options?.pressureDecision?.retryAfterMs) ?
+      options.pressureDecision.retryAfterMs :
+      DEFAULT_RETRY_BASE_DELAY_MS;
+    const nextAttemptAt = new Date(this.now() + retryAfterMs).toISOString();
+    return {
+      success: false,
+      partitionId: options.partitionId,
+      tableId: options.tableId || null,
+      tableName: options.tableName || null,
+      workflowId: options.workflowId || null,
+      targetVersion: options.targetVersion || null,
+      state: PARTITION_TRANSITION_STATE.DEFERRED,
+      error: 'control_plane_backpressure',
+      retryScheduled: true,
+      nextAttemptAt,
+      retry: {
+        attemptCount:
+          options.retryMetadata?.attemptCount || 1,
+        lastAttemptAt:
+          options.retryMetadata?.lastAttemptAt ||
+          new Date(this.now()).toISOString(),
+        nextAttemptAt,
+        backoffMs: retryAfterMs,
+        scheduledState: PARTITION_TRANSITION_STATE.DEFERRED,
+      },
+      pressureAction: options?.pressureDecision?.action || null,
+      pressureSummary: options?.pressureDecision?.summary || null,
+    };
   }
 
   /**
@@ -261,13 +355,6 @@ class ManagedSplitWorkflow {
       throw new Error(QUERY_ERROR_MSG.TABLE_SPLIT_PRIMARY_KEY_REQUIRED);
     }
 
-    this.logger.info(QUERY_LOG_MSG.TABLE_SPLIT_START, {
-      partitionId,
-      tableId,
-      tableName,
-      primaryKeyColumn,
-    });
-
     const replicaCount = Number.isInteger(partitionInfo.replica_count) &&
       partitionInfo.replica_count > 0 ?
       partitionInfo.replica_count :
@@ -313,6 +400,22 @@ class ManagedSplitWorkflow {
         retry: scheduledRetry,
       };
     }
+    const pressureDecision = this.evaluatePressure(executionContext);
+    if (pressureDecision.action === PRESSURE_GOVERNOR_ACTION.DEFER) {
+      return this.buildPressureDeferredResult({
+        partitionId,
+        tableId,
+        tableName,
+        retryMetadata,
+        pressureDecision,
+      });
+    }
+    this.logger.info(QUERY_LOG_MSG.TABLE_SPLIT_START, {
+      partitionId,
+      tableId,
+      tableName,
+      primaryKeyColumn,
+    });
     const now = this.now();
     const executionTimeoutBudget = executionContext.timeoutBudget ||
       (typeof this.createExecutionTimeoutBudget === 'function' ?
@@ -2059,19 +2162,19 @@ class ManagedSplitWorkflow {
       }
     }
 
-    await cdcIntegrationService.updateSystemTableRow(
-      TABLES.TABLES,
-      {table_id: workflow.tableId},
-      updatePayload,
-      {
-        expectedCacheFields: {
-          pending_partition_version:
-            updatePayload.pending_partition_version,
-          partition_transition_state: workflow.status,
-          partition_transition_metadata: serializedMetadata,
-        },
+    await this.getControlPlaneSystemTableGateway().submitMutation({
+      operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+      tableName: TABLES.TABLES,
+      whereClause: {table_id: workflow.tableId},
+      data: updatePayload,
+    }, {
+      expectedCacheFields: {
+        pending_partition_version:
+          updatePayload.pending_partition_version,
+        partition_transition_state: workflow.status,
+        partition_transition_metadata: serializedMetadata,
       },
-    );
+    });
   }
 
   /**
@@ -2282,15 +2385,14 @@ class ManagedSplitWorkflow {
    */
   async insertPartitionMetadata(partitionMetadata) {
     const cdcIntegrationService = this.getCDCIntegrationService();
-    if (!cdcIntegrationService ||
-        typeof cdcIntegrationService.insertSystemTableRow !== 'function') {
+    if (!cdcIntegrationService && !this.controlPlaneSystemTableGateway) {
       return;
     }
-    await cdcIntegrationService.insertSystemTableRow(
-      TABLES.PARTITIONS,
-      partitionMetadata,
-      {skipCacheWait: true},
-    );
+    await this.getControlPlaneSystemTableGateway().submitMutation({
+      operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
+      tableName: TABLES.PARTITIONS,
+      row: partitionMetadata,
+    }, {skipCacheWait: true});
   }
 
   /**
@@ -2345,6 +2447,18 @@ class ManagedSplitWorkflow {
    */
   createWorkflowId(tableId, partitionId, targetVersion) {
     return `split-${tableId}-${partitionId}-v${targetVersion}`;
+  }
+
+  getControlPlaneSystemTableGateway() {
+    if (this.controlPlaneSystemTableGateway) {
+      return this.controlPlaneSystemTableGateway;
+    }
+    this.controlPlaneSystemTableGateway = new ControlPlaneSystemTableGateway({
+      nodeId: this.nodeId,
+      cdcIntegrationService: this.getCDCIntegrationService(),
+      messageRouter: this.messageRouter,
+    });
+    return this.controlPlaneSystemTableGateway;
   }
 }
 

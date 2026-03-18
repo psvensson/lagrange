@@ -77,29 +77,48 @@ class ControlPlaneKernelIngress {
   resolveTargetCandidates(options = {}) {
     this.pruneExpiredState();
     const targets = [];
+    const fallbackTargets = [];
     const allowBootstrapHints = options.allowBootstrapHints !== false;
     const allowSelfTarget = options.allowSelfTarget === true;
+    const requiredTables = Array.isArray(options.requiredTables) ?
+      options.requiredTables :
+      [];
+    const localTargetMode =
+      options.localTargetMode === 'any_replica' ?
+        'any_replica' :
+        'leader_only';
     const assignment = this.getBootstrapResponse()?.messageGroupAssignment ||
       null;
+    const pushOrderedTarget = (address) => {
+      if (typeof address !== TYPEOF.STRING || address.length === NUM.ZERO) {
+        return;
+      }
+      if (this.isTargetReachable(address)) {
+        pushUniqueAddress(targets, address);
+        return;
+      }
+      pushUniqueAddress(fallbackTargets, address);
+    };
 
     const confirmedIngressLease = this.getConfirmedIngressLease();
-    if (confirmedIngressLease &&
-        this.isTargetReachable(confirmedIngressLease.targetAddress)) {
-      pushUniqueAddress(targets, confirmedIngressLease.targetAddress);
+    if (confirmedIngressLease) {
+      pushOrderedTarget(confirmedIngressLease.targetAddress);
     }
     if (allowSelfTarget) {
-      pushUniqueAddress(
-        targets,
-        this.resolveLocalTargetAddress(assignment),
+      pushOrderedTarget(
+        this.resolveLocalTargetAddress(assignment, {
+          localTargetMode,
+          requiredTables,
+        }),
       );
     }
     if (allowBootstrapHints) {
       for (const address of this.resolveBootstrapTargetAddresses(assignment)) {
-        pushUniqueAddress(targets, address);
+        pushOrderedTarget(address);
       }
     }
 
-    return targets;
+    return [...targets, ...fallbackTargets];
   }
 
   getConfirmedIngressLease() {
@@ -144,14 +163,21 @@ class ControlPlaneKernelIngress {
     }
   }
 
-  resolveLocalTargetAddress(assignment = null) {
+  resolveLocalTargetAddress(assignment = null, options = {}) {
     const services = this.getMessageGroupServices();
     if (!(services instanceof Map) || services.size === NUM.ZERO) {
       return null;
     }
+    const requiredTables = Array.isArray(options.requiredTables) ?
+      options.requiredTables :
+      [];
+    const localTargetMode =
+      options.localTargetMode === 'any_replica' ?
+        'any_replica' :
+        'leader_only';
 
     const groupId = assignment?.groupId || null;
-    let preferred = null;
+    let replicaFallback = null;
     for (const service of services.values()) {
       if (!service?.unifiedAddress) {
         continue;
@@ -162,17 +188,25 @@ class ControlPlaneKernelIngress {
 
       const isLeader = typeof service.isLeaderReplica === TYPEOF.FUNCTION &&
         service.isLeaderReplica() === true;
+      const ingressReady =
+        typeof service.isMetadataIngressReady === TYPEOF.FUNCTION &&
+        service.isMetadataIngressReady({requiredTables});
       if (isLeader) {
+        if (!ingressReady) {
+          continue;
+        }
         return this.isTargetSuppressed(service.unifiedAddress) ?
           null :
           service.unifiedAddress;
       }
-      if (!preferred) {
-        preferred = service.unifiedAddress;
+      if (localTargetMode === 'any_replica' &&
+          ingressReady &&
+          replicaFallback === null &&
+          !this.isTargetSuppressed(service.unifiedAddress)) {
+        replicaFallback = service.unifiedAddress;
       }
     }
-
-    return this.isTargetSuppressed(preferred) ? null : preferred;
+    return replicaFallback;
   }
 
   resolveBootstrapTargetAddresses(assignment = null) {
@@ -193,6 +227,8 @@ class ControlPlaneKernelIngress {
     ];
     const seedTargets = [];
     const remoteTargets = [];
+    const seedFallbackTargets = [];
+    const remoteFallbackTargets = [];
 
     for (const address of hintCandidates) {
       const parsed = parseMessageGroupAddress(address);
@@ -208,17 +244,26 @@ class ControlPlaneKernelIngress {
       if (replicaToMove && parsed.replicaId === replicaToMove) {
         continue;
       }
-      if (!this.isConnectedNode(parsed.nodeId)) {
-        continue;
-      }
+      const reachable = this.isConnectedNode(parsed.nodeId);
       if (seedNodeId && parsed.nodeId === seedNodeId) {
-        pushUniqueAddress(seedTargets, address);
+        pushUniqueAddress(
+          reachable ? seedTargets : seedFallbackTargets,
+          address,
+        );
         continue;
       }
-      pushUniqueAddress(remoteTargets, address);
+      pushUniqueAddress(
+        reachable ? remoteTargets : remoteFallbackTargets,
+        address,
+      );
     }
 
-    return [...seedTargets, ...remoteTargets];
+    return [
+      ...seedTargets,
+      ...remoteTargets,
+      ...seedFallbackTargets,
+      ...remoteFallbackTargets,
+    ];
   }
 
   isConnectedNode(nodeId) {

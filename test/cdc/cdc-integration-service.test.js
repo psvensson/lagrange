@@ -263,6 +263,148 @@ test('CDCIntegrationService - insertSystemTableRow skips cache wait for logs', a
   t.end();
 });
 
+test('CDCIntegrationService - coalesces identical in-flight upserts into ' +
+  'one routed write', async (t) => {
+  let releaseWrite = null;
+  const mockSqlEngine = {
+    executedQueries: [],
+    async executeQuery(sql, params = [], options = {}) {
+      this.executedQueries.push({sql, params, options});
+      await new Promise((resolve) => {
+        releaseWrite = resolve;
+      });
+      return {
+        success: true,
+        affectedRows: 1,
+      };
+    },
+  };
+  const service = new CDCIntegrationService({
+    nodeId: 'test-node',
+    sqlQueryEngine: mockSqlEngine,
+  });
+  service.initialize();
+
+  const row = {
+    node_id: 'node-1',
+    node_address: 'localhost:8080',
+    status: 'active',
+    last_heartbeat: 1000,
+    created_at: 1000,
+    updated_at: 1000,
+  };
+
+  const firstWrite = service.upsertSystemTableRow(
+    SYSTEM_TABLE_NAME.NODES,
+    row,
+    {
+      skipCacheWait: true,
+      workClass: 'background',
+      allowPressureDefer: true,
+      deliveryPriority: 'background',
+    },
+  );
+  const secondWrite = service.upsertSystemTableRow(
+    SYSTEM_TABLE_NAME.NODES,
+    {...row},
+    {
+      skipCacheWait: true,
+      workClass: 'background',
+      allowPressureDefer: true,
+      deliveryPriority: 'background',
+    },
+  );
+
+  await new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
+
+  t.equal(
+    mockSqlEngine.executedQueries.length,
+    1,
+    'identical concurrent upserts should collapse into one routed mutation',
+  );
+  t.equal(
+    mockSqlEngine.executedQueries[0]?.options?.deliveryPriority,
+    'background',
+    'coalesced writes should preserve routed delivery metadata',
+  );
+  t.equal(
+    typeof releaseWrite,
+    'function',
+    'the routed write should be armed before releasing it',
+  );
+
+  releaseWrite();
+  const [firstResult, secondResult] = await Promise.all([
+    firstWrite,
+    secondWrite,
+  ]);
+
+  t.same(firstResult, secondResult, 'coalesced upserts should share one result');
+  t.end();
+});
+
+test('CDCIntegrationService - defers routed writes under pressure when allowed',
+  async (t) => {
+    let sqlCalls = 0;
+    const service = new CDCIntegrationService({
+      nodeId: 'pressure-node',
+      messageRouter: {
+        getOutboundPressureSummary() {
+          return {
+            backpressured: true,
+            saturatedNodeCount: 1,
+            totalPending: 64,
+            maxPendingUtilization: 1,
+          };
+        },
+      },
+      sqlQueryEngine: {
+        async executeQuery() {
+          sqlCalls++;
+          return {
+            success: true,
+            affectedRows: 1,
+          };
+        },
+      },
+    });
+    service.initialize();
+
+    const error = await t.rejects(
+      service.updateSystemTableRow(
+        SYSTEM_TABLE_NAME.SERVICES,
+        {service_id: 'svc-1'},
+        {status: 'active', updated_at: 1234},
+        {
+          skipCacheWait: true,
+          workClass: 'background',
+          allowPressureDefer: true,
+          deliveryPriority: 'background',
+        },
+      ),
+      'deferable routed writes should fail closed before hitting SQL',
+    );
+    t.equal(
+      error?.code,
+      'CONTROL_PLANE_PRESSURE_DEGRADED',
+      'pressure admission should surface the typed error code',
+    );
+    t.equal(
+      error?.deferRetry,
+      true,
+      'pressure admission should mark the error as deferable',
+    );
+    t.equal(
+      error?.retryAfterMs,
+      250,
+      'pressure admission should preserve retry-after metadata',
+    );
+
+    t.equal(sqlCalls, 0, 'deferred routed writes should not hit routed SQL');
+  });
+
 test('CDCIntegrationService - insertSystemTableRow waits for propagated tables', async (t) => {
   const mockSqlEngine = createMockSqlQueryEngine();
   const {cache, state} = createCacheWaitProbe();
@@ -1012,6 +1154,11 @@ test('CDCIntegrationService - routed system-table writes default to repairEligib
       mockSqlEngine.executedQueries[0]?.options?.routingReadinessDimension,
       CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
       'internal system-table writes should route through repairEligible readiness by default',
+    );
+    t.equal(
+      mockSqlEngine.executedQueries[0]?.options?.deliveryPriority,
+      'critical',
+      'internal system-table writes should claim the critical delivery lane by default',
     );
   },
 );
@@ -2717,6 +2864,34 @@ test('CDCIntegrationService - executeSQL routes to SQL engine in normal mode',
     t.ok(
       mockSqlEngine.executedQueries[0].sql.includes('INSERT INTO'),
       'should execute INSERT query',
+    );
+    t.end();
+  });
+
+test('CDCIntegrationService - canWriteSystemTableLocally detects local leader ownership',
+  async (t) => {
+    const service = new CDCIntegrationService({
+      nodeId: 'test-node',
+      partitionServicesProvider: new Map([
+        ['services-p1-r1', {
+          partitionId: 'services-p1',
+          initialized: true,
+          isLeader: true,
+          executeQuery: async () => ({success: true, affectedRows: 1}),
+        }],
+      ]),
+    });
+    service.initialize();
+
+    t.equal(
+      service.canWriteSystemTableLocally(SYSTEM_TABLE_NAME.SERVICES),
+      true,
+      'should treat a local services leader as a writable owner',
+    );
+    t.equal(
+      service.canWriteSystemTableLocally('not_a_system_table'),
+      false,
+      'should reject unknown tables',
     );
     t.end();
   });

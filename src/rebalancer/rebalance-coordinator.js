@@ -24,6 +24,16 @@ import {
 import {
   ControlPlaneSystemTableGateway,
 } from '../control-plane/control-plane-system-table-gateway.js';
+import {
+  CONTROL_PLANE_MUTATION_WORK_CLASS,
+  getLocalControlPlaneMutationReadinessBlocker,
+  normalizeControlPlaneMutationWorkClass,
+  requiresStableLocalControlPlaneMutationReadiness,
+} from '../control-plane/control-plane-mutation-readiness.js';
+import {
+  PRESSURE_WORK_CLASS,
+  PressureGovernor,
+} from '../control-plane/pressure-governor.js';
 import {DurableWorkflowCoordinator} from '../workflow/durable-workflow-coordinator.js';
 import {OperationLane} from '../workflow/operation-lane.js';
 import {
@@ -41,12 +51,14 @@ import {
   createTopLevelOperationBudget,
 } from '../control-plane/timeout-budget.js';
 import {
+  COORDINATOR_OWNED_OPERATION_TYPES_SQL_CLAUSE,
   OPERATION_METADATA_KEY,
   ReplicaStatus,
   TERMINAL_STATUSES,
   WORKFLOW_STEP_TO_STATUS,
   OperationType,
   isTerminalStep,
+  isCoordinatorOwnedOperationType,
   createOperation as createOperationRecord,
 } from './replica-status.js';
 import {
@@ -73,6 +85,7 @@ import {
 } from './storage-capacity-constants.js';
 import {
   STORAGE_ADMISSION_DECISION_TYPE,
+  STORAGE_ADMISSION_REASON,
 } from './storage-admission-constants.js';
 import {
   READ_MODEL_DIVERGENCE_TYPE,
@@ -103,6 +116,7 @@ const SQL = Object.freeze({
   SELECT_OPERATION_BY_ID: 'SELECT * FROM replica_operations WHERE operation_id = ?',
   SELECT_INCOMPLETE_OPERATIONS: `SELECT * FROM replica_operations
     WHERE source_node_id = ?
+    AND type IN (${COORDINATOR_OWNED_OPERATION_TYPES_SQL_CLAUSE})
     AND (
       workflow_step IN (?, ?, ?, ?, ?)
       OR (workflow_step = ? AND type = ?)
@@ -181,9 +195,14 @@ const FAILURE_LOG_LEVEL = Object.freeze({
 });
 const OPERATION_SINGLE_FLIGHT_SCOPE = Object.freeze({
   CREATE: 'create',
+  CREATE_BUDGET: 'create-budget',
   OPERATION: 'operation',
 });
 const OPERATION_SINGLE_FLIGHT_KEY_SEPARATOR = ':';
+const CONCURRENT_CREATE_BUDGET_SCOPE = Object.freeze({
+  ADD: 'add',
+  REMOVE: 'remove',
+});
 const CONTROL_PLANE_QUERY_OPTIONS = Object.freeze({
   ...buildControlPlaneQueryOptions(),
   routingReadinessDimension:
@@ -247,6 +266,7 @@ class RebalanceCoordinator extends EventEmitter {
         nodeId: this.nodeId,
         sqlQueryEngine: options.sqlQueryEngine || null,
         cdcIntegrationService: this.cdcIntegrationService,
+        messageRouter: options.messageRouter || null,
       });
     this.messageRouter = assertCritical(
       options.messageRouter,
@@ -269,6 +289,8 @@ class RebalanceCoordinator extends EventEmitter {
       options.storageAdmissionService || null;
     this.cdcGroupPropagationService =
       options.cdcGroupPropagationService || null;
+    this.bootstrapReadinessState =
+      options.bootstrapReadinessState || null;
     this.controlPlaneReadinessService =
       options.controlPlaneReadinessService ||
       new ControlPlaneReadinessService({
@@ -478,7 +500,10 @@ class RebalanceCoordinator extends EventEmitter {
       return null;
     }
 
-    return this.rowToOperation(result.rows[NUM.ZERO]);
+    const operation = this.rowToOperation(result.rows[NUM.ZERO]);
+    return isCoordinatorOwnedOperationType(operation?.type) ?
+      operation :
+      null;
   }
 
   /**
@@ -490,7 +515,10 @@ class RebalanceCoordinator extends EventEmitter {
   async queryIncompleteOperations() {
     const mapAndSortOperations = (rows) => rows
       .map((row) => this.rowToOperation(row))
-      .filter((operation) => !this.isOperationTerminal(operation))
+      .filter((operation) =>
+        isCoordinatorOwnedOperationType(operation?.type) &&
+        !this.isOperationTerminal(operation),
+      )
       .sort((left, right) => {
         const leftUpdatedAt = Number(left?.updatedAt) || NUM.ZERO;
         const rightUpdatedAt = Number(right?.updatedAt) || NUM.ZERO;
@@ -506,6 +534,9 @@ class RebalanceCoordinator extends EventEmitter {
       if (!row || row.source_node_id !== this.nodeId) {
         return false;
       }
+      if (!isCoordinatorOwnedOperationType(row.type)) {
+        return false;
+      }
 
       return row.workflow_step === WORKFLOW_STEP.PENDING ||
         row.workflow_step === WORKFLOW_STEP.SENDING ||
@@ -516,10 +547,7 @@ class RebalanceCoordinator extends EventEmitter {
           row.type === OperationType.REPLACE);
     });
     if (cachedRows !== null) {
-      const cachedOperations = mapAndSortOperations(cachedRows);
-      if (cachedOperations.length > NUM.ZERO) {
-        return cachedOperations;
-      }
+      return mapAndSortOperations(cachedRows);
     }
 
     const queryStartedAtMs = Date.now();
@@ -1324,6 +1352,22 @@ class RebalanceCoordinator extends EventEmitter {
   }
 
   /**
+   * Build the shared single-flight key for concurrent create-budget checks.
+   * Distinct create intents still dedupe on their per-intent key, but all
+   * add-like or remove-like creates serialize through one budget gate so the
+   * coordinator can enforce maxConcurrentAdds/maxConcurrentRemoves atomically.
+   * @param {string} scope
+   * @return {string}
+   * @private
+   */
+  getCreateBudgetSingleFlightKey(scope) {
+    return this.buildOperationSingleFlightKey(
+      OPERATION_SINGLE_FLIGHT_SCOPE.CREATE_BUDGET,
+      scope,
+    );
+  }
+
+  /**
    * Build execute-operation single-flight key.
    * @param {string} operationId - Operation ID.
    * @return {string}
@@ -1377,6 +1421,9 @@ class RebalanceCoordinator extends EventEmitter {
     }
 
     if (operation.workflowStep !== WORKFLOW_STEP.PENDING) {
+      return null;
+    }
+    if (!isCoordinatorOwnedOperationType(operation.type)) {
       return null;
     }
 
@@ -1435,6 +1482,104 @@ class RebalanceCoordinator extends EventEmitter {
     );
   }
 
+  /**
+   * Normalize one topology mutation work class for coordinator callers.
+   * Background work is deferable; interactive/critical work keeps its current
+   * caller-visible behavior.
+   *
+   * @param {Object} move
+   * @return {string}
+   * @private
+   */
+  normalizeControlPlaneMutationWorkClass(move) {
+    return normalizeControlPlaneMutationWorkClass(
+      move?.controlPlaneMutationWorkClass,
+      CONTROL_PLANE_MUTATION_WORK_CLASS.INTERACTIVE,
+    );
+  }
+
+  /**
+   * Build an admission result for local control-plane mutation unhealthiness.
+   * @param {Object} blocker
+   * @return {Object}
+   * @private
+   */
+  buildLocalControlPlaneMutationAdmissionResult(blocker) {
+    const reasonCodes = Array.isArray(blocker?.reasonCodes) &&
+        blocker.reasonCodes.length > NUM.ZERO ?
+      blocker.reasonCodes :
+      [STORAGE_ADMISSION_REASON.CONTROL_PLANE_WRITE_UNHEALTHY];
+    const firstReason = String(
+      reasonCodes[NUM.ZERO] ||
+      STORAGE_ADMISSION_REASON.CONTROL_PLANE_WRITE_UNHEALTHY,
+    );
+    const nodeSummary = blocker?.readiness &&
+        typeof blocker.readiness === 'object' ?
+      Object.freeze({
+        status: blocker.readiness.lifecycleState ?? null,
+        connectionState:
+          blocker.readiness.nodeEvidence?.connectionState ?? null,
+        lastHeartbeat:
+          blocker.readiness.nodeEvidence?.lastHeartbeat ?? null,
+        readyLeaseExpiresAt:
+          blocker.readiness.nodeEvidence?.readyLeaseExpiresAt ?? null,
+        storageBudgetBytes:
+          blocker.readiness.capacity?.storageBudgetBytes ?? null,
+      }) :
+      null;
+    return Object.freeze({
+      allowed: false,
+      decision: 'defer',
+      decisionType: STORAGE_ADMISSION_DECISION_TYPE.DEFERRED,
+      reason: firstReason,
+      blockingReasons: Object.freeze(
+        reasonCodes.map((code) => Object.freeze({code})),
+      ),
+      eligibleNodeIds: Object.freeze([]),
+      ineligibleNodes: Object.freeze([
+        Object.freeze({
+          nodeId: blocker?.nodeId || this.nodeId,
+          failedDimensions:
+            Array.isArray(blocker?.failedDimensions) ?
+              [...blocker.failedDimensions] :
+              [],
+          reasonCodes: Object.freeze([...reasonCodes]),
+          nodeSummary,
+          readinessSnapshot: blocker?.readinessSnapshot || null,
+        }),
+      ]),
+    });
+  }
+
+  /**
+   * Defer optional background topology mutation when the local control-plane
+   * mutation contract is not currently healthy.
+   * @param {Object} move
+   * @return {void}
+   * @private
+   */
+  assertLocalControlPlaneMutationReady(move) {
+    if (!requiresStableLocalControlPlaneMutationReadiness(
+      this.normalizeControlPlaneMutationWorkClass(move),
+    )) {
+      return;
+    }
+
+    const blocker = getLocalControlPlaneMutationReadinessBlocker({
+      nodeId: this.nodeId,
+      controlPlaneReadinessService: this.controlPlaneReadinessService,
+    });
+    if (!blocker) {
+      return;
+    }
+
+    const admissionResult =
+      this.buildLocalControlPlaneMutationAdmissionResult(blocker);
+    const error = this.createProvisioningAdmissionError(move, admissionResult);
+    error.rebalanceSkipReason = REBALANCER_SKIP_REASON.LOCAL_MUTATION_UNHEALTHY;
+    throw error;
+  }
+
 
 
 
@@ -1458,6 +1603,8 @@ class RebalanceCoordinator extends EventEmitter {
     if (this.isShuttingDown || !this.initialized) {
       throw new Error('RebalanceCoordinator is shutting down');
     }
+
+    this.assertLocalControlPlaneMutationReady(move);
 
     const entityType = move.entityType || SERVICE_TYPE.PARTITION;
     const entityId = move.entityId || move.partitionId;
@@ -1597,6 +1744,63 @@ class RebalanceCoordinator extends EventEmitter {
       return existing;
     }
 
+    await this.ensureCriticalPartitionCreateLaneAvailable({
+      move,
+      normalizedMoveType,
+      entityType,
+      entityId,
+      partitionId,
+    });
+
+    if (this.shouldEnforceConcurrentOperationBudget(move, normalizedMoveType)) {
+      return this.runConcurrentCreateBudgetGate(
+        normalizedMoveType,
+        async () => this.createOperationRecordInternal({
+          move,
+          normalizedMove,
+          normalizedMoveType,
+          shouldEmitOperationCreated,
+          entityType,
+          entityId,
+          partitionId,
+          dedupeKey,
+          sourceNodeId,
+        }),
+      );
+    }
+
+    return this.createOperationRecordInternal({
+      move,
+      normalizedMove,
+      normalizedMoveType,
+      shouldEmitOperationCreated,
+      entityType,
+      entityId,
+      partitionId,
+      dedupeKey,
+      sourceNodeId,
+    });
+  }
+
+  /**
+   * Create and persist one operation after dedupe checks pass.
+   * @param {Object} context
+   * @return {Promise<Object>}
+   * @private
+   */
+  async createOperationRecordInternal(context) {
+    const {
+      move,
+      normalizedMove,
+      normalizedMoveType,
+      shouldEmitOperationCreated,
+      entityType,
+      entityId,
+      partitionId,
+      dedupeKey,
+      sourceNodeId,
+    } = context;
+
     const operationId = uuidv4();
     const sourceReplicaId = normalizedMoveType === OperationType.REPLACE ?
       (move.replicaId || null) :
@@ -1685,6 +1889,149 @@ class RebalanceCoordinator extends EventEmitter {
     }
 
     return operation;
+  }
+
+  /**
+   * Determine whether this create request should enforce coordinator-level
+   * concurrent operation budgets.
+   * @param {Object} move
+   * @param {string|null} normalizedMoveType
+   * @return {boolean}
+   * @private
+   */
+  shouldEnforceConcurrentOperationBudget(move, normalizedMoveType) {
+    if (move?.enforceConcurrentOperationBudget !== true) {
+      return false;
+    }
+    return normalizedMoveType === OperationType.ADD ||
+      normalizedMoveType === OperationType.REPLACE ||
+      normalizedMoveType === OperationType.REMOVE;
+  }
+
+  /**
+   * Critical system partitions admit only one add-like workflow at a time.
+   * This prevents multiple replacement learners from racing ahead of the
+   * source-removal phase and creating temporary 5-voter critical groups.
+   * @param {Object} context
+   * @return {Promise<void>}
+   * @private
+   */
+  async ensureCriticalPartitionCreateLaneAvailable(context) {
+    const normalizedMoveType = context?.normalizedMoveType;
+    if (context?.move?.enforceConcurrentOperationBudget !== true) {
+      return;
+    }
+    if (normalizedMoveType !== OperationType.ADD &&
+        normalizedMoveType !== OperationType.REPLACE) {
+      return;
+    }
+    if (!this.isCriticalSystemPartition(context?.partitionId)) {
+      return;
+    }
+
+    const existingOperations = await this.getOperationsByEntity(
+      context?.entityType || SERVICE_TYPE.PARTITION,
+      context?.entityId || context?.partitionId,
+    );
+    const conflictingOperation = existingOperations.find((operation) => {
+      if (!operation || this.isOperationTerminal(operation)) {
+        return false;
+      }
+      return operation.type === OperationType.ADD ||
+        operation.type === OperationType.REPLACE;
+    });
+    if (!conflictingOperation) {
+      return;
+    }
+
+    throw this.createConcurrentOperationBudgetError(
+      normalizedMoveType,
+      1,
+      {
+        message:
+          `Critical partition ${context.partitionId} already has ` +
+          `an add-like operation in flight`,
+        conflictingOperationId: conflictingOperation.operationId,
+      },
+    );
+  }
+
+  /**
+   * Serialize create admission through one add-like or remove-like budget lane.
+   * @param {string|null} normalizedMoveType
+   * @param {Function} executionFactory
+   * @return {Promise<*>}
+   * @private
+   */
+  async runConcurrentCreateBudgetGate(normalizedMoveType, executionFactory) {
+    const scope = normalizedMoveType === OperationType.REMOVE ?
+      CONCURRENT_CREATE_BUDGET_SCOPE.REMOVE :
+      CONCURRENT_CREATE_BUDGET_SCOPE.ADD;
+    return this.operationWorkflowRunExclusive(
+      this.getCreateBudgetSingleFlightKey(scope),
+      async () => {
+        await this.ensureConcurrentOperationBudgetAllowed(
+          normalizedMoveType,
+        );
+        return executionFactory();
+      },
+    );
+  }
+
+  /**
+   * Enforce configured maxConcurrentAdds/maxConcurrentRemoves before persisting
+   * a newly scheduled operation.
+   * @param {string|null} normalizedMoveType
+   * @return {Promise<void>}
+   * @private
+   */
+  async ensureConcurrentOperationBudgetAllowed(normalizedMoveType) {
+    if (normalizedMoveType === OperationType.ADD ||
+        normalizedMoveType === OperationType.REPLACE) {
+      const canStart = await this.canStartAddOperation();
+      if (canStart) {
+        return;
+      }
+      throw this.createConcurrentOperationBudgetError(
+        normalizedMoveType,
+        this.config.maxConcurrentAdds,
+      );
+    }
+
+    if (normalizedMoveType === OperationType.REMOVE) {
+      const canStart = await this.canStartRemoveOperation();
+      if (canStart) {
+        return;
+      }
+      throw this.createConcurrentOperationBudgetError(
+        normalizedMoveType,
+        this.config.maxConcurrentRemoves,
+      );
+    }
+  }
+
+  /**
+   * Build a typed concurrent-budget error for rebalancer callers.
+   * @param {string|null} normalizedMoveType
+   * @param {number} limit
+   * @return {Error}
+   * @private
+   */
+  createConcurrentOperationBudgetError(normalizedMoveType, limit, options = {}) {
+    const error = new Error(
+      options.message ||
+      (
+        `Concurrent ${String(normalizedMoveType || 'operation').toLowerCase()} ` +
+        `budget exceeded at limit ${limit}`
+      ),
+    );
+    error.rebalanceSkipReason = REBALANCER_SKIP_REASON.BUDGET_EXCEEDED;
+    error.operationType = normalizedMoveType || null;
+    error.limit = limit;
+    if (options.conflictingOperationId) {
+      error.conflictingOperationId = options.conflictingOperationId;
+    }
+    return error;
   }
 
   /**
@@ -2122,9 +2469,18 @@ class RebalanceCoordinator extends EventEmitter {
    * @private
    */
   buildOperationMutationQueryOptions(options = {}) {
+    const ownerId = typeof options.ownerId === 'string' &&
+        options.ownerId.length > NUM.ZERO ?
+      options.ownerId :
+      null;
     return {
       ...CONTROL_PLANE_QUERY_OPTIONS,
       sessionId: this.resolveOperationMutationSessionId(options),
+      deliveryPriority: 'critical',
+      workClass: PRESSURE_WORK_CLASS.CRITICAL,
+      controlPlaneTableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+      controlPlaneOperationKind: 'write',
+      ...(ownerId ? {coalescingKey: `replica-operation:${ownerId}`} : {}),
     };
   }
 
@@ -2584,11 +2940,16 @@ class RebalanceCoordinator extends EventEmitter {
     }
     if (typeof operationInput.operationId === 'string' &&
         operationInput.operationId.length > NUM.ZERO) {
-      return operationInput;
+      return isCoordinatorOwnedOperationType(operationInput.type) ?
+        operationInput :
+        null;
     }
     if (typeof operationInput.operation_id === 'string' &&
         operationInput.operation_id.length > NUM.ZERO) {
-      return this.rowToOperation(operationInput);
+      const operation = this.rowToOperation(operationInput);
+      return isCoordinatorOwnedOperationType(operation?.type) ?
+        operation :
+        null;
     }
     return null;
   }
@@ -2787,7 +3148,10 @@ class RebalanceCoordinator extends EventEmitter {
     const response = await this.messageRouter.deliver(
       target,
       request,
-      {targetNodeId: dispatchNodeId},
+      {
+        targetNodeId: dispatchNodeId,
+        deliveryPriority: 'background',
+      },
     );
 
     if (!response.acknowledged) {
@@ -4563,6 +4927,9 @@ class RebalanceCoordinator extends EventEmitter {
    * @return {Promise<boolean>} True if we can start a new ADD operation.
    */
   async canStartAddOperation() {
+    if (this.isLocalRouterBackpressured()) {
+      return false;
+    }
     const count = await this.getConcurrentAddCount();
     return count < this.config.maxConcurrentAdds;
   }
@@ -4573,8 +4940,28 @@ class RebalanceCoordinator extends EventEmitter {
    * @return {Promise<boolean>} True if we can start a new REMOVE operation.
    */
   async canStartRemoveOperation() {
+    if (this.isLocalRouterBackpressured()) {
+      return false;
+    }
     const count = await this.getConcurrentRemoveCount();
     return count < this.config.maxConcurrentRemoves;
+  }
+
+  /**
+   * Return true when the local router reports bounded outbound pressure and
+   * non-critical scheduling should reuse existing observations instead of
+   * issuing more routed control-plane reads.
+   * @return {boolean}
+   * @private
+   */
+  isLocalRouterBackpressured() {
+    return PressureGovernor.getShared({
+      nodeId: this.nodeId,
+      messageRouter: this.messageRouter,
+    }).isBackpressured({
+      workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+      resourceKeys: ['rebalancer:operations'],
+    });
   }
 
   /**

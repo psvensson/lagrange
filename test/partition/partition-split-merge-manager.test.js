@@ -15,6 +15,9 @@ import {
   DEFAULT_MAX_AUTO_EXECUTE_SPLITS_PER_EVALUATION,
 } from '../../src/partition/partition-split-merge-manager.js';
 import {KeyRange, KeyRangeManager} from '../../src/partition/key-range-manager.js';
+import {
+  SPLIT_MERGE_REASON,
+} from '../../src/partition/partition-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 
@@ -814,6 +817,106 @@ test('PartitionSplitMergeManager - retries reactive evaluation once busy ' +
 
     manager.shutdown();
   });
+
+test('PartitionSplitMergeManager - defers reactive evaluation timers while ' +
+  'the local node is backpressured', async (t) => {
+  let evaluateCalls = 0;
+  const manager = new PartitionSplitMergeManager({
+    reactiveEvaluationDebounceMs: 0,
+    pressureGovernor: {
+      evaluate() {
+        return {
+          action: 'defer',
+          retryAfterMs: 30,
+          summary: {backpressured: true},
+        };
+      },
+    },
+  });
+  manager.evaluateAllPartitions = async () => {
+    evaluateCalls += 1;
+    return {evaluated: true};
+  };
+
+  manager.requestEvaluation({
+    reasonCode: 'write_activity',
+    partitionId: 'users-p1',
+  });
+
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  t.equal(
+    evaluateCalls,
+    0,
+    'reactive evaluation should not run immediately while pressure defers background work',
+  );
+
+  await new Promise((resolve) => setTimeout(resolve, 40));
+  await new Promise((resolve) => setImmediate(resolve));
+
+  t.equal(
+    evaluateCalls,
+    1,
+    'reactive evaluation should resume after the deferred retry window',
+  );
+
+  manager.shutdown();
+});
+
+test('PartitionSplitMergeManager - defers split evaluation under local ' +
+  'control-plane pressure before executing candidates', async (t) => {
+  let executeCalls = 0;
+  const manager = new PartitionSplitMergeManager({
+    pressureGovernor: {
+      evaluate() {
+        return {
+          action: 'defer',
+          retryAfterMs: 25,
+          summary: {backpressured: true},
+        };
+      },
+    },
+    listPartitions: async () => [{
+      partition_id: 'users-p1',
+      size_bytes: 256,
+    }],
+    getPartitionMetrics: async () => ({
+      sizeBytes: 256,
+      queriesPerMinute: 0,
+    }),
+    executeSplitCandidate: async () => {
+      executeCalls += 1;
+      return {
+        success: true,
+      };
+    },
+    tablePolicyService: {
+      async getPolicyForPartition() {
+        return {splitStorageThreshold: 64};
+      },
+    },
+  });
+
+  const results = await manager.evaluateAllPartitions();
+
+  t.equal(results.evaluated, false);
+  t.equal(
+    results.reason,
+    SPLIT_MERGE_REASON.CONTROL_PLANE_BACKPRESSURE,
+    'evaluation should report the canonical control-plane pressure reason',
+  );
+  t.equal(
+    executeCalls,
+    0,
+    'manager must not start managed split execution while the node is hot',
+  );
+  t.equal(
+    manager.getEvaluationDiagnostics().requestedEvaluationPending,
+    true,
+    'manager should keep one deferred evaluation queued for retry',
+  );
+
+  manager.shutdown();
+});
 
 test('PartitionSplitMergeManager - exposes split evaluation diagnostics',
   async (t) => {

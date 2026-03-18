@@ -259,6 +259,102 @@ test('message-group target resolver excludes non-ready nodes from leader and for
     );
   });
 
+test('message-group target resolver can retain canonical leader selection when strict routing bypasses readiness gates',
+  async (t) => {
+    const cache = new SystemTableCache();
+    const now = Date.now();
+
+    addNode(cache, {
+      [COLUMN.NODE_ID]: 'node-a',
+      [COLUMN.CONNECTION_STATE]: STATE.READY,
+      [COLUMN.READY_LEASE_EXPIRES_AT]: now - 1,
+    });
+    addNode(cache, {
+      [COLUMN.NODE_ID]: 'node-b',
+      [COLUMN.CONNECTION_STATE]: STATE.READY,
+      [COLUMN.READY_LEASE_EXPIRES_AT]: now + 60000,
+    });
+
+    cache.applySystemTableChange(TABLES.MESSAGE_GROUPS, CDC_OPERATION.UPSERT, {
+      [COLUMN.GROUP_ID]: 'mg-1',
+      [COLUMN.LEADER_NODE_ID]: 'node-a',
+    });
+
+    addMessageGroupService(cache, {
+      [COLUMN.SERVICE_ID]: 'mg-1-r2',
+      [COLUMN.GROUP_ID]: 'mg-1',
+      [COLUMN.NODE_ID]: 'node-a',
+      [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.MESSAGE_GROUP,
+      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+      [COLUMN.ADDRESS]: 'node-a/message-group/mg-1-r2',
+      [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEADER,
+      [COLUMN.UPDATED_AT]: now,
+    });
+    addMessageGroupService(cache, {
+      [COLUMN.SERVICE_ID]: 'mg-1-r3',
+      [COLUMN.GROUP_ID]: 'mg-1',
+      [COLUMN.NODE_ID]: 'node-b',
+      [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.MESSAGE_GROUP,
+      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+      [COLUMN.ADDRESS]: 'node-b/message-group/mg-1-r3',
+      [COLUMN.RAFT_ROLE]: RAFT_ROLE.FOLLOWER,
+      [COLUMN.UPDATED_AT]: now + 1,
+    });
+
+    const leaderService = resolveMessageGroupLeaderServiceFromCache(cache, 'mg-1', {
+      requireReadyNode: false,
+      preferConnectedCandidates: false,
+      isConnectedNode: (nodeId) => nodeId === 'node-b',
+    });
+
+    t.equal(
+      leaderService?.[COLUMN.SERVICE_ID],
+      'mg-1-r2',
+      'strict routing should keep the canonical leader target even when readiness metadata is behind',
+    );
+  });
+
+test('message-group target resolver can retain canonical leader selection when strict routing allows stopped leader rows',
+  async (t) => {
+    const cache = new SystemTableCache();
+
+    cache.applySystemTableChange(TABLES.MESSAGE_GROUPS, CDC_OPERATION.UPSERT, {
+      [COLUMN.GROUP_ID]: 'mg-1',
+      [COLUMN.LEADER_NODE_ID]: 'node-a',
+    });
+
+    addMessageGroupService(cache, {
+      [COLUMN.SERVICE_ID]: 'mg-1-r2',
+      [COLUMN.GROUP_ID]: 'mg-1',
+      [COLUMN.NODE_ID]: 'node-a',
+      [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.MESSAGE_GROUP,
+      [COLUMN.STATUS]: SERVICE_STATUS.STOPPED,
+      [COLUMN.ADDRESS]: 'node-a/message-group/mg-1-r2',
+      [COLUMN.RAFT_ROLE]: RAFT_ROLE.FOLLOWER,
+    });
+    addMessageGroupService(cache, {
+      [COLUMN.SERVICE_ID]: 'mg-1-r3',
+      [COLUMN.GROUP_ID]: 'mg-1',
+      [COLUMN.NODE_ID]: 'node-b',
+      [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.MESSAGE_GROUP,
+      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+      [COLUMN.ADDRESS]: 'node-b/message-group/mg-1-r3',
+      [COLUMN.RAFT_ROLE]: RAFT_ROLE.FOLLOWER,
+    });
+
+    const leaderService = resolveMessageGroupLeaderServiceFromCache(cache, 'mg-1', {
+      requireReadyNode: false,
+      preferConnectedCandidates: false,
+      allowStoppedService: true,
+    });
+
+    t.equal(
+      leaderService?.[COLUMN.SERVICE_ID],
+      'mg-1-r2',
+      'strict routing should still use the canonical leader service row before activation flips it to active',
+    );
+  });
+
 test('message-group target resolver prefers connected relay candidates over disconnected leaders',
   async (t) => {
     const cache = new SystemTableCache();

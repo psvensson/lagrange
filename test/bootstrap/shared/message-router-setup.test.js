@@ -111,6 +111,26 @@ describe('MessageRouterSetup', () => {
       assert.deepStrictEqual(router.identifyPayload, identifyPayload);
     });
 
+    it('should preserve a distinct advertised websocket identity address', async () => {
+      const router = await MessageRouterSetup.create({
+        nodeId: 'advertised-address-node',
+        nodeAddress: 'joiner-host:8080',
+        advertisedNodeWsAddress: 'ws://172.20.0.42:8082',
+      });
+      createdRouters.push(router);
+
+      assert.strictEqual(
+        router.nodeAddress,
+        'joiner-host:8080',
+        'router local nodeAddress should remain the configured node address',
+      );
+      assert.strictEqual(
+        router.advertisedAddress,
+        'ws://172.20.0.42:8082',
+        'router identification should use the canonical advertised websocket address',
+      );
+    });
+
     it('should normalize raw endpoint rows to websocket delivery addresses', async () => {
       const originalGetInstance = NodeService.getInstance;
 

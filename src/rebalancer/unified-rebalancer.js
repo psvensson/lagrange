@@ -12,11 +12,12 @@ import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js'
 import {MovePlanner} from './move-planner.js';
 import {StoragePressureBehavior} from './storage-pressure-behavior.js';
 import {
+  COORDINATOR_OWNED_OPERATION_TYPES_SQL_CLAUSE,
   OperationType,
   ReplicaStatus,
   TERMINAL_STATUSES,
   TERMINAL_STATUS_SQL_CLAUSE,
-  ADJUST_DIRECTION,
+  isCoordinatorOwnedOperationType,
 } from './replica-status.js';
 import {assertCritical} from '../utils/assert.js';
 import {
@@ -28,7 +29,21 @@ import {
 import {
   ControlPlaneSystemTableGateway,
 } from '../control-plane/control-plane-system-table-gateway.js';
+import {
+  wasNodeRecordReadyWhenWritten,
+} from '../node/node-readiness-policy.js';
+import {
+  PRESSURE_WORK_CLASS,
+  PressureGovernor,
+} from '../control-plane/pressure-governor.js';
+import {
+  CONTROL_PLANE_MUTATION_WORK_CLASS,
+  getLocalControlPlaneMutationReadinessBlocker,
+} from '../control-plane/control-plane-mutation-readiness.js';
 import {RAFT_ROLE} from '../raft/constants.js';
+import {
+  LIFECYCLE_PHASE,
+} from '../bootstrap/lifecycle-controller-constants.js';
 import {
   REBALANCER_CONFIG_KEY,
   REBALANCER_DEFAULT,
@@ -48,11 +63,27 @@ import {
 import {
   CLUSTER_READINESS_TIMEOUT_MS,
 } from '../constants/cdc-lifecycle-constants.js';
-import {NUM, STATE, TYPEOF} from '../constants/index.js';
+import {
+  COLUMN,
+  ENDPOINT_STATUS,
+  META_SERVICE_ID,
+  NUM,
+  STATE,
+  TABLES,
+  TRANSPORT_TYPE,
+  TYPEOF,
+} from '../constants/index.js';
+import {ENDPOINT_SYNC_HEALTH} from '../runtime/endpoint-sync-constants.js';
 import {OwnerKeyReconcileQueue} from
   '../workflow/owner-key-reconcile-queue.js';
 import {RECONCILE_REASON} from
   '../workflow/reconcile-queue-constants.js';
+import {
+  adjustToOddCount,
+  getNextOddCount,
+  getPreviousOddCount,
+  isOddReplicaCount,
+} from './odd-replica-count.js';
 
 const EntityType = REBALANCER_ENTITY_TYPE;
 
@@ -71,63 +102,13 @@ const SQL_BUDGET = Object.freeze({
     'SELECT config_value FROM config WHERE config_key = ? LIMIT 1',
   SELECT_IN_FLIGHT_COUNT:
     `SELECT COUNT(*) AS total_count FROM replica_operations
-     WHERE status NOT IN (${TERMINAL_STATUS_SQL_CLAUSE})`,
+     WHERE type IN (${COORDINATOR_OWNED_OPERATION_TYPES_SQL_CLAUSE})
+     AND status NOT IN (${TERMINAL_STATUS_SQL_CLAUSE})`,
 });
 
 const CRITICAL_SYSTEM_PARTITION_IDS = new Set(
   Object.values(SYSTEM_TABLE_NAME).map((tableName) => `${tableName}-p1`),
 );
-
-const ODD_MODULUS = 2;
-const ODD_REMAINDER = 1;
-const ODD_STEP = 2;
-const ODD_ADJUST = 1;
-
-/**
- * Validate that a replica count is odd (required for Raft quorum).
- * @param {number} count - Replica count to validate.
- * @return {boolean} True if count is odd.
- */
-function isOddReplicaCount(count) {
-  return count % ODD_MODULUS === ODD_REMAINDER;
-}
-
-/**
- * Adjust replica count to nearest odd number.
- * @param {number} count - Replica count to adjust.
- * @param {string} direction - ADJUST_DIRECTION.UP or ADJUST_DIRECTION.DOWN.
- * @return {number} Adjusted odd replica count.
- */
-function adjustToOddCount(count, direction = ADJUST_DIRECTION.UP) {
-  if (isOddReplicaCount(count)) {
-    return count;
-  }
-  return direction === ADJUST_DIRECTION.UP ?
-    count + ODD_ADJUST : count - ODD_ADJUST;
-}
-
-/**
- * Get the next higher odd replica count (3→5→7).
- * @param {number} current - Current replica count.
- * @param {number} max - Maximum allowed count.
- * @return {number} Next odd count or current if at max.
- */
-function getNextOddCount(current, max) {
-  const next = current + ODD_STEP;
-  return next <= max ? next : current;
-}
-
-/**
- * Get the next lower odd replica count (7→5→3).
- * @param {number} current - Current replica count.
- * @param {number} min - Minimum allowed count.
- * @return {number} Previous odd count or current if at min.
- */
-function getPreviousOddCount(current, min) {
-  const prev = current - ODD_STEP;
-  return prev >= min ? prev : current;
-}
-
 
 /**
  * UnifiedRebalancer manages replica placement for both partitions and message groups.
@@ -186,6 +167,7 @@ class UnifiedRebalancer extends EventEmitter {
         nodeId: this.nodeId,
         sqlQueryEngine: this.sqlQueryEngine,
         cdcIntegrationService: this.cdcIntegrationService,
+        messageRouter: this.messageRouter,
       });
 
     // RebalanceCoordinator for delegated operation execution (Requirements 2.5)
@@ -259,7 +241,11 @@ class UnifiedRebalancer extends EventEmitter {
       config.get(REBALANCER_CONFIG_KEY.USER_PARTITION_START_DELAY_MS),
       REBALANCER_DEFAULT.UNIFIED.USER_PARTITION_START_DELAY_MS,
     );
-    this.rebalanceStartAtMs = Date.now();
+    // Per-entity random offset spreads start-delay eligibility across
+    // the jitter window so all system partitions don't become eligible
+    // simultaneously (thundering herd prevention).
+    this.rebalanceStartAtMs = Date.now() +
+      Math.floor(Math.random() * this.periodicCheckJitterMs);
 
     // Stabilization state
     // Initialize to current time so rebalancer waits for stabilization period
@@ -303,6 +289,10 @@ class UnifiedRebalancer extends EventEmitter {
     this.cdcGroupPropagationService =
       options.cdcGroupPropagationService ||
       this.rebalanceCoordinator?.cdcGroupPropagationService ||
+      null;
+    this.bootstrapReadinessState =
+      options.bootstrapReadinessState ||
+      this.rebalanceCoordinator?.bootstrapReadinessState ||
       null;
     this.controlPlaneReadinessService =
       options.controlPlaneReadinessService ||
@@ -398,6 +388,9 @@ class UnifiedRebalancer extends EventEmitter {
     if (coordinator.cdcGroupPropagationService) {
       this.cdcGroupPropagationService = coordinator.cdcGroupPropagationService;
     }
+    if (coordinator.bootstrapReadinessState) {
+      this.bootstrapReadinessState = coordinator.bootstrapReadinessState;
+    }
     if (coordinator.controlPlaneReadinessService) {
       this.controlPlaneReadinessService =
         coordinator.controlPlaneReadinessService;
@@ -433,7 +426,12 @@ class UnifiedRebalancer extends EventEmitter {
         entityId: this.entityId,
         entityType: this.entityType,
       });
-      this.scheduleNextCheck();
+      // Stagger initial check with per-entity random offset to avoid
+      // thundering herd when many partitions become leaders at once
+      // (e.g. during bootstrap or rolling restarts).
+      const initialJitter =
+        Math.floor(Math.random() * this.periodicCheckIntervalMs);
+      this.scheduleNextCheck(this.periodicCheckIntervalMs + initialJitter);
     } else if (!isLeader && wasLeader) {
       this.logger.info(REBALANCER_LOG_MSG.LEADER_STOP, {
         entityId: this.entityId,
@@ -622,22 +620,7 @@ class UnifiedRebalancer extends EventEmitter {
    * @return {number} Valid odd replica count.
    */
   validateReplicaCount(count, policy) {
-    const min = policy.minReplicaCount || 3;
-    const max = policy.maxReplicaCount || 7;
-
-    // Ensure count is within bounds
-    let adjusted = Math.max(min, Math.min(max, count));
-
-    // Ensure count is odd
-    if (!isOddReplicaCount(adjusted)) {
-      adjusted = adjustToOddCount(adjusted, ADJUST_DIRECTION.UP);
-      // If adjusting up exceeds max, adjust down
-      if (adjusted > max) {
-        adjusted = adjustToOddCount(count, ADJUST_DIRECTION.DOWN);
-      }
-    }
-
-    return adjusted;
+    return this.movePlanner.validateReplicaCount(count, policy);
   }
 
   /**
@@ -648,39 +631,10 @@ class UnifiedRebalancer extends EventEmitter {
    * @return {number} Target replica count.
    */
   calculateTargetReplicaCount(currentReplicas, policy) {
-    const healthyCount = this.getHealthyReplicas(currentReplicas).length;
-    const targetCount = this.getPolicyTargetReplicaCount(policy);
-    const minCount = policy.minReplicaCount || 3;
-    const maxCount = policy.maxReplicaCount || 7;
-
-    // Validate target is odd
-    const validTarget = this.validateReplicaCount(targetCount, policy);
-
-    // If we're below minimum, grow to minimum
-    if (healthyCount < minCount) {
-      return this.validateReplicaCount(minCount, policy);
-    }
-
-    // If we're above maximum, shrink to maximum
-    if (healthyCount > maxCount) {
-      return this.validateReplicaCount(maxCount, policy);
-    }
-
-    // If we need to grow, grow in odd increments
-    if (healthyCount < validTarget) {
-      // Grow by 2 (odd increment) until we reach target
-      const nextCount = getNextOddCount(healthyCount, maxCount);
-      return Math.min(nextCount, validTarget);
-    }
-
-    // If we need to shrink, shrink in odd increments
-    if (healthyCount > validTarget) {
-      // Shrink by 2 (odd decrement) until we reach target
-      const prevCount = getPreviousOddCount(healthyCount, minCount);
-      return Math.max(prevCount, validTarget);
-    }
-
-    return validTarget;
+    return this.movePlanner.calculateTargetReplicaCount(
+      currentReplicas,
+      policy,
+    );
   }
 
   /**
@@ -689,7 +643,7 @@ class UnifiedRebalancer extends EventEmitter {
    * @return {number} Desired policy target.
    */
   getPolicyTargetReplicaCount(policy) {
-    return policy.targetReplicaCount || policy.replicaCount || 3;
+    return this.movePlanner.getPolicyTargetReplicaCount(policy);
   }
 
   /**
@@ -699,9 +653,10 @@ class UnifiedRebalancer extends EventEmitter {
    * @return {number} Actionable target for current topology.
    */
   getActionableTargetReplicaCount(policy, availableNodes) {
-    const desiredTarget = this.getPolicyTargetReplicaCount(policy);
-    const availableCount = Array.isArray(availableNodes) ? availableNodes.length : 0;
-    return Math.min(desiredTarget, availableCount);
+    return this.movePlanner.getActionableTargetReplicaCount(
+      policy,
+      availableNodes,
+    );
   }
 
   /**
@@ -710,60 +665,7 @@ class UnifiedRebalancer extends EventEmitter {
    * @return {Object} Rebalancing decision with reason.
    */
   applyPolicy(policy) {
-    const currentReplicas = this.getCurrentReplicas();
-    const healthyReplicas = this.getHealthyReplicas(currentReplicas);
-    const availableNodes = this.getAvailableNodes();
-    const actionableTarget = this.getActionableTargetReplicaCount(policy, availableNodes);
-    const targetCount = this.calculateTargetReplicaCount(currentReplicas, policy);
-
-    const decision = {
-      needsRebalancing: false,
-      reason: null,
-      currentCount: healthyReplicas.length,
-      targetCount,
-      policy,
-    };
-
-    // Check if replica count needs adjustment
-    if (healthyReplicas.length < actionableTarget) {
-      decision.needsRebalancing = true;
-      decision.reason = 'replica_count_below_target';
-    } else if (healthyReplicas.length > targetCount) {
-      decision.needsRebalancing = true;
-      decision.reason = 'replica_count_above_target';
-    }
-
-    // Check placement constraints
-    // But only if there are actually more nodes available to spread to
-    if (policy.placementConstraints?.spreadAcrossNodes) {
-      if (this.hasMultipleReplicasOnSameNode(healthyReplicas)) {
-        const availableNodes = this.getAvailableNodes();
-        // Filter out replicas without node_id (defensive check)
-        const usedNodeIds = new Set(
-          healthyReplicas.filter((r) => r && r.node_id).map((r) => r.node_id),
-        );
-        const unusedNodes = availableNodes.filter(
-          (n) => n && n.node_id && !usedNodeIds.has(n.node_id),
-        );
-
-        // Only needs rebalancing if we can actually spread to other nodes
-        if (unusedNodes.length > 0) {
-          decision.needsRebalancing = true;
-          decision.reason = decision.reason || 'replicas_not_spread';
-        }
-      }
-    }
-
-    // For message groups, check local access requirement
-    if (this.entityType === EntityType.MESSAGE_GROUP && policy.ensureLocalAccess) {
-      const nodesWithoutReplica = this.getNodesWithoutLocalReplica(currentReplicas);
-      if (nodesWithoutReplica.length > 0) {
-        decision.needsRebalancing = true;
-        decision.reason = decision.reason || 'nodes_without_local_replica';
-      }
-    }
-
-    return decision;
+    return this.movePlanner.applyPolicy(policy);
   }
 
 
@@ -790,6 +692,366 @@ class UnifiedRebalancer extends EventEmitter {
         ] === true;
       },
     );
+  }
+
+  /**
+   * Return one blocker summary when critical system-partition rebalancing
+   * should wait for cluster topology convergence.
+   *
+   * A joining or restarting cluster should not start background system-table
+   * redistribution while nodes are still progressing through non-terminal
+   * membership states, while endpoint publication is incomplete, or while
+   * control-plane topology operations are still in flight. Hard failures
+   * remain actionable and do not block.
+   *
+   * @return {Object|null}
+   * @private
+   */
+  getCriticalSystemTopologySettlingBlocker() {
+    if (!this.isSystemPartitionEntity()) {
+      return null;
+    }
+    const nodeRows = typeof this.systemTableCache?.getAll === TYPEOF.FUNCTION ?
+      this.systemTableCache.getAll(SYSTEM_TABLE_NAME.NODES) :
+      [];
+    if (!Array.isArray(nodeRows) || nodeRows.length === 0) {
+      return null;
+    }
+
+    let hasTransitionalNode = false;
+    let hasFailedNode = false;
+    const activeNodeIds = [];
+    const unreadyNodeIds = [];
+    for (const nodeRow of nodeRows) {
+      const status = String(nodeRow?.status || '').toLowerCase();
+      const nodeId = String(nodeRow?.[COLUMN.NODE_ID] || nodeRow?.node_id || '');
+      if (!status) {
+        continue;
+      }
+      if (status === NodeStatus.FAILED) {
+        hasFailedNode = true;
+        continue;
+      }
+      if (status !== NodeStatus.ACTIVE || nodeId.length === 0) {
+        hasTransitionalNode = true;
+        if (nodeId.length > 0) {
+          unreadyNodeIds.push(nodeId);
+        }
+        continue;
+      }
+      if (!wasNodeRecordReadyWhenWritten(nodeRow, {
+        requireActiveStatus: true,
+      })) {
+        hasTransitionalNode = true;
+        unreadyNodeIds.push(nodeId);
+        continue;
+      }
+      activeNodeIds.push(nodeId);
+    }
+
+    if (hasTransitionalNode && !hasFailedNode) {
+      return Object.freeze({
+        reason: unreadyNodeIds.length > 0 ?
+          'node_ready_lease_incomplete' :
+          'transitional_node_membership',
+        unreadyNodeIds: Object.freeze([...unreadyNodeIds]),
+      });
+    }
+
+    const connectedNodeIds = this.resolveConnectedClusterNodeIds();
+    if (connectedNodeIds.size > 0) {
+      for (const connectedNodeId of connectedNodeIds) {
+        if (!nodeRows.some((nodeRow) => nodeRow?.node_id === connectedNodeId)) {
+          return Object.freeze({
+            reason: 'transport_membership_exceeds_nodes_cache',
+            connectedNodeId,
+          });
+        }
+      }
+    }
+
+    const endpointVisibility =
+      this.evaluateCriticalSystemEndpointVisibility(activeNodeIds);
+    if (endpointVisibility.ready !== true) {
+      return Object.freeze({
+        reason: 'endpoint_visibility_incomplete',
+        ...endpointVisibility,
+      });
+    }
+
+    const inFlightTopologyOperations =
+      this.collectCriticalSystemInFlightReplicaOperations(activeNodeIds);
+    if (inFlightTopologyOperations.count > NUM.ZERO) {
+      return Object.freeze({
+        reason: 'topology_operations_in_flight',
+        inFlightReplicaOperations: inFlightTopologyOperations.count,
+        inFlightReplicaOperationDetails: inFlightTopologyOperations.details,
+      });
+    }
+
+    return null;
+  }
+
+  /**
+   * Return true when critical system-partition rebalancing should wait for
+   * topology convergence.
+   *
+   * @return {boolean}
+   * @private
+   */
+  isCriticalSystemTopologySettling() {
+    return this.getCriticalSystemTopologySettlingBlocker() !== null;
+  }
+
+  /**
+   * Resolve live cluster peers from the message router plus the local node.
+   * When transport shows peers that the nodes table does not yet publish,
+   * system-topology background work should continue to treat the cluster as
+   * settling.
+   * @return {Set<string>}
+   * @private
+   */
+  resolveConnectedClusterNodeIds() {
+    const connectedNodeIds = new Set();
+    if (typeof this.nodeId === TYPEOF.STRING && this.nodeId.length > 0) {
+      connectedNodeIds.add(this.nodeId);
+    }
+    const peers = typeof this.messageRouter?.getConnectedNodes === TYPEOF.FUNCTION ?
+      this.messageRouter.getConnectedNodes() :
+      [];
+    for (const peerNodeId of peers) {
+      if (typeof peerNodeId === TYPEOF.STRING && peerNodeId.length > 0) {
+        connectedNodeIds.add(peerNodeId);
+      }
+    }
+    return connectedNodeIds;
+  }
+
+  /**
+   * Return one endpoint visibility summary for ACTIVE cluster members.
+   * @param {string[]} activeNodeIds
+   * @return {{
+   *   ready: boolean,
+   *   missingNodeEndpointNodeIds: string[],
+   *   missingPostgresWireNodeIds: string[],
+   * }}
+   * @private
+   */
+  evaluateCriticalSystemEndpointVisibility(activeNodeIds = []) {
+    const requiredNodeIds = Array.isArray(activeNodeIds) ?
+      activeNodeIds.filter((nodeId) =>
+        typeof nodeId === TYPEOF.STRING && nodeId.length > 0,
+      ) :
+      [];
+    if (requiredNodeIds.length === NUM.ZERO) {
+      return Object.freeze({
+        ready: false,
+        missingNodeEndpointNodeIds: [],
+        missingPostgresWireNodeIds: [],
+      });
+    }
+
+    const nodeEndpointRows =
+      typeof this.systemTableCache?.getAll === TYPEOF.FUNCTION ?
+        this.systemTableCache.getAll(TABLES.NODE_ENDPOINTS) :
+        [];
+    const serviceEndpointRows =
+      typeof this.systemTableCache?.getAll === TYPEOF.FUNCTION ?
+        this.systemTableCache.getAll(TABLES.SERVICE_ENDPOINTS) :
+        [];
+    const visibleNodeEndpointNodeIds = new Set();
+    const visiblePostgresWireNodeIds = new Set();
+
+    for (const row of nodeEndpointRows) {
+      const nodeId = String(
+        row?.[COLUMN.NODE_ID] || row?.node_id || row?.nodeId || '',
+      );
+      const status = String(
+        row?.[COLUMN.STATUS] || row?.status || '',
+      ).toLowerCase();
+      const transportType = String(
+        row?.[COLUMN.TRANSPORT_TYPE] ||
+          row?.transport_type ||
+          row?.transportType ||
+          '',
+      ).toLowerCase();
+      if (!nodeId ||
+          status !== String(ENDPOINT_STATUS.ACTIVE).toLowerCase() ||
+          transportType !== String(TRANSPORT_TYPE.WEBSOCKET).toLowerCase()) {
+        continue;
+      }
+      visibleNodeEndpointNodeIds.add(nodeId);
+    }
+
+    for (const row of serviceEndpointRows) {
+      const nodeId = String(
+        row?.[COLUMN.NODE_ID] || row?.node_id || row?.nodeId || '',
+      );
+      const serviceId = String(
+        row?.[COLUMN.SERVICE_ID] ||
+          row?.service_id ||
+          row?.serviceId ||
+          '',
+      );
+      const healthStatus = String(
+        row?.health_status || row?.healthStatus || '',
+      ).toLowerCase();
+      if (!nodeId ||
+          serviceId !== META_SERVICE_ID.POSTGRES_WIRE ||
+          healthStatus !== String(ENDPOINT_SYNC_HEALTH.HEALTHY).toLowerCase()) {
+        continue;
+      }
+      visiblePostgresWireNodeIds.add(nodeId);
+    }
+
+    const missingNodeEndpointNodeIds = requiredNodeIds.filter((nodeId) =>
+      !visibleNodeEndpointNodeIds.has(nodeId),
+    );
+    const missingPostgresWireNodeIds = requiredNodeIds.filter((nodeId) =>
+      !visiblePostgresWireNodeIds.has(nodeId),
+    );
+    return Object.freeze({
+      ready: missingNodeEndpointNodeIds.length === NUM.ZERO &&
+        missingPostgresWireNodeIds.length === NUM.ZERO,
+      missingNodeEndpointNodeIds,
+      missingPostgresWireNodeIds,
+    });
+  }
+
+  /**
+   * Return non-terminal replica operations that still indicate topology churn
+   * for already-ACTIVE nodes.
+   * @param {string[]} activeNodeIds
+   * @return {{count:number,details:Object[]}}
+   * @private
+   */
+  collectCriticalSystemInFlightReplicaOperations(activeNodeIds = []) {
+    const requiredNodeIds = new Set(
+      (Array.isArray(activeNodeIds) ? activeNodeIds : []).filter((nodeId) =>
+        typeof nodeId === TYPEOF.STRING && nodeId.length > 0,
+      ),
+    );
+    if (requiredNodeIds.size === NUM.ZERO ||
+        typeof this.systemTableCache?.getAll !== TYPEOF.FUNCTION) {
+      return Object.freeze({
+        count: NUM.ZERO,
+        details: Object.freeze([]),
+      });
+    }
+
+    const rows = this.systemTableCache.getAll(TABLES.REPLICA_OPERATIONS) || [];
+    const details = [];
+    for (const row of rows) {
+      const status = String(row?.status || '').toLowerCase();
+      const targetNodeId = String(
+        row?.target_node_id || row?.targetNodeId || '',
+      );
+      if (!targetNodeId || !requiredNodeIds.has(targetNodeId)) {
+        continue;
+      }
+      if (TERMINAL_STATUSES.includes(status)) {
+        continue;
+      }
+      details.push(Object.freeze({
+        operationId: row?.operation_id || row?.operationId || null,
+        type: row?.type || null,
+        partitionId:
+          row?.partition_group_id ||
+          row?.partitionGroupId ||
+          row?.partition_id ||
+          row?.partitionId ||
+          null,
+        targetNodeId,
+        status: row?.status || null,
+        workflowStep: row?.workflow_step || row?.workflowStep || null,
+      }));
+    }
+
+    return Object.freeze({
+      count: details.length,
+      details: Object.freeze(details),
+    });
+  }
+
+  /**
+   * Return one local readiness snapshot when critical system-partition
+   * planning should wait for this leader to become serve-eligible.
+   *
+   * Background redistribution of seed-hosted system partitions fans out many
+   * control-plane reads and writes. During join/restart convergence, a leader
+   * that is not yet serve-eligible should not initiate that background work,
+   * even though repair-eligible topology operations remain valid elsewhere.
+   *
+   * @return {Object|null}
+   * @private
+   */
+  getCriticalSystemLocalServeReadinessBlocker() {
+    if (!this.isSystemPartitionEntity() ||
+        !this.controlPlaneReadinessService ||
+        typeof this.controlPlaneReadinessService.getNodeReadinessSync !==
+          TYPEOF.FUNCTION) {
+      return null;
+    }
+    const readiness = this.controlPlaneReadinessService.getNodeReadinessSync(
+      this.nodeId,
+      {
+        allowStaleOnCacheChange: false,
+      },
+    );
+    if (!readiness?.dimensions ||
+        readiness.dimensions[
+          CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE
+        ] === true) {
+      return null;
+    }
+    return readiness;
+  }
+
+  /**
+   * Return one local readiness snapshot when background topology mutation
+   * should wait for the local metadata publication contract to recover.
+   *
+   * @return {Object|null}
+   * @private
+   */
+  getLocalControlPlaneMutationReadinessBlocker() {
+    return getLocalControlPlaneMutationReadinessBlocker({
+      nodeId: this.nodeId,
+      controlPlaneReadinessService: this.controlPlaneReadinessService,
+    });
+  }
+
+  /**
+   * Return one bootstrap lifecycle snapshot when critical system-partition
+   * planning should wait for the node's traffic-ready stable window.
+   *
+   * `BootstrapReadinessState` is the canonical owner for startup/join/traffic
+   * lifecycle. Critical system redistribution should wait until that owner
+   * reports TRAFFIC_READY, rather than inferring readiness from cache health.
+   *
+   * @return {Object|null}
+   * @private
+   */
+  getCriticalSystemTrafficReadinessBlocker() {
+    if (!this.isSystemPartitionEntity() ||
+        !this.bootstrapReadinessState) {
+      return null;
+    }
+
+    const snapshot =
+      typeof this.bootstrapReadinessState.evaluate === TYPEOF.FUNCTION ?
+        this.bootstrapReadinessState.evaluate() :
+        (typeof this.bootstrapReadinessState.getSnapshot === TYPEOF.FUNCTION ?
+          this.bootstrapReadinessState.getSnapshot() :
+          null);
+    if (!snapshot || typeof snapshot !== TYPEOF.OBJECT) {
+      return null;
+    }
+    if (snapshot.ready === true &&
+        snapshot.phase === LIFECYCLE_PHASE.TRAFFIC_READY) {
+      return null;
+    }
+    return snapshot;
   }
 
   /**
@@ -919,6 +1181,9 @@ class UnifiedRebalancer extends EventEmitter {
     return this.systemTableCache.filter(
       SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
       (operation) => {
+        if (!isCoordinatorOwnedOperationType(operation?.type)) {
+          return false;
+        }
         if (TERMINAL_STATUSES.includes(operation.status)) {
           return false;
         }
@@ -939,6 +1204,13 @@ class UnifiedRebalancer extends EventEmitter {
       const result = await this.controlPlaneSystemTableGateway.executeQuery(
         SQL_BUDGET.SELECT_REBALANCE_BUDGET,
         [REBALANCER_CONFIG_KEY.REBALANCE_BUDGET],
+        {
+          controlPlaneTableName: SYSTEM_TABLE_NAME.CONFIG,
+          controlPlaneOperationKind: 'read',
+          workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+          allowPressureDefer: true,
+          deliveryPriority: 'background',
+        },
       );
 
       if (!result.success || !result.rows || result.rows.length === 0) {
@@ -960,6 +1232,13 @@ class UnifiedRebalancer extends EventEmitter {
       const result = await this.controlPlaneSystemTableGateway.executeQuery(
         SQL_BUDGET.SELECT_IN_FLIGHT_COUNT,
         [],
+        {
+          controlPlaneTableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+          controlPlaneOperationKind: 'read',
+          workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+          allowPressureDefer: true,
+          deliveryPriority: 'background',
+        },
       );
 
       if (!result.success || !result.rows || result.rows.length === 0) {
@@ -1239,8 +1518,21 @@ class UnifiedRebalancer extends EventEmitter {
         nodeId: move.nodeId,
         replicaId: move.replicaId,
         sourceNodeId: move.sourceNodeId,
+        enforceConcurrentOperationBudget: true,
+        controlPlaneMutationWorkClass:
+          CONTROL_PLANE_MUTATION_WORK_CLASS.BACKGROUND,
       });
     } catch (error) {
+      if (error?.rebalanceSkipReason) {
+        return {
+          success: false,
+          skipped: true,
+          reason: error.rebalanceSkipReason,
+          operation: move.type,
+          nodeId: move.nodeId,
+          replicaId: move.replicaId,
+        };
+      }
       if (error?.admissionResult) {
         return {
           success: false,
@@ -1498,7 +1790,7 @@ class UnifiedRebalancer extends EventEmitter {
     try {
       const configuredBudget = await this.getConfiguredRebalanceBudget();
       const inFlightCount = await this.getGlobalInFlightOperationCount();
-      const isCritical = this.isCriticalState(
+      const isCritical = this.movePlanner.isCriticalState(
         currentReplicas,
         effectivePolicy,
         availableNodes,
@@ -1676,6 +1968,137 @@ class UnifiedRebalancer extends EventEmitter {
         return;
       }
 
+      const topologySettlingBlocker =
+        this.getCriticalSystemTopologySettlingBlocker();
+      if (topologySettlingBlocker) {
+        this.currentInterval = Math.min(
+          this.currentInterval * 1.25,
+          this.maxInterval,
+        );
+        this.logger.info(REBALANCER_LOG_MSG.WAIT_TOPOLOGY_SETTLING, {
+          entityId: this.entityId,
+          entityType: this.entityType,
+          delayMs: this.currentInterval,
+          blockerReason: topologySettlingBlocker.reason || null,
+          unreadyNodeIds:
+            Array.isArray(topologySettlingBlocker.unreadyNodeIds) ?
+              [...topologySettlingBlocker.unreadyNodeIds] :
+              [],
+          missingNodeEndpointNodeIds:
+            Array.isArray(topologySettlingBlocker.missingNodeEndpointNodeIds) ?
+              [...topologySettlingBlocker.missingNodeEndpointNodeIds] :
+              [],
+          missingPostgresWireNodeIds:
+            Array.isArray(topologySettlingBlocker.missingPostgresWireNodeIds) ?
+              [...topologySettlingBlocker.missingPostgresWireNodeIds] :
+              [],
+          inFlightReplicaOperations: Number.isFinite(
+            topologySettlingBlocker.inFlightReplicaOperations,
+          ) ?
+            topologySettlingBlocker.inFlightReplicaOperations :
+            null,
+        });
+        this.scheduleNextCheck(this.currentInterval);
+        return;
+      }
+
+      const trafficReadinessBlocker =
+        this.getCriticalSystemTrafficReadinessBlocker();
+      if (trafficReadinessBlocker) {
+        this.currentInterval = Math.min(
+          this.currentInterval * 1.25,
+          this.maxInterval,
+        );
+        this.logger.info(REBALANCER_LOG_MSG.WAIT_TRAFFIC_READY, {
+          entityId: this.entityId,
+          entityType: this.entityType,
+          nodeId: this.nodeId,
+          delayMs: this.currentInterval,
+          readinessPhase: trafficReadinessBlocker.phase || null,
+          readinessReady: trafficReadinessBlocker.ready === true,
+          reasonCodes: Array.isArray(trafficReadinessBlocker.reasons) ?
+            [...trafficReadinessBlocker.reasons] :
+            [],
+          stableElapsedMs: Number.isFinite(
+            trafficReadinessBlocker.stableElapsedMs,
+          ) ?
+            trafficReadinessBlocker.stableElapsedMs :
+            null,
+          stableWindowMs: Number.isFinite(
+            trafficReadinessBlocker.stableWindowMs,
+          ) ?
+            trafficReadinessBlocker.stableWindowMs :
+            null,
+        });
+        this.scheduleNextCheck(this.currentInterval);
+        return;
+      }
+
+      const localServeReadinessBlocker =
+        this.getCriticalSystemLocalServeReadinessBlocker();
+      if (localServeReadinessBlocker) {
+        this.currentInterval = Math.min(
+          this.currentInterval * 1.25,
+          this.maxInterval,
+        );
+        this.logger.info(REBALANCER_LOG_MSG.WAIT_LOCAL_SERVE_READINESS, {
+          entityId: this.entityId,
+          entityType: this.entityType,
+          nodeId: this.nodeId,
+          delayMs: this.currentInterval,
+          reasonCodes: Array.isArray(localServeReadinessBlocker.reasons) ?
+            localServeReadinessBlocker.reasons
+              .map((reason) => String(reason?.code || ''))
+              .filter(Boolean) :
+            [],
+        });
+        this.scheduleNextCheck(this.currentInterval);
+        return;
+      }
+
+      const localMutationReadinessBlocker =
+        this.getLocalControlPlaneMutationReadinessBlocker();
+      if (localMutationReadinessBlocker) {
+        this.currentInterval = Math.min(
+          this.currentInterval * 1.25,
+          this.maxInterval,
+        );
+        this.logger.info(REBALANCER_LOG_MSG.WAIT_LOCAL_MUTATION_READINESS, {
+          entityId: this.entityId,
+          entityType: this.entityType,
+          nodeId: this.nodeId,
+          delayMs: this.currentInterval,
+          failedDimensions:
+            Array.isArray(localMutationReadinessBlocker.failedDimensions) ?
+              [...localMutationReadinessBlocker.failedDimensions] :
+              [],
+          reasonCodes:
+            Array.isArray(localMutationReadinessBlocker.reasonCodes) ?
+              [...localMutationReadinessBlocker.reasonCodes] :
+              [],
+        });
+        this.scheduleNextCheck(this.currentInterval);
+        return;
+      }
+
+      const transportPressure = this.getTransportPressureSummary();
+      if (transportPressure?.backpressured === true) {
+        this.currentInterval = Math.min(
+          this.currentInterval * 1.5,
+          this.maxInterval,
+        );
+        this.logger.info(REBALANCER_LOG_MSG.WAIT_TRANSPORT_BACKPRESSURE, {
+          entityId: this.entityId,
+          entityType: this.entityType,
+          saturatedNodeCount: transportPressure.saturatedNodeCount,
+          totalPending: transportPressure.totalPending,
+          maxPendingUtilization: transportPressure.maxPendingUtilization,
+          delayMs: this.currentInterval,
+        });
+        this.scheduleNextCheck(this.currentInterval);
+        return;
+      }
+
       // Re-evaluate state after stabilization (Requirement 2.4)
       const needsRebalance = await this.evaluateState();
 
@@ -1715,6 +2138,18 @@ class UnifiedRebalancer extends EventEmitter {
   }
 
   /**
+   * Return the local router's outbound pressure summary when available.
+   * @return {Object|null}
+   * @private
+   */
+  getTransportPressureSummary() {
+    return PressureGovernor.getShared({
+      nodeId: this.nodeId,
+      messageRouter: this.messageRouter,
+    }).getPressureSummary(['rebalancer:schedule']);
+  }
+
+  /**
    * Count moves that actually scheduled work (not skipped/deferred).
    * @param {Object} rebalanceResult - Result from rebalance().
    * @return {number} Number of actionable moves.
@@ -1741,11 +2176,19 @@ class UnifiedRebalancer extends EventEmitter {
     const currentReplicas = this.getCurrentReplicas();
     const policy = await this.getPolicy();
     const availableNodes = this.getAvailableNodes();
-    const desiredTarget = this.getPolicyTargetReplicaCount(policy);
-    const actionableTarget = this.getActionableTargetReplicaCount(
+    const assessment = this.movePlanner.assessState(
+      currentReplicas,
       policy,
       availableNodes,
     );
+    const {
+      actionableTarget,
+      critical,
+      criticalReason,
+      desiredTarget,
+      healthyReplicas,
+      suboptimal,
+    } = assessment;
 
     this.logger.debug(REBALANCER_LOG_MSG.EVALUATING_STATE, {
       entityId: this.entityId,
@@ -1769,7 +2212,6 @@ class UnifiedRebalancer extends EventEmitter {
       return false;
     }
 
-    const healthyReplicas = this.getHealthyReplicas(currentReplicas);
     if (availableNodes.length < desiredTarget &&
         healthyReplicas.length >= actionableTarget) {
       const degradedSignal = this.buildDegradedTargetSignal(
@@ -1794,18 +2236,18 @@ class UnifiedRebalancer extends EventEmitter {
     }
 
     // Critical checks - trigger immediate rebalancing
-    if (this.isCriticalState(currentReplicas, policy, availableNodes)) {
+    if (critical) {
       this.lastSuboptimalSignal = null;
       this.logger.warn(REBALANCER_LOG_MSG.CRITICAL_STATE, {
         entityId: this.entityId,
         entityType: this.entityType,
-        reason: this.getCriticalReason(currentReplicas, policy, availableNodes),
+        reason: criticalReason,
       });
       return true;
     }
 
     // Opportunistic checks - can wait for periodic schedule
-    if (this.isSuboptimalState(currentReplicas, policy, availableNodes)) {
+    if (suboptimal) {
       const suboptimalSignal = this.buildSuboptimalSignal(
         availableNodes,
         desiredTarget,
@@ -1885,27 +2327,11 @@ class UnifiedRebalancer extends EventEmitter {
    * @return {boolean} True if state is critical.
    */
   isCriticalState(replicas, policy, availableNodes = null) {
-    const healthyReplicas = this.getHealthyReplicas(replicas);
-    const readyNodes = Array.isArray(availableNodes) ?
-      availableNodes :
-      this.getAvailableNodes();
-    const minReplicas = policy.minReplicaCount || 3;
-
-    // Critical: Below minimum replica count
-    if (healthyReplicas.length < minReplicas &&
-        readyNodes.length >= minReplicas) {
-      return true;
-    }
-
-    // Critical: Message group has no local replica on some node
-    if (this.entityType === EntityType.MESSAGE_GROUP && policy.ensureLocalAccess) {
-      const nodesWithoutLocalReplica = this.getNodesWithoutLocalReplica(replicas);
-      if (nodesWithoutLocalReplica.length > 0) {
-        return true;
-      }
-    }
-
-    return false;
+    return this.movePlanner.isCriticalState(
+      replicas,
+      policy,
+      availableNodes,
+    );
   }
 
   /**
@@ -1915,25 +2341,11 @@ class UnifiedRebalancer extends EventEmitter {
    * @return {string} Reason description.
    */
   getCriticalReason(replicas, policy, availableNodes = null) {
-    const healthyReplicas = this.getHealthyReplicas(replicas);
-    const readyNodes = Array.isArray(availableNodes) ?
-      availableNodes :
-      this.getAvailableNodes();
-    const minReplicas = policy.minReplicaCount || 3;
-
-    if (healthyReplicas.length < minReplicas &&
-        readyNodes.length >= minReplicas) {
-      return `replica_count_below_minimum: ${healthyReplicas.length} < ${minReplicas}`;
-    }
-
-    if (this.entityType === EntityType.MESSAGE_GROUP && policy.ensureLocalAccess) {
-      const nodesWithoutLocalReplica = this.getNodesWithoutLocalReplica(replicas);
-      if (nodesWithoutLocalReplica.length > 0) {
-        return `nodes_without_local_replica: ${nodesWithoutLocalReplica.join(', ')}`;
-      }
-    }
-
-    return 'unknown';
+    return this.movePlanner.getCriticalReason(
+      replicas,
+      policy,
+      availableNodes,
+    );
   }
 
   /**
@@ -1943,41 +2355,11 @@ class UnifiedRebalancer extends EventEmitter {
    * @return {boolean} True if state is suboptimal.
    */
   isSuboptimalState(replicas, policy, availableNodes = null) {
-    const targetCount = this.getPolicyTargetReplicaCount(policy);
-    const healthyReplicas = this.getHealthyReplicas(replicas);
-    const readyNodes = Array.isArray(availableNodes) ?
-      availableNodes :
-      this.getAvailableNodes();
-    const actionableTarget = this.getActionableTargetReplicaCount(policy, readyNodes);
-
-    // Suboptimal: Not at target replica count
-    if (healthyReplicas.length < actionableTarget ||
-        healthyReplicas.length > targetCount) {
-      return true;
-    }
-
-    // Suboptimal: Replicas not spread across nodes
-    // But only if there are actually more nodes available to spread to
-    if (policy.placementConstraints?.spreadAcrossNodes) {
-      if (this.hasMultipleReplicasOnSameNode(healthyReplicas)) {
-        // Check if there are more nodes available than currently used
-        // Filter out replicas without node_id (defensive check)
-        const availableNodes = this.getAvailableNodes();
-        const usedNodeIds = new Set(
-          healthyReplicas.filter((r) => r && r.node_id).map((r) => r.node_id),
-        );
-        const unusedNodes = availableNodes.filter(
-          (n) => n && n.node_id && !usedNodeIds.has(n.node_id),
-        );
-
-        // Only suboptimal if we can actually spread to other nodes
-        if (unusedNodes.length > 0) {
-          return true;
-        }
-      }
-    }
-
-    return false;
+    return this.movePlanner.isSuboptimalState(
+      replicas,
+      policy,
+      availableNodes,
+    );
   }
 
   /**
@@ -1986,15 +2368,7 @@ class UnifiedRebalancer extends EventEmitter {
    * @return {boolean} True if duplicates exist.
    */
   hasMultipleReplicasOnSameNode(replicas) {
-    // Filter out replicas without node_id (defensive check)
-    const nodeIds = replicas
-      .filter((r) => r && r.node_id)
-      .map((r) => r.node_id);
-    if (nodeIds.length === 0) {
-      return false;
-    }
-    const uniqueNodeIds = new Set(nodeIds);
-    return uniqueNodeIds.size < nodeIds.length;
+    return this.movePlanner.hasMultipleReplicasOnSameNode(replicas);
   }
 
   /**
@@ -2003,31 +2377,7 @@ class UnifiedRebalancer extends EventEmitter {
    * @return {Array<string>} Node IDs without local replicas.
    */
   getNodesWithoutLocalReplica(replicas) {
-    const allNodes = this.getAvailableNodes();
-    let localAccessReplicas = replicas;
-
-    if (this.entityType === EntityType.MESSAGE_GROUP &&
-        this.systemTableCache &&
-        typeof this.systemTableCache.filter === 'function') {
-      localAccessReplicas = this.systemTableCache.filter(
-        SYSTEM_TABLE_NAME.SERVICES,
-        (service) => {
-          return service?.service_type === EntityType.MESSAGE_GROUP &&
-            service?.status === ReplicaStatus.ACTIVE &&
-            typeof service?.node_id === 'string' &&
-            service.node_id.length > 0;
-        },
-      );
-    }
-
-    // Filter out replicas without node_id (defensive check)
-    const nodesWithReplicas = new Set(
-      localAccessReplicas.filter((r) => r && r.node_id).map((r) => r.node_id),
-    );
-
-    return allNodes
-      .filter((node) => node && node.node_id && !nodesWithReplicas.has(node.node_id))
-      .map((node) => node.node_id);
+    return this.movePlanner.getNodesWithoutLocalReplica(replicas);
   }
 
   /**

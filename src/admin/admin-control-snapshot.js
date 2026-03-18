@@ -119,7 +119,7 @@ class AdminControlSnapshot {
    * Build local control snapshot payload from system cache only.
    * @return {Object}
    */
-  async buildLocalControlSnapshot() {
+  async buildLocalControlSnapshot(options = {}) {
     if (!this.systemTableCache ||
       typeof this.systemTableCache.getAll !== TYPEOF.FUNCTION) {
       throw new Error(
@@ -174,6 +174,10 @@ class AdminControlSnapshot {
         await this.buildControlPlaneDiagnosticsSnapshot({
           capturedAt,
           tableRows,
+          allowAuthoritativeReadinessRefresh:
+            options.allowAuthoritativeReadinessRefresh,
+          allowStaleReadinessOnCacheChange:
+            options.allowStaleReadinessOnCacheChange,
         }),
       leaders: leaderSummary.leaders,
       replicaRoles: leaderSummary.replicaRoles,
@@ -190,14 +194,21 @@ class AdminControlSnapshot {
    * @return {Promise<Object>}
    */
   async resolveLocalControlSnapshot(options = {}) {
-    const snapshot = await this.buildLocalControlSnapshot();
+    const snapshot = await this.buildLocalControlSnapshot(options);
     const forceAuthoritativeRepair =
       options.forceAuthoritativeRepair === true;
+    const allowAuthoritativeRepair =
+      options.allowAuthoritativeRepair !== false;
+    const repairEvaluation =
+      this.evaluateAuthoritativeControlSnapshotRepair();
     if (!this.canRunAuthoritativeControlSnapshotRepair()) {
       return snapshot;
     }
+    if (!forceAuthoritativeRepair && !allowAuthoritativeRepair) {
+      return snapshot;
+    }
     if (!forceAuthoritativeRepair &&
-        !this.shouldAttemptAuthoritativeControlSnapshotRepair()) {
+        repairEvaluation?.shouldRepair !== true) {
       return snapshot;
     }
 
@@ -206,6 +217,7 @@ class AdminControlSnapshot {
       repair = await this.ensureAuthoritativeDiscoveryCacheRepair({
         reason: CONTROL_SNAPSHOT_REPAIR_REASON,
         bypassReuse: forceAuthoritativeRepair,
+        triggerCodes: repairEvaluation?.triggerCodes,
       });
     } catch (_error) {
       repair = null;
@@ -241,8 +253,19 @@ class AdminControlSnapshot {
    * @private
    */
   shouldAttemptAuthoritativeControlSnapshotRepair() {
+    return this.evaluateAuthoritativeControlSnapshotRepair()
+      ?.shouldRepair === true;
+  }
+
+  /**
+   * Evaluate whether local control snapshot should attempt
+   * authoritative cache repair.
+   * @return {Object|null}
+   * @private
+   */
+  evaluateAuthoritativeControlSnapshotRepair() {
     if (!this.canRunAuthoritativeControlSnapshotRepair()) {
-      return false;
+      return null;
     }
 
     const capturedAt = this.nowFn();
@@ -269,7 +292,7 @@ class AdminControlSnapshot {
       staleReplicaOpsInFlightCount:
         replicaOperationSummary.staleInFlightCount,
     });
-    return evaluation.shouldRepair;
+    return evaluation;
   }
 
   /**
@@ -445,7 +468,12 @@ class AdminControlSnapshot {
     const capturedAt = Number.isFinite(options.capturedAt) ?
       options.capturedAt :
       this.nowFn();
-    const readinessEntries = await this.resolveControlPlaneReadinessEntries();
+    const readinessEntries = await this.resolveControlPlaneReadinessEntries({
+      allowAuthoritativeRefresh:
+        options.allowAuthoritativeReadinessRefresh !== false,
+      allowStaleOnCacheChange:
+        options.allowStaleReadinessOnCacheChange !== false,
+    });
     const readinessByNodeId = {};
     const nodeLivenessByNodeId = {};
     const placementEligibilityByNodeId = {};
@@ -506,7 +534,7 @@ class AdminControlSnapshot {
    * @return {Promise<Array<Object>>}
    * @private
    */
-  async resolveControlPlaneReadinessEntries() {
+  async resolveControlPlaneReadinessEntries(options = {}) {
     if (!this.controlPlaneReadinessService ||
         typeof this.controlPlaneReadinessService.getAllNodeReadiness !==
           TYPEOF.FUNCTION) {
@@ -515,8 +543,10 @@ class AdminControlSnapshot {
     try {
       const readiness =
         await this.controlPlaneReadinessService.getAllNodeReadiness({
-          allowAuthoritativeRefresh: true,
-          allowStaleOnCacheChange: true,
+          allowAuthoritativeRefresh:
+            options.allowAuthoritativeRefresh !== false,
+          allowStaleOnCacheChange:
+            options.allowStaleOnCacheChange !== false,
           maxCachedAgeMs: this.readinessSnapshotCacheMaxAgeMs,
         });
       return Array.isArray(readiness) ? readiness : ADMIN_CACHE_DUMP.EMPTY;
@@ -1540,8 +1570,23 @@ class AdminControlSnapshot {
       options.forceAuthoritativeRepair === true;
     const snapshot = await this.resolveLocalControlSnapshot(
       forceAuthoritativeRepair ?
-        {forceAuthoritativeRepair: true} :
-        {},
+        {
+          forceAuthoritativeRepair: true,
+          allowAuthoritativeRepair:
+            options.allowAuthoritativeRepair,
+          allowAuthoritativeReadinessRefresh:
+            options.allowAuthoritativeReadinessRefresh,
+          allowStaleReadinessOnCacheChange:
+            options.allowStaleReadinessOnCacheChange,
+        } :
+        {
+          allowAuthoritativeRepair:
+            options.allowAuthoritativeRepair,
+          allowAuthoritativeReadinessRefresh:
+            options.allowAuthoritativeReadinessRefresh,
+          allowStaleReadinessOnCacheChange:
+            options.allowStaleReadinessOnCacheChange,
+        },
     );
     return {
       success: true,

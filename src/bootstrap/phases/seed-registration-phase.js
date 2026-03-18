@@ -229,6 +229,18 @@ class SeedRegistrationPhase {
       messageRouter: typeof d.getMessageRouter === 'function' ?
         d.getMessageRouter() :
         null,
+      deferTransientFailures: true,
+      onDeferredActivation: ({partitionId, replicaId, error}) => {
+        logger.warn(
+          'Deferring seed partition service row activation during startup',
+          {
+            nodeId,
+            partitionId,
+            replicaId,
+            error: error?.message || String(error),
+          },
+        );
+      },
       partitionServices: d.getPartitionServices(),
       now: () => now,
     });
@@ -264,6 +276,7 @@ class SeedRegistrationPhase {
         },
         nodeId: d.getNodeId(),
         nodeAddress: d.getNodeAddress(),
+        advertisedNodeWsAddress: d.getAdvertisedNodeWsAddress?.() || null,
         wsPort: d.getWsPort(),
       });
 

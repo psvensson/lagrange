@@ -23,10 +23,11 @@ import {
 } from '../../constants/index.js';
 import {ENTRYPOINT_DEFAULT} from '../../constants/entrypoint.js';
 import {CONNECTION_STATE} from '../../constants/transport.js';
+import {resolveNodeWebSocketAddress} from
+  '../../transport/node-address-resolution.js';
 
 const OWNER_MESSAGE_ROUTER_SETUP = 'MessageRouterSetup';
-const ERR_MISSING_NODE_ADDRESS = 'Missing node_address';
-const ERR_CANNOT_DERIVE_WS_ADDRESS = 'Could not derive WebSocket address';
+const ERR_MISSING_WS_ENDPOINT = 'Missing canonical node_endpoints websocket address';
 const LOG_SEED_WS_FALLBACK =
   '[JOIN-DEBUG] Proceeding with peer mesh after seed websocket retry exhaustion';
 const MESH_CONNECTED_OR_IN_FLIGHT_STATES = new Set([
@@ -86,6 +87,8 @@ class ConnectWebSocketPhase {
     const wsPort = this.delegates.getWsPort();
     const identifyPayload = this.delegates.getIdentifyPayload();
     const nodeAddress = this.delegates.getNodeAddress();
+    const advertisedNodeWsAddress =
+      this.delegates.getAdvertisedNodeWsAddress?.() || null;
     const logger = this.delegates.getLogger();
 
     // Route message-router setup through the shared owner.
@@ -94,6 +97,7 @@ class ConnectWebSocketPhase {
       messageRouter = await MessageRouterSetup.create({
         nodeId: this.nodeId,
         nodeAddress,
+        advertisedNodeWsAddress,
         wsPort: wsPort,
         identifyPayload,
       });
@@ -125,6 +129,10 @@ class ConnectWebSocketPhase {
     await this.delegates.triggerJoinReconciler(
       JOINING_UNIFIED_RECONCILE.INFRA_READY_REASON,
     );
+    if (typeof this.delegates.ensureBootstrapSnapshotHydrated ===
+        TYPEOF.FUNCTION) {
+      await this.delegates.ensureBootstrapSnapshotHydrated();
+    }
 
     // Get seed node WebSocket address from bootstrap response or options
     const seedWsAddress = assertCritical(
@@ -342,6 +350,10 @@ class ConnectWebSocketPhase {
   async connectToClusterNodes() {
     const logger = this.delegates.getLogger();
     const messageRouter = this.delegates.getMessageRouter();
+    const bootstrapResponse =
+      this.delegates.getBootstrapResponse?.() || null;
+    const systemTableCache =
+      this.delegates.getSystemTableCache?.() || null;
     const {
       source: nodeSource,
       rows: nodesSnapshot,
@@ -388,26 +400,17 @@ class ConnectWebSocketPhase {
         return;
       }
 
-      if (!nodeAddress) {
-        logger.warn(JOINING_LOG_MSG.CLUSTER_NODE_CONNECT_FAILED, {
-          nodeId: this.nodeId,
-          targetNodeId,
-          error: ERR_MISSING_NODE_ADDRESS,
-        });
-        return;
-      }
-
-      // Derive WebSocket address from node address
-      // node_address format: "hostname:port" (e.g., "localhost:8082")
-      // WebSocket port = REST port + WS_PORT_OFFSET (2)
-      const wsAddress =
-        deriveWsAddressFromNodeAddress(nodeAddress);
+      const wsAddress = resolveNodeWebSocketAddress({
+        targetNodeId,
+        bootstrapResponse,
+        systemTableCache,
+      });
       if (!wsAddress) {
         logger.warn(JOINING_LOG_MSG.CLUSTER_NODE_CONNECT_FAILED, {
           nodeId: this.nodeId,
           targetNodeId,
           nodeAddress,
-          error: ERR_CANNOT_DERIVE_WS_ADDRESS,
+          error: ERR_MISSING_WS_ENDPOINT,
         });
         return;
       }

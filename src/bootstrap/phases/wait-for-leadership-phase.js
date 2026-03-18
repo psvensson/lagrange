@@ -68,6 +68,7 @@ class WaitForLeadershipPhase {
     const backoffMultiplier = config.leadershipWaitBackoffMultiplier;
     const systemTableCache =
       this.delegates.getSystemTableCache();
+    const requiredTables = this.getRequiredSystemWriteTables();
 
     logger.debug(JOINING_LOG_MSG.WAITING_LEADERSHIP, {
       nodeId: this.nodeId,
@@ -77,35 +78,28 @@ class WaitForLeadershipPhase {
     });
 
     while (now() - startTime < timeoutMs) {
-      const hasCacheLeader =
-        this.delegates.hasMessageGroupLeaderInCache(
-          systemTableCache,
-        );
-
-      // Check if any local replica is leader or has a known leader
+      // Check whether any local replica can already carry the upcoming join
+      // write set through the canonical metadata ingress path.
       const messageGroupServices =
         this.delegates.getMessageGroupServices();
       for (const [replicaId, service] of messageGroupServices) {
-        if (service.isLeaderReplica() || service.getLeaderId()) {
+        const ingressReady =
+          service?.isMetadataIngressReady?.({requiredTables}) === true;
+        if (ingressReady) {
           logger.debug(JOINING_LOG_MSG.LEADERSHIP_ESTABLISHED, {
             nodeId: this.nodeId,
             replicaId,
-            isLeader: service.isLeaderReplica(),
-            leaderId: service.getLeaderId(),
+            isLeader:
+              service?.isLeaderReplica?.() === true,
+            leaderId:
+              typeof service?.getLeaderId === TYPEOF.FUNCTION ?
+                service.getLeaderId() :
+                null,
+            requiredTables,
             elapsedMs: now() - startTime,
           });
           return;
         }
-      }
-      if (hasCacheLeader) {
-        logger.debug(JOINING_LOG_MSG.LEADERSHIP_ESTABLISHED, {
-          nodeId: this.nodeId,
-          replicaId: null,
-          isLeader: false,
-          leaderId: null,
-          elapsedMs: now() - startTime,
-        });
-        return;
       }
 
       // Wait with exponential backoff

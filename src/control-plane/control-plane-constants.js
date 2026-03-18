@@ -7,6 +7,7 @@ import {
   MESSAGE_TYPE,
   NODE_CAPABILITY,
   STATE,
+  TABLES,
   TIME_MS,
 } from '../constants/index.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
@@ -14,6 +15,13 @@ import {CONFIG_KEY} from '../config/config-constants.js';
 const ControlPlaneMessageType = Object.freeze({
   NODE_STATE_UPDATE: MESSAGE_TYPE.NODE_STATE_UPDATE,
   REPLICA_OPERATION_DISPATCH: MESSAGE_TYPE.REPLICA_OPERATION_DISPATCH,
+});
+
+const CONTROL_PLANE_MESSAGE_REQUIRED_TABLES = Object.freeze({
+  [ControlPlaneMessageType.NODE_STATE_UPDATE]: Object.freeze([
+    TABLES.NODES,
+  ]),
+  [ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH]: Object.freeze([]),
 });
 
 const ControlPlaneField = Object.freeze({
@@ -85,8 +93,15 @@ const CONTROL_PLANE_ALLOWED_STATES = Object.freeze([
   STATE.DISCONNECTED,
 ]);
 
+function getControlPlaneMessageRequiredTables(messageType) {
+  const requiredTables =
+    CONTROL_PLANE_MESSAGE_REQUIRED_TABLES[messageType];
+  return Array.isArray(requiredTables) ? [...requiredTables] : [];
+}
+
 export {
   ControlPlaneMessageType,
+  CONTROL_PLANE_MESSAGE_REQUIRED_TABLES,
   ControlPlaneField,
   DEFAULT_READY_LEASE_MS,
   DEFAULT_HEARTBEAT_INTERVAL_MS,
@@ -99,4 +114,5 @@ export {
   CONTROL_PLANE_ERROR_MSG,
   CONTROL_PLANE_ALLOWED_STATES,
   HEARTBEAT_FAILURE_WARN_THRESHOLD,
+  getControlPlaneMessageRequiredTables,
 };

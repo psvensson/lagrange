@@ -13,6 +13,11 @@ import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js'
 import {NUM, SERVICE_TYPE} from '../constants/index.js';
 import {assertCritical} from '../utils/assert.js';
 import {
+  CONTROL_PLANE_MUTATION_OPERATION,
+  ControlPlaneSystemTableGateway,
+} from '../control-plane/control-plane-system-table-gateway.js';
+import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
+import {
   REPLICA_RECOVERY_DEFAULT,
   REPLICA_RECOVERY_ENTITY_TYPE,
   REPLICA_RECOVERY_ERROR_MSG,
@@ -61,6 +66,8 @@ class ReplicaRecoveryService extends EventEmitter {
 
     this.systemTableCache = options.systemTableCache || null;
     this.cdcIntegrationService = options.cdcIntegrationService || null;
+    this.controlPlaneSystemTableGateway =
+      options.controlPlaneSystemTableGateway || null;
     this.nodeId = options.nodeId || null;
 
     // Configuration
@@ -100,6 +107,9 @@ class ReplicaRecoveryService extends EventEmitter {
     }
     if (options.cdcIntegrationService) {
       this.cdcIntegrationService = options.cdcIntegrationService;
+    }
+    if (options.controlPlaneSystemTableGateway) {
+      this.controlPlaneSystemTableGateway = options.controlPlaneSystemTableGateway;
     }
     if (options.nodeId) {
       this.nodeId = options.nodeId;
@@ -503,9 +513,10 @@ class ReplicaRecoveryService extends EventEmitter {
     });
 
     try {
-      await this.cdcIntegrationService.insertSystemTableRow(
-        SYSTEM_TABLE_NAME.SERVICES,
-        {
+      await this.getControlPlaneSystemTableGateway().submitMutation({
+        operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
+        tableName: SYSTEM_TABLE_NAME.SERVICES,
+        row: {
           service_id: serviceId,
           node_id: nodeId,
           service_type: ServiceType.PARTITION_REPLICA,
@@ -515,7 +526,10 @@ class ReplicaRecoveryService extends EventEmitter {
           created_at: Date.now(),
           id: serviceId,
         },
-      );
+      }, {
+        workClass: PRESSURE_WORK_CLASS.CRITICAL,
+        deliveryPriority: 'critical',
+      });
 
       this.recoveryCount++;
 
@@ -559,9 +573,10 @@ class ReplicaRecoveryService extends EventEmitter {
     });
 
     try {
-      await this.cdcIntegrationService.insertSystemTableRow(
-        SYSTEM_TABLE_NAME.SERVICES,
-        {
+      await this.getControlPlaneSystemTableGateway().submitMutation({
+        operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
+        tableName: SYSTEM_TABLE_NAME.SERVICES,
+        row: {
           service_id: serviceId,
           node_id: nodeId,
           service_type: ServiceType.MESSAGE_GROUP_REPLICA,
@@ -570,7 +585,10 @@ class ReplicaRecoveryService extends EventEmitter {
           created_at: Date.now(),
           id: serviceId,
         },
-      );
+      }, {
+        workClass: PRESSURE_WORK_CLASS.CRITICAL,
+        deliveryPriority: 'critical',
+      });
 
       this.recoveryCount++;
 
@@ -595,6 +613,22 @@ class ReplicaRecoveryService extends EventEmitter {
       });
       throw error;
     }
+  }
+
+  getControlPlaneSystemTableGateway() {
+    if (this.controlPlaneSystemTableGateway) {
+      if (!this.controlPlaneSystemTableGateway.cdcIntegrationService &&
+          this.cdcIntegrationService) {
+        this.controlPlaneSystemTableGateway
+          .setCdcIntegrationService(this.cdcIntegrationService);
+      }
+      return this.controlPlaneSystemTableGateway;
+    }
+    this.controlPlaneSystemTableGateway = new ControlPlaneSystemTableGateway({
+      nodeId: this.nodeId,
+      cdcIntegrationService: this.cdcIntegrationService,
+    });
+    return this.controlPlaneSystemTableGateway;
   }
 
   /**

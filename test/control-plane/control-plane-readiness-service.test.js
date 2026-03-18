@@ -173,6 +173,114 @@ test('ControlPlaneReadinessService classifies a fully ready node', async (t) => 
   t.end();
 });
 
+test('ControlPlaneReadinessService uses injected owners for async shared metadata reads',
+  async (t) => {
+    const nodeRow = createActiveNode('node-1');
+    const serviceRow = createMessageGroupService('node-1');
+    let cacheGetCalls = 0;
+    let cacheGetAllCalls = 0;
+    let cacheFilterCalls = 0;
+    const readinessService = new ControlPlaneReadinessService({
+      nodeId: 'node-1',
+      systemTableCache: {
+        get() {
+          cacheGetCalls += 1;
+          throw new Error('direct cache get should not be used');
+        },
+        getAll() {
+          cacheGetAllCalls += 1;
+          throw new Error('direct cache getAll should not be used');
+        },
+        filter() {
+          cacheFilterCalls += 1;
+          throw new Error('direct cache filter should not be used');
+        },
+        onCacheChange() {},
+      },
+      nodesOwner: {
+        async getNodeFromCache(nodeId) {
+          return {
+            success: true,
+            rows: nodeId === 'node-1' ? [nodeRow] : [],
+          };
+        },
+      },
+      servicesOwner: {
+        async listServicesForNodeFromCache(nodeId) {
+          return {
+            success: true,
+            rows: nodeId === 'node-1' ? [serviceRow] : [],
+          };
+        },
+      },
+      storageAccountingService: createAccountingService({
+        'node-1': {
+          nodeId: 'node-1',
+          budgetBytes: 1000,
+          pressureState: 'normal',
+        },
+      }),
+      cdcGroupPropagationService: createPublicationService({
+        currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+        reasonCode: null,
+        enteredAt: '2026-03-04T00:00:00.000Z',
+        recentTransitions: [],
+      }),
+      now: () => 1500,
+    });
+
+    const readiness = await readinessService.getNodeReadiness('node-1');
+
+    t.equal(readiness.dimensions.routingReady, true);
+    t.equal(readiness.dimensions.controlPlaneWritable, true);
+    t.equal(cacheGetCalls, 0, 'async owner path should not use cache.get');
+    t.equal(cacheGetAllCalls, 0, 'async owner path should not use cache.getAll');
+    t.equal(cacheFilterCalls, 0, 'async owner path should not use cache.filter');
+  });
+
+test('ControlPlaneReadinessService routes authoritative cache repair through ' +
+  'the injected gateway instead of mutating the cache directly',
+async (t) => {
+  const cache = createCache({
+    nodes: [{
+      [COLUMN.NODE_ID]: 'node-a',
+      status: STATE.ACTIVE,
+    }],
+  });
+  const repairCalls = [];
+  const readinessService = new ControlPlaneReadinessService({
+    nodeId: 'node-a',
+    systemTableCache: cache,
+    cacheMutationTarget: {
+      applySystemTableChange() {
+        throw new Error('readiness repair must not mutate cache directly');
+      },
+    },
+    controlPlaneSystemTableGateway: {
+      reconcileAuthoritativeCacheRows(tableName, rows, options) {
+        repairCalls.push({tableName, rows, options});
+        return Promise.resolve({success: true, mutationCount: 2});
+      },
+    },
+  });
+
+  const mutationCount = await readinessService.applyAuthoritativeRows(
+    TABLES.NODES,
+    [{[COLUMN.NODE_ID]: 'node-a', status: STATE.ACTIVE}],
+    [{[COLUMN.NODE_ID]: 'node-a', status: STATE.ACTIVE}],
+    'readiness-repair:test',
+  );
+
+  t.equal(mutationCount, 2, 'gateway-provided mutation count should propagate');
+  t.equal(repairCalls.length, 1, 'readiness repair should delegate once');
+  t.equal(repairCalls[0].tableName, TABLES.NODES, 'readiness repair should target the requested table');
+  t.equal(
+    repairCalls[0].options.causeId,
+    'readiness-repair:test',
+    'readiness repair should preserve the repair cause',
+  );
+});
+
 test('ControlPlaneReadinessService reuses one owner-key evaluation for ' +
   'concurrent readiness reads', async (t) => {
   let releaseCapacityRead;
@@ -978,6 +1086,72 @@ async (t) => {
   t.end();
 });
 
+test('ControlPlaneReadinessService avoids synchronous authoritative self ' +
+  'repair when local active service evidence is already present',
+async (t) => {
+  const now = 410000;
+  const nodeId = 'node-self-local-evidence';
+  const cache = createCache({
+    nodes: [{
+      ...createActiveNode(nodeId),
+      [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
+      [COLUMN.LAST_HEARTBEAT]: now - 60000,
+      [COLUMN.READY_LEASE_EXPIRES_AT]: now - 30000,
+    }],
+    services: [createMessageGroupService(nodeId)],
+  });
+  const authoritativeReads = [];
+  const readinessService = new ControlPlaneReadinessService({
+    nodeId,
+    systemTableCache: cache,
+    cacheMutationTarget: cache,
+    messageRouter: {
+      getConnectionState() {
+        return STATE.CONNECTED;
+      },
+    },
+    storageAccountingService: createAccountingService({
+      [nodeId]: {
+        nodeId,
+        budgetBytes: 1000,
+        pressureState: 'normal',
+      },
+    }),
+    cdcIntegrationService: {
+      async executeAuthoritativeSystemTableRead(tableName, sql, params) {
+        authoritativeReads.push({tableName, sql, params});
+        return {success: false, rows: []};
+      },
+    },
+    cdcGroupPropagationService: createPublicationService({
+      currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+      reasonCode: null,
+      enteredAt: '2026-03-04T00:00:00.000Z',
+      recentTransitions: [],
+    }),
+    now: () => now,
+  });
+
+  const readiness = await readinessService.getNodeReadiness(
+    nodeId,
+    {
+      allowAuthoritativeRefresh: true,
+      requireFreshOnIneligible: true,
+      decisionDimension: CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
+    },
+  );
+
+  t.equal(readiness.dimensions.clusterMemberHealthy, true,
+    'self-node local execution must keep membership healthy even with stale cached lease');
+  t.equal(readiness.dimensions.controlPlaneWritable, true,
+    'locally hosted active control-plane services should keep self writes admitted');
+  t.equal(readiness.dimensions.serveEligible, true,
+    'self-node should remain serve-eligible while authoritative state catches up');
+  t.same(authoritativeReads, [],
+    'self-node hot-path readiness should not force synchronous authoritative self repair');
+  t.end();
+});
+
 test('ControlPlaneReadinessService reuses a recent readiness snapshot ' +
   'instead of repeating timed-out authoritative repairs on the hot path',
 async (t) => {
@@ -1412,6 +1586,116 @@ test('ControlPlaneReadinessService refreshes invalidated ineligible snapshots ' 
 });
 
 test('ControlPlaneReadinessService refreshes cached ineligible snapshots ' +
+  'in the background for serve decisions', async (t) => {
+  const now = 529000;
+  const nodeId = 'node-cached-ineligible-background';
+  const cache = createCache({
+    nodes: [{
+      ...createActiveNode(nodeId),
+      [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
+      [COLUMN.LAST_HEARTBEAT]: now - 60000,
+      [COLUMN.READY_LEASE_EXPIRES_AT]: now - 30000,
+    }],
+    services: [{
+      ...createMessageGroupService(nodeId),
+      [COLUMN.STATUS]: SERVICE_STATUS.STOPPED,
+    }],
+  });
+  const authoritativeReads = [];
+  let releaseAuthoritativeRead = null;
+  const authoritativeReadGate = new Promise((resolve) => {
+    releaseAuthoritativeRead = resolve;
+  });
+  let backgroundReadStartedResolve = null;
+  const backgroundReadStarted = new Promise((resolve) => {
+    backgroundReadStartedResolve = resolve;
+  });
+  const readinessService = new ControlPlaneReadinessService({
+    nodeId: 'seed-node',
+    systemTableCache: cache,
+    cacheMutationTarget: cache,
+    messageRouter: {
+      getConnectionState() {
+        return STATE.CONNECTED;
+      },
+    },
+    storageAccountingService: createAccountingService({
+      [nodeId]: {
+        nodeId,
+        budgetBytes: 1000,
+        pressureState: 'normal',
+      },
+    }),
+    cdcIntegrationService: {
+      async executeAuthoritativeSystemTableRead(tableName) {
+        authoritativeReads.push(tableName);
+        backgroundReadStartedResolve?.();
+        await authoritativeReadGate;
+        if (tableName === TABLES.NODES) {
+          return {
+            success: true,
+            rows: [{
+              ...createActiveNode(nodeId),
+              [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
+              [COLUMN.LAST_HEARTBEAT]: now - 100,
+              [COLUMN.READY_LEASE_EXPIRES_AT]: now + 60000,
+            }],
+          };
+        }
+        if (tableName === TABLES.SERVICES) {
+          return {
+            success: true,
+            rows: [createMessageGroupService(nodeId)],
+          };
+        }
+        return {success: false, rows: []};
+      },
+    },
+    cdcGroupPropagationService: createPublicationService({
+      currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+      reasonCode: null,
+      enteredAt: '2026-03-04T00:00:00.000Z',
+      recentTransitions: [],
+    }),
+    now: () => now,
+  });
+
+  const initial = await readinessService.getNodeReadiness(
+    nodeId,
+    {maxCachedAgeMs: 5000},
+  );
+
+  const repeated = await readinessService.getNodeReadiness(
+    nodeId,
+    {
+      maxCachedAgeMs: 5000,
+      allowAuthoritativeRefresh: true,
+      preferBackgroundRefreshOnIneligible: true,
+      decisionDimension: CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
+    },
+  );
+
+  t.equal(initial.dimensions.serveEligible, false);
+  t.equal(repeated.dimensions.serveEligible, false,
+    'background-refresh mode should return the cached ineligible snapshot immediately');
+
+  await backgroundReadStarted;
+  t.equal(authoritativeReads.length, 2,
+    'background-refresh mode should start the owner-path refresh without blocking the caller');
+
+  releaseAuthoritativeRead();
+  await new Promise((resolve) => setImmediate(resolve));
+
+  const refreshed = await readinessService.getNodeReadiness(
+    nodeId,
+    {maxCachedAgeMs: 5000},
+  );
+  t.equal(refreshed.dimensions.serveEligible, true,
+    'later callers should observe the asynchronously refreshed readiness snapshot');
+  t.end();
+});
+
+test('ControlPlaneReadinessService refreshes cached ineligible snapshots ' +
   'synchronously for serve decisions', async (t) => {
   const now = 530000;
   const cache = createCache({
@@ -1821,8 +2105,8 @@ async (t) => {
   t.end();
 });
 
-test('ControlPlaneReadinessService keeps self-node repairs on the authoritative ' +
-  'owner path with repair-eligible routed fallback available',
+test('ControlPlaneReadinessService keeps self-node hot-path readiness off the ' +
+  'authoritative owner path when local service evidence is available',
 async (t) => {
   const now = 395000;
   const cache = createCache({
@@ -1891,24 +2175,8 @@ async (t) => {
   );
 
   t.equal(readiness.dimensions.clusterMemberHealthy, true);
-  t.equal(authoritativeReads.length, 2,
-    'self readiness should still perform bounded node and service reads');
-  for (const read of authoritativeReads) {
-    t.match(read.options, {
-      localReadConsistency: 'local_leader',
-      allowSqlFallback: true,
-    });
-    t.equal(
-      read.options?.queryOptions?.routingReadinessDimension,
-      CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
-      'self readiness fallback must stay on repairEligible routing',
-    );
-    t.match(
-      String(read.options?.queryOptions?.sessionId || ''),
-      /^authoritative-control-plane-read:/,
-      'self readiness fallback should isolate the SQL session',
-    );
-  }
+  t.equal(authoritativeReads.length, 0,
+    'self readiness should rely on local active service evidence instead of synchronous authoritative self repair');
   t.end();
 });
 

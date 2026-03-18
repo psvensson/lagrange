@@ -7,6 +7,7 @@ import {
   parseSamplesNdjson,
   analyzeMemoryLeakSamples,
   analyzeMemoryLeakFromPlayback,
+  calculateTailSlopeBytesPerMinute,
 } from '../memory-leak-analyzer.js';
 
 const MS_PER_MINUTE = 60000;
@@ -190,4 +191,127 @@ describe('memory-leak-analyzer', () => {
       await rm(tempDir, {recursive: true, force: true});
     }
   });
+
+  it('classifies transient pressure when tail slope recovers', () => {
+    // Simulate a spike-then-recovery pattern: memory grows sharply
+    // in the first 70% of samples, then levels off in the last 30%.
+    // Overall slope and growth exceed thresholds, but tail slope is
+    // near zero — transient pressure, not a leak.
+    const spikeCount = 14;
+    const recoveryCount = 6;
+    const samples = [];
+    const startBytes = 100000000;
+    const spikeStepBytes = 3000000;
+
+    for (let i = 0; i < spikeCount; i++) {
+      samples.push({
+        timestamp: i * MS_PER_MINUTE,
+        nodeId: 'node-spike',
+        memoryUsageBytes: startBytes + (i * spikeStepBytes),
+        memoryLimitBytes: 500000000,
+      });
+    }
+    const peakBytes =
+      startBytes + ((spikeCount - 1) * spikeStepBytes);
+    for (let i = 0; i < recoveryCount; i++) {
+      samples.push({
+        timestamp: (spikeCount + i) * MS_PER_MINUTE,
+        nodeId: 'node-spike',
+        memoryUsageBytes: peakBytes,
+        memoryLimitBytes: 500000000,
+      });
+    }
+
+    const analysis = analyzeMemoryLeakSamples(samples, {
+      enabled: true,
+      minSamplesPerNode: 5,
+      warmupFraction: 0,
+      minWarmupMs: 0,
+      minAnalysisWindowMs: 1,
+      maxPositiveSlopeBytesPerMin: 500000,
+      minGrowthBytes: 4000000,
+      minPositiveDeltaRatio: 0.5,
+    });
+
+    assert.equal(analysis.enabled, true);
+    assert.equal(analysis.analyzed, true);
+    assert.equal(
+      analysis.leakDetected,
+      false,
+      'Should not flag as leak when tail slope shows recovery',
+    );
+    assert.equal(analysis.nodeCount, 1);
+    assert.equal(
+      analysis.nodes[0].reason,
+      'transient-pressure',
+    );
+    assert.equal(analysis.nodes[0].recoveryDetected, true);
+    assert.equal(analysis.leakingNodeCount, 0);
+  });
+
+  it('still flags sustained leak when tail slope remains positive',
+    () => {
+      const samples = buildLinearSamples({
+        nodeId: 'node-leak',
+        sampleCount: 20,
+        stepBytes: 3000000,
+        startBytes: 100000000,
+      });
+
+      const analysis = analyzeMemoryLeakSamples(samples, {
+        enabled: true,
+        minSamplesPerNode: 5,
+        warmupFraction: 0,
+        minWarmupMs: 0,
+        minAnalysisWindowMs: 1,
+        maxPositiveSlopeBytesPerMin: 500000,
+        minGrowthBytes: 4000000,
+        minPositiveDeltaRatio: 0.5,
+      });
+
+      assert.equal(
+        analysis.leakDetected,
+        true,
+        'Should flag as leak when tail slope is still positive',
+      );
+      assert.equal(
+        analysis.nodes[0].reason,
+        'sustained-positive-trend',
+      );
+      assert.equal(analysis.nodes[0].recoveryDetected, false);
+      assert.equal(analysis.leakingNodeCount, 1);
+    });
+
+  it('calculateTailSlopeBytesPerMinute returns near-zero for flat tail',
+    () => {
+      const samples = [];
+      const flatBytes = 200000000;
+      for (let i = 0; i < 10; i++) {
+        samples.push({
+          timestamp: i * MS_PER_MINUTE,
+          memoryUsageBytes: flatBytes,
+        });
+      }
+      const tailSlope = calculateTailSlopeBytesPerMinute(samples);
+      assert.ok(
+        Math.abs(tailSlope) < 1000,
+        'Expected near-zero tail slope for flat data, ' +
+        `got ${tailSlope}`,
+      );
+    });
+
+  it('calculateTailSlopeBytesPerMinute returns positive for growing tail',
+    () => {
+      const samples = buildLinearSamples({
+        nodeId: 'node-grow',
+        sampleCount: 10,
+        stepBytes: 2000000,
+      });
+      const tailSlope = calculateTailSlopeBytesPerMinute(samples);
+      assert.ok(
+        tailSlope > 0,
+        'Expected positive tail slope for growing data, ' +
+        `got ${tailSlope}`,
+      );
+    });
 });

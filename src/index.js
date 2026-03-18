@@ -49,14 +49,23 @@ import {
 } from './runtime/control-plane-rollout-controls.js';
 import {createManagedSplitMetricsProvider} from
   './partition/managed-split-metrics-provider.js';
-import {PARTITION_SERVICE_EVENT} from
-  './partition/partition-service-constants.js';
+import {TRANSPORT_CONFIG_KEY} from './constants/transport.js';
+import {resolveAdvertisedWebSocketAddress} from
+  './transport/node-address-resolution.js';
+import {
+  ControlPlaneSystemTableGateway,
+} from './control-plane/control-plane-system-table-gateway.js';
+import {
+  createSystemMetadataOwners,
+} from './control-plane/owners/index.js';
 import {SPLIT_MERGE_EVENT} from
   './partition/partition-constants.js';
 import {STABILIZATION_RESET_TRIGGER} from
   './rebalancer/rebalancer-constants.js';
 import {wireMigrationWorkflowOwners} from
   './migration/migration-composition.js';
+import {wireMigrationRecoveryOnLeaderElection} from
+  './migration/migration-recovery-trigger.js';
 
 // Re-export modules for external use
 export * from './query/index.js';
@@ -81,16 +90,6 @@ export * from './storage/index.js';
  */
 export const VERSION = ENTRYPOINT_VERSION;
 const CONTROL_PLANE_WRITE_FAILURE_THRESHOLD = 3;
-const MIGRATION_RECOVERY_REASON = Object.freeze({
-  NODE_RESTART: 'node_restart',
-  LEADER_ELECTED: 'leader_elected',
-});
-const MIGRATION_RECOVERY_LOG_MSG = Object.freeze({
-  SKIPPED: 'Schema migration recovery skipped: migration coordinator unavailable',
-  START: 'Starting schema migration recovery',
-  COMPLETE: 'Schema migration recovery completed',
-  FAILED: 'Schema migration recovery failed',
-});
 
 /**
  * Check for version flag.
@@ -202,102 +201,6 @@ function resolvePartitionServiceByPartitionId(
     }
   }
   return null;
-}
-
-
-/**
- * Run migration recovery if the SQL engine has a migration coordinator.
- * @param {Object|null} sqlQueryEngine
- * @param {Object} logger
- * @param {string} reason
- * @return {Promise<void>}
- */
-async function recoverMigrationsForReason(sqlQueryEngine, logger, reason) {
-  const migrationCoordinator = sqlQueryEngine?.migrationCoordinator || null;
-  if (!migrationCoordinator ||
-      typeof migrationCoordinator.recoverMigrations !== 'function') {
-    logger.debug(MIGRATION_RECOVERY_LOG_MSG.SKIPPED, {reason});
-    return;
-  }
-  logger.info(MIGRATION_RECOVERY_LOG_MSG.START, {reason});
-  try {
-    const recoveryResult = await migrationCoordinator.recoverMigrations();
-    logger.info(MIGRATION_RECOVERY_LOG_MSG.COMPLETE, {
-      reason,
-      recoveredCount: recoveryResult?.recovered || 0,
-    });
-  } catch (error) {
-    logger.error(MIGRATION_RECOVERY_LOG_MSG.FAILED, {
-      reason,
-      error: error.message,
-    });
-  }
-}
-
-/**
- * Attach migration recovery to partition leader-election events.
- * @param {Object} options
- * @param {Object|null} options.sqlQueryEngine
- * @param {Map|string|Object|null} options.partitionServices
- * @param {Object} options.logger
- * @return {Function}
- */
-function wireMigrationRecoveryOnLeaderElection(options = {}) {
-  const sqlQueryEngine = options.sqlQueryEngine || null;
-  const partitionServices = options.partitionServices || null;
-  const logger = options.logger || console;
-  if (!sqlQueryEngine ||
-      !partitionServices ||
-      typeof partitionServices.values !== 'function') {
-    return () => {};
-  }
-
-  let recoveryInFlight = null;
-  const triggerRecovery = (reason) => {
-    if (recoveryInFlight) {
-      return recoveryInFlight;
-    }
-    recoveryInFlight = recoverMigrationsForReason(
-      sqlQueryEngine,
-      logger,
-      reason,
-    ).finally(() => {
-      recoveryInFlight = null;
-    });
-    return recoveryInFlight;
-  };
-  const handlers = [];
-  for (const partitionService of partitionServices.values()) {
-    if (!partitionService || typeof partitionService.on !== 'function') {
-      continue;
-    }
-    const handler = () => {
-      void triggerRecovery(MIGRATION_RECOVERY_REASON.LEADER_ELECTED);
-    };
-    partitionService.on(PARTITION_SERVICE_EVENT.LEADER_ELECTED, handler);
-    handlers.push({
-      partitionService,
-      handler,
-    });
-  }
-
-  void triggerRecovery(MIGRATION_RECOVERY_REASON.NODE_RESTART);
-
-  return () => {
-    for (const entry of handlers) {
-      if (typeof entry.partitionService?.off === 'function') {
-        entry.partitionService.off(
-          PARTITION_SERVICE_EVENT.LEADER_ELECTED,
-          entry.handler,
-        );
-      } else if (typeof entry.partitionService?.removeListener === 'function') {
-        entry.partitionService.removeListener(
-          PARTITION_SERVICE_EVENT.LEADER_ELECTED,
-          entry.handler,
-        );
-      }
-    }
-  };
 }
 
 /**
@@ -431,10 +334,21 @@ async function connectLogsTablePersistence(
   }
 
   try {
+    const controlPlaneSystemTableGateway = new ControlPlaneSystemTableGateway({
+      cdcIntegrationService,
+      messageRouter: cdcIntegrationService?.messageRouter || null,
+    });
+    const systemMetadataOwners = createSystemMetadataOwners({
+      controlPlaneSystemTableGateway,
+    });
     const logsTableService = LogsTableService.getInstance({
       rolloutControls,
     });
-    logsTableService.initialize({cdcIntegrationService});
+    logsTableService.initialize({
+      cdcIntegrationService,
+      logsOwner: systemMetadataOwners.logsOwner,
+      controlPlaneSystemTableGateway,
+    });
     const flushedCount = await logsTableService.connectToLoggingService();
     logger.info(ENTRYPOINT_LOG_MSG.LOGS_TABLE_CONNECTED, {
       bufferedEntriesFlushed: flushedCount,
@@ -647,6 +561,18 @@ async function main() {
     const wsPort =
       config.get(CONFIG_KEY.NODE_WS_PORT) ||
       (restApiPort + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET);
+    const joiningNodeAddress =
+      config.get(CONFIG_KEY.NODE_ADDRESS) ||
+      `${ENTRYPOINT_DEFAULT.LOCALHOST}:${restApiPort}`;
+    const advertisedNodeWsAddress =
+      resolveAdvertisedWebSocketAddress({
+        advertisedAddress: config.get(
+          CONFIG_KEY.NODE_ADVERTISED_WS_ADDRESS,
+        ),
+        nodeAddress: joiningNodeAddress,
+        wsPort,
+        wsHost: config.get(TRANSPORT_CONFIG_KEY.WS_HOST),
+      });
     const joiningConfig = {};
     const joinHttpTimeoutMs = parsePositiveTimeoutMs(
       process.env[ENTRYPOINT_ENV.JOINING_HTTP_TIMEOUT_MS],
@@ -661,18 +587,6 @@ async function main() {
       joiningConfig.leadershipWaitTimeoutMs = joinLeadershipWaitTimeoutMs;
     }
 
-    const nodeJoiningService = new NodeJoiningService({
-      nodeId: config.get(CONFIG_KEY.NODE_ID),
-      nodeAddress: config.get(CONFIG_KEY.NODE_ADDRESS) ||
-        `${ENTRYPOINT_DEFAULT.LOCALHOST}:${config.get(CONFIG_KEY.NODE_REST_API_PORT)}`,
-      seedNodeAddress: seedUrl,
-      wsPort: wsPort,
-      dataDir: dataDirectoryManager.getDataDir(),
-      rolloutControls,
-      config: Object.keys(joiningConfig).length > 0 ?
-        joiningConfig :
-        undefined,
-    });
     const joinReadinessState = new BootstrapReadinessState();
     joinReadinessState.on(READINESS_EVENT.TRANSITION, (transition) => {
       mainLogger.info(ENTRYPOINT_LOG_MSG.READINESS_TRANSITION, {
@@ -694,9 +608,23 @@ async function main() {
         timestamp: event.timestamp,
       });
     });
+    const nodeJoiningService = new NodeJoiningService({
+      nodeId: config.get(CONFIG_KEY.NODE_ID),
+      nodeAddress: joiningNodeAddress,
+      advertisedNodeWsAddress,
+      seedNodeAddress: seedUrl,
+      wsPort: wsPort,
+      dataDir: dataDirectoryManager.getDataDir(),
+      rolloutControls,
+      readinessState: joinReadinessState,
+      config: Object.keys(joiningConfig).length > 0 ?
+        joiningConfig :
+        undefined,
+    });
     const bootstrapAPI = new BootstrapAPI({
       seedNodeId: config.get(CONFIG_KEY.NODE_ID),
-      seedNodeAddress: config.get(CONFIG_KEY.NODE_ADDRESS),
+      seedNodeAddress: joiningNodeAddress,
+      seedNodeWsAddress: advertisedNodeWsAddress,
       wsPort: wsPort,
       messageGroupServices: nodeJoiningService.messageGroupServices,
       partitionServices: nodeJoiningService.partitionServices,
@@ -788,6 +716,8 @@ async function main() {
       const {PartitionSplitMergeManager} =
         await import('./partition/partition-split-merge-manager.js');
       const partitionSplitMergeManager = new PartitionSplitMergeManager({
+        nodeId: config.get(CONFIG_KEY.NODE_ID),
+        messageRouter: joinResult.messageRouter,
         tablePolicyService: nodeJoiningService.tablePolicyService,
         listPartitions: () => sqlQueryEngine.listManagedSplitPartitions(),
         getPartitionMetrics: createManagedSplitMetricsProvider({
@@ -945,15 +875,19 @@ async function main() {
     const wsPort =
       config.get(CONFIG_KEY.NODE_WS_PORT) ||
       (restApiPort + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET);
+    const seedNodeHttpAddress =
+      config.get(CONFIG_KEY.NODE_ADDRESS) ||
+      `${ENTRYPOINT_DEFAULT.LOCALHOST}:${restApiPort}`;
+    const advertisedNodeWsAddress =
+      resolveAdvertisedWebSocketAddress({
+        advertisedAddress: config.get(
+          CONFIG_KEY.NODE_ADVERTISED_WS_ADDRESS,
+        ),
+        nodeAddress: seedNodeHttpAddress,
+        wsPort,
+        wsHost: config.get(TRANSPORT_CONFIG_KEY.WS_HOST),
+      });
 
-    const bootstrapService = new BootstrapService({
-      nodeId: config.get(CONFIG_KEY.NODE_ID),
-      nodeAddress:
-        config.get(CONFIG_KEY.NODE_ADDRESS) || `${ENTRYPOINT_DEFAULT.LOCALHOST}:${restApiPort}`,
-      dataDirectoryManager,
-      wsPort: wsPort,
-      rolloutControls,
-    });
     const readinessState = new BootstrapReadinessState();
     readinessState.on(READINESS_EVENT.TRANSITION, (transition) => {
       mainLogger.info(ENTRYPOINT_LOG_MSG.READINESS_TRANSITION, {
@@ -975,12 +909,22 @@ async function main() {
         timestamp: event.timestamp,
       });
     });
+    const bootstrapService = new BootstrapService({
+      nodeId: config.get(CONFIG_KEY.NODE_ID),
+      nodeAddress: seedNodeHttpAddress,
+      advertisedNodeWsAddress,
+      dataDirectoryManager,
+      wsPort: wsPort,
+      rolloutControls,
+      readinessState,
+    });
 
     // Start Bootstrap API early so /health reports liveness during
     // bootstrap phases. Readiness is still exposed via `ready: false`.
     const bootstrapAPI = new BootstrapAPI({
       seedNodeId: config.get(CONFIG_KEY.NODE_ID),
-      seedNodeAddress: config.get(CONFIG_KEY.NODE_ADDRESS),
+      seedNodeAddress: seedNodeHttpAddress,
+      seedNodeWsAddress: advertisedNodeWsAddress,
       wsPort: wsPort,
       messageGroupServices: bootstrapService.messageGroupServices,
       partitionServices: bootstrapService.partitionServices,
@@ -1064,6 +1008,8 @@ async function main() {
     const {PartitionSplitMergeManager} =
       await import('./partition/partition-split-merge-manager.js');
     const partitionSplitMergeManager = new PartitionSplitMergeManager({
+      nodeId: config.get(CONFIG_KEY.NODE_ID),
+      messageRouter: bootstrapResult.messageRouter,
       tablePolicyService: bootstrapService.tablePolicyService,
       listPartitions: () => sqlQueryEngine.listManagedSplitPartitions(),
       getPartitionMetrics: createManagedSplitMetricsProvider({

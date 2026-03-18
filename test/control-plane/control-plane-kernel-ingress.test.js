@@ -60,6 +60,7 @@ test('ControlPlaneKernelIngress - prefers local ingress before remote ingress',
           groupId: 'mg-1',
           unifiedAddress: 'joining-node-2/message-group/mg-1-r2',
           isLeaderReplica: () => true,
+          isMetadataIngressReady: () => true,
         }],
       ]),
     });
@@ -74,6 +75,90 @@ test('ControlPlaneKernelIngress - prefers local ingress before remote ingress',
         'seed-node-1/message-group/mg-1-r3',
       ],
       'local ingress should be first when the joiner has a live local replica',
+    );
+  });
+
+test('ControlPlaneKernelIngress - skips non-leader local ingress during join convergence',
+  async (t) => {
+    const ingress = new ControlPlaneKernelIngress({
+      nodeId: 'joining-node-2b',
+      getBootstrapResponse: () => ({
+        seedNodeId: 'seed-node-1',
+        messageGroupAssignment: {
+          strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
+          groupId: 'mg-1',
+          peerAddresses: [
+            'seed-node-1/message-group/mg-1-r3',
+          ],
+        },
+      }),
+      getMessageRouter: () => ({
+        getConnectionState() {
+          return 'connected';
+        },
+      }),
+      getMessageGroupServices: () => new Map([
+        ['mg-1-r2', {
+          groupId: 'mg-1',
+          unifiedAddress: 'joining-node-2b/message-group/mg-1-r2',
+          isLeaderReplica: () => false,
+          isMetadataIngressReady: () => false,
+        }],
+      ]),
+    });
+
+    t.same(
+      ingress.resolveTargetCandidates({
+        allowBootstrapHints: true,
+        allowSelfTarget: true,
+      }),
+      [
+        'seed-node-1/message-group/mg-1-r3',
+      ],
+      'non-leader local ingress should not be treated as authoritative',
+    );
+  });
+
+test('ControlPlaneKernelIngress - can prefer ingress-ready non-leader local ingress for any-replica control paths',
+  async (t) => {
+    const ingress = new ControlPlaneKernelIngress({
+      nodeId: 'joining-node-2c',
+      getBootstrapResponse: () => ({
+        seedNodeId: 'seed-node-1',
+        messageGroupAssignment: {
+          strategy: AssignmentStrategy.MOVE_REPLICA,
+          groupId: 'mg-1',
+          peerAddresses: [
+            'seed-node-1/message-group/mg-1-r1',
+          ],
+        },
+      }),
+      getMessageRouter: () => ({
+        getConnectionState() {
+          return 'connected';
+        },
+      }),
+      getMessageGroupServices: () => new Map([
+        ['mg-1-r2', {
+          groupId: 'mg-1',
+          unifiedAddress: 'joining-node-2c/message-group/mg-1-r2',
+          isLeaderReplica: () => false,
+          isMetadataIngressReady: () => true,
+        }],
+      ]),
+    });
+
+    t.same(
+      ingress.resolveTargetCandidates({
+        allowBootstrapHints: true,
+        allowSelfTarget: true,
+        localTargetMode: 'any_replica',
+      }),
+      [
+        'joining-node-2c/message-group/mg-1-r2',
+        'seed-node-1/message-group/mg-1-r1',
+      ],
+      'any-replica control-plane paths should prefer the local ingress replica before remote hints',
     );
   });
 
@@ -168,5 +253,37 @@ test('ControlPlaneKernelIngress - prefers confirmed ingress lease and suppresses
         'seed-node-2/message-group/mg-1-r4',
       ],
       'suppressed targets should become eligible again after the local cooldown',
+    );
+  });
+
+test('ControlPlaneKernelIngress - retains disconnected bootstrap ingress as fallback',
+  async (t) => {
+    const ingress = new ControlPlaneKernelIngress({
+      nodeId: 'joining-node-5',
+      getBootstrapResponse: () => ({
+        seedNodeId: 'seed-node-1',
+        messageGroupAssignment: {
+          strategy: AssignmentStrategy.MOVE_REPLICA,
+          groupId: 'mg-1',
+          peerAddresses: [
+            'seed-node-1/message-group/mg-1-r3',
+            'seed-node-2/message-group/mg-1-r4',
+          ],
+        },
+      }),
+      getMessageRouter: () => ({
+        getConnectionState(nodeId) {
+          return nodeId === 'seed-node-2' ? 'connected' : 'disconnected';
+        },
+      }),
+    });
+
+    t.same(
+      ingress.resolveTargetCandidates({allowBootstrapHints: true}),
+      [
+        'seed-node-2/message-group/mg-1-r4',
+        'seed-node-1/message-group/mg-1-r3',
+      ],
+      'disconnected ingress should remain eligible after connected targets so delivery can trigger reconnect',
     );
   });

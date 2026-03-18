@@ -8,6 +8,11 @@ import {EventEmitter} from 'events';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
+import {ControlPlaneSystemTableGateway} from '../control-plane/control-plane-system-table-gateway.js';
+import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
+import {
+  createSystemMetadataGatewayRequiredError,
+} from '../control-plane/system-metadata-access-error.js';
 import {
   LOG_RETENTION_DEFAULT,
   LOG_RETENTION_ERROR_MSG,
@@ -51,6 +56,8 @@ class LogRetentionService extends EventEmitter {
 
     this.sqlQueryEngine = options.sqlQueryEngine || null;
     this.tablePolicyService = options.tablePolicyService || null;
+    this.controlPlaneSystemTableGateway =
+      options.controlPlaneSystemTableGateway || null;
 
     // Configuration
     const config = ConfigurationManager.getInstance();
@@ -116,6 +123,9 @@ class LogRetentionService extends EventEmitter {
 
     if (options.tablePolicyService) {
       this.tablePolicyService = options.tablePolicyService;
+    }
+    if (options.controlPlaneSystemTableGateway) {
+      this.controlPlaneSystemTableGateway = options.controlPlaneSystemTableGateway;
     }
 
     this.initialized = true;
@@ -237,8 +247,14 @@ class LogRetentionService extends EventEmitter {
    * @private
    */
   async deleteOldLogs(cutoffTime, limit) {
-    if (!this.sqlQueryEngine) {
-      throw new Error(LOG_RETENTION_ERROR_MSG.ENGINE_NOT_AVAILABLE);
+    const gateway = this.getControlPlaneSystemTableGateway();
+    if (!gateway) {
+      throw createSystemMetadataGatewayRequiredError({
+        serviceName: 'LogRetentionService',
+        tableName: SYSTEM_TABLE_NAME.LOGS,
+        operation: 'write',
+        message: LOG_RETENTION_ERROR_MSG.ENGINE_NOT_AVAILABLE,
+      });
     }
 
     // First, get the IDs of logs to delete
@@ -246,30 +262,42 @@ class LogRetentionService extends EventEmitter {
       `SELECT log_id FROM ${SYSTEM_TABLE_NAME.LOGS}` +
       ' WHERE timestamp < ? ORDER BY timestamp ASC LIMIT ?';
 
-    const selectResult = await this.sqlQueryEngine.executeQuery(
-      selectSQL, [cutoffTime, limit],
+    const selectResult = await gateway.executeQuery(
+      selectSQL,
+      [cutoffTime, limit],
+      {
+        workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+        allowPressureDefer: true,
+      },
     );
+    const selectedRows = Array.isArray(selectResult.results) ?
+      selectResult.results :
+      (Array.isArray(selectResult.rows) ? selectResult.rows : []);
 
     if (!selectResult.success ||
-        !selectResult.results ||
-        selectResult.results.length === 0) {
+        selectedRows.length === 0) {
       return 0;
     }
 
     // Delete the selected logs
-    const placeholders = selectResult.results
+    const placeholders = selectedRows
       .map(() => '?').join(', ');
-    const logIds = selectResult.results.map((r) => r.log_id);
+    const logIds = selectedRows.map((r) => r.log_id);
     const deleteSQL =
       `DELETE FROM ${SYSTEM_TABLE_NAME.LOGS}` +
       ` WHERE log_id IN (${placeholders})`;
 
-    const deleteResult = await this.sqlQueryEngine.executeQuery(
-      deleteSQL, logIds,
+    const deleteResult = await gateway.executeQuery(
+      deleteSQL,
+      logIds,
+      {
+        workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+        allowPressureDefer: true,
+      },
     );
 
     return deleteResult.affectedRows ||
-      selectResult.results.length;
+      selectedRows.length;
   }
 
   /**
@@ -341,6 +369,27 @@ class LogRetentionService extends EventEmitter {
     this.initialized = false;
     this.removeAllListeners();
     this.logger.log(retentionLogMessages.shutdown);
+  }
+
+  /**
+   * @return {ControlPlaneSystemTableGateway|null}
+   * @private
+   */
+  getControlPlaneSystemTableGateway() {
+    if (this.controlPlaneSystemTableGateway) {
+      if (!this.controlPlaneSystemTableGateway.sqlQueryEngine &&
+          this.sqlQueryEngine) {
+        this.controlPlaneSystemTableGateway.setSqlQueryEngine(this.sqlQueryEngine);
+      }
+      return this.controlPlaneSystemTableGateway;
+    }
+    if (!this.sqlQueryEngine) {
+      return null;
+    }
+    this.controlPlaneSystemTableGateway = new ControlPlaneSystemTableGateway({
+      sqlQueryEngine: this.sqlQueryEngine,
+    });
+    return this.controlPlaneSystemTableGateway;
   }
 }
 

@@ -61,3 +61,53 @@ test('activatePartitionServiceRows requires per-replica handler registration',
       'activation should fail closed until every partition handler is routable',
     );
   });
+
+test('activatePartitionServiceRows can defer pressure admission failures',
+  async (t) => {
+    const deferred = [];
+
+    await t.resolves(
+      activatePartitionServiceRows({
+        nodeId: 'node-a',
+        systemTableWriter: {
+          updateSystemTableRow: async () => {
+            const error = new Error('control_plane_pressure_degraded');
+            error.code = 'CONTROL_PLANE_PRESSURE_DEGRADED';
+            error.deferRetry = true;
+            error.retryAfterMs = 250;
+            throw error;
+          },
+          upsertSystemTableRow: async () => {
+            const error = new Error('control_plane_pressure_degraded');
+            error.code = 'CONTROL_PLANE_PRESSURE_DEGRADED';
+            error.deferRetry = true;
+            error.retryAfterMs = 250;
+            throw error;
+          },
+        },
+        messageRouter: {
+          isRegistered: () => true,
+        },
+        partitionServices: new Map([
+          ['p1-r1', {
+            partitionId: 'p1',
+            initialized: true,
+          }],
+        ]),
+        deferTransientFailures: true,
+        onDeferredActivation: (details) => deferred.push(details),
+      }),
+      'seed/join activation should not fail hard on pressure admission deferrals when deferral is enabled',
+    );
+
+    t.equal(
+      deferred.length,
+      1,
+      'pressure admission deferral should be surfaced via deferred callback',
+    );
+    t.equal(
+      deferred[0]?.replicaId,
+      'p1-r1',
+      'callback should identify the deferred partition replica',
+    );
+  });

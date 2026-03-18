@@ -14,10 +14,9 @@ import {
   TRANSPORT_TYPE,
 } from '../../src/constants/index.js';
 
-test('registerNodeInCluster() - should publish admission via NODE_STATE_UPDATE and upsert endpoints',
+test('registerNodeInCluster() - should create the canonical nodes row and upsert endpoints',
   async (t) => {
   const upsertCalls = [];
-  const nodeStateUpdates = [];
   const mockCDCService = {
     sqlQueryEngine: {},
     upsertSystemTableRow: async (tableName, rowData) => {
@@ -35,33 +34,39 @@ test('registerNodeInCluster() - should publish admission via NODE_STATE_UPDATE a
 
   // Set the mock CDC service
   service.cdcIntegrationService = mockCDCService;
-  service.sendControlPlaneNodeStateUpdate = async (options) => {
-    nodeStateUpdates.push(options);
+  service.sendControlPlaneNodeStateUpdate = async () => {
+    throw new Error('legacy node-state owner path should not be used');
   };
 
   // Call registerNodeInCluster
   await service.registerNodeInCluster();
 
-  t.equal(nodeStateUpdates.length, 1, 'should publish one node admission update');
-  const nodeCall = nodeStateUpdates[0];
-  t.equal(nodeCall.state, STATE.CONNECTED, 'should publish CONNECTED admission state');
-  t.equal(nodeCall.nodeRow.node_id, 'test-node-123', 'should use correct node_id');
+  const nodeCall = upsertCalls.find((call) =>
+    call.tableName === TABLES.NODES,
+  );
+  t.ok(nodeCall, 'should create one canonical nodes row during registration');
+  t.equal(nodeCall.rowData.node_id, 'test-node-123', 'should use correct node_id');
   t.equal(
-    nodeCall.nodeRow.node_address,
+    nodeCall.rowData.node_address,
     'ws://localhost:9000',
     'should use correct node_address',
   );
-  t.ok(nodeCall.nodeRow.cpu_cores > 0, 'should have cpu_cores > 0');
-  t.ok(nodeCall.nodeRow.memory_mb > 0, 'should have memory_mb > 0');
-  t.ok(nodeCall.nodeRow.disk_gb > 0, 'should have disk_gb > 0');
+  t.ok(nodeCall.rowData.cpu_cores > 0, 'should have cpu_cores > 0');
+  t.ok(nodeCall.rowData.memory_mb > 0, 'should have memory_mb > 0');
+  t.ok(nodeCall.rowData.disk_gb > 0, 'should have disk_gb > 0');
   t.equal(
-    nodeCall.nodeRow.status,
+    nodeCall.rowData.status,
     SERVICE_STATUS.ACTIVE,
-    'should publish ACTIVE status through the node-row payload',
+    'should persist ACTIVE status in the canonical nodes row',
+  );
+  t.equal(
+    nodeCall.rowData.connection_state,
+    STATE.CONNECTED,
+    'should persist CONNECTED admission state in the canonical nodes row',
   );
   t.notOk(
-    Number.isFinite(nodeCall.nodeRow.ready_lease_expires_at),
-    'join admission should not assign the ready lease before ready signaling',
+    Number.isFinite(nodeCall.rowData.ready_lease_expires_at),
+    'join registration should not assign the ready lease before ready signaling',
   );
 
   const endpointCall = upsertCalls.find((call) =>
@@ -101,7 +106,9 @@ test('registerNodeInCluster() - should canonicalize raw node address to websocke
     seedNodeAddress: 'ws://seed:8000',
   });
   service.cdcIntegrationService = mockCDCService;
-  service.sendControlPlaneNodeStateUpdate = async () => {};
+  service.sendControlPlaneNodeStateUpdate = async () => {
+    throw new Error('legacy node-state owner path should not be used');
+  };
 
   await service.registerNodeInCluster();
 
@@ -113,6 +120,40 @@ test('registerNodeInCluster() - should canonicalize raw node address to websocke
     endpointCall?.rowData?.address,
     'ws://joiner-host:8082',
     'join-time endpoint registration should publish canonical websocket address',
+  );
+});
+
+test('registerNodeInCluster() - should publish explicit advertised websocket endpoint when configured', async (t) => {
+  const upsertCalls = [];
+  const mockCDCService = {
+    sqlQueryEngine: {},
+    upsertSystemTableRow: async (tableName, rowData) => {
+      upsertCalls.push({tableName, rowData});
+      return {success: true};
+    },
+  };
+
+  const service = new NodeJoiningService({
+    nodeId: 'test-node-explicit-endpoint',
+    nodeAddress: 'joiner-host:8080',
+    advertisedNodeWsAddress: 'ws://172.20.0.42:8082',
+    seedNodeAddress: 'ws://seed:8000',
+  });
+  service.cdcIntegrationService = mockCDCService;
+  service.sendControlPlaneNodeStateUpdate = async () => {
+    throw new Error('legacy node-state owner path should not be used');
+  };
+
+  await service.registerNodeInCluster();
+
+  const endpointCall = upsertCalls.find((call) =>
+    call.tableName === TABLES.NODE_ENDPOINTS,
+  );
+  t.ok(endpointCall, 'should upsert node_endpoints table');
+  t.equal(
+    endpointCall?.rowData?.address,
+    'ws://172.20.0.42:8082',
+    'explicit advertised websocket address should be published canonically',
   );
 });
 
@@ -133,7 +174,9 @@ test('registerNodeInCluster() - should throw error if query fails', async (t) =>
 
   // Set the mock CDC service
   service.cdcIntegrationService = mockCDCService;
-  service.sendControlPlaneNodeStateUpdate = async () => {};
+  service.sendControlPlaneNodeStateUpdate = async () => {
+    throw new Error('legacy node-state owner path should not be used');
+  };
 
   // Call registerNodeInCluster and expect it to throw
   try {
@@ -185,17 +228,23 @@ test('registerNodeInCluster() - should skip cache waits before CDC subscriptions
   });
   service.cdcIntegrationService = mockCDCService;
   service.seedJoinTimeCacheRow = () => {};
-  service.sendControlPlaneNodeStateUpdate = async () => {};
+  service.sendControlPlaneNodeStateUpdate = async () => {
+    throw new Error('legacy node-state owner path should not be used');
+  };
   service.getNodeStorageBudgetService = () => ({
-    resolveBudgetRow: (nodeRow) => ({
-      budgetRow: nodeRow,
-      resolution: {
-        isValid: true,
-        budgetBytes: 1024,
-        source: 'test',
-        diskBytes: 1024,
-      },
-    }),
+    registerNodeBudget: async ({nodeRow, upsertOptions}) => {
+      await mockCDCService.upsertSystemTableRow(TABLES.NODES, nodeRow, upsertOptions);
+      return {
+        result: {success: true},
+        budgetRow: nodeRow,
+        resolution: {
+          isValid: true,
+          budgetBytes: 1024,
+          source: 'test',
+          diskBytes: 1024,
+        },
+      };
+    },
   });
 
     await service.registerNodeInCluster();
@@ -207,9 +256,9 @@ test('registerNodeInCluster() - should skip cache waits before CDC subscriptions
     );
   });
 
-test('registerNodeInCluster() - should route node admission through NODE_STATE_UPDATE owner path',
+test('registerNodeInCluster() - should use the registration owner path for nodes row creation',
   async (t) => {
-    const nodeStateUpdates = [];
+    const upsertCalls = [];
     const service = new NodeJoiningService({
       nodeId: 'test-node-owner-path',
       nodeAddress: 'ws://localhost:9010',
@@ -218,31 +267,35 @@ test('registerNodeInCluster() - should route node admission through NODE_STATE_U
 
     service.cdcIntegrationService = {
       sqlQueryEngine: {},
-      upsertSystemTableRow: async () => ({success: true}),
+      upsertSystemTableRow: async (tableName, rowData) => {
+        upsertCalls.push({tableName, rowData});
+        return {success: true};
+      },
     };
-    service.sendControlPlaneNodeStateUpdate = async (options) => {
-      nodeStateUpdates.push(options);
+    service.sendControlPlaneNodeStateUpdate = async () => {
+      throw new Error('legacy node-state owner path should not be used');
     };
 
     await service.registerNodeInCluster();
 
-    t.equal(nodeStateUpdates.length, 1, 'should publish one node-state update');
+    const nodeUpserts = upsertCalls.filter((call) => call.tableName === TABLES.NODES);
+    t.equal(nodeUpserts.length, 1, 'should create exactly one canonical nodes row');
     t.equal(
-      nodeStateUpdates[0].state,
+      nodeUpserts[0].rowData.connection_state,
       STATE.CONNECTED,
-      'membership publication should use CONNECTED state until ready signaling completes',
+      'registration should persist CONNECTED until ready signaling completes',
     );
-  t.equal(
-    nodeStateUpdates[0].nodeRow.node_id,
-    'test-node-owner-path',
-    'membership publication should carry the canonical node row',
-  );
-  t.equal(
-    service.joinMembershipPublished,
-    true,
-    'successful membership publication should mark join membership as published',
-  );
-});
+    t.equal(
+      nodeUpserts[0].rowData.node_id,
+      'test-node-owner-path',
+      'registration should create the canonical node row directly',
+    );
+    t.equal(
+      service.joinMembershipPublished,
+      true,
+      'successful registration should mark join membership as published',
+    );
+  });
 
 test('registerNodeInCluster() - should fail narrowly on seed participant failure before endpoint publication',
   async (t) => {
@@ -267,18 +320,12 @@ test('registerNodeInCluster() - should fail narrowly on seed participant failure
       },
     };
     service.getNodeStorageBudgetService = () => ({
-      resolveBudgetRow: (nodeRow) => ({
-        budgetRow: nodeRow,
-        resolution: {
-          isValid: true,
-          budgetBytes: 1024,
-          source: 'test',
-          diskBytes: 1024,
-        },
-      }),
+      registerNodeBudget: async () => {
+        throw participantFailure;
+      },
     });
     service.sendControlPlaneNodeStateUpdate = async () => {
-      throw participantFailure;
+      throw new Error('legacy node-state owner path should not be used');
     };
 
     const error = await t.rejects(

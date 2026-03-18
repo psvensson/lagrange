@@ -42,6 +42,11 @@ import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../control-plane/control-plane-readiness-constants.js';
 import {
+  PRESSURE_GOVERNOR_ACTION,
+  PRESSURE_WORK_CLASS,
+  PressureGovernor,
+} from '../control-plane/pressure-governor.js';
+import {
   ERRNO,
   HTTP_STATUS,
   NUM,
@@ -125,6 +130,8 @@ const HTTP_HEADER_VALUE = Object.freeze({
 });
 const ADMIN_STREAM_LANE_DEFAULT = 'default';
 const ADMIN_STREAM_LANE_LOAD = 'load';
+const ADMIN_STREAM_LANE_PROBE = 'probe';
+const ADMIN_STREAM_LANE_SNAPSHOT = 'snapshot';
 const LOAD_LANE_READINESS_CACHE_MAX_AGE_MS = 5000;
 const SSE_FRAME_PREFIX = 'data: ';
 const SSE_FRAME_SUFFIX = '\n\n';
@@ -1076,6 +1083,83 @@ class AdminWebSocketAPI {
   }
 
   /**
+   * Return true when one request is executing on a local-observation lane.
+   * Probe/snapshot lanes must not amplify cluster pressure with
+   * authoritative discovery repair.
+   * @param {Object} executionContext
+   * @return {boolean}
+   * @private
+   */
+  isLocalObservationLaneExecution(executionContext = {}) {
+    const lane = this.resolveAdminClientLane(
+      executionContext?.clientInfo?.lane,
+    );
+    return lane === ADMIN_STREAM_LANE_PROBE ||
+      lane === ADMIN_STREAM_LANE_SNAPSHOT;
+  }
+
+  /**
+   * Evaluate node-local pressure for local observation queries.
+   * @return {Object|null}
+   * @private
+   */
+  evaluateLocalObservationPressure() {
+    if (!this.messageRouter) {
+      return null;
+    }
+    return PressureGovernor.getShared({
+      nodeId: this.nodeId,
+      messageRouter: this.messageRouter,
+      now: this.nowFn,
+    }).evaluate({
+      workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+      resourceKeys: [
+        'control-plane:read',
+        'control-plane:admin-local-observation',
+      ],
+      allowDegrade: true,
+    });
+  }
+
+  /**
+   * Resolve execution policy for control-snapshot/service-discovery
+   * local observation queries.
+   * @param {Object} executionContext
+   * @param {Object} [options={}]
+   * @return {Object}
+   * @private
+   */
+  resolveLocalObservationExecutionPolicy(
+    executionContext = {},
+    options = {},
+  ) {
+    const forceAuthoritativeRepair =
+      options.forceAuthoritativeRepair === true;
+    if (forceAuthoritativeRepair) {
+      return {
+        allowAuthoritativeRepair: true,
+        allowAuthoritativeReadinessRefresh: true,
+        allowStaleReadinessOnCacheChange: false,
+      };
+    }
+
+    const pressureDecision = this.evaluateLocalObservationPressure();
+    const pressureDegraded =
+      pressureDecision?.action === PRESSURE_GOVERNOR_ACTION.DEGRADE ||
+      pressureDecision?.action === PRESSURE_GOVERNOR_ACTION.DEFER ||
+      pressureDecision?.action === PRESSURE_GOVERNOR_ACTION.REJECT;
+    const localObservationLane =
+      this.isLocalObservationLaneExecution(executionContext);
+    const localOnly = localObservationLane || pressureDegraded;
+
+    return {
+      allowAuthoritativeRepair: !localOnly,
+      allowAuthoritativeReadinessRefresh: !localOnly,
+      allowStaleReadinessOnCacheChange: localOnly,
+    };
+  }
+
+  /**
    * Resolve local readiness snapshot for load-lane admission checks.
    * @return {Object|null}
    * @private
@@ -1093,7 +1177,7 @@ class AdminWebSocketAPI {
           this.nodeId,
           {
             allowAuthoritativeRefresh: true,
-            requireFreshOnIneligible: true,
+            preferBackgroundRefreshOnIneligible: true,
             decisionDimension:
               CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
             maxCachedAgeMs: this.loadLaneReadinessCacheMaxAgeMs,
@@ -1703,17 +1787,37 @@ class AdminWebSocketAPI {
     const controlSnapshotQuery =
       this.parseControlSnapshotQuery(sql);
     if (controlSnapshotQuery.isQuery) {
+      const observationPolicy =
+        this.resolveLocalObservationExecutionPolicy(
+          executionContext,
+          {
+            forceAuthoritativeRepair:
+              controlSnapshotQuery.forceAuthoritativeRepair,
+          },
+        );
       return this.buildControlSnapshotQueryResult({
         forceAuthoritativeRepair:
           controlSnapshotQuery.forceAuthoritativeRepair,
+        allowAuthoritativeRepair:
+          observationPolicy.allowAuthoritativeRepair,
+        allowAuthoritativeReadinessRefresh:
+          observationPolicy.allowAuthoritativeReadinessRefresh,
+        allowStaleReadinessOnCacheChange:
+          observationPolicy.allowStaleReadinessOnCacheChange,
       });
     }
     const serviceDiscoveryQuery = parseServiceDiscoverySqlQuery(sql);
     if (serviceDiscoveryQuery.isQuery) {
+      const observationPolicy =
+        this.resolveLocalObservationExecutionPolicy(
+          executionContext,
+        );
       return this.serviceDiscovery
         .buildServiceDiscoveryQueryResult({
           tableName: serviceDiscoveryQuery.tableName,
           tableId: serviceDiscoveryQuery.tableId,
+          allowAuthoritativeRepair:
+            observationPolicy.allowAuthoritativeRepair,
         });
     }
     const localSystemTableObservation =

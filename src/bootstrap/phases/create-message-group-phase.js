@@ -107,6 +107,16 @@ class CreateMessageGroupPhase {
       transport: this.delegates.getMessageRouter(),
       peerAddresses: options.peerAddresses,
       deferElection: Boolean(options.deferElection),
+      deferElectionUntilJoinConvergence:
+        options.deferElectionUntilJoinConvergence === true,
+      isJoiningExistingGroup: Boolean(options.isJoiningExistingGroup),
+      publishRoleMetadata: options.publishRoleMetadata !== false,
+      publishLeaderNodeMetadata:
+        options.publishLeaderNodeMetadata !== false,
+      bootstrapReadinessState:
+        typeof this.delegates.getBootstrapReadinessState === 'function' ?
+          this.delegates.getBootstrapReadinessState() :
+          null,
     });
 
     const messageRouter = this.delegates.getMessageRouter();
@@ -240,26 +250,77 @@ class CreateMessageGroupPhase {
   }
 
   /**
+   * Compute one deterministic delay between releasing deferred elections so a
+   * previously started replica has time to establish leadership and heartbeat
+   * before the next local replica arms its own timer.
+   * @param {Array<Object>} replicas
+   * @return {number}
+   */
+  resolveDeferredElectionReleaseDelayMs(replicas = []) {
+    const config = this.delegates.getConfig?.() || {};
+    const configuredMinimumDelay =
+      Number.isFinite(config.replicaStaggerDelayMs) &&
+      config.replicaStaggerDelayMs > NUM.ZERO ?
+        Math.floor(config.replicaStaggerDelayMs) :
+        NUM.ZERO;
+    let computedDelayMs = configuredMinimumDelay;
+
+    for (const replica of replicas) {
+      const electionMaxMs = replica?.raftTimingConfig?.electionMaxMs;
+      const heartbeatMs = replica?.raftTimingConfig?.heartbeatMs;
+      if (!Number.isFinite(electionMaxMs) || electionMaxMs <= NUM.ZERO) {
+        continue;
+      }
+      const heartbeatAllowanceMs =
+        Number.isFinite(heartbeatMs) && heartbeatMs > NUM.ZERO ?
+          Math.floor(heartbeatMs * 2) :
+          NUM.ZERO;
+      computedDelayMs = Math.max(
+        computedDelayMs,
+        Math.floor(electionMaxMs) + heartbeatAllowanceMs,
+      );
+    }
+
+    return computedDelayMs;
+  }
+
+  /**
    * Compatibility shim for deferred self-hosted join elections.
    * Replica create/start ownership remains in unified lifecycle
    * adapters.
    * @param {string} groupId - Message group ID.
-   * @return {void}
+   * @return {Promise<void>}
    */
-  startDeferredJoinMessageGroupElections(groupId) {
+  async startDeferredJoinMessageGroupElections(groupId) {
     const logger = this.delegates.getLogger();
     const replicas =
-      this.delegates.getJoinMessageGroupReplicas();
+      this.delegates.getJoinMessageGroupReplicas()
+        .filter((replica) =>
+          replica?.deferElectionUntilJoinConvergence !== true,
+        );
+    const sleep =
+      typeof this.delegates.getSleep === 'function' ?
+        this.delegates.getSleep() :
+        null;
+    const electionReleaseDelayMs =
+      this.resolveDeferredElectionReleaseDelayMs(replicas);
     logger.debug(
       JOINING_LOG_MSG.MESSAGE_GROUP_ELECTIONS_START,
       {
         groupId,
         replicaCount: replicas.length,
+        electionReleaseDelayMs,
       },
     );
 
-    for (const messageGroup of replicas) {
+    for (let index = NUM.ZERO; index < replicas.length; index += NUM.ONE) {
+      const messageGroup = replicas[index];
       messageGroup.startElection();
+      if (index < replicas.length - NUM.ONE &&
+          electionReleaseDelayMs > NUM.ZERO &&
+          typeof sleep === 'function') {
+        await sleep(electionReleaseDelayMs);
+      }
     }
   }
 
@@ -328,6 +389,9 @@ class CreateMessageGroupPhase {
           replicaIndex: index,
           peerAddresses,
           deferElection: true,
+          deferElectionUntilJoinConvergence: index > NUM.ZERO,
+          publishRoleMetadata: false,
+          publishLeaderNodeMetadata: false,
           createDelayMs: index > NUM.ZERO ?
             index * replicaStaggerDelayMs :
             NUM.ZERO,
@@ -341,7 +405,7 @@ class CreateMessageGroupPhase {
       JOINING_UNIFIED_RECONCILE.MESSAGE_GROUPS_REASON,
     );
 
-    this.startDeferredJoinMessageGroupElections(groupId);
+    await this.startDeferredJoinMessageGroupElections(groupId);
 
     const messageGroupServices =
       this.delegates.getMessageGroupServices();

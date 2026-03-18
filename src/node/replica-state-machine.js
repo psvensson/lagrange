@@ -11,6 +11,10 @@ import {LoggingService} from '../logging/logging-service.js';
 import {SERVICE_TYPE, TABLES, TYPEOF} from '../constants/index.js';
 import {assertCritical} from '../utils/assert.js';
 import {
+  CONTROL_PLANE_MUTATION_OPERATION,
+  ControlPlaneSystemTableGateway,
+} from '../control-plane/control-plane-system-table-gateway.js';
+import {
   REPLICA_STATE_MACHINE_DEFAULT,
   REPLICA_STATE_MACHINE_DEFAULT_TIMEOUTS,
   REPLICA_STATE_MACHINE_DIAGNOSTIC_CODE,
@@ -46,6 +50,13 @@ const VALID_TRANSITIONS = REPLICA_STATE_MACHINE_VALID_TRANSITIONS;
  */
 const DEFAULT_TIMEOUTS = REPLICA_STATE_MACHINE_DEFAULT_TIMEOUTS;
 
+const BACKGROUND_PERSISTENCE_STATES = new Set([
+  ReplicaState.PENDING,
+  ReplicaState.CREATING,
+  ReplicaState.SYNCING,
+  ReplicaState.REMOVING,
+]);
+
 /**
  * ReplicaStateMachine - Central state machine for replica lifecycle.
  * Enforces valid transitions and emits events for all state changes.
@@ -77,8 +88,11 @@ class ReplicaStateMachine extends EventEmitter {
     );
 
     // CDC integration service for state persistence
-    this.cdcIntegrationService = assertCritical(
-      options.cdcIntegrationService,
+    this.cdcIntegrationService = options.cdcIntegrationService || null;
+    this.controlPlaneSystemTableGateway =
+      options.controlPlaneSystemTableGateway || null;
+    assertCritical(
+      this.cdcIntegrationService || this.controlPlaneSystemTableGateway,
       REPLICA_STATE_MACHINE_ERROR_MSG.MISSING_CDC_SERVICE,
     );
     this.now = typeof options.now === TYPEOF.FUNCTION ?
@@ -309,14 +323,6 @@ class ReplicaStateMachine extends EventEmitter {
   async _createReplicaRowInCdc(replicaState) {
     try {
       const serviceId = replicaState.serviceId || replicaState.replicaId;
-      const upsertSystemTableRow = assertCritical(
-        typeof this.cdcIntegrationService.upsertSystemTableRow === TYPEOF.FUNCTION ?
-          this.cdcIntegrationService.upsertSystemTableRow.bind(
-            this.cdcIntegrationService,
-          ) :
-          null,
-        REPLICA_STATE_MACHINE_ERROR_MSG.MISSING_UPSERT_SYSTEM_TABLE_ROW,
-      );
       const addressManager = AddressManager.getInstance();
       const serviceType = replicaState.serviceType || SERVICE_TYPE.PARTITION;
       const address = replicaState.serviceAddress ||
@@ -327,8 +333,16 @@ class ReplicaStateMachine extends EventEmitter {
         serviceType,
         address,
       );
+      const persistenceOptions = this._buildCdcPersistenceOptions(
+        replicaState,
+        serviceId,
+      );
 
-      await upsertSystemTableRow(TABLES.SERVICES, insertData);
+      await this.getControlPlaneSystemTableGateway().submitMutation({
+        operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
+        tableName: TABLES.SERVICES,
+        row: insertData,
+      }, persistenceOptions);
 
       this.logger.debug(REPLICA_STATE_MACHINE_LOG_MSG.STATE_PERSISTED, {
         replicaId: replicaState.replicaId,
@@ -365,20 +379,16 @@ class ReplicaStateMachine extends EventEmitter {
   async _updateReplicaStateInCdc(replicaState, previousState) {
     try {
       const serviceId = replicaState.serviceId || replicaState.replicaId;
-      const updateSystemTableRow = assertCritical(
-        typeof this.cdcIntegrationService.updateSystemTableRow === TYPEOF.FUNCTION ?
-          this.cdcIntegrationService.updateSystemTableRow.bind(
-            this.cdcIntegrationService,
-          ) :
-          null,
-        REPLICA_STATE_MACHINE_ERROR_MSG.MISSING_UPDATE_SYSTEM_TABLE_ROW,
+      const persistenceOptions = this._buildCdcPersistenceOptions(
+        replicaState,
+        serviceId,
       );
-
-      await updateSystemTableRow(
-        TABLES.SERVICES,
-        {service_id: serviceId},
-        this._buildUpdateCdcData(replicaState, previousState),
-      );
+      await this.getControlPlaneSystemTableGateway().submitMutation({
+        operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+        tableName: TABLES.SERVICES,
+        whereClause: {service_id: serviceId},
+        data: this._buildUpdateCdcData(replicaState, previousState),
+      }, persistenceOptions);
 
       this.logger.debug(REPLICA_STATE_MACHINE_LOG_MSG.STATE_PERSISTED, {
         replicaId: replicaState.replicaId,
@@ -468,6 +478,31 @@ class ReplicaStateMachine extends EventEmitter {
       replica_id: replicaState.replicaId,
       address,
       created_at: replicaState.stateEnteredAt,
+    };
+  }
+
+  /**
+   * Build canonical CDC mutation options for one replica-state write.
+   * Transitional lifecycle updates are non-routable background metadata;
+   * they should not occupy scarce critical-lane capacity or retain memory
+   * waiting on local cache propagation. Stable states still use the
+   * canonical write path but keep critical delivery priority.
+   * @param {Object} replicaState
+   * @param {string} serviceId
+   * @return {Object}
+   * @private
+   */
+  _buildCdcPersistenceOptions(replicaState, serviceId) {
+    const state = replicaState?.state || null;
+    const backgroundWrite = BACKGROUND_PERSISTENCE_STATES.has(state);
+    return {
+      allowCoalescing: true,
+      coalescingKey: `replica-state:${serviceId}`,
+      deliveryPriority: backgroundWrite ? 'background' : 'critical',
+      workClass: backgroundWrite ? 'background' : 'critical',
+      // ReplicaStateMachine is the canonical owner already; waiting for the
+      // local cache here only retains memory and elongates transitional churn.
+      skipCacheWait: true,
     };
   }
 
@@ -715,6 +750,22 @@ class ReplicaStateMachine extends EventEmitter {
       this.stateCounts[state] = REPLICA_STATE_MACHINE_NUM.ZERO;
     }
     this._initializeMetrics();
+  }
+
+  getControlPlaneSystemTableGateway() {
+    if (this.controlPlaneSystemTableGateway) {
+      if (!this.controlPlaneSystemTableGateway.cdcIntegrationService &&
+          this.cdcIntegrationService) {
+        this.controlPlaneSystemTableGateway
+          .setCdcIntegrationService(this.cdcIntegrationService);
+      }
+      return this.controlPlaneSystemTableGateway;
+    }
+    this.controlPlaneSystemTableGateway = new ControlPlaneSystemTableGateway({
+      nodeId: this.nodeId,
+      cdcIntegrationService: this.cdcIntegrationService,
+    });
+    return this.controlPlaneSystemTableGateway;
   }
 
   /**

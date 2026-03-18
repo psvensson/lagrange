@@ -3,6 +3,10 @@ const METRICS_LOG_PREFIX = 'metrics.';
 const METRICS_LOG_TAG = Object.freeze({
   QUERY_LIFECYCLE: 'metrics.query.lifecycle',
   QUERY_DISPATCH: 'metrics.query.dispatch',
+  CONTROL_PLANE_GATEWAY_READ: 'metrics.control_plane.gateway.read',
+  CONTROL_PLANE_GATEWAY_MUTATION: 'metrics.control_plane.gateway.mutation',
+  CONTROL_PLANE_GATEWAY_RETENTION: 'metrics.control_plane.gateway.retention',
+  PRESSURE_POLICY: 'metrics.pressure.policy',
   SELECT_DISTRIBUTED: 'metrics.select.distributed',
   FANOUT_COMPLETE: 'metrics.fanout.complete',
   PARTITION_SQLITE: 'metrics.partition.sqlite',

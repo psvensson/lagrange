@@ -600,6 +600,9 @@ test('checkSplit - requests fresh repair-eligibility readiness snapshots',
       options: {
         allowAuthoritativeRefresh: true,
         requireFreshOnIneligible: true,
+        preferBackgroundRefreshOnIneligible: true,
+        allowStaleOnCacheChange: true,
+        maxCachedAgeMs: 10000,
         decisionDimension:
           CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
       },
@@ -706,6 +709,44 @@ test('checkSplit - repairs stale connected node readiness from ' +
   );
   t.end();
 });
+
+test('checkAdd reuses cached readiness snapshots for background admission',
+  async (t) => {
+    initializeConfig();
+    const {accounting} = setupWithNode('node-1', NUM.THOUSAND);
+    const calls = [];
+    const readinessService = {
+      clusterMemberStaleHeartbeatMaxAgeMs: 4321,
+      async getNodeReadiness(nodeId, options = {}) {
+        calls.push({nodeId, options: {...options}});
+        return createReadiness(nodeId);
+      },
+    };
+    const admission = new StorageAdmissionService({
+      accountingService: accounting,
+      controlPlaneReadinessService: readinessService,
+    });
+
+    const result = await admission.checkAdd({
+      targetNodeId: 'node-1',
+      estimatedBytes: NUM.TEN,
+    });
+
+    t.equal(result.allowed, true, 'admission should still allow the healthy target');
+    t.equal(calls.length, 1, 'should consult readiness once for the candidate node');
+    t.same(calls[0], {
+      nodeId: 'node-1',
+      options: {
+        allowAuthoritativeRefresh: true,
+        requireFreshOnIneligible: true,
+        preferBackgroundRefreshOnIneligible: true,
+        allowStaleOnCacheChange: true,
+        maxCachedAgeMs: 4321,
+        decisionDimension: CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+      },
+    }, 'background admission should reuse cached readiness and refresh in background');
+    t.end();
+  });
 
 // --- Existing usage affects admission ---
 

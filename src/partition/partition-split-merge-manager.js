@@ -28,6 +28,11 @@ import {
   STORAGE_CAPACITY_CONFIG_KEY,
   STORAGE_CAPACITY_DEFAULT,
 } from '../rebalancer/storage-capacity-constants.js';
+import {
+  PRESSURE_GOVERNOR_ACTION,
+  PRESSURE_WORK_CLASS,
+  PressureGovernor,
+} from '../control-plane/pressure-governor.js';
 import {KeyRange} from './key-range-manager.js';
 
 const OperationState = SPLIT_MERGE_STATE;
@@ -108,6 +113,9 @@ class PartitionSplitMergeManager extends EventEmitter {
         options.storageAdmissionService || null;
       this.storageAccountingService =
         options.storageAccountingService || null;
+      this.nodeId = options.nodeId || null;
+      this.messageRouter = options.messageRouter || null;
+      this.pressureGovernor = options.pressureGovernor || null;
 
       // Configuration
       const config = ConfigurationManager.getInstance();
@@ -143,6 +151,7 @@ class PartitionSplitMergeManager extends EventEmitter {
           DEFAULT_REACTIVE_EVALUATION_DEBOUNCE_MS;
       this.requestedEvaluation = null;
       this.requestedEvaluationTimer = null;
+      this.requestedEvaluationDueAtMs = null;
       this.deferredRetryEvaluation = null;
       this.deferredRetryEvaluationDueAtMs = null;
       this.deferredRetryEvaluationTimer = null;
@@ -163,6 +172,75 @@ class PartitionSplitMergeManager extends EventEmitter {
         loggingService.forSubsystem(PARTITION_SUBSYSTEM.SPLIT_MERGE) :
         console;
     }
+
+  /**
+   * Resolve the shared pressure-governor owner for this node.
+   * @return {PressureGovernor}
+   * @private
+   */
+  getPressureGovernor() {
+    if (this.pressureGovernor) {
+      this.pressureGovernor.configure?.({
+        messageRouter: this.messageRouter,
+      });
+      return this.pressureGovernor;
+    }
+    this.pressureGovernor = PressureGovernor.getShared({
+      nodeId: this.nodeId,
+      messageRouter: this.messageRouter,
+    });
+    return this.pressureGovernor;
+  }
+
+  /**
+   * Evaluate seed-local background split work against the canonical governor.
+   * @param {Object} [options={}]
+   * @return {Object}
+   * @private
+   */
+  evaluateSplitPressure(options = {}) {
+    return this.getPressureGovernor().evaluate({
+      workClass: options.workClass || PRESSURE_WORK_CLASS.BACKGROUND,
+      resourceKeys: [
+        'partition:split:evaluation',
+        'control-plane:write',
+      ],
+      allowDegrade: false,
+      allowDefer: true,
+      retryAfterMs: options.retryAfterMs,
+    });
+  }
+
+  /**
+   * Build a typed split execution deferral caused by node-local pressure.
+   * @param {string} partitionId
+   * @param {Object} decision
+   * @return {Object}
+   * @private
+   */
+  buildPressureDeferredExecution(partitionId, decision) {
+    const retryAfterMs = Number.isFinite(decision?.retryAfterMs) ?
+      decision.retryAfterMs :
+      NUM.ZERO;
+    const nextAttemptAt = retryAfterMs > NUM.ZERO ?
+      new Date(Date.now() + retryAfterMs).toISOString() :
+      null;
+    return {
+      success: false,
+      partitionId,
+      state: PARTITION_TRANSITION_STATE.DEFERRED,
+      error: SPLIT_MERGE_REASON.CONTROL_PLANE_BACKPRESSURE,
+      retryScheduled: nextAttemptAt !== null,
+      nextAttemptAt,
+      retry: {
+        nextAttemptAt,
+        backoffMs: retryAfterMs,
+        scheduledState: PARTITION_TRANSITION_STATE.DEFERRED,
+      },
+      pressureAction: decision?.action || null,
+      pressureSummary: decision?.summary || null,
+    };
+  }
 
   /**
    * Get the table policy for a partition.
@@ -375,6 +453,13 @@ class PartitionSplitMergeManager extends EventEmitter {
         typeof this.executeSplitCandidate !== 'function') {
       return null;
     }
+    const pressureDecision = this.evaluateSplitPressure();
+    if (pressureDecision.action === PRESSURE_GOVERNOR_ACTION.DEFER) {
+      return this.buildPressureDeferredExecution(
+        partitionId,
+        pressureDecision,
+      );
+    }
     this.allowManagedSplitDuringEvaluation = true;
     try {
       return await this.executeSplitCandidate(partitionId);
@@ -431,6 +516,19 @@ class PartitionSplitMergeManager extends EventEmitter {
     }
     const retryDueAtMs = Date.parse(nextAttemptAt);
     return Number.isFinite(retryDueAtMs) ? retryDueAtMs : null;
+  }
+
+  /**
+   * Resolve a stable deferred-reason code for one managed split execution.
+   * @param {Object} execution
+   * @return {string}
+   * @private
+   */
+  resolveManagedSplitExecutionDeferredReason(execution) {
+    if (execution?.error === SPLIT_MERGE_REASON.CONTROL_PLANE_BACKPRESSURE) {
+      return SPLIT_MERGE_REASON.CONTROL_PLANE_BACKPRESSURE;
+    }
+    return execution?.state || PARTITION_TRANSITION_STATE.DEFERRED;
   }
 
   /**
@@ -512,6 +610,8 @@ class PartitionSplitMergeManager extends EventEmitter {
     }
 
     if (outcome === 'deferred') {
+      const deferredReason =
+        this.resolveManagedSplitExecutionDeferredReason(execution);
       this.logger.warn(SPLIT_MERGE_LOG_MSG.SPLIT_EXECUTION_DEFERRED, {
         partitionId,
         state: execution.state || null,
@@ -531,13 +631,13 @@ class PartitionSplitMergeManager extends EventEmitter {
       });
       results.splitDeferred.push({
         partitionId,
-        reason: execution.state || PARTITION_TRANSITION_STATE.DEFERRED,
+        reason: deferredReason,
         execution,
       });
       this.scheduleDeferredManagedSplitRetry(partitionId, execution);
       this.emit(SPLIT_MERGE_EVENT.SPLIT_DEFERRED, {
         partitionId,
-        reason: execution.state || PARTITION_TRANSITION_STATE.DEFERRED,
+        reason: deferredReason,
       });
       return;
     }
@@ -1111,14 +1211,40 @@ class PartitionSplitMergeManager extends EventEmitter {
       context,
     );
     this.setRequestedEvaluationDiagnostics(this.requestedEvaluation);
-    if (this.requestedEvaluationTimer) {
-      return;
+    const pressureDecision = this.evaluateSplitPressure();
+    const pressureDeferred =
+      pressureDecision.action === PRESSURE_GOVERNOR_ACTION.DEFER;
+    const delayMs = Math.max(
+      this.reactiveEvaluationDebounceMs,
+      pressureDeferred ? pressureDecision.retryAfterMs : NUM.ZERO,
+    );
+    const dueAtMs = Date.now() + delayMs;
+    if (this.requestedEvaluationTimer &&
+        Number.isFinite(this.requestedEvaluationDueAtMs)) {
+      if (pressureDeferred &&
+          this.requestedEvaluationDueAtMs < dueAtMs) {
+        clearTimeout(this.requestedEvaluationTimer);
+        this.requestedEvaluationTimer = null;
+      } else if (!pressureDeferred &&
+          this.requestedEvaluationDueAtMs <= dueAtMs) {
+        return;
+      } else if (this.requestedEvaluationDueAtMs === dueAtMs) {
+        return;
+      } else {
+        clearTimeout(this.requestedEvaluationTimer);
+        this.requestedEvaluationTimer = null;
+      }
+    } else if (this.requestedEvaluationTimer) {
+      clearTimeout(this.requestedEvaluationTimer);
+      this.requestedEvaluationTimer = null;
     }
 
+    this.requestedEvaluationDueAtMs = dueAtMs;
     this.requestedEvaluationTimer = setTimeout(() => {
       this.requestedEvaluationTimer = null;
+      this.requestedEvaluationDueAtMs = null;
       void this.flushRequestedEvaluation();
-    }, this.reactiveEvaluationDebounceMs);
+    }, delayMs);
     this.requestedEvaluationTimer.unref?.();
   }
 
@@ -1339,9 +1465,34 @@ class PartitionSplitMergeManager extends EventEmitter {
         return {evaluated: false, reason: SPLIT_MERGE_REASON.BUSY};
       }
 
-      this.state = OperationState.EVALUATING;
       const evaluationStartedAtMs =
         this.recordEvaluationStart(preflightOptions);
+      const pressureDecision = this.evaluateSplitPressure();
+      if (pressureDecision.action === PRESSURE_GOVERNOR_ACTION.DEFER) {
+        this.requestEvaluation({
+          reasonCode: SPLIT_MERGE_REASON.CONTROL_PLANE_BACKPRESSURE,
+          partitionIds: preflightOptions.partitionIds,
+        });
+        const results = {
+          evaluated: false,
+          reason: SPLIT_MERGE_REASON.CONTROL_PLANE_BACKPRESSURE,
+          retryAfterMs: pressureDecision.retryAfterMs,
+          pressureSummary: pressureDecision.summary || null,
+          partitionsEvaluated: NUM.ZERO,
+          splitCandidates: [],
+          executedSplits: [],
+          splitErrors: [],
+          splitDeferred: [],
+          mergeCandidates: [],
+        };
+        this.recordEvaluationSuccess(
+          results,
+          evaluationStartedAtMs,
+        );
+        return results;
+      }
+
+      this.state = OperationState.EVALUATING;
 
       try {
         const results = {
@@ -1624,6 +1775,7 @@ class PartitionSplitMergeManager extends EventEmitter {
       clearTimeout(this.requestedEvaluationTimer);
       this.requestedEvaluationTimer = null;
     }
+    this.requestedEvaluationDueAtMs = null;
     if (this.deferredRetryEvaluationTimer) {
       clearTimeout(this.deferredRetryEvaluationTimer);
       this.deferredRetryEvaluationTimer = null;

@@ -3,15 +3,11 @@
  * storage_budget_bytes, storage_budget_source, and
  * storage_budget_updated_at across all heartbeat publication paths.
  *
- * Bug: Under load, the heartbeat upsert fallback (triggered when
- * updateSystemTableRow returns 0 affected rows) could lose budget
- * fields because sendHeartbeat's updateRow did not include them.
- * The reporter path also sent nodeRow without budget fields, so
- * the dispatch service's resolveNodeStateUpdateBudgetFields
- * extracted nothing.
+ * Bug: steady-state heartbeat writers were recreating missing
+ * authoritative node rows from partial local knowledge.
  *
  * Owner path verified: HeartbeatService.sendHeartbeat ->
- *   writeNodeHeartbeat upsert fallback preserves budget from cache;
+ *   writeNodeHeartbeat updates existing rows only;
  *   reporter payload includes budget fields from cache.
  */
 
@@ -19,8 +15,10 @@ import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {
-  HeartbeatService,
+  HeartbeatService as RawHeartbeatService,
 } from '../../src/control-plane/heartbeat-service.js';
+import {ControlPlaneSystemTableGateway} from
+  '../../src/control-plane/control-plane-system-table-gateway.js';
 import {COLUMN, NUM} from '../../src/constants/index.js';
 import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
@@ -65,21 +63,46 @@ function createCacheWithBudget() {
   };
 }
 
+function createHeartbeatService(options = {}) {
+  const controlPlaneSystemTableGateway =
+    options.controlPlaneSystemTableGateway ||
+    new ControlPlaneSystemTableGateway({
+      nodeId: options.nodeId || null,
+      cdcIntegrationService: options.cdcIntegrationService || null,
+      sqlQueryEngine: options.cdcIntegrationService?.sqlQueryEngine || null,
+      systemTableCache: options.systemTableCache || null,
+      messageRouter: options.messageRouter || null,
+    });
+  return new RawHeartbeatService({
+    ...options,
+    controlPlaneSystemTableGateway,
+  });
+}
 
-test('writeNodeHeartbeat upsert fallback preserves storage budget ' +
-  'fields from cache when UPDATE returns zero affected rows',
+function HeartbeatService(options = {}) {
+  return createHeartbeatService(options);
+}
+
+HeartbeatService.prototype = RawHeartbeatService.prototype;
+
+
+test('writeNodeHeartbeat fails loudly when the authoritative nodes row is missing',
 async (t) => {
   initEnv();
 
+  const updates = [];
   const upserts = [];
   const service = new HeartbeatService({
     nodeId: TEST_NODE_ID,
     nodeAddress: TEST_NODE_ADDRESS,
     cdcIntegrationService: {
-      updateSystemTableRow: async () => ({
-        success: true,
-        partitionResult: {affectedRows: NUM.ZERO},
-      }),
+      updateSystemTableRow: async (_table, _where, row) => {
+        updates.push(row);
+        return {
+          success: true,
+          partitionResult: {affectedRows: NUM.ZERO},
+        };
+      },
       upsertSystemTableRow: async (_table, row) => {
         upserts.push(row);
         return {success: true};
@@ -90,27 +113,13 @@ async (t) => {
   });
 
   try {
-    await service.sendHeartbeat(null, null);
-
-    const nodeUpsert = upserts.find((r) =>
-      r[COLUMN.NODE_ID] === TEST_NODE_ID &&
-      r.last_heartbeat === TEST_NOW);
-    t.ok(nodeUpsert, 'upsert fallback should fire for nodes row');
-    t.equal(
-      nodeUpsert[COLUMN.STORAGE_BUDGET_BYTES],
-      TEST_BUDGET_BYTES,
-      'upsert fallback must preserve storage_budget_bytes from cache',
+    await t.rejects(
+      service.sendHeartbeat(null, null),
+      /node row .*missing/i,
+      'missing authoritative rows should fail instead of being recreated',
     );
-    t.equal(
-      nodeUpsert[COLUMN.STORAGE_BUDGET_SOURCE],
-      TEST_BUDGET_SOURCE,
-      'upsert fallback must preserve storage_budget_source from cache',
-    );
-    t.equal(
-      nodeUpsert[COLUMN.STORAGE_BUDGET_UPDATED_AT],
-      TEST_BUDGET_UPDATED_AT,
-      'upsert fallback must preserve storage_budget_updated_at from cache',
-    );
+    t.equal(updates.length, 1, 'should still attempt one heartbeat update');
+    t.equal(upserts.length, 0, 'steady-state heartbeat should not recreate rows');
   } finally {
     ConfigurationManager.resetInstance();
     LoggingService.resetInstance();

@@ -39,6 +39,7 @@ import {
   BOOTSTRAP_ERROR,
   BOOTSTRAP_EVENT,
   BOOTSTRAP_LOG_MSG,
+  BOOTSTRAP_NODE_READY_REBALANCE_TABLES,
   BOOTSTRAP_PHASE,
   BOOTSTRAP_READY_MESSAGE,
   BOOTSTRAP_REBALANCE_DELAY_MS,
@@ -87,6 +88,13 @@ import {
 import {
   ReplicaCreationProgressReporter,
 } from '../utils/replica-creation-progress-reporter.js';
+import {
+  buildMessageGroupOwnerNotReadyError,
+} from './shared/message-group-selection.js';
+import {
+  detachBootstrapOwnedCdcSubscriber,
+  isBootstrapOwnedCdcPropagationActive,
+} from './shared/bootstrap-cdc-propagation-scope.js';
 import {createSeedPhaseOwners} from './owners/seed-phase-owners.js';
 import {StartupPipelineRunner} from './pipeline/startup-pipeline-runner.js';
 import {createSeedStartupPlan} from './pipeline/seed-startup-plan.js';
@@ -135,6 +143,8 @@ const bootstrapError = BOOTSTRAP_ERROR;
 const DEFAULT_BOOTSTRAP_CONFIG = BOOTSTRAP_DEFAULT;
 const BOOTSTRAP_REPLICA_REGISTRATION_PROGRESS_INTERVAL = NUM.TEN;
 const BOOTSTRAP_REPLICA_STATE_TRANSITIONS_PER_REPLICA = NUM.FOUR;
+const NODE_READY_REBALANCE_TABLE_SET =
+  new Set(BOOTSTRAP_NODE_READY_REBALANCE_TABLES);
 
 /**
  * Maps BOOTSTRAP_PHASE values to BOOTSTRAP_SUB_PHASE values
@@ -199,6 +209,7 @@ class BootstrapService extends EventEmitter {
     });
     this.nodeId = options.nodeId || null;
     this.nodeAddress = options.nodeAddress || null;
+    this.advertisedNodeWsAddress = options.advertisedNodeWsAddress || null;
     this.wsPort = options.wsPort || null;
     this.config = {...BOOTSTRAP_DEFAULT, ...options.config};
     this.config.replicaStaggerDelayMs = Number.isFinite(this.config.replicaStaggerDelayMs) ?
@@ -212,6 +223,7 @@ class BootstrapService extends EventEmitter {
     this.config.replicaRegistrationTraceEnabled = Boolean(
       this.config.replicaRegistrationTraceEnabled,
     );
+    this.bootstrapReadinessState = options.readinessState || null;
     this.nodeReadyRebalanceDelayMs = Number.isFinite(
       this.config.nodeReadyRebalanceDelayMs,
     ) ?
@@ -359,6 +371,7 @@ class BootstrapService extends EventEmitter {
       // -- Accessors --
       getNodeId: () => self.nodeId,
       getNodeAddress: () => self.nodeAddress,
+      getAdvertisedNodeWsAddress: () => self.advertisedNodeWsAddress,
       getWsPort: () => self.wsPort,
       getConfig: () => self.config,
       getLogger: () => self.logger,
@@ -382,8 +395,12 @@ class BootstrapService extends EventEmitter {
         self.bootstrapDesiredServiceDefinitions,
       getBootstrapReplicaOptionsByServiceId: () =>
         self.bootstrapReplicaOptionsByServiceId,
-      getLeaderMessageGroupService: () =>
-        self.getLeaderMessageGroupService(),
+      getLeaderMessageGroupService: (options) =>
+        self.getLeaderMessageGroupService(options),
+      getBootstrapMessageGroupService: () =>
+        self.getBootstrapMessageGroupService(),
+      resolveOperationalMessageGroupSelection: (options) =>
+        self.resolveOperationalMessageGroupSelection(options),
       getSystemTableCache: () => self.getSystemTableCache(),
       getSystemTableCacheRef: () => self.systemTableCache,
       getSystemTableCacheSafe: () =>
@@ -397,6 +414,8 @@ class BootstrapService extends EventEmitter {
       getTablePolicyService: () => self.tablePolicyService,
       getLifecycleStateMachine: () =>
         self.lifecycleStateMachine,
+      getBootstrapReadinessState: () =>
+        self.bootstrapReadinessState,
       getPartitionReplicaProgressReporter: () =>
         self.partitionReplicaProgressReporter,
       getInitialMessageGroupId: () => INITIAL_MESSAGE_GROUP_ID,
@@ -407,6 +426,9 @@ class BootstrapService extends EventEmitter {
       },
       setNodeAddress: (v) => {
         self.nodeAddress = v;
+      },
+      setAdvertisedNodeWsAddress: (v) => {
+        self.advertisedNodeWsAddress = v;
       },
       setMessageRouter: (v) => {
         self.messageRouter = v;
@@ -1153,14 +1175,38 @@ class BootstrapService extends EventEmitter {
   }
 
   /**
-   * Get the leader message group service for sending lifecycle messages.
-   * Returns the first message group service that is a leader, or any available service.
+   * Get the operational message-group service for runtime routing.
+   * Bootstrap-only formation selection must use getBootstrapMessageGroupService().
+   * @param {Object} [options]
+   * @param {Array<string>} [options.requiredTables]
    * @return {Object|null} Message group service or null.
    * @private
    */
-  getLeaderMessageGroupService() {
+  getLeaderMessageGroupService(options = {}) {
     return this.seedMessageGroupsPhase
-      .getLeaderMessageGroupService();
+      .getLeaderMessageGroupService(options);
+  }
+
+  /**
+   * Get a bootstrap-only message-group service before leadership exists.
+   * @return {Object|null}
+   * @private
+   */
+  getBootstrapMessageGroupService() {
+    return this.seedMessageGroupsPhase
+      .getBootstrapMessageGroupService();
+  }
+
+  /**
+   * Resolve the operational message-group selection with readiness metadata.
+   * @param {Object} [options]
+   * @param {Array<string>} [options.requiredTables]
+   * @return {Object}
+   * @private
+   */
+  resolveOperationalMessageGroupSelection(options = {}) {
+    return this.seedMessageGroupsPhase
+      .resolveOperationalMessageGroupSelection(options);
   }
 
   /**
@@ -1550,16 +1596,67 @@ class BootstrapService extends EventEmitter {
    * @private
    */
   triggerRebalancingOnAllPartitions(reason) {
+    const nodeReadyScoped = reason === BOOTSTRAP_REBALANCE_REASON.NODE_READY;
+    let leaderPartitionCount = NUM.ZERO;
+    let triggeredPartitionCount = NUM.ZERO;
+
+    for (const partition of this.partitionServices.values()) {
+      if (!partition?.isLeader) {
+        continue;
+      }
+      leaderPartitionCount++;
+      if (nodeReadyScoped &&
+          !this.shouldTriggerNodeReadyRebalanceForPartition(partition)) {
+        continue;
+      }
+      triggeredPartitionCount++;
+      partition.triggerRebalanceCheck(reason);
+    }
+
     this.logger.info(BootstrapLog.REBALANCE_TRIGGER, {
       reason,
       partitionCount: this.partitionServices.size,
+      leaderPartitionCount,
+      triggeredPartitionCount,
+      scope: nodeReadyScoped ?
+        'bootstrap_convergence_critical' :
+        'all_leader_partitions',
     });
+  }
 
-    for (const partition of this.partitionServices.values()) {
-      if (partition.isLeader) {
-        partition.triggerRebalanceCheck(reason);
+  /**
+   * Limit node-ready fanout to the control-plane partitions that gate
+   * convergence. Periodic rebalancing covers the broader data plane.
+   * @param {Object} partition
+   * @return {boolean}
+   * @private
+   */
+  shouldTriggerNodeReadyRebalanceForPartition(partition) {
+    const tableName =
+      partition?.tableName ||
+      partition?.table_id ||
+      partition?.tableId ||
+      null;
+    if (typeof tableName === 'string' &&
+        NODE_READY_REBALANCE_TABLE_SET.has(tableName)) {
+      return true;
+    }
+
+    const partitionId =
+      partition?.partitionId ||
+      partition?.partition_id ||
+      partition?.serviceId ||
+      partition?.service_id ||
+      null;
+    if (typeof partitionId !== 'string' || partitionId.length === NUM.ZERO) {
+      return false;
+    }
+    for (const nodeReadyTableName of BOOTSTRAP_NODE_READY_REBALANCE_TABLES) {
+      if (partitionId === `${nodeReadyTableName}-p1`) {
+        return true;
       }
     }
+    return false;
   }
 
   /**
@@ -1599,9 +1696,21 @@ class BootstrapService extends EventEmitter {
       nodeId: this.nodeId,
       systemTableWriter: this.cdcIntegrationService,
       messageRouter: this.messageRouter,
+      deferTransientFailures: true,
       handlerRegistered: this.messageGroupServiceHandlerRegistered,
       endpointsPublished: this.messageGroupServiceEndpointsPublished,
       messageGroupServices: this.messageGroupServices,
+      onDeferredActivation: ({groupId, replicaId, error}) => {
+        this.logger.warn(
+          'Deferring seed message-group service row activation during startup',
+          {
+            nodeId: this.nodeId,
+            groupId,
+            replicaId,
+            error: error?.message || String(error),
+          },
+        );
+      },
     });
   }
 
@@ -1770,6 +1879,7 @@ class BootstrapService extends EventEmitter {
         cdcIntegrationService: cdcIntegrationService,
         sqlQueryEngine: cdcIntegrationService?.sqlQueryEngine || null,
         tablePolicyService: this.tablePolicyService,
+        bootstrapReadinessState: this.bootstrapReadinessState,
       });
 
       await partition.initialize();
@@ -1778,21 +1888,63 @@ class BootstrapService extends EventEmitter {
       this.servicesCreated++;
 
       const tableName = options.tableName;
-      if (
-        tableName &&
-        messageGroupService &&
-        shouldAttachPartitionCdcPropagation(tableName)
-      ) {
-        await messageGroupService.subscribeToCDC(tableName);
+      const bootstrapOwnedCdcPropagationActive =
+        isBootstrapOwnedCdcPropagationActive(
+          this.phase,
+          BootstrapPhase.COMPLETE,
+        );
+      if (tableName &&
+          shouldAttachPartitionCdcPropagation(tableName) &&
+          bootstrapOwnedCdcPropagationActive) {
+        const subscriptionSelection =
+          this.resolveOperationalMessageGroupSelection({
+            requiredTables: [tableName],
+          });
+        const subscriptionMessageGroupService =
+          subscriptionSelection.service;
+        if (!subscriptionMessageGroupService) {
+          throw buildMessageGroupOwnerNotReadyError(
+            subscriptionSelection,
+            {
+              message:
+                `Operational message-group ingress not ready ` +
+                `for ${tableName} CDC subscription`,
+            },
+          );
+        }
+
+        await subscriptionMessageGroupService.subscribeToCDC(tableName);
 
         const subscriberId = [
           'bootstrap',
           this.nodeId,
           tableName,
           options.replicaId,
-          messageGroupService?.groupId || 'message-group',
+          subscriptionMessageGroupService?.groupId || 'message-group',
         ].join(':');
+        let bootstrapCdcSubscriberDetached = false;
         const cdcSubscriber = async (cdcEvent) => {
+          if (!isBootstrapOwnedCdcPropagationActive(
+            this.phase,
+            BootstrapPhase.COMPLETE,
+          )) {
+            if (!bootstrapCdcSubscriberDetached) {
+              bootstrapCdcSubscriberDetached =
+                detachBootstrapOwnedCdcSubscriber({
+                  partition,
+                  subscriber: cdcSubscriber,
+                  logger: this.logger,
+                  logMessage:
+                    'Detached bootstrap-owned CDC propagation subscriber after bootstrap completion',
+                  nodeId: this.nodeId,
+                  tableName,
+                  partitionId: options.partitionId,
+                  replicaId: options.replicaId,
+                  lifecyclePhase: this.phase,
+                });
+            }
+            return;
+          }
           if (cdcEvent.tableName === tableName) {
             this.logger.debug(BootstrapLog.CDC_DYNAMIC_PARTITION_EVENT, {
               tableName: cdcEvent.tableName,
@@ -1800,17 +1952,21 @@ class BootstrapService extends EventEmitter {
               partitionId: options.partitionId,
               replicaId: options.replicaId,
             });
+            const propagationSelection =
+              this.resolveOperationalMessageGroupSelection({
+                requiredTables: [tableName],
+              });
             const propagationMessageGroupService =
-              this.resolveCdcPropagationMessageGroup(messageGroupService);
+              propagationSelection.service;
             if (!propagationMessageGroupService) {
-              this.logger.warn(
-                CDC_LIFECYCLE_LOG_MSG.MESSAGE_GROUP_RESOLUTION_NULL, {
-                  tableName: cdcEvent.tableName,
-                  operation: cdcEvent.operation,
-                  reason: 'no_leader_message_group',
+              throw buildMessageGroupOwnerNotReadyError(
+                propagationSelection,
+                {
+                  message:
+                    `Operational message-group ingress not ready ` +
+                    `for ${tableName} CDC propagation`,
                 },
               );
-              return;
             }
 
             await this.propagatePartitionCDCEvent(
@@ -2084,6 +2240,7 @@ class BootstrapService extends EventEmitter {
     const controlPlane = await ControlPlaneSetup.create({
       nodeId: this.nodeId,
       nodeAddress: this.nodeAddress,
+      advertisedNodeWsAddress: this.advertisedNodeWsAddress,
       messageRouter: this.messageRouter,
       cdcIntegrationService: this.cdcIntegrationService,
       cdcGroupPropagationService:
@@ -2092,6 +2249,7 @@ class BootstrapService extends EventEmitter {
       tablePolicyService: this.tablePolicyService,
       messageGroupServices: this.messageGroupServices,
       rebalanceCoordinator: this.rebalanceCoordinator,
+      bootstrapReadinessState: this.bootstrapReadinessState,
     });
 
     this.heartbeatService = controlPlane.heartbeatService;

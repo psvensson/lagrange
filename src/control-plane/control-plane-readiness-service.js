@@ -1,8 +1,5 @@
 import {LoggingService} from '../logging/logging-service.js';
-import {getSystemCachePrimaryKeyFieldOrFallback} from
-  '../cache/system-cache-key-descriptor.js';
 import {
-  CDC_OPERATION,
   COLUMN,
   NUM,
   STATE,
@@ -19,6 +16,10 @@ import {
 import {PRESSURE_STATE} from '../rebalancer/storage-capacity-constants.js';
 import {AuthoritativeControlPlaneView} from
   './authoritative-control-plane-view.js';
+import {ControlPlaneSystemTableGateway} from
+  './control-plane-system-table-gateway.js';
+import {getRegisteredControlPlaneSystemTableGateway} from
+  './control-plane-gateway-registry.js';
 import {
   CONTROL_PLANE_PUBLICATION_MODE,
   CONTROL_PLANE_READINESS_DEFAULT,
@@ -99,6 +100,8 @@ class ControlPlaneReadinessService {
   constructor(options = {}) {
     this.nodeId = options.nodeId || null;
     this.systemTableCache = options.systemTableCache || null;
+    this.nodesOwner = options.nodesOwner || null;
+    this.servicesOwner = options.servicesOwner || null;
     this.messageRouter = options.messageRouter || null;
     this.nodeLifecycleStateMachine = options.nodeLifecycleStateMachine || null;
     this.storageAccountingService = options.storageAccountingService || null;
@@ -161,6 +164,10 @@ class ControlPlaneReadinessService {
     this.lastReadinessSnapshotInvalidatedAtMsByNodeId = new Map();
     this.authoritativeControlPlaneView =
       options.authoritativeControlPlaneView || null;
+    this.controlPlaneSystemTableGateway =
+      options.controlPlaneSystemTableGateway ||
+      getRegisteredControlPlaneSystemTableGateway() ||
+      null;
     this.now = typeof options.now === TYPEOF.FUNCTION ?
       options.now :
       () => Date.now();
@@ -195,7 +202,7 @@ class ControlPlaneReadinessService {
    * @return {Promise<Object[]>}
    */
   async getAllNodeReadiness(options = {}) {
-    const nodeRows = this.getNodeRows();
+    const nodeRows = await this.readNodeRows(options);
     const readiness = [];
 
     for (const nodeRow of nodeRows) {
@@ -227,6 +234,13 @@ class ControlPlaneReadinessService {
     );
     if (cachedSnapshot) {
       const snapshotInvalidated = this.isReadinessSnapshotInvalidated(nodeId);
+      if (this.shouldPreferBackgroundRefreshOnIneligible(
+        cachedSnapshot,
+        options,
+      )) {
+        this.maybeStartBackgroundReadinessRefresh(nodeId, options);
+        return cachedSnapshot;
+      }
       if (this.shouldBypassCachedSnapshot(cachedSnapshot, options)) {
         // Fall through to a fresh owner-path evaluation when cached readiness
         // is currently ineligible for the requested decision.
@@ -257,8 +271,8 @@ class ControlPlaneReadinessService {
   async evaluateNodeReadiness(nodeId, options = {}) {
     const observedAt = normalizeIsoTimestamp(this.now());
     const publication = this.getPublicationDiagnostics(observedAt);
-    let nodeRow = this.getNodeRow(nodeId);
-    let serviceRows = this.getNodeServiceRows(nodeId);
+    let nodeRow = await this.readNodeRow(nodeId, options);
+    let serviceRows = await this.readNodeServiceRows(nodeId, options);
 
     if (options.allowAuthoritativeRefresh === true) {
       const repaired = await this.maybeRepairAuthoritativeNodeEvidence(
@@ -270,8 +284,8 @@ class ControlPlaneReadinessService {
         options,
       );
       if (repaired) {
-        nodeRow = this.getNodeRow(nodeId);
-        serviceRows = this.getNodeServiceRows(nodeId);
+        nodeRow = await this.readNodeRow(nodeId, options);
+        serviceRows = await this.readNodeServiceRows(nodeId, options);
       }
     }
 
@@ -608,15 +622,47 @@ class ControlPlaneReadinessService {
       return false;
     }
     const decisionDimension =
-      typeof options.decisionDimension === TYPEOF.STRING &&
-        options.decisionDimension.length > NUM.ZERO ?
-        options.decisionDimension :
-        CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE;
+      this.resolveReadinessDecisionDimension(options);
     const dimensions = snapshot?.dimensions;
     if (!dimensions || typeof dimensions !== TYPEOF.OBJECT) {
       return true;
     }
     return dimensions[decisionDimension] !== true;
+  }
+
+  /**
+   * Return true when callers should reuse a recent cached ineligible snapshot
+   * immediately and refresh the canonical readiness owner in the background.
+   * @param {Object|null} snapshot
+   * @param {Object} [options]
+   * @return {boolean}
+   * @private
+   */
+  shouldPreferBackgroundRefreshOnIneligible(snapshot, options = {}) {
+    if (options.allowAuthoritativeRefresh !== true ||
+        options.preferBackgroundRefreshOnIneligible !== true) {
+      return false;
+    }
+    const dimensions = snapshot?.dimensions;
+    if (!dimensions || typeof dimensions !== TYPEOF.OBJECT) {
+      return false;
+    }
+    const decisionDimension =
+      this.resolveReadinessDecisionDimension(options);
+    return dimensions[decisionDimension] !== true;
+  }
+
+  /**
+   * Resolve the caller's gating dimension with a stable serve default.
+   * @param {Object} [options]
+   * @return {string}
+   * @private
+   */
+  resolveReadinessDecisionDimension(options = {}) {
+    return typeof options.decisionDimension === TYPEOF.STRING &&
+      options.decisionDimension.length > NUM.ZERO ?
+      options.decisionDimension :
+      CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE;
   }
 
   /**
@@ -1115,6 +1161,7 @@ class ControlPlaneReadinessService {
     this.authoritativeControlPlaneView = new AuthoritativeControlPlaneView({
       nodeId: this.nodeId,
       cdcIntegrationService: this.cdcIntegrationService,
+      messageRouter: this.messageRouter,
       now: this.now,
       queryTimeoutMs: this.authoritativeReadinessRepairQueryTimeoutMs,
     });
@@ -1387,6 +1434,13 @@ class ControlPlaneReadinessService {
     const serviceRows = Array.isArray(context?.serviceRows) ?
       context.serviceRows :
       [];
+    if (this.shouldPreferLocalSelfNodeEvidence({
+      nodeId,
+      nodeRow,
+      serviceRows,
+    })) {
+      return false;
+    }
     const transportState = this.getNodeTransportState(nodeId, nodeRow);
     if (!transportState.connected) {
       return false;
@@ -1414,6 +1468,45 @@ class ControlPlaneReadinessService {
 
     return !this.hasRoutableService(serviceRows) ||
       !this.hasWritableControlPlaneService(serviceRows);
+  }
+
+  /**
+   * Return true when the local node already has stronger self-owned readiness
+   * evidence than an immediate authoritative repair would provide.
+   *
+   * The local node's active status plus locally hosted control-plane services
+   * are sufficient to keep self admission open while CDC catches up. Forcing a
+   * synchronous read-your-own-write round-trip to the seed on every stale local
+   * heartbeat only recreates the chokepoint we are trying to avoid.
+   *
+   * @param {Object} context
+   * @param {string|null} context.nodeId
+   * @param {Object|null} context.nodeRow
+   * @param {Object[]} context.serviceRows
+   * @return {boolean}
+   * @private
+   */
+  shouldPreferLocalSelfNodeEvidence(context = {}) {
+    const nodeId = context?.nodeId || null;
+    if (!nodeId || nodeId !== this.nodeId) {
+      return false;
+    }
+
+    const nodeRow = context?.nodeRow || null;
+    if (!nodeRow || typeof nodeRow !== TYPEOF.OBJECT) {
+      return false;
+    }
+
+    const status = String(nodeRow?.[COLUMN.STATUS] || '').toLowerCase();
+    if (status !== SERVICE_STATUS.ACTIVE) {
+      return false;
+    }
+
+    const serviceRows = Array.isArray(context?.serviceRows) ?
+      context.serviceRows :
+      [];
+    return this.hasRoutableService(serviceRows) &&
+      this.hasWritableControlPlaneService(serviceRows);
   }
 
   /**
@@ -1513,7 +1606,6 @@ class ControlPlaneReadinessService {
     const snapshot = await authoritativeControlPlaneView.readNodeSnapshot(
       nodeId,
       {
-        allowSqlFallback: true,
         queryTimeoutMs: this.authoritativeReadinessRepairQueryTimeoutMs,
       },
     );
@@ -1532,19 +1624,21 @@ class ControlPlaneReadinessService {
     }
 
     let repairedRowCount = NUM.ZERO;
+    const cachedNodeRow = await this.readNodeRow(nodeId);
+    const cachedServiceRows = await this.readNodeServiceRows(nodeId);
     if (nodeRows) {
-      repairedRowCount += this.applyAuthoritativeRows(
+      repairedRowCount += await this.applyAuthoritativeRows(
         TABLES.NODES,
         nodeRows,
-        this.getNodeRow(nodeId) ? [this.getNodeRow(nodeId)] : [],
+        cachedNodeRow ? [cachedNodeRow] : [],
         causeId,
       );
     }
     if (serviceRows) {
-      repairedRowCount += this.applyAuthoritativeRows(
+      repairedRowCount += await this.applyAuthoritativeRows(
         TABLES.SERVICES,
         serviceRows,
-        this.getNodeServiceRows(nodeId),
+        cachedServiceRows,
         causeId,
       );
     }
@@ -1570,6 +1664,37 @@ class ControlPlaneReadinessService {
       repaired: false,
       outcome: 'unchanged',
     };
+  }
+
+  async readNodeRow(nodeId, options = {}) {
+    if (this.nodesOwner &&
+        typeof this.nodesOwner.getNodeFromCache === TYPEOF.FUNCTION) {
+      const result = await this.nodesOwner.getNodeFromCache(nodeId, options);
+      return result?.rows?.[0] || null;
+    }
+    return this.getNodeRow(nodeId);
+  }
+
+  async readNodeRows(options = {}) {
+    if (this.nodesOwner &&
+        typeof this.nodesOwner.listNodesFromCache === TYPEOF.FUNCTION) {
+      const result = await this.nodesOwner.listNodesFromCache(options);
+      return Array.isArray(result?.rows) ? result.rows : [];
+    }
+    return this.getNodeRows();
+  }
+
+  async readNodeServiceRows(nodeId, options = {}) {
+    if (this.servicesOwner &&
+        typeof this.servicesOwner.listServicesForNodeFromCache ===
+          TYPEOF.FUNCTION) {
+      const result = await this.servicesOwner.listServicesForNodeFromCache(
+        nodeId,
+        options,
+      );
+      return Array.isArray(result?.rows) ? result.rows : [];
+    }
+    return this.getNodeServiceRows(nodeId);
   }
 
   /**
@@ -1618,46 +1743,19 @@ class ControlPlaneReadinessService {
    * @return {number}
    * @private
    */
-  applyAuthoritativeRows(tableName, rows, cachedRows, causeId) {
-    const primaryKeyField =
-      getSystemCachePrimaryKeyFieldOrFallback(tableName, 'id');
-    const authoritativeRows = Array.isArray(rows) ? rows : [];
-    const cachedEntries = Array.isArray(cachedRows) ? cachedRows : [];
-    const authoritativeKeys = new Set();
-    let mutationCount = NUM.ZERO;
-
-    for (const row of authoritativeRows) {
-      const key = row?.[primaryKeyField] ?? row?.id;
-      if (typeof key === TYPEOF.UNDEFINED || key === null) {
-        continue;
-      }
-      authoritativeKeys.add(key);
-      this.cacheMutationTarget.applySystemTableChange(
+  async applyAuthoritativeRows(tableName, rows, cachedRows, causeId) {
+    const result =
+      await this.controlPlaneSystemTableGateway.reconcileAuthoritativeCacheRows(
         tableName,
-        CDC_OPERATION.UPSERT,
-        row,
-        {causeId},
+        rows,
+        {
+          causeId,
+          cachedRows,
+          cacheMutationTarget: this.cacheMutationTarget,
+          systemTableCache: this.systemTableCache,
+        },
       );
-      mutationCount += NUM.ONE;
-    }
-
-    for (const row of cachedEntries) {
-      const key = row?.[primaryKeyField] ?? row?.id;
-      if (typeof key === TYPEOF.UNDEFINED ||
-          key === null ||
-          authoritativeKeys.has(key)) {
-        continue;
-      }
-      this.cacheMutationTarget.applySystemTableChange(
-        tableName,
-        CDC_OPERATION.DELETE,
-        row,
-        {causeId},
-      );
-      mutationCount += NUM.ONE;
-    }
-
-    return mutationCount;
+    return result?.mutationCount || NUM.ZERO;
   }
 
   /**

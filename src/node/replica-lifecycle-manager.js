@@ -21,6 +21,11 @@ import {SERVICE_TYPE, TYPEOF} from '../constants/index.js';
 import {STORAGE_DEFAULT} from '../storage/storage-constants.js';
 import {assertCritical} from '../utils/assert.js';
 import {
+  CONTROL_PLANE_MUTATION_OPERATION,
+  ControlPlaneSystemTableGateway,
+} from '../control-plane/control-plane-system-table-gateway.js';
+import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
+import {
   REPLICA_LIFECYCLE_ACK_STATUS,
   REPLICA_LIFECYCLE_DEFAULT,
   REPLICA_LIFECYCLE_ERROR_MSG,
@@ -109,6 +114,8 @@ class ReplicaLifecycleManager extends EventEmitter {
     this.nodeId = options.nodeId || REPLICA_LIFECYCLE_DEFAULT.UNKNOWN_NODE_ID;
     this.systemTableCache = options.systemTableCache || null;
     this.cdcIntegrationService = options.cdcIntegrationService || null;
+    this.controlPlaneSystemTableGateway =
+      options.controlPlaneSystemTableGateway || null;
     this.messageGroupService = options.messageGroupService || null;
     this.createPartitionService = options.createPartitionService || null;
     this.dataDir = options.dataDir || REPLICA_LIFECYCLE_DEFAULT.DATA_DIR;
@@ -128,6 +135,7 @@ class ReplicaLifecycleManager extends EventEmitter {
         nodeId: this.nodeId,
         systemTableCache: this.systemTableCache,
         cdcIntegrationService: this.cdcIntegrationService,
+        controlPlaneSystemTableGateway: this.controlPlaneSystemTableGateway,
         createPartitionService: this.createPartitionService,
         dataDir: this.dataDir,
       });
@@ -281,16 +289,21 @@ class ReplicaLifecycleManager extends EventEmitter {
     // The seed node already inserted the row with all fields before sending
     // CREATE_REPLICA. Using INSERT OR REPLACE would overwrite the entire row
     // and lose fields like partition_id, raft_role, created_at, etc.
-    if (this.cdcIntegrationService) {
-      const result = await this.cdcIntegrationService.updateSystemTableRow(
-        SYSTEM_TABLE_NAME.SERVICES,
-        {service_id: replicaId},
-        {
-          status: newStatus,
-          updated_at: Date.now(),
-          ...additionalData,
-        },
-      );
+    if (this.cdcIntegrationService || this.controlPlaneSystemTableGateway) {
+      const result = await this.getControlPlaneSystemTableGateway()
+        .submitMutation({
+          operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+          tableName: SYSTEM_TABLE_NAME.SERVICES,
+          whereClause: {service_id: replicaId},
+          data: {
+            status: newStatus,
+            updated_at: Date.now(),
+            ...additionalData,
+          },
+        }, {
+          workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+          deliveryPriority: 'critical',
+        });
 
       if (result && result.success === false) {
         this.logger.error(REPLICA_LIFECYCLE_LOG_MSG.CDC_UPDATE_FAILED, {
@@ -610,14 +623,20 @@ class ReplicaLifecycleManager extends EventEmitter {
       try {
         if (status === ReplicaStatus.STARTING || status === ReplicaStatus.SYNCING) {
           // Mark 'starting'/'syncing' replicas as 'failed'
-          const failResult = await this.cdcIntegrationService.updateSystemTableRow(
-            SYSTEM_TABLE_NAME.SERVICES,
-            buildObservedReplicaWhereClause(service),
-            {
-              status: ReplicaStatus.FAILED,
-              error_message: REPLICA_LIFECYCLE_ERROR_MSG.RECOVERY_CLEANUP_ERROR,
-            },
-          );
+          const failResult = await this.getControlPlaneSystemTableGateway()
+            .submitMutation({
+              operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+              tableName: SYSTEM_TABLE_NAME.SERVICES,
+              whereClause: buildObservedReplicaWhereClause(service),
+              data: {
+                status: ReplicaStatus.FAILED,
+                error_message:
+                  REPLICA_LIFECYCLE_ERROR_MSG.RECOVERY_CLEANUP_ERROR,
+              },
+            }, {
+              workClass: PRESSURE_WORK_CLASS.CRITICAL,
+              deliveryPriority: 'critical',
+            });
           if (!guardedMutationApplied(failResult)) {
             this.logger.debug('Skipped stale replica recovery failure update', {
               replicaId: serviceId,
@@ -638,11 +657,16 @@ class ReplicaLifecycleManager extends EventEmitter {
           });
         } else if (status === ReplicaStatus.STOPPING) {
           // Complete removal for 'stopping' replicas
-          const stopResult = await this.cdcIntegrationService.updateSystemTableRow(
-            SYSTEM_TABLE_NAME.SERVICES,
-            buildObservedReplicaWhereClause(service),
-            {status: ReplicaStatus.STOPPED},
-          );
+          const stopResult = await this.getControlPlaneSystemTableGateway()
+            .submitMutation({
+              operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+              tableName: SYSTEM_TABLE_NAME.SERVICES,
+              whereClause: buildObservedReplicaWhereClause(service),
+              data: {status: ReplicaStatus.STOPPED},
+            }, {
+              workClass: PRESSURE_WORK_CLASS.CRITICAL,
+              deliveryPriority: 'critical',
+            });
           if (!guardedMutationApplied(stopResult)) {
             this.logger.debug('Skipped stale replica recovery stop update', {
               replicaId: serviceId,
@@ -652,13 +676,17 @@ class ReplicaLifecycleManager extends EventEmitter {
             continue;
           }
 
-          await this.cdcIntegrationService.deleteSystemTableRow(
-            SYSTEM_TABLE_NAME.SERVICES,
-            {
+          await this.getControlPlaneSystemTableGateway().submitMutation({
+            operation: CONTROL_PLANE_MUTATION_OPERATION.DELETE,
+            tableName: SYSTEM_TABLE_NAME.SERVICES,
+            whereClause: {
               service_id: serviceId,
               status: ReplicaStatus.STOPPED,
             },
-          );
+          }, {
+            workClass: PRESSURE_WORK_CLASS.CRITICAL,
+            deliveryPriority: 'critical',
+          });
 
           // Clean up local resources
           await this.cleanupReplicaResources(partitionId, serviceId);
@@ -769,6 +797,22 @@ class ReplicaLifecycleManager extends EventEmitter {
   getAllLocalReplicas() {
     assertCritical(this.replicaHandler, REPLICA_LIFECYCLE_ERROR_MSG.REPLICA_HANDLER_REQUIRED);
     return this.replicaHandler.getAllLocalReplicas();
+  }
+
+  getControlPlaneSystemTableGateway() {
+    if (this.controlPlaneSystemTableGateway) {
+      if (!this.controlPlaneSystemTableGateway.cdcIntegrationService &&
+          this.cdcIntegrationService) {
+        this.controlPlaneSystemTableGateway
+          .setCdcIntegrationService(this.cdcIntegrationService);
+      }
+      return this.controlPlaneSystemTableGateway;
+    }
+    this.controlPlaneSystemTableGateway = new ControlPlaneSystemTableGateway({
+      nodeId: this.nodeId,
+      cdcIntegrationService: this.cdcIntegrationService,
+    });
+    return this.controlPlaneSystemTableGateway;
   }
 
   /**

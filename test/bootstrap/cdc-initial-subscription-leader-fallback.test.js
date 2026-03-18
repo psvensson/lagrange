@@ -1,13 +1,7 @@
 /**
  * Tests that the initial CDC subscription path in BootstrapService
- * propagates CDC events even when the local message group replica
- * is not the leader.
- *
- * Bug: subscribeToCDC() uses a hard isLeaderReplica() gate that
- * silently drops CDC events when the message group leader moves
- * to another node after bootstrap. The dynamic partition path
- * already uses resolveCdcPropagationMessageGroup() which falls
- * back correctly.
+ * always uses an operational message-group owner and defers
+ * rather than dropping CDC when that owner is temporarily unavailable.
  */
 
 import {test} from '../../src/test-helpers/tap.js';
@@ -78,26 +72,27 @@ test(
 
     // Message group that is NOT the leader
     const mockMessageGroup = {
+      initialized: true,
       subscribeToCDC: async () => {},
       isLeaderReplica: () => false,
+      getMetadataIngressReadiness: () => ({ready: false}),
     };
 
-    // A fallback message group that IS the leader (on another node
-    // conceptually, but available locally for propagation)
-    const fallbackLeaderMg = {
+    // An operational message group that IS the leader.
+    const leaderMg = {
+      initialized: true,
       subscribeToCDC: async () => {},
       isLeaderReplica: () => true,
+      isMetadataIngressReady: () => true,
     };
 
+    service.messageGroupServices = new Map([
+      ['mg-1-r1', mockMessageGroup],
+      ['mg-1-r2', leaderMg],
+    ]);
     service.partitionServices = new Map([
       ['partitions-p1-r1', mockPartition],
     ]);
-    service.messageGroupServices = new Map([
-      ['mg-1-r1', mockMessageGroup],
-    ]);
-
-    // resolveCdcPropagationMessageGroup should find the fallback
-    service.getLeaderMessageGroupService = () => fallbackLeaderMg;
 
     await service.subscribeToCDC(
       'partitions',
@@ -127,8 +122,73 @@ test(
     assert.equal(
       propagatedEvents.length,
       1,
-      'CDC event should be propagated via fallback message group ' +
-      'when local MG is not leader',
+      'CDC event should be propagated via the operational message-group ' +
+      'leader when the local replica is not the leader',
+    );
+
+    teardownEnvironment();
+    t.end();
+  },
+);
+
+test(
+  'subscribeToCDC defers CDC delivery when no operational message-group is ready',
+  async (t) => {
+    setupEnvironment();
+
+    const service = new BootstrapService({nodeId: 'node-a'});
+    let capturedCdcSubscriber = null;
+
+    const mockPartition = {
+      subscribeToCDCWithHandshake: async (subscriber, options = {}) => {
+        capturedCdcSubscriber = subscriber;
+        return {
+          subscriberId: options.subscriberId || null,
+          subscriptionEpoch: 1,
+          catchup: {
+            mode: 'none',
+            bufferedEventsReplayed: 0,
+          },
+        };
+      },
+      isLeader: false,
+    };
+
+    service.partitionServices = new Map([
+      ['partitions-p1-r1', mockPartition],
+    ]);
+    service.messageGroupServices = new Map([
+      ['mg-1-r1', {
+        initialized: true,
+        subscribeToCDC: async () => {},
+        isLeaderReplica: () => false,
+        getMetadataIngressReadiness: () => ({
+          ready: false,
+          reason: 'leader metadata incomplete',
+          retryAfterMs: 250,
+        }),
+      }],
+    ]);
+
+    await service.subscribeToCDC(
+      'partitions',
+      'partitions-p1',
+      ['partitions-p1-r1'],
+    );
+
+    await assert.rejects(
+      () => capturedCdcSubscriber({
+        tableName: 'partitions',
+        operation: 'INSERT',
+        data: {partition_id: 'tbl-abc-p1', table_name: 'benchmark'},
+      }),
+      (error) => {
+        assert.equal(error.ownerNotReady, true);
+        assert.equal(error.deferRetry, true);
+        assert.equal(error.retryAfterMs, 250);
+        return true;
+      },
+      'subscriber should surface typed defer semantics so partition CDC can replay later',
     );
 
     teardownEnvironment();

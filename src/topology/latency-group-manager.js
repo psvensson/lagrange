@@ -8,6 +8,11 @@ import {LoggingService} from '../logging/logging-service.js';
 import {assertCritical} from '../utils/assert.js';
 import {COLUMN, NUM, TABLES, TYPEOF} from '../constants/index.js';
 import {
+  CONTROL_PLANE_MUTATION_OPERATION,
+  ControlPlaneSystemTableGateway,
+} from '../control-plane/control-plane-system-table-gateway.js';
+import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
+import {
   LATENCY_ASSIGNMENT_STATE,
   LATENCY_GROUP_STATE,
   LATENCY_TOPOLOGY_CONFIG_KEY,
@@ -42,6 +47,8 @@ class LatencyGroupManager extends EventEmitter {
     this.nodeId = options.nodeId || null;
     this.systemTableCache = options.systemTableCache || null;
     this.cdcIntegrationService = options.cdcIntegrationService || null;
+    this.controlPlaneSystemTableGateway =
+      options.controlPlaneSystemTableGateway || null;
     this.latencyMeasurementService = options.latencyMeasurementService || null;
     this.groupSelectionService = options.groupSelectionService || null;
     this.nowFn = options.nowFn || Date.now;
@@ -86,6 +93,9 @@ class LatencyGroupManager extends EventEmitter {
     }
     if (options.cdcIntegrationService) {
       this.cdcIntegrationService = options.cdcIntegrationService;
+    }
+    if (options.controlPlaneSystemTableGateway) {
+      this.controlPlaneSystemTableGateway = options.controlPlaneSystemTableGateway;
     }
     if (options.latencyMeasurementService) {
       this.latencyMeasurementService = options.latencyMeasurementService;
@@ -406,10 +416,14 @@ class LatencyGroupManager extends EventEmitter {
     const now = this.now();
 
     if (decision.createdGroupRow) {
-      await this.cdcIntegrationService.upsertSystemTableRow(
-        TABLES.LATENCY_GROUPS,
-        decision.createdGroupRow,
-      );
+      await this.getControlPlaneSystemTableGateway().submitMutation({
+        operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
+        tableName: TABLES.LATENCY_GROUPS,
+        row: decision.createdGroupRow,
+      }, {
+        workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+        deliveryPriority: 'critical',
+      });
       this.logger.info(LATENCY_GROUP_MANAGER_LOG_MSG.GROUP_CREATED, {
         nodeId: this.nodeId,
         groupId: decision.createdGroupRow[COLUMN.GROUP_ID],
@@ -475,11 +489,15 @@ class LatencyGroupManager extends EventEmitter {
       [COLUMN.LATENCY_ASSIGNMENT_STATE]: options.assignmentState,
       [COLUMN.LAST_LATENCY_CHECK_AT]: options.timestamp,
     };
-    await this.cdcIntegrationService.updateSystemTableRow(
-      TABLES.NODES,
-      {[COLUMN.NODE_ID]: this.nodeId},
-      updateRow,
-    );
+    await this.getControlPlaneSystemTableGateway().submitMutation({
+      operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+      tableName: TABLES.NODES,
+      whereClause: {[COLUMN.NODE_ID]: this.nodeId},
+      data: updateRow,
+    }, {
+      workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+      deliveryPriority: 'critical',
+    });
   }
 
   /**
@@ -518,10 +536,14 @@ class LatencyGroupManager extends EventEmitter {
       });
 
       if (this.shouldPersistLifecycleState(groupRow, normalizedGroupRow)) {
-        await this.cdcIntegrationService.upsertSystemTableRow(
-          TABLES.LATENCY_GROUPS,
-          normalizedGroupRow,
-        );
+        await this.getControlPlaneSystemTableGateway().submitMutation({
+          operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
+          tableName: TABLES.LATENCY_GROUPS,
+          row: normalizedGroupRow,
+        }, {
+          workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+          deliveryPriority: 'critical',
+        });
       }
 
       await this.groupSelectionService.applyGroupLeadership({
@@ -883,6 +905,23 @@ class LatencyGroupManager extends EventEmitter {
    */
   now() {
     return this.nowFn();
+  }
+
+  getControlPlaneSystemTableGateway() {
+    if (this.controlPlaneSystemTableGateway) {
+      if (!this.controlPlaneSystemTableGateway.cdcIntegrationService &&
+          this.cdcIntegrationService) {
+        this.controlPlaneSystemTableGateway
+          .setCdcIntegrationService(this.cdcIntegrationService);
+      }
+      return this.controlPlaneSystemTableGateway;
+    }
+    this.controlPlaneSystemTableGateway = new ControlPlaneSystemTableGateway({
+      nodeId: this.nodeId,
+      cdcIntegrationService: this.cdcIntegrationService,
+      systemTableCache: this.systemTableCache,
+    });
+    return this.controlPlaneSystemTableGateway;
   }
 
   /**

@@ -1,8 +1,10 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {
   AUTHORITATIVE_REPAIR_TRIGGER,
+  deriveAuthoritativeRepairTables,
   evaluateAuthoritativeRepairPolicy,
 } from '../../src/admin/admin-authoritative-repair-policy.js';
+import {TABLES} from '../../src/constants/index.js';
 
 test('authoritative repair policy triggers for stale cache watermark',
   async (t) => {
@@ -99,5 +101,43 @@ test('authoritative repair policy triggers for scoped discovery with zero replic
         AUTHORITATIVE_REPAIR_TRIGGER.DISCOVERY_ZERO_SCOPED_REPLICAS,
       ),
       true,
+    );
+  });
+
+test('authoritative repair policy narrows stale replica-operation repair to replica_operations',
+  async (t) => {
+    const tables = deriveAuthoritativeRepairTables({
+      triggerCodes: [
+        AUTHORITATIVE_REPAIR_TRIGGER
+          .STALE_REPLICA_OPERATIONS_IN_FLIGHT,
+      ],
+    });
+
+    t.same(
+      tables,
+      [TABLES.REPLICA_OPERATIONS],
+    );
+  });
+
+test('authoritative repair policy narrows scoped discovery repair to topology tables',
+  async (t) => {
+    const tables = deriveAuthoritativeRepairTables({
+      scopedQuery: true,
+      triggerCodes: [
+        AUTHORITATIVE_REPAIR_TRIGGER
+          .DISCOVERY_EMPTY_WITH_SERVICES_PRESENT,
+      ],
+    });
+
+    t.same(
+      tables,
+      [
+        TABLES.NODES,
+        TABLES.PARTITIONS,
+        TABLES.SERVICES,
+        TABLES.TABLES,
+        TABLES.SERVICE_DEFINITIONS,
+        TABLES.SERVICE_ENDPOINTS,
+      ],
     );
   });

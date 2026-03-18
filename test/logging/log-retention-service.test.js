@@ -88,6 +88,10 @@ test('LogRetentionService runCleanup without engine throws error', async (t) => 
     t.fail('should throw error');
   } catch (error) {
     t.ok(error.message.includes('not available'), 'should have error message');
+    t.equal(error.code, 'SYSTEM_METADATA_GATEWAY_REQUIRED',
+      'should expose typed gateway-required code');
+    t.equal(error.outcome, 'owner_not_ready',
+      'should expose owner_not_ready outcome');
   }
 
   LogRetentionService.resetInstance();

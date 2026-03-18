@@ -78,7 +78,8 @@ const NODE_LIFECYCLE_SERVICE_LOG_MSG = Object.freeze({
 });
 
 const NODE_LIFECYCLE_SERVICE_ERROR_MSG = Object.freeze({
-  MISSING_CDC: 'NodeLifecycleService requires cdcIntegrationService',
+  MISSING_CDC:
+    'NodeLifecycleService requires cdcIntegrationService or controlPlaneSystemTableGateway',
   MISSING_NODE_ID: 'NodeLifecycleService requires nodeId',
   NOT_INITIALIZED: 'NodeLifecycleService not initialized',
   INVALID_NODES_CACHE: 'NodeLifecycleService requires a valid nodes cache array',
@@ -198,7 +199,8 @@ const FAILURE_DETECTOR_ERROR_MSG = Object.freeze({
   MISSING_NODE_ID: 'FailureDetector requires nodeId',
   MISSING_SYSTEM_TABLE_CACHE: 'FailureDetector requires systemTableCache',
   MISSING_SQL_QUERY_ENGINE: 'FailureDetector requires sqlQueryEngine',
-  MISSING_CDC_SERVICE: 'FailureDetector requires cdcIntegrationService',
+  MISSING_CDC_SERVICE:
+    'FailureDetector requires cdcIntegrationService or controlPlaneSystemTableGateway',
   NOT_INITIALIZED: 'FailureDetector not initialized',
 });
 
@@ -264,7 +266,8 @@ const NODE_REINTEGRATION_LOG_MSG = Object.freeze({
 const NODE_REINTEGRATION_ERROR_MSG = Object.freeze({
   MISSING_NODE_ID: 'NodeReintegrationService requires nodeId',
   MISSING_SYSTEM_TABLE_CACHE: 'NodeReintegrationService requires systemTableCache',
-  MISSING_CDC_SERVICE: 'NodeReintegrationService requires cdcIntegrationService',
+  MISSING_CDC_SERVICE:
+    'NodeReintegrationService requires cdcIntegrationService or controlPlaneSystemTableGateway',
   NOT_INITIALIZED: 'NodeReintegrationService not initialized',
 });
 

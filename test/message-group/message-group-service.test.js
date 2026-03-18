@@ -3,6 +3,7 @@
  * Requirements: 4.1, 4.2, 4.3, 4.4, 4.5
  */
 
+import {EventEmitter} from 'node:events';
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import {
   MessageGroupOperationLedger,
@@ -18,22 +19,61 @@ import {
   SYSTEM_TABLE_NAME,
   INITIAL_PARTITION_IDS,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
+import {
+  LIFECYCLE_PHASE,
+  LIFECYCLE_REASON,
+} from '../../src/bootstrap/lifecycle-controller-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {
   COLUMN,
   CDC_OPERATION,
   SERVICE_TYPE,
   SERVICE_STATUS,
+  STATE,
   TABLES,
 } from '../../src/constants/index.js';
 import LifeRaft from '@markwylde/liferaft';
 import {RAFT_EVENT} from '../../src/raft/constants.js';
+import {
+  ControlPlaneField,
+  ControlPlaneMessageType,
+} from '../../src/control-plane/control-plane-constants.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 
 // Port counter for unique ports per test
 let testPortCounter = 24000;
+
+function createTrafficReadinessState() {
+  const emitter = new EventEmitter();
+  let snapshot = {
+    phase: LIFECYCLE_PHASE.INIT,
+    ready: false,
+    reasons: [],
+  };
+
+  return {
+    getSnapshot() {
+      return {...snapshot};
+    },
+    on(eventName, listener) {
+      emitter.on(eventName, listener);
+    },
+    off(eventName, listener) {
+      emitter.off(eventName, listener);
+    },
+    transitionTo(phase, options = {}) {
+      snapshot = {
+        phase,
+        ready: options.ready === true,
+        reasons: Array.isArray(options.reasons) ? [...options.reasons] : [],
+      };
+      emitter.emit('transition', {...snapshot});
+      return {...snapshot};
+    },
+  };
+}
 
 /**
  * Create a real WebSocket transport for testing.
@@ -191,6 +231,1016 @@ test('MessageGroupService - follower demotion clears stale self leader id', asyn
 });
 
 test(
+  'MessageGroupService - joining existing group ignores candidate churn until join completes',
+  async (t) => {
+    const {router, nodeId, cleanup} = await createTestTransport();
+    try {
+      const service = new MessageGroupService({
+        groupId: 'mg-join-existing',
+        replicaId: 'mg-join-existing-r2',
+        nodeId,
+        replicaIds: ['mg-join-existing-r1', 'mg-join-existing-r2'],
+        peerAddresses: ['seed-node-1/message-group/mg-join-existing-r1'],
+        transport: router,
+        deferElection: true,
+        isJoiningExistingGroup: true,
+      });
+
+      await service.initialize();
+      t.equal(service.role, RaftRole.FOLLOWER, 'joining replica should start as follower');
+
+      service.raft.emit(RAFT_EVENT.CANDIDATE);
+
+      t.equal(
+        service.role,
+        RaftRole.FOLLOWER,
+        'joining replica should ignore candidate transitions while join suppression is active',
+      );
+
+      await service.shutdown();
+    } finally {
+      await cleanup();
+    }
+  },
+);
+
+test(
+  'MessageGroupService - joining existing group rejects vote requests and stays timer-suppressed',
+  async (t) => {
+    const {router, nodeId, cleanup} = await createTestTransport();
+    const deliveries = [];
+    const originalDeliver = router.deliver.bind(router);
+    router.deliver = async (targetAddress, payload, options) => {
+      deliveries.push({targetAddress, payload, options});
+      return originalDeliver(targetAddress, payload, options)
+        .catch(() => ({acknowledged: true}));
+    };
+
+    try {
+      const service = new MessageGroupService({
+        groupId: 'mg-join-vote',
+        replicaId: 'mg-join-vote-r2',
+        nodeId,
+        replicaIds: ['mg-join-vote-r1', 'mg-join-vote-r2'],
+        peerAddresses: ['seed-node-1/message-group/mg-join-vote-r1'],
+        transport: router,
+        deferElection: true,
+        isJoiningExistingGroup: true,
+      });
+
+      await service.initialize();
+      const heartbeatActiveBefore = service.raft?.timers?.active('heartbeat');
+      t.notOk(
+        heartbeatActiveBefore,
+        'joining replica should start without an active heartbeat timer',
+      );
+
+      await service.receiveMessage({
+        type: 'vote',
+        term: 1,
+        address: 'seed-node-1/message-group/mg-join-vote-r1',
+        leader: '',
+        last: {
+          index: 0,
+          term: 0,
+          committedIndex: 0,
+        },
+      });
+
+      const voteResponse = deliveries.find((entry) => {
+        return entry.payload?.type === 'voted';
+      });
+      t.ok(voteResponse, 'joining replica should respond to vote requests');
+      t.equal(
+        voteResponse?.payload?.data?.granted,
+        false,
+        'joining replica should deny votes until join suppression is released',
+      );
+      t.notOk(
+        service.raft?.timers?.active('heartbeat'),
+        'joining replica should keep heartbeat timers suppressed after vote traffic',
+      );
+
+      await service.shutdown();
+    } finally {
+      router.deliver = originalDeliver;
+      await cleanup();
+    }
+  },
+);
+
+test(
+  'MessageGroupService - joining existing group keeps append traffic from rearming timers',
+  async (t) => {
+    const {router, nodeId, cleanup} = await createTestTransport();
+    try {
+      const service = new MessageGroupService({
+        groupId: 'mg-join-append',
+        replicaId: 'mg-join-append-r2',
+        nodeId,
+        replicaIds: ['mg-join-append-r1', 'mg-join-append-r2'],
+        peerAddresses: ['seed-node-1/message-group/mg-join-append-r1'],
+        transport: router,
+        deferElection: true,
+        isJoiningExistingGroup: true,
+      });
+
+      await service.initialize();
+      await service.receiveMessage({
+        type: 'append',
+        term: 1,
+        address: 'seed-node-1/message-group/mg-join-append-r1',
+        leader: 'seed-node-1/message-group/mg-join-append-r1',
+        last: {
+          index: 0,
+          term: 0,
+          committedIndex: 0,
+        },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      t.notOk(
+        service.raft?.timers?.active('heartbeat'),
+        'joining replica should not rearm heartbeat timers from append traffic',
+      );
+
+      await service.shutdown();
+    } finally {
+      await cleanup();
+    }
+  },
+);
+
+test(
+  'MessageGroupService - completeJoinConvergence re-enables normal raft participation for moved replicas',
+  async (t) => {
+    const {router, nodeId, cleanup} = await createTestTransport();
+    try {
+      const service = new MessageGroupService({
+        groupId: 'mg-join-release',
+        replicaId: 'mg-join-release-r2',
+        nodeId,
+        replicaIds: ['mg-join-release-r1', 'mg-join-release-r2'],
+        peerAddresses: ['seed-node-1/message-group/mg-join-release-r1'],
+        transport: router,
+        deferElection: true,
+        isJoiningExistingGroup: true,
+      });
+
+      await service.initialize();
+      service.completeJoinConvergence();
+
+      t.equal(
+        service.isJoiningExistingGroup,
+        false,
+        'join completion should release the join suppression state',
+      );
+      t.equal(
+        service.electionStarted,
+        true,
+        'join completion should start the election timer for the moved replica',
+      );
+      t.ok(
+        service.raft?.timers?.active('heartbeat'),
+        'join completion should restore heartbeat timers for normal raft participation',
+      );
+
+      service.raft.emit(RAFT_EVENT.CANDIDATE);
+      t.equal(
+        service.role,
+        RaftRole.CANDIDATE,
+        'after join completion the replica should process candidate transitions normally',
+      );
+
+      await service.shutdown();
+    } finally {
+      await cleanup();
+    }
+  },
+);
+
+test(
+  'MessageGroupService - completeJoinConvergence releases deferred self-hosted follower elections',
+  async (t) => {
+    const {router, nodeId, cleanup} = await createTestTransport();
+    try {
+      const service = new MessageGroupService({
+        groupId: 'mg-self-hosted-release',
+        replicaId: 'mg-self-hosted-release-r1',
+        nodeId,
+        replicaIds: [
+          'mg-self-hosted-release-r0',
+          'mg-self-hosted-release-r1',
+          'mg-self-hosted-release-r2',
+        ],
+        peerAddresses: [
+          `${nodeId}/message-group/mg-self-hosted-release-r0`,
+          `${nodeId}/message-group/mg-self-hosted-release-r1`,
+          `${nodeId}/message-group/mg-self-hosted-release-r2`,
+        ],
+        transport: router,
+        deferElection: true,
+        deferElectionUntilJoinConvergence: true,
+      });
+
+      await service.initialize();
+
+      t.equal(
+        service.electionStarted,
+        false,
+        'self-hosted follower elections should remain suppressed during join',
+      );
+
+      service.completeJoinConvergence();
+
+      t.equal(
+        service.deferElectionUntilJoinConvergence,
+        false,
+        'join convergence should release the self-hosted follower suppression state',
+      );
+      t.equal(
+        service.electionStarted,
+        true,
+        'join convergence should start follower election timers for normal failover',
+      );
+      t.ok(
+        service.raft?.timers?.active('heartbeat'),
+        'join convergence should restore heartbeat timers for self-hosted followers',
+      );
+
+      await service.shutdown();
+    } finally {
+      await cleanup();
+    }
+  },
+);
+
+test(
+  'MessageGroupService - deferred self-hosted followers stay timer-suppressed until join convergence',
+  async (t) => {
+    const {router, nodeId, cleanup} = await createTestTransport();
+    try {
+      const service = new MessageGroupService({
+        groupId: 'mg-self-hosted-suppressed',
+        replicaId: 'mg-self-hosted-suppressed-r1',
+        nodeId,
+        replicaIds: [
+          'mg-self-hosted-suppressed-r0',
+          'mg-self-hosted-suppressed-r1',
+          'mg-self-hosted-suppressed-r2',
+        ],
+        peerAddresses: [
+          `${nodeId}/message-group/mg-self-hosted-suppressed-r0`,
+          `${nodeId}/message-group/mg-self-hosted-suppressed-r1`,
+          `${nodeId}/message-group/mg-self-hosted-suppressed-r2`,
+        ],
+        transport: router,
+        deferElection: true,
+        deferElectionUntilJoinConvergence: true,
+      });
+
+      await service.initialize();
+      await service.receiveMessage({
+        type: 'append',
+        term: 1,
+        address: `${nodeId}/message-group/mg-self-hosted-suppressed-r0`,
+        leader: `${nodeId}/message-group/mg-self-hosted-suppressed-r0`,
+        last: {
+          index: 0,
+          term: 0,
+          committedIndex: 0,
+        },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      t.notOk(
+        service.raft?.timers?.active('heartbeat'),
+        'append traffic should not rearm timers for deferred self-hosted followers',
+      );
+
+      service.raft.emit(RAFT_EVENT.CANDIDATE);
+      t.equal(
+        service.role,
+        RaftRole.FOLLOWER,
+        'suppressed self-hosted followers should ignore candidate churn until convergence',
+      );
+
+      await service.shutdown();
+    } finally {
+      await cleanup();
+    }
+  },
+);
+
+test(
+  'MessageGroupService - strict CDC no-target miss triggers authoritative topology repair',
+  async (t) => {
+    const {router, nodeId, cleanup} = await createTestTransport();
+    try {
+      const service = new MessageGroupService({
+        groupId: 'mg-strict-repair',
+        replicaId: 'mg-strict-repair-r3',
+        nodeId,
+        replicaIds: [
+          'mg-strict-repair-r1',
+          'mg-strict-repair-r2',
+          'mg-strict-repair-r3',
+        ],
+        transport: router,
+      });
+
+      let repairContext = null;
+      service.maybeRepairAuthoritativeForwardTopology = async (context = {}) => {
+        repairContext = context;
+        return true;
+      };
+
+      const readiness = service.canAcceptCDCEvent({
+        tableName: TABLES.SERVICES,
+        operation: CDC_OPERATION.UPSERT,
+      });
+      await new Promise((resolve) => setImmediate(resolve));
+
+      t.equal(
+        readiness.ready,
+        false,
+        'strict system-table CDC should defer when no canonical leader target is available',
+      );
+      t.match(
+        readiness.reason,
+        /leader is unknown/i,
+        'strict miss should expose the typed leader-unknown reason',
+      );
+      t.ok(repairContext, 'strict miss should trigger bounded authoritative topology repair');
+      t.equal(
+        repairContext?.tableName,
+        TABLES.SERVICES,
+        'repair context should retain the strict system table name',
+      );
+    } finally {
+      await cleanup();
+    }
+  },
+);
+
+test(
+  'MessageGroupService - live leader routing uses current raft peer addresses before cache echo',
+  async (t) => {
+    const {router, nodeId, cleanup} = await createTestTransport();
+    try {
+      const service = new MessageGroupService({
+        groupId: 'mg-live-leader-address',
+        replicaId: 'mg-live-leader-address-r3',
+        nodeId,
+        replicaIds: [
+          'mg-live-leader-address-r1',
+          'mg-live-leader-address-r2',
+          'mg-live-leader-address-r3',
+        ],
+        transport: router,
+      });
+
+      service.leaderId = 'peer-node-a/message-group/mg-live-leader-address-r1';
+      service.raft = {
+        nodes: [
+          {address: 'peer-node-a/message-group/mg-live-leader-address-r1'},
+        ],
+      };
+
+      const target = service.resolveLiveLeaderForwardTarget();
+
+      t.same(target, {
+        serviceId: 'mg-live-leader-address-r1',
+        address: 'peer-node-a/message-group/mg-live-leader-address-r1',
+      }, 'live leader routing should normalize live raft leader addresses before cache echo');
+    } finally {
+      await cleanup();
+    }
+  },
+);
+
+test(
+  'MessageGroupService - strict CDC accepts connected live leader targets before ready lease publication',
+  async (t) => {
+    const {router, nodeId, cleanup} = await createTestTransport();
+    try {
+      const service = new MessageGroupService({
+        groupId: 'mg-strict-ready-gate',
+        replicaId: 'mg-strict-ready-gate-r3',
+        nodeId,
+        replicaIds: [
+          'mg-strict-ready-gate-r1',
+          'mg-strict-ready-gate-r2',
+          'mg-strict-ready-gate-r3',
+        ],
+        transport: router,
+      });
+
+      router.getConnectionState = (targetNodeId) => {
+        return targetNodeId === 'peer-node-a' ? STATE.CONNECTED : STATE.CONNECTED;
+      };
+      service.leaderId = 'mg-strict-ready-gate-r1';
+      service.raft = {
+        nodes: [
+          {address: 'peer-node-a/message-group/mg-strict-ready-gate-r1'},
+        ],
+      };
+      service.systemTableCache.applySystemTableChange(
+        TABLES.NODES,
+        CDC_OPERATION.UPSERT,
+        {
+          [COLUMN.NODE_ID]: 'peer-node-a',
+          [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+          [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
+          [COLUMN.LAST_HEARTBEAT]: Date.now(),
+          [COLUMN.READY_LEASE_EXPIRES_AT]: null,
+        },
+      );
+
+      const readiness = service.canAcceptCDCEvent({
+        tableName: TABLES.NODES,
+        operation: CDC_OPERATION.UPSERT,
+      });
+
+      t.equal(
+        readiness.ready,
+        true,
+        'strict forwarding should keep owner relay traffic routable before ready lease publication',
+      );
+    } finally {
+      await cleanup();
+    }
+  },
+);
+
+test(
+  'MessageGroupService - metadata ingress accepts connected canonical cache leader before ready lease publication',
+  async (t) => {
+    const {router, nodeId, cleanup} = await createTestTransport();
+    try {
+      const service = new MessageGroupService({
+        groupId: 'mg-strict-cache-ready-gate',
+        replicaId: 'mg-strict-cache-ready-gate-r3',
+        nodeId,
+        replicaIds: [
+          'mg-strict-cache-ready-gate-r1',
+          'mg-strict-cache-ready-gate-r2',
+          'mg-strict-cache-ready-gate-r3',
+        ],
+        transport: router,
+      });
+
+      service.initialized = true;
+      router.getConnectionState = (targetNodeId) => {
+        return targetNodeId === 'peer-node-b' ? STATE.CONNECTED : STATE.CONNECTED;
+      };
+      service.systemTableCache.applySystemTableChange(
+        TABLES.MESSAGE_GROUPS,
+        CDC_OPERATION.UPSERT,
+        {
+          [COLUMN.GROUP_ID]: 'mg-strict-cache-ready-gate',
+          [COLUMN.LEADER_NODE_ID]: 'peer-node-b',
+        },
+      );
+      service.systemTableCache.applySystemTableChange(
+        TABLES.NODES,
+        CDC_OPERATION.UPSERT,
+        {
+          [COLUMN.NODE_ID]: 'peer-node-b',
+          [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+          [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
+          [COLUMN.LAST_HEARTBEAT]: Date.now(),
+          [COLUMN.READY_LEASE_EXPIRES_AT]: null,
+        },
+      );
+      service.systemTableCache.applySystemTableChange(
+        TABLES.SERVICES,
+        CDC_OPERATION.UPSERT,
+        {
+          [COLUMN.SERVICE_ID]: 'mg-strict-cache-ready-gate-r1',
+          [COLUMN.GROUP_ID]: 'mg-strict-cache-ready-gate',
+          [COLUMN.NODE_ID]: 'peer-node-b',
+          [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.MESSAGE_GROUP,
+          [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+          [COLUMN.ADDRESS]:
+            'peer-node-b/message-group/mg-strict-cache-ready-gate-r1',
+          [COLUMN.RAFT_ROLE]: RaftRole.FOLLOWER,
+          [COLUMN.UPDATED_AT]: Date.now(),
+        },
+      );
+
+      const readiness = service.getMetadataIngressReadiness({
+        requiredTables: [TABLES.SERVICES],
+      });
+
+      t.equal(
+        readiness.ready,
+        true,
+        'metadata ingress should accept the connected canonical leader before ready lease publication completes',
+      );
+    } finally {
+      await cleanup();
+    }
+  },
+);
+
+test(
+  'MessageGroupService - strict CDC accepts connected canonical leader during join convergence before ready lease publication',
+  async (t) => {
+    const {router, nodeId, cleanup} = await createTestTransport();
+    try {
+      const service = new MessageGroupService({
+        groupId: 'mg-join-strict-connected',
+        replicaId: 'mg-join-strict-connected-r1',
+        nodeId,
+        replicaIds: [
+          'mg-join-strict-connected-r1',
+          'mg-join-strict-connected-r2',
+          'mg-join-strict-connected-r3',
+        ],
+        transport: router,
+      });
+
+      service.initialized = true;
+      service.isJoiningExistingGroup = true;
+      router.getConnectionState = (targetNodeId) => {
+        return targetNodeId === 'seed-node' ? STATE.CONNECTED : STATE.CONNECTED;
+      };
+
+      service.systemTableCache.applySystemTableChange(
+        TABLES.MESSAGE_GROUPS,
+        CDC_OPERATION.UPSERT,
+        {
+          [COLUMN.GROUP_ID]: 'mg-join-strict-connected',
+          [COLUMN.LEADER_NODE_ID]: 'seed-node',
+        },
+      );
+      service.systemTableCache.applySystemTableChange(
+        TABLES.NODES,
+        CDC_OPERATION.UPSERT,
+        {
+          [COLUMN.NODE_ID]: 'seed-node',
+          [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+          [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
+          [COLUMN.LAST_HEARTBEAT]: Date.now(),
+          [COLUMN.READY_LEASE_EXPIRES_AT]: null,
+        },
+      );
+      service.systemTableCache.applySystemTableChange(
+        TABLES.SERVICES,
+        CDC_OPERATION.UPSERT,
+        {
+          [COLUMN.SERVICE_ID]: 'mg-join-strict-connected-r2',
+          [COLUMN.GROUP_ID]: 'mg-join-strict-connected',
+          [COLUMN.NODE_ID]: 'seed-node',
+          [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.MESSAGE_GROUP,
+          [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+          [COLUMN.ADDRESS]: 'seed-node/message-group/mg-join-strict-connected-r2',
+          [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
+          [COLUMN.UPDATED_AT]: Date.now(),
+        },
+      );
+
+      const readiness = service.getMetadataIngressReadiness({
+        requiredTables: [TABLES.NODES, TABLES.NODE_ENDPOINTS],
+      });
+
+      t.equal(
+        readiness.ready,
+        true,
+        'join convergence should accept the connected canonical leader before ready lease publication completes',
+      );
+    } finally {
+      await cleanup();
+    }
+  },
+);
+
+test(
+  'MessageGroupService - strict CDC does not exclude authoritative remote target solely because the replica id matches during move',
+  async (t) => {
+    const {router, nodeId, cleanup} = await createTestTransport();
+    try {
+      const service = new MessageGroupService({
+        groupId: 'mg-move-self-target',
+        replicaId: 'mg-move-self-target-r1',
+        nodeId,
+        replicaIds: [
+          'mg-move-self-target-r1',
+          'mg-move-self-target-r2',
+          'mg-move-self-target-r3',
+        ],
+        transport: router,
+      });
+
+      service.isJoiningExistingGroup = true;
+      router.getConnectionState = () => STATE.CONNECTED;
+
+      service.systemTableCache.applySystemTableChange(
+        TABLES.MESSAGE_GROUPS,
+        CDC_OPERATION.UPSERT,
+        {
+          [COLUMN.GROUP_ID]: 'mg-move-self-target',
+          [COLUMN.LEADER_NODE_ID]: 'seed-node',
+        },
+      );
+      service.systemTableCache.applySystemTableChange(
+        TABLES.NODES,
+        CDC_OPERATION.UPSERT,
+        {
+          [COLUMN.NODE_ID]: 'seed-node',
+          [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+          [COLUMN.CONNECTION_STATE]: STATE.READY,
+          [COLUMN.LAST_HEARTBEAT]: Date.now(),
+          [COLUMN.READY_LEASE_EXPIRES_AT]: Date.now() + 60_000,
+        },
+      );
+      service.systemTableCache.applySystemTableChange(
+        TABLES.SERVICES,
+        CDC_OPERATION.UPSERT,
+        {
+          [COLUMN.SERVICE_ID]: 'mg-move-self-target-r1',
+          [COLUMN.GROUP_ID]: 'mg-move-self-target',
+          [COLUMN.NODE_ID]: 'seed-node',
+          [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.MESSAGE_GROUP,
+          [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+          [COLUMN.ADDRESS]: 'seed-node/message-group/mg-move-self-target-r1',
+          [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
+          [COLUMN.UPDATED_AT]: Date.now(),
+        },
+      );
+
+      const selection = service.resolveCDCForwardSelection({
+        tableName: TABLES.NODES,
+      });
+
+      t.equal(
+        selection.targets.length,
+        1,
+        'move convergence should retain the authoritative remote target even when the replica id matches locally',
+      );
+      t.equal(
+        selection.targets[0]?.address,
+        'seed-node/message-group/mg-move-self-target-r1',
+        'strict selection should target the authoritative remote replica rather than treating it as local',
+      );
+    } finally {
+      await cleanup();
+    }
+  },
+);
+
+test(
+  'MessageGroupService - strict CDC uses canonical bootstrap peer hints during move convergence when services cache lags',
+  async (t) => {
+    const {router, nodeId, cleanup} = await createTestTransport();
+    try {
+      const service = new MessageGroupService({
+        groupId: 'mg-move-bootstrap-ingress',
+        replicaId: 'mg-move-bootstrap-ingress-r1',
+        nodeId,
+        replicaIds: [
+          'mg-move-bootstrap-ingress-r1',
+          'mg-move-bootstrap-ingress-r2',
+          'mg-move-bootstrap-ingress-r3',
+        ],
+        peerAddresses: [
+          'seed-node/message-group/mg-move-bootstrap-ingress-r1',
+          'seed-node/message-group/mg-move-bootstrap-ingress-r2',
+          'seed-node/message-group/mg-move-bootstrap-ingress-r3',
+        ],
+        transport: router,
+      });
+
+      service.initialized = true;
+      service.isJoiningExistingGroup = true;
+      router.getConnectionState = (targetNodeId) => {
+        return targetNodeId === 'seed-node' ? STATE.CONNECTED : null;
+      };
+
+      service.systemTableCache.applySystemTableChange(
+        TABLES.MESSAGE_GROUPS,
+        CDC_OPERATION.UPSERT,
+        {
+          [COLUMN.GROUP_ID]: 'mg-move-bootstrap-ingress',
+          [COLUMN.LEADER_NODE_ID]: 'seed-node',
+        },
+      );
+      service.systemTableCache.applySystemTableChange(
+        TABLES.NODES,
+        CDC_OPERATION.UPSERT,
+        {
+          [COLUMN.NODE_ID]: 'seed-node',
+          [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+          [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
+          [COLUMN.LAST_HEARTBEAT]: Date.now(),
+          [COLUMN.READY_LEASE_EXPIRES_AT]: null,
+        },
+      );
+
+      const readiness = service.getMetadataIngressReadiness({
+        requiredTables: [TABLES.NODES, TABLES.NODE_ENDPOINTS],
+      });
+      const selection = service.resolveCDCForwardSelection({
+        tableName: TABLES.NODES,
+      });
+
+      t.equal(
+        readiness.ready,
+        true,
+        'join convergence should keep strict metadata ingress available from canonical bootstrap peer hints while services cache catches up',
+      );
+      t.equal(
+        selection.targets[0]?.address,
+        'seed-node/message-group/mg-move-bootstrap-ingress-r1',
+        'strict selection should target the canonical leader-node bootstrap peer when no services row is available yet',
+      );
+    } finally {
+      await cleanup();
+    }
+  },
+);
+
+test(
+  'MessageGroupService - metadata ingress forwarding reuses canonical target selection',
+  async (t) => {
+    const transport = {
+      async deliver() {
+        return {acknowledged: true};
+      },
+      async initialize() {},
+      async shutdown() {},
+      setServiceNodeResolver() {},
+    };
+
+    const service = new MessageGroupService({
+      groupId: 'mg-1',
+      replicaId: 'mg-1-r2',
+      nodeId: 'node-local',
+      transport,
+    });
+    const forwarded = [];
+
+    service.resolveMetadataIngressForwardSelection = async () => ({
+      strictForwarding: true,
+      strictForwardRetryAfterMs: 250,
+      targets: [{address: 'seed-node/message-group/mg-1-r1'}],
+      suppressedCount: 0,
+    });
+    service.sendMessage = async (targetAddress, payload) => {
+      forwarded.push({targetAddress, payload});
+    };
+
+    await service.forwardMetadataIngressPayloadToLeader(
+      {
+        [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+      },
+      {
+        requiredTables: [TABLES.NODES],
+        forwardedByNodeId: 'node-forwarder',
+      },
+    );
+
+    t.same(
+      forwarded,
+      [{
+        targetAddress: 'seed-node/message-group/mg-1-r1',
+        payload: {
+          [ControlPlaneField.TYPE]:
+            ControlPlaneMessageType.NODE_STATE_UPDATE,
+          [ControlPlaneField.FORWARDED_BY]: ['node-forwarder'],
+        },
+      }],
+      'metadata ingress forwarding should use the canonical target selection and forwarded-by field',
+    );
+  },
+);
+
+test(
+  'MessageGroupService - joinPeerNodes keeps authoritative remote same-id peer during move convergence',
+  async (t) => {
+    const {router, nodeId, cleanup} = await createTestTransport();
+    try {
+      const service = new MessageGroupService({
+        groupId: 'mg-move-peer-join',
+        replicaId: 'mg-move-peer-join-r1',
+        nodeId,
+        replicaIds: [
+          'mg-move-peer-join-r1',
+          'mg-move-peer-join-r2',
+          'mg-move-peer-join-r3',
+        ],
+        peerAddresses: [
+          'seed-node/message-group/mg-move-peer-join-r1',
+          'seed-node/message-group/mg-move-peer-join-r2',
+          'seed-node/message-group/mg-move-peer-join-r3',
+        ],
+        transport: router,
+      });
+
+      const joinedPeers = [];
+      service.raft = {};
+      service.raftProvider = {
+        joinPeer: (_raft, address) => {
+          joinedPeers.push(address);
+        },
+      };
+
+      service.joinPeerNodes();
+
+      t.same(
+        joinedPeers,
+        [
+          'seed-node/message-group/mg-move-peer-join-r1',
+          'seed-node/message-group/mg-move-peer-join-r2',
+          'seed-node/message-group/mg-move-peer-join-r3',
+        ],
+        'move convergence should join the authoritative remote same-id peer alongside the other canonical peers',
+      );
+    } finally {
+      await cleanup();
+    }
+  },
+);
+
+test(
+  'MessageGroupService - reconcileRaftPeersFromCache keeps authoritative remote same-id peer during move convergence',
+  async (t) => {
+    const {router, nodeId, cleanup} = await createTestTransport();
+    try {
+      const service = new MessageGroupService({
+        groupId: 'mg-move-peer-reconcile',
+        replicaId: 'mg-move-peer-reconcile-r1',
+        nodeId,
+        transport: router,
+      });
+
+      const joinedPeers = [];
+      service.raft = {
+        nodes: [],
+        leave: () => {},
+      };
+      service.raftProvider = {
+        joinPeer: (_raft, address) => {
+          joinedPeers.push(address);
+        },
+      };
+
+      service.systemTableCache.applySystemTableChange(
+        TABLES.SERVICES,
+        CDC_OPERATION.UPSERT,
+        {
+          [COLUMN.SERVICE_ID]: 'mg-move-peer-reconcile-r1',
+          [COLUMN.GROUP_ID]: 'mg-move-peer-reconcile',
+          [COLUMN.NODE_ID]: 'seed-node',
+          [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.MESSAGE_GROUP,
+          [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+          [COLUMN.ADDRESS]: 'seed-node/message-group/mg-move-peer-reconcile-r1',
+        },
+      );
+      service.systemTableCache.applySystemTableChange(
+        TABLES.SERVICES,
+        CDC_OPERATION.UPSERT,
+        {
+          [COLUMN.SERVICE_ID]: 'mg-move-peer-reconcile-r2',
+          [COLUMN.GROUP_ID]: 'mg-move-peer-reconcile',
+          [COLUMN.NODE_ID]: 'seed-node',
+          [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.MESSAGE_GROUP,
+          [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+          [COLUMN.ADDRESS]: 'seed-node/message-group/mg-move-peer-reconcile-r2',
+        },
+      );
+
+      service.reconcileRaftPeersFromCache();
+
+      t.same(
+        joinedPeers,
+        [
+          'seed-node/message-group/mg-move-peer-reconcile-r1',
+          'seed-node/message-group/mg-move-peer-reconcile-r2',
+        ],
+        'cache reconciliation should retain the authoritative remote same-id peer until the local handoff is canonical',
+      );
+    } finally {
+      await cleanup();
+    }
+  },
+);
+
+test(
+  'MessageGroupService - strict CDC propagation defers on join-suppressed followers',
+  async (t) => {
+    const {router, nodeId, cleanup} = await createTestTransport();
+    try {
+      const service = new MessageGroupService({
+        groupId: 'mg-strict-join-defer',
+        replicaId: 'mg-strict-join-defer-r1',
+        nodeId,
+        transport: router,
+      });
+
+      service.canAcceptCDCEvent = () => ({
+        ready: false,
+        reason: 'join convergence incomplete',
+        retryAfterMs: 250,
+      });
+      service.forwardCDCEventToLeader = async () => {
+        throw new Error('should not forward while strict readiness is deferred');
+      };
+      service.raft = {
+        state: LifeRaft.FOLLOWER,
+      };
+
+      const result = await service.handleLatencyCdcPropagationMessage(
+        'msg-strict-join-defer',
+        {
+          type: 'latency.cdc.propagation',
+          tableName: TABLES.NODES,
+          operation: CDC_OPERATION.UPSERT,
+          data: {id: 'node-a', status: 'ready'},
+        },
+      );
+
+      t.equal(result.acknowledged, true, 'join-suppressed strict propagation should acknowledge receipt');
+      t.equal(result.success, false, 'join-suppressed strict propagation should defer instead of succeeding');
+      t.equal(result.deferRetry, true, 'join-suppressed strict propagation should surface typed defer semantics');
+      t.equal(result.retryAfterMs, 250, 'join-suppressed strict propagation should preserve retry hint');
+      t.match(result.error, /join convergence incomplete/i, 'join-suppressed strict propagation should preserve the defer reason');
+    } finally {
+      await cleanup();
+    }
+  },
+);
+
+test(
+  'MessageGroupService - strict CDC forward retries selection after authoritative topology repair',
+  async (t) => {
+    const {router, nodeId, cleanup} = await createTestTransport();
+    try {
+      const service = new MessageGroupService({
+        groupId: 'mg-forward-repair',
+        replicaId: 'mg-forward-repair-r3',
+        nodeId,
+        transport: router,
+      });
+
+      let selectionCalls = 0;
+      let repairCalls = 0;
+      let deliveredAddress = null;
+      service.resolveCDCForwardSelection = () => {
+        selectionCalls += 1;
+        if (selectionCalls === 1) {
+          return {
+            strictForwarding: true,
+            strictForwardRetryAfterMs: 250,
+            targets: [],
+            suppressedCount: 0,
+          };
+        }
+        return {
+          strictForwarding: true,
+          strictForwardRetryAfterMs: 250,
+          targets: [{
+            serviceId: 'mg-forward-repair-r1',
+            address: 'peer-node-a/message-group/mg-forward-repair-r1',
+          }],
+          suppressedCount: 0,
+        };
+      };
+      service.maybeRepairAuthoritativeForwardTopology = async () => {
+        repairCalls += 1;
+        return true;
+      };
+      service.transport.deliver = async (address) => {
+        deliveredAddress = address;
+        return {acknowledged: true, success: true};
+      };
+
+      await service.forwardCDCPayloadToLeader(
+        {type: 'CDC_PROPAGATION'},
+        {
+          tableName: TABLES.NODES,
+          operation: CDC_OPERATION.UPSERT,
+          causeId: 'cause-forward-repair',
+        },
+      );
+
+      t.equal(repairCalls, 1,
+        'strict forward should run one bounded authoritative repair before failing');
+      t.equal(selectionCalls, 2,
+        'strict forward should recompute selection after repair');
+      t.equal(
+        deliveredAddress,
+        'peer-node-a/message-group/mg-forward-repair-r1',
+        'strict forward should deliver to the repaired leader target',
+      );
+    } finally {
+      await cleanup();
+    }
+  },
+);
+
+test(
   'MessageGroupService - leader change demotes stale local leadership without follower event',
   async (t) => {
     const {router, nodeId, cleanup} = await createTestTransport();
@@ -210,14 +1260,17 @@ test(
 
       // Regression: liferaft may emit a leader-change notification without a
       // separate follower event when leadership moves away from the local replica.
-      service.raft.emit(RAFT_EVENT.LEADER_CHANGE, 'mg-leader-change-demotion-r2');
+      service.raft.emit(
+        RAFT_EVENT.LEADER_CHANGE,
+        'node-2/message-group/mg-leader-change-demotion-r2',
+      );
 
       t.equal(service.role, RaftRole.FOLLOWER, 'leader-change should demote local role');
       t.equal(service.isLeader, false, 'leader-change should clear leader flag');
       t.equal(
         service.leaderId,
         'mg-leader-change-demotion-r2',
-        'leader-change should update leader id to the new leader',
+        'leader-change should normalize the new leader to a replica id',
       );
       t.equal(
         service.leaderNodeUpdateRetryTimer,
@@ -424,7 +1477,7 @@ test(
   },
 );
 
-test('MessageGroupService - persists raft role updates to services table', async (t) => {
+test('MessageGroupService - publishes leader state as follower metadata in services table', async (t) => {
   const {router, nodeId, cleanup} = await createTestTransport();
   const updates = [];
   const mockCdcIntegrationService = {
@@ -438,11 +1491,13 @@ test('MessageGroupService - persists raft role updates to services table', async
   systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDC_OPERATION.INSERT, {
     [COLUMN.PARTITION_ID]: servicesPartitionId,
     [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.SERVICES,
+    [COLUMN.LEADER_NODE_ID]: nodeId,
   });
   systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, {
     [COLUMN.SERVICE_ID]: 'services-leader',
     [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
     [COLUMN.PARTITION_ID]: servicesPartitionId,
+    [COLUMN.NODE_ID]: nodeId,
     [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
     [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
     [COLUMN.ADDRESS]: `${nodeId}/partition/services-leader`,
@@ -467,19 +1522,186 @@ test('MessageGroupService - persists raft role updates to services table', async
       (update) =>
         update.tableName === SYSTEM_TABLE_NAME.SERVICES &&
         update.whereClause?.service_id === 'mg-1-r1' &&
-        update.data?.raft_role === RaftRole.LEADER,
+        update.data?.raft_role === RaftRole.FOLLOWER,
     );
 
     t.ok(roleUpdate, 'raft role update should be persisted via CDC');
     t.same(
       roleUpdate?.options?.expectedCacheFields,
-      {raft_role: RaftRole.LEADER},
-      'raft role cache wait should only require the stable role field',
+      {
+        raft_role: RaftRole.FOLLOWER,
+      },
+      'raft role cache wait should converge only the role field',
     );
     t.equal(
       roleUpdate?.options?.routingReadinessDimension,
       CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
       'raft role persistence should route through repairEligible readiness',
+    );
+    t.equal(
+      roleUpdate?.options?.deliveryPriority,
+      'background',
+      'message-group raft-role publication should be advisory background metadata',
+    );
+    t.equal(
+      roleUpdate?.options?.workClass,
+      'background',
+      'message-group raft-role publication should use background admission',
+    );
+    t.equal(
+      roleUpdate?.options?.allowPressureDefer,
+      true,
+      'message-group raft-role publication should defer under pressure',
+    );
+    t.notOk(
+      updates.some((update) => update.data?.raft_role === RaftRole.LEADER),
+      'leader authority should not be republished through services.raft_role',
+    );
+
+    await service.shutdown();
+  } finally {
+    await cleanup();
+  }
+});
+
+test('MessageGroupService - demotes non-control-plane role publication to background', async (t) => {
+  const {router, nodeId, cleanup} = await createTestTransport();
+  const updates = [];
+  const mockCdcIntegrationService = {
+    updateSystemTableRow: async (tableName, whereClause, data, options) => {
+      updates.push({tableName, whereClause, data, options});
+      return {success: true};
+    },
+  };
+  const systemTableCache = new SystemTableCache();
+  const servicesPartitionId = INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SERVICES];
+  systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDC_OPERATION.INSERT, {
+    [COLUMN.PARTITION_ID]: servicesPartitionId,
+    [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.SERVICES,
+    [COLUMN.LEADER_NODE_ID]: nodeId,
+  });
+  systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, {
+    [COLUMN.SERVICE_ID]: 'services-leader',
+    [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
+    [COLUMN.PARTITION_ID]: servicesPartitionId,
+    [COLUMN.NODE_ID]: nodeId,
+    [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
+    [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+    [COLUMN.ADDRESS]: `${nodeId}/partition/services-leader`,
+  });
+
+  try {
+    const service = new MessageGroupService({
+      groupId: 'mg-user-1',
+      replicaId: 'mg-user-1-r1',
+      nodeId,
+      transport: router,
+      cdcIntegrationService: mockCdcIntegrationService,
+    });
+
+    await service.initialize();
+    service.systemTableCache = systemTableCache;
+    service.setCdcIntegrationService(mockCdcIntegrationService);
+
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const roleUpdate = updates.find(
+      (update) =>
+        update.tableName === SYSTEM_TABLE_NAME.SERVICES &&
+        update.whereClause?.service_id === 'mg-user-1-r1' &&
+        update.data?.raft_role === RaftRole.FOLLOWER,
+    );
+
+    t.ok(roleUpdate, 'non-control-plane role update should still be persisted');
+    t.equal(
+      roleUpdate?.options?.deliveryPriority,
+      'background',
+      'non-control-plane message-group role publication should not consume the critical lane',
+    );
+
+    await service.shutdown();
+  } finally {
+    await cleanup();
+  }
+});
+
+test('MessageGroupService - publishes candidate role as follower metadata', async (t) => {
+  const {router, nodeId, cleanup} = await createTestTransport();
+  const updates = [];
+  const mockCdcIntegrationService = {
+    updateSystemTableRow: async (tableName, whereClause, data, options) => {
+      updates.push({tableName, whereClause, data, options});
+      return {success: true};
+    },
+  };
+  const systemTableCache = new SystemTableCache();
+  const servicesPartitionId = INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SERVICES];
+  systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDC_OPERATION.INSERT, {
+    [COLUMN.PARTITION_ID]: servicesPartitionId,
+    [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.SERVICES,
+    [COLUMN.LEADER_NODE_ID]: nodeId,
+  });
+  systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, {
+    [COLUMN.SERVICE_ID]: 'services-leader',
+    [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
+    [COLUMN.PARTITION_ID]: servicesPartitionId,
+    [COLUMN.NODE_ID]: nodeId,
+    [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
+    [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+    [COLUMN.ADDRESS]: `${nodeId}/partition/services-leader`,
+  });
+  systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, {
+    [COLUMN.SERVICE_ID]: 'mg-1-r1',
+    [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.MESSAGE_GROUP,
+    [COLUMN.GROUP_ID]: 'mg-1',
+    [COLUMN.REPLICA_ID]: 'mg-1-r1',
+    [COLUMN.NODE_ID]: nodeId,
+    [COLUMN.RAFT_ROLE]: RaftRole.CANDIDATE,
+    [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+    [COLUMN.ADDRESS]: `${nodeId}/message-group/mg-1-r1`,
+    [COLUMN.UPDATED_AT]: 1,
+  });
+
+  try {
+    const service = new MessageGroupService({
+      groupId: 'mg-1',
+      replicaId: 'mg-1-r1',
+      nodeId,
+      transport: router,
+      cdcIntegrationService: mockCdcIntegrationService,
+    });
+
+    await service.initialize();
+    service.systemTableCache = systemTableCache;
+    service.setCdcIntegrationService(mockCdcIntegrationService);
+    updates.length = 0;
+
+    service.queueRoleUpdate(RaftRole.CANDIDATE);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const candidateUpdate = updates.find(
+      (update) =>
+        update.tableName === SYSTEM_TABLE_NAME.SERVICES &&
+        update.whereClause?.service_id === 'mg-1-r1',
+    );
+
+    t.ok(
+      candidateUpdate,
+      'candidate publication should normalize stale cache metadata back to follower',
+    );
+    t.equal(
+      candidateUpdate?.data?.raft_role,
+      RaftRole.FOLLOWER,
+      'candidate publication should rewrite advisory metadata to follower',
+    );
+    t.equal(
+      service.persistedRole,
+      RaftRole.FOLLOWER,
+      'candidate publication should still converge the advisory metadata role to follower',
+    );
+    t.notOk(
+      updates.some((update) => update.data?.raft_role === RaftRole.CANDIDATE),
+      'candidate metadata should not be written to services',
     );
 
     await service.shutdown();
@@ -489,7 +1711,63 @@ test('MessageGroupService - persists raft role updates to services table', async
 });
 
 test(
-  'MessageGroupService - syncs persisted role from cache before rewriting same role',
+  'MessageGroupService - can suppress global raft-role publication for local-only groups',
+  async (t) => {
+    const {router, nodeId, cleanup} = await createTestTransport();
+    const updates = [];
+    const mockCdcIntegrationService = {
+      updateSystemTableRow: async (tableName, whereClause, data, options) => {
+        updates.push({tableName, whereClause, data, options});
+        return {success: true};
+      },
+    };
+    const systemTableCache = new SystemTableCache();
+    const servicesPartitionId = INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SERVICES];
+    systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDC_OPERATION.INSERT, {
+      [COLUMN.PARTITION_ID]: servicesPartitionId,
+      [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.SERVICES,
+      [COLUMN.LEADER_NODE_ID]: nodeId,
+    });
+    systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, {
+      [COLUMN.SERVICE_ID]: 'services-leader',
+      [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
+      [COLUMN.PARTITION_ID]: servicesPartitionId,
+      [COLUMN.NODE_ID]: nodeId,
+      [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
+      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+      [COLUMN.ADDRESS]: `${nodeId}/partition/services-leader`,
+    });
+
+    try {
+      const service = new MessageGroupService({
+        groupId: 'mg-local-only',
+        replicaId: 'mg-local-only-r1',
+        nodeId,
+        transport: router,
+        cdcIntegrationService: mockCdcIntegrationService,
+        publishRoleMetadata: false,
+      });
+
+      await service.initialize();
+      service.systemTableCache = systemTableCache;
+      service.setCdcIntegrationService(mockCdcIntegrationService);
+      service.queueRoleUpdate(RaftRole.LEADER);
+      await new Promise((resolve) => setImmediate(resolve));
+
+      t.notOk(
+        updates.find((update) => update.tableName === SYSTEM_TABLE_NAME.SERVICES),
+        'role publication should stay local when global role metadata is disabled',
+      );
+
+      await service.shutdown();
+    } finally {
+      await cleanup();
+    }
+  },
+);
+
+test(
+  'MessageGroupService - rewrites stale leader cache metadata to follower',
   async (t) => {
     const {router, nodeId, cleanup} = await createTestTransport();
     let updateCalls = 0;
@@ -504,11 +1782,13 @@ test(
     systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDC_OPERATION.INSERT, {
       [COLUMN.PARTITION_ID]: servicesPartitionId,
       [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.SERVICES,
+      [COLUMN.LEADER_NODE_ID]: nodeId,
     });
     systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, {
       [COLUMN.SERVICE_ID]: 'services-leader',
       [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
       [COLUMN.PARTITION_ID]: servicesPartitionId,
+      [COLUMN.NODE_ID]: nodeId,
       [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
       [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
       [COLUMN.ADDRESS]: `${nodeId}/partition/services-leader`,
@@ -539,10 +1819,201 @@ test(
 
       await service.flushRoleUpdate();
 
-      t.equal(updateCalls, 0, 'cache convergence should suppress redundant rewrite attempts');
-      t.equal(service.persistedRole, RaftRole.LEADER, 'persisted role should resync from cache');
+      t.equal(updateCalls, 1, 'stale leader metadata should be rewritten once');
+      t.equal(service.persistedRole, RaftRole.FOLLOWER, 'persisted role should converge to follower metadata');
       t.equal(service.pendingRoleUpdate, null, 'pending role should clear once cache matches');
     } finally {
+      await cleanup();
+    }
+  },
+);
+
+test('MessageGroupService - flushes services role update when local services leader exists',
+  async (t) => {
+    const {router, nodeId, cleanup} = await createTestTransport();
+    const updates = [];
+    const mockCdcIntegrationService = {
+      canWriteSystemTableLocally: (tableName) => tableName === SYSTEM_TABLE_NAME.SERVICES,
+      updateSystemTableRow: async (tableName, whereClause, data) => {
+        updates.push({tableName, whereClause, data});
+        return {success: true};
+      },
+    };
+
+    try {
+      const service = new MessageGroupService({
+        groupId: 'mg-1',
+        replicaId: 'mg-1-r1',
+        nodeId,
+        transport: router,
+        cdcIntegrationService: mockCdcIntegrationService,
+      });
+
+      service.systemTableCache = new SystemTableCache();
+      service.pendingRoleUpdate = RaftRole.LEADER;
+      service.persistedRole = null;
+
+      const result = await service.flushRoleUpdate();
+
+      t.equal(result.reason, 'applied', 'should persist when the local services leader owns the write');
+      t.equal(updates.length, 1, 'should issue one services-table write');
+      t.equal(updates[0].tableName, SYSTEM_TABLE_NAME.SERVICES, 'should target services');
+      t.same(updates[0].whereClause, {
+        [COLUMN.SERVICE_ID]: 'mg-1-r1',
+      }, 'should update the local message-group service row');
+      t.equal(
+        updates[0].data?.raft_role,
+        RaftRole.FOLLOWER,
+        'canonical leader ownership should publish follower metadata only',
+      );
+      t.notOk(
+        Object.prototype.hasOwnProperty.call(updates[0].data, 'status'),
+        'role persistence should not rewrite lifecycle status',
+      );
+      t.equal(service.pendingRoleUpdate, null, 'pending role should clear after success');
+      t.equal(service.persistedRole, RaftRole.FOLLOWER, 'persisted role should track the published metadata role');
+    } finally {
+      await cleanup();
+    }
+  },
+);
+
+test(
+  'MessageGroupService - defers role metadata publication until traffic ready',
+  async (t) => {
+    const {router, nodeId, cleanup} = await createTestTransport();
+    const updates = [];
+    const readinessState = createTrafficReadinessState();
+    const mockCdcIntegrationService = {
+      canWriteSystemTableLocally: (tableName) =>
+        tableName === SYSTEM_TABLE_NAME.SERVICES,
+      updateSystemTableRow: async (tableName, whereClause, data) => {
+        updates.push({tableName, whereClause, data});
+        return {success: true};
+      },
+    };
+
+    try {
+      const service = new MessageGroupService({
+        groupId: 'mg-1',
+        replicaId: 'mg-1-r1',
+        nodeId,
+        transport: router,
+        cdcIntegrationService: mockCdcIntegrationService,
+        bootstrapReadinessState: readinessState,
+      });
+
+      service.systemTableCache = new SystemTableCache();
+      service.systemTableCache.applySystemTableChange(
+        TABLES.NODES,
+        CDC_OPERATION.INSERT,
+        {
+          [COLUMN.NODE_ID]: nodeId,
+          [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+          [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
+          [COLUMN.LAST_HEARTBEAT]: Date.now(),
+          [COLUMN.READY_LEASE_EXPIRES_AT]: null,
+        },
+      );
+      service.pendingRoleUpdate = RaftRole.LEADER;
+      service.persistedRole = null;
+
+      const deferredResult = await service.flushRoleUpdate();
+      t.equal(
+        deferredResult.reason,
+        'settling',
+        'role publication should stay deferred until lifecycle reaches metadata-safe readiness',
+      );
+      t.equal(
+        updates.length,
+        0,
+        'service metadata should not publish while lifecycle is still settling',
+      );
+
+      const now = Date.now();
+      service.systemTableCache.applySystemTableChange(
+        TABLES.NODES,
+        CDC_OPERATION.UPDATE,
+        {
+          [COLUMN.NODE_ID]: nodeId,
+          [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+          [COLUMN.CONNECTION_STATE]: STATE.READY,
+          [COLUMN.LAST_HEARTBEAT]: now,
+          [COLUMN.READY_LEASE_EXPIRES_AT]: now + 60_000,
+        },
+      );
+
+      readinessState.transitionTo(LIFECYCLE_PHASE.CONTROL_READY, {
+        ready: false,
+        reasons: [LIFECYCLE_REASON.LEADER_METADATA_INCOMPLETE],
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      const noopResult = await service.flushRoleUpdate();
+      t.equal(noopResult.reason, 'noop', 'no duplicate write is needed after the deferred publish succeeds');
+      t.equal(updates.length, 1, 'control-ready leader-lag transition should release exactly one deferred write');
+    } finally {
+      await cleanup();
+    }
+  },
+);
+
+test(
+  'MessageGroupService - defers rebalancer initialization until traffic ready',
+  async (t) => {
+    const {router, nodeId, cleanup} = await createTestTransport();
+    const readinessState = createTrafficReadinessState();
+    let service = null;
+
+    try {
+      service = new MessageGroupService({
+        groupId: 'mg-ready-gate',
+        replicaId: 'mg-ready-gate-r1',
+        nodeId,
+        transport: router,
+        bootstrapReadinessState: readinessState,
+      });
+
+      service.initialized = true;
+      service.systemTableCache = {
+        get: () => null,
+        getAll: () => [],
+        filter: () => [],
+      };
+      service.cdcIntegrationService = {
+        sqlQueryEngine: {
+          executeQuery: async () => ({success: true, rows: []}),
+        },
+      };
+      service.tablePolicyService = {};
+      service.rebalanceCoordinator = {
+        initialize: () => {},
+      };
+      service.isLeaderReplica = () => true;
+
+      readinessState.transitionTo(LIFECYCLE_PHASE.CONTROL_READY, {
+        ready: false,
+        reasons: [LIFECYCLE_REASON.LEADER_METADATA_INCOMPLETE],
+      });
+      service.maybeInitializeRebalancer();
+      t.notOk(
+        service.rebalancer,
+        'should not initialize message-group rebalancer before traffic-ready lifecycle',
+      );
+
+      readinessState.transitionTo(LIFECYCLE_PHASE.TRAFFIC_READY, {
+        ready: true,
+        reasons: [],
+      });
+      service.maybeInitializeRebalancer();
+      t.ok(
+        service.rebalancer,
+        'should initialize message-group rebalancer after traffic-ready lifecycle',
+      );
+    } finally {
+      service?.rebalancer?.cancelScheduledCheck?.();
+      await service?.rebalancer?.shutdown?.();
+      service.rebalancer = null;
       await cleanup();
     }
   },
@@ -562,11 +2033,13 @@ test('MessageGroupService - persists leader node updates to message groups table
   systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDC_OPERATION.INSERT, {
     [COLUMN.PARTITION_ID]: messageGroupsPartitionId,
     [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.MESSAGE_GROUPS,
+    [COLUMN.LEADER_NODE_ID]: nodeId,
   });
   systemTableCache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.INSERT, {
     [COLUMN.SERVICE_ID]: 'message-groups-leader',
     [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
     [COLUMN.PARTITION_ID]: messageGroupsPartitionId,
+    [COLUMN.NODE_ID]: nodeId,
     [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
     [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
     [COLUMN.ADDRESS]: `${nodeId}/partition/message-groups-leader`,
@@ -604,6 +2077,11 @@ test('MessageGroupService - persists leader node updates to message groups table
       leaderUpdate?.options?.routingReadinessDimension,
       CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
       'leader node persistence should route through repairEligible readiness',
+    );
+    t.equal(
+      leaderUpdate?.options?.deliveryPriority,
+      'critical',
+      'control-plane message-group leader publication should stay on the critical lane',
     );
 
     await service.shutdown();
@@ -686,6 +2164,330 @@ test('MessageGroupService - QUERY payload uses fast non-durable delivery path',
       persistCalls,
       0,
       'query message should not be persisted to raft when direct delivery fails',
+    );
+  });
+
+test('MessageGroupService - QUERY payload preserves deferred retry metadata',
+  async (t) => {
+    let deliverCalls = 0;
+    const transport = {
+      async deliver() {
+        deliverCalls += 1;
+        return {
+          acknowledged: false,
+          error: 'No connection to node seed',
+          errorCode: 'ROUTER_NO_CONNECTION',
+          deferRetry: true,
+          retryAfterMs: 250,
+        };
+      },
+      async initialize() {},
+      async shutdown() {},
+      setServiceNodeResolver() {},
+    };
+
+    const service = new MessageGroupService({
+      groupId: 'mg-query-deferred',
+      replicaId: 'mg-query-deferred-r1',
+      nodeId: 'node-query-deferred',
+      transport,
+    });
+
+    service.initialized = true;
+    service.retryMaxAttempts = 4;
+    service.sleep = async () => {};
+
+    let persistCalls = 0;
+    service.persistToRaftLog = async () => {
+      persistCalls += 1;
+      return {success: true};
+    };
+
+    try {
+      await service.sendMessage('node-x/partition/p1', {
+        type: 'QUERY',
+        sql: 'SELECT 1',
+        params: [],
+      });
+      t.fail('query delivery should reject when transport defers');
+    } catch (error) {
+      t.equal(deliverCalls, 1,
+        'query message should not multiply direct retries when transport defers');
+      t.equal(error?.code, 'ROUTER_NO_CONNECTION',
+        'query failure should preserve the transport error code');
+      t.equal(error?.deferRetry, true,
+        'query failure should preserve the defer-retry hint');
+      t.equal(error?.retryAfterMs, 250,
+        'query failure should preserve retryAfterMs for upstream owners');
+      t.equal(persistCalls, 0,
+        'query delivery should still skip raft persistence on direct failure');
+    }
+  });
+
+test('MessageGroupService - idempotent control-plane payloads use direct-only delivery',
+  async (t) => {
+    let deliverCalls = 0;
+    const transport = {
+      async deliver() {
+        deliverCalls += 1;
+        return {
+          acknowledged: false,
+          error: 'No connection to node seed',
+          errorCode: 'ROUTER_NO_CONNECTION',
+          deferRetry: true,
+          retryAfterMs: 250,
+        };
+      },
+      async initialize() {},
+      async shutdown() {},
+      setServiceNodeResolver() {},
+    };
+
+    const service = new MessageGroupService({
+      groupId: 'mg-control-plane-direct',
+      replicaId: 'mg-control-plane-direct-r1',
+      nodeId: 'node-control-plane-direct',
+      transport,
+    });
+
+    service.initialized = true;
+    service.retryMaxAttempts = 4;
+    service.sleep = async () => {};
+
+    let persistCalls = 0;
+    service.persistToRaftLog = async () => {
+      persistCalls += 1;
+      return {success: true};
+    };
+
+    try {
+      await service.sendMessage('seed-node/message-group/mg-1-r1', {
+        type: ControlPlaneMessageType.REPLICA_OPERATION_DISPATCH,
+        operationId: 'op-1',
+      });
+      t.fail('control-plane delivery should reject when transport defers');
+    } catch (error) {
+      t.equal(deliverCalls, 1,
+        'control-plane message should not multiply direct retries');
+      t.equal(error?.code, 'ROUTER_NO_CONNECTION',
+        'control-plane failure should preserve the transport error code');
+      t.equal(error?.deferRetry, true,
+        'control-plane failure should preserve defer-retry hints');
+      t.equal(error?.retryAfterMs, 250,
+        'control-plane failure should preserve retryAfterMs for upstream owners');
+      t.equal(persistCalls, 0,
+        'idempotent control-plane messages should not be persisted to raft');
+    }
+  });
+
+test('MessageGroupService - Raft CDC propose failures preserve deferred retry ' +
+  'metadata for upstream owners', async (t) => {
+  const transport = {
+    async deliver() {
+      return {acknowledged: true};
+    },
+    async initialize() {},
+    async shutdown() {},
+    setServiceNodeResolver() {},
+  };
+
+  const service = new MessageGroupService({
+    groupId: 'mg-1',
+    replicaId: 'mg-1-r2',
+    nodeId: 'node-mg-1-r2',
+    transport,
+  });
+
+  service.raft = {};
+  service.raftProvider = {
+    async proposeWithLeaderRouting(_raft, command, options) {
+      await options.forwardToLeader(command);
+    },
+  };
+  service.forwardCDCEventToLeader = async () => {
+    const error = new Error('Cannot forward CDC event because message-group leader is unknown');
+    error.deferRetry = true;
+    error.retryAfterMs = 5000;
+    error.retryable = false;
+    error.code = 'MG_LEADER_UNKNOWN';
+    throw error;
+  };
+
+  try {
+    await service.proposeCDCCommand({
+      type: 'CDC',
+      tableName: 'nodes',
+      operation: 'UPDATE',
+      data: {node_id: 'node-1'},
+      timestamp: '123',
+      causeId: 'cause-1',
+    });
+    t.fail('proposeCDCCommand should reject when strict forwarding defers');
+  } catch (error) {
+    t.match(
+      error?.message,
+      /Raft CDC replication failed: Cannot forward CDC event because message-group leader is unknown/,
+      'wrapped error should preserve the original defer reason',
+    );
+    t.equal(error?.deferRetry, true,
+      'wrapped raft propose error should preserve defer-retry metadata');
+    t.equal(error?.retryAfterMs, 5000,
+      'wrapped raft propose error should preserve retryAfterMs for upstream owners');
+    t.equal(error?.retryable, false,
+      'wrapped raft propose error should preserve non-retryable semantics');
+    t.equal(error?.code, 'MG_LEADER_UNKNOWN',
+      'wrapped raft propose error should preserve the upstream error code');
+  }
+});
+
+test('MessageGroupService - non-query sendMessage honors deferred retry hints',
+  async (t) => {
+    let deliverCalls = 0;
+    let sleepCalls = 0;
+    const transport = {
+      async deliver() {
+        deliverCalls += 1;
+        return {
+          acknowledged: false,
+          error: 'No connection to node seed',
+          errorCode: 'ROUTER_NO_CONNECTION',
+          deferRetry: true,
+          retryAfterMs: 250,
+        };
+      },
+      async initialize() {},
+      async shutdown() {},
+      setServiceNodeResolver() {},
+    };
+
+    const service = new MessageGroupService({
+      groupId: 'mg-deferred-retry',
+      replicaId: 'mg-deferred-retry-r1',
+      nodeId: 'node-deferred-retry',
+      transport,
+    });
+
+    service.initialized = true;
+    service.retryMaxAttempts = 4;
+    service.sleep = async () => {
+      sleepCalls += 1;
+    };
+
+    let persistCalls = 0;
+    service.persistToRaftLog = async () => {
+      persistCalls += 1;
+      return {success: true};
+    };
+
+    const result = await service.sendMessage('node-x/partition/p1', {
+      type: 'CDC',
+      operation: 'UPDATE',
+    });
+
+    t.equal(deliverCalls, 1,
+      'deferred transport failures should not multiply direct retries');
+    t.equal(sleepCalls, 0,
+      'deferred transport failures should not schedule retry delays');
+    t.equal(result.status, MessageStatus.PENDING,
+      'deferred transport failures should fall back to raft persistence');
+    t.equal(persistCalls, 1,
+      'non-query messages should still be persisted once for later replay');
+  });
+
+test('MessageGroupService - control-plane targets default to critical router priority',
+  async (t) => {
+    const deliveries = [];
+    const transport = {
+      async deliver(targetService, payload, options) {
+        deliveries.push({targetService, payload, options});
+        return {
+          acknowledged: true,
+        };
+      },
+      async initialize() {},
+      async shutdown() {},
+      setServiceNodeResolver() {},
+    };
+
+    const service = new MessageGroupService({
+      groupId: 'mg-priority-default',
+      replicaId: 'mg-priority-default-r1',
+      nodeId: 'node-priority-default',
+      transport,
+    });
+
+    service.initialized = true;
+    service.persistToRaftLog = async () => ({success: true});
+
+    await service.sendMessage(
+      'seed-node/partition/services-p1-r1',
+      {
+        type: 'CDC',
+        operation: 'UPDATE',
+      },
+    );
+
+    t.equal(deliveries.length, 1, 'should perform one direct delivery attempt');
+    t.equal(
+      deliveries[0]?.options?.deliveryPriority,
+      'critical',
+      'control-plane partition targets should claim the critical router lane by default',
+    );
+  });
+
+test('MessageGroupService - deferred raft responses use the critical router lane',
+  async (t) => {
+    const deliveries = [];
+    const transport = {
+      async deliver(targetService, payload, options) {
+        deliveries.push({targetService, payload, options});
+        return {
+          acknowledged: false,
+          error: 'Connection to node seed closed',
+          errorCode: 'ROUTER_CONNECTION_CLOSED',
+          deferRetry: true,
+          retryAfterMs: 200,
+        };
+      },
+      async initialize() {},
+      async shutdown() {},
+      setServiceNodeResolver() {},
+    };
+
+    const service = new MessageGroupService({
+      groupId: 'mg-1',
+      replicaId: 'mg-1-r1',
+      nodeId: 'node-mg-1',
+      transport,
+    });
+
+    service.initialized = true;
+    service.raft = {
+      emit(_eventName, payload, write) {
+        write({
+          type: 'voted',
+          term: payload.term,
+          address: payload.address,
+        });
+      },
+    };
+
+    const result = await service.receiveMessage({
+      payload: {
+        type: 'vote',
+        term: 3,
+        address: 'seed/message-group/mg-1-r2',
+      },
+    });
+
+    t.equal(result.acknowledged, true,
+      'raft packets should still acknowledge local handling');
+    t.equal(deliveries.length, 1,
+      'raft response delivery should still be attempted once');
+    t.equal(
+      deliveries[0]?.options?.deliveryPriority,
+      'critical',
+      'raft response delivery to mg-1 should claim the critical router lane',
     );
   });
 
@@ -967,6 +2769,79 @@ test(
   },
 );
 
+test('MessageGroupService - CDC batch propagation proposes one raft command',
+  async (t) => {
+    const {router, nodeId, cleanup} = await createTestTransport();
+    try {
+      const service = new MessageGroupService({
+        groupId: 'mg-batch-propose',
+        replicaId: 'mg-batch-propose-r1',
+        nodeId,
+        transport: router,
+      });
+
+      await service.initialize();
+      service.replicaIds = ['mg-batch-propose-r1', 'mg-batch-propose-r2'];
+      if (service.raft) {
+        Object.defineProperty(service.raft, 'state', {
+          value: LifeRaft.LEADER,
+          writable: true,
+          configurable: true,
+        });
+      }
+      await service.subscribeToCDC('nodes');
+
+      const proposedCommands = [];
+      service.raftProvider.proposeWithLeaderRouting = async (_raft, command) => {
+        proposedCommands.push(command);
+      };
+
+      const result = await service.handleLatencyCdcPropagationBatchMessage(
+        'msg-batch',
+        {
+          type: 'latency.cdc.propagation.batch',
+          events: [
+            {
+              tableName: 'nodes',
+              operation: 'INSERT',
+              data: {id: 'node-batch-1', status: 'active'},
+            },
+            {
+              tableName: 'nodes',
+              operation: 'INSERT',
+              data: {id: 'node-batch-2', status: 'ready'},
+            },
+          ],
+        },
+      );
+
+      t.equal(result.status, 'latency_cdc_batch_propagated',
+        'batched propagation should acknowledge success');
+      t.equal(result.eventCount, 2,
+        'batched propagation should report the full event count');
+      t.equal(proposedCommands.length, 1,
+        'batched propagation should propose one raft command');
+      t.equal(proposedCommands[0]?.type, 'CDC_BATCH',
+        'batched propagation should use the CDC_BATCH command type');
+      t.equal(proposedCommands[0]?.events?.length, 2,
+        'raft command should retain all batch events');
+
+      t.ok(
+        service.getWritableCache().get('nodes', 'node-batch-1'),
+        'leader should apply first batched event locally',
+      );
+      t.ok(
+        service.getWritableCache().get('nodes', 'node-batch-2'),
+        'leader should apply second batched event locally',
+      );
+
+      await service.shutdown();
+    } finally {
+      await cleanup();
+    }
+  },
+);
+
 test('MessageGroupService - CDC paths delegate to CDCHandler owner', async (t) => {
   const {router, nodeId, cleanup} = await createTestTransport();
   try {
@@ -1080,6 +2955,7 @@ test('MessageGroupService - single replica becomes leader', async (t) => {
       replicaId: 'mg-1-r1',
       nodeId,
       replicaIds: ['mg-1-r1'],
+      peerAddresses: [`${nodeId}/message-group/mg-1-r1`],
       transport: router,
     });
 
@@ -1094,6 +2970,67 @@ test('MessageGroupService - single replica becomes leader', async (t) => {
     t.equal(service.isLeaderReplica(), true, 'Should become leader');
     t.equal(service.getLeaderId(), 'mg-1-r1', 'Should be own leader');
     t.ok(leaderEvent, 'Should emit leaderElected event');
+
+    await service.shutdown();
+  } finally {
+    await cleanup();
+  }
+});
+
+test('MessageGroupService - leader activation dedupes same-term flaps', async (t) => {
+  const {router, nodeId, cleanup} = await createTestTransport();
+  try {
+    const service = new MessageGroupService({
+      groupId: 'mg-leader-gate',
+      replicaId: 'mg-leader-gate-r1',
+      replicaIds: ['mg-leader-gate-r1', 'mg-leader-gate-r2'],
+      peerAddresses: [
+        `${nodeId}/message-group/mg-leader-gate-r1`,
+        `${nodeId}/message-group/mg-leader-gate-r2`,
+      ],
+      nodeId,
+      transport: router,
+      deferElection: true,
+      leaderActivationStabilizationMs: 20,
+    });
+
+    await service.initialize();
+    await service.subscribeToCDC('nodes');
+    await service.subscribeToCDC('services');
+
+    let rebalancerLeadershipUpdates = 0;
+    let cdcResubscribeCalls = 0;
+    let leaderEvents = 0;
+    const originalSubscribeToCDC = service.subscribeToCDC.bind(service);
+    service.updateRebalancerLeadership = () => {
+      rebalancerLeadershipUpdates += 1;
+    };
+    service.subscribeToCDC = async (tableName) => {
+      cdcResubscribeCalls += 1;
+      return originalSubscribeToCDC(tableName);
+    };
+    service.on('leaderElected', () => {
+      leaderEvents += 1;
+    });
+
+    service.raft.term = 11;
+    service.raft.emit(RAFT_EVENT.LEADER);
+    service.raft.emit(RAFT_EVENT.LEADER);
+    service.raft.emit(RAFT_EVENT.LEADER);
+
+    await new Promise((resolve) => setTimeout(resolve, 80));
+
+    t.equal(
+      rebalancerLeadershipUpdates,
+      1,
+      'leader-owned background work should activate once per stable term',
+    );
+    t.equal(
+      cdcResubscribeCalls,
+      2,
+      'existing CDC subscriptions should be replayed once per stable term',
+    );
+    t.equal(leaderEvents, 1, 'leaderElected should emit once per stable term');
 
     await service.shutdown();
   } finally {
@@ -1174,6 +3111,69 @@ test('MessageGroupService - rebalancer coordinator refresh uses owner sync path'
     }
   });
 
+test('MessageGroupService routes forward-topology cache repair through the ' +
+  'gateway instead of mutating the cache directly', async (t) => {
+  const {router, cleanup} = await createTestTransport();
+  try {
+    const nodeService = NodeService.getInstance();
+    nodeService.initialize({nodeId: 'node-a', autoTransitionLifecycle: false});
+    const cache = {
+      get() {
+        return null;
+      },
+      getAll() {
+        return [];
+      },
+      filter() {
+        return [];
+      },
+      applySystemTableChange() {
+        throw new Error('message-group repair must not mutate cache directly');
+      },
+      on() {},
+      off() {},
+    };
+    nodeService.setSystemCacheProxy(cache);
+
+    const repairCalls = [];
+    const service = new MessageGroupService({
+      groupId: 'mg-1',
+      replicaId: 'mg-1-r1',
+      nodeId: 'node-a',
+      replicaIds: ['mg-1-r1'],
+      transport: router,
+      controlPlaneSystemTableGateway: {
+        reconcileAuthoritativeCacheRows(tableName, rows, options) {
+          repairCalls.push({tableName, rows, options});
+          return Promise.resolve({success: true, mutationCount: 1});
+        },
+        setCdcIntegrationService() {},
+        setSqlQueryEngine() {},
+        setSystemTableCache() {},
+        setMessageRouter() {},
+      },
+    });
+
+    const repairedRowCount = await service.applyAuthoritativeForwardTopologyRows(
+      TABLES.MESSAGE_GROUPS,
+      [{
+        [COLUMN.GROUP_ID]: 'mg-1',
+        leader_node_id: 'node-a',
+      }],
+    );
+
+    t.equal(repairedRowCount, 1, 'gateway-provided repair count should propagate');
+    t.equal(repairCalls.length, 1, 'forward-topology repair should delegate once');
+    t.equal(
+      repairCalls[0].options.deleteMissing,
+      false,
+      'forward-topology refresh should not delete unrelated cached rows',
+    );
+  } finally {
+    await cleanup();
+  }
+});
+
 test('MessageGroupService - shutdown cleans up', async (t) => {
   const {router, nodeId, cleanup} = await createTestTransport();
   try {
@@ -1210,6 +3210,19 @@ test('MessageGroupOperationLedger - appendEntry adds entries', async (t) => {
   t.equal(entry1.index, 1, 'First entry should have index 1');
   t.equal(entry2.index, 2, 'Second entry should have index 2');
   t.equal(storage.getLogLength(), 2, 'Should have 2 entries');
+});
+
+test('MessageGroupOperationLedger - retains a bounded rolling window', async (t) => {
+  const storage = new MessageGroupOperationLedger({maxEntries: 2});
+
+  const entry1 = storage.appendEntry({type: 'MESSAGE', data: 'test1'});
+  const entry2 = storage.appendEntry({type: 'MESSAGE', data: 'test2'});
+  const entry3 = storage.appendEntry({type: 'MESSAGE', data: 'test3'});
+
+  t.equal(storage.getLogLength(), 2, 'Should retain only the bounded number of entries');
+  t.equal(storage.getEntry(entry1.index), null, 'Old trimmed entries should no longer be addressable');
+  t.equal(storage.getEntry(entry2.index)?.data?.data, 'test2', 'Should retain newer entries');
+  t.equal(storage.getLastEntry()?.index, entry3.index, 'Newest entry should retain its monotonic index');
 });
 
 test('MessageGroupOperationLedger - getEntriesFrom returns entries', async (t) => {

@@ -1,4 +1,4 @@
-import LifeRaft from '@markwylde/liferaft';
+import LifeRaft from './liferaft.js';
 import {NUM, TYPEOF} from '../constants/index.js';
 
 const LIFERAFT_PROVIDER_ERROR_MSG = Object.freeze({

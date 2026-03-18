@@ -6,7 +6,15 @@ import {EventEmitter} from 'events';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {assertCritical} from '../utils/assert.js';
+import {
+  getSystemCachePrimaryKeyFieldOrFallback,
+} from '../cache/system-cache-key-descriptor.js';
+import {isTableInternalCachePropagationEnabled} from '../cache/cdc-table-policy.js';
 import {COLUMN, NUM, SERVICE_STATUS, SERVICE_TYPE, TABLES, TYPEOF} from '../constants/index.js';
+import {
+  PRESSURE_WORK_CLASS,
+  PressureGovernor,
+} from '../control-plane/pressure-governor.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {
   LATENCY_GROUP_STATE,
@@ -33,6 +41,28 @@ const CDC_GROUP_PROPAGATION_MESSAGE = Object.freeze({
 const MESSAGE_GROUP_REPLICA_SUFFIX = '-r';
 const DELIVERY_ERROR_UNKNOWN = 'unknown delivery error';
 const PUBLICATION_TRANSITION_HISTORY_LIMIT = 10;
+const BACKGROUND_RETRY_PENDING_ERROR = 'background_retry_pending';
+const IMMEDIATE_BATCH_DELAY_MS = NUM.TEN;
+const IMMEDIATE_BATCH_MAX_EVENTS = NUM.SIXTY_FOUR;
+
+function sortObjectKeys(value) {
+  if (Array.isArray(value)) {
+    return value.map((entry) => sortObjectKeys(entry));
+  }
+  if (!value || typeof value !== TYPEOF.OBJECT) {
+    return value;
+  }
+  return Object.keys(value)
+    .sort()
+    .reduce((accumulator, key) => {
+      accumulator[key] = sortObjectKeys(value[key]);
+      return accumulator;
+    }, {});
+}
+
+function stableSerialize(value) {
+  return JSON.stringify(sortObjectKeys(value));
+}
 
 class CDCGroupPropagationService extends EventEmitter {
   /**
@@ -97,6 +127,17 @@ class CDCGroupPropagationService extends EventEmitter {
       CDC_GROUP_PROPAGATION_RETRY.MAX_DELAY_MS,
     );
     this.backgroundRetryTimers = new Set();
+    this.backgroundRetryEntriesByKey = new Map();
+    this.immediateBatchTimers = new Set();
+    this.immediateBatchEntriesByKey = new Map();
+    this.immediateBatchDelayMs = this.resolvePositiveInteger(
+      options.immediateBatchDelayMs,
+      IMMEDIATE_BATCH_DELAY_MS,
+    );
+    this.immediateBatchMaxEvents = this.resolvePositiveInteger(
+      options.immediateBatchMaxEvents,
+      IMMEDIATE_BATCH_MAX_EVENTS,
+    );
     this.publicationModeDiagnostics = this.freezePublicationModeDiagnostics({
       currentMode: this.propagationMode ===
         LATENCY_PROPAGATION_MODE.GROUPED ?
@@ -172,6 +213,7 @@ class CDCGroupPropagationService extends EventEmitter {
   stop() {
     this.state = CDC_GROUP_PROPAGATION_STATE.STOPPED;
     this.clearBackgroundRetryTimers();
+    this.clearImmediateBatchTimers();
     this.logger.info(CDC_GROUP_PROPAGATION_LOG_MSG.STOPPED, {
       nodeId: this.nodeId,
     });
@@ -384,6 +426,27 @@ class CDCGroupPropagationService extends EventEmitter {
    * @private
    */
   async deliverToTargetsWithRetry(options) {
+    const events = this.normalizeDeliveryEvents(options);
+    const deliveryLabel = this.describeDeliveryEvents(events);
+    const retryKey = !options?.events ?
+      this.buildBackgroundRetryKey(options) :
+      null;
+    const allowDeferToExistingRetry =
+      options?.allowDeferToExistingRetry !== false;
+    if (allowDeferToExistingRetry &&
+        retryKey &&
+        this.backgroundRetryEntriesByKey.has(retryKey)) {
+      this.scheduleDeferredDeliveryEvents(events, options, NUM.ONE);
+      return this.buildDeferredFailures(options.targets);
+    }
+    if (this.shouldBatchImmediateDelivery(options)) {
+      return this.enqueueImmediateBatch(options);
+    }
+    if (this.isLocalRouterBackpressured()) {
+      this.scheduleDeferredDeliveryEvents(events, options, NUM.ONE);
+      return this.buildDeferredFailures(options.targets);
+    }
+
     let pendingTargets = Array.isArray(options.targets) ?
       [...options.targets] :
       [];
@@ -408,8 +471,9 @@ class CDCGroupPropagationService extends EventEmitter {
       const retryDelayMs = this.computeRetryDelayMs(attempt);
       this.logger.warn(CDC_GROUP_PROPAGATION_LOG_MSG.RETRYING_DELIVERY_FAILURES, {
         nodeId: this.nodeId,
-        tableName: options.tableName,
-        operation: options.operation,
+        tableName: deliveryLabel.tableName,
+        operation: deliveryLabel.operation,
+        eventCount: deliveryLabel.eventCount,
         attempt,
         retryDelayMs,
         failureCount: deliveryFailures.length,
@@ -423,23 +487,243 @@ class CDCGroupPropagationService extends EventEmitter {
     if (deliveryFailures.length > NUM.ZERO) {
       this.logger.warn(CDC_GROUP_PROPAGATION_LOG_MSG.DELIVERY_RETRY_EXHAUSTED, {
         nodeId: this.nodeId,
-        tableName: options.tableName,
-        operation: options.operation,
+        tableName: deliveryLabel.tableName,
+        operation: deliveryLabel.operation,
+        eventCount: deliveryLabel.eventCount,
         attempts: maxAttempts,
         failureCount: deliveryFailures.length,
       });
       const retryTargets = this.convertFailuresToRetryTargets(deliveryFailures);
-      this.scheduleBackgroundRetry({
-        tableName: options.tableName,
-        operation: options.operation,
-        data: options.data,
-        sourceGroupId: options.sourceGroupId,
+      this.scheduleDeferredDeliveryEvents(events, {
+        ...options,
         targets: retryTargets,
-        attempt: maxAttempts + NUM.ONE,
-      });
+      }, maxAttempts + NUM.ONE);
     }
 
     return deliveryFailures;
+  }
+
+  /**
+   * Describe one delivery wave for diagnostics.
+   * @param {Array<Object>} events
+   * @return {{tableName:string|null, operation:string|null, eventCount:number}}
+   * @private
+   */
+  describeDeliveryEvents(events) {
+    const normalizedEvents = Array.isArray(events) ? events : [];
+    if (normalizedEvents.length === NUM.ZERO) {
+      return {
+        tableName: null,
+        operation: null,
+        eventCount: NUM.ZERO,
+      };
+    }
+    if (normalizedEvents.length === NUM.ONE) {
+      return {
+        tableName: normalizedEvents[0].tableName || null,
+        operation: normalizedEvents[0].operation || null,
+        eventCount: NUM.ONE,
+      };
+    }
+    return {
+      tableName: 'batch',
+      operation: 'batch',
+      eventCount: normalizedEvents.length,
+    };
+  }
+
+  /**
+   * Schedule one or more failed delivery events onto the background retry owner.
+   * @param {Array<Object>} events
+   * @param {Object} options
+   * @param {number} attempt
+   * @private
+   */
+  scheduleDeferredDeliveryEvents(events, options, attempt) {
+    for (const event of events) {
+      this.scheduleBackgroundRetry({
+        tableName: event.tableName,
+        operation: event.operation,
+        data: event.data,
+        sourceGroupId: options.sourceGroupId,
+        targets: options.targets,
+        attempt,
+      });
+    }
+  }
+
+  /**
+   * Return true when one propagation wave should use immediate batching.
+   * @param {Object} options
+   * @return {boolean}
+   * @private
+   */
+  shouldBatchImmediateDelivery(options) {
+    if (options?.allowBatching === false || options?.events) {
+      return false;
+    }
+    if (typeof options?.tableName !== TYPEOF.STRING ||
+        options.tableName.length === NUM.ZERO) {
+      return false;
+    }
+    if (!isTableInternalCachePropagationEnabled(options.tableName)) {
+      return false;
+    }
+    return Array.isArray(options.targets) && options.targets.length > NUM.ZERO;
+  }
+
+  /**
+   * Queue one immediate propagation wave into the canonical batch owner.
+   * Repeated row updates for the same target wave collapse to the latest state.
+   * @param {Object} options
+   * @return {Promise<Array<Object>>}
+   * @private
+   */
+  enqueueImmediateBatch(options) {
+    const batchKey = this.buildImmediateBatchKey(options);
+    if (!batchKey) {
+      return this.deliverToTargetsWithRetry({
+        ...options,
+        allowBatching: false,
+      });
+    }
+
+    let entry = this.immediateBatchEntriesByKey.get(batchKey);
+    if (!entry) {
+      entry = {
+        pendingEventsByKey: new Map(),
+        resolvers: [],
+        sourceGroupId: options.sourceGroupId || null,
+        targets: Array.isArray(options.targets) ? [...options.targets] : [],
+        timer: null,
+      };
+      this.immediateBatchEntriesByKey.set(batchKey, entry);
+      this.armImmediateBatchEntry(batchKey, entry);
+    }
+
+    const eventKey = this.buildBackgroundRetryEventKey(options);
+    entry.pendingEventsByKey.set(eventKey, {
+      eventKey,
+      tableName: options.tableName,
+      operation: options.operation,
+      data: options.data,
+    });
+
+    if (entry.pendingEventsByKey.size >= this.immediateBatchMaxEvents &&
+        entry.timer) {
+      clearTimeout(entry.timer);
+      this.immediateBatchTimers.delete(entry.timer);
+      entry.timer = null;
+      void this.runImmediateBatchEntry(batchKey, entry);
+    }
+
+    return new Promise((resolve) => {
+      entry.resolvers.push(resolve);
+    });
+  }
+
+  /**
+   * Build a canonical key for one immediate publication batch.
+   * @param {Object} options
+   * @return {string|null}
+   * @private
+   */
+  buildImmediateBatchKey(options) {
+    const targetGroupIds = Array.isArray(options?.targets) ?
+      [...new Set(options.targets
+        .map((target) => target?.groupId)
+        .filter((groupId) =>
+          typeof groupId === TYPEOF.STRING && groupId.length > NUM.ZERO,
+        ))].sort() :
+      [];
+    if (targetGroupIds.length === NUM.ZERO) {
+      return null;
+    }
+    const sourceGroupId = typeof options?.sourceGroupId === TYPEOF.STRING ?
+      options.sourceGroupId :
+      '';
+    return [sourceGroupId, targetGroupIds.join(',')].join('|');
+  }
+
+  /**
+   * Arm the timer for one immediate publication batch.
+   * @param {string} batchKey
+   * @param {Object} entry
+   * @private
+   */
+  armImmediateBatchEntry(batchKey, entry) {
+    if (entry?.timer) {
+      return;
+    }
+    const timer = setTimeout(async () => {
+      await this.runImmediateBatchEntry(batchKey, entry);
+    }, this.immediateBatchDelayMs);
+    entry.timer = timer;
+    this.immediateBatchTimers.add(timer);
+  }
+
+  /**
+   * Drain one immediate publication batch.
+   * @param {string} batchKey
+   * @param {Object} entry
+   * @return {Promise<void>}
+   * @private
+   */
+  async runImmediateBatchEntry(batchKey, entry) {
+    if (entry?.timer) {
+      this.immediateBatchTimers.delete(entry.timer);
+      entry.timer = null;
+    }
+    if (this.immediateBatchEntriesByKey.get(batchKey) === entry) {
+      this.immediateBatchEntriesByKey.delete(batchKey);
+    }
+
+    const events = [...entry.pendingEventsByKey.values()];
+    entry.pendingEventsByKey.clear();
+    if (events.length === NUM.ZERO) {
+      this.resolveImmediateBatch(entry, []);
+      return;
+    }
+
+    if (this.isLocalRouterBackpressured()) {
+      for (const event of events) {
+        this.scheduleBackgroundRetry({
+          tableName: event.tableName,
+          operation: event.operation,
+          data: event.data,
+          sourceGroupId: entry.sourceGroupId,
+          targets: entry.targets,
+          attempt: NUM.ONE,
+        });
+      }
+      this.resolveImmediateBatch(
+        entry,
+        this.buildDeferredFailures(entry.targets),
+      );
+      return;
+    }
+
+    const deliveryFailures = await this.deliverToTargetsWithRetry({
+      events,
+      sourceGroupId: entry.sourceGroupId,
+      targets: entry.targets,
+      allowBatching: false,
+    });
+    this.resolveImmediateBatch(entry, deliveryFailures);
+  }
+
+  /**
+   * Resolve all waiters attached to one immediate batch entry.
+   * @param {Object} entry
+   * @param {Array<Object>} deliveryFailures
+   * @private
+   */
+  resolveImmediateBatch(entry, deliveryFailures) {
+    const resolvers = Array.isArray(entry?.resolvers) ? entry.resolvers : [];
+    entry.resolvers = [];
+    for (const resolve of resolvers) {
+      resolve([...deliveryFailures]);
+    }
   }
 
   /**
@@ -462,6 +746,27 @@ class CDCGroupPropagationService extends EventEmitter {
       }
 
       const {tableName, operation, data, sourceGroupId, targets} = options;
+      const retryKey = this.buildBackgroundRetryKey({
+        tableName,
+        operation,
+        sourceGroupId,
+        targets,
+      });
+      const eventKey = this.buildBackgroundRetryEventKey({
+        tableName,
+        operation,
+        data,
+      });
+      const existingEntry = retryKey ?
+        this.backgroundRetryEntriesByKey.get(retryKey) :
+        null;
+      if (existingEntry) {
+        this.recordBackgroundRetryEvent(existingEntry, eventKey, data);
+        if (!existingEntry.timer) {
+          this.armBackgroundRetryEntry(retryKey, existingEntry);
+        }
+        return;
+      }
 
       const attempt = Number.isFinite(options.attempt) && options.attempt > NUM.ZERO ?
         Math.floor(options.attempt) :
@@ -483,44 +788,71 @@ class CDCGroupPropagationService extends EventEmitter {
         return;
       }
       const retryDelayMs = this.computeRetryDelayMs(attempt);
+      const entry = {
+        attempt,
+        operation,
+        pendingEventsByKey: new Map(),
+        sourceGroupId,
+        tableName,
+        targets: Array.isArray(targets) ? [...targets] : [],
+        timer: null,
+      };
+      this.recordBackgroundRetryEvent(entry, eventKey, data);
+      this.armBackgroundRetryEntry(retryKey, entry);
+    }
+
+  /**
+   * Arm the retry timer for one background entry.
+   * @param {string|null} retryKey
+   * @param {Object} entry
+   * @private
+   */
+  armBackgroundRetryEntry(retryKey, entry) {
+      if (entry?.timer) {
+        return;
+      }
+      const attempt = Number.isFinite(entry?.attempt) && entry.attempt > NUM.ZERO ?
+        Math.floor(entry.attempt) :
+        NUM.ONE;
+      const maxTotalAttempts =
+        this.deliveryRetryMaxAttempts + this.backgroundRetryMaxAttempts;
+      if (attempt >= maxTotalAttempts) {
+        this.logger.warn(
+          CDC_GROUP_PROPAGATION_LOG_MSG.DELIVERY_RETRY_EXHAUSTED, {
+            nodeId: this.nodeId,
+            tableName: entry?.tableName,
+            operation: entry?.operation,
+            attempt,
+            maxTotalAttempts,
+            failureCount: entry?.pendingEventsByKey?.size || NUM.ZERO,
+            background: true,
+          });
+        if (retryKey) {
+          this.backgroundRetryEntriesByKey.delete(retryKey);
+        }
+        return;
+      }
+
+      const retryDelayMs = this.computeRetryDelayMs(attempt);
       this.logger.warn(CDC_GROUP_PROPAGATION_LOG_MSG.RETRYING_DELIVERY_FAILURES, {
         nodeId: this.nodeId,
-        tableName,
-        operation,
+        tableName: entry.tableName,
+        operation: entry.operation,
         attempt,
         retryDelayMs,
-        failureCount: targets.length,
+        failureCount: entry.pendingEventsByKey.size,
         background: true,
       });
 
       const retryTimer = setTimeout(async () => {
-        this.backgroundRetryTimers.delete(retryTimer);
-        if (this.state !== CDC_GROUP_PROPAGATION_STATE.RUNNING) {
-          return;
-        }
-
-        const deliveryFailures = await this.deliverToTargets({
-          tableName,
-          operation,
-          data,
-          sourceGroupId,
-          targets,
-        });
-        if (deliveryFailures.length === NUM.ZERO) {
-          return;
-        }
-        const retryTargets = this.convertFailuresToRetryTargets(deliveryFailures);
-        this.scheduleBackgroundRetry({
-          tableName,
-          operation,
-          data,
-          sourceGroupId,
-          targets: retryTargets,
-          attempt: attempt + NUM.ONE,
-        });
+        await this.runBackgroundRetryEntry(retryKey, retryTimer, entry);
       }, retryDelayMs);
+      entry.timer = retryTimer;
       this.backgroundRetryTimers.add(retryTimer);
-    }
+      if (retryKey) {
+        this.backgroundRetryEntriesByKey.set(retryKey, entry);
+      }
+  }
 
   /**
    * Clear all pending background retry timers.
@@ -531,6 +863,219 @@ class CDCGroupPropagationService extends EventEmitter {
       clearTimeout(retryTimer);
     }
     this.backgroundRetryTimers.clear();
+    this.backgroundRetryEntriesByKey.clear();
+  }
+
+  /**
+   * Clear all pending immediate publication batch timers.
+   * @private
+   */
+  clearImmediateBatchTimers() {
+    for (const timer of this.immediateBatchTimers) {
+      clearTimeout(timer);
+    }
+    this.immediateBatchTimers.clear();
+    this.immediateBatchEntriesByKey.clear();
+  }
+
+  /**
+   * Build a canonical key for one background retry wave.
+   * @param {Object} options
+   * @return {string|null}
+   * @private
+   */
+  buildBackgroundRetryKey(options) {
+    const targetGroupIds = Array.isArray(options.targets) ?
+      [...new Set(options.targets
+        .map((target) => target?.groupId)
+        .filter((groupId) =>
+          typeof groupId === TYPEOF.STRING && groupId.length > NUM.ZERO,
+        ))].sort() :
+      [];
+    if (targetGroupIds.length === NUM.ZERO) {
+      return null;
+    }
+    const tableName = typeof options.tableName === TYPEOF.STRING ?
+      options.tableName :
+      '';
+    const operation = typeof options.operation === TYPEOF.STRING ?
+      options.operation :
+      '';
+    const sourceGroupId = typeof options.sourceGroupId === TYPEOF.STRING ?
+      options.sourceGroupId :
+      '';
+    return [
+      tableName,
+      operation,
+      sourceGroupId,
+      targetGroupIds.join(','),
+    ].join('|');
+  }
+
+  /**
+   * Build a canonical event key for one deferred propagation payload.
+   * Uses table primary key when available so repeated row updates collapse
+   * to the latest state while preserving distinct rows under one retry wave.
+   * @param {Object} options
+   * @return {string}
+   * @private
+   */
+  buildBackgroundRetryEventKey(options) {
+    const tableName = typeof options?.tableName === TYPEOF.STRING ?
+      options.tableName :
+      '';
+    const operation = typeof options?.operation === TYPEOF.STRING ?
+      options.operation :
+      '';
+    const data = options?.data && typeof options.data === TYPEOF.OBJECT ?
+      options.data :
+      null;
+    const pkField = getSystemCachePrimaryKeyFieldOrFallback(tableName, 'id');
+    const pkValue = data?.[pkField] ?? data?.id ?? null;
+    if (pkValue !== null && pkValue !== undefined) {
+      return `${tableName}|${operation}|${String(pkValue)}`;
+    }
+    return `${tableName}|${operation}|${stableSerialize(data)}`;
+  }
+
+  /**
+   * Record or replace the latest deferred payload for one retry entry.
+   * @param {Object} entry
+   * @param {string} eventKey
+   * @param {Object} data
+   * @private
+   */
+  recordBackgroundRetryEvent(entry, eventKey, data) {
+    if (!entry || !eventKey) {
+      return;
+    }
+    entry.pendingEventsByKey.set(eventKey, {
+      data,
+      eventKey,
+    });
+  }
+
+  /**
+   * Execute one background retry entry, draining all queued row events and
+   * rescheduling only the remaining misses.
+   * @param {string|null} retryKey
+   * @param {Object} retryTimer
+   * @param {Object} entry
+   * @return {Promise<void>}
+   * @private
+   */
+  async runBackgroundRetryEntry(retryKey, retryTimer, entry) {
+    this.backgroundRetryTimers.delete(retryTimer);
+    if (retryKey) {
+      const activeEntry = this.backgroundRetryEntriesByKey.get(retryKey);
+      if (activeEntry === entry) {
+        activeEntry.timer = null;
+      }
+    }
+
+    if (this.state !== CDC_GROUP_PROPAGATION_STATE.RUNNING) {
+      return;
+    }
+    if (this.isLocalRouterBackpressured()) {
+      this.rescheduleBackgroundRetryEntry(retryKey, entry);
+      return;
+    }
+
+    const pendingEvents = [...entry.pendingEventsByKey.values()];
+    entry.pendingEventsByKey.clear();
+    if (pendingEvents.length === NUM.ZERO) {
+      if (retryKey) {
+        this.backgroundRetryEntriesByKey.delete(retryKey);
+      }
+      return;
+    }
+
+    const deliveryFailures = await this.deliverToTargets({
+      events: pendingEvents.map((pendingEvent) => ({
+        tableName: entry.tableName,
+        operation: entry.operation,
+        data: pendingEvent.data,
+      })),
+      sourceGroupId: entry.sourceGroupId,
+      targets: entry.targets,
+    });
+    if (deliveryFailures.length > NUM.ZERO) {
+      for (const pendingEvent of pendingEvents) {
+        this.recordBackgroundRetryEvent(
+          entry,
+          pendingEvent.eventKey,
+          pendingEvent.data,
+        );
+      }
+    }
+
+    if (entry.pendingEventsByKey.size === NUM.ZERO) {
+      if (retryKey) {
+        this.backgroundRetryEntriesByKey.delete(retryKey);
+      }
+      return;
+    }
+
+    entry.attempt += NUM.ONE;
+    this.rescheduleBackgroundRetryEntry(retryKey, entry);
+  }
+
+  /**
+   * Reschedule one existing retry entry if budget remains.
+   * @param {string|null} retryKey
+   * @param {Object} entry
+   * @private
+   */
+  rescheduleBackgroundRetryEntry(retryKey, entry) {
+    const maxTotalAttempts =
+      this.deliveryRetryMaxAttempts + this.backgroundRetryMaxAttempts;
+    if (entry.attempt >= maxTotalAttempts) {
+      this.logger.warn(
+        CDC_GROUP_PROPAGATION_LOG_MSG.DELIVERY_RETRY_EXHAUSTED, {
+          nodeId: this.nodeId,
+          tableName: entry.tableName,
+          operation: entry.operation,
+          attempt: entry.attempt,
+          maxTotalAttempts,
+          failureCount: entry.pendingEventsByKey.size,
+          background: true,
+        });
+      if (retryKey) {
+        this.backgroundRetryEntriesByKey.delete(retryKey);
+      }
+      return;
+    }
+    this.armBackgroundRetryEntry(retryKey, entry);
+  }
+
+  /**
+   * Determine whether the local router is currently backpressured.
+   * @return {boolean}
+   * @private
+   */
+  isLocalRouterBackpressured() {
+    return PressureGovernor.getShared({
+      nodeId: this.nodeId,
+      messageRouter: this.messageRouter,
+    }).isBackpressured({
+      workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+      resourceKeys: ['cdc:retry'],
+    });
+  }
+
+  /**
+   * Build immediate deferred failures for a queued retry wave.
+   * @param {Array<Object>} targets
+   * @return {Array<Object>}
+   * @private
+   */
+  buildDeferredFailures(targets) {
+    return (Array.isArray(targets) ? targets : []).map((target) => ({
+      targetGroupId: target?.groupId || null,
+      coordinatorNodeId: target?.coordinatorNodeId || null,
+      address: target?.address || null,
+      error: BACKGROUND_RETRY_PENDING_ERROR,
+    }));
   }
 
   /**
@@ -614,6 +1159,7 @@ class CDCGroupPropagationService extends EventEmitter {
       data: options.data,
       sourceGroupId: options.sourceGroupId,
       targets: safeTargets,
+      allowDeferToExistingRetry: false,
     });
     const failuresByKey = new Map();
     let unkeyedCounter = NUM.ZERO;
@@ -960,6 +1506,7 @@ class CDCGroupPropagationService extends EventEmitter {
    * @private
    */
   async deliverToTargets(options) {
+    const events = this.normalizeDeliveryEvents(options);
     const deliveryFailures = [];
     for (const target of options.targets) {
       if (!this.messageRouter ||
@@ -973,15 +1520,23 @@ class CDCGroupPropagationService extends EventEmitter {
         continue;
       }
 
-      const payload = {
-        type: LATENCY_TOPOLOGY_MESSAGE_TYPE.CDC_PROPAGATION,
-        tableName: options.tableName,
-        operation: options.operation,
-        data: options.data,
-        sourceNodeId: this.nodeId,
-        sourceGroupId: options.sourceGroupId,
-        targetGroupId: target.groupId,
-      };
+      const payload = events.length > NUM.ONE ?
+        {
+          type: LATENCY_TOPOLOGY_MESSAGE_TYPE.CDC_PROPAGATION_BATCH,
+          events,
+          sourceNodeId: this.nodeId,
+          sourceGroupId: options.sourceGroupId,
+          targetGroupId: target.groupId,
+        } :
+        {
+          type: LATENCY_TOPOLOGY_MESSAGE_TYPE.CDC_PROPAGATION,
+          tableName: events[0].tableName,
+          operation: events[0].operation,
+          data: events[0].data,
+          sourceNodeId: this.nodeId,
+          sourceGroupId: options.sourceGroupId,
+          targetGroupId: target.groupId,
+        };
       let result = null;
       try {
         result = await this.messageRouter.deliver(
@@ -1008,6 +1563,32 @@ class CDCGroupPropagationService extends EventEmitter {
       }
     }
     return deliveryFailures;
+  }
+
+  /**
+   * Normalize one delivery request into a batch-safe event array.
+   * @param {Object} options
+   * @return {Array<Object>}
+   * @private
+   */
+  normalizeDeliveryEvents(options) {
+    const explicitEvents = Array.isArray(options?.events) ?
+      options.events
+        .filter((event) => event?.tableName && event?.operation && event?.data)
+        .map((event) => ({
+          tableName: event.tableName,
+          operation: event.operation,
+          data: event.data,
+        })) :
+      [];
+    if (explicitEvents.length > NUM.ZERO) {
+      return explicitEvents;
+    }
+    return [{
+      tableName: options.tableName,
+      operation: options.operation,
+      data: options.data,
+    }];
   }
 
   /**

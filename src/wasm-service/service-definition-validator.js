@@ -1,5 +1,7 @@
 import {NUM, TYPEOF, SERVICE_PROFILE} from '../constants/index.js';
 import {RUNTIME_KIND} from '../constants/runtime.js';
+import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
+import {ControlPlaneSystemTableGateway} from '../control-plane/control-plane-system-table-gateway.js';
 import {
   READ_CONSISTENCY_MODE,
   WRITE_CONSISTENCY_MODE,
@@ -55,6 +57,7 @@ class ServiceDefinitionValidator {
    */
   constructor({sqlQueryEngine}) {
     this.sqlQueryEngine = sqlQueryEngine;
+    this.controlPlaneSystemTableGateway = null;
   }
 
   /**
@@ -137,7 +140,8 @@ class ServiceDefinitionValidator {
       );
       return;
     }
-    const result = await this.sqlQueryEngine.executeQuery(
+    const result = await this.getControlPlaneSystemTableGateway().readRows(
+      SYSTEM_TABLE_NAME.CODE,
       SQL_CHECK_HANDLER,
       [handlerFunctionId],
     );
@@ -205,6 +209,24 @@ class ServiceDefinitionValidator {
         );
       }
     }
+  }
+
+  /**
+   * @return {ControlPlaneSystemTableGateway}
+   * @private
+   */
+  getControlPlaneSystemTableGateway() {
+    if (this.controlPlaneSystemTableGateway) {
+      if (!this.controlPlaneSystemTableGateway.sqlQueryEngine &&
+          this.sqlQueryEngine) {
+        this.controlPlaneSystemTableGateway.setSqlQueryEngine(this.sqlQueryEngine);
+      }
+      return this.controlPlaneSystemTableGateway;
+    }
+    this.controlPlaneSystemTableGateway = new ControlPlaneSystemTableGateway({
+      sqlQueryEngine: this.sqlQueryEngine,
+    });
+    return this.controlPlaneSystemTableGateway;
   }
 }
 

@@ -157,3 +157,34 @@ test('SQLQueryEngine - system-table local reads reuse AuthoritativeControlPlaneV
     t.equal(deliveries.length, 0, 'shared authoritative reads should still bypass routed delivery');
     t.equal(result.rows.length, 1);
   });
+
+test('SQLQueryEngine - routed system-table queries default to critical delivery priority',
+  async (t) => {
+    const deliveries = [];
+    const engine = new SQLQueryEngine({
+      systemCache: createMockSystemCache(),
+      messageRouter: {
+        async deliver(address, message, options) {
+          deliveries.push({address, message, options});
+          return {
+            acknowledged: true,
+            success: true,
+            rows: [],
+            changes: 0,
+          };
+        },
+      },
+    });
+
+    const result = await engine.executeQuery(
+      "SELECT * FROM services WHERE service_type = 'partition'",
+    );
+
+    t.equal(result.success, true, 'routed system-table query should succeed');
+    t.equal(deliveries.length > 0, true, 'system-table query should route through the message router');
+    t.equal(
+      deliveries[0]?.options?.deliveryPriority,
+      'critical',
+      'system-table routed queries should claim the critical delivery lane by default',
+    );
+  });

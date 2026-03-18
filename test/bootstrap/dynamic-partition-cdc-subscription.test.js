@@ -8,6 +8,10 @@ import {PartitionService} from '../../src/partition/partition-service.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {ReplicaHandlerSetup} from '../../src/bootstrap/shared/replica-handler-setup.js';
 import {TABLES} from '../../src/constants/index.js';
+import {
+  BOOTSTRAP_PHASE,
+  JOINING_PHASE,
+} from '../../src/bootstrap/bootstrap-constants.js';
 
 function initializeTestEnvironment() {
   ConfigurationManager.resetInstance();
@@ -54,15 +58,17 @@ async function withCapturedReplicaFactory(service, t, assertFactory) {
     service.systemCacheHydrated = true;
     service.tablePolicyService = {};
     service.rebalanceCoordinator = {};
-    service.messageGroupServices = new Map([
-      ['mg-1', {
-        groupId: 'mg-1',
-        isLeaderReplica: () => true,
-        getLeaderId: () => null,
-        subscribeToCDC: async (tableName) => {
-          subscribedTables.push(tableName);
-        },
-      }],
+      service.messageGroupServices = new Map([
+        ['mg-1', {
+          groupId: 'mg-1',
+          initialized: true,
+          isLeaderReplica: () => true,
+          isMetadataIngressReady: () => true,
+          getLeaderId: () => null,
+          subscribeToCDC: async (tableName) => {
+            subscribedTables.push(tableName);
+          },
+        }],
     ]);
     if (typeof service.createCdcIntegrationService === 'function' &&
         hasCustomCreateCdcIntegrationService) {
@@ -232,6 +238,65 @@ test('NodeJoiningService dynamic user partition CDC subscription', async (t) => 
     );
   });
 });
+
+test('BootstrapService does not attach bootstrap-owned CDC propagation after bootstrap completes',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const service = new BootstrapService({
+      nodeId: 'seed-node',
+      nodeAddress: 'ws://localhost:9001',
+    });
+    service.phase = BOOTSTRAP_PHASE.COMPLETE;
+
+    await withCapturedReplicaFactory(service, t, async ({
+      subscribedTables,
+      handshakeSubscriberIds,
+      createPartitionService,
+    }) => {
+      await createPartition(createPartitionService, TABLES.SERVICES, 'seed-node');
+
+      t.notOk(
+        subscribedTables.includes(TABLES.SERVICES),
+        'bootstrap-owned runtime partitions should not keep attaching CDC propagation once bootstrap is complete',
+      );
+      t.notOk(
+        handshakeSubscriberIds.some((subscriberId) =>
+          String(subscriberId || '').includes(TABLES.SERVICES)),
+        'bootstrap-complete runtime partitions should not register bootstrap CDC handshakes',
+      );
+    });
+  });
+
+test('NodeJoiningService does not attach join-owned CDC propagation after join completes',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const service = new NodeJoiningService({
+      nodeId: 'join-node',
+      nodeAddress: 'ws://localhost:9002',
+      seedNodeAddress: 'http://localhost:8080',
+    });
+    service.phase = JOINING_PHASE.COMPLETE;
+
+    await withCapturedReplicaFactory(service, t, async ({
+      subscribedTables,
+      handshakeSubscriberIds,
+      createPartitionService,
+    }) => {
+      await createPartition(createPartitionService, TABLES.SERVICES, 'join-node');
+
+      t.notOk(
+        subscribedTables.includes(TABLES.SERVICES),
+        'join-owned runtime partitions should not keep attaching CDC propagation once join is complete',
+      );
+      t.notOk(
+        handshakeSubscriberIds.some((subscriberId) =>
+          String(subscriberId || '').includes(TABLES.SERVICES)),
+        'join-complete runtime partitions should not register join-owned CDC handshakes',
+      );
+    });
+  });
 
 test('BootstrapService dynamic partition factory injects the current SQL engine',
   async (t) => {

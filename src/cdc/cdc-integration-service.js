@@ -36,6 +36,12 @@ import {
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../control-plane/control-plane-readiness-constants.js';
+import {
+  buildPressureAdmissionFailure,
+  PRESSURE_GOVERNOR_ACTION,
+  PRESSURE_WORK_CLASS,
+  PressureGovernor,
+} from '../control-plane/pressure-governor.js';
 import {HLCClockService} from '../hlc/hlc-clock-service.js';
 import {
   QUERY_ERROR_CODE,
@@ -72,6 +78,8 @@ import {
   createBootstrapDirectWriteRouter,
   createSqlWriteRouter,
 } from './write-router/index.js';
+import {resolveNodeWebSocketAddress} from
+  '../transport/node-address-resolution.js';
 
 /**
  * Valid system table names for CDC operations.
@@ -121,6 +129,58 @@ const LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY = Object.freeze({
   ANY_REPLICA: 'any_replica',
   LOCAL_LEADER: 'local_leader',
 });
+
+function normalizeDeliveryPriority(value, fallback = null) {
+  return typeof value === TYPEOF.STRING && value.length > NUM.ZERO ?
+    value :
+    fallback;
+}
+
+function buildSystemTableMutationError(result, fallbackMessage) {
+  const error = new Error(result?.error || fallbackMessage);
+  if (typeof result?.errorCode === TYPEOF.STRING &&
+      result.errorCode.length > NUM.ZERO) {
+    error.code = result.errorCode;
+  }
+  if (typeof result?.pressureAction === TYPEOF.STRING &&
+      result.pressureAction.length > NUM.ZERO) {
+    error.pressureAction = result.pressureAction;
+  }
+  if (typeof result?.pressureReason === TYPEOF.STRING &&
+      result.pressureReason.length > NUM.ZERO) {
+    error.pressureReason = result.pressureReason;
+  }
+  if (Number.isFinite(result?.retryAfterMs)) {
+    error.retryAfterMs = Math.max(NUM.ZERO, Math.floor(result.retryAfterMs));
+    if (error.retryAfterMs > NUM.ZERO) {
+      error.deferRetry = true;
+    }
+  }
+  if (result?.pressureSummary &&
+      typeof result.pressureSummary === TYPEOF.OBJECT) {
+    error.pressureSummary = result.pressureSummary;
+  }
+  return error;
+}
+
+function sortMutationKeyObject(value) {
+  if (Array.isArray(value)) {
+    return value.map((entry) => sortMutationKeyObject(entry));
+  }
+  if (!value || typeof value !== TYPEOF.OBJECT) {
+    return value;
+  }
+  return Object.keys(value)
+    .sort()
+    .reduce((accumulator, key) => {
+      accumulator[key] = sortMutationKeyObject(value[key]);
+      return accumulator;
+    }, {});
+}
+
+function stableSerializeMutationKey(value) {
+  return JSON.stringify(sortMutationKeyObject(value));
+}
 const AUTHORITATIVE_ROW_VERSION_FIELD_CANDIDATES = Object.freeze([
   'last_heartbeat',
   'lastHeartbeat',
@@ -227,7 +287,7 @@ class CDCIntegrationService extends EventEmitter {
     this.rebalancer = null;
 
     // Message router reference for mesh connectivity on node join
-    this.messageRouter = null;
+    this.messageRouter = options.messageRouter || null;
 
     this.cdcEventHandler = null;
 
@@ -236,6 +296,7 @@ class CDCIntegrationService extends EventEmitter {
     this.authoritativeFallbackHistory = [];
     this.authoritativeFallbackTotals = new Map();
     this.authoritativeFallbackWindowMs = AUTHORITATIVE_FALLBACK_WINDOW_MS;
+    this.inFlightMutationsByKey = new Map();
 
     this.initialized = false;
   }
@@ -300,6 +361,12 @@ class CDCIntegrationService extends EventEmitter {
       },
       incrementNodeStateChanges: () => {
         this.stats.nodeStateChanges++;
+      },
+      resolveNodeWebSocketAddress: (targetNodeId) => {
+        return resolveNodeWebSocketAddress({
+          targetNodeId,
+          systemTableCache: this.systemTableCache,
+        });
       },
       _service: this,
     };
@@ -617,6 +684,25 @@ class CDCIntegrationService extends EventEmitter {
     });
 
     return matches;
+  }
+
+  /**
+   * Determine whether this node can satisfy one system-table write locally.
+   * This is stronger than cache-based leader metadata during leadership churn:
+   * if a local replica already owns leader state, direct local execution can
+   * still succeed even before the services table reflects that leader row.
+   * @param {string} tableName
+   * @return {boolean}
+   */
+  canWriteSystemTableLocally(tableName) {
+    if (!tableName || !VALID_SYSTEM_TABLES.includes(tableName)) {
+      return false;
+    }
+
+    const localLeaders = this.resolveLocalSystemTableServices(tableName, {
+      consistency: LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.LOCAL_LEADER,
+    });
+    return localLeaders.length > NUM.ZERO;
   }
 
   /**
@@ -1272,9 +1358,35 @@ class CDCIntegrationService extends EventEmitter {
       Number(this.retryDelayMs) || CDC_DEFAULTS.RETRY_DELAY_MS,
     );
     const tableName = this.extractTableNameFromSQL(sql);
+    const pressureDecision = PressureGovernor.getShared({
+      nodeId: this.nodeId,
+      messageRouter: this.messageRouter,
+    }).evaluate({
+      workClass: options?.workClass || PRESSURE_WORK_CLASS.CRITICAL,
+      resourceKeys: [
+        'control-plane:write',
+        `control-plane:table:${tableName || 'unknown'}`,
+      ],
+      allowDegrade: false,
+      allowDefer: options?.allowPressureDefer === true,
+      retryAfterMs: options?.pressureRetryAfterMs,
+    });
     const queryTimeoutMs = Number(options?.queryTimeoutMs);
+    if (pressureDecision.action === PRESSURE_GOVERNOR_ACTION.DEFER ||
+        pressureDecision.action === PRESSURE_GOVERNOR_ACTION.REJECT) {
+      return buildPressureAdmissionFailure(pressureDecision, {
+        tableName,
+      });
+    }
     const queryOptions = {
       sessionId: this.resolveSystemWriteSessionId(options),
+      deliveryPriority: normalizeDeliveryPriority(
+        options?.deliveryPriority,
+        pressureDecision.action === PRESSURE_GOVERNOR_ACTION.ALLOW ||
+          pressureDecision.action === PRESSURE_GOVERNOR_ACTION.DEGRADE ?
+          'critical' :
+          'background',
+      ),
       routingReadinessDimension:
         options?.routingReadinessDimension ||
         CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
@@ -2293,6 +2405,68 @@ class CDCIntegrationService extends EventEmitter {
   }
 
   /**
+   * Build one canonical single-flight key for an in-flight system-table
+   * mutation so identical callers collapse into one routed write.
+   * @param {string} operation
+   * @param {string} tableName
+   * @param {string|null} identity
+   * @param {Object} payload
+   * @param {Object} [options={}]
+   * @return {string|null}
+   * @private
+   */
+  buildMutationSingleFlightKey(
+    operation,
+    tableName,
+    identity,
+    payload,
+    options = {},
+  ) {
+    if (options?.allowCoalescing === false) {
+      return null;
+    }
+    if (typeof options?.coalescingKey === TYPEOF.STRING &&
+        options.coalescingKey.length > NUM.ZERO) {
+      return `${operation}:${tableName}:${options.coalescingKey}`;
+    }
+    return stableSerializeMutationKey({
+      operation,
+      tableName,
+      identity: identity || null,
+      payload,
+    });
+  }
+
+  /**
+   * Reuse one in-flight mutation promise when callers submit the same
+   * canonical write intent concurrently.
+   * @param {string|null} singleFlightKey
+   * @param {Function} executionFactory
+   * @return {Promise<Object>}
+   * @private
+   */
+  runCoalescedMutation(singleFlightKey, executionFactory) {
+    if (!singleFlightKey) {
+      return executionFactory();
+    }
+    const existingMutation = this.inFlightMutationsByKey.get(singleFlightKey);
+    if (existingMutation) {
+      return existingMutation;
+    }
+    let inFlightMutation = null;
+    inFlightMutation = Promise.resolve()
+      .then(() => executionFactory())
+      .finally(() => {
+        if (this.inFlightMutationsByKey.get(singleFlightKey) ===
+            inFlightMutation) {
+          this.inFlightMutationsByKey.delete(singleFlightKey);
+        }
+      });
+    this.inFlightMutationsByKey.set(singleFlightKey, inFlightMutation);
+    return inFlightMutation;
+  }
+
+  /**
    * Insert a row into a system table.
    * The write goes through SQL, which routes to the partition leader.
    * The partition generates a CDC event that updates all caches.
@@ -2309,6 +2483,13 @@ class CDCIntegrationService extends EventEmitter {
     const rowData = this.prepareInsertData(tableName, data);
     const idField = this.getPrimaryKeyField(tableName);
     const trackingId = rowData[idField];
+    const singleFlightKey = this.buildMutationSingleFlightKey(
+      CDC_OPERATION.INSERT,
+      tableName,
+      trackingId,
+      rowData,
+      options,
+    );
 
     this.logger.debug(CDC_LOG_MSG.INSERTING_ROW, {
       tableName,
@@ -2316,87 +2497,96 @@ class CDCIntegrationService extends EventEmitter {
       nodeId: this.nodeId,
     });
 
-    try {
-      const {columns, placeholders, values} = this.buildInsertParts(rowData);
-      const sql = `${SQL.INSERT_INTO} ${tableName} (${columns}) ` +
-        `${SQL.VALUES} (${placeholders})`;
+    return this.runCoalescedMutation(singleFlightKey, async () => {
+      try {
+        const {columns, placeholders, values} = this.buildInsertParts(rowData);
+        const sql = `${SQL.INSERT_INTO} ${tableName} (${columns}) ` +
+          `${SQL.VALUES} (${placeholders})`;
 
-      const sqlStartMs = Date.now();
-      const result = await this.executeSQL(sql, values, {
-        queryTimeoutMs: options?.queryTimeoutMs,
-        cancellationToken: options?.cancellationToken || null,
-        routingReadinessDimension: options?.routingReadinessDimension,
-      });
-      const sqlDurationMs = Date.now() - sqlStartMs;
+        const sqlStartMs = Date.now();
+        const result = await this.executeSQL(sql, values, {
+          queryTimeoutMs: options?.queryTimeoutMs,
+          cancellationToken: options?.cancellationToken || null,
+          routingReadinessDimension: options?.routingReadinessDimension,
+          workClass: options?.workClass,
+          allowPressureDefer: options?.allowPressureDefer,
+          pressureRetryAfterMs: options?.pressureRetryAfterMs,
+          deliveryPriority: options?.deliveryPriority,
+        });
+        const sqlDurationMs = Date.now() - sqlStartMs;
 
-      if (!result.success) {
-        throw new Error(result.error || CDC_ERROR_MSG.INSERT_FAILED);
-      }
-
-      const pkField = this.getPrimaryKeyField(tableName);
-      const pkValue = rowData[pkField];
-      const cacheWaitStartMs = Date.now();
-      if (pkValue && options?.skipCacheWait !== true) {
-        await this.waitForCacheUpdate(tableName, pkValue, true);
-      }
-      const cacheWaitDurationMs = Date.now() - cacheWaitStartMs;
-
-      if (shouldEmitTableWriteMetric(tableName)) {
-        try {
-          this.logger.info(METRICS_LOG_TAG.CDC_WRITE, {
-            tableName,
-            operation: CDC_OPERATION.INSERT,
-            sqlDurationMs,
-            cacheWaitDurationMs,
-            totalDurationMs: sqlDurationMs + cacheWaitDurationMs,
-          });
-        } catch (_metricsErr) {
-          // Metrics logging must not propagate to callers
+        if (!result.success) {
+          throw buildSystemTableMutationError(
+            result,
+            CDC_ERROR_MSG.INSERT_FAILED,
+          );
         }
-      }
 
-      this.stats.inserts++;
+        const pkField = this.getPrimaryKeyField(tableName);
+        const pkValue = rowData[pkField];
+        const cacheWaitStartMs = Date.now();
+        if (pkValue && options?.skipCacheWait !== true) {
+          await this.waitForCacheUpdate(tableName, pkValue, true);
+        }
+        const cacheWaitDurationMs = Date.now() - cacheWaitStartMs;
 
-      this.logger.debug(CDC_LOG_MSG.INSERTED_ROW, {
-        tableName,
-        id: trackingId,
-        success: true,
-      });
+        if (shouldEmitTableWriteMetric(tableName)) {
+          try {
+            this.logger.info(METRICS_LOG_TAG.CDC_WRITE, {
+              tableName,
+              operation: CDC_OPERATION.INSERT,
+              sqlDurationMs,
+              cacheWaitDurationMs,
+              totalDurationMs: sqlDurationMs + cacheWaitDurationMs,
+            });
+          } catch (_metricsErr) {
+            // Metrics logging must not propagate to callers
+          }
+        }
 
-      this.emit(CDC_EVENT.INSERT, {
-        tableName,
-        data: rowData,
-        result,
-      });
+        this.stats.inserts++;
 
-      return {
-        success: true,
-        operation: CDCOperationType.INSERT,
-        tableName,
-        data: rowData,
-        partitionResult: result,
-      };
-    } catch (error) {
-      this.stats.failures++;
-
-      if (shouldLogTableWriteFailure(tableName)) {
-        this.logger.error(CDC_LOG_MSG.INSERT_FAILED, {
+        this.logger.debug(CDC_LOG_MSG.INSERTED_ROW, {
           tableName,
           id: trackingId,
-          error: error.message,
-          nodeId: this.nodeId,
+          success: true,
         });
+
+        this.emit(CDC_EVENT.INSERT, {
+          tableName,
+          data: rowData,
+          result,
+        });
+
+        return {
+          success: true,
+          operation: CDCOperationType.INSERT,
+          tableName,
+          data: rowData,
+          partitionResult: result,
+        };
+      } catch (error) {
+        this.stats.failures++;
+
+        if (shouldLogTableWriteFailure(tableName)) {
+          this.logger.error(CDC_LOG_MSG.INSERT_FAILED, {
+            tableName,
+            id: trackingId,
+            error: error.message,
+            nodeId: this.nodeId,
+          });
+        }
+
+        this.emitErrorEvent({
+          operation: CDCOperationType.INSERT,
+          tableName,
+          data: rowData,
+          error: error.message,
+        });
+
+        throw error;
       }
-
-      this.emitErrorEvent({
-        operation: CDCOperationType.INSERT,
-        tableName,
-        data: rowData,
-        error: error.message,
-      });
-
-      throw error;
-    }
+    });
   }
 
   /**
@@ -2427,6 +2617,16 @@ class CDCIntegrationService extends EventEmitter {
     if (Object.keys(updateData).length === NUM.ZERO) {
       throw new Error(`${CDC_ERROR_MSG.UPDATE_VALID_COLUMNS_PREFIX}${tableName}`);
     }
+    const singleFlightKey = this.buildMutationSingleFlightKey(
+      CDC_OPERATION.UPDATE,
+      tableName,
+      id,
+      {
+        whereClause,
+        data: updateData,
+      },
+      options,
+    );
 
     this.logger.debug(CDC_LOG_MSG.UPDATING_ROW, {
       tableName,
@@ -2434,103 +2634,112 @@ class CDCIntegrationService extends EventEmitter {
       nodeId: this.nodeId,
     });
 
-    try {
-      const {setClause, values: setValues} = this.buildUpdateParts(updateData);
-      const {whereStr, values: whereValues} = this.buildWhereParts(whereClause);
-      const sql = `${SQL.UPDATE} ${tableName} ${SQL.SET} ${setClause} ` +
-        `${SQL.WHERE} ${whereStr}`;
+    return this.runCoalescedMutation(singleFlightKey, async () => {
+      try {
+        const {setClause, values: setValues} = this.buildUpdateParts(updateData);
+        const {whereStr, values: whereValues} = this.buildWhereParts(whereClause);
+        const sql = `${SQL.UPDATE} ${tableName} ${SQL.SET} ${setClause} ` +
+          `${SQL.WHERE} ${whereStr}`;
 
-      const sqlStartMs = Date.now();
-      const result = await this.executeSQL(sql, [...setValues, ...whereValues], {
-        queryTimeoutMs: options?.queryTimeoutMs,
-        cancellationToken: options?.cancellationToken || null,
-        routingReadinessDimension: options?.routingReadinessDimension,
-      });
-      const sqlDurationMs = Date.now() - sqlStartMs;
-
-      if (!result.success) {
-        throw new Error(result.error || CDC_ERROR_MSG.UPDATE_FAILED);
-      }
-
-      const cacheWaitStartMs = Date.now();
-      if (options?.skipCacheWait !== true &&
-        (typeof result.affectedRows !== TYPEOF.NUMBER ||
-        result.affectedRows > NUM.ZERO)) {
-        const expectedCacheFields = options?.expectedCacheFields &&
-          typeof options.expectedCacheFields === TYPEOF.OBJECT ?
-          options.expectedCacheFields :
-          null;
-        const minimumCacheFields = options?.minimumCacheFields &&
-          typeof options.minimumCacheFields === TYPEOF.OBJECT ?
-          options.minimumCacheFields :
-          null;
-        await this.waitForCacheUpdate(tableName, id, true, {
-          expectedFields: expectedCacheFields,
-          minimumFields: minimumCacheFields,
+        const sqlStartMs = Date.now();
+        const result = await this.executeSQL(sql, [...setValues, ...whereValues], {
+          queryTimeoutMs: options?.queryTimeoutMs,
+          cancellationToken: options?.cancellationToken || null,
+          routingReadinessDimension: options?.routingReadinessDimension,
+          workClass: options?.workClass,
+          allowPressureDefer: options?.allowPressureDefer,
+          pressureRetryAfterMs: options?.pressureRetryAfterMs,
+          deliveryPriority: options?.deliveryPriority,
         });
-      }
-      const cacheWaitDurationMs = Date.now() - cacheWaitStartMs;
+        const sqlDurationMs = Date.now() - sqlStartMs;
 
-      if (shouldEmitTableWriteMetric(tableName)) {
-        try {
-          this.logger.info(METRICS_LOG_TAG.CDC_WRITE, {
-            tableName,
-            operation: CDC_OPERATION.UPDATE,
-            sqlDurationMs,
-            cacheWaitDurationMs,
-            totalDurationMs: sqlDurationMs + cacheWaitDurationMs,
-          });
-        } catch (_metricsErr) {
-          // Metrics logging must not propagate to callers
+        if (!result.success) {
+          throw buildSystemTableMutationError(
+            result,
+            CDC_ERROR_MSG.UPDATE_FAILED,
+          );
         }
-      }
 
-      this.stats.updates++;
+        const cacheWaitStartMs = Date.now();
+        if (options?.skipCacheWait !== true &&
+          (typeof result.affectedRows !== TYPEOF.NUMBER ||
+          result.affectedRows > NUM.ZERO)) {
+          const expectedCacheFields = options?.expectedCacheFields &&
+            typeof options.expectedCacheFields === TYPEOF.OBJECT ?
+            options.expectedCacheFields :
+            null;
+          const minimumCacheFields = options?.minimumCacheFields &&
+            typeof options.minimumCacheFields === TYPEOF.OBJECT ?
+            options.minimumCacheFields :
+            null;
+          await this.waitForCacheUpdate(tableName, id, true, {
+            expectedFields: expectedCacheFields,
+            minimumFields: minimumCacheFields,
+          });
+        }
+        const cacheWaitDurationMs = Date.now() - cacheWaitStartMs;
 
-      this.logger.debug(CDC_LOG_MSG.UPDATED_ROW, {
-        tableName,
-        id,
-        success: true,
-        changes: result.affectedRows,
-      });
+        if (shouldEmitTableWriteMetric(tableName)) {
+          try {
+            this.logger.info(METRICS_LOG_TAG.CDC_WRITE, {
+              tableName,
+              operation: CDC_OPERATION.UPDATE,
+              sqlDurationMs,
+              cacheWaitDurationMs,
+              totalDurationMs: sqlDurationMs + cacheWaitDurationMs,
+            });
+          } catch (_metricsErr) {
+            // Metrics logging must not propagate to callers
+          }
+        }
 
-      this.emit(CDC_EVENT.UPDATE, {
-        tableName,
-        whereClause,
-        data: updateData,
-        result,
-      });
+        this.stats.updates++;
 
-      return {
-        success: true,
-        operation: CDCOperationType.UPDATE,
-        tableName,
-        whereClause,
-        data: updateData,
-        partitionResult: result,
-      };
-    } catch (error) {
-      this.stats.failures++;
-
-      if (shouldLogTableWriteFailure(tableName)) {
-        this.logger.error(CDC_LOG_MSG.UPDATE_FAILED, {
+        this.logger.debug(CDC_LOG_MSG.UPDATED_ROW, {
           tableName,
           id,
-          error: error.message,
-          nodeId: this.nodeId,
+          success: true,
+          changes: result.affectedRows,
         });
+
+        this.emit(CDC_EVENT.UPDATE, {
+          tableName,
+          whereClause,
+          data: updateData,
+          result,
+        });
+
+        return {
+          success: true,
+          operation: CDCOperationType.UPDATE,
+          tableName,
+          whereClause,
+          data: updateData,
+          partitionResult: result,
+        };
+      } catch (error) {
+        this.stats.failures++;
+
+        if (shouldLogTableWriteFailure(tableName)) {
+          this.logger.error(CDC_LOG_MSG.UPDATE_FAILED, {
+            tableName,
+            id,
+            error: error.message,
+            nodeId: this.nodeId,
+          });
+        }
+
+        this.emitErrorEvent({
+          operation: CDCOperationType.UPDATE,
+          tableName,
+          whereClause,
+          data: updateData,
+          error: error.message,
+        });
+
+        throw error;
       }
-
-      this.emitErrorEvent({
-        operation: CDCOperationType.UPDATE,
-        tableName,
-        whereClause,
-        data: updateData,
-        error: error.message,
-      });
-
-      throw error;
-    }
+    });
   }
 
   /**
@@ -2555,6 +2764,13 @@ class CDCIntegrationService extends EventEmitter {
         `${CDC_ERROR_MSG.DELETE_PRIMARY_KEY_SUFFIX}`,
       );
     }
+    const singleFlightKey = this.buildMutationSingleFlightKey(
+      CDC_OPERATION.DELETE,
+      tableName,
+      id,
+      {whereClause},
+      options,
+    );
 
     this.logger.debug(CDC_LOG_MSG.DELETING_ROW, {
       tableName,
@@ -2562,70 +2778,79 @@ class CDCIntegrationService extends EventEmitter {
       nodeId: this.nodeId,
     });
 
-    try {
-      const {whereStr, values} = this.buildWhereParts(whereClause);
-      const sql = `${SQL.DELETE_FROM} ${tableName} ${SQL.WHERE} ${whereStr}`;
+    return this.runCoalescedMutation(singleFlightKey, async () => {
+      try {
+        const {whereStr, values} = this.buildWhereParts(whereClause);
+        const sql = `${SQL.DELETE_FROM} ${tableName} ${SQL.WHERE} ${whereStr}`;
 
-      const result = await this.executeSQL(sql, values, {
-        queryTimeoutMs: options?.queryTimeoutMs,
-        cancellationToken: options?.cancellationToken || null,
-        routingReadinessDimension: options?.routingReadinessDimension,
-      });
+        const result = await this.executeSQL(sql, values, {
+          queryTimeoutMs: options?.queryTimeoutMs,
+          cancellationToken: options?.cancellationToken || null,
+          routingReadinessDimension: options?.routingReadinessDimension,
+          workClass: options?.workClass,
+          allowPressureDefer: options?.allowPressureDefer,
+          pressureRetryAfterMs: options?.pressureRetryAfterMs,
+          deliveryPriority: options?.deliveryPriority,
+        });
 
-      if (!result.success) {
-        throw new Error(result.error || CDC_ERROR_MSG.DELETE_FAILED);
-      }
+        if (!result.success) {
+          throw buildSystemTableMutationError(
+            result,
+            CDC_ERROR_MSG.DELETE_FAILED,
+          );
+        }
 
-      if (typeof result.affectedRows !== TYPEOF.NUMBER ||
-        result.affectedRows > NUM.ZERO) {
-        await this.waitForCacheUpdate(tableName, id, false);
-      }
+        if (typeof result.affectedRows !== TYPEOF.NUMBER ||
+          result.affectedRows > NUM.ZERO) {
+          await this.waitForCacheUpdate(tableName, id, false);
+        }
 
-      this.stats.deletes++;
+        this.stats.deletes++;
 
-      this.logger.debug(CDC_LOG_MSG.DELETED_ROW, {
-        tableName,
-        id,
-        success: true,
-        changes: result.affectedRows,
-      });
-
-      this.emit(CDC_EVENT.DELETE, {
-        tableName,
-        whereClause,
-        id,
-        result,
-      });
-
-      return {
-        success: true,
-        operation: CDCOperationType.DELETE,
-        tableName,
-        whereClause,
-        id,
-        partitionResult: result,
-      };
-    } catch (error) {
-      this.stats.failures++;
-
-      if (shouldLogTableWriteFailure(tableName)) {
-        this.logger.error(CDC_LOG_MSG.DELETE_FAILED, {
+        this.logger.debug(CDC_LOG_MSG.DELETED_ROW, {
           tableName,
           id,
-          error: error.message,
-          nodeId: this.nodeId,
+          success: true,
+          changes: result.affectedRows,
         });
+
+        this.emit(CDC_EVENT.DELETE, {
+          tableName,
+          whereClause,
+          id,
+          result,
+        });
+
+        return {
+          success: true,
+          operation: CDCOperationType.DELETE,
+          tableName,
+          whereClause,
+          id,
+          partitionResult: result,
+        };
+      } catch (error) {
+        this.stats.failures++;
+
+        if (shouldLogTableWriteFailure(tableName)) {
+          this.logger.error(CDC_LOG_MSG.DELETE_FAILED, {
+            tableName,
+            id,
+            error: error.message,
+            nodeId: this.nodeId,
+          });
+        }
+
+        this.emitErrorEvent({
+          operation: CDCOperationType.DELETE,
+          tableName,
+          whereClause,
+          error: error.message,
+        });
+
+        throw error;
       }
-
-      this.emitErrorEvent({
-        operation: CDCOperationType.DELETE,
-        tableName,
-        whereClause,
-        error: error.message,
-      });
-
-      throw error;
-    }
+    });
   }
 
   /**
@@ -2650,6 +2875,13 @@ class CDCIntegrationService extends EventEmitter {
         `${CDC_ERROR_MSG.UPSERT_PRIMARY_KEY_SUFFIX}`,
       );
     }
+    const singleFlightKey = this.buildMutationSingleFlightKey(
+      CDC_OPERATION.UPSERT,
+      tableName,
+      id,
+      upsertData,
+      options,
+    );
 
     this.logger.debug(CDC_LOG_MSG.UPSERTING_ROW, {
       tableName,
@@ -2657,68 +2889,77 @@ class CDCIntegrationService extends EventEmitter {
       nodeId: this.nodeId,
     });
 
-    try {
-      const {columns, placeholders, values} = this.buildInsertParts(upsertData);
-      // SQLite INSERT OR REPLACE
-      const sql = `${SQL.INSERT_OR_REPLACE_INTO} ${tableName} (${columns}) ` +
-        `${SQL.VALUES} (${placeholders})`;
+    return this.runCoalescedMutation(singleFlightKey, async () => {
+      try {
+        const {columns, placeholders, values} = this.buildInsertParts(upsertData);
+        // SQLite INSERT OR REPLACE
+        const sql = `${SQL.INSERT_OR_REPLACE_INTO} ${tableName} (${columns}) ` +
+          `${SQL.VALUES} (${placeholders})`;
 
-      const result = await this.executeSQL(sql, values, {
-        queryTimeoutMs: options?.queryTimeoutMs,
-        cancellationToken: options?.cancellationToken || null,
-        routingReadinessDimension: options?.routingReadinessDimension,
-      });
+        const result = await this.executeSQL(sql, values, {
+          queryTimeoutMs: options?.queryTimeoutMs,
+          cancellationToken: options?.cancellationToken || null,
+          routingReadinessDimension: options?.routingReadinessDimension,
+          workClass: options?.workClass,
+          allowPressureDefer: options?.allowPressureDefer,
+          pressureRetryAfterMs: options?.pressureRetryAfterMs,
+          deliveryPriority: options?.deliveryPriority,
+        });
 
-      if (!result.success) {
-        throw new Error(result.error || CDC_ERROR_MSG.UPSERT_FAILED);
-      }
+        if (!result.success) {
+          throw buildSystemTableMutationError(
+            result,
+            CDC_ERROR_MSG.UPSERT_FAILED,
+          );
+        }
 
-      if (options?.skipCacheWait !== true) {
-        await this.waitForCacheUpdate(tableName, id, true);
-      }
+        if (options?.skipCacheWait !== true) {
+          await this.waitForCacheUpdate(tableName, id, true);
+        }
 
-      this.stats.updates++;
+        this.stats.updates++;
 
-      this.logger.debug(CDC_LOG_MSG.UPSERTED_ROW, {
-        tableName,
-        id,
-        success: true,
-      });
-
-      this.emit(CDC_EVENT.UPSERT, {
-        tableName,
-        data: upsertData,
-        result,
-      });
-
-      return {
-        success: true,
-        operation: CDCOperationType.UPSERT,
-        tableName,
-        data: upsertData,
-        partitionResult: result,
-      };
-    } catch (error) {
-      this.stats.failures++;
-
-      if (shouldLogTableWriteFailure(tableName)) {
-        this.logger.error(CDC_LOG_MSG.UPSERT_FAILED, {
+        this.logger.debug(CDC_LOG_MSG.UPSERTED_ROW, {
           tableName,
           id,
-          error: error.message,
-          nodeId: this.nodeId,
+          success: true,
         });
+
+        this.emit(CDC_EVENT.UPSERT, {
+          tableName,
+          data: upsertData,
+          result,
+        });
+
+        return {
+          success: true,
+          operation: CDCOperationType.UPSERT,
+          tableName,
+          data: upsertData,
+          partitionResult: result,
+        };
+      } catch (error) {
+        this.stats.failures++;
+
+        if (shouldLogTableWriteFailure(tableName)) {
+          this.logger.error(CDC_LOG_MSG.UPSERT_FAILED, {
+            tableName,
+            id,
+            error: error.message,
+            nodeId: this.nodeId,
+          });
+        }
+
+        this.emitErrorEvent({
+          operation: CDCOperationType.UPSERT,
+          tableName,
+          data: upsertData,
+          error: error.message,
+        });
+
+        throw error;
       }
-
-      this.emitErrorEvent({
-        operation: CDCOperationType.UPSERT,
-        tableName,
-        data: upsertData,
-        error: error.message,
-      });
-
-      throw error;
-    }
+    });
   }
 
   /**
@@ -2940,32 +3181,21 @@ class CDCIntegrationService extends EventEmitter {
       };
     }
 
-    // Check if we have a node address to connect to
-    if (!nodeAddress) {
-      this.logger.warn(CDC_LOG_MSG.NEW_NODE_MISSING_ADDRESS, {
-        nodeId: this.nodeId,
-        targetNodeId,
-      });
-      return {
-        processed: false,
-        nodeId: targetNodeId,
-        error: 'Missing node_address',
-      };
-    }
-
-    // Derive WebSocket address from node address
-    const wsAddress = this.deriveWsAddressFromNodeAddress(nodeAddress);
+    const wsAddress = resolveNodeWebSocketAddress({
+      targetNodeId,
+      systemTableCache: this.systemTableCache,
+    });
     if (!wsAddress) {
       this.logger.warn(CDC_LOG_MSG.NEW_NODE_CONNECT_FAILED, {
         nodeId: this.nodeId,
         targetNodeId,
         nodeAddress,
-        error: 'Could not derive WebSocket address',
+        error: 'Missing canonical node_endpoints websocket address',
       });
       return {
         processed: false,
         nodeId: targetNodeId,
-        error: 'Could not derive WebSocket address',
+        error: 'Missing canonical node_endpoints websocket address',
       };
     }
 

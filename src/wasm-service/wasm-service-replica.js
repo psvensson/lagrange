@@ -13,6 +13,10 @@ import {SERVICE_TYPE} from '../constants/service.js';
 import {COLUMN, TABLES, TYPEOF} from '../constants/index.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {isSystemTableWriteReady} from '../cache/leader-readiness-gate.js';
+import {
+  CONTROL_PLANE_MUTATION_OPERATION,
+  ControlPlaneSystemTableGateway,
+} from '../control-plane/control-plane-system-table-gateway.js';
 import {SessionKVStore} from './session-kv-store.js';
 import {SafetyInterval} from './safety-interval.js';
 import {TimerManager} from './timer-manager.js';
@@ -611,21 +615,23 @@ class WasmServiceReplica extends RaftReplicaBase {
       return {success: true};
     }
 
-    if (!this.cdcIntegrationService ||
-      typeof this.cdcIntegrationService.updateSystemTableRow !==
-        TYPEOF.FUNCTION) {
+    if (!this.cdcIntegrationService) {
       return {success: true};
     }
 
-    return this.cdcIntegrationService.updateSystemTableRow(
-      TABLES.SERVICES,
-      {[COLUMN.SERVICE_ID]: this.replicaId},
-      {
+    return new ControlPlaneSystemTableGateway({
+      nodeId: this.nodeId,
+      cdcIntegrationService: this.cdcIntegrationService,
+      messageRouter: this.transport,
+    }).submitMutation({
+      operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+      tableName: TABLES.SERVICES,
+      whereClause: {[COLUMN.SERVICE_ID]: this.replicaId},
+      data: {
         [COLUMN.RAFT_ROLE]: role,
         [COLUMN.UPDATED_AT]: updatedAt,
       },
-      options,
-    );
+    }, options);
   }
 
   /**
@@ -655,22 +661,24 @@ class WasmServiceReplica extends RaftReplicaBase {
       return {success: true};
     }
 
-    if (!this.cdcIntegrationService ||
-      typeof this.cdcIntegrationService.updateSystemTableRow !==
-        TYPEOF.FUNCTION) {
+    if (!this.cdcIntegrationService) {
       return {success: true};
     }
 
-    return this.cdcIntegrationService.updateSystemTableRow(
-      TABLES.SERVICES,
-      {[COLUMN.SERVICE_ID]: this.replicaId},
-      {
+    return new ControlPlaneSystemTableGateway({
+      nodeId: this.nodeId,
+      cdcIntegrationService: this.cdcIntegrationService,
+      messageRouter: this.transport,
+    }).submitMutation({
+      operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+      tableName: TABLES.SERVICES,
+      whereClause: {[COLUMN.SERVICE_ID]: this.replicaId},
+      data: {
         [COLUMN.NODE_ID]: leaderNodeId,
         [COLUMN.RAFT_ROLE]: role,
         [COLUMN.UPDATED_AT]: updatedAt,
       },
-      options,
-    );
+    }, options);
   }
 
   /**

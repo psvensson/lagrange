@@ -7,10 +7,17 @@ import {
   TYPEOF,
 } from '../constants/index.js';
 import {INITIAL_PARTITION_IDS} from '../bootstrap/system-table-schemas-constants.js';
-import {RAFT_ROLE} from '../raft/constants.js';
 
 const DEFAULT_OPTIONS = Object.freeze({
   requireLeaderNodeId: false,
+});
+const OWNER_TABLE_BY_SERVICE_TYPE = Object.freeze({
+  [SERVICE_TYPE.PARTITION]: TABLES.PARTITIONS,
+  [SERVICE_TYPE.MESSAGE_GROUP]: TABLES.MESSAGE_GROUPS,
+});
+const ID_COLUMN_BY_SERVICE_TYPE = Object.freeze({
+  [SERVICE_TYPE.PARTITION]: COLUMN.PARTITION_ID,
+  [SERVICE_TYPE.MESSAGE_GROUP]: COLUMN.GROUP_ID,
 });
 
 const isFunction = (value) => typeof value === TYPEOF.FUNCTION;
@@ -49,15 +56,87 @@ const hasPartitionRecord = (cache, partitionId) => {
   return partitions.length > NUM.ZERO;
 };
 
-const hasPartitionLeaderService = (cache, partitionId) => {
-  const leaders = filterRecords(cache, TABLES.SERVICES, (service) =>
-    service[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.PARTITION &&
-    service[COLUMN.PARTITION_ID] === partitionId &&
-    service[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER &&
-    service[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE &&
-    Boolean(service[COLUMN.ADDRESS]),
-  );
-  return leaders.length > NUM.ZERO;
+const getOwnerTableName = (serviceType) =>
+  OWNER_TABLE_BY_SERVICE_TYPE[serviceType] || null;
+
+const getOwnerIdColumn = (serviceType) =>
+  ID_COLUMN_BY_SERVICE_TYPE[serviceType] || null;
+
+const getOwnerRecords = (cache, serviceType) => {
+  const ownerTableName = getOwnerTableName(serviceType);
+  if (!ownerTableName) {
+    return [];
+  }
+  return getAllRecords(cache, ownerTableName);
+};
+
+const getOwnerRecord = (cache, serviceType, entityId) => {
+  const idColumn = getOwnerIdColumn(serviceType);
+  if (!idColumn || !entityId) {
+    return null;
+  }
+  const ownerTableName = getOwnerTableName(serviceType);
+  if (!ownerTableName) {
+    return null;
+  }
+  if (isFunction(cache?.get)) {
+    const record = cache.get(ownerTableName, entityId) || null;
+    if (record) {
+      return record;
+    }
+  }
+  const records = getOwnerRecords(cache, serviceType);
+  return records.find((record) => record?.[idColumn] === entityId) || null;
+};
+
+const findCanonicalLeaderService = (
+    services,
+    serviceType,
+    entityId,
+    leaderNodeId,
+    options = {},
+) => {
+  if (!leaderNodeId) {
+    return null;
+  }
+  const idColumn = getOwnerIdColumn(serviceType);
+  const requireAddress = options.requireAddress === true;
+  return services.find((service) =>
+    service?.[COLUMN.SERVICE_TYPE] === serviceType &&
+    service?.[idColumn] === entityId &&
+    service?.[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE &&
+    service?.[COLUMN.NODE_ID] === leaderNodeId &&
+    (!requireAddress || Boolean(service?.[COLUMN.ADDRESS])),
+  ) || null;
+};
+
+const resolveCanonicalLeaderService = (
+    cache,
+    serviceType,
+    entityId,
+    options = {},
+) => {
+  if (!cache || !serviceType || !entityId) {
+    return {
+      ownerRecord: null,
+      leaderNodeId: null,
+      leaderService: null,
+    };
+  }
+  const ownerRecord = getOwnerRecord(cache, serviceType, entityId);
+  const leaderNodeId = ownerRecord?.[COLUMN.LEADER_NODE_ID] || null;
+  const services = getAllRecords(cache, TABLES.SERVICES);
+  return {
+    ownerRecord,
+    leaderNodeId,
+    leaderService: findCanonicalLeaderService(
+      services,
+      serviceType,
+      entityId,
+      leaderNodeId,
+      options,
+    ),
+  };
 };
 
 /**
@@ -68,15 +147,13 @@ const hasPartitionLeaderService = (cache, partitionId) => {
  * @param {string} partitionId - Partition ID.
  * @return {boolean} True if leader exists.
  */
-const hasPartitionLeaderServiceWithoutAddress = (cache, partitionId) => {
-  const leaders = filterRecords(cache, TABLES.SERVICES, (service) =>
-    service[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.PARTITION &&
-    service[COLUMN.PARTITION_ID] === partitionId &&
-    service[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER &&
-    service[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE,
-  );
-  return leaders.length > NUM.ZERO;
-};
+const hasCanonicalPartitionLeaderService = (cache, partitionId, options = {}) =>
+  Boolean(resolveCanonicalLeaderService(
+    cache,
+    SERVICE_TYPE.PARTITION,
+    partitionId,
+    options,
+  ).leaderService);
 
 const hasLeaderNodeId = (record) => Boolean(record && record[COLUMN.LEADER_NODE_ID]);
 
@@ -105,14 +182,15 @@ const isSystemTableWriteReady = (systemTableCache, tableName) => {
   // This avoids circular dependency where services-p1 leader can't write
   // its own address because it doesn't have an address yet
   if (tableName === TABLES.SERVICES) {
-    return hasPartitionLeaderServiceWithoutAddress(systemTableCache, partitionId);
+    return hasCanonicalPartitionLeaderService(systemTableCache, partitionId);
   }
-  return hasPartitionLeaderService(systemTableCache, partitionId);
+  return hasCanonicalPartitionLeaderService(systemTableCache, partitionId, {
+    requireAddress: true,
+  });
 };
 
 const getMissingSystemServiceLeaders = (systemTableCache, options = {}) => {
   const config = {...DEFAULT_OPTIONS, ...options};
-  const services = getAllRecords(systemTableCache, TABLES.SERVICES);
   const partitions = getAllRecords(systemTableCache, TABLES.PARTITIONS);
   const messageGroups = getAllRecords(systemTableCache, TABLES.MESSAGE_GROUPS);
 
@@ -128,30 +206,33 @@ const getMissingSystemServiceLeaders = (systemTableCache, options = {}) => {
     if (!partitionId) {
       continue;
     }
-
-    // Find leader service for this partition
-    const leaderService = services.find((service) =>
-      service[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.PARTITION &&
-      service[COLUMN.PARTITION_ID] === partitionId &&
-      service[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER &&
-      service[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE,
+    const {
+      leaderNodeId,
+      leaderService,
+    } = resolveCanonicalLeaderService(
+      systemTableCache,
+      SERVICE_TYPE.PARTITION,
+      partitionId,
+      {requireAddress: false},
     );
 
     if (!leaderService) {
       missingPartitionLeaders.push(partitionId);
     } else {
-      // Leader exists - check if it has required fields for routing
-      // A leader without an address or node_id is useless for query routing
       if (!leaderService[COLUMN.ADDRESS]) {
         missingPartitionLeaderAddresses.push(partitionId);
       }
-      if (!leaderService[COLUMN.NODE_ID]) {
+      if (!leaderNodeId) {
         missingPartitionLeaderNodes.push(partitionId);
       }
     }
 
-    if (config.requireLeaderNodeId && !hasLeaderNodeId(partition)) {
-      // Also check partition table's leader_node_id if required
+    if (!leaderService && config.requireLeaderNodeId && !hasLeaderNodeId(partition)) {
+      if (!missingPartitionLeaderNodes.includes(partitionId)) {
+        missingPartitionLeaderNodes.push(partitionId);
+      }
+    }
+    if (leaderService && config.requireLeaderNodeId && !hasLeaderNodeId(partition)) {
       if (!missingPartitionLeaderNodes.includes(partitionId)) {
         missingPartitionLeaderNodes.push(partitionId);
       }
@@ -163,29 +244,33 @@ const getMissingSystemServiceLeaders = (systemTableCache, options = {}) => {
     if (!groupId) {
       continue;
     }
-
-    // Find leader service for this message group
-    const leaderService = services.find((service) =>
-      service[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP &&
-      service[COLUMN.GROUP_ID] === groupId &&
-      service[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER &&
-      service[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE,
+    const {
+      leaderNodeId,
+      leaderService,
+    } = resolveCanonicalLeaderService(
+      systemTableCache,
+      SERVICE_TYPE.MESSAGE_GROUP,
+      groupId,
+      {requireAddress: false},
     );
 
     if (!leaderService) {
       missingMessageGroupLeaders.push(groupId);
     } else {
-      // Leader exists - check if it has required fields for routing
       if (!leaderService[COLUMN.ADDRESS]) {
         missingMessageGroupLeaderAddresses.push(groupId);
       }
-      if (!leaderService[COLUMN.NODE_ID]) {
+      if (!leaderNodeId) {
         missingMessageGroupLeaderNodes.push(groupId);
       }
     }
 
-    if (config.requireLeaderNodeId && !hasLeaderNodeId(group)) {
-      // Also check message_groups table's leader_node_id if required
+    if (!leaderService && config.requireLeaderNodeId && !hasLeaderNodeId(group)) {
+      if (!missingMessageGroupLeaderNodes.includes(groupId)) {
+        missingMessageGroupLeaderNodes.push(groupId);
+      }
+    }
+    if (leaderService && config.requireLeaderNodeId && !hasLeaderNodeId(group)) {
       if (!missingMessageGroupLeaderNodes.includes(groupId)) {
         missingMessageGroupLeaderNodes.push(groupId);
       }
@@ -262,7 +347,10 @@ const getMissingSystemServiceLeaderCount = (missing = {}) =>
 
 export {
   getBlockingSystemServiceLeaders,
+  getOwnerRecords,
+  getOwnerRecord,
   getMissingSystemServiceLeaders,
   getMissingSystemServiceLeaderCount,
   isSystemTableWriteReady,
+  resolveCanonicalLeaderService,
 };

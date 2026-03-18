@@ -7,10 +7,14 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {
+  ControlPlaneSystemTableGateway,
+} from '../../src/control-plane/control-plane-system-table-gateway.js';
+import {
   QUERY_ROUTING_DIAGNOSTIC_REASON,
 } from '../../src/query/query-constants.js';
 import {
   COLUMN,
+  METRICS_LOG_TAG,
   SERVICE_STATUS,
   SERVICE_TYPE,
   STATE,
@@ -30,6 +34,9 @@ import {
   TIMEOUT_BUDGET_CLASSIFICATION,
   createTimeoutBudget,
 } from '../../src/control-plane/timeout-budget.js';
+import {
+  PRESSURE_WORK_CLASS,
+} from '../../src/control-plane/pressure-governor.js';
 
 // Initialize configuration for tests
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
@@ -238,6 +245,236 @@ test('SQLQueryEngine - executes SELECT query', async (t) => {
 
   // Clean up
   mockPartitionData.clear();
+});
+
+test('SQLQueryEngine - query ingress reuses the shared pressure admission ' +
+  'contract', async (t) => {
+  const pressureSummary = {
+    backpressured: true,
+    saturatedNodeCount: 1,
+    totalPending: 64,
+    maxPendingUtilization: 1,
+  };
+  const engine = new SQLQueryEngine({
+    nodeId: 'pressure-node',
+    systemCache: createMockSystemCache([], [], []),
+    messageRouter: {
+      getOutboundPressureSummary() {
+        return pressureSummary;
+      },
+    },
+  });
+
+  const cases = [
+    {
+      name: 'defer',
+      options: {
+        workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+        pressureRetryAfterMs: 321,
+      },
+      expectedError: 'query_admission_deferred',
+      expectedAction: 'defer',
+      expectedRetryAfterMs: 321,
+    },
+    {
+      name: 'reject',
+      options: {
+        workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+        allowPressureDefer: false,
+        pressureRetryAfterMs: 654,
+      },
+      expectedError: 'query_admission_rejected',
+      expectedAction: 'reject',
+      expectedRetryAfterMs: 654,
+    },
+  ];
+
+  for (const testCase of cases) {
+    const result = await engine.executeQuery(
+      'SELECT * FROM users',
+      [],
+      testCase.options,
+    );
+
+    t.equal(result.success, false,
+      `${testCase.name}: query admission under pressure should fail closed`);
+    t.equal(result.error, testCase.expectedError,
+      `${testCase.name}: query ingress should preserve its query-specific admission error`);
+    t.equal(result.pressureAction, testCase.expectedAction,
+      `${testCase.name}: query ingress should expose the shared pressure action`);
+    t.equal(result.pressureReason, 'transport_backpressure',
+      `${testCase.name}: query ingress should expose the shared pressure reason`);
+    t.equal(result.retryAfterMs, testCase.expectedRetryAfterMs,
+      `${testCase.name}: query ingress should preserve retry hints from the shared contract`);
+    t.same(result.pressureSummary, {
+      sensor: 'transport:outbound',
+      capacityPartition: 'query-plane',
+      ...pressureSummary,
+      totalPendingCritical: 0,
+      totalPendingBackground: 0,
+    }, `${testCase.name}: query ingress should expose the shared pressure summary shape`);
+  }
+});
+
+test('SQLQueryEngine emits shared pressure diagnostics with query-plane ' +
+  'resource keys', async (t) => {
+  const metricEvents = [];
+  const engine = new SQLQueryEngine({
+    nodeId: 'query-pressure-node',
+    systemCache: createMockSystemCache([], [], []),
+    messageRouter: {
+      getOutboundPressureSummary() {
+        return {
+          backpressured: true,
+          saturatedNodeCount: 1,
+          totalPending: 64,
+          maxPendingUtilization: 1,
+        };
+      },
+    },
+  });
+  engine.logger = {
+    info(tag, data) {
+      metricEvents.push({tag, data});
+    },
+    debug() {},
+    warn() {},
+    error() {},
+  };
+
+  await engine.executeQuery('SELECT * FROM users', [], {
+    workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+    pressureRetryAfterMs: 250,
+  });
+
+  const pressureMetric = metricEvents.find((entry) => {
+    return entry.tag === METRICS_LOG_TAG.PRESSURE_POLICY;
+  }) || null;
+
+  t.ok(pressureMetric, 'pressure policy metric should be emitted');
+  t.same(
+    pressureMetric?.data?.resourceKeys,
+    ['query-plane:read', 'query-plane:statement:select'],
+    'pressure diagnostics should preserve query-plane resource keys',
+  );
+  t.equal(
+    pressureMetric?.data?.capacityPartition,
+    'query-plane',
+    'pressure diagnostics should preserve the query-plane partition',
+  );
+});
+
+test('SQLQueryEngine logs typed admission defer reasons for harness playback',
+  async (t) => {
+    const warnings = [];
+    const engine = new SQLQueryEngine({
+      nodeId: 'query-admission-node',
+      systemCache: createMockSystemCache([], [], []),
+      messageRouter: {
+        getOutboundPressureSummary() {
+          return {
+            backpressured: true,
+            saturatedNodeCount: 1,
+            totalPending: 64,
+            maxPendingUtilization: 1,
+          };
+        },
+      },
+    });
+    engine.logger = {
+      info() {},
+      debug() {},
+      warn(message, data) {
+        warnings.push({message, data});
+      },
+      error() {},
+    };
+
+    const result = await engine.executeQuery('SELECT * FROM users', [], {
+      workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+      pressureRetryAfterMs: 275,
+    });
+
+    t.equal(result.error, 'query_admission_deferred',
+      'query ingress should surface deferred admission');
+    t.equal(warnings.length, 1, 'query ingress should emit one warning');
+    t.equal(
+      warnings[0].message,
+      'Query admission deferred',
+      'warning should identify the deferred query admission path',
+    );
+    t.equal(
+      warnings[0].data.pressureReason,
+      'transport_backpressure',
+      'warning should include the typed defer reason',
+    );
+    t.equal(
+      warnings[0].data.retryAfterMs,
+      275,
+      'warning should include retry hints for the harness',
+    );
+  });
+
+test('Shared pressure policy preserves plane isolation between query ingress ' +
+  'and metadata ingress', async (t) => {
+  const messageRouter = {
+    getStats() {
+      return {
+        outboundQueues: {
+          'node-b': {
+            pending: 48,
+            pendingCritical: 0,
+            pendingBackground: 48,
+            criticalReserve: 16,
+            backgroundPendingLimit: 48,
+            maxPending: 64,
+          },
+        },
+      };
+    },
+  };
+  const engine = new SQLQueryEngine({
+    nodeId: 'pressure-node',
+    systemCache: createMockSystemCache([], [], []),
+    messageRouter,
+  });
+  const gateway = new ControlPlaneSystemTableGateway({
+    nodeId: 'pressure-node',
+    messageRouter,
+    cdcIntegrationService: {
+      async executeAuthoritativeSystemTableRead() {
+        return {
+          success: true,
+          rows: [{node_id: 'node-a'}],
+        };
+      },
+    },
+  });
+
+  const queryResult = await engine.executeQuery(
+    'SELECT * FROM users',
+    [],
+    {
+      workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+      pressureRetryAfterMs: 111,
+    },
+  );
+  const metadataResult = await gateway.readRows(
+    TABLES.NODES,
+    'SELECT * FROM nodes WHERE node_id = ?',
+    ['node-a'],
+    {
+      allowPressureDegrade: false,
+      allowPressureDefer: true,
+    },
+  );
+
+  t.equal(queryResult.pressureAction, 'defer',
+    'query ingress should defer when the query-plane background partition is saturated');
+  t.equal(metadataResult.success, true,
+    'metadata ingress should stay admissible while control-plane reserve remains available');
+  t.equal(metadataResult.outcome, 'authoritative',
+    'metadata ingress should continue through the authoritative owner path');
 });
 
 test('SQLQueryEngine - shuts down lifecycle-owned table creation services', async (t) => {
@@ -1596,6 +1833,7 @@ test('SQLQueryEngine - provisionInitialTablePartition provisions requested ' +
   const partitionId = 'tbl-users-p1';
   const localNodeId = 'node-a';
   const createdTargetNodeIds = [];
+  const mutationWorkClasses = [];
   const nodes = [
     {node_id: localNodeId, status: 'active'},
     {node_id: 'node-b', status: 'active'},
@@ -1666,6 +1904,7 @@ test('SQLQueryEngine - provisionInitialTablePartition provisions requested ' +
   const rebalanceCoordinator = {
     async createOperation(move) {
       createdTargetNodeIds.push(move.nodeId);
+      mutationWorkClasses.push(move.controlPlaneMutationWorkClass);
       return {
         operationId: `op-${move.nodeId}`,
         ...move,
@@ -1706,6 +1945,11 @@ test('SQLQueryEngine - provisionInitialTablePartition provisions requested ' +
     createdTargetNodeIds,
     ['node-a', 'node-b', 'node-c'],
     'provisioning should target local node first, then active peers',
+  );
+  t.same(
+    mutationWorkClasses,
+    ['interactive', 'interactive', 'interactive'],
+    'interactive provisioning should explicitly mark coordinator mutations as interactive work',
   );
   t.equal(
     engine.getRoutablePartitionServiceNodeIds(partitionId).length,

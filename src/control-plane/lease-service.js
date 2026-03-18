@@ -21,6 +21,8 @@ import {assertCritical} from '../utils/assert.js';
 import {
   ControlPlaneSystemTableGateway,
 } from './control-plane-system-table-gateway.js';
+import {getRegisteredControlPlaneSystemTableGateway} from
+  './control-plane-gateway-registry.js';
 import {
   LEASE_CONFIG_KEY,
   LEASE_DEFAULT_OPTIONS,
@@ -56,10 +58,8 @@ class LeaseService extends EventEmitter {
     this.sqlQueryEngine = options.sqlQueryEngine;
     this.controlPlaneSystemTableGateway =
       options.controlPlaneSystemTableGateway ||
-      new ControlPlaneSystemTableGateway({
-        nodeId: this.nodeId,
-        sqlQueryEngine: this.sqlQueryEngine,
-      });
+      getRegisteredControlPlaneSystemTableGateway() ||
+      null;
     this.messageGroupServices =
       options.messageGroupServices ?? createDefaultMessageGroupServices();
     this.messageRouter = options.messageRouter || null;

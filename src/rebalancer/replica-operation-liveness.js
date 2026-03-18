@@ -17,6 +17,7 @@ const DEFAULT_TIMELINE_ENTRIES_PER_OPERATION = 16;
 const HOURS_PER_DAY = NUM.THREE * NUM.EIGHT;
 const MINUTES_PER_HOUR = NUM.THIRTY * NUM.TWO;
 const SERVICE_TYPE_PARTITION = 'partition';
+const BOOTSTRAP_MOVE_ASSIGNMENT_OPERATION_TYPE = 'MOVE_ASSIGNMENT';
 const STALE_TIMEOUT_CLASSIFICATION_LOOKBACK_MS =
   TIME_MS.MINUTE *
   HOURS_PER_DAY *
@@ -182,7 +183,7 @@ function isReplicaOperationTerminalSuccess(record) {
 
 function hasObservedActiveTargetReplica(record, options = {}) {
   if (record?.type !== OperationType.ADD) {
-    return false;
+    return hasObservedActiveTargetServiceOwnership(record, options);
   }
 
   const replicaId = String(record?.replicaId || '');
@@ -224,6 +225,50 @@ function hasObservedActiveTargetReplica(record, options = {}) {
       'partitionId',
       'id',
     ) || '') !== partitionId) {
+      continue;
+    }
+    const serviceReplicaId = firstStringField(
+      serviceRow,
+      'replica_id',
+      'replicaId',
+      'service_id',
+      'serviceId',
+      'id',
+    );
+    if (serviceReplicaId === replicaId) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function hasObservedActiveTargetServiceOwnership(record, options = {}) {
+  if (record?.type !== BOOTSTRAP_MOVE_ASSIGNMENT_OPERATION_TYPE) {
+    return false;
+  }
+
+  const replicaId = String(record?.replicaId || '');
+  const targetNodeId = String(record?.targetNodeId || '');
+  if (!replicaId || !targetNodeId) {
+    return false;
+  }
+
+  const serviceRows = Array.isArray(options.serviceRows) ?
+    options.serviceRows :
+    [];
+  for (const serviceRow of serviceRows) {
+    if (String(firstStringField(
+      serviceRow,
+      'status',
+    ) || '').toLowerCase() !== REPLICA_OPERATION_STATUS_ACTIVE) {
+      continue;
+    }
+    if (String(firstStringField(
+      serviceRow,
+      'node_id',
+      'nodeId',
+    ) || '') !== targetNodeId) {
       continue;
     }
     const serviceReplicaId = firstStringField(

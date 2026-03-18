@@ -221,16 +221,10 @@ t.test('MessageRouter unit tests', async (t) => {
     await router.shutdown();
   });
 
-  t.test('should fall back QUERY messages when resolver returns no transport',
+  t.test('should defer QUERY messages when resolver returns no transport',
     async (t) => {
       const router = new MessageRouter({nodeId: 'test-node'});
       await router.initialize();
-
-      let localHandlerCalls = 0;
-      router.register('test-node/partition/p1', () => {
-        localHandlerCalls++;
-        return {acknowledged: true, success: true, rows: [{id: 'fallback'}]};
-      });
 
       router.setQueryMessageGroupServiceResolver(() => null);
 
@@ -240,9 +234,14 @@ t.test('MessageRouter unit tests', async (t) => {
         params: [],
       });
 
-      t.equal(localHandlerCalls, 1, 'should use standard local delivery path');
-      t.equal(result.acknowledged, true, 'should acknowledge query delivery');
-      t.equal(result.success, true, 'should return local handler result');
+      t.equal(result.acknowledged, false,
+        'should fail closed when query transport is unavailable');
+      t.equal(result.deferRetry, true,
+        'should return typed defer semantics instead of falling back');
+      t.equal(result.errorCode, 'ROUTER_QUERY_TRANSPORT_NOT_READY',
+        'should surface a stable transport-not-ready error code');
+      t.ok(result.retryAfterMs > 0,
+        'should expose a retry hint for the canonical query transport path');
 
       await router.shutdown();
     });
@@ -251,18 +250,55 @@ t.test('MessageRouter unit tests', async (t) => {
     const router = new MessageRouter({nodeId: 'test-node'});
     await router.initialize();
 
-    await t.rejects(
-      router.deliver('test-node/partition/p1', {
-        type: 'QUERY',
-        sql: 'SELECT 1',
-        params: [],
-      }),
+    const result = await router.deliver('test-node/partition/p1', {
+      type: 'QUERY',
+      sql: 'SELECT 1',
+      params: [],
+    });
+
+    t.equal(result.acknowledged, false,
+      'should fail closed when query transport resolver is missing');
+    t.equal(result.deferRetry, true,
+      'missing query transport should surface typed defer semantics');
+    t.equal(result.errorCode, 'ROUTER_QUERY_TRANSPORT_NOT_READY',
+      'missing resolver should expose a stable error code');
+    t.match(
+      result.error,
       /message-group transport is not configured/i,
-      'should fail closed when query transport resolver is missing',
+      'missing resolver should preserve the canonical reason',
     );
 
     await router.shutdown();
   });
+
+  t.test('should preserve typed query transport retry hints from resolver selections',
+    async (t) => {
+      const router = new MessageRouter({nodeId: 'test-node'});
+      await router.initialize();
+
+      router.setQueryMessageGroupServiceResolver(() => ({
+        service: null,
+        reason: 'query ingress owner not ready',
+        retryAfterMs: 321,
+      }));
+
+      const result = await router.deliver('test-node/partition/p1', {
+        type: 'QUERY',
+        sql: 'SELECT 1',
+        params: [],
+      });
+
+      t.equal(result.acknowledged, false,
+        'should fail closed while query transport owner is unavailable');
+      t.equal(result.deferRetry, true,
+        'typed selection misses should preserve defer semantics');
+      t.equal(result.retryAfterMs, 321,
+        'typed selection misses should preserve retryAfterMs');
+      t.equal(result.error, 'query ingress owner not ready',
+        'typed selection misses should preserve the owner reason');
+
+      await router.shutdown();
+    });
 
   t.test('should deliver locally for async handler without connection', async (t) => {
     const router = new MessageRouter({nodeId: 'test-node'});
@@ -378,6 +414,672 @@ t.test('MessageRouter unit tests', async (t) => {
       }, 'should reconnect using the resolved node address');
       t.equal(result.acknowledged, true, 'should deliver after recovering the node connection');
       t.equal(result.recovered, true, 'should preserve the delivery result from the retry');
+
+      await router.shutdown();
+    });
+
+  t.test('should surface defer-retry hints when delivery recovery cannot reconnect a target',
+    async (t) => {
+      const router = new MessageRouter({nodeId: 'test-node'});
+      await router.initialize({startServer: false});
+      t.teardown(async () => {
+        await router.shutdown().catch(() => {});
+      });
+
+      router.setNodeAddressResolver((nodeId) => {
+        return nodeId === 'remote-node' ? 'ws://remote-node:9999' : null;
+      });
+      router.connectToNode = async () => {
+        throw new Error('connect ECONNREFUSED remote-node:9999');
+      };
+
+      const result = await router.deliver(
+        'remote-node/service/remote-service',
+        {type: 'TEST_MESSAGE'},
+      );
+
+      t.equal(result.acknowledged, false,
+        'delivery should fail when reconnect recovery cannot restore the peer');
+      t.equal(result.deferRetry, true,
+        'failed recovery should ask upstream owners to defer immediate retries');
+      t.ok(result.retryAfterMs > 0 &&
+        result.retryAfterMs <= router.reconnectIntervalMs,
+      'failed recovery should expose the active reconnect cooldown');
+      t.equal(result.errorCode, 'ROUTER_CONNECTION_CLOSED',
+        'failed recovery should surface the reconnect-in-progress error code');
+      t.equal(
+        router.nodeConnections.get('remote-node')?.state,
+        ConnectionState.RECONNECTING,
+        'failed cold recovery should arm one reconnect owner for the peer',
+      );
+    });
+
+  t.test('failed cold dials should not stampede repeated reconnect attempts',
+    async (t) => {
+      const router = new MessageRouter({nodeId: 'test-node'});
+      await router.initialize({startServer: false});
+      t.teardown(async () => {
+        await router.shutdown().catch(() => {});
+      });
+
+      router.setNodeAddressResolver((nodeId) => {
+        return nodeId === 'remote-node' ? 'ws://remote-node:9999' : null;
+      });
+
+      let connectCalls = 0;
+      router.connectToNode = async () => {
+        connectCalls += 1;
+        throw new Error('connect ECONNREFUSED remote-node:9999');
+      };
+
+      const firstResult = await router.deliver(
+        'remote-node/service/remote-service',
+        {type: 'TEST_MESSAGE'},
+      );
+      const secondResult = await router.deliver(
+        'remote-node/service/remote-service',
+        {type: 'TEST_MESSAGE'},
+      );
+
+      t.equal(connectCalls, 1,
+        'subsequent deliveries should defer behind the armed reconnect owner');
+      t.equal(firstResult.deferRetry, true,
+        'first failed cold dial should ask callers to defer');
+      t.equal(secondResult.deferRetry, true,
+        'second delivery should also defer while reconnect remains scheduled');
+      t.equal(secondResult.errorCode, 'ROUTER_CONNECTION_CLOSED',
+        'second delivery should reuse the reconnect-in-progress failure');
+    });
+
+  t.test('should defer to an armed reconnect instead of starting a second recovery dial',
+    async (t) => {
+      const router = new MessageRouter({nodeId: 'test-node'});
+      await router.initialize({startServer: false});
+      t.teardown(async () => {
+        await router.shutdown().catch(() => {});
+      });
+
+      const reconnectTimeout = setTimeout(() => {}, 1000);
+      t.teardown(() => {
+        clearTimeout(reconnectTimeout);
+      });
+
+      router.nodeConnections.set('remote-node', {
+        nodeId: 'remote-node',
+        address: 'ws://remote-node:9999',
+        configuredAddress: 'ws://remote-node:9999',
+        observedAddress: null,
+        connectionId: 'remote-node-reconnecting',
+        ws: null,
+        state: ConnectionState.RECONNECTING,
+        reconnectAttempts: 1,
+        reconnectTimeout,
+        reconnectDueAt: Date.now() + 250,
+        pingInterval: null,
+        isIncoming: false,
+        isSelfConnection: false,
+      });
+
+      let connectCalls = 0;
+      router.connectToNode = async () => {
+        connectCalls += 1;
+      };
+
+      const result = await router.deliver(
+        'remote-node/service/remote-service',
+        {type: 'TEST_MESSAGE'},
+      );
+
+      t.equal(connectCalls, 0,
+        'delivery should not bypass an already armed reconnect timer');
+      t.equal(result.acknowledged, false,
+        'delivery should fail closed while reconnect remains in progress');
+      t.equal(result.deferRetry, true,
+        'delivery should return a deferred retry hint');
+      t.equal(result.errorCode, 'ROUTER_CONNECTION_CLOSED',
+        'delivery should surface a stable closed-connection error code');
+      t.ok(result.retryAfterMs > 0 && result.retryAfterMs <= 250,
+        'delivery should expose the remaining reconnect delay');
+    });
+
+  t.test('should fail fast when one remote outbound queue is already saturated',
+    async (t) => {
+      const router = new MessageRouter({
+        nodeId: 'test-node',
+        outboundQueueMaxConcurrent: 1,
+        outboundQueueMaxPending: 1,
+      });
+      await router.initialize();
+
+      let sendCallCount = 0;
+      let releaseFirstSend = null;
+      const firstSendPromise = new Promise((resolve) => {
+        releaseFirstSend = () => {
+          resolve({
+            acknowledged: false,
+            error: 'first-send-released',
+          });
+        };
+      });
+
+      router.registerPendingResponse = () => new Promise(() => {});
+      router.nodeConnections.set('remote-node', {
+        nodeId: 'remote-node',
+        address: 'ws://remote-node:9999',
+        configuredAddress: 'ws://remote-node:9999',
+        observedAddress: null,
+        state: ConnectionState.CONNECTED,
+        ws: {},
+        isIncoming: false,
+      });
+      router.sendMessage = async () => {
+        sendCallCount += 1;
+        if (sendCallCount === 1) {
+          return firstSendPromise;
+        }
+        return {
+          acknowledged: false,
+          error: 'queued-send-released',
+        };
+      };
+
+      const firstDelivery = router.deliver(
+        'remote-node/service/remote-service',
+        {type: 'TEST_MESSAGE', messageId: 'msg-1'},
+      );
+      await Promise.resolve();
+
+      const secondDelivery = router.deliver(
+        'remote-node/service/remote-service',
+        {type: 'TEST_MESSAGE', messageId: 'msg-2'},
+      );
+      await Promise.resolve();
+
+      const thirdAttempt = router.deliver(
+        'remote-node/service/remote-service',
+        {type: 'TEST_MESSAGE', messageId: 'msg-3'},
+      );
+      const thirdOutcome = await Promise.race([
+        thirdAttempt,
+        new Promise((resolve) => setImmediate(() => resolve('pending'))),
+      ]);
+
+      t.not(thirdOutcome, 'pending',
+        'queue-saturated delivery should fail fast instead of joining backlog');
+      t.equal(thirdOutcome.acknowledged, false,
+        'saturated delivery should return a failed-delivery envelope');
+      t.match(thirdOutcome.error, /queue/i,
+        'saturated delivery should expose queue backpressure');
+      t.equal(thirdOutcome.deferRetry, true,
+        'saturated delivery should ask upstream owners to defer retries');
+      t.equal(thirdOutcome.retryAfterMs, router.reconnectIntervalMs,
+        'saturated delivery should surface a retry-after hint');
+      t.equal(
+        router.getOutboundQueue('remote-node').pending.length,
+        1,
+        'only one waiting delivery should remain queued behind the in-flight send',
+      );
+
+      releaseFirstSend();
+      await firstDelivery;
+      await secondDelivery;
+      await router.shutdown();
+    });
+
+  t.test('should reserve pending capacity for critical outbound deliveries',
+    async (t) => {
+      const router = new MessageRouter({
+        nodeId: 'test-node',
+        outboundQueueMaxConcurrent: 1,
+        outboundQueueMaxPending: 4,
+        outboundQueueCriticalReserve: 3,
+      });
+      await router.initialize();
+
+      let sendCallCount = 0;
+      let releaseFirstSend = null;
+      router.registerPendingResponse = () => new Promise(() => {});
+      router.nodeConnections.set('remote-node', {
+        nodeId: 'remote-node',
+        address: 'ws://remote-node:9999',
+        configuredAddress: 'ws://remote-node:9999',
+        observedAddress: null,
+        state: ConnectionState.CONNECTED,
+        ws: {},
+        isIncoming: false,
+      });
+      router.sendMessage = async () => {
+        sendCallCount += 1;
+        if (sendCallCount === 1) {
+          await new Promise((resolve) => {
+            releaseFirstSend = resolve;
+          });
+        }
+        return {
+          acknowledged: false,
+          error: 'released-send',
+        };
+      };
+
+      const inFlightDelivery = router.deliver(
+        'remote-node/service/remote-service',
+        {type: 'TEST_MESSAGE', messageId: 'msg-1'},
+        {deliveryPriority: 'background'},
+      );
+      await Promise.resolve();
+
+      const backgroundQueued = router.deliver(
+        'remote-node/service/remote-service',
+        {type: 'TEST_MESSAGE', messageId: 'msg-2'},
+        {deliveryPriority: 'background'},
+      );
+      await Promise.resolve();
+
+      const backgroundRejectedAttempt = router.deliver(
+        'remote-node/service/remote-service',
+        {type: 'TEST_MESSAGE', messageId: 'msg-3'},
+        {deliveryPriority: 'background'},
+      );
+      const backgroundRejected = await Promise.race([
+        backgroundRejectedAttempt,
+        new Promise((resolve) => setImmediate(() => resolve('pending'))),
+      ]);
+      t.equal(
+        backgroundRejected !== 'pending',
+        true,
+        'background rejection should fail fast instead of waiting in the queue',
+      );
+      t.equal(
+        backgroundRejected.acknowledged,
+        false,
+        'background delivery should be rejected once non-reserved capacity is full',
+      );
+      t.match(
+        backgroundRejected.error,
+        /queue/i,
+        'background rejection should surface queue pressure',
+      );
+
+      const criticalQueued = router.deliver(
+        'remote-node/service/remote-service',
+        {type: 'TEST_MESSAGE', messageId: 'msg-4'},
+        {deliveryPriority: 'critical'},
+      );
+      await Promise.resolve();
+
+      const queue = router.getOutboundQueue('remote-node');
+      t.equal(
+        queue.pending.length,
+        2,
+        'one background and one critical delivery should remain queued',
+      );
+
+      releaseFirstSend();
+      await inFlightDelivery;
+      await backgroundQueued;
+      await criticalQueued;
+      await router.shutdown();
+    });
+
+  t.test('should attribute saturated queue warnings to delivery sources',
+    async (t) => {
+      const router = new MessageRouter({
+        nodeId: 'test-node',
+        outboundQueueMaxConcurrent: 1,
+        outboundQueueMaxPending: 1,
+        outboundQueueCriticalReserve: 0,
+      });
+      await router.initialize();
+
+      const warnEntries = [];
+      const originalWarn = router.logger.warn.bind(router.logger);
+      router.logger.warn = (message, context) => {
+        warnEntries.push({message, context});
+        return originalWarn(message, context);
+      };
+
+      let releaseFirstSend = null;
+      const blockingDeliverFn = async () => {
+        await new Promise((resolve) => {
+          releaseFirstSend = resolve;
+        });
+        return {acknowledged: true};
+      };
+
+      const firstDelivery = router.enqueueOutbound(
+        'remote-node',
+        blockingDeliverFn,
+        {deliveryPriority: 'critical'},
+      );
+      await Promise.resolve();
+
+      const secondDelivery = router.enqueueOutbound(
+        'remote-node',
+        async () => ({acknowledged: true}),
+        {
+          deliveryPriority: 'critical',
+          targetAddress: 'remote-node/partition/services-p1-r1',
+          message: {
+            type: 'QUERY',
+            messageId: 'msg-2',
+            sql: 'UPDATE services SET raft_role = ? WHERE service_id = ?',
+            params: ['leader', 'svc-1'],
+          },
+        },
+      );
+      await Promise.resolve();
+
+      let rejectionError = null;
+      try {
+        await router.enqueueOutbound(
+          'remote-node',
+          async () => ({acknowledged: true}),
+          {
+            deliveryPriority: 'critical',
+            targetAddress: 'remote-node/service/control-plane',
+            message: {type: 'NODE_STATE_UPDATE', messageId: 'msg-3'},
+            deliverySource: 'join:node_state_update',
+          },
+        );
+      } catch (error) {
+        rejectionError = error;
+      }
+
+      t.ok(rejectionError, 'saturated delivery should fail');
+      t.equal(
+        rejectionError?.code,
+        'ROUTER_OUTBOUND_QUEUE_BACKPRESSURED',
+        'rejected delivery should surface queue backpressure',
+      );
+      const saturationEntry = warnEntries.find((entry) =>
+        entry.message === 'Outbound queue saturated for node delivery');
+      t.ok(saturationEntry, 'router should emit one saturation warning');
+      t.equal(
+        saturationEntry.context.localNodeId,
+        'test-node',
+        'warning should retain the local node id',
+      );
+      t.equal(
+        saturationEntry.context.targetNodeId,
+        'remote-node',
+        'warning should report the target node id',
+      );
+      t.equal(
+        saturationEntry.context.attemptedDeliverySource,
+        'join:node_state_update',
+        'warning should attribute the rejected source',
+      );
+      t.same(
+        saturationEntry.context.pendingSourceSummary,
+        [
+          {source: 'query:update:services', count: 1},
+        ],
+        'warning should summarize the queued source mix',
+      );
+
+      releaseFirstSend();
+      await firstDelivery;
+      await secondDelivery;
+      await router.shutdown();
+    });
+
+  t.test('should attribute Raft append saturation to underlying command types',
+    async (t) => {
+      const router = new MessageRouter({
+        nodeId: 'test-node',
+        outboundQueueMaxConcurrent: 1,
+        outboundQueueMaxPending: 1,
+        outboundQueueCriticalReserve: 0,
+      });
+      await router.initialize();
+
+      const warnEntries = [];
+      const originalWarn = router.logger.warn.bind(router.logger);
+      router.logger.warn = (message, context) => {
+        warnEntries.push({message, context});
+        return originalWarn(message, context);
+      };
+
+      let releaseFirstSend = null;
+      const blockingDeliverFn = async () => {
+        await new Promise((resolve) => {
+          releaseFirstSend = resolve;
+        });
+        return {acknowledged: true};
+      };
+
+      const firstDelivery = router.enqueueOutbound(
+        'remote-node',
+        blockingDeliverFn,
+        {deliveryPriority: 'critical'},
+      );
+      await Promise.resolve();
+
+      const secondDelivery = router.enqueueOutbound(
+        'remote-node',
+        async () => ({acknowledged: true}),
+        {
+          deliveryPriority: 'critical',
+          targetAddress: 'remote-node/message-group/mg-1-r2',
+          message: {
+            type: 'append',
+            data: [
+              {
+                command: {
+                  type: 'CDC_BATCH',
+                  events: [
+                    {
+                      tableName: 'services',
+                      operation: 'UPDATE',
+                      data: {service_id: 'svc-1'},
+                    },
+                    {
+                      tableName: 'services',
+                      operation: 'UPDATE',
+                      data: {service_id: 'svc-2'},
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        },
+      );
+      await Promise.resolve();
+
+      await t.rejects(
+        router.enqueueOutbound(
+          'remote-node',
+          async () => ({acknowledged: true}),
+          {
+            deliveryPriority: 'critical',
+            targetAddress: 'remote-node/message-group/mg-1-r3',
+            message: {
+              type: 'append',
+              data: [
+                {
+                  command: {
+                    type: 'MESSAGE',
+                    message: {
+                      payload: {
+                        type: 'NODE_STATE_UPDATE',
+                      },
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        ),
+        /queue/i,
+        'third delivery should surface queue saturation',
+      );
+
+      const saturationEntry = warnEntries.find((entry) =>
+        entry.message === 'Outbound queue saturated for node delivery');
+      t.ok(saturationEntry, 'router should emit one saturation warning');
+      t.equal(
+        saturationEntry.context.attemptedDeliverySource,
+        'raft:append:message:node_state_update',
+        'warning should attribute rejected raft append by logical command type',
+      );
+      t.same(
+        saturationEntry.context.pendingSourceSummary,
+        [
+          {source: 'raft:append:cdc_batch:services:2', count: 1},
+        ],
+        'warning should summarize queued raft append command types',
+      );
+
+      releaseFirstSend();
+      await firstDelivery;
+      await secondDelivery;
+      await router.shutdown();
+    });
+
+  t.test('should replace superseded Raft heartbeat appends in the pending queue',
+    async (t) => {
+      const router = new MessageRouter({
+        nodeId: 'test-node',
+        outboundQueueMaxConcurrent: 1,
+        outboundQueueMaxPending: 2,
+        outboundQueueCriticalReserve: 0,
+      });
+      await router.initialize();
+
+      let releaseFirstSend = null;
+      const deliveredHeartbeatIds = [];
+      const firstDelivery = router.enqueueOutbound(
+        'remote-node',
+        () => new Promise((resolve) => {
+          releaseFirstSend = () => resolve({acknowledged: true});
+        }),
+        {deliveryPriority: 'critical'},
+      );
+      await Promise.resolve();
+
+      const secondDelivery = router.enqueueOutbound(
+        'remote-node',
+        async () => {
+          deliveredHeartbeatIds.push('second');
+          return {acknowledged: true, heartbeatId: 'second'};
+        },
+        {
+          deliveryPriority: 'critical',
+          targetAddress: 'remote-node/message-group/mg-1-r2',
+          message: {type: 'append', data: []},
+        },
+      );
+      await Promise.resolve();
+
+      const thirdDelivery = router.enqueueOutbound(
+        'remote-node',
+        async () => {
+          deliveredHeartbeatIds.push('third');
+          return {acknowledged: true, heartbeatId: 'third'};
+        },
+        {
+          deliveryPriority: 'critical',
+          targetAddress: 'remote-node/message-group/mg-1-r2',
+          message: {type: 'append'},
+        },
+      );
+
+      const supersededResult = await secondDelivery;
+      t.equal(
+        supersededResult?.result?.acknowledged,
+        true,
+        'superseded heartbeat should resolve without surfacing an error',
+      );
+      t.equal(
+        supersededResult?.result?.replacedPending,
+        true,
+        'superseded heartbeat should be marked as replaced pending work',
+      );
+
+      const queue = router.getOutboundQueue('remote-node');
+      t.equal(
+        queue.pending.length,
+        1,
+        'heartbeat replacement should keep only one pending heartbeat',
+      );
+      t.equal(
+        queue.pending[0].deliverySource,
+        'raft:append:heartbeat',
+        'pending heartbeat should use the explicit heartbeat delivery source',
+      );
+
+      releaseFirstSend();
+      await firstDelivery;
+      const finalHeartbeatResult = await thirdDelivery;
+
+      t.same(
+        deliveredHeartbeatIds,
+        ['third'],
+        'only the latest queued heartbeat should be delivered',
+      );
+      t.equal(
+        finalHeartbeatResult?.result?.heartbeatId,
+        'third',
+        'latest heartbeat should be the one that actually drains',
+      );
+
+      await router.shutdown();
+    });
+
+  t.test('should drain critical deliveries ahead of background backlog',
+    async (t) => {
+      const router = new MessageRouter({
+        nodeId: 'test-node',
+        outboundQueueMaxConcurrent: 1,
+        outboundQueueMaxPending: 4,
+        outboundQueueCriticalReserve: 1,
+      });
+      await router.initialize();
+
+      const executionOrder = [];
+      let releaseFirstSend = null;
+
+      const firstDelivery = router.enqueueOutbound(
+        'node-1',
+        async () => {
+          executionOrder.push('first');
+          await new Promise((resolve) => {
+            releaseFirstSend = resolve;
+          });
+          return {acknowledged: true};
+        },
+        {deliveryPriority: 'background'},
+      );
+      await Promise.resolve();
+
+      const backgroundQueued = router.enqueueOutbound(
+        'node-1',
+        async () => {
+          executionOrder.push('background');
+          return {acknowledged: true};
+        },
+        {deliveryPriority: 'background'},
+      );
+      const criticalQueued = router.enqueueOutbound(
+        'node-1',
+        async () => {
+          executionOrder.push('critical');
+          return {acknowledged: true};
+        },
+        {deliveryPriority: 'critical'},
+      );
+
+      releaseFirstSend();
+      await firstDelivery;
+      await criticalQueued;
+      await backgroundQueued;
+
+      t.same(
+        executionOrder,
+        ['first', 'critical', 'background'],
+        'critical queue lane should drain before background backlog',
+      );
 
       await router.shutdown();
     });
@@ -1672,6 +2374,10 @@ t.test('MessageRouter unit tests', async (t) => {
 
       t.equal(result.acknowledged, false, 'delivery should fail when ACK times out');
       t.match(result.error, /Message timeout/i, 'should surface ACK timeout error');
+      t.equal(result.deferRetry, true,
+        'ACK timeout should ask callers to defer immediate retries');
+      t.equal(result.errorCode, 'ROUTER_MESSAGE_TIMEOUT',
+        'ACK timeout should surface a stable deferred-timeout error code');
 
       await new Promise((resolve) => setTimeout(resolve, 150));
       t.equal(
@@ -1681,7 +2387,72 @@ t.test('MessageRouter unit tests', async (t) => {
       );
     });
 
-  t.test('ack timeout resets stale remote connection so the next delivery can reconnect',
+  t.test('closed socket before send returns a deferred failure and arms reconnect',
+    async (t) => {
+      const router = new MessageRouter({
+        nodeId: 'node-a',
+        reconnectIntervalMs: 250,
+      });
+      await router.initialize({startServer: false});
+      t.teardown(async () => {
+        await router.shutdown().catch(() => {});
+      });
+
+      const closedWs = {
+        readyState: 3,
+        send: () => {
+          throw new Error('socket should not send while closed');
+        },
+        terminateCalled: false,
+        terminate() {
+          this.terminateCalled = true;
+        },
+      };
+      router.nodeConnections.set('node-b', {
+        nodeId: 'node-b',
+        nodeAddress: 'ws://node-b:9999',
+        connectionId: 'node-b-closed-before-send',
+        ws: closedWs,
+        state: ConnectionState.CONNECTED,
+        isIncoming: false,
+        reconnectAttempts: 0,
+        reconnectTimeout: null,
+        reconnectDueAt: null,
+        pingInterval: null,
+        address: 'ws://node-b:9999',
+        configuredAddress: 'ws://node-b:9999',
+        observedAddress: null,
+        isSelfConnection: false,
+      });
+
+      const result = await router.deliver(
+        'node-b/service/closed-before-send',
+        {type: 'TEST'},
+      );
+
+      t.equal(result.acknowledged, false,
+        'delivery should fail closed when the socket is already closed');
+      t.equal(result.deferRetry, true,
+        'delivery should ask callers to defer immediate retries');
+      t.equal(result.errorCode, 'ROUTER_CONNECTION_CLOSED',
+        'delivery should surface a stable closed-connection error code');
+      t.equal(
+        router.nodeConnections.get('node-b')?.state,
+        ConnectionState.RECONNECTING,
+        'the peer should transition into reconnecting after the closed send',
+      );
+      t.ok(
+        router.nodeConnections.get('node-b')?.reconnectTimeout,
+        'the peer should arm one reconnect timer after the closed send',
+      );
+      t.equal(
+        closedWs.terminateCalled,
+        true,
+        'the stale socket should be terminated before recovery',
+      );
+    });
+
+  t.test('ack timeout quarantines stale remote connection so the next delivery can reconnect',
     async (t) => {
       cleanupTestEnvironment();
       const config = ConfigurationManager.getInstance();
@@ -1690,6 +2461,7 @@ t.test('MessageRouter unit tests', async (t) => {
         logging: {level: 'error'},
         transport: {
           messageTimeoutMs: 100,
+          reconnectIntervalMs: 100,
         },
       });
       const logging = LoggingService.getInstance();
@@ -1741,38 +2513,40 @@ t.test('MessageRouter unit tests', async (t) => {
         'first delivery should surface the ACK timeout',
       );
       t.equal(
+        firstResult.deferRetry,
+        true,
+        'first delivery should ask callers to defer while recovery is pending',
+      );
+      t.equal(
+        firstResult.errorCode,
+        'ROUTER_MESSAGE_TIMEOUT',
+        'first delivery should surface the deferred-timeout error code',
+      );
+      t.equal(
         router.nodeConnections.get('node-b')?.state,
         ConnectionState.RECONNECTING,
         'timed-out connection should enter reconnecting state',
       );
       t.equal(
         staleWs.terminateCalled,
-        true,
-        'timed-out connection should terminate the stale socket',
+        false,
+        'timed-out connection should not hard-close the stale socket immediately',
       );
 
-      router.setNodeAddressResolver((nodeId) => {
-        return nodeId === 'node-b' ? 'ws://node-b:9999' : null;
-      });
       const connectCalls = [];
-      router.connectToNode = async (nodeId, address) => {
-        connectCalls.push({nodeId, address});
-        router.nodeConnections.set(nodeId, {
-          nodeId,
-          nodeAddress: address,
-          connectionId: 'node-b-fresh',
-          ws: {
-            readyState: 1,
-            send: () => {},
-          },
-          state: ConnectionState.CONNECTED,
-          isIncoming: false,
-          reconnectAttempts: 0,
-          reconnectTimeout: null,
-          pingInterval: null,
-          address,
-          isSelfConnection: false,
+      router.establishConnection = async (connectionInfo) => {
+        connectCalls.push({
+          nodeId: connectionInfo.nodeId,
+          address: connectionInfo.address,
         });
+        connectionInfo.ws = {
+          readyState: 1,
+          send: () => {},
+        };
+        connectionInfo.state = ConnectionState.CONNECTED;
+        connectionInfo.reconnectAttempts = 0;
+        connectionInfo.reconnectTimeout = null;
+        connectionInfo.reconnectDueAt = null;
       };
       router.sendMessage = async (
         _connection,
@@ -1796,20 +2570,45 @@ t.test('MessageRouter unit tests', async (t) => {
         {type: 'TEST'},
       );
 
+      t.same(connectCalls, [],
+        'next delivery should respect the armed reconnect owner');
+      t.equal(
+        secondResult.acknowledged,
+        false,
+        'next delivery should still fail closed while reconnect is pending',
+      );
+      t.equal(
+        secondResult.deferRetry,
+        true,
+        'next delivery should ask callers to defer while reconnect is pending',
+      );
+      t.equal(
+        secondResult.errorCode,
+        'ROUTER_CONNECTION_CLOSED',
+        'next delivery should surface the reconnect-in-progress error code',
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 140));
+
+      const thirdResult = await router.deliver(
+        'node-b/service/no-ack',
+        {type: 'TEST'},
+      );
+
       t.same(
         connectCalls,
         [{nodeId: 'node-b', address: 'ws://node-b:9999'}],
-        'next delivery should force one reconnect attempt',
+        'scheduled reconnect should eventually redial exactly once',
       );
       t.equal(
-        secondResult.acknowledged,
+        thirdResult.acknowledged,
         true,
-        'next delivery should succeed after reconnecting',
+        'delivery should succeed after the scheduled reconnect completes',
       );
       t.equal(
-        secondResult.recovered,
+        thirdResult.recovered,
         true,
-        'next delivery should use the recovered connection',
+        'delivery should use the recovered connection after reconnect completes',
       );
     });
 
@@ -2109,6 +2908,156 @@ t.test('MessageRouter unit tests', async (t) => {
           'ws://node-b-fresh:9999',
         ],
         'after ENOTFOUND, later deliveries should not start from the stale reconnect address again',
+      );
+    });
+
+  t.test('should replace a stale configured reconnect address with the current authoritative resolver address',
+    async (t) => {
+      const router = new MessageRouter({
+        nodeId: 'node-a',
+      });
+      await router.initialize({startServer: false});
+      t.teardown(async () => {
+        await router.shutdown().catch(() => {});
+      });
+
+      router.setServiceNodeResolver((address) => {
+        const match = address.match(/^([^/]+)\//);
+        return match ? match[1] : null;
+      });
+      router.setNodeAddressResolver((nodeId) => {
+        return nodeId === 'node-b' ? 'ws://172.20.0.2:8082' : null;
+      });
+
+      router.nodeConnections.set('node-b', {
+        nodeId: 'node-b',
+        nodeAddress: 'ws://ddb-test-reuse-5-1:8082',
+        connectionId: 'node-b-stale-configured-address',
+        ws: null,
+        state: ConnectionState.DISCONNECTED,
+        isIncoming: false,
+        reconnectAttempts: 0,
+        reconnectTimeout: null,
+        pingInterval: null,
+        address: 'ws://ddb-test-reuse-5-1:8082',
+        configuredAddress: 'ws://ddb-test-reuse-5-1:8082',
+        observedAddress: null,
+        isSelfConnection: false,
+      });
+
+      const connectCalls = [];
+      router.connectToNode = async (nodeId, address) => {
+        connectCalls.push({nodeId, address});
+        router.nodeConnections.set(nodeId, {
+          nodeId,
+          nodeAddress: address,
+          connectionId: 'node-b-authoritative-address',
+          ws: {
+            readyState: 1,
+            send: () => {},
+          },
+          state: ConnectionState.CONNECTED,
+          isIncoming: false,
+          reconnectAttempts: 0,
+          reconnectTimeout: null,
+          pingInterval: null,
+          address,
+          configuredAddress: address,
+          observedAddress: null,
+          isSelfConnection: false,
+        });
+      };
+      router.sendMessage = async (
+        _connection,
+        _targetAddress,
+        messageId,
+        _payload,
+        targetNodeId,
+        correlationId,
+      ) => {
+        return {
+          messageId,
+          correlationId,
+          acknowledged: true,
+          targetNodeId,
+          recovered: true,
+        };
+      };
+
+      const result = await router.deliver(
+        'node-b/service/authoritative-reconnect-address',
+        {type: 'TEST'},
+      );
+
+      t.same(
+        connectCalls,
+        [{nodeId: 'node-b', address: 'ws://172.20.0.2:8082'}],
+        'delivery recovery should dial the authoritative resolver address instead of the stale configured hostname',
+      );
+      t.equal(
+        result.acknowledged,
+        true,
+        'delivery should recover through the authoritative address',
+      );
+    });
+
+  t.test('scheduled reconnect should refresh to the current authoritative resolver address before redialing',
+    async (t) => {
+      const router = new MessageRouter({nodeId: 'node-a'});
+      await router.initialize({startServer: false});
+      t.teardown(async () => {
+        await router.shutdown().catch(() => {});
+      });
+
+      router.reconnectIntervalMs = 5;
+      router.reconnectBackoffMultiplier = 1;
+      router.reconnectMaxAttempts = 2;
+      router.setNodeAddressResolver((nodeId) => {
+        return nodeId === 'node-b' ? 'ws://172.20.0.2:8082' : null;
+      });
+
+      const connectionInfo = {
+        nodeId: 'node-b',
+        nodeAddress: 'ws://ddb-test-reuse-5-1:8082',
+        connectionId: 'node-b-refresh-scheduled-reconnect',
+        ws: null,
+        state: ConnectionState.DISCONNECTED,
+        isIncoming: false,
+        reconnectAttempts: 0,
+        reconnectTimeout: null,
+        reconnectDueAt: null,
+        pingInterval: null,
+        address: 'ws://ddb-test-reuse-5-1:8082',
+        configuredAddress: 'ws://ddb-test-reuse-5-1:8082',
+        observedAddress: null,
+        isSelfConnection: false,
+        retired: false,
+      };
+      router.nodeConnections.set('node-b', connectionInfo);
+
+      const dialedAddresses = [];
+      router.establishConnection = async (connection) => {
+        dialedAddresses.push(connection.address);
+        connection.ws = {
+          readyState: 1,
+          send: () => {},
+        };
+        connection.state = ConnectionState.CONNECTED;
+        connection.reconnectAttempts = 0;
+      };
+
+      router.scheduleReconnect(connectionInfo);
+      await new Promise((resolve) => setTimeout(resolve, 25));
+
+      t.same(
+        dialedAddresses,
+        ['ws://172.20.0.2:8082'],
+        'scheduled reconnect should redial the authoritative resolver address instead of the stale configured hostname',
+      );
+      t.equal(
+        connectionInfo.configuredAddress,
+        'ws://172.20.0.2:8082',
+        'scheduled reconnect should refresh the stored configured address to the authoritative value',
       );
     });
 

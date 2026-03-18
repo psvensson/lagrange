@@ -4,6 +4,7 @@
  * Requirements: 3.2, 3.3, 3.4, 3.5, 4.4
  */
 
+import {EventEmitter} from 'node:events';
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import LifeRaft from '@markwylde/liferaft';
 import {
@@ -22,6 +23,10 @@ import {
   SYSTEM_TABLE_NAME,
   INITIAL_PARTITION_IDS,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
+import {
+  LIFECYCLE_PHASE,
+  LIFECYCLE_REASON,
+} from '../../src/bootstrap/lifecycle-controller-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {
   COLUMN,
@@ -86,6 +91,36 @@ async function waitForCondition(
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
   }
   return false;
+}
+
+function createTrafficReadinessState() {
+  const emitter = new EventEmitter();
+  let snapshot = {
+    phase: LIFECYCLE_PHASE.INIT,
+    ready: false,
+    reasons: [],
+  };
+
+  return {
+    getSnapshot() {
+      return {...snapshot};
+    },
+    on(eventName, listener) {
+      emitter.on(eventName, listener);
+    },
+    off(eventName, listener) {
+      emitter.off(eventName, listener);
+    },
+    transitionTo(phase, options = {}) {
+      snapshot = {
+        phase,
+        ready: options.ready === true,
+        reasons: Array.isArray(options.reasons) ? [...options.reasons] : [],
+      };
+      emitter.emit('transition', {...snapshot});
+      return {...snapshot};
+    },
+  };
 }
 
 test('PartitionService - constructor requires partitionId', async (t) => {
@@ -222,12 +257,20 @@ test(
     const retryTimer = setTimeout(() => {}, 10000);
     partition.leaderNodeMutationHelper.retryTimer = retryTimer;
 
-    partition.raft.emit('leader change', 'leader-change-partition-1-r2');
+    partition.raft.emit(
+      'leader change',
+      'node-2/partition/leader-change-partition-1-r2',
+    );
+    await partition.flushRoleUpdate();
     await Promise.resolve();
 
     t.equal(partition.role, RaftRole.FOLLOWER);
     t.equal(partition.isLeader, false);
-    t.equal(partition.leaderId, 'leader-change-partition-1-r2');
+    t.equal(
+      partition.leaderId,
+      'leader-change-partition-1-r2',
+      'leader-change should normalize unified leader addresses to replica ids',
+    );
     t.equal(partition.pendingRoleUpdate, null);
     t.equal(partition.persistedRole, RaftRole.FOLLOWER);
     t.equal(partition.pendingLeaderNodeUpdate, null);
@@ -278,6 +321,50 @@ test('PartitionService - leader mutation helper guards owner writes with observe
       [COLUMN.LEADER_NODE_ID]: 'node-1',
       [COLUMN.UPDATED_AT]: 77,
     }, 'leader owner writes should include the observed owner-row guard fields');
+
+    await partition.shutdown();
+  });
+
+test('PartitionService - flushes services role update when local services leader exists',
+  async (t) => {
+    const updates = [];
+    const partition = new PartitionService({
+      partitionId: 'services-p1',
+      tableId: 'services',
+      tableName: 'services',
+      replicaId: 'services-p1-r1',
+      replicaIds: ['services-p1-r1'],
+      nodeId: 'node-1',
+      dbPath: ':memory:',
+      suppressLifecycleLogs: true,
+      systemTableCache: new SystemTableCache(),
+      cdcIntegrationService: {
+        canWriteSystemTableLocally: (tableName) => tableName === SYSTEM_TABLE_NAME.SERVICES,
+        updateSystemTableRow: async (tableName, whereClause, data) => {
+          updates.push({tableName, whereClause, data});
+          return {success: true};
+        },
+      },
+    });
+
+    partition.pendingRoleUpdate = RaftRole.LEADER;
+    partition.persistedRole = null;
+
+    const result = await partition.flushRoleUpdate();
+
+    t.equal(result.reason, 'applied', 'should persist when the local services leader owns the write');
+    t.equal(updates.length, 1, 'should issue one services-table write');
+    t.equal(updates[0].tableName, SYSTEM_TABLE_NAME.SERVICES, 'should target services');
+    t.same(updates[0].whereClause, {
+      service_id: 'services-p1-r1',
+    }, 'should update the local services replica row');
+    t.equal(
+      updates[0].data?.raft_role,
+      RaftRole.FOLLOWER,
+      'canonical leader ownership should publish follower metadata only',
+    );
+    t.equal(partition.pendingRoleUpdate, null, 'should clear pending role after success');
+    t.equal(partition.persistedRole, RaftRole.FOLLOWER, 'should track the published metadata role');
 
     await partition.shutdown();
   });
@@ -461,7 +548,7 @@ test('PartitionService - generates CDC events on insert', async (t) => {
   await Promise.resolve();
 
   const cdcEvents = [];
-  partition.subscribeToCDC((event) => {
+  await partition.subscribeToCDCWithHandshake((event) => {
     cdcEvents.push(event);
   });
 
@@ -597,11 +684,9 @@ test('PartitionService - generates CDC events on update', async (t) => {
   await partition.insertData('cdc_test', {id: 'cdc-1', value: 100});
 
   const cdcEvents = [];
-  partition.subscribeToCDC((event) => {
+  await partition.subscribeToCDCWithHandshake((event) => {
     cdcEvents.push(event);
   });
-  // Allow async buffer replay to complete, then clear replayed events
-  await Promise.resolve();
   cdcEvents.length = 0;
 
   await partition.updateData('cdc_test', {id: 'cdc-1'}, {value: 200});
@@ -634,7 +719,7 @@ test('PartitionService - suppresses CDC for no-op updates', async (t) => {
   await Promise.resolve();
 
   const cdcEvents = [];
-  partition.subscribeToCDC((event) => {
+  await partition.subscribeToCDCWithHandshake((event) => {
     cdcEvents.push(event);
   });
 
@@ -676,11 +761,9 @@ test('PartitionService - generates CDC events on delete', async (t) => {
   await partition.insertData('cdc_test', {id: 'cdc-1', value: 100});
 
   const cdcEvents = [];
-  partition.subscribeToCDC((event) => {
+  await partition.subscribeToCDCWithHandshake((event) => {
     cdcEvents.push(event);
   });
-  // Allow async buffer replay to complete, then clear replayed events
-  await Promise.resolve();
   cdcEvents.length = 0;
 
   await partition.deleteData('cdc_test', {id: 'cdc-1'});
@@ -722,11 +805,9 @@ test('PartitionService - generates CDC UPSERT events on upsert', async (t) => {
   await partition.upsertData('cdc_test', {id: 'u1', value: 10});
 
   const cdcEvents = [];
-  partition.subscribeToCDC((event) => {
+  await partition.subscribeToCDCWithHandshake((event) => {
     cdcEvents.push(event);
   });
-  // Allow async buffer replay to complete, then clear replayed events
-  await Promise.resolve();
   cdcEvents.length = 0;
 
   // Upsert same key — should produce UPSERT, not INSERT
@@ -774,11 +855,9 @@ test('PartitionService - raw SQL INSERT OR REPLACE generates CDC UPSERT', async 
   );
 
   const cdcEvents = [];
-  partition.subscribeToCDC((event) => {
+  await partition.subscribeToCDCWithHandshake((event) => {
     cdcEvents.push(event);
   });
-  // Allow async buffer replay to complete, then clear replayed events
-  await Promise.resolve();
   cdcEvents.length = 0;
 
   // Upsert same key via raw SQL — should produce UPSERT, not INSERT
@@ -828,10 +907,9 @@ test('PartitionService - raw SQL nested parenthesized DELETE preserves composite
     );
 
     const cdcEvents = [];
-    partition.subscribeToCDC((event) => {
+    await partition.subscribeToCDCWithHandshake((event) => {
       cdcEvents.push(event);
     });
-    await Promise.resolve();
     cdcEvents.length = 0;
 
     await partition.executeQuery(
@@ -1079,11 +1157,13 @@ test('PartitionService - persists partition size_bytes for leader-owned partitio
     systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
       [COLUMN.PARTITION_ID]: partitionsPartitionId,
       [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.PARTITIONS,
+      [COLUMN.LEADER_NODE_ID]: 'seed-node',
     });
     systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
       [COLUMN.SERVICE_ID]: 'partitions-leader',
       [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
       [COLUMN.PARTITION_ID]: partitionsPartitionId,
+      [COLUMN.NODE_ID]: 'seed-node',
       [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
       [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
       [COLUMN.ADDRESS]: 'seed-node/partition/partitions-leader',
@@ -1788,7 +1868,80 @@ test('PartitionService - emits leaderElected event for single replica', async (t
   await partition.shutdown();
 });
 
-test('PartitionService - persists raft role updates to services table', async (t) => {
+test('PartitionService - leader activation dedupes same-term flaps and cancels on candidate demotion', async (t) => {
+  const partition = new PartitionService({
+    partitionId: 'test-partition-leader-gate',
+    tableId: 'leader_gate_test',
+    replicaId: 'replica-1',
+    replicaIds: ['replica-1', 'replica-2'],
+    peerAddresses: ['node-2/partition/replica-2'],
+    nodeId: 'node-1',
+    transport: createLoopbackTransport(),
+    dbPath: ':memory:',
+    deferElection: true,
+    leaderActivationStabilizationMs: 20,
+  });
+
+  await partition.initialize();
+
+  let reconstructions = 0;
+  let rebalancerLeadershipUpdates = 0;
+  let leaderEvents = 0;
+  partition.reconstructPreparedState = () => {
+    reconstructions += 1;
+    return {preparedTransactionCount: 0, prepareLostCount: 0};
+  };
+  partition.updateRebalancerLeadership = () => {
+    rebalancerLeadershipUpdates += 1;
+  };
+  partition.on('leaderElected', () => {
+    leaderEvents += 1;
+  });
+
+  partition.raft.term = 7;
+  partition.raft.emit('leader');
+  partition.raft.emit('leader');
+  partition.raft.emit('leader');
+
+  await waitForCondition(() => leaderEvents === 1, 500, 10);
+
+  t.equal(reconstructions, 1, 'prepared-state reconstruction should run once');
+  t.equal(
+    rebalancerLeadershipUpdates,
+    1,
+    'leader-owned background work should activate once',
+  );
+
+  reconstructions = 0;
+  leaderEvents = 0;
+  rebalancerLeadershipUpdates = 0;
+
+  partition.raft.term = 8;
+  partition.raft.emit('leader');
+  partition.raft.emit('candidate');
+
+  await new Promise((resolve) => setTimeout(resolve, 60));
+
+  t.equal(
+    reconstructions,
+    0,
+    'candidate demotion should cancel pending leader reconstruction',
+  );
+  t.equal(
+    leaderEvents,
+    0,
+    'candidate demotion should cancel pending leaderElected emission',
+  );
+  t.equal(
+    rebalancerLeadershipUpdates,
+    1,
+    'candidate demotion should immediately revoke leader-owned background work',
+  );
+
+  await partition.shutdown();
+});
+
+test('PartitionService - publishes leader state as follower metadata in services table', async (t) => {
   const updates = [];
   const mockCdcIntegrationService = {
     updateSystemTableRow: async (tableName, whereClause, data, options) => {
@@ -1801,11 +1954,13 @@ test('PartitionService - persists raft role updates to services table', async (t
   systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
     [COLUMN.PARTITION_ID]: servicesPartitionId,
     [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.SERVICES,
+    [COLUMN.LEADER_NODE_ID]: 'seed-node',
   });
   systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
     [COLUMN.SERVICE_ID]: 'services-leader',
     [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
     [COLUMN.PARTITION_ID]: servicesPartitionId,
+    [COLUMN.NODE_ID]: 'seed-node',
     [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
     [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
     [COLUMN.ADDRESS]: 'seed-node/partition/services-leader',
@@ -1832,19 +1987,117 @@ test('PartitionService - persists raft role updates to services table', async (t
     (update) =>
       update.tableName === SYSTEM_TABLE_NAME.SERVICES &&
       update.whereClause?.service_id === 'replica-1' &&
-      update.data?.raft_role === RaftRole.LEADER,
+      update.data?.raft_role === RaftRole.FOLLOWER,
   );
 
   t.ok(roleUpdate, 'raft role update should be persisted via CDC');
   t.same(
     roleUpdate?.options?.expectedCacheFields,
-    {raft_role: RaftRole.LEADER},
-    'cache visibility should only depend on the raft role',
+    {
+      raft_role: RaftRole.FOLLOWER,
+    },
+    'cache visibility should converge only the published role field',
   );
   t.equal(
     roleUpdate?.options?.routingReadinessDimension,
     CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
     'raft role persistence should route through repairEligible readiness',
+  );
+  t.equal(
+    roleUpdate?.options?.deliveryPriority,
+    'background',
+    'non-control-plane partition role publication should not consume the critical lane',
+  );
+  t.equal(
+    roleUpdate?.options?.workClass,
+    'background',
+    'partition raft-role publication should use background admission',
+  );
+  t.equal(
+    roleUpdate?.options?.allowPressureDefer,
+    true,
+    'partition raft-role publication should defer under pressure',
+  );
+  t.notOk(
+    updates.some((update) => update.data?.raft_role === RaftRole.LEADER),
+    'leader authority should not be republished through services.raft_role',
+  );
+
+  await partition.shutdown();
+});
+
+test('PartitionService - publishes candidate role as follower metadata', async (t) => {
+  const updates = [];
+  const mockCdcIntegrationService = {
+    updateSystemTableRow: async (tableName, whereClause, data, options) => {
+      updates.push({tableName, whereClause, data, options});
+      return {success: true};
+    },
+  };
+  const systemTableCache = new SystemTableCache();
+  const servicesPartitionId = INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SERVICES];
+  systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
+    [COLUMN.PARTITION_ID]: servicesPartitionId,
+    [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.SERVICES,
+    [COLUMN.LEADER_NODE_ID]: 'seed-node',
+  });
+  systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
+    [COLUMN.SERVICE_ID]: 'services-leader',
+    [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
+    [COLUMN.PARTITION_ID]: servicesPartitionId,
+    [COLUMN.NODE_ID]: 'seed-node',
+    [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
+    [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+    [COLUMN.ADDRESS]: 'seed-node/partition/services-leader',
+  });
+  systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
+    [COLUMN.SERVICE_ID]: 'replica-1',
+    [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
+    [COLUMN.PARTITION_ID]: 'test-partition-candidate',
+    [COLUMN.REPLICA_ID]: 'replica-1',
+    [COLUMN.NODE_ID]: 'seed-node',
+    [COLUMN.RAFT_ROLE]: RaftRole.CANDIDATE,
+    [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+    [COLUMN.ADDRESS]: 'seed-node/partition/replica-1',
+    [COLUMN.UPDATED_AT]: 1,
+  });
+
+  const partition = new PartitionService({
+    partitionId: 'test-partition-candidate',
+    tableId: 'services',
+    tableName: 'services',
+    replicaId: 'replica-1',
+    replicaIds: ['replica-1'],
+    nodeId: 'seed-node',
+    dbPath: ':memory:',
+    systemTableCache,
+    cdcIntegrationService: mockCdcIntegrationService,
+  });
+
+  await partition.initialize();
+  updates.length = 0;
+
+  partition.queueRoleUpdate(RaftRole.CANDIDATE);
+  await new Promise((resolve) => setImmediate(resolve));
+
+  const candidateUpdate = updates.find(
+    (update) =>
+      update.tableName === SYSTEM_TABLE_NAME.SERVICES &&
+      update.whereClause?.service_id === 'replica-1',
+  );
+
+  t.notOk(
+    candidateUpdate,
+    'candidate publication should not emit a redundant write once follower metadata is converged',
+  );
+  t.equal(
+    partition.persistedRole,
+    RaftRole.FOLLOWER,
+    'candidate publication should still converge the advisory metadata role to follower',
+  );
+  t.notOk(
+    updates.some((update) => update.data?.raft_role === RaftRole.CANDIDATE),
+    'candidate metadata should not be written to services',
   );
 
   await partition.shutdown();
@@ -1867,11 +2120,13 @@ test('PartitionService - retries raft role persistence after cache visibility fa
     systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
       [COLUMN.PARTITION_ID]: servicesPartitionId,
       [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.SERVICES,
+      [COLUMN.LEADER_NODE_ID]: 'seed-node',
     });
     systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
       [COLUMN.SERVICE_ID]: 'services-leader',
       [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
       [COLUMN.PARTITION_ID]: servicesPartitionId,
+      [COLUMN.NODE_ID]: 'seed-node',
       [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
       [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
       [COLUMN.ADDRESS]: 'seed-node/partition/services-leader',
@@ -1894,8 +2149,10 @@ test('PartitionService - retries raft role persistence after cache visibility fa
 
     t.same(
       updates[0]?.options?.expectedCacheFields,
-      {raft_role: RaftRole.LEADER},
-      'retryable role persistence should only wait on raft_role visibility',
+      {
+        raft_role: RaftRole.FOLLOWER,
+      },
+      'retryable role persistence should only wait for the published role visibility',
     );
 
     await new Promise((resolve) => setTimeout(resolve, 1200));
@@ -1907,7 +2164,7 @@ test('PartitionService - retries raft role persistence after cache visibility fa
     );
     t.equal(
       updates[1]?.data?.raft_role,
-      RaftRole.LEADER,
+      RaftRole.FOLLOWER,
       'retry should target the same raft role',
     );
 
@@ -1928,11 +2185,13 @@ test('PartitionService - persists initial follower role for multi-replica startu
     systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
       [COLUMN.PARTITION_ID]: servicesPartitionId,
       [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.SERVICES,
+      [COLUMN.LEADER_NODE_ID]: 'seed-node',
     });
     systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
       [COLUMN.SERVICE_ID]: 'services-leader',
       [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
       [COLUMN.PARTITION_ID]: servicesPartitionId,
+      [COLUMN.NODE_ID]: 'seed-node',
       [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
       [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
       [COLUMN.ADDRESS]: 'seed-node/partition/services-leader',
@@ -1966,9 +2225,151 @@ test('PartitionService - persists initial follower role for multi-replica startu
     );
 
     t.ok(roleUpdate, 'initial follower role should be persisted via CDC');
+    t.notOk(
+      Object.prototype.hasOwnProperty.call(roleUpdate?.data || {}, 'status'),
+      'initial follower role persistence should not rewrite lifecycle status',
+    );
 
     await partition.shutdown();
   });
+
+test(
+  'PartitionService - defers role metadata publication until traffic ready',
+  async (t) => {
+    const updates = [];
+    const now = Date.now();
+    const readinessState = createTrafficReadinessState();
+    const mockCdcIntegrationService = {
+      canWriteSystemTableLocally: (tableName) => tableName === SYSTEM_TABLE_NAME.SERVICES,
+      updateSystemTableRow: async (tableName, whereClause, data) => {
+        updates.push({tableName, whereClause, data});
+        return {success: true};
+      },
+    };
+    const systemTableCache = new SystemTableCache();
+    systemTableCache.applySystemTableChange(TABLES.NODES, CDCOperation.INSERT, {
+      [COLUMN.NODE_ID]: 'node-2',
+      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+      [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
+      [COLUMN.LAST_HEARTBEAT]: now,
+      [COLUMN.READY_LEASE_EXPIRES_AT]: null,
+    });
+
+    const partition = new PartitionService({
+      partitionId: 'test-partition-ready-gate',
+      tableId: 'user-table',
+      tableName: 'user_table',
+      replicaId: 'replica-ready-gate',
+      replicaIds: ['replica-ready-gate'],
+      nodeId: 'node-2',
+      dbPath: ':memory:',
+      systemTableCache,
+      cdcIntegrationService: mockCdcIntegrationService,
+      bootstrapReadinessState: readinessState,
+    });
+
+    partition.pendingRoleUpdate = RaftRole.LEADER;
+    partition.persistedRole = null;
+
+    const deferredResult = await partition.flushRoleUpdate();
+    t.equal(
+      deferredResult.reason,
+      'settling',
+      'partition role publication should stay deferred until lifecycle reaches metadata-safe readiness',
+    );
+    t.equal(
+      updates.length,
+      0,
+      'partition role publication should not write while lifecycle is still settling',
+    );
+
+    systemTableCache.applySystemTableChange(TABLES.NODES, CDCOperation.UPDATE, {
+      [COLUMN.NODE_ID]: 'node-2',
+      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+      [COLUMN.CONNECTION_STATE]: STATE.READY,
+      [COLUMN.LAST_HEARTBEAT]: now + 1,
+        [COLUMN.READY_LEASE_EXPIRES_AT]: now + 60_000,
+      });
+
+    readinessState.transitionTo(LIFECYCLE_PHASE.CONTROL_READY, {
+      ready: false,
+      reasons: [LIFECYCLE_REASON.LEADER_METADATA_INCOMPLETE],
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const noopResult = await partition.flushRoleUpdate();
+    t.equal(noopResult.reason, 'noop', 'ready-heartbeat transition should not force a duplicate write');
+    t.equal(updates.length, 1, 'control-ready leader-lag transition should release one deferred services write');
+
+    await partition.shutdown();
+  },
+);
+
+test(
+  'PartitionService - defers rebalancer initialization until traffic ready',
+  async (t) => {
+    const readinessState = createTrafficReadinessState();
+    const partition = new PartitionService({
+      partitionId: 'test-partition-rebalancer-ready-gate',
+      tableId: 'services',
+      tableName: 'services',
+      replicaId: 'replica-ready-gate',
+      replicaIds: ['replica-ready-gate'],
+      nodeId: 'node-2',
+      dbPath: ':memory:',
+      bootstrapReadinessState: readinessState,
+    });
+
+    await partition.initialize();
+    partition.isLeader = true;
+    partition.systemTableCache = {
+      get: () => null,
+      filter: () => [],
+      onCacheChange: () => {},
+      offCacheChange: () => {},
+    };
+    partition.cdcIntegrationService = {
+      insertSystemTableRow: async () => ({success: true}),
+      updateSystemTableRow: async () => ({success: true}),
+      deleteSystemTableRow: async () => ({success: true}),
+    };
+    partition.tablePolicyService = {
+      getPolicyForPartition: () => ({targetReplicaCount: 3}),
+    };
+    partition.messageRouter = {
+      getConnectionState: () => 'connected',
+      send: async () => {},
+    };
+    partition.sqlQueryEngine = {
+      executeQuery: async () => ({success: true, rows: []}),
+    };
+    partition.rebalanceCoordinator = {
+      initialize: () => {},
+    };
+
+    readinessState.transitionTo(LIFECYCLE_PHASE.CONTROL_READY, {
+      ready: false,
+      reasons: [LIFECYCLE_REASON.LEADER_METADATA_INCOMPLETE],
+    });
+    partition.maybeInitializeRebalancer();
+    t.notOk(
+      partition.rebalancer,
+      'should not initialize rebalancer before traffic-ready lifecycle',
+    );
+
+    readinessState.transitionTo(LIFECYCLE_PHASE.TRAFFIC_READY, {
+      ready: true,
+      reasons: [],
+    });
+    partition.maybeInitializeRebalancer();
+    t.ok(
+      partition.rebalancer,
+      'should initialize rebalancer after traffic-ready lifecycle',
+    );
+
+    await partition.shutdown();
+  },
+);
 
 test('PartitionService - persists leader node updates to partitions table', async (t) => {
   const updates = [];
@@ -1984,11 +2385,13 @@ test('PartitionService - persists leader node updates to partitions table', asyn
   systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
     [COLUMN.PARTITION_ID]: partitionsPartitionId,
     [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.PARTITIONS,
+    [COLUMN.LEADER_NODE_ID]: 'seed-node',
   });
   systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
     [COLUMN.SERVICE_ID]: 'partitions-leader',
     [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
     [COLUMN.PARTITION_ID]: partitionsPartitionId,
+    [COLUMN.NODE_ID]: 'seed-node',
     [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
     [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
     [COLUMN.ADDRESS]: 'seed-node/partition/partitions-leader',
@@ -2029,6 +2432,93 @@ test('PartitionService - persists leader node updates to partitions table', asyn
     CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
     'leader node persistence should route through repairEligible readiness',
   );
+  t.equal(
+    leaderUpdate?.options?.deliveryPriority,
+    'background',
+    'non-control-plane partition leader publication should not consume the critical lane',
+  );
+
+  await partition.shutdown();
+});
+
+test('PartitionService - keeps control-plane metadata publication critical', async (t) => {
+  const updates = [];
+  const mockCdcIntegrationService = {
+    updateSystemTableRow: async (tableName, whereClause, data, options) => {
+      updates.push({tableName, whereClause, data, options});
+      return {success: true};
+    },
+  };
+  const systemTableCache = new SystemTableCache();
+  const servicesPartitionId = INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SERVICES];
+  const partitionsPartitionId = INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.PARTITIONS];
+  systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
+    [COLUMN.PARTITION_ID]: servicesPartitionId,
+    [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.SERVICES,
+    [COLUMN.LEADER_NODE_ID]: 'seed-node',
+  });
+  systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
+    [COLUMN.PARTITION_ID]: partitionsPartitionId,
+    [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.PARTITIONS,
+    [COLUMN.LEADER_NODE_ID]: 'seed-node',
+  });
+  systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
+    [COLUMN.SERVICE_ID]: 'services-leader',
+    [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
+    [COLUMN.PARTITION_ID]: servicesPartitionId,
+    [COLUMN.NODE_ID]: 'seed-node',
+    [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
+    [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+    [COLUMN.ADDRESS]: 'seed-node/partition/services-leader',
+  });
+  systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
+    [COLUMN.SERVICE_ID]: 'partitions-leader',
+    [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
+    [COLUMN.PARTITION_ID]: partitionsPartitionId,
+    [COLUMN.NODE_ID]: 'seed-node',
+    [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
+    [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+    [COLUMN.ADDRESS]: 'seed-node/partition/partitions-leader',
+  });
+
+  const partition = new PartitionService({
+    partitionId: INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.NODES],
+    tableId: SYSTEM_TABLE_NAME.NODES,
+    tableName: SYSTEM_TABLE_NAME.NODES,
+    replicaId: 'nodes-p1-r1',
+    replicaIds: ['nodes-p1-r1'],
+    nodeId: 'seed-node',
+    dbPath: ':memory:',
+    cdcIntegrationService: mockCdcIntegrationService,
+  });
+
+  await partition.initialize();
+  partition.setSystemTableCache(systemTableCache);
+  partition.setCdcIntegrationService(mockCdcIntegrationService);
+
+  await new Promise((resolve) => setImmediate(resolve));
+
+  const roleUpdate = updates.find(
+    (update) =>
+      update.tableName === SYSTEM_TABLE_NAME.SERVICES &&
+      update.whereClause?.service_id === 'nodes-p1-r1',
+  );
+  const leaderUpdate = updates.find(
+    (update) =>
+      update.tableName === SYSTEM_TABLE_NAME.PARTITIONS &&
+      update.whereClause?.[COLUMN.PARTITION_ID] === INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.NODES],
+  );
+
+  t.equal(
+    roleUpdate?.options?.deliveryPriority,
+    'background',
+    'control-plane partition role publication should be advisory background metadata',
+  );
+  t.equal(
+    leaderUpdate?.options?.deliveryPriority,
+    'critical',
+    'control-plane partition leader publication should stay on the critical lane',
+  );
 
   await partition.shutdown();
 });
@@ -2053,11 +2543,13 @@ test('PartitionService - retries leader node persistence after cache visibility 
     systemTableCache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
       [COLUMN.PARTITION_ID]: partitionsPartitionId,
       [COLUMN.TABLE_ID]: SYSTEM_TABLE_NAME.PARTITIONS,
+      [COLUMN.LEADER_NODE_ID]: 'seed-node',
     });
     systemTableCache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
       [COLUMN.SERVICE_ID]: 'partitions-leader',
       [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
       [COLUMN.PARTITION_ID]: partitionsPartitionId,
+      [COLUMN.NODE_ID]: 'seed-node',
       [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
       [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
       [COLUMN.ADDRESS]: 'seed-node/partition/partitions-leader',
@@ -2157,6 +2649,171 @@ test('PartitionService - setCdcIntegrationService sets service on partition and 
     await partition.shutdown();
   });
 
+test('PartitionService - initializeRebalancer passes sqlQueryEngine to gateway',
+  async (t) => {
+    // Bug reproduction: initializeRebalancer() creates UnifiedRebalancer
+    // without passing sqlQueryEngine, so the gateway is created with null.
+    // Later, maybeInitializeRebalancer() sets rebalancer.sqlQueryEngine
+    // but does NOT propagate to the gateway. The gateway retains null
+    // forever, causing "requires sqlQueryEngine" errors when the
+    // rebalancer tries to call getConfiguredRebalanceBudget() or
+    // getGlobalInFlightOperationCount().
+    const mockSqlQueryEngine = {
+      executeQuery: async () => ({success: true, rows: []}),
+    };
+    const mockSystemTableCache = {
+      get: () => null,
+      filter: () => [],
+      onCacheChange: () => {},
+      offCacheChange: () => {},
+    };
+    const mockCdcIntegrationService = {
+      insertSystemTableRow: async () => ({success: true}),
+      updateSystemTableRow: async () => ({success: true}),
+      deleteSystemTableRow: async () => ({success: true}),
+    };
+    const mockTablePolicyService = {
+      getPolicyForPartition: () => ({targetReplicaCount: 3}),
+    };
+    const mockMessageRouter = {
+      getConnectionState: () => 'connected',
+      send: async () => {},
+    };
+    const mockRebalanceCoordinator = {
+      systemTableCache: null,
+      cdcIntegrationService: null,
+      tablePolicyService: null,
+      sqlQueryEngine: null,
+      initialize: () => {},
+    };
+
+    const partition = new PartitionService({
+      partitionId: 'test-partition-gw-1',
+      tableId: 'services',
+      tableName: 'services',
+      replicaId: 'replica-1',
+      replicaIds: ['replica-1'],
+      nodeId: 'test-node',
+      dbPath: ':memory:',
+    });
+
+    await partition.initialize();
+
+    // Wire all dependencies so initializeRebalancer() fires
+    partition.rebalanceCoordinator = mockRebalanceCoordinator;
+    partition.systemTableCache = mockSystemTableCache;
+    partition.cdcIntegrationService = mockCdcIntegrationService;
+    partition.tablePolicyService = mockTablePolicyService;
+    partition.messageRouter = mockMessageRouter;
+    partition.isLeader = true;
+    partition.setSqlQueryEngine(mockSqlQueryEngine);
+
+    // Rebalancer should now exist
+    t.ok(partition.rebalancer, 'rebalancer should be initialized');
+
+    // The gateway must have the sqlQueryEngine — this is the bug
+    const gateway = partition.rebalancer.controlPlaneSystemTableGateway;
+    t.ok(gateway, 'gateway should exist on rebalancer');
+    t.equal(
+      gateway.sqlQueryEngine,
+      mockSqlQueryEngine,
+      'gateway.sqlQueryEngine must be set after initializeRebalancer ' +
+      '(uses injected owner path via constructor)',
+    );
+
+    // Verify the gateway can actually execute a query without throwing
+    const result = await gateway.executeQuery(
+      'SELECT 1',
+      [],
+      {},
+    );
+    t.ok(result, 'gateway.executeQuery should succeed');
+
+    await partition.shutdown();
+  });
+
+test('PartitionService - maybeInitializeRebalancer propagates sqlQueryEngine ' +
+  'to gateway on refresh',
+async (t) => {
+  // Bug reproduction: when maybeInitializeRebalancer() refreshes an
+  // existing rebalancer, it sets rebalancer.sqlQueryEngine but does NOT
+  // propagate to the gateway. The gateway retains the stale engine.
+  const firstEngine = {
+    executeQuery: async () => ({success: true, rows: [], tag: 'first'}),
+  };
+  const secondEngine = {
+    executeQuery: async () => ({success: true, rows: [], tag: 'second'}),
+  };
+  const mockSystemTableCache = {
+    get: () => null,
+    filter: () => [],
+    onCacheChange: () => {},
+    offCacheChange: () => {},
+  };
+  const mockCdcIntegrationService = {
+    insertSystemTableRow: async () => ({success: true}),
+    updateSystemTableRow: async () => ({success: true}),
+    deleteSystemTableRow: async () => ({success: true}),
+  };
+  const mockTablePolicyService = {
+    getPolicyForPartition: () => ({targetReplicaCount: 3}),
+  };
+  const mockMessageRouter = {
+    getConnectionState: () => 'connected',
+    send: async () => {},
+  };
+  const mockRebalanceCoordinator = {
+    systemTableCache: null,
+    cdcIntegrationService: null,
+    tablePolicyService: null,
+    sqlQueryEngine: null,
+    initialize: () => {},
+  };
+
+  const partition = new PartitionService({
+    partitionId: 'test-partition-gw-2',
+    tableId: 'services',
+    tableName: 'services',
+    replicaId: 'replica-1',
+    replicaIds: ['replica-1'],
+    nodeId: 'test-node',
+    dbPath: ':memory:',
+  });
+
+  await partition.initialize();
+
+  // Initialize with first engine
+  partition.rebalanceCoordinator = mockRebalanceCoordinator;
+  partition.systemTableCache = mockSystemTableCache;
+  partition.cdcIntegrationService = mockCdcIntegrationService;
+  partition.tablePolicyService = mockTablePolicyService;
+  partition.messageRouter = mockMessageRouter;
+  partition.isLeader = true;
+  partition.setSqlQueryEngine(firstEngine);
+
+  t.ok(partition.rebalancer, 'rebalancer should be initialized');
+
+  const gateway = partition.rebalancer.controlPlaneSystemTableGateway;
+  t.equal(
+    gateway.sqlQueryEngine,
+    firstEngine,
+    'gateway should have first engine after init',
+  );
+
+  // Now update to second engine — this triggers maybeInitializeRebalancer
+  partition.setSqlQueryEngine(secondEngine);
+
+  // The gateway must have the updated engine — this is the bug
+  t.equal(
+    gateway.sqlQueryEngine,
+    secondEngine,
+    'gateway.sqlQueryEngine must be updated when ' +
+    'maybeInitializeRebalancer refreshes (uses injected owner path)',
+  );
+
+  await partition.shutdown();
+});
+
 test('PartitionService - setRebalanceCoordinator replaces local coordinator',
   async (t) => {
     const partition = new PartitionService({
@@ -2217,11 +2874,25 @@ test('PartitionService - setRebalanceCoordinator replaces local coordinator',
     await partition.shutdown();
   });
 
-test('PartitionService - learner promotion deferred for even voter count', async (t) => {
-  // Create a mock system table cache with 3 active voters
+test('PartitionService - learner promotes one temporary replacement voter above target for non-critical partitions', async (t) => {
+  // Create a mock system table cache with 3 active voters and a 3-voter target.
   const mockCache = {
-    get: () => null, // Not used for voter counting
+    get: (tableName, key) => {
+      if (tableName === TABLES.PARTITIONS && key === 'test-partition') {
+        return {
+          partition_id: 'test-partition',
+          replica_count: 3,
+        };
+      }
+      return null;
+    },
     filter: (tableName, predicate) => {
+      if (tableName === TABLES.PARTITIONS) {
+        return [{
+          partition_id: 'test-partition',
+          replica_count: 3,
+        }].filter(predicate);
+      }
       if (tableName === TABLES.SERVICES) {
         // Return 3 active partition replicas (odd count)
         const services = [
@@ -2272,13 +2943,101 @@ test('PartitionService - learner promotion deferred for even voter count', async
   // Manually trigger learner promotion check
   partition.checkLearnerPromotion();
 
-  // Should still be learner because promoting would cause 4 voters (even)
-  t.equal(partition.role, RaftRole.LEARNER, 'Should remain learner to avoid even voter count');
-
-  // Verify promotion timer was rescheduled
-  t.ok(partition.learnerPromotionTimer, 'Should reschedule promotion check');
+  // One temporary replacement learner above target is allowed so the
+  // source voter can be removed after the replacement becomes ready.
+  t.equal(
+    partition.role,
+    RaftRole.FOLLOWER,
+    'Should promote one temporary replacement learner above target',
+  );
+  t.equal(
+    partition.learnerPromotionTimer,
+    null,
+    'Single replacement promotion should not reschedule',
+  );
 
   // Clean up timer
+  if (partition.learnerPromotionTimer) {
+    clearTimeout(partition.learnerPromotionTimer);
+    partition.learnerPromotionTimer = null;
+  }
+});
+
+test('PartitionService - learner promotes one temporary replacement voter above target for critical partitions during REPLACE', async (t) => {
+  const mockCache = {
+    get: (tableName, key) => {
+      if (tableName === TABLES.PARTITIONS && key === 'nodes-p1') {
+        return {
+          partition_id: 'nodes-p1',
+          replica_count: 3,
+        };
+      }
+      return null;
+    },
+    filter: (tableName, predicate) => {
+      if (tableName === TABLES.PARTITIONS) {
+        return [{
+          partition_id: 'nodes-p1',
+          replica_count: 3,
+        }].filter(predicate);
+      }
+      if (tableName === TABLES.SERVICES) {
+        const services = [
+          {
+            service_id: 'nodes-p1-r1',
+            partition_id: 'nodes-p1',
+            service_type: SERVICE_TYPE.PARTITION,
+            status: SERVICE_STATUS.ACTIVE,
+            raft_role: 'leader',
+          },
+          {
+            service_id: 'nodes-p1-r2',
+            partition_id: 'nodes-p1',
+            service_type: SERVICE_TYPE.PARTITION,
+            status: SERVICE_STATUS.ACTIVE,
+            raft_role: 'follower',
+          },
+          {
+            service_id: 'nodes-p1-r3',
+            partition_id: 'nodes-p1',
+            service_type: SERVICE_TYPE.PARTITION,
+            status: SERVICE_STATUS.ACTIVE,
+            raft_role: 'follower',
+          },
+        ];
+        return services.filter(predicate);
+      }
+      return [];
+    },
+  };
+
+  const partition = new PartitionService({
+    partitionId: 'nodes-p1',
+    tableId: 'nodes',
+    replicaId: 'nodes-p1-r4',
+    replicaIds: ['nodes-p1-r4'],
+    nodeId: 'node-d',
+    dbPath: ':memory:',
+    isJoiningExistingGroup: true,
+    systemTableCache: mockCache,
+  });
+
+  partition.role = RaftRole.LEARNER;
+  partition.leaderId = 'nodes-p1-r1';
+
+  partition.checkLearnerPromotion();
+
+  t.equal(
+    partition.role,
+    RaftRole.FOLLOWER,
+    'critical REPLACE should allow the bounded temporary replacement voter',
+  );
+  t.equal(
+    partition.learnerPromotionTimer,
+    null,
+    'critical replacement promotion should not reschedule',
+  );
+
   if (partition.learnerPromotionTimer) {
     clearTimeout(partition.learnerPromotionTimer);
     partition.learnerPromotionTimer = null;
@@ -2347,6 +3106,13 @@ test('PartitionService - learner promotion deferred until leader is known', asyn
   const mockCache = {
     get: () => null,
     filter: (tableName, predicate) => {
+      if (tableName === TABLES.PARTITIONS) {
+        const partitions = [{
+          partition_id: 'test-partition',
+          replica_count: 5,
+        }];
+        return partitions.filter(predicate);
+      }
       if (tableName === TABLES.SERVICES) {
         const services = [
           {
@@ -2480,6 +3246,55 @@ test(
 );
 
 test(
+  'PartitionService - joining learner ignores candidate and follower demotion events before promotion',
+  async (t) => {
+    const partition = new PartitionService({
+      partitionId: 'joiner-partition',
+      tableId: 'joiner-table',
+      replicaId: 'replica-2',
+      replicaIds: ['replica-1', 'replica-2'],
+      peerAddresses: ['node-1/partition/replica-1'],
+      nodeId: 'node-2',
+      transport: createLoopbackTransport(),
+      dbPath: ':memory:',
+      isJoiningExistingGroup: true,
+    });
+
+    try {
+      await partition.initialize();
+      const initialPendingRoleUpdate = partition.pendingRoleUpdate;
+
+      t.equal(
+        partition.role,
+        RaftRole.LEARNER,
+        'joining replica should start as learner',
+      );
+
+      partition.raft.emit('candidate');
+      partition.raft.emit('follower');
+
+      t.equal(
+        partition.role,
+        RaftRole.LEARNER,
+        'joining learner should ignore raw demotion events before promotion',
+      );
+      t.equal(
+        partition.pendingRoleUpdate,
+        initialPendingRoleUpdate,
+        'joining learner should not queue a persisted demotion before promotion',
+      );
+      t.equal(
+        partition.electionStarted,
+        false,
+        'joining learner should keep elections disabled before promotion',
+      );
+    } finally {
+      await partition.shutdown();
+    }
+  },
+);
+
+test(
   'PartitionService - reconciled single-replica leader keeps promoted joiner follower',
   async (t) => {
     ConfigurationManager.resetInstance();
@@ -2586,8 +3401,8 @@ test(
       );
       t.equal(
         joiner.leaderId,
-        'node-1/partition/replica-1',
-        'joiner should retain the reconciled leader address after promotion',
+        'replica-1',
+        'joiner should retain the reconciled leader replica identity after promotion',
       );
     } finally {
       await joiner.shutdown();
@@ -2685,10 +3500,17 @@ test(
   },
 );
 
-test('PartitionService - critical partition defers learner on even voter count', async (t) => {
+test('PartitionService - critical partition defers second learner when replacement window is exhausted', async (t) => {
   const mockCache = {
     get: () => null,
     filter: (tableName, predicate) => {
+      if (tableName === TABLES.PARTITIONS) {
+        const partitions = [{
+          partition_id: 'test-partition',
+          replica_count: 3,
+        }];
+        return partitions.filter(predicate);
+      }
       if (tableName === TABLES.SERVICES) {
         const services = [
           {
@@ -2719,6 +3541,13 @@ test('PartitionService - critical partition defers learner on even voter count',
             status: SERVICE_STATUS.ACTIVE,
             raft_role: 'learner',
           },
+          {
+            service_id: 'replica-5',
+            partition_id: `${SYSTEM_TABLE_NAME.CONFIG}-p1`,
+            service_type: SERVICE_TYPE.PARTITION,
+            status: SERVICE_STATUS.ACTIVE,
+            raft_role: 'learner',
+          },
         ];
         return services.filter(predicate);
       }
@@ -2729,8 +3558,8 @@ test('PartitionService - critical partition defers learner on even voter count',
   const partition = new PartitionService({
     partitionId: `${SYSTEM_TABLE_NAME.CONFIG}-p1`,
     tableId: SYSTEM_TABLE_NAME.CONFIG,
-    replicaId: 'replica-4',
-    replicaIds: ['replica-4'],
+    replicaId: 'replica-5',
+    replicaIds: ['replica-5'],
     nodeId: 'node-2',
     dbPath: ':memory:',
     isJoiningExistingGroup: true,
@@ -2745,9 +3574,12 @@ test('PartitionService - critical partition defers learner on even voter count',
   t.equal(
     partition.role,
     RaftRole.LEARNER,
-    'Critical partitions should also defer promotion that creates even voters',
+    'Critical partitions should defer when a second learner would exceed the bounded replacement window',
   );
-  t.ok(partition.learnerPromotionTimer, 'Should reschedule promotion check');
+  t.ok(
+    partition.learnerPromotionTimer,
+    'Exhausted critical replacement window should reschedule',
+  );
 
   if (partition.learnerPromotionTimer) {
     clearTimeout(partition.learnerPromotionTimer);
@@ -2755,12 +3587,27 @@ test('PartitionService - critical partition defers learner on even voter count',
   }
 });
 
-test('PartitionService - learner promotes when multiple learners reach odd count', async (t) => {
+test('PartitionService - learner promotes when multiple learners reach odd count within target replica count', async (t) => {
   // Create a mock system table cache with 3 active voters and 2 learners
   // 3 voters + 2 learners = 5 (odd) - should allow promotion
   const mockCache = {
-    get: () => null,
+    get: (tableName, key) => {
+      if (tableName === TABLES.PARTITIONS && key === 'test-partition') {
+        return {
+          partition_id: 'test-partition',
+          replica_count: 5,
+        };
+      }
+      return null;
+    },
     filter: (tableName, predicate) => {
+      if (tableName === TABLES.PARTITIONS) {
+        const partitions = [{
+          partition_id: 'test-partition',
+          replica_count: 5,
+        }];
+        return partitions.filter(predicate);
+      }
       if (tableName === TABLES.SERVICES) {
         const services = [
           {
@@ -2827,8 +3674,9 @@ test('PartitionService - learner promotes when multiple learners reach odd count
 
   // Should promote because 3 voters + 2 learners = 5 (odd)
   // Even though 3 + 1 = 4 (even), all learners promoting gives odd count
+  // and stays within the configured target of 5 voters.
   t.equal(partition.role, RaftRole.FOLLOWER,
-    'Should promote when all learners would reach odd count');
+    'Should promote when all learners would reach odd count within target');
 
   // Clean up any timers
   if (partition.learnerPromotionTimer) {
@@ -2837,12 +3685,118 @@ test('PartitionService - learner promotes when multiple learners reach odd count
   }
 });
 
-test('PartitionService - learner deferred when all learners would still be even', async (t) => {
-  // Create a mock system table cache with 3 active voters and 1 learner
-  // 3 voters + 1 learner = 4 (even) - should defer promotion
+test('PartitionService - learner defers when multiple learners would exceed target replica count', async (t) => {
   const mockCache = {
-    get: () => null,
+    get: (tableName, key) => {
+      if (tableName === TABLES.PARTITIONS && key === 'test-partition') {
+        return {
+          partition_id: 'test-partition',
+          replica_count: 3,
+        };
+      }
+      return null;
+    },
     filter: (tableName, predicate) => {
+      if (tableName === TABLES.PARTITIONS) {
+        const partitions = [{
+          partition_id: 'test-partition',
+          replica_count: 3,
+        }];
+        return partitions.filter(predicate);
+      }
+      if (tableName === TABLES.SERVICES) {
+        const services = [
+          {
+            service_id: 'replica-1',
+            partition_id: 'test-partition',
+            service_type: SERVICE_TYPE.PARTITION,
+            status: SERVICE_STATUS.ACTIVE,
+            raft_role: 'leader',
+          },
+          {
+            service_id: 'replica-2',
+            partition_id: 'test-partition',
+            service_type: SERVICE_TYPE.PARTITION,
+            status: SERVICE_STATUS.ACTIVE,
+            raft_role: 'follower',
+          },
+          {
+            service_id: 'replica-3',
+            partition_id: 'test-partition',
+            service_type: SERVICE_TYPE.PARTITION,
+            status: SERVICE_STATUS.ACTIVE,
+            raft_role: 'follower',
+          },
+          {
+            service_id: 'replica-4',
+            partition_id: 'test-partition',
+            service_type: SERVICE_TYPE.PARTITION,
+            status: SERVICE_STATUS.ACTIVE,
+            raft_role: 'learner',
+          },
+          {
+            service_id: 'replica-5',
+            partition_id: 'test-partition',
+            service_type: SERVICE_TYPE.PARTITION,
+            status: SERVICE_STATUS.ACTIVE,
+            raft_role: 'learner',
+          },
+        ];
+        return services.filter(predicate);
+      }
+      return [];
+    },
+  };
+
+  const partition = new PartitionService({
+    partitionId: 'test-partition',
+    tableId: 'test-table',
+    replicaId: 'replica-4',
+    replicaIds: ['replica-4'],
+    nodeId: 'node-2',
+    dbPath: ':memory:',
+    isJoiningExistingGroup: true,
+    systemTableCache: mockCache,
+  });
+
+  partition.role = RaftRole.LEARNER;
+  partition.leaderId = 'replica-1';
+
+  partition.checkLearnerPromotion();
+
+  t.equal(
+    partition.role,
+    RaftRole.LEARNER,
+    'Should defer when multi-learner promotion would exceed target',
+  );
+  t.ok(partition.learnerPromotionTimer, 'Should reschedule promotion check');
+
+  if (partition.learnerPromotionTimer) {
+    clearTimeout(partition.learnerPromotionTimer);
+    partition.learnerPromotionTimer = null;
+  }
+});
+
+test('PartitionService - learner deferred when all learners would still be even', async (t) => {
+  // Create a mock system table cache with 3 active voters and 3 learners.
+  // 3 voters + 3 learners = 6 (even), so the learner should still defer.
+  const mockCache = {
+    get: (tableName, key) => {
+      if (tableName === TABLES.PARTITIONS && key === 'test-partition') {
+        return {
+          partition_id: 'test-partition',
+          replica_count: 6,
+        };
+      }
+      return null;
+    },
+    filter: (tableName, predicate) => {
+      if (tableName === TABLES.PARTITIONS) {
+        return [{
+          partition_id: 'test-partition',
+          replica_count: 6,
+        }].filter(predicate);
+      }
       if (tableName === TABLES.SERVICES) {
         const services = [
           {
@@ -2874,6 +3828,20 @@ test('PartitionService - learner deferred when all learners would still be even'
             status: SERVICE_STATUS.ACTIVE,
             raft_role: 'learner',
           },
+          {
+            service_id: 'replica-5',
+            partition_id: 'test-partition',
+            service_type: SERVICE_TYPE.PARTITION,
+            status: SERVICE_STATUS.ACTIVE,
+            raft_role: 'learner',
+          },
+          {
+            service_id: 'replica-6',
+            partition_id: 'test-partition',
+            service_type: SERVICE_TYPE.PARTITION,
+            status: SERVICE_STATUS.ACTIVE,
+            raft_role: 'learner',
+          },
         ];
         return services.filter(predicate);
       }
@@ -2895,11 +3863,13 @@ test('PartitionService - learner deferred when all learners would still be even'
 
   // Manually set role to learner
   partition.role = RaftRole.LEARNER;
+  partition.leaderId = 'replica-1';
 
   // Manually trigger learner promotion check
   partition.checkLearnerPromotion();
 
-  // Should remain learner because 3 + 1 = 4 (even)
+  // Should remain learner because 3 + 1 = 4 (even) and promoting all learners
+  // would still leave the group at an even count of 6.
   t.equal(partition.role, RaftRole.LEARNER,
     'Should remain learner when all learners would still be even');
 

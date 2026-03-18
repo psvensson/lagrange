@@ -14,6 +14,8 @@ const ZERO = 0;
 const ONE = 1;
 const MS_PER_MINUTE = 60000;
 const UNKNOWN_NODE_ID = 'unknown-node';
+const TAIL_FRACTION = 0.3;
+const RECOVERY_SLOPE_RATIO = 0.25;
 
 /**
  * Normalize memory leak config.
@@ -356,20 +358,34 @@ function analyzeNodeMemoryTrend(nodeId, samples, config) {
     growthBytes > config.minGrowthBytes &&
     positiveDeltaRatio >= config.minPositiveDeltaRatio;
 
+  const tailSlopeBytesPerMin = calculateTailSlopeBytesPerMinute(
+    analysisSamples,
+  );
+  const recoveryDetected = leakDetected &&
+    tailSlopeBytesPerMin <= slopeBytesPerMin * RECOVERY_SLOPE_RATIO;
+  const effectiveLeakDetected = leakDetected && !recoveryDetected;
+  const reason = effectiveLeakDetected ?
+    'sustained-positive-trend' :
+    recoveryDetected ?
+      'transient-pressure' :
+      'within-thresholds';
+
   return {
     nodeId,
     analyzed: true,
-    leakDetected,
-    reason: leakDetected ? 'sustained-positive-trend' : 'within-thresholds',
+    leakDetected: effectiveLeakDetected,
+    reason,
     sampleCount,
     postWarmupSampleCount: analysisSamples.length,
     analysisWindowMs,
     slopeBytesPerMin,
+    tailSlopeBytesPerMin,
     growthBytes,
     growthPercent,
     positiveDeltaRatio,
     maxMemoryUsageBytes,
     maxMemoryUsagePercent,
+    recoveryDetected,
   };
 }
 
@@ -430,6 +446,29 @@ function calculatePositiveDeltaRatio(samples) {
 }
 
 /**
+ * Calculate linear regression slope for the tail portion of samples.
+ * Uses the last TAIL_FRACTION of the analysis window to detect
+ * whether memory growth has recovered (slope near zero or negative)
+ * after an initial transient spike.
+ * @param {Array<Object>} samples
+ * @return {number}
+ */
+function calculateTailSlopeBytesPerMinute(samples) {
+  if (!Array.isArray(samples) || samples.length < 2) {
+    return ZERO;
+  }
+  const tailStartIndex = Math.max(
+    ZERO,
+    Math.floor(samples.length * (ONE - TAIL_FRACTION)),
+  );
+  const tailSamples = samples.slice(tailStartIndex);
+  if (tailSamples.length < 2) {
+    return ZERO;
+  }
+  return calculateSlopeBytesPerMinute(tailSamples);
+}
+
+/**
  * Return first finite number from the input list.
  * @param {Array<*>} values
  * @return {number|null}
@@ -482,4 +521,5 @@ export {
   analyzeMemoryLeakFromPlayback,
   calculateSlopeBytesPerMinute,
   calculatePositiveDeltaRatio,
+  calculateTailSlopeBytesPerMinute,
 };

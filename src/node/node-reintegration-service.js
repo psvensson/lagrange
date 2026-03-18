@@ -10,6 +10,11 @@ import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {NUM} from '../constants/index.js';
+import {
+  CONTROL_PLANE_MUTATION_OPERATION,
+  ControlPlaneSystemTableGateway,
+} from '../control-plane/control-plane-system-table-gateway.js';
+import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
 import {assertCritical} from '../utils/assert.js';
 import {
   NODE_REINTEGRATION_DEFAULT,
@@ -70,6 +75,8 @@ class NodeReintegrationService extends EventEmitter {
 
     this.systemTableCache = options.systemTableCache || null;
     this.cdcIntegrationService = options.cdcIntegrationService || null;
+    this.controlPlaneSystemTableGateway =
+      options.controlPlaneSystemTableGateway || null;
     this.nodeId = options.nodeId || null;
 
     // Configuration
@@ -113,6 +120,9 @@ class NodeReintegrationService extends EventEmitter {
     if (options.cdcIntegrationService) {
       this.cdcIntegrationService = options.cdcIntegrationService;
     }
+    if (options.controlPlaneSystemTableGateway) {
+      this.controlPlaneSystemTableGateway = options.controlPlaneSystemTableGateway;
+    }
     if (options.nodeId) {
       this.nodeId = options.nodeId;
     }
@@ -124,10 +134,9 @@ class NodeReintegrationService extends EventEmitter {
       this.systemTableCache,
       NODE_REINTEGRATION_ERROR_MSG.MISSING_SYSTEM_TABLE_CACHE,
     );
-    this.cdcIntegrationService = assertCritical(
-      this.cdcIntegrationService,
-      NODE_REINTEGRATION_ERROR_MSG.MISSING_CDC_SERVICE,
-    );
+    if (!this.cdcIntegrationService && !this.controlPlaneSystemTableGateway) {
+      throw new Error(NODE_REINTEGRATION_ERROR_MSG.MISSING_CDC_SERVICE);
+    }
 
     this.initialized = true;
 
@@ -383,15 +392,19 @@ class NodeReintegrationService extends EventEmitter {
 
     // Mark node as active
     try {
-      const result = await this.cdcIntegrationService.updateSystemTableRow(
-        SYSTEM_TABLE_NAME.NODES,
-        buildObservedNodeWhereClause(node),
-        {
+      const result = await this.getControlPlaneSystemTableGateway().submitMutation({
+        operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+        tableName: SYSTEM_TABLE_NAME.NODES,
+        whereClause: buildObservedNodeWhereClause(node),
+        data: {
           status: NodeStatus.ACTIVE,
           reintegrated_at: now,
           updated_at: now,
         },
-      );
+      }, {
+        workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+        deliveryPriority: 'critical',
+      });
       if (!guardedUpdateApplied(result)) {
         this.logger.debug(NODE_REINTEGRATION_LOG_MSG.STALE_COMPLETION_UPDATE, {
           nodeId,
@@ -467,14 +480,18 @@ class NodeReintegrationService extends EventEmitter {
     // Mark node back to failed status if health checks failed
     if (reason === NODE_REINTEGRATION_REASON.HEALTH_CHECK_FAILED) {
       try {
-        const result = await this.cdcIntegrationService.updateSystemTableRow(
-          SYSTEM_TABLE_NAME.NODES,
-          buildObservedNodeWhereClause(node),
-          {
+        const result = await this.getControlPlaneSystemTableGateway().submitMutation({
+          operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+          tableName: SYSTEM_TABLE_NAME.NODES,
+          whereClause: buildObservedNodeWhereClause(node),
+          data: {
             status: NodeStatus.FAILED,
             updated_at: Date.now(),
           },
-        );
+        }, {
+          workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+          deliveryPriority: 'critical',
+        });
         if (!guardedUpdateApplied(result)) {
           this.logger.debug(NODE_REINTEGRATION_LOG_MSG.STALE_FAILURE_UPDATE, {
             nodeId,
@@ -584,6 +601,32 @@ class NodeReintegrationService extends EventEmitter {
    */
   isRunning() {
     return this.monitoringActive;
+  }
+
+  /**
+   * @return {ControlPlaneSystemTableGateway}
+   * @private
+   */
+  getControlPlaneSystemTableGateway() {
+    if (this.controlPlaneSystemTableGateway) {
+      if (!this.controlPlaneSystemTableGateway.cdcIntegrationService &&
+          this.cdcIntegrationService) {
+        this.controlPlaneSystemTableGateway
+          .setCdcIntegrationService(this.cdcIntegrationService);
+      }
+      if (!this.controlPlaneSystemTableGateway.messageRouter &&
+          this.cdcIntegrationService?.messageRouter) {
+        this.controlPlaneSystemTableGateway
+          .setMessageRouter(this.cdcIntegrationService.messageRouter);
+      }
+      return this.controlPlaneSystemTableGateway;
+    }
+    this.controlPlaneSystemTableGateway = new ControlPlaneSystemTableGateway({
+      nodeId: this.nodeId,
+      cdcIntegrationService: this.cdcIntegrationService,
+      messageRouter: this.cdcIntegrationService?.messageRouter || null,
+    });
+    return this.controlPlaneSystemTableGateway;
   }
 
   /**

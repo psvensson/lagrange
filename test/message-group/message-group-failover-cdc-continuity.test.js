@@ -35,6 +35,7 @@ const TEST_NODE_ID_PREFIX = 'failover-node-';
 const CDC_TABLE_NODES = 'nodes';
 const CDC_TABLE_PARTITIONS = 'partitions';
 const CDC_TABLE_SERVICES = 'services';
+const LEADER_ACTIVATION_STABILIZATION_MS = 20;
 
 /**
  * Create a real WebSocket transport for testing.
@@ -53,6 +54,21 @@ async function createTestTransport() {
       await router.shutdown();
     },
   };
+}
+
+async function waitForCondition(
+  predicate,
+  timeoutMs = 500,
+  intervalMs = 10,
+) {
+  const start = Date.now();
+  while ((Date.now() - start) < timeoutMs) {
+    if (await Promise.resolve(predicate())) {
+      return true;
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+  return false;
 }
 
 beforeEach(() => {
@@ -83,6 +99,8 @@ test(
         groupId: TEST_GROUP_ID,
         replicaId,
         nodeId,
+        peerAddresses: [`${nodeId}/message-group/${replicaId}`],
+        leaderActivationStabilizationMs: LEADER_ACTIVATION_STABILIZATION_MS,
         transport: router,
       });
 
@@ -125,6 +143,10 @@ test(
         service.isLeader,
         true,
         'should regain leadership after LEADER event',
+      );
+
+      await waitForCondition(
+        () => resubscribedTables.length === NUM.THREE,
       );
 
       // Assert re-subscription happened for all three tables.
@@ -172,6 +194,8 @@ test(
         groupId: `${TEST_GROUP_ID}-idempotent`,
         replicaId,
         nodeId,
+        peerAddresses: [`${nodeId}/message-group/${replicaId}`],
+        leaderActivationStabilizationMs: LEADER_ACTIVATION_STABILIZATION_MS,
         transport: router,
       });
 
@@ -185,6 +209,12 @@ test(
       service.raft.emit(RAFT_EVENT.LEADER);
       service.raft.emit(RAFT_EVENT.FOLLOWER);
       service.raft.emit(RAFT_EVENT.LEADER);
+
+      await waitForCondition(() => service.isLeader === true);
+      await new Promise((resolve) => setTimeout(
+        resolve,
+        LEADER_ACTIVATION_STABILIZATION_MS * 3,
+      ));
 
       // Subscriptions should still be exactly one entry (idempotent).
       const subs = service.cdcHandler.getSubscriptions();
@@ -216,6 +246,8 @@ test(
         groupId: `${TEST_GROUP_ID}-empty`,
         replicaId,
         nodeId,
+        peerAddresses: [`${nodeId}/message-group/${replicaId}`],
+        leaderActivationStabilizationMs: LEADER_ACTIVATION_STABILIZATION_MS,
         transport: router,
       });
 
@@ -241,6 +273,11 @@ test(
       service.raft.emit(RAFT_EVENT.FOLLOWER);
       service.raft.emit(RAFT_EVENT.LEADER);
 
+      await new Promise((resolve) => setTimeout(
+        resolve,
+        LEADER_ACTIVATION_STABILIZATION_MS * 3,
+      ));
+
       t.equal(
         subscribeCalls,
         NUM.ZERO,
@@ -265,6 +302,8 @@ test(
         groupId: `${TEST_GROUP_ID}-auto`,
         replicaId,
         nodeId,
+        peerAddresses: [`${nodeId}/message-group/${replicaId}`],
+        leaderActivationStabilizationMs: LEADER_ACTIVATION_STABILIZATION_MS,
         transport: router,
       });
 
@@ -285,6 +324,13 @@ test(
       // Simulate full failover cycle: lose leadership, then regain.
       service.raft.emit(RAFT_EVENT.FOLLOWER);
       service.raft.emit(RAFT_EVENT.LEADER);
+
+      await waitForCondition(() => {
+        return logMessages.some((entry) => {
+          return entry.msg ===
+            MESSAGE_GROUP_SERVICE_LOG_MSG.CDC_RESUBSCRIBE_ON_LEADER_COMPLETE;
+        });
+      });
 
       // Verify re-subscription log was emitted (proves automatic
       // recovery without manual intervention).
@@ -340,6 +386,8 @@ test(
         groupId: `${TEST_GROUP_ID}-e2e`,
         replicaId,
         nodeId,
+        peerAddresses: [`${nodeId}/message-group/${replicaId}`],
+        leaderActivationStabilizationMs: LEADER_ACTIVATION_STABILIZATION_MS,
         transport: router,
       });
 

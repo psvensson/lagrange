@@ -1,6 +1,9 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
-import {BOOTSTRAP_API_CACHE_VISIBILITY} from '../../src/bootstrap/bootstrap-api-constants.js';
+import {
+  BOOTSTRAP_API_CACHE_VISIBILITY,
+  BOOTSTRAP_API_HANDOFF_STATUS,
+} from '../../src/bootstrap/bootstrap-api-constants.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {SERVICE_STATUS, SERVICE_TYPE} from '../../src/constants/index.js';
@@ -202,6 +205,118 @@ function createSqlQueryEngineFixture(rows) {
   };
 }
 
+function getPrimaryKeyFieldForSystemTable(tableName, row = null) {
+  switch (tableName) {
+    case 'services':
+      return 'service_id';
+    case 'nodes':
+    case 'node_endpoints':
+    case 'logs':
+      return 'node_id';
+    case 'replica_operations':
+      return 'operation_id';
+    case 'message_groups':
+      return 'group_id';
+    case 'partitions':
+      return 'partition_id';
+    case 'service_endpoints':
+      return 'endpoint_id';
+    case 'service_definitions':
+      return 'service_id';
+    default:
+      break;
+  }
+  for (const candidate of ['service_id', 'node_id', 'operation_id', 'id']) {
+    if (typeof row?.[candidate] !== 'undefined' && row?.[candidate] !== null) {
+      return candidate;
+    }
+  }
+  return 'id';
+}
+
+function createCdcIntegrationServiceFixture(rows, options = {}) {
+  const persistMutations = options.persistMutations !== false;
+  const findRows = (tableName) => {
+    if (!Array.isArray(rows[tableName])) {
+      rows[tableName] = [];
+    }
+    return rows[tableName];
+  };
+  const findRowIndex = (tableName, primaryKeyField, keyValue) => {
+    return findRows(tableName).findIndex((row) => row?.[primaryKeyField] === keyValue);
+  };
+
+  return {
+    async insertSystemTableRow(tableName, row) {
+      if (!persistMutations) {
+        return {success: true, affectedRows: 1};
+      }
+      const tableRows = findRows(tableName);
+      tableRows.push({...row});
+      return {success: true, affectedRows: 1};
+    },
+
+    async upsertSystemTableRow(tableName, row) {
+      if (!persistMutations) {
+        return {success: true, affectedRows: 1};
+      }
+      const tableRows = findRows(tableName);
+      const primaryKeyField = getPrimaryKeyFieldForSystemTable(tableName, row);
+      const keyValue = row?.[primaryKeyField];
+      const rowPayload = {...row};
+      const existingIndex = findRowIndex(tableName, primaryKeyField, keyValue);
+      if (existingIndex === -1) {
+        tableRows.push(rowPayload);
+      } else {
+        tableRows[existingIndex] = {
+          ...tableRows[existingIndex],
+          ...rowPayload,
+        };
+      }
+      return {success: true, affectedRows: 1};
+    },
+
+    async updateSystemTableRow(tableName, whereClause, data) {
+      if (!persistMutations) {
+        return {success: true, affectedRows: 1};
+      }
+      const tableRows = findRows(tableName);
+      let affectedRows = 0;
+      for (const row of tableRows) {
+        const matches = Object.entries(whereClause || {}).every(([key, value]) =>
+          row?.[key] === value,
+        );
+        if (!matches) {
+          continue;
+        }
+        Object.assign(row, data);
+        affectedRows += 1;
+      }
+      return {success: true, affectedRows};
+    },
+
+    async deleteSystemTableRow(tableName, whereClause) {
+      if (!persistMutations) {
+        return {success: true, affectedRows: 1};
+      }
+      const tableRows = findRows(tableName);
+      const remainingRows = tableRows.filter((row) =>
+        !Object.entries(whereClause || {}).every(([key, value]) => row?.[key] === value),
+      );
+      const affectedRows = tableRows.length - remainingRows.length;
+      rows[tableName] = remainingRows;
+      return {success: true, affectedRows};
+    },
+
+    async repairCacheVisibilityHole(...args) {
+      if (typeof options.repairCacheVisibilityHole === 'function') {
+        return options.repairCacheVisibilityHole(...args);
+      }
+      return false;
+    },
+  };
+}
+
 function buildRegisterPayload(nodeId, assignment, overrides = {}) {
   const replicaId = assignment.replicaToMove;
   return {
@@ -226,14 +341,18 @@ async function bootstrapMoveReplicaAssignment(t, options = {}) {
 
   const {rows, cache} = createSystemCacheFixture();
   const sqlQueryEngine = createSqlQueryEngineFixture(rows);
+  const cdcIntegrationService = createCdcIntegrationServiceFixture(rows);
 
   const api = new BootstrapAPI({
     seedNodeId: 'seed-node-1',
     seedNodeAddress: 'ws://localhost:8080',
     systemTableCache: cache,
     messageGroupServices,
+    cdcIntegrationService,
     moveReplicaAssignmentLeaseMs: options.assignmentLeaseMs,
     moveReplicaAssignmentSweepIntervalMs: options.assignmentSweepIntervalMs,
+    ownsMoveReplicaAssignmentLifecycle:
+      options.ownsMoveReplicaAssignmentLifecycle === true,
   });
   await api.initialize(0, {listen: false});
   api.setSqlQueryEngine(sqlQueryEngine);
@@ -357,6 +476,65 @@ test('BootstrapAPI register-service rejects mismatched assignment token and revi
   );
 });
 
+test('BootstrapAPI register-service renews near-expiry reservation before it expires',
+  async (t) => {
+    const fixture = await bootstrapMoveReplicaAssignment(t, {
+      joiningNodeId: '550e8400-e29b-41d4-a716-446655440398',
+      assignmentLeaseMs: 40,
+    });
+    const {api, assignment, joiningNodeId, rows} = fixture;
+
+    const reservationRowBefore = rows.replica_operations.find((row) =>
+      row.operation_id === assignment.assignmentId,
+    );
+    t.ok(reservationRowBefore, 'fixture should persist replica operation reservation');
+
+    const nearExpiry = Date.now() + 5;
+    reservationRowBefore.completed_at = nearExpiry;
+    reservationRowBefore.updated_at = Date.now();
+    const cachedReservation = api.moveReplicaAssignmentReservations.get(
+      assignment.assignmentId,
+    );
+    cachedReservation.leaseExpiresAt = nearExpiry;
+    cachedReservation.updatedAt = Date.now();
+
+    const response = await api.getFastify().inject({
+      method: 'POST',
+      url: '/register-service',
+      payload: buildRegisterPayload(joiningNodeId, assignment, {
+        assignment_id: assignment.assignmentId,
+      }),
+    });
+    t.equal(
+      response.statusCode,
+      200,
+      'register-service should renew an active reservation before expiry under slow handoff progress',
+    );
+
+    const reservationRowAfter = rows.replica_operations.find((row) =>
+      row.operation_id === assignment.assignmentId,
+    );
+    const stepsHistory = JSON.parse(reservationRowAfter?.steps_history || '[]');
+    const validatedStep = stepsHistory.find((step) => step.phase === 'validated');
+    t.ok(
+      Number(validatedStep?.leaseExpiresAt) > nearExpiry,
+      'renewal should persist a later lease expiry in replica_operations history',
+    );
+    const renewedReservation = api.moveReplicaAssignmentReservations.get(
+      assignment.assignmentId,
+    );
+    t.equal(
+      renewedReservation?.status,
+      BOOTSTRAP_API_HANDOFF_STATUS.COMMITTED,
+      'successful register-service should advance the reservation into committed state',
+    );
+    t.equal(
+      stepsHistory.at(-1)?.phase,
+      'commit_metadata',
+      'successful handoff should continue from lease validation into metadata commit',
+    );
+  });
+
 test('BootstrapAPI register-service still rejects expired reservation after source ownership drift', async (t) => {
   const expiredFixture = await bootstrapMoveReplicaAssignment(t, {
     joiningNodeId: '550e8400-e29b-41d4-a716-446655440324',
@@ -433,6 +611,7 @@ test('BootstrapAPI background sweep clears stranded MOVE_REPLICA reservation wit
       joiningNodeId: '550e8400-e29b-41d4-a716-446655440328',
       assignmentLeaseMs: 60_000,
       assignmentSweepIntervalMs: 5,
+      ownsMoveReplicaAssignmentLifecycle: true,
     });
 
     const sourceNode = fixture.rows.nodes.find((row) =>
@@ -461,6 +640,7 @@ test('BootstrapAPI background sweep preserves expired but revivable MOVE_REPLICA
       joiningNodeId: '550e8400-e29b-41d4-a716-446655440329',
       assignmentLeaseMs: 5,
       assignmentSweepIntervalMs: 5,
+      ownsMoveReplicaAssignmentLifecycle: true,
     });
 
     await new Promise((resolve) => setTimeout(resolve, 30));
@@ -487,6 +667,99 @@ test('BootstrapAPI background sweep preserves expired but revivable MOVE_REPLICA
       revivedResponse.statusCode,
       200,
       'expired reservation should still be revivable after background sweep',
+    );
+  });
+
+test('BootstrapAPI defers subsequent bootstrap while an expired non-terminal MOVE_REPLICA reservation is still open',
+  async (t) => {
+    const fixture = await bootstrapMoveReplicaAssignment(t, {
+      joiningNodeId: '550e8400-e29b-41d4-a716-446655440332',
+      assignmentLeaseMs: 5,
+      assignmentSweepIntervalMs: 5,
+      ownsMoveReplicaAssignmentLifecycle: true,
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    const secondBootstrap = await fixture.api.getFastify().inject({
+      method: 'POST',
+      url: '/bootstrap',
+      payload: {
+        nodeId: '550e8400-e29b-41d4-a716-446655440333',
+        nodeAddress: 'ws://localhost:9129',
+      },
+    });
+    t.equal(
+      secondBootstrap.statusCode,
+      503,
+      'bootstrap should still defer while the original MOVE_REPLICA handoff remains non-terminal after lease expiry',
+    );
+    t.equal(
+      secondBootstrap.json().code,
+      'BOOTSTRAP_NOT_READY',
+      'deferred bootstrap should use the canonical not-ready code',
+    );
+    t.ok(
+      (secondBootstrap.json().reasons || [])
+        .includes('MOVE_REPLICA_HANDOFF_STABILIZING'),
+      'deferred bootstrap should surface the open handoff stabilization reason',
+    );
+  });
+
+test('BootstrapAPI sweep reconciles observed target ownership into a committed MOVE_REPLICA handoff',
+  async (t) => {
+    const fixture = await bootstrapMoveReplicaAssignment(t, {
+      joiningNodeId: '550e8400-e29b-41d4-a716-446655440334',
+      assignmentLeaseMs: 60_000,
+    });
+    const {api, assignment, rows, joiningNodeId} = fixture;
+
+    const targetReplica = rows.services.find((row) =>
+      row.service_id === assignment.replicaToMove,
+    );
+    t.ok(targetReplica, 'fixture should include the reserved replica service row');
+    targetReplica.node_id = joiningNodeId;
+    targetReplica.address =
+      `${joiningNodeId}/message-group/${assignment.replicaToMove}`;
+
+    rows.nodes.push({
+      node_id: joiningNodeId,
+      status: SERVICE_STATUS.ACTIVE,
+      connection_state: 'ready',
+      last_heartbeat: Date.now(),
+      ready_lease_expires_at: Date.now() + 60_000,
+    });
+
+    api.messageGroupServices.delete(assignment.replicaToMove);
+
+    await api.expireMoveReplicaAssignmentReservations();
+
+    const reservationRow = rows.replica_operations.find((row) =>
+      row.operation_id === assignment.assignmentId,
+    );
+    t.equal(
+      reservationRow?.status,
+      'active',
+      'observed target ownership should reconcile the reservation to committed',
+    );
+    t.equal(
+      reservationRow?.workflow_step,
+      'ACTIVE',
+      'reconciled reservation should persist ACTIVE workflow step',
+    );
+
+    const nextBootstrap = await api.getFastify().inject({
+      method: 'POST',
+      url: '/bootstrap',
+      payload: {
+        nodeId: '550e8400-e29b-41d4-a716-446655440335',
+        nodeAddress: 'ws://localhost:9130',
+      },
+    });
+    t.equal(
+      nextBootstrap.statusCode,
+      200,
+      'bootstrap should not remain blocked once observed ownership and target readiness have converged',
     );
   });
 
@@ -570,12 +843,13 @@ test('BootstrapAPI register-service returns retryable 503 when assignment token 
     );
   });
 
-test('BootstrapAPI does not expire committed MOVE_REPLICA operations on subsequent bootstrap',
+test('BootstrapAPI defers subsequent bootstrap until committed MOVE_REPLICA target is ready',
   async (t) => {
     const fixture = await bootstrapMoveReplicaAssignment(t, {
       joiningNodeId: '550e8400-e29b-41d4-a716-446655440325',
     });
     const {api, assignment, joiningNodeId, rows} = fixture;
+    const targetNodeId = joiningNodeId;
 
     const registerResponse = await api.getFastify().inject({
       method: 'POST',
@@ -612,7 +886,43 @@ test('BootstrapAPI does not expire committed MOVE_REPLICA operations on subseque
         nodeAddress: 'ws://localhost:9124',
       },
     });
-    t.equal(secondBootstrap.statusCode, 200, 'second bootstrap should succeed');
+    t.equal(
+      secondBootstrap.statusCode,
+      503,
+      'second bootstrap should defer while the committed target is still unready',
+    );
+    t.equal(
+      secondBootstrap.json().code,
+      'BOOTSTRAP_NOT_READY',
+      'bootstrap defer should use the canonical not-ready code',
+    );
+    t.ok(
+      (secondBootstrap.json().reasons || [])
+        .includes('MOVE_REPLICA_HANDOFF_STABILIZING'),
+      'bootstrap defer should surface committed handoff stabilization reason',
+    );
+
+    rows.nodes.push({
+      node_id: targetNodeId,
+      status: SERVICE_STATUS.ACTIVE,
+      connection_state: 'ready',
+      last_heartbeat: Date.now(),
+      ready_lease_expires_at: Date.now() + 60_000,
+    });
+
+    const thirdBootstrap = await api.getFastify().inject({
+      method: 'POST',
+      url: '/bootstrap',
+      payload: {
+        nodeId: '550e8400-e29b-41d4-a716-446655440326',
+        nodeAddress: 'ws://localhost:9124',
+      },
+    });
+    t.equal(
+      thirdBootstrap.statusCode,
+      200,
+      'bootstrap should resume once the committed target becomes ready',
+    );
 
     const operationAfterSecondBootstrap = rows.replica_operations.find((row) =>
       row.operation_id === assignment.assignmentId,
@@ -672,6 +982,7 @@ test('BootstrapAPI register-service emits retryable cache visibility timeout res
       seedNodeAddress: 'ws://localhost:8080',
       systemTableCache,
       messageGroupServices: new Map(),
+      cdcIntegrationService: createCdcIntegrationServiceFixture(rows),
     });
     await api.initialize(0, {listen: false});
     api.setSqlQueryEngine({
@@ -731,7 +1042,7 @@ test('BootstrapAPI register-service emits retryable cache visibility timeout res
     );
   });
 
-test('BootstrapAPI register-service accepts storage-visible row when cache is stale',
+test('BootstrapAPI register-service remains retryable when storage is visible but cache is stale',
   async (t) => {
     initializeTestEnvironment();
     const rows = {
@@ -781,6 +1092,7 @@ test('BootstrapAPI register-service accepts storage-visible row when cache is st
       seedNodeAddress: 'ws://localhost:8080',
       systemTableCache,
       messageGroupServices: new Map(),
+      cdcIntegrationService: createCdcIntegrationServiceFixture(rows),
     });
     await api.initialize(0, {listen: false});
     api.setSqlQueryEngine({
@@ -816,17 +1128,219 @@ test('BootstrapAPI register-service accepts storage-visible row when cache is st
 
     t.equal(
       response.statusCode,
-      200,
-      'register-service should succeed when services row is visible in storage',
+      503,
+      'register-service should remain retryable until the services cache reflects the row',
     );
+    const responseBody = response.json();
+    t.equal(responseBody.code, 'SERVICE_REGISTRATION_CACHE_VISIBILITY_TIMEOUT');
     t.equal(
-      response.json().success,
-      true,
-      'register-service should return success payload',
+      responseBody.details?.lastVisibilityCheck?.reason,
+      BOOTSTRAP_API_CACHE_VISIBILITY.REASON_STORAGE_ROW_VISIBLE_CACHE_STALE,
+      'diagnostics should report storage-visible but cache-stale visibility',
     );
     t.ok(
       storageVisibilityLookups > 0,
       'register-service should check authoritative storage visibility',
+    );
+  });
+
+test('BootstrapAPI register-service repairs cache-visible hole from authoritative storage',
+  async (t) => {
+    initializeTestEnvironment();
+    const rows = {
+      services: [],
+      nodes: [],
+      partitions: [],
+      tables: [],
+      message_groups: [],
+      replica_operations: [],
+      indices: [],
+      config: [],
+      logs: [],
+      live_queries: [],
+      contexts: [],
+      code: [],
+      node_endpoints: [],
+    };
+    const systemTableCache = {
+      getAll(tableName) {
+        return rows[tableName] || [];
+      },
+      get(tableName, id) {
+        return (rows[tableName] || []).find((row) => row.service_id === id) || null;
+      },
+      filter(tableName, predicate) {
+        return (rows[tableName] || []).filter(predicate);
+      },
+      getReadyNodes() {
+        return ['seed-node-1'];
+      },
+      applySystemTableChange(tableName, _operation, data) {
+        const tableRows = rows[tableName] || [];
+        const key = data?.service_id || null;
+        if (!key) {
+          return;
+        }
+        const index = tableRows.findIndex((row) => row.service_id === key);
+        if (index === -1) {
+          tableRows.push({...data});
+        } else {
+          tableRows[index] = {
+            ...tableRows[index],
+            ...data,
+          };
+        }
+      },
+    };
+
+    const expectedServiceRow = {
+      service_id: 'mg-2-r1',
+      service_type: SERVICE_TYPE.MESSAGE_GROUP,
+      node_id: '550e8400-e29b-41d4-a716-446655440324',
+      group_id: 'mg-2',
+      replica_id: 'mg-2-r1',
+      raft_role: RAFT_ROLE.FOLLOWER,
+      status: SERVICE_STATUS.ACTIVE,
+      address: '550e8400-e29b-41d4-a716-446655440324/message-group/mg-2-r1',
+    };
+
+    let storageVisibilityLookups = 0;
+    let repairAttempts = 0;
+    const cdcIntegrationService = createCdcIntegrationServiceFixture(rows, {
+      persistMutations: false,
+      async repairCacheVisibilityHole(tableName, key, expectPresent, expectedFields) {
+        repairAttempts += 1;
+        t.equal(tableName, 'services', 'repair should target the services table');
+        t.equal(key, expectedServiceRow.service_id, 'repair should target the registered service');
+        t.equal(expectPresent, true, 'repair should expect the services row to exist');
+        systemTableCache.applySystemTableChange(tableName, 'UPSERT', {
+          ...expectedFields,
+          ...expectedServiceRow,
+        });
+        return true;
+      },
+    });
+
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache,
+      messageGroupServices: new Map(),
+      cdcIntegrationService,
+    });
+    await api.initialize(0, {listen: false});
+    api.setSqlQueryEngine({
+      async executeQuery(sql) {
+        if (sql.includes('INSERT OR REPLACE INTO services')) {
+          return {success: true, rows: []};
+        }
+        if (sql.includes('FROM services') && sql.includes('WHERE service_id = ?')) {
+          storageVisibilityLookups += 1;
+          return {success: true, rows: [expectedServiceRow]};
+        }
+        return {success: true, rows: []};
+      },
+    });
+    t.teardown(async () => {
+      await api.shutdown();
+    });
+
+    const response = await api.getFastify().inject({
+      method: 'POST',
+      url: '/register-service',
+      payload: {
+        service_id: expectedServiceRow.service_id,
+        service_type: expectedServiceRow.service_type,
+        node_id: expectedServiceRow.node_id,
+        group_id: expectedServiceRow.group_id,
+        replica_id: expectedServiceRow.replica_id,
+        raft_role: expectedServiceRow.raft_role,
+        status: expectedServiceRow.status,
+        address: expectedServiceRow.address,
+      },
+    });
+
+    t.equal(response.statusCode, 200,
+      'register-service should succeed once authoritative repair closes the cache hole');
+    t.ok(storageVisibilityLookups > 0,
+      'register-service should still verify authoritative storage visibility');
+    t.equal(repairAttempts, 1,
+      'register-service should use the canonical authoritative repair helper');
+  });
+
+test('BootstrapAPI register-service preserves MOVE_REPLICA assignment after retryable cache visibility timeout',
+  async (t) => {
+    const fixture = await bootstrapMoveReplicaAssignment(t, {
+      joiningNodeId: '550e8400-e29b-41d4-a716-4466554403aa',
+    });
+    const {api, assignment, joiningNodeId, rows} = fixture;
+    const originalWaitForVisibility =
+      api.waitForRegisteredServiceCacheVisibility.bind(api);
+    let visibilityAttempts = 0;
+
+    api.waitForRegisteredServiceCacheVisibility = async (expectedService) => {
+      visibilityAttempts += 1;
+      if (visibilityAttempts === 1) {
+        const error = new Error(
+          'Timed out waiting for services cache visibility for retry test',
+        );
+        error.statusCode = 503;
+        error.errorCode = 'SERVICE_REGISTRATION_CACHE_VISIBILITY_TIMEOUT';
+        error.retryAfterMs = 10;
+        error.details = {
+          serviceId: expectedService?.service_id || null,
+          nodeId: expectedService?.node_id || null,
+          lastVisibilityCheck: {
+            reason:
+              BOOTSTRAP_API_CACHE_VISIBILITY
+                .REASON_STORAGE_ROW_VISIBLE_CACHE_STALE,
+          },
+        };
+        throw error;
+      }
+      return originalWaitForVisibility(expectedService);
+    };
+
+    const firstResponse = await api.getFastify().inject({
+      method: 'POST',
+      url: '/register-service',
+      payload: buildRegisterPayload(joiningNodeId, assignment, {
+        assignment_id: assignment.assignmentId,
+      }),
+    });
+
+    t.equal(
+      firstResponse.statusCode,
+      503,
+      'first register-service attempt should remain retryable',
+    );
+    t.equal(
+      firstResponse.json().code,
+      'SERVICE_REGISTRATION_CACHE_VISIBILITY_TIMEOUT',
+      'retryable timeout should surface the stable timeout code',
+    );
+
+    const reservationRowAfterRetryableFailure = rows.replica_operations.find((row) =>
+      row.operation_id === assignment.assignmentId,
+    );
+    t.equal(
+      reservationRowAfterRetryableFailure?.status,
+      'syncing',
+      'retryable target-visibility timeout must keep the assignment reservation active',
+    );
+
+    const secondResponse = await api.getFastify().inject({
+      method: 'POST',
+      url: '/register-service',
+      payload: buildRegisterPayload(joiningNodeId, assignment, {
+        assignment_id: assignment.assignmentId,
+      }),
+    });
+
+    t.equal(
+      secondResponse.statusCode,
+      200,
+      'same assignment token should still be accepted after a retryable timeout',
     );
   });
 
@@ -885,6 +1399,7 @@ test('BootstrapAPI register-service timeout diagnostics include mismatch fields'
     seedNodeAddress: 'ws://localhost:8080',
     systemTableCache,
     messageGroupServices: new Map(),
+    cdcIntegrationService: createCdcIntegrationServiceFixture(rows),
   });
   await api.initialize(0, {listen: false});
   api.setSqlQueryEngine({

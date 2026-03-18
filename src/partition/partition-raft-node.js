@@ -6,7 +6,7 @@
  * @module partition/partition-raft-node
  */
 
-import LifeRaft from '@markwylde/liferaft';
+import LifeRaft from '../raft/liferaft.js';
 import {
   PARTITION_RAFT_NODE_LOG_MSG,
 } from './partition-raft-node-constants.js';

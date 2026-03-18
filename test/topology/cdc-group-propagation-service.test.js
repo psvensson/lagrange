@@ -927,6 +927,84 @@ test('CDCGroupPropagationService retries transient safe-mode delivery failure',
     t.end();
   });
 
+test('CDCGroupPropagationService batches immediate same-row control-plane updates',
+  async (t) => {
+    setupConfig(LATENCY_PROPAGATION_MODE.SAFE);
+    const cache = createTopologyCache({
+      nodes: [{
+        [COLUMN.NODE_ID]: 'node-a',
+        [COLUMN.LATENCY_GROUP_ID]: 'g-1',
+      }],
+      groups: [
+        createGroupRow('g-1', 'node-a'),
+        createGroupRow('g-2', 'node-b'),
+      ],
+      services: [
+        createMessageGroupServiceRow(
+          'mg-node-b-r1',
+          'node-b',
+          'node-b/message-group/mg-node-b-r1',
+          RAFT_ROLE.LEADER,
+          'g-2',
+        ),
+      ],
+    });
+    const source = createSourceMessageGroupService();
+    source.groupId = 'g-1';
+    const router = createMessageRouter([{acknowledged: true}]);
+    const service = new CDCGroupPropagationService({
+      nodeId: 'node-a',
+      systemTableCache: cache,
+      messageRouter: router,
+      latencyTreeService: {
+        getRoutingOrder: () => ['g-1', 'g-2'],
+      },
+      nowFn: () => 7050,
+      immediateBatchDelayMs: 5,
+    });
+    service.initialize();
+    service.start();
+
+    const [firstResult, secondResult] = await Promise.all([
+      service.propagateCDCEvent({
+        tableName: TABLES.NODES,
+        operation: 'UPDATE',
+        data: {
+          [COLUMN.NODE_ID]: 'node-batched',
+          status: 'warming',
+        },
+        sourceMessageGroupService: source,
+      }),
+      service.propagateCDCEvent({
+        tableName: TABLES.NODES,
+        operation: 'UPDATE',
+        data: {
+          [COLUMN.NODE_ID]: 'node-batched',
+          status: 'active',
+        },
+        sourceMessageGroupService: source,
+      }),
+    ]);
+
+    assert.equal(firstResult.success, true);
+    assert.equal(secondResult.success, true);
+    assert.equal(source.calls.length, 2, 'source group should still apply both local updates');
+    assert.equal(router.calls.length, 1, 'remote publication should collapse into one batch');
+    const latestPayloadStatus =
+      router.calls[0].payload.type === LATENCY_TOPOLOGY_MESSAGE_TYPE.CDC_PROPAGATION_BATCH ?
+        router.calls[0].payload.events[0].data.status :
+        router.calls[0].payload.data.status;
+    assert.equal(
+      latestPayloadStatus,
+      'active',
+      'batch should carry only the latest same-row state',
+    );
+
+    service.stop();
+    teardownConfig();
+    t.end();
+  });
+
 test('CDCGroupPropagationService continues retries in background after retry budget',
   async (t) => {
     setupConfig(LATENCY_PROPAGATION_MODE.SAFE);
@@ -999,6 +1077,361 @@ test('CDCGroupPropagationService continues retries in background after retry bud
       eventuallyDelivered,
       true,
       'background retry loop should continue until delivery succeeds',
+    );
+
+  service.stop();
+  teardownConfig();
+  t.end();
+  });
+
+test('CDCGroupPropagationService defers immediate propagation while the local router is backpressured',
+  async (t) => {
+    setupConfig(LATENCY_PROPAGATION_MODE.SAFE);
+    const cache = createTopologyCache({
+      nodes: [{
+        [COLUMN.NODE_ID]: 'node-a',
+        [COLUMN.LATENCY_GROUP_ID]: 'g-1',
+      }],
+      groups: [
+        createGroupRow('g-1', 'node-a'),
+        createGroupRow('g-2', 'node-b'),
+      ],
+      services: [
+        createMessageGroupServiceRow(
+          'mg-node-b-r1',
+          'node-b',
+          'node-b/message-group/mg-node-b-r1',
+          RAFT_ROLE.LEADER,
+          'g-2',
+        ),
+      ],
+    });
+    const source = createSourceMessageGroupService();
+    source.groupId = 'g-1';
+    const routerPressure = {
+      backpressured: true,
+      saturatedNodeCount: 1,
+      totalPending: 48,
+      maxPendingUtilization: 0.75,
+    };
+    const router = createMessageRouter([{acknowledged: true}]);
+    router.getOutboundPressureSummary = () => ({...routerPressure});
+    const service = new CDCGroupPropagationService({
+      nodeId: 'node-a',
+      systemTableCache: cache,
+      messageRouter: router,
+      latencyTreeService: {
+        getRoutingOrder: () => ['g-1', 'g-2'],
+      },
+      nowFn: () => 7150,
+      deliveryRetryDelayMs: 5,
+      deliveryRetryMaxDelayMs: 5,
+      deliveryRetryBackoffMultiplier: 1,
+    });
+    service.initialize();
+    service.start();
+
+    const result = await service.propagateCDCEvent({
+      tableName: TABLES.NODES,
+      operation: 'UPSERT',
+      data: {[COLUMN.NODE_ID]: 'node-pressure-deferred'},
+      sourceMessageGroupService: source,
+    });
+
+    assert.equal(result.success, false);
+    assert.equal(result.deliveryFailures.length, 1);
+    assert.equal(result.deliveryFailures[0].error, 'background_retry_pending');
+    assert.equal(router.calls.length, 0, 'router delivery should defer under local pressure');
+
+    routerPressure.backpressured = false;
+    routerPressure.saturatedNodeCount = 0;
+    routerPressure.totalPending = 0;
+    routerPressure.maxPendingUtilization = 0;
+
+    const deliveredAfterPressureClears = await waitForCondition(
+      () => router.calls.length === 1,
+      1000,
+      10,
+    );
+    assert.equal(
+      deliveredAfterPressureClears,
+      true,
+      'deferred propagation should resume once local router pressure clears',
+    );
+
+    service.stop();
+    teardownConfig();
+    t.end();
+  });
+
+test('CDCGroupPropagationService coalesces same-row deferred retries to the latest payload',
+  async (t) => {
+    setupConfig(LATENCY_PROPAGATION_MODE.SAFE);
+    const cache = createTopologyCache({
+      nodes: [{
+        [COLUMN.NODE_ID]: 'node-a',
+        [COLUMN.LATENCY_GROUP_ID]: 'g-1',
+      }],
+      groups: [
+        createGroupRow('g-1', 'node-a'),
+        createGroupRow('g-2', 'node-b'),
+      ],
+      services: [
+        createMessageGroupServiceRow(
+          'mg-node-b-r1',
+          'node-b',
+          'node-b/message-group/mg-node-b-r1',
+          RAFT_ROLE.LEADER,
+          'g-2',
+        ),
+      ],
+    });
+    const source = createSourceMessageGroupService();
+    source.groupId = 'g-1';
+    const router = createMessageRouter([
+      {acknowledged: false, error: 'transient'},
+      {acknowledged: true},
+    ]);
+    const service = new CDCGroupPropagationService({
+      nodeId: 'node-a',
+      systemTableCache: cache,
+      messageRouter: router,
+      latencyTreeService: {
+        getRoutingOrder: () => ['g-1', 'g-2'],
+      },
+      nowFn: () => 7175,
+      deliveryRetryMaxAttempts: 1,
+      deliveryRetryDelayMs: 5,
+      deliveryRetryMaxDelayMs: 5,
+      deliveryRetryBackoffMultiplier: 1,
+    });
+    service.initialize();
+    service.start();
+
+    const firstResult = await service.propagateCDCEvent({
+      tableName: TABLES.NODES,
+      operation: 'UPDATE',
+      data: {
+        [COLUMN.NODE_ID]: 'node-latest-only',
+        status: 'warming',
+      },
+      sourceMessageGroupService: source,
+    });
+    assert.equal(firstResult.success, false);
+    assert.equal(router.calls.length, 1, 'first failed propagation should make one immediate attempt');
+
+    const secondResult = await service.propagateCDCEvent({
+      tableName: TABLES.NODES,
+      operation: 'UPDATE',
+      data: {
+        [COLUMN.NODE_ID]: 'node-latest-only',
+        status: 'active',
+      },
+      sourceMessageGroupService: source,
+    });
+    assert.equal(secondResult.success, false);
+    assert.equal(
+      router.calls.length,
+      1,
+      'same-row propagation should merge into the existing retry wave instead of sending immediately',
+    );
+
+    const latestDelivered = await waitForCondition(
+      () => router.calls.length === 2,
+      1000,
+      10,
+    );
+    assert.equal(
+      latestDelivered,
+      true,
+      'background retry should eventually redrive the queued latest payload',
+    );
+    assert.equal(
+      router.calls[1].payload.data.status,
+      'active',
+      'retry wave should deliver the latest state for the row, not the stale version',
+    );
+
+    service.stop();
+    teardownConfig();
+    t.end();
+  });
+
+test('CDCGroupPropagationService coalesces duplicate background retries for the same target set',
+  async (t) => {
+    setupConfig(LATENCY_PROPAGATION_MODE.SAFE);
+    const cache = createTopologyCache();
+    const router = createMessageRouter();
+    const tree = {
+      getRoutingOrder: () => ['g-1', 'g-2', 'g-3'],
+    };
+    const service = new CDCGroupPropagationService({
+      nodeId: 'node-a',
+      systemTableCache: cache,
+      messageRouter: router,
+      latencyTreeService: tree,
+      nowFn: () => 7200,
+      deliveryRetryDelayMs: 1000,
+      deliveryRetryMaxDelayMs: 1000,
+      deliveryRetryBackoffMultiplier: 1,
+    });
+    service.initialize();
+    service.start();
+
+    service.scheduleBackgroundRetry({
+      tableName: TABLES.NODES,
+      operation: 'UPSERT',
+      data: {[COLUMN.NODE_ID]: 'node-coalesced'},
+      sourceGroupId: 'g-1',
+      targets: [
+        {groupId: 'g-2', address: 'node-b/message-group/mg-node-b-r1'},
+        {groupId: 'g-3', address: 'node-c/message-group/mg-node-c-r1'},
+      ],
+      attempt: 2,
+    });
+    service.scheduleBackgroundRetry({
+      tableName: TABLES.NODES,
+      operation: 'UPSERT',
+      data: {[COLUMN.NODE_ID]: 'node-coalesced'},
+      sourceGroupId: 'g-1',
+      targets: [
+        {groupId: 'g-3', address: 'node-c/message-group/mg-node-c-r1'},
+        {groupId: 'g-2', address: 'node-b/message-group/mg-node-b-r1'},
+      ],
+      attempt: 2,
+    });
+
+    assert.equal(
+      service.backgroundRetryTimers.size,
+      1,
+      'duplicate background retries for the same target group set should collapse to one timer',
+    );
+
+    service.stop();
+    teardownConfig();
+    t.end();
+  });
+
+test('CDCGroupPropagationService batches background retry waves by target set',
+  async (t) => {
+    setupConfig(LATENCY_PROPAGATION_MODE.SAFE);
+    const cache = createTopologyCache();
+    const router = createMessageRouter([{acknowledged: true}]);
+    const service = new CDCGroupPropagationService({
+      nodeId: 'node-a',
+      systemTableCache: cache,
+      messageRouter: router,
+      latencyTreeService: {
+        getRoutingOrder: () => ['g-1', 'g-2'],
+      },
+      nowFn: () => 7250,
+      deliveryRetryDelayMs: 5,
+      deliveryRetryMaxDelayMs: 5,
+      deliveryRetryBackoffMultiplier: 1,
+    });
+    service.initialize();
+    service.start();
+
+    service.scheduleBackgroundRetry({
+      tableName: TABLES.NODES,
+      operation: 'UPDATE',
+      data: {[COLUMN.NODE_ID]: 'node-bg-1', status: 'warming'},
+      sourceGroupId: 'g-1',
+      targets: [
+        {groupId: 'g-2', address: 'node-b/message-group/mg-node-b-r1'},
+      ],
+      attempt: 2,
+    });
+    service.scheduleBackgroundRetry({
+      tableName: TABLES.NODES,
+      operation: 'UPDATE',
+      data: {[COLUMN.NODE_ID]: 'node-bg-2', status: 'active'},
+      sourceGroupId: 'g-1',
+      targets: [
+        {groupId: 'g-2', address: 'node-b/message-group/mg-node-b-r1'},
+      ],
+      attempt: 2,
+    });
+
+    const delivered = await waitForCondition(
+      () => router.calls.length === 1,
+      1000,
+      10,
+    );
+    assert.equal(delivered, true);
+    assert.equal(
+      router.calls[0].payload.type,
+      LATENCY_TOPOLOGY_MESSAGE_TYPE.CDC_PROPAGATION_BATCH,
+    );
+    assert.equal(router.calls[0].payload.events.length, 2);
+
+    service.stop();
+    teardownConfig();
+    t.end();
+  });
+
+test('CDCGroupPropagationService defers background retries while local router pressure is active',
+  async (t) => {
+    setupConfig(LATENCY_PROPAGATION_MODE.SAFE);
+    const cache = createTopologyCache();
+    const routerPressure = {
+      backpressured: true,
+      saturatedNodeCount: 1,
+      totalPending: 48,
+      maxPendingUtilization: 0.75,
+    };
+    const router = createMessageRouter([
+      {acknowledged: true},
+    ]);
+    router.getOutboundPressureSummary = () => ({...routerPressure});
+    const tree = {
+      getRoutingOrder: () => ['g-1', 'g-2'],
+    };
+    const service = new CDCGroupPropagationService({
+      nodeId: 'node-a',
+      systemTableCache: cache,
+      messageRouter: router,
+      latencyTreeService: tree,
+      nowFn: () => 7300,
+      deliveryRetryDelayMs: 5,
+      deliveryRetryMaxDelayMs: 5,
+      deliveryRetryBackoffMultiplier: 1,
+    });
+    service.initialize();
+    service.start();
+
+    service.scheduleBackgroundRetry({
+      tableName: TABLES.NODES,
+      operation: 'UPSERT',
+      data: {[COLUMN.NODE_ID]: 'node-deferred'},
+      sourceGroupId: 'g-1',
+      targets: [
+        {groupId: 'g-2', address: 'node-b/message-group/mg-node-b-r1'},
+      ],
+      attempt: 2,
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    assert.equal(
+      router.calls.length,
+      0,
+      'background retry should not redrive delivery while the local router is backpressured',
+    );
+
+    routerPressure.backpressured = false;
+    routerPressure.saturatedNodeCount = 0;
+    routerPressure.totalPending = 0;
+    routerPressure.maxPendingUtilization = 0;
+
+    const deliveredAfterPressureClears = await waitForCondition(
+      () => router.calls.length === 1,
+      1000,
+      10,
+    );
+    assert.equal(
+      deliveredAfterPressureClears,
+      true,
+      'background retry should resume once local router pressure clears',
     );
 
     service.stop();

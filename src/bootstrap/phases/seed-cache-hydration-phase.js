@@ -16,6 +16,13 @@ import {assertCritical} from '../../utils/assert.js';
 import {CDCIntegrationSetup} from '../shared/cdc-integration-setup.js';
 import {LatencyTopologySetup} from '../shared/latency-topology-setup.js';
 import {
+  buildMessageGroupOwnerNotReadyError,
+} from '../shared/message-group-selection.js';
+import {
+  detachBootstrapOwnedCdcSubscriber,
+  isBootstrapOwnedCdcPropagationActive,
+} from '../shared/bootstrap-cdc-propagation-scope.js';
+import {
   CDCPipelineReadinessGate,
 } from '../../cdc/cdc-pipeline-readiness-gate.js';
 import {
@@ -35,6 +42,7 @@ import {
   BOOTSTRAP_DEFAULT,
   BOOTSTRAP_ERROR,
   BOOTSTRAP_LOG_MSG,
+  BOOTSTRAP_PHASE,
 } from '../bootstrap-constants.js';
 import {
   SYSTEM_TABLE_NAME,
@@ -580,7 +588,29 @@ class SeedCacheHydrationPhase {
           replicaId,
           messageGroup?.groupId || 'message-group',
         ].join(':');
+        let bootstrapCdcSubscriberDetached = false;
         const cdcSubscriber = async (cdcEvent) => {
+          if (!isBootstrapOwnedCdcPropagationActive(
+            d.getPhase(),
+            BOOTSTRAP_PHASE.COMPLETE,
+          )) {
+            if (!bootstrapCdcSubscriberDetached) {
+              bootstrapCdcSubscriberDetached =
+                detachBootstrapOwnedCdcSubscriber({
+                  partition,
+                  subscriber: cdcSubscriber,
+                  logger,
+                  logMessage:
+                    'Detached bootstrap cache-hydration CDC propagation subscriber after bootstrap completion',
+                  nodeId: d.getNodeId(),
+                  tableName,
+                  partitionId,
+                  replicaId,
+                  lifecyclePhase: d.getPhase(),
+                });
+            }
+            return;
+          }
           if (cdcEvent.tableName === tableName) {
             logger.debug(
               BOOTSTRAP_LOG_MSG.CDC_EVENT_RECEIVED, {
@@ -608,10 +638,11 @@ class SeedCacheHydrationPhase {
               );
             }
 
-            const propagationMgs =
-              d.resolveCdcPropagationMessageGroup(
-                messageGroup,
-              );
+            const propagationSelection =
+              d.resolveOperationalMessageGroupSelection({
+                requiredTables: [tableName],
+              });
+            const propagationMgs = propagationSelection.service;
             if (propagationMgs) {
               await d.propagatePartitionCDCEvent(
                 propagationMgs, cdcEvent,
@@ -621,12 +652,12 @@ class SeedCacheHydrationPhase {
                 d.applyCurrentEpochFromCache();
               }
             } else {
-              logger.warn(
-                CDC_LIFECYCLE_LOG_MSG
-                  .MESSAGE_GROUP_RESOLUTION_NULL, {
-                  tableName: cdcEvent.tableName,
-                  operation: cdcEvent.operation,
-                  reason: 'no_leader_message_group',
+              throw buildMessageGroupOwnerNotReadyError(
+                propagationSelection,
+                {
+                  message:
+                    `Operational message-group ingress not ready ` +
+                    `for ${tableName} CDC propagation`,
                 },
               );
             }
@@ -964,7 +995,7 @@ class SeedCacheHydrationPhase {
     if (leaderMgs) {
       return leaderMgs;
     }
-    return preferredMessageGroupService || null;
+    return null;
   }
 
   /**

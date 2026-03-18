@@ -43,6 +43,7 @@ const LATENCY_GROUP_STATE = Object.freeze({
 
 const LATENCY_TOPOLOGY_MESSAGE_TYPE = Object.freeze({
   CDC_PROPAGATION: 'latency.cdc.propagation',
+  CDC_PROPAGATION_BATCH: 'latency.cdc.propagation.batch',
 });
 
 export {

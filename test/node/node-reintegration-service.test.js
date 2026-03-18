@@ -55,6 +55,22 @@ function createMockCDCService() {
   };
 }
 
+function createMockMutationGateway() {
+  const operations = [];
+  return {
+    operations,
+    async submitMutation(mutation, options = {}) {
+      operations.push({...mutation, options});
+      return {
+        success: true,
+        partitionResult: {affectedRows: 1},
+        mutation,
+        options,
+      };
+    },
+  };
+}
+
 /**
  * Create a mock system table cache for testing.
  * @param {Object} data - Initial cache data.
@@ -109,6 +125,21 @@ test('NodeReintegrationService - initialize', async (t) => {
   t.equal(service.isInitialized(), true, 'should be initialized');
   t.end();
 });
+
+test('NodeReintegrationService - initialize accepts control-plane mutation gateway',
+  async (t) => {
+    const mockCache = createMockCache();
+    const mockGateway = createMockMutationGateway();
+    const service = new NodeReintegrationService({
+      nodeId: 'test-node',
+      systemTableCache: mockCache,
+      controlPlaneSystemTableGateway: mockGateway,
+    });
+
+    service.initialize();
+
+    t.equal(service.isInitialized(), true, 'should initialize with mutation gateway');
+  });
 
 test('NodeReintegrationService - initialize requires nodeId', async (t) => {
   const service = new NodeReintegrationService({});
@@ -243,6 +274,34 @@ test('NodeReintegrationService - reintegrates recovering node', async (t) => {
   service.shutdown();
   t.end();
 });
+
+test('NodeReintegrationService - routes reintegration writes through control-plane ingress',
+  async (t) => {
+    const now = Date.now();
+    const mockCache = createMockCache();
+    const mockGateway = createMockMutationGateway();
+    const service = new NodeReintegrationService({
+      nodeId: 'test-node',
+      systemTableCache: mockCache,
+      controlPlaneSystemTableGateway: mockGateway,
+    });
+    service.initialize();
+
+    await service.completeReintegration({
+      node_id: 'node-1',
+      status: NodeStatus.RECOVERING,
+      last_heartbeat: now - 1000,
+      recovered_at: now - 5000,
+    });
+
+    t.equal(mockGateway.operations.length, 1, 'should submit one mutation');
+    t.equal(mockGateway.operations[0].operation, 'update', 'should use update mutation');
+    t.equal(
+      mockGateway.operations[0].options.deliveryPriority,
+      'critical',
+      'reintegration completion should use the control-plane critical lane',
+    );
+  });
 
 test('NodeReintegrationService - skips self node', async (t) => {
   const mockCDC = createMockCDCService();

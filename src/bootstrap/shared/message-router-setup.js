@@ -18,14 +18,10 @@ import {LoggingService} from '../../logging/logging-service.js';
 import {NodeService} from '../../node/node-service.js';
 import {DependencyError} from '../bootstrap-errors.js';
 import {
-  COLUMN,
-  NUM,
   SUBSYSTEM,
-  TABLES,
-  TYPEOF,
 } from '../../constants/index.js';
-import {ENDPOINT_STATUS, TRANSPORT_TYPE} from '../../constants/transport-types.js';
-import {normalizeToWebSocketAddress} from '../../constants/transport.js';
+import {resolveNodeWebSocketAddress} from
+  '../../transport/node-address-resolution.js';
 
 /**
  * Subsystem identifier for logging.
@@ -63,31 +59,10 @@ function createNodeWebSocketAddressResolver() {
     if (!cache) {
       return null;
     }
-
-    const endpointRows = typeof cache.filter === TYPEOF.FUNCTION ?
-      cache.filter(TABLES.NODE_ENDPOINTS, (row) => {
-        return row?.[COLUMN.NODE_ID] === targetNodeId &&
-          row?.[COLUMN.STATUS] === ENDPOINT_STATUS.ACTIVE &&
-          row?.[COLUMN.TRANSPORT_TYPE] === TRANSPORT_TYPE.WEBSOCKET &&
-          typeof row?.[COLUMN.ADDRESS] === TYPEOF.STRING &&
-          row[COLUMN.ADDRESS].length > NUM.ZERO;
-      }) :
-      [];
-    if (endpointRows.length > NUM.ZERO) {
-      const sorted = [...endpointRows].sort((left, right) => {
-        return Number(left?.[COLUMN.PRIORITY] || NUM.ZERO) -
-          Number(right?.[COLUMN.PRIORITY] || NUM.ZERO);
-      });
-      const endpointAddress =
-        sorted[NUM.ZERO]?.[COLUMN.ADDRESS] || null;
-      return normalizeToWebSocketAddress(endpointAddress);
-    }
-
-    const nodeRow = typeof cache.get === TYPEOF.FUNCTION ?
-      cache.get(TABLES.NODES, targetNodeId) :
-      null;
-    const nodeAddress = nodeRow?.[COLUMN.NODE_ADDRESS] || null;
-    return normalizeToWebSocketAddress(nodeAddress);
+    return resolveNodeWebSocketAddress({
+      targetNodeId,
+      systemTableCache: cache,
+    });
   };
 }
 
@@ -114,7 +89,13 @@ class MessageRouterSetup {
    * @throws {DependencyError} If nodeId is not provided.
    * @throws {Error} If router initialization fails.
    */
-  static async create({nodeId, nodeAddress, wsPort, identifyPayload}) {
+  static async create({
+    nodeId,
+    nodeAddress,
+    advertisedNodeWsAddress,
+    wsPort,
+    identifyPayload,
+  }) {
     // Validate required dependencies
     if (!nodeId) {
       throw new DependencyError('MessageRouterSetup', 'nodeId');
@@ -134,6 +115,7 @@ class MessageRouterSetup {
     const messageRouter = new MessageRouter({
       nodeId,
       nodeAddress,
+      advertisedAddress: advertisedNodeWsAddress || null,
       wsPort,
       identifyPayload,
     });
@@ -143,7 +125,7 @@ class MessageRouterSetup {
     // like "joining-node-id/lifecycle" -> routes to node "joining-node-id"
     messageRouter.setServiceNodeResolver((address) => {
       const match = address.match(/^([^/]+)\//);
-      return match ? match[NUM.ONE] : null;
+      return match ? match[1] : null;
     });
     messageRouter.setNodeAddressResolver(
       createNodeWebSocketAddressResolver(),

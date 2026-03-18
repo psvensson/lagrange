@@ -9,6 +9,12 @@ import {EventEmitter} from 'events';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
+import {ControlPlaneSystemTableGateway} from '../control-plane/control-plane-system-table-gateway.js';
+import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
+import {
+  buildSystemMetadataOwnerNotReadyFailure,
+  createSystemMetadataGatewayRequiredError,
+} from '../control-plane/system-metadata-access-error.js';
 import {
   LOG_LEVEL_ORDER,
   LOG_QUERY_DEFAULT,
@@ -62,6 +68,8 @@ class LogQueryService extends EventEmitter {
 
     this.sqlQueryEngine = options.sqlQueryEngine || null;
     this.systemCache = options.systemCache || null;
+    this.controlPlaneSystemTableGateway =
+      options.controlPlaneSystemTableGateway || null;
 
     // Configuration
     const config = ConfigurationManager.getInstance();
@@ -114,6 +122,9 @@ class LogQueryService extends EventEmitter {
 
     if (options.systemCache) {
       this.systemCache = options.systemCache;
+    }
+    if (options.controlPlaneSystemTableGateway) {
+      this.controlPlaneSystemTableGateway = options.controlPlaneSystemTableGateway;
     }
 
     this.initialized = true;
@@ -438,16 +449,23 @@ class LogQueryService extends EventEmitter {
    * @private
    */
   async executeSQL(sql) {
-    if (!this.sqlQueryEngine) {
-      return {
-        success: false,
-        error: LOG_QUERY_ERROR_MSG.ENGINE_NOT_AVAILABLE,
-        errorCode: LOG_QUERY_ERROR_CODE.ENGINE_NOT_AVAILABLE,
-      };
+    const gateway = this.getControlPlaneSystemTableGateway();
+    if (!gateway) {
+      return buildSystemMetadataOwnerNotReadyFailure(
+        createSystemMetadataGatewayRequiredError({
+          serviceName: 'LogQueryService',
+          tableName: SYSTEM_TABLE_NAME.LOGS,
+          operation: 'read',
+          message: LOG_QUERY_ERROR_MSG.ENGINE_NOT_AVAILABLE,
+        }),
+      );
     }
 
     try {
-      const result = await this.sqlQueryEngine.executeQuery(sql);
+      const result = await gateway.executeQuery(sql, [], {
+        workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+        allowPressureDefer: true,
+      });
       return result;
     } catch (error) {
       this.logger.warn(LOG_QUERY_LOG_MSG.QUERY_EXECUTION_FAILED, {
@@ -498,6 +516,32 @@ class LogQueryService extends EventEmitter {
     this.initialized = false;
     this.removeAllListeners();
     this.logger.log(LOG_QUERY_LOG_MSG.SHUTDOWN);
+  }
+
+  /**
+   * @return {ControlPlaneSystemTableGateway|null}
+   * @private
+   */
+  getControlPlaneSystemTableGateway() {
+    if (this.controlPlaneSystemTableGateway) {
+      if (!this.controlPlaneSystemTableGateway.sqlQueryEngine &&
+          this.sqlQueryEngine) {
+        this.controlPlaneSystemTableGateway.setSqlQueryEngine(this.sqlQueryEngine);
+      }
+      if (!this.controlPlaneSystemTableGateway.systemTableCache &&
+          this.systemCache) {
+        this.controlPlaneSystemTableGateway.setSystemTableCache(this.systemCache);
+      }
+      return this.controlPlaneSystemTableGateway;
+    }
+    if (!this.sqlQueryEngine && !this.systemCache) {
+      return null;
+    }
+    this.controlPlaneSystemTableGateway = new ControlPlaneSystemTableGateway({
+      sqlQueryEngine: this.sqlQueryEngine,
+      systemTableCache: this.systemCache,
+    });
+    return this.controlPlaneSystemTableGateway;
   }
 }
 

@@ -25,14 +25,47 @@ function teardownEnvironment() {
 }
 
 test(
+  'BootstrapService runtime leader selection ignores bootstrap-only non-leader replicas',
+  async (t) => {
+    setupEnvironment();
+
+    const service = new BootstrapService({nodeId: 'node-a'});
+    service.messageGroupServices = new Map([
+      ['mg-1-r1', {
+        initialized: true,
+        isLeaderReplica: () => false,
+        isMetadataIngressReady: () => false,
+      }],
+    ]);
+
+    const resolved = service.getLeaderMessageGroupService();
+
+    assert.equal(
+      resolved,
+      null,
+      'should not reuse a bootstrap-only replica as operational runtime ingress',
+    );
+
+    teardownEnvironment();
+    t.end();
+  },
+);
+
+test(
   'BootstrapService resolves CDC propagation service to current leader',
   async (t) => {
     setupEnvironment();
 
     const service = new BootstrapService({nodeId: 'node-a'});
     const preferredMessageGroup = {id: 'preferred'};
-    const leaderMessageGroup = {id: 'leader'};
-    service.getLeaderMessageGroupService = () => leaderMessageGroup;
+    const leaderMessageGroup = {
+      id: 'leader',
+      initialized: true,
+      isLeaderReplica: () => true,
+    };
+    service.messageGroupServices = new Map([
+      ['mg-1-r2', leaderMessageGroup],
+    ]);
 
     const resolved = service.resolveCdcPropagationMessageGroup(
       preferredMessageGroup,
@@ -50,13 +83,19 @@ test(
 );
 
 test(
-  'BootstrapService falls back to preferred CDC propagation service',
+  'BootstrapService does not reuse preferred CDC propagation service when leader is unavailable',
   async (t) => {
     setupEnvironment();
 
     const service = new BootstrapService({nodeId: 'node-a'});
     const preferredMessageGroup = {id: 'preferred'};
-    service.getLeaderMessageGroupService = () => null;
+    service.messageGroupServices = new Map([
+      ['mg-1-r1', {
+        initialized: true,
+        isLeaderReplica: () => false,
+        isMetadataIngressReady: () => false,
+      }],
+    ]);
 
     const resolved = service.resolveCdcPropagationMessageGroup(
       preferredMessageGroup,
@@ -64,8 +103,8 @@ test(
 
     assert.equal(
       resolved,
-      preferredMessageGroup,
-      'should fall back to preferred message group when leader is unavailable',
+      null,
+      'should fail closed when no operational leader message group is available',
     );
 
     teardownEnvironment();
@@ -83,8 +122,15 @@ test(
       seedNodeAddress: 'http://seed-node:8080',
     });
     const preferredMessageGroup = {id: 'preferred'};
-    const leaderMessageGroup = {id: 'leader'};
-    service.getLeaderMessageGroupService = () => leaderMessageGroup;
+    const leaderMessageGroup = {
+      id: 'leader',
+      initialized: true,
+      isLeaderReplica: () => true,
+      isMetadataIngressReady: () => true,
+    };
+    service.messageGroupServices = new Map([
+      ['mg-1-r2', leaderMessageGroup],
+    ]);
 
     const resolved = service.resolveCdcPropagationMessageGroup(
       preferredMessageGroup,
@@ -102,7 +148,7 @@ test(
 );
 
 test(
-  'NodeJoiningService falls back to preferred CDC propagation service',
+  'NodeJoiningService does not reuse preferred CDC propagation service when leader is unavailable',
   async (t) => {
     setupEnvironment();
 
@@ -111,7 +157,13 @@ test(
       seedNodeAddress: 'http://seed-node:8080',
     });
     const preferredMessageGroup = {id: 'preferred'};
-    service.getLeaderMessageGroupService = () => null;
+    service.messageGroupServices = new Map([
+      ['mg-1-r1', {
+        initialized: true,
+        isLeaderReplica: () => false,
+        isMetadataIngressReady: () => false,
+      }],
+    ]);
 
     const resolved = service.resolveCdcPropagationMessageGroup(
       preferredMessageGroup,
@@ -119,8 +171,8 @@ test(
 
     assert.equal(
       resolved,
-      preferredMessageGroup,
-      'should fall back to preferred message group when leader is unavailable',
+      null,
+      'should fail closed when no operational leader message group is available',
     );
 
     teardownEnvironment();

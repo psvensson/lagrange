@@ -9,6 +9,11 @@ import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {STRING, TABLES} from '../constants/index.js';
 import {
+  CONTROL_PLANE_MUTATION_OPERATION,
+  ControlPlaneSystemTableGateway,
+} from '../control-plane/control-plane-system-table-gateway.js';
+import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
+import {
   INDEX_CONFIG_KEY,
   INDEX_DEFAULTS,
   INDEX_ERROR_MSG,
@@ -38,6 +43,8 @@ class IndexService {
     this.cdcIntegrationService = options.cdcIntegrationService || null;
     this.systemTableCache = options.systemTableCache || null;
     this.sqlQueryEngine = options.sqlQueryEngine || null;
+    this.controlPlaneSystemTableGateway =
+      options.controlPlaneSystemTableGateway || null;
 
     // Configuration
     const config = ConfigurationManager.getInstance();
@@ -83,9 +90,11 @@ class IndexService {
   async loadIndicesFromCache() {
     try {
       let indices = [];
-      if (this.sqlQueryEngine) {
-        const result = await this.sqlQueryEngine.executeQuery(
-          'SELECT * FROM indices', [],
+      if (this.canReadMetadata()) {
+        const result = await this.getControlPlaneSystemTableGateway().readRows(
+          TABLES.INDICES,
+          'SELECT * FROM indices',
+          [],
         );
         indices = result.rows || [];
       }
@@ -185,14 +194,21 @@ class IndexService {
     };
 
     // Store in indices system table via CDC
-    if (this.cdcIntegrationService) {
-      await this.cdcIntegrationService.insertSystemTableRow(TABLES.INDICES, {
-        index_id: indexId,
-        table_id: tableId,
-        index_name: indexName,
-        column_names: JSON.stringify(columnNames),
-        index_type: indexType,
-        created_at: createdAt,
+    if (this.cdcIntegrationService || this.controlPlaneSystemTableGateway) {
+      await this.getControlPlaneSystemTableGateway().submitMutation({
+        operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
+        tableName: TABLES.INDICES,
+        row: {
+          index_id: indexId,
+          table_id: tableId,
+          index_name: indexName,
+          column_names: JSON.stringify(columnNames),
+          index_type: indexType,
+          created_at: createdAt,
+        },
+      }, {
+        workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+        deliveryPriority: 'critical',
       });
     }
 
@@ -285,8 +301,9 @@ class IndexService {
     const partitions = [];
 
     let partitionRecords = [];
-    if (this.sqlQueryEngine) {
-      const result = await this.sqlQueryEngine.executeQuery(
+    if (this.canReadMetadata()) {
+      const result = await this.getControlPlaneSystemTableGateway().readRows(
+        TABLES.PARTITIONS,
         'SELECT * FROM partitions WHERE table_id = ?',
         [tableId],
       );
@@ -312,8 +329,9 @@ class IndexService {
    * @private
    */
   async getPartition(partitionId) {
-    if (this.sqlQueryEngine) {
-      const result = await this.sqlQueryEngine.executeQuery(
+    if (this.canReadMetadata()) {
+      const result = await this.getControlPlaneSystemTableGateway().readRows(
+        TABLES.PARTITIONS,
         'SELECT * FROM partitions WHERE partition_id = ?',
         [partitionId],
       );
@@ -342,9 +360,16 @@ class IndexService {
     }
 
     // Drop from indices system table via CDC
-    if (this.cdcIntegrationService) {
-      await this.cdcIntegrationService.deleteSystemTableRow(TABLES.INDICES, {
-        index_id: indexMetadata.indexId,
+    if (this.cdcIntegrationService || this.controlPlaneSystemTableGateway) {
+      await this.getControlPlaneSystemTableGateway().submitMutation({
+        operation: CONTROL_PLANE_MUTATION_OPERATION.DELETE,
+        tableName: TABLES.INDICES,
+        whereClause: {
+          index_id: indexMetadata.indexId,
+        },
+      }, {
+        workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+        deliveryPriority: 'critical',
       });
     }
 
@@ -710,6 +735,41 @@ class IndexService {
    */
   setCDCIntegrationService(service) {
     this.cdcIntegrationService = service;
+  }
+
+  canReadMetadata() {
+    return Boolean(
+      this.controlPlaneSystemTableGateway ||
+      this.sqlQueryEngine ||
+      this.cdcIntegrationService,
+    );
+  }
+
+  getControlPlaneSystemTableGateway() {
+    if (this.controlPlaneSystemTableGateway) {
+      if (!this.controlPlaneSystemTableGateway.cdcIntegrationService &&
+          this.cdcIntegrationService) {
+        this.controlPlaneSystemTableGateway
+          .setCdcIntegrationService(this.cdcIntegrationService);
+      }
+      if (!this.controlPlaneSystemTableGateway.sqlQueryEngine &&
+          this.sqlQueryEngine) {
+        this.controlPlaneSystemTableGateway.setSqlQueryEngine(this.sqlQueryEngine);
+      }
+      if (!this.controlPlaneSystemTableGateway.systemTableCache &&
+          this.systemTableCache) {
+        this.controlPlaneSystemTableGateway.setSystemTableCache(
+          this.systemTableCache,
+        );
+      }
+      return this.controlPlaneSystemTableGateway;
+    }
+    this.controlPlaneSystemTableGateway = new ControlPlaneSystemTableGateway({
+      cdcIntegrationService: this.cdcIntegrationService,
+      sqlQueryEngine: this.sqlQueryEngine,
+      systemTableCache: this.systemTableCache,
+    });
+    return this.controlPlaneSystemTableGateway;
   }
 
   /**

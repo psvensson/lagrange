@@ -8,6 +8,11 @@ import {LoggingService} from '../logging/logging-service.js';
 import {assertCritical} from '../utils/assert.js';
 import {COLUMN, NUM, TABLES, TYPEOF} from '../constants/index.js';
 import {
+  CONTROL_PLANE_MUTATION_OPERATION,
+  ControlPlaneSystemTableGateway,
+} from '../control-plane/control-plane-system-table-gateway.js';
+import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
+import {
   LATENCY_TOPOLOGY_CONFIG_KEY,
   LATENCY_TOPOLOGY_DEFAULT,
 } from './latency-topology-constants.js';
@@ -48,6 +53,8 @@ class LatencyMeasurementService extends EventEmitter {
     this.messageRouter = options.messageRouter || null;
     this.systemTableCache = options.systemTableCache || null;
     this.cdcIntegrationService = options.cdcIntegrationService || null;
+    this.controlPlaneSystemTableGateway =
+      options.controlPlaneSystemTableGateway || null;
     this.nowFn = options.nowFn || Date.now;
 
     this.config = ConfigurationManager.getInstance();
@@ -86,6 +93,9 @@ class LatencyMeasurementService extends EventEmitter {
     }
     if (options.cdcIntegrationService) {
       this.cdcIntegrationService = options.cdcIntegrationService;
+    }
+    if (options.controlPlaneSystemTableGateway) {
+      this.controlPlaneSystemTableGateway = options.controlPlaneSystemTableGateway;
     }
     if (options.nowFn) {
       this.nowFn = options.nowFn;
@@ -309,10 +319,16 @@ class LatencyMeasurementService extends EventEmitter {
       [COLUMN.UPDATED_AT]: now,
     };
 
-    const result = await this.cdcIntegrationService.upsertSystemTableRow(
-      TABLES.INTER_GROUP_LATENCIES,
+    const result = await this.getControlPlaneSystemTableGateway().submitMutation({
+      operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
+      tableName: TABLES.INTER_GROUP_LATENCIES,
       row,
-    );
+    }, {
+      workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+      deliveryPriority: 'background',
+      allowPressureDefer: true,
+      coalescingKey: `latency-edge:${edgeId}`,
+    });
 
     this.logger.debug(LATENCY_MEASUREMENT_LOG_MSG.SAMPLE_RECORDED, {
       nodeId: this.nodeId,
@@ -547,6 +563,28 @@ class LatencyMeasurementService extends EventEmitter {
       nodeId: this.nodeId,
       state: this.state,
     };
+  }
+
+  getControlPlaneSystemTableGateway() {
+    if (this.controlPlaneSystemTableGateway) {
+      if (!this.controlPlaneSystemTableGateway.cdcIntegrationService &&
+          this.cdcIntegrationService) {
+        this.controlPlaneSystemTableGateway
+          .setCdcIntegrationService(this.cdcIntegrationService);
+      }
+      if (!this.controlPlaneSystemTableGateway.messageRouter &&
+          this.messageRouter) {
+        this.controlPlaneSystemTableGateway.setMessageRouter(this.messageRouter);
+      }
+      return this.controlPlaneSystemTableGateway;
+    }
+    this.controlPlaneSystemTableGateway = new ControlPlaneSystemTableGateway({
+      nodeId: this.nodeId,
+      cdcIntegrationService: this.cdcIntegrationService,
+      messageRouter: this.messageRouter,
+      systemTableCache: this.systemTableCache,
+    });
+    return this.controlPlaneSystemTableGateway;
   }
 
   /**

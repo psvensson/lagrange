@@ -8,6 +8,11 @@
 import {LoggingService} from '../logging/logging-service.js';
 import {COLUMN, NUM, TABLES, TYPEOF} from '../constants/index.js';
 import {
+  CONTROL_PLANE_MUTATION_OPERATION,
+  ControlPlaneSystemTableGateway,
+} from '../control-plane/control-plane-system-table-gateway.js';
+import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
+import {
   BACKFILL_DEFAULT_RATIO,
   STORAGE_BUDGET_SOURCE,
   STORAGE_CAPACITY_LOG_MSG,
@@ -28,6 +33,8 @@ class StorageCapacityMigration {
    */
   constructor(options = {}) {
     this.cdcIntegrationService = options.cdcIntegrationService || null;
+    this.controlPlaneSystemTableGateway =
+      options.controlPlaneSystemTableGateway || null;
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
       loggingService.forSubsystem(STORAGE_CAPACITY_SUBSYSTEM) : console;
@@ -97,10 +104,14 @@ class StorageCapacityMigration {
         [COLUMN.STORAGE_BUDGET_UPDATED_AT]: Date.now(),
       };
 
-      await this.cdcIntegrationService.upsertSystemTableRow(
-        TABLES.NODES,
-        budgetRow,
-      );
+      await this.getControlPlaneSystemTableGateway().submitMutation({
+        operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
+        tableName: TABLES.NODES,
+        row: budgetRow,
+      }, {
+        workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+        deliveryPriority: 'critical',
+      });
 
       this.logger.info(STORAGE_CAPACITY_LOG_MSG.BACKFILL_APPLIED, {
         nodeId,
@@ -111,6 +122,21 @@ class StorageCapacityMigration {
     }
 
     return {backfilled, skipped};
+  }
+
+  getControlPlaneSystemTableGateway() {
+    if (this.controlPlaneSystemTableGateway) {
+      if (!this.controlPlaneSystemTableGateway.cdcIntegrationService &&
+          this.cdcIntegrationService) {
+        this.controlPlaneSystemTableGateway
+          .setCdcIntegrationService(this.cdcIntegrationService);
+      }
+      return this.controlPlaneSystemTableGateway;
+    }
+    this.controlPlaneSystemTableGateway = new ControlPlaneSystemTableGateway({
+      cdcIntegrationService: this.cdcIntegrationService,
+    });
+    return this.controlPlaneSystemTableGateway;
   }
 }
 

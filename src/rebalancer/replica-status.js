@@ -94,6 +94,17 @@ const OperationType = {
   REPLACE: 'REPLACE',
 };
 
+const COORDINATOR_OWNED_OPERATION_TYPES = Object.freeze([
+  OperationType.ADD,
+  OperationType.REMOVE,
+  OperationType.REPLACE,
+]);
+
+const COORDINATOR_OWNED_OPERATION_TYPES_SQL_CLAUSE =
+  COORDINATOR_OWNED_OPERATION_TYPES
+    .map((type) => `'${type}'`)
+    .join(', ');
+
 /**
  * Workflow steps for ADD operations.
  * Progress in order: PENDING → SENDING → CREATING → SYNCING → ACTIVE
@@ -296,6 +307,21 @@ function isValidStatus(value) {
   return getAllStatusValues().includes(value);
 }
 
+/**
+ * Check whether an operation type belongs to the steady-state coordinator
+ * domain. Bootstrap-owned MOVE_ASSIGNMENT rows must not be treated as
+ * dispatchable or recoverable coordinator work.
+ *
+ * @param {string} value - Operation type to check.
+ * @return {boolean} True when the type is coordinator-owned.
+ */
+function isCoordinatorOwnedOperationType(value) {
+  if (typeof value !== 'string') {
+    return false;
+  }
+  return COORDINATOR_OWNED_OPERATION_TYPES.includes(value.toUpperCase());
+}
+
 export {
   ReplicaStatus,
   TERMINAL_STATUSES,
@@ -314,4 +340,7 @@ export {
   createOperation,
   getAllStatusValues,
   isValidStatus,
+  COORDINATOR_OWNED_OPERATION_TYPES,
+  COORDINATOR_OWNED_OPERATION_TYPES_SQL_CLAUSE,
+  isCoordinatorOwnedOperationType,
 };

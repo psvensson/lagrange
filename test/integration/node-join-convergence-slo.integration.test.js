@@ -685,8 +685,8 @@ test('Readiness endpoint remains reachable during background log buffer flush',
       logsTableService = LogsTableService.getInstance();
       logsTableService.initialize({
         batchSize: READINESS_STRESS_LOG_BATCH_SIZE,
-        cdcIntegrationService: {
-          upsertSystemTableRow: async () => {
+        logsOwner: {
+          async upsertLog() {
             await sleepForMs(READINESS_STRESS_BLOCKING_WRITE_MS);
           },
         },
@@ -865,8 +865,8 @@ test('Real-listener join retries through transient SQL/metadata blockers under c
       logsTableService = LogsTableService.getInstance();
       logsTableService.initialize({
         batchSize: READINESS_STRESS_LOG_BATCH_SIZE,
-        cdcIntegrationService: {
-          upsertSystemTableRow: async () => {
+        logsOwner: {
+          async upsertLog() {
             await sleepForMs(READINESS_STRESS_BLOCKING_WRITE_MS);
           },
         },

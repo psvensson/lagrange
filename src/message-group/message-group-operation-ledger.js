@@ -44,11 +44,41 @@ class MessageGroupOperationLedger {
     this.now = typeof options.now === TYPEOF.FUNCTION ?
       options.now :
       MESSAGE_GROUP_OPERATION_LEDGER_NOW;
+    this.maxEntries = Number.isInteger(options.maxEntries) &&
+      options.maxEntries > NUM.ZERO ?
+        options.maxEntries :
+        MESSAGE_GROUP_OPERATION_LEDGER.DEFAULT_MAX_ENTRIES;
     this.log = [];
     this.currentTerm = MESSAGE_GROUP_OPERATION_LEDGER_NUM.INITIAL_TERM;
     this.votedFor = MESSAGE_GROUP_OPERATION_LEDGER.DEFAULT_VOTED_FOR;
     this.commitIndex = MESSAGE_GROUP_OPERATION_LEDGER_NUM.INITIAL_INDEX;
     this.lastApplied = MESSAGE_GROUP_OPERATION_LEDGER_NUM.INITIAL_INDEX;
+    this.nextIndex = MESSAGE_GROUP_OPERATION_LEDGER_NUM.FIRST_INDEX;
+  }
+
+  /**
+   * @return {number} First retained index in the bounded ledger.
+   * @private
+   */
+  getFirstRetainedIndex() {
+    return this.log.length > NUM.ZERO ?
+      this.log[NUM.ZERO].index :
+      this.nextIndex;
+  }
+
+  /**
+   * Trim retained entries to the configured bounded window.
+   * @return {void}
+   * @private
+   */
+  trimRetainedEntries() {
+    if (!Number.isInteger(this.maxEntries) || this.maxEntries <= NUM.ZERO) {
+      return;
+    }
+    if (this.log.length <= this.maxEntries) {
+      return;
+    }
+    this.log = this.log.slice(this.log.length - this.maxEntries);
   }
 
   /**
@@ -56,8 +86,7 @@ class MessageGroupOperationLedger {
    * @return {MessageGroupOperationLedgerEntry} Appended entry.
    */
   appendEntry(data) {
-    const index = this.log.length +
-      MESSAGE_GROUP_OPERATION_LEDGER_NUM.FIRST_INDEX;
+    const index = this.nextIndex;
     const entry = new MessageGroupOperationLedgerEntry(
       this.currentTerm,
       index,
@@ -65,6 +94,8 @@ class MessageGroupOperationLedger {
       this.now,
     );
     this.log.push(entry);
+    this.nextIndex += NUM.ONE;
+    this.trimRetainedEntries();
     return entry;
   }
 
@@ -76,9 +107,11 @@ class MessageGroupOperationLedger {
     if (startIndex < MESSAGE_GROUP_OPERATION_LEDGER_NUM.FIRST_INDEX) {
       return [...this.log];
     }
-    return this.log.slice(
-      startIndex - MESSAGE_GROUP_OPERATION_LEDGER_NUM.FIRST_INDEX,
-    );
+    const firstRetainedIndex = this.getFirstRetainedIndex();
+    if (startIndex <= firstRetainedIndex) {
+      return [...this.log];
+    }
+    return this.log.slice(startIndex - firstRetainedIndex);
   }
 
   /**
@@ -95,25 +128,48 @@ class MessageGroupOperationLedger {
    * @return {MessageGroupOperationLedgerEntry|null} Entry or null.
    */
   getEntry(index) {
+    const firstRetainedIndex = this.getFirstRetainedIndex();
     if (index < MESSAGE_GROUP_OPERATION_LEDGER_NUM.FIRST_INDEX ||
-      index > this.log.length) {
+      index < firstRetainedIndex) {
       return MESSAGE_GROUP_OPERATION_LEDGER_NO_ENTRY;
     }
-    return this.log[
-      index - MESSAGE_GROUP_OPERATION_LEDGER_NUM.FIRST_INDEX
-    ];
+    const offset = index - firstRetainedIndex;
+    if (offset >= this.log.length) {
+      return MESSAGE_GROUP_OPERATION_LEDGER_NO_ENTRY;
+    }
+    return this.log[offset];
   }
 
   /**
    * @param {number} fromIndex - Index to truncate from (FIRST_INDEX-based).
    */
   truncateFrom(fromIndex) {
-    if (fromIndex >= MESSAGE_GROUP_OPERATION_LEDGER_NUM.FIRST_INDEX &&
-      fromIndex <= this.log.length) {
+    if (fromIndex < MESSAGE_GROUP_OPERATION_LEDGER_NUM.FIRST_INDEX) {
+      return;
+    }
+    const firstRetainedIndex = this.getFirstRetainedIndex();
+    const lastRetainedIndex = this.nextIndex - NUM.ONE;
+    if (this.log.length === NUM.ZERO) {
+      this.nextIndex = Math.max(
+        MESSAGE_GROUP_OPERATION_LEDGER_NUM.FIRST_INDEX,
+        fromIndex,
+      );
+      return;
+    }
+    if (fromIndex <= firstRetainedIndex) {
+      this.log = [];
+      this.nextIndex = Math.max(
+        MESSAGE_GROUP_OPERATION_LEDGER_NUM.FIRST_INDEX,
+        fromIndex,
+      );
+      return;
+    }
+    if (fromIndex <= lastRetainedIndex + NUM.ONE) {
       this.log = this.log.slice(
         MESSAGE_GROUP_OPERATION_LEDGER_NUM.INITIAL_INDEX,
-        fromIndex - MESSAGE_GROUP_OPERATION_LEDGER_NUM.FIRST_INDEX,
+        fromIndex - firstRetainedIndex,
       );
+      this.nextIndex = fromIndex;
     }
   }
 

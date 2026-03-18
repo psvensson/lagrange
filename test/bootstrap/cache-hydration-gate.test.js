@@ -68,7 +68,10 @@ function createPartitionRecord(partitionId, overrides = {}) {
   return {
     [COLUMN.PARTITION_ID]: partitionId,
     [COLUMN.TABLE_ID]: overrides.tableId || `table-${partitionId}`,
-    [COLUMN.LEADER_NODE_ID]: overrides.leaderNodeId || null,
+    [COLUMN.LEADER_NODE_ID]:
+      Object.prototype.hasOwnProperty.call(overrides, 'leaderNodeId') ?
+        overrides.leaderNodeId :
+        'node-1',
     ...overrides,
   };
 }
@@ -82,7 +85,10 @@ function createPartitionRecord(partitionId, overrides = {}) {
 function createMessageGroupRecord(groupId, overrides = {}) {
   return {
     [COLUMN.GROUP_ID]: groupId,
-    [COLUMN.LEADER_NODE_ID]: overrides.leaderNodeId || null,
+    [COLUMN.LEADER_NODE_ID]:
+      Object.prototype.hasOwnProperty.call(overrides, 'leaderNodeId') ?
+        overrides.leaderNodeId :
+        'node-1',
     ...overrides,
   };
 }
@@ -137,8 +143,8 @@ test('CacheHydrationGate - passes when all partition leaders have complete metad
     const cache = createMockCache({
       partitions: [
         createPartitionRecord('p1'),
-        createPartitionRecord('p2'),
-        createPartitionRecord('p3'),
+        createPartitionRecord('p2', {leaderNodeId: 'node-2'}),
+        createPartitionRecord('p3', {leaderNodeId: 'node-3'}),
       ],
       services: [
         createPartitionLeaderService('p1', {address: 'ws://node1:8080', nodeId: 'node-1'}),
@@ -163,7 +169,7 @@ test('CacheHydrationGate - passes when all message group leaders have complete m
     const cache = createMockCache({
       messageGroups: [
         createMessageGroupRecord('mg1'),
-        createMessageGroupRecord('mg2'),
+        createMessageGroupRecord('mg2', {leaderNodeId: 'node-2'}),
       ],
       services: [
         createMessageGroupLeaderService('mg1', {address: 'ws://node1:8080', nodeId: 'node-1'}),
@@ -187,11 +193,11 @@ test('CacheHydrationGate - passes when all partitions and message groups have co
     const cache = createMockCache({
       partitions: [
         createPartitionRecord('p1'),
-        createPartitionRecord('p2'),
+        createPartitionRecord('p2', {leaderNodeId: 'node-2'}),
       ],
       messageGroups: [
         createMessageGroupRecord('mg1'),
-        createMessageGroupRecord('mg2'),
+        createMessageGroupRecord('mg2', {leaderNodeId: 'node-2'}),
       ],
       services: [
         createPartitionLeaderService('p1', {address: 'ws://node1:8080', nodeId: 'node-1'}),
@@ -206,6 +212,46 @@ test('CacheHydrationGate - passes when all partitions and message groups have co
     t.equal(result.success, true, 'Should pass when all leaders complete');
     t.same(result.errors, [], 'Should have no errors');
   });
+
+test(
+  'CacheHydrationGate - accepts canonical owner metadata without services leader role',
+  async (t) => {
+    const gate = new CacheHydrationGate();
+    const cache = createMockCache({
+      partitions: [
+        createPartitionRecord('p1', {leaderNodeId: 'node-1'}),
+      ],
+      messageGroups: [
+        createMessageGroupRecord('mg1', {leaderNodeId: 'node-1'}),
+      ],
+      services: [
+        {
+          [COLUMN.SERVICE_ID]: 'p1-r1',
+          [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
+          [COLUMN.PARTITION_ID]: 'p1',
+          [COLUMN.RAFT_ROLE]: RAFT_ROLE.FOLLOWER,
+          [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+          [COLUMN.NODE_ID]: 'node-1',
+          [COLUMN.ADDRESS]: 'ws://node1:8080',
+        },
+        {
+          [COLUMN.SERVICE_ID]: 'mg1-r1',
+          [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.MESSAGE_GROUP,
+          [COLUMN.GROUP_ID]: 'mg1',
+          [COLUMN.RAFT_ROLE]: RAFT_ROLE.FOLLOWER,
+          [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+          [COLUMN.NODE_ID]: 'node-1',
+          [COLUMN.ADDRESS]: 'ws://node1:8080',
+        },
+      ],
+    });
+
+    const result = gate.validate({systemTableCache: cache});
+
+    t.equal(result.success, true, 'canonical owner metadata should satisfy cache hydration');
+    t.same(result.errors, [], 'should have no errors');
+  },
+);
 
 test('CacheHydrationGate - passes with empty cache (no partitions or message groups)',
   async (t) => {
@@ -227,7 +273,7 @@ test('CacheHydrationGate - fails when partition leader service missing', async (
   const cache = createMockCache({
     partitions: [
       createPartitionRecord('p1'),
-      createPartitionRecord('p2'),
+      createPartitionRecord('p2', {leaderNodeId: 'node-2'}),
     ],
     services: [
       createPartitionLeaderService('p1', {address: 'ws://node1:8080', nodeId: 'node-1'}),
@@ -271,7 +317,7 @@ test('CacheHydrationGate - fails when partition leader has no address', async (t
   const cache = createMockCache({
     partitions: [
       createPartitionRecord('p1'),
-      createPartitionRecord('p2'),
+      createPartitionRecord('p2', {leaderNodeId: 'node-2'}),
     ],
     services: [
       createPartitionLeaderService('p1', {address: 'ws://node1:8080', nodeId: 'node-1'}),
@@ -295,7 +341,7 @@ test('CacheHydrationGate - fails when message group leader service missing', asy
   const cache = createMockCache({
     messageGroups: [
       createMessageGroupRecord('mg1'),
-      createMessageGroupRecord('mg2'),
+      createMessageGroupRecord('mg2', {leaderNodeId: 'node-2'}),
     ],
     services: [
       createMessageGroupLeaderService('mg1', {address: 'ws://node1:8080', nodeId: 'node-1'}),
@@ -337,7 +383,7 @@ test('CacheHydrationGate - fails when message group leader has no address', asyn
   const cache = createMockCache({
     messageGroups: [
       createMessageGroupRecord('mg1'),
-      createMessageGroupRecord('mg2'),
+      createMessageGroupRecord('mg2', {leaderNodeId: 'node-2'}),
     ],
     services: [
       createMessageGroupLeaderService('mg1', {address: 'ws://node1:8080', nodeId: 'node-1'}),
@@ -361,13 +407,13 @@ test('CacheHydrationGate - returns comprehensive diagnostics on mixed failures',
   const cache = createMockCache({
     partitions: [
       createPartitionRecord('p1'),
-      createPartitionRecord('p2'),
+      createPartitionRecord('p2', {leaderNodeId: 'node-2'}),
       createPartitionRecord('p3'),
     ],
     messageGroups: [
       createMessageGroupRecord('mg1'),
       createMessageGroupRecord('mg2'),
-      createMessageGroupRecord('mg3'),
+      createMessageGroupRecord('mg3', {leaderNodeId: 'node-3'}),
     ],
     services: [
       createPartitionLeaderService('p1', {address: 'ws://node1:8080', nodeId: 'node-1'}),
@@ -468,7 +514,7 @@ test('CacheHydrationGate - handles inactive leader services correctly', async (t
     'Should report p1 as missing (inactive leader not counted)');
 });
 
-test('CacheHydrationGate - handles follower services correctly', async (t) => {
+test('CacheHydrationGate - requires the service row to match the owner leader node', async (t) => {
   const gate = new CacheHydrationGate();
   const cache = createMockCache({
     partitions: [createPartitionRecord('p1')],
@@ -477,9 +523,9 @@ test('CacheHydrationGate - handles follower services correctly', async (t) => {
         [COLUMN.SERVICE_ID]: 'p1-follower',
         [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
         [COLUMN.PARTITION_ID]: 'p1',
-        [COLUMN.RAFT_ROLE]: RAFT_ROLE.FOLLOWER, // Not a leader
+        [COLUMN.RAFT_ROLE]: RAFT_ROLE.FOLLOWER,
         [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-        [COLUMN.NODE_ID]: 'node-1',
+        [COLUMN.NODE_ID]: 'node-2',
         [COLUMN.ADDRESS]: 'ws://node1:8080',
       },
     ],
@@ -487,9 +533,9 @@ test('CacheHydrationGate - handles follower services correctly', async (t) => {
 
   const result = gate.validate({systemTableCache: cache});
 
-  t.equal(result.success, false, 'Should fail when only follower exists');
+  t.equal(result.success, false, 'Should fail when the active service is on the wrong node');
   t.same(result.diagnostics.missingPartitionLeaders, ['p1'],
-    'Should report p1 as missing (follower not counted as leader)');
+    'Should report p1 as missing when no service matches the owner leader node');
 });
 
 test('CacheHydrationGate - extends PhaseGate base class', async (t) => {
@@ -497,4 +543,3 @@ test('CacheHydrationGate - extends PhaseGate base class', async (t) => {
 
   t.ok(typeof gate.validate === 'function', 'Should have validate method');
 });
-

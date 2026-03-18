@@ -27,6 +27,7 @@ import {
 const CDC_NO_SUBSCRIBER_BUFFER_SUPPRESSED_TABLES = new Set([
   SYSTEM_TABLE_NAME.LOGS,
 ]);
+const CDC_SUBSCRIBER_NOT_READY_MSG = 'CDC subscriber not ready for delivery';
 
 /**
  * Parse external CDC allowed override from table policy JSON.
@@ -86,6 +87,100 @@ class PartitionCDCDelivery {
    */
   constructor(owner) {
     this.owner = owner;
+  }
+
+  /**
+   * Resolve the underlying subscriber object from a wrapper.
+   * @param {Function|Object} subscriber
+   * @return {Function|Object}
+   * @private
+   */
+  getCDCSubscriberSource(subscriber) {
+    return subscriber?.cdcSourceSubscriber || subscriber;
+  }
+
+  /**
+   * Normalize optional subscriber readiness metadata.
+   * @param {*} readiness
+   * @return {{ready:boolean,retryAfterMs:number,reason:string|null}}
+   * @private
+   */
+  normalizeCDCSubscriberReadiness(readiness) {
+    if (readiness === true || readiness == null) {
+      return {
+        ready: true,
+        retryAfterMs: NUM.ZERO,
+        reason: null,
+      };
+    }
+    if (readiness === false) {
+      return {
+        ready: false,
+        retryAfterMs: NUM.ZERO,
+        reason: null,
+      };
+    }
+    if (typeof readiness !== 'object') {
+      return {
+        ready: true,
+        retryAfterMs: NUM.ZERO,
+        reason: null,
+      };
+    }
+    return {
+      ready: readiness.ready !== false,
+      retryAfterMs:
+        Number.isFinite(readiness.retryAfterMs) && readiness.retryAfterMs > NUM.ZERO ?
+          Math.floor(readiness.retryAfterMs) :
+          NUM.ZERO,
+      reason:
+        typeof readiness.reason === 'string' && readiness.reason.length > NUM.ZERO ?
+          readiness.reason :
+          null,
+    };
+  }
+
+  /**
+   * Resolve whether a subscriber-owner is ready to accept this CDC event.
+   * @param {Function|Object} subscriber
+   * @param {Object} cdcEvent
+   * @return {{ready:boolean,retryAfterMs:number,reason:string|null}}
+   * @private
+   */
+  resolveCDCSubscriberReadiness(subscriber, cdcEvent) {
+    const sourceSubscriber = this.getCDCSubscriberSource(subscriber);
+    if (sourceSubscriber &&
+        typeof sourceSubscriber.canAcceptCDCEvent ===
+          PARTITION_SERVICE_TYPE.FUNCTION) {
+      return this.normalizeCDCSubscriberReadiness(
+        sourceSubscriber.canAcceptCDCEvent(cdcEvent),
+      );
+    }
+    return {
+      ready: true,
+      retryAfterMs: NUM.ZERO,
+      reason: null,
+    };
+  }
+
+  /**
+   * Resolve the next buffered replay delay after a subscriber miss.
+   * Honors typed retryAfter hints from downstream owners when present.
+   * @param {*} error
+   * @return {number}
+   * @private
+   */
+  resolveBufferedReplayDelayAfterError(error) {
+    if (Number.isFinite(error?.retryAfterMs) && error.retryAfterMs > NUM.ZERO) {
+      return Math.min(
+        PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_MAX_DELAY_MS,
+        Math.floor(error.retryAfterMs),
+      );
+    }
+    return Math.min(
+      PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_MAX_DELAY_MS,
+      this.owner.cdcBufferReplayDelayMs * NUM.TWO,
+    );
   }
 
   /**
@@ -277,10 +372,8 @@ class PartitionCDCDelivery {
       this.owner.cdcPipelineMetrics.increment(
         CDC_PIPELINE_METRIC.DELIVERY_FAILURES,
       );
-      this.owner.cdcBufferReplayDelayMs = Math.min(
-        PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_MAX_DELAY_MS,
-        this.owner.cdcBufferReplayDelayMs * NUM.TWO,
-      );
+      this.owner.cdcBufferReplayDelayMs =
+        this.resolveBufferedReplayDelayAfterError(error);
       this.owner.logger.warn(
         PARTITION_SERVICE_LOG_MSG.CDC_BUFFER_REPLAY_FAILED, {
           partitionId: this.owner.partitionId,
@@ -331,6 +424,21 @@ class PartitionCDCDelivery {
    * @return {Promise<void>}
    */
   async deliverCDCEventToSubscriber(subscriber, cdcEvent) {
+    const readiness = this.resolveCDCSubscriberReadiness(
+      subscriber,
+      cdcEvent,
+    );
+    if (readiness.ready !== true) {
+      const error = new Error(
+        readiness.reason || CDC_SUBSCRIBER_NOT_READY_MSG,
+      );
+      error.ownerNotReady = true;
+      if (readiness.retryAfterMs > NUM.ZERO) {
+        error.retryAfterMs = readiness.retryAfterMs;
+      }
+      throw error;
+    }
+
     if (typeof subscriber === PARTITION_SERVICE_TYPE.FUNCTION) {
       await subscriber(cdcEvent);
       return;
@@ -415,6 +523,7 @@ class PartitionCDCDelivery {
       wrapper = this.buildCDCSubscriberWrapper(
         subscriber, subscriptionState,
       );
+      wrapper.cdcSourceSubscriber = subscriber;
       this.owner.cdcSubscriberWrappers.set(subscriber, wrapper);
       this.owner.cdcSubscribers.add(wrapper);
       this.owner.logger.debug(
@@ -431,6 +540,7 @@ class PartitionCDCDelivery {
       PARTITION_SERVICE_CDC.CATCHUP_MODE_NONE;
     let bufferedEventsReplayed = NUM.ZERO;
     let catchupCompletedAt = Date.now();
+    let preserveReplayDelayAfterHandshake = false;
     const deliveredIdentities = new Set();
 
     if (catchupMode === PARTITION_SERVICE_CDC.CATCHUP_MODE_BACKFILL) {
@@ -461,10 +571,10 @@ class PartitionCDCDelivery {
         this.owner.cdcPipelineMetrics.increment(
           CDC_PIPELINE_METRIC.DELIVERY_FAILURES,
         );
-        this.owner.cdcBufferReplayDelayMs = Math.min(
-          PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_MAX_DELAY_MS,
-          this.owner.cdcBufferReplayDelayMs * NUM.TWO,
-        );
+        this.owner.cdcBufferReplayDelayMs =
+          this.resolveBufferedReplayDelayAfterError(error);
+        preserveReplayDelayAfterHandshake =
+          Number.isFinite(error?.retryAfterMs) && error.retryAfterMs > NUM.ZERO;
         this.owner.logger.warn(
           PARTITION_SERVICE_LOG_MSG.CDC_BUFFER_REPLAY_FAILED, {
             partitionId: this.owner.partitionId,
@@ -570,8 +680,10 @@ class PartitionCDCDelivery {
         streamVersion: handshake.versionContext.streamVersion,
       });
 
-    this.owner.cdcBufferReplayDelayMs =
-      PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
+    if (!preserveReplayDelayAfterHandshake) {
+      this.owner.cdcBufferReplayDelayMs =
+        PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
+    }
     this.scheduleBufferedCDCReplay('post_subscription_handshake');
 
     return handshake;

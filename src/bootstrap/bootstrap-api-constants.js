@@ -21,6 +21,8 @@ const BOOTSTRAP_API_MESSAGE_GROUP_PREFIX = 'mg-';
 const BOOTSTRAP_API_DEFAULT = Object.freeze({
   MG_ID_LENGTH: NUM.EIGHT,
   WS_HOST: HOST.LOCALHOST,
+  MAX_CONCURRENT_BOOTSTRAP_REQUESTS: 1,
+  BOOTSTRAP_ADMISSION_RETRY_AFTER_MS: 1000,
   MOVE_REPLICA_ASSIGNMENT_LEASE_MS: NUM.THIRTY_THOUSAND,
   MOVE_REPLICA_ASSIGNMENT_SWEEP_INTERVAL_MS: NUM.THOUSAND,
   SERVICE_REGISTRATION_CACHE_VISIBILITY_TIMEOUT_MS: NUM.FIVE_THOUSAND,
@@ -65,6 +67,8 @@ const BOOTSTRAP_API_LOG_MSG = Object.freeze({
     'Reserved MOVE_REPLICA assignment for joining node',
   MOVE_REPLICA_ASSIGNMENT_RENEWED:
     'Renewed MOVE_REPLICA assignment reservation for original target node',
+  MOVE_REPLICA_ASSIGNMENT_RECONCILED:
+    'Reconciled observed MOVE_REPLICA assignment to committed state',
   MOVE_REPLICA_ASSIGNMENT_EXPIRED:
     'Expired stale MOVE_REPLICA assignment reservation',
   MOVE_REPLICA_ASSIGNMENT_SWEEP_FAILED:
@@ -93,6 +97,8 @@ const BOOTSTRAP_API_LOG_MSG = Object.freeze({
     'Allowing idempotent re-registration of node with unchanged address',
   STALE_NODE_REJOIN_ALLOWED:
     'Allowing re-registration of dead node',
+  BOOTSTRAP_ADMISSION_DEFERRED:
+    'Deferred bootstrap request due to bounded join admission',
 });
 
 const BOOTSTRAP_API_ERROR = Object.freeze({
@@ -221,6 +227,9 @@ const BOOTSTRAP_API_PROBE_SCOPE = Object.freeze({
 
 const BOOTSTRAP_API_PROBE_REASON = Object.freeze({
   BOOTSTRAP_PHASE_INCOMPLETE: 'BOOTSTRAP_PHASE_INCOMPLETE',
+  JOIN_ADMISSION_BACKPRESSURED: 'JOIN_ADMISSION_BACKPRESSURED',
+  MOVE_REPLICA_HANDOFF_STABILIZING:
+    'MOVE_REPLICA_HANDOFF_STABILIZING',
 });
 
 const BOOTSTRAP_API_LIVENESS = Object.freeze({

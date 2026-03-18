@@ -10,6 +10,11 @@ import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
 import {NUM, STATE, TABLES} from '../constants/index.js';
 import {
+  CONTROL_PLANE_MUTATION_OPERATION,
+  ControlPlaneSystemTableGateway,
+} from '../control-plane/control-plane-system-table-gateway.js';
+import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
+import {
   QUERY_ERROR_CODE,
   QUERY_ERROR_MSG,
   QUERY_LOG_MSG,
@@ -33,6 +38,8 @@ class TableCreationService {
   constructor(options = {}) {
     this.systemCache = null;
     this.cdcIntegrationService = options.cdcIntegrationService || null;
+    this.controlPlaneSystemTableGateway =
+      options.controlPlaneSystemTableGateway || null;
     this.partitionSplitMergeManager = null;
     this.tablePolicyByTableId = new Map();
     this.partitionSizeByPartitionId = new Map();
@@ -92,6 +99,10 @@ class TableCreationService {
    */
   setCDCIntegrationService(service) {
     this.cdcIntegrationService = service;
+  }
+
+  setControlPlaneSystemTableGateway(controlPlaneSystemTableGateway) {
+    this.controlPlaneSystemTableGateway = controlPlaneSystemTableGateway || null;
   }
 
   /**
@@ -462,11 +473,22 @@ class TableCreationService {
 
     // Write to system tables via CDC
     if (this.cdcIntegrationService) {
-      await this.cdcIntegrationService.insertSystemTableRow(TABLES.TABLES, tableMetadata);
-      await this.cdcIntegrationService.insertSystemTableRow(
-        TABLES.PARTITIONS,
-        partitionMetadata,
-      );
+      await this.getControlPlaneSystemTableGateway().submitMutation({
+        operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
+        tableName: TABLES.TABLES,
+        row: tableMetadata,
+      }, {
+        workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+        deliveryPriority: 'critical',
+      });
+      await this.getControlPlaneSystemTableGateway().submitMutation({
+        operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
+        tableName: TABLES.PARTITIONS,
+        row: partitionMetadata,
+      }, {
+        workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+        deliveryPriority: 'critical',
+      });
     }
 
     await this.provisionInitialPartition({
@@ -626,6 +648,21 @@ class TableCreationService {
   async shutdown() {
     this.detachCachePolicyListener();
     this.stopPeriodicSplitMergeEvaluation();
+  }
+
+  getControlPlaneSystemTableGateway() {
+    if (this.controlPlaneSystemTableGateway) {
+      if (!this.controlPlaneSystemTableGateway.cdcIntegrationService &&
+          this.cdcIntegrationService) {
+        this.controlPlaneSystemTableGateway
+          .setCdcIntegrationService(this.cdcIntegrationService);
+      }
+      return this.controlPlaneSystemTableGateway;
+    }
+    this.controlPlaneSystemTableGateway = new ControlPlaneSystemTableGateway({
+      cdcIntegrationService: this.cdcIntegrationService,
+    });
+    return this.controlPlaneSystemTableGateway;
   }
 
   /**

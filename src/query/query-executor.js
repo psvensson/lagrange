@@ -260,6 +260,7 @@ class QueryExecutor {
       options.preferLeader || false,
       options.preferSameLatencyGroup === true,
       {
+        deliveryPriority: options.deliveryPriority,
         timeoutMs: options.timeoutMs,
         cancellationToken:
           options.cancellationToken || null,
@@ -404,6 +405,7 @@ class QueryExecutor {
       options.preferLeader || false,
       options.preferSameLatencyGroup === true,
       {
+        deliveryPriority: options.deliveryPriority,
         timeoutMs: options.timeoutMs,
         cancellationToken:
           options.cancellationToken || null,
@@ -454,6 +456,7 @@ class QueryExecutor {
           options.preferLeader || false,
           options.preferSameLatencyGroup === true,
           {
+            deliveryPriority: options.deliveryPriority,
             timeoutMs: options.timeoutMs,
             cancellationToken:
               options.cancellationToken || null,
@@ -915,6 +918,7 @@ class QueryExecutor {
         forRead,
         preferLeader,
         preferSameLatencyGroup,
+        deliveryPriority: executionOptions.deliveryPriority,
         routingReadinessDimension:
           executionOptions.routingReadinessDimension ||
           this.defaultRoutingReadinessDimension,
@@ -1133,7 +1137,11 @@ class QueryExecutor {
                 executionOptions.migrationId;
             }
           }
-          const response = await this.messageRouter.deliver(address, request);
+          const response = await this.messageRouter.deliver(
+            address,
+            request,
+            {deliveryPriority: executionOptions.deliveryPriority},
+          );
           this.throwIfCancelled(cancellationToken);
 
           if (response.acknowledged && response.success) {
@@ -1170,6 +1178,7 @@ class QueryExecutor {
                 [QUERY_MESSAGE_FIELD_MIGRATION_ID]:
                   executionOptions.migrationId || null,
               },
+              {deliveryPriority: executionOptions.deliveryPriority},
             );
 
             if (redirectResponse.acknowledged && redirectResponse.success) {

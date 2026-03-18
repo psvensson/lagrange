@@ -1,5 +1,6 @@
 import {describe, it, beforeEach, afterEach} from 'node:test';
 import assert from 'node:assert/strict';
+import {EventEmitter} from 'node:events';
 import {
   WasmServiceReplica,
   ENTRY_TYPE,
@@ -24,6 +25,7 @@ import {NodeService} from
   '../../src/node/node-service.js';
 import {AddressManager} from
   '../../src/address/address-manager.js';
+import {LeaderActivationScheduler} from '../../src/raft/leader-activation-scheduler.js';
 
 /**
  * Initialize singletons required by RaftReplicaBase.
@@ -98,9 +100,11 @@ function createWriteReadySystemTableCache() {
 describe('WasmServiceReplica', () => {
   beforeEach(() => {
     initEnv();
+    LeaderActivationScheduler.resetSharedForTests();
   });
 
   afterEach(() => {
+    LeaderActivationScheduler.resetSharedForTests();
     cleanEnv();
   });
 
@@ -652,6 +656,33 @@ describe('WasmServiceReplica', () => {
       assert.equal(replica.kvStore, null);
       assert.equal(replica._safetyBroadcastTimer, null);
       assert.equal(replica.timerManager.activeTimers.size, 0);
+    });
+  });
+
+  describe('leader activation stabilization', () => {
+    it('cancels delayed leader activation on candidate demotion', async () => {
+      const replica = new WasmServiceReplica(defaultOpts({
+        cdcIntegrationService: {},
+        replicaIds: ['wsr-1', 'wsr-2'],
+        leaderActivationStabilizationMs: 10,
+        leaderActivationNodeSpacingMs: 0,
+      }));
+      replica.timerManager.reconstructTimers = async () => 0;
+      let leaderEvents = 0;
+      replica.on('leaderElected', () => {
+        leaderEvents += 1;
+      });
+      replica.raft = new EventEmitter();
+      replica.wireRaftEvents();
+
+      replica.raft.emit('leader');
+      replica.raft.emit('candidate');
+
+      await new Promise((resolve) => setTimeout(resolve, 40));
+
+      assert.equal(leaderEvents, 0);
+      assert.equal(replica._safetyBroadcastTimer, null);
+      await replica.shutdown();
     });
   });
 });

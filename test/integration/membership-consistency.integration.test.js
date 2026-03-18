@@ -23,6 +23,12 @@ import {FailureDetector} from '../../src/node/failure-detector.js';
 import {HeartbeatService} from '../../src/control-plane/heartbeat-service.js';
 import {LeaseService} from '../../src/control-plane/lease-service.js';
 import {EndpointService} from '../../src/control-plane/endpoint-service.js';
+import {
+  ControlPlaneSystemTableGateway,
+} from '../../src/control-plane/control-plane-system-table-gateway.js';
+import {
+  createSystemMetadataOwners,
+} from '../../src/control-plane/owners/index.js';
 import {ReplicaDispatchService} from
   '../../src/control-plane/replica-dispatch-service.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
@@ -879,11 +885,19 @@ test('Membership Consistency Integration Tests', async (t) => {
       });
       leaseSvc.initialize();
 
+      const endpointGateway = new ControlPlaneSystemTableGateway({
+        nodeId: 'control-plane-node',
+        sqlQueryEngine: createCacheSqlQueryEngine(leaderCache),
+        cdcIntegrationService: cdcService,
+        messageRouter,
+      });
       const endpointSvc = new EndpointService({
         nodeId: 'control-plane-node',
-        cdcIntegrationService: cdcService,
-        systemTableCache: leaderCache,
-        sqlQueryEngine: createCacheSqlQueryEngine(leaderCache),
+        serviceEndpointsOwner: createSystemMetadataOwners({
+          controlPlaneSystemTableGateway: endpointGateway,
+          systemTableCache: leaderCache,
+        }).serviceEndpointsOwner,
+        controlPlaneSystemTableGateway: endpointGateway,
       });
       endpointSvc.initialize();
 
@@ -1089,11 +1103,19 @@ test('Membership Consistency Integration Tests', async (t) => {
       });
       leaseSvc.initialize();
 
+      const endpointGateway = new ControlPlaneSystemTableGateway({
+        nodeId: 'control-plane-node',
+        sqlQueryEngine: createCacheSqlQueryEngine(cache),
+        cdcIntegrationService: cdcService,
+        messageRouter,
+      });
       const endpointSvc = new EndpointService({
         nodeId: 'control-plane-node',
-        cdcIntegrationService: cdcService,
-        systemTableCache: cache,
-        sqlQueryEngine: createCacheSqlQueryEngine(cache),
+        serviceEndpointsOwner: createSystemMetadataOwners({
+          controlPlaneSystemTableGateway: endpointGateway,
+          systemTableCache: cache,
+        }).serviceEndpointsOwner,
+        controlPlaneSystemTableGateway: endpointGateway,
       });
       endpointSvc.initialize();
 
@@ -1698,11 +1720,19 @@ test('Membership Consistency Integration Tests', async (t) => {
       });
       leaseSvc.initialize();
 
+      const endpointGateway = new ControlPlaneSystemTableGateway({
+        nodeId: 'follower-node',
+        sqlQueryEngine: createCacheSqlQueryEngine(cache),
+        cdcIntegrationService: cdcService,
+        messageRouter: mockRouter,
+      });
       const endpointSvc = new EndpointService({
         nodeId: 'follower-node',
-        cdcIntegrationService: cdcService,
-        systemTableCache: cache,
-        sqlQueryEngine: createCacheSqlQueryEngine(cache),
+        serviceEndpointsOwner: createSystemMetadataOwners({
+          controlPlaneSystemTableGateway: endpointGateway,
+          systemTableCache: cache,
+        }).serviceEndpointsOwner,
+        controlPlaneSystemTableGateway: endpointGateway,
       });
       endpointSvc.initialize();
 

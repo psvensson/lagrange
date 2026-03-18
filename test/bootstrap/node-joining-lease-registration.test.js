@@ -33,16 +33,29 @@ test('registerNodeInCluster defers ready_lease_expires_at until ready signaling'
   async (t) => {
   initializeTestEnvironment();
 
-  let capturedNodeStateUpdate = null;
+  const upserts = [];
 
   const mockCdcIntegrationService = {
     sqlQueryEngine: {},
-    upsertSystemTableRow: async () => ({success: true}),
+    upsertSystemTableRow: async (tableName, rowData, options) => {
+      upserts.push({tableName, rowData, options});
+      return {success: true};
+    },
   };
 
   const mockBudgetService = {
-    resolveBudgetRow: (nodeRow) => {
+    registerNodeBudget: async ({nodeRow, upsertOptions}) => {
+      await mockCdcIntegrationService.upsertSystemTableRow(
+        'nodes',
+        {
+          ...nodeRow,
+          storage_budget_bytes: 100,
+          storage_budget_source: 'test',
+        },
+        upsertOptions,
+      );
       return {
+        result: {success: true},
         budgetRow: {
           ...nodeRow,
           storage_budget_bytes: 100,
@@ -65,21 +78,22 @@ test('registerNodeInCluster defers ready_lease_expires_at until ready signaling'
 
   service.cdcIntegrationService = mockCdcIntegrationService;
   service.getNodeStorageBudgetService = () => mockBudgetService;
-  service.sendControlPlaneNodeStateUpdate = async (options) => {
-    capturedNodeStateUpdate = options;
+  service.sendControlPlaneNodeStateUpdate = async () => {
+    throw new Error('legacy node-state owner path should not be used');
   };
 
   await service.registerNodeInCluster();
 
-  t.ok(capturedNodeStateUpdate, 'membership publication should be emitted');
+  const nodeUpsert = upserts.find((entry) => entry.tableName === 'nodes');
+  t.ok(nodeUpsert, 'canonical nodes row should be created during registration');
   t.equal(
-    capturedNodeStateUpdate.state,
+    nodeUpsert.rowData.connection_state,
     'connected',
-    'join membership should publish CONNECTED before ready signaling',
+    'join registration should persist CONNECTED before ready signaling',
   );
   t.equal(
-    capturedNodeStateUpdate.nodeRow.ready_lease_expires_at,
+    nodeUpsert.rowData.ready_lease_expires_at,
     undefined,
-    'join membership payload should not carry a ready lease before the ready checkpoint',
+    'join registration should not carry a ready lease before the ready checkpoint',
   );
   });

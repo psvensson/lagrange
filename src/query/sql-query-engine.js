@@ -99,6 +99,19 @@ import {
 import {AuthoritativeControlPlaneView} from
   '../control-plane/authoritative-control-plane-view.js';
 import {
+  CONTROL_PLANE_MUTATION_OPERATION,
+  ControlPlaneSystemTableGateway,
+} from '../control-plane/control-plane-system-table-gateway.js';
+import {
+  CONTROL_PLANE_MUTATION_WORK_CLASS,
+} from '../control-plane/control-plane-mutation-readiness.js';
+import {
+  buildPressureAdmissionFailure,
+  PRESSURE_GOVERNOR_ACTION,
+  PRESSURE_WORK_CLASS,
+  PressureGovernor,
+} from '../control-plane/pressure-governor.js';
+import {
   PARTITION_SPLIT_MIRROR_ORIGIN,
   PARTITION_TRANSITION_METADATA_FIELD,
   PARTITION_TRANSITION_STATE,
@@ -174,6 +187,8 @@ class SQLQueryEngine {
     this.systemCache = options.systemCache || null;
     this.messageRouter = options.messageRouter || null;
     this.cdcIntegrationService = options.cdcIntegrationService || null;
+    this.controlPlaneSystemTableGateway =
+      options.controlPlaneSystemTableGateway || null;
     this.nodeId = options.nodeId || QUERY_SUBSYSTEM.SQL_QUERY_ENGINE;
     this.rebalanceCoordinator = options.rebalanceCoordinator || null;
     this.controlPlaneReadinessService =
@@ -285,6 +300,7 @@ class SQLQueryEngine {
     this.tableCreationService = new TableCreationService({
       systemCache: this.systemCache,
       cdcIntegrationService: this.cdcIntegrationService,
+      controlPlaneSystemTableGateway: this.controlPlaneSystemTableGateway,
       partitionSplitMergeManager: this.partitionSplitMergeManager,
       calculateQuorumReplicaCount: (replicaCount) =>
         this.calculateQuorumReplicaCount(replicaCount),
@@ -350,6 +366,7 @@ class SQLQueryEngine {
           this.calculateQuorumReplicaCount(replicaCount),
         storageAdmissionService:
           this.rebalanceCoordinator?.storageAdmissionService || null,
+        messageRouter: this.messageRouter,
         createExecutionTimeoutBudget: () =>
           this.createControlPlaneTimeoutBudget(
             this.tablePartitionProvisioningTimeoutMs,
@@ -437,6 +454,9 @@ class SQLQueryEngine {
    */
   setSystemCache(cache) {
     this.systemCache = cache;
+    if (this.controlPlaneSystemTableGateway) {
+      this.controlPlaneSystemTableGateway.setSystemTableCache(cache);
+    }
     this.partitionResolver.setSystemCache(cache);
     this.tableCreationService.setSystemCache(cache);
     this.queryExecutor.setSystemCache(cache);
@@ -469,6 +489,9 @@ class SQLQueryEngine {
   setMessageRouter(router) {
     this.messageRouter = router;
     this.queryExecutor.setMessageRouter(router);
+    if (this.controlPlaneSystemTableGateway) {
+      this.controlPlaneSystemTableGateway.setMessageRouter(router);
+    }
   }
 
   /**
@@ -502,6 +525,35 @@ class SQLQueryEngine {
   setCDCIntegrationService(service) {
     this.cdcIntegrationService = service;
     this.tableCreationService.setCDCIntegrationService(service);
+    if (this.controlPlaneSystemTableGateway) {
+      this.controlPlaneSystemTableGateway.setCdcIntegrationService(service);
+    }
+  }
+
+  getControlPlaneSystemTableGateway() {
+    if (this.controlPlaneSystemTableGateway) {
+      if (!this.controlPlaneSystemTableGateway.cdcIntegrationService &&
+          this.cdcIntegrationService) {
+        this.controlPlaneSystemTableGateway
+          .setCdcIntegrationService(this.cdcIntegrationService);
+      }
+      if (!this.controlPlaneSystemTableGateway.messageRouter &&
+          this.messageRouter) {
+        this.controlPlaneSystemTableGateway.setMessageRouter(this.messageRouter);
+      }
+      if (!this.controlPlaneSystemTableGateway.systemTableCache &&
+          this.systemCache) {
+        this.controlPlaneSystemTableGateway.setSystemTableCache(this.systemCache);
+      }
+      return this.controlPlaneSystemTableGateway;
+    }
+    this.controlPlaneSystemTableGateway = new ControlPlaneSystemTableGateway({
+      nodeId: this.nodeId,
+      cdcIntegrationService: this.cdcIntegrationService,
+      messageRouter: this.messageRouter,
+      systemTableCache: this.systemCache,
+    });
+    return this.controlPlaneSystemTableGateway;
   }
 
   /**
@@ -1399,6 +1451,32 @@ class SQLQueryEngine {
     cancellationToken?.throwIfCancelled?.();
 
     try {
+      const ingressPressureDecision = this.evaluateQueryIngressPressure(ast, options);
+      if (ingressPressureDecision &&
+          (ingressPressureDecision.action === PRESSURE_GOVERNOR_ACTION.DEFER ||
+            ingressPressureDecision.action === PRESSURE_GOVERNOR_ACTION.REJECT)) {
+        this.logger.warn(
+          ingressPressureDecision.action === PRESSURE_GOVERNOR_ACTION.DEFER ?
+            QUERY_LOG_MSG.QUERY_ADMISSION_DEFERRED :
+            QUERY_LOG_MSG.QUERY_ADMISSION_REJECTED,
+          {
+            statementType: ast.type,
+            pressureAction: ingressPressureDecision.action,
+            pressureReason: ingressPressureDecision.reason,
+            retryAfterMs: ingressPressureDecision.retryAfterMs,
+            workClass:
+              options?.workClass || PRESSURE_WORK_CLASS.INTERACTIVE,
+          },
+        );
+        return buildPressureAdmissionFailure(ingressPressureDecision, {
+          error:
+            ingressPressureDecision.action === PRESSURE_GOVERNOR_ACTION.DEFER ?
+              'query_admission_deferred' :
+              'query_admission_rejected',
+          errorCode: QUERY_ERROR_CODE.INTERNAL_ERROR,
+        });
+      }
+
       // Route based on statement type
       let result;
       switch (ast.type) {
@@ -1507,6 +1585,44 @@ class SQLQueryEngine {
         errorCode: this.getErrorCode(error),
       };
     }
+  }
+
+  evaluateQueryIngressPressure(ast, options = {}) {
+    const astType = ast?.type || null;
+    const writeStatement =
+      astType === QUERY_AST_TYPE.INSERT ||
+      astType === QUERY_AST_TYPE.UPDATE ||
+      astType === QUERY_AST_TYPE.DELETE ||
+      astType === QUERY_AST_TYPE.CREATE_TABLE ||
+      astType === QUERY_AST_TYPE.ALTER_TABLE;
+    return this.getPressureGovernor().evaluate({
+      workClass:
+        options?.workClass ||
+        (writeStatement ?
+          PRESSURE_WORK_CLASS.INTERACTIVE :
+          PRESSURE_WORK_CLASS.INTERACTIVE),
+      resourceKeys: [
+        writeStatement ? 'query-plane:write' : 'query-plane:read',
+        `query-plane:statement:${String(astType || 'unknown').toLowerCase()}`,
+      ],
+      allowDegrade: false,
+      allowDefer: options?.allowPressureDefer !== false,
+      retryAfterMs: options?.pressureRetryAfterMs,
+    });
+  }
+
+  getPressureGovernor() {
+    this.pressureGovernor = this.pressureGovernor || PressureGovernor.getShared({
+      nodeId: this.nodeId,
+      messageRouter: this.messageRouter,
+      logger: this.logger,
+    });
+    this.pressureGovernor.configure({
+      nodeId: this.nodeId,
+      messageRouter: this.messageRouter,
+      logger: this.logger,
+    });
+    return this.pressureGovernor;
   }
 
   /**
@@ -1882,6 +1998,8 @@ class SQLQueryEngine {
           entityType: SERVICE_TYPE.PARTITION,
           entityId: partitionId,
           nodeId: targetNodeId,
+          controlPlaneMutationWorkClass:
+            CONTROL_PLANE_MUTATION_WORK_CLASS.INTERACTIVE,
           // Initial partition provisioning executes these operations inline
           // below, so skip the redundant coordinator-created dispatch trigger.
           emitOperationCreated: false,
@@ -2523,14 +2641,15 @@ class SQLQueryEngine {
   /**
    * Execute one managed split for a source partition.
    * @param {string} partitionId - Source partition ID.
+   * @param {Object} [executionOptions={}] - Optional workflow execution hints.
    * @return {Promise<Object>} Split orchestration result.
    */
-  async executeManagedSplit(partitionId) {
+  async executeManagedSplit(partitionId, executionOptions = {}) {
     if (!this.managedSplitWorkflow ||
         typeof this.managedSplitWorkflow.execute !== 'function') {
       throw new Error(QUERY_ERROR_MSG.TABLE_SPLIT_START_FAILED);
     }
-    return this.managedSplitWorkflow.execute(partitionId);
+    return this.managedSplitWorkflow.execute(partitionId, executionOptions);
   }
 
   /**
@@ -4479,12 +4598,17 @@ class SQLQueryEngine {
 
     // Execute on resolved partitions
     const executionStartTimeMs = Date.now();
+    const deliveryPriority = this.resolveRoutedDeliveryPriority(
+      tableName,
+      queryOptions.deliveryPriority,
+    );
     const result = await this.queryExecutor.executeSelect(
       ast,
       partitionIds,
       params,
       {
         preferLeader,
+        deliveryPriority,
         distributedPlan,
         routingReadinessDimension:
           queryOptions.routingReadinessDimension ||
@@ -4586,6 +4710,7 @@ class SQLQueryEngine {
     this.authoritativeControlPlaneView = new AuthoritativeControlPlaneView({
       nodeId: this.nodeId,
       cdcIntegrationService: this.cdcIntegrationService,
+      messageRouter: this.messageRouter,
       now: this.nowFn,
     });
     return this.authoritativeControlPlaneView;
@@ -4731,8 +4856,13 @@ class SQLQueryEngine {
     let result;
     const executionStartTimeMs = Date.now();
     try {
+      const deliveryPriority = this.resolveRoutedDeliveryPriority(
+        tableName,
+        queryOptions.deliveryPriority,
+      );
       const writeExecutionOptions = {
         sessionId,
+        deliveryPriority,
         timeoutMs: queryOptions.timeoutMs,
         cancellationToken: queryOptions.cancellationToken || null,
         routingReadinessDimension:
@@ -4886,8 +5016,13 @@ class SQLQueryEngine {
     let result;
     const executionStartTimeMs = Date.now();
     try {
+      const deliveryPriority = this.resolveRoutedDeliveryPriority(
+        tableName,
+        queryOptions.deliveryPriority,
+      );
       const writeExecutionOptions = {
         sessionId,
+        deliveryPriority,
         timeoutMs: queryOptions.timeoutMs,
         cancellationToken: queryOptions.cancellationToken || null,
         routingReadinessDimension:
@@ -5040,8 +5175,13 @@ class SQLQueryEngine {
     let result;
     const executionStartTimeMs = Date.now();
     try {
+      const deliveryPriority = this.resolveRoutedDeliveryPriority(
+        tableName,
+        queryOptions.deliveryPriority,
+      );
       const writeExecutionOptions = {
         sessionId,
+        deliveryPriority,
         timeoutMs: queryOptions.timeoutMs,
         cancellationToken: queryOptions.cancellationToken || null,
         routingReadinessDimension:
@@ -5243,13 +5383,13 @@ class SQLQueryEngine {
    * @private
    */
   async persistDistributedTransactionRow(record) {
-    if (!this.cdcIntegrationService ||
-      typeof this.cdcIntegrationService.upsertSystemTableRow !== 'function') {
+    if (!this.cdcIntegrationService && !this.controlPlaneSystemTableGateway) {
       return;
     }
-    await this.cdcIntegrationService.upsertSystemTableRow(
-      TABLES.SQL_TRANSACTIONS,
-      {
+    await this.getControlPlaneSystemTableGateway().submitMutation({
+      operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
+      tableName: TABLES.SQL_TRANSACTIONS,
+      row: {
         transaction_id: record.transactionId,
         session_id: record.sessionId,
         status: record.status,
@@ -5258,7 +5398,10 @@ class SQLQueryEngine {
         created_at: record.createdAt,
         updated_at: record.updatedAt,
       },
-    );
+    }, {
+      workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+      deliveryPriority: 'critical',
+    });
   }
 
   /**
@@ -5268,13 +5411,13 @@ class SQLQueryEngine {
    * @private
    */
   async persistDistributedTransactionParticipantRow(record) {
-    if (!this.cdcIntegrationService ||
-      typeof this.cdcIntegrationService.upsertSystemTableRow !== 'function') {
+    if (!this.cdcIntegrationService && !this.controlPlaneSystemTableGateway) {
       return;
     }
-    await this.cdcIntegrationService.upsertSystemTableRow(
-      TABLES.SQL_TRANSACTION_PARTICIPANTS,
-      {
+    await this.getControlPlaneSystemTableGateway().submitMutation({
+      operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
+      tableName: TABLES.SQL_TRANSACTION_PARTICIPANTS,
+      row: {
         participant_id: record.participantId,
         transaction_id: record.transactionId,
         partition_id: record.partitionId,
@@ -5283,7 +5426,10 @@ class SQLQueryEngine {
         created_at: record.createdAt,
         updated_at: record.updatedAt,
       },
-    );
+    }, {
+      workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+      deliveryPriority: 'critical',
+    });
   }
 
   /**
@@ -5293,13 +5439,13 @@ class SQLQueryEngine {
    * @private
    */
   async persistDistributedWriteOperationRow(record) {
-    if (!this.cdcIntegrationService ||
-      typeof this.cdcIntegrationService.upsertSystemTableRow !== 'function') {
+    if (!this.cdcIntegrationService && !this.controlPlaneSystemTableGateway) {
       return;
     }
-    await this.cdcIntegrationService.upsertSystemTableRow(
-      TABLES.SQL_WRITE_OPERATIONS,
-      {
+    await this.getControlPlaneSystemTableGateway().submitMutation({
+      operation: CONTROL_PLANE_MUTATION_OPERATION.UPSERT,
+      tableName: TABLES.SQL_WRITE_OPERATIONS,
+      row: {
         operation_id: record.operationId,
         transaction_id: record.transactionId || null,
         statement_type: record.statementType,
@@ -5312,7 +5458,10 @@ class SQLQueryEngine {
         created_at: record.createdAt,
         updated_at: record.updatedAt,
       },
-    );
+    }, {
+      workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+      deliveryPriority: 'critical',
+    });
   }
 
   /**
@@ -5977,6 +6126,23 @@ class SQLQueryEngine {
    */
   isSystemTable(tableName) {
     return Object.values(SYSTEM_TABLE_NAME).includes(tableName);
+  }
+
+  /**
+   * Resolve router delivery priority for one routed table operation.
+   * System-table traffic defaults to the critical lane unless a caller
+   * explicitly chooses a different priority.
+   * @param {string|null} tableName
+   * @param {string|undefined|null} deliveryPriority
+   * @return {string|undefined}
+   * @private
+   */
+  resolveRoutedDeliveryPriority(tableName, deliveryPriority) {
+    if (typeof deliveryPriority === 'string' &&
+        deliveryPriority.length > 0) {
+      return deliveryPriority;
+    }
+    return this.isSystemTable(tableName) ? 'critical' : undefined;
   }
 
   /**

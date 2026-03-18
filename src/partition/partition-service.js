@@ -10,12 +10,19 @@ import {randomUUID} from 'node:crypto';
 import fs from 'fs';
 import path from 'path';
 import Database from 'better-sqlite3';
-import LifeRaft from '@markwylde/liferaft';
+import LifeRaft from '../raft/liferaft.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../control-plane/control-plane-readiness-constants.js';
+import {
+  PRESSURE_WORK_CLASS,
+} from '../control-plane/pressure-governor.js';
+import {
+  CONTROL_PLANE_MUTATION_OPERATION,
+  ControlPlaneSystemTableGateway,
+} from '../control-plane/control-plane-system-table-gateway.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {HLCClockService} from '../hlc/hlc-clock-service.js';
 import {UnifiedRebalancer, EntityType} from '../rebalancer/unified-rebalancer.js';
@@ -45,13 +52,22 @@ import {AuthoritativeRowMutationHelper} from '../raft/authoritative-row-mutation
 import {
   wireReplicaLifecycleEvents,
 } from '../raft/replica-leadership-state.js';
+import {normalizePublishedRaftRole} from '../raft/published-raft-role.js';
 import {
   applyRuntimeRaftTiming,
   computeReplicaElectionTimeouts,
 } from '../raft/raft-timing-utils.js';
+import {LeaderActivationGate} from '../raft/leader-activation-gate.js';
+import {LeaderActivationScheduler} from '../raft/leader-activation-scheduler.js';
 import {
+  INITIAL_PARTITION_IDS,
   SYSTEM_TABLE_NAME,
 } from '../bootstrap/system-table-schemas-constants.js';
+import {
+  attachTrafficReadinessListener,
+  isBackgroundWorkReady as isBackgroundWorkLifecycleReady,
+  isMetadataPublicationReady as isMetadataPublicationLifecycleReady,
+} from '../bootstrap/traffic-readiness-utils.js';
 import {AddressManager} from '../address/address-manager.js';
 import {isSystemTableWriteReady} from '../cache/leader-readiness-gate.js';
 import {
@@ -65,6 +81,7 @@ import {
   METRICS_LOG_TAG,
   NUM,
   SQL,
+  SERVICE_STATUS,
   SERVICE_TYPE,
   STRING,
   TABLES,
@@ -124,6 +141,10 @@ const PartitionState = PARTITION_STATE;
  */
 const RaftRole = PARTITION_RAFT_ROLE;
 
+const CONTROL_PLANE_PARTITION_IDS = new Set(
+  Object.values(INITIAL_PARTITION_IDS),
+);
+
 /**
  * CDC operation types.
  */
@@ -145,6 +166,11 @@ const SPLIT_SNAPSHOT_BACKFILL_YIELD_EVERY_ROWS = 64;
 const DEFAULT_TRANSACTION_SESSION_ID = 'default';
 const QUERY_PAYLOAD_FIELD_MIGRATION_OPERATION = 'migrationOperation';
 const QUERY_PAYLOAD_FIELD_MIGRATION_ID = 'migrationId';
+const PARTITION_REPLICA_COUNT_FIELD = 'replica_count';
+const FLUSH_SKIP_SETTLING = 'settling';
+const CRITICAL_SYSTEM_PARTITION_IDS = new Set(
+  Object.values(SYSTEM_TABLE_NAME).map((tableName) => `${tableName}-p1`),
+);
 
 
 /**
@@ -220,6 +246,22 @@ class PartitionService extends EventEmitter {
     this.sizeUpdateIntervalMs =
       config.get(CONFIG_KEY.PARTITION_SIZE_UPDATE_INTERVAL_MS) ||
       PARTITION_SERVICE_DEFAULT.SIZE_UPDATE_INTERVAL_MS;
+    this.leaderActivationStabilizationMs =
+      Number.isFinite(options.leaderActivationStabilizationMs) &&
+      options.leaderActivationStabilizationMs >= NUM.ZERO ?
+        Math.floor(options.leaderActivationStabilizationMs) :
+        (
+          config.get(CONFIG_KEY.RAFT_LEADER_ACTIVATION_STABILIZATION_MS) ??
+          250
+        );
+    this.leaderActivationNodeSpacingMs =
+      Number.isFinite(options.leaderActivationNodeSpacingMs) &&
+      options.leaderActivationNodeSpacingMs >= NUM.ZERO ?
+        Math.floor(options.leaderActivationNodeSpacingMs) :
+        (
+          config.get(CONFIG_KEY.RAFT_LEADER_ACTIVATION_NODE_SPACING_MS) ??
+          25
+        );
 
     // SQLite database
     this.db = null;
@@ -308,6 +350,16 @@ class PartitionService extends EventEmitter {
     this.initialized = false;
     this.isShutdown = false;
     this.isLeader = false;
+    this.leaderActivationScheduler = options.leaderActivationScheduler ||
+      LeaderActivationScheduler.getShared({
+        nodeId: this.nodeId,
+        spacingMs: this.leaderActivationNodeSpacingMs,
+      });
+    this.leaderActivationGate = new LeaderActivationGate({
+      holdoffMs: this.leaderActivationStabilizationMs,
+      activationScheduler: this.leaderActivationScheduler,
+    });
+    this.lastPreparedStateReconstructionTerm = null;
 
     // PendingRequestTracker for lifecycle messages (replaces EventEmitter-based ACK handling)
     // Requirements: 3.1, 6.1, 6.2, 6.3, 6.4
@@ -347,6 +399,14 @@ class PartitionService extends EventEmitter {
     this.leaderNodeMutationHelper = this.createLeaderNodeMutationHelper();
     this.pendingLeaderNodeUpdate = null;
     this.persistedLeaderNodeId = null;
+    this.metadataPublicationReadinessTransitionListener =
+      this.handleMetadataPublicationReadinessTransition.bind(this);
+    this.releaseMetadataPublicationReadinessListener = null;
+    this._metadataPublicationReadinessState = null;
+    this.metadataPublicationReadinessState =
+      options.metadataPublicationReadinessState ||
+      options.bootstrapReadinessState ||
+      null;
 
     // When true, the Raft election timer won't start until startElection() is called
     // This prevents election storms when multiple replicas are created on the same node
@@ -433,7 +493,8 @@ class PartitionService extends EventEmitter {
 
   set pendingRoleUpdate(role) {
     if (this.roleMutationHelper) {
-      this.roleMutationHelper.pendingValue = role;
+      this.roleMutationHelper.pendingValue =
+        normalizePublishedRaftRole(role, {collapseLeaderToFollower: true});
     }
   }
 
@@ -501,6 +562,118 @@ class PartitionService extends EventEmitter {
     }
   }
 
+  get metadataPublicationReadinessState() {
+    return this._metadataPublicationReadinessState || null;
+  }
+
+  set metadataPublicationReadinessState(readinessState) {
+    if (typeof this.releaseMetadataPublicationReadinessListener ===
+      PARTITION_SERVICE_TYPE.FUNCTION) {
+      this.releaseMetadataPublicationReadinessListener();
+    }
+    this._metadataPublicationReadinessState = readinessState || null;
+    this.releaseMetadataPublicationReadinessListener =
+      attachTrafficReadinessListener(
+        this._metadataPublicationReadinessState,
+        this.metadataPublicationReadinessTransitionListener,
+      );
+  }
+
+  isMetadataPublicationReady() {
+    if (!this.metadataPublicationReadinessState) {
+      return true;
+    }
+    return isMetadataPublicationLifecycleReady(this.metadataPublicationReadinessState);
+  }
+
+  isBackgroundWorkReady() {
+    return isBackgroundWorkLifecycleReady(
+      this.metadataPublicationReadinessState,
+    );
+  }
+
+  handleMetadataPublicationReadinessTransition() {
+    this.maybeInitializeRebalancer();
+    if (!this.isMetadataPublicationReady()) {
+      return;
+    }
+    this.flushRoleUpdate().catch((error) => {
+      this.logger.warn(
+        'Failed to flush deferred partition raft-role update',
+        {
+          partitionId: this.partitionId,
+          replicaId: this.replicaId,
+          error: error.message,
+        },
+      );
+    });
+    this.flushLeaderNodeUpdate().catch((error) => {
+      this.logger.warn(
+        'Failed to flush deferred partition leader update',
+        {
+          partitionId: this.partitionId,
+          replicaId: this.replicaId,
+          error: error.message,
+        },
+      );
+    });
+  }
+
+  updateRebalancerLeadership() {
+    if (!this.rebalancer) {
+      this.maybeInitializeRebalancer();
+      return;
+    }
+    if (typeof this.rebalancer.setLeader === PARTITION_SERVICE_TYPE.FUNCTION) {
+      this.rebalancer.setLeader(this.isBackgroundWorkReady() && this.isLeader);
+    }
+  }
+
+  cancelLeaderOwnedActivation() {
+    this.leaderActivationGate.cancel({clearActivatedTerm: true});
+  }
+
+  scheduleLeaderOwnedActivation(term) {
+    this.leaderActivationGate.schedule(term, () => {
+      if (this.isShutdown || !this.isLeader) {
+        return;
+      }
+      if (!this.isJoiningExistingGroup) {
+        this.updateRebalancerLeadership();
+      }
+
+      this.logger.info(PARTITION_SERVICE_LOG_MSG.BECAME_LEADER, {
+        term,
+        replicaId: this.replicaId,
+        partitionId: this.partitionId,
+        rebalancerActive:
+          !this.isJoiningExistingGroup && this.isBackgroundWorkReady(),
+      });
+
+      if (this.lastPreparedStateReconstructionTerm !== term) {
+        const reconstruction = this.reconstructPreparedState();
+        this.lastPreparedStateReconstructionTerm = term;
+        this.logger.info(
+          PARTITION_SERVICE_LOG_MSG.PREPARED_STATE_RECONSTRUCTED,
+          {
+            partitionId: this.partitionId,
+            preparedTransactionCount: reconstruction.preparedTransactionCount,
+            prepareLostCount: reconstruction.prepareLostCount,
+          },
+        );
+      }
+
+      this.emit(PARTITION_SERVICE_EVENT.LEADER_ELECTED, {
+        leaderId: this.replicaId,
+        term,
+        partitionId: this.partitionId,
+      });
+    }, {
+      immediate: this.replicaIds.length === NUM.ONE,
+      shouldActivate: () => !this.isShutdown && this.isLeader,
+    });
+  }
+
   createRoleMutationHelper() {
     return new AuthoritativeRowMutationHelper({
       tableName: SYSTEM_TABLE_NAME.SERVICES,
@@ -520,10 +693,22 @@ class PartitionService extends EventEmitter {
         updated_at: updatedAt,
       }),
       buildUpdateOptions: () => ({
+        deliveryPriority: 'background',
+        workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+        allowPressureDefer: true,
         routingReadinessDimension:
           CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
       }),
-      buildExpectedCacheFields: (role) => ({raft_role: role}),
+      buildExpectedCacheFields: (role) => ({
+        raft_role: role,
+      }),
+      prepareFlush: () => ({
+        skip: !this.isMetadataPublicationReady(),
+        clearPending: false,
+        reason: !this.isMetadataPublicationReady() ?
+          FLUSH_SKIP_SETTLING :
+          'ready',
+      }),
       readRowFromCache: (systemTableCache) =>
         systemTableCache?.get?.(TABLES.SERVICES, this.replicaId) || null,
       readValueFromCache: (systemTableCache) => {
@@ -564,6 +749,7 @@ class PartitionService extends EventEmitter {
         [COLUMN.UPDATED_AT]: updatedAt,
       }),
       buildUpdateOptions: () => ({
+        deliveryPriority: this.getMetadataPublicationDeliveryPriority(),
         routingReadinessDimension:
           CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
       }),
@@ -682,11 +868,40 @@ class PartitionService extends EventEmitter {
    * @private
    */
   resolveLeaderAddress() {
-    if (!this.leaderId) {
+    const leaderReplicaId = this.normalizeLeaderReplicaId(this.leaderId);
+    if (!leaderReplicaId) {
       return null;
     }
 
-    return this.buildPeerAddress(this.leaderId);
+    return this.buildPeerAddress(leaderReplicaId);
+  }
+
+  /**
+   * Normalize one raw leader identifier into the canonical replica ID.
+   * Liferaft leader-change notifications use peer addresses, while partition
+   * runtime state should track replica IDs.
+   * @param {*} candidate
+   * @return {string|null}
+   * @private
+   */
+  normalizeLeaderReplicaId(candidate) {
+    if (typeof candidate !== 'string' || candidate.length === NUM.ZERO) {
+      return null;
+    }
+    if (!candidate.includes(PARTITION_SERVICE_ADDRESS.SEPARATOR)) {
+      return candidate;
+    }
+    try {
+      const parsed = AddressManager.getInstance().parse(candidate);
+      if (parsed?.serviceType === ENTITY_TYPE.PARTITION &&
+          typeof parsed?.serviceId === 'string' &&
+          parsed.serviceId.length > NUM.ZERO) {
+        return parsed.serviceId;
+      }
+    } catch (_error) {
+      // Ignore malformed addresses and preserve the original value.
+    }
+    return candidate;
   }
 
   /**
@@ -1196,6 +1411,28 @@ class PartitionService extends EventEmitter {
         NUM.ZERO;
       return this.replicaIds.length === NUM.ONE && peerCount === NUM.ZERO;
     };
+    const shouldIgnoreDemotionEvent = (eventName) => {
+      if (isSingleReplica() && this.isLeader) {
+        return true;
+      }
+      const isJoiningLearner =
+        this.isJoiningExistingGroup === true &&
+        this.role === RaftRole.LEARNER;
+      if (!isJoiningLearner) {
+        return false;
+      }
+      if (eventName !== PARTITION_SERVICE_ROLE.FOLLOWER &&
+          eventName !== PARTITION_SERVICE_ROLE.CANDIDATE) {
+        return false;
+      }
+      if (this.raft) {
+        this.raftProvider.clearTimers(
+          this.raft,
+          PARTITION_SERVICE_LIFERAFT_TIMER.HEARTBEAT_ELECTION,
+        );
+      }
+      return true;
+    };
 
     // Learner phase: new replicas joining existing groups start as non-voting learners
     // They receive log entries but don't vote until caught up
@@ -1222,42 +1459,22 @@ class PartitionService extends EventEmitter {
       },
       roles: RaftRole,
       getCurrentTerm: () => this.raftProvider.getCurrentTerm(this.raft),
-      shouldIgnoreDemotionEvent: () => isSingleReplica() && this.isLeader,
+      normalizeLeaderId: (candidate) =>
+        this.normalizeLeaderReplicaId(candidate),
+      shouldIgnoreDemotionEvent,
       onLeader: ({term}) => {
         this.storage.currentTerm = term;
-
-        // Activate rebalancer when becoming leader.
-        if (this.rebalancer && !this.isJoiningExistingGroup) {
-          this.rebalancer.setLeader(true);
-        }
-
-        this.logger.info(PARTITION_SERVICE_LOG_MSG.BECAME_LEADER, {
-          term,
-          replicaId: this.replicaId,
-          partitionId: this.partitionId,
-          rebalancerActive: !this.isJoiningExistingGroup,
-        });
-        const reconstruction = this.reconstructPreparedState();
-        this.logger.info(PARTITION_SERVICE_LOG_MSG.PREPARED_STATE_RECONSTRUCTED, {
-          partitionId: this.partitionId,
-          preparedTransactionCount: reconstruction.preparedTransactionCount,
-          prepareLostCount: reconstruction.prepareLostCount,
-        });
-
-        this.emit(PARTITION_SERVICE_EVENT.LEADER_ELECTED, {
-          leaderId: this.replicaId,
-          term,
-          partitionId: this.partitionId,
-        });
+        this.scheduleLeaderOwnedActivation(term);
       },
       onFollower: ({term}) => {
         this.storage.currentTerm = term;
-        if (this.rebalancer) {
-          this.rebalancer.setLeader(false);
-        }
+        this.cancelLeaderOwnedActivation();
+        this.updateRebalancerLeadership();
       },
       onCandidate: ({term}) => {
         this.storage.currentTerm = term;
+        this.cancelLeaderOwnedActivation();
+        this.updateRebalancerLeadership();
       },
       onCommit: (command) => {
         this.applyCommittedEntry(command);
@@ -1330,9 +1547,7 @@ class PartitionService extends EventEmitter {
         this.leaderId = this.replicaId;
         this.queueRoleUpdate(this.role);
         this.queueLeaderNodeUpdate(this.nodeId);
-        if (this.rebalancer) {
-          this.rebalancer.setLeader(true);
-        }
+        this.updateRebalancerLeadership();
         this.emit(PARTITION_SERVICE_EVENT.LEADER_ELECTED, {
           leaderId: this.replicaId,
           term: this.raftProvider.getCurrentTerm(this.raft),
@@ -3858,6 +4073,8 @@ class PartitionService extends EventEmitter {
       entryType: entry.type,
     });
 
+    const entryKey = this.getCommittedEntryKey(entry);
+
     // Append to Raft log
     const logAppendStartMs = Date.now();
     const logEntry = this.storage.appendEntry(entry);
@@ -3889,6 +4106,11 @@ class PartitionService extends EventEmitter {
         partitionId: this.partitionId,
         logIndex: logEntry.index,
       };
+
+      // The owner has already applied this write locally. Track the replay
+      // key now so the later committed-entry callback does not emit duplicate
+      // CDC for the same mutation.
+      this.trackAppliedEntryKey(entryKey);
 
       // Generate CDC event asynchronously to avoid blocking write acknowledgments.
       this.generateCDCEvent({...entry, changes: info.changes}).catch((error) => {
@@ -3934,8 +4156,6 @@ class PartitionService extends EventEmitter {
     const isLiferaftLeader = this.raft && this.raft.state === LifeRaft.LEADER;
     if (isLiferaftLeader) {
       const raftCommandDispatchStartMs = Date.now();
-      const entryKey = this.getCommittedEntryKey(entry);
-      this.trackAppliedEntryKey(entryKey);
       this.raftProvider.propose(this.raft, entry, (err) => {
         if (err) {
           this.logger.debug(PARTITION_SERVICE_ERROR_MSG.RAFT_COMMAND_FAILED, {
@@ -4656,14 +4876,27 @@ class PartitionService extends EventEmitter {
     }
 
     try {
-      await this.cdcIntegrationService.updateSystemTableRow(
-        TABLES.PARTITIONS,
-        {partition_id: this.partitionId},
-        {
+      const gateway =
+        this.rebalancer?.controlPlaneSystemTableGateway ||
+        new ControlPlaneSystemTableGateway({
+          nodeId: this.nodeId,
+          cdcIntegrationService: this.cdcIntegrationService,
+          messageRouter: this.transport,
+        });
+      await gateway.submitMutation({
+        operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+        tableName: TABLES.PARTITIONS,
+        whereClause: {partition_id: this.partitionId},
+        data: {
           size_bytes: sizeBytes,
           updated_at: Date.now(),
         },
-      );
+      }, {
+        workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+        deliveryPriority: 'background',
+        allowPressureDefer: true,
+        coalescingKey: `partitions:size:${this.partitionId}`,
+      });
     } catch (error) {
       this.logger.warn(PARTITION_SERVICE_LOG_MSG.SPLIT_REPLICATION_SIZE_PERSIST_FAILED, {
         partitionId: this.partitionId,
@@ -5522,12 +5755,19 @@ class PartitionService extends EventEmitter {
    * @private
    */
   maybeInitializeRebalancer() {
+    const backgroundReady = this.isBackgroundWorkReady();
     if (this.rebalancer) {
       this.rebalancer.systemTableCache = this.systemTableCache;
       this.rebalancer.cdcIntegrationService = this.cdcIntegrationService;
       this.rebalancer.tablePolicyService = this.tablePolicyService;
       this.rebalancer.messageRouter = this.messageRouter;
       this.rebalancer.sqlQueryEngine = this.sqlQueryEngine;
+      if (this.rebalancer.controlPlaneSystemTableGateway &&
+          typeof this.rebalancer.controlPlaneSystemTableGateway
+            .setSqlQueryEngine === PARTITION_SERVICE_TYPE.FUNCTION) {
+        this.rebalancer.controlPlaneSystemTableGateway
+          .setSqlQueryEngine(this.sqlQueryEngine);
+      }
       if (this.rebalanceCoordinator) {
         const setRebalanceCoordinator = assertCritical(
           typeof this.rebalancer.setRebalanceCoordinator ===
@@ -5539,12 +5779,14 @@ class PartitionService extends EventEmitter {
         setRebalanceCoordinator(this.rebalanceCoordinator);
       }
       if (typeof this.rebalancer.setLeader === PARTITION_SERVICE_TYPE.FUNCTION) {
-        this.rebalancer.setLeader(this.isLeader);
+        this.rebalancer.setLeader(backgroundReady && this.isLeader);
       }
       return;
     }
 
-    if (!this.systemTableCache ||
+    if (!backgroundReady ||
+        !this.isLeader ||
+        !this.systemTableCache ||
         !this.cdcIntegrationService ||
         !this.tablePolicyService ||
         !this.messageRouter ||
@@ -5601,13 +5843,14 @@ class PartitionService extends EventEmitter {
       systemTableCache: systemTableCache,
       cdcIntegrationService: cdcIntegrationService,
       tablePolicyService: tablePolicyService,
+      sqlQueryEngine: sqlQueryEngine,
       nodeId: this.nodeId,
       replicaStateMachine: this.replicaStateMachine,
       messageRouter: messageRouter,
       rebalanceCoordinator: rebalanceCoordinator,
     });
     this.rebalancer.initialize();
-    this.rebalancer.setLeader(this.isLeader);
+    this.rebalancer.setLeader(this.isBackgroundWorkReady() && this.isLeader);
   }
 
   /**
@@ -5616,7 +5859,9 @@ class PartitionService extends EventEmitter {
    * @private
    */
   queueRoleUpdate(role) {
-    this.roleMutationHelper.queue(role);
+    this.roleMutationHelper.queue(
+      normalizePublishedRaftRole(role, {collapseLeaderToFollower: true}),
+    );
   }
 
   /**
@@ -5656,12 +5901,24 @@ class PartitionService extends EventEmitter {
   }
 
   /**
-   * Check if the services partition leader is available for writes.
-   * @return {boolean} True if a leader with an address is known.
+   * Check if the services table is writable through either cache-visible
+   * routing metadata or the local services-p1 leader owner.
+   * @return {boolean} True if writes can be issued safely.
    * @private
    */
   isServicesLeaderAvailable() {
-    return isSystemTableWriteReady(this.systemTableCache, SYSTEM_TABLE_NAME.SERVICES);
+    if (isSystemTableWriteReady(this.systemTableCache, SYSTEM_TABLE_NAME.SERVICES)) {
+      return true;
+    }
+    return this.cdcIntegrationService?.canWriteSystemTableLocally?.(
+      SYSTEM_TABLE_NAME.SERVICES,
+    ) === true;
+  }
+
+  getMetadataPublicationDeliveryPriority() {
+    return CONTROL_PLANE_PARTITION_IDS.has(this.partitionId) ?
+      'critical' :
+      'background';
   }
 
   /**
@@ -5852,8 +6109,11 @@ class PartitionService extends EventEmitter {
    * Promotion happens when:
    * 1. Minimum delay has passed (already satisfied by timer)
    * 2. A leader has been discovered for the group
-   * 3. Promoting would not result in an even number of voters (prevents split votes)
-   *    OR promoting all pending learners would result in an odd count
+   * 3. Promoting would stay within the partition's configured replica count,
+   *    allowing at most one temporary replacement voter above target
+   * 4. Promoting would not result in an even number of voters (prevents split votes)
+   *    unless this is the single temporary replacement voter or all pending
+   *    learners together would reach an odd count within target
    * @private
    */
   checkLearnerPromotion() {
@@ -5890,7 +6150,18 @@ class PartitionService extends EventEmitter {
     // If promoting this learner would result in an even number of voters,
     // defer promotion until the old replica is removed
     // activeVoterCount is current voters, adding this learner makes it activeVoterCount + 1
+    const targetReplicaCount = this.getTargetReplicaCountForPromotion();
+    const isCriticalSystemPartition =
+      CRITICAL_SYSTEM_PARTITION_IDS.has(this.partitionId);
+    const singleReplacementPromotionAllowed =
+      this.isJoiningExistingGroup === true &&
+      learnerCount === NUM.ONE &&
+      activeVoterCount >= targetReplicaCount;
+    const maxAllowedVotersAfterPromotion = targetReplicaCount +
+      (singleReplacementPromotionAllowed ? NUM.ONE : NUM.ZERO);
     const votersAfterPromotion = activeVoterCount + NUM.ONE;
+    const wouldExceedTargetReplicaCount =
+      votersAfterPromotion > maxAllowedVotersAfterPromotion;
     const wouldBeEven = votersAfterPromotion % NUM.TWO === NUM.ZERO;
 
     // Check if promoting ALL learners would result in an odd count
@@ -5898,6 +6169,10 @@ class PartitionService extends EventEmitter {
     // e.g., 3 voters + 2 learners = 5 (odd) - allow promotion
     const votersAfterAllLearners = activeVoterCount + learnerCount;
     const allLearnersWouldBeOdd = votersAfterAllLearners % NUM.TWO === NUM.ONE;
+    const allLearnersWithinTarget =
+      votersAfterAllLearners <= targetReplicaCount;
+    const multiLearnerPromotionAllowed =
+      allLearnersWouldBeOdd && allLearnersWithinTarget;
 
     this.logger.debug(PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_CHECK, {
       replicaId: this.replicaId,
@@ -5905,20 +6180,44 @@ class PartitionService extends EventEmitter {
       leaderId: this.leaderId,
       logLength: this.storage?.getLogLength() || NUM.ZERO,
       activeVoterCount,
+      isCriticalSystemPartition,
+      targetReplicaCount,
+      maxAllowedVotersAfterPromotion,
       votersAfterPromotion,
+      wouldExceedTargetReplicaCount,
       wouldBeEven,
       learnerCount,
       votersAfterAllLearners,
       allLearnersWouldBeOdd,
+      allLearnersWithinTarget,
+      singleReplacementPromotionAllowed,
     });
+
+    if (wouldExceedTargetReplicaCount) {
+      this.logger.info(PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_DEFERRED, {
+        replicaId: this.replicaId,
+        partitionId: this.partitionId,
+        activeVoterCount,
+        targetReplicaCount,
+        votersAfterPromotion,
+        learnerCount,
+        votersAfterAllLearners,
+        reason: 'would_exceed_target_replica_count',
+      });
+      this.scheduleLearnerPromotion();
+      return;
+    }
 
     // Allow promotion if:
     // 1. Promoting this learner alone would result in odd count, OR
-    // 2. There are multiple learners and promoting ALL would result in odd count
+    // 2. This is the single temporary replacement learner above target, OR
+    // 3. There are multiple learners and promoting ALL would result in odd count
+    //    without exceeding the configured replica target
     if (
       wouldBeEven &&
       activeVoterCount >= NUM.THREE &&
-      !allLearnersWouldBeOdd
+      !singleReplacementPromotionAllowed &&
+      !multiLearnerPromotionAllowed
     ) {
       // Defer promotion - reschedule check after a shorter interval
       // The old replica should be removed soon, which will make the count odd again
@@ -5926,22 +6225,26 @@ class PartitionService extends EventEmitter {
         replicaId: this.replicaId,
         partitionId: this.partitionId,
         activeVoterCount,
+        targetReplicaCount,
         votersAfterPromotion,
         learnerCount,
         votersAfterAllLearners,
-        reason: 'would_cause_even_voter_count',
+        reason: allLearnersWouldBeOdd ?
+          'would_exceed_target_replica_count' :
+          'would_cause_even_voter_count',
       });
       this.scheduleLearnerPromotion();
       return;
     }
 
     // Log if we're allowing promotion due to multiple learners
-    if (wouldBeEven && allLearnersWouldBeOdd) {
+    if (wouldBeEven && multiLearnerPromotionAllowed) {
       this.logger.info(PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_ALLOWED_MULTI, {
         replicaId: this.replicaId,
         partitionId: this.partitionId,
         activeVoterCount,
         learnerCount,
+        targetReplicaCount,
         votersAfterAllLearners,
       });
     }
@@ -6000,6 +6303,27 @@ class PartitionService extends EventEmitter {
 
     // Ensure we count at least 1 (this learner) even if cache is stale
     return Math.max(learnerCount, NUM.ONE);
+  }
+
+  /**
+   * Resolve the authoritative target voter count for learner promotion.
+   * Defaults to the configured partition replica count when cache metadata
+   * is temporarily unavailable.
+   * @return {number}
+   * @private
+   */
+  getTargetReplicaCountForPromotion() {
+    const partitionRow = this.getCachedSystemTableRow(TABLES.PARTITIONS, (partition) =>
+      partition?.[COLUMN.PARTITION_ID] === this.partitionId,
+    );
+    const configuredReplicaCount = Number(
+      partitionRow?.[PARTITION_REPLICA_COUNT_FIELD],
+    );
+    if (Number.isFinite(configuredReplicaCount) &&
+        configuredReplicaCount > NUM.ZERO) {
+      return configuredReplicaCount;
+    }
+    return this.defaultReplicaCount;
   }
 
   /**
@@ -6105,6 +6429,7 @@ class PartitionService extends EventEmitter {
    */
   async shutdown() {
     this.isShutdown = true;
+    this.leaderActivationGate.shutdown();
     this.logger.info(PARTITION_SERVICE_LOG_MSG.SHUTTING_DOWN, {
       partitionId: this.partitionId,
       replicaId: this.replicaId,
@@ -6138,6 +6463,12 @@ class PartitionService extends EventEmitter {
     this.stopPeriodicSizeUpdates();
     this.stopPreparedStateHoldTimeoutSweep();
 
+    if (typeof this.releaseMetadataPublicationReadinessListener ===
+      PARTITION_SERVICE_TYPE.FUNCTION) {
+      this.releaseMetadataPublicationReadinessListener();
+    }
+    this.releaseMetadataPublicationReadinessListener = null;
+    this._metadataPublicationReadinessState = null;
     this.roleMutationHelper.shutdown();
     this.leaderNodeMutationHelper.shutdown();
     if (this.cdcBufferReplayTimer) {

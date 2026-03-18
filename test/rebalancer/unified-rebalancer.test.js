@@ -23,9 +23,19 @@ import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
+  LIFECYCLE_PHASE,
+} from '../../src/bootstrap/lifecycle-controller-constants.js';
+import {
   PRESSURE_BEHAVIOR_DECISION,
   PRESSURE_STATE,
 } from '../../src/rebalancer/storage-capacity-constants.js';
+import {
+  ENDPOINT_STATUS,
+  META_SERVICE_ID,
+  TRANSPORT_TYPE,
+  WORKFLOW_STEP,
+} from '../../src/constants/index.js';
+import {ENDPOINT_SYNC_HEALTH} from '../../src/runtime/endpoint-sync-constants.js';
 
 // Initialize test environment
 function initializeTestEnvironment() {
@@ -51,6 +61,8 @@ function createMockCache(
   partitions = [],
   tables = [],
   replicaOperations = [],
+  nodeEndpoints = [],
+  serviceEndpoints = [],
 ) {
   const now = Date.now();
   const normalizedNodes = nodes.map((node) => ({
@@ -67,6 +79,9 @@ function createMockCache(
     tables: new Map(tables.map((t) => [t.table_id, t])),
     message_groups: new Map(),
     replica_operations: new Map(replicaOperations.map((op) => [op.operation_id, op])),
+    node_endpoints: new Map(nodeEndpoints.map((row, index) => [index, row])),
+    service_endpoints:
+      new Map(serviceEndpoints.map((row, index) => [index, row])),
   };
 
   return {
@@ -111,12 +126,32 @@ function createMockPolicyService(partitions = [], tables = []) {
 }
 
 // Create mock message router
-function createMockMessageRouter(connectionState = 'connected') {
+function createMockMessageRouter(
+  connectionState = 'connected',
+  connectedNodes = [],
+) {
   return {
     getConnectionState: () => connectionState,
+    getConnectedNodes: () => [...connectedNodes],
     deliver: async () => ({acknowledged: true, status: 'completed'}),
     pingNode: async () => true,
     isOutboundQueueAvailable: () => true,
+  };
+}
+
+function createNodeEndpoint(nodeId) {
+  return {
+    node_id: nodeId,
+    transport_type: TRANSPORT_TYPE.WEBSOCKET,
+    status: ENDPOINT_STATUS.ACTIVE,
+  };
+}
+
+function createPostgresWireEndpoint(nodeId) {
+  return {
+    node_id: nodeId,
+    service_id: META_SERVICE_ID.POSTGRES_WIRE,
+    health_status: ENDPOINT_SYNC_HEALTH.HEALTHY,
   };
 }
 
@@ -227,26 +262,39 @@ function createTestRebalancer(options = {}) {
     partitions = [],
     tables = [],
     replicaOperations = [],
+    nodeEndpoints = [],
+    serviceEndpoints = [],
     connectionState = 'connected',
     sqlQueryEngine = null,
     controlPlaneSystemTableGateway = null,
+    messageRouter = null,
+    controlPlaneReadinessService = null,
+    bootstrapReadinessState = null,
   } = options;
 
   const mockCache = createMockCache(
-    nodes, services, partitions, tables, replicaOperations,
+    nodes,
+    services,
+    partitions,
+    tables,
+    replicaOperations,
+    nodeEndpoints,
+    serviceEndpoints,
   );
   const mockCdcService = createMockCdcService();
   const mockPolicyService = createMockPolicyService(
     partitions, tables,
   );
-  const mockMessageRouter = createMockMessageRouter(connectionState);
+  const mockMessageRouter = messageRouter ||
+    createMockMessageRouter(connectionState);
   const mockCoordinator = createMockCoordinator();
   const mockSqlQueryEngine = sqlQueryEngine || {
     async executeQuery() {
       return {success: true, rows: []};
     },
   };
-  const mockReadinessService = createMockReadinessService(mockCache);
+  const mockReadinessService = controlPlaneReadinessService ||
+    createMockReadinessService(mockCache);
 
   return new UnifiedRebalancer({
     entityId,
@@ -260,6 +308,7 @@ function createTestRebalancer(options = {}) {
     sqlQueryEngine: mockSqlQueryEngine,
     controlPlaneSystemTableGateway,
     controlPlaneReadinessService: mockReadinessService,
+    bootstrapReadinessState,
   });
 }
 
@@ -271,6 +320,9 @@ test('UnifiedRebalancer - Basic Initialization', async (t) => {
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',
+      nodes: [
+        {node_id: 'node-1', status: NodeStatus.ACTIVE},
+      ],
     });
 
     t.equal(rebalancer.entityId, 'partition-1');
@@ -297,6 +349,9 @@ test('UnifiedRebalancer - Basic Initialization', async (t) => {
         entityId: 'partition-1',
         entityType: EntityType.PARTITION,
         nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+        ],
       });
 
       t.equal(
@@ -474,7 +529,138 @@ test('UnifiedRebalancer - Basic Initialization', async (t) => {
 
     rebalancer.shutdown();
   });
+
+  await t.test('returns budget_exceeded when coordinator create gate blocks scheduling',
+    async (t) => {
+      const mockCache = createMockCache([
+        {node_id: 'node-1', status: NodeStatus.ACTIVE, connection_state: 'ready'},
+      ]);
+      const rebalancer = new UnifiedRebalancer({
+        entityId: 'partition-1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-0',
+        systemTableCache: mockCache,
+        cdcIntegrationService: createMockCdcService(),
+        tablePolicyService: createMockPolicyService(),
+        messageRouter: createMockMessageRouter(),
+        rebalanceCoordinator: {
+          ...createMockCoordinator(),
+          async createOperation(move) {
+            t.equal(
+              move.enforceConcurrentOperationBudget,
+              true,
+              'rebalancer should request coordinator-side create gating',
+            );
+            const error = new Error('budget exceeded');
+            error.rebalanceSkipReason = 'budget_exceeded';
+            throw error;
+          },
+        },
+      });
+
+      const result = await rebalancer.executeMoveViaCoordinator({
+        type: MoveType.ADD,
+        nodeId: 'node-1',
+        replicaId: 'partition-1-r4',
+      });
+
+      t.same(result, {
+        success: false,
+        skipped: true,
+        reason: 'budget_exceeded',
+        operation: MoveType.ADD,
+        nodeId: 'node-1',
+        replicaId: 'partition-1-r4',
+      });
+
+      rebalancer.shutdown();
+    });
 });
+
+test('UnifiedRebalancer defers background planning when local control-plane mutation readiness is unhealthy',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const rebalancer = createTestRebalancer({
+      entityId: 'partition-1',
+      entityType: EntityType.PARTITION,
+      nodeId: 'node-1',
+      nodes: [
+        {node_id: 'node-1', status: NodeStatus.ACTIVE},
+      ],
+      controlPlaneReadinessService: {
+        getNodeReadinessSync() {
+          return {
+            nodeId: 'node-1',
+            dimensions: {
+              [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.LOAD_READY]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.PLACEMENT_ELIGIBLE]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]:
+                false,
+              [CONTROL_PLANE_READINESS_DIMENSION
+                .METADATA_PUBLICATION_HEALTHY]: false,
+              [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+              [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: true,
+            },
+            reasons: [
+              {code: 'control_plane_write_unhealthy'},
+              {code: 'metadata_publication_degraded'},
+            ],
+          };
+        },
+      },
+    });
+
+    rebalancer.initialize();
+    rebalancer.setLeader(true);
+    rebalancer.clusterReadinessConfirmed = true;
+    rebalancer.isStabilized = () => true;
+    rebalancer.currentInterval = 100;
+    rebalancer.maxInterval = 1000;
+    rebalancer.scheduleNextCheck = () => {};
+
+    let evaluateCalls = 0;
+    const waitLogs = [];
+    rebalancer.evaluateState = async () => {
+      evaluateCalls += 1;
+      return false;
+    };
+    rebalancer.logger = {
+      ...rebalancer.logger,
+      info: (message, payload) => {
+        if (message === REBALANCER_LOG_MSG.WAIT_LOCAL_MUTATION_READINESS) {
+          waitLogs.push(payload);
+        }
+      },
+      debug: () => {},
+      warn: () => {},
+      error: () => {},
+    };
+
+    try {
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        evaluateCalls,
+        0,
+        'background planning should not execute while local mutation readiness is unhealthy',
+      );
+      t.equal(waitLogs.length, 1, 'rebalancer should emit one defer diagnostic');
+      t.same(
+        waitLogs[0]?.reasonCodes,
+        [
+          'control_plane_write_unhealthy',
+          'metadata_publication_degraded',
+        ],
+        'defer diagnostic should preserve readiness reason codes',
+      );
+    } finally {
+      rebalancer.shutdown();
+    }
+  });
 
 test('UnifiedRebalancer budget queries use injected control-plane ' +
   'system-table gateway', async (t) => {
@@ -1892,6 +2078,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
 
     rebalancer.initialize();
     rebalancer.isLeader = true;
+    rebalancer.clusterReadinessConfirmed = true;
     rebalancer.isStabilized = () => true;
     rebalancer.evaluateState = async () => true;
     rebalancer.rebalance = async () => ({
@@ -1918,10 +2105,14 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
       entityId: 'partition-1',
       entityType: EntityType.PARTITION,
       nodeId: 'node-1',
+      nodes: [
+        {node_id: 'node-1', status: NodeStatus.ACTIVE},
+      ],
     });
 
     rebalancer.initialize();
     rebalancer.isLeader = true;
+    rebalancer.clusterReadinessConfirmed = true;
     rebalancer.isStabilized = () => true;
     rebalancer.evaluateState = async () => true;
     rebalancer.rebalance = async () => ({
@@ -1943,8 +2134,56 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
     );
   });
 
-  await t.test('checkRebalance defers system partitions until start delay elapses',
+  await t.test('checkRebalance defers periodic work when local router is backpressured',
     async (t) => {
+      const router = createMockMessageRouter('connected');
+      router.getOutboundPressureSummary = () => ({
+        backpressured: true,
+        saturatedNodeCount: 1,
+        maxPendingUtilization: 1,
+      });
+      const rebalancer = createTestRebalancer({
+        entityId: 'partition-1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        messageRouter: router,
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.clusterReadinessConfirmed = true;
+      rebalancer.isStabilized = () => true;
+
+      let evaluateCalls = 0;
+      rebalancer.evaluateState = async () => {
+        evaluateCalls++;
+        return false;
+      };
+
+      let scheduledDelayMs = null;
+      rebalancer.scheduleNextCheck = (overrideDelayMs = null) => {
+        scheduledDelayMs = overrideDelayMs;
+      };
+
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        evaluateCalls,
+        0,
+        'router pressure should defer the periodic cycle before evaluation',
+      );
+      t.equal(
+        typeof scheduledDelayMs,
+        'number',
+        'router pressure defer should schedule a delayed retry',
+      );
+    });
+
+  await t.test(
+    'checkRebalance defers system partitions when explicit ' +
+    'non-zero start delay is configured',
+    async (t) => {
+      const explicitDelayMs = 600000;
       const rebalancer = createTestRebalancer({
         entityId: 'nodes-p1',
         entityType: EntityType.PARTITION,
@@ -1953,8 +2192,9 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
 
       rebalancer.initialize();
       rebalancer.isLeader = true;
+      rebalancer.clusterReadinessConfirmed = true;
       rebalancer.isStabilized = () => true;
-      rebalancer.systemPartitionStartDelayMs = 600000;
+      rebalancer.systemPartitionStartDelayMs = explicitDelayMs;
       rebalancer.userPartitionStartDelayMs = 0;
       rebalancer.rebalanceStartAtMs = Date.now();
 
@@ -1974,7 +2214,7 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
       t.equal(
         evaluateCalls,
         0,
-        'system partition should not evaluate rebalancing before start delay',
+        'system partition should not evaluate before explicit delay',
       );
       t.equal(
         typeof scheduledDelayMs,
@@ -1983,7 +2223,62 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
       );
       t.ok(
         scheduledDelayMs >= 599000,
-        'scheduled delay should be close to configured system start delay',
+        'scheduled delay should be close to explicit start delay',
+      );
+    });
+
+  await t.test(
+    'checkRebalance defers system partitions with default ' +
+    '0ms start delay',
+    async (t) => {
+      const rebalancer = createTestRebalancer({
+        entityId: 'nodes-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+        ],
+        nodeEndpoints: [
+          createNodeEndpoint('node-1'),
+          createNodeEndpoint('node-2'),
+          createNodeEndpoint('node-3'),
+        ],
+        serviceEndpoints: [
+          createPostgresWireEndpoint('node-1'),
+          createPostgresWireEndpoint('node-2'),
+          createPostgresWireEndpoint('node-3'),
+        ],
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.isStabilized = () => true;
+      rebalancer.rebalanceStartAtMs = Date.now();
+
+      let evaluateCalls = 0;
+      rebalancer.evaluateState = async () => {
+        evaluateCalls++;
+        return false;
+      };
+
+      let scheduledDelayMs = null;
+      rebalancer.scheduleNextCheck = (overrideDelayMs = null) => {
+        scheduledDelayMs = overrideDelayMs;
+      };
+
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        evaluateCalls,
+        1,
+        'system partition should evaluate immediately with zero default delay',
+      );
+      t.equal(
+        scheduledDelayMs,
+        null,
+        'zero default delay should not schedule a deferred start-delay check',
       );
     });
 
@@ -1993,12 +2288,15 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         entityId: 'partition-1',
         entityType: EntityType.PARTITION,
         nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+        ],
       });
 
       rebalancer.initialize();
       rebalancer.isLeader = true;
+      rebalancer.clusterReadinessConfirmed = true;
       rebalancer.isStabilized = () => true;
-      rebalancer.systemPartitionStartDelayMs = 600000;
       rebalancer.userPartitionStartDelayMs = 0;
       rebalancer.rebalanceStartAtMs = Date.now();
 
@@ -2015,6 +2313,532 @@ test('UnifiedRebalancer - Rebalancing Triggers', async (t) => {
         evaluateCalls,
         1,
         'user partition should evaluate immediately when start delay is zero',
+      );
+    });
+
+  await t.test(
+    'checkRebalance defers critical system partitions while cluster membership is transitional',
+    async (t) => {
+      const rebalancer = createTestRebalancer({
+        entityId: 'nodes-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: 'warming'},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+        ],
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.isStabilized = () => true;
+
+      let evaluateCalls = 0;
+      rebalancer.evaluateState = async () => {
+        evaluateCalls++;
+        return false;
+      };
+
+      let scheduledDelayMs = null;
+      rebalancer.scheduleNextCheck = (overrideDelayMs = null) => {
+        scheduledDelayMs = overrideDelayMs;
+      };
+
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        evaluateCalls,
+        0,
+        'critical system partitions should not evaluate while nodes are still transitional',
+      );
+      t.equal(
+        typeof scheduledDelayMs,
+        'number',
+        'topology-settling gate should schedule a delayed retry',
+      );
+    });
+
+  await t.test(
+    'checkRebalance defers critical system partitions while active nodes have not published ready heartbeats',
+    async (t) => {
+      const rebalancer = createTestRebalancer({
+        entityId: 'nodes-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {
+            node_id: 'node-2',
+            status: NodeStatus.ACTIVE,
+            connection_state: 'connected',
+            ready_lease_expires_at: null,
+          },
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+        ],
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.isStabilized = () => true;
+
+      let evaluateCalls = 0;
+      rebalancer.evaluateState = async () => {
+        evaluateCalls++;
+        return false;
+      };
+
+      let scheduledDelayMs = null;
+      rebalancer.scheduleNextCheck = (overrideDelayMs = null) => {
+        scheduledDelayMs = overrideDelayMs;
+      };
+
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        evaluateCalls,
+        0,
+        'critical system partitions should not evaluate while active nodes are still missing ready-heartbeat publication',
+      );
+      t.equal(
+        typeof scheduledDelayMs,
+        'number',
+        'ready-heartbeat settling should schedule a delayed retry',
+      );
+    });
+
+  await t.test(
+    'checkRebalance does not defer critical system partitions when a node is failed',
+    async (t) => {
+      const rebalancer = createTestRebalancer({
+        entityId: 'nodes-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.FAILED},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+        ],
+        nodeEndpoints: [
+          createNodeEndpoint('node-1'),
+          createNodeEndpoint('node-3'),
+        ],
+        serviceEndpoints: [
+          createPostgresWireEndpoint('node-1'),
+          createPostgresWireEndpoint('node-3'),
+        ],
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.isStabilized = () => true;
+
+      let evaluateCalls = 0;
+      rebalancer.evaluateState = async () => {
+        evaluateCalls++;
+        return false;
+      };
+      rebalancer.scheduleNextCheck = () => {};
+
+      await rebalancer.checkRebalance();
+
+    t.equal(
+      evaluateCalls,
+      1,
+      'failed nodes should remain actionable and must not be blocked by the settling gate',
+    );
+  });
+
+  await t.test(
+    'checkRebalance defers critical system partitions while connected membership exceeds nodes cache',
+    async (t) => {
+      const rebalancer = createTestRebalancer({
+        entityId: 'nodes-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+        ],
+        messageRouter: createMockMessageRouter('connected', [
+          'node-2',
+          'node-3',
+          'node-4',
+        ]),
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.isStabilized = () => true;
+
+      let evaluateCalls = 0;
+      rebalancer.evaluateState = async () => {
+        evaluateCalls++;
+        return false;
+      };
+
+      let scheduledDelayMs = null;
+      rebalancer.scheduleNextCheck = (overrideDelayMs = null) => {
+        scheduledDelayMs = overrideDelayMs;
+      };
+
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        evaluateCalls,
+        0,
+        'critical system partitions should not evaluate while transport sees extra cluster members',
+      );
+      t.equal(
+        typeof scheduledDelayMs,
+        'number',
+        'live-membership settling should schedule a delayed retry',
+      );
+
+      rebalancer.shutdown();
+    });
+
+  await t.test(
+    'checkRebalance defers critical system partitions while active node endpoint visibility is incomplete',
+    async (t) => {
+      const rebalancer = createTestRebalancer({
+        entityId: 'nodes-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+        ],
+        nodeEndpoints: [
+          createNodeEndpoint('node-1'),
+          createNodeEndpoint('node-2'),
+        ],
+        serviceEndpoints: [
+          createPostgresWireEndpoint('node-1'),
+          createPostgresWireEndpoint('node-2'),
+        ],
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.isStabilized = () => true;
+
+      let evaluateCalls = 0;
+      rebalancer.evaluateState = async () => {
+        evaluateCalls++;
+        return false;
+      };
+
+      let scheduledDelayMs = null;
+      rebalancer.scheduleNextCheck = (overrideDelayMs = null) => {
+        scheduledDelayMs = overrideDelayMs;
+      };
+
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        evaluateCalls,
+        0,
+        'critical system partitions should not evaluate before endpoint coverage reaches every active node',
+      );
+      t.equal(
+        typeof scheduledDelayMs,
+        'number',
+        'endpoint-visibility settling should schedule a delayed retry',
+      );
+    });
+
+  await t.test(
+    'checkRebalance defers critical system partitions while active-node replica operations are in flight',
+    async (t) => {
+      const rebalancer = createTestRebalancer({
+        entityId: 'nodes-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+        ],
+        nodeEndpoints: [
+          createNodeEndpoint('node-1'),
+          createNodeEndpoint('node-2'),
+          createNodeEndpoint('node-3'),
+        ],
+        serviceEndpoints: [
+          createPostgresWireEndpoint('node-1'),
+          createPostgresWireEndpoint('node-2'),
+          createPostgresWireEndpoint('node-3'),
+        ],
+        replicaOperations: [{
+          operation_id: 'op-1',
+          type: 'replace',
+          partition_group_id: 'services-p1',
+          target_node_id: 'node-2',
+          status: 'running',
+          workflow_step: WORKFLOW_STEP.ACTIVE,
+        }],
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.isStabilized = () => true;
+
+      let evaluateCalls = 0;
+      rebalancer.evaluateState = async () => {
+        evaluateCalls++;
+        return false;
+      };
+
+      let scheduledDelayMs = null;
+      rebalancer.scheduleNextCheck = (overrideDelayMs = null) => {
+        scheduledDelayMs = overrideDelayMs;
+      };
+
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        evaluateCalls,
+        0,
+        'critical system partitions should not evaluate while topology operations are still converging on active nodes',
+      );
+      t.equal(
+        typeof scheduledDelayMs,
+        'number',
+        'in-flight topology operations should schedule a delayed retry',
+      );
+    });
+
+  await t.test(
+    'checkRebalance defers critical system partitions while local serve readiness is false',
+    async (t) => {
+      const readinessService = {
+        getNodeReadinessSync: () => ({
+          nodeId: 'node-1',
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+            [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: false,
+          },
+          reasons: [
+            {code: 'load_not_ready'},
+            {code: 'transport_not_ready'},
+          ],
+        }),
+      };
+      const rebalancer = createTestRebalancer({
+        entityId: 'nodes-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+        ],
+        controlPlaneReadinessService: readinessService,
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.isStabilized = () => true;
+
+      let evaluateCalls = 0;
+      rebalancer.evaluateState = async () => {
+        evaluateCalls++;
+        return false;
+      };
+
+      let scheduledDelayMs = null;
+      rebalancer.scheduleNextCheck = (overrideDelayMs = null) => {
+        scheduledDelayMs = overrideDelayMs;
+      };
+
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        evaluateCalls,
+        0,
+        'critical system partitions should not evaluate while the local leader is not serve-eligible',
+      );
+      t.equal(
+        typeof scheduledDelayMs,
+        'number',
+        'local serve-readiness gate should schedule a delayed retry',
+      );
+    });
+
+  await t.test(
+    'checkRebalance defers critical system partitions until bootstrap lifecycle reaches traffic-ready',
+    async (t) => {
+      const bootstrapReadinessState = {
+        evaluate: () => ({
+          ready: false,
+          phase: LIFECYCLE_PHASE.JOIN_READY,
+          reasons: ['READINESS_STABLE_WINDOW_PENDING'],
+          stableElapsedMs: 2000,
+          stableWindowMs: 5000,
+        }),
+      };
+      const rebalancer = createTestRebalancer({
+        entityId: 'nodes-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+        ],
+        nodeEndpoints: [
+          createNodeEndpoint('node-1'),
+          createNodeEndpoint('node-2'),
+          createNodeEndpoint('node-3'),
+        ],
+        serviceEndpoints: [
+          createPostgresWireEndpoint('node-1'),
+          createPostgresWireEndpoint('node-2'),
+          createPostgresWireEndpoint('node-3'),
+        ],
+        bootstrapReadinessState,
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.isStabilized = () => true;
+
+      let evaluateCalls = 0;
+      rebalancer.evaluateState = async () => {
+        evaluateCalls++;
+        return false;
+      };
+
+      let scheduledDelayMs = null;
+      rebalancer.scheduleNextCheck = (overrideDelayMs = null) => {
+        scheduledDelayMs = overrideDelayMs;
+      };
+
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        evaluateCalls,
+        0,
+        'critical system partitions should not evaluate before bootstrap lifecycle is traffic-ready',
+      );
+      t.equal(
+        typeof scheduledDelayMs,
+        'number',
+        'traffic-readiness gate should schedule a delayed retry',
+      );
+    });
+
+  await t.test(
+    'checkRebalance allows critical system partitions after bootstrap lifecycle reaches traffic-ready',
+    async (t) => {
+      const bootstrapReadinessState = {
+        evaluate: () => ({
+          ready: true,
+          phase: LIFECYCLE_PHASE.TRAFFIC_READY,
+          reasons: [],
+          stableElapsedMs: 6000,
+          stableWindowMs: 5000,
+        }),
+      };
+      const rebalancer = createTestRebalancer({
+        entityId: 'nodes-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+        ],
+        nodeEndpoints: [
+          createNodeEndpoint('node-1'),
+          createNodeEndpoint('node-2'),
+          createNodeEndpoint('node-3'),
+        ],
+        serviceEndpoints: [
+          createPostgresWireEndpoint('node-1'),
+          createPostgresWireEndpoint('node-2'),
+          createPostgresWireEndpoint('node-3'),
+        ],
+        bootstrapReadinessState,
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.isStabilized = () => true;
+
+      let evaluateCalls = 0;
+      rebalancer.evaluateState = async () => {
+        evaluateCalls++;
+        return false;
+      };
+      rebalancer.scheduleNextCheck = () => {};
+
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        evaluateCalls,
+        1,
+        'critical system partitions should evaluate once bootstrap lifecycle is traffic-ready',
+      );
+    });
+
+  await t.test(
+    'checkRebalance allows critical system partitions once local serve readiness is true',
+    async (t) => {
+      const readinessService = {
+        getNodeReadinessSync: () => ({
+          nodeId: 'node-1',
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: true,
+            [CONTROL_PLANE_READINESS_DIMENSION
+              .METADATA_PUBLICATION_HEALTHY]: true,
+            [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+            [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: true,
+          },
+          reasons: [],
+        }),
+      };
+      const rebalancer = createTestRebalancer({
+        entityId: 'nodes-p1',
+        entityType: EntityType.PARTITION,
+        nodeId: 'node-1',
+        nodes: [
+          {node_id: 'node-1', status: NodeStatus.ACTIVE},
+          {node_id: 'node-2', status: NodeStatus.ACTIVE},
+          {node_id: 'node-3', status: NodeStatus.ACTIVE},
+        ],
+        nodeEndpoints: [
+          createNodeEndpoint('node-1'),
+          createNodeEndpoint('node-2'),
+          createNodeEndpoint('node-3'),
+        ],
+        serviceEndpoints: [
+          createPostgresWireEndpoint('node-1'),
+          createPostgresWireEndpoint('node-2'),
+          createPostgresWireEndpoint('node-3'),
+        ],
+        controlPlaneReadinessService: readinessService,
+      });
+
+      rebalancer.initialize();
+      rebalancer.isLeader = true;
+      rebalancer.isStabilized = () => true;
+
+      let evaluateCalls = 0;
+      rebalancer.evaluateState = async () => {
+        evaluateCalls++;
+        return false;
+      };
+      rebalancer.scheduleNextCheck = () => {};
+
+      await rebalancer.checkRebalance();
+
+      t.equal(
+        evaluateCalls,
+        1,
+        'critical system partitions should evaluate once the local leader is serve-eligible',
       );
     });
 });

@@ -19,8 +19,7 @@ const ENDPOINT_SVC_LOG_MSG = Object.freeze({
 
 const ENDPOINT_SVC_ERROR_MSG = Object.freeze({
   MISSING_NODE_ID: 'EndpointService requires nodeId',
-  MISSING_CDC: 'EndpointService requires cdcIntegrationService',
-  MISSING_CACHE: 'EndpointService requires systemTableCache',
+  MISSING_OWNER: 'EndpointService requires serviceEndpointsOwner',
   NOT_INITIALIZED: 'EndpointService must be initialized first',
   MISSING_ENDPOINT_ID: 'Endpoint ID is required',
 });

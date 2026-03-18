@@ -5,6 +5,8 @@
  * Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 12.1, 12.2, 12.3, 12.4, 12.5
  */
 
+import {NUM} from '../constants/index.js';
+
 /**
  * SQLite log adapter for liferaft.
  * Used by PartitionService for durable data storage.
@@ -73,6 +75,103 @@ class SQLiteLogAdapter {
     `);
   }
 
+  /**
+   * Check whether a persisted payload already uses the canonical entry shape.
+   * @param {*} entry
+   * @return {boolean}
+   * @private
+   */
+  isCanonicalEntryShape(entry) {
+    return !!entry &&
+      typeof entry === 'object' &&
+      (
+        Object.prototype.hasOwnProperty.call(entry, 'command') ||
+        Object.prototype.hasOwnProperty.call(entry, 'responses') ||
+        Object.prototype.hasOwnProperty.call(entry, 'committed')
+      );
+  }
+
+  /**
+   * Normalize any stored or incoming entry to the canonical raft entry shape.
+   * Legacy rows that stored only the command payload are wrapped without
+   * rewriting metadata outside the adapter owner path.
+   * @param {*} entry
+   * @param {Object} [fallback]
+   * @param {number} [fallback.index]
+   * @param {number} [fallback.term]
+   * @param {number} [fallback.committedIndex]
+   * @return {Object}
+   * @private
+   */
+  normalizeEntry(entry, fallback = {}) {
+    const hasCanonicalShape = this.isCanonicalEntryShape(entry);
+    const committedIndex = Number.isFinite(fallback.committedIndex) ?
+      fallback.committedIndex :
+      NUM.ZERO;
+    const index = hasCanonicalShape && Number.isFinite(entry?.index) ?
+      entry.index :
+      fallback.index;
+    const term = hasCanonicalShape && Number.isFinite(entry?.term) ?
+      entry.term :
+      fallback.term;
+
+    return {
+      index,
+      term,
+      committed: hasCanonicalShape ?
+        entry.committed === true :
+        Number.isFinite(index) && index <= committedIndex,
+      responses: hasCanonicalShape && Array.isArray(entry.responses) ?
+        entry.responses.map((response) => ({...response})) :
+        [],
+      command: hasCanonicalShape ? entry.command : entry,
+    };
+  }
+
+  /**
+   * Decode one SQLite row into the canonical raft entry shape.
+   * @param {Object|null} row
+   * @param {number} [committedIndex]
+   * @return {Object|null}
+   * @private
+   */
+  readEntryRow(row, committedIndex = null) {
+    if (!row) {
+      return null;
+    }
+    const parsedEntry = JSON.parse(row.command);
+    return this.normalizeEntry(parsedEntry, {
+      index: row.log_index,
+      term: row.term,
+      committedIndex: Number.isFinite(committedIndex) ?
+        committedIndex :
+        this.getCommittedIndex(),
+    });
+  }
+
+  /**
+   * Persist one entry using the canonical serialized shape.
+   * @param {Object} entry
+   * @return {Object}
+   * @private
+   */
+  persistEntry(entry) {
+    const normalizedEntry = this.normalizeEntry(entry, {
+      index: entry?.index,
+      term: entry?.term,
+      committedIndex: this.getCommittedIndex(),
+    });
+    this.db.prepare(
+      'INSERT OR REPLACE INTO _raft_log (log_index, term, command, timestamp) VALUES (?, ?, ?, ?)',
+    ).run(
+      normalizedEntry.index,
+      normalizedEntry.term,
+      JSON.stringify(normalizedEntry),
+      Date.now(),
+    );
+    return normalizedEntry;
+  }
+
   // ============================================================
   // Liferaft Log Interface Methods (sync versions)
   // Requirements: 12.2, 12.3, 12.4, 12.5
@@ -124,12 +223,7 @@ class SQLiteLogAdapter {
       'SELECT log_index, term, command FROM _raft_log WHERE log_index = ?',
     ).get(index);
 
-    if (!row) return null;
-    return {
-      index: row.log_index,
-      term: row.term,
-      command: JSON.parse(row.command),
-    };
+    return this.readEntryRow(row);
   }
 
   /**
@@ -141,9 +235,7 @@ class SQLiteLogAdapter {
     if (!this.isOpen()) {
       return;
     }
-    this.db.prepare(
-      'INSERT OR REPLACE INTO _raft_log (log_index, term, command, timestamp) VALUES (?, ?, ?, ?)',
-    ).run(entry.index, entry.term, JSON.stringify(entry.command), Date.now());
+    this.persistEntry(entry);
   }
 
   /**
@@ -169,16 +261,13 @@ class SQLiteLogAdapter {
     if (!this.isOpen()) {
       return [];
     }
+    const committedIndex = this.getCommittedIndex();
     const rows = this.db.prepare(
       'SELECT log_index, term, command FROM _raft_log ' +
       'WHERE log_index >= ? AND log_index <= ? ORDER BY log_index',
     ).all(startIndex, endIndex);
 
-    return rows.map((row) => ({
-      index: row.log_index,
-      term: row.term,
-      command: JSON.parse(row.command),
-    }));
+    return rows.map((row) => this.readEntryRow(row, committedIndex));
   }
 
   /**
@@ -226,9 +315,7 @@ class SQLiteLogAdapter {
 
     // Store in SQLite (only if database is open)
     if (this.isOpen()) {
-      const sql = 'INSERT OR REPLACE INTO _raft_log ' +
-        '(log_index, term, command, timestamp) VALUES (?, ?, ?, ?)';
-      this.db.prepare(sql).run(index, term, JSON.stringify(entry), Date.now());
+      this.persistEntry(entry);
     }
 
     return entry;
@@ -254,7 +341,7 @@ class SQLiteLogAdapter {
       return {responses: []};
     }
 
-    const entry = JSON.parse(row.command);
+    const entry = this.readEntryRow(row);
 
     // Add acknowledgment if not already present
     if (!entry.responses) {
@@ -286,19 +373,13 @@ class SQLiteLogAdapter {
     if (!this.isOpen()) {
       return [];
     }
+    const committedIndex = this.getCommittedIndex();
     const rows = this.db.prepare(
       'SELECT log_index, term, command FROM _raft_log WHERE log_index <= ? ORDER BY log_index',
     ).all(index);
 
     return rows
-      .map((row) => {
-        const entry = JSON.parse(row.command);
-        return {
-          ...entry,
-          index: row.log_index,
-          term: row.term,
-        };
-      })
+      .map((row) => this.readEntryRow(row, committedIndex))
       .filter((entry) => !entry.committed);
   }
 
@@ -321,10 +402,8 @@ class SQLiteLogAdapter {
       return null;
     }
 
-    const entry = JSON.parse(row.command);
+    const entry = this.readEntryRow(row);
     entry.committed = true;
-    entry.index = row.log_index;
-    entry.term = row.term;
 
     // Update in SQLite
     this.db.prepare(
@@ -358,12 +437,7 @@ class SQLiteLogAdapter {
       };
     }
 
-    const entry = JSON.parse(row.command);
-    return {
-      ...entry,
-      index: row.log_index,
-      term: row.term,
-    };
+    return this.readEntryRow(row);
   }
 
   /**
@@ -416,12 +490,7 @@ class SQLiteLogAdapter {
       return defaultInfo;
     }
 
-    const prevEntry = JSON.parse(row.command);
-    return {
-      ...prevEntry,
-      index: row.log_index,
-      term: row.term,
-    };
+    return this.readEntryRow(row);
   }
 
   /**
@@ -435,18 +504,12 @@ class SQLiteLogAdapter {
     if (!this.isOpen()) {
       return [];
     }
+    const committedIndex = this.getCommittedIndex();
     const rows = this.db.prepare(
       'SELECT log_index, term, command FROM _raft_log WHERE log_index > ? ORDER BY log_index',
     ).all(index);
 
-    return rows.map((row) => {
-      const entry = JSON.parse(row.command);
-      return {
-        ...entry,
-        index: row.log_index,
-        term: row.term,
-      };
-    });
+    return rows.map((row) => this.readEntryRow(row, committedIndex));
   }
 
   /**
@@ -518,10 +581,15 @@ class SQLiteLogAdapter {
 
       const insertMany = this.db.transaction((entries) => {
         for (const entry of entries) {
+          const normalizedEntry = this.normalizeEntry(entry, {
+            index: entry?.index,
+            term: entry?.term,
+            committedIndex: this.getCommittedIndex(),
+          });
           stmt.run(
-            entry.index,
-            entry.term,
-            JSON.stringify(entry.command),
+            normalizedEntry.index,
+            normalizedEntry.term,
+            JSON.stringify(normalizedEntry),
             Date.now(),
           );
         }
@@ -546,15 +614,15 @@ class SQLiteLogAdapter {
       return;
     }
     try {
+      const committedIndex = this.getCommittedIndex();
       const entries = this.db.prepare(
         'SELECT log_index, term, command FROM _raft_log WHERE log_index >= ? ORDER BY log_index',
       ).all(startIndex);
 
-      callback(null, entries.map((row) => ({
-        index: row.log_index,
-        term: row.term,
-        command: JSON.parse(row.command),
-      })));
+      callback(
+        null,
+        entries.map((row) => this.readEntryRow(row, committedIndex)),
+      );
     } catch (error) {
       callback(error);
     }
@@ -575,11 +643,7 @@ class SQLiteLogAdapter {
       ).get();
 
       if (row) {
-        callback(null, {
-          index: row.log_index,
-          term: row.term,
-          command: JSON.parse(row.command),
-        });
+        callback(null, this.readEntryRow(row));
       } else {
         callback(null, null);
       }

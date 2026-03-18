@@ -427,9 +427,15 @@ test('Services return empty results without SQL engine',
   async (t) => {
     // FunctionRegistry
     const registry = new FunctionRegistry();
-    const func = await registry.getFunction('fn-1');
-    t.equal(func, null,
-      'FunctionRegistry returns null without engine');
+    try {
+      await registry.getFunction('fn-1');
+      t.fail('FunctionRegistry should throw typed gateway error without engine');
+    } catch (error) {
+      t.equal(error.code, 'SYSTEM_METADATA_GATEWAY_REQUIRED',
+        'FunctionRegistry should expose typed gateway-required code');
+      t.equal(error.outcome, 'owner_not_ready',
+        'FunctionRegistry should expose owner_not_ready outcome');
+    }
 
     // ContextManager
     const manager = new ContextManager();

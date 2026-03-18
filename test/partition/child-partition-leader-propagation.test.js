@@ -66,12 +66,17 @@ function initializeTestConfig() {
  */
 function createMockSystemTableCache() {
   const partitionRecords = [
-    {[COLUMN.PARTITION_ID]: PARTITIONS_SYSTEM_PARTITION_ID},
+    {
+      [COLUMN.PARTITION_ID]: PARTITIONS_SYSTEM_PARTITION_ID,
+      [COLUMN.LEADER_NODE_ID]: CHILD_NODE_ID,
+    },
   ];
   const serviceRecords = [
     {
+      [COLUMN.SERVICE_ID]: `${PARTITIONS_SYSTEM_PARTITION_ID}-r1`,
       [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
       [COLUMN.PARTITION_ID]: PARTITIONS_SYSTEM_PARTITION_ID,
+      [COLUMN.NODE_ID]: CHILD_NODE_ID,
       [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEADER,
       [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
       [COLUMN.ADDRESS]: 'mock-address',
@@ -165,15 +170,7 @@ async (t) => {
 
   try {
     await partition.initialize();
-
-    // Single-replica partition becomes leader immediately during
-    // initialize(). The leader election triggers:
-    //   applyReplicaLeadership → queueLeaderNodeUpdate(nodeId) →
-    //   leaderNodeMutationHelper.queue(nodeId) → flush() →
-    //   cdcIntegrationService.updateSystemTableRow(...)
-    // Allow the async flush to complete.
-    await Promise.resolve();
-    await Promise.resolve();
+    await partition.flushLeaderNodeUpdate();
 
     t.ok(
       partition.isLeader,
@@ -226,8 +223,7 @@ async (t) => {
 
   try {
     await partition.initialize();
-    await Promise.resolve();
-    await Promise.resolve();
+    await partition.flushLeaderNodeUpdate();
 
     // The leaderNodeMutationHelper is the canonical owner for
     // leader_node_id writes. Verify it was used by checking that

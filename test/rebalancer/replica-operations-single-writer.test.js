@@ -57,7 +57,10 @@ import {
 } from '../../src/rebalancer/rebalancer-constants.js';
 import {DurableWorkflowCoordinator} from
   '../../src/workflow/durable-workflow-coordinator.js';
-import {ReplicaStatus} from
+import {
+  ReplicaStatus,
+  isCoordinatorOwnedOperationType,
+} from
   '../../src/rebalancer/replica-status.js';
 import {SystemTableCache} from
   '../../src/cache/system-table-cache.js';
@@ -338,6 +341,37 @@ async (t) => {
   );
 });
 
+test('claimDispatchTransition returns null for bootstrap-owned ' +
+  'MOVE_ASSIGNMENT reservations',
+async (t) => {
+  const operation = buildTestOperation({
+    type: 'MOVE_ASSIGNMENT',
+    workflowStep: WORKFLOW_STEP.PENDING,
+  });
+  const {coordinator, persisted} =
+    createTestCoordinator({operation});
+
+  const claimed = await coordinator.claimDispatchTransition(
+    TEST_OPERATION_ID,
+  );
+
+  t.equal(
+    isCoordinatorOwnedOperationType(operation.type),
+    false,
+    'MOVE_ASSIGNMENT must stay outside the coordinator owner domain',
+  );
+  t.equal(
+    claimed,
+    null,
+    'claim must ignore bootstrap-owned reservation rows',
+  );
+  t.equal(
+    persisted.length,
+    0,
+    'no persistence should occur for bootstrap-owned reservations',
+  );
+});
+
 test('claimDispatchTransition returns null when coordinator is ' +
   'shutting down',
 async (t) => {
@@ -414,3 +448,37 @@ async (t) => {
     'dispatch owner path should persist each step transition only once',
   );
 });
+
+test('dispatchOperation uses background router priority for replica work',
+  async (t) => {
+    const operation = buildTestOperation({
+      workflowStep: WORKFLOW_STEP.PENDING,
+      targetNodeId: REMOTE_NODE_ID,
+    });
+    const deliverCalls = [];
+
+    const {coordinator} = createTestCoordinator({
+      operation,
+      messageRouter: {
+        async deliver(target, request, options) {
+          deliverCalls.push({target, request, options});
+          return {acknowledged: true, status: 'initiated'};
+        },
+      },
+    });
+
+    const result = await coordinator.dispatchOperation(TEST_OPERATION_ID);
+
+    t.equal(result.success, true, 'dispatch should still succeed');
+    t.equal(deliverCalls.length, 1, 'dispatch should use one router delivery');
+    t.equal(
+      deliverCalls[0].options?.deliveryPriority,
+      'background',
+      'replica dispatch should use background router priority',
+    );
+    t.equal(
+      deliverCalls[0].options?.targetNodeId,
+      REMOTE_NODE_ID,
+      'dispatch should preserve explicit target node routing',
+    );
+  });

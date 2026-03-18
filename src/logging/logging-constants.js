@@ -40,6 +40,9 @@ const LOGGING_LOG_MSG = Object.freeze({
   LOGS_TABLE_SERVICE_SHUTDOWN: 'LogsTableService shutdown',
   logsDroppedByBackpressure: (dropped, maxPendingWrites) =>
     `LogsTableService dropped ${dropped} logs (maxPendingWrites=${maxPendingWrites})`,
+  logsWriteDeferred: (retryAfterMs, pendingWrites) =>
+    `LogsTableService deferred background writes for ${retryAfterMs}ms ` +
+    `(pendingWrites=${pendingWrites})`,
   connectedLoggingService: (count) =>
     `Connected to LoggingService, flushed ${count} buffered entries`,
 });
@@ -48,6 +51,7 @@ const LOGGING_ERROR_MSG = Object.freeze({
   LOGGING_SERVICE_REQUIRED: 'LoggingService must be initialized first',
   WRITE_ENTRY_FAILED: 'Failed to write log entry after retries:',
   PERIODIC_FLUSH_FAILED: 'Periodic flush failed:',
+  OWNER_REQUIRED: 'LogsTableService requires logsOwner',
   NO_WRITE_MECHANISM: 'No write mechanism available for logs table',
 });
 
@@ -119,6 +123,10 @@ const LOGS_TABLE_DEFAULT = Object.freeze({
   MAX_RETRIES: NUM.THREE,
   RETRY_DELAY_MS: NUM.THOUSAND,
   MAX_PENDING_WRITES: NUM.TEN_THOUSAND,
+  PRESSURE_HIGH_WATERMARK: 512,
+  PRESSURE_RETAINED_PENDING_WRITES: 128,
+  PRESSURE_DEFER_BACKOFF_MULTIPLIER: NUM.TWO,
+  PRESSURE_MAX_RETRY_DELAY_MS: NUM.TEN * NUM.THOUSAND,
   BACKPRESSURE_WARNING_INTERVAL: NUM.THOUSAND,
   STARTUP_THROTTLED_BACKGROUND_FLUSH_THRESHOLD: NUM.HUNDRED,
   STARTUP_THROTTLED_BACKGROUND_FLUSH_CHUNK_SIZE: NUM.ONE,

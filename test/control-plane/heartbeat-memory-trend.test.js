@@ -2,9 +2,11 @@ import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {
-  HeartbeatService,
+  HeartbeatService as RawHeartbeatService,
   calculateUsageSlopePerMinute,
 } from '../../src/control-plane/heartbeat-service.js';
+import {ControlPlaneSystemTableGateway} from
+  '../../src/control-plane/control-plane-system-table-gateway.js';
 import {HEARTBEAT_EVENT} from
   '../../src/control-plane/heartbeat-service-constants.js';
 import {SERVICE_STATUS, STATE} from '../../src/constants/index.js';
@@ -38,6 +40,28 @@ function createMockCdc() {
     upsertSystemTableRow: async () => ({success: true}),
   };
 }
+
+function createHeartbeatService(options = {}) {
+  const controlPlaneSystemTableGateway =
+    options.controlPlaneSystemTableGateway ||
+    new ControlPlaneSystemTableGateway({
+      nodeId: options.nodeId || null,
+      cdcIntegrationService: options.cdcIntegrationService || null,
+      sqlQueryEngine: options.cdcIntegrationService?.sqlQueryEngine || null,
+      systemTableCache: options.systemTableCache || null,
+      messageRouter: options.messageRouter || null,
+    });
+  return new RawHeartbeatService({
+    ...options,
+    controlPlaneSystemTableGateway,
+  });
+}
+
+function HeartbeatService(options = {}) {
+  return createHeartbeatService(options);
+}
+
+HeartbeatService.prototype = RawHeartbeatService.prototype;
 
 test('Heartbeat memory trend slope helper handles minimal and rising samples', async (t) => {
   t.equal(calculateUsageSlopePerMinute([]), 0, 'empty sample list should return 0');
@@ -269,7 +293,7 @@ test('HeartbeatService sendHeartbeat uses injected control-plane system-table ' 
   LoggingService.resetInstance();
 });
 
-test('HeartbeatService skips cache wait for heartbeat writes and repairs missing rows',
+test('HeartbeatService skips cache wait for heartbeat writes and fails on missing rows',
   async (t) => {
     initEnv();
 
@@ -308,31 +332,19 @@ test('HeartbeatService skips cache wait for heartbeat writes and repairs missing
       now: () => now,
     });
 
-    await service.sendHeartbeat(null, null);
-
-    t.equal(updates.length, 1, 'issues heartbeat update');
+    await t.rejects(
+      service.sendHeartbeat(null, null),
+      /node row .*missing/i,
+      'steady-state heartbeat should fail instead of recreating missing rows',
+    );
+    t.equal(updates.length, 1, 'issues one heartbeat update');
     t.equal(
       updates[0].options?.skipCacheWait,
       true,
       'heartbeat update should not block on cache wait',
     );
     const nodeUpserts = upserts.filter((entry) => entry.tableName === 'nodes');
-    t.equal(nodeUpserts.length, 1, 'repairs missing row via upsert fallback');
-    t.equal(
-      nodeUpserts[0].options?.skipCacheWait,
-      true,
-      'upsert repair should also skip cache wait',
-    );
-    t.equal(
-      nodeUpserts[0].row.storage_budget_bytes,
-      1024,
-      'upsert repair should preserve storage budget fields',
-    );
-    t.equal(
-      nodeUpserts[0].row.last_heartbeat,
-      now,
-      'upsert repair should keep current heartbeat timestamp',
-    );
+    t.equal(nodeUpserts.length, 0, 'steady-state heartbeat should not upsert nodes');
 
     ConfigurationManager.resetInstance();
     LoggingService.resetInstance();
@@ -399,7 +411,11 @@ test('HeartbeatService throttles endpoint upserts but refreshes after interval',
     now += 10;
     await service.sendHeartbeat(null, null);
 
-    t.equal(counters.nodeUpdates, 3, 'should update nodes row every heartbeat');
+    t.equal(
+      counters.nodeUpdates,
+      1,
+      'should coalesce unchanged nodes-row writes independently of endpoint refresh',
+    );
     t.equal(
       counters.endpointUpserts,
       1,
@@ -516,6 +532,98 @@ test('HeartbeatService forces node heartbeat refresh once max staleness elapses'
     }
   });
 
+test('HeartbeatService suppresses bucket-equivalent utilization churn even after min interval',
+  async (t) => {
+    initEnv();
+
+    let nodeUpdates = 0;
+    const service = new HeartbeatService({
+      nodeId: 'node-f1',
+      nodeAddress: '10.0.0.61:8080',
+      cdcIntegrationService: {
+        updateSystemTableRow: async () => {
+          nodeUpdates += 1;
+          return {success: true};
+        },
+        upsertSystemTableRow: async () => ({success: true}),
+      },
+      systemTableCache: createMockCache(),
+      nodeMetadataMinUpdateIntervalMs: 1000,
+      nodeMetadataMaxStalenessMs: 5000,
+      nodeMetadataUsagePercentBucketSize: 5,
+    });
+
+    const originalNow = Date.now;
+    let now = 0;
+    Date.now = () => now;
+    try {
+      await service.sendHeartbeat({
+        cpu: {count: 4, usagePercent: 11},
+        memory: {totalBytes: 128 * 1024 * 1024, usagePercent: 21},
+        diskGb: 100,
+        diskUsagePercent: 31,
+      }, ['partition_replica']);
+      now += 1500;
+      await service.sendHeartbeat({
+        cpu: {count: 4, usagePercent: 12},
+        memory: {totalBytes: 128 * 1024 * 1024, usagePercent: 22},
+        diskGb: 100,
+        diskUsagePercent: 33,
+      }, ['partition_replica']);
+
+      t.equal(
+        nodeUpdates,
+        1,
+        'usage jitter within the same bucket should not trigger another write',
+      );
+    } finally {
+      Date.now = originalNow;
+      ConfigurationManager.resetInstance();
+      LoggingService.resetInstance();
+    }
+  });
+
+test('HeartbeatService writes immediately when structural metadata changes',
+  async (t) => {
+    initEnv();
+
+    let nodeUpdates = 0;
+    const service = new HeartbeatService({
+      nodeId: 'node-f2',
+      nodeAddress: '10.0.0.62:8080',
+      cdcIntegrationService: {
+        updateSystemTableRow: async () => {
+          nodeUpdates += 1;
+          return {success: true};
+        },
+        upsertSystemTableRow: async () => ({success: true}),
+      },
+      systemTableCache: createMockCache(),
+      nodeMetadataMinUpdateIntervalMs: 1000,
+      nodeMetadataMaxStalenessMs: 5000,
+      nodeMetadataUsagePercentBucketSize: 5,
+    });
+
+    const originalNow = Date.now;
+    let now = 0;
+    Date.now = () => now;
+    try {
+      await service.sendHeartbeat(null, ['partition_replica']);
+      now += 10;
+      await service.sendHeartbeat(null, ['partition_replica', 'leader']);
+
+      t.equal(
+        nodeUpdates,
+        2,
+        'structural metadata changes should bypass the min-interval coalescing',
+      );
+    } finally {
+      Date.now = originalNow;
+      ConfigurationManager.resetInstance();
+      LoggingService.resetInstance();
+    }
+  });
+
 test('HeartbeatService prefers node-state reporter for node heartbeats', async (t) => {
   initEnv();
 
@@ -600,7 +708,7 @@ test('HeartbeatService prefers node-state reporter for node heartbeats', async (
   }
   });
 
-test('HeartbeatService falls back to routed SQL when node-state reporter fails',
+test('HeartbeatService surfaces reporter failure when node-state reporter fails',
   async (t) => {
     initEnv();
 
@@ -631,19 +739,18 @@ test('HeartbeatService falls back to routed SQL when node-state reporter fails',
     });
 
     try {
-      await service.sendHeartbeat(null, ['partition_replica']);
+      await t.rejects(
+        service.sendHeartbeat(null, ['partition_replica']),
+        /control-plane route unavailable/,
+        'reporter failure should surface to the heartbeat owner path',
+      );
 
       t.equal(reporterAttempts, 1, 'reporter should be attempted first');
-      t.equal(nodeUpdates, 1, 'failed reporter should fall back to routed SQL update');
-      t.equal(
-        service.getHeartbeatPublicationDiagnostics().publicationPath,
-        'cdc_update_after_reporter_failure',
-        'fallback publication should preserve that the reporter path failed first',
-      );
+      t.equal(nodeUpdates, 0, 'failed reporter should not fall back to routed SQL update');
       t.equal(
         service.getHeartbeatPublicationDiagnostics().targetAddress,
         'seed-1/message-group/mg-1',
-        'fallback diagnostics should retain the last known reporter target',
+        'failure diagnostics should retain the last known reporter target',
       );
     } finally {
       ConfigurationManager.resetInstance();
@@ -651,21 +758,19 @@ test('HeartbeatService falls back to routed SQL when node-state reporter fails',
     }
   });
 
-test('HeartbeatService falls back to routed SQL when node-state reporter exceeds ' +
+test('HeartbeatService surfaces reporter timeout when node-state reporter exceeds ' +
   'its timeout budget',
 async (t) => {
   initEnv();
 
   let nodeUpdates = 0;
-  const nodeWriteTimeouts = [];
   const service = new HeartbeatService({
     nodeId: 'node-reporter-timeout-fallback',
     nodeAddress: '10.0.0.15:8080',
     heartbeatAttemptTimeoutMs: 7000,
     cdcIntegrationService: {
-      updateSystemTableRow: async (_table, _where, _row, options = {}) => {
+      updateSystemTableRow: async () => {
         nodeUpdates += 1;
-        nodeWriteTimeouts.push(options.queryTimeoutMs ?? null);
         return {success: true};
       },
       upsertSystemTableRow: async () => ({success: true}),
@@ -689,16 +794,18 @@ async (t) => {
   });
 
   try {
-    await service.sendHeartbeat(null, ['partition_replica']);
+    await t.rejects(
+      service.sendHeartbeat(null, ['partition_replica']),
+      /timed out/,
+      'reporter timeout should surface to the heartbeat owner path',
+    );
 
-    t.equal(nodeUpdates, 1,
-      'timed-out reporter should still fall back to one routed SQL node write');
-    t.equal(nodeWriteTimeouts[0], 3000,
-      'fallback node write should use the reduced timeout budget');
+    t.equal(nodeUpdates, 0,
+      'timed-out reporter should not fall back to a routed SQL node write');
     t.equal(
-      service.getHeartbeatPublicationDiagnostics().publicationPath,
-      'cdc_update_after_reporter_failure',
-      'reporter-timeout fallback should preserve reporter-failure classification',
+      service.getHeartbeatPublicationDiagnostics().targetAddress,
+      null,
+      'reporter-timeout diagnostics should not invent a routed SQL target',
     );
   } finally {
     ConfigurationManager.resetInstance();
@@ -767,7 +874,7 @@ async (t) => {
   }
 });
 
-test('HeartbeatService bounds routed SQL heartbeat write timeouts below attempt timeout',
+test('HeartbeatService surfaces reporter failure without routed SQL fallback',
   async (t) => {
     initEnv();
 
@@ -796,32 +903,36 @@ test('HeartbeatService bounds routed SQL heartbeat write timeouts below attempt 
     });
 
     try {
-      await service.sendHeartbeat(null, ['partition_replica']);
-
-      t.equal(nodeWriteOptions.length, 1,
-        'reporter failure should trigger one routed SQL node write');
-      t.equal(nodeWriteOptions[0]?.queryTimeoutMs, 6000,
-        'node heartbeat routed SQL timeout should stay below attempt timeout');
-      t.equal(nodeWriteOptions[0]?.skipCacheWait, true,
-        'heartbeat write should still bypass cache wait');
-      t.equal(endpointWriteOptions.length, 1,
-        'endpoint refresh should still execute');
-      t.equal(endpointWriteOptions[0]?.queryTimeoutMs, 6000,
-        'endpoint upsert should reuse bounded heartbeat write timeout');
+      await t.rejects(
+        service.sendHeartbeat(null, ['partition_replica']),
+        /reporter unavailable/,
+        'reporter failure should surface to the heartbeat owner path',
+      );
+      t.equal(nodeWriteOptions.length, 0,
+        'reporter failure should not trigger a routed SQL node write');
+      t.equal(endpointWriteOptions.length, 0,
+        'heartbeat should stop before endpoint refresh when publication fails');
     } finally {
       ConfigurationManager.resetInstance();
       LoggingService.resetInstance();
     }
   });
 
-test('HeartbeatService falls back to routed SQL when reporter heartbeat ' +
-  'does not become canonically visible',
+test('HeartbeatService keeps the reporter path when heartbeat visibility ' +
+  'remains unverified',
 async (t) => {
   initEnv();
 
   let reporterAttempts = 0;
   let nodeUpdates = 0;
   let authoritativeReads = 0;
+  const scheduledVerifications = [];
+  const flushScheduledVerifications = async () => {
+    while (scheduledVerifications.length > 0) {
+      const verification = scheduledVerifications.shift();
+      await verification();
+    }
+  };
   const service = new HeartbeatService({
     nodeId: 'node-reporter-visibility-gap',
     nodeAddress: '10.0.0.11:8080',
@@ -853,8 +964,11 @@ async (t) => {
       };
     },
     verifyReporterVisibilityOnSuccess: true,
-    fallbackToCdcOnReporterVisibilityGap: true,
     now: () => 1000,
+    setTimeoutFn: (fn) => {
+      scheduledVerifications.push(fn);
+      return {unref() {}};
+    },
   });
 
   try {
@@ -862,14 +976,19 @@ async (t) => {
 
     t.equal(reporterAttempts, 1,
       'reporter should still be attempted first');
+    t.equal(authoritativeReads, 0,
+      'visibility verification should not block the heartbeat hot path');
+
+    await flushScheduledVerifications();
+
     t.equal(authoritativeReads, 1,
       'reporter success should be followed by canonical visibility verification');
-    t.equal(nodeUpdates, 1,
-      'stale authoritative heartbeat evidence should trigger direct CDC fallback');
+    t.equal(nodeUpdates, 0,
+      'stale authoritative heartbeat evidence should not trigger CDC fallback');
     t.equal(
       service.getHeartbeatPublicationDiagnostics().publicationPath,
-      'cdc_update_after_reporter_visibility_gap',
-      'fallback publication should classify reporter visibility gaps separately',
+      'node_state_reporter_unverified',
+      'visibility gap should remain on the reporter publication path',
     );
     t.equal(
       service.getHeartbeatPublicationDiagnostics().targetAddress,
@@ -888,6 +1007,13 @@ async (t) => {
   initEnv();
 
   const authoritativeReadOptions = [];
+  const scheduledVerifications = [];
+  const flushScheduledVerifications = async () => {
+    while (scheduledVerifications.length > 0) {
+      const verification = scheduledVerifications.shift();
+      await verification();
+    }
+  };
   const service = new HeartbeatService({
     nodeId: 'node-reporter-routed-visibility',
     nodeAddress: '10.0.0.12:8080',
@@ -919,10 +1045,19 @@ async (t) => {
     }),
     verifyReporterVisibilityOnSuccess: true,
     now: () => 1000,
+    setTimeoutFn: (fn) => {
+      scheduledVerifications.push(fn);
+      return {unref() {}};
+    },
   });
 
   try {
     await service.sendHeartbeat(null, ['partition_replica']);
+
+    t.equal(authoritativeReadOptions.length, 0,
+      'visibility verification should be deferred off the heartbeat hot path');
+
+    await flushScheduledVerifications();
 
     t.equal(authoritativeReadOptions.length, 1,
       'reporter success should perform exactly one canonical visibility read');
@@ -931,7 +1066,7 @@ async (t) => {
       params: ['node-reporter-routed-visibility'],
       options: {
         localReadConsistency: 'local_leader',
-        allowSqlFallback: true,
+        allowSqlFallback: false,
       },
     });
     t.equal(
@@ -944,6 +1079,215 @@ async (t) => {
     LoggingService.resetInstance();
   }
 });
+
+test('HeartbeatService reuses a recent successful reporter visibility proof',
+  async (t) => {
+    initEnv();
+
+    let authoritativeReads = 0;
+    let now = 1000;
+    const scheduledVerifications = [];
+    const flushScheduledVerifications = async () => {
+      while (scheduledVerifications.length > 0) {
+        const verification = scheduledVerifications.shift();
+        await verification();
+      }
+    };
+    const service = new HeartbeatService({
+      nodeId: 'node-reporter-visibility-throttle',
+      nodeAddress: '10.0.0.13:8080',
+      cdcIntegrationService: {
+        updateSystemTableRow: async () => ({success: true}),
+        upsertSystemTableRow: async () => ({success: true}),
+        executeAuthoritativeSystemTableRead: async () => {
+          authoritativeReads += 1;
+          return {
+            success: true,
+            rows: [{
+              node_id: 'node-reporter-visibility-throttle',
+              last_heartbeat: now,
+            }],
+          };
+        },
+      },
+      systemTableCache: createMockCache(),
+      nodeMetadataMinUpdateIntervalMs: 0,
+      nodeMetadataMaxStalenessMs: 5000,
+      nodeStateReporter: async () => ({
+        publicationPath: 'node_state_reporter',
+        targetAddress: 'seed-1/message-group/mg-1',
+      }),
+      verifyReporterVisibilityOnSuccess: true,
+      reporterVisibilitySuccessTtlMs: 10000,
+      now: () => now,
+      setTimeoutFn: (fn) => {
+        scheduledVerifications.push(fn);
+        return {unref() {}};
+      },
+    });
+
+    try {
+      await service.sendHeartbeat(null, ['partition_replica']);
+      await flushScheduledVerifications();
+      now += 1000;
+      await service.sendHeartbeat(null, ['partition_replica']);
+      await flushScheduledVerifications();
+
+      t.equal(
+        authoritativeReads,
+        1,
+        'steady-state heartbeat publishes should reuse a recent visibility proof',
+      );
+
+      now += 10000;
+      await service.sendHeartbeat(null, ['partition_replica']);
+      await flushScheduledVerifications();
+
+      t.equal(
+        authoritativeReads,
+        2,
+        'visibility proof should be refreshed after the reuse window expires',
+      );
+    } finally {
+      ConfigurationManager.resetInstance();
+      LoggingService.resetInstance();
+    }
+  });
+
+test('HeartbeatService throttles repeated unverified reporter visibility retries',
+  async (t) => {
+    initEnv();
+
+    let authoritativeReads = 0;
+    let now = 1000;
+    const scheduledVerifications = [];
+    const flushScheduledVerifications = async () => {
+      while (scheduledVerifications.length > 0) {
+        const verification = scheduledVerifications.shift();
+        await verification();
+      }
+    };
+    const service = new HeartbeatService({
+      nodeId: 'node-reporter-visibility-retry-throttle',
+      nodeAddress: '10.0.0.14:8080',
+      cdcIntegrationService: {
+        updateSystemTableRow: async () => ({success: true}),
+        upsertSystemTableRow: async () => ({success: true}),
+        executeAuthoritativeSystemTableRead: async () => {
+          authoritativeReads += 1;
+          return {
+            success: true,
+            rows: [{
+              node_id: 'node-reporter-visibility-retry-throttle',
+              last_heartbeat: 1,
+            }],
+          };
+        },
+      },
+      systemTableCache: createMockCache(),
+      nodeMetadataMinUpdateIntervalMs: 0,
+      nodeMetadataMaxStalenessMs: 5000,
+      nodeStateReporter: async () => ({
+        publicationPath: 'node_state_reporter',
+        targetAddress: 'seed-1/message-group/mg-1',
+      }),
+      verifyReporterVisibilityOnSuccess: true,
+      reporterVisibilityRetryIntervalMs: 10000,
+      now: () => now,
+      setTimeoutFn: (fn) => {
+        scheduledVerifications.push(fn);
+        return {unref() {}};
+      },
+    });
+
+    try {
+      await service.sendHeartbeat(null, ['partition_replica']);
+      await flushScheduledVerifications();
+
+      now += 1000;
+      await service.sendHeartbeat(null, ['partition_replica']);
+      await flushScheduledVerifications();
+
+      t.equal(
+        authoritativeReads,
+        1,
+        'failed visibility proofs should not trigger another immediate readback',
+      );
+
+      now += 10000;
+      await service.sendHeartbeat(null, ['partition_replica']);
+      await flushScheduledVerifications();
+
+      t.equal(
+        authoritativeReads,
+        2,
+        'visibility proof should retry after the failure cooldown expires',
+      );
+    } finally {
+      ConfigurationManager.resetInstance();
+      LoggingService.resetInstance();
+    }
+  });
+
+test('HeartbeatService cancels deferred reporter visibility verification when the reporter is disabled',
+  async (t) => {
+    initEnv();
+
+    let authoritativeReads = 0;
+    const scheduledVerifications = [];
+    const flushScheduledVerifications = async () => {
+      while (scheduledVerifications.length > 0) {
+        const verification = scheduledVerifications.shift();
+        await verification();
+      }
+    };
+    const service = new HeartbeatService({
+      nodeId: 'node-reporter-disabled-before-verify',
+      nodeAddress: '10.0.0.15:8080',
+      cdcIntegrationService: {
+        updateSystemTableRow: async () => ({success: true}),
+        upsertSystemTableRow: async () => ({success: true}),
+        executeAuthoritativeSystemTableRead: async () => {
+          authoritativeReads += 1;
+          return {
+            success: true,
+            rows: [{
+              node_id: 'node-reporter-disabled-before-verify',
+              last_heartbeat: 1000,
+            }],
+          };
+        },
+      },
+      systemTableCache: createMockCache(),
+      nodeMetadataMinUpdateIntervalMs: 0,
+      nodeMetadataMaxStalenessMs: 5000,
+      nodeStateReporter: async () => ({
+        publicationPath: 'node_state_reporter',
+        targetAddress: 'seed-1/message-group/mg-1',
+      }),
+      verifyReporterVisibilityOnSuccess: true,
+      now: () => 1000,
+      setTimeoutFn: (fn) => {
+        scheduledVerifications.push(fn);
+        return {unref() {}};
+      },
+    });
+
+    try {
+      await service.sendHeartbeat(null, ['partition_replica']);
+      service.setNodeStateReporter(null);
+      await flushScheduledVerifications();
+
+      t.equal(
+        authoritativeReads,
+        0,
+        'disabling the reporter should skip any queued visibility readback',
+      );
+    } finally {
+      ConfigurationManager.resetInstance();
+      LoggingService.resetInstance();
+    }
+  });
 
 test('HeartbeatService suppresses non-critical heartbeat writes while quiet mode is active',
   async (t) => {
@@ -1164,6 +1508,56 @@ test('HeartbeatService preserves max-staleness liveness writes in quiet mode eve
     }
   });
 
+test('HeartbeatService allows quiet-mode structural-change bypass and records reason',
+  async (t) => {
+    initEnv();
+
+    let nodeUpdates = 0;
+    let quietModeActive = false;
+    const service = new HeartbeatService({
+      nodeId: 'node-h3',
+      nodeAddress: '10.0.0.82:8080',
+      cdcIntegrationService: {
+        updateSystemTableRow: async () => {
+          nodeUpdates += 1;
+          return {success: true};
+        },
+        upsertSystemTableRow: async () => ({success: true}),
+      },
+      systemTableCache: createMockCache(),
+      nodeMetadataMinUpdateIntervalMs: 1000,
+      nodeMetadataMaxStalenessMs: 5000,
+      quietMode: {
+        isActive: () => quietModeActive,
+      },
+    });
+
+    const originalNow = Date.now;
+    let now = 0;
+    Date.now = () => now;
+    try {
+      await service.sendHeartbeat(null, ['partition_replica']);
+      quietModeActive = true;
+      now += 10;
+      await service.sendHeartbeat(null, ['partition_replica', 'leader']);
+
+      t.equal(
+        nodeUpdates,
+        2,
+        'quiet mode should not suppress structural heartbeat metadata changes',
+      );
+      t.same(
+        service.getQuietModeBypassReasonHistogram(),
+        {node_heartbeat_structural_change: 1},
+        'quiet mode should record the structural-change bypass reason',
+      );
+    } finally {
+      Date.now = originalNow;
+      ConfigurationManager.resetInstance();
+      LoggingService.resetInstance();
+    }
+  });
+
 test('HeartbeatService does not overlap heartbeat writes when a tick is still in-flight',
   async (t) => {
     initEnv();
@@ -1273,6 +1667,7 @@ test('HeartbeatService recovers from a hung heartbeat attempt after timeout',
     service.start();
 
     try {
+      await new Promise((resolve) => setTimeout(resolve, 0));
       t.equal(writes.length, 1, 'start should issue the first heartbeat attempt');
       t.equal(service.heartbeatConsecutiveFailures, 0,
         'first heartbeat attempt should not fail immediately');
@@ -1378,7 +1773,7 @@ test('HeartbeatService reportNodeShutdown publishes stopped state through node-s
     LoggingService.resetInstance();
   });
 
-test('HeartbeatService reportNodeShutdown falls back to CDC update after reporter failure',
+test('HeartbeatService reportNodeShutdown fails when reporter publication fails',
   async (t) => {
     initEnv();
 
@@ -1423,28 +1818,19 @@ test('HeartbeatService reportNodeShutdown falls back to CDC update after reporte
       now: () => 22334,
     });
 
-    const published = await service.reportNodeShutdown();
-
-    t.equal(published, true, 'shutdown publication should fall back to CDC');
-    t.equal(updates.length, 1, 'should issue one CDC shutdown update');
-    t.equal(updates[0].tableName, 'nodes', 'shutdown update should target nodes table');
-    t.same(updates[0].whereClause, {node_id: 'node-shutdown-cdc'},
-      'shutdown update should target the current node id');
-    t.equal(updates[0].updateRow.status, SERVICE_STATUS.STOPPED,
-      'shutdown update should mark node status stopped');
-    t.equal(updates[0].updateRow.connection_state, STATE.DISCONNECTED,
-      'shutdown update should clear readiness connection state');
-    t.equal(updates[0].updateRow.ready_lease_expires_at, null,
-      'shutdown update should clear ready lease expiry');
-    t.equal(updates[0].options?.skipCacheWait, true,
-      'shutdown update should avoid cache-waiting on process exit');
+    await t.rejects(
+      service.reportNodeShutdown(),
+      /reporter unavailable/,
+      'shutdown publication should stay on the reporter path when configured',
+    );
+    t.equal(updates.length, 0, 'shutdown publication should not fall back to CDC');
 
     ConfigurationManager.resetInstance();
     LoggingService.resetInstance();
   });
 
-test('HeartbeatService reportNodeShutdown falls back to CDC update when reporter ' +
-  'shutdown publication is not canonically visible',
+test('HeartbeatService reportNodeShutdown keeps the reporter path when shutdown ' +
+  'visibility remains unverified',
 async (t) => {
   initEnv();
 
@@ -1509,21 +1895,15 @@ async (t) => {
   const published = await service.reportNodeShutdown();
 
   t.equal(published, true,
-    'shutdown publication should fall back when reporter ack is not durable');
+    'shutdown publication should still succeed when the reporter path is unverified');
   t.equal(authoritativeReads, 1,
     'shutdown publication should verify canonical visibility after reporter success');
-  t.equal(updates.length, 1,
-    'shutdown publication should repair the authoritative nodes row after visibility gap');
-  t.equal(updates[0].updateRow.status, SERVICE_STATUS.STOPPED,
-    'shutdown fallback should persist stopped node status');
-  t.equal(updates[0].updateRow.connection_state, STATE.DISCONNECTED,
-    'shutdown fallback should persist disconnected connection state');
-  t.equal(updates[0].updateRow.ready_lease_expires_at, null,
-    'shutdown fallback should clear ready lease expiry');
+  t.equal(updates.length, 0,
+    'shutdown publication should not repair the authoritative nodes row via CDC fallback');
   t.equal(
     service.getHeartbeatPublicationDiagnostics().publicationPath,
-    'node_shutdown_cdc_after_reporter_visibility_gap',
-    'shutdown visibility gap should classify the fallback path explicitly',
+    'node_shutdown_reporter_unverified',
+    'shutdown visibility gap should remain on the reporter publication path',
   );
 
   ConfigurationManager.resetInstance();

@@ -194,6 +194,40 @@ const applyCommonStubs = (service, systemTableCache) => {
   prepareNodeService(systemTableCache);
 };
 
+const createBootstrapResponseFromCache = (systemTableCache, options = {}) => {
+  const systemTableSnapshots = {};
+  for (const tableName of CACHE_HYDRATION_TABLES) {
+    systemTableSnapshots[tableName] = systemTableCache.getAll(tableName);
+  }
+
+  if (Array.isArray(options.removeTables)) {
+    for (const tableName of options.removeTables) {
+      delete systemTableSnapshots[tableName];
+    }
+  }
+
+  const hydrationTables = Array.isArray(options.hydrationTables) ?
+    options.hydrationTables :
+    CACHE_HYDRATION_TABLES.filter((tableName) => {
+      return Object.prototype.hasOwnProperty.call(
+        systemTableSnapshots,
+        tableName,
+      );
+    });
+
+  return {
+    systemTableSnapshots,
+    topologySnapshotMeta: {
+      hydrationTables,
+      tableRowCounts: Object.fromEntries(
+        hydrationTables.map((tableName) => {
+          return [tableName, systemTableSnapshots[tableName]?.length || 0];
+        }),
+      ),
+    },
+  };
+};
+
 test('phaseQuerySystemState succeeds when CDC pipeline is ready',
   async (t) => {
     const service = new NodeJoiningService({
@@ -219,7 +253,7 @@ test('phaseQuerySystemState succeeds when CDC pipeline is ready',
     t.pass('phaseQuerySystemState completed with ready CDC pipeline');
   });
 
-test('phaseQuerySystemState limits join-time backfill to discovery-critical tables',
+test('phaseQuerySystemState skips blocking backfill when bootstrap snapshot covers discovery-critical tables',
   async (t) => {
     const service = new NodeJoiningService({
       nodeId: NODE_ID,
@@ -239,6 +273,9 @@ test('phaseQuerySystemState limits join-time backfill to discovery-critical tabl
 
     const systemTableCache = createFullyHydratedCache();
     applyCommonStubs(service, systemTableCache);
+    service.systemCacheHydrated = false;
+    service.bootstrapResponse =
+      createBootstrapResponseFromCache(systemTableCache);
 
     service.partitionServices = createPartitionServicesWithSubscribers();
     service.messageGroupServices = createMessageGroupServicesWithLeader();
@@ -256,35 +293,84 @@ test('phaseQuerySystemState limits join-time backfill to discovery-critical tabl
     await service.phaseQuerySystemState();
     t.same(
       backfillCalls,
-      [JOIN_BACKFILL_SCOPE.BLOCKING_TABLES],
-      'phaseQuerySystemState should only block on discovery-critical repair',
+      [],
+      'phaseQuerySystemState should trust the complete bootstrap snapshot instead of rereading discovery-critical tables',
     );
     const opportunisticPromise = service.startJoinOpportunisticBackfill();
     await opportunisticPromise;
 
     t.same(
       backfillCalls,
-      [
-        JOIN_BACKFILL_SCOPE.BLOCKING_TABLES,
-        JOIN_BACKFILL_SCOPE.OPPORTUNISTIC_TABLES,
-      ],
-      'join-time backfill should block on discovery-critical repair before best-effort follow-up',
+      [],
+      'snapshot-complete joins should trust bootstrap hydration plus CDC instead of rereading propagated tables again',
     );
     const infoMessages = infoLogs.map(({message}) => message);
     t.ok(
       infoMessages.some((message) =>
-        /Starting blocking join backfill/.test(message)),
-      'logs should record the blocking backfill start',
+        /Skipping blocking join backfill/.test(message)),
+      'logs should record the blocking backfill skip when the bootstrap snapshot is complete',
     );
     t.ok(
       infoMessages.some((message) =>
-        /Completed blocking join backfill/.test(message)),
-      'logs should record the blocking backfill completion',
+        /Skipping opportunistic join backfill/.test(message)),
+      'logs should record the opportunistic backfill skip when the bootstrap snapshot is complete',
+    );
+  });
+
+test('phaseQuerySystemState backfills only missing discovery-critical tables when bootstrap snapshot is incomplete',
+  async (t) => {
+    const service = new NodeJoiningService({
+      nodeId: NODE_ID,
+      nodeAddress: NODE_ADDRESS,
+      seedNodeAddress: 'ws://127.0.0.1:19090',
+      config: {
+        cdcPipelineReadinessTimeoutMs: 2000,
+      },
+    });
+    const infoLogs = [];
+    service.logger = {
+      info: (message, context) => infoLogs.push({message, context}),
+      debug() {},
+      warn() {},
+      error() {},
+    };
+
+    const systemTableCache = createFullyHydratedCache();
+    applyCommonStubs(service, systemTableCache);
+    service.systemCacheHydrated = false;
+    service.bootstrapResponse = createBootstrapResponseFromCache(
+      systemTableCache,
+      {removeTables: [SYSTEM_TABLE_NAME.SERVICE_ENDPOINTS]},
+    );
+
+    service.partitionServices = createPartitionServicesWithSubscribers();
+    service.messageGroupServices = createMessageGroupServicesWithLeader();
+
+    service.subscribeToCDCEvents = async () => {
+      service.cdcSubscriptionsActive = true;
+    };
+
+    const backfillCalls = [];
+    service.backfillPropagatedCacheTablesFromAuthoritativeState =
+      async (tableNames) => {
+        backfillCalls.push(tableNames);
+      };
+
+    await service.phaseQuerySystemState();
+
+    t.same(
+      backfillCalls,
+      [[SYSTEM_TABLE_NAME.SERVICE_ENDPOINTS]],
+      'phaseQuerySystemState should reread only the discovery-critical tables missing from the bootstrap snapshot',
     );
     t.ok(
-      infoMessages.some((message) =>
-        /Completed opportunistic join backfill/.test(message)),
-      'logs should record the opportunistic backfill completion separately',
+      infoLogs.some(({message, context}) => {
+        return /Starting blocking join backfill/.test(message) &&
+          Array.isArray(context?.tableNames) &&
+          context.tableNames.length === 1 &&
+          context.tableNames[0] === SYSTEM_TABLE_NAME.SERVICE_ENDPOINTS;
+      }),
+      'blocking backfill diagnostics should identify the missing snapshot table',
     );
   });
 
@@ -318,7 +404,10 @@ test('phaseQuerySystemState fails on blocking discovery backfill failure',
 
     service.backfillPropagatedCacheTablesFromAuthoritativeState =
       async (tableNames) => {
-        if (tableNames === JOIN_BACKFILL_SCOPE.BLOCKING_TABLES) {
+        if (Array.isArray(tableNames) &&
+            tableNames.length === JOIN_BACKFILL_SCOPE.BLOCKING_TABLES.length &&
+            tableNames.every((tableName, index) =>
+              tableName === JOIN_BACKFILL_SCOPE.BLOCKING_TABLES[index])) {
           throw new Error('synthetic blocking backfill failure');
         }
       };
@@ -358,6 +447,12 @@ test('phaseQuerySystemState tolerates opportunistic backfill failures after join
 
     const systemTableCache = createFullyHydratedCache();
     applyCommonStubs(service, systemTableCache);
+    const missingOpportunisticTable =
+      JOIN_BACKFILL_SCOPE.OPPORTUNISTIC_TABLES[0];
+    service.bootstrapResponse = createBootstrapResponseFromCache(
+      systemTableCache,
+      {removeTables: [missingOpportunisticTable]},
+    );
 
     service.partitionServices = createPartitionServicesWithSubscribers();
     service.messageGroupServices = createMessageGroupServicesWithLeader();
@@ -370,7 +465,9 @@ test('phaseQuerySystemState tolerates opportunistic backfill failures after join
     service.backfillPropagatedCacheTablesFromAuthoritativeState =
       async (tableNames) => {
         backfillCalls.push(tableNames);
-        if (tableNames === JOIN_BACKFILL_SCOPE.OPPORTUNISTIC_TABLES) {
+        if (Array.isArray(tableNames) &&
+            tableNames.length === 1 &&
+            tableNames[0] === missingOpportunisticTable) {
           throw new Error('synthetic opportunistic backfill failure');
         }
       };
@@ -381,11 +478,8 @@ test('phaseQuerySystemState tolerates opportunistic backfill failures after join
 
     t.same(
       backfillCalls,
-      [
-        JOIN_BACKFILL_SCOPE.BLOCKING_TABLES,
-        JOIN_BACKFILL_SCOPE.OPPORTUNISTIC_TABLES,
-      ],
-      'join should block on discovery-critical backfill and downgrade opportunistic failures',
+      [[missingOpportunisticTable]],
+      'join should skip blocking rereads when discovery-critical tables are covered and only reread opportunistic snapshot gaps',
     );
     t.match(
       warnLogs.map(({message}) => message),

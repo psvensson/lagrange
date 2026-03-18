@@ -52,6 +52,125 @@ test('ReplicaStateMachine uses upsert for initial services persistence',
     LoggingService.resetInstance();
   });
 
+test('ReplicaStateMachine demotes transitional persistence and skips cache waits',
+  async (t) => {
+    ConfigurationManager.resetInstance();
+    LoggingService.resetInstance();
+
+    const config = ConfigurationManager.getInstance();
+    config.initialize({});
+
+    const logging = LoggingService.getInstance();
+    logging.initialize({level: 'error'});
+
+    const calls = [];
+    const cdcIntegrationService = {
+      async upsertSystemTableRow(tableName, data, options) {
+        calls.push({type: 'upsert', tableName, data, options});
+        return {success: true};
+      },
+      async updateSystemTableRow(tableName, whereClause, data, options) {
+        calls.push({type: 'update', tableName, whereClause, data, options});
+        return {success: true};
+      },
+    };
+
+    const stateMachine = new ReplicaStateMachine({
+      nodeId: 'node-1',
+      cdcIntegrationService,
+    });
+
+    await stateMachine.transition('svc-3', ReplicaState.PENDING, {
+      partitionId: 'partition-3',
+      nodeId: 'node-1',
+      reason: 'pending',
+      serviceId: 'svc-3',
+      serviceAddress: 'node-1/partition/svc-3',
+    });
+    await stateMachine.transition('svc-3', ReplicaState.CREATING, {
+      partitionId: 'partition-3',
+      nodeId: 'node-1',
+      reason: 'creating',
+      serviceId: 'svc-3',
+    });
+
+    t.equal(calls.length, 2, 'should persist both transitions');
+    for (const call of calls) {
+      t.equal(call.options.skipCacheWait, true,
+        'replica-state persistence should not wait on cache propagation');
+      t.equal(call.options.deliveryPriority, 'background',
+        'transitional replica-state writes should use background delivery');
+      t.equal(call.options.workClass, 'background',
+        'transitional replica-state writes should use background work class');
+      t.equal(call.options.coalescingKey, 'replica-state:svc-3',
+        'transitional writes should share one canonical coalescing key');
+    }
+
+    stateMachine.clear();
+    ConfigurationManager.resetInstance();
+    LoggingService.resetInstance();
+  });
+
+test('ReplicaStateMachine keeps stable-state persistence on the critical lane',
+  async (t) => {
+    ConfigurationManager.resetInstance();
+    LoggingService.resetInstance();
+
+    const config = ConfigurationManager.getInstance();
+    config.initialize({});
+
+    const logging = LoggingService.getInstance();
+    logging.initialize({level: 'error'});
+
+    const calls = [];
+    const cdcIntegrationService = {
+      async upsertSystemTableRow(tableName, data, options) {
+        calls.push({type: 'upsert', tableName, data, options});
+        return {success: true};
+      },
+      async updateSystemTableRow(tableName, whereClause, data, options) {
+        calls.push({type: 'update', tableName, whereClause, data, options});
+        return {success: true};
+      },
+    };
+
+    const stateMachine = new ReplicaStateMachine({
+      nodeId: 'node-1',
+      cdcIntegrationService,
+    });
+
+    await stateMachine.transition('svc-4', ReplicaState.PENDING, {
+      partitionId: 'partition-4',
+      nodeId: 'node-1',
+      reason: 'pending',
+      serviceId: 'svc-4',
+      serviceAddress: 'node-1/partition/svc-4',
+    });
+    await stateMachine.transition('svc-4', ReplicaState.FAILED, {
+      partitionId: 'partition-4',
+      nodeId: 'node-1',
+      reason: 'failed',
+      serviceId: 'svc-4',
+      errorMessage: 'boom',
+    });
+
+    t.equal(calls.length, 2, 'should persist both transitions');
+    const failedUpdate = calls[1];
+    t.equal(failedUpdate.type, 'update', 'stable follow-up transition should use update');
+    t.equal(failedUpdate.options.skipCacheWait, true,
+      'stable state writes should also avoid cache-retention waits');
+    t.equal(failedUpdate.options.deliveryPriority, 'critical',
+      'stable state writes should remain critical');
+    t.equal(failedUpdate.options.workClass, 'critical',
+      'stable state writes should remain critical work');
+    t.equal(failedUpdate.options.coalescingKey, 'replica-state:svc-4',
+      'stable writes should use the canonical coalescing key');
+
+    stateMachine.clear();
+    ConfigurationManager.resetInstance();
+    LoggingService.resetInstance();
+  });
+
 test('ReplicaStateMachine uses injected clock for create and update persistence',
   async (t) => {
     ConfigurationManager.resetInstance();

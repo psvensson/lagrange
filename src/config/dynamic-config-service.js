@@ -9,6 +9,11 @@ import {LoggingService} from '../logging/logging-service.js';
 import {CDC_OPERATION, NUM, STRING, TYPEOF} from '../constants/index.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
+  CONTROL_PLANE_MUTATION_OPERATION,
+  ControlPlaneSystemTableGateway,
+} from '../control-plane/control-plane-system-table-gateway.js';
+import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
+import {
   CONFIG_DEFINITIONS,
   CONFIG_ENV,
   CONFIG_ENV_REGEX,
@@ -53,6 +58,8 @@ class DynamicConfigService extends EventEmitter {
     this.cdcIntegrationService = options.cdcIntegrationService || null;
     this.systemTableCache = options.systemTableCache || null;
     this.sqlQueryEngine = options.sqlQueryEngine || null;
+    this.controlPlaneSystemTableGateway =
+      options.controlPlaneSystemTableGateway || null;
     this.nodeId = options.nodeId || STRING.UNKNOWN;
 
     // Local cache of configuration values
@@ -85,6 +92,9 @@ class DynamicConfigService extends EventEmitter {
     }
     if (options.sqlQueryEngine) {
       this.sqlQueryEngine = options.sqlQueryEngine;
+    }
+    if (options.controlPlaneSystemTableGateway) {
+      this.controlPlaneSystemTableGateway = options.controlPlaneSystemTableGateway;
     }
     if (options.nodeId) {
       this.nodeId = options.nodeId;
@@ -130,9 +140,10 @@ class DynamicConfigService extends EventEmitter {
         definition.defaultValue;
 
       // Insert into config table
-      await this.cdcIntegrationService.insertSystemTableRow(
-        SYSTEM_TABLE_NAME.CONFIG,
-        {
+      await this.getControlPlaneSystemTableGateway().submitMutation({
+        operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
+        tableName: SYSTEM_TABLE_NAME.CONFIG,
+        row: {
           [CONFIG_TABLE_COLUMN.KEY]: key,
           [CONFIG_TABLE_COLUMN.VALUE]: this.serializeValue(
             value, definition.type,
@@ -148,7 +159,10 @@ class DynamicConfigService extends EventEmitter {
           [CONFIG_TABLE_COLUMN.UPDATED_AT]: now,
           [CONFIG_TABLE_COLUMN.CREATED_AT]: now,
         },
-      );
+      }, {
+        workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+        deliveryPriority: 'critical',
+      });
 
       seeded.push(key);
     }
@@ -221,20 +235,25 @@ class DynamicConfigService extends EventEmitter {
 
     if (existing) {
       // Update existing
-      await this.cdcIntegrationService.updateSystemTableRow(
-        SYSTEM_TABLE_NAME.CONFIG,
-        {[CONFIG_TABLE_COLUMN.KEY]: key},
-        {
+      await this.getControlPlaneSystemTableGateway().submitMutation({
+        operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+        tableName: SYSTEM_TABLE_NAME.CONFIG,
+        whereClause: {[CONFIG_TABLE_COLUMN.KEY]: key},
+        data: {
           [CONFIG_TABLE_COLUMN.VALUE]: this.serializeValue(value, valueType),
           [CONFIG_TABLE_COLUMN.UPDATED_BY]: updatedBy,
           [CONFIG_TABLE_COLUMN.UPDATED_AT]: now,
         },
-      );
+      }, {
+        workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+        deliveryPriority: 'critical',
+      });
     } else {
       // Insert new
-      await this.cdcIntegrationService.insertSystemTableRow(
-        SYSTEM_TABLE_NAME.CONFIG,
-        {
+      await this.getControlPlaneSystemTableGateway().submitMutation({
+        operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
+        tableName: SYSTEM_TABLE_NAME.CONFIG,
+        row: {
           [CONFIG_TABLE_COLUMN.KEY]: key,
           [CONFIG_TABLE_COLUMN.VALUE]: this.serializeValue(value, valueType),
           [CONFIG_TABLE_COLUMN.VALUE_TYPE]: valueType,
@@ -249,7 +268,10 @@ class DynamicConfigService extends EventEmitter {
           [CONFIG_TABLE_COLUMN.UPDATED_AT]: now,
           [CONFIG_TABLE_COLUMN.CREATED_AT]: now,
         },
-      );
+      }, {
+        workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+        deliveryPriority: 'critical',
+      });
     }
 
     this.stats.writes++;
@@ -277,9 +299,11 @@ class DynamicConfigService extends EventEmitter {
   async getAll() {
     const result = {};
 
-    if (this.sqlQueryEngine) {
-      const queryResult = await this.sqlQueryEngine.executeQuery(
-        CONFIG_SELECT_ALL_SQL, [],
+    if (this.canReadConfig()) {
+      const queryResult = await this.getControlPlaneSystemTableGateway().readRows(
+        SYSTEM_TABLE_NAME.CONFIG,
+        CONFIG_SELECT_ALL_SQL,
+        [],
       );
       const configs = queryResult.rows || [];
       for (const config of configs) {
@@ -521,9 +545,11 @@ class DynamicConfigService extends EventEmitter {
    * @private
    */
   async getConfigFromTable(key) {
-    if (this.sqlQueryEngine) {
-      const result = await this.sqlQueryEngine.executeQuery(
-        CONFIG_SELECT_BY_KEY_SQL, [key],
+    if (this.canReadConfig()) {
+      const result = await this.getControlPlaneSystemTableGateway().readRows(
+        SYSTEM_TABLE_NAME.CONFIG,
+        CONFIG_SELECT_BY_KEY_SQL,
+        [key],
       );
       return result.rows?.[0] || null;
     }
@@ -663,6 +689,42 @@ class DynamicConfigService extends EventEmitter {
    */
   isInitialized() {
     return this.initialized;
+  }
+
+  canReadConfig() {
+    return Boolean(
+      this.controlPlaneSystemTableGateway ||
+      this.sqlQueryEngine ||
+      this.cdcIntegrationService,
+    );
+  }
+
+  getControlPlaneSystemTableGateway() {
+    if (this.controlPlaneSystemTableGateway) {
+      if (!this.controlPlaneSystemTableGateway.cdcIntegrationService &&
+          this.cdcIntegrationService) {
+        this.controlPlaneSystemTableGateway
+          .setCdcIntegrationService(this.cdcIntegrationService);
+      }
+      if (!this.controlPlaneSystemTableGateway.sqlQueryEngine &&
+          this.sqlQueryEngine) {
+        this.controlPlaneSystemTableGateway.setSqlQueryEngine(this.sqlQueryEngine);
+      }
+      if (!this.controlPlaneSystemTableGateway.systemTableCache &&
+          this.systemTableCache) {
+        this.controlPlaneSystemTableGateway.setSystemTableCache(
+          this.systemTableCache,
+        );
+      }
+      return this.controlPlaneSystemTableGateway;
+    }
+    this.controlPlaneSystemTableGateway = new ControlPlaneSystemTableGateway({
+      nodeId: this.nodeId,
+      cdcIntegrationService: this.cdcIntegrationService,
+      sqlQueryEngine: this.sqlQueryEngine,
+      systemTableCache: this.systemTableCache,
+    });
+    return this.controlPlaneSystemTableGateway;
   }
 
   /**

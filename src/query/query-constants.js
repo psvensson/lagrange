@@ -189,6 +189,8 @@ const QUERY_LOG_MSG = Object.freeze({
   EXECUTING_DISTRIBUTED_SELECT: 'Executing distributed SELECT',
   EXECUTING_CROSS_PARTITION_JOIN: 'Executing cross-partition JOIN',
   EXECUTING_SQL_QUERY: 'Executing SQL query',
+  QUERY_ADMISSION_DEFERRED: 'Query admission deferred',
+  QUERY_ADMISSION_REJECTED: 'Query admission rejected',
   QUERY_EXECUTION_FAILED: 'Query execution failed',
   RESOLVED_PARTITIONS_SELECT: 'Resolved partitions for SELECT',
   ROUTING_INSERT: 'Routing INSERT to partitions',

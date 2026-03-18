@@ -5,9 +5,9 @@
  * Bug: When a second node joins the cluster, the seed node crashes
  * with: "UNIQUE constraint failed: nodes.node_id"
  *
- * Fix: Node admission routes through sendControlPlaneNodeStateUpdate
- * (owner path) and endpoints use upsertSystemTableRow (INSERT OR
- * REPLACE). Both paths are idempotent.
+ * Fix: Node registration owns canonical nodes-row creation directly
+ * and endpoints use upsertSystemTableRow (INSERT OR REPLACE). Both
+ * paths are idempotent.
  */
 
 import {test} from '../../src/test-helpers/tap.js';
@@ -16,18 +16,17 @@ import {TABLES} from '../../src/constants/index.js';
 
 /**
  * Wire a NodeJoiningService so registerNodeInCluster can
- * execute without a live cluster. Captures node-state updates
- * and endpoint upserts for assertion.
+ * execute without a live cluster. Captures nodes-row and endpoint
+ * upserts for assertion.
  *
  * @param {Object} opts
  * @param {string} opts.nodeId
  * @param {string} opts.nodeAddress
- * @param {Array} opts.nodeStateUpdates - Accumulator.
  * @param {Array} opts.upsertCalls - Accumulator.
  * @return {NodeJoiningService}
  */
 function createWiredService({
-  nodeId, nodeAddress, nodeStateUpdates, upsertCalls,
+  nodeId, nodeAddress, upsertCalls,
 }) {
   const mockCDCService = {
     sqlQueryEngine: {},
@@ -43,8 +42,8 @@ function createWiredService({
     seedNodeAddress: 'ws://seed:8000',
   });
   service.cdcIntegrationService = mockCDCService;
-  service.sendControlPlaneNodeStateUpdate = async (options) => {
-    nodeStateUpdates.push(options);
+  service.sendControlPlaneNodeStateUpdate = async () => {
+    throw new Error('legacy node-state owner path should not be used');
   };
 
   return service;
@@ -54,21 +53,21 @@ test(
   'registerNodeInCluster() uses idempotent owner paths ' +
   'for node and endpoint writes',
   async (t) => {
-    const nodeStateUpdates = [];
     const upsertCalls = [];
     const service = createWiredService({
       nodeId: 'test-node-idempotent',
       nodeAddress: 'ws://localhost:9000',
-      nodeStateUpdates,
       upsertCalls,
     });
 
     await service.registerNodeInCluster();
 
+    const nodeUpsert = upsertCalls.find(
+      (c) => c.tableName === TABLES.NODES,
+    );
     t.equal(
-      nodeStateUpdates.length, 1,
-      'node admission should route through ' +
-      'sendControlPlaneNodeStateUpdate owner path',
+      Boolean(nodeUpsert), true,
+      'node admission should create the canonical nodes row directly',
     );
 
     const endpointUpsert = upsertCalls.find(
@@ -86,22 +85,22 @@ test(
   'registerNodeInCluster() does not fail on ' +
   'duplicate node_id (idempotent re-registration)',
   async (t) => {
-    const nodeStateUpdates = [];
     const upsertCalls = [];
     const service = createWiredService({
       nodeId: 'duplicate-node-test',
       nodeAddress: 'ws://localhost:9002',
-      nodeStateUpdates,
       upsertCalls,
     });
 
     await service.registerNodeInCluster();
     await service.registerNodeInCluster();
 
+    const nodeUpserts = upsertCalls.filter(
+      (c) => c.tableName === TABLES.NODES,
+    );
     t.equal(
-      nodeStateUpdates.length, 2,
-      'both registrations should route through ' +
-      'the idempotent owner path',
+      nodeUpserts.length, 2,
+      'both registrations should create the canonical nodes row idempotently',
     );
 
     const endpointUpserts = upsertCalls.filter(

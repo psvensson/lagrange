@@ -29,6 +29,10 @@ const DISPATCH_LOG_MSG = Object.freeze({
     'Skipped duplicate ready-trigger retry',
   NODE_STATE_UPDATE_SKIPPED:
     'Skipped stale node-state update',
+  NODE_STATE_UPDATE_DEFERRED:
+    'Deferred node-state update while control-plane path recovers',
+  NODE_STATE_UPDATE_DEFERRED_RETRY:
+    'Re-enqueued deferred node-state update',
   ENQUEUE_OPERATION_DISPATCH:
     'Enqueued operation for dispatch reconcile',
   ENQUEUE_NODE_STATE_UPDATE:
@@ -54,8 +58,16 @@ const DISPATCH_ERROR_MSG = Object.freeze({
     'ReplicaDispatchService requires systemTableCache.getAll',
   MISSING_COORDINATOR:
     'ReplicaDispatchService requires rebalanceCoordinator',
+  METADATA_FORWARD_PATH_UNAVAILABLE:
+    'ReplicaDispatchService requires canonical metadata ingress forwarding support',
+  NODE_ROW_MISSING:
+    'ReplicaDispatchService cannot apply NODE_STATE_UPDATE because the node row is missing',
   NOT_INITIALIZED:
     'ReplicaDispatchService must be initialized before start',
+});
+
+const DISPATCH_DEFAULT = Object.freeze({
+  NODE_STATE_UPDATE_RETRY_AFTER_MS: 250,
 });
 
 const DISPATCH_EVENT = Object.freeze({
@@ -68,6 +80,7 @@ export {
   DISPATCH_STATE,
   DISPATCH_LOG_MSG,
   DISPATCH_ERROR_MSG,
+  DISPATCH_DEFAULT,
   DISPATCH_EVENT,
   DISPATCH_QUEUE_NAME,
 };

@@ -70,7 +70,10 @@ function createPartitionRecord(partitionId, overrides = {}) {
   return {
     [COLUMN.PARTITION_ID]: partitionId,
     [COLUMN.TABLE_ID]: overrides.tableId || `table-${partitionId}`,
-    [COLUMN.LEADER_NODE_ID]: overrides.leaderNodeId || null,
+    [COLUMN.LEADER_NODE_ID]:
+      Object.prototype.hasOwnProperty.call(overrides, 'leaderNodeId') ?
+        overrides.leaderNodeId :
+        'node-1',
     ...overrides,
   };
 }
@@ -84,7 +87,10 @@ function createPartitionRecord(partitionId, overrides = {}) {
 function createMessageGroupRecord(groupId, overrides = {}) {
   return {
     [COLUMN.GROUP_ID]: groupId,
-    [COLUMN.LEADER_NODE_ID]: overrides.leaderNodeId || null,
+    [COLUMN.LEADER_NODE_ID]:
+      Object.prototype.hasOwnProperty.call(overrides, 'leaderNodeId') ?
+        overrides.leaderNodeId :
+        'node-1',
     ...overrides,
   };
 }
@@ -184,6 +190,34 @@ test('getMissingSystemServiceLeaders - returns empty arrays when all partition l
       'missingPartitionLeaderNodes should be empty');
   });
 
+test(
+  'getMissingSystemServiceLeaders - treats canonical leader_node_id plus matching service as ready',
+  async (t) => {
+    const cache = createMockCache({
+      partitions: [
+        createPartitionRecord('p1', {leaderNodeId: 'node-1'}),
+      ],
+      services: [
+        {
+          [COLUMN.SERVICE_ID]: 'p1-r1',
+          [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
+          [COLUMN.PARTITION_ID]: 'p1',
+          [COLUMN.RAFT_ROLE]: RAFT_ROLE.FOLLOWER,
+          [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+          [COLUMN.NODE_ID]: 'node-1',
+          [COLUMN.ADDRESS]: 'ws://node1:8080',
+        },
+      ],
+    });
+
+    const result = getMissingSystemServiceLeaders(cache);
+
+    t.same(result.missingPartitionLeaders, [], 'canonical owner metadata should satisfy leader presence');
+    t.same(result.missingPartitionLeaderNodes, [], 'canonical leader_node_id should satisfy node metadata');
+    t.same(result.missingPartitionLeaderAddresses, [], 'matching service address should satisfy routing metadata');
+  },
+);
+
 test('getMissingSystemServiceLeaders - returns empty arrays when all message group leaders present',
   async (t) => {
     const cache = createMockCache({
@@ -211,7 +245,7 @@ test('getMissingSystemServiceLeaders - empty arrays when all leaders have addres
     const cache = createMockCache({
       partitions: [
         createPartitionRecord('p1'),
-        createPartitionRecord('p2'),
+        createPartitionRecord('p2', {leaderNodeId: 'node-2'}),
       ],
       messageGroups: [
         createMessageGroupRecord('mg1'),
@@ -278,7 +312,7 @@ test('getMissingSystemServiceLeaders - identifies multiple missing partition lea
       'Should identify all missing partition leaders');
   });
 
-test('getMissingSystemServiceLeaders - does not count follower as leader', async (t) => {
+test('getMissingSystemServiceLeaders - requires the service row to match the owner leader node', async (t) => {
   const cache = createMockCache({
     partitions: [
       createPartitionRecord('p1'),
@@ -288,9 +322,9 @@ test('getMissingSystemServiceLeaders - does not count follower as leader', async
         [COLUMN.SERVICE_ID]: 'p1-follower',
         [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
         [COLUMN.PARTITION_ID]: 'p1',
-        [COLUMN.RAFT_ROLE]: RAFT_ROLE.FOLLOWER, // Not a leader
+        [COLUMN.RAFT_ROLE]: RAFT_ROLE.FOLLOWER,
         [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
-        [COLUMN.NODE_ID]: 'node-1',
+        [COLUMN.NODE_ID]: 'node-2',
         [COLUMN.ADDRESS]: 'ws://127.0.0.1:8080',
       },
     ],
@@ -299,7 +333,7 @@ test('getMissingSystemServiceLeaders - does not count follower as leader', async
   const result = getMissingSystemServiceLeaders(cache);
 
   t.same(result.missingPartitionLeaders, ['p1'],
-    'Should not count follower as leader');
+    'Should not count a service on the wrong node as authoritative');
 });
 
 test('getMissingSystemServiceLeaders - does not count inactive leader', async (t) => {
@@ -412,10 +446,10 @@ test('getMissingSystemServiceLeaders - identifies message group leaders with mis
       'Should identify mg2 as missing address');
   });
 
-test('getMissingSystemServiceLeaders - identifies leaders with missing node_id', async (t) => {
+test('getMissingSystemServiceLeaders - requires canonical node ownership for leader visibility', async (t) => {
   const cache = createMockCache({
     partitions: [
-      createPartitionRecord('p1'),
+      createPartitionRecord('p1', {leaderNodeId: 'node-1'}),
     ],
     services: [
       createPartitionLeaderService('p1', {nodeId: null, address: 'ws://node1:8080'}),
@@ -424,15 +458,15 @@ test('getMissingSystemServiceLeaders - identifies leaders with missing node_id',
 
   const result = getMissingSystemServiceLeaders(cache);
 
-  t.same(result.missingPartitionLeaderNodes, ['p1'],
-    'Should identify p1 as missing node_id');
+  t.same(result.missingPartitionLeaders, ['p1'],
+    'Should identify p1 as missing because no service row matches the owner node');
 });
 
 test('getMissingSystemServiceLeaders - handles mixed missing metadata', async (t) => {
   const cache = createMockCache({
     partitions: [
       createPartitionRecord('p1'),
-      createPartitionRecord('p2'),
+      createPartitionRecord('p2', {leaderNodeId: 'node-2'}),
       createPartitionRecord('p3'),
     ],
     messageGroups: [
@@ -444,7 +478,7 @@ test('getMissingSystemServiceLeaders - handles mixed missing metadata', async (t
       createPartitionLeaderService('p2', {address: null, nodeId: 'node-2'}), // Missing address
       // p3 has no leader service at all
       createMessageGroupLeaderService('mg1', {address: 'ws://node1:8080', nodeId: 'node-1'}),
-      createMessageGroupLeaderService('mg2', {address: null, nodeId: null}), // Missing both
+      createMessageGroupLeaderService('mg2', {address: null, nodeId: 'node-1'}), // Missing address only
     ],
   });
 
@@ -454,7 +488,7 @@ test('getMissingSystemServiceLeaders - handles mixed missing metadata', async (t
   t.same(result.missingPartitionLeaderAddresses, ['p2'], 'p2 leader missing address');
   t.same(result.missingMessageGroupLeaders, [], 'All message groups have leaders');
   t.same(result.missingMessageGroupLeaderAddresses, ['mg2'], 'mg2 leader missing address');
-  t.same(result.missingMessageGroupLeaderNodes, ['mg2'], 'mg2 leader missing node_id');
+  t.same(result.missingMessageGroupLeaderNodes, [], 'owner row already provides canonical leader node');
 });
 
 // ============================================================================

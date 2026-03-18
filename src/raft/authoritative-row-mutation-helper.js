@@ -1,4 +1,9 @@
 import {TIME_MS, TYPEOF} from '../constants/index.js';
+import {
+  CONTROL_PLANE_MUTATION_OPERATION,
+  CONTROL_PLANE_MUTATION_OUTCOME,
+  ControlPlaneSystemTableGateway,
+} from '../control-plane/control-plane-system-table-gateway.js';
 
 const CACHE_VISIBILITY_ERROR_FRAGMENT = 'Cache update not observed';
 const AUTHORITATIVE_ROW_MUTATION_REASON = Object.freeze({
@@ -6,10 +11,12 @@ const AUTHORITATIVE_ROW_MUTATION_REASON = Object.freeze({
   AUTHORITATIVE_WRITE_FAILED: 'authoritative-write-failed',
   CACHE_VISIBILITY_GAP_RECOVERED: 'cache-visibility-gap-recovered',
   CACHE_VISIBILITY_GAP_UNRECOVERED: 'cache-visibility-gap-unrecovered',
+  DEFERRED: 'deferred',
   IN_FLIGHT: 'in-flight',
   NOOP: 'noop',
   OBSERVED_STATE_CHANGED: 'observed-state-changed',
   OWNER_NOT_READY: 'owner-not-ready',
+  REJECTED: 'rejected',
   SKIPPED: 'skipped',
 });
 const AUTHORITATIVE_ROW_MUTATION_ERROR_MSG = Object.freeze({
@@ -20,6 +27,10 @@ const AUTHORITATIVE_ROW_MUTATION_ERROR_MSG = Object.freeze({
   MISSING_READ_VALUE_FROM_CACHE:
     'AuthoritativeRowMutationHelper requires readValueFromCache',
   MISSING_TABLE_NAME: 'AuthoritativeRowMutationHelper requires tableName',
+});
+const AUTHORITATIVE_ROW_MUTATION_RETRY = Object.freeze({
+  BACKOFF_MULTIPLIER: 2,
+  MAX_DELAY_MS: TIME_MS.SECOND * 30,
 });
 
 function extractAffectedRows(result) {
@@ -37,6 +48,22 @@ function classifyMutationFailure(error) {
   return AUTHORITATIVE_ROW_MUTATION_REASON.AUTHORITATIVE_WRITE_FAILED;
 }
 
+function classifyGatewayMutationOutcome(result) {
+  if (result?.outcome === CONTROL_PLANE_MUTATION_OUTCOME.DEFERRED) {
+    return AUTHORITATIVE_ROW_MUTATION_REASON.DEFERRED;
+  }
+  if (result?.outcome === CONTROL_PLANE_MUTATION_OUTCOME.REJECTED) {
+    return AUTHORITATIVE_ROW_MUTATION_REASON.REJECTED;
+  }
+  if (result?.outcome === CONTROL_PLANE_MUTATION_OUTCOME.OWNER_NOT_READY) {
+    return AUTHORITATIVE_ROW_MUTATION_REASON.OWNER_NOT_READY;
+  }
+  if (result?.outcome === CONTROL_PLANE_MUTATION_OUTCOME.OBSERVED_STATE_CHANGED) {
+    return AUTHORITATIVE_ROW_MUTATION_REASON.OBSERVED_STATE_CHANGED;
+  }
+  return null;
+}
+
 class AuthoritativeRowMutationHelper {
   constructor(options = {}) {
     const {
@@ -50,7 +77,13 @@ class AuthoritativeRowMutationHelper {
       isWriteReady = () => true,
       prepareFlush = () => ({skip: false}),
       retryDelayMs = TIME_MS.SECOND,
+      retryBackoffMultiplier =
+        AUTHORITATIVE_ROW_MUTATION_RETRY.BACKOFF_MULTIPLIER,
+      maxRetryDelayMs = AUTHORITATIVE_ROW_MUTATION_RETRY.MAX_DELAY_MS,
       cdcIntegrationService = null,
+      controlPlaneSystemTableGateway = null,
+      nodeId = null,
+      messageRouter = null,
       systemTableCache = null,
       onAsyncError = () => {},
       now = () => Date.now(),
@@ -87,7 +120,18 @@ class AuthoritativeRowMutationHelper {
     this.isWriteReady = isWriteReady;
     this.prepareFlush = prepareFlush;
     this.retryDelayMs = retryDelayMs;
+    this.retryBackoffMultiplier = Number.isFinite(retryBackoffMultiplier) &&
+      retryBackoffMultiplier >= 1 ?
+      retryBackoffMultiplier :
+      AUTHORITATIVE_ROW_MUTATION_RETRY.BACKOFF_MULTIPLIER;
+    this.maxRetryDelayMs = Number.isFinite(maxRetryDelayMs) &&
+      maxRetryDelayMs > 0 ?
+      Math.floor(maxRetryDelayMs) :
+      AUTHORITATIVE_ROW_MUTATION_RETRY.MAX_DELAY_MS;
     this.cdcIntegrationService = cdcIntegrationService;
+    this.controlPlaneSystemTableGateway = controlPlaneSystemTableGateway;
+    this.nodeId = nodeId;
+    this.messageRouter = messageRouter;
     this.systemTableCache = systemTableCache;
     this.onAsyncError = onAsyncError;
     this.now = now;
@@ -98,6 +142,7 @@ class AuthoritativeRowMutationHelper {
     this.persistedValue = null;
     this.inFlight = false;
     this.retryTimer = null;
+    this.retryAttemptCount = 0;
     this.followUpFlushScheduled = false;
     this.shuttingDown = false;
   }
@@ -108,6 +153,16 @@ class AuthoritativeRowMutationHelper {
 
   setCdcIntegrationService(cdcIntegrationService) {
     this.cdcIntegrationService = cdcIntegrationService;
+    if (this.controlPlaneSystemTableGateway &&
+        !this.controlPlaneSystemTableGateway.cdcIntegrationService &&
+        cdcIntegrationService) {
+      this.controlPlaneSystemTableGateway
+        .setCdcIntegrationService(cdcIntegrationService);
+    }
+  }
+
+  setControlPlaneSystemTableGateway(controlPlaneSystemTableGateway) {
+    this.controlPlaneSystemTableGateway = controlPlaneSystemTableGateway || null;
   }
 
   queue(value) {
@@ -170,6 +225,9 @@ class AuthoritativeRowMutationHelper {
     }
 
     if (prepareResult.skip) {
+      if (!prepareResult.clearPending && prepareResult.retry === true) {
+        this.scheduleRetry(prepareResult.retryDelayMs);
+      }
       return this.buildResult({
         cacheVisible: this.pendingValue === null,
         recoveredFromCacheGap,
@@ -180,6 +238,10 @@ class AuthoritativeRowMutationHelper {
 
     if (!this.cdcIntegrationService || !this.pendingValue ||
       this.pendingValue === this.persistedValue) {
+      if (this.pendingValue === null ||
+          this.pendingValue === this.persistedValue) {
+        this.retryAttemptCount = 0;
+      }
       return this.buildResult({
         cacheVisible: this.pendingValue === null,
         recoveredFromCacheGap,
@@ -226,14 +288,28 @@ class AuthoritativeRowMutationHelper {
     };
 
     try {
-      const partitionResult = await this.cdcIntegrationService.updateSystemTableRow(
-        this.tableName,
-        whereClause,
-        updateData,
-        writeOptions,
+      const partitionResult = await this.getControlPlaneSystemTableGateway()
+        .submitMutation({
+          operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+          tableName: this.tableName,
+          whereClause,
+          data: updateData,
+        }, writeOptions);
+      const gatewayFailureReason = classifyGatewayMutationOutcome(
+        partitionResult,
       );
+      if (partitionResult?.success === false && gatewayFailureReason) {
+        this.scheduleRetry(partitionResult?.retryAfterMs);
+        return this.buildResult({
+          attempts: 1,
+          partitionResult,
+          reason: gatewayFailureReason,
+        });
+      }
       const affectedRows = extractAffectedRows(partitionResult);
-      if (affectedRows !== null && affectedRows <= 0) {
+      if (gatewayFailureReason === AUTHORITATIVE_ROW_MUTATION_REASON
+        .OBSERVED_STATE_CHANGED ||
+        (affectedRows !== null && affectedRows <= 0)) {
         this.scheduleRetry();
         return this.buildResult({
           attempts: 1,
@@ -247,6 +323,7 @@ class AuthoritativeRowMutationHelper {
         this.pendingValue = null;
       }
       writeSucceeded = true;
+      this.retryAttemptCount = 0;
 
       return this.buildResult({
         applied: true,
@@ -264,7 +341,7 @@ class AuthoritativeRowMutationHelper {
       });
       error.mutationResult = mutationResult;
       if (!this.shuttingDown) {
-        this.scheduleRetry();
+        this.scheduleRetry(error?.retryAfterMs);
       }
       throw error;
     } finally {
@@ -278,17 +355,39 @@ class AuthoritativeRowMutationHelper {
     }
   }
 
-  scheduleRetry() {
+  scheduleRetry(delayMs = null) {
     if (this.shuttingDown || this.retryTimer) {
       return;
     }
 
-    this.retryTimer = this.setTimeoutFn(() => {
+    const boundedDelayMs = this.resolveRetryDelayMs(delayMs);
+    this.retryAttemptCount += 1;
+    this.retryTimer = this.setTimeoutFn(async () => {
       this.retryTimer = null;
-      this.flush().catch((error) => {
+      await this.flush().catch((error) => {
         this.onAsyncError(error, {value: this.pendingValue, retry: true});
       });
-    }, this.retryDelayMs);
+    }, boundedDelayMs);
+  }
+
+  resolveRetryDelayMs(delayMs = null) {
+    const explicitDelayMs = Number.isFinite(delayMs) && delayMs > 0 ?
+      Math.floor(delayMs) :
+      0;
+    const baseDelayMs = Number.isFinite(this.retryDelayMs) &&
+      this.retryDelayMs > 0 ?
+      Math.floor(this.retryDelayMs) :
+      TIME_MS.SECOND;
+    const backoffDelayMs = Math.min(
+      this.maxRetryDelayMs,
+      Math.floor(
+        baseDelayMs * (this.retryBackoffMultiplier ** this.retryAttemptCount),
+      ),
+    );
+    return Math.min(
+      this.maxRetryDelayMs,
+      Math.max(backoffDelayMs, explicitDelayMs),
+    );
   }
 
   scheduleFollowUpFlush() {
@@ -318,12 +417,14 @@ class AuthoritativeRowMutationHelper {
     if (!this.retryTimer) {
       this.followUpFlushScheduled = false;
       this.pendingValue = null;
+      this.retryAttemptCount = 0;
       return;
     }
     this.clearTimeoutFn(this.retryTimer);
     this.retryTimer = null;
     this.followUpFlushScheduled = false;
     this.pendingValue = null;
+    this.retryAttemptCount = 0;
   }
 
   buildResult(overrides = {}) {
@@ -336,6 +437,31 @@ class AuthoritativeRowMutationHelper {
       reason: AUTHORITATIVE_ROW_MUTATION_REASON.NOOP,
       ...overrides,
     };
+  }
+
+  getControlPlaneSystemTableGateway() {
+    if (this.controlPlaneSystemTableGateway) {
+      if (typeof this.controlPlaneSystemTableGateway
+        ?.setCdcIntegrationService === TYPEOF.FUNCTION &&
+          !this.controlPlaneSystemTableGateway.cdcIntegrationService &&
+          this.cdcIntegrationService) {
+        this.controlPlaneSystemTableGateway
+          .setCdcIntegrationService(this.cdcIntegrationService);
+      }
+      if (typeof this.controlPlaneSystemTableGateway
+        ?.setMessageRouter === TYPEOF.FUNCTION &&
+          !this.controlPlaneSystemTableGateway.messageRouter &&
+          this.messageRouter) {
+        this.controlPlaneSystemTableGateway.setMessageRouter(this.messageRouter);
+      }
+      return this.controlPlaneSystemTableGateway;
+    }
+    this.controlPlaneSystemTableGateway = new ControlPlaneSystemTableGateway({
+      nodeId: this.nodeId,
+      cdcIntegrationService: this.cdcIntegrationService,
+      messageRouter: this.messageRouter,
+    });
+    return this.controlPlaneSystemTableGateway;
   }
 }
 

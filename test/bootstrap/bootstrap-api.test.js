@@ -101,6 +101,42 @@ test('BootstrapAPI - health endpoint', async (t) => {
   await api.shutdown();
 });
 
+test('BootstrapAPI - move-assignment sweep only starts on the lifecycle owner',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const joinerApi = new BootstrapAPI({
+      seedNodeId: 'joiner-node-1',
+      seedNodeAddress: 'ws://localhost:8081',
+      systemTableCache: createEmptySystemTableCache(),
+      ownsMoveReplicaAssignmentLifecycle: false,
+    });
+
+    joinerApi.startMoveReplicaAssignmentSweep();
+    t.equal(
+      joinerApi.moveReplicaAssignmentSweepTimer,
+      null,
+      'joiner-local bootstrap API should not start sweeping seed-owned move assignments',
+    );
+
+    const seedApi = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: createEmptySystemTableCache(),
+      ownsMoveReplicaAssignmentLifecycle: true,
+      moveReplicaAssignmentSweepIntervalMs: 1000,
+    });
+
+    seedApi.startMoveReplicaAssignmentSweep();
+    t.ok(
+      seedApi.moveReplicaAssignmentSweepTimer,
+      'seed-side bootstrap API should start the move-assignment sweep timer',
+    );
+
+    await joinerApi.shutdown();
+    await seedApi.shutdown();
+  });
+
 test('BootstrapAPI - health reports initializing before SQL engine is ready', async (t) => {
   initializeTestEnvironment();
 
@@ -177,6 +213,178 @@ test('BootstrapAPI - setSqlQueryEngine propagates to current partition services'
       sqlQueryEngine,
       'partition services should receive the exact engine instance',
     );
+  });
+
+test('BootstrapAPI - bootstrap control-plane queries use the canonical gateway with shared admission policy',
+  async (t) => {
+    initializeTestEnvironment();
+
+    let capturedSql = null;
+    let capturedParams = null;
+    let capturedOptions = null;
+    const controlPlaneSystemTableGateway = {
+      async executeQuery(sql, params, options) {
+        capturedSql = sql;
+        capturedParams = params;
+        capturedOptions = options;
+        return {success: true, rows: []};
+      },
+    };
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: createEmptySystemTableCache(),
+      controlPlaneSystemTableGateway,
+      bootstrapAdmissionRetryAfterMs: 375,
+    });
+
+    const result = await api.executeBootstrapControlPlaneQuery(
+      'SELECT * FROM services WHERE service_id = ?',
+      ['svc-1'],
+    );
+
+    t.same(result, {success: true, rows: []},
+      'gateway result should be returned unchanged');
+    t.equal(capturedSql, 'SELECT * FROM services WHERE service_id = ?',
+      'bootstrap queries should execute through the gateway');
+    t.same(capturedParams, ['svc-1'],
+      'bootstrap queries should preserve parameters');
+    t.equal(capturedOptions.owner, 'bootstrap-api',
+      'bootstrap gateway queries should identify the bootstrap owner');
+    t.equal(capturedOptions.workClass, 'interactive',
+      'bootstrap gateway queries should be admission-controlled instead of bypassing pressure');
+    t.equal(capturedOptions.deliveryPriority, 'critical',
+      'bootstrap gateway queries should still use critical transport delivery');
+    t.equal(capturedOptions.enforcePressureAdmission, true,
+      'bootstrap gateway queries should enforce shared pressure admission');
+    t.equal(capturedOptions.allowPressureDefer, true,
+      'bootstrap gateway queries should defer under pressure instead of failing deep in the stack');
+    t.equal(capturedOptions.allowPressureDegrade, false,
+      'bootstrap gateway writes should not silently degrade');
+    t.equal(capturedOptions.pressureRetryAfterMs, 375,
+      'bootstrap gateway queries should propagate retry hints');
+    t.equal(capturedOptions.routingReadinessDimension, 'repairEligible',
+      'bootstrap gateway queries should keep repair-eligible routing semantics');
+  });
+
+test('BootstrapAPI - bootstrap control-plane mutations use the canonical gateway with shared admission policy',
+  async (t) => {
+    initializeTestEnvironment();
+
+    let capturedMutation = null;
+    let capturedOptions = null;
+    const controlPlaneSystemTableGateway = {
+      async submitMutation(mutation, options) {
+        capturedMutation = mutation;
+        capturedOptions = options;
+        return {success: true, outcome: 'applied'};
+      },
+    };
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: createEmptySystemTableCache(),
+      controlPlaneSystemTableGateway,
+      bootstrapAdmissionRetryAfterMs: 375,
+    });
+
+    const result = await api.executeBootstrapControlPlaneMutation({
+      operation: 'upsert',
+      tableName: TABLES.SERVICES,
+      row: {
+        service_id: 'svc-1',
+        service_type: SERVICE_TYPE.MESSAGE_GROUP,
+        node_id: 'seed-node-1',
+      },
+    });
+
+    t.same(result, {success: true, outcome: 'applied'},
+      'gateway mutation result should be returned unchanged');
+    t.same(capturedMutation, {
+      operation: 'upsert',
+      tableName: TABLES.SERVICES,
+      row: {
+        service_id: 'svc-1',
+        service_type: SERVICE_TYPE.MESSAGE_GROUP,
+        node_id: 'seed-node-1',
+      },
+    }, 'bootstrap mutations should execute through the gateway');
+    t.equal(capturedOptions.owner, 'bootstrap-api',
+      'bootstrap gateway mutations should identify the bootstrap owner');
+    t.equal(capturedOptions.workClass, 'interactive',
+      'bootstrap gateway mutations should remain admission-controlled');
+    t.equal(capturedOptions.deliveryPriority, 'critical',
+      'bootstrap gateway mutations should still use critical delivery');
+    t.equal(capturedOptions.allowPressureDefer, true,
+      'bootstrap gateway mutations should defer under pressure');
+    t.equal(capturedOptions.allowPressureDegrade, false,
+      'bootstrap gateway mutations should not silently degrade');
+    t.equal(capturedOptions.pressureRetryAfterMs, 375,
+      'bootstrap gateway mutations should propagate retry hints');
+    t.equal(capturedOptions.routingReadinessDimension, 'repairEligible',
+      'bootstrap gateway mutations should keep repair-eligible routing semantics');
+  });
+
+test('BootstrapAPI - register-service returns retryable 503 when the control-plane gateway defers',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: createEmptySystemTableCache(),
+      sqlQueryEngine: {executeQuery: async () => ({success: true})},
+      controlPlaneSystemTableGateway: {
+        async submitMutation() {
+          return {
+            success: false,
+            error: 'Distributed operation failed due to participant failures',
+            errorCode: 'CONTROL_PLANE_PRESSURE_DEGRADED',
+            pressureAction: 'defer',
+            pressureReason: 'transport_backpressure',
+            retryAfterMs: 250,
+            tableName: TABLES.SERVICES,
+            pressureSummary: {
+              backpressured: true,
+            },
+          };
+        },
+        async executeQuery() {
+          return {success: true, rows: []};
+        },
+      },
+    });
+
+    await api.initialize(0, {listen: false});
+
+    const response = await api.getFastify().inject({
+      method: 'POST',
+      url: '/register-service',
+      payload: {
+        service_id: 'mg-1-r1',
+        service_type: SERVICE_TYPE.MESSAGE_GROUP,
+        node_id: 'joiner-node-1',
+        group_id: 'mg-1',
+        replica_id: 'mg-1-r1',
+      },
+    });
+
+    t.equal(response.statusCode, 503,
+      'register-service should surface a retryable response when the control-plane query path defers');
+    const body = JSON.parse(response.body);
+    t.equal(body.success, false,
+      'register-service should fail closed under shared-pressure deferral');
+    t.equal(body.code, 'CONTROL_PLANE_PRESSURE_DEGRADED',
+      'register-service should propagate the typed gateway error code');
+    t.equal(body.retryAfterMs, 250,
+      'register-service should expose the retry hint from the gateway');
+    t.equal(
+      body.error,
+      'Distributed operation failed due to participant failures',
+      'register-service should preserve the canonical failure message',
+    );
+
+    await api.shutdown();
   });
 
 test('BootstrapAPI - keeps legacy /health available while readiness remains blocked',
@@ -475,6 +683,83 @@ test('BootstrapAPI - readyz still blocks missing partition leader metadata', asy
   await api.shutdown();
 });
 
+test('BootstrapAPI - readyz tolerates non-traffic control-plane partition lag',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const systemTableCache = {
+      ...createEmptySystemTableCache(),
+      getAll(tableName) {
+        if (tableName === TABLES.PARTITIONS) {
+          return [
+            {partition_id: 'nodes-p1', table_id: TABLES.NODES},
+            {partition_id: 'tables-p1', table_id: TABLES.TABLES},
+            {partition_id: 'partitions-p1', table_id: TABLES.PARTITIONS},
+            {partition_id: 'services-p1', table_id: TABLES.SERVICES},
+            {partition_id: 'node_endpoints-p1', table_id: TABLES.NODE_ENDPOINTS},
+            {partition_id: 'config-p1', table_id: TABLES.CONFIG},
+            {partition_id: 'message_groups-p1', table_id: TABLES.MESSAGE_GROUPS},
+          ];
+        }
+        return [];
+      },
+    };
+    const readinessState = new BootstrapReadinessState({
+      readyStableWindowMs: 0,
+    });
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache,
+      bootstrapService: {
+        phase: BOOTSTRAP_PHASE.COMPLETE,
+        messageRouter: {},
+      },
+      readinessState,
+      sqlQueryEngine: {
+        async executeQuery() {
+          return {success: true, rows: []};
+        },
+      },
+    });
+
+    api.getMissingServiceLeaders = () => {
+      return {
+        missingPartitionLeaders: ['config-p1', 'message_groups-p1'],
+        missingPartitionLeaderNodes: ['config-p1', 'message_groups-p1'],
+        missingPartitionLeaderAddresses: ['config-p1', 'message_groups-p1'],
+        missingMessageGroupLeaders: [],
+        missingMessageGroupLeaderNodes: [],
+        missingMessageGroupLeaderAddresses: [],
+      };
+    };
+
+    await api.initialize(0, {listen: false});
+
+    const leaderStatus = api.getLeaderReadinessStatusForProbe();
+    t.equal(leaderStatus.ready, true,
+      'config and message-group metadata lag should not block traffic readiness');
+    t.same(
+      leaderStatus.missingPartitionLeaders,
+      [],
+      'blocking readiness subset should exclude non-traffic partition lag',
+    );
+
+    const readyResponse = await api.getFastify().inject({
+      method: 'GET',
+      url: '/readyz',
+    });
+    t.equal(readyResponse.statusCode, 200,
+      'readyz should stay green when only non-traffic control-plane partitions lag');
+    const readyBody = JSON.parse(readyResponse.body);
+    t.equal(readyBody.ready, true,
+      'readyz should project ready=true when traffic routing tables are complete');
+    t.same(readyBody.reasons, [],
+      'readyz should not report tolerated control-plane lag as a hard blocker');
+
+    await api.shutdown();
+  });
+
 test('BootstrapAPI - bootstrap join readiness keeps blocking when additional blockers exist',
   async (t) => {
     initializeTestEnvironment();
@@ -606,11 +891,13 @@ test('BootstrapAPI - readiness stays gated until startup dependencies and stable
           return [{
             partition_id: 'partition-1',
             table_name: TABLES.NODES,
+            leader_node_id: 'seed-node-1',
           }];
         }
         if (tableName === TABLES.MESSAGE_GROUPS) {
           return [{
             group_id: 'mg-1',
+            leader_node_id: 'seed-node-1',
           }];
         }
         if (tableName === TABLES.SERVICES) {
@@ -1028,7 +1315,172 @@ test('BootstrapAPI - returns bootstrap not ready before touching cache', async (
   await api.shutdown();
 });
 
-test('BootstrapAPI - blocks bootstrap until raft leaders are ready', async (t) => {
+test('BootstrapAPI - defers concurrent bootstrap requests when admission is saturated',
+  async (t) => {
+    initializeTestEnvironment();
+
+    let releaseFirstRequest = null;
+    const firstRequestGate = new Promise((resolve) => {
+      releaseFirstRequest = resolve;
+    });
+
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: createEmptySystemTableCache(),
+      maxConcurrentBootstrapRequests: 1,
+      bootstrapAdmissionRetryAfterMs: 250,
+    });
+
+    api.waitForServiceLeaders = async () => ({ready: true});
+    api.determineAndReserveMessageGroupAssignment = async (nodeId) => {
+      if (nodeId === '550e8400-e29b-41d4-a716-446655440011') {
+        await firstRequestGate;
+      }
+      return {
+        strategy: BootstrapStrategy.CREATE_SELF_HOSTED,
+        groupId: 'mg-test',
+      };
+    };
+    api.getCurrentEpoch = () => null;
+    api.getClusterConfiguration = () => ({});
+    api.getReadyNodes = () => [];
+    api.getTablePolicies = () => ({});
+    api.getLatencyTopologyHints = () => null;
+
+    await api.initialize(0, {listen: false});
+
+    const firstRequestPromise = api.getFastify().inject({
+      method: 'POST',
+      url: '/bootstrap',
+      payload: {
+        nodeId: '550e8400-e29b-41d4-a716-446655440011',
+        nodeAddress: 'ws://localhost:9091',
+      },
+    });
+
+    for (let attempt = 0; attempt < 20; attempt++) {
+      if (api.inFlightBootstrapRequestCount === 1) {
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    t.equal(api.inFlightBootstrapRequestCount, 1,
+      'first bootstrap request should occupy the single admission slot');
+
+    const deferredResponse = await api.getFastify().inject({
+      method: 'POST',
+      url: '/bootstrap',
+      payload: {
+        nodeId: '550e8400-e29b-41d4-a716-446655440012',
+        nodeAddress: 'ws://localhost:9092',
+      },
+    });
+
+    t.equal(deferredResponse.statusCode, 503,
+      'concurrent bootstrap request should be deferred');
+    const deferredBody = JSON.parse(deferredResponse.body);
+    t.equal(
+      deferredBody.error,
+      BOOTSTRAP_API_ERROR.BOOTSTRAP_NOT_READY,
+      'deferred request should use the canonical bootstrap-not-ready error',
+    );
+    t.equal(
+      deferredBody.code,
+      BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY,
+      'deferred request should use the canonical bootstrap-not-ready code',
+    );
+    t.equal(
+      deferredBody.retryAfterMs,
+      250,
+      'deferred request should include the configured retry hint',
+    );
+    t.ok(
+      deferredBody.reasons.includes('JOIN_ADMISSION_BACKPRESSURED'),
+      'deferred request should expose the admission backpressure reason',
+    );
+
+    releaseFirstRequest();
+    const firstResponse = await firstRequestPromise;
+    t.equal(firstResponse.statusCode, 200,
+      'original bootstrap request should complete once the slot is released');
+    t.equal(api.inFlightBootstrapRequestCount, 0,
+      'bootstrap admission count should return to zero after completion');
+
+    const subsequentResponse = await api.getFastify().inject({
+      method: 'POST',
+      url: '/bootstrap',
+      payload: {
+        nodeId: '550e8400-e29b-41d4-a716-446655440013',
+        nodeAddress: 'ws://localhost:9093',
+      },
+    });
+    t.equal(subsequentResponse.statusCode, 200,
+      'later bootstrap requests should be admitted after the slot frees');
+
+    await api.shutdown();
+  });
+
+test('BootstrapAPI - releases bootstrap admission slot after request failure',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: createEmptySystemTableCache(),
+      maxConcurrentBootstrapRequests: 1,
+      bootstrapAdmissionRetryAfterMs: 250,
+    });
+
+    api.waitForServiceLeaders = async () => ({ready: true});
+    let shouldFail = true;
+    api.determineAndReserveMessageGroupAssignment = async () => {
+      if (shouldFail) {
+        throw new Error('simulated bootstrap failure');
+      }
+      return {
+        strategy: BootstrapStrategy.CREATE_SELF_HOSTED,
+        groupId: 'mg-test',
+      };
+    };
+    api.getCurrentEpoch = () => null;
+    api.getClusterConfiguration = () => ({});
+    api.getReadyNodes = () => [];
+    api.getTablePolicies = () => ({});
+    api.getLatencyTopologyHints = () => null;
+
+    await api.initialize(0, {listen: false});
+
+    const failedResponse = await api.getFastify().inject({
+      method: 'POST',
+      url: '/bootstrap',
+      payload: {
+        nodeId: '550e8400-e29b-41d4-a716-446655440014',
+        nodeAddress: 'ws://localhost:9094',
+      },
+    });
+    t.equal(failedResponse.statusCode, 500,
+      'failing bootstrap request should still surface the underlying error');
+    t.equal(api.inFlightBootstrapRequestCount, 0,
+      'bootstrap admission slot should be released after failure');
+
+    shouldFail = false;
+    const recoveryResponse = await api.getFastify().inject({
+      method: 'POST',
+      url: '/bootstrap',
+      payload: {
+        nodeId: '550e8400-e29b-41d4-a716-446655440015',
+        nodeAddress: 'ws://localhost:9095',
+      },
+    });
+    t.equal(recoveryResponse.statusCode, 200,
+      'subsequent bootstrap request should succeed after a failed request');
+
+    await api.shutdown();
+  });
+
+test('BootstrapAPI - returns bootstrap state while raft leaders are still settling', async (t) => {
   initializeTestEnvironment();
 
   const mockSystemTableCache = {
@@ -1086,17 +1538,16 @@ test('BootstrapAPI - blocks bootstrap until raft leaders are ready', async (t) =
     },
   });
 
-  t.equal(response.statusCode, 503, 'should return 503 when leaders are missing');
+  t.equal(response.statusCode, 200,
+    'should not block bootstrap admission solely on settling leader metadata');
   const body = JSON.parse(response.body);
-  t.equal(body.error, BOOTSTRAP_API_ERROR.RAFT_LEADERS_NOT_READY, 'should return error');
-  t.equal(body.missingPartitionLeaders[0], 'partition-1', 'should report missing leader');
-  t.equal(body.missingMessageGroupLeaders[0], 'mg-1', 'should report missing group leader');
-  t.equal(body.retryAfterMs, 500,
-    'should include retry guidance when leader metadata is incomplete');
-  t.ok(Array.isArray(body.reasons),
-    'should include reasons array for readiness-aware retries');
-  t.ok(body.reasons.includes(BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE),
-    'should include leader metadata blocker reason code');
+  t.equal(body.success, true, 'should still return a successful bootstrap envelope');
+  t.equal(body.leaderReadiness.ready, false,
+    'should expose degraded leader readiness in the bootstrap response');
+  t.equal(body.leaderReadiness.missingPartitionLeaders[0], 'partition-1',
+    'should report missing partition leader diagnostics');
+  t.equal(body.leaderReadiness.missingMessageGroupLeaders[0], 'mg-1',
+    'should report missing message-group leader diagnostics');
 
   await api.shutdown();
 });
@@ -1590,6 +2041,146 @@ test(
   },
 );
 
+test(
+  'BootstrapAPI - message group assignment prefers authoritative local services rows',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const cacheServices = [
+      {
+        service_id: 'mg-1-r1',
+        service_type: SERVICE_TYPE.MESSAGE_GROUP,
+        node_id: 'seed-node-1',
+        group_id: 'mg-1',
+        replica_id: 'mg-1-r1',
+        address: 'seed-node-1/message-group/mg-1-r1',
+        raft_role: RAFT_ROLE.FOLLOWER,
+        status: SERVICE_STATUS.ACTIVE,
+        created_at: 1,
+        updated_at: 10,
+      },
+      {
+        service_id: 'mg-1-r2',
+        service_type: SERVICE_TYPE.MESSAGE_GROUP,
+        node_id: 'seed-node-1',
+        group_id: 'mg-1',
+        replica_id: 'mg-1-r2',
+        address: 'seed-node-1/message-group/mg-1-r2',
+        raft_role: RAFT_ROLE.FOLLOWER,
+        status: SERVICE_STATUS.ACTIVE,
+        created_at: 1,
+        updated_at: 10,
+      },
+      {
+        service_id: 'mg-1-r3',
+        service_type: SERVICE_TYPE.MESSAGE_GROUP,
+        node_id: 'seed-node-1',
+        group_id: 'mg-1',
+        replica_id: 'mg-1-r3',
+        address: 'seed-node-1/message-group/mg-1-r3',
+        raft_role: RAFT_ROLE.FOLLOWER,
+        status: SERVICE_STATUS.ACTIVE,
+        created_at: 1,
+        updated_at: 10,
+      },
+    ];
+    const authoritativeServices = [
+      {
+        ...cacheServices[0],
+        node_id: 'node-2',
+        address: 'node-2/message-group/mg-1-r1',
+        updated_at: 20,
+      },
+      {
+        ...cacheServices[1],
+        updated_at: 20,
+      },
+      {
+        ...cacheServices[2],
+        updated_at: 20,
+      },
+    ];
+    const cacheData = {
+      [TABLES.PARTITIONS]: [
+        {
+          partition_id: 'services-p1',
+          table_name: TABLES.SERVICES,
+        },
+      ],
+      [TABLES.SERVICES]: cacheServices,
+      [TABLES.MESSAGE_GROUPS]: [],
+    };
+    const mockCache = {
+      get() {
+        return null;
+      },
+      getAll(tableName) {
+        return cacheData[tableName] || [];
+      },
+      filter(tableName, predicate) {
+        return (cacheData[tableName] || []).filter(predicate);
+      },
+      getReadyNodes() {
+        return ['seed-node-1', 'node-2'];
+      },
+    };
+
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: mockCache,
+      partitionServices: new Map([
+        ['services-p1-r1', {
+          partitionId: 'services-p1',
+          replicaId: 'services-p1-r1',
+          initialized: true,
+          db: {
+            prepare(sql) {
+              t.equal(
+                sql,
+                `SELECT * FROM ${TABLES.SERVICES}`,
+                'message group assignment should use the same authoritative services read as bootstrap snapshots',
+              );
+              return {
+                all() {
+                  return authoritativeServices;
+                },
+              };
+            },
+          },
+        }],
+      ]),
+    });
+
+    await api.initialize(0, {listen: false});
+
+    const messageGroups = api.getMessageGroups();
+    t.same(
+      messageGroups[0]?.replicas?.map((replica) => replica.node_id).sort(),
+      ['node-2', 'seed-node-1', 'seed-node-1'],
+      'message group topology should come from authoritative local services rows',
+    );
+
+    const assignment = api.determineMessageGroupAssignment('new-node-1');
+    t.equal(
+      assignment.strategy,
+      BootstrapStrategy.MOVE_REPLICA,
+      'assignment should still use MOVE_REPLICA when one source node has two replicas',
+    );
+    t.not(
+      assignment.replicaToMove,
+      'mg-1-r1',
+      'assignment must not reserve a replica that authoritative services rows already show as moved',
+    );
+    t.ok(
+      ['mg-1-r2', 'mg-1-r3'].includes(assignment.replicaToMove),
+      'assignment should choose one of the replicas still owned by the seed',
+    );
+
+    await api.shutdown();
+  },
+);
+
 test('BootstrapAPI - buildSystemTableSnapshots handles missing cache', async (t) => {
   initializeTestEnvironment();
 
@@ -1699,6 +2290,7 @@ test('BootstrapAPI - handleBootstrapRequest includes systemTableSnapshots', asyn
 
   t.equal(body.success, true, 'should return success');
   t.ok(body.systemTableSnapshots, 'should include systemTableSnapshots');
+  t.ok(body.topologySnapshotMeta, 'should include topologySnapshotMeta');
   t.ok(Array.isArray(body.systemTableSnapshots.nodes), 'nodes should be an array');
   t.ok(Array.isArray(body.systemTableSnapshots.partitions),
     'partitions should be an array');
@@ -1716,6 +2308,13 @@ test('BootstrapAPI - handleBootstrapRequest includes systemTableSnapshots', asyn
     'should have 1 partition in snapshot');
   t.equal(body.systemTableSnapshots.services.length, 2,
     'should have 2 services in snapshot');
+  t.equal(body.topologySnapshotMeta.topologyEpoch, 0,
+    'bootstrap response should include the published topology epoch');
+  t.same(
+    body.topologySnapshotMeta.hydrationTables,
+    CACHE_HYDRATION_TABLES,
+    'bootstrap response should advertise the sanctioned hydration tables',
+  );
 
   await api.shutdown();
 });

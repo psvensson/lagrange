@@ -6,7 +6,7 @@
 import tap from 'tap';
 import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
 import {NodeService} from '../../src/node/node-service.js';
-import {TABLES} from '../../src/constants/index.js';
+import {COLUMN, TABLES} from '../../src/constants/index.js';
 
 tap.test('hydrateSystemCacheFromBootstrap', async (t) => {
   t.test('should hydrate cache from bootstrap response snapshots', async (t) => {
@@ -193,6 +193,65 @@ tap.test('hydrateSystemCacheFromBootstrap', async (t) => {
 
     t.end();
   });
+
+  t.test('should apply bootstrap topology epoch to the local cache watermark',
+    async (t) => {
+      const nodeService = NodeService.getInstance();
+      nodeService.initialize({
+        nodeId: 'test-node-epoch',
+        nodeAddress: 'http://localhost:3010',
+      });
+
+      const systemTableCache = nodeService.getSystemTableCache();
+      systemTableCache.clear();
+
+      const joiningService = new NodeJoiningService({
+        nodeId: 'test-node-epoch',
+        nodeAddress: 'http://localhost:3010',
+        seedNodeAddress: 'http://localhost:3000',
+      });
+
+      joiningService.bootstrapResponse = {
+        currentEpoch: {
+          epoch: 7,
+          assignments: {},
+          proposedBy: 'seed-node',
+          timestamp: '1740000000000:1:seed-node',
+        },
+        topologySnapshotMeta: {
+          topologyEpoch: 7,
+          activeNodeIds: ['seed-node'],
+          hydrationTables: [TABLES.NODES],
+          tableRowCounts: {
+            [TABLES.NODES]: 1,
+          },
+        },
+        systemTableSnapshots: {
+          nodes: [
+            {
+              [COLUMN.NODE_ID]: 'seed-node',
+              node_address: 'http://localhost:3000',
+              [COLUMN.STATUS]: 'active',
+            },
+          ],
+          partitions: [],
+          services: [],
+          tables: [],
+          message_groups: [],
+          replica_operations: [],
+        },
+      };
+
+      await joiningService.hydrateSystemCacheFromBootstrap();
+
+      t.equal(systemTableCache.getEpoch(), 7,
+        'bootstrap hydration should apply the published topology epoch to the cache watermark');
+      t.same(
+        joiningService.bootstrapTopologySnapshotMeta,
+        joiningService.bootstrapResponse.topologySnapshotMeta,
+        'joining service should retain the published topology snapshot metadata',
+      );
+    });
 
   t.end();
 });

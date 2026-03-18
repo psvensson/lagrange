@@ -19,9 +19,6 @@ import {
   CACHE_HYDRATION_TABLES,
 } from '../../cache/cache-constants.js';
 import {
-  deriveWsAddressFromNodeAddress,
-} from './connect-websocket-phase.js';
-import {
   getSystemCachePrimaryKeyFieldOrFallback,
 } from '../../cache/system-cache-key-descriptor.js';
 import {
@@ -44,6 +41,8 @@ import {
   TRANSPORT_TYPE,
   TYPEOF,
 } from '../../constants/index.js';
+import {resolveAdvertisedWebSocketAddress} from
+  '../../transport/node-address-resolution.js';
 
 const LOG_CACHE_POPULATED =
   'System cache populated from bootstrap response';
@@ -51,6 +50,8 @@ const LOG_BOOTSTRAP_MISSING_SNAPSHOTS =
   'Bootstrap response missing systemTableSnapshots';
 const LOG_CACHE_HYDRATED =
   'System cache hydrated from bootstrap response';
+const LOG_TOPOLOGY_EPOCH_APPLIED =
+  'Applied bootstrap topology epoch to local cache watermark';
 const LOG_SNAPSHOT_MISSING =
   'Snapshot missing or invalid for table';
 const LOG_HYDRATED_TABLE =
@@ -73,6 +74,10 @@ const LOG_BLOCKING_BACKFILL_COMPLETE =
   'Completed blocking join backfill for discovery-critical propagated tables';
 const LOG_BLOCKING_BACKFILL_FAILED =
   'Blocking join backfill failed for discovery-critical propagated tables';
+const LOG_BLOCKING_BACKFILL_SKIPPED =
+  'Skipping blocking join backfill because bootstrap snapshot already covers discovery-critical propagated tables';
+const LOG_OPPORTUNISTIC_BACKFILL_SKIPPED =
+  'Skipping opportunistic join backfill because bootstrap snapshot already covers opportunistic propagated tables';
 const LOG_OPPORTUNISTIC_BACKFILL_COMPLETE =
   'Completed opportunistic join backfill for non-critical propagated tables';
 const LOG_OPPORTUNISTIC_BACKFILL_FAILED =
@@ -92,6 +97,7 @@ class QuerySystemStatePhase {
   constructor(options = {}) {
     this.nodeId = options.nodeId;
     this.nodeAddress = options.nodeAddress;
+    this.advertisedNodeWsAddress = options.advertisedNodeWsAddress || null;
     this.delegates = options.delegates || {};
     this.opportunisticBackfillPromise = null;
   }
@@ -257,12 +263,27 @@ class QuerySystemStatePhase {
    */
   async backfillBlockingDiscoveryTables() {
     const logger = this.delegates.getLogger();
-    const tables = JOIN_BACKFILL_SCOPE.BLOCKING_TABLES;
+    const {
+      tables,
+      missingTables,
+    } = this.resolveSnapshotBackfillPlan(
+      JOIN_BACKFILL_SCOPE.BLOCKING_TABLES,
+    );
+
+    if (tables.length === NUM.ZERO) {
+      logger.info(LOG_BLOCKING_BACKFILL_SKIPPED, {
+        nodeId: this.nodeId,
+        tableCount: JOIN_BACKFILL_SCOPE.BLOCKING_TABLES.length,
+        tableNames: JOIN_BACKFILL_SCOPE.BLOCKING_TABLES,
+      });
+      return;
+    }
 
     logger.info(LOG_BLOCKING_BACKFILL_START, {
       nodeId: this.nodeId,
       tableCount: tables.length,
       tableNames: tables,
+      missingBootstrapSnapshotTables: missingTables,
     });
 
     try {
@@ -287,6 +308,47 @@ class QuerySystemStatePhase {
   }
 
   /**
+   * Resolve the bootstrap-snapshot reread plan for one table cohort.
+   * When bootstrap already published authoritative snapshot rows for the
+   * requested propagated tables, the join path should trust that snapshot plus
+   * CDC catch-up instead of immediately rereading the same tables.
+   * @param {Array<string>} tableNames
+   * @return {{tables: Array<string>, missingTables: Array<string>}}
+   * @private
+   */
+  resolveSnapshotBackfillPlan(tableNames = []) {
+    const bootstrapResponse =
+      typeof this.delegates.getBootstrapResponse === TYPEOF.FUNCTION ?
+        this.delegates.getBootstrapResponse() :
+        null;
+    const snapshots = bootstrapResponse?.systemTableSnapshots;
+    const hydrationTables = Array.isArray(
+      bootstrapResponse?.topologySnapshotMeta?.hydrationTables,
+    ) ?
+      new Set(
+        bootstrapResponse.topologySnapshotMeta.hydrationTables.filter(
+          (value) => typeof value === TYPEOF.STRING && value.length > NUM.ZERO,
+        ),
+      ) :
+      null;
+    const missingTables = [];
+
+    for (const tableName of tableNames) {
+      const hasSnapshotRows = Array.isArray(snapshots?.[tableName]);
+      const declaredHydrated =
+        !hydrationTables || hydrationTables.has(tableName);
+      if (!hasSnapshotRows || !declaredHydrated) {
+        missingTables.push(tableName);
+      }
+    }
+
+    return {
+      tables: missingTables,
+      missingTables,
+    };
+  }
+
+  /**
    * Start best-effort backfill for non-critical propagated tables.
    * Failures are logged but do not abort the join-critical path.
    * @return {Promise<void>|null}
@@ -297,9 +359,19 @@ class QuerySystemStatePhase {
       return this.opportunisticBackfillPromise;
     }
 
-    const tables = JOIN_BACKFILL_SCOPE.OPPORTUNISTIC_TABLES;
+    const {
+      tables,
+      missingTables,
+    } = this.resolveSnapshotBackfillPlan(
+      JOIN_BACKFILL_SCOPE.OPPORTUNISTIC_TABLES,
+    );
     if (!Array.isArray(tables) || tables.length === NUM.ZERO) {
-      return null;
+      this.delegates.getLogger().info(LOG_OPPORTUNISTIC_BACKFILL_SKIPPED, {
+        nodeId: this.nodeId,
+        tableCount: JOIN_BACKFILL_SCOPE.OPPORTUNISTIC_TABLES.length,
+        tableNames: JOIN_BACKFILL_SCOPE.OPPORTUNISTIC_TABLES,
+      });
+      return Promise.resolve();
     }
 
     const logger = this.delegates.getLogger();
@@ -313,6 +385,7 @@ class QuerySystemStatePhase {
           nodeId: this.nodeId,
           tableCount: tables.length,
           tableNames: tables,
+          missingBootstrapSnapshotTables: missingTables,
         });
       })
       .catch((error) => {
@@ -320,6 +393,7 @@ class QuerySystemStatePhase {
           nodeId: this.nodeId,
           tableCount: tables.length,
           tableNames: tables,
+          missingBootstrapSnapshotTables: missingTables,
           error: error.message,
         });
       })
@@ -416,6 +490,14 @@ class QuerySystemStatePhase {
       });
     }
 
+    this.applyBootstrapTopologyEpoch(
+      systemTableCache,
+      bootstrapResponse,
+    );
+    this.recordBootstrapTopologySnapshotMetadata(
+      bootstrapResponse,
+    );
+
     logger.info(
       LOG_CACHE_HYDRATED,
       {
@@ -428,6 +510,56 @@ class QuerySystemStatePhase {
         ).length,
       },
     );
+  }
+
+  /**
+   * Apply the published bootstrap topology epoch to the local cache watermark.
+   * @param {Object} systemTableCache
+   * @param {Object|null} bootstrapResponse
+   * @return {void}
+   * @private
+   */
+  applyBootstrapTopologyEpoch(systemTableCache, bootstrapResponse) {
+    if (!systemTableCache ||
+        typeof systemTableCache.updateFromEpoch !== TYPEOF.FUNCTION) {
+      return;
+    }
+
+    const currentEpoch = bootstrapResponse?.currentEpoch;
+    if (!currentEpoch || typeof currentEpoch !== TYPEOF.OBJECT) {
+      return;
+    }
+
+    const logger = this.delegates.getLogger();
+    systemTableCache.updateFromEpoch(currentEpoch);
+    logger.info(LOG_TOPOLOGY_EPOCH_APPLIED, {
+      nodeId: this.nodeId,
+      topologyEpoch: currentEpoch.epoch,
+    });
+  }
+
+  /**
+   * Retain owner-published bootstrap topology metadata for readiness.
+   * @param {Object|null} bootstrapResponse
+   * @return {void}
+   * @private
+   */
+  recordBootstrapTopologySnapshotMetadata(bootstrapResponse) {
+    if (typeof this.delegates.setBootstrapTopologySnapshotMeta ===
+        TYPEOF.FUNCTION) {
+      this.delegates.setBootstrapTopologySnapshotMeta(
+        bootstrapResponse?.topologySnapshotMeta || null,
+      );
+    }
+    if (typeof this.delegates.setBootstrapTopologySnapshotHydratedAtMs ===
+        TYPEOF.FUNCTION) {
+      const now = typeof this.delegates.getNow === TYPEOF.FUNCTION ?
+        this.delegates.getNow() :
+        Date.now;
+      this.delegates.setBootstrapTopologySnapshotHydratedAtMs(
+        typeof now === TYPEOF.FUNCTION ? now() : Date.now(),
+      );
+    }
   }
 
   /**
@@ -545,7 +677,9 @@ class QuerySystemStatePhase {
       [COLUMN.DISK_USAGE_PERCENT]: NUM.ZERO,
       [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
       [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
-      [COLUMN.CAPABILITIES]: JSON.stringify([]),
+      [COLUMN.CAPABILITIES]: JSON.stringify(
+        this.delegates.getNodeCapabilities(),
+      ),
       [COLUMN.LAST_HEARTBEAT]: now,
       [COLUMN.CREATED_AT]: now,
     };
@@ -554,17 +688,12 @@ class QuerySystemStatePhase {
       const budgetService =
         this.delegates.getNodeStorageBudgetService();
       const {budgetRow, resolution} =
-        await NodeStorageBudgetSetup.resolveWithoutPersist({
+        await NodeStorageBudgetSetup.resolveAndPersist({
           budgetService,
           nodeRow: nodeData,
           nodeId: this.nodeId,
+          upsertOptions: joinTimeUpsertOptions,
         });
-      await this.delegates.sendControlPlaneNodeStateUpdate({
-        state: STATE.CONNECTED,
-        capabilities: this.delegates.getNodeCapabilities(),
-        heartbeatAt: now,
-        nodeRow: budgetRow,
-      });
       if (typeof this.delegates.setJoinMembershipPublished ===
         TYPEOF.FUNCTION) {
         this.delegates.setJoinMembershipPublished(true);
@@ -654,7 +783,11 @@ class QuerySystemStatePhase {
 
     const endpointId = `ep-${this.nodeId}-ws`;
     const canonicalWsAddress =
-      deriveWsAddressFromNodeAddress(this.nodeAddress) ||
+      this.advertisedNodeWsAddress ||
+      resolveAdvertisedWebSocketAddress({
+        nodeAddress: this.nodeAddress,
+        wsPort: this.delegates.getWsPort?.() || null,
+      }) ||
       this.nodeAddress;
 
     const endpointData = {
@@ -713,6 +846,7 @@ class QuerySystemStatePhase {
         },
         nodeId: this.nodeId,
         nodeAddress: this.nodeAddress,
+        advertisedNodeWsAddress: this.advertisedNodeWsAddress,
         wsPort: this.delegates.getWsPort(),
       });
       return endpointRows;
@@ -754,7 +888,7 @@ class QuerySystemStatePhase {
       `(${columns.join(', ')}) VALUES (${placeholders})`;
     const params = columns.map((column) => rowData[column]);
     return cdcIntegrationService.sqlQueryEngine
-      .executeQuery(sql, params);
+      .executeQuery(sql, params, upsertOptions);
   }
 
   /**
@@ -763,9 +897,11 @@ class QuerySystemStatePhase {
    * @return {Object|undefined}
    */
   getJoinTimeUpsertOptions() {
-    return this.delegates.getCdcSubscriptionsActive() === true ?
-      undefined :
-      {skipCacheWait: true};
+    const options = {deliveryPriority: 'critical'};
+    if (this.delegates.getCdcSubscriptionsActive() !== true) {
+      options.skipCacheWait = true;
+    }
+    return options;
   }
 
   /**

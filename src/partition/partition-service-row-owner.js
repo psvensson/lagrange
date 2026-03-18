@@ -7,6 +7,7 @@ import {
   TYPEOF,
 } from '../constants/index.js';
 import {RAFT_ROLE} from '../raft/constants.js';
+import {normalizePublishedRaftRole} from '../raft/published-raft-role.js';
 
 const PARTITION_SERVICE_ROW_OWNER_ERROR = Object.freeze({
   PARTITION_ID_REQUIRED: 'PartitionServiceRowOwner requires partitionId',
@@ -14,6 +15,14 @@ const PARTITION_SERVICE_ROW_OWNER_ERROR = Object.freeze({
   REPLICA_ID_REQUIRED: 'PartitionServiceRowOwner requires replicaId',
   UPSERT_REQUIRED:
     'PartitionServiceRowOwner requires upsertSystemTableRow for registration',
+});
+const SERVICE_ROW_UPDATE_OPTION = Object.freeze({
+  allowCoalescing: true,
+  allowPressureDefer: true,
+  deliveryPriority: 'background',
+  pressureRetryAfterMs: 250,
+  skipCacheWait: true,
+  workClass: 'background',
 });
 
 function assertRequiredString(value, errorMessage) {
@@ -31,10 +40,10 @@ function resolvePartitionRaftRole(service) {
   }
 
   if (typeof service?.getRole === TYPEOF.FUNCTION) {
-    return service.getRole() || RAFT_ROLE.FOLLOWER;
+    return normalizePublishedRaftRole(service.getRole());
   }
 
-  return service?.role || RAFT_ROLE.FOLLOWER;
+  return normalizePublishedRaftRole(service?.role);
 }
 
 class PartitionServiceRowOwner {
@@ -91,6 +100,13 @@ class PartitionServiceRowOwner {
     };
   }
 
+  buildDeferredUpdateOptions(serviceId) {
+    return {
+      ...SERVICE_ROW_UPDATE_OPTION,
+      coalescingKey: `services:${serviceId}`,
+    };
+  }
+
   async registerReplica(options = {}) {
     if (
       !this.systemTableWriter ||
@@ -139,6 +155,7 @@ class PartitionServiceRowOwner {
       await this.systemTableWriter.upsertSystemTableRow(
         SYSTEM_TABLE_NAME.SERVICES,
         row,
+        this.buildDeferredUpdateOptions(row.service_id),
       );
       return row;
     }
@@ -154,6 +171,7 @@ class PartitionServiceRowOwner {
         service_type: row.service_type,
       },
       updates,
+      this.buildDeferredUpdateOptions(row.service_id),
     );
     return row;
   }

@@ -65,10 +65,6 @@ const EXPECTED_API_METHODS = Object.freeze([
   'isOutboundQueueAvailable',
   'getStats',
   'shutdown',
-  'setJoinRequestHandler',
-  'setJoinCompleteHandler',
-  'sendJoinRequest',
-  'sendJoinComplete',
   'registerWorkerHandler',
   'unregisterWorkerHandler',
   'hasWorkerHandler',
@@ -245,6 +241,33 @@ t.test('MessageRouter API Compatibility Property Tests', async (t) => {
     );
 
     t.pass('Address validation rejects invalid entity types');
+    await router.shutdown();
+  });
+
+  t.test('Property: legacy join protocol API is absent', async (t) => {
+    const router = new MessageRouter({nodeId: 'test-node'});
+
+    t.equal(
+      typeof router.setJoinRequestHandler,
+      'undefined',
+      'legacy JOIN_REQUEST handler registration should be absent',
+    );
+    t.equal(
+      typeof router.setJoinCompleteHandler,
+      'undefined',
+      'legacy JOIN_COMPLETE handler registration should be absent',
+    );
+    t.equal(
+      typeof router.sendJoinRequest,
+      'undefined',
+      'legacy JOIN_REQUEST sender should be absent',
+    );
+    t.equal(
+      typeof router.sendJoinComplete,
+      'undefined',
+      'legacy JOIN_COMPLETE sender should be absent',
+    );
+
     await router.shutdown();
   });
 });

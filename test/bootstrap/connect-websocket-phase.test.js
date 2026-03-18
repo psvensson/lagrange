@@ -7,6 +7,23 @@ import {
   MessageRouterSetup,
 } from '../../src/bootstrap/shared/message-router-setup.js';
 
+function createBootstrapResponseWithPeerEndpoints(...nodeIds) {
+  return {
+    seedNodeId: 'seed-node',
+    seedNodeWsAddress: 'ws://seed-node:8082',
+    systemTableSnapshots: {
+      node_endpoints: nodeIds.map((nodeId) => ({
+        endpoint_id: `${nodeId}-ws`,
+        node_id: nodeId,
+        transport_type: 'ws',
+        address: `ws://${nodeId}:8082`,
+        priority: 0,
+        status: 'active',
+      })),
+    },
+  };
+}
+
 test(
   'ConnectWebSocketPhase retries transient seed websocket connect failures',
   async () => {
@@ -85,6 +102,8 @@ test(
           triggerJoinReconciler: async () => {},
           getSeedNodeWsAddress: () => 'ws://seed-node:8082',
           getSeedNodeId: () => 'seed-node',
+          getBootstrapResponse: () =>
+            createBootstrapResponseWithPeerEndpoints('joining-node-1'),
           resolveMeshConnectivityNodeRows: () => ({
             source: 'cache',
             rows: [
@@ -249,6 +268,114 @@ test(
 );
 
 test(
+  'ConnectWebSocketPhase hydrates bootstrap snapshots before later join phases depend on cache state',
+  async () => {
+    const originalCreate = MessageRouterSetup.create;
+    let currentRouter = null;
+    let hydrationCalls = 0;
+    const steps = [];
+
+    const router = {
+      nodeConnections: new Map(),
+      async connectToNode(nodeId, address) {
+        this.nodeConnections.set(nodeId, {state: 'connected', address});
+      },
+      getConnectionState(nodeId) {
+        return this.nodeConnections.get(nodeId)?.state || null;
+      },
+      getConnectedNodes() {
+        return Array.from(this.nodeConnections.keys());
+      },
+      hasSelfConnection() {
+        return true;
+      },
+      setQueryMessageGroupServiceResolver() {},
+    };
+
+    MessageRouterSetup.create = async () => router;
+
+    try {
+      const phase = new ConnectWebSocketPhase({
+        nodeId: 'joining-node-1',
+        delegates: {
+          getWsPort: () => 9090,
+          getIdentifyPayload: () => ({role: 'joining'}),
+          getNodeAddress: () => 'joining-node-1:8080',
+          getLogger: () => ({
+            info() {},
+            warn() {},
+            error(errorMessage) {
+              throw new Error(`unexpected error log: ${errorMessage}`);
+            },
+            debug() {},
+          }),
+          getNow: () => () => 0,
+          getSleep: () => async () => {},
+          resolveJoinRetryPolicy: () => ({
+            retryTimeoutMs: 100,
+            initialDelayMs: 25,
+            maxDelayMs: 50,
+            backoffMultiplier: 2,
+          }),
+          computeSeedContactRetryDelayMs: ({baseDelayMs, maxDelayMs}) =>
+            Math.min(baseDelayMs, maxDelayMs),
+          getMessageRouter: () => currentRouter,
+          setMessageRouter(routerInstance) {
+            currentRouter = routerInstance;
+          },
+          setTransport() {},
+          initializeJoiningLifecycleOwners: async () => {
+            steps.push('owners');
+          },
+          triggerJoinReconciler: async () => {
+            steps.push('reconcile');
+          },
+          ensureBootstrapSnapshotHydrated: async () => {
+            hydrationCalls += 1;
+            steps.push('hydrate');
+          },
+          getSeedNodeWsAddress: () => 'ws://seed-node:8082',
+          getSeedNodeId: () => 'seed-node',
+          getBootstrapResponse: () =>
+            createBootstrapResponseWithPeerEndpoints('joining-node-1'),
+          resolveMeshConnectivityNodeRows: () => ({
+            source: 'cache',
+            rows: [
+              {
+                node_id: 'joining-node-1',
+                node_address: 'joining-node-1:8080',
+              },
+            ],
+          }),
+          buildClusterMeshSignature: () => 'mesh-signature',
+          setLastClusterMeshSignature: () => {},
+          sendControlPlaneNodeStateUpdate: async () => {
+            steps.push('node-state');
+          },
+          getNodeCapabilities: () => ['sql'],
+          getLeaderMessageGroupService: () => null,
+        },
+      });
+
+      await phase.phaseConnectWebSocket();
+
+      assert.equal(
+        hydrationCalls,
+        1,
+        'phase should hydrate bootstrap snapshots exactly once before later phases depend on cache state',
+      );
+      assert.deepEqual(
+        steps,
+        ['owners', 'reconcile', 'hydrate', 'node-state'],
+        'bootstrap snapshot hydration should happen before connected state publication',
+      );
+    } finally {
+      MessageRouterSetup.create = originalCreate;
+    }
+  },
+);
+
+test(
   'ConnectWebSocketPhase can proceed when seed websocket stays unavailable but a peer mesh already exists',
   async () => {
     const originalCreate = MessageRouterSetup.create;
@@ -321,6 +448,11 @@ test(
           triggerJoinReconciler: async () => {},
           getSeedNodeWsAddress: () => 'ws://seed-node:8082',
           getSeedNodeId: () => 'seed-node',
+          getBootstrapResponse: () =>
+            createBootstrapResponseWithPeerEndpoints(
+              'joining-node-1',
+              'peer-node',
+            ),
           resolveMeshConnectivityNodeRows: () => ({
             source: 'cache',
             rows: [
@@ -437,6 +569,12 @@ test(
           triggerJoinReconciler: async () => {},
           getSeedNodeWsAddress: () => 'ws://seed-node:8082',
           getSeedNodeId: () => 'seed-node',
+          getBootstrapResponse: () =>
+            createBootstrapResponseWithPeerEndpoints(
+              'joining-node-1',
+              'peer-node-1',
+              'peer-node-2',
+            ),
           resolveMeshConnectivityNodeRows: () => ({
             source: 'cache',
             rows: [
@@ -557,6 +695,11 @@ test(
           triggerJoinReconciler: async () => {},
           getSeedNodeWsAddress: () => 'ws://seed-node:8082',
           getSeedNodeId: () => 'seed-node',
+          getBootstrapResponse: () =>
+            createBootstrapResponseWithPeerEndpoints(
+              'joining-node-1',
+              'seed-node',
+            ),
           resolveMeshConnectivityNodeRows: () => ({
             source: 'cache',
             rows: [
@@ -639,6 +782,14 @@ test(
           debug() {},
         }),
         getMessageRouter: () => router,
+        getBootstrapResponse: () =>
+          createBootstrapResponseWithPeerEndpoints(
+            'joining-node-1',
+            'peer-connected',
+            'peer-connecting',
+            'peer-reconnecting',
+            'peer-disconnected',
+          ),
         resolveMeshConnectivityNodeRows: () => ({
           source: 'cache',
           rows: [

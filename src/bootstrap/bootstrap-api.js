@@ -39,6 +39,8 @@ import {
 import {
   getMissingSystemServiceLeaders,
   getMissingSystemServiceLeaderCount,
+  getOwnerRecords,
+  resolveCanonicalLeaderService,
 } from '../cache/leader-readiness-gate.js';
 import {
   isNodeRecordReady,
@@ -95,6 +97,17 @@ import {
 } from '../control-plane/control-plane-readiness-constants.js';
 import {AuthoritativeControlPlaneView} from
   '../control-plane/authoritative-control-plane-view.js';
+import {ControlPlaneSystemTableGateway} from
+  '../control-plane/control-plane-system-table-gateway.js';
+import {
+  PRESSURE_GOVERNOR_ERROR_CODE,
+  PRESSURE_WORK_CLASS,
+} from '../control-plane/pressure-governor.js';
+import {
+  buildBootstrapTopologySnapshotEnvelope,
+} from './bootstrap-topology-snapshot.js';
+import {resolveAdvertisedWebSocketAddress} from
+  '../transport/node-address-resolution.js';
 
 /**
  * Bootstrap response strategies.
@@ -109,6 +122,13 @@ const BOOTSTRAP_REQUIRED_LEADER_TABLES = Object.freeze([
   TABLES.REPLICA_OPERATIONS,
   TABLES.NODE_ENDPOINTS,
   TABLES.CONFIG,
+]);
+const TRAFFIC_REQUIRED_LEADER_TABLES = Object.freeze([
+  TABLES.NODES,
+  TABLES.TABLES,
+  TABLES.PARTITIONS,
+  TABLES.SERVICES,
+  TABLES.NODE_ENDPOINTS,
 ]);
 
 /**
@@ -141,6 +161,14 @@ const REGISTERED_SERVICE_CACHE_OPTIONAL_FIELDS = Object.freeze([
   COLUMN.STATUS,
   COLUMN.ADDRESS,
   COLUMN.GROUP_ID,
+]);
+const RETRYABLE_BOOTSTRAP_CONTROL_PLANE_ERROR_FRAGMENTS = Object.freeze([
+  'Distributed operation failed due to participant failures',
+  'Outbound queue for node',
+  'No connection to node',
+  'Connection to node',
+  'Message timeout',
+  'closed',
 ]);
 
 /**
@@ -181,10 +209,26 @@ class BootstrapAPI {
     this.replicaHandler = options.replicaHandler || null;
     this.sqlQueryEngine = options.sqlQueryEngine || null;
     this.bootstrapService = options.bootstrapService || null;
+    this.cdcIntegrationService = options.cdcIntegrationService ||
+      this.bootstrapService?.cdcIntegrationService ||
+      null;
     this.epochManager = options.epochManager || null;
     this.messageRouter = options.messageRouter || null;
+    this.controlPlaneSystemTableGateway =
+      options.controlPlaneSystemTableGateway || null;
     this.authoritativeControlPlaneView =
       options.authoritativeControlPlaneView || null;
+    this.maxConcurrentBootstrapRequests =
+      Number.isFinite(options.maxConcurrentBootstrapRequests) &&
+        options.maxConcurrentBootstrapRequests > NUM.ZERO ?
+        Math.floor(options.maxConcurrentBootstrapRequests) :
+        BOOTSTRAP_API_DEFAULT.MAX_CONCURRENT_BOOTSTRAP_REQUESTS;
+    this.bootstrapAdmissionRetryAfterMs =
+      Number.isFinite(options.bootstrapAdmissionRetryAfterMs) &&
+        options.bootstrapAdmissionRetryAfterMs > NUM.ZERO ?
+        Math.floor(options.bootstrapAdmissionRetryAfterMs) :
+        BOOTSTRAP_API_DEFAULT.BOOTSTRAP_ADMISSION_RETRY_AFTER_MS;
+    this.inFlightBootstrapRequestCount = NUM.ZERO;
     this.moveReplicaAssignmentLeaseMs = Number.isFinite(options.moveReplicaAssignmentLeaseMs) ?
       Math.max(NUM.ONE, Math.floor(options.moveReplicaAssignmentLeaseMs)) :
       BOOTSTRAP_API_DEFAULT.MOVE_REPLICA_ASSIGNMENT_LEASE_MS;
@@ -192,6 +236,10 @@ class BootstrapAPI {
       Number.isFinite(options.moveReplicaAssignmentSweepIntervalMs) ?
         Math.max(NUM.ONE, Math.floor(options.moveReplicaAssignmentSweepIntervalMs)) :
         BOOTSTRAP_API_DEFAULT.MOVE_REPLICA_ASSIGNMENT_SWEEP_INTERVAL_MS;
+    this.ownsMoveReplicaAssignmentLifecycle =
+      typeof options.ownsMoveReplicaAssignmentLifecycle === TYPEOF.BOOLEAN ?
+        options.ownsMoveReplicaAssignmentLifecycle :
+        Boolean(options.bootstrapService);
     this.moveReplicaAssignmentReservations = new Map();
     this.moveReplicaAssignmentReservationLock = Promise.resolve();
     this.moveReplicaAssignmentSweepTimer = null;
@@ -224,6 +272,12 @@ class BootstrapAPI {
    */
   setSqlQueryEngine(sqlQueryEngine) {
     this.sqlQueryEngine = sqlQueryEngine;
+    if (this.controlPlaneSystemTableGateway &&
+        !this.controlPlaneSystemTableGateway.sqlQueryEngine &&
+        typeof this.controlPlaneSystemTableGateway.setSqlQueryEngine ===
+          TYPEOF.FUNCTION) {
+      this.controlPlaneSystemTableGateway.setSqlQueryEngine(sqlQueryEngine);
+    }
     if (this.partitionServices &&
         typeof this.partitionServices.values === 'function') {
       for (const partitionService of this.partitionServices.values()) {
@@ -241,6 +295,39 @@ class BootstrapAPI {
   }
 
   /**
+   * Set the canonical CDC integration dependency used by bootstrap-owned
+   * mutation ingress and authoritative repair/read helpers.
+   * @param {Object|null} cdcIntegrationService
+   */
+  setCdcIntegrationService(cdcIntegrationService) {
+    this.cdcIntegrationService = cdcIntegrationService || null;
+    if (this.controlPlaneSystemTableGateway &&
+        typeof this.controlPlaneSystemTableGateway.setCdcIntegrationService ===
+          TYPEOF.FUNCTION) {
+      this.controlPlaneSystemTableGateway.setCdcIntegrationService(
+        this.cdcIntegrationService,
+      );
+    }
+    if (this.authoritativeControlPlaneView &&
+        this.authoritativeControlPlaneView.cdcIntegrationService !==
+          this.cdcIntegrationService) {
+      this.authoritativeControlPlaneView = null;
+    }
+  }
+
+  /**
+   * Resolve the canonical CDC integration dependency used by bootstrap-owned
+   * control-plane reads, writes, and cache repair.
+   * @return {Object|null}
+   * @private
+   */
+  getCdcIntegrationService() {
+    return this.cdcIntegrationService ||
+      this.bootstrapService?.cdcIntegrationService ||
+      null;
+  }
+
+  /**
    * Execute one bootstrap-owned control-plane query using repair-eligible
    * routing semantics.
    * @param {string} sql
@@ -249,14 +336,162 @@ class BootstrapAPI {
    * @private
    */
   async executeBootstrapControlPlaneQuery(sql, params = []) {
-    if (!this.sqlQueryEngine ||
-        typeof this.sqlQueryEngine.executeQuery !== TYPEOF.FUNCTION) {
+    const controlPlaneSystemTableGateway =
+      this.getControlPlaneSystemTableGateway();
+    if (!controlPlaneSystemTableGateway ||
+        typeof controlPlaneSystemTableGateway.executeQuery !== TYPEOF.FUNCTION) {
       throw new Error(BOOTSTRAP_API_ERROR.SQL_ENGINE_UNAVAILABLE);
     }
-    return this.sqlQueryEngine.executeQuery(sql, params, {
+    return controlPlaneSystemTableGateway.executeQuery(sql, params, {
+      owner: BOOTSTRAP_API_SUBSYSTEM,
+      workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+      deliveryPriority: 'critical',
+      enforcePressureAdmission: true,
+      allowPressureDefer: true,
+      allowPressureDegrade: false,
+      pressureRetryAfterMs: this.bootstrapAdmissionRetryAfterMs,
       routingReadinessDimension:
         CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
     });
+  }
+
+  /**
+   * Execute one bootstrap-owned control-plane mutation through the canonical
+   * gateway mutation ingress.
+   * @param {Object} mutation
+   * @param {Object} [options={}]
+   * @return {Promise<Object>}
+   * @private
+   */
+  async executeBootstrapControlPlaneMutation(mutation, options = {}) {
+    const controlPlaneSystemTableGateway =
+      this.getControlPlaneSystemTableGateway();
+    if (!controlPlaneSystemTableGateway ||
+        typeof controlPlaneSystemTableGateway.submitMutation !== TYPEOF.FUNCTION) {
+      throw new Error(BOOTSTRAP_API_ERROR.SQL_ENGINE_UNAVAILABLE);
+    }
+    return controlPlaneSystemTableGateway.submitMutation(mutation, {
+      owner: BOOTSTRAP_API_SUBSYSTEM,
+      workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+      deliveryPriority: 'critical',
+      allowPressureDefer: true,
+      allowPressureDegrade: false,
+      pressureRetryAfterMs: this.bootstrapAdmissionRetryAfterMs,
+      routingReadinessDimension:
+        CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+      ...options,
+    });
+  }
+
+  /**
+   * Resolve the canonical shared-metadata query gateway for bootstrap-owned
+   * control-plane reads and writes.
+   * @return {ControlPlaneSystemTableGateway|null}
+   * @private
+   */
+  getControlPlaneSystemTableGateway() {
+    const cdcIntegrationService = this.getCdcIntegrationService();
+    if (!this.controlPlaneSystemTableGateway &&
+        this.sqlQueryEngine &&
+        typeof this.sqlQueryEngine.executeQuery === TYPEOF.FUNCTION) {
+      this.controlPlaneSystemTableGateway = new ControlPlaneSystemTableGateway({
+        nodeId: this.seedNodeId || BOOTSTRAP_API_SUBSYSTEM,
+        sqlQueryEngine: this.sqlQueryEngine,
+        cdcIntegrationService,
+        systemTableCache: this.systemTableCache,
+        messageRouter: this.messageRouter,
+      });
+    }
+    if (!this.controlPlaneSystemTableGateway) {
+      return null;
+    }
+    if (!this.controlPlaneSystemTableGateway.sqlQueryEngine &&
+        this.sqlQueryEngine &&
+        typeof this.controlPlaneSystemTableGateway.setSqlQueryEngine ===
+          TYPEOF.FUNCTION) {
+      this.controlPlaneSystemTableGateway.setSqlQueryEngine(this.sqlQueryEngine);
+    }
+    if (!this.controlPlaneSystemTableGateway.messageRouter &&
+        this.messageRouter &&
+        typeof this.controlPlaneSystemTableGateway.setMessageRouter ===
+          TYPEOF.FUNCTION) {
+      this.controlPlaneSystemTableGateway.setMessageRouter(this.messageRouter);
+    }
+    if (!this.controlPlaneSystemTableGateway.systemTableCache &&
+        this.systemTableCache &&
+        typeof this.controlPlaneSystemTableGateway.setSystemTableCache ===
+          TYPEOF.FUNCTION) {
+      this.controlPlaneSystemTableGateway.setSystemTableCache(
+        this.systemTableCache,
+      );
+    }
+    if (!this.controlPlaneSystemTableGateway.cdcIntegrationService &&
+        cdcIntegrationService &&
+        typeof this.controlPlaneSystemTableGateway.setCdcIntegrationService ===
+          TYPEOF.FUNCTION) {
+      this.controlPlaneSystemTableGateway.setCdcIntegrationService(
+        cdcIntegrationService,
+      );
+    }
+    return this.controlPlaneSystemTableGateway;
+  }
+
+  /**
+   * Determine whether one bootstrap-owned control-plane query failure should
+   * slow producers down with a typed retry surface rather than surfacing as
+   * a terminal internal error.
+   * @param {Object|null} result
+   * @return {boolean}
+   * @private
+   */
+  isRetryableBootstrapControlPlaneQueryFailure(result) {
+    if (!result || result.success !== false) {
+      return false;
+    }
+    if (result.errorCode ===
+        PRESSURE_GOVERNOR_ERROR_CODE.CONTROL_PLANE_PRESSURE_DEGRADED) {
+      return true;
+    }
+    const message = typeof result.error === TYPEOF.STRING ? result.error : '';
+    return RETRYABLE_BOOTSTRAP_CONTROL_PLANE_ERROR_FRAGMENTS.some((fragment) =>
+      message.includes(fragment),
+    );
+  }
+
+  /**
+   * Build one typed retry/defer error for bootstrap-owned control-plane query
+   * failures.
+   * @param {Object} result
+   * @param {string} fallbackMessage
+   * @return {Error}
+   * @private
+   */
+  buildBootstrapControlPlaneQueryError(result, fallbackMessage) {
+    const message =
+      typeof result?.error === TYPEOF.STRING && result.error.length > NUM.ZERO ?
+        result.error :
+        fallbackMessage;
+    if (this.isRetryableBootstrapControlPlaneQueryFailure(result)) {
+      const error = new Error(message);
+      error.statusCode = HTTP_STATUS.SERVICE_UNAVAILABLE;
+      error.errorCode =
+        typeof result?.errorCode === TYPEOF.STRING &&
+          result.errorCode.length > NUM.ZERO ?
+          result.errorCode :
+          BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY;
+      const retryAfterMs = Number.isFinite(result?.retryAfterMs) ?
+        Math.max(NUM.ZERO, Math.floor(result.retryAfterMs)) :
+        this.bootstrapAdmissionRetryAfterMs;
+      error.retryAfterMs = retryAfterMs;
+      error.details = {
+        pressureAction: result?.pressureAction || null,
+        pressureReason: result?.pressureReason || null,
+        pressureSummary: result?.pressureSummary || null,
+        tableName: result?.tableName || null,
+      };
+      return error;
+    }
+    return new Error(message);
   }
 
   /**
@@ -731,8 +966,9 @@ class BootstrapAPI {
       return {ready: false};
     }
 
-    const missing = this.normalizeLeaderStatusForBootstrap(
+    const missing = this.normalizeLeaderStatusForRequiredTables(
       this.getMissingServiceLeaders(),
+      TRAFFIC_REQUIRED_LEADER_TABLES,
     );
     const blockingMissing =
       this.getBlockingLeaderStatusForReadiness(missing);
@@ -807,9 +1043,11 @@ class BootstrapAPI {
       error: options.error,
       code: options.code,
       reasons,
-      retryAfterMs: Number.isFinite(snapshot.retryAfterMs) ?
-        snapshot.retryAfterMs :
-        NUM.ZERO,
+      retryAfterMs: Number.isFinite(options.retryAfterMs) ?
+        Math.max(NUM.ZERO, Math.floor(options.retryAfterMs)) :
+        (Number.isFinite(snapshot.retryAfterMs) ?
+          snapshot.retryAfterMs :
+          NUM.ZERO),
     };
 
     if (typeof options.phase === TYPEOF.STRING && options.phase.length > NUM.ZERO) {
@@ -917,6 +1155,58 @@ class BootstrapAPI {
       return {error: conflictError};
     }
 
+    const now = Date.now();
+    const blockingMoveReplicaAdmissions =
+      await this.getBlockingMoveReplicaBootstrapAdmissions(now);
+    if (blockingMoveReplicaAdmissions.length > NUM.ZERO) {
+      const blockingReservation = blockingMoveReplicaAdmissions[NUM.ZERO];
+      const retryAfterMs =
+        this.resolveMoveReplicaBootstrapAdmissionRetryAfterMs(
+          blockingReservation,
+          now,
+        );
+      this.logger.warn(BOOTSTRAP_API_LOG_MSG.BOOTSTRAP_ADMISSION_DEFERRED, {
+        nodeId,
+        nodeAddress,
+        seedNodeId: this.seedNodeId,
+        admissionBlock: 'move_replica_handoff_stabilizing',
+        assignmentId: blockingReservation.assignmentId,
+        replicaId: blockingReservation.replicaId,
+        groupId: blockingReservation.groupId || null,
+        sourceNodeId: blockingReservation.sourceNodeId || null,
+        targetNodeId: blockingReservation.targetNodeId,
+        retryAfterMs,
+      });
+      reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE);
+      return this.buildBootstrapNotReadyResponse({
+        error: BOOTSTRAP_API_ERROR.BOOTSTRAP_NOT_READY,
+        code: BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY,
+        reasonCode:
+          BOOTSTRAP_API_PROBE_REASON.MOVE_REPLICA_HANDOFF_STABILIZING,
+        retryAfterMs,
+      });
+    }
+
+    if (this.inFlightBootstrapRequestCount >=
+        this.maxConcurrentBootstrapRequests) {
+      this.logger.warn(BOOTSTRAP_API_LOG_MSG.BOOTSTRAP_ADMISSION_DEFERRED, {
+        nodeId,
+        nodeAddress,
+        seedNodeId: this.seedNodeId,
+        inFlightBootstrapRequests: this.inFlightBootstrapRequestCount,
+        maxConcurrentBootstrapRequests: this.maxConcurrentBootstrapRequests,
+        retryAfterMs: this.bootstrapAdmissionRetryAfterMs,
+      });
+      reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE);
+      return this.buildBootstrapNotReadyResponse({
+        error: BOOTSTRAP_API_ERROR.BOOTSTRAP_NOT_READY,
+        code: BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY,
+        reasonCode: BOOTSTRAP_API_PROBE_REASON.JOIN_ADMISSION_BACKPRESSURED,
+        retryAfterMs: this.bootstrapAdmissionRetryAfterMs,
+      });
+    }
+
+    this.inFlightBootstrapRequestCount += 1;
     try {
       const leaderStatus = await this.waitForServiceLeaders();
       if (!leaderStatus.ready) {
@@ -927,25 +1217,19 @@ class BootstrapAPI {
           missingPartitionLeaderNodes: leaderStatus.missingPartitionLeaderNodes,
           missingMessageGroupLeaderNodes: leaderStatus.missingMessageGroupLeaderNodes,
         });
-        reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE);
-        return {
-          ...this.buildBootstrapNotReadyResponse({
-            error: BOOTSTRAP_API_ERROR.RAFT_LEADERS_NOT_READY,
-            code: BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE,
-            reasonCode: BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE,
-          }),
-          missingPartitionLeaders: leaderStatus.missingPartitionLeaders,
-          missingMessageGroupLeaders: leaderStatus.missingMessageGroupLeaders,
-          missingPartitionLeaderNodes: leaderStatus.missingPartitionLeaderNodes,
-          missingMessageGroupLeaderNodes: leaderStatus.missingMessageGroupLeaderNodes,
-        };
       }
 
       // Determine message group assignment strategy
       const assignment = await this.determineAndReserveMessageGroupAssignment(nodeId);
 
-      // Build complete system table snapshots for the new node
-      const systemTableSnapshots = this.buildSystemTableSnapshots();
+      // Get current assignment epoch if available
+      const currentEpoch = this.getCurrentEpoch();
+      const {
+        systemTableSnapshots,
+        topologySnapshotMeta,
+      } = this.buildBootstrapTopologySnapshotEnvelope({
+        currentEpoch,
+      });
 
       // Get cluster configuration
       const clusterConfig = this.getClusterConfiguration();
@@ -962,31 +1246,18 @@ class BootstrapAPI {
 
       // Get table policies for assignment validation
       const tablePolicies = this.getTablePolicies();
-
-      // Get current assignment epoch if available
-      const currentEpoch = this.getCurrentEpoch();
       const latencyTopologyHints = this.getLatencyTopologyHints(nodeId);
 
       // Node registration happens after WebSocket IDENTIFY + NODE_STATE_UPDATE.
       // System table cache is the source of truth.
 
       // Build seed node WebSocket address for cross-node communication
-      let seedNodeWsAddress = this.seedNodeWsAddress || null;
-      if (!seedNodeWsAddress && this.seedNodeAddress &&
-          /^wss?:\/\//.test(this.seedNodeAddress)) {
-        seedNodeWsAddress = this.seedNodeAddress;
-      }
-      if (!seedNodeWsAddress && this.wsPort) {
-        // Extract host from seedNodeAddress (e.g., 'localhost:8080' -> 'localhost')
-        const host = this.seedNodeAddress ?
-          this.seedNodeAddress
-            .replace(/^https?:\/\//, STRING.EMPTY)
-            .replace(/^wss?:\/\//, STRING.EMPTY)
-            .split(ADDRESS.PORT_SEPARATOR)[NUM.ZERO] :
-          BOOTSTRAP_API_DEFAULT.WS_HOST;
-        seedNodeWsAddress = `${PROTOCOL.WS}${host}` +
-          `${ADDRESS.PORT_SEPARATOR}${this.wsPort}`;
-      }
+      const seedNodeWsAddress = resolveAdvertisedWebSocketAddress({
+        advertisedAddress: this.seedNodeWsAddress,
+        nodeAddress: this.seedNodeAddress ||
+          BOOTSTRAP_API_DEFAULT.WS_HOST,
+        wsPort: this.wsPort || null,
+      });
 
       const response = {
         success: true,
@@ -995,11 +1266,26 @@ class BootstrapAPI {
         seedNodeWsAddress,
         messageGroupAssignment: assignment,
         systemTableSnapshots,
+        topologySnapshotMeta,
         readyNodes,
         tablePolicies,
         currentEpoch,
         latencyTopologyHints,
         clusterConfig,
+        leaderReadiness: {
+          ready: leaderStatus.ready === true,
+          missingPartitionLeaders: leaderStatus.missingPartitionLeaders || [],
+          missingPartitionLeaderNodes:
+            leaderStatus.missingPartitionLeaderNodes || [],
+          missingPartitionLeaderAddresses:
+            leaderStatus.missingPartitionLeaderAddresses || [],
+          missingMessageGroupLeaders:
+            leaderStatus.missingMessageGroupLeaders || [],
+          missingMessageGroupLeaderNodes:
+            leaderStatus.missingMessageGroupLeaderNodes || [],
+          missingMessageGroupLeaderAddresses:
+            leaderStatus.missingMessageGroupLeaderAddresses || [],
+        },
         timestamp: Date.now(),
       };
 
@@ -1019,6 +1305,11 @@ class BootstrapAPI {
       });
       reply.code(HTTP_STATUS.INTERNAL_SERVER_ERROR);
       throw error;
+    } finally {
+      this.inFlightBootstrapRequestCount = Math.max(
+        NUM.ZERO,
+        this.inFlightBootstrapRequestCount - NUM.ONE,
+      );
     }
   }
 
@@ -1072,6 +1363,9 @@ class BootstrapAPI {
     }
 
     let handoffContext = null;
+    let previousRegisteredServiceRow = null;
+    let targetServiceRowWritten = false;
+    let sourceRemovalCompleted = false;
     try {
       // Use SQL query engine to insert/update the service
       if (!this.sqlQueryEngine) {
@@ -1083,6 +1377,12 @@ class BootstrapAPI {
       assignmentContext = await this.validateMoveReplicaAssignmentToken(serviceData);
       this.assertSingleOwnerReplicaRegistration(serviceData, assignmentContext);
       handoffContext = await this.startMoveReplicaHandoff(serviceData, assignmentContext);
+      if (handoffContext) {
+        previousRegisteredServiceRow =
+          await this.readCurrentRegisteredServiceRow(
+            serviceData[COLUMN.SERVICE_ID],
+          );
+      }
 
       if (handoffContext) {
         await this.executeMoveReplicaHandoffPhase(
@@ -1092,44 +1392,48 @@ class BootstrapAPI {
           BOOTSTRAP_API_HANDOFF_STATUS.VERIFYING,
           () => this.verifyMoveReplicaHandoffTarget(handoffContext, serviceData),
         );
+      }
 
+      const registeredServiceRow =
+        this.buildRegisteredServiceMutationRow(serviceData);
+      try {
+        const mutationResult = await this.executeBootstrapControlPlaneMutation({
+          operation: 'upsert',
+          tableName: TABLES.SERVICES,
+          row: registeredServiceRow,
+        }, {
+          skipCacheWait: true,
+        });
+        if (mutationResult?.success === false) {
+          throw this.buildBootstrapControlPlaneQueryError(
+            mutationResult,
+            BOOTSTRAP_API_ERROR.SERVICE_REGISTRATION_FAILED,
+          );
+        }
+      } catch (mutationError) {
+        throw this.buildBootstrapControlPlaneMutationError(
+          mutationError,
+          TABLES.SERVICES,
+          BOOTSTRAP_API_ERROR.SERVICE_REGISTRATION_FAILED,
+        );
+      }
+      targetServiceRowWritten = true;
+
+      const expectedRegisteredService =
+        this.buildExpectedRegisteredServiceData(registeredServiceRow);
+      await this.waitForRegisteredServiceCacheVisibility(expectedRegisteredService);
+
+      if (handoffContext) {
         await this.executeMoveReplicaHandoffPhase(
           handoffContext,
           BOOTSTRAP_API_HANDOFF_PHASE.REMOVE_SOURCE,
           WORKFLOW_STEP.STOPPING,
           BOOTSTRAP_API_HANDOFF_STATUS.REMOVING,
-          () => this.removeLocalSourceReplicaForMoveReplica(serviceData),
+          async () => {
+            await this.removeLocalSourceReplicaForMoveReplica(serviceData);
+            sourceRemovalCompleted = true;
+          },
         );
-      }
-
-      // Use INSERT OR REPLACE to handle both new and existing services
-      const sql = BOOTSTRAP_API_SQL.UPSERT_SERVICE;
-
-      const params = [
-        serviceData[COLUMN.SERVICE_ID],
-        serviceData[COLUMN.SERVICE_TYPE],
-        serviceData[COLUMN.NODE_ID],
-        serviceData[COLUMN.PARTITION_ID] || null,
-        serviceData[COLUMN.GROUP_ID] || null,
-        serviceData[COLUMN.REPLICA_ID] || serviceData[COLUMN.SERVICE_ID],
-        serviceData[COLUMN.RAFT_ROLE] || RAFT_ROLE.FOLLOWER,
-        serviceData[COLUMN.STATUS] || SERVICE_STATUS.ACTIVE,
-        serviceData[COLUMN.ADDRESS] || null,
-        serviceData[COLUMN.CREATED_AT] || Date.now(),
-        serviceData[COLUMN.UPDATED_AT] || Date.now(),
-      ];
-
-      const result = await this.executeBootstrapControlPlaneQuery(sql, params);
-
-      if (!result.success) {
-        throw new Error(result.error || BOOTSTRAP_API_ERROR.SERVICE_REGISTRATION_FAILED);
-      }
-
-      const expectedRegisteredService =
-        this.buildExpectedRegisteredServiceData(serviceData);
-      await this.waitForRegisteredServiceCacheVisibility(expectedRegisteredService);
-
-      if (handoffContext) {
         await this.completeMoveReplicaHandoff(handoffContext);
       }
 
@@ -1149,8 +1453,37 @@ class BootstrapAPI {
         operationId: handoffContext?.operationId || null,
       };
     } catch (error) {
+      if (handoffContext &&
+          targetServiceRowWritten &&
+          !sourceRemovalCompleted) {
+        await this.restoreRegisteredServiceRowAfterFailedHandoff(
+          previousRegisteredServiceRow,
+          serviceData,
+          error,
+        );
+      }
       if (handoffContext) {
-        await this.failMoveReplicaHandoff(handoffContext, error);
+        const shouldPreserveRetryableHandoff =
+          this.shouldPreserveMoveReplicaHandoffReservation(
+            handoffContext,
+            error,
+            sourceRemovalCompleted,
+          );
+        if (shouldPreserveRetryableHandoff) {
+          this.logger.warn(
+            'Preserving MOVE_REPLICA handoff reservation after retryable target visibility timeout',
+            {
+              operationId: handoffContext.operationId,
+              serviceId: handoffContext.replicaId,
+              sourceNodeId: handoffContext.sourceNodeId,
+              targetNodeId: handoffContext.targetNodeId,
+              code: error?.errorCode || null,
+              error: error?.message || null,
+            },
+          );
+        } else {
+          await this.failMoveReplicaHandoff(handoffContext, error);
+        }
       }
       if (Number.isFinite(error?.statusCode) &&
           typeof error?.errorCode === TYPEOF.STRING) {
@@ -1191,6 +1524,28 @@ class BootstrapAPI {
   }
 
   /**
+   * Decide whether a MOVE_REPLICA handoff must remain active after a
+   * retryable target-registration failure.
+   * @param {Object|null} handoffContext
+   * @param {Error} error
+   * @param {boolean} sourceRemovalCompleted
+   * @return {boolean}
+   * @private
+   */
+  shouldPreserveMoveReplicaHandoffReservation(
+    handoffContext,
+    error,
+    sourceRemovalCompleted,
+  ) {
+    if (!handoffContext || sourceRemovalCompleted === true) {
+      return false;
+    }
+    return error?.errorCode ===
+      BOOTSTRAP_PIPELINE_ERROR_CODE
+        .SERVICE_REGISTRATION_CACHE_VISIBILITY_TIMEOUT;
+  }
+
+  /**
    * Build canonical expected service row data for registration visibility checks.
    * @param {Object} serviceData - register-service payload.
    * @return {Object} Expected service row shape in system cache.
@@ -1208,6 +1563,74 @@ class BootstrapAPI {
       [COLUMN.STATUS]: serviceData[COLUMN.STATUS] || SERVICE_STATUS.ACTIVE,
       [COLUMN.ADDRESS]: serviceData[COLUMN.ADDRESS] || null,
     };
+  }
+
+  /**
+   * Build the canonical services row persisted by /register-service.
+   * @param {Object} serviceData
+   * @return {Object}
+   * @private
+   */
+  buildRegisteredServiceMutationRow(serviceData) {
+    const serviceId = serviceData[COLUMN.SERVICE_ID];
+    return {
+      [COLUMN.SERVICE_ID]: serviceId,
+      [COLUMN.SERVICE_TYPE]: serviceData[COLUMN.SERVICE_TYPE],
+      [COLUMN.NODE_ID]: serviceData[COLUMN.NODE_ID],
+      [COLUMN.PARTITION_ID]: serviceData[COLUMN.PARTITION_ID] || null,
+      [COLUMN.GROUP_ID]: serviceData[COLUMN.GROUP_ID] || null,
+      [COLUMN.REPLICA_ID]: serviceData[COLUMN.REPLICA_ID] || serviceId,
+      [COLUMN.RAFT_ROLE]: serviceData[COLUMN.RAFT_ROLE] || RAFT_ROLE.FOLLOWER,
+      [COLUMN.STATUS]: serviceData[COLUMN.STATUS] || SERVICE_STATUS.ACTIVE,
+      [COLUMN.ADDRESS]: serviceData[COLUMN.ADDRESS] || null,
+      [COLUMN.CREATED_AT]: serviceData[COLUMN.CREATED_AT] || Date.now(),
+      [COLUMN.UPDATED_AT]: serviceData[COLUMN.UPDATED_AT] || Date.now(),
+    };
+  }
+
+  /**
+   * Normalize one bootstrap mutation failure to the shared typed retry surface.
+   * @param {Error} error
+   * @param {string} tableName
+   * @param {string} fallbackMessage
+   * @return {Error}
+   * @private
+   */
+  buildBootstrapControlPlaneMutationError(
+    error,
+    tableName,
+    fallbackMessage,
+  ) {
+    return this.buildBootstrapControlPlaneQueryError({
+      success: false,
+      error: error?.message || fallbackMessage,
+      errorCode:
+        typeof error?.errorCode === TYPEOF.STRING &&
+          error.errorCode.length > NUM.ZERO ?
+          error.errorCode :
+          (
+            typeof error?.code === TYPEOF.STRING && error.code.length > NUM.ZERO ?
+              error.code :
+              null
+          ),
+      retryAfterMs:
+        Number.isFinite(error?.retryAfterMs) ?
+          Math.max(NUM.ZERO, Math.floor(error.retryAfterMs)) :
+          null,
+      pressureAction:
+        typeof error?.pressureAction === TYPEOF.STRING ?
+          error.pressureAction :
+          null,
+      pressureReason:
+        typeof error?.pressureReason === TYPEOF.STRING ?
+          error.pressureReason :
+          null,
+      pressureSummary:
+        error?.pressureSummary && typeof error.pressureSummary === TYPEOF.OBJECT ?
+          error.pressureSummary :
+          null,
+      tableName,
+    }, fallbackMessage);
   }
 
   /**
@@ -1402,7 +1825,7 @@ class BootstrapAPI {
 
     if (storageMismatchFields.length === NUM.ZERO) {
       return {
-        visible: true,
+        visible: false,
         diagnostics: {
           ...diagnostics,
           reason:
@@ -1424,6 +1847,52 @@ class BootstrapAPI {
         authoritative: authoritativeDiagnostics,
       },
     };
+  }
+
+  /**
+   * Repair one services-cache visibility hole through the canonical CDC
+   * authoritative repair helper when storage already reflects the row.
+   * @param {Object} expectedService
+   * @param {Object|null} diagnostics
+   * @return {Promise<boolean>}
+   * @private
+   */
+  async maybeRepairRegisteredServiceCacheVisibility(expectedService, diagnostics) {
+    if (!expectedService ||
+        diagnostics?.reason !==
+          BOOTSTRAP_API_CACHE_VISIBILITY.REASON_STORAGE_ROW_VISIBLE_CACHE_STALE) {
+      return false;
+    }
+
+    const cdcIntegrationService = this.getCdcIntegrationService();
+    if (!cdcIntegrationService ||
+        typeof cdcIntegrationService.repairCacheVisibilityHole !==
+          TYPEOF.FUNCTION) {
+      return false;
+    }
+
+    try {
+      return await cdcIntegrationService.repairCacheVisibilityHole(
+        TABLES.SERVICES,
+        expectedService[COLUMN.SERVICE_ID],
+        true,
+        expectedService,
+        null,
+        {
+          fallbackPhase: 'bootstrap_api_service_registration',
+        },
+      );
+    } catch (error) {
+      this.logger.warn(
+        'Authoritative services-cache repair failed during register-service visibility wait',
+        {
+          serviceId: expectedService[COLUMN.SERVICE_ID],
+          nodeId: expectedService[COLUMN.NODE_ID],
+          error: error?.message || String(error),
+        },
+      );
+      return false;
+    }
   }
 
   /**
@@ -1482,6 +1951,18 @@ class BootstrapAPI {
       if (evaluation.visible) {
         return;
       }
+      const repaired = await this.maybeRepairRegisteredServiceCacheVisibility(
+        expectedService,
+        evaluation.diagnostics,
+      );
+      if (repaired) {
+        const repairedEvaluation =
+          await this.evaluateRegisteredServiceCacheVisibility(expectedService);
+        lastDiagnostics = repairedEvaluation.diagnostics;
+        if (repairedEvaluation.visible) {
+          return;
+        }
+      }
       if (Date.now() > deadline) {
         break;
       }
@@ -1514,6 +1995,81 @@ class BootstrapAPI {
         details: timeoutDiagnostics,
       },
     );
+  }
+
+  /**
+   * Read the current registered services row from cache or authoritative
+   * storage so MOVE_REPLICA handoff can restore the prior owner when target
+   * visibility never converges.
+   * @param {string} serviceId
+   * @return {Promise<Object|null>}
+   * @private
+   */
+  async readCurrentRegisteredServiceRow(serviceId) {
+    if (typeof serviceId !== TYPEOF.STRING || serviceId.length === NUM.ZERO) {
+      return null;
+    }
+    const cachedRow = this.systemTableCache?.get?.(TABLES.SERVICES, serviceId) || null;
+    if (cachedRow) {
+      return {...cachedRow};
+    }
+    const storageLookup =
+      await this.readRegisteredServiceFromStorage(serviceId);
+    if (storageLookup?.row) {
+      return {...storageLookup.row};
+    }
+    return null;
+  }
+
+  /**
+   * Restore the prior services row when a MOVE_REPLICA target write was issued
+   * but the source replica has not yet been removed.
+   * @param {?Object} previousServiceRow
+   * @param {Object} requestedServiceData
+   * @param {Error} error
+   * @return {Promise<void>}
+   * @private
+   */
+  async restoreRegisteredServiceRowAfterFailedHandoff(
+    previousServiceRow,
+    requestedServiceData,
+    error,
+  ) {
+    if (!previousServiceRow ||
+        typeof previousServiceRow !== TYPEOF.OBJECT) {
+      return;
+    }
+
+    try {
+      const rollbackResult = await this.executeBootstrapControlPlaneMutation({
+        operation: 'upsert',
+        tableName: TABLES.SERVICES,
+        row: this.buildRegisteredServiceMutationRow(previousServiceRow),
+      }, {
+        skipCacheWait: true,
+      });
+      if (rollbackResult?.success === false) {
+        throw this.buildBootstrapControlPlaneQueryError(
+          rollbackResult,
+          BOOTSTRAP_API_ERROR.SERVICE_REGISTRATION_FAILED,
+        );
+      }
+      await this.waitForRegisteredServiceCacheVisibility(previousServiceRow);
+      this.logger.warn('Restored previous service owner after failed MOVE_REPLICA target registration', {
+        serviceId: requestedServiceData?.[COLUMN.SERVICE_ID] || null,
+        targetNodeId: requestedServiceData?.[COLUMN.NODE_ID] || null,
+        restoredNodeId: previousServiceRow?.[COLUMN.NODE_ID] || null,
+        error: error?.message || String(error),
+      });
+    } catch (rollbackError) {
+      this.logger.error('Failed to restore previous service owner after MOVE_REPLICA target registration failure', {
+        serviceId: requestedServiceData?.[COLUMN.SERVICE_ID] || null,
+        targetNodeId: requestedServiceData?.[COLUMN.NODE_ID] || null,
+        restoredNodeId: previousServiceRow?.[COLUMN.NODE_ID] || null,
+        error: rollbackError?.message || String(rollbackError),
+        originalError: error?.message || String(error),
+      });
+    }
   }
 
   /**
@@ -1735,8 +2291,13 @@ class BootstrapAPI {
     const now = Date.now();
     if (!Number.isFinite(reservation.leaseExpiresAt) || reservation.leaseExpiresAt <= now) {
       const renewedReservation =
-        await this.reviveExpiredMoveReplicaAssignmentReservation(
+        await this.renewMoveReplicaAssignmentReservation(
           reservation,
+          {
+            now,
+            force: true,
+            phase: 'lease_renewed',
+          },
         );
       if (renewedReservation) {
         return renewedReservation;
@@ -1754,22 +2315,71 @@ class BootstrapAPI {
       );
     }
 
-    return reservation;
+    return this.renewMoveReplicaAssignmentReservation(
+      reservation,
+      {
+        now,
+        force: false,
+        phase: 'validated',
+      },
+    );
   }
 
   /**
-   * Renew an expired MOVE_REPLICA reservation when the original handoff
+   * Return whether one active reservation should be renewed before it expires.
+   * Keeps long-running join/register retries alive without waiting for the
+   * token to become invalid first.
+   * @param {Object} reservation
+   * @param {number} [now=Date.now()]
+   * @return {boolean}
+   * @private
+   */
+  shouldRenewMoveReplicaAssignmentReservation(reservation, now = Date.now()) {
+    if (!Number.isFinite(reservation?.leaseExpiresAt)) {
+      return false;
+    }
+    const renewalWindowMs = Math.max(
+      NUM.ONE,
+      Math.floor(this.moveReplicaAssignmentLeaseMs / NUM.TWO),
+    );
+    return reservation.leaseExpiresAt - now <= renewalWindowMs;
+  }
+
+  /**
+   * Renew or revive a MOVE_REPLICA reservation when the original handoff
    * is still the canonical pending move for this replica.
    * @param {Object} reservation
+   * @param {Object} [options]
+   * @param {number} [options.now=Date.now()]
+   * @param {boolean} [options.force=false]
+   * @param {string} [options.phase='lease_renewed']
    * @return {Promise<Object|null>}
    * @private
    */
-  async reviveExpiredMoveReplicaAssignmentReservation(reservation) {
-    if (!this.canReviveExpiredMoveReplicaAssignmentReservation(reservation)) {
-      return null;
+  async renewMoveReplicaAssignmentReservation(
+    reservation,
+    options = {},
+  ) {
+    const now = Number.isFinite(options.now) ?
+      Math.floor(options.now) :
+      Date.now();
+    const force = options.force === true;
+    const phase = typeof options.phase === TYPEOF.STRING &&
+      options.phase.length > NUM.ZERO ?
+      options.phase :
+      'lease_renewed';
+
+    if (force) {
+      if (!this.canReviveExpiredMoveReplicaAssignmentReservation(reservation)) {
+        return null;
+      }
+    } else if (!this.shouldRenewMoveReplicaAssignmentReservation(
+      reservation,
+      now,
+    )) {
+      return reservation;
     }
 
-    const now = Date.now();
     const leaseExpiresAt = now + this.moveReplicaAssignmentLeaseMs;
     const status = reservation.status || BOOTSTRAP_API_HANDOFF_STATUS.PREPARING;
     const step = WORKFLOW_STEP.PENDING;
@@ -1779,7 +2389,7 @@ class BootstrapAPI {
     const stepsHistory = [
       ...existingStepsHistory,
       {
-        phase: 'lease_renewed',
+        phase,
         step,
         status,
         timestamp: now,
@@ -1823,7 +2433,7 @@ class BootstrapAPI {
               'failed to persist MOVE_REPLICA assignment lease renewal',
           },
         );
-        return null;
+        return force ? null : reservation;
       }
     }
 
@@ -1832,10 +2442,85 @@ class BootstrapAPI {
       replicaId: renewedReservation.replicaId,
       targetNodeId: renewedReservation.targetNodeId,
       sourceNodeId: renewedReservation.sourceNodeId,
+      phase,
       leaseExpiresAt,
     });
 
     return renewedReservation;
+  }
+
+  /**
+   * Return whether the source replica still exists locally on the seed.
+   * MOVE_REPLICA reservations only originate from seed-owned source replicas,
+   * so local replica absence is one authoritative signal that source removal
+   * has already completed.
+   * @param {Object} reservation
+   * @return {boolean}
+   * @private
+   */
+  isMoveReplicaAssignmentSourceReplicaPresentLocally(reservation) {
+    if (!reservation?.replicaId) {
+      return false;
+    }
+    if (reservation.sourceNodeId &&
+        reservation.sourceNodeId !== this.seedNodeId) {
+      return false;
+    }
+    return this.messageGroupServices?.has?.(reservation.replicaId) === true;
+  }
+
+  /**
+   * Evaluate canonical ownership signals for one MOVE_REPLICA reservation.
+   * @param {Object} reservation
+   * @param {number} [now=Date.now()]
+   * @return {Object}
+   * @private
+   */
+  evaluateMoveReplicaAssignmentReservationOwnership(
+    reservation,
+    now = Date.now(),
+  ) {
+    const existingRow =
+      this.systemTableCache?.get(TABLES.SERVICES, reservation?.replicaId) || null;
+    const existingNodeId = existingRow?.[COLUMN.NODE_ID] || null;
+    const existingStatus = String(
+      existingRow?.[COLUMN.STATUS] || STRING.UNKNOWN,
+    ).toLowerCase();
+    const hasActiveServiceOwner = existingStatus === SERVICE_STATUS.ACTIVE;
+    const sourceOwnsActiveReplica = hasActiveServiceOwner &&
+      existingNodeId === (reservation?.sourceNodeId || null);
+    const targetOwnsActiveReplica = hasActiveServiceOwner &&
+      existingNodeId === (reservation?.targetNodeId || null);
+    const sourceNodeRow = reservation?.sourceNodeId ?
+      this.systemTableCache?.get(TABLES.NODES, reservation.sourceNodeId) || null :
+      null;
+    const targetNodeRow = reservation?.targetNodeId ?
+      this.systemTableCache?.get(TABLES.NODES, reservation.targetNodeId) || null :
+      null;
+    const sourceNodeReady = !sourceNodeRow ||
+      isNodeRecordReady(sourceNodeRow, {now});
+    const targetNodeReady = !!targetNodeRow &&
+      isNodeRecordReady(targetNodeRow, {now});
+    const sourceReplicaPresentLocally =
+      this.isMoveReplicaAssignmentSourceReplicaPresentLocally(reservation);
+    const continuingTargetAdoption = targetOwnsActiveReplica &&
+      sourceReplicaPresentLocally;
+    const observedCommitted = targetOwnsActiveReplica &&
+      !sourceReplicaPresentLocally;
+
+    return {
+      existingRow,
+      existingNodeId,
+      existingStatus,
+      hasActiveServiceOwner,
+      sourceOwnsActiveReplica,
+      targetOwnsActiveReplica,
+      sourceNodeReady,
+      targetNodeReady,
+      sourceReplicaPresentLocally,
+      continuingTargetAdoption,
+      observedCommitted,
+    };
   }
 
   /**
@@ -1852,19 +2537,13 @@ class BootstrapAPI {
     if (BOOTSTRAP_API_ASSIGNMENT.TERMINAL_STATUSES.includes(reservation.status)) {
       return false;
     }
-
-    const existingRow =
-      this.systemTableCache?.get(TABLES.SERVICES, reservation.replicaId) || null;
-    const existingNodeId = existingRow?.[COLUMN.NODE_ID] || null;
-    const existingStatus = String(
-      existingRow?.[COLUMN.STATUS] || STRING.UNKNOWN,
-    ).toLowerCase();
-    if (existingStatus !== SERVICE_STATUS.ACTIVE) {
+    const ownership =
+      this.evaluateMoveReplicaAssignmentReservationOwnership(reservation);
+    if (!ownership.hasActiveServiceOwner || ownership.observedCommitted) {
       return false;
     }
-
-    return existingNodeId === reservation.sourceNodeId ||
-      existingNodeId === reservation.targetNodeId;
+    return ownership.sourceOwnsActiveReplica ||
+      ownership.continuingTargetAdoption;
   }
 
   /**
@@ -1881,36 +2560,28 @@ class BootstrapAPI {
     if (!reservation?.replicaId) {
       return false;
     }
-
-    const existingRow =
-      this.systemTableCache?.get(TABLES.SERVICES, reservation.replicaId) || null;
-    const existingNodeId = existingRow?.[COLUMN.NODE_ID] || null;
-    const existingStatus = String(
-      existingRow?.[COLUMN.STATUS] || STRING.UNKNOWN,
-    ).toLowerCase();
-    if (existingStatus !== SERVICE_STATUS.ACTIVE) {
+    const ownership =
+      this.evaluateMoveReplicaAssignmentReservationOwnership(
+        reservation,
+        now,
+      );
+    if (!ownership.hasActiveServiceOwner || ownership.observedCommitted) {
       return false;
     }
 
     if (!reservation.sourceNodeId) {
+      return ownership.continuingTargetAdoption ||
+        ownership.targetOwnsActiveReplica;
+    }
+
+    if (ownership.continuingTargetAdoption) {
       return true;
     }
 
-    if (existingNodeId === reservation.targetNodeId) {
-      return true;
-    }
-
-    if (existingNodeId !== reservation.sourceNodeId) {
+    if (!ownership.sourceOwnsActiveReplica) {
       return false;
     }
-
-    const sourceNodeRow =
-      this.systemTableCache?.get(TABLES.NODES, reservation.sourceNodeId) || null;
-    if (!sourceNodeRow) {
-      return true;
-    }
-
-    return isNodeRecordReady(sourceNodeRow, {now});
+    return ownership.sourceNodeReady;
   }
 
   /**
@@ -1940,6 +2611,14 @@ class BootstrapAPI {
     )) {
       return 'inactive_status';
     }
+    const ownership =
+      this.evaluateMoveReplicaAssignmentReservationOwnership(
+        reservation,
+        now,
+      );
+    if (ownership.observedCommitted) {
+      return null;
+    }
     if (!Number.isFinite(reservation.leaseExpiresAt)) {
       return 'missing_lease';
     }
@@ -1950,6 +2629,30 @@ class BootstrapAPI {
       return 'source_owner_unavailable';
     }
     return null;
+  }
+
+  /**
+   * Determine whether one non-terminal reservation has already converged to
+   * canonical target ownership and should be reconciled into a committed row.
+   * @param {Object} reservation
+   * @param {number} [now=Date.now()]
+   * @return {boolean}
+   * @private
+   */
+  shouldReconcileMoveReplicaAssignmentReservationToCommitted(
+    reservation,
+    now = Date.now(),
+  ) {
+    if (!reservation ||
+        BOOTSTRAP_API_ASSIGNMENT.TERMINAL_STATUSES.includes(
+          reservation.status,
+        )) {
+      return false;
+    }
+    return this.evaluateMoveReplicaAssignmentReservationOwnership(
+      reservation,
+      now,
+    ).observedCommitted;
   }
 
   /**
@@ -2069,6 +2772,9 @@ class BootstrapAPI {
   buildMoveReplicaHandoffContextFromAssignment(serviceData, assignmentContext) {
     const now = Date.now();
     const groupId = serviceData[COLUMN.GROUP_ID] || assignmentContext.groupId || null;
+    const existingStepsHistory = Array.isArray(assignmentContext?.stepsHistory) ?
+      assignmentContext.stepsHistory.map((step) => ({...step})) :
+      [];
     return {
       operationId: assignmentContext.assignmentId,
       type: BOOTSTRAP_API_ASSIGNMENT.OPERATION_TYPE,
@@ -2086,7 +2792,7 @@ class BootstrapAPI {
         Math.floor(assignmentContext.leaseExpiresAt) :
         null,
       errorMessage: null,
-      stepsHistory: [],
+      stepsHistory: existingStepsHistory,
     };
   }
 
@@ -2168,7 +2874,10 @@ class BootstrapAPI {
         params,
       );
     if (!result.success) {
-      throw new Error(result.error || 'Failed to persist MOVE_REPLICA handoff operation');
+      throw this.buildBootstrapControlPlaneQueryError(
+        result,
+        'Failed to persist MOVE_REPLICA handoff operation',
+      );
     }
   }
 
@@ -2194,7 +2903,10 @@ class BootstrapAPI {
       params,
     );
     if (!result.success) {
-      throw new Error(result.error || 'Failed to update MOVE_REPLICA handoff operation');
+      throw this.buildBootstrapControlPlaneQueryError(
+        result,
+        'Failed to update MOVE_REPLICA handoff operation',
+      );
     }
   }
 
@@ -2677,14 +3389,14 @@ class BootstrapAPI {
     if (this.authoritativeControlPlaneView) {
       return this.authoritativeControlPlaneView;
     }
-    const cdcIntegrationService =
-      this.bootstrapService?.cdcIntegrationService || null;
+    const cdcIntegrationService = this.getCdcIntegrationService();
     if (!cdcIntegrationService) {
       return null;
     }
     this.authoritativeControlPlaneView = new AuthoritativeControlPlaneView({
       nodeId: this.seedNodeId || 'bootstrap-api',
       cdcIntegrationService,
+      messageRouter: this.messageRouter || this.bootstrapService?.messageRouter || null,
     });
     return this.authoritativeControlPlaneView;
   }
@@ -2701,10 +3413,32 @@ class BootstrapAPI {
   determineMessageGroupAssignment(newNodeId, options = {}) {
     // Get existing message groups from cache or services
     const messageGroups = this.getMessageGroups();
+    const excludedSourceNodeIds = new Set(
+      options.excludedSourceNodeIds instanceof Set ?
+        options.excludedSourceNodeIds :
+        [],
+    );
+
+    // BootstrapAPI can only complete MOVE_REPLICA handoff from a source
+    // replica it owns locally on the seed. Remote source replicas are not
+    // actionable during /register-service because source removal is local-only.
+    if (typeof this.seedNodeId === TYPEOF.STRING &&
+        this.seedNodeId.length > NUM.ZERO) {
+      for (const group of messageGroups) {
+        for (const replica of group?.replicas || []) {
+          const replicaNodeId = replica?.node_id;
+          if (!replicaNodeId || replicaNodeId === this.seedNodeId) {
+            continue;
+          }
+          excludedSourceNodeIds.add(replicaNodeId);
+        }
+      }
+    }
 
     this.logger.info(BOOTSTRAP_API_LOG_MSG.JOIN_ASSIGNMENT, {
       newNodeId,
       messageGroupCount: messageGroups.length,
+      excludedSourceNodeCount: excludedSourceNodeIds.size,
       messageGroups: messageGroups.map((g) => ({
         groupId: g.group_id,
         replicaCount: g.replicas?.length || NUM.ZERO,
@@ -2725,6 +3459,7 @@ class BootstrapAPI {
       messageGroups,
       {
         excludedReplicaIds: options.excludedReplicaIds,
+        excludedSourceNodeIds,
       },
     );
 
@@ -2896,6 +3631,249 @@ class BootstrapAPI {
   }
 
   /**
+   * Return one set of MOVE_REPLICA reservations that should defer new
+   * bootstrap admissions because the canonical handoff has not stabilized yet.
+   * This includes in-flight reservations and recently committed handoffs whose
+   * target node is not ready yet.
+   * @param {number} [now=Date.now()]
+   * @return {Promise<Array<Object>>}
+   * @private
+   */
+  async getBlockingMoveReplicaBootstrapAdmissions(now = Date.now()) {
+    const reservations = [];
+    const byAssignmentId = new Map();
+    const pushReservation = (reservation) => {
+      const normalized =
+        this.normalizeMoveReplicaAssignmentReservationRow(reservation);
+      if (!normalized) {
+        return;
+      }
+      byAssignmentId.set(normalized.assignmentId, normalized);
+    };
+
+    for (const reservation of this.moveReplicaAssignmentReservations.values()) {
+      pushReservation(reservation);
+    }
+
+    if (this.sqlQueryEngine) {
+      const queryResult = await this.executeBootstrapControlPlaneQuery(
+        BOOTSTRAP_API_SQL.SELECT_MOVE_ASSIGNMENT_RESERVATIONS,
+        [BOOTSTRAP_API_ASSIGNMENT.OPERATION_TYPE],
+      );
+      if (queryResult?.success !== false) {
+        const rows = Array.isArray(queryResult?.rows) ? queryResult.rows : [];
+        for (const row of rows) {
+          pushReservation(row);
+        }
+      }
+    }
+
+    for (const reservation of byAssignmentId.values()) {
+      if (!this.isMoveReplicaBootstrapAdmissionBlocked(reservation, now)) {
+        continue;
+      }
+      reservations.push(reservation);
+    }
+
+    reservations.sort((left, right) => {
+      const leftUpdatedAt = Number.isFinite(left?.updatedAt) ?
+        left.updatedAt :
+        NUM.ZERO;
+      const rightUpdatedAt = Number.isFinite(right?.updatedAt) ?
+        right.updatedAt :
+        NUM.ZERO;
+      return leftUpdatedAt - rightUpdatedAt;
+    });
+
+    return reservations;
+  }
+
+  /**
+   * Determine whether one MOVE_REPLICA reservation should block a new
+   * bootstrap admission.
+   * @param {Object} reservation
+   * @param {number} [now=Date.now()]
+   * @return {boolean}
+   * @private
+   */
+  isMoveReplicaBootstrapAdmissionBlocked(
+    reservation,
+    now = Date.now(),
+  ) {
+    if (this.isMoveReplicaAssignmentReservationOpen(reservation, now)) {
+      return true;
+    }
+    return this.isCommittedMoveReplicaHandoffStabilizing(
+      reservation,
+      now,
+    );
+  }
+
+  /**
+   * A non-terminal MOVE_REPLICA handoff remains exclusive for new bootstrap
+   * admissions until it either commits or is explicitly invalidated. Lease
+   * expiry only affects token freshness; it must not make the replica
+   * assignable again while the original handoff is still open.
+   * @param {Object} reservation
+   * @param {number} [now=Date.now()]
+   * @return {boolean}
+   * @private
+   */
+  isMoveReplicaAssignmentReservationOpen(
+    reservation,
+    now = Date.now(),
+  ) {
+    if (!reservation ||
+        typeof reservation.assignmentId !== TYPEOF.STRING ||
+        reservation.assignmentId.length === NUM.ZERO) {
+      return false;
+    }
+    if (!reservation.replicaId || !reservation.targetNodeId) {
+      return false;
+    }
+    if (BOOTSTRAP_API_ASSIGNMENT.TERMINAL_STATUSES.includes(
+      reservation.status,
+    )) {
+      return false;
+    }
+    if (!BOOTSTRAP_API_ASSIGNMENT.ACTIVE_RESERVATION_STATUSES.includes(
+      reservation.status,
+    )) {
+      return false;
+    }
+    const ownership =
+      this.evaluateMoveReplicaAssignmentReservationOwnership(
+        reservation,
+        now,
+      );
+    if (ownership.observedCommitted) {
+      return false;
+    }
+    if (ownership.continuingTargetAdoption) {
+      return true;
+    }
+    return this.hasViableMoveReplicaAssignmentSource(reservation, now);
+  }
+
+  /**
+   * A committed handoff still blocks new bootstrap admissions until the target
+   * node is actually ready and the canonical service row points at it. This
+   * prevents the seed from starting a second control-plane handoff while the
+   * first moved replica is still converging.
+   * @param {Object} reservation
+   * @param {number} [now=Date.now()]
+   * @return {boolean}
+   * @private
+   */
+  isCommittedMoveReplicaHandoffStabilizing(
+    reservation,
+    now = Date.now(),
+  ) {
+    if (!reservation) {
+      return false;
+    }
+    const observedOwnership =
+      this.evaluateMoveReplicaAssignmentReservationOwnership(
+        reservation,
+        now,
+      );
+    const logicallyCommitted =
+      reservation.status === BOOTSTRAP_API_HANDOFF_STATUS.COMMITTED ||
+      observedOwnership.observedCommitted;
+    if (!logicallyCommitted) {
+      return false;
+    }
+
+    const stabilizationExpiresAt = Number.isFinite(reservation.updatedAt) ?
+      reservation.updatedAt + this.moveReplicaAssignmentLeaseMs :
+      null;
+    if (!Number.isFinite(stabilizationExpiresAt) ||
+        stabilizationExpiresAt <= now) {
+      return false;
+    }
+
+    return !this.isMoveReplicaAssignmentTargetReady(reservation, now);
+  }
+
+  /**
+   * Determine whether the canonical target of a committed MOVE_REPLICA
+   * handoff is locally ready.
+   * @param {Object} reservation
+   * @param {number} [now=Date.now()]
+   * @return {boolean}
+   * @private
+   */
+  isMoveReplicaAssignmentTargetReady(
+    reservation,
+    now = Date.now(),
+  ) {
+    if (!reservation?.targetNodeId || !reservation?.replicaId) {
+      return false;
+    }
+
+    const targetNodeRow =
+      this.systemTableCache?.get(TABLES.NODES, reservation.targetNodeId) || null;
+    if (!targetNodeRow || !isNodeRecordReady(targetNodeRow, {now})) {
+      return false;
+    }
+
+    const existingServiceRow =
+      this.systemTableCache?.get(TABLES.SERVICES, reservation.replicaId) || null;
+    const existingNodeId = existingServiceRow?.[COLUMN.NODE_ID] || null;
+    const existingStatus = String(
+      existingServiceRow?.[COLUMN.STATUS] || STRING.UNKNOWN,
+    ).toLowerCase();
+
+    return existingNodeId === reservation.targetNodeId &&
+      existingStatus === SERVICE_STATUS.ACTIVE;
+  }
+
+  /**
+   * Resolve one bounded retry hint for bootstrap admission blocked by an
+   * unsettled MOVE_REPLICA handoff.
+   * @param {Object|null} reservation
+   * @param {number} [now=Date.now()]
+   * @return {number}
+   * @private
+   */
+  resolveMoveReplicaBootstrapAdmissionRetryAfterMs(
+    reservation,
+    now = Date.now(),
+  ) {
+    const admissionFloor = Number.isFinite(this.bootstrapAdmissionRetryAfterMs) &&
+      this.bootstrapAdmissionRetryAfterMs > NUM.ZERO ?
+      this.bootstrapAdmissionRetryAfterMs :
+      BOOTSTRAP_API_DEFAULT.BOOTSTRAP_ADMISSION_RETRY_AFTER_MS;
+    const sweepInterval = Number.isFinite(this.moveReplicaAssignmentSweepIntervalMs) &&
+      this.moveReplicaAssignmentSweepIntervalMs > NUM.ZERO ?
+      this.moveReplicaAssignmentSweepIntervalMs :
+      admissionFloor;
+
+    if (!reservation) {
+      return admissionFloor;
+    }
+
+    const blockingUntilMs =
+      reservation.status === BOOTSTRAP_API_HANDOFF_STATUS.COMMITTED &&
+        Number.isFinite(reservation.updatedAt) ?
+        reservation.updatedAt + this.moveReplicaAssignmentLeaseMs :
+        reservation.leaseExpiresAt;
+    if (!Number.isFinite(blockingUntilMs)) {
+      return Math.max(admissionFloor, sweepInterval);
+    }
+
+    const remainingMs = Math.max(NUM.ZERO, blockingUntilMs - now);
+    if (remainingMs === NUM.ZERO) {
+      return admissionFloor;
+    }
+
+    return Math.max(
+      admissionFloor,
+      Math.min(sweepInterval, remainingMs),
+    );
+  }
+
+  /**
    * Check whether one reservation is currently active.
    * @param {Object} reservation
    * @param {number} now
@@ -2949,6 +3927,16 @@ class BootstrapAPI {
     }
 
     for (const reservation of reservations) {
+      if (this.shouldReconcileMoveReplicaAssignmentReservationToCommitted(
+        reservation,
+        now,
+      )) {
+        await this.reconcileMoveReplicaAssignmentReservationToCommitted(
+          reservation,
+          now,
+        );
+        continue;
+      }
       const invalidationReason =
         this.getMoveReplicaAssignmentReservationInvalidationReason(
           reservation,
@@ -2998,6 +3986,9 @@ class BootstrapAPI {
    * @private
    */
   startMoveReplicaAssignmentSweep() {
+    if (!this.ownsMoveReplicaAssignmentLifecycle) {
+      return;
+    }
     if (this.moveReplicaAssignmentSweepTimer ||
         this.moveReplicaAssignmentSweepIntervalMs <= NUM.ZERO) {
       return;
@@ -3105,8 +4096,9 @@ class BootstrapAPI {
         params,
       );
       if (persistResult?.success === false) {
-        throw new Error(
-          persistResult.error || 'Failed to persist MOVE_REPLICA assignment reservation',
+        throw this.buildBootstrapControlPlaneQueryError(
+          persistResult,
+          'Failed to persist MOVE_REPLICA assignment reservation',
         );
       }
     }
@@ -3169,6 +4161,92 @@ class BootstrapAPI {
         });
       }
     }
+  }
+
+  /**
+   * Reconcile one non-terminal reservation into its observed committed state
+   * once canonical ownership has already moved to the target and the source
+   * replica is gone locally.
+   * @param {Object} reservation
+   * @param {number} [now=Date.now()]
+   * @return {Promise<void>}
+   * @private
+   */
+  async reconcileMoveReplicaAssignmentReservationToCommitted(
+    reservation,
+    now = Date.now(),
+  ) {
+    if (!reservation?.assignmentId) {
+      return;
+    }
+
+    const existingStepsHistory = Array.isArray(reservation.stepsHistory) ?
+      reservation.stepsHistory :
+      [];
+    const lastStep = existingStepsHistory[existingStepsHistory.length - 1] || null;
+    const stepsHistory = lastStep?.phase === 'observed_committed' &&
+      lastStep?.step === WORKFLOW_STEP.ACTIVE &&
+      lastStep?.status === BOOTSTRAP_API_HANDOFF_STATUS.COMMITTED ?
+      existingStepsHistory :
+      [
+        ...existingStepsHistory,
+        {
+          phase: 'observed_committed',
+          step: WORKFLOW_STEP.ACTIVE,
+          status: BOOTSTRAP_API_HANDOFF_STATUS.COMMITTED,
+          timestamp: now,
+        },
+      ];
+
+    const nextReservation = {
+      ...reservation,
+      status: BOOTSTRAP_API_HANDOFF_STATUS.COMMITTED,
+      leaseExpiresAt: now,
+      updatedAt: now,
+      stepsHistory,
+    };
+    this.moveReplicaAssignmentReservations.set(
+      reservation.assignmentId,
+      nextReservation,
+    );
+
+    if (this.sqlQueryEngine) {
+      const updateResult = await this.executeBootstrapControlPlaneQuery(
+        BOOTSTRAP_API_SQL.UPDATE_REPLICA_OPERATION,
+        [
+          BOOTSTRAP_API_HANDOFF_STATUS.COMMITTED,
+          WORKFLOW_STEP.ACTIVE,
+          now,
+          now,
+          null,
+          JSON.stringify(stepsHistory),
+          reservation.assignmentId,
+        ],
+      );
+      if (updateResult?.success === false) {
+        this.logger.warn(
+          BOOTSTRAP_API_LOG_MSG.MOVE_REPLICA_ASSIGNMENT_VALIDATION_FAILED,
+          {
+            assignmentId: reservation.assignmentId,
+            status: BOOTSTRAP_API_HANDOFF_STATUS.COMMITTED,
+            error:
+              updateResult.error ||
+              'failed to reconcile MOVE_REPLICA assignment to committed state',
+          },
+        );
+        return;
+      }
+    }
+
+    this.logger.info(
+      BOOTSTRAP_API_LOG_MSG.MOVE_REPLICA_ASSIGNMENT_RECONCILED,
+      {
+        assignmentId: reservation.assignmentId,
+        replicaId: reservation.replicaId,
+        targetNodeId: reservation.targetNodeId,
+        sourceNodeId: reservation.sourceNodeId || null,
+      },
+    );
   }
 
   /**
@@ -3287,14 +4365,11 @@ class BootstrapAPI {
    * @return {Array<Object>} Message groups.
    */
   getMessageGroups() {
-    const systemTableCache = assertCritical(
-      this.systemTableCache,
-      BOOTSTRAP_API_ERROR.SYSTEM_TABLE_CACHE_REQUIRED,
-    );
-
-    // Get message group services from services table in system cache
-    // The system cache is the single source of truth (fed by CDC)
-    const services = systemTableCache.getAll(TABLES.SERVICES) || [];
+    // Bootstrap assignment and bootstrap snapshot publication must observe the
+    // same canonical row source. Prefer local authoritative partition rows
+    // over cache state so a lagging seed cache cannot reserve a replica that
+    // bootstrap snapshots already expose as moved.
+    const services = this.getBootstrapAuthoritativeTableRows(TABLES.SERVICES);
     const messageGroupServices = services.filter((service) =>
       service[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP,
     );
@@ -3331,7 +4406,8 @@ class BootstrapAPI {
     }
 
     // Fall back to message_groups table (may be empty for MOVE_REPLICA tests)
-    const cachedGroups = systemTableCache.getAll(TABLES.MESSAGE_GROUPS) || [];
+    const cachedGroups =
+      this.getBootstrapAuthoritativeTableRows(TABLES.MESSAGE_GROUPS);
 
     return cachedGroups.map((group) => {
       const replicas = messageGroupServices
@@ -3350,6 +4426,28 @@ class BootstrapAPI {
         replicas,
       };
     });
+  }
+
+  /**
+   * Resolve bootstrap-owned system-table rows from the same authoritative
+   * source used when publishing bootstrap topology snapshots. This keeps
+   * assignment selection, peer-address derivation, and bootstrap snapshot
+   * publication on one canonical topology view.
+   * @param {string} tableName
+   * @return {Object[]}
+   * @private
+   */
+  getBootstrapAuthoritativeTableRows(tableName) {
+    const systemTableCache = assertCritical(
+      this.systemTableCache,
+      BOOTSTRAP_API_ERROR.SYSTEM_TABLE_CACHE_REQUIRED,
+    );
+    const cacheRows = systemTableCache.getAll(tableName) || [];
+    const rows = this.resolveAuthoritativeSystemTableSnapshotRows(
+      tableName,
+      cacheRows,
+    );
+    return Array.isArray(rows) ? rows : [];
   }
 
   /**
@@ -3374,19 +4472,35 @@ class BootstrapAPI {
    * @return {Object} System table snapshots with arrays for each table.
    */
   buildSystemTableSnapshots() {
-    const systemTableCache = assertCritical(
-      this.systemTableCache,
-      BOOTSTRAP_API_ERROR.SYSTEM_TABLE_CACHE_REQUIRED,
-    );
+    return this.buildBootstrapTopologySnapshotEnvelope()
+      .systemTableSnapshots;
+  }
 
-    const snapshots = {};
-    for (const tableName of CACHE_HYDRATION_TABLES) {
-      const cacheRows = systemTableCache.getAll(tableName) || [];
-      snapshots[tableName] = this.resolveAuthoritativeSystemTableSnapshotRows(
-        tableName,
-        cacheRows,
-      );
-    }
+  /**
+   * Build the bootstrap topology snapshot envelope published to joiners.
+   * @param {Object} [options]
+   * @param {Object|null} [options.currentEpoch]
+   * @return {{systemTableSnapshots: Object, topologySnapshotMeta: Object}}
+   */
+  buildBootstrapTopologySnapshotEnvelope(options = {}) {
+    const currentEpoch =
+      options.currentEpoch === undefined ?
+        this.getCurrentEpoch() :
+        options.currentEpoch;
+    const envelope = buildBootstrapTopologySnapshotEnvelope({
+      systemTableCache: assertCritical(
+        this.systemTableCache,
+        BOOTSTRAP_API_ERROR.SYSTEM_TABLE_CACHE_REQUIRED,
+      ),
+      currentEpoch,
+      resolveSnapshotRows: (tableName, cacheRows) =>
+        this.resolveAuthoritativeSystemTableSnapshotRows(
+          tableName,
+          cacheRows,
+        ),
+    });
+
+    const snapshots = envelope.systemTableSnapshots;
 
     // Verify that we have partition leaders in the services table
     // Joining nodes need this information to write to system tables
@@ -3404,7 +4518,7 @@ class BootstrapAPI {
       });
     }
 
-    return snapshots;
+    return envelope;
   }
 
   /**
@@ -3614,6 +4728,20 @@ class BootstrapAPI {
    * @private
    */
   getLeaderReadinessPartitionSets() {
+    return this.getLeaderReadinessPartitionSetsForTables(
+      BOOTSTRAP_REQUIRED_LEADER_TABLES,
+    );
+  }
+
+  /**
+   * Build partition ID sets for one leader-readiness requirement set.
+   * Required tables must have routable leaders before the owning concern
+   * is considered fully ready.
+   * @param {Array<string>} requiredTablesList
+   * @return {Object} Known/required partition ID sets.
+   * @private
+   */
+  getLeaderReadinessPartitionSetsForTables(requiredTablesList = []) {
     const systemTableCache = assertCritical(
       this.systemTableCache,
       BOOTSTRAP_API_ERROR.SYSTEM_TABLE_CACHE_REQUIRED,
@@ -3622,7 +4750,7 @@ class BootstrapAPI {
 
     const knownPartitionIds = new Set();
     const requiredPartitionIds = new Set();
-    const requiredTables = new Set(BOOTSTRAP_REQUIRED_LEADER_TABLES);
+    const requiredTables = new Set(requiredTablesList);
 
     for (const partition of partitions) {
       const partitionId = partition[COLUMN.PARTITION_ID];
@@ -3644,10 +4772,14 @@ class BootstrapAPI {
    * Keep missing-partition diagnostics focused on bootstrap-critical tables.
    * Unknown partition IDs are preserved for safety.
    * @param {Array<string>} partitionIds - Missing partition IDs.
+   * @param {Array<string>} [requiredTablesList]
    * @return {Array<string>} Filtered missing IDs.
    * @private
    */
-  filterMissingRequiredPartitionIds(partitionIds = []) {
+  filterMissingRequiredPartitionIds(
+      partitionIds = [],
+      requiredTablesList = BOOTSTRAP_REQUIRED_LEADER_TABLES,
+  ) {
     if (!Array.isArray(partitionIds) || partitionIds.length === NUM.ZERO) {
       return [];
     }
@@ -3655,7 +4787,7 @@ class BootstrapAPI {
     const {
       knownPartitionIds,
       requiredPartitionIds,
-    } = this.getLeaderReadinessPartitionSets();
+    } = this.getLeaderReadinessPartitionSetsForTables(requiredTablesList);
 
     if (knownPartitionIds.size === NUM.ZERO || requiredPartitionIds.size === NUM.ZERO) {
       return partitionIds;
@@ -3678,25 +4810,30 @@ class BootstrapAPI {
       this.systemTableCache,
       BOOTSTRAP_API_ERROR.SYSTEM_TABLE_CACHE_REQUIRED,
     );
-    const services = systemTableCache.getAll(TABLES.SERVICES) || [];
+    const ownerRecords = getOwnerRecords(systemTableCache, serviceType);
     const metadata = new Map();
 
-    for (const service of services) {
-      const entityId = service[idColumn];
-      if (!entityId ||
-          service[COLUMN.SERVICE_TYPE] !== serviceType ||
-          service[COLUMN.RAFT_ROLE] !== RAFT_ROLE.LEADER) {
+    for (const ownerRecord of ownerRecords) {
+      const entityId = ownerRecord?.[idColumn];
+      if (!entityId) {
         continue;
       }
-
-      const existing = metadata.get(entityId) || {
+      const {
+        leaderNodeId,
+        leaderService,
+      } = resolveCanonicalLeaderService(
+        systemTableCache,
+        serviceType,
+        entityId,
+      );
+      const existing = {
         hasLeaderRecord: false,
         hasNodeId: false,
         hasAddress: false,
       };
-      existing.hasLeaderRecord = true;
-      existing.hasNodeId = existing.hasNodeId || Boolean(service[COLUMN.NODE_ID]);
-      existing.hasAddress = existing.hasAddress || Boolean(service[COLUMN.ADDRESS]);
+      existing.hasLeaderRecord = Boolean(leaderNodeId && leaderService);
+      existing.hasNodeId = Boolean(leaderNodeId);
+      existing.hasAddress = Boolean(leaderService?.[COLUMN.ADDRESS]);
       metadata.set(entityId, existing);
     }
 
@@ -3780,12 +4917,16 @@ class BootstrapAPI {
   }
 
   /**
-   * Normalize leader readiness diagnostics for /bootstrap gating.
+   * Normalize leader readiness diagnostics for one required-table set.
    * @param {Object} missing - Missing-leader diagnostics.
+   * @param {Array<string>} [requiredTablesList]
    * @return {Object} Normalized diagnostics.
    * @private
    */
-  normalizeLeaderStatusForBootstrap(missing = {}) {
+  normalizeLeaderStatusForRequiredTables(
+      missing = {},
+      requiredTablesList = BOOTSTRAP_REQUIRED_LEADER_TABLES,
+  ) {
     const cachedPartitionLeaders = this.getCachedLeaderMetadataByServiceType(
       SERVICE_TYPE.PARTITION,
       COLUMN.PARTITION_ID,
@@ -3801,6 +4942,7 @@ class BootstrapAPI {
       ...missing,
       missingPartitionLeaders: this.filterMissingRequiredPartitionIds(
         missing.missingPartitionLeaders || [],
+        requiredTablesList,
       ).filter((partitionId) => {
         const cached = cachedPartitionLeaders.get(partitionId);
         if (!cached || !cached.hasLeaderRecord) {
@@ -3810,6 +4952,7 @@ class BootstrapAPI {
       }),
       missingPartitionLeaderNodes: this.filterMissingRequiredPartitionIds(
         missing.missingPartitionLeaderNodes || [],
+        requiredTablesList,
       ).filter((partitionId) => {
         const cached = cachedPartitionLeaders.get(partitionId);
         if (!cached || !cached.hasLeaderRecord) {
@@ -3824,6 +4967,7 @@ class BootstrapAPI {
       }),
       missingPartitionLeaderAddresses: this.filterMissingRequiredPartitionIds(
         missing.missingPartitionLeaderAddresses || [],
+        requiredTablesList,
       ).filter((partitionId) => {
         const cached = cachedPartitionLeaders.get(partitionId);
         if (!cached || !cached.hasLeaderRecord) {
@@ -3898,8 +5042,9 @@ class BootstrapAPI {
    * @private
    */
   async waitForServiceLeaders() {
-    const missing = this.normalizeLeaderStatusForBootstrap(
+    const missing = this.normalizeLeaderStatusForRequiredTables(
       this.getMissingServiceLeaders(),
+      BOOTSTRAP_REQUIRED_LEADER_TABLES,
     );
     const blockingMissing =
       this.getBlockingLeaderStatusForReadiness(missing);
@@ -3960,6 +5105,8 @@ class BootstrapAPI {
   /**
    * Get system partition leaders for new node to query.
    * Prefer live partition services when available to avoid races with cache updates.
+   * Cache fallback is strict: partitions.leader_node_id must map to an active
+   * partition service on that node.
    * @return {Object} Partition leader addresses by table name.
    */
   getSystemPartitionLeaders() {
@@ -4010,20 +5157,18 @@ class BootstrapAPI {
 
     // Get partitions from system cache - the single source of truth
     const partitions = systemTableCache.getAll(TABLES.PARTITIONS) || [];
-    const services = systemTableCache.getAll(TABLES.SERVICES) || [];
-
     for (const partition of partitions) {
       const tableName = partition.table_id || partition.table_name;
       if (!tableName || leaders[tableName]) {
         continue;
       }
-
-      // Find the leader service for this partition
-      const leaderService = services.find((service) =>
-        service[COLUMN.PARTITION_ID] === partition[COLUMN.PARTITION_ID] &&
-        service[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.PARTITION &&
-        service[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER &&
-        service[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE,
+      const {
+        leaderNodeId,
+        leaderService,
+      } = resolveCanonicalLeaderService(
+        systemTableCache,
+        SERVICE_TYPE.PARTITION,
+        partition[COLUMN.PARTITION_ID],
       );
 
       if (leaderService) {
@@ -4031,7 +5176,7 @@ class BootstrapAPI {
           partitionId: partition[COLUMN.PARTITION_ID],
           replicaId: leaderService[COLUMN.REPLICA_ID] ||
             leaderService[COLUMN.SERVICE_ID],
-          nodeId: leaderService[COLUMN.NODE_ID],
+          nodeId: leaderNodeId,
           address: leaderService[COLUMN.ADDRESS],
         };
       }

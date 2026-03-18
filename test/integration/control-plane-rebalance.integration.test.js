@@ -11,6 +11,12 @@ import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {HeartbeatService} from '../../src/control-plane/heartbeat-service.js';
 import {LeaseService} from '../../src/control-plane/lease-service.js';
 import {EndpointService} from '../../src/control-plane/endpoint-service.js';
+import {
+  ControlPlaneSystemTableGateway,
+} from '../../src/control-plane/control-plane-system-table-gateway.js';
+import {
+  createSystemMetadataOwners,
+} from '../../src/control-plane/owners/index.js';
 import {ReplicaDispatchService} from
   '../../src/control-plane/replica-dispatch-service.js';
 import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.js';
@@ -207,11 +213,19 @@ test('Control plane dispatch integration', async (t) => {
       });
       leaseSvc.initialize();
 
+      const endpointGateway = new ControlPlaneSystemTableGateway({
+        nodeId: seedNodeId,
+        sqlQueryEngine: cdcIntegrationService.sqlQueryEngine,
+        cdcIntegrationService,
+        messageRouter: realMessageRouter,
+      });
       const endpointSvc = new EndpointService({
         nodeId: seedNodeId,
-        cdcIntegrationService,
-        systemTableCache,
-        sqlQueryEngine: cdcIntegrationService.sqlQueryEngine,
+        serviceEndpointsOwner: createSystemMetadataOwners({
+          controlPlaneSystemTableGateway: endpointGateway,
+          systemTableCache,
+        }).serviceEndpointsOwner,
+        controlPlaneSystemTableGateway: endpointGateway,
       });
       endpointSvc.initialize();
 

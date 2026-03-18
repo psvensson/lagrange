@@ -11,8 +11,15 @@
  */
 
 import {LoggingService} from '../logging/logging-service.js';
+import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {NUM, WORKFLOW_STEP} from '../constants/index.js';
-import {ReplicaStatus} from './replica-status.js';
+import {ADJUST_DIRECTION, ReplicaStatus} from './replica-status.js';
+import {
+  adjustToOddCount,
+  getNextOddCount,
+  getPreviousOddCount,
+  isOddReplicaCount,
+} from './odd-replica-count.js';
 import {
   MOVE_REASON,
   PLACEMENT_DEGRADED_REASON,
@@ -149,6 +156,371 @@ class MovePlanner {
     return this.calculatePartitionPlacement(
       feasibleNodes, targetReplicaCount, policy, diagnostics,
     );
+  }
+
+  /**
+   * Validate and adjust replica count to an entity-safe target.
+   * Raft-backed entities require odd replica counts; runtime services do not.
+   * @param {number} count
+   * @param {Object} policy
+   * @return {number}
+   */
+  validateReplicaCount(count, policy) {
+    const defaultMin = this.entityType === EntityType.RUNTIME_SERVICE ?
+      NUM.ONE :
+      NUM.THREE;
+    const defaultMax = this.entityType === EntityType.RUNTIME_SERVICE ?
+      Math.max(defaultMin, count || defaultMin) :
+      NUM.SEVEN;
+    const min = policy.minReplicaCount || defaultMin;
+    const max = policy.maxReplicaCount || defaultMax;
+
+    let adjusted = Math.max(min, Math.min(max, count));
+    if (this.entityType === EntityType.RUNTIME_SERVICE) {
+      return adjusted;
+    }
+
+    if (!isOddReplicaCount(adjusted)) {
+      adjusted = adjustToOddCount(adjusted, ADJUST_DIRECTION.UP);
+      if (adjusted > max) {
+        adjusted = adjustToOddCount(count, ADJUST_DIRECTION.DOWN);
+      }
+    }
+
+    return adjusted;
+  }
+
+  /**
+   * Get desired replica target from policy.
+   * @param {Object} policy
+   * @return {number}
+   */
+  getPolicyTargetReplicaCount(policy) {
+    const defaultTarget = this.entityType === EntityType.RUNTIME_SERVICE ?
+      NUM.ONE :
+      NUM.THREE;
+    return policy.targetReplicaCount || policy.replicaCount || defaultTarget;
+  }
+
+  /**
+   * Get actionable target based on currently available ready nodes.
+   * @param {Object} policy
+   * @param {Array<Object>} availableNodes
+   * @return {number}
+   */
+  getActionableTargetReplicaCount(policy, availableNodes) {
+    const desiredTarget = this.getPolicyTargetReplicaCount(policy);
+    const availableCount = Array.isArray(availableNodes) ?
+      availableNodes.length :
+      NUM.ZERO;
+    return Math.min(desiredTarget, availableCount);
+  }
+
+  /**
+   * Calculate target replica count based on policy and current state.
+   * @param {Array<Object>} currentReplicas
+   * @param {Object} policy
+   * @return {number}
+   */
+  calculateTargetReplicaCount(currentReplicas, policy) {
+    const healthyCount = this.getHealthyReplicas(currentReplicas).length;
+    const targetCount = this.getPolicyTargetReplicaCount(policy);
+    const minCount = policy.minReplicaCount || NUM.THREE;
+    const maxCount = policy.maxReplicaCount || NUM.SEVEN;
+
+    if (this.entityType === EntityType.RUNTIME_SERVICE) {
+      return this.validateReplicaCount(targetCount, policy);
+    }
+
+    const validTarget = this.validateReplicaCount(targetCount, policy);
+
+    if (healthyCount < minCount) {
+      return this.validateReplicaCount(minCount, policy);
+    }
+
+    if (healthyCount > maxCount) {
+      return this.validateReplicaCount(maxCount, policy);
+    }
+
+    if (healthyCount < validTarget) {
+      const nextCount = getNextOddCount(healthyCount, maxCount);
+      return Math.min(nextCount, validTarget);
+    }
+
+    if (healthyCount > validTarget) {
+      const prevCount = getPreviousOddCount(healthyCount, minCount);
+      return Math.max(prevCount, validTarget);
+    }
+
+    return validTarget;
+  }
+
+  /**
+   * Check if multiple replicas are on the same node.
+   * @param {Array<Object>} replicas
+   * @return {boolean}
+   */
+  hasMultipleReplicasOnSameNode(replicas) {
+    const nodeIds = replicas
+      .filter((replica) => replica && replica.node_id)
+      .map((replica) => replica.node_id);
+    if (nodeIds.length === NUM.ZERO) {
+      return false;
+    }
+    return new Set(nodeIds).size < nodeIds.length;
+  }
+
+  /**
+   * Get nodes that do not have a local replica.
+   * @param {Array<Object>} replicas
+   * @return {Array<string>}
+   */
+  getNodesWithoutLocalReplica(replicas) {
+    const allNodes = this.moveStateProvider.getAvailableNodes();
+    let localAccessReplicas = replicas;
+    const cache = this.moveStateProvider.systemTableCache;
+
+    if (this.entityType === EntityType.MESSAGE_GROUP &&
+        cache &&
+        typeof cache.filter === 'function') {
+      localAccessReplicas = cache.filter(
+        SYSTEM_TABLE_NAME.SERVICES,
+        (service) => {
+          return service?.service_type === EntityType.MESSAGE_GROUP &&
+            service?.status === ReplicaStatus.ACTIVE &&
+            typeof service?.node_id === 'string' &&
+            service.node_id.length > NUM.ZERO;
+        },
+      );
+    }
+
+    const nodesWithReplicas = new Set(
+      localAccessReplicas
+        .filter((replica) => replica && replica.node_id)
+        .map((replica) => replica.node_id),
+    );
+    return allNodes
+      .map((node) => node?.node_id || null)
+      .filter((nodeId) => nodeId && !nodesWithReplicas.has(nodeId));
+  }
+
+  /**
+   * Check if current state is critical.
+   * @param {Array<Object>} replicas
+   * @param {Object} policy
+   * @param {Array<Object>|null} [availableNodes]
+   * @return {boolean}
+   */
+  isCriticalState(replicas, policy, availableNodes = null) {
+    const healthyReplicas = this.getHealthyReplicas(replicas);
+    const readyNodes = Array.isArray(availableNodes) ?
+      availableNodes :
+      this.moveStateProvider.getAvailableNodes();
+    const minReplicas = policy.minReplicaCount || NUM.THREE;
+
+    if (healthyReplicas.length < minReplicas &&
+        readyNodes.length >= minReplicas) {
+      return true;
+    }
+
+    if (this.entityType === EntityType.MESSAGE_GROUP &&
+        policy.ensureLocalAccess) {
+      return this.getNodesWithoutLocalReplica(replicas).length > NUM.ZERO;
+    }
+
+    return false;
+  }
+
+  /**
+   * Get the reason for critical state.
+   * @param {Array<Object>} replicas
+   * @param {Object} policy
+   * @param {Array<Object>|null} [availableNodes]
+   * @return {string}
+   */
+  getCriticalReason(replicas, policy, availableNodes = null) {
+    const healthyReplicas = this.getHealthyReplicas(replicas);
+    const readyNodes = Array.isArray(availableNodes) ?
+      availableNodes :
+      this.moveStateProvider.getAvailableNodes();
+    const minReplicas = policy.minReplicaCount || NUM.THREE;
+
+    if (healthyReplicas.length < minReplicas &&
+        readyNodes.length >= minReplicas) {
+      return `replica_count_below_minimum: ${healthyReplicas.length} < ` +
+        `${minReplicas}`;
+    }
+
+    if (this.entityType === EntityType.MESSAGE_GROUP &&
+        policy.ensureLocalAccess) {
+      const nodesWithoutLocalReplica =
+        this.getNodesWithoutLocalReplica(replicas);
+      if (nodesWithoutLocalReplica.length > NUM.ZERO) {
+        return `nodes_without_local_replica: ` +
+          `${nodesWithoutLocalReplica.join(', ')}`;
+      }
+    }
+
+    return 'unknown';
+  }
+
+  /**
+   * Check if current state is suboptimal.
+   * @param {Array<Object>} replicas
+   * @param {Object} policy
+   * @param {Array<Object>|null} [availableNodes]
+   * @return {boolean}
+   */
+  isSuboptimalState(replicas, policy, availableNodes = null) {
+    const targetCount = this.getPolicyTargetReplicaCount(policy);
+    const healthyReplicas = this.getHealthyReplicas(replicas);
+    const readyNodes = Array.isArray(availableNodes) ?
+      availableNodes :
+      this.moveStateProvider.getAvailableNodes();
+    const actionableTarget =
+      this.getActionableTargetReplicaCount(policy, readyNodes);
+
+    if (healthyReplicas.length < actionableTarget ||
+        healthyReplicas.length > targetCount) {
+      return true;
+    }
+
+    if (policy.placementConstraints?.spreadAcrossNodes &&
+        this.hasMultipleReplicasOnSameNode(healthyReplicas)) {
+      const usedNodeIds = new Set(
+        healthyReplicas
+          .filter((replica) => replica && replica.node_id)
+          .map((replica) => replica.node_id),
+      );
+      const unusedNodes = readyNodes.filter(
+        (node) => node && node.node_id && !usedNodeIds.has(node.node_id),
+      );
+      if (unusedNodes.length > NUM.ZERO) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Apply policy to determine if rebalancing is needed.
+   * @param {Object} policy
+   * @return {Object}
+   */
+  applyPolicy(policy) {
+    const currentReplicas = this.getCurrentReplicas();
+    const healthyReplicas = this.getHealthyReplicas(currentReplicas);
+    const availableNodes = this.moveStateProvider.getAvailableNodes();
+    const actionableTarget =
+      this.getActionableTargetReplicaCount(policy, availableNodes);
+    const targetCount = this.calculateTargetReplicaCount(
+      currentReplicas,
+      policy,
+    );
+
+    const decision = {
+      needsRebalancing: false,
+      reason: null,
+      currentCount: healthyReplicas.length,
+      targetCount,
+      policy,
+    };
+
+    if (healthyReplicas.length < actionableTarget) {
+      decision.needsRebalancing = true;
+      decision.reason = 'replica_count_below_target';
+    } else if (healthyReplicas.length > targetCount) {
+      decision.needsRebalancing = true;
+      decision.reason = 'replica_count_above_target';
+    }
+
+    if (policy.placementConstraints?.spreadAcrossNodes &&
+        this.hasMultipleReplicasOnSameNode(healthyReplicas)) {
+      const usedNodeIds = new Set(
+        healthyReplicas
+          .filter((replica) => replica && replica.node_id)
+          .map((replica) => replica.node_id),
+      );
+      const unusedNodes = availableNodes.filter(
+        (node) => node && node.node_id && !usedNodeIds.has(node.node_id),
+      );
+      if (unusedNodes.length > NUM.ZERO) {
+        decision.needsRebalancing = true;
+        decision.reason = decision.reason || 'replicas_not_spread';
+      }
+    }
+
+    if (this.entityType === EntityType.MESSAGE_GROUP &&
+        policy.ensureLocalAccess) {
+      const nodesWithoutReplica =
+        this.getNodesWithoutLocalReplica(currentReplicas);
+      if (nodesWithoutReplica.length > NUM.ZERO) {
+        decision.needsRebalancing = true;
+        decision.reason = decision.reason || 'nodes_without_local_replica';
+      }
+    }
+
+    return decision;
+  }
+
+  /**
+   * Assess the current state for logging and scheduling.
+   * @param {Array<Object>} currentReplicas
+   * @param {Object} policy
+   * @param {Array<Object>|null} [availableNodes]
+   * @return {Object}
+   */
+  assessState(currentReplicas, policy, availableNodes = null) {
+    const readyNodes = Array.isArray(availableNodes) ?
+      availableNodes :
+      this.moveStateProvider.getAvailableNodes();
+    const healthyReplicas = this.getHealthyReplicas(currentReplicas);
+    const desiredTarget = this.getPolicyTargetReplicaCount(policy);
+    const actionableTarget =
+      this.getActionableTargetReplicaCount(policy, readyNodes);
+    const critical = this.isCriticalState(
+      currentReplicas,
+      policy,
+      readyNodes,
+    );
+
+    return {
+      healthyReplicas,
+      desiredTarget,
+      actionableTarget,
+      critical,
+      criticalReason: critical ?
+        this.getCriticalReason(currentReplicas, policy, readyNodes) :
+        null,
+      suboptimal: !critical &&
+        this.isSuboptimalState(currentReplicas, policy, readyNodes),
+    };
+  }
+
+  /**
+   * Read current replicas from the owner provider.
+   * @return {Array<Object>}
+   * @private
+   */
+  getCurrentReplicas() {
+    if (typeof this.moveStateProvider.getCurrentReplicas !== 'function') {
+      return [];
+    }
+    return this.moveStateProvider.getCurrentReplicas();
+  }
+
+  /**
+   * Read healthy replicas through the owner provider.
+   * @param {Array<Object>} replicas
+   * @return {Array<Object>}
+   * @private
+   */
+  getHealthyReplicas(replicas) {
+    if (typeof this.moveStateProvider.getHealthyReplicas !== 'function') {
+      return Array.isArray(replicas) ? replicas : [];
+    }
+    return this.moveStateProvider.getHealthyReplicas(replicas);
   }
 
   /**

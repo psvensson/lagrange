@@ -1,0 +1,221 @@
+import {test} from '../../src/test-helpers/tap.js';
+import {
+  PRESSURE_GOVERNOR_ACTION,
+  PRESSURE_GOVERNOR_REASON,
+  PRESSURE_WORK_CLASS,
+  PressureGovernor,
+} from '../../src/control-plane/pressure-governor.js';
+
+test('PressureGovernor allows critical work during transport pressure',
+  async (t) => {
+    const governor = new PressureGovernor({
+      nodeId: 'node-a',
+      messageRouter: {
+        getOutboundPressureSummary() {
+          return {
+            backpressured: true,
+            saturatedNodeCount: 1,
+            totalPending: 64,
+            maxPendingUtilization: 1,
+          };
+        },
+      },
+    });
+
+    const decision = governor.evaluate({
+      workClass: PRESSURE_WORK_CLASS.CRITICAL,
+      resourceKeys: ['control-plane:write'],
+      allowDegrade: true,
+      allowDefer: true,
+    });
+
+    t.equal(
+      decision.action,
+      PRESSURE_GOVERNOR_ACTION.ALLOW,
+      'critical work should remain admissible',
+    );
+    t.equal(
+      decision.reason,
+      PRESSURE_GOVERNOR_REASON.CRITICAL_BYPASS,
+      'critical work should report the bypass reason',
+    );
+    t.equal(
+      decision.summary?.backpressured,
+      true,
+      'decision should preserve canonical pressure summary',
+    );
+  });
+
+test('PressureGovernor degrades background work during transport pressure',
+  async (t) => {
+    const governor = new PressureGovernor({
+      nodeId: 'node-a',
+      messageRouter: {
+        getOutboundPressureSummary() {
+          return {
+            backpressured: true,
+            saturatedNodeCount: 2,
+            totalPending: 96,
+            maxPendingUtilization: 1,
+          };
+        },
+      },
+    });
+
+    const decision = governor.evaluate({
+      workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+      resourceKeys: ['join:repair'],
+      allowDegrade: true,
+      allowDefer: true,
+    });
+
+    t.equal(
+      decision.action,
+      PRESSURE_GOVERNOR_ACTION.DEGRADE,
+      'background work should degrade first under pressure',
+    );
+    t.equal(
+      decision.reason,
+      PRESSURE_GOVERNOR_REASON.TRANSPORT_BACKPRESSURE,
+      'degrade should be attributed to transport pressure',
+    );
+  });
+
+test('PressureGovernor reuses one shared instance per node id',
+  async (t) => {
+    PressureGovernor.clearSharedForTests();
+
+    const first = PressureGovernor.getShared({
+      nodeId: 'node-shared',
+      messageRouter: {
+        getOutboundPressureSummary() {
+          return {
+            backpressured: false,
+            saturatedNodeCount: 0,
+            totalPending: 0,
+            maxPendingUtilization: 0,
+          };
+        },
+      },
+    });
+    const second = PressureGovernor.getShared({
+      nodeId: 'node-shared',
+      messageRouter: null,
+    });
+
+    t.equal(
+      second,
+      first,
+      'shared lookup should return the existing governor for the node',
+    );
+    t.equal(
+      first.getPressureSummary(['transport:outbound'])?.backpressured,
+      false,
+      'shared governor should retain configured dependencies',
+    );
+
+    PressureGovernor.clearSharedForTests();
+  });
+
+test('PressureGovernor isolates query-plane pressure from control-plane ' +
+  'capacity partitions', async (t) => {
+    const governor = new PressureGovernor({
+      nodeId: 'node-a',
+      messageRouter: {
+        getStats() {
+          return {
+            outboundQueues: {
+              'node-b': {
+                pending: 48,
+                pendingCritical: 0,
+                pendingBackground: 48,
+                criticalReserve: 16,
+                backgroundPendingLimit: 48,
+                maxPending: 64,
+              },
+            },
+          };
+        },
+      },
+    });
+
+    const queryDecision = governor.evaluate({
+      workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+      resourceKeys: ['query-plane:read'],
+      allowDegrade: true,
+      allowDefer: true,
+    });
+    const controlPlaneDecision = governor.evaluate({
+      workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+      resourceKeys: ['control-plane:read'],
+      allowDegrade: false,
+      allowDefer: true,
+    });
+
+    t.equal(
+      queryDecision.action,
+      PRESSURE_GOVERNOR_ACTION.DEGRADE,
+      'query-plane work should degrade when the background partition is saturated',
+    );
+    t.equal(
+      queryDecision.summary?.capacityPartition,
+      'query-plane',
+      'query-plane decisions should report the query-plane capacity partition',
+    );
+    t.equal(
+      controlPlaneDecision.action,
+      PRESSURE_GOVERNOR_ACTION.ALLOW,
+      'control-plane work should stay admissible while critical reserve remains available',
+    );
+    t.equal(
+      controlPlaneDecision.summary?.capacityPartition,
+      'control-plane',
+      'control-plane decisions should report the control-plane capacity partition',
+    );
+  });
+
+test('PressureGovernor backpressures control-plane work when critical reserve ' +
+  'is exhausted', async (t) => {
+    const governor = new PressureGovernor({
+      nodeId: 'node-a',
+      messageRouter: {
+        getStats() {
+          return {
+            outboundQueues: {
+              'node-b': {
+                pending: 44,
+                pendingCritical: 16,
+                pendingBackground: 28,
+                criticalReserve: 16,
+                backgroundPendingLimit: 48,
+                maxPending: 64,
+              },
+            },
+          };
+        },
+      },
+    });
+
+    const decision = governor.evaluate({
+      workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+      resourceKeys: ['control-plane:write'],
+      allowDegrade: false,
+      allowDefer: true,
+    });
+
+    t.equal(
+      decision.action,
+      PRESSURE_GOVERNOR_ACTION.DEFER,
+      'control-plane work should defer once its reserved capacity is exhausted',
+    );
+    t.equal(
+      decision.summary?.capacityPartition,
+      'control-plane',
+      'control-plane defer should preserve the control-plane partition marker',
+    );
+    t.equal(
+      decision.summary?.totalPendingCritical,
+      16,
+      'control-plane summary should expose critical pending pressure',
+    );
+  });

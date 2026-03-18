@@ -6,14 +6,14 @@
 
 import {EventEmitter} from 'events';
 import {v4 as uuidv4} from 'uuid';
-import LifeRaft from '@markwylde/liferaft';
+import LifeRaft from '../raft/liferaft.js';
 import {
-  CDC_OPERATION,
   ADDRESS,
   COLUMN,
   ENTITY_TYPE,
   METRICS_LOG_TAG,
   NUM,
+  SERVICE_STATUS,
   SERVICE_TYPE,
   STATE,
   STRING,
@@ -26,25 +26,50 @@ import {getSystemCachePrimaryKeyFieldOrFallback} from
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
 import {
+  ControlPlaneField,
+  ControlPlaneMessageType,
+} from '../control-plane/control-plane-constants.js';
+import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../control-plane/control-plane-readiness-constants.js';
+import {ControlPlaneSystemTableGateway} from
+  '../control-plane/control-plane-system-table-gateway.js';
+import {
+  PRESSURE_WORK_CLASS,
+} from '../control-plane/pressure-governor.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {NodeService} from '../node/node-service.js';
 import {HLCClockService} from '../hlc/hlc-clock-service.js';
 import {HLCTimestamp} from '../hlc/hlc-timestamp.js';
-import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
+import {
+  INITIAL_MESSAGE_GROUP_ID,
+  INITIAL_PARTITION_IDS,
+  SYSTEM_TABLE_NAME,
+} from '../bootstrap/system-table-schemas-constants.js';
+import {
+  attachTrafficReadinessListener,
+  isBackgroundWorkReady as isBackgroundWorkLifecycleReady,
+  isMetadataPublicationReady as isMetadataPublicationLifecycleReady,
+} from '../bootstrap/traffic-readiness-utils.js';
 import {isSystemTableWriteReady} from '../cache/leader-readiness-gate.js';
 import {InMemoryLogAdapter} from '../raft/in-memory-log-adapter.js';
 import {isRaftPacket, RAFT_PACKET_TYPES} from '../raft/raft-packet-utils.js';
-import {RAFT_ELECTION_TIMING, RAFT_EVENT} from '../raft/constants.js';
+import {
+  RAFT_ELECTION_TIMING,
+  RAFT_EVENT,
+  RAFT_PACKET_TYPE,
+} from '../raft/constants.js';
 import {
   applyRuntimeRaftTiming,
   computeReplicaElectionTimeouts,
 } from '../raft/raft-timing-utils.js';
+import {LeaderActivationGate} from '../raft/leader-activation-gate.js';
+import {LeaderActivationScheduler} from '../raft/leader-activation-scheduler.js';
 import {assertRaftProviderContract} from '../raft/raft-provider-contract.js';
 import {LiferaftProvider} from '../raft/liferaft-provider.js';
 import {AuthoritativeRowMutationHelper} from '../raft/authoritative-row-mutation-helper.js';
 import {wireReplicaLifecycleEvents} from '../raft/replica-leadership-state.js';
+import {normalizePublishedRaftRole} from '../raft/published-raft-role.js';
 import {AddressManager} from '../address/address-manager.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
 import {
@@ -81,9 +106,15 @@ const ROLE_PERSIST_ERROR_MSG =
   'Failed to persist raft role update';
 const LEADER_NODE_PERSIST_ERROR_MSG =
   'Failed to persist message group leader update';
+const STRICT_CDC_FORWARD_SYSTEM_TABLES = new Set(
+  Object.values(SYSTEM_TABLE_NAME),
+);
 const FLUSH_SKIP_NOT_OWNER = 'not-owner';
 const FLUSH_SKIP_READY = 'ready';
+const FLUSH_SKIP_SETTLING = 'settling';
+const FLUSH_SKIP_DISABLED = 'disabled';
 const CDC_FORWARD_MAX_RELAY_DEPTH = NUM.TWO;
+const CDC_BATCH_COMMAND_TYPE = 'CDC_BATCH';
 const FORWARD_TOPOLOGY_REPAIR_LOCAL_READ_CONSISTENCY = 'local_leader';
 const FORWARD_TOPOLOGY_REPAIR_DEFAULT = Object.freeze({
   COOLDOWN_MS: 1000,
@@ -91,6 +122,107 @@ const FORWARD_TOPOLOGY_REPAIR_DEFAULT = Object.freeze({
   NO_CHANGE_COOLDOWN_MS: 2000,
   QUERY_TIMEOUT_MS: 1500,
 });
+const CONTROL_PLANE_PARTITION_IDS = new Set(
+  Object.values(INITIAL_PARTITION_IDS),
+);
+const DIRECT_ONLY_MESSAGE_TYPES = new Set([
+  ...Object.values(ControlPlaneMessageType),
+]);
+const MESSAGE_DELIVERY_MODE = Object.freeze({
+  AUTO: 'auto',
+  DIRECT_ONLY: 'direct_only',
+  DIRECT_WITH_RAFT_FALLBACK: 'direct_with_raft_fallback',
+});
+
+function shouldDeferImmediateDeliveryRetry(result) {
+  return Boolean(
+    result &&
+    typeof result === TYPEOF.OBJECT &&
+    result.deferRetry === true &&
+    Number.isFinite(result.retryAfterMs) &&
+    result.retryAfterMs > NUM.ZERO,
+  );
+}
+
+function buildDeferredDeliveryError(deliveryResult) {
+  const error = new Error(
+    deliveryResult?.error || 'Message delivery deferred',
+  );
+  if (typeof deliveryResult?.errorCode === TYPEOF.STRING &&
+      deliveryResult.errorCode.length > NUM.ZERO) {
+    error.code = deliveryResult.errorCode;
+  }
+  if (deliveryResult?.deferRetry === true) {
+    error.deferRetry = true;
+  }
+  if (Number.isFinite(deliveryResult?.retryAfterMs)) {
+    error.retryAfterMs = Math.max(
+      NUM.ZERO,
+      Math.floor(deliveryResult.retryAfterMs),
+    );
+  }
+  return error;
+}
+
+function buildDeferredCdcForwardError(message, retryAfterMs = NUM.ZERO) {
+  const error = new Error(message);
+  error.retryable = false;
+  error.deferRetry = true;
+  error.retryAfterMs = Math.max(NUM.ONE, Math.floor(retryAfterMs || NUM.ZERO));
+  return error;
+}
+
+function wrapCdcProposeError(message, error) {
+  const wrappedError = new Error(message);
+  if (error?.deferRetry === true) {
+    wrappedError.deferRetry = true;
+  }
+  if (Number.isFinite(error?.retryAfterMs) && error.retryAfterMs > NUM.ZERO) {
+    wrappedError.retryAfterMs = Math.max(NUM.ONE, Math.floor(error.retryAfterMs));
+  }
+  if (typeof error?.code === TYPEOF.STRING && error.code.length > NUM.ZERO) {
+    wrappedError.code = error.code;
+  }
+  if (error?.retryable === false) {
+    wrappedError.retryable = false;
+  }
+  return wrappedError;
+}
+
+function isControlPlaneTransportTarget(targetService) {
+  if (typeof targetService !== TYPEOF.STRING || targetService.length === 0) {
+    return false;
+  }
+  const [nodeId, entityType, entityId] = targetService.split('/');
+  if (!nodeId || !entityType || !entityId) {
+    return false;
+  }
+  if (entityType === ENTITY_TYPE.PARTITION) {
+    const partitionId = entityId.replace(/-r\d+$/, '');
+    return CONTROL_PLANE_PARTITION_IDS.has(partitionId);
+  }
+  if (entityType === ENTITY_TYPE.MESSAGE_GROUP) {
+    return entityId === INITIAL_MESSAGE_GROUP_ID ||
+      entityId.startsWith(`${INITIAL_MESSAGE_GROUP_ID}-r`);
+  }
+  return false;
+}
+
+function resolveTransportDeliveryOptions(targetService) {
+  return isControlPlaneTransportTarget(targetService) ?
+    {deliveryPriority: 'critical'} :
+    undefined;
+}
+
+function normalizeMessageDeliveryMode(deliveryMode) {
+  if (deliveryMode === MESSAGE_DELIVERY_MODE.DIRECT_ONLY) {
+    return MESSAGE_DELIVERY_MODE.DIRECT_ONLY;
+  }
+  if (deliveryMode === MESSAGE_DELIVERY_MODE.DIRECT_WITH_RAFT_FALLBACK) {
+    return MESSAGE_DELIVERY_MODE.DIRECT_WITH_RAFT_FALLBACK;
+  }
+  return MESSAGE_DELIVERY_MODE.AUTO;
+}
 
 /**
  * MessageGroupService provides reliable inter-service communication.
@@ -175,6 +307,22 @@ class MessageGroupService extends EventEmitter {
     this.retryJitterFactor =
       config.get(CONFIG_KEY.MESSAGE_GROUP_RETRY_JITTER_FACTOR) ??
       MESSAGE_GROUP_SERVICE_DEFAULT.RETRY_JITTER_FACTOR;
+    this.leaderActivationStabilizationMs =
+      Number.isFinite(options.leaderActivationStabilizationMs) &&
+      options.leaderActivationStabilizationMs >= NUM.ZERO ?
+        Math.floor(options.leaderActivationStabilizationMs) :
+        (
+          config.get(CONFIG_KEY.RAFT_LEADER_ACTIVATION_STABILIZATION_MS) ??
+          250
+        );
+    this.leaderActivationNodeSpacingMs =
+      Number.isFinite(options.leaderActivationNodeSpacingMs) &&
+      options.leaderActivationNodeSpacingMs >= NUM.ZERO ?
+        Math.floor(options.leaderActivationNodeSpacingMs) :
+        (
+          config.get(CONFIG_KEY.RAFT_LEADER_ACTIVATION_NODE_SPACING_MS) ??
+          25
+        );
     this.forwardTargetSuppression = new Map();
     this.forwardTargetSuppressionMs =
       Number.isFinite(options.forwardTargetSuppressionMs) &&
@@ -213,12 +361,17 @@ class MessageGroupService extends EventEmitter {
     // Note: transportAdapter removed - RaftNode.write() now calls messageRouter directly
     // Requirements: 3.1, 3.2, 3.3, 3.4, 4.1, 4.2, 4.3, 4.4
 
-    this.operationLedger = new MessageGroupOperationLedger({now: this.now});
+    this.operationLedger = new MessageGroupOperationLedger({
+      now: this.now,
+      maxEntries: options.operationLedgerMaxEntries,
+    });
     this.role = RaftRole.FOLLOWER;
     this.leaderId = null;
     this.cdcIntegrationService = options.cdcIntegrationService || null;
     this.tablePolicyService = options.tablePolicyService || null;
     this.rebalanceCoordinator = options.rebalanceCoordinator || null;
+    this.controlPlaneSystemTableGateway =
+      options.controlPlaneSystemTableGateway || null;
     this.rebalancer = null;
 
     // Message tracking
@@ -251,17 +404,43 @@ class MessageGroupService extends EventEmitter {
     this.leaderNodeMutationHelper = this.createLeaderNodeMutationHelper();
     this.pendingLeaderNodeUpdate = null;
     this.persistedLeaderNodeId = null;
+    this.metadataPublicationReadinessTransitionListener =
+      this.handleMetadataPublicationReadinessTransition.bind(this);
+    this.releaseMetadataPublicationReadinessListener = null;
+    this._metadataPublicationReadinessState = null;
+    this.publishRoleMetadata = options.publishRoleMetadata !== false;
+    this.publishLeaderNodeMetadata =
+      options.publishLeaderNodeMetadata !== false;
+    this.metadataPublicationReadinessState =
+      options.metadataPublicationReadinessState ||
+      options.bootstrapReadinessState ||
+      null;
 
     // State
     this.initialized = false;
     this.isLeader = false;
+    this.leaderActivationScheduler = options.leaderActivationScheduler ||
+      LeaderActivationScheduler.getShared({
+        nodeId: this.nodeId,
+        spacingMs: this.leaderActivationNodeSpacingMs,
+      });
+    this.leaderActivationGate = new LeaderActivationGate({
+      holdoffMs: this.leaderActivationStabilizationMs,
+      activationScheduler: this.leaderActivationScheduler,
+    });
+    this.lastLeaderCdcResubscribeTerm = null;
 
     // Defer election start until all replicas are ready
     // When true, the Raft election timer won't start until startElection() is called
     // This prevents election storms when multiple replicas are created on the same node
-    this.deferElection = options.deferElection || false;
+    this.isJoiningExistingGroup = options.isJoiningExistingGroup || false;
+    this.deferElectionUntilJoinConvergence =
+      options.deferElectionUntilJoinConvergence === true;
+    this.deferElection =
+      options.deferElection || this.isJoiningExistingGroup || false;
     this.electionStarted = false;
     this.raftTimingConfig = null;
+    this.joinSuppressedHeartbeat = null;
   }
 
   get systemTableCache() {
@@ -305,13 +484,31 @@ class MessageGroupService extends EventEmitter {
     }
   }
 
+  get metadataPublicationReadinessState() {
+    return this._metadataPublicationReadinessState || null;
+  }
+
+  set metadataPublicationReadinessState(readinessState) {
+    if (typeof this.releaseMetadataPublicationReadinessListener ===
+      TYPEOF.FUNCTION) {
+      this.releaseMetadataPublicationReadinessListener();
+    }
+    this._metadataPublicationReadinessState = readinessState || null;
+    this.releaseMetadataPublicationReadinessListener =
+      attachTrafficReadinessListener(
+        this._metadataPublicationReadinessState,
+        this.metadataPublicationReadinessTransitionListener,
+      );
+  }
+
   get pendingRoleUpdate() {
     return this.roleMutationHelper?.pendingValue || null;
   }
 
   set pendingRoleUpdate(role) {
     if (this.roleMutationHelper) {
-      this.roleMutationHelper.pendingValue = role;
+      this.roleMutationHelper.pendingValue =
+        normalizePublishedRaftRole(role, {collapseLeaderToFollower: true});
     }
   }
 
@@ -379,6 +576,40 @@ class MessageGroupService extends EventEmitter {
     }
   }
 
+  isMetadataPublicationReady() {
+    if (!this.metadataPublicationReadinessState) {
+      return true;
+    }
+    return isMetadataPublicationLifecycleReady(this.metadataPublicationReadinessState);
+  }
+
+  isBackgroundWorkReady() {
+    return isBackgroundWorkLifecycleReady(
+      this.metadataPublicationReadinessState,
+    );
+  }
+
+  handleMetadataPublicationReadinessTransition() {
+    this.maybeInitializeRebalancer();
+    if (!this.isMetadataPublicationReady()) {
+      return;
+    }
+    this.flushRoleUpdate().catch((error) => {
+      this.logger.warn('Failed to flush deferred message-group role update', {
+        groupId: this.groupId,
+        replicaId: this.replicaId,
+        error: error.message,
+      });
+    });
+    this.flushLeaderNodeUpdate().catch((error) => {
+      this.logger.warn('Failed to flush deferred message-group leader update', {
+        groupId: this.groupId,
+        replicaId: this.replicaId,
+        error: error.message,
+      });
+    });
+  }
+
   createRoleMutationHelper() {
     return new AuthoritativeRowMutationHelper({
       tableName: SYSTEM_TABLE_NAME.SERVICES,
@@ -398,10 +629,25 @@ class MessageGroupService extends EventEmitter {
         updated_at: updatedAt,
       }),
       buildUpdateOptions: () => ({
+        deliveryPriority: 'background',
+        workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+        allowPressureDefer: true,
         routingReadinessDimension:
           CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
       }),
-      buildExpectedCacheFields: (role) => ({raft_role: role}),
+      buildExpectedCacheFields: (role) => ({
+        raft_role: role,
+      }),
+      prepareFlush: () => ({
+        skip: !this.publishRoleMetadata ||
+          !this.isMetadataPublicationReady(),
+        clearPending: !this.publishRoleMetadata,
+        reason: !this.publishRoleMetadata ?
+          FLUSH_SKIP_DISABLED :
+          (!this.isMetadataPublicationReady() ?
+            FLUSH_SKIP_SETTLING :
+            FLUSH_SKIP_READY),
+      }),
       readRowFromCache: (systemTableCache) =>
         systemTableCache?.get?.(TABLES.SERVICES, this.replicaId) || null,
       readValueFromCache: (systemTableCache) => {
@@ -442,6 +688,7 @@ class MessageGroupService extends EventEmitter {
         [COLUMN.UPDATED_AT]: updatedAt,
       }),
       buildUpdateOptions: () => ({
+        deliveryPriority: this.getMetadataPublicationDeliveryPriority(),
         routingReadinessDimension:
           CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
       }),
@@ -455,9 +702,11 @@ class MessageGroupService extends EventEmitter {
         return cached?.[COLUMN.LEADER_NODE_ID] || null;
       },
       prepareFlush: () => ({
-        skip: !this.isLeader,
-        clearPending: !this.isLeader,
-        reason: !this.isLeader ? FLUSH_SKIP_NOT_OWNER : FLUSH_SKIP_READY,
+        skip: !this.publishLeaderNodeMetadata || !this.isLeader,
+        clearPending: !this.publishLeaderNodeMetadata || !this.isLeader,
+        reason: !this.publishLeaderNodeMetadata ?
+          FLUSH_SKIP_DISABLED :
+          (!this.isLeader ? FLUSH_SKIP_NOT_OWNER : FLUSH_SKIP_READY),
       }),
       isWriteReady: () => this.isMessageGroupsLeaderAvailable(),
       systemTableCache: this.systemTableCache,
@@ -542,33 +791,40 @@ class MessageGroupService extends EventEmitter {
       return cachedAddress;
     }
 
-    // Check peerAddresses array (provided during cross-node joining)
-    // Format: ['nodeId/message-group/replicaId', ...]
-    if (this.peerAddresses && this.peerAddresses.length > 0) {
-      for (const addr of this.peerAddresses) {
-        const validation = this.addressManager.validate(addr);
-        if (!validation.valid) {
-          this.logger.error('Peer address must be in unified format', {
-            peerId: addr,
-            groupId: this.groupId,
-            replicaId: this.replicaId,
-            error: validation.error,
-          });
-          throw new Error(`Peer address must be unified: ${addr}`);
-        }
-        try {
-          const parsed = this.addressManager.parse(addr);
-          if (parsed.serviceId === peerId) {
-            this.logBootstrapHintFallback(peerId, addr);
-            return addr;
-          }
-        } catch (_e) {
-          // Ignore parse errors here; validation already guards format.
-        }
-      }
+    const hintedAddress = this.resolvePeerAddressFromHints(peerId);
+    if (hintedAddress) {
+      this.logBootstrapHintFallback(peerId, hintedAddress);
+      return hintedAddress;
     }
 
     throw new Error(`Unable to resolve unified peer address for ${peerId}`);
+  }
+
+  resolvePeerAddressFromHints(peerId) {
+    if (!this.peerAddresses || this.peerAddresses.length === 0) {
+      return null;
+    }
+    for (const addr of this.peerAddresses) {
+      const validation = this.addressManager.validate(addr);
+      if (!validation.valid) {
+        this.logger.error('Peer address must be in unified format', {
+          peerId: addr,
+          groupId: this.groupId,
+          replicaId: this.replicaId,
+          error: validation.error,
+        });
+        throw new Error(`Peer address must be unified: ${addr}`);
+      }
+      try {
+        const parsed = this.addressManager.parse(addr);
+        if (parsed.serviceId === peerId) {
+          return addr;
+        }
+      } catch (_e) {
+        // Ignore parse errors here; validation already guards format.
+      }
+    }
+    return null;
   }
 
   /**
@@ -690,7 +946,7 @@ class MessageGroupService extends EventEmitter {
         service?.service_id ||
         service?.[COLUMN.REPLICA_ID] ||
         service?.replica_id;
-      if (!replicaId || replicaId === this.replicaId) {
+      if (!replicaId) {
         continue;
       }
 
@@ -717,7 +973,8 @@ class MessageGroupService extends EventEmitter {
               ) :
               null
           );
-      if (!peerAddress) {
+      if (!peerAddress ||
+          this.isLocalForwardTarget(replicaId, peerAddress)) {
         continue;
       }
 
@@ -866,11 +1123,12 @@ class MessageGroupService extends EventEmitter {
         // Build peer address for routing
         // this.address is the destination, packet.address is the sender
         const peerAddress = self.buildPeerAddress(this.address);
+        const deliveryOptions = resolveTransportDeliveryOptions(peerAddress);
 
         // Send packet unchanged - no type conversion
         // Only add destination address for routing, preserve all packet fields
         // Requirements: 3.1, 3.2, 3.3
-        self.transport.deliver(peerAddress, packet)
+        self.transport.deliver(peerAddress, packet, deliveryOptions)
           .then((result) => callback(null, result))
           .catch((err) => callback(err));
       }
@@ -887,6 +1145,7 @@ class MessageGroupService extends EventEmitter {
       'election max': electionMaxMs,
       'Log': InMemoryLogAdapter,
     });
+    this.armJoinExistingGroupElectionSuppression();
 
     // If deferElection is true, clear all timers that liferaft started automatically
     // This prevents elections from starting until startElection() is called
@@ -941,62 +1200,46 @@ class MessageGroupService extends EventEmitter {
    * @private
    */
   wireRaftEvents() {
+    const shouldIgnoreLeaderEvent = () => {
+      if (!this.shouldSuppressJoinPhaseRaftParticipation()) {
+        return false;
+      }
+      this.clearJoinExistingGroupTimers();
+      return true;
+    };
+    const shouldIgnoreDemotionEvent = (eventName) => {
+      if (!this.shouldSuppressJoinPhaseRaftParticipation()) {
+        return false;
+      }
+      if (eventName !== RAFT_EVENT.FOLLOWER &&
+          eventName !== RAFT_EVENT.CANDIDATE) {
+        return false;
+      }
+      if (this.raft) {
+        this.raftProvider.clearTimers(this.raft, 'heartbeat, election');
+      }
+      return true;
+    };
+
     wireReplicaLifecycleEvents(this, {
       events: RAFT_EVENT,
       roles: RaftRole,
       getCurrentTerm: () => this.raftProvider.getCurrentTerm(this.raft),
+      normalizeLeaderId: (candidate) =>
+        this.normalizeLeaderReplicaId(candidate),
+      shouldIgnoreLeaderEvent,
+      shouldIgnoreDemotionEvent,
       onLeader: ({term}) => {
-        this.updateRebalancerLeadership();
         this.operationLedger.currentTerm = term;
-
-        // Re-subscribe to CDC tables on leadership gain so the
-        // new leader's CDCHandler is active for all propagated
-        // tables. CDCHandler.subscribe is idempotent, so this
-        // is safe even if subscriptions already exist.
-        // Requirements: 6.1, 6.2
-        const existingSubscriptions =
-          this.cdcHandler.getSubscriptions();
-        if (existingSubscriptions.length > NUM.ZERO) {
-          this.logger.info(
-            MESSAGE_GROUP_SERVICE_LOG_MSG
-              .CDC_RESUBSCRIBE_ON_LEADER, {
-              term,
-              replicaId: this.replicaId,
-              groupId: this.groupId,
-              tableCount: existingSubscriptions.length,
-            },
-          );
-          for (const tableName of existingSubscriptions) {
-            this.subscribeToCDC(tableName);
-          }
-          this.logger.info(
-            MESSAGE_GROUP_SERVICE_LOG_MSG
-              .CDC_RESUBSCRIBE_ON_LEADER_COMPLETE, {
-              term,
-              replicaId: this.replicaId,
-              groupId: this.groupId,
-              tableCount: existingSubscriptions.length,
-            },
-          );
-        }
-
-        this.logger.info('Became leader', {
-          term,
-          replicaId: this.replicaId,
-          groupId: this.groupId,
-        });
-
-        this.emit('leaderElected', {
-          leaderId: this.replicaId,
-          term,
-          groupId: this.groupId,
-        });
+        this.scheduleLeaderOwnedActivation(term);
       },
       onFollower: ({term}) => {
+        this.cancelLeaderOwnedActivation();
         this.updateRebalancerLeadership();
         this.operationLedger.currentTerm = term;
       },
       onCandidate: ({term}) => {
+        this.cancelLeaderOwnedActivation();
         this.updateRebalancerLeadership();
         this.operationLedger.currentTerm = term;
       },
@@ -1022,10 +1265,16 @@ class MessageGroupService extends EventEmitter {
    */
   joinPeerNodes() {
     for (const peerId of this.replicaIds) {
-      if (peerId !== this.replicaId) {
-        const peerAddress = this.buildPeerAddress(peerId);
-        this.raftProvider.joinPeer(this.raft, peerAddress);
+      if (peerId === this.replicaId &&
+          !this.resolvePeerAddressFromCache(peerId) &&
+          !this.resolvePeerAddressFromHints(peerId)) {
+        continue;
       }
+      const peerAddress = this.buildPeerAddress(peerId);
+      if (this.isLocalForwardTarget(peerId, peerAddress)) {
+        continue;
+      }
+      this.raftProvider.joinPeer(this.raft, peerAddress);
     }
   }
 
@@ -1084,6 +1333,84 @@ class MessageGroupService extends EventEmitter {
 
       this.raftProvider.startElectionTimer(this.raft);
     }
+  }
+
+  clearJoinExistingGroupTimers() {
+    if (!this.raft) {
+      return;
+    }
+    this.raftProvider.clearTimers(this.raft, 'heartbeat, election');
+  }
+
+  shouldSuppressJoinPhaseRaftParticipation() {
+    return this.isJoiningExistingGroup === true ||
+      this.deferElectionUntilJoinConvergence === true;
+  }
+
+  armJoinExistingGroupElectionSuppression() {
+    if (!this.raft ||
+        !this.shouldSuppressJoinPhaseRaftParticipation() ||
+        this.joinSuppressedHeartbeat) {
+      return;
+    }
+    const originalHeartbeat = this.raft.heartbeat;
+    if (typeof originalHeartbeat !== TYPEOF.FUNCTION) {
+      return;
+    }
+    const boundHeartbeat = originalHeartbeat.bind(this.raft);
+    this.joinSuppressedHeartbeat = boundHeartbeat;
+    this.raft.heartbeat = (duration) => {
+      if (this.shouldSuppressJoinPhaseRaftParticipation()) {
+        this.clearJoinExistingGroupTimers();
+        return this.raft;
+      }
+      return boundHeartbeat(duration);
+    };
+    this.clearJoinExistingGroupTimers();
+  }
+
+  releaseJoinExistingGroupElectionSuppression() {
+    if (!this.raft || !this.joinSuppressedHeartbeat) {
+      return;
+    }
+    this.raft.heartbeat = this.joinSuppressedHeartbeat;
+    this.joinSuppressedHeartbeat = null;
+  }
+
+  /**
+   * Release join-time election suppression once the local node has completed
+   * convergence and may participate normally in control-plane leadership.
+   * @return {void}
+   */
+  completeJoinConvergence() {
+    const wasJoiningExistingGroup = this.isJoiningExistingGroup === true;
+    const shouldReleaseDeferredElection =
+      this.deferElectionUntilJoinConvergence === true;
+
+    if (!wasJoiningExistingGroup && !shouldReleaseDeferredElection) {
+      return;
+    }
+
+    this.deferElection = false;
+    this.releaseJoinExistingGroupElectionSuppression();
+
+    if (wasJoiningExistingGroup) {
+      this.isJoiningExistingGroup = false;
+      if (this.role !== RaftRole.LEADER) {
+        this.role = RaftRole.FOLLOWER;
+        this.isLeader = false;
+        if (this.leaderId === this.replicaId) {
+          this.leaderId = null;
+        }
+        this.queueRoleUpdate(this.role);
+      }
+    }
+
+    if (shouldReleaseDeferredElection) {
+      this.deferElectionUntilJoinConvergence = false;
+    }
+
+    this.startElection();
   }
 
   /**
@@ -1225,6 +1552,27 @@ class MessageGroupService extends EventEmitter {
       );
       this.emit('cdcApplied', command);
       break;
+    case CDC_BATCH_COMMAND_TYPE:
+      for (const event of this.normalizeCDCBatchEvents(command.events)) {
+        this.cdcHandler.applyImmediate(
+          {
+            tableName: event.tableName,
+            operation: event.operation,
+            data: event.data,
+            timestamp: event.timestamp,
+            causeId: normalizeCauseId(event.causeId),
+          },
+          {skipSubscriptionCheck: true},
+        );
+        this.emit('cdcApplied', {
+          tableName: event.tableName,
+          operation: event.operation,
+          data: event.data,
+          logIndex: command.index || null,
+          causeId: normalizeCauseId(event.causeId),
+        });
+      }
+      break;
     case 'ACK':
       // Handle acknowledgment
       this.acknowledgedMessages.add(command.messageId);
@@ -1237,9 +1585,11 @@ class MessageGroupService extends EventEmitter {
    * Implements simultaneous delivery and persistence pattern.
    * @param {string} targetService - Target service address.
    * @param {Object} message - Message payload.
+   * @param {Object} [options]
+   * @param {string} [options.deliveryMode]
    * @return {Promise<Object>} Delivery result.
    */
-  async sendMessage(targetService, message) {
+  async sendMessage(targetService, message, options = {}) {
     if (!this.initialized) {
       throw new Error('MessageGroupService not initialized');
     }
@@ -1269,37 +1619,13 @@ class MessageGroupService extends EventEmitter {
     // Track pending message
     this.pendingMessages.set(messageId, messageEnvelope);
 
-    if (this.isQueryDeliveryPayload(message)) {
-      try {
-        const deliveryResult = await this.attemptDirectDelivery(
-          messageEnvelope,
-          {
-            maxAttempts: NUM.ONE,
-            disableRetryDelay: true,
-          },
-        );
-        if (!deliveryResult.delivered) {
-          throw new Error(
-            deliveryResult.error || 'Query message delivery failed',
-          );
-        }
-        messageEnvelope.status = MessageStatus.DELIVERED;
-        const {delivered: _d, attempt: _a, ...transportResult} = deliveryResult;
-        return {
-          messageId,
-          status: MessageStatus.DELIVERED,
-          deliveryType: 'direct',
-          ...transportResult,
-        };
-      } catch (error) {
-        this.logger.error('Failed to send message', {
-          messageId,
-          targetService,
-          error: error.message,
-        });
-        messageEnvelope.status = MessageStatus.FAILED;
-        throw error;
-      }
+    const deliveryMode = this.resolveMessageDeliveryMode(
+      targetService,
+      message,
+      options,
+    );
+    if (deliveryMode === MESSAGE_DELIVERY_MODE.DIRECT_ONLY) {
+      return this.deliverDirectOnlyMessage(messageEnvelope);
     }
 
     // Simultaneous delivery and persistence (non-blocking)
@@ -1402,16 +1728,28 @@ class MessageGroupService extends EventEmitter {
         }
 
         // Attempt delivery via transport
+        const deliveryOptions =
+          resolveTransportDeliveryOptions(targetService);
         const result = await this.transport.deliver(targetService, {
           messageId,
           payload,
           sourceGroup: this.groupId,
           sourceReplica: this.replicaId,
-        });
+        }, deliveryOptions);
 
         if (result && result.acknowledged) {
           // Spread transport result directly - ACK structure is flat
           return {delivered: true, attempt: attempt + 1, ...result};
+        }
+        if (shouldDeferImmediateDeliveryRetry(result)) {
+          return {
+            delivered: false,
+            attempt: attempt + 1,
+            error: result?.error || 'Message delivery deferred',
+            deferRetry: true,
+            retryAfterMs: result.retryAfterMs,
+            errorCode: result?.errorCode || null,
+          };
         }
         lastError = new Error(result?.error || 'Message delivery not acknowledged');
       } catch (error) {
@@ -1443,6 +1781,89 @@ class MessageGroupService extends EventEmitter {
       typeof payload === TYPEOF.OBJECT &&
       payload.type === QUERY_MESSAGE_TYPE.QUERY,
     );
+  }
+
+  /**
+   * Determine whether payload is an idempotent control-plane message that
+   * should use direct delivery without duplicate Raft durability.
+   * @param {Object} payload
+   * @return {boolean}
+   * @private
+   */
+  isDirectOnlyControlPlanePayload(payload) {
+    return Boolean(
+      payload &&
+      typeof payload === TYPEOF.OBJECT &&
+      DIRECT_ONLY_MESSAGE_TYPES.has(payload.type),
+    );
+  }
+
+  /**
+   * Resolve the canonical delivery mode for one outbound message.
+   * @param {string} _targetService
+   * @param {Object} payload
+   * @param {Object} [options]
+   * @return {string}
+   * @private
+   */
+  resolveMessageDeliveryMode(_targetService, payload, options = {}) {
+    const explicitMode = normalizeMessageDeliveryMode(options?.deliveryMode);
+    if (explicitMode !== MESSAGE_DELIVERY_MODE.AUTO) {
+      return explicitMode;
+    }
+    if (this.isQueryDeliveryPayload(payload) ||
+        this.isDirectOnlyControlPlanePayload(payload)) {
+      return MESSAGE_DELIVERY_MODE.DIRECT_ONLY;
+    }
+    return MESSAGE_DELIVERY_MODE.DIRECT_WITH_RAFT_FALLBACK;
+  }
+
+  /**
+   * Send one message through the fast direct-only path.
+   * @param {Object} messageEnvelope
+   * @return {Promise<Object>}
+   * @private
+   */
+  async deliverDirectOnlyMessage(messageEnvelope) {
+    const {id: messageId, targetService, payload} = messageEnvelope;
+    const failureDescription = this.isQueryDeliveryPayload(payload) ?
+      'Query message delivery failed' :
+      'Message delivery failed';
+    try {
+      const deliveryResult = await this.attemptDirectDelivery(
+        messageEnvelope,
+        {
+          maxAttempts: NUM.ONE,
+          disableRetryDelay: true,
+        },
+      );
+      if (!deliveryResult.delivered) {
+        throw shouldDeferImmediateDeliveryRetry(deliveryResult) ?
+          buildDeferredDeliveryError(deliveryResult) :
+          new Error(deliveryResult.error || failureDescription);
+      }
+      messageEnvelope.status = MessageStatus.DELIVERED;
+      const {delivered: _d, attempt: _a, ...transportResult} = deliveryResult;
+      return {
+        messageId,
+        status: MessageStatus.DELIVERED,
+        deliveryType: 'direct',
+        ...transportResult,
+      };
+    } catch (error) {
+      const logLevel = error?.deferRetry === true ? 'debug' : 'error';
+      this.logger[logLevel]('Failed to send message', {
+        messageId,
+        targetService,
+        error: error.message,
+        deferRetry: error?.deferRetry === true,
+        retryAfterMs: Number.isFinite(error?.retryAfterMs) ?
+          error.retryAfterMs :
+          null,
+      });
+      messageEnvelope.status = MessageStatus.FAILED;
+      throw error;
+    }
   }
 
 
@@ -1522,13 +1943,29 @@ class MessageGroupService extends EventEmitter {
         const senderAddress = payload.address;
         const write = (responsePacket) => {
           if (responsePacket) {
+            const deliveryOptions =
+              resolveTransportDeliveryOptions(senderAddress);
             this.logger.trace('Sending Raft response', {
               type: responsePacket.type,
               destination: senderAddress,
               term: responsePacket.term,
             });
             // Send response to the sender
-            this.transport.deliver(senderAddress, responsePacket)
+            this.transport.deliver(
+              senderAddress,
+              responsePacket,
+              deliveryOptions,
+            )
+              .then((result) => {
+                if (!result?.acknowledged &&
+                    shouldDeferImmediateDeliveryRetry(result)) {
+                  this.logger.debug('Deferred Raft response delivery', {
+                    destination: senderAddress,
+                    retryAfterMs: result.retryAfterMs,
+                    errorCode: result?.errorCode || null,
+                  });
+                }
+              })
               .catch((err) => {
                 this.logger.error('Failed to send Raft response', {
                   error: err.message,
@@ -1537,6 +1974,17 @@ class MessageGroupService extends EventEmitter {
               });
           }
         };
+
+        if (this.isJoiningExistingGroup === true &&
+            payload.type === RAFT_PACKET_TYPE.VOTE) {
+          this.clearJoinExistingGroupTimers();
+          const deniedVote = await this.raft.packet(
+            RAFT_PACKET_TYPE.VOTED,
+            {granted: false},
+          );
+          write(deniedVote);
+          return {acknowledged: true};
+        }
 
         // Emit to liferaft with write function for responses
         // Requirements: 2.2
@@ -1598,6 +2046,12 @@ class MessageGroupService extends EventEmitter {
           MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE.LATENCY_CDC_PROPAGATION) {
         return this.handleLatencyCdcPropagationMessage(messageId, payload);
       }
+      if (payload &&
+        payload.type ===
+          MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE
+            .LATENCY_CDC_PROPAGATION_BATCH) {
+        return this.handleLatencyCdcPropagationBatchMessage(messageId, payload);
+      }
 
       this.emit('messageReceived', {
         messageId,
@@ -1650,6 +2104,25 @@ class MessageGroupService extends EventEmitter {
     // Allow one additional bounded hop so stale first-hop routing can
     // converge during elections without creating open-ended loops.
     if (!this.isCurrentRaftLeader()) {
+      if (this.shouldUseStrictCDCForwarding({tableName, operation})) {
+        const readiness = this.canAcceptCDCEvent({tableName, operation});
+        if (readiness.ready !== true) {
+          return {
+            messageId,
+            status: MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_PROPAGATED,
+            acknowledged: true,
+            success: false,
+            error: readiness.reason ||
+              MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN,
+            deferRetry: true,
+            retryAfterMs: Number.isFinite(readiness.retryAfterMs) ?
+              readiness.retryAfterMs :
+              this.resolveStrictCdcForwardRetryAfterMs(),
+            tableName,
+            operation,
+          };
+        }
+      }
       if (relayDepth >= CDC_FORWARD_MAX_RELAY_DEPTH) {
         throw new Error(MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN);
       }
@@ -1684,6 +2157,82 @@ class MessageGroupService extends EventEmitter {
       acknowledged: true,
       tableName,
       operation,
+    };
+  }
+
+  /**
+   * Handle grouped-latency CDC batch propagation message.
+   * @param {string} messageId - Message ID.
+   * @param {Object} payload - Propagation payload.
+   * @return {Promise<Object>}
+   * @private
+   */
+  async handleLatencyCdcPropagationBatchMessage(messageId, payload) {
+    const events = Array.isArray(payload.events) ? payload.events : [];
+    const relayDepth = Number.isInteger(payload.relayDepth) &&
+      payload.relayDepth >= NUM.ZERO ?
+      payload.relayDepth :
+      NUM.ZERO;
+    if (events.length === NUM.ZERO ||
+        events.some((event) =>
+          !event?.tableName || !event?.operation || !event?.data,
+        )) {
+      throw new Error(
+        MESSAGE_GROUP_APPLICATION_ERROR_MSG.INVALID_LATENCY_CDC_BATCH_PAYLOAD,
+      );
+    }
+
+    if (!this.isCurrentRaftLeader()) {
+      const strictEvent = events.find((event) => {
+        return this.shouldUseStrictCDCForwarding({
+          tableName: event?.tableName || null,
+          operation: event?.operation || null,
+        });
+      });
+      if (strictEvent) {
+        const readiness = this.canAcceptCDCEvent({
+          tableName: strictEvent.tableName,
+          operation: strictEvent.operation,
+        });
+        if (readiness.ready !== true) {
+          return {
+            messageId,
+            status: MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_BATCH_PROPAGATED,
+            acknowledged: true,
+            success: false,
+            error: readiness.reason ||
+              MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN,
+            deferRetry: true,
+            retryAfterMs: Number.isFinite(readiness.retryAfterMs) ?
+              readiness.retryAfterMs :
+              this.resolveStrictCdcForwardRetryAfterMs(),
+            eventCount: events.length,
+          };
+        }
+      }
+      if (relayDepth >= CDC_FORWARD_MAX_RELAY_DEPTH) {
+        throw new Error(MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN);
+      }
+      await this.forwardCDCBatchToLeader(events, {
+        relayDepth: relayDepth + NUM.ONE,
+      });
+      return {
+        messageId,
+        status: MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_BATCH_PROPAGATED,
+        acknowledged: true,
+        eventCount: events.length,
+      };
+    }
+
+    await this.applyCDCBatch(events, {
+      skipSubscriptionCheck: true,
+    });
+
+    return {
+      messageId,
+      status: MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_BATCH_PROPAGATED,
+      acknowledged: true,
+      eventCount: events.length,
     };
   }
 
@@ -1761,157 +2310,224 @@ class MessageGroupService extends EventEmitter {
    * @return {Promise<void>}
    */
   async applyCDCEvent(tableName, operation, data, options = {}) {
+    return this.applyCDCBatch(
+      [{tableName, operation, data, ...options}],
+      options,
+    );
+  }
+
+  /**
+   * Normalize CDC batch events into one canonical replicated command payload.
+   * @param {Array<Object>} events
+   * @param {Object} [options]
+   * @return {Array<Object>}
+   * @private
+   */
+  normalizeCDCBatchEvents(events, options = {}) {
+    return (Array.isArray(events) ? events : [])
+      .filter((event) =>
+        event?.tableName &&
+        event?.operation &&
+        event?.data,
+      )
+      .map((event) => {
+        const timestamp = typeof event.timestamp === 'string' &&
+          event.timestamp.length > NUM.ZERO ?
+          event.timestamp :
+          (
+            typeof options.timestamp === 'string' &&
+            options.timestamp.length > NUM.ZERO ?
+              options.timestamp :
+              this.hlcClock.now().toString()
+          );
+        const causeId = normalizeCauseId(
+          event.causeId ?? options.causeId,
+        );
+        return {
+          tableName: event.tableName,
+          operation: event.operation,
+          data: event.data,
+          timestamp,
+          causeId,
+        };
+      });
+  }
+
+  /**
+   * Emit canonical cdcApplied notifications for one or more events.
+   * @param {Array<Object>} events
+   * @param {?number} logIndex
+   * @private
+   */
+  emitCDCAppliedEvents(events, logIndex = null) {
+    for (const event of events) {
+      this.emit('cdcApplied', {
+        tableName: event.tableName,
+        operation: event.operation,
+        data: event.data,
+        logIndex,
+        causeId: normalizeCauseId(event.causeId),
+      });
+    }
+  }
+
+  /**
+   * Record CDC propagation metrics for one or more events.
+   * @param {Array<Object>} events
+   * @param {number} applyStartMs
+   * @private
+   */
+  recordCDCPropagationMetrics(events, applyStartMs) {
+    for (const event of events) {
+      try {
+        const handlerDurationMs = this.now() - applyStartMs;
+        const metricsData = {
+          tableName: event.tableName,
+          operation: event.operation,
+          causeId: normalizeCauseId(event.causeId),
+          handlerDurationMs,
+        };
+        if (event.timestamp != null) {
+          metricsData.eventAgeMs = this.now() - event.timestamp;
+        }
+        this.logger.info(
+          METRICS_LOG_TAG.CDC_PROPAGATION, metricsData,
+        );
+      } catch (_metricsErr) {
+        // Metrics logging must not propagate to callers
+      }
+    }
+  }
+
+  /**
+   * Apply one or more CDC events through the canonical cache/raft owner.
+   * @param {Array<Object>} events
+   * @param {Object} [options]
+   * @param {boolean} [options.skipReplication]
+   * @param {boolean} [options.skipSubscriptionCheck]
+   * @return {Promise<void>}
+   */
+  async applyCDCBatch(events, options = {}) {
     const applyStartMs = this.now();
     const skipSubscriptionCheck =
       options.skipSubscriptionCheck === true;
     const skipReplication =
       options.skipReplication === true;
-    const eventTimestamp =
-      options.timestamp || this.hlcClock.now().toString();
-    const causeId = getOrCreateCauseId(options.causeId);
+    const normalizedEvents = this.normalizeCDCBatchEvents(events, options)
+      .map((event) => ({
+        ...event,
+        causeId: getOrCreateCauseId(event.causeId),
+      }));
+    if (normalizedEvents.length === NUM.ZERO) {
+      return;
+    }
     const isSingleReplicaGroup = Array.isArray(this.replicaIds) &&
       this.replicaIds.length <= NUM.ONE;
     const requiresRaftReplication = !skipReplication && !isSingleReplicaGroup;
     const shouldApplyLocally = !requiresRaftReplication ||
       this.isCurrentRaftLeader();
 
-    let applied = false;
+    const appliedEvents = [];
     if (shouldApplyLocally) {
-      applied = this.cdcHandler.applyImmediate(
-        {
-          tableName,
-          operation,
-          data,
-          timestamp: eventTimestamp,
-          causeId,
-        },
-        {skipSubscriptionCheck},
-      );
+      for (const event of normalizedEvents) {
+        const applied = this.cdcHandler.applyImmediate(
+          {
+            tableName: event.tableName,
+            operation: event.operation,
+            data: event.data,
+            timestamp: event.timestamp,
+            causeId: event.causeId,
+          },
+          {skipSubscriptionCheck},
+        );
+        if (applied) {
+          appliedEvents.push(event);
+        }
+      }
     }
 
     if (requiresRaftReplication) {
-      const cdcCommand = {
-        type: 'CDC',
-        tableName,
-        operation,
-        data,
-        timestamp: eventTimestamp,
-        causeId,
-      };
+      const cdcCommand = normalizedEvents.length === NUM.ONE ?
+        {
+          type: 'CDC',
+          tableName: normalizedEvents[0].tableName,
+          operation: normalizedEvents[0].operation,
+          data: normalizedEvents[0].data,
+          timestamp: normalizedEvents[0].timestamp,
+          causeId: normalizedEvents[0].causeId,
+        } :
+        {
+          type: CDC_BATCH_COMMAND_TYPE,
+          events: normalizedEvents,
+        };
 
-      // Persist CDC event to Raft log for replication
-      const entry = this.operationLedger.appendEntry({
-        ...cdcCommand,
-      });
       // Replicate via Raft so all message group replicas (and their
       // co-located system caches) receive this CDC event. Cache updates
       // are applied only from committed CDC entries.
       await this.proposeCDCCommand(cdcCommand);
+      // Retain only successfully proposed commands in the bounded local
+      // diagnostic ledger so failed relays do not accumulate indefinitely.
+      const entry = this.operationLedger.appendEntry({
+        ...cdcCommand,
+      });
 
-      try {
-        const handlerDurationMs = this.now() - applyStartMs;
-        const metricsData = {
-          tableName,
-          operation,
-          causeId,
-          handlerDurationMs,
-        };
-        if (options.timestamp != null) {
-          metricsData.eventAgeMs =
-            this.now() - options.timestamp;
-        }
-        this.logger.info(
-          METRICS_LOG_TAG.CDC_PROPAGATION, metricsData,
-        );
-      } catch (_metricsErr) {
-        // Metrics logging must not propagate to callers
-      }
+      this.recordCDCPropagationMetrics(normalizedEvents, applyStartMs);
 
       this.logger.debug('CDC event proposed for replication; awaiting commit apply', {
-        tableName,
-        operation,
+        tableName: normalizedEvents.length === NUM.ONE ?
+          normalizedEvents[0].tableName :
+          'batch',
+        operation: normalizedEvents.length === NUM.ONE ?
+          normalizedEvents[0].operation :
+          `batch:${normalizedEvents.length}`,
         logIndex: entry.index,
         groupId: this.groupId,
         replicaId: this.replicaId,
-        causeId,
+        causeId: normalizeCauseId(normalizedEvents[0].causeId),
+        eventCount: normalizedEvents.length,
       });
 
       if (!shouldApplyLocally) {
         return;
       }
-      if (!applied) {
+      if (appliedEvents.length === NUM.ZERO) {
         return;
       }
 
-      this.emit('cdcApplied', {
-        tableName, operation, data, logIndex: entry.index,
-        causeId,
-      });
+      this.emitCDCAppliedEvents(appliedEvents, entry.index);
       return;
     }
 
-    if (!applied) {
+    if (appliedEvents.length === NUM.ZERO) {
       return;
     }
 
     if (!skipReplication) {
       const entry = this.operationLedger.appendEntry({
-        type: 'CDC',
-        tableName,
-        operation,
-        data,
-        timestamp: eventTimestamp,
+        ...(normalizedEvents.length === NUM.ONE ?
+          {
+            type: 'CDC',
+            tableName: normalizedEvents[0].tableName,
+            operation: normalizedEvents[0].operation,
+            data: normalizedEvents[0].data,
+            timestamp: normalizedEvents[0].timestamp,
+            causeId: normalizedEvents[0].causeId,
+          } :
+          {
+            type: CDC_BATCH_COMMAND_TYPE,
+            events: normalizedEvents,
+          }),
       });
 
-      try {
-        const handlerDurationMs = this.now() - applyStartMs;
-        const metricsData = {
-          tableName,
-          operation,
-          causeId,
-          handlerDurationMs,
-        };
-        if (options.timestamp != null) {
-          metricsData.eventAgeMs =
-            this.now() - options.timestamp;
-        }
-        this.logger.info(
-          METRICS_LOG_TAG.CDC_PROPAGATION, metricsData,
-        );
-      } catch (_metricsErr) {
-        // Metrics logging must not propagate to callers
-      }
+      this.recordCDCPropagationMetrics(normalizedEvents, applyStartMs);
 
-      this.emit('cdcApplied', {
-        tableName, operation, data, logIndex: entry.index,
-        causeId,
-      });
+      this.emitCDCAppliedEvents(appliedEvents, entry.index);
       return;
     }
 
-    try {
-      const handlerDurationMs = this.now() - applyStartMs;
-      const metricsData = {
-        tableName,
-        operation,
-        causeId,
-        handlerDurationMs,
-      };
-      if (options.timestamp != null) {
-        metricsData.eventAgeMs =
-          this.now() - options.timestamp;
-      }
-      this.logger.info(
-        METRICS_LOG_TAG.CDC_PROPAGATION, metricsData,
-      );
-    } catch (_metricsErr) {
-      // Metrics logging must not propagate to callers
-    }
+    this.recordCDCPropagationMetrics(normalizedEvents, applyStartMs);
 
-    this.emit('cdcApplied', {
-      tableName, operation, data, logIndex: null,
-      causeId,
-    });
+    this.emitCDCAppliedEvents(appliedEvents, null);
   }
 
   /**
@@ -1979,9 +2595,10 @@ class MessageGroupService extends EventEmitter {
         proposeTimeoutMs,
         error: error?.message || null,
       });
-      throw new Error(
+      throw wrapCdcProposeError(
         `${MESSAGE_GROUP_CDC_ERROR_MSG.RAFT_PROPOSE_FAILED}: ` +
-        `${error?.message || 'unknown error'}`,
+          `${error?.message || 'unknown error'}`,
+        error,
       );
     }
   }
@@ -1997,23 +2614,191 @@ class MessageGroupService extends EventEmitter {
   }
 
   /**
+   * Resolve the current live Raft leader target without using bootstrap
+   * transport hints. This lets strict system-table forwarding honor the
+   * owner's current leader state without waiting for the control-plane echo.
+   * @return {{serviceId: string, address: string}|null}
+   * @private
+   */
+  resolveLiveLeaderForwardTarget() {
+    const leaderServiceId = this.normalizeLeaderReplicaId(this.leaderId);
+    if (leaderServiceId === this.replicaId) {
+      return null;
+    }
+    if (!leaderServiceId) {
+      return null;
+    }
+
+    const address =
+      this.resolveLivePeerAddressFromRaftNodes(leaderServiceId) ||
+      this.resolvePeerAddressFromCache(leaderServiceId);
+    if (typeof address !== TYPEOF.STRING || address.length === NUM.ZERO) {
+      return null;
+    }
+
+    return {
+      serviceId: leaderServiceId,
+      address,
+    };
+  }
+
+  /**
+   * Normalize a leader identifier from liferaft into one canonical replica ID.
+   * Liferaft leader-change events use peer addresses, while runtime owners
+   * consume replica IDs.
+   * @param {*} candidate
+   * @return {string|null}
+   * @private
+   */
+  normalizeLeaderReplicaId(candidate) {
+    if (typeof candidate !== TYPEOF.STRING || candidate.length === NUM.ZERO) {
+      return null;
+    }
+    if (!candidate.includes(ADDRESS.SEPARATOR)) {
+      return candidate;
+    }
+    try {
+      const parsed = this.addressManager.parse(candidate);
+      if (parsed?.serviceType === ENTITY_TYPE.MESSAGE_GROUP &&
+          typeof parsed?.serviceId === TYPEOF.STRING &&
+          parsed.serviceId.length > NUM.ZERO) {
+        return parsed.serviceId;
+      }
+    } catch (_error) {
+      // Ignore malformed addresses and preserve the original value.
+    }
+    return candidate;
+  }
+
+  /**
+   * Resolve one peer address from the current live Raft membership state.
+   * This avoids depending on control-plane cache echo for already-joined peers.
+   * @param {string} peerId
+   * @return {string|null}
+   * @private
+   */
+  resolveLivePeerAddressFromRaftNodes(peerId) {
+    if (typeof peerId !== TYPEOF.STRING ||
+        peerId.length === NUM.ZERO ||
+        !this.raft ||
+        !Array.isArray(this.raft.nodes)) {
+      return null;
+    }
+
+    for (const node of this.raft.nodes) {
+      const address = node?.address;
+      if (typeof address !== TYPEOF.STRING || address.length === NUM.ZERO) {
+        continue;
+      }
+      try {
+        const parsed = this.addressManager.parse(address);
+        if (parsed.serviceType === ENTITY_TYPE.MESSAGE_GROUP &&
+            parsed.serviceId === peerId) {
+          return address;
+        }
+      } catch (_error) {
+        // Ignore non-unified or stale addresses; callers can fall back to cache.
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Resolve the current CDC forward selection for this replica and payload
+   * class. Strict system-table forwarding uses only canonical/live leader
+   * signals and does not probe alternate peers. Canonical owner traffic must
+   * remain routable while leader-node readiness publication converges, or the
+   * owner can deadlock on its own metadata echo.
+   * @param {Object} [logContext]
+   * @return {Object}
+   * @private
+   */
+  resolveCDCForwardSelection(logContext = {}) {
+    const strictForwarding = this.shouldUseStrictCDCForwarding(logContext);
+    const allowJoinConvergenceTargeting = strictForwarding &&
+      this.shouldAllowJoinConvergenceStrictTargeting();
+    const excludedReplicaId = allowJoinConvergenceTargeting ?
+      null :
+      this.replicaId;
+    const strictForwardRetryAfterMs = strictForwarding ?
+      this.resolveStrictCdcForwardRetryAfterMs() :
+      NUM.ZERO;
+    const isConnectedNode = (nodeId) => {
+      if (typeof this.transport?.getConnectionState !== TYPEOF.FUNCTION) {
+        return true;
+      }
+      return this.transport.getConnectionState(nodeId) === STATE.CONNECTED;
+    };
+    const cacheLeaderService = resolveMessageGroupLeaderServiceFromCache(
+      this.systemTableCache,
+      this.groupId,
+      strictForwarding ?
+        {
+          excludeServiceId: excludedReplicaId,
+          requireReadyNode: false,
+          preferConnectedCandidates: false,
+          allowStoppedService: false,
+          isConnectedNode,
+        } :
+        {
+          excludeServiceId: excludedReplicaId,
+          isConnectedNode,
+        },
+    );
+    const cacheForwardService = resolveMessageGroupForwardServiceFromCache(
+      this.systemTableCache,
+      this.groupId,
+      {
+        excludeServiceId: excludedReplicaId,
+        isConnectedNode,
+      },
+    );
+    const {
+      targets,
+      suppressedCount,
+    } = this.buildCDCForwardTargets(
+      cacheLeaderService,
+      cacheForwardService,
+      {
+        strictForwarding,
+      },
+    );
+
+    return {
+      strictForwarding,
+      strictForwardRetryAfterMs,
+      cacheLeaderService,
+      cacheForwardService,
+      targets,
+      suppressedCount,
+    };
+  }
+
+  /**
    * Build an ordered list of CDC forwarding targets.
-   * Prefers cache-selected forward routes, then cache leader metadata, then
-   * stale local leader hints, then bootstrap-time replica hints.
+   * Strict system-table forwarding uses the owner's live Raft leader first and
+   * otherwise requires canonical cache leader metadata. Non-strict forwarding
+   * keeps the broader relay target set for non-critical tables.
    * Suppressed targets are excluded until their local cooldown expires.
    * @param {?Object} cacheLeaderService
    * @param {?Object} cacheForwardService
    * @return {{targets: Array<{serviceId: string, address: ?string}>, suppressedCount: number}}
    * @private
    */
-  buildCDCForwardTargets(cacheLeaderService, cacheForwardService) {
+  buildCDCForwardTargets(
+    cacheLeaderService,
+    cacheForwardService,
+    options = {},
+  ) {
+    const strictForwarding = options.strictForwarding === true;
     const targets = [];
     let suppressedCount = NUM.ZERO;
     const targetsByServiceId = new Map();
     const addTarget = (serviceId, address = null) => {
       if (typeof serviceId !== TYPEOF.STRING ||
         serviceId.length === NUM.ZERO ||
-        serviceId === this.replicaId) {
+        this.isLocalForwardTarget(serviceId, address)) {
         return;
       }
 
@@ -2041,10 +2826,44 @@ class MessageGroupService extends EventEmitter {
       targets.push(target);
     };
 
+    if (strictForwarding) {
+      const liveLeaderTarget = this.resolveLiveLeaderForwardTarget();
+      if (this.isStrictForwardTargetEligible(liveLeaderTarget)) {
+        addTarget(liveLeaderTarget.serviceId, liveLeaderTarget.address);
+        return {
+          targets,
+          suppressedCount,
+        };
+      }
+
+      if (this.isStrictForwardTargetEligible({
+        serviceId: cacheLeaderService?.[COLUMN.SERVICE_ID],
+        address: cacheLeaderService?.[COLUMN.ADDRESS],
+      })) {
+        addTarget(
+          cacheLeaderService?.[COLUMN.SERVICE_ID],
+          cacheLeaderService?.[COLUMN.ADDRESS],
+        );
+      }
+      if (targets.length === NUM.ZERO &&
+          this.shouldAllowJoinConvergenceStrictTargeting()) {
+        const bootstrapTarget =
+          this.resolveJoinConvergenceBootstrapForwardTarget();
+        if (this.isStrictForwardTargetEligible(bootstrapTarget)) {
+          addTarget(bootstrapTarget.serviceId, bootstrapTarget.address);
+        }
+      }
+      return {
+        targets,
+        suppressedCount,
+      };
+    }
+
     addTarget(
       cacheForwardService?.[COLUMN.SERVICE_ID],
       cacheForwardService?.[COLUMN.ADDRESS],
     );
+
     addTarget(
       cacheLeaderService?.[COLUMN.SERVICE_ID],
       cacheLeaderService?.[COLUMN.ADDRESS],
@@ -2061,6 +2880,492 @@ class MessageGroupService extends EventEmitter {
       targets,
       suppressedCount,
     };
+  }
+
+  shouldUseStrictCDCForwarding(logContext = {}) {
+    const tableName = logContext?.tableName || null;
+    return typeof tableName === TYPEOF.STRING &&
+      STRICT_CDC_FORWARD_SYSTEM_TABLES.has(tableName);
+  }
+
+  /**
+   * Return readiness for accepting one CDC event from upstream owners.
+   * This lets buffered partition replay defer until strict forwarding has a
+   * usable leader target instead of repeatedly rediscovering the same miss.
+   * @param {Object} cdcEvent
+   * @return {{ready: boolean, retryAfterMs?: number, reason?: string}}
+   */
+  canAcceptCDCEvent(cdcEvent = {}) {
+    if (this.isCurrentRaftLeader()) {
+      return {ready: true};
+    }
+
+    const selection = this.resolveCDCForwardSelection({
+      tableName: cdcEvent?.tableName || null,
+      operation: cdcEvent?.operation || null,
+    });
+    if (!selection.strictForwarding) {
+      return {ready: true};
+    }
+    if (selection.targets.length > NUM.ZERO) {
+      return {ready: true};
+    }
+
+    // A strict no-target miss means the canonical cache view is incomplete.
+    // Trigger the bounded authoritative repair owner path immediately so
+    // buffered replay can converge instead of idling until a failed forward
+    // attempt happens elsewhere.
+    void this.maybeRepairAuthoritativeForwardTopology({
+      errorMessage: MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN,
+      tableName: cdcEvent?.tableName || null,
+      operation: cdcEvent?.operation || null,
+    });
+
+    return {
+      ready: false,
+      reason: MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN,
+      retryAfterMs: selection.strictForwardRetryAfterMs,
+    };
+  }
+
+  /**
+   * Report whether this replica can currently serve as a metadata ingress
+   * owner for the supplied system-table write set.
+   * @param {Object} [options]
+   * @param {Array<string>} [options.requiredTables]
+   * @return {{ready: boolean, retryAfterMs?: number, reason?: string}}
+   */
+  getMetadataIngressReadiness(options = {}) {
+    if (this.initialized !== true) {
+      return {
+        ready: false,
+        reason: 'message-group ingress not initialized',
+        retryAfterMs: this.resolveStrictCdcForwardRetryAfterMs(),
+      };
+    }
+
+    if (this.isCurrentRaftLeader()) {
+      return {ready: true};
+    }
+
+    const requiredTables = [...new Set(
+      (Array.isArray(options.requiredTables) ? options.requiredTables : [])
+        .filter((tableName) =>
+          typeof tableName === TYPEOF.STRING &&
+            tableName.length > NUM.ZERO,
+        ),
+    )];
+    if (requiredTables.length === NUM.ZERO) {
+      return {
+        ready: false,
+        reason: MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN,
+        retryAfterMs: this.resolveStrictCdcForwardRetryAfterMs(),
+      };
+    }
+
+    let retryAfterMs = NUM.ZERO;
+    for (const tableName of requiredTables) {
+      const readiness = this.canAcceptCDCEvent({tableName});
+      if (readiness.ready !== true) {
+        return {
+          ready: false,
+          reason: readiness.reason ||
+            MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN,
+          retryAfterMs: Number.isFinite(readiness.retryAfterMs) ?
+            readiness.retryAfterMs :
+            this.resolveStrictCdcForwardRetryAfterMs(),
+        };
+      }
+      if (Number.isFinite(readiness.retryAfterMs)) {
+        retryAfterMs = Math.max(retryAfterMs, readiness.retryAfterMs);
+      }
+    }
+
+    if (retryAfterMs > NUM.ZERO) {
+      return {ready: true, retryAfterMs};
+    }
+    return {ready: true};
+  }
+
+  /**
+   * Resolve canonical forwarding targets for metadata-ingress payloads.
+   * Control-plane messages must use the same ingress target-selection logic
+   * as metadata-ingress readiness instead of inventing a separate raw
+   * leader-id path.
+   * @param {Object} [options]
+   * @param {Array<string>} [options.requiredTables]
+   * @return {Promise<Object>}
+   */
+  async resolveMetadataIngressForwardSelection(options = {}) {
+    const requiredTables = [...new Set(
+      (Array.isArray(options.requiredTables) ? options.requiredTables : [])
+        .filter((tableName) =>
+          typeof tableName === TYPEOF.STRING &&
+          tableName.length > NUM.ZERO,
+        ),
+    )];
+    const tableName = requiredTables.find((candidate) =>
+      STRICT_CDC_FORWARD_SYSTEM_TABLES.has(candidate),
+    ) || requiredTables[NUM.ZERO] || null;
+    if (!tableName) {
+      return {
+        strictForwarding: false,
+        strictForwardRetryAfterMs: NUM.ZERO,
+        targets: [],
+        suppressedCount: NUM.ZERO,
+      };
+    }
+
+    let selection = this.resolveCDCForwardSelection({
+      tableName,
+      operation: 'metadata_ingress',
+    });
+    if (selection.strictForwarding === true &&
+        selection.targets.length === NUM.ZERO) {
+      await this.maybeRepairAuthoritativeForwardTopology({
+        errorMessage: MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN,
+        tableName,
+        operation: 'metadata_ingress',
+      });
+      selection = this.resolveCDCForwardSelection({
+        tableName,
+        operation: 'metadata_ingress',
+      });
+    }
+    return selection;
+  }
+
+  /**
+   * Forward one metadata-ingress payload through the canonical ingress target
+   * selected for the required system-table write set.
+   * @param {Object} payload
+   * @param {Object} [options]
+   * @param {Array<string>} [options.requiredTables]
+   * @param {string} [options.forwardedByNodeId]
+   * @return {Promise<void>}
+   */
+  async forwardMetadataIngressPayloadToLeader(payload, options = {}) {
+    const selection = await this.resolveMetadataIngressForwardSelection({
+      requiredTables: options.requiredTables,
+    });
+    const {
+      strictForwarding,
+      strictForwardRetryAfterMs,
+      targets,
+      suppressedCount,
+    } = selection;
+    if (!Array.isArray(targets) || targets.length === NUM.ZERO) {
+      const error = strictForwarding ?
+        buildDeferredCdcForwardError(
+          MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN,
+          strictForwardRetryAfterMs,
+        ) :
+        new Error(MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN);
+      if (suppressedCount > NUM.ZERO) {
+        error.retryable = false;
+      }
+      throw error;
+    }
+
+    const forwardedByNodeId =
+      typeof options.forwardedByNodeId === TYPEOF.STRING &&
+      options.forwardedByNodeId.length > NUM.ZERO ?
+        options.forwardedByNodeId :
+        this.nodeId;
+    const forwardedBy = Array.isArray(
+      payload?.[ControlPlaneField.FORWARDED_BY],
+    ) ?
+      payload[ControlPlaneField.FORWARDED_BY] :
+      payload?.[ControlPlaneField.FORWARDED_BY] ?
+        [payload[ControlPlaneField.FORWARDED_BY]] :
+        [];
+    if (forwardedBy.includes(forwardedByNodeId)) {
+      return;
+    }
+
+    const forwardedPayload = {
+      ...payload,
+      [ControlPlaneField.FORWARDED_BY]: [
+        ...forwardedBy,
+        forwardedByNodeId,
+      ],
+    };
+
+    let lastError = null;
+    for (const target of targets) {
+      const targetAddress = typeof target?.address === TYPEOF.STRING &&
+        target.address.length > NUM.ZERO ?
+        target.address :
+        this.buildPeerAddress(target?.serviceId || null);
+      if (typeof targetAddress !== TYPEOF.STRING ||
+          targetAddress.length === NUM.ZERO) {
+        lastError = new Error(
+          MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_ADDRESS_UNRESOLVED,
+        );
+        continue;
+      }
+      try {
+        await this.sendMessage(targetAddress, forwardedPayload);
+        return;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    throw lastError || new Error(
+      MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN,
+    );
+  }
+
+  /**
+   * Return whether this replica can currently carry metadata ingress work.
+   * @param {Object} [options]
+   * @param {Array<string>} [options.requiredTables]
+   * @return {boolean}
+   */
+  isMetadataIngressReady(options = {}) {
+    return this.getMetadataIngressReadiness(options).ready === true;
+  }
+
+  /**
+   * Strict system-table forwarding may only target nodes that are currently
+   * connected. Broader node READY publication must not gate owner relay
+   * traffic, because the same relay path is what carries the canonical writes
+   * needed for READY convergence after leader movement.
+   * @param {?Object} target
+   * @return {boolean}
+   * @private
+   */
+  isStrictForwardTargetEligible(target = null) {
+    if (!target ||
+        typeof target !== TYPEOF.OBJECT ||
+        typeof target.serviceId !== TYPEOF.STRING ||
+        target.serviceId.length === NUM.ZERO) {
+      return false;
+    }
+
+    const nodeId = this.resolveForwardTargetNodeId(target);
+    if (typeof nodeId !== TYPEOF.STRING || nodeId.length === NUM.ZERO) {
+      return false;
+    }
+
+    if (!this.isStrictForwardNodeConnected(nodeId)) {
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * During join convergence, strict forwarding should accept the canonical
+   * connected owner even before the broader cluster marks it fully READY.
+   * This keeps metadata ingress on the canonical path without making the
+   * joining replica externally targetable.
+   * @return {boolean}
+   * @private
+   */
+  shouldAllowJoinConvergenceStrictTargeting() {
+    return this.shouldSuppressJoinPhaseRaftParticipation();
+  }
+
+  /**
+   * During MOVE_REPLICA convergence, bootstrap peer hints remain authoritative
+   * until the local cache catches up, but only for the canonical leader node
+   * already published in message_groups. This avoids inventing a second
+   * discovery path while still letting the joining replica route ingress
+   * before its own services row becomes canonical.
+   * @return {{serviceId: string, address: string}|null}
+   * @private
+   */
+  resolveJoinConvergenceBootstrapForwardTarget() {
+    if (!Array.isArray(this.peerAddresses) ||
+        this.peerAddresses.length === NUM.ZERO) {
+      return null;
+    }
+
+    const leaderNodeId = this.resolveCanonicalLeaderNodeIdFromCache();
+    if (typeof leaderNodeId !== TYPEOF.STRING ||
+        leaderNodeId.length === NUM.ZERO) {
+      return null;
+    }
+
+    for (const address of this.peerAddresses) {
+      if (typeof address !== TYPEOF.STRING || address.length === NUM.ZERO) {
+        continue;
+      }
+      try {
+        const parsed = this.addressManager.parse(address);
+        if (parsed.serviceType !== ENTITY_TYPE.MESSAGE_GROUP ||
+            parsed.nodeId !== leaderNodeId ||
+            this.isLocalForwardTarget(parsed.serviceId, address)) {
+          continue;
+        }
+        return {
+          serviceId: parsed.serviceId,
+          address,
+        };
+      } catch (_error) {
+        continue;
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Read the canonical leader node from the shared message_groups cache.
+   * @return {string|null}
+   * @private
+   */
+  resolveCanonicalLeaderNodeIdFromCache() {
+    if (!this.systemTableCache ||
+        typeof this.systemTableCache.get !== TYPEOF.FUNCTION) {
+      return null;
+    }
+
+    const group = this.systemTableCache.get(TABLES.MESSAGE_GROUPS, this.groupId);
+    const leaderNodeId =
+      group?.[COLUMN.LEADER_NODE_ID] ||
+      group?.leader_node_id ||
+      group?.leaderNodeId ||
+      null;
+    return typeof leaderNodeId === TYPEOF.STRING &&
+      leaderNodeId.length > NUM.ZERO ?
+      leaderNodeId :
+      null;
+  }
+
+  /**
+   * Resolve whether a forwarding target is this local replica.
+   * Service IDs are not sufficient during MOVE_REPLICA handoffs because the
+   * authoritative remote replica and the local joining replica temporarily
+   * share the same replica ID.
+   * @param {?string} serviceId
+   * @param {?string} address
+   * @return {boolean}
+   * @private
+   */
+  isLocalForwardTarget(serviceId, address = null) {
+    if (typeof address === TYPEOF.STRING && address.length > NUM.ZERO) {
+      if (address === this.unifiedAddress) {
+        return true;
+      }
+      try {
+        const parsed = this.addressManager.parse(address);
+        return parsed?.serviceType === ENTITY_TYPE.MESSAGE_GROUP &&
+          parsed?.serviceId === this.replicaId &&
+          parsed?.nodeId === this.nodeId;
+      } catch (_error) {
+        // Ignore malformed addresses and fall back to service-id-only logic.
+      }
+    }
+
+    return typeof serviceId === TYPEOF.STRING &&
+      serviceId.length > NUM.ZERO &&
+      serviceId === this.replicaId;
+  }
+
+  /**
+   * Resolve the hosting node ID for a forward target.
+   * @param {?Object} target
+   * @return {?string}
+   * @private
+   */
+  resolveForwardTargetNodeId(target = null) {
+    const targetAddress = typeof target?.address === TYPEOF.STRING &&
+      target.address.length > NUM.ZERO ?
+      target.address :
+      this.resolvePeerAddressFromCache(target?.serviceId || null);
+
+    if (typeof targetAddress === TYPEOF.STRING &&
+        targetAddress.length > NUM.ZERO) {
+      try {
+        const parsed = this.addressManager.parse(targetAddress);
+        if (typeof parsed?.nodeId === TYPEOF.STRING &&
+            parsed.nodeId.length > NUM.ZERO) {
+          return parsed.nodeId;
+        }
+      } catch (_error) {
+        // Ignore malformed or stale addresses and fall through to cache rows.
+      }
+    }
+
+    const cache = this.systemTableCache;
+    if (!cache || typeof cache.get !== TYPEOF.FUNCTION) {
+      return null;
+    }
+    const serviceRow = cache.get(TABLES.SERVICES, target?.serviceId || null);
+    const nodeId = serviceRow?.[COLUMN.NODE_ID] || null;
+    return typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO ?
+      nodeId :
+      null;
+  }
+
+  /**
+   * Return true when a strict forward target node is ready, or when readiness
+   * evidence is not yet available locally.
+   * @param {?string} nodeId
+   * @return {boolean}
+   * @private
+   */
+  isStrictForwardNodeReady(nodeId) {
+    if (typeof nodeId !== TYPEOF.STRING || nodeId.length === NUM.ZERO) {
+      return false;
+    }
+
+    const cache = this.systemTableCache;
+    if (!cache) {
+      return true;
+    }
+
+    if (typeof cache.getReadyNodes === TYPEOF.FUNCTION) {
+      const readyNodes = cache.getReadyNodes();
+      if (Array.isArray(readyNodes)) {
+        return readyNodes.includes(nodeId);
+      }
+    }
+
+    const allNodeRows = typeof cache.getAll === TYPEOF.FUNCTION ?
+      cache.getAll(TABLES.NODES) || [] :
+      typeof cache.filter === TYPEOF.FUNCTION ?
+        cache.filter(TABLES.NODES, () => true) || [] :
+        [];
+    if (!Array.isArray(allNodeRows) || allNodeRows.length === NUM.ZERO) {
+      return true;
+    }
+
+    const nodeRow = typeof cache.get === TYPEOF.FUNCTION ?
+      cache.get(TABLES.NODES, nodeId) :
+      allNodeRows.find((row) => row?.[COLUMN.NODE_ID] === nodeId) || null;
+    if (!nodeRow) {
+      return false;
+    }
+
+    const readyLeaseExpiresAt = Number(nodeRow?.[COLUMN.READY_LEASE_EXPIRES_AT]);
+    return nodeRow?.[COLUMN.CONNECTION_STATE] === STATE.READY &&
+      Number.isFinite(readyLeaseExpiresAt) &&
+      readyLeaseExpiresAt > Date.now();
+  }
+
+  /**
+   * Strict forwarding always requires a currently connected node.
+   * @param {?string} nodeId
+   * @return {boolean}
+   * @private
+   */
+  isStrictForwardNodeConnected(nodeId) {
+    if (typeof nodeId !== TYPEOF.STRING || nodeId.length === NUM.ZERO) {
+      return false;
+    }
+    if (nodeId === this.nodeId) {
+      return true;
+    }
+
+    if (typeof this.transport?.getConnectionState !== TYPEOF.FUNCTION) {
+      return true;
+    }
+
+    return this.transport.getConnectionState(nodeId) === STATE.CONNECTED;
   }
 
   /**
@@ -2290,14 +3595,14 @@ class MessageGroupService extends EventEmitter {
     }
 
     let repairedRowCount = NUM.ZERO;
-    repairedRowCount += this.applyAuthoritativeForwardTopologyRows(
+    repairedRowCount += await this.applyAuthoritativeForwardTopologyRows(
       TABLES.MESSAGE_GROUPS,
       groupRows,
     );
-    repairedRowCount += this.reconcileAuthoritativeForwardServiceRows(
+    repairedRowCount += await this.reconcileAuthoritativeForwardServiceRows(
       serviceRows,
     );
-    repairedRowCount += this.applyAuthoritativeForwardTopologyRows(
+    repairedRowCount += await this.applyAuthoritativeForwardTopologyRows(
       TABLES.NODES,
       nodeRows,
     );
@@ -2332,34 +3637,21 @@ class MessageGroupService extends EventEmitter {
    * @return {number}
    * @private
    */
-  applyAuthoritativeForwardTopologyRows(tableName, rows = []) {
+  async applyAuthoritativeForwardTopologyRows(tableName, rows = []) {
+    const gateway = this.getControlPlaneSystemTableGateway();
     const cache = this.systemTableCache;
-    if (!cache || typeof cache.applySystemTableChange !== TYPEOF.FUNCTION) {
+    if (!cache || !gateway) {
       return NUM.ZERO;
     }
-
-    const primaryKeyField = getSystemCachePrimaryKeyFieldOrFallback(tableName);
-    let repairedRowCount = NUM.ZERO;
-    for (const row of Array.isArray(rows) ? rows : []) {
-      if (!row || typeof row !== TYPEOF.OBJECT) {
-        continue;
-      }
-      const key = row?.[primaryKeyField];
-      if (typeof key !== TYPEOF.STRING || key.length === NUM.ZERO) {
-        continue;
-      }
-      const cachedRow = cache.get(tableName, key);
-      if (this.areForwardTopologyRowsEqual(cachedRow, row)) {
-        continue;
-      }
-      cache.applySystemTableChange(
-        tableName,
-        CDC_OPERATION.UPSERT,
-        row,
-      );
-      repairedRowCount += NUM.ONE;
-    }
-    return repairedRowCount;
+    const result =
+      await gateway.reconcileAuthoritativeCacheRows(tableName, rows, {
+        primaryKeyField: getSystemCachePrimaryKeyFieldOrFallback(tableName),
+        deleteMissing: false,
+        areRowsEqual: (left, right) =>
+          this.areForwardTopologyRowsEqual(left, right),
+        systemTableCache: cache,
+      });
+    return result?.mutationCount || NUM.ZERO;
   }
 
   /**
@@ -2369,45 +3661,53 @@ class MessageGroupService extends EventEmitter {
    * @return {number}
    * @private
    */
-  reconcileAuthoritativeForwardServiceRows(authoritativeRows = []) {
+  async reconcileAuthoritativeForwardServiceRows(authoritativeRows = []) {
+    const gateway = this.getControlPlaneSystemTableGateway();
     const cache = this.systemTableCache;
-    if (!cache || typeof cache.applySystemTableChange !== TYPEOF.FUNCTION) {
+    if (!cache || !gateway) {
       return NUM.ZERO;
     }
-
-    let repairedRowCount = this.applyAuthoritativeForwardTopologyRows(
-      TABLES.SERVICES,
-      authoritativeRows,
-    );
-    const authoritativeServiceIds = new Set(
-      authoritativeRows
-        .map((row) => row?.[COLUMN.SERVICE_ID] || row?.service_id || null)
-        .filter((serviceId) => {
-          return typeof serviceId === TYPEOF.STRING &&
-            serviceId.length > NUM.ZERO;
-        }),
-    );
     const cachedRows = typeof cache.filter === TYPEOF.FUNCTION ?
       cache.filter(TABLES.SERVICES, (row) => {
         return row?.[COLUMN.GROUP_ID] === this.groupId &&
           row?.[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP;
       }) :
       [];
-    for (const cachedRow of cachedRows) {
-      const serviceId = cachedRow?.[COLUMN.SERVICE_ID] || cachedRow?.service_id;
-      if (typeof serviceId !== TYPEOF.STRING ||
-        serviceId.length === NUM.ZERO ||
-        authoritativeServiceIds.has(serviceId)) {
-        continue;
-      }
-      cache.applySystemTableChange(
+    const result =
+      await gateway.reconcileAuthoritativeCacheRows(
         TABLES.SERVICES,
-        CDC_OPERATION.DELETE,
-        cachedRow,
+        authoritativeRows,
+        {
+          cachedRows,
+          areRowsEqual: (left, right) =>
+            this.areForwardTopologyRowsEqual(left, right),
+          systemTableCache: cache,
+        },
       );
-      repairedRowCount += NUM.ONE;
+    return result?.mutationCount || NUM.ZERO;
+  }
+
+  getControlPlaneSystemTableGateway() {
+    if (!this.controlPlaneSystemTableGateway) {
+      this.controlPlaneSystemTableGateway =
+        new ControlPlaneSystemTableGateway({
+          nodeId: this.nodeId,
+          cdcIntegrationService: this.cdcIntegrationService,
+          sqlQueryEngine: this.cdcIntegrationService?.sqlQueryEngine || null,
+          systemTableCache: this.systemTableCache,
+          messageRouter: this.transport,
+        });
+    } else {
+      this.controlPlaneSystemTableGateway
+        .setCdcIntegrationService(this.cdcIntegrationService);
+      this.controlPlaneSystemTableGateway
+        .setSqlQueryEngine(this.cdcIntegrationService?.sqlQueryEngine || null);
+      this.controlPlaneSystemTableGateway
+        .setSystemTableCache(this.systemTableCache);
+      this.controlPlaneSystemTableGateway
+        .setMessageRouter(this.transport);
     }
-    return repairedRowCount;
+    return this.controlPlaneSystemTableGateway;
   }
 
   /**
@@ -2448,6 +3748,7 @@ class MessageGroupService extends EventEmitter {
       return false;
     }
     return this.shouldRepairForwardTopology(errorMessage) ||
+      this.isForwardTargetBackpressured(deliveryResult, errorMessage) ||
       errorMessage === TRANSPORT_ERROR_MSG.MESSAGE_TIMEOUT ||
       errorMessage.includes('ENOTFOUND') ||
       errorMessage.includes('EAI_AGAIN') ||
@@ -2456,6 +3757,26 @@ class MessageGroupService extends EventEmitter {
       (errorMessage.includes('Connection to node') &&
         errorMessage.includes('closed')) ||
       errorMessage.includes('No handler registered for address');
+  }
+
+  /**
+   * Return true when a forward target is rejecting traffic due to bounded
+   * outbound queue pressure and should be temporarily suppressed.
+   * @param {?Object} deliveryResult
+   * @param {?string} errorMessage
+   * @return {boolean}
+   * @private
+   */
+  isForwardTargetBackpressured(deliveryResult, errorMessage) {
+    const normalizedErrorMessage =
+      typeof errorMessage === TYPEOF.STRING ?
+        errorMessage :
+        '';
+    if (deliveryResult?.errorCode === 'OUTBOUND_QUEUE_BACKPRESSURED') {
+      return true;
+    }
+    return normalizedErrorMessage.includes('Outbound queue for node') &&
+      normalizedErrorMessage.includes('is saturated');
   }
 
   /**
@@ -2481,43 +3802,6 @@ class MessageGroupService extends EventEmitter {
       options.relayDepth :
       NUM.ZERO;
     const causeId = normalizeCauseId(options.causeId);
-    const isConnectedNode = (nodeId) => {
-      if (typeof this.transport?.getConnectionState !== TYPEOF.FUNCTION) {
-        return true;
-      }
-      return this.transport.getConnectionState(nodeId) === STATE.CONNECTED;
-    };
-    const cacheLeaderService = resolveMessageGroupLeaderServiceFromCache(
-      this.systemTableCache,
-      this.groupId,
-      {
-        excludeServiceId: this.replicaId,
-        isConnectedNode,
-      },
-    );
-    const cacheForwardService = resolveMessageGroupForwardServiceFromCache(
-      this.systemTableCache,
-      this.groupId,
-      {
-        excludeServiceId: this.replicaId,
-        isConnectedNode,
-      },
-    );
-    const {
-      targets: forwardTargets,
-      suppressedCount,
-    } = this.buildCDCForwardTargets(
-      cacheLeaderService,
-      cacheForwardService,
-    );
-    if (forwardTargets.length === NUM.ZERO) {
-      const error = new Error(MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN);
-      if (suppressedCount > NUM.ZERO) {
-        error.retryable = false;
-      }
-      throw error;
-    }
-
     const payload = {
       type: MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE.LATENCY_CDC_PROPAGATION,
       tableName,
@@ -2528,6 +3812,105 @@ class MessageGroupService extends EventEmitter {
       relayDepth,
       causeId,
     };
+    return this.forwardCDCPayloadToLeader(payload, {
+      tableName,
+      operation,
+      relayDepth,
+      causeId,
+    });
+  }
+
+  /**
+   * Forward a CDC batch to the message-group leader for Raft replication.
+   * @param {Array<Object>} events
+   * @param {Object} [options]
+   * @param {number} [options.relayDepth]
+   * @return {Promise<void>}
+   * @private
+   */
+  async forwardCDCBatchToLeader(events, options = {}) {
+    const relayDepth = Number.isInteger(options.relayDepth) &&
+      options.relayDepth >= NUM.ZERO ?
+      options.relayDepth :
+      NUM.ZERO;
+    const normalizedEvents = (Array.isArray(events) ? events : [])
+      .filter((event) => event?.tableName && event?.operation && event?.data)
+      .map((event) => {
+        const timestamp = typeof event.timestamp === 'string' &&
+          event.timestamp.length > NUM.ZERO ?
+          event.timestamp :
+          this.hlcClock.now().toString();
+        return {
+          tableName: event.tableName,
+          operation: event.operation,
+          data: event.data,
+          timestamp,
+          causeId: normalizeCauseId(event.causeId),
+        };
+      });
+    if (normalizedEvents.length === NUM.ZERO) {
+      throw new Error(
+        MESSAGE_GROUP_APPLICATION_ERROR_MSG.INVALID_LATENCY_CDC_BATCH_PAYLOAD,
+      );
+    }
+
+    const payload = {
+      type: MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE.LATENCY_CDC_PROPAGATION_BATCH,
+      events: normalizedEvents,
+      sourceNodeId: this.nodeId,
+      relayDepth,
+    };
+    return this.forwardCDCPayloadToLeader(payload, {
+      tableName: normalizedEvents[0].tableName,
+      operation: `batch:${normalizedEvents.length}`,
+      relayDepth,
+      causeId: normalizeCauseId(normalizedEvents[0].causeId),
+    });
+  }
+
+  /**
+   * Forward one CDC payload to the current message-group leader.
+   * @param {Object} payload
+   * @param {Object} logContext
+   * @return {Promise<void>}
+   * @private
+   */
+  async forwardCDCPayloadToLeader(payload, logContext = {}) {
+    const tableName = logContext.tableName || null;
+    const operation = logContext.operation || null;
+    const relayDepth = Number.isInteger(logContext.relayDepth) ?
+      logContext.relayDepth :
+      NUM.ZERO;
+    const causeId = normalizeCauseId(logContext.causeId);
+    let selection = this.resolveCDCForwardSelection(logContext);
+    if (selection.strictForwarding === true &&
+        selection.targets.length === NUM.ZERO) {
+      await this.maybeRepairAuthoritativeForwardTopology({
+        errorMessage: MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN,
+        tableName,
+        operation,
+        causeId,
+      });
+      selection = this.resolveCDCForwardSelection(logContext);
+    }
+    const {
+      strictForwarding,
+      strictForwardRetryAfterMs,
+      targets: forwardTargets,
+      suppressedCount,
+    } = selection;
+    if (forwardTargets.length === NUM.ZERO) {
+      const error = strictForwarding ?
+        buildDeferredCdcForwardError(
+          MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN,
+          strictForwardRetryAfterMs,
+        ) :
+        new Error(MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN);
+      if (suppressedCount > NUM.ZERO) {
+        error.retryable = false;
+      }
+      throw error;
+    }
     let lastAddressError = null;
     let lastDeliveryError = null;
 
@@ -2549,7 +3932,11 @@ class MessageGroupService extends EventEmitter {
 
       const forwardStartMs = this.now();
       try {
-        const deliveryResult = await this.transport.deliver(leaderAddress, payload);
+        const deliveryResult = await this.transport.deliver(
+          leaderAddress,
+          payload,
+          {deliveryPriority: 'critical'},
+        );
         const deliveryAcked = deliveryResult?.acknowledged === true;
         const deliverySucceeded = deliveryResult?.success !== false;
         const deliveryErrorMessage =
@@ -2596,9 +3983,14 @@ class MessageGroupService extends EventEmitter {
           const deliveryError = deliveryErrorMessage !== null ?
               `: ${deliveryErrorMessage}` :
               '';
-          lastDeliveryError = new Error(
-            `${MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_DELIVERY_REJECTED}${deliveryError}`,
-          );
+          const forwardErrorMessage =
+            `${MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_DELIVERY_REJECTED}${deliveryError}`;
+          lastDeliveryError = strictForwarding ?
+            buildDeferredCdcForwardError(
+              forwardErrorMessage,
+              strictForwardRetryAfterMs,
+            ) :
+            new Error(forwardErrorMessage);
           continue;
         }
         this.clearForwardTargetSuppression({
@@ -2625,7 +4017,12 @@ class MessageGroupService extends EventEmitter {
             errorMessage: error?.message || null,
           });
         }
-        lastDeliveryError = error;
+        lastDeliveryError = strictForwarding ?
+          buildDeferredCdcForwardError(
+            error?.message || MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN,
+            strictForwardRetryAfterMs,
+          ) :
+          error;
       }
     }
 
@@ -2633,13 +4030,20 @@ class MessageGroupService extends EventEmitter {
       throw lastDeliveryError;
     }
     if (lastAddressError) {
-      throw new Error(
+      const message =
         `${MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_ADDRESS_UNRESOLVED}: ` +
-          `${lastAddressError.message}`,
-      );
+        `${lastAddressError.message}`;
+      throw strictForwarding ?
+        buildDeferredCdcForwardError(message, strictForwardRetryAfterMs) :
+        new Error(message);
     }
 
-    throw new Error(MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN);
+    throw strictForwarding ?
+      buildDeferredCdcForwardError(
+        MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN,
+        strictForwardRetryAfterMs,
+      ) :
+      new Error(MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN);
   }
 
   /**
@@ -2668,6 +4072,19 @@ class MessageGroupService extends EventEmitter {
           retryBackoffMultiplier ** Math.max(NUM.ZERO, attempt - NUM.TWO)
         ),
       ),
+    );
+  }
+
+  resolveStrictCdcForwardRetryAfterMs() {
+    return Math.max(
+      NUM.ONE,
+      this.computeCdcForwardRetryDelayMs(NUM.ONE),
+      Number.isFinite(this.forwardTargetSuppressionMs) ?
+        this.forwardTargetSuppressionMs :
+        NUM.ZERO,
+      Number.isFinite(this.forwardTopologyRepairCooldownMs) ?
+        this.forwardTopologyRepairCooldownMs :
+        NUM.ZERO,
     );
   }
 
@@ -2786,6 +4203,7 @@ class MessageGroupService extends EventEmitter {
    * @private
    */
   maybeInitializeRebalancer() {
+    const backgroundReady = this.isBackgroundWorkReady();
     if (this.rebalancer) {
       this.rebalancer.systemTableCache = this.systemTableCache;
       this.rebalancer.cdcIntegrationService = this.cdcIntegrationService;
@@ -2797,12 +4215,21 @@ class MessageGroupService extends EventEmitter {
       }
       this.rebalancer.setRebalanceCoordinator(this.rebalanceCoordinator);
       this.rebalancer.messageRouter = this.transport;
-      this.rebalancer.sqlQueryEngine = this.cdcIntegrationService?.sqlQueryEngine || null;
-      this.rebalancer.setLeader(this.isLeaderReplica());
+      this.rebalancer.sqlQueryEngine =
+        this.cdcIntegrationService?.sqlQueryEngine || null;
+      if (this.rebalancer.controlPlaneSystemTableGateway &&
+          typeof this.rebalancer.controlPlaneSystemTableGateway
+            .setSqlQueryEngine === TYPEOF.FUNCTION) {
+        this.rebalancer.controlPlaneSystemTableGateway
+          .setSqlQueryEngine(
+            this.cdcIntegrationService?.sqlQueryEngine || null,
+          );
+      }
+      this.rebalancer.setLeader(backgroundReady && this.isLeaderReplica());
       return;
     }
 
-    if (!this.initialized || !this.isLeaderReplica()) {
+    if (!backgroundReady || !this.initialized || !this.isLeaderReplica()) {
       return;
     }
 
@@ -2826,7 +4253,7 @@ class MessageGroupService extends EventEmitter {
       rebalanceCoordinator: this.rebalanceCoordinator,
     });
     this.rebalancer.initialize();
-    this.rebalancer.setLeader(true);
+    this.rebalancer.setLeader(backgroundReady && this.isLeaderReplica());
   }
 
   /**
@@ -2835,10 +4262,66 @@ class MessageGroupService extends EventEmitter {
    */
   updateRebalancerLeadership() {
     if (this.rebalancer) {
-      this.rebalancer.setLeader(this.isLeaderReplica());
+      this.rebalancer.setLeader(
+        this.isBackgroundWorkReady() && this.isLeaderReplica(),
+      );
       return;
     }
     this.maybeInitializeRebalancer();
+  }
+
+  cancelLeaderOwnedActivation() {
+    this.leaderActivationGate.cancel({clearActivatedTerm: true});
+  }
+
+  scheduleLeaderOwnedActivation(term) {
+    this.leaderActivationGate.schedule(term, () => {
+      if (!this.raft || !this.isLeaderReplica()) {
+        return;
+      }
+      this.updateRebalancerLeadership();
+
+      const existingSubscriptions = this.cdcHandler.getSubscriptions();
+      if (existingSubscriptions.length > NUM.ZERO &&
+          this.lastLeaderCdcResubscribeTerm !== term) {
+        this.lastLeaderCdcResubscribeTerm = term;
+        this.logger.info(
+          MESSAGE_GROUP_SERVICE_LOG_MSG.CDC_RESUBSCRIBE_ON_LEADER,
+          {
+            term,
+            replicaId: this.replicaId,
+            groupId: this.groupId,
+            tableCount: existingSubscriptions.length,
+          },
+        );
+        for (const tableName of existingSubscriptions) {
+          this.subscribeToCDC(tableName);
+        }
+        this.logger.info(
+          MESSAGE_GROUP_SERVICE_LOG_MSG.CDC_RESUBSCRIBE_ON_LEADER_COMPLETE,
+          {
+            term,
+            replicaId: this.replicaId,
+            groupId: this.groupId,
+            tableCount: existingSubscriptions.length,
+          },
+        );
+      }
+
+      this.logger.info('Became leader', {
+        term,
+        replicaId: this.replicaId,
+        groupId: this.groupId,
+      });
+
+      this.emit('leaderElected', {
+        leaderId: this.replicaId,
+        term,
+        groupId: this.groupId,
+      });
+    }, {
+      shouldActivate: () => this.raft !== null && this.isLeaderReplica(),
+    });
   }
 
   /**
@@ -2847,7 +4330,9 @@ class MessageGroupService extends EventEmitter {
    * @private
    */
   queueRoleUpdate(role) {
-    this.roleMutationHelper.queue(role);
+    this.roleMutationHelper.queue(
+      normalizePublishedRaftRole(role, {collapseLeaderToFollower: true}),
+    );
   }
 
   /**
@@ -2887,12 +4372,24 @@ class MessageGroupService extends EventEmitter {
   }
 
   /**
-   * Check if the services partition leader is available for writes.
-   * @return {boolean} True if a leader with an address is known.
+   * Check if the services table is writable through either cache-visible
+   * routing metadata or the local services-p1 leader owner.
+   * @return {boolean} True if writes can be issued safely.
    * @private
    */
   isServicesLeaderAvailable() {
-    return isSystemTableWriteReady(this.systemTableCache, SYSTEM_TABLE_NAME.SERVICES);
+    if (isSystemTableWriteReady(this.systemTableCache, SYSTEM_TABLE_NAME.SERVICES)) {
+      return true;
+    }
+    return this.cdcIntegrationService?.canWriteSystemTableLocally?.(
+      SYSTEM_TABLE_NAME.SERVICES,
+    ) === true;
+  }
+
+  getMetadataPublicationDeliveryPriority() {
+    return this.groupId === INITIAL_MESSAGE_GROUP_ID ?
+      'critical' :
+      'background';
   }
 
   /**
@@ -2995,6 +4492,7 @@ class MessageGroupService extends EventEmitter {
       groupId: this.groupId,
       replicaId: this.replicaId,
     });
+    this.leaderActivationGate.shutdown();
 
     this.peerReconciliationScheduled = false;
     if (this.systemTableCache &&
@@ -3008,7 +4506,14 @@ class MessageGroupService extends EventEmitter {
       this.raftProvider.shutdownNode(this.raft);
       this.raft = null;
     }
+    this.joinSuppressedHeartbeat = null;
 
+    if (typeof this.releaseMetadataPublicationReadinessListener ===
+      TYPEOF.FUNCTION) {
+      this.releaseMetadataPublicationReadinessListener();
+    }
+    this.releaseMetadataPublicationReadinessListener = null;
+    this._metadataPublicationReadinessState = null;
     this.roleMutationHelper.shutdown();
     this.leaderNodeMutationHelper.shutdown();
     await this.quiesceRebalancing();

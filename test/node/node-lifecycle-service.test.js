@@ -59,6 +59,17 @@ function createMockCDCService() {
   };
 }
 
+function createMockMutationGateway() {
+  const operations = [];
+  return {
+    operations,
+    async submitMutation(mutation, options = {}) {
+      operations.push({...mutation, options});
+      return {success: true, mutation, options};
+    },
+  };
+}
+
 test('NodeLifecycleService - constructor', async (t) => {
   const service = new NodeLifecycleService({
     nodeId: 'test-node',
@@ -98,6 +109,19 @@ test('NodeLifecycleService - initialize requires cdcIntegrationService', async (
   }
   t.end();
 });
+
+test('NodeLifecycleService - initialize accepts control-plane mutation gateway',
+  async (t) => {
+    const mockGateway = createMockMutationGateway();
+    const service = new NodeLifecycleService({
+      nodeId: 'test-node',
+      controlPlaneSystemTableGateway: mockGateway,
+    });
+
+    service.initialize();
+
+    t.equal(service.isInitialized(), true, 'should initialize with mutation gateway');
+  });
 
 test('NodeLifecycleService - initialize requires nodeId', async (t) => {
   const mockCDC = createMockCDCService();
@@ -211,6 +235,31 @@ test('NodeLifecycleService - removeNode', async (t) => {
   );
   t.end();
 });
+
+test('NodeLifecycleService - routes writes through control-plane mutation ingress',
+  async (t) => {
+    const mockGateway = createMockMutationGateway();
+    const service = new NodeLifecycleService({
+      nodeId: 'test-node',
+      controlPlaneSystemTableGateway: mockGateway,
+    });
+    service.initialize();
+
+    await service.updateHeartbeat('node-1');
+
+    t.equal(mockGateway.operations.length, 1, 'should submit one mutation');
+    t.equal(mockGateway.operations[0].operation, 'update', 'should use update mutation');
+    t.equal(
+      mockGateway.operations[0].tableName,
+      SYSTEM_TABLE_NAME.NODES,
+      'should target the nodes table through one ingress',
+    );
+    t.equal(
+      mockGateway.operations[0].options.allowPressureDefer,
+      true,
+      'heartbeat writes should opt into gateway defer handling',
+    );
+  });
 
 test('NodeLifecycleService - emits events for write operations', async (t) => {
   const mockCDC = createMockCDCService();

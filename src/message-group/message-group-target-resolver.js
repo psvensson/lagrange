@@ -66,18 +66,26 @@ function isReadyNode(cache, nodeId) {
     readyLeaseExpiresAt > Date.now();
 }
 
-function getActiveMessageGroupServiceCandidates(cache, groupId) {
+function getMessageGroupServiceCandidates(cache, groupId, options = {}) {
+  const requireReadyNode = options.requireReadyNode !== false;
+  const allowStoppedService = options.allowStoppedService === true;
   return filterRows(cache, TABLES.SERVICES, (row) => {
+    const status = row?.[COLUMN.STATUS];
+    const hasEligibleStatus = status === SERVICE_STATUS.ACTIVE ||
+      (allowStoppedService && status === SERVICE_STATUS.STOPPED);
     return row?.[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP &&
       row?.[COLUMN.GROUP_ID] === groupId &&
-      row?.[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE &&
-      isReadyNode(cache, row?.[COLUMN.NODE_ID]) &&
+      hasEligibleStatus &&
+      (!requireReadyNode || isReadyNode(cache, row?.[COLUMN.NODE_ID])) &&
       typeof row?.[COLUMN.ADDRESS] === TYPEOF.STRING &&
       row[COLUMN.ADDRESS].length > NUM.ZERO;
   });
 }
 
 function preferConnectedCandidates(candidates, options = {}) {
+  if (options.preferConnectedCandidates === false) {
+    return candidates;
+  }
   const isConnectedNode = typeof options.isConnectedNode === TYPEOF.FUNCTION ?
     options.isConnectedNode :
     null;
@@ -164,7 +172,7 @@ function resolveCanonicalLeaderServiceCandidate(
 
 function resolveMessageGroupLeaderServiceFromCache(cache, groupId, options = {}) {
   const candidates = preferConnectedCandidates(
-    getActiveMessageGroupServiceCandidates(cache, groupId),
+    getMessageGroupServiceCandidates(cache, groupId, options),
     options,
   );
   const leaderNodeId = getCanonicalLeaderNodeId(cache, groupId);
@@ -194,7 +202,7 @@ function resolveMessageGroupLeaderServiceFromCache(cache, groupId, options = {})
 
 function resolveMessageGroupForwardServiceFromCache(cache, groupId, options = {}) {
   const candidates = preferConnectedCandidates(
-    getActiveMessageGroupServiceCandidates(cache, groupId),
+    getMessageGroupServiceCandidates(cache, groupId, options),
     options,
   )
     .filter((row) => {
@@ -252,7 +260,11 @@ function resolveMessageGroupTargetAddressFromCache(cache, groupId, options = {})
   const isConnectedNode = typeof options.isConnectedNode === TYPEOF.FUNCTION ?
     options.isConnectedNode :
     () => true;
-  const candidates = getActiveMessageGroupServiceCandidates(cache, groupId);
+  const candidates = getMessageGroupServiceCandidates(
+    cache,
+    groupId,
+    options,
+  );
 
   if (candidates.length === NUM.ZERO) {
     return null;

@@ -273,6 +273,7 @@ test('MOVE_REPLICA handoff ownership integration', {timeout: 180000}, async (t) 
         });
 
         let targetElectionStartedAt = null;
+        let targetReplicaStartedDeferred = false;
         const originalStartJoinMessageGroupReplica =
           joiningService.startJoinMessageGroupReplica.bind(joiningService);
         joiningService.startJoinMessageGroupReplica = async function(replicaHandle, context) {
@@ -288,11 +289,22 @@ test('MOVE_REPLICA handoff ownership integration', {timeout: 180000}, async (t) 
               serviceId,
               'message_group',
             );
-            if (options?.deferElection !== true) {
-              targetElectionStartedAt = Date.now();
+            targetReplicaStartedDeferred = options?.deferElection === true;
+          }
+          const result = await originalStartJoinMessageGroupReplica(replicaHandle, context);
+          if (serviceId === movedReplicaId) {
+            const movedService = this.messageGroupServices.get(serviceId);
+            const originalStartElection =
+              movedService?.startElection?.bind(movedService) || null;
+            if (originalStartElection && movedService.__electionProbeInstalled !== true) {
+              movedService.__electionProbeInstalled = true;
+              movedService.startElection = (...args) => {
+                targetElectionStartedAt = Date.now();
+                return originalStartElection(...args);
+              };
             }
           }
-          return originalStartJoinMessageGroupReplica(replicaHandle, context);
+          return result;
         };
 
         const joinResult = await joiningService.join();
@@ -306,8 +318,8 @@ test('MOVE_REPLICA handoff ownership integration', {timeout: 180000}, async (t) 
         const sourceRemovedAt =
           sourceShutdownAtByReplicaId.get(movedReplicaId) || null;
         t.ok(
-          Number.isFinite(targetElectionStartedAt),
-          'moved replica should eventually start election on target',
+          targetReplicaStartedDeferred,
+          'moved replica should start in deferred-election join mode',
         );
         t.ok(
           Number.isFinite(sourceRemovedAt),
@@ -317,7 +329,7 @@ test('MOVE_REPLICA handoff ownership integration', {timeout: 180000}, async (t) 
           Number.isFinite(targetElectionStartedAt) &&
             Number.isFinite(sourceRemovedAt) &&
             targetElectionStartedAt >= sourceRemovedAt,
-          'target election must not start before source replica removal',
+          'deferred target election must not start before source replica removal',
         );
       } finally {
         await gracefulJoiningShutdown(joiningService);

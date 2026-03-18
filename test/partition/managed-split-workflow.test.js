@@ -131,6 +131,7 @@ function buildWorkflow(options = {}) {
             return createAdmissionResult();
           },
         },
+    pressureGovernor: options.pressureGovernor || null,
     waitForTablePartitionMetadata:
       options.waitForTablePartitionMetadata || (async () => {}),
     probeInitialTablePartitionProvisioning:
@@ -468,6 +469,66 @@ test('ManagedSplitWorkflow persists blocked split admission instead of ' +
     ].nextAttemptAt,
     'retryable admission denial should persist the next retry window',
   );
+});
+
+test('ManagedSplitWorkflow defers under local control-plane pressure ' +
+  'without creating new durable split metadata', async (t) => {
+  const {
+    workflow,
+    updateCalls,
+    insertCalls,
+    admissionCalls,
+    provisionCalls,
+  } = buildWorkflow({
+    pressureGovernor: {
+      evaluate() {
+        return {
+          action: 'defer',
+          retryAfterMs: 250,
+          summary: {backpressured: true},
+        };
+      },
+    },
+    buildManagedSplitPlan: async () => {
+      t.fail('split planning must not start while the node is hot');
+    },
+  });
+
+  const result = await workflow.execute('users-p1');
+
+  t.equal(result.success, false);
+  t.equal(
+    result.state,
+    PARTITION_TRANSITION_STATE.DEFERRED,
+    'workflow should return a typed deferred state under pressure',
+  );
+  t.equal(
+    result.error,
+    'control_plane_backpressure',
+    'workflow should surface the canonical pressure reason',
+  );
+  t.equal(
+    updateCalls.length,
+    0,
+    'workflow must not create admission metadata rows while pressure blocks the split',
+  );
+  t.equal(
+    insertCalls.length,
+    0,
+    'workflow must not insert child partitions while pressure blocks the split',
+  );
+  t.equal(
+    admissionCalls.length,
+    0,
+    'storage admission must not run while the local node is already hot',
+  );
+  t.equal(
+    provisionCalls.length,
+    0,
+    'child provisioning must not start while pressure defers the split',
+  );
+  t.equal(result.retryScheduled, true);
+  t.type(result.nextAttemptAt, 'string');
 });
 
 test('ManagedSplitWorkflow uses source-routable nodes when active target ' +

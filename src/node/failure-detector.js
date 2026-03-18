@@ -11,6 +11,11 @@ import {CONFIG_KEY} from '../config/config-constants.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {NUM, SERVICE_TYPE, TYPEOF} from '../constants/index.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
+import {
+  CONTROL_PLANE_MUTATION_OPERATION,
+  ControlPlaneSystemTableGateway,
+} from '../control-plane/control-plane-system-table-gateway.js';
+import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
 import {assertCritical} from '../utils/assert.js';
 import {
   FAILURE_DETECTOR_ACTION,
@@ -91,6 +96,8 @@ class FailureDetector extends EventEmitter {
     this.sqlQueryEngine = options.sqlQueryEngine || null;
     this.systemTableCache = options.systemTableCache || null;
     this.cdcIntegrationService = options.cdcIntegrationService || null;
+    this.controlPlaneSystemTableGateway =
+      options.controlPlaneSystemTableGateway || null;
     this.nodeId = options.nodeId || null;
 
     // Configuration
@@ -143,6 +150,9 @@ class FailureDetector extends EventEmitter {
     if (options.cdcIntegrationService) {
       this.cdcIntegrationService = options.cdcIntegrationService;
     }
+    if (options.controlPlaneSystemTableGateway) {
+      this.controlPlaneSystemTableGateway = options.controlPlaneSystemTableGateway;
+    }
     if (options.nodeId) {
       this.nodeId = options.nodeId;
     }
@@ -157,10 +167,9 @@ class FailureDetector extends EventEmitter {
       this.sqlQueryEngine,
       FAILURE_DETECTOR_ERROR_MSG.MISSING_SQL_QUERY_ENGINE,
     );
-    this.cdcIntegrationService = assertCritical(
-      this.cdcIntegrationService,
-      FAILURE_DETECTOR_ERROR_MSG.MISSING_CDC_SERVICE,
-    );
+    if (!this.cdcIntegrationService && !this.controlPlaneSystemTableGateway) {
+      throw new Error(FAILURE_DETECTOR_ERROR_MSG.MISSING_CDC_SERVICE);
+    }
 
     this.initialized = true;
 
@@ -311,14 +320,18 @@ class FailureDetector extends EventEmitter {
     });
 
     try {
-      const result = await this.cdcIntegrationService.updateSystemTableRow(
-        SYSTEM_TABLE_NAME.NODES,
-        buildObservedNodeWhereClause(node),
-        {
+      const result = await this.getControlPlaneSystemTableGateway().submitMutation({
+        operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+        tableName: SYSTEM_TABLE_NAME.NODES,
+        whereClause: buildObservedNodeWhereClause(node),
+        data: {
           status: NODE_STATUS.SUSPECTED,
           updated_at: now,
         },
-      );
+      }, {
+        workClass: PRESSURE_WORK_CLASS.CRITICAL,
+        deliveryPriority: 'critical',
+      });
       if (!guardedUpdateApplied(result)) {
         this.logger.debug(FAILURE_DETECTOR_LOG_MSG.STALE_NODE_SUSPICION_UPDATE, {
           nodeId: node.node_id,
@@ -359,15 +372,19 @@ class FailureDetector extends EventEmitter {
 
     // Mark node as failed
     try {
-      const result = await this.cdcIntegrationService.updateSystemTableRow(
-        SYSTEM_TABLE_NAME.NODES,
-        buildObservedNodeWhereClause(node),
-        {
+      const result = await this.getControlPlaneSystemTableGateway().submitMutation({
+        operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+        tableName: SYSTEM_TABLE_NAME.NODES,
+        whereClause: buildObservedNodeWhereClause(node),
+        data: {
           status: NODE_STATUS.FAILED,
           failed_at: now,
           updated_at: now,
         },
-      );
+      }, {
+        workClass: PRESSURE_WORK_CLASS.CRITICAL,
+        deliveryPriority: 'critical',
+      });
       if (!guardedUpdateApplied(result)) {
         this.logger.debug(FAILURE_DETECTOR_LOG_MSG.STALE_NODE_FAILURE_UPDATE, {
           nodeId: node.node_id,
@@ -407,15 +424,19 @@ class FailureDetector extends EventEmitter {
     });
 
     try {
-      const result = await this.cdcIntegrationService.updateSystemTableRow(
-        SYSTEM_TABLE_NAME.NODES,
-        buildObservedNodeWhereClause(node),
-        {
+      const result = await this.getControlPlaneSystemTableGateway().submitMutation({
+        operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+        tableName: SYSTEM_TABLE_NAME.NODES,
+        whereClause: buildObservedNodeWhereClause(node),
+        data: {
           status: NODE_STATUS.RECOVERING,
           recovered_at: now,
           updated_at: now,
         },
-      );
+      }, {
+        workClass: PRESSURE_WORK_CLASS.CRITICAL,
+        deliveryPriority: 'critical',
+      });
       if (!guardedUpdateApplied(result)) {
         this.logger.debug(FAILURE_DETECTOR_LOG_MSG.STALE_NODE_RECOVERY_UPDATE, {
           nodeId: node.node_id,
@@ -475,14 +496,18 @@ class FailureDetector extends EventEmitter {
    */
   async markReplicaAsFailed(replica, nodeId, now) {
     try {
-      const result = await this.cdcIntegrationService.updateSystemTableRow(
-        SYSTEM_TABLE_NAME.SERVICES,
-        buildObservedReplicaWhereClause(replica),
-        {
+      const result = await this.getControlPlaneSystemTableGateway().submitMutation({
+        operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+        tableName: SYSTEM_TABLE_NAME.SERVICES,
+        whereClause: buildObservedReplicaWhereClause(replica),
+        data: {
           status: ReplicaStatus.FAILED,
           updated_at: now,
         },
-      );
+      }, {
+        workClass: PRESSURE_WORK_CLASS.CRITICAL,
+        deliveryPriority: 'critical',
+      });
       if (!guardedUpdateApplied(result)) {
         this.logger.debug(
           FAILURE_DETECTOR_LOG_MSG.STALE_PARTITION_REPLICA_FAILURE_UPDATE,
@@ -528,14 +553,18 @@ class FailureDetector extends EventEmitter {
    */
   async markMessageGroupReplicaAsFailed(replica, nodeId, now) {
     try {
-      const result = await this.cdcIntegrationService.updateSystemTableRow(
-        SYSTEM_TABLE_NAME.SERVICES,
-        buildObservedReplicaWhereClause(replica),
-        {
+      const result = await this.getControlPlaneSystemTableGateway().submitMutation({
+        operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+        tableName: SYSTEM_TABLE_NAME.SERVICES,
+        whereClause: buildObservedReplicaWhereClause(replica),
+        data: {
           status: ReplicaStatus.FAILED,
           updated_at: now,
         },
-      );
+      }, {
+        workClass: PRESSURE_WORK_CLASS.CRITICAL,
+        deliveryPriority: 'critical',
+      });
       if (!guardedUpdateApplied(result)) {
         this.logger.debug(
           FAILURE_DETECTOR_LOG_MSG.STALE_MESSAGE_GROUP_REPLICA_FAILURE_UPDATE,
@@ -666,8 +695,14 @@ class FailureDetector extends EventEmitter {
    * @private
    */
   async getNodes() {
-    const result = await this.sqlQueryEngine.executeQuery(
+    const result = await this.getControlPlaneSystemTableGateway().readRows(
+      SYSTEM_TABLE_NAME.NODES,
       FAILURE_DETECTOR_SQL.SELECT_ALL_NODES,
+      [],
+      {
+        coalescingKey: 'failure-detector:nodes',
+        workClass: PRESSURE_WORK_CLASS.CRITICAL,
+      },
     );
     return result.rows || [];
   }
@@ -679,9 +714,14 @@ class FailureDetector extends EventEmitter {
    * @private
    */
   async getPartitionReplicasOnNode(nodeId) {
-    const result = await this.sqlQueryEngine.executeQuery(
+    const result = await this.getControlPlaneSystemTableGateway().readRows(
+      SYSTEM_TABLE_NAME.SERVICES,
       FAILURE_DETECTOR_SQL.SELECT_SERVICES_BY_NODE_AND_TYPE,
       [nodeId, SERVICE_TYPE.PARTITION],
+      {
+        coalescingKey: `failure-detector:partition-services:${nodeId}`,
+        workClass: PRESSURE_WORK_CLASS.CRITICAL,
+      },
     );
     return result.rows || [];
   }
@@ -693,9 +733,14 @@ class FailureDetector extends EventEmitter {
    * @private
    */
   async getMessageGroupReplicasOnNode(nodeId) {
-    const result = await this.sqlQueryEngine.executeQuery(
+    const result = await this.getControlPlaneSystemTableGateway().readRows(
+      SYSTEM_TABLE_NAME.SERVICES,
       FAILURE_DETECTOR_SQL.SELECT_SERVICES_BY_NODE_AND_TYPE,
       [nodeId, SERVICE_TYPE.MESSAGE_GROUP_REPLICA],
+      {
+        coalescingKey: `failure-detector:mg-services:${nodeId}`,
+        workClass: PRESSURE_WORK_CLASS.CRITICAL,
+      },
     );
     return result.rows || [];
   }
@@ -737,6 +782,43 @@ class FailureDetector extends EventEmitter {
    */
   isRunning() {
     return this.checkTimer !== null;
+  }
+
+  /**
+   * @return {ControlPlaneSystemTableGateway}
+   * @private
+   */
+  getControlPlaneSystemTableGateway() {
+    if (this.controlPlaneSystemTableGateway) {
+      if (!this.controlPlaneSystemTableGateway.sqlQueryEngine &&
+          this.sqlQueryEngine &&
+          typeof this.controlPlaneSystemTableGateway.setSqlQueryEngine ===
+            TYPEOF.FUNCTION) {
+        this.controlPlaneSystemTableGateway.setSqlQueryEngine(this.sqlQueryEngine);
+      }
+      if (!this.controlPlaneSystemTableGateway.cdcIntegrationService &&
+          this.cdcIntegrationService &&
+          typeof this.controlPlaneSystemTableGateway.setCdcIntegrationService ===
+            TYPEOF.FUNCTION) {
+        this.controlPlaneSystemTableGateway
+          .setCdcIntegrationService(this.cdcIntegrationService);
+      }
+      if (!this.controlPlaneSystemTableGateway.messageRouter &&
+          this.cdcIntegrationService?.messageRouter &&
+          typeof this.controlPlaneSystemTableGateway.setMessageRouter ===
+            TYPEOF.FUNCTION) {
+        this.controlPlaneSystemTableGateway
+          .setMessageRouter(this.cdcIntegrationService.messageRouter);
+      }
+      return this.controlPlaneSystemTableGateway;
+    }
+    this.controlPlaneSystemTableGateway = new ControlPlaneSystemTableGateway({
+      nodeId: this.nodeId,
+      sqlQueryEngine: this.sqlQueryEngine,
+      cdcIntegrationService: this.cdcIntegrationService,
+      messageRouter: this.cdcIntegrationService?.messageRouter || null,
+    });
+    return this.controlPlaneSystemTableGateway;
   }
 
   /**

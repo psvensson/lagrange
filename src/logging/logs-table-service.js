@@ -8,11 +8,11 @@ import {EventEmitter} from 'events';
 import {LoggingService} from './logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
-import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {METRICS_LOG_PREFIX} from '../constants/metrics-constants.js';
 import {
   LOGGING_ERROR_MSG,
   LOGGING_LOG_MSG,
+  LOG_LEVEL_ORDER,
   LOGS_TABLE_DEFAULT,
 } from './logging-constants.js';
 import {
@@ -20,6 +20,12 @@ import {
   WORK_CLASS_SCHEDULER_ERROR,
   WorkClassScheduler,
 } from '../runtime/work-class-scheduler.js';
+import {
+  PRESSURE_WORK_CLASS,
+} from '../control-plane/pressure-governor.js';
+import {
+  createSystemMetadataOwnerRequiredError,
+} from '../control-plane/system-metadata-access-error.js';
 import {
   CONTROL_PLANE_ROLLOUT_REQUIRED,
   assertRequiredControlPlaneRollout,
@@ -74,8 +80,7 @@ class LogsTableService extends EventEmitter {
       controls: options.rolloutControls,
       required: CONTROL_PLANE_ROLLOUT_REQUIRED.LOGS_TABLE_SERVICE,
     });
-    this.cdcIntegrationService = options.cdcIntegrationService || null;
-    this.partitionService = options.partitionService || null;
+    this.logsOwner = options.logsOwner || null;
 
     // Configuration
     const config = ConfigurationManager.getInstance();
@@ -100,21 +105,71 @@ class LogsTableService extends EventEmitter {
       options.maxPendingWrites > 0 ?
       Math.floor(options.maxPendingWrites) :
       LOGS_TABLE_DEFAULT.MAX_PENDING_WRITES;
+    this.pressureHighWatermark =
+      Number.isFinite(options.pressureHighWatermark) &&
+      options.pressureHighWatermark > 0 ?
+        Math.min(
+          this.maxPendingWrites,
+          Math.floor(options.pressureHighWatermark),
+        ) :
+        Math.min(
+          this.maxPendingWrites,
+          LOGS_TABLE_DEFAULT.PRESSURE_HIGH_WATERMARK,
+        );
+    this.pressureRetainedPendingWrites =
+      Number.isFinite(options.pressureRetainedPendingWrites) &&
+      options.pressureRetainedPendingWrites > 0 ?
+        Math.min(
+          this.maxPendingWrites,
+          Math.floor(options.pressureRetainedPendingWrites),
+        ) :
+        Math.min(
+          this.maxPendingWrites,
+          LOGS_TABLE_DEFAULT.PRESSURE_RETAINED_PENDING_WRITES,
+        );
+    this.pressureDeferBackoffMultiplier =
+      Number.isFinite(options.pressureDeferBackoffMultiplier) &&
+      options.pressureDeferBackoffMultiplier >= 1 ?
+        options.pressureDeferBackoffMultiplier :
+        LOGS_TABLE_DEFAULT.PRESSURE_DEFER_BACKOFF_MULTIPLIER;
+    this.pressureMaxRetryDelayMs =
+      Number.isFinite(options.pressureMaxRetryDelayMs) &&
+      options.pressureMaxRetryDelayMs > 0 ?
+        Math.floor(options.pressureMaxRetryDelayMs) :
+        LOGS_TABLE_DEFAULT.PRESSURE_MAX_RETRY_DELAY_MS;
     this.workClassScheduler = options.workClassScheduler ||
       new WorkClassScheduler();
+    this.now = typeof options.now === 'function' ?
+      options.now :
+      () => Date.now();
+    this.setTimeoutFn = typeof options.setTimeoutFn === 'function' ?
+      options.setTimeoutFn :
+      setTimeout;
+    this.clearTimeoutFn = typeof options.clearTimeoutFn === 'function' ?
+      options.clearTimeoutFn :
+      clearTimeout;
+    this.setIntervalFn = typeof options.setIntervalFn === 'function' ?
+      options.setIntervalFn :
+      setInterval;
+    this.clearIntervalFn = typeof options.clearIntervalFn === 'function' ?
+      options.clearIntervalFn :
+      clearInterval;
 
     // State
     this.initialized = false;
     this.pendingWrites = [];
     this.flushTimer = null;
     this.flushContinuationTimer = null;
+    this.flushContinuationDueAtMs = null;
     this.flushWorkScheduled = false;
     this.isWriting = false;
     this.isShuttingDown = false;
+    this.writeDeferredUntilMs = 0;
     this.writeCount = 0;
     this.errorCount = 0;
     this.droppedWrites = 0;
     this.selfLoopPreventedWrites = 0;
+    this.consecutiveDeferredWriteFailures = 0;
 
     // Logging (use console until we're fully initialized to avoid recursion)
     this.logger = console;
@@ -147,8 +202,11 @@ class LogsTableService extends EventEmitter {
     instance.pendingWrites = [];
     instance.flushWorkScheduled = false;
     instance.isWriting = false;
+    instance.flushContinuationDueAtMs = null;
+    instance.writeDeferredUntilMs = 0;
     instance.initialized = false;
     instance.isShuttingDown = false;
+    instance.consecutiveDeferredWriteFailures = 0;
     instance.removeAllListeners();
     LogsTableService.instance = null;
   }
@@ -156,20 +214,15 @@ class LogsTableService extends EventEmitter {
   /**
    * Initialize the logs table service.
    * @param {Object} options - Initialization options.
-   * @param {Object} options.cdcIntegrationService - CDC integration service for writes.
-   * @param {Object} options.partitionService - Partition service for direct writes.
+   * @param {Object} options.logsOwner - Semantic owner for logs-table writes.
    */
   initialize(options = {}) {
     if (this.initialized) {
       return;
     }
 
-    if (options.cdcIntegrationService) {
-      this.cdcIntegrationService = options.cdcIntegrationService;
-    }
-
-    if (options.partitionService) {
-      this.partitionService = options.partitionService;
+    if (options.logsOwner) {
+      this.logsOwner = options.logsOwner;
     }
 
     // Start periodic flush timer
@@ -248,14 +301,29 @@ class LogsTableService extends EventEmitter {
       return;
     }
 
+    if (this.isPressureModeActive()) {
+      if (this.shouldApplyRetainedBacklogCap() &&
+          this.pendingWrites.length >= this.getRetainedPressureBacklogCap()) {
+        const droppedPendingEntry = this.dropPendingQueuedEntryForAdmission(entry);
+        if (!droppedPendingEntry || this.shouldDropEntryUnderPressure(entry)) {
+          this.recordDroppedWrite();
+          return;
+        }
+      }
+      if (this.shouldDropEntryUnderPressure(entry)) {
+        this.recordDroppedWrite();
+        return;
+      }
+    }
+
     if (this.pendingWrites.length >= this.maxPendingWrites) {
       if (this.isMetricsLogEntry(entry)) {
         this.recordDroppedWrite();
         return;
       }
 
-      const droppedMetrics = this.dropPendingMetricsLogEntry();
-      if (!droppedMetrics) {
+      const droppedPendingEntry = this.dropPendingQueuedEntryForAdmission(entry);
+      if (!droppedPendingEntry) {
         this.recordDroppedWrite();
         return;
       }
@@ -281,6 +349,11 @@ class LogsTableService extends EventEmitter {
    * @return {Promise<number>} Number of entries written.
    */
   async flush(options = {}) {
+    if (this.isWriteDeferred()) {
+      this.scheduleContinuationFlush(this.getRemainingWriteDeferMs());
+      return 0;
+    }
+
     const scheduleThroughWorkClass = options.scheduleThroughWorkClass !== false;
     if (scheduleThroughWorkClass &&
       this.workClassScheduler &&
@@ -323,16 +396,26 @@ class LogsTableService extends EventEmitter {
     let writtenCount = 0;
 
     try {
-      for (const entry of entriesToWrite) {
+      for (let index = 0; index < entriesToWrite.length; index += 1) {
+        const entry = entriesToWrite[index];
         try {
           const success = await this.writeEntryWithRetry(entry);
           if (success) {
+            this.consecutiveDeferredWriteFailures = 0;
             writtenCount++;
             this.writeCount++;
           } else {
             this.errorCount++;
           }
         } catch (writeError) {
+          if (this.shouldDeferWriteError(writeError)) {
+            this.errorCount++;
+            this.deferPendingWrites(
+              entriesToWrite.slice(index),
+              writeError,
+            );
+            break;
+          }
           this.errorCount++;
           console.warn(LOGGING_ERROR_MSG.WRITE_ENTRY_FAILED, writeError);
         }
@@ -343,7 +426,9 @@ class LogsTableService extends EventEmitter {
       }
     } finally {
       this.isWriting = false;
-      if (yieldPending && this.pendingWrites.length > 0) {
+      if (yieldPending &&
+          this.pendingWrites.length > 0 &&
+          !this.isWriteDeferred()) {
         this.scheduleContinuationFlush();
       }
     }
@@ -355,20 +440,33 @@ class LogsTableService extends EventEmitter {
    * Schedule a continuation flush for pending queued entries.
    * @private
    */
-  scheduleContinuationFlush() {
-    if (this.flushContinuationTimer) {
+  scheduleContinuationFlush(delayOverrideMs = this.flushYieldMs) {
+    const delayMs = Number.isFinite(delayOverrideMs) &&
+      delayOverrideMs >= MIN_YIELD_MS ?
+      Math.floor(delayOverrideMs) :
+      this.flushYieldMs;
+    const dueAtMs = this.now() + delayMs;
+    if (this.flushContinuationTimer &&
+        Number.isFinite(this.flushContinuationDueAtMs) &&
+        this.flushContinuationDueAtMs <= dueAtMs) {
       return;
     }
 
-    this.flushContinuationTimer = setTimeout(() => {
+    if (this.flushContinuationTimer) {
+      this.clearTimeoutFn(this.flushContinuationTimer);
+    }
+
+    this.flushContinuationDueAtMs = dueAtMs;
+    this.flushContinuationTimer = this.setTimeoutFn(() => {
       this.flushContinuationTimer = null;
+      this.flushContinuationDueAtMs = null;
       this.flush({
         maxEntries: this.flushChunkSize,
         yieldPending: true,
       }).catch((error) => {
         console.error(LOGGING_ERROR_MSG.PERIODIC_FLUSH_FAILED, error.message);
       });
-    }, this.flushYieldMs);
+    }, delayMs);
 
     if (this.flushContinuationTimer.unref) {
       this.flushContinuationTimer.unref();
@@ -390,6 +488,9 @@ class LogsTableService extends EventEmitter {
         return true;
       } catch (error) {
         lastError = error;
+        if (this.shouldDeferWriteError(error)) {
+          throw error;
+        }
         if (attempt < this.maxRetries - 1) {
           await this.sleep(this.retryDelayMs * (attempt + 1));
         }
@@ -423,21 +524,130 @@ class LogsTableService extends EventEmitter {
     // Log rows are append-only (write-once, never updated). UPSERT is used
     // solely for idempotent replay of duplicate log_id values; it effectively
     // acts as INSERT since no fields are ever mutated after creation.
-    if (this.cdcIntegrationService) {
-      await this.cdcIntegrationService.upsertSystemTableRow(
-        SYSTEM_TABLE_NAME.LOGS,
-        row,
-      );
+    if (this.logsOwner) {
+      await this.logsOwner.upsertLog(row, {
+        workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+        deliveryPriority: 'background',
+        allowPressureDefer: true,
+        pressureRetryAfterMs: this.retryDelayMs,
+      });
       return;
     }
 
-    // Fall back to direct partition write
-    if (this.partitionService) {
-      await this.partitionService.insertData(SYSTEM_TABLE_NAME.LOGS, row);
-      return;
-    }
+    throw createSystemMetadataOwnerRequiredError({
+      serviceName: LOGS_TABLE_OWNER,
+      ownerName: 'logsOwner',
+      tableName: 'logs',
+      operation: 'write',
+      message: LOGGING_ERROR_MSG.OWNER_REQUIRED,
+    });
+  }
 
-    throw new Error(LOGGING_ERROR_MSG.NO_WRITE_MECHANISM);
+  /**
+   * Check whether logs-table writes are currently in a defer window.
+   * @return {boolean}
+   * @private
+   */
+  isWriteDeferred() {
+    if (!Number.isFinite(this.writeDeferredUntilMs) ||
+        this.writeDeferredUntilMs <= 0) {
+      return false;
+    }
+    if (this.now() >= this.writeDeferredUntilMs) {
+      this.writeDeferredUntilMs = 0;
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Return remaining defer time for the logs-table writer.
+   * @return {number}
+   * @private
+   */
+  getRemainingWriteDeferMs() {
+    if (!this.isWriteDeferred()) {
+      return 0;
+    }
+    return Math.max(MIN_SLEEP_MS, this.writeDeferredUntilMs - this.now());
+  }
+
+  /**
+   * Determine whether one logs-table write failure should defer the owner
+   * instead of retrying every buffered entry inline.
+   * @param {Error} error
+   * @return {boolean}
+   * @private
+   */
+  shouldDeferWriteError(error) {
+    if (!error) {
+      return false;
+    }
+    if (error?.deferRetry === true ||
+        error?.code === 'CONTROL_PLANE_PRESSURE_DEGRADED') {
+      return true;
+    }
+    if (Number.isFinite(error?.retryAfterMs) &&
+        error.retryAfterMs > 0) {
+      return true;
+    }
+    const message = error?.message || String(error);
+    return message.includes('Distributed operation failed due to participant failures') ||
+      message.includes('Connection to node') &&
+      message.includes('closed') ||
+      message.includes('No connection to node') ||
+      message.includes('Message timeout') ||
+      message.includes('Query routing failed') ||
+      message.includes('Failed to forward write to leader');
+  }
+
+  /**
+   * Resolve one defer delay after a transient logs-table write failure.
+   * @param {Error} error
+   * @return {number}
+   * @private
+   */
+  resolveWriteDeferMs(error) {
+    const baseRetryAfterMs = Number.isFinite(error?.retryAfterMs) &&
+      error.retryAfterMs > 0 ?
+      Math.max(MIN_SLEEP_MS, Math.floor(error.retryAfterMs)) :
+      Math.max(MIN_SLEEP_MS, this.retryDelayMs);
+    const exponent = Math.max(0, this.consecutiveDeferredWriteFailures - 1);
+    const scaledRetryAfterMs =
+      baseRetryAfterMs * (this.pressureDeferBackoffMultiplier ** exponent);
+    return Math.min(
+      this.pressureMaxRetryDelayMs,
+      Math.max(MIN_SLEEP_MS, Math.floor(scaledRetryAfterMs)),
+    );
+  }
+
+  /**
+   * Requeue the remaining batch and pause the logs-table writer briefly after
+   * one transient control-plane failure.
+   * @param {Array<Object>} entries
+   * @param {Error} error
+   * @private
+   */
+  deferPendingWrites(entries, error) {
+    if (Array.isArray(entries) && entries.length > 0) {
+      this.pendingWrites = entries.concat(this.pendingWrites);
+    }
+    this.consecutiveDeferredWriteFailures += 1;
+    this.trimPendingWritesUnderPressure();
+    const retryAfterMs = this.resolveWriteDeferMs(error);
+    const desiredUntilMs = this.now() + retryAfterMs;
+    this.writeDeferredUntilMs = Math.max(
+      this.writeDeferredUntilMs || 0,
+      desiredUntilMs,
+    );
+    this.scheduleContinuationFlush(retryAfterMs);
+    console.warn(
+      LOGGING_LOG_MSG.logsWriteDeferred(
+        retryAfterMs,
+        this.pendingWrites.length,
+      ),
+      error?.message || String(error),
+    );
   }
 
   /**
@@ -449,7 +659,7 @@ class LogsTableService extends EventEmitter {
       return;
     }
 
-    this.flushTimer = setInterval(() => {
+    this.flushTimer = this.setIntervalFn(() => {
       this.flush().catch((error) => {
         console.error(LOGGING_ERROR_MSG.PERIODIC_FLUSH_FAILED, error.message);
       });
@@ -467,13 +677,14 @@ class LogsTableService extends EventEmitter {
    */
   stopFlushTimer() {
     if (this.flushTimer) {
-      clearInterval(this.flushTimer);
+      this.clearIntervalFn(this.flushTimer);
       this.flushTimer = null;
     }
     if (this.flushContinuationTimer) {
-      clearTimeout(this.flushContinuationTimer);
+      this.clearTimeoutFn(this.flushContinuationTimer);
       this.flushContinuationTimer = null;
     }
+    this.flushContinuationDueAtMs = null;
   }
 
   /**
@@ -487,13 +698,17 @@ class LogsTableService extends EventEmitter {
       writeCount: this.writeCount,
       errorCount: this.errorCount,
       isWriting: this.isWriting,
+      writeDeferredUntilMs: this.writeDeferredUntilMs,
       flushChunkSize: this.flushChunkSize,
       flushYieldMs: this.flushYieldMs,
       maxPendingWrites: this.maxPendingWrites,
+      pressureHighWatermark: this.pressureHighWatermark,
+      pressureRetainedPendingWrites: this.pressureRetainedPendingWrites,
       droppedWrites: this.droppedWrites,
       selfLoopPreventedWrites: this.selfLoopPreventedWrites,
       flushWorkScheduled: this.flushWorkScheduled,
       workClassSchedulerEnabled: Boolean(this.workClassScheduler),
+      consecutiveDeferredWriteFailures: this.consecutiveDeferredWriteFailures,
     };
   }
 
@@ -506,6 +721,117 @@ class LogsTableService extends EventEmitter {
   isMetricsLogEntry(entry) {
     return typeof entry?.message === 'string' &&
       entry.message.startsWith(METRICS_LOG_PREFIX);
+  }
+
+  /**
+   * Return normalized priority for one log entry.
+   * Higher values are more important.
+   * @param {Object} entry
+   * @return {number}
+   * @private
+   */
+  getLogPriority(entry) {
+    const normalizedLevel = String(entry?.level || 'INFO').toUpperCase();
+    return Number.isInteger(LOG_LEVEL_ORDER[normalizedLevel]) ?
+      LOG_LEVEL_ORDER[normalizedLevel] :
+      LOG_LEVEL_ORDER.INFO;
+  }
+
+  /**
+   * Determine whether the logs-table writer is in sustained pressure mode.
+   * @return {boolean}
+   * @private
+   */
+  isPressureModeActive() {
+    return this.isWriteDeferred() ||
+      this.pendingWrites.length >= this.pressureHighWatermark;
+  }
+
+  /**
+   * Return the retained backlog cap applied while the writer is deferred.
+   * @return {number}
+   * @private
+   */
+  getRetainedPressureBacklogCap() {
+    return Math.max(
+      MIN_CHUNK_SIZE,
+      Math.min(
+        this.maxPendingWrites,
+        this.pressureHighWatermark,
+        this.pressureRetainedPendingWrites,
+      ),
+    );
+  }
+
+  /**
+   * Determine whether the deferred-pressure backlog cap should be applied.
+   * @return {boolean}
+   * @private
+   */
+  shouldApplyRetainedBacklogCap() {
+    return this.isWriteDeferred();
+  }
+
+  /**
+   * Build a stable fingerprint used to collapse repeated pressure logs.
+   * @param {Object} entry
+   * @return {string|null}
+   * @private
+   */
+  buildPressureFingerprint(entry) {
+    const message = typeof entry?.message === 'string' ?
+      entry.message.trim() :
+      '';
+    if (!message) {
+      return null;
+    }
+    return [
+      String(entry?.level || 'INFO').toUpperCase(),
+      entry?.nodeId || '',
+      entry?.serviceId || '',
+      message,
+    ].join('|');
+  }
+
+  /**
+   * Check whether a pressure-equivalent entry is already queued.
+   * @param {Object} entry
+   * @return {boolean}
+   * @private
+   */
+  hasPendingPressureEquivalentEntry(entry) {
+    const fingerprint = this.buildPressureFingerprint(entry);
+    if (!fingerprint) {
+      return false;
+    }
+    for (const pendingEntry of this.pendingWrites) {
+      if (this.buildPressureFingerprint(pendingEntry) === fingerprint) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Determine whether an incoming entry should be dropped while the owner is
+   * pressure-deferred or the queue is already hot.
+   * @param {Object} entry
+   * @return {boolean}
+   * @private
+   */
+  shouldDropEntryUnderPressure(entry) {
+    if (this.shouldApplyRetainedBacklogCap() &&
+        this.pendingWrites.length >= this.getRetainedPressureBacklogCap() &&
+        this.getLogPriority(entry) < LOG_LEVEL_ORDER.ERROR) {
+      return true;
+    }
+    if (this.isMetricsLogEntry(entry)) {
+      return true;
+    }
+    if (this.getLogPriority(entry) <= LOG_LEVEL_ORDER.INFO) {
+      return true;
+    }
+    return this.hasPendingPressureEquivalentEntry(entry);
   }
 
   /**
@@ -549,6 +875,99 @@ class LogsTableService extends EventEmitter {
   }
 
   /**
+   * Drop one queued entry so a more important incoming entry can be admitted.
+   * Prefer dropping metrics, then lower-priority entries, then duplicates.
+   * @param {Object} incomingEntry
+   * @return {boolean}
+   * @private
+   */
+  dropPendingQueuedEntryForAdmission(incomingEntry) {
+    if (this.dropPendingMetricsLogEntry()) {
+      return true;
+    }
+
+    const incomingPriority = this.getLogPriority(incomingEntry);
+    for (let index = 0; index < this.pendingWrites.length; index++) {
+      const pendingEntry = this.pendingWrites[index];
+      if (this.getLogPriority(pendingEntry) >= incomingPriority) {
+        continue;
+      }
+      this.pendingWrites.splice(index, 1);
+      this.recordDroppedWrite();
+      return true;
+    }
+
+    const incomingFingerprint = this.buildPressureFingerprint(incomingEntry);
+    if (!incomingFingerprint) {
+      return false;
+    }
+    for (let index = 0; index < this.pendingWrites.length; index++) {
+      const pendingEntry = this.pendingWrites[index];
+      if (this.buildPressureFingerprint(pendingEntry) !== incomingFingerprint) {
+        continue;
+      }
+      this.pendingWrites.splice(index, 1);
+      this.recordDroppedWrite();
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Trim retained backlog aggressively during defer windows so the writer does
+   * not keep retaining outage noise while the control plane is unavailable.
+   * @private
+   */
+  trimPendingWritesUnderPressure() {
+    const retainedCap = this.getRetainedPressureBacklogCap();
+    while (this.pendingWrites.length > retainedCap) {
+      const dropIndex = this.findPendingTrimDropIndex();
+      if (dropIndex < 0) {
+        break;
+      }
+      this.pendingWrites.splice(dropIndex, 1);
+      this.recordDroppedWrite();
+    }
+  }
+
+  /**
+   * Select one queued entry to evict while trimming deferred-pressure backlog.
+   * Prefer metrics, then duplicate fingerprints, then the oldest lowest-
+   * priority entry.
+   * @return {number}
+   * @private
+   */
+  findPendingTrimDropIndex() {
+    const seenFingerprints = new Set();
+    let lowestPriorityIndex = -1;
+    let lowestPriority = Number.POSITIVE_INFINITY;
+
+    for (let index = 0; index < this.pendingWrites.length; index += 1) {
+      const entry = this.pendingWrites[index];
+      if (this.isMetricsLogEntry(entry)) {
+        return index;
+      }
+
+      const fingerprint = this.buildPressureFingerprint(entry);
+      if (fingerprint) {
+        if (seenFingerprints.has(fingerprint)) {
+          return index;
+        }
+        seenFingerprints.add(fingerprint);
+      }
+
+      const priority = this.getLogPriority(entry);
+      if (priority < lowestPriority) {
+        lowestPriority = priority;
+        lowestPriorityIndex = index;
+      }
+    }
+
+    return lowestPriorityIndex;
+  }
+
+  /**
    * Update drop counters and emit throttled warning log.
    * @private
    */
@@ -589,6 +1008,10 @@ class LogsTableService extends EventEmitter {
         await this.sleep(Math.max(MIN_SLEEP_MS, this.flushYieldMs));
         continue;
       }
+      if (this.isWriteDeferred()) {
+        await this.sleep(this.getRemainingWriteDeferMs());
+        continue;
+      }
       await this.flush({
         scheduleThroughWorkClass: false,
         maxEntries: this.flushChunkSize,
@@ -609,7 +1032,7 @@ class LogsTableService extends EventEmitter {
    * @private
    */
   sleep(ms) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
+    return new Promise((resolve) => this.setTimeoutFn(resolve, ms));
   }
 }
 

@@ -124,6 +124,7 @@ const CONFIG_KEY = Object.freeze({
   NODE_WS_PORT: 'node.wsPort',
   NODE_FAILURE_DETECTION_INTERVAL_MS: 'node.failureDetectionIntervalMs',
   NODE_ADDRESS: 'node.address',
+  NODE_ADVERTISED_WS_ADDRESS: 'node.advertisedWsAddress',
   NODE_SEED_NODE_ADDRESS: 'node.seedNodeAddress',
   NODE_SEED_NODE_WS_ADDRESS: 'node.seedNodeWsAddress',
 
@@ -162,6 +163,10 @@ const CONFIG_KEY = Object.freeze({
     'raft.adaptiveTimingIdleElectionTimeoutMinMs',
   RAFT_ADAPTIVE_TIMING_IDLE_ELECTION_TIMEOUT_MAX_MS:
     'raft.adaptiveTimingIdleElectionTimeoutMaxMs',
+  RAFT_LEADER_ACTIVATION_STABILIZATION_MS:
+    'raft.leaderActivationStabilizationMs',
+  RAFT_LEADER_ACTIVATION_NODE_SPACING_MS:
+    'raft.leaderActivationNodeSpacingMs',
 
   MESSAGE_GROUP_REPLICA_COUNT: 'messageGroup.replicaCount',
   MESSAGE_GROUP_DELIVERY_TIMEOUT_MS: 'messageGroup.deliveryTimeoutMs',
@@ -364,6 +369,8 @@ const CONFIG_SCHEMA = {
         adaptiveTimingIdleHeartbeatIntervalMs: {type: 'number', minimum: 10},
         adaptiveTimingIdleElectionTimeoutMinMs: {type: 'number', minimum: 100},
         adaptiveTimingIdleElectionTimeoutMaxMs: {type: 'number', minimum: 200},
+        leaderActivationStabilizationMs: {type: 'number', minimum: 0},
+        leaderActivationNodeSpacingMs: {type: 'number', minimum: 0},
         snapshotThreshold: {type: 'number', minimum: 100},
         maxLogEntriesPerAppend: {type: 'number', minimum: 1},
         leadershipWaitTimeoutMs: {type: 'number', minimum: 1000},
@@ -596,6 +603,8 @@ const DEFAULT_CONFIG = {
     adaptiveTimingIdleHeartbeatIntervalMs: 150,
     adaptiveTimingIdleElectionTimeoutMinMs: 3000,
     adaptiveTimingIdleElectionTimeoutMaxMs: 5000,
+    leaderActivationStabilizationMs: 250,
+    leaderActivationNodeSpacingMs: 25,
     snapshotThreshold: 10000,
     maxLogEntriesPerAppend: 100,
     leadershipWaitTimeoutMs: 30000,
@@ -679,7 +688,7 @@ const DEFAULT_CONFIG = {
     nodeMemoryThreshold: 0.8, // 80% memory threshold
     nodeDiskThreshold: 0.9, // 90% disk threshold
     stabilizationPeriodMs: 1000, // 1 second stabilization period (Req 2.1)
-    systemPartitionStartDelayMs: 600000, // 10 minutes for system partitions
+    systemPartitionStartDelayMs: 0, // system partitions rebalance immediately
     userPartitionStartDelayMs: 0, // user partitions can rebalance immediately
     storageSoftPressurePercent: 70,
     storageHardPressurePercent: 85,
@@ -731,6 +740,7 @@ const DEFAULT_CONFIG = {
 const ENV_MAPPINGS = {
   NODE_ID: CONFIG_KEY.NODE_ID,
   NODE_ADDRESS: CONFIG_KEY.NODE_ADDRESS,
+  NODE_ADVERTISED_WS_ADDRESS: CONFIG_KEY.NODE_ADVERTISED_WS_ADDRESS,
   REST_API_PORT: CONFIG_KEY.NODE_REST_API_PORT,
   LOG_LEVEL: CONFIG_KEY.LOGGING_LEVEL,
   LOG_PRETTY_PRINT: CONFIG_KEY.LOGGING_PRETTY_PRINT,
@@ -923,6 +933,20 @@ const CONFIG_DEFINITIONS = {
     type: CONFIG_VALUE_TYPE.NUMBER,
     requiresRestart: false,
     description: 'Idle-profile maximum election timeout for adaptive raft timing',
+  },
+  [CONFIG_KEY.RAFT_LEADER_ACTIVATION_STABILIZATION_MS]: {
+    defaultValue: DEFAULT_CONFIG.raft.leaderActivationStabilizationMs,
+    type: CONFIG_VALUE_TYPE.NUMBER,
+    requiresRestart: false,
+    description:
+      'Holdoff before leader-owned background work activates after a leader event',
+  },
+  [CONFIG_KEY.RAFT_LEADER_ACTIVATION_NODE_SPACING_MS]: {
+    defaultValue: DEFAULT_CONFIG.raft.leaderActivationNodeSpacingMs,
+    type: CONFIG_VALUE_TYPE.NUMBER,
+    requiresRestart: false,
+    description:
+      'Minimum spacing between leader-owned activation starts on the same node',
   },
 
   // Message group configuration

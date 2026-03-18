@@ -287,12 +287,17 @@ test('FunctionRegistry - getFunction returns function', async (t) => {
   t.equal(func.function_id, 'func-1', 'Should have correct ID');
 });
 
-test('FunctionRegistry - getFunction returns null without engine', async (t) => {
+test('FunctionRegistry - getFunction throws typed gateway error without engine',
+  async (t) => {
   const registry = new FunctionRegistry();
 
-  const func = await registry.getFunction('func-1');
-
-  t.equal(func, null, 'Should return null when no SQL engine');
+  try {
+    await registry.getFunction('func-1');
+    t.fail('Should throw typed gateway error when no metadata ingress exists');
+  } catch (error) {
+    t.equal(error.code, 'SYSTEM_METADATA_GATEWAY_REQUIRED');
+    t.equal(error.outcome, 'owner_not_ready');
+  }
 });
 
 test('FunctionRegistry - multiple executors', async (t) => {

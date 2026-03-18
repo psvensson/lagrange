@@ -8,6 +8,15 @@ import {LogsTableService, LOGS_TABLE_DEFAULT} from '../../src/logging/logs-table
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {WORK_CLASS} from '../../src/runtime/work-class-scheduler.js';
+import {PRESSURE_WORK_CLASS} from '../../src/control-plane/pressure-governor.js';
+
+function createLogsOwner(writeImpl = async () => ({success: true})) {
+  return {
+    async upsertLog(row, options) {
+      return writeImpl(row, options);
+    },
+  };
+}
 
 // Initialize configuration before tests
 test('setup', async (t) => {
@@ -63,11 +72,8 @@ test('LogsTableService flush routes write work through class C scheduler when co
         return task();
       },
     };
-    const mockCdcService = {
-      upsertSystemTableRow: async () => {},
-    };
     const service = new LogsTableService({
-      cdcIntegrationService: mockCdcService,
+      logsOwner: createLogsOwner(),
       workClassScheduler: scheduler,
       batchSize: 100,
     });
@@ -91,11 +97,8 @@ test('LogsTableService flush routes write work through class C scheduler when co
 
 test('LogsTableService writeLogEntry queues entries', async (t) => {
   LogsTableService.resetInstance();
-  const mockCdcService = {
-    upsertSystemTableRow: async () => {},
-  };
   const service = LogsTableService.getInstance();
-  service.initialize({cdcIntegrationService: mockCdcService});
+  service.initialize({logsOwner: createLogsOwner()});
 
   const entry = {
     logId: 'log-1',
@@ -117,11 +120,8 @@ test('LogsTableService writeLogEntry queues entries', async (t) => {
 
 test('LogsTableService bounds pending queue and drops overflow', async (t) => {
   LogsTableService.resetInstance();
-  const mockCdcService = {
-    upsertSystemTableRow: async () => {},
-  };
   const service = new LogsTableService({
-    cdcIntegrationService: mockCdcService,
+    logsOwner: createLogsOwner(),
     batchSize: 100,
     maxPendingWrites: 2,
   });
@@ -162,11 +162,8 @@ test('LogsTableService bounds pending queue and drops overflow', async (t) => {
 test('LogsTableService prioritizes non-metrics entries when queue is full',
   async (t) => {
     LogsTableService.resetInstance();
-    const mockCdcService = {
-      upsertSystemTableRow: async () => {},
-    };
     const service = new LogsTableService({
-      cdcIntegrationService: mockCdcService,
+      logsOwner: createLogsOwner(),
       batchSize: 100,
       maxPendingWrites: 2,
     });
@@ -209,18 +206,128 @@ test('LogsTableService prioritizes non-metrics entries when queue is full',
     await service.shutdown();
   });
 
-test('LogsTableService flush with mock CDC service', async (t) => {
+test('LogsTableService drops low-priority and duplicate entries while write ' +
+  'pressure is active', async (t) => {
+  LogsTableService.resetInstance();
+  let currentNow = 1000;
+  const service = new LogsTableService({
+    logsOwner: createLogsOwner(),
+    now: () => currentNow,
+    maxPendingWrites: 10,
+    pressureHighWatermark: 2,
+  });
+  service.initialize();
+
+  await service.writeLogEntry({
+    logId: 'warn-1',
+    timestamp: Date.now(),
+    level: 'WARN',
+    nodeId: 'test-node',
+    message: 'important warning',
+    createdAt: Date.now(),
+  });
+  await service.writeLogEntry({
+    logId: 'warn-2',
+    timestamp: Date.now(),
+    level: 'WARN',
+    nodeId: 'test-node',
+    message: 'another warning',
+    createdAt: Date.now(),
+  });
+
+  t.equal(service.getStats().pendingWrites, 2, 'should queue initial warnings');
+
+  currentNow = 1010;
+  service.writeDeferredUntilMs = 2000;
+
+  await service.writeLogEntry({
+    logId: 'info-1',
+    timestamp: Date.now(),
+    level: 'INFO',
+    nodeId: 'test-node',
+    message: 'informational noise',
+    createdAt: Date.now(),
+  });
+  await service.writeLogEntry({
+    logId: 'warn-duplicate',
+    timestamp: Date.now(),
+    level: 'WARN',
+    nodeId: 'test-node',
+    message: 'important warning',
+    createdAt: Date.now(),
+  });
+
+  const pendingMessages = service.pendingWrites
+    .map((entry) => entry.message)
+    .sort();
+  t.same(
+    pendingMessages,
+    ['another warning', 'important warning'],
+    'pressure mode should keep one exemplar and drop low-priority noise',
+  );
+  t.equal(service.getStats().droppedWrites, 2, 'should count pressure drops');
+
+  currentNow = 2100;
+  await service.shutdown();
+});
+
+test('LogsTableService admits higher-priority logs by evicting lower-priority ' +
+  'queued entries', async (t) => {
+  LogsTableService.resetInstance();
+  const service = new LogsTableService({
+    logsOwner: createLogsOwner(),
+    maxPendingWrites: 2,
+  });
+  service.initialize();
+
+  await service.writeLogEntry({
+    logId: 'info-1',
+    timestamp: Date.now(),
+    level: 'INFO',
+    nodeId: 'test-node',
+    message: 'info 1',
+    createdAt: Date.now(),
+  });
+  await service.writeLogEntry({
+    logId: 'info-2',
+    timestamp: Date.now(),
+    level: 'INFO',
+    nodeId: 'test-node',
+    message: 'info 2',
+    createdAt: Date.now(),
+  });
+  await service.writeLogEntry({
+    logId: 'error-1',
+    timestamp: Date.now(),
+    level: 'ERROR',
+    nodeId: 'test-node',
+    message: 'important error',
+    createdAt: Date.now(),
+  });
+
+  const pendingMessages = service.pendingWrites.map((entry) => entry.message);
+  t.equal(
+    pendingMessages.includes('important error'),
+    true,
+    'queue should admit the higher-priority error entry',
+  );
+  t.equal(service.getStats().pendingWrites, 2, 'queue should remain bounded');
+  t.equal(service.getStats().droppedWrites, 1, 'should drop one lower-priority entry');
+
+  await service.shutdown();
+});
+
+test('LogsTableService flush with mock logs owner', async (t) => {
   LogsTableService.resetInstance();
 
   const writtenRows = [];
-  const mockCdcService = {
-    upsertSystemTableRow: async (tableName, row) => {
-      writtenRows.push({tableName, row});
-    },
-  };
-
   const service = LogsTableService.getInstance();
-  service.initialize({cdcIntegrationService: mockCdcService});
+  service.initialize({
+    logsOwner: createLogsOwner(async (row) => {
+      writtenRows.push(row);
+      return {success: true};
+    }),
+  });
 
   // Add entries
   const entry1 = {
@@ -252,11 +359,10 @@ test('LogsTableService flush with mock CDC service', async (t) => {
 
   t.equal(flushedCount, 2, 'should flush 2 entries');
   t.equal(writtenRows.length, 2, 'should write 2 rows');
-  t.equal(writtenRows[0].tableName, 'logs', 'should write to logs table');
-  t.equal(writtenRows[0].row.log_id, 'log-1', 'should have correct log_id');
-  t.equal(writtenRows[1].row.service_id, 'svc-1', 'should include service_id');
-  t.equal(writtenRows[1].row.trace_id, 'trace-123', 'should include trace_id');
-  t.ok(writtenRows[1].row.metadata, 'should include metadata');
+  t.equal(writtenRows[0].log_id, 'log-1', 'should have correct log_id');
+  t.equal(writtenRows[1].service_id, 'svc-1', 'should include service_id');
+  t.equal(writtenRows[1].trace_id, 'trace-123', 'should include trace_id');
+  t.ok(writtenRows[1].metadata, 'should include metadata');
 
   const stats = service.getStats();
   t.equal(stats.pendingWrites, 0, 'should have no pending writes after flush');
@@ -268,20 +374,12 @@ test('LogsTableService flush with mock CDC service', async (t) => {
 test('LogsTableService writes logs via upsert for idempotency', async (t) => {
   LogsTableService.resetInstance();
 
-  let insertCalls = 0;
   let upsertCalls = 0;
-  const mockCdcService = {
-    insertSystemTableRow: async () => {
-      insertCalls++;
-      throw new Error('UNIQUE constraint failed: logs.log_id');
-    },
-    upsertSystemTableRow: async () => {
-      upsertCalls++;
-    },
-  };
-
   const service = new LogsTableService({
-    cdcIntegrationService: mockCdcService,
+    logsOwner: createLogsOwner(async () => {
+      upsertCalls++;
+      return {success: true};
+    }),
   });
   service.initialize();
 
@@ -298,27 +396,165 @@ test('LogsTableService writes logs via upsert for idempotency', async (t) => {
   const stats = service.getStats();
 
   t.equal(flushedCount, 1, 'flush should succeed with one write');
-  t.equal(upsertCalls, 1, 'should call upsert for log writes');
-  t.equal(insertCalls, 0, 'should not call insert for log writes');
+  t.equal(upsertCalls, 1, 'should call owner upsert for log writes');
   t.equal(stats.errorCount, 0, 'should not record write error for duplicate-safe upsert');
 
   await service.shutdown();
   LogsTableService.resetInstance();
 });
 
+test('LogsTableService routes owner-backed log writes through background control-plane admission',
+  async (t) => {
+    LogsTableService.resetInstance();
+
+    const writes = [];
+    const service = new LogsTableService({
+      logsOwner: createLogsOwner(async (row, options) => {
+        writes.push({row, options});
+        return {success: true};
+      }),
+      retryDelayMs: 250,
+    });
+    service.initialize();
+
+    await service.writeLogEntry({
+      logId: 'log-background-write',
+      timestamp: Date.now(),
+      level: 'WARN',
+      nodeId: 'test-node',
+      message: 'background.log.write',
+      createdAt: Date.now(),
+    });
+
+    await service.flush();
+
+    t.equal(writes.length, 1, 'should perform one owner-backed logs-table write');
+    t.equal(writes[0].row.log_id, 'log-background-write',
+      'owner-backed write should preserve log identity');
+    t.equal(
+      writes[0].options.workClass,
+      PRESSURE_WORK_CLASS.BACKGROUND,
+      'logs-table writes should use background pressure admission',
+    );
+    t.equal(
+      writes[0].options.deliveryPriority,
+      'background',
+      'logs-table writes should stay off the critical transport lane',
+    );
+    t.equal(
+      writes[0].options.allowPressureDefer,
+      true,
+      'logs-table writes should be deferrable under pressure',
+    );
+    t.equal(
+      writes[0].options.pressureRetryAfterMs,
+      250,
+      'logs-table writes should pass through retry defer hints',
+    );
+
+    await service.shutdown();
+    LogsTableService.resetInstance();
+  });
+
+test('LogsTableService uses injected logsOwner when the composition root supplies one',
+  async (t) => {
+    LogsTableService.resetInstance();
+
+    const writes = [];
+    const service = new LogsTableService({
+      logsOwner: createLogsOwner(async (row, options) => {
+        writes.push({row, options});
+        return {success: true};
+      }),
+      retryDelayMs: 125,
+    });
+    service.initialize();
+
+    await service.writeLogEntry({
+      logId: 'log-owner-write',
+      timestamp: Date.now(),
+      level: 'INFO',
+      nodeId: 'test-node',
+      message: 'owner.log.write',
+      createdAt: Date.now(),
+    });
+    await service.flush();
+
+    t.equal(writes.length, 1, 'should perform one owner-backed write');
+    t.equal(writes[0].row.log_id, 'log-owner-write',
+      'owner-backed write should preserve the canonical row');
+    t.equal(
+      writes[0].options.workClass,
+      PRESSURE_WORK_CLASS.BACKGROUND,
+      'owner-backed log writes should preserve background pressure class',
+    );
+    t.equal(
+      writes[0].options.allowPressureDefer,
+      true,
+      'owner-backed log writes should remain deferrable under pressure',
+    );
+
+    await service.shutdown();
+    LogsTableService.resetInstance();
+  });
+
+test('LogsTableService requires the owner path and does not fall back to gateway or CDC',
+  async (t) => {
+    LogsTableService.resetInstance();
+
+    let gatewayCalls = 0;
+    let cdcCalls = 0;
+    const service = new LogsTableService({
+      controlPlaneSystemTableGateway: {
+        async submitMutation() {
+          gatewayCalls++;
+          return {success: true};
+        },
+      },
+      cdcIntegrationService: {
+        async upsertSystemTableRow() {
+          cdcCalls++;
+          return {success: true};
+        },
+      },
+      maxRetries: 1,
+    });
+    service.initialize();
+
+    const entry = {
+      logId: 'log-owner-required',
+      timestamp: Date.now(),
+      level: 'WARN',
+      nodeId: 'test-node',
+      message: 'owner.required',
+      createdAt: Date.now(),
+    };
+
+    try {
+      await service.writeEntryToTable(entry);
+      t.fail(
+        'missing owner should surface as a typed error instead of reconstructing a path',
+      );
+    } catch (error) {
+      t.equal(error.code, 'SYSTEM_METADATA_OWNER_REQUIRED');
+      t.equal(error.outcome, 'owner_not_ready');
+    }
+    t.equal(gatewayCalls, 0, 'gateway fallback should not run');
+    t.equal(cdcCalls, 0, 'CDC fallback should not run');
+
+    await service.shutdown();
+    LogsTableService.resetInstance();
+  });
+
 test('LogsTableService handles write errors', async (t) => {
   LogsTableService.resetInstance();
 
   let callCount = 0;
-  const mockCdcService = {
-    upsertSystemTableRow: async () => {
+  const service = new LogsTableService({
+    logsOwner: createLogsOwner(async () => {
       callCount++;
       throw new Error('Write failed');
-    },
-  };
-
-  const service = new LogsTableService({
-    cdcIntegrationService: mockCdcService,
+    }),
     maxRetries: 2,
     retryDelayMs: 10,
   });
@@ -344,18 +580,297 @@ test('LogsTableService handles write errors', async (t) => {
   await service.shutdown();
 });
 
+test('LogsTableService defers transient control-plane write failures instead ' +
+  'of retrying every buffered entry inline', async (t) => {
+  LogsTableService.resetInstance();
+
+  const scheduledTimeouts = [];
+  let writeAttempts = 0;
+  let currentNow = 1000;
+  const transientError =
+    new Error('Distributed operation failed due to participant failures');
+  transientError.retryAfterMs = 75;
+  const service = new LogsTableService({
+    logsOwner: createLogsOwner(async () => {
+        writeAttempts++;
+        throw transientError;
+      }),
+    maxRetries: 3,
+    retryDelayMs: 10,
+    setTimeoutFn(callback, delayMs) {
+      const handle = {callback, delayMs};
+      scheduledTimeouts.push(handle);
+      return handle;
+    },
+    clearTimeoutFn() {},
+    setIntervalFn() {
+      return {interval: true};
+    },
+    clearIntervalFn() {},
+    now: () => currentNow,
+  });
+  service.initialize();
+
+  await service.writeLogEntry({
+    logId: 'log-defer-1',
+    timestamp: Date.now(),
+    level: 'WARN',
+    nodeId: 'test-node',
+    message: 'deferred-1',
+    createdAt: Date.now(),
+  });
+  await service.writeLogEntry({
+    logId: 'log-defer-2',
+    timestamp: Date.now(),
+    level: 'WARN',
+    nodeId: 'test-node',
+    message: 'deferred-2',
+    createdAt: Date.now(),
+  });
+
+  const flushedCount = await service.flush({
+    scheduleThroughWorkClass: false,
+    maxEntries: 2,
+    yieldPending: true,
+  });
+
+  t.equal(flushedCount, 0, 'transient failures should not count as flushed');
+  t.equal(
+    writeAttempts,
+    1,
+    'transient failure should stop the batch instead of exhausting inline retries',
+  );
+  t.equal(
+    service.getStats().pendingWrites,
+    2,
+    'remaining entries should be re-queued for a later flush',
+  );
+  t.equal(
+    service.getStats().writeDeferredUntilMs,
+    1075,
+    'service should enter a defer window using retryAfterMs',
+  );
+  t.equal(
+    scheduledTimeouts.length,
+    1,
+    'service should schedule one continuation flush',
+  );
+  t.equal(
+    scheduledTimeouts[0].delayMs,
+    75,
+    'continuation flush should honor retryAfterMs',
+  );
+
+  currentNow = 1100;
+  service.logsOwner = createLogsOwner(async () => ({success: true}));
+  service.setTimeoutFn = (callback) => {
+    callback();
+    return {immediate: true};
+  };
+  service.clearTimeoutFn = () => {};
+  await service.shutdown();
+});
+
+test('LogsTableService escalates defer windows after repeated transient ' +
+  'control-plane failures', async (t) => {
+  LogsTableService.resetInstance();
+
+  const scheduledTimeouts = [];
+  let currentNow = 1000;
+  const transientError =
+    new Error('Distributed operation failed due to participant failures');
+  transientError.retryAfterMs = 50;
+  const service = new LogsTableService({
+    logsOwner: createLogsOwner(async () => {
+      throw transientError;
+    }),
+    maxRetries: 1,
+    retryDelayMs: 10,
+    pressureMaxRetryDelayMs: 1000,
+    setTimeoutFn(callback, delayMs) {
+      const handle = {callback, delayMs};
+      scheduledTimeouts.push(handle);
+      return handle;
+    },
+    clearTimeoutFn() {},
+    setIntervalFn() {
+      return {interval: true};
+    },
+    clearIntervalFn() {},
+    now: () => currentNow,
+  });
+  service.initialize();
+
+  await service.writeLogEntry({
+    logId: 'log-escalate-1',
+    timestamp: Date.now(),
+    level: 'ERROR',
+    nodeId: 'test-node',
+    message: 'escalate-1',
+    createdAt: Date.now(),
+  });
+
+  await service.flush({
+    scheduleThroughWorkClass: false,
+    maxEntries: 1,
+    yieldPending: true,
+  });
+
+  t.equal(service.getStats().writeDeferredUntilMs, 1050,
+    'first transient failure should use the base retryAfterMs');
+  t.equal(service.getStats().consecutiveDeferredWriteFailures, 1,
+    'first transient failure should increment deferred-failure tracking');
+
+  currentNow = 1050;
+  service.writeDeferredUntilMs = 0;
+
+  await service.flush({
+    scheduleThroughWorkClass: false,
+    maxEntries: 1,
+    yieldPending: true,
+  });
+
+  t.equal(service.getStats().writeDeferredUntilMs, 1150,
+    'second consecutive transient failure should back off more aggressively');
+  t.equal(service.getStats().consecutiveDeferredWriteFailures, 2,
+    'consecutive defer tracking should continue across repeated failures');
+  t.equal(scheduledTimeouts[0].delayMs, 50,
+    'first defer should schedule continuation using the base retry window');
+
+  currentNow = 1200;
+  service.logsOwner = createLogsOwner(async () => ({success: true}));
+  service.setTimeoutFn = (callback) => {
+    callback();
+    return {immediate: true};
+  };
+  service.clearTimeoutFn = () => {};
+  await service.shutdown();
+});
+
+test('LogsTableService trims queued backlog to retained cap when deferred ' +
+  'writes keep failing', async (t) => {
+  LogsTableService.resetInstance();
+
+  let currentNow = 1000;
+  const transientError =
+    new Error('Distributed operation failed due to participant failures');
+  transientError.retryAfterMs = 25;
+  const service = new LogsTableService({
+    logsOwner: createLogsOwner(async () => {
+      throw transientError;
+    }),
+    maxRetries: 1,
+    batchSize: 100,
+    pressureHighWatermark: 10,
+    pressureRetainedPendingWrites: 3,
+    now: () => currentNow,
+    setTimeoutFn() {
+      return {timeout: true};
+    },
+    clearTimeoutFn() {},
+    setIntervalFn() {
+      return {interval: true};
+    },
+    clearIntervalFn() {},
+  });
+  service.initialize();
+
+  for (let index = 0; index < 5; index += 1) {
+    await service.writeLogEntry({
+      logId: `log-retain-${index}`,
+      timestamp: Date.now(),
+      level: 'WARN',
+      nodeId: 'test-node',
+      message: `retain-${index}`,
+      createdAt: Date.now(),
+    });
+  }
+
+  await service.flush({
+    scheduleThroughWorkClass: false,
+    maxEntries: 5,
+    yieldPending: true,
+  });
+
+  t.equal(service.getStats().pendingWrites, 3,
+    'deferred writer should trim queued backlog to retained cap');
+  t.equal(service.getStats().droppedWrites, 2,
+    'trimming deferred backlog should count dropped retained entries');
+  t.equal(service.getStats().writeDeferredUntilMs, 1025,
+    'writer should still enter the defer window');
+
+  currentNow = 1100;
+  service.logsOwner = createLogsOwner(async () => ({success: true}));
+  await service.shutdown();
+});
+
+test('LogsTableService only admits unique error-level logs once the deferred ' +
+  'backlog cap is reached', async (t) => {
+  LogsTableService.resetInstance();
+
+  let currentNow = 1000;
+  const service = new LogsTableService({
+    logsOwner: createLogsOwner(),
+    maxPendingWrites: 10,
+    pressureHighWatermark: 10,
+    pressureRetainedPendingWrites: 4,
+    now: () => currentNow,
+  });
+  service.initialize();
+
+  for (let index = 0; index < 4; index += 1) {
+    await service.writeLogEntry({
+      logId: `log-warn-${index}`,
+      timestamp: Date.now(),
+      level: 'WARN',
+      nodeId: 'test-node',
+      message: `warn-${index}`,
+      createdAt: Date.now(),
+    });
+  }
+
+  service.writeDeferredUntilMs = 2000;
+
+  await service.writeLogEntry({
+    logId: 'log-warn-dropped',
+    timestamp: Date.now(),
+    level: 'WARN',
+    nodeId: 'test-node',
+    message: 'warn-dropped',
+    createdAt: Date.now(),
+  });
+  await service.writeLogEntry({
+    logId: 'log-error-admitted',
+    timestamp: Date.now(),
+    level: 'ERROR',
+    nodeId: 'test-node',
+    message: 'error-admitted',
+    createdAt: Date.now(),
+  });
+
+  const pendingMessages = service.pendingWrites.map((entry) => entry.message);
+  t.equal(service.getStats().pendingWrites, 4,
+    'deferred pressure cap should keep retained backlog bounded');
+  t.equal(pendingMessages.includes('warn-dropped'), false,
+    'warn-level entries should be dropped once deferred cap is reached');
+  t.equal(pendingMessages.includes('error-admitted'), true,
+    'error-level entries should still displace lower-priority retained logs');
+  t.equal(service.getStats().droppedWrites, 2,
+    'one warn drop and one warning eviction should be counted');
+
+  currentNow = 2100;
+  await service.shutdown();
+});
+
 test('LogsTableService batch flush on size threshold', async (t) => {
   LogsTableService.resetInstance();
 
   const writtenRows = [];
-  const mockCdcService = {
-    upsertSystemTableRow: async (tableName, row) => {
-      writtenRows.push({tableName, row});
-    },
-  };
-
   const service = new LogsTableService({
-    cdcIntegrationService: mockCdcService,
+    logsOwner: createLogsOwner(async (row) => {
+      writtenRows.push(row);
+      return {success: true};
+    }),
     batchSize: 3,
   });
   service.initialize();
@@ -392,12 +907,6 @@ test('LogsTableService connectToLoggingService flushes buffer', async (t) => {
   LoggingService.resetInstance();
 
   const writtenRows = [];
-  const mockCdcService = {
-    upsertSystemTableRow: async (tableName, row) => {
-      writtenRows.push({tableName, row});
-    },
-  };
-
   // Initialize logging service and buffer some entries
   const loggingService = LoggingService.getInstance();
   loggingService.initialize({nodeId: 'test-node'});
@@ -409,7 +918,12 @@ test('LogsTableService connectToLoggingService flushes buffer', async (t) => {
 
   // Initialize logs table service and connect
   const service = LogsTableService.getInstance();
-  service.initialize({cdcIntegrationService: mockCdcService});
+  service.initialize({
+    logsOwner: createLogsOwner(async (row) => {
+      writtenRows.push(row);
+      return {success: true};
+    }),
+  });
 
   const flushedCount = await service.connectToLoggingService();
 
@@ -460,11 +974,7 @@ test('LogsTableService connectToLoggingService throttles large startup buffer dr
     };
 
     const service = LogsTableService.getInstance();
-    service.initialize({
-      cdcIntegrationService: {
-        upsertSystemTableRow: async () => {},
-      },
-    });
+    service.initialize();
 
     const flushedCount = await service.connectToLoggingService();
 
@@ -493,14 +1003,13 @@ test('LogsTableService shutdown flushes pending', async (t) => {
   LogsTableService.resetInstance();
 
   const writtenRows = [];
-  const mockCdcService = {
-    upsertSystemTableRow: async (tableName, row) => {
-      writtenRows.push({tableName, row});
-    },
-  };
-
   const service = LogsTableService.getInstance();
-  service.initialize({cdcIntegrationService: mockCdcService});
+  service.initialize({
+    logsOwner: createLogsOwner(async (row) => {
+      writtenRows.push(row);
+      return {success: true};
+    }),
+  });
 
   await service.writeLogEntry({
     logId: 'log-1',
@@ -528,15 +1037,12 @@ test('LogsTableService shutdown drains queue while write is in-flight', async (t
   const writeBlocked = new Promise((resolve) => {
     resolveWrite = resolve;
   });
-  const mockCdcService = {
-    upsertSystemTableRow: async () => {
-      await writeBlocked;
-    },
-  };
-
   const service = LogsTableService.getInstance();
   service.initialize({
-    cdcIntegrationService: mockCdcService,
+    logsOwner: createLogsOwner(async () => {
+      await writeBlocked;
+      return {success: true};
+    }),
     flushChunkSize: 1,
     flushYieldMs: 1,
   });
@@ -606,14 +1112,13 @@ test('LogsTableService drops logging-pipeline metrics to prevent recursion',
   async (t) => {
     LogsTableService.resetInstance();
     const writtenRows = [];
-    const mockCdcService = {
-      upsertSystemTableRow: async (tableName, row) => {
-        writtenRows.push({tableName, row});
-      },
-    };
-
     const service = LogsTableService.getInstance();
-    service.initialize({cdcIntegrationService: mockCdcService});
+    service.initialize({
+      logsOwner: createLogsOwner(async (row) => {
+        writtenRows.push(row);
+        return {success: true};
+      }),
+    });
 
     await service.writeLogEntry({
       logId: 'log-loop-1',
@@ -661,11 +1166,7 @@ test('LogsTableService drops writes once shutdown has started', async (t) => {
   LogsTableService.resetInstance();
 
   const service = LogsTableService.getInstance();
-  service.initialize({
-    cdcIntegrationService: {
-      upsertSystemTableRow: async () => {},
-    },
-  });
+  service.initialize();
 
   service.isShuttingDown = true;
   await service.writeLogEntry({

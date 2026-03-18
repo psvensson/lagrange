@@ -30,16 +30,21 @@ const MESSAGE_GROUP_METADATA_SQL = Object.freeze({
 
 const MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE = Object.freeze({
   LATENCY_CDC_PROPAGATION: LATENCY_TOPOLOGY_MESSAGE_TYPE.CDC_PROPAGATION,
+  LATENCY_CDC_PROPAGATION_BATCH:
+    LATENCY_TOPOLOGY_MESSAGE_TYPE.CDC_PROPAGATION_BATCH,
 });
 
 const MESSAGE_GROUP_APPLICATION_STATUS = Object.freeze({
   DUPLICATE: 'duplicate',
   RECEIVED: 'received',
   LATENCY_CDC_PROPAGATED: 'latency_cdc_propagated',
+  LATENCY_CDC_BATCH_PROPAGATED: 'latency_cdc_batch_propagated',
 });
 
 const MESSAGE_GROUP_APPLICATION_ERROR_MSG = Object.freeze({
   INVALID_LATENCY_CDC_PAYLOAD: 'Invalid latency CDC propagation payload',
+  INVALID_LATENCY_CDC_BATCH_PAYLOAD:
+    'Invalid latency CDC batch propagation payload',
 });
 
 const MESSAGE_GROUP_CDC_ERROR_MSG = Object.freeze({
@@ -84,6 +89,7 @@ const MESSAGE_GROUP_SERVICE_LOG_MSG = Object.freeze({
 const MESSAGE_GROUP_OPERATION_LEDGER = Object.freeze({
   DEFAULT_OPTIONS: Object.freeze({}),
   DEFAULT_VOTED_FOR: null,
+  DEFAULT_MAX_ENTRIES: 512,
 });
 
 const MESSAGE_GROUP_OPERATION_LEDGER_NOW = () => Date.now();

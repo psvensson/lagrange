@@ -49,6 +49,8 @@ const TRANSPORT_CONFIG_KEY = Object.freeze({
   PING_INTERVAL_MS: 'transport.pingIntervalMs',
   RECONNECT_BACKOFF_MULTIPLIER: 'transport.reconnectBackoffMultiplier',
   OUTBOUND_QUEUE_MAX_CONCURRENT: 'transport.outboundQueueMaxConcurrent',
+  OUTBOUND_QUEUE_MAX_PENDING: 'transport.outboundQueueMaxPending',
+  OUTBOUND_QUEUE_CRITICAL_RESERVE: 'transport.outboundQueueCriticalReserve',
   CONNECTION_POOL_TTL_MS: 'transport.connectionPoolTtlMs',
   CONNECTION_POOL_CLEANUP_INTERVAL_MS: 'transport.connectionPoolCleanupIntervalMs',
 });
@@ -65,11 +67,18 @@ const TRANSPORT_DEFAULT = Object.freeze({
   PING_INTERVAL_MS: 30000,
   RECONNECT_BACKOFF_MULTIPLIER: 1.5,
   OUTBOUND_QUEUE_CONCURRENCY: 32,
+  OUTBOUND_QUEUE_MAX_PENDING: 64,
+  OUTBOUND_QUEUE_CRITICAL_RESERVE: NUM.SIXTEEN,
   SHUTDOWN_WAIT_MS: 100,
   RPC_TIMEOUT_MS: 30000,
   EMPTY: STRING.EMPTY,
   CONNECTION_POOL_TTL_MS: 300000, // 5 minutes
   CONNECTION_POOL_CLEANUP_INTERVAL_MS: 60000, // 1 minute
+});
+
+const OUTBOUND_DELIVERY_PRIORITY = Object.freeze({
+  CRITICAL: 'critical',
+  BACKGROUND: 'background',
 });
 
 const TRANSPORT_STRING = Object.freeze({
@@ -252,6 +261,9 @@ const ROUTER_ERROR_MSG = Object.freeze({
   ALL_TRANSPORTS_FAILED: 'All transport endpoints failed',
   NO_ENDPOINTS_FOR_NODE: 'No endpoints available for node',
   noEndpointsForNode: (nodeId) => `No endpoints available for node ${nodeId}`,
+  outboundQueueBackpressured: (nodeId, maxPending) =>
+    `Outbound queue for node ${nodeId} is saturated ` +
+    `(maxPending=${maxPending})`,
 });
 
 const WS_LOG_MSG = Object.freeze({
@@ -339,6 +351,7 @@ const TRANSPORT_METRIC_TRIGGER = Object.freeze({
 
 export {
   CONNECTION_STATE,
+  OUTBOUND_DELIVERY_PRIORITY,
   ROUTER_MESSAGE_TYPE,
   ROUTER_VALID_ENTITY_TYPES,
   ROUTER_EXPECTED_ENTITY_TYPES,

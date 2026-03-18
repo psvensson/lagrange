@@ -279,6 +279,11 @@ describe('ControlPlaneSetup', () => {
         assert.ok(result.endpointService);
         assert.ok(result.dispatchService);
         assert.ok(result.rebalanceCoordinator);
+        assert.ok(result.systemMetadataOwners);
+        assert.strictEqual(
+          result.endpointService.serviceEndpointsOwner,
+          result.systemMetadataOwners.serviceEndpointsOwner,
+        );
       });
 
     it('should keep lease sweep frozen until activation barrier',
@@ -400,10 +405,6 @@ describe('ControlPlaneSetup', () => {
 
       assert.strictEqual(
         result.heartbeatService.verifyReporterVisibilityOnSuccess,
-        true,
-      );
-      assert.strictEqual(
-        result.heartbeatService.fallbackToCdcOnReporterVisibilityGap,
         true,
       );
     });

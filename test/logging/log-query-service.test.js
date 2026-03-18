@@ -246,7 +246,12 @@ test('LogQueryService queryLogs without engine returns error', async (t) => {
   const result = await service.queryLogs({});
 
   t.notOk(result.success, 'should fail without engine');
-  t.equal(result.errorCode, 'ENGINE_NOT_AVAILABLE', 'should have correct error code');
+  t.equal(result.outcome, 'owner_not_ready', 'should expose typed outcome');
+  t.equal(
+    result.errorCode,
+    'SYSTEM_METADATA_GATEWAY_REQUIRED',
+    'should have typed gateway-required error code',
+  );
 
   LogQueryService.resetInstance();
 });

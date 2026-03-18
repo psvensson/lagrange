@@ -5,6 +5,7 @@
 import {EventEmitter} from 'node:events';
 import {test} from '../../src/test-helpers/tap.js';
 import {RaftReplicaBase, RaftRole} from '../../src/raft/raft-replica-base.js';
+import {LeaderActivationScheduler} from '../../src/raft/leader-activation-scheduler.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
@@ -57,7 +58,9 @@ class TestRaftReplica extends RaftReplicaBase {
     });
     this.flushRoleUpdateCalled = false;
     this.flushLeaderNodeUpdateCalled = false;
+    this.becameLeaderCount = 0;
     this.becameFollowerCount = 0;
+    this.becameCandidateCount = 0;
     this.leaderChangeCalls = [];
   }
 
@@ -69,8 +72,16 @@ class TestRaftReplica extends RaftReplicaBase {
     this.flushLeaderNodeUpdateCalled = true;
   }
 
+  onBecameLeader() {
+    this.becameLeaderCount += 1;
+  }
+
   onBecameFollower() {
     this.becameFollowerCount += 1;
+  }
+
+  onBecameCandidate() {
+    this.becameCandidateCount += 1;
   }
 
   onLeaderChanged(leaderId, context) {
@@ -82,9 +93,11 @@ test('RaftReplicaBase', async (t) => {
   t.beforeEach(() => {
     initializeTestEnvironment();
     resetProcessRaftProviderForTests();
+    LeaderActivationScheduler.resetSharedForTests();
   });
 
   t.afterEach(() => {
+    LeaderActivationScheduler.resetSharedForTests();
     resetProcessRaftProviderForTests();
     cleanupTestEnvironment();
   });
@@ -310,6 +323,64 @@ test('RaftReplicaBase', async (t) => {
       );
       t.equal(invariantEvents[0].passed, false);
       t.equal(invariantEvents[0].observed.role, RaftRole.CANDIDATE);
+    },
+  );
+
+  await t.test(
+    'leader activation dedupes same-term flaps and cancels on candidate demotion',
+    async (t) => {
+      const replica = new TestRaftReplica({
+        replicaId: 'replica-1',
+        nodeId: 'node-1',
+        replicaIds: ['replica-1', 'replica-2'],
+        cdcIntegrationService: {},
+        leaderActivationStabilizationMs: 10,
+        leaderActivationNodeSpacingMs: 0,
+      });
+      replica.raft = new EventEmitter();
+      replica.wireRaftEvents();
+      let leaderEvents = 0;
+      replica.on(RAFT_REPLICA_BASE_EVENT.LEADER_ELECTED, () => {
+        leaderEvents += 1;
+      });
+
+      replica.raft.emit('leader');
+      replica.raft.emit('leader');
+      replica.raft.emit('candidate');
+
+      await new Promise((resolve) => setTimeout(resolve, 40));
+
+      t.equal(replica.becameLeaderCount, 0);
+      t.equal(replica.becameCandidateCount, 1);
+      t.equal(leaderEvents, 0);
+    },
+  );
+
+  await t.test(
+    'leader activation emits once after stabilization',
+    async (t) => {
+      const replica = new TestRaftReplica({
+        replicaId: 'replica-1',
+        nodeId: 'node-1',
+        replicaIds: ['replica-1', 'replica-2'],
+        cdcIntegrationService: {},
+        leaderActivationStabilizationMs: 10,
+        leaderActivationNodeSpacingMs: 0,
+      });
+      replica.raft = new EventEmitter();
+      replica.wireRaftEvents();
+      let leaderEvents = 0;
+      replica.on(RAFT_REPLICA_BASE_EVENT.LEADER_ELECTED, () => {
+        leaderEvents += 1;
+      });
+
+      replica.raft.emit('leader');
+      replica.raft.emit('leader');
+
+      await new Promise((resolve) => setTimeout(resolve, 40));
+
+      t.equal(replica.becameLeaderCount, 1);
+      t.equal(leaderEvents, 1);
     },
   );
 

@@ -193,12 +193,16 @@ class SeedPartitionsPhase {
         nodeId: d.getNodeId(),
         transport: d.getTransport(),
         dbPath: options.dbPath,
-        messageGroupService: d.getLeaderMessageGroupService(),
+        messageGroupService: d.getBootstrapMessageGroupService(),
         messageRouter: d.getMessageRouter(),
         rebalanceCoordinator: d.getRebalanceCoordinator(),
         cdcIntegrationService: d.getCdcIntegrationService(),
         sqlQueryEngine: d.getCdcIntegrationService()?.sqlQueryEngine || null,
         deferElection: Boolean(options.deferElection),
+        bootstrapReadinessState:
+          typeof d.getBootstrapReadinessState === 'function' ?
+            d.getBootstrapReadinessState() :
+            null,
         suppressLifecycleLogs: true,
         onInitializationStage: (stageEvent) =>
           this.updatePartitionReplicaProgress(

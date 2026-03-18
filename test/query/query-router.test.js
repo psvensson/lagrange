@@ -18,22 +18,32 @@ import {RAFT_ROLE} from '../../src/raft/constants.js';
  * Create a mock system cache with configurable services.
  * @param {Array} services - Array of service objects
  * @param {Array} nodes - Array of node rows
+ * @param {Array} partitions - Array of partition rows
  * @return {Object} Mock system cache
  */
-function createMockSystemCache(services = [], nodes = []) {
+function createMockSystemCache(services = [], nodes = [], partitions = []) {
   const nodeById = new Map(
     nodes.map((node) => [node.node_id, node]),
+  );
+  const partitionById = new Map(
+    partitions.map((partition) => [partition.partition_id, partition]),
   );
   return {
     filter: (tableName, predicate) => {
       if (tableName === TABLES.SERVICES) {
         return services.filter(predicate);
       }
+      if (tableName === TABLES.PARTITIONS) {
+        return partitions.filter(predicate);
+      }
       return [];
     },
     get: (tableName, key) => {
       if (tableName === TABLES.NODES) {
         return nodeById.get(key) || null;
+      }
+      if (tableName === TABLES.PARTITIONS) {
+        return partitionById.get(key) || null;
       }
       return null;
     },
@@ -161,6 +171,36 @@ describe('QueryRouter', () => {
       assert.strictEqual(candidates.length, 2);
       assert.strictEqual(candidates[0].address, 'ws://leader:8080');
       assert.strictEqual(candidates[0].isLeader, true);
+    });
+
+    it('should prefer canonical leader_node_id before stale service roles', () => {
+      const services = [
+        createService({
+          service_id: 'stale-leader',
+          node_id: 'node-stale',
+          raft_role: RAFT_ROLE.LEADER,
+          address: 'ws://stale:8080',
+        }),
+        createService({
+          service_id: 'canonical-leader',
+          node_id: 'node-canonical',
+          raft_role: RAFT_ROLE.FOLLOWER,
+          address: 'ws://canonical:8080',
+        }),
+      ];
+      const partitions = [{
+        partition_id: 'partition-1',
+        leader_node_id: 'node-canonical',
+      }];
+
+      const router = new QueryRouter({
+        systemCache: createMockSystemCache(services, [], partitions),
+        messageRouter: createMockMessageRouter(() => ({})),
+      });
+
+      const candidates = router.findServiceCandidates('partition-1', true);
+      assert.strictEqual(candidates.length, 2);
+      assert.strictEqual(candidates[0].address, 'ws://canonical:8080');
     });
 
     it('should filter out services without addresses', () => {

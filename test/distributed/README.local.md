@@ -450,3 +450,36 @@ Run all non-integration fast tests:
 ```bash
 npm run test:fast
 ```
+
+## Memory Leak Detection
+
+The harness includes a memory leak analyzer that samples RSS across nodes
+during scenario execution. Configuration lives in the `memoryLeak` block of
+each config file.
+
+Key settings:
+
+1. `enabled` — collect memory samples (default `true`).
+2. `failOnDetection` — fail the scenario when a leak is detected (default
+   `true`).
+3. `requireSamples` — fail when insufficient samples are collected (default
+   `false`).
+
+### Temporary `failOnDetection: false` override
+
+Both `local.json` (5-node) and `local-three-node.json` (3-node) currently set
+`failOnDetection: false`. This is a **temporary** workaround for known seed
+memory growth during rolling restarts (Bug G — post-restart redistribution
+deadlock causes the seed to accumulate all replicas and grow monotonically).
+
+This override **must be removed** once either:
+
+1. The redistribution deadlock (Bug G) is fixed and clean rolling restarts
+   show stable seed memory, proving the growth was caused by replica
+   accumulation.
+2. Or the growth is confirmed to be a genuine leak unrelated to redistribution,
+   in which case the leak itself must be fixed first.
+
+Do not leave `failOnDetection: false` as a permanent setting. It masks future
+memory leaks and defeats the purpose of the analyzer. Re-enable it as soon as
+the underlying issue is resolved.

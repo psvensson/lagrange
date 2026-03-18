@@ -25,6 +25,8 @@ import {
   CDC_SOURCE,
   CDC_SUBSYSTEM,
 } from './cdc-constants.js';
+import {resolveNodeWebSocketAddress} from
+  '../transport/node-address-resolution.js';
 
 /**
  * CDCEventHandler processes CDC events for system state changes.
@@ -503,32 +505,28 @@ class CDCEventHandler {
       };
     }
 
-    // Check if we have a node address to connect to
-    if (!nodeAddress) {
-      this.logger.warn(CDC_LOG_MSG.NEW_NODE_MISSING_ADDRESS, {
-        nodeId: this.nodeId,
-        targetNodeId,
-      });
-      return {
-        processed: false,
-        nodeId: targetNodeId,
-        error: 'Missing node_address',
-      };
-    }
-
-    // Derive WebSocket address from node address
-    const wsAddress = this.deriveWsAddressFromNodeAddress(nodeAddress);
+    const wsAddress =
+      (typeof this.eventContext.resolveNodeWebSocketAddress ===
+        TYPEOF.FUNCTION ?
+        this.eventContext.resolveNodeWebSocketAddress(
+          targetNodeId,
+        ) :
+        resolveNodeWebSocketAddress({
+          targetNodeId,
+          systemTableCache: this.eventContext?._service?.systemTableCache ||
+            null,
+        }));
     if (!wsAddress) {
       this.logger.warn(CDC_LOG_MSG.NEW_NODE_CONNECT_FAILED, {
         nodeId: this.nodeId,
         targetNodeId,
         nodeAddress,
-        error: 'Could not derive WebSocket address',
+        error: 'Missing canonical node_endpoints websocket address',
       });
       return {
         processed: false,
         nodeId: targetNodeId,
-        error: 'Could not derive WebSocket address',
+        error: 'Missing canonical node_endpoints websocket address',
       };
     }
 

@@ -19,6 +19,8 @@ import {
   buildMetaServiceEndpoints,
 } from '../../admin/admin-meta-endpoint-builder.js';
 import {buildEndpointRecord} from '../../wasm-service/service-endpoint-builder.js';
+import {resolveAdvertisedEndpointHost} from
+  '../../transport/node-address-resolution.js';
 
 const META_SERVICE_DEFINITION_REGISTRATION_ERROR = Object.freeze({
   UPSERT_REQUIRED: 'Meta service definition registration requires upsertRow function',
@@ -63,7 +65,14 @@ async function registerBuiltInMetaServiceDefinitions(options = {}) {
  * @return {Promise<string[]>} Registered endpoint IDs.
  */
 async function registerBuiltInMetaServiceEndpoints(options = {}) {
-  const {upsertRow, nodeId, nodeAddress, wsPort, postgresPort} = options;
+  const {
+    upsertRow,
+    nodeId,
+    nodeAddress,
+    advertisedNodeWsAddress,
+    wsPort,
+    postgresPort,
+  } = options;
   if (typeof upsertRow !== TYPEOF.FUNCTION) {
     throw new Error(META_SERVICE_DEFINITION_REGISTRATION_ERROR.UPSERT_REQUIRED);
   }
@@ -71,7 +80,11 @@ async function registerBuiltInMetaServiceEndpoints(options = {}) {
     throw new Error(META_SERVICE_DEFINITION_REGISTRATION_ERROR.NODE_ID_REQUIRED);
   }
 
-  const endpointAddress = resolveEndpointAddress(nodeAddress, nodeId);
+  const endpointAddress = resolveEndpointAddress({
+    nodeAddress,
+    advertisedNodeWsAddress,
+    nodeId,
+  });
   const endpointPort = resolveEndpointPort(wsPort, nodeAddress);
   if (!Number.isInteger(endpointPort) || endpointPort <= 0) {
     throw new Error(META_SERVICE_DEFINITION_REGISTRATION_ERROR.ENDPOINT_PORT_REQUIRED);
@@ -104,11 +117,26 @@ async function registerBuiltInMetaServiceEndpoints(options = {}) {
 
 /**
  * Resolve endpoint address from node address or fallback to node ID.
- * @param {string|undefined|null} nodeAddress
- * @param {string} nodeId
+ * @param {Object} options
+ * @param {string|undefined|null} options.nodeAddress
+ * @param {string|undefined|null} options.advertisedNodeWsAddress
+ * @param {string} options.nodeId
  * @return {string}
  */
-function resolveEndpointAddress(nodeAddress, nodeId) {
+function resolveEndpointAddress(options = {}) {
+  const advertisedHost = resolveAdvertisedEndpointHost({
+    advertisedAddress: options.advertisedNodeWsAddress,
+    nodeAddress: options.nodeAddress,
+    wsPort: null,
+    fallbackHost: options.nodeId,
+  });
+  if (typeof advertisedHost === TYPEOF.STRING &&
+      advertisedHost.length > 0) {
+    return advertisedHost;
+  }
+
+  const nodeAddress = options.nodeAddress;
+  const nodeId = options.nodeId;
   if (typeof nodeAddress !== TYPEOF.STRING || nodeAddress.length === 0) {
     return nodeId;
   }

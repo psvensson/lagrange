@@ -3,7 +3,7 @@ import {BootstrapService} from '../../src/bootstrap/bootstrap-service.js';
 import {
   BOOTSTRAP_REBALANCE_REASON,
 } from '../../src/bootstrap/bootstrap-constants.js';
-import {SERVICE_STATUS, STATE} from '../../src/constants/index.js';
+import {SERVICE_STATUS, STATE, TABLES} from '../../src/constants/index.js';
 
 const NODE_READY_REBALANCE_DELAY_MS = 5;
 const WAIT_FOR_TIMER_FLUSH_MS = 20;
@@ -69,6 +69,116 @@ function setReadyNodeCache(bootstrapService, nodeRows) {
 }
 
 test('BootstrapService node-ready rebalance trigger ownership', async (t) => {
+  await t.test(
+    'limits node_ready rebalance fanout to convergence-critical leader partitions',
+    async (t) => {
+      const bootstrapService = new BootstrapService({
+        nodeId: 'seed-node',
+        nodeAddress: 'localhost:8080',
+      });
+
+      const triggered = [];
+      const createPartition = (partitionId, tableName, isLeader = true) => ({
+        partitionId,
+        tableName,
+        isLeader,
+        triggerRebalanceCheck(reason) {
+          triggered.push({partitionId, reason});
+        },
+      });
+
+      bootstrapService.partitionServices = new Map([
+        ['nodes', createPartition('nodes-p1', TABLES.NODES)],
+        [
+          'replica-ops',
+          createPartition('replica_operations-p1', null),
+        ],
+        [
+          'svc-defs',
+          createPartition(
+            'service_definitions-p1',
+            TABLES.SERVICE_DEFINITIONS,
+          ),
+        ],
+        ['logs', createPartition('logs-p1', TABLES.LOGS)],
+        ['orders', createPartition('orders-p1', 'orders')],
+        [
+          'service-endpoints-follower',
+          createPartition(
+            'service_endpoints-p1',
+            TABLES.SERVICE_ENDPOINTS,
+            false,
+          ),
+        ],
+      ]);
+
+      bootstrapService.triggerRebalancingOnAllPartitions(
+        BOOTSTRAP_REBALANCE_REASON.NODE_READY,
+      );
+
+      t.same(
+        triggered,
+        [
+          {
+            partitionId: 'nodes-p1',
+            reason: BOOTSTRAP_REBALANCE_REASON.NODE_READY,
+          },
+          {
+            partitionId: 'replica_operations-p1',
+            reason: BOOTSTRAP_REBALANCE_REASON.NODE_READY,
+          },
+          {
+            partitionId: 'service_definitions-p1',
+            reason: BOOTSTRAP_REBALANCE_REASON.NODE_READY,
+          },
+        ],
+        'node_ready should only fan out to convergence-critical leader partitions',
+      );
+    },
+  );
+
+  await t.test(
+    'keeps non-node_ready rebalance fanout on all leader partitions',
+    async (t) => {
+      const bootstrapService = new BootstrapService({
+        nodeId: 'seed-node',
+        nodeAddress: 'localhost:8080',
+      });
+
+      const triggered = [];
+      const createPartition = (partitionId, tableName, isLeader = true) => ({
+        partitionId,
+        tableName,
+        isLeader,
+        triggerRebalanceCheck(reason) {
+          triggered.push({partitionId, reason});
+        },
+      });
+
+      bootstrapService.partitionServices = new Map([
+        ['nodes', createPartition('nodes-p1', TABLES.NODES)],
+        ['logs', createPartition('logs-p1', TABLES.LOGS)],
+        ['orders', createPartition('orders-p1', 'orders')],
+        [
+          'services-follower',
+          createPartition('services-p1', TABLES.SERVICES, false),
+        ],
+      ]);
+
+      bootstrapService.triggerRebalancingOnAllPartitions('periodic');
+
+      t.same(
+        triggered,
+        [
+          {partitionId: 'nodes-p1', reason: 'periodic'},
+          {partitionId: 'logs-p1', reason: 'periodic'},
+          {partitionId: 'orders-p1', reason: 'periodic'},
+        ],
+        'non-node_ready triggers should still fan out to every leader partition',
+      );
+    },
+  );
+
   await t.test('schedules one rebalance trigger per node-ready transition', async (t) => {
     const bootstrapService = new BootstrapService({
       nodeId: 'seed-node',

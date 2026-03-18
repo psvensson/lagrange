@@ -142,7 +142,9 @@ class AdminPreflightSnapshot {
    */
   async resolvePreflightCriticalPathSnapshot() {
     const snapshot = await this.buildLocalPreflightCriticalPathSnapshot();
-    if (!this.shouldAttemptAuthoritativePreflightRepair(snapshot)) {
+    const repairEvaluation =
+      this.evaluateAuthoritativePreflightRepair(snapshot);
+    if (repairEvaluation?.shouldRepair !== true) {
       return snapshot;
     }
     if (!this.ensureAuthoritativeDiscoveryCacheRepair) {
@@ -151,6 +153,7 @@ class AdminPreflightSnapshot {
     const repair = await this.awaitAuthoritativeRepairWithinBudget(
       this.ensureAuthoritativeDiscoveryCacheRepair({
         reason: PREFLIGHT_REPAIR_REASON,
+        triggerCodes: repairEvaluation.triggerCodes,
       }),
     );
     if (repair.applied !== true) {
@@ -242,6 +245,17 @@ class AdminPreflightSnapshot {
    * @return {boolean}
    */
   shouldAttemptAuthoritativePreflightRepair(snapshot) {
+    return this.evaluateAuthoritativePreflightRepair(snapshot)
+      ?.shouldRepair === true;
+  }
+
+  /**
+   * Determine whether preflight snapshot warrants authoritative cache
+   * repair.
+   * @param {Object} snapshot
+   * @return {Object|null}
+   */
+  evaluateAuthoritativePreflightRepair(snapshot) {
     if (!this.systemTableCache ||
         !this.cacheMutationTarget ||
         typeof this.cacheMutationTarget.applySystemTableChange !==
@@ -249,7 +263,7 @@ class AdminPreflightSnapshot {
         !this.sqlQueryEngine ||
         typeof this.sqlQueryEngine.executeRequest !==
           TYPEOF.FUNCTION) {
-      return false;
+      return null;
     }
     const selectedNodeIds =
       Array.isArray(snapshot?.discovery?.selectedNodeIds) ?
@@ -264,7 +278,7 @@ class AdminPreflightSnapshot {
       selectedNodeCount: selectedNodeIds.length,
       serviceEndpointsCount,
     });
-    return evaluation.shouldRepair;
+    return evaluation;
   }
 
   /**

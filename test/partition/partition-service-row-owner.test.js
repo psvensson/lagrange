@@ -12,8 +12,8 @@ test('PartitionServiceRowOwner - activateReplica updates status without rewritin
         async upsertSystemTableRow() {
           throw new Error('should not fall back to upsert when update is available');
         },
-        async updateSystemTableRow(tableName, whereClause, updateData) {
-          updates.push({tableName, whereClause, updateData});
+        async updateSystemTableRow(tableName, whereClause, updateData, options) {
+          updates.push({tableName, whereClause, updateData, options});
         },
       },
     });
@@ -42,4 +42,19 @@ test('PartitionServiceRowOwner - activateReplica updates status without rewritin
       'activation update should not rewrite created_at',
     );
     t.equal(updates[0].updateData.status, 'active');
+    t.equal(
+      updates[0].options?.allowPressureDefer,
+      true,
+      'activation update should allow pressure deferral',
+    );
+    t.equal(
+      updates[0].options?.deliveryPriority,
+      'background',
+      'activation update should use background delivery',
+    );
+    t.equal(
+      updates[0].options?.coalescingKey,
+      'services:p1-r1',
+      'activation update should coalesce by service row',
+    );
   });

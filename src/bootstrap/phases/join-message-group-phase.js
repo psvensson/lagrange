@@ -28,7 +28,6 @@ import {
   UNIFIED_SERVICE_TYPE,
 } from '../../constants/index.js';
 
-const DEFER_ELECTION_DEFAULT = JOIN_REPLICA_DEFAULT.DEFER_ELECTION;
 const LOG_ENVELOPE_DEFAULT = JOIN_REPLICA_DEFAULT.LOG_ENVELOPE;
 const LOG_REGISTRATION_DEFAULT = JOIN_REPLICA_DEFAULT.LOG_REGISTRATION;
 
@@ -179,7 +178,11 @@ class JoinMessageGroupPhase {
         replicaIds: allReplicaIds,
         replicaIndex: NUM.ZERO,
         peerAddresses: peerAddresses || [],
-        deferElection: DEFER_ELECTION_DEFAULT,
+        // Join-time replicas must not campaign before the existing control
+        // plane has converged on their placement. Existing leaders will pull
+        // them into the group via AppendEntries without a local election.
+        deferElection: true,
+        isJoiningExistingGroup: true,
         createDelayMs: NUM.ZERO,
         logEnvelope: LOG_ENVELOPE_DEFAULT,
         logRegistration: LOG_REGISTRATION_DEFAULT,
@@ -207,15 +210,11 @@ class JoinMessageGroupPhase {
       raftTerm: messageGroup.raft?.term,
     });
 
-    // Update the services table to point this replica to the
-    // new node. This is an UPDATE, not INSERT - the replica ID
-    // already exists.
-    await this.delegates.registerMessageGroupService(
-      groupId,
-      replicaId,
-      messageGroup,
-      {status: SERVICE_STATUS.STOPPED},
-    );
+    // Do not publish the services row yet. The joining node must not become
+    // a routable replica target until canonical node membership and endpoint
+    // publication have completed. The shared activation step after
+    // QUERYING_STATE is the only owner allowed to make local replicas
+    // externally targetable during join.
 
     logger.info(JOINING_LOG_MSG.JOINED_EXISTING_GROUP, {
       nodeId: this.nodeId,

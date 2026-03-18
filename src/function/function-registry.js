@@ -6,6 +6,10 @@
 
 import {LoggingService} from '../logging/logging-service.js';
 import {TABLES} from '../constants/index.js';
+import {ControlPlaneSystemTableGateway} from '../control-plane/control-plane-system-table-gateway.js';
+import {
+  createSystemMetadataGatewayRequiredError,
+} from '../control-plane/system-metadata-access-error.js';
 import {
   FUNCTION_ERROR_MSG,
   FUNCTION_LOG_MSG,
@@ -29,6 +33,8 @@ class FunctionRegistry {
     this.systemTableCache = options.systemTableCache || null;
     this.cdcIntegrationService = options.cdcIntegrationService || null;
     this.sqlQueryEngine = options.sqlQueryEngine || null;
+    this.controlPlaneSystemTableGateway =
+      options.controlPlaneSystemTableGateway || null;
     this.executors = new Map(); // executorType → executor
     this.logger = this.initLogger();
     this.initialized = false;
@@ -66,6 +72,9 @@ class FunctionRegistry {
     }
     if (options.sqlQueryEngine) {
       this.sqlQueryEngine = options.sqlQueryEngine;
+    }
+    if (options.controlPlaneSystemTableGateway) {
+      this.controlPlaneSystemTableGateway = options.controlPlaneSystemTableGateway;
     }
 
     this.initialized = true;
@@ -188,22 +197,23 @@ class FunctionRegistry {
    * @return {Promise<Object|null>} Function definition or null.
    */
   async getFunction(functionId) {
-    if (this.sqlQueryEngine) {
-      const result = await this.sqlQueryEngine.executeQuery(
-        'SELECT * FROM code WHERE code_id = ?',
-        [functionId],
-      );
-      if (result.rows?.[0]) {
-        return result.rows[0];
-      }
-      // Try by function_id field
-      const byField = await this.sqlQueryEngine.executeQuery(
-        'SELECT * FROM code WHERE function_id = ?',
-        [functionId],
-      );
-      return byField.rows?.[0] || null;
+    const gateway = this.getControlPlaneSystemTableGateway();
+    if (!gateway) {
+      throw createSystemMetadataGatewayRequiredError({
+        serviceName: 'FunctionRegistry',
+        tableName: TABLES.CODE,
+        operation: 'read',
+      });
     }
-    return null;
+    const result = await gateway.readRows(
+      TABLES.CODE,
+      'SELECT * FROM code WHERE code_id = ? OR function_id = ? LIMIT 1',
+      [functionId, functionId],
+      {
+        coalescingKey: `function:${functionId}`,
+      },
+    );
+    return result.rows?.[0] || null;
   }
 
   /**
@@ -212,14 +222,23 @@ class FunctionRegistry {
    * @return {Promise<Object|null>} Function definition or null.
    */
   async getFunctionByName(functionName) {
-    if (this.sqlQueryEngine) {
-      const result = await this.sqlQueryEngine.executeQuery(
-        'SELECT * FROM code WHERE function_name = ?',
-        [functionName],
-      );
-      return result.rows?.[0] || null;
+    const gateway = this.getControlPlaneSystemTableGateway();
+    if (!gateway) {
+      throw createSystemMetadataGatewayRequiredError({
+        serviceName: 'FunctionRegistry',
+        tableName: TABLES.CODE,
+        operation: 'read',
+      });
     }
-    return null;
+    const result = await gateway.readRows(
+      TABLES.CODE,
+      'SELECT * FROM code WHERE function_name = ?',
+      [functionName],
+      {
+        coalescingKey: `function-name:${functionName}`,
+      },
+    );
+    return result.rows?.[0] || null;
   }
 
   /**
@@ -253,6 +272,41 @@ class FunctionRegistry {
    */
   isInitialized() {
     return this.initialized;
+  }
+
+  /**
+   * @return {ControlPlaneSystemTableGateway|null}
+   * @private
+   */
+  getControlPlaneSystemTableGateway() {
+    if (this.controlPlaneSystemTableGateway) {
+      if (!this.controlPlaneSystemTableGateway.sqlQueryEngine &&
+          this.sqlQueryEngine) {
+        this.controlPlaneSystemTableGateway.setSqlQueryEngine(this.sqlQueryEngine);
+      }
+      if (!this.controlPlaneSystemTableGateway.cdcIntegrationService &&
+          this.cdcIntegrationService) {
+        this.controlPlaneSystemTableGateway
+          .setCdcIntegrationService(this.cdcIntegrationService);
+      }
+      if (!this.controlPlaneSystemTableGateway.systemTableCache &&
+          this.systemTableCache) {
+        this.controlPlaneSystemTableGateway
+          .setSystemTableCache(this.systemTableCache);
+      }
+      return this.controlPlaneSystemTableGateway;
+    }
+    if (!this.sqlQueryEngine &&
+        !this.cdcIntegrationService &&
+        !this.systemTableCache) {
+      return null;
+    }
+    this.controlPlaneSystemTableGateway = new ControlPlaneSystemTableGateway({
+      sqlQueryEngine: this.sqlQueryEngine,
+      cdcIntegrationService: this.cdcIntegrationService,
+      systemTableCache: this.systemTableCache,
+    });
+    return this.controlPlaneSystemTableGateway;
   }
 }
 

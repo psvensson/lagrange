@@ -22,6 +22,8 @@ import {
   clearReplicaLeaderUpdateState,
   reconcileReplicaLeaderChange,
 } from './replica-leadership-state.js';
+import {LeaderActivationGate} from './leader-activation-gate.js';
+import {LeaderActivationScheduler} from './leader-activation-scheduler.js';
 import {
   RAFT_REPLICA_BASE_ADDRESS,
   RAFT_REPLICA_BASE_DEFAULT,
@@ -106,6 +108,33 @@ class RaftReplicaBase extends EventEmitter {
     // System table cache - use shared cache from NodeService singleton
     const nodeService = NodeService.getInstance();
     this.systemTableCache = options.systemTableCache || nodeService.getSystemTableCache();
+
+    const config = ConfigurationManager.getInstance();
+    this.leaderActivationStabilizationMs =
+      Number.isFinite(options.leaderActivationStabilizationMs) &&
+      options.leaderActivationStabilizationMs >= NUM.ZERO ?
+        Math.floor(options.leaderActivationStabilizationMs) :
+        (
+          config.get(CONFIG_KEY.RAFT_LEADER_ACTIVATION_STABILIZATION_MS) ??
+          250
+        );
+    this.leaderActivationNodeSpacingMs =
+      Number.isFinite(options.leaderActivationNodeSpacingMs) &&
+      options.leaderActivationNodeSpacingMs >= NUM.ZERO ?
+        Math.floor(options.leaderActivationNodeSpacingMs) :
+        (
+          config.get(CONFIG_KEY.RAFT_LEADER_ACTIVATION_NODE_SPACING_MS) ??
+          25
+        );
+    this.leaderActivationScheduler = options.leaderActivationScheduler ||
+      LeaderActivationScheduler.getShared({
+        nodeId: this.nodeId,
+        spacingMs: this.leaderActivationNodeSpacingMs,
+      });
+    this.leaderActivationGate = new LeaderActivationGate({
+      holdoffMs: this.leaderActivationStabilizationMs,
+      activationScheduler: this.leaderActivationScheduler,
+    });
 
     // Deferred election support
     this.deferElection = options.deferElection || options.isJoiningExistingGroup || false;
@@ -300,11 +329,7 @@ class RaftReplicaBase extends EventEmitter {
       this.emitReadinessRoleInvariant(true, {
         role: this.role,
       });
-      this.onBecameLeader();
-      this.emit(RAFT_REPLICA_BASE_EVENT.LEADER_ELECTED, {
-        leaderId: this.replicaId,
-        term,
-      });
+      this.scheduleLeaderOwnedActivation(term);
     });
 
     this.raft.on(RAFT_REPLICA_BASE_LIFERAFT_EVENT.FOLLOWER, () => {
@@ -312,6 +337,7 @@ class RaftReplicaBase extends EventEmitter {
         return;
       }
       applyReplicaDemotion(this, RaftRole.FOLLOWER);
+      this.cancelLeaderOwnedActivation();
       this.emitReadinessRoleInvariant(true, {
         role: this.role,
       });
@@ -323,6 +349,7 @@ class RaftReplicaBase extends EventEmitter {
         return;
       }
       applyReplicaDemotion(this, RaftRole.CANDIDATE);
+      this.cancelLeaderOwnedActivation();
       this.emitReadinessRoleInvariant(false, {
         role: this.role,
       });
@@ -384,11 +411,10 @@ class RaftReplicaBase extends EventEmitter {
       this.emitReadinessRoleInvariant(true, {
         role: this.role,
       });
-      this.onBecameLeader();
-      this.emit(RAFT_REPLICA_BASE_EVENT.LEADER_ELECTED, {
-        leaderId: this.replicaId,
-        term: this.raftProvider.getCurrentTerm(this.raft),
-      });
+      this.scheduleLeaderOwnedActivation(
+        this.raftProvider.getCurrentTerm(this.raft),
+        {immediate: true},
+      );
     }
   }
 
@@ -724,6 +750,7 @@ class RaftReplicaBase extends EventEmitter {
       demoted,
     });
     if (demoted) {
+      this.cancelLeaderOwnedActivation();
       this.onBecameFollower();
     }
     const leaderId = this.leaderId;
@@ -775,6 +802,32 @@ class RaftReplicaBase extends EventEmitter {
     });
   }
 
+  cancelLeaderOwnedActivation() {
+    this.leaderActivationGate.cancel({clearActivatedTerm: true});
+  }
+
+  scheduleLeaderOwnedActivation(term, options = {}) {
+    this.leaderActivationGate.schedule(term, () => {
+      if (!this.isLeaderReplica()) {
+        return;
+      }
+
+      this.logger.info(RAFT_REPLICA_BASE_LOG_MSG.BECAME_LEADER, {
+        term,
+        replicaId: this.replicaId,
+      });
+
+      this.onBecameLeader();
+      this.emit(RAFT_REPLICA_BASE_EVENT.LEADER_ELECTED, {
+        leaderId: this.replicaId,
+        term,
+      });
+    }, {
+      immediate: options.immediate === true,
+      shouldActivate: () => this.isLeaderReplica(),
+    });
+  }
+
   /**
    * Shutdown the replica service.
    * Clears timers and ends liferaft instance.
@@ -804,6 +857,7 @@ class RaftReplicaBase extends EventEmitter {
       clearTimeout(this.learnerPromotionTimer);
       this.learnerPromotionTimer = null;
     }
+    this.leaderActivationGate.shutdown();
 
     this.initialized = false;
     this.emit(RAFT_REPLICA_BASE_EVENT.SHUTDOWN, {replicaId: this.replicaId});
