@@ -264,10 +264,10 @@ class ControlPlaneSystemTableGateway {
    */
   constructor(options = {}) {
     this.nodeId = options.nodeId || null;
-    this.sqlQueryEngine = options.sqlQueryEngine || null;
-    this.cdcIntegrationService = options.cdcIntegrationService || null;
-    this.systemTableCache = options.systemTableCache || null;
-    this.messageRouter = options.messageRouter || null;
+    this._sqlQueryEngine = options.sqlQueryEngine || null;
+    this._cdcIntegrationService = options.cdcIntegrationService || null;
+    this._systemTableCache = options.systemTableCache || null;
+    this._messageRouter = options.messageRouter || null;
     this.sqlQueryEngineProvider =
       typeof options.getSqlQueryEngine === TYPEOF.FUNCTION ?
         options.getSqlQueryEngine :
@@ -334,64 +334,88 @@ class ControlPlaneSystemTableGateway {
     this.recordGatewayRetentionSnapshot();
   }
 
+  get sqlQueryEngine() {
+    const providedSqlQueryEngine = this.sqlQueryEngineProvider?.() || null;
+    return providedSqlQueryEngine || this._sqlQueryEngine || null;
+  }
+
+  set sqlQueryEngine(sqlQueryEngine) {
+    this._sqlQueryEngine = sqlQueryEngine || null;
+  }
+
+  get cdcIntegrationService() {
+    const providedCdcIntegrationService =
+      this.cdcIntegrationServiceProvider?.() || null;
+    return providedCdcIntegrationService || this._cdcIntegrationService || null;
+  }
+
+  set cdcIntegrationService(cdcIntegrationService) {
+    this._cdcIntegrationService = cdcIntegrationService || null;
+  }
+
+  get systemTableCache() {
+    const providedSystemTableCache = this.systemTableCacheProvider?.() || null;
+    return providedSystemTableCache || this._systemTableCache || null;
+  }
+
+  set systemTableCache(systemTableCache) {
+    this._systemTableCache = systemTableCache || null;
+  }
+
+  get messageRouter() {
+    const providedMessageRouter = this.messageRouterProvider?.() || null;
+    return providedMessageRouter || this._messageRouter || null;
+  }
+
+  set messageRouter(messageRouter) {
+    this._messageRouter = messageRouter || null;
+  }
+
   /**
    * @param {Object|null} sqlQueryEngine
    */
   setSqlQueryEngine(sqlQueryEngine) {
-    this.sqlQueryEngine = sqlQueryEngine || null;
+    this.sqlQueryEngine = sqlQueryEngine;
   }
 
   /**
    * @param {Object|null} cdcIntegrationService
    */
   setCdcIntegrationService(cdcIntegrationService) {
-    this.cdcIntegrationService = cdcIntegrationService || null;
+    this.cdcIntegrationService = cdcIntegrationService;
   }
 
   /**
    * @param {Object|null} systemTableCache
    */
   setSystemTableCache(systemTableCache) {
-    this.systemTableCache = systemTableCache || null;
+    this.systemTableCache = systemTableCache;
   }
 
   /**
    * @param {Object|null} messageRouter
    */
   setMessageRouter(messageRouter) {
-    this.messageRouter = messageRouter || null;
+    this.messageRouter = messageRouter;
   }
 
   resolveSqlQueryEngine() {
     if (this.sqlQueryEngine) {
       return this.sqlQueryEngine;
     }
-    const providedSqlQueryEngine = this.sqlQueryEngineProvider?.() || null;
-    if (providedSqlQueryEngine) {
-      return providedSqlQueryEngine;
-    }
     return this.resolveCdcIntegrationService()?.sqlQueryEngine || null;
   }
 
   resolveCdcIntegrationService() {
-    if (this.cdcIntegrationService) {
-      return this.cdcIntegrationService;
-    }
-    return this.cdcIntegrationServiceProvider?.() || null;
+    return this.cdcIntegrationService;
   }
 
   resolveSystemTableCache() {
-    if (this.systemTableCache) {
-      return this.systemTableCache;
-    }
-    return this.systemTableCacheProvider?.() || null;
+    return this.systemTableCache;
   }
 
   resolveMessageRouter() {
-    if (this.messageRouter) {
-      return this.messageRouter;
-    }
-    return this.messageRouterProvider?.() || null;
+    return this.messageRouter;
   }
 
   /**
@@ -544,6 +568,19 @@ class ControlPlaneSystemTableGateway {
       typeof cdcIntegrationService
         ?.executeAuthoritativeSystemTableRead === TYPEOF.FUNCTION ||
       typeof sqlQueryEngine?.executeQuery === TYPEOF.FUNCTION
+    );
+  }
+
+  /**
+   * @return {boolean}
+   */
+  supportsMutationSubmission() {
+    const cdcIntegrationService = this.resolveCdcIntegrationService();
+    return (
+      typeof cdcIntegrationService?.insertSystemTableRow === TYPEOF.FUNCTION ||
+      typeof cdcIntegrationService?.updateSystemTableRow === TYPEOF.FUNCTION ||
+      typeof cdcIntegrationService?.upsertSystemTableRow === TYPEOF.FUNCTION ||
+      typeof cdcIntegrationService?.deleteSystemTableRow === TYPEOF.FUNCTION
     );
   }
 

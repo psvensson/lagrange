@@ -455,6 +455,29 @@ test('ControlPlaneSystemTableGateway supportsReadRows only when a readable ' +
   );
 });
 
+test('ControlPlaneSystemTableGateway supportsMutationSubmission only when a ' +
+  'mutation owner is configured', async (t) => {
+  const emptyGateway = new ControlPlaneSystemTableGateway();
+  t.equal(
+    emptyGateway.supportsMutationSubmission(),
+    false,
+    'gateway without mutation owner should not claim write support',
+  );
+
+  const mutationGateway = new ControlPlaneSystemTableGateway({
+    cdcIntegrationService: {
+      async upsertSystemTableRow() {
+        return {success: true};
+      },
+    },
+  });
+  t.equal(
+    mutationGateway.supportsMutationSubmission(),
+    true,
+    'CDC mutation owner should make the gateway writable',
+  );
+});
+
 test('ControlPlaneSystemTableGateway submitMutation replace_pending keeps ' +
   'only the newest pending mutation for one coalescing key', async (t) => {
   const updateCalls = [];

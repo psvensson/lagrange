@@ -5355,13 +5355,27 @@ class SQLQueryEngine {
   }
 
   /**
+   * Check whether distributed transaction metadata can be persisted through the
+   * canonical control-plane mutation ingress.
+   * @return {boolean}
+   * @private
+   */
+  canPersistDistributedTransactionState() {
+    const gateway = this.getControlPlaneSystemTableGateway();
+    if (typeof gateway?.supportsMutationSubmission === 'function') {
+      return gateway.supportsMutationSubmission();
+    }
+    return Boolean(this.cdcIntegrationService);
+  }
+
+  /**
    * Persist one distributed transaction row.
    * @param {Object} record - Transaction persistence payload.
    * @return {Promise<void>}
    * @private
    */
   async persistDistributedTransactionRow(record) {
-    if (!this.cdcIntegrationService && !this.controlPlaneSystemTableGateway) {
+    if (!this.canPersistDistributedTransactionState()) {
       return;
     }
     await this.getControlPlaneSystemTableGateway().submitMutation({
@@ -5389,7 +5403,7 @@ class SQLQueryEngine {
    * @private
    */
   async persistDistributedTransactionParticipantRow(record) {
-    if (!this.cdcIntegrationService && !this.controlPlaneSystemTableGateway) {
+    if (!this.canPersistDistributedTransactionState()) {
       return;
     }
     await this.getControlPlaneSystemTableGateway().submitMutation({
@@ -5417,7 +5431,7 @@ class SQLQueryEngine {
    * @private
    */
   async persistDistributedWriteOperationRow(record) {
-    if (!this.cdcIntegrationService && !this.controlPlaneSystemTableGateway) {
+    if (!this.canPersistDistributedTransactionState()) {
       return;
     }
     await this.getControlPlaneSystemTableGateway().submitMutation({

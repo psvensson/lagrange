@@ -10,14 +10,6 @@ function resolveProviderValue(options, fieldName, providerName) {
 }
 
 function createControlPlaneRuntimeBundle(options = {}) {
-  const hasSqlQueryEngineProvider =
-    typeof options.getSqlQueryEngine === 'function';
-  const hasCdcIntegrationServiceProvider =
-    typeof options.getCdcIntegrationService === 'function';
-  const hasSystemTableCacheProvider =
-    typeof options.getSystemTableCache === 'function';
-  const hasMessageRouterProvider =
-    typeof options.getMessageRouter === 'function';
   const cdcIntegrationService = resolveProviderValue(
     options,
     'cdcIntegrationService',
@@ -41,10 +33,10 @@ function createControlPlaneRuntimeBundle(options = {}) {
     options.controlPlaneSystemTableGateway ||
     new ControlPlaneSystemTableGateway({
       nodeId: options.nodeId || null,
-      ...(hasSqlQueryEngineProvider ? {} : {sqlQueryEngine}),
-      ...(hasCdcIntegrationServiceProvider ? {} : {cdcIntegrationService}),
-      ...(hasSystemTableCacheProvider ? {} : {systemTableCache}),
-      ...(hasMessageRouterProvider ? {} : {messageRouter}),
+      sqlQueryEngine,
+      cdcIntegrationService,
+      systemTableCache,
+      messageRouter,
       getSqlQueryEngine: options.getSqlQueryEngine,
       getCdcIntegrationService: options.getCdcIntegrationService,
       getSystemTableCache: options.getSystemTableCache,
