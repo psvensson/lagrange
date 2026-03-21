@@ -53,11 +53,11 @@ import {TRANSPORT_CONFIG_KEY} from './constants/transport.js';
 import {resolveAdvertisedWebSocketAddress} from
   './transport/node-address-resolution.js';
 import {
-  ControlPlaneSystemTableGateway,
-} from './control-plane/control-plane-system-table-gateway.js';
-import {
   createSystemMetadataOwners,
 } from './control-plane/owners/index.js';
+import {
+  createControlPlaneRuntimeBundle,
+} from './control-plane/control-plane-runtime-bundle.js';
 import {SPLIT_MERGE_EVENT} from
   './partition/partition-constants.js';
 import {STABILIZATION_RESET_TRIGGER} from
@@ -334,10 +334,12 @@ async function connectLogsTablePersistence(
   }
 
   try {
-    const controlPlaneSystemTableGateway = new ControlPlaneSystemTableGateway({
+    const controlPlaneRuntimeBundle = createControlPlaneRuntimeBundle({
       cdcIntegrationService,
       messageRouter: cdcIntegrationService?.messageRouter || null,
     });
+    const controlPlaneSystemTableGateway =
+      controlPlaneRuntimeBundle.controlPlaneSystemTableGateway;
     const systemMetadataOwners = createSystemMetadataOwners({
       controlPlaneSystemTableGateway,
     });

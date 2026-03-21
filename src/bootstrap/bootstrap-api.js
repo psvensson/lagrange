@@ -56,7 +56,6 @@ import {RAFT_ROLE} from '../raft/constants.js';
 import {NODE_CONFIG_KEY, NODE_DEFAULT} from '../node/node-constants.js';
 import {CONFIG_CATEGORY, CONFIG_KEY} from '../config/config-constants.js';
 import {
-  BOOTSTRAP_API_CACHE_VISIBILITY,
   BOOTSTRAP_API_CLUSTER_STATE,
   BOOTSTRAP_API_DEFAULT,
   BOOTSTRAP_API_CLOSE_ERROR_CODE,
@@ -110,6 +109,8 @@ import {
 } from './bootstrap-topology-snapshot.js';
 import {resolveAdvertisedWebSocketAddress} from
   '../transport/node-address-resolution.js';
+import {ServiceRegistrationVisibilityOwner} from
+  './owners/service-registration-visibility-owner.js';
 
 /**
  * Bootstrap response strategies.
@@ -154,16 +155,6 @@ const BOOTSTRAP_JOIN_NON_BLOCKING_REASONS = Object.freeze([
   BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE,
 ]);
 
-const REGISTERED_SERVICE_CACHE_REQUIRED_FIELDS = Object.freeze([
-  COLUMN.NODE_ID,
-  COLUMN.SERVICE_TYPE,
-]);
-
-const REGISTERED_SERVICE_CACHE_OPTIONAL_FIELDS = Object.freeze([
-  COLUMN.STATUS,
-  COLUMN.ADDRESS,
-  COLUMN.GROUP_ID,
-]);
 /**
  * BootstrapAPI provides REST endpoints for node bootstrap and discovery.
  */
@@ -252,6 +243,18 @@ class BootstrapAPI {
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
       loggingService.forSubsystem(BOOTSTRAP_API_SUBSYSTEM) : console;
+    this.serviceRegistrationVisibilityOwner =
+      new ServiceRegistrationVisibilityOwner({
+        delegates: {
+          getSystemTableCache: () => this.systemTableCache,
+          executeBootstrapControlPlaneQuery: (sql, params) =>
+            this.executeBootstrapControlPlaneQuery(sql, params),
+          getCdcIntegrationService: () => this.getCdcIntegrationService(),
+          buildRegisterServiceValidationError: (...args) =>
+            this.buildRegisterServiceValidationError(...args),
+          getLogger: () => this.logger,
+        },
+      });
 
     // Fastify instance
     this.fastify = null;
@@ -1673,8 +1676,8 @@ class BootstrapAPI {
    * @private
    */
   async isRegisteredServiceVisibleInCache(expectedService) {
-    const evaluation = await this.evaluateRegisteredServiceCacheVisibility(expectedService);
-    return evaluation.visible;
+    return this.serviceRegistrationVisibilityOwner
+      .isRegisteredServiceVisibleInCache(expectedService);
   }
 
   /**
@@ -1684,20 +1687,8 @@ class BootstrapAPI {
    * @private
    */
   buildRegisteredServiceVisibilitySnapshot(serviceRow) {
-    if (!serviceRow || typeof serviceRow !== TYPEOF.OBJECT) {
-      return null;
-    }
-    return {
-      [COLUMN.SERVICE_ID]: serviceRow[COLUMN.SERVICE_ID] || null,
-      [COLUMN.NODE_ID]: serviceRow[COLUMN.NODE_ID] || null,
-      [COLUMN.SERVICE_TYPE]: serviceRow[COLUMN.SERVICE_TYPE] || null,
-      [COLUMN.STATUS]: serviceRow[COLUMN.STATUS] || null,
-      [COLUMN.GROUP_ID]: serviceRow[COLUMN.GROUP_ID] || null,
-      [COLUMN.REPLICA_ID]: serviceRow[COLUMN.REPLICA_ID] || null,
-      [COLUMN.ADDRESS]: serviceRow[COLUMN.ADDRESS] || null,
-      [COLUMN.CREATED_AT]: serviceRow[COLUMN.CREATED_AT] || null,
-      [COLUMN.UPDATED_AT]: serviceRow[COLUMN.UPDATED_AT] || null,
-    };
+    return this.serviceRegistrationVisibilityOwner
+      .buildRegisteredServiceVisibilitySnapshot(serviceRow);
   }
 
   /**
@@ -1708,21 +1699,8 @@ class BootstrapAPI {
    * @private
    */
   getRegisteredServiceMismatchFields(observedService, expectedService) {
-    const mismatchFields = [];
-    for (const fieldName of REGISTERED_SERVICE_CACHE_REQUIRED_FIELDS) {
-      if (observedService[fieldName] !== expectedService[fieldName]) {
-        mismatchFields.push(fieldName);
-      }
-    }
-    for (const fieldName of REGISTERED_SERVICE_CACHE_OPTIONAL_FIELDS) {
-      if (!expectedService[fieldName]) {
-        continue;
-      }
-      if (observedService[fieldName] !== expectedService[fieldName]) {
-        mismatchFields.push(fieldName);
-      }
-    }
-    return mismatchFields;
+    return this.serviceRegistrationVisibilityOwner
+      .getRegisteredServiceMismatchFields(observedService, expectedService);
   }
 
   /**
@@ -1732,33 +1710,8 @@ class BootstrapAPI {
    * @private
    */
   async readRegisteredServiceFromStorage(serviceId) {
-    if (!this.sqlQueryEngine ||
-        typeof this.sqlQueryEngine.executeQuery !== TYPEOF.FUNCTION) {
-      return {row: null, error: null};
-    }
-
-    try {
-      const result = await this.executeBootstrapControlPlaneQuery(
-        BOOTSTRAP_API_SQL.SELECT_REGISTERED_SERVICE_BY_ID,
-        [serviceId],
-      );
-      if (!result || result.success === false) {
-        return {
-          row: null,
-          error: result?.error || BOOTSTRAP_API_ERROR.SERVICE_REGISTRATION_FAILED,
-        };
-      }
-      const rows = Array.isArray(result.rows) ? result.rows : [];
-      return {
-        row: rows[NUM.ZERO] || null,
-        error: null,
-      };
-    } catch (error) {
-      return {
-        row: null,
-        error: error.message,
-      };
-    }
+    return this.serviceRegistrationVisibilityOwner
+      .readRegisteredServiceFromStorage(serviceId);
   }
 
   /**
@@ -1768,118 +1721,8 @@ class BootstrapAPI {
    * @private
    */
   async evaluateRegisteredServiceCacheVisibility(expectedService) {
-    const diagnostics = {
-      reason: BOOTSTRAP_API_CACHE_VISIBILITY.REASON_CACHE_UNAVAILABLE,
-      serviceId: expectedService[COLUMN.SERVICE_ID],
-      expected: this.buildRegisteredServiceVisibilitySnapshot(expectedService),
-      observed: null,
-      mismatchFields: [],
-      authoritative: null,
-    };
-    const cache = this.systemTableCache;
-    let cachedService = null;
-    let cacheMismatchFields = [];
-    let cacheReason = BOOTSTRAP_API_CACHE_VISIBILITY.REASON_CACHE_UNAVAILABLE;
-    if (cache) {
-      cachedService = cache.get(
-        TABLES.SERVICES,
-        expectedService[COLUMN.SERVICE_ID],
-      );
-      if (!cachedService) {
-        cacheReason = BOOTSTRAP_API_CACHE_VISIBILITY.REASON_SERVICE_ROW_MISSING;
-      } else {
-        cacheMismatchFields = this.getRegisteredServiceMismatchFields(
-          cachedService,
-          expectedService,
-        );
-        if (cacheMismatchFields.length === NUM.ZERO) {
-          return {
-            visible: true,
-            diagnostics: {
-              ...diagnostics,
-              reason: BOOTSTRAP_API_CACHE_VISIBILITY.REASON_VISIBLE,
-              observed: this.buildRegisteredServiceVisibilitySnapshot(cachedService),
-            },
-          };
-        }
-        cacheReason = BOOTSTRAP_API_CACHE_VISIBILITY.REASON_FIELD_MISMATCH;
-      }
-    }
-
-    const storageLookup = await this.readRegisteredServiceFromStorage(
-      expectedService[COLUMN.SERVICE_ID],
-    );
-    if (storageLookup.error) {
-      return {
-        visible: false,
-        diagnostics: {
-          ...diagnostics,
-          reason: cacheReason,
-          observed: this.buildRegisteredServiceVisibilitySnapshot(cachedService),
-          mismatchFields: cacheMismatchFields,
-          authoritative: {
-            reason: BOOTSTRAP_API_CACHE_VISIBILITY.REASON_STORAGE_LOOKUP_FAILED,
-            error: storageLookup.error,
-            observed: null,
-            mismatchFields: [],
-          },
-        },
-      };
-    }
-
-    if (!storageLookup.row) {
-      return {
-        visible: false,
-        diagnostics: {
-          ...diagnostics,
-          reason: cacheReason,
-          observed: this.buildRegisteredServiceVisibilitySnapshot(cachedService),
-          mismatchFields: cacheMismatchFields,
-          authoritative: {
-            reason: BOOTSTRAP_API_CACHE_VISIBILITY.REASON_STORAGE_ROW_MISSING,
-            observed: null,
-            mismatchFields: [],
-          },
-        },
-      };
-    }
-
-    const storageMismatchFields = this.getRegisteredServiceMismatchFields(
-      storageLookup.row,
-      expectedService,
-    );
-    const authoritativeDiagnostics = {
-      reason: storageMismatchFields.length === NUM.ZERO ?
-        BOOTSTRAP_API_CACHE_VISIBILITY.REASON_VISIBLE :
-        BOOTSTRAP_API_CACHE_VISIBILITY.REASON_FIELD_MISMATCH,
-      observed: this.buildRegisteredServiceVisibilitySnapshot(storageLookup.row),
-      mismatchFields: storageMismatchFields,
-    };
-
-    if (storageMismatchFields.length === NUM.ZERO) {
-      return {
-        visible: false,
-        diagnostics: {
-          ...diagnostics,
-          reason:
-            BOOTSTRAP_API_CACHE_VISIBILITY.REASON_STORAGE_ROW_VISIBLE_CACHE_STALE,
-          observed: this.buildRegisteredServiceVisibilitySnapshot(cachedService),
-          mismatchFields: cacheMismatchFields,
-          authoritative: authoritativeDiagnostics,
-        },
-      };
-    }
-
-    return {
-      visible: false,
-      diagnostics: {
-        ...diagnostics,
-        reason: cacheReason,
-        observed: this.buildRegisteredServiceVisibilitySnapshot(cachedService),
-        mismatchFields: cacheMismatchFields,
-        authoritative: authoritativeDiagnostics,
-      },
-    };
+    return this.serviceRegistrationVisibilityOwner
+      .evaluateRegisteredServiceCacheVisibility(expectedService);
   }
 
   /**
@@ -1891,41 +1734,8 @@ class BootstrapAPI {
    * @private
    */
   async maybeRepairRegisteredServiceCacheVisibility(expectedService, diagnostics) {
-    if (!expectedService ||
-        diagnostics?.reason !==
-          BOOTSTRAP_API_CACHE_VISIBILITY.REASON_STORAGE_ROW_VISIBLE_CACHE_STALE) {
-      return false;
-    }
-
-    const cdcIntegrationService = this.getCdcIntegrationService();
-    if (!cdcIntegrationService ||
-        typeof cdcIntegrationService.repairCacheVisibilityHole !==
-          TYPEOF.FUNCTION) {
-      return false;
-    }
-
-    try {
-      return await cdcIntegrationService.repairCacheVisibilityHole(
-        TABLES.SERVICES,
-        expectedService[COLUMN.SERVICE_ID],
-        true,
-        expectedService,
-        null,
-        {
-          fallbackPhase: 'bootstrap_api_service_registration',
-        },
-      );
-    } catch (error) {
-      this.logger.warn(
-        'Authoritative services-cache repair failed during register-service visibility wait',
-        {
-          serviceId: expectedService[COLUMN.SERVICE_ID],
-          nodeId: expectedService[COLUMN.NODE_ID],
-          error: error?.message || String(error),
-        },
-      );
-      return false;
-    }
+    return this.serviceRegistrationVisibilityOwner
+      .maybeRepairRegisteredServiceCacheVisibility(expectedService, diagnostics);
   }
 
   /**
@@ -1943,21 +1753,13 @@ class BootstrapAPI {
     timeoutMs,
     elapsedMs,
   ) {
-    return {
-      serviceId: expectedService[COLUMN.SERVICE_ID],
-      nodeId: expectedService[COLUMN.NODE_ID],
-      timeoutMs,
-      elapsedMs,
-      lastVisibilityCheck: lastDiagnostics ||
-        {
-          reason: BOOTSTRAP_API_CACHE_VISIBILITY.REASON_CACHE_UNAVAILABLE,
-          serviceId: expectedService[COLUMN.SERVICE_ID],
-          expected: this.buildRegisteredServiceVisibilitySnapshot(expectedService),
-          observed: null,
-          mismatchFields: [],
-          authoritative: null,
-        },
-    };
+    return this.serviceRegistrationVisibilityOwner
+      .buildRegisteredServiceVisibilityTimeoutDiagnostics(
+        expectedService,
+        lastDiagnostics,
+        timeoutMs,
+        elapsedMs,
+      );
   }
 
   /**
@@ -1968,66 +1770,8 @@ class BootstrapAPI {
    * @private
    */
   async waitForRegisteredServiceCacheVisibility(expectedService) {
-    const serviceRegistrationCacheVisibilityTimeout =
-      BOOTSTRAP_API_ERROR.SERVICE_REGISTRATION_CACHE_VISIBILITY_TIMEOUT;
-    const timeoutMs =
-      BOOTSTRAP_API_DEFAULT.SERVICE_REGISTRATION_CACHE_VISIBILITY_TIMEOUT_MS;
-    const pollIntervalMs =
-      BOOTSTRAP_API_DEFAULT.SERVICE_REGISTRATION_CACHE_VISIBILITY_POLL_INTERVAL_MS;
-    const startTime = Date.now();
-    const deadline = startTime + timeoutMs;
-    let lastDiagnostics = null;
-
-    while (true) {
-      const evaluation = await this.evaluateRegisteredServiceCacheVisibility(expectedService);
-      lastDiagnostics = evaluation.diagnostics;
-      if (evaluation.visible) {
-        return;
-      }
-      const repaired = await this.maybeRepairRegisteredServiceCacheVisibility(
-        expectedService,
-        evaluation.diagnostics,
-      );
-      if (repaired) {
-        const repairedEvaluation =
-          await this.evaluateRegisteredServiceCacheVisibility(expectedService);
-        lastDiagnostics = repairedEvaluation.diagnostics;
-        if (repairedEvaluation.visible) {
-          return;
-        }
-      }
-      if (Date.now() > deadline) {
-        break;
-      }
-      await new Promise((resolve) => {
-        setTimeout(resolve, pollIntervalMs);
-      });
-    }
-
-    const timeoutDiagnostics = this.buildRegisteredServiceVisibilityTimeoutDiagnostics(
-      expectedService,
-      lastDiagnostics,
-      timeoutMs,
-      Math.max(NUM.ZERO, Date.now() - startTime),
-    );
-    this.logger.warn(BOOTSTRAP_API_LOG_MSG.SERVICE_REGISTRATION_CACHE_VISIBILITY_TIMEOUT, {
-      ...timeoutDiagnostics,
-    });
-
-    throw this.buildRegisterServiceValidationError(
-      HTTP_STATUS.SERVICE_UNAVAILABLE,
-      serviceRegistrationCacheVisibilityTimeout(
-        expectedService[COLUMN.SERVICE_ID],
-        expectedService[COLUMN.NODE_ID],
-        timeoutMs,
-      ),
-      BOOTSTRAP_PIPELINE_ERROR_CODE
-        .SERVICE_REGISTRATION_CACHE_VISIBILITY_TIMEOUT,
-      {
-        retryAfterMs: pollIntervalMs,
-        details: timeoutDiagnostics,
-      },
-    );
+    return this.serviceRegistrationVisibilityOwner
+      .waitForRegisteredServiceCacheVisibility(expectedService);
   }
 
   /**
@@ -2039,19 +1783,8 @@ class BootstrapAPI {
    * @private
    */
   async readCurrentRegisteredServiceRow(serviceId) {
-    if (typeof serviceId !== TYPEOF.STRING || serviceId.length === NUM.ZERO) {
-      return null;
-    }
-    const cachedRow = this.systemTableCache?.get?.(TABLES.SERVICES, serviceId) || null;
-    if (cachedRow) {
-      return {...cachedRow};
-    }
-    const storageLookup =
-      await this.readRegisteredServiceFromStorage(serviceId);
-    if (storageLookup?.row) {
-      return {...storageLookup.row};
-    }
-    return null;
+    return this.serviceRegistrationVisibilityOwner
+      .readCurrentRegisteredServiceRow(serviceId);
   }
 
   /**

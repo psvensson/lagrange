@@ -1,4 +1,5 @@
 import {LoggingService} from '../logging/logging-service.js';
+import {assertCritical} from '../utils/assert.js';
 import {
   COLUMN,
   NUM,
@@ -17,8 +18,8 @@ import {PRESSURE_STATE} from '../rebalancer/storage-capacity-constants.js';
 import {AuthoritativeControlPlaneView} from
   './authoritative-control-plane-view.js';
 import {
-  resolveControlPlaneSystemTableGateway,
-} from './control-plane-gateway-resolution.js';
+  createControlPlaneRuntimeBundle,
+} from './control-plane-runtime-bundle.js';
 import {
   CONTROL_PLANE_PUBLICATION_MODE,
   CONTROL_PLANE_READINESS_DEFAULT,
@@ -164,14 +165,16 @@ class ControlPlaneReadinessService {
     this.authoritativeControlPlaneView =
       options.authoritativeControlPlaneView || null;
     this.controlPlaneSystemTableGateway =
-      resolveControlPlaneSystemTableGateway({
-        controlPlaneSystemTableGateway:
-          options.controlPlaneSystemTableGateway || null,
-        nodeId: this.nodeId,
-        cdcIntegrationService: this.cdcIntegrationService,
-        systemTableCache: this.systemTableCache,
-        messageRouter: this.messageRouter,
-      });
+      options.controlPlaneSystemTableGateway ||
+      (this.cdcIntegrationService || this.systemTableCache || this.messageRouter ?
+        createControlPlaneRuntimeBundle({
+          nodeId: this.nodeId,
+          cdcIntegrationService: this.cdcIntegrationService,
+          systemTableCache: this.systemTableCache,
+          messageRouter: this.messageRouter,
+          now: options.now,
+        }).controlPlaneSystemTableGateway :
+        null);
     this.now = typeof options.now === TYPEOF.FUNCTION ?
       options.now :
       () => Date.now();
@@ -258,11 +261,6 @@ class ControlPlaneReadinessService {
       this.cdcGroupPropagationService =
         options.cdcGroupPropagationService || null;
     }
-    if (Object.hasOwn(options, 'controlPlaneSystemTableGateway')) {
-      this.controlPlaneSystemTableGateway =
-        options.controlPlaneSystemTableGateway || null;
-    }
-
     if (this.authoritativeControlPlaneView &&
         typeof this.authoritativeControlPlaneView
           .syncOwnerDependencies === TYPEOF.FUNCTION) {
@@ -270,19 +268,6 @@ class ControlPlaneReadinessService {
         cdcIntegrationService: this.cdcIntegrationService,
         messageRouter: this.messageRouter,
       });
-    }
-
-    if (this.controlPlaneSystemTableGateway) {
-      if (typeof this.controlPlaneSystemTableGateway
-        .setCdcIntegrationService === TYPEOF.FUNCTION) {
-        this.controlPlaneSystemTableGateway
-          .setCdcIntegrationService(this.cdcIntegrationService);
-      }
-      if (typeof this.controlPlaneSystemTableGateway
-        .setMessageRouter === TYPEOF.FUNCTION) {
-        this.controlPlaneSystemTableGateway
-          .setMessageRouter(this.messageRouter);
-      }
     }
 
     if (systemTableCacheProvided &&
@@ -1860,18 +1845,10 @@ class ControlPlaneReadinessService {
    * @private
    */
   getControlPlaneSystemTableGateway() {
-    if (this.controlPlaneSystemTableGateway) {
-      return this.controlPlaneSystemTableGateway;
-    }
-    this.controlPlaneSystemTableGateway =
-      resolveControlPlaneSystemTableGateway({
-        nodeId: this.nodeId,
-        cdcIntegrationService: this.cdcIntegrationService,
-        systemTableCache: this.systemTableCache,
-        messageRouter: this.messageRouter,
-        now: this.now,
-      });
-    return this.controlPlaneSystemTableGateway;
+    return assertCritical(
+      this.controlPlaneSystemTableGateway,
+      'ControlPlaneReadinessService requires controlPlaneSystemTableGateway',
+    );
   }
 
   /**

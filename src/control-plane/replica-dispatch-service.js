@@ -20,8 +20,8 @@ import {
   ControlPlaneReadinessService,
 } from './control-plane-readiness-service.js';
 import {
-  resolveControlPlaneSystemTableGateway,
-} from './control-plane-gateway-resolution.js';
+  createControlPlaneRuntimeBundle,
+} from './control-plane-runtime-bundle.js';
 import {
   OperationType,
   isCoordinatorOwnedOperationType,
@@ -80,17 +80,17 @@ class ReplicaDispatchService extends EventEmitter {
     this.messageRouter = options.messageRouter || null;
     this.cdcIntegrationService = options.cdcIntegrationService || null;
     this.controlPlaneSystemTableGateway =
-      resolveControlPlaneSystemTableGateway({
-        controlPlaneSystemTableGateway:
-          options.controlPlaneSystemTableGateway || null,
-        sourceGateway:
-          options.rebalanceCoordinator?.controlPlaneSystemTableGateway || null,
-        nodeId: this.nodeId,
-        cdcIntegrationService: this.cdcIntegrationService,
-        sqlQueryEngine: options.sqlQueryEngine || null,
-        systemTableCache: options.systemTableCache || null,
-        messageRouter: this.messageRouter,
-      });
+      options.controlPlaneSystemTableGateway ||
+      (this.cdcIntegrationService || options.sqlQueryEngine ||
+          options.systemTableCache || this.messageRouter ?
+        createControlPlaneRuntimeBundle({
+          nodeId: this.nodeId,
+          cdcIntegrationService: this.cdcIntegrationService,
+          sqlQueryEngine: options.sqlQueryEngine || null,
+          systemTableCache: options.systemTableCache || null,
+          messageRouter: this.messageRouter,
+        }).controlPlaneSystemTableGateway :
+        null);
     this.systemTableCache = options.systemTableCache || null;
     this.nodesOwner = options.nodesOwner || null;
     this.servicesOwner = options.servicesOwner || null;
@@ -697,19 +697,6 @@ class ReplicaDispatchService extends EventEmitter {
    * @private
    */
   getControlPlaneSystemTableGateway() {
-    if (this.controlPlaneSystemTableGateway) {
-      return this.controlPlaneSystemTableGateway;
-    }
-    this.controlPlaneSystemTableGateway =
-      resolveControlPlaneSystemTableGateway({
-        sourceGateway:
-          this.rebalanceCoordinator?.controlPlaneSystemTableGateway || null,
-        nodeId: this.nodeId,
-        cdcIntegrationService: this.cdcIntegrationService,
-        sqlQueryEngine: this.sqlQueryEngine || null,
-        systemTableCache: this.systemTableCache,
-        messageRouter: this.messageRouter || null,
-      });
     assertCritical(
       this.controlPlaneSystemTableGateway,
       'ReplicaDispatchService requires controlPlaneSystemTableGateway',

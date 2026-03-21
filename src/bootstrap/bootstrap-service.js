@@ -1990,15 +1990,6 @@ class BootstrapService extends EventEmitter {
   }
 
   /**
-   * Compatibility adapter for direct seed-readiness assertions.
-   * @return {Promise<void>}
-   */
-  async waitForSystemServiceLeadersInCache() {
-    return this.seedCacheHydrationPhase
-      .waitForSystemServiceLeadersInCache();
-  }
-
-  /**
    * Activate non-critical periodic control-plane writers after bootstrap
    * reaches the active startup barrier.
    * @return {void}

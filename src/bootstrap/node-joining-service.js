@@ -389,9 +389,10 @@ class NodeJoiningService extends EventEmitter {
         resolveControlPlaneTargetAddressCandidates: (opts) =>
           this.resolveControlPlaneTargetAddressCandidates(opts),
         getMissingSystemServiceLeaders: (cache) =>
-          this.getMissingSystemServiceLeaders(cache),
+          this.waitForLeadershipPhase.getMissingSystemServiceLeaders(cache),
         getBlockingSystemServiceLeaders: (missing, cache) =>
-          this.getBlockingSystemServiceLeaders(missing, cache),
+          this.waitForLeadershipPhase
+            .getBlockingSystemServiceLeaders(missing, cache),
         backfillPropagatedCacheTables: (tables, backfillOptions) =>
           this.backfillPropagatedCacheTablesFromAuthoritativeState(
             tables,
@@ -574,7 +575,7 @@ class NodeJoiningService extends EventEmitter {
           }
         },
         waitForSystemServiceLeaders: (cache) =>
-          this.waitForSystemServiceLeaders(cache),
+          this.waitForLeadershipPhase.waitForSystemServiceLeaders(cache),
         registerCreateSelfHostedMetadata: () =>
           this.registerCreateSelfHostedMetadata(),
         registerNodeInCluster: () =>
@@ -1980,80 +1981,6 @@ class NodeJoiningService extends EventEmitter {
   async phaseWaitForLeadership() {
     return this.waitForLeadershipPhase
       .phaseWaitForLeadership();
-  }
-
-  /**
-   * Wait for system table leaders to be present in cache before seeding writes.
-   * Delegates to WaitForLeadershipPhase.
-   * @param {Object} systemTableCache - System table cache.
-   * @return {Promise<void>}
-   * @private
-   */
-  async waitForSystemServiceLeaders(systemTableCache) {
-    return this.waitForLeadershipPhase
-      .waitForSystemServiceLeaders(systemTableCache);
-  }
-
-  /**
-   * Get the system tables that must be write-routable before state-query writes.
-   * Delegates to WaitForLeadershipPhase.
-   * @return {Array<string>} Required system table names.
-   * @private
-   */
-  getRequiredSystemWriteTables() {
-    return this.waitForLeadershipPhase
-      .getRequiredSystemWriteTables();
-  }
-
-  /**
-   * Check whether a system table is currently write-routable for join workflow.
-   * Delegates to WaitForLeadershipPhase.
-   * @param {Object} systemTableCache - System table cache.
-   * @param {string} tableName - System table name.
-   * @return {boolean} True when writes can be routed.
-   * @private
-   */
-  isSystemTableWriteRoutable(systemTableCache, tableName) {
-    return this.waitForLeadershipPhase
-      .isSystemTableWriteRoutable(systemTableCache, tableName);
-  }
-
-  /**
-   * Check whether the cache currently includes a partition row for a table.
-   * Delegates to WaitForLeadershipPhase.
-   * @param {Object} systemTableCache - System table cache.
-   * @param {string} tableName - System table name.
-   * @return {boolean} True when table partition is present in cache.
-   * @private
-   */
-  hasSystemTablePartition(systemTableCache, tableName) {
-    return this.waitForLeadershipPhase
-      .hasSystemTablePartition(systemTableCache, tableName);
-  }
-
-  /**
-   * Find missing service leaders using system table cache.
-   * Delegates to WaitForLeadershipPhase.
-   * @param {Object} systemTableCache - System table cache.
-   * @return {Object} Missing leader lists.
-   * @private
-   */
-  getMissingSystemServiceLeaders(systemTableCache) {
-    return this.waitForLeadershipPhase
-      .getMissingSystemServiceLeaders(systemTableCache);
-  }
-
-  /**
-   * Keep join-time readiness gates focused on system-table write routing.
-   * Delegates to WaitForLeadershipPhase.
-   * @param {Object} missing - Missing leader diagnostics.
-   * @param {Object} systemTableCache - System table cache.
-   * @return {Object} Blocking subset for state-query readiness.
-   * @private
-   */
-  getBlockingSystemServiceLeaders(missing, systemTableCache) {
-    return this.waitForLeadershipPhase
-      .getBlockingSystemServiceLeaders(missing, systemTableCache);
   }
 
   /**

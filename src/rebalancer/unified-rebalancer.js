@@ -78,6 +78,12 @@ import {
   TYPEOF,
 } from '../constants/index.js';
 import {ENDPOINT_SYNC_HEALTH} from '../runtime/endpoint-sync-constants.js';
+import {
+  normalizeNodeRow,
+  normalizeNodeEndpointRow,
+  normalizeServiceEndpointRow,
+  normalizeServiceRow,
+} from '../control-plane/system-row-normalizers.js';
 import {OwnerKeyReconcileQueue} from
   '../workflow/owner-key-reconcile-queue.js';
 import {RECONCILE_REASON} from
@@ -786,8 +792,8 @@ class UnifiedRebalancer extends EventEmitter {
     const activeNodeIds = [];
     const unreadyNodeIds = [];
     for (const nodeRow of nodeRows) {
-      const status = String(nodeRow?.status || '').toLowerCase();
-      const nodeId = String(nodeRow?.[COLUMN.NODE_ID] || nodeRow?.node_id || '');
+      const normalizedNode = normalizeNodeRow(nodeRow);
+      const {status, nodeId} = normalizedNode;
       if (!status) {
         continue;
       }
@@ -824,7 +830,9 @@ class UnifiedRebalancer extends EventEmitter {
     const connectedNodeIds = this.resolveConnectedClusterNodeIds();
     if (connectedNodeIds.size > 0) {
       for (const connectedNodeId of connectedNodeIds) {
-        if (!nodeRows.some((nodeRow) => nodeRow?.node_id === connectedNodeId)) {
+        if (!nodeRows.some((nodeRow) => {
+          return normalizeNodeRow(nodeRow).nodeId === connectedNodeId;
+        })) {
           return Object.freeze({
             reason: 'transport_membership_exceeds_nodes_cache',
             connectedNodeId,
@@ -926,18 +934,8 @@ class UnifiedRebalancer extends EventEmitter {
     const visiblePostgresWireNodeIds = new Set();
 
     for (const row of nodeEndpointRows) {
-      const nodeId = String(
-        row?.[COLUMN.NODE_ID] || row?.node_id || row?.nodeId || '',
-      );
-      const status = String(
-        row?.[COLUMN.STATUS] || row?.status || '',
-      ).toLowerCase();
-      const transportType = String(
-        row?.[COLUMN.TRANSPORT_TYPE] ||
-          row?.transport_type ||
-          row?.transportType ||
-          '',
-      ).toLowerCase();
+      const normalizedRow = normalizeNodeEndpointRow(row);
+      const {nodeId, status, transportType} = normalizedRow;
       if (!nodeId ||
           status !== String(ENDPOINT_STATUS.ACTIVE).toLowerCase() ||
           transportType !== String(TRANSPORT_TYPE.WEBSOCKET).toLowerCase()) {
@@ -947,18 +945,8 @@ class UnifiedRebalancer extends EventEmitter {
     }
 
     for (const row of serviceEndpointRows) {
-      const nodeId = String(
-        row?.[COLUMN.NODE_ID] || row?.node_id || row?.nodeId || '',
-      );
-      const serviceId = String(
-        row?.[COLUMN.SERVICE_ID] ||
-          row?.service_id ||
-          row?.serviceId ||
-          '',
-      );
-      const healthStatus = String(
-        row?.health_status || row?.healthStatus || '',
-      ).toLowerCase();
+      const normalizedRow = normalizeServiceEndpointRow(row);
+      const {nodeId, serviceId, healthStatus} = normalizedRow;
       if (!nodeId ||
           serviceId !== META_SERVICE_ID.POSTGRES_WIRE ||
           healthStatus !== String(ENDPOINT_SYNC_HEALTH.HEALTHY).toLowerCase()) {
@@ -1267,8 +1255,9 @@ class UnifiedRebalancer extends EventEmitter {
     if (this.entityType === EntityType.MESSAGE_GROUP) {
       return this.systemTableCache.filter(
         SYSTEM_TABLE_NAME.SERVICES, (service) => {
-          return service.group_id === this.entityId &&
-            service.service_type === EntityType.MESSAGE_GROUP;
+          const normalizedService = normalizeServiceRow(service);
+          return normalizedService.groupId === this.entityId &&
+            normalizedService.serviceType === EntityType.MESSAGE_GROUP;
         });
     }
 
@@ -1277,17 +1266,19 @@ class UnifiedRebalancer extends EventEmitter {
     if (this.entityType === EntityType.RUNTIME_SERVICE) {
       return this.systemTableCache.filter(
         SYSTEM_TABLE_NAME.SERVICES, (service) => {
-          return service.service_type ===
+          const normalizedService = normalizeServiceRow(service);
+          return normalizedService.serviceType ===
             EntityType.RUNTIME_SERVICE &&
-            service.service_id === this.entityId;
+            normalizedService.serviceId === this.entityId;
         });
     }
 
     // For partitions, get services with matching partition_id
     return this.systemTableCache.filter(
       SYSTEM_TABLE_NAME.SERVICES, (service) => {
-        return service.partition_id === this.entityId &&
-          service.service_type === EntityType.PARTITION;
+        const normalizedService = normalizeServiceRow(service);
+        return normalizedService.partitionId === this.entityId &&
+          normalizedService.serviceType === EntityType.PARTITION;
       });
   }
 

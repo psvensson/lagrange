@@ -26,8 +26,8 @@ import {assertCritical} from '../utils/assert.js';
 import {AuthoritativeControlPlaneView} from
   './authoritative-control-plane-view.js';
 import {
-  resolveControlPlaneSystemTableGateway,
-} from './control-plane-gateway-resolution.js';
+  createControlPlaneRuntimeBundle,
+} from './control-plane-runtime-bundle.js';
 import {
   HEARTBEAT_CONFIG_KEY,
   HEARTBEAT_DEFAULT,
@@ -170,14 +170,16 @@ class HeartbeatService extends EventEmitter {
     this.authoritativeControlPlaneView =
       options.authoritativeControlPlaneView || null;
     this.controlPlaneSystemTableGateway =
-      resolveControlPlaneSystemTableGateway({
-        controlPlaneSystemTableGateway:
-          options.controlPlaneSystemTableGateway || null,
-        nodeId: this.nodeId,
-        cdcIntegrationService: this.cdcIntegrationService,
-        systemTableCache: this.systemTableCache,
-        now: this.now,
-      });
+      options.controlPlaneSystemTableGateway ||
+      (this.cdcIntegrationService || this.systemTableCache ?
+        createControlPlaneRuntimeBundle({
+          nodeId: this.nodeId,
+          cdcIntegrationService: this.cdcIntegrationService,
+          systemTableCache: this.systemTableCache,
+          messageRouter: options.messageRouter || null,
+          now: options.now,
+        }).controlPlaneSystemTableGateway :
+        null);
 
     const config = ConfigurationManager.getInstance();
     this.heartbeatIntervalMs =
@@ -739,7 +741,7 @@ class HeartbeatService extends EventEmitter {
     }
 
     const updateResult =
-      await this.controlPlaneSystemTableGateway.updateSystemTableRow(
+      await this.getControlPlaneSystemTableGateway().updateSystemTableRow(
       SYSTEM_TABLE_NAME.NODES,
       {node_id: this.nodeId},
       shutdownRow,
@@ -928,7 +930,7 @@ class HeartbeatService extends EventEmitter {
         this.recordQuietModeSuppressedWrite('endpointUpserts');
         return;
       }
-      await this.controlPlaneSystemTableGateway.upsertSystemTableRow(
+      await this.getControlPlaneSystemTableGateway().upsertSystemTableRow(
         SYSTEM_TABLE_NAME.NODE_ENDPOINTS, endpointRow,
         {
           skipCacheWait: true,
@@ -1013,7 +1015,7 @@ class HeartbeatService extends EventEmitter {
     }
 
     const updateResult =
-      await this.controlPlaneSystemTableGateway.updateSystemTableRow(
+      await this.getControlPlaneSystemTableGateway().updateSystemTableRow(
       SYSTEM_TABLE_NAME.NODES,
       {node_id: this.nodeId},
       updateRow,
@@ -1256,6 +1258,18 @@ class HeartbeatService extends EventEmitter {
   }
 
   /**
+   * Resolve the canonical system-table gateway for heartbeat writes.
+   * @return {Object}
+   * @private
+   */
+  getControlPlaneSystemTableGateway() {
+    return assertCritical(
+      this.controlPlaneSystemTableGateway,
+      'HeartbeatService requires controlPlaneSystemTableGateway',
+    );
+  }
+
+  /**
    * Apply the canonical guarded disconnect for a node whose ready lease expired.
    * @param {Object} node - Observed node snapshot.
    * @param {number} now - Current timestamp.
@@ -1269,7 +1283,7 @@ class HeartbeatService extends EventEmitter {
     };
 
     try {
-      return await this.controlPlaneSystemTableGateway.updateSystemTableRow(
+      return await this.getControlPlaneSystemTableGateway().updateSystemTableRow(
         SYSTEM_TABLE_NAME.NODES,
         whereClause,
         {

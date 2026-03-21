@@ -136,7 +136,8 @@ test('BootstrapService readiness waiter blocks when required system-table leader
 
   let error = null;
   try {
-    await bootstrapService.waitForSystemServiceLeadersInCache();
+    await bootstrapService.seedCacheHydrationPhase
+      .waitForSystemServiceLeadersInCache();
   } catch (caughtError) {
     error = caughtError;
   }
@@ -165,7 +166,8 @@ test('BootstrapService readiness waiter ignores missing message-group leaders be
     includeMessageGroupLeader: false,
   });
 
-  await bootstrapService.waitForSystemServiceLeadersInCache();
+  await bootstrapService.seedCacheHydrationPhase
+    .waitForSystemServiceLeadersInCache();
   t.pass('seed bootstrap waiter should only block on required system-table write leaders');
 });
 
@@ -221,7 +223,7 @@ test('NodeJoiningService join waiter allows missing leader_node_id metadata', as
     config: TEST_CONFIG,
   });
 
-  await service.waitForSystemServiceLeaders(cache);
+  await service.waitForLeadershipPhase.waitForSystemServiceLeaders(cache);
   t.pass('join waiter should not require leader_node_id when leader services are routable');
 });
 
@@ -280,6 +282,6 @@ test('NodeJoiningService join waiter ignores missing message-group leader rows',
     config: TEST_CONFIG,
   });
 
-  await service.waitForSystemServiceLeaders(cache);
+  await service.waitForLeadershipPhase.waitForSystemServiceLeaders(cache);
   t.pass('join waiter should not block on missing message-group leader cache rows');
 });

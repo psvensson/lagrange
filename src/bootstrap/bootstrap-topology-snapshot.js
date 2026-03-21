@@ -1,6 +1,7 @@
 import {assertCritical} from '../utils/assert.js';
 import {CACHE_HYDRATION_TABLES} from '../cache/cache-constants.js';
-import {COLUMN, NUM, TABLES, TYPEOF} from '../constants/index.js';
+import {NUM, TABLES, TYPEOF} from '../constants/index.js';
+import {normalizeNodeRow} from '../control-plane/system-row-normalizers.js';
 
 const DEFAULT_TOPOLOGY_EPOCH = NUM.ZERO;
 
@@ -21,12 +22,8 @@ function resolveActiveNodeIds(nodeRows) {
   const activeNodeIds = new Set();
   const rows = Array.isArray(nodeRows) ? nodeRows : [];
   for (const row of rows) {
-    const nodeId = String(
-      row?.[COLUMN.NODE_ID] || row?.node_id || row?.nodeId || '',
-    );
-    const status = String(
-      row?.[COLUMN.STATUS] || row?.status || '',
-    ).toLowerCase();
+    const normalizedRow = normalizeNodeRow(row);
+    const {nodeId, status} = normalizedRow;
     if (nodeId.length === NUM.ZERO) {
       continue;
     }

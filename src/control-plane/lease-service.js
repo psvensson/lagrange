@@ -19,8 +19,8 @@ import {emitInvariant} from '../invariants/invariant-emitter.js';
 import {INVARIANT_ID} from '../invariants/invariant-catalog.js';
 import {assertCritical} from '../utils/assert.js';
 import {
-  resolveControlPlaneSystemTableGateway,
-} from './control-plane-gateway-resolution.js';
+  createControlPlaneRuntimeBundle,
+} from './control-plane-runtime-bundle.js';
 import {
   LEASE_CONFIG_KEY,
   LEASE_DEFAULT_OPTIONS,
@@ -55,18 +55,15 @@ class LeaseService extends EventEmitter {
     this.systemTableCache = options.systemTableCache;
     this.sqlQueryEngine = options.sqlQueryEngine;
     this.controlPlaneSystemTableGateway =
-      resolveControlPlaneSystemTableGateway({
-        controlPlaneSystemTableGateway:
-          options.controlPlaneSystemTableGateway || null,
-        sourceGateway:
-          options.nodeLeaseOwner?.controlPlaneSystemTableGateway || null,
-        nodeId: this.nodeId,
-        cdcIntegrationService:
-          options.nodeLeaseOwner?.cdcIntegrationService || null,
-        sqlQueryEngine: this.sqlQueryEngine || null,
-        systemTableCache: this.systemTableCache,
-        messageRouter: options.messageRouter || null,
-      });
+      options.controlPlaneSystemTableGateway ||
+      (options.sqlQueryEngine || options.systemTableCache || options.messageRouter ?
+        createControlPlaneRuntimeBundle({
+          nodeId: this.nodeId,
+          sqlQueryEngine: this.sqlQueryEngine || null,
+          systemTableCache: this.systemTableCache,
+          messageRouter: options.messageRouter || null,
+        }).controlPlaneSystemTableGateway :
+        null);
     this.messageGroupServices =
       options.messageGroupServices ?? createDefaultMessageGroupServices();
     this.messageRouter = options.messageRouter || null;
@@ -290,20 +287,6 @@ class LeaseService extends EventEmitter {
    * @private
    */
   getControlPlaneSystemTableGateway() {
-    if (this.controlPlaneSystemTableGateway) {
-      return this.controlPlaneSystemTableGateway;
-    }
-    this.controlPlaneSystemTableGateway =
-      resolveControlPlaneSystemTableGateway({
-        sourceGateway:
-          this.nodeLeaseOwner?.controlPlaneSystemTableGateway || null,
-        nodeId: this.nodeId,
-        cdcIntegrationService:
-          this.nodeLeaseOwner?.cdcIntegrationService || null,
-        sqlQueryEngine: this.sqlQueryEngine || null,
-        systemTableCache: this.systemTableCache,
-        messageRouter: this.messageRouter || null,
-      });
     assertCritical(
       this.controlPlaneSystemTableGateway,
       'LeaseService requires controlPlaneSystemTableGateway',

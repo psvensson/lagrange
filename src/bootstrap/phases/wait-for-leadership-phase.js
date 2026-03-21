@@ -18,6 +18,10 @@ import {
 } from '../../cache/leader-readiness-gate.js';
 import {createSystemLeaderReadinessSnapshot} from '../system-readiness-snapshot.js';
 import {
+  subscribeToSystemTableCacheChanges,
+  waitForStartupConvergence,
+} from '../shared/startup-convergence-gate.js';
+import {
   JOINING_ERROR_MSG,
   JOINING_LOG_MSG,
 } from '../node-joining-constants.js';
@@ -120,50 +124,44 @@ class WaitForLeadershipPhase {
   async waitForSystemServiceLeaders(systemTableCache) {
     const config = this.delegates.getConfig();
     const logger = this.delegates.getLogger();
-    const now = this.delegates.getNow();
-    const sleep = this.delegates.getSleep();
-
-    const startTime = now();
     const timeoutMs = config.leadershipWaitTimeoutMs;
-    let delay = config.leadershipWaitInitialDelayMs;
-    const maxDelay = config.leadershipWaitMaxDelayMs;
-    const backoffMultiplier = config.leadershipWaitBackoffMultiplier;
 
     logger.debug(JOINING_LOG_MSG.WAITING_LEADERSHIP, {
       nodeId: this.nodeId,
       timeoutMs,
     });
 
-    while (now() - startTime < timeoutMs) {
-      const readiness =
-        this.createSystemServiceLeadershipSnapshot(systemTableCache);
-      if (readiness.ready) {
-        return;
-      }
-
-      await sleep(delay);
-      delay = Math.min(delay * backoffMultiplier, maxDelay);
-    }
-
-    const missing =
-      this.getMissingSystemServiceLeaders(systemTableCache);
-    const readiness =
-      this.createSystemServiceLeadershipSnapshot(systemTableCache);
-    const blockingMissing = readiness.missingLeaders;
-    const leadershipTimeout = JOINING_ERROR_MSG.leadershipTimeout;
-    const error = new Error(leadershipTimeout(timeoutMs));
-    error.missingLeaders = blockingMissing;
-    error.missingCount = readiness.missingCount;
-    error.nonBlockingMissingLeaders = {
-      missingMessageGroupLeaders:
-        missing.missingMessageGroupLeaders,
-      missingMessageGroupLeaderNodes:
-        missing.missingMessageGroupLeaderNodes,
-      missingMessageGroupLeaderAddresses:
-        missing.missingMessageGroupLeaderAddresses,
-    };
-    error.timeoutMs = timeoutMs;
-    throw error;
+    await waitForStartupConvergence({
+      timeoutMs,
+      subscriptions: [
+        (notify) => subscribeToSystemTableCacheChanges(
+          systemTableCache,
+          notify,
+        ),
+      ],
+      evaluate: () =>
+        this.createSystemServiceLeadershipSnapshot(systemTableCache),
+      createTimeoutError: (readiness, context) => {
+        const missing =
+          this.getMissingSystemServiceLeaders(systemTableCache);
+        const blockingMissing = readiness?.missingLeaders || missing;
+        const leadershipTimeout = JOINING_ERROR_MSG.leadershipTimeout;
+        const error = new Error(leadershipTimeout(timeoutMs));
+        error.missingLeaders = blockingMissing;
+        error.missingCount = readiness?.missingCount || NUM.ZERO;
+        error.nonBlockingMissingLeaders = {
+          missingMessageGroupLeaders:
+            missing.missingMessageGroupLeaders,
+          missingMessageGroupLeaderNodes:
+            missing.missingMessageGroupLeaderNodes,
+          missingMessageGroupLeaderAddresses:
+            missing.missingMessageGroupLeaderAddresses,
+        };
+        error.timeoutMs = timeoutMs;
+        error.timeoutKind = context.timeoutKind;
+        return error;
+      },
+    });
   }
 
   /**

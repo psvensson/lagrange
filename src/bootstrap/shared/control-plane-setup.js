@@ -21,11 +21,11 @@ import {HeartbeatService} from '../../control-plane/heartbeat-service.js';
 import {LeaseService} from '../../control-plane/lease-service.js';
 import {EndpointService} from '../../control-plane/endpoint-service.js';
 import {
-  ControlPlaneSystemTableGateway,
-} from '../../control-plane/control-plane-system-table-gateway.js';
-import {
   registerControlPlaneSystemTableGateway,
 } from '../../control-plane/control-plane-gateway-registry.js';
+import {
+  createControlPlaneRuntimeBundle,
+} from '../../control-plane/control-plane-runtime-bundle.js';
 import {
   createSystemMetadataOwners,
 } from '../../control-plane/owners/index.js';
@@ -186,6 +186,16 @@ class ControlPlaneSetup {
         messageGroupServices.size : 0,
     });
 
+    const controlPlaneRuntimeBundle = createControlPlaneRuntimeBundle({
+      nodeId,
+      cdcIntegrationService,
+      systemTableCache,
+      messageRouter,
+    });
+    const controlPlaneSystemTableGateway =
+      controlPlaneRuntimeBundle.controlPlaneSystemTableGateway;
+    registerControlPlaneSystemTableGateway(controlPlaneSystemTableGateway);
+
     // Create or use existing RebalanceCoordinator
     let rebalanceCoordinator = existingCoordinator;
     let storageAccountingService =
@@ -194,17 +204,10 @@ class ControlPlaneSetup {
       storageAccountingService =
         new StorageCapacityAccountingService({
           systemTableCache,
-          sqlQueryEngine: cdcIntegrationService.sqlQueryEngine,
+          sqlQueryEngine: controlPlaneRuntimeBundle.sqlQueryEngine,
+          controlPlaneSystemTableGateway,
         });
     }
-
-    const controlPlaneSystemTableGateway = new ControlPlaneSystemTableGateway({
-      nodeId,
-      sqlQueryEngine: cdcIntegrationService.sqlQueryEngine,
-      cdcIntegrationService,
-      messageRouter,
-    });
-    registerControlPlaneSystemTableGateway(controlPlaneSystemTableGateway);
 
     let controlPlaneReadinessService =
       rebalanceCoordinator?.controlPlaneReadinessService || null;
@@ -248,7 +251,7 @@ class ControlPlaneSetup {
         cdcIntegrationService,
         messageRouter,
         tablePolicyService,
-        sqlQueryEngine: cdcIntegrationService.sqlQueryEngine,
+        sqlQueryEngine: controlPlaneRuntimeBundle.sqlQueryEngine,
         transactionCoordinator,
         storageAccountingService,
         storageAdmissionService,
@@ -307,7 +310,6 @@ class ControlPlaneSetup {
         cacheMutationTarget: systemTableCache,
         messageRouter,
         cdcIntegrationService,
-        controlPlaneSystemTableGateway,
       });
     }
 
@@ -328,7 +330,7 @@ class ControlPlaneSetup {
       nodeId,
       nodeLeaseOwner: heartbeatService,
       systemTableCache,
-      sqlQueryEngine: cdcIntegrationService.sqlQueryEngine,
+      sqlQueryEngine: controlPlaneRuntimeBundle.sqlQueryEngine,
       messageRouter,
       controlPlaneSystemTableGateway,
     });
@@ -347,7 +349,7 @@ class ControlPlaneSetup {
       cdcIntegrationService,
       systemTableCache,
       rebalanceCoordinator,
-      sqlQueryEngine: cdcIntegrationService.sqlQueryEngine,
+      sqlQueryEngine: controlPlaneRuntimeBundle.sqlQueryEngine,
       controlPlaneReadinessService,
       storageAccountingService,
       cdcGroupPropagationService: cdcGroupPropagationService || null,

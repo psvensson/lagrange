@@ -19,6 +19,10 @@ import {
   buildMessageGroupOwnerNotReadyError,
 } from '../shared/message-group-selection.js';
 import {
+  subscribeToSystemTableCacheChanges,
+  waitForStartupConvergence,
+} from '../shared/startup-convergence-gate.js';
+import {
   CDCPipelineReadinessGate,
 } from '../../cdc/cdc-pipeline-readiness-gate.js';
 import {
@@ -704,51 +708,38 @@ class SeedCacheHydrationPhase {
     const cache = d.getSystemTableCache();
     const timeoutMs = config.leadershipWaitTimeoutMs ||
       BOOTSTRAP_DEFAULT.leadershipWaitTimeoutMs;
-    let delay = config.leadershipWaitInitialDelayMs ||
-      BOOTSTRAP_DEFAULT.leadershipWaitInitialDelayMs;
-    const maxDelay = config.leadershipWaitMaxDelayMs ||
-      BOOTSTRAP_DEFAULT.leadershipWaitMaxDelayMs;
-    const backoffMultiplier =
-      config.leadershipWaitBackoffMultiplier ||
-      BOOTSTRAP_DEFAULT.leadershipWaitBackoffMultiplier;
-
-    const startTime = Date.now();
-    while (Date.now() - startTime < timeoutMs) {
-      const readiness = createSystemLeaderReadinessSnapshot({
+    await waitForStartupConvergence({
+      timeoutMs,
+      subscriptions: [
+        (notify) => subscribeToSystemTableCacheChanges(cache, notify),
+      ],
+      evaluate: () => createSystemLeaderReadinessSnapshot({
         systemTableCache: cache,
         requiredTables: SEED_REQUIRED_WRITE_TABLES,
-      });
-
-      if (readiness.ready) {
-        return;
-      }
-
-      await d.sleep(delay);
-      delay = Math.min(delay * backoffMultiplier, maxDelay);
-    }
-
-    const readiness = createSystemLeaderReadinessSnapshot({
-      systemTableCache: cache,
-      requiredTables: SEED_REQUIRED_WRITE_TABLES,
+      }),
+      createTimeoutError: (readiness, context) => {
+        const missing = readiness?.missingLeaders || {};
+        const allMissing = [
+          ...(missing.missingPartitionLeaders || []),
+          ...(missing.missingMessageGroupLeaders || []),
+          ...(missing.missingPartitionLeaderNodes || []),
+          ...(missing.missingMessageGroupLeaderNodes || []),
+          ...(missing.missingPartitionLeaderAddresses || []),
+          ...(missing.missingMessageGroupLeaderAddresses || []),
+        ];
+        const error = new Error(
+          BOOTSTRAP_ERROR.partitionLeadershipTimeout(
+            allMissing,
+            timeoutMs,
+          ),
+        );
+        error.missingLeaders = missing;
+        error.missingCount = readiness?.missingCount || NUM.ZERO;
+        error.timeoutMs = timeoutMs;
+        error.timeoutKind = context.timeoutKind;
+        return error;
+      },
     });
-    const missing = readiness.missingLeaders;
-    const allMissing = [
-      ...missing.missingPartitionLeaders,
-      ...missing.missingMessageGroupLeaders,
-      ...missing.missingPartitionLeaderNodes,
-      ...missing.missingMessageGroupLeaderNodes,
-      ...missing.missingPartitionLeaderAddresses,
-      ...missing.missingMessageGroupLeaderAddresses,
-    ];
-    const error = new Error(
-      BOOTSTRAP_ERROR.partitionLeadershipTimeout(
-        allMissing, timeoutMs,
-      ),
-    );
-    error.missingLeaders = missing;
-    error.missingCount = readiness.missingCount;
-    error.timeoutMs = timeoutMs;
-    throw error;
   }
 
   /**
@@ -763,24 +754,34 @@ class SeedCacheHydrationPhase {
     const cache = d.getSystemTableCache();
     const timeoutMs = config.leadershipWaitTimeoutMs ||
       BOOTSTRAP_DEFAULT.leadershipWaitTimeoutMs;
-    let delay = config.leadershipWaitInitialDelayMs ||
-      BOOTSTRAP_DEFAULT.leadershipWaitInitialDelayMs;
-    const maxDelay = config.leadershipWaitMaxDelayMs ||
-      BOOTSTRAP_DEFAULT.leadershipWaitMaxDelayMs;
-    const backoffMultiplier =
-      config.leadershipWaitBackoffMultiplier ||
-      BOOTSTRAP_DEFAULT.leadershipWaitBackoffMultiplier;
-
-    const startTime = Date.now();
-    while (Date.now() - startTime < timeoutMs) {
-      const now = Date.now();
-      const node = cache.get(TABLES.NODES, nodeId);
-      if (isNodeRecordReady(node, {now})) {
-        return;
-      }
-
-      await d.sleep(delay);
-      delay = Math.min(delay * backoffMultiplier, maxDelay);
+    try {
+      await waitForStartupConvergence({
+        timeoutMs,
+        subscriptions: [
+          (notify) => subscribeToSystemTableCacheChanges(cache, notify, {
+            tableNames: [TABLES.NODES],
+          }),
+        ],
+        evaluate: () => {
+          const now = Date.now();
+          const node = cache.get(TABLES.NODES, nodeId);
+          return {
+            ready: isNodeRecordReady(node, {now}),
+            node,
+          };
+        },
+        createTimeoutError: (_result, context) => {
+          const error = new Error(
+            BOOTSTRAP_ERROR.seedReadyTimeout(nodeId, timeoutMs),
+          );
+          error.timeoutMs = timeoutMs;
+          error.timeoutKind = context.timeoutKind;
+          return error;
+        },
+      });
+      return;
+    } catch (_timeoutError) {
+      // Fall through to one explicit authoritative repair attempt.
     }
 
     try {
