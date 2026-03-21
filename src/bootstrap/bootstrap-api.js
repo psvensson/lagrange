@@ -12,7 +12,6 @@
  */
 
 import Fastify from 'fastify';
-import {validate as uuidValidate} from 'uuid';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {assertCritical} from '../utils/assert.js';
@@ -34,9 +33,6 @@ import {
 } from '../constants/index.js';
 import {CACHE_HYDRATION_TABLES} from '../cache/cache-constants.js';
 import {
-  getSystemCachePrimaryKeyFieldOrFallback,
-} from '../cache/system-cache-key-descriptor.js';
-import {
   resolveCanonicalLeaderService,
 } from '../cache/leader-readiness-gate.js';
 import {
@@ -44,15 +40,12 @@ import {
 } from '../node/node-readiness-policy.js';
 import {
   BOOTSTRAP_ASSIGNMENT_STRATEGY,
-  BOOTSTRAP_PHASE,
   BOOTSTRAP_PIPELINE_ERROR_CODE,
 } from './bootstrap-constants.js';
-import {NODE_STATE} from '../constants/node-state.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {NODE_CONFIG_KEY, NODE_DEFAULT} from '../node/node-constants.js';
-import {CONFIG_CATEGORY, CONFIG_KEY} from '../config/config-constants.js';
+import {CONFIG_KEY} from '../config/config-constants.js';
 import {
-  BOOTSTRAP_API_CLUSTER_STATE,
   BOOTSTRAP_API_DEFAULT,
   BOOTSTRAP_API_CLOSE_ERROR_CODE,
   BOOTSTRAP_API_ERROR,
@@ -62,27 +55,15 @@ import {
   BOOTSTRAP_API_HANDOFF_PHASE,
   BOOTSTRAP_API_HANDOFF_STATUS,
   BOOTSTRAP_API_ASSIGNMENT,
-  BOOTSTRAP_API_LIVENESS,
   BOOTSTRAP_API_LOG_MSG,
-  BOOTSTRAP_API_PROBE_REASON,
-  BOOTSTRAP_API_PROBE_SCOPE,
   BOOTSTRAP_API_REGISTER_SERVICE_ERROR_CODE,
   BOOTSTRAP_API_ROUTE,
   BOOTSTRAP_API_SQL,
   BOOTSTRAP_API_SUBSYSTEM,
 } from './bootstrap-api-constants.js';
-import {MessageGroupAssignment} from './message-group-assignment.js';
 import {
   BootstrapReadinessState,
 } from './bootstrap-readiness-state.js';
-import {
-  READINESS_DEPENDENCY,
-} from './bootstrap-readiness-state-constants.js';
-import {
-  LIFECYCLE_DEPENDENCY_CLASS,
-  LIFECYCLE_PHASE,
-  LIFECYCLE_REASON,
-} from './lifecycle-controller-constants.js';
 import {
   CONTROL_PLANE_ROLLOUT_REQUIRED,
   assertRequiredControlPlaneRollout,
@@ -90,8 +71,6 @@ import {
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../control-plane/control-plane-readiness-constants.js';
-import {AuthoritativeControlPlaneView} from
-  '../control-plane/authoritative-control-plane-view.js';
 import {createControlPlaneRuntimeBundle} from
   '../control-plane/control-plane-runtime-bundle.js';
 import {
@@ -100,11 +79,6 @@ import {
 import {
   isRetryableControlPlaneError,
 } from '../control-plane/control-plane-error-classification.js';
-import {
-  buildBootstrapTopologySnapshotEnvelope,
-} from './bootstrap-topology-snapshot.js';
-import {resolveAdvertisedWebSocketAddress} from
-  '../transport/node-address-resolution.js';
 import {ServiceRegistrationVisibilityOwner} from
   './owners/service-registration-visibility-owner.js';
 import {ServiceRegistrationHandoffOwner} from
@@ -115,32 +89,21 @@ import {MoveReplicaAssignmentOwner} from
   './owners/move-replica-assignment-owner.js';
 import {MoveReplicaHandoffOwner} from
   './owners/move-replica-handoff-owner.js';
+import {BootstrapTopologySnapshotOwner} from
+  './owners/bootstrap-topology-snapshot-owner.js';
+import {BootstrapJoinAdmissionOwner} from
+  './owners/bootstrap-join-admission-owner.js';
+import {BootstrapReadinessOwner} from
+  './owners/bootstrap-readiness-owner.js';
+import {BootstrapRequestOwner} from
+  './owners/bootstrap-request-owner.js';
+import {BootstrapClusterViewOwner} from
+  './owners/bootstrap-cluster-view-owner.js';
 
 /**
  * Bootstrap response strategies.
  */
 const BootstrapStrategy = BOOTSTRAP_ASSIGNMENT_STRATEGY;
-/**
- * Node statuses that indicate the node is dead and eligible
- * for re-registration via the bootstrap API.
- */
-const REJOIN_TERMINAL_STATES = Object.freeze(new Set([
-  NODE_STATE.STOPPED,
-  NODE_STATE.FAILED,
-  NODE_STATE.SHUTTING_DOWN,
-]));
-
-const READINESS_DEPENDENCY_NAME = Object.freeze({
-  SQL_ENGINE_READY: 'sql_engine_ready',
-  LEADER_METADATA_READY: 'leader_metadata_ready',
-  RUNTIME_WIRING_READY: 'runtime_wiring_ready',
-  CONTROL_PLANE_WRITE_HEALTH: 'control_plane_write_health',
-});
-
-const BOOTSTRAP_JOIN_NON_BLOCKING_REASONS = Object.freeze([
-  BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE,
-]);
-
 /**
  * BootstrapAPI provides REST endpoints for node bootstrap and discovery.
  */
@@ -218,7 +181,6 @@ class BootstrapAPI {
         options.ownsMoveReplicaAssignmentLifecycle :
         Boolean(options.bootstrapService);
     this.moveReplicaAssignmentReservations = new Map();
-    this.moveReplicaAssignmentReservationLock = Promise.resolve();
     this.moveReplicaAssignmentSweepTimer = null;
     this.readinessState = options.readinessState ||
       new BootstrapReadinessState({
@@ -364,6 +326,111 @@ class BootstrapAPI {
                 code,
                 options,
               ),
+        },
+      });
+    this.bootstrapTopologySnapshotOwner =
+      new BootstrapTopologySnapshotOwner({
+        delegates: {
+          getSystemTableCache: () => this.systemTableCache,
+          getPartitionServices: () => this.partitionServices,
+          getSeedNodeId: () => this.seedNodeId,
+          getLogger: () => this.logger,
+          getCurrentEpoch: () => this.getCurrentEpoch(),
+        },
+      });
+    this.bootstrapJoinAdmissionOwner =
+      new BootstrapJoinAdmissionOwner({
+        delegates: {
+          getSeedNodeId: () => this.seedNodeId,
+          getSeedNodeAddress: () => this.seedNodeAddress,
+          getSystemTableCache: () => this.systemTableCache,
+          getLogger: () => this.logger,
+          getCdcIntegrationService: () => this.getCdcIntegrationService(),
+          getMessageRouter: () =>
+            this.messageRouter || this.bootstrapService?.messageRouter || null,
+          getAuthoritativeControlPlaneViewInstance: () =>
+            this.authoritativeControlPlaneView,
+          setAuthoritativeControlPlaneViewInstance: (view) => {
+            this.authoritativeControlPlaneView = view || null;
+          },
+          getBootstrapAuthoritativeTableRows: (tableName) =>
+            this.getBootstrapAuthoritativeTableRows(tableName),
+          expireMoveReplicaAssignmentReservations: () =>
+            this.expireMoveReplicaAssignmentReservations(),
+          getActiveMoveReplicaAssignmentReservations: () =>
+            this.getActiveMoveReplicaAssignmentReservations(),
+          reserveMoveReplicaAssignment: (targetNodeId, assignment) =>
+            this.reserveMoveReplicaAssignment(targetNodeId, assignment),
+        },
+      });
+    this.bootstrapReadinessOwner =
+      new BootstrapReadinessOwner({
+        delegates: {
+          getSeedNodeId: () => this.seedNodeId,
+          getReadinessState: () => this.readinessState,
+          getBootstrapService: () => this.bootstrapService,
+          getMessageRouter: () => this.messageRouter,
+          getSqlQueryEngine: () => this.sqlQueryEngine,
+          getControlPlaneWriteHealthProvider: () =>
+            this.controlPlaneWriteHealthProvider,
+          getLeaderReadinessStatusForProbe: () =>
+            this.getLeaderReadinessStatusForProbe(),
+        },
+      });
+    this.bootstrapRequestOwner =
+      new BootstrapRequestOwner({
+        delegates: {
+          getLogger: () => this.logger,
+          getSeedNodeId: () => this.seedNodeId,
+          getSeedNodeAddress: () => this.seedNodeAddress,
+          getSeedNodeWsAddress: () => this.seedNodeWsAddress,
+          getWsPort: () => this.wsPort,
+          getBootstrapService: () => this.bootstrapService,
+          getMaxConcurrentBootstrapRequests: () =>
+            this.maxConcurrentBootstrapRequests,
+          getBootstrapAdmissionRetryAfterMs: () =>
+            this.bootstrapAdmissionRetryAfterMs,
+          getInFlightBootstrapRequestCount: () =>
+            this.inFlightBootstrapRequestCount,
+          setInFlightBootstrapRequestCount: (count) => {
+            this.inFlightBootstrapRequestCount = count;
+          },
+          validateBootstrapRequest: (nodeId, nodeAddress) =>
+            this.validateBootstrapRequest(nodeId, nodeAddress),
+          checkForConflicts: (nodeId, nodeAddress) =>
+            this.checkForConflicts(nodeId, nodeAddress),
+          getBlockingMoveReplicaBootstrapAdmissions: (now) =>
+            this.getBlockingMoveReplicaBootstrapAdmissions(now),
+          resolveMoveReplicaBootstrapAdmissionRetryAfterMs:
+            (reservation, now) =>
+              this.resolveMoveReplicaBootstrapAdmissionRetryAfterMs(
+                reservation,
+                now,
+              ),
+          buildBootstrapNotReadyResponse: (options) =>
+            this.buildBootstrapNotReadyResponse(options),
+          waitForServiceLeaders: () => this.waitForServiceLeaders(),
+          determineAndReserveMessageGroupAssignment: (nodeId) =>
+            this.determineAndReserveMessageGroupAssignment(nodeId),
+          getCurrentEpoch: () => this.getCurrentEpoch(),
+          buildBootstrapTopologySnapshotEnvelope: (options) =>
+            this.buildBootstrapTopologySnapshotEnvelope(options),
+          getClusterConfiguration: () => this.getClusterConfiguration(),
+          getReadyNodes: () => this.getReadyNodes(),
+          getTablePolicies: () => this.getTablePolicies(),
+          getLatencyTopologyHints: (nodeId) =>
+            this.getLatencyTopologyHints(nodeId),
+        },
+      });
+    this.bootstrapClusterViewOwner =
+      new BootstrapClusterViewOwner({
+        delegates: {
+          getSystemTableCache: () => this.systemTableCache,
+          getSeedNodeId: () => this.seedNodeId,
+          getSeedNodeAddress: () => this.seedNodeAddress,
+          getMessageGroups: () => this.getMessageGroups(),
+          getEpochManager: () =>
+            this.epochManager || this.bootstrapService?.getEpochManager?.(),
         },
       });
     this.serviceLeaderReadinessOwner =
@@ -670,16 +737,8 @@ class BootstrapAPI {
    * @return {Object} Probe payload.
    */
   handleLivenessProbeRequest(reply) {
-    const statusCode = HTTP_STATUS.OK;
-    const response = {
-      alive: BOOTSTRAP_API_LIVENESS.ALIVE,
-      state: BOOTSTRAP_API_LIVENESS.STATE_RUNNING,
-      nodeId: this.seedNodeId,
-      timestamp: Date.now(),
-    };
-    this.recordReadinessProbeResult(BOOTSTRAP_API_ROUTE.LIVEZ, statusCode);
-    reply.code(statusCode);
-    return response;
+    return this.bootstrapReadinessOwner
+      .handleLivenessProbeRequest(reply);
   }
 
   /**
@@ -688,29 +747,8 @@ class BootstrapAPI {
    * @return {Object} Probe payload.
    */
   handleStartupProbeRequest(reply) {
-    const snapshot = this.evaluateReadinessSnapshot();
-    const started = this.isStartupComplete();
-    const statusCode = started ?
-      HTTP_STATUS.OK :
-      HTTP_STATUS.SERVICE_UNAVAILABLE;
-    const reasons = this.getStartupProbeReasons(snapshot, started);
-    const response = {
-      started,
-      phase: typeof snapshot.phase === TYPEOF.STRING ?
-        snapshot.phase :
-        LIFECYCLE_PHASE.INIT,
-      state: snapshot.state,
-      reasons,
-      timestamp: snapshot.timestamp,
-    };
-
-    if (!started) {
-      response.retryAfterMs = snapshot.retryAfterMs;
-    }
-
-    this.recordReadinessProbeResult(BOOTSTRAP_API_ROUTE.STARTUPZ, statusCode);
-    reply.code(statusCode);
-    return response;
+    return this.bootstrapReadinessOwner
+      .handleStartupProbeRequest(reply);
   }
 
   /**
@@ -719,15 +757,8 @@ class BootstrapAPI {
    * @return {Object} Probe payload.
    */
   handleReadinessProbeRequest(reply) {
-    const snapshot = this.evaluateReadinessSnapshot();
-    const statusCode = snapshot.ready ?
-      HTTP_STATUS.OK :
-      HTTP_STATUS.SERVICE_UNAVAILABLE;
-    const response = this.buildReadinessProbeResponse(snapshot);
-
-    this.recordReadinessProbeResult(BOOTSTRAP_API_ROUTE.READYZ, statusCode);
-    reply.code(statusCode);
-    return response;
+    return this.bootstrapReadinessOwner
+      .handleReadinessProbeRequest(reply);
   }
 
   /**
@@ -736,23 +767,8 @@ class BootstrapAPI {
    * @return {Object} Probe payload.
    */
   handleBootstrapReadinessProbeRequest(reply) {
-    const snapshot = this.resolveReadinessSnapshotForScope(
-      this.evaluateReadinessSnapshot(),
-      BOOTSTRAP_API_PROBE_SCOPE.BOOTSTRAP_JOIN,
-    );
-    const statusCode = snapshot.ready ?
-      HTTP_STATUS.OK :
-      HTTP_STATUS.SERVICE_UNAVAILABLE;
-    const response = this.buildReadinessProbeResponse(snapshot, {
-      scope: BOOTSTRAP_API_PROBE_SCOPE.BOOTSTRAP_JOIN,
-    });
-
-    this.recordReadinessProbeResult(
-      BOOTSTRAP_API_ROUTE.BOOTSTRAP_READY,
-      statusCode,
-    );
-    reply.code(statusCode);
-    return response;
+    return this.bootstrapReadinessOwner
+      .handleBootstrapReadinessProbeRequest(reply);
   }
 
   /**
@@ -762,33 +778,8 @@ class BootstrapAPI {
    * @return {Object}
    */
   resolveReadinessSnapshotForScope(snapshot, scope) {
-    if (!snapshot || typeof snapshot !== TYPEOF.OBJECT) {
-      return snapshot;
-    }
-    if (scope !== BOOTSTRAP_API_PROBE_SCOPE.BOOTSTRAP_JOIN ||
-        snapshot.ready === true) {
-      return snapshot;
-    }
-
-    const reasons = Array.isArray(snapshot.reasons) ? snapshot.reasons : [];
-    const blockingReasons = reasons.filter((reason) =>
-      !BOOTSTRAP_JOIN_NON_BLOCKING_REASONS.includes(reason),
-    );
-    const canProjectReady = this.canProjectBootstrapJoinReadiness(
-      snapshot,
-      reasons,
-      blockingReasons,
-    );
-    if (!canProjectReady) {
-      return snapshot;
-    }
-
-    return {
-      ...snapshot,
-      ready: true,
-      reasons: [],
-      retryAfterMs: NUM.ZERO,
-    };
+    return this.bootstrapReadinessOwner
+      .resolveReadinessSnapshotForScope(snapshot, scope);
   }
 
   /**
@@ -799,23 +790,12 @@ class BootstrapAPI {
    * @return {boolean}
    */
   canProjectBootstrapJoinReadiness(snapshot, reasons, blockingReasons) {
-    if (snapshot.draining === true) {
-      return false;
-    }
-    if (snapshot.phase === LIFECYCLE_PHASE.CONTROL_READY) {
-      if (reasons.length === NUM.ZERO) {
-        return false;
-      }
-      return blockingReasons.length === NUM.ZERO;
-    }
-
-    if (snapshot.phase === LIFECYCLE_PHASE.JOIN_READY) {
-      return reasons.length === NUM.ONE &&
-        reasons[NUM.ZERO] ===
-          LIFECYCLE_REASON.READINESS_STABLE_WINDOW_PENDING;
-    }
-
-    return false;
+    return this.bootstrapReadinessOwner
+      .canProjectBootstrapJoinReadiness(
+        snapshot,
+        reasons,
+        blockingReasons,
+      );
   }
 
   /**
@@ -826,28 +806,8 @@ class BootstrapAPI {
    * @return {Object}
    */
   buildReadinessProbeResponse(snapshot, options = {}) {
-    const response = {
-      ready: snapshot.ready === true,
-      phase: typeof snapshot.phase === TYPEOF.STRING ?
-        snapshot.phase :
-        LIFECYCLE_PHASE.INIT,
-      state: snapshot.state,
-      reasons: Array.isArray(snapshot.reasons) ? snapshot.reasons : [],
-      timestamp: snapshot.timestamp,
-    };
-    if (snapshot.draining === true) {
-      response.draining = true;
-    }
-    if (Number.isFinite(snapshot.drainDeadlineMs)) {
-      response.drainDeadlineMs = Math.floor(snapshot.drainDeadlineMs);
-    }
-    if (Number.isFinite(snapshot.retryAfterMs)) {
-      response.retryAfterMs = snapshot.retryAfterMs;
-    }
-    if (typeof options.scope === TYPEOF.STRING && options.scope.length > NUM.ZERO) {
-      response.scope = options.scope;
-    }
-    return response;
+    return this.bootstrapReadinessOwner
+      .buildReadinessProbeResponse(snapshot, options);
   }
 
   /**
@@ -855,73 +815,8 @@ class BootstrapAPI {
    * @return {Object} Current readiness snapshot.
    */
   evaluateReadinessSnapshot() {
-    if (!this.readinessState || typeof this.readinessState.setDependency !== TYPEOF.FUNCTION) {
-      if (typeof this.readinessState?.evaluate === TYPEOF.FUNCTION) {
-        return this.readinessState.evaluate();
-      }
-      if (typeof this.readinessState?.getSnapshot === TYPEOF.FUNCTION) {
-        return this.readinessState.getSnapshot();
-      }
-      return {
-        ready: false,
-        phase: LIFECYCLE_PHASE.INIT,
-        state: BOOTSTRAP_PHASE.NOT_STARTED,
-        reasons: [BOOTSTRAP_API_PROBE_REASON.BOOTSTRAP_PHASE_INCOMPLETE],
-        retryAfterMs: NUM.ZERO,
-        timestamp: Date.now(),
-      };
-    }
-
-    const startupComplete = this.isStartupComplete();
-    this.readinessState.setDependency(
-      READINESS_DEPENDENCY.STARTUP_COMPLETE,
-      startupComplete,
-      {
-        reasonCode: BOOTSTRAP_API_PROBE_REASON.BOOTSTRAP_PHASE_INCOMPLETE,
-        details: {
-          phase: this.bootstrapService?.phase || null,
-        },
-      },
-    );
-
-    this.readinessState.setDependency(
-      READINESS_DEPENDENCY_NAME.SQL_ENGINE_READY,
-      this.isSqlEngineDependencyReady(),
-      {
-        reasonCode: BOOTSTRAP_PIPELINE_ERROR_CODE.SQL_ENGINE_UNAVAILABLE,
-      },
-    );
-
-    const leaderStatus = this.getLeaderReadinessStatusForProbe();
-    this.readinessState.setDependency(
-      READINESS_DEPENDENCY_NAME.LEADER_METADATA_READY,
-      leaderStatus.ready === true,
-      {
-        reasonCode: BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE,
-        details: leaderStatus,
-      },
-    );
-
-    this.readinessState.setDependency(
-      READINESS_DEPENDENCY_NAME.RUNTIME_WIRING_READY,
-      this.isRuntimeWiringReady(),
-      {
-        reasonCode: BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY,
-      },
-    );
-
-    const controlPlaneWriteHealth = this.getControlPlaneWriteHealth();
-    this.readinessState.setDependency(
-      READINESS_DEPENDENCY_NAME.CONTROL_PLANE_WRITE_HEALTH,
-      controlPlaneWriteHealth.healthy === true,
-      {
-        reasonCode: controlPlaneWriteHealth.reasonCode,
-        details: controlPlaneWriteHealth.details,
-        classification: LIFECYCLE_DEPENDENCY_CLASS.HARD,
-      },
-    );
-
-    return this.readinessState.evaluate();
+    return this.bootstrapReadinessOwner
+      .evaluateReadinessSnapshot();
   }
 
   /**
@@ -929,38 +824,8 @@ class BootstrapAPI {
    * @return {{healthy: boolean, reasonCode: string, details: Object|null}}
    */
   getControlPlaneWriteHealth() {
-    if (typeof this.controlPlaneWriteHealthProvider !== TYPEOF.FUNCTION) {
-      return {
-        healthy: true,
-        reasonCode: LIFECYCLE_REASON.OBSERVABILITY_BACKLOG,
-        details: null,
-      };
-    }
-
-    try {
-      const health = this.controlPlaneWriteHealthProvider() || {};
-      const healthy = health.healthy !== false;
-      return {
-        healthy,
-        reasonCode:
-          typeof health.reasonCode === TYPEOF.STRING &&
-            health.reasonCode.length > NUM.ZERO ?
-            health.reasonCode :
-            LIFECYCLE_REASON.OBSERVABILITY_BACKLOG,
-        details:
-          health.details && typeof health.details === TYPEOF.OBJECT ?
-            health.details :
-            null,
-      };
-    } catch (error) {
-      return {
-        healthy: false,
-        reasonCode: LIFECYCLE_REASON.OBSERVABILITY_BACKLOG,
-        details: {
-          error: error?.message || String(error),
-        },
-      };
-    }
+    return this.bootstrapReadinessOwner
+      .getControlPlaneWriteHealth();
   }
 
   /**
@@ -970,17 +835,8 @@ class BootstrapAPI {
    * @return {string[]}
    */
   getStartupProbeReasons(snapshot, started) {
-    if (started) {
-      return [];
-    }
-
-    const reasons = Array.isArray(snapshot?.reasons) ?
-      [...snapshot.reasons] :
-      [];
-    if (!reasons.includes(BOOTSTRAP_API_PROBE_REASON.BOOTSTRAP_PHASE_INCOMPLETE)) {
-      reasons.unshift(BOOTSTRAP_API_PROBE_REASON.BOOTSTRAP_PHASE_INCOMPLETE);
-    }
-    return reasons;
+    return this.bootstrapReadinessOwner
+      .getStartupProbeReasons(snapshot, started);
   }
 
   /**
@@ -988,10 +844,8 @@ class BootstrapAPI {
    * @return {boolean}
    */
   isStartupComplete() {
-    if (!this.bootstrapService) {
-      return true;
-    }
-    return this.bootstrapService.phase === BOOTSTRAP_PHASE.COMPLETE;
+    return this.bootstrapReadinessOwner
+      .isStartupComplete();
   }
 
   /**
@@ -999,10 +853,8 @@ class BootstrapAPI {
    * @return {boolean}
    */
   isRuntimeWiringReady() {
-    if (!this.bootstrapService) {
-      return true;
-    }
-    return Boolean(this.messageRouter || this.bootstrapService?.messageRouter);
+    return this.bootstrapReadinessOwner
+      .isRuntimeWiringReady();
   }
 
   /**
@@ -1010,10 +862,8 @@ class BootstrapAPI {
    * @return {boolean}
    */
   isSqlEngineDependencyReady() {
-    if (!this.bootstrapService) {
-      return true;
-    }
-    return Boolean(this.sqlQueryEngine);
+    return this.bootstrapReadinessOwner
+      .isSqlEngineDependencyReady();
   }
 
   /**
@@ -1031,10 +881,8 @@ class BootstrapAPI {
    * @param {number} statusCode
    */
   recordReadinessProbeResult(endpoint, statusCode) {
-    if (typeof this.readinessState?.recordProbeResult !== TYPEOF.FUNCTION) {
-      return;
-    }
-    this.readinessState.recordProbeResult(endpoint, statusCode);
+    return this.bootstrapReadinessOwner
+      .recordReadinessProbeResult(endpoint, statusCode);
   }
 
   /**
@@ -1045,21 +893,8 @@ class BootstrapAPI {
    * @return {Object}
    */
   markDraining(options = {}) {
-    if (typeof this.readinessState?.beginDrain === TYPEOF.FUNCTION) {
-      return this.readinessState.beginDrain({
-        drainDeadlineMs: options.drainDeadlineMs,
-        reasonCode: options.reasonCode || LIFECYCLE_REASON.NODE_DRAINING,
-      });
-    }
-
-    if (typeof this.readinessState?.transitionTo === TYPEOF.FUNCTION) {
-      return this.readinessState.transitionTo('DEGRADED', {
-        ready: false,
-        reasons: [options.reasonCode || LIFECYCLE_REASON.NODE_DRAINING],
-      });
-    }
-
-    return this.getReadinessSnapshotForDiagnostics();
+    return this.bootstrapReadinessOwner
+      .markDraining(options);
   }
 
   /**
@@ -1073,52 +908,8 @@ class BootstrapAPI {
    * @return {Object}
    */
   buildBootstrapNotReadyResponse(options = {}) {
-    const snapshot = this.getReadinessSnapshotForDiagnostics();
-    const reasons = this.mergeReadinessReasons(
-      snapshot.reasons,
-      options.reasonCode,
-    );
-    const response = {
-      success: false,
-      error: options.error,
-      code: options.code,
-      reasons,
-      retryAfterMs: Number.isFinite(options.retryAfterMs) ?
-        Math.max(NUM.ZERO, Math.floor(options.retryAfterMs)) :
-        (Number.isFinite(snapshot.retryAfterMs) ?
-          snapshot.retryAfterMs :
-          NUM.ZERO),
-    };
-
-    if (typeof options.phase === TYPEOF.STRING && options.phase.length > NUM.ZERO) {
-      response.phase = options.phase;
-    }
-
-    if (typeof snapshot.state === TYPEOF.STRING && snapshot.state.length > NUM.ZERO) {
-      response.state = snapshot.state;
-    }
-
-    if (options.leaderReadiness &&
-        typeof options.leaderReadiness === TYPEOF.OBJECT) {
-      response.leaderReadiness = {
-        ...options.leaderReadiness,
-      };
-      for (const field of [
-        'missingPartitionLeaders',
-        'missingPartitionLeaderNodes',
-        'missingPartitionLeaderAddresses',
-        'missingMessageGroupLeaders',
-        'missingMessageGroupLeaderNodes',
-        'missingMessageGroupLeaderAddresses',
-      ]) {
-        if (!Array.isArray(options.leaderReadiness[field])) {
-          continue;
-        }
-        response[field] = [...options.leaderReadiness[field]];
-      }
-    }
-
-    return response;
+    return this.bootstrapReadinessOwner
+      .buildBootstrapNotReadyResponse(options);
   }
 
   /**
@@ -1126,24 +917,8 @@ class BootstrapAPI {
    * @return {Object}
    */
   getReadinessSnapshotForDiagnostics() {
-    try {
-      return this.evaluateReadinessSnapshot();
-    } catch (_error) {
-      const fallbackSnapshot = typeof this.readinessState?.getSnapshot === TYPEOF.FUNCTION ?
-        this.readinessState.getSnapshot() :
-        null;
-      if (fallbackSnapshot) {
-        return fallbackSnapshot;
-      }
-      return {
-        ready: false,
-        phase: LIFECYCLE_PHASE.INIT,
-        state: BOOTSTRAP_PHASE.NOT_STARTED,
-        reasons: [],
-        retryAfterMs: NUM.ZERO,
-        timestamp: Date.now(),
-      };
-    }
+    return this.bootstrapReadinessOwner
+      .getReadinessSnapshotForDiagnostics();
   }
 
   /**
@@ -1153,16 +928,8 @@ class BootstrapAPI {
    * @return {Array<string>}
    */
   mergeReadinessReasons(reasons, reasonCode) {
-    const merged = Array.isArray(reasons) ?
-      [...reasons] :
-      [];
-    if (typeof reasonCode !== TYPEOF.STRING || reasonCode.length === NUM.ZERO) {
-      return merged;
-    }
-    if (!merged.includes(reasonCode)) {
-      merged.push(reasonCode);
-    }
-    return merged;
+    return this.bootstrapReadinessOwner
+      .mergeReadinessReasons(reasons, reasonCode);
   }
 
   /**
@@ -1172,212 +939,8 @@ class BootstrapAPI {
    * @return {Promise<Object>} Bootstrap response.
    */
   async handleBootstrapRequest(request, reply) {
-    const {nodeId, nodeAddress} = request.body || {};
-
-    this.logger.info(BOOTSTRAP_API_LOG_MSG.RECEIVED_BOOTSTRAP_REQUEST, {
-      nodeId,
-      nodeAddress,
-      seedNodeId: this.seedNodeId,
-    });
-
-    // Validate request
-    const validationError = this.validateBootstrapRequest(nodeId, nodeAddress);
-    if (validationError) {
-      this.logger.warn(BOOTSTRAP_API_LOG_MSG.VALIDATION_FAILED, {
-        nodeId,
-        nodeAddress,
-        error: validationError,
-      });
-      reply.code(HTTP_STATUS.BAD_REQUEST);
-      return {error: validationError};
-    }
-
-    if (this.bootstrapService &&
-        this.bootstrapService.phase !== BOOTSTRAP_PHASE.COMPLETE) {
-      reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE);
-      return this.buildBootstrapNotReadyResponse({
-        error: BOOTSTRAP_API_ERROR.BOOTSTRAP_NOT_READY,
-        code: BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY,
-        phase: this.bootstrapService.phase,
-        reasonCode: BOOTSTRAP_API_PROBE_REASON.BOOTSTRAP_PHASE_INCOMPLETE,
-      });
-    }
-
-    // Check for conflicts
-    const conflictError = await this.checkForConflicts(nodeId, nodeAddress);
-    if (conflictError) {
-      this.logger.warn(BOOTSTRAP_API_LOG_MSG.CONFLICT_DETECTED, {
-        nodeId,
-        nodeAddress,
-        error: conflictError,
-      });
-      reply.code(HTTP_STATUS.CONFLICT);
-      return {error: conflictError};
-    }
-
-    const now = Date.now();
-    const blockingMoveReplicaAdmissions =
-      await this.getBlockingMoveReplicaBootstrapAdmissions(now);
-    if (blockingMoveReplicaAdmissions.length > NUM.ZERO) {
-      const blockingReservation = blockingMoveReplicaAdmissions[NUM.ZERO];
-      const retryAfterMs =
-        this.resolveMoveReplicaBootstrapAdmissionRetryAfterMs(
-          blockingReservation,
-          now,
-        );
-      this.logger.warn(BOOTSTRAP_API_LOG_MSG.BOOTSTRAP_ADMISSION_DEFERRED, {
-        nodeId,
-        nodeAddress,
-        seedNodeId: this.seedNodeId,
-        admissionBlock: 'move_replica_handoff_stabilizing',
-        assignmentId: blockingReservation.assignmentId,
-        replicaId: blockingReservation.replicaId,
-        groupId: blockingReservation.groupId || null,
-        sourceNodeId: blockingReservation.sourceNodeId || null,
-        targetNodeId: blockingReservation.targetNodeId,
-        retryAfterMs,
-      });
-      reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE);
-      return this.buildBootstrapNotReadyResponse({
-        error: BOOTSTRAP_API_ERROR.BOOTSTRAP_NOT_READY,
-        code: BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY,
-        reasonCode:
-          BOOTSTRAP_API_PROBE_REASON.MOVE_REPLICA_HANDOFF_STABILIZING,
-        retryAfterMs,
-      });
-    }
-
-    if (this.inFlightBootstrapRequestCount >=
-        this.maxConcurrentBootstrapRequests) {
-      this.logger.warn(BOOTSTRAP_API_LOG_MSG.BOOTSTRAP_ADMISSION_DEFERRED, {
-        nodeId,
-        nodeAddress,
-        seedNodeId: this.seedNodeId,
-        inFlightBootstrapRequests: this.inFlightBootstrapRequestCount,
-        maxConcurrentBootstrapRequests: this.maxConcurrentBootstrapRequests,
-        retryAfterMs: this.bootstrapAdmissionRetryAfterMs,
-      });
-      reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE);
-      return this.buildBootstrapNotReadyResponse({
-        error: BOOTSTRAP_API_ERROR.BOOTSTRAP_NOT_READY,
-        code: BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY,
-        reasonCode: BOOTSTRAP_API_PROBE_REASON.JOIN_ADMISSION_BACKPRESSURED,
-        retryAfterMs: this.bootstrapAdmissionRetryAfterMs,
-      });
-    }
-
-    this.inFlightBootstrapRequestCount += 1;
-    try {
-      const leaderStatus = await this.waitForServiceLeaders();
-      if (!leaderStatus.ready) {
-        this.logger.warn(BOOTSTRAP_API_LOG_MSG.LEADERS_NOT_READY, {
-          nodeId,
-          missingPartitionLeaders: leaderStatus.missingPartitionLeaders,
-          missingMessageGroupLeaders: leaderStatus.missingMessageGroupLeaders,
-          missingPartitionLeaderNodes: leaderStatus.missingPartitionLeaderNodes,
-          missingMessageGroupLeaderNodes: leaderStatus.missingMessageGroupLeaderNodes,
-        });
-        reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE);
-        return this.buildBootstrapNotReadyResponse({
-          error: BOOTSTRAP_API_ERROR.BOOTSTRAP_NOT_READY,
-          code: BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE,
-          reasonCode: BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE,
-          leaderReadiness: leaderStatus,
-        });
-      }
-
-      // Determine message group assignment strategy
-      const assignment = await this.determineAndReserveMessageGroupAssignment(nodeId);
-
-      // Get current assignment epoch if available
-      const currentEpoch = this.getCurrentEpoch();
-      const {
-        systemTableSnapshots,
-        topologySnapshotMeta,
-      } = this.buildBootstrapTopologySnapshotEnvelope({
-        currentEpoch,
-      });
-
-      // Get cluster configuration
-      const clusterConfig = this.getClusterConfiguration();
-
-      // Get ready nodes for pull-based assignment
-      const readyNodes = this.getReadyNodes();
-
-      this.logger.info(BOOTSTRAP_API_LOG_MSG.READY_NODES_FOR_BOOTSTRAP, {
-        nodeId,
-        readyNodesCount: readyNodes.length,
-        readyNodes,
-        seedNodeId: this.seedNodeId,
-      });
-
-      // Get table policies for assignment validation
-      const tablePolicies = this.getTablePolicies();
-      const latencyTopologyHints = this.getLatencyTopologyHints(nodeId);
-
-      // Node registration happens after WebSocket IDENTIFY + NODE_STATE_UPDATE.
-      // System table cache is the source of truth.
-
-      // Build seed node WebSocket address for cross-node communication
-      const seedNodeWsAddress = resolveAdvertisedWebSocketAddress({
-        advertisedAddress: this.seedNodeWsAddress,
-        nodeAddress: this.seedNodeAddress ||
-          BOOTSTRAP_API_DEFAULT.WS_HOST,
-        wsPort: this.wsPort || null,
-      });
-
-      const response = {
-        success: true,
-        seedNodeId: this.seedNodeId,
-        seedNodeAddress: this.seedNodeAddress,
-        seedNodeWsAddress,
-        messageGroupAssignment: assignment,
-        systemTableSnapshots,
-        topologySnapshotMeta,
-        readyNodes,
-        tablePolicies,
-        currentEpoch,
-        latencyTopologyHints,
-        clusterConfig,
-        leaderReadiness: {
-          ready: leaderStatus.ready === true,
-          missingPartitionLeaders: leaderStatus.missingPartitionLeaders || [],
-          missingPartitionLeaderNodes:
-            leaderStatus.missingPartitionLeaderNodes || [],
-          missingPartitionLeaderAddresses:
-            leaderStatus.missingPartitionLeaderAddresses || [],
-          missingMessageGroupLeaders:
-            leaderStatus.missingMessageGroupLeaders || [],
-          missingMessageGroupLeaderNodes:
-            leaderStatus.missingMessageGroupLeaderNodes || [],
-          missingMessageGroupLeaderAddresses:
-            leaderStatus.missingMessageGroupLeaderAddresses || [],
-        },
-        timestamp: Date.now(),
-      };
-
-      this.logger.info(BOOTSTRAP_API_LOG_MSG.RESPONSE_PREPARED, {
-        nodeId,
-        strategy: assignment.strategy,
-        groupId: assignment.groupId,
-      });
-
-      return response;
-    } catch (error) {
-      this.logger.error(BOOTSTRAP_API_LOG_MSG.BOOTSTRAP_FAILED, {
-        nodeId,
-        nodeAddress,
-        error: error.message,
-        stack: error.stack,
-      });
-      reply.code(HTTP_STATUS.INTERNAL_SERVER_ERROR);
-      throw error;
-    } finally {
-      this.inFlightBootstrapRequestCount = Math.max(
-        NUM.ZERO,
-        this.inFlightBootstrapRequestCount - NUM.ONE,
-      );
-    }
+    return this.bootstrapRequestOwner
+      .handleBootstrapRequest(request, reply);
   }
 
   /**
@@ -2070,42 +1633,8 @@ class BootstrapAPI {
    * @private
    */
   getLeaderPartitionForTable(tableName) {
-    const systemTableCache = assertCritical(
-      this.systemTableCache,
-      BOOTSTRAP_API_ERROR.SYSTEM_TABLE_CACHE_REQUIRED,
-    );
-
-    // Get partition from system cache - the single source of truth
-    const partitions = systemTableCache.filter(TABLES.PARTITIONS, (p) =>
-      p.table_id === tableName || p.table_name === tableName,
-    ) || [];
-
-    if (partitions.length === NUM.ZERO) {
-      return null;
-    }
-
-    const partition = partitions[NUM.ZERO];
-
-    // Find the leader service
-    const services = systemTableCache.filter(TABLES.SERVICES, (service) =>
-      service[COLUMN.PARTITION_ID] === partition[COLUMN.PARTITION_ID] &&
-      service[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.PARTITION &&
-      service[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER &&
-      service[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE,
-    ) || [];
-
-    if (services.length === NUM.ZERO) {
-      return null;
-    }
-
-    return {
-      partitionId: partition[COLUMN.PARTITION_ID],
-      tableName: tableName,
-      leaderNodeId: services[NUM.ZERO][COLUMN.NODE_ID],
-      replicaId: services[NUM.ZERO][COLUMN.REPLICA_ID] ||
-        services[NUM.ZERO][COLUMN.SERVICE_ID],
-      address: services[NUM.ZERO][COLUMN.ADDRESS],
-    };
+    return this.bootstrapJoinAdmissionOwner
+      .getLeaderPartitionForTable(tableName);
   }
 
   /**
@@ -2115,23 +1644,8 @@ class BootstrapAPI {
    * @return {string|null} Error message or null if valid.
    */
   validateBootstrapRequest(nodeId, nodeAddress) {
-    if (!nodeId) {
-      return BOOTSTRAP_API_ERROR.NODE_ID_REQUIRED;
-    }
-
-    if (!uuidValidate(nodeId)) {
-      return BOOTSTRAP_API_ERROR.NODE_ID_INVALID;
-    }
-
-    if (!nodeAddress) {
-      return BOOTSTRAP_API_ERROR.NODE_ADDRESS_REQUIRED;
-    }
-
-    if (typeof nodeAddress !== TYPEOF.STRING || nodeAddress.length === NUM.ZERO) {
-      return BOOTSTRAP_API_ERROR.NODE_ADDRESS_INVALID;
-    }
-
-    return null;
+    return this.bootstrapJoinAdmissionOwner
+      .validateBootstrapRequest(nodeId, nodeAddress);
   }
 
   /**
@@ -2141,71 +1655,8 @@ class BootstrapAPI {
    * @return {Promise<string|null>} Error message or null if no conflict.
    */
   async checkForConflicts(nodeId, nodeAddress) {
-    const nodeIdAlreadyRegistered = BOOTSTRAP_API_ERROR.NODE_ID_ALREADY_REGISTERED;
-    const nodeAddressInUse = BOOTSTRAP_API_ERROR.NODE_ADDRESS_IN_USE;
-    const systemTableCache = assertCritical(
-      this.systemTableCache,
-      BOOTSTRAP_API_ERROR.SYSTEM_TABLE_CACHE_REQUIRED,
-    );
-
-    // Check if this is the seed node
-    if (nodeId === this.seedNodeId) {
-      return BOOTSTRAP_API_ERROR.SEED_NODE_ID_CONFLICT;
-    }
-
-    // Check against seed node address
-    if (nodeAddress === this.seedNodeAddress) {
-      return BOOTSTRAP_API_ERROR.SEED_NODE_ADDRESS_CONFLICT;
-    }
-
-    // Check system table cache for existing nodes
-    // Check if node ID already exists
-    const existingNode = systemTableCache.get(TABLES.NODES, nodeId);
-    if (existingNode) {
-      const authoritativeExistingNode =
-        await this.readAuthoritativeNodeRow(nodeId);
-      const effectiveExistingNode =
-        authoritativeExistingNode.available ?
-          authoritativeExistingNode.row :
-          existingNode;
-      const existingNodeAddress =
-        effectiveExistingNode?.[COLUMN.NODE_ADDRESS] ??
-        effectiveExistingNode?.node_address ??
-        null;
-      if (existingNodeAddress === nodeAddress) {
-        this.logger.info(BOOTSTRAP_API_LOG_MSG.IDEMPOTENT_NODE_REJOIN_ALLOWED, {
-          nodeId,
-          nodeAddress,
-          authoritativeOverride:
-            authoritativeExistingNode.available === true,
-        });
-        return null;
-      }
-      if (effectiveExistingNode && !this._isNodeDead(effectiveExistingNode)) {
-        return nodeIdAlreadyRegistered(nodeId);
-      }
-      this.logger.info(BOOTSTRAP_API_LOG_MSG.STALE_NODE_REJOIN_ALLOWED, {
-        nodeId,
-        existingStatus:
-          effectiveExistingNode?.[COLUMN.STATUS] ?? null,
-        existingLease:
-          effectiveExistingNode?.[COLUMN.READY_LEASE_EXPIRES_AT] ?? null,
-        authoritativeOverride:
-          authoritativeExistingNode.available === true,
-      });
-    }
-
-    // Check for address conflicts (skip dead nodes)
-    const allNodes = systemTableCache.getAll(TABLES.NODES) || [];
-    for (const node of allNodes) {
-      if (node[COLUMN.NODE_ADDRESS] === nodeAddress &&
-          node[COLUMN.NODE_ID] !== nodeId &&
-          !this._isNodeDead(node)) {
-        return nodeAddressInUse(nodeAddress);
-      }
-    }
-
-    return null;
+    return this.bootstrapJoinAdmissionOwner
+      .checkForConflicts(nodeId, nodeAddress);
   }
 
   /**
@@ -2217,17 +1668,7 @@ class BootstrapAPI {
    * @private
    */
   _isNodeDead(nodeRecord) {
-    const status = nodeRecord[COLUMN.STATUS];
-    if (REJOIN_TERMINAL_STATES.has(status)) {
-      return true;
-    }
-    const leaseExpiry = Number(
-      nodeRecord[COLUMN.READY_LEASE_EXPIRES_AT],
-    );
-    if (Number.isFinite(leaseExpiry) && leaseExpiry <= Date.now()) {
-      return true;
-    }
-    return false;
+    return this.bootstrapJoinAdmissionOwner.isNodeDead(nodeRecord);
   }
 
   /**
@@ -2239,41 +1680,8 @@ class BootstrapAPI {
    * @private
    */
   async readAuthoritativeNodeRow(nodeId) {
-    const view = this.getAuthoritativeControlPlaneView();
-    if (!view?.canRead()) {
-      return {
-        available: false,
-        row: null,
-      };
-    }
-
-    try {
-      const result = await view.readRows(
-        TABLES.NODES,
-        `SELECT * FROM ${TABLES.NODES} WHERE ${COLUMN.NODE_ID} = ?`,
-        [nodeId],
-      );
-      if (result?.success !== true) {
-        return {
-          available: false,
-          row: null,
-        };
-      }
-      const rows = Array.isArray(result.rows) ? result.rows : [];
-      const row = rows.find((candidate) => {
-        return candidate?.[COLUMN.NODE_ID] === nodeId ||
-          candidate?.node_id === nodeId;
-      }) || rows[NUM.ZERO] || null;
-      return {
-        available: true,
-        row,
-      };
-    } catch (_error) {
-      return {
-        available: false,
-        row: null,
-      };
-    }
+    return this.bootstrapJoinAdmissionOwner
+      .readAuthoritativeNodeRow(nodeId);
   }
 
   /**
@@ -2283,19 +1691,8 @@ class BootstrapAPI {
    * @private
    */
   getAuthoritativeControlPlaneView() {
-    if (this.authoritativeControlPlaneView) {
-      return this.authoritativeControlPlaneView;
-    }
-    const cdcIntegrationService = this.getCdcIntegrationService();
-    if (!cdcIntegrationService) {
-      return null;
-    }
-    this.authoritativeControlPlaneView = new AuthoritativeControlPlaneView({
-      nodeId: this.seedNodeId || 'bootstrap-api',
-      cdcIntegrationService,
-      messageRouter: this.messageRouter || this.bootstrapService?.messageRouter || null,
-    });
-    return this.authoritativeControlPlaneView;
+    return this.bootstrapJoinAdmissionOwner
+      .getAuthoritativeControlPlaneView();
   }
 
   /**
@@ -2308,60 +1705,8 @@ class BootstrapAPI {
    * @return {Object} Assignment instructions.
    */
   determineMessageGroupAssignment(newNodeId, options = {}) {
-    // Get existing message groups from cache or services
-    const messageGroups = this.getMessageGroups();
-    const excludedSourceNodeIds = new Set(
-      options.excludedSourceNodeIds instanceof Set ?
-        options.excludedSourceNodeIds :
-        [],
-    );
-
-    // BootstrapAPI can only complete MOVE_REPLICA handoff from a source
-    // replica it owns locally on the seed. Remote source replicas are not
-    // actionable during /register-service because source removal is local-only.
-    if (typeof this.seedNodeId === TYPEOF.STRING &&
-        this.seedNodeId.length > NUM.ZERO) {
-      for (const group of messageGroups) {
-        for (const replica of group?.replicas || []) {
-          const replicaNodeId = replica?.node_id;
-          if (!replicaNodeId || replicaNodeId === this.seedNodeId) {
-            continue;
-          }
-          excludedSourceNodeIds.add(replicaNodeId);
-        }
-      }
-    }
-
-    this.logger.info(BOOTSTRAP_API_LOG_MSG.JOIN_ASSIGNMENT, {
-      newNodeId,
-      messageGroupCount: messageGroups.length,
-      excludedSourceNodeCount: excludedSourceNodeIds.size,
-      messageGroups: messageGroups.map((g) => ({
-        groupId: g.group_id,
-        replicaCount: g.replicas?.length || NUM.ZERO,
-        replicas: g.replicas?.map((r) => ({
-          replicaId: r.replica_id,
-          nodeId: r.node_id,
-          address: r.address,
-        })),
-      })),
-    });
-
-    // Delegate strategy selection to MessageGroupAssignment (single owner)
-    const mgAssignment = new MessageGroupAssignment({
-      seedNodeAddress: this.seedNodeAddress,
-    });
-    const assignment = mgAssignment.determineAssignment(
-      newNodeId,
-      messageGroups,
-      {
-        excludedReplicaIds: options.excludedReplicaIds,
-        excludedSourceNodeIds,
-      },
-    );
-
-    // Augment with peer addresses for Raft communication
-    return this.augmentAssignmentWithPeerAddresses(assignment, messageGroups);
+    return this.bootstrapJoinAdmissionOwner
+      .determineMessageGroupAssignment(newNodeId, options);
   }
 
   /**
@@ -2372,18 +1717,8 @@ class BootstrapAPI {
    * @private
    */
   async withMoveReplicaAssignmentReservationLock(action) {
-    const previousLock = this.moveReplicaAssignmentReservationLock;
-    let releaseLock;
-    this.moveReplicaAssignmentReservationLock = new Promise((resolve) => {
-      releaseLock = resolve;
-    });
-
-    await previousLock;
-    try {
-      return await action();
-    } finally {
-      releaseLock();
-    }
+    return this.bootstrapJoinAdmissionOwner
+      .withMoveReplicaAssignmentReservationLock(action);
   }
 
   /**
@@ -2394,30 +1729,8 @@ class BootstrapAPI {
    * @private
    */
   async determineAndReserveMessageGroupAssignment(newNodeId) {
-    return this.withMoveReplicaAssignmentReservationLock(async () => {
-      await this.expireMoveReplicaAssignmentReservations();
-      const activeReservations = await this.getActiveMoveReplicaAssignmentReservations();
-      const excludedReplicaIds = new Set(
-        activeReservations.map((reservation) => reservation.replicaId),
-      );
-      const assignment = this.determineMessageGroupAssignment(newNodeId, {
-        excludedReplicaIds,
-      });
-
-      if (assignment.strategy !== BootstrapStrategy.MOVE_REPLICA) {
-        return assignment;
-      }
-
-      const reservation = await this.reserveMoveReplicaAssignment(
-        newNodeId,
-        assignment,
-      );
-      return {
-        ...assignment,
-        assignmentId: reservation.assignmentId,
-        assignmentLeaseExpiresAt: reservation.leaseExpiresAt,
-      };
-    });
+    return this.bootstrapJoinAdmissionOwner
+      .determineAndReserveMessageGroupAssignment(newNodeId);
   }
 
   /**
@@ -2673,55 +1986,8 @@ class BootstrapAPI {
    * @private
    */
   augmentAssignmentWithPeerAddresses(assignment, messageGroups) {
-    if (assignment.strategy === BootstrapStrategy.MOVE_REPLICA) {
-      // Find the group to extract peer addresses
-      const group = messageGroups.find(
-        (g) => g.group_id === assignment.groupId,
-      );
-      const replicas = group?.replicas || [];
-      const peerAddresses = replicas.map((r) =>
-        `${r.node_id}${ADDRESS.SEPARATOR}${ENTITY_TYPE.MESSAGE_GROUP}` +
-        `${ADDRESS.SEPARATOR}${r.replica_id}`,
-      );
-
-      this.logger.info(BOOTSTRAP_API_LOG_MSG.JOIN_MOVABLE_REPLICA, {
-        groupId: assignment.groupId,
-        sourceNodeId: assignment.sourceNodeId,
-        replicaToMove: assignment.replicaToMove,
-        peerIds: assignment.existingPeerIds,
-        peerAddresses,
-        replicaAddresses: assignment.replicaAddresses,
-      });
-
-      return {
-        ...assignment,
-        peerAddresses,
-      };
-    }
-
-    // CREATE_SELF_HOSTED: include peer addresses from an existing group
-    // so the joining node can reach the control plane.
-    const fallbackGroup = messageGroups.find((group) =>
-      Array.isArray(group.replicas) && group.replicas.length > NUM.ZERO,
-    ) || messageGroups[NUM.ZERO];
-
-    if (fallbackGroup && Array.isArray(fallbackGroup.replicas)) {
-      const replicas = fallbackGroup.replicas;
-      return {
-        ...assignment,
-        existingPeerIds: replicas.map((r) => r.replica_id),
-        replicaAddresses: replicas.map((r) => r.address),
-        peerAddresses: replicas.map((r) =>
-          `${r.node_id}${ADDRESS.SEPARATOR}${ENTITY_TYPE.MESSAGE_GROUP}` +
-          `${ADDRESS.SEPARATOR}${r.replica_id}`,
-        ),
-        replicaNodeMap: Object.fromEntries(
-          replicas.map((r) => [r.replica_id, r.node_id]),
-        ),
-      };
-    }
-
-    return assignment;
+    return this.bootstrapJoinAdmissionOwner
+      .augmentAssignmentWithPeerAddresses(assignment, messageGroups);
   }
 
   /**
@@ -2739,67 +2005,7 @@ class BootstrapAPI {
    * @return {Array<Object>} Message groups.
    */
   getMessageGroups() {
-    // Bootstrap assignment and bootstrap snapshot publication must observe the
-    // same canonical row source. Prefer local authoritative partition rows
-    // over cache state so a lagging seed cache cannot reserve a replica that
-    // bootstrap snapshots already expose as moved.
-    const services = this.getBootstrapAuthoritativeTableRows(TABLES.SERVICES);
-    const messageGroupServices = services.filter((service) =>
-      service[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP,
-    );
-
-    // Group services by group_id to build message groups
-    const groupsFromServices = new Map();
-    for (const service of messageGroupServices) {
-      const groupId = service[COLUMN.GROUP_ID];
-      if (!groupId) {
-        continue;
-      }
-
-      if (!groupsFromServices.has(groupId)) {
-        groupsFromServices.set(groupId, {
-          group_id: groupId,
-          replicas: [],
-          replica_count: NUM.ZERO,
-        });
-      }
-
-      const group = groupsFromServices.get(groupId);
-      group.replicas.push({
-        replica_id: service[COLUMN.REPLICA_ID] || service[COLUMN.SERVICE_ID],
-        node_id: service[COLUMN.NODE_ID],
-        address: service[COLUMN.ADDRESS],
-        raft_role: service[COLUMN.RAFT_ROLE],
-      });
-      group.replica_count = group.replicas.length;
-    }
-
-    // If we found groups from services, return them
-    if (groupsFromServices.size > NUM.ZERO) {
-      return Array.from(groupsFromServices.values());
-    }
-
-    // Fall back to message_groups table (may be empty for MOVE_REPLICA tests)
-    const cachedGroups =
-      this.getBootstrapAuthoritativeTableRows(TABLES.MESSAGE_GROUPS);
-
-    return cachedGroups.map((group) => {
-      const replicas = messageGroupServices
-        .filter((service) =>
-          service[COLUMN.GROUP_ID] === group[COLUMN.GROUP_ID],
-        )
-        .map((service) => ({
-          replica_id: service[COLUMN.REPLICA_ID] || service[COLUMN.SERVICE_ID],
-          node_id: service[COLUMN.NODE_ID],
-          address: service[COLUMN.ADDRESS],
-          raft_role: service[COLUMN.RAFT_ROLE],
-        }));
-
-      return {
-        ...group,
-        replicas,
-      };
-    });
+    return this.bootstrapJoinAdmissionOwner.getMessageGroups();
   }
 
   /**
@@ -2812,16 +2018,8 @@ class BootstrapAPI {
    * @private
    */
   getBootstrapAuthoritativeTableRows(tableName) {
-    const systemTableCache = assertCritical(
-      this.systemTableCache,
-      BOOTSTRAP_API_ERROR.SYSTEM_TABLE_CACHE_REQUIRED,
-    );
-    const cacheRows = systemTableCache.getAll(tableName) || [];
-    const rows = this.resolveAuthoritativeSystemTableSnapshotRows(
-      tableName,
-      cacheRows,
-    );
-    return Array.isArray(rows) ? rows : [];
+    return this.bootstrapTopologySnapshotOwner
+      .getBootstrapAuthoritativeTableRows(tableName);
   }
 
   /**
@@ -2846,8 +2044,8 @@ class BootstrapAPI {
    * @return {Object} System table snapshots with arrays for each table.
    */
   buildSystemTableSnapshots() {
-    return this.buildBootstrapTopologySnapshotEnvelope()
-      .systemTableSnapshots;
+    return this.bootstrapTopologySnapshotOwner
+      .buildSystemTableSnapshots();
   }
 
   /**
@@ -2857,42 +2055,8 @@ class BootstrapAPI {
    * @return {{systemTableSnapshots: Object, topologySnapshotMeta: Object}}
    */
   buildBootstrapTopologySnapshotEnvelope(options = {}) {
-    const currentEpoch =
-      options.currentEpoch === undefined ?
-        this.getCurrentEpoch() :
-        options.currentEpoch;
-    const envelope = buildBootstrapTopologySnapshotEnvelope({
-      systemTableCache: assertCritical(
-        this.systemTableCache,
-        BOOTSTRAP_API_ERROR.SYSTEM_TABLE_CACHE_REQUIRED,
-      ),
-      currentEpoch,
-      resolveSnapshotRows: (tableName, cacheRows) =>
-        this.resolveAuthoritativeSystemTableSnapshotRows(
-          tableName,
-          cacheRows,
-        ),
-    });
-
-    const snapshots = envelope.systemTableSnapshots;
-
-    // Verify that we have partition leaders in the services table
-    // Joining nodes need this information to write to system tables
-    const serviceSnapshot = snapshots[TABLES.SERVICES] || [];
-    const leaders = serviceSnapshot.filter((service) =>
-      service[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.PARTITION &&
-      service[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER &&
-      service[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE,
-    );
-
-    if (leaders.length === NUM.ZERO) {
-      this.logger.warn('No partition leaders found in system cache', {
-        seedNodeId: this.seedNodeId,
-        totalServices: serviceSnapshot.length,
-      });
-    }
-
-    return envelope;
+    return this.bootstrapTopologySnapshotOwner
+      .buildBootstrapTopologySnapshotEnvelope(options);
   }
 
   /**
@@ -2905,29 +2069,8 @@ class BootstrapAPI {
    * @private
    */
   resolveAuthoritativeSystemTableSnapshotRows(tableName, cacheRows = []) {
-    const localRowSets = this.queryLocalAuthoritativePartitionRowSets(tableName);
-    if (localRowSets.length === NUM.ZERO) {
-      return cacheRows;
-    }
-
-    const mergedRows = this.mergeAuthoritativeSystemTableRowSets(
-      tableName,
-      localRowSets,
-    );
-    if (mergedRows.length !== cacheRows.length) {
-      this.logger.warn(
-        'Bootstrap snapshot diverged from local authoritative partition state',
-        {
-          seedNodeId: this.seedNodeId,
-          tableName,
-          cacheRowCount: cacheRows.length,
-          authoritativeRowCount: mergedRows.length,
-          replicaCount: localRowSets.length,
-        },
-      );
-    }
-
-    return mergedRows;
+    return this.bootstrapTopologySnapshotOwner
+      .resolveAuthoritativeSystemTableSnapshotRows(tableName, cacheRows);
   }
 
   /**
@@ -2937,58 +2080,8 @@ class BootstrapAPI {
    * @private
    */
   queryLocalAuthoritativePartitionRowSets(tableName) {
-    const systemTableCache = assertCritical(
-      this.systemTableCache,
-      BOOTSTRAP_API_ERROR.SYSTEM_TABLE_CACHE_REQUIRED,
-    );
-    if (!this.partitionServices || this.partitionServices.size === NUM.ZERO) {
-      return [];
-    }
-
-    const partitionRows =
-      typeof systemTableCache.filter === TYPEOF.FUNCTION ?
-        systemTableCache.filter(TABLES.PARTITIONS, (row) => {
-          const rowTableName = row?.[COLUMN.TABLE_NAME] || row?.table_name || row?.tableName;
-          const rowTableId = row?.[COLUMN.TABLE_ID] || row?.table_id || row?.tableId;
-          return rowTableName === tableName || rowTableId === tableName;
-        }) :
-        [];
-    const partitionIds = [...new Set(partitionRows
-      .map((row) => row?.[COLUMN.PARTITION_ID] || row?.partition_id || row?.partitionId)
-      .filter((value) => typeof value === TYPEOF.STRING && value.length > NUM.ZERO),
-    )];
-    if (partitionIds.length === NUM.ZERO) {
-      return [];
-    }
-
-    const rowSets = [];
-    const sql = `SELECT * FROM ${tableName}`;
-    for (const partitionId of partitionIds) {
-      for (const service of this.partitionServices.values()) {
-        if (service?.partitionId !== partitionId ||
-            service?.initialized !== true ||
-            typeof service?.db?.prepare !== TYPEOF.FUNCTION) {
-          continue;
-        }
-        try {
-          const rows = service.db.prepare(sql).all();
-          rowSets.push(Array.isArray(rows) ? rows : []);
-        } catch (error) {
-          this.logger.warn(
-            'Failed to read authoritative snapshot rows from local partition',
-            {
-              seedNodeId: this.seedNodeId,
-              tableName,
-              partitionId,
-              replicaId: service?.replicaId || service?.service_id || null,
-              error: error.message,
-            },
-          );
-        }
-      }
-    }
-
-    return rowSets;
+    return this.bootstrapTopologySnapshotOwner
+      .queryLocalAuthoritativePartitionRowSets(tableName);
   }
 
   /**
@@ -2999,24 +2092,8 @@ class BootstrapAPI {
    * @private
    */
   mergeAuthoritativeSystemTableRowSets(tableName, rowSets) {
-    const keyField = getSystemCachePrimaryKeyFieldOrFallback(tableName, 'id');
-    const mergedRows = new Map();
-
-    for (const rowSet of rowSets) {
-      const rows = Array.isArray(rowSet) ? rowSet : [];
-      for (const row of rows) {
-        const key = row?.[keyField] ?? row?.id;
-        if (typeof key === TYPEOF.UNDEFINED || key === null) {
-          continue;
-        }
-        const existing = mergedRows.get(key);
-        if (!existing || this.isAuthoritativeSnapshotRowNewer(row, existing)) {
-          mergedRows.set(key, row);
-        }
-      }
-    }
-
-    return [...mergedRows.values()];
+    return this.bootstrapTopologySnapshotOwner
+      .mergeAuthoritativeSystemTableRowSets(tableName, rowSets);
   }
 
   /**
@@ -3027,29 +2104,8 @@ class BootstrapAPI {
    * @private
    */
   isAuthoritativeSnapshotRowNewer(candidate, existing) {
-    const candidateUpdatedAt =
-      Number(candidate?.[COLUMN.UPDATED_AT] ?? candidate?.updated_at ?? candidate?.updatedAt);
-    const existingUpdatedAt =
-      Number(existing?.[COLUMN.UPDATED_AT] ?? existing?.updated_at ?? existing?.updatedAt);
-    if (Number.isFinite(candidateUpdatedAt) && Number.isFinite(existingUpdatedAt)) {
-      return candidateUpdatedAt > existingUpdatedAt;
-    }
-    if (Number.isFinite(candidateUpdatedAt) && !Number.isFinite(existingUpdatedAt)) {
-      return true;
-    }
-
-    const candidateCreatedAt =
-      Number(candidate?.[COLUMN.CREATED_AT] ?? candidate?.created_at ?? candidate?.createdAt);
-    const existingCreatedAt =
-      Number(existing?.[COLUMN.CREATED_AT] ?? existing?.created_at ?? existing?.createdAt);
-    if (Number.isFinite(candidateCreatedAt) && Number.isFinite(existingCreatedAt)) {
-      return candidateCreatedAt > existingCreatedAt;
-    }
-    if (Number.isFinite(candidateCreatedAt) && !Number.isFinite(existingCreatedAt)) {
-      return true;
-    }
-
-    return JSON.stringify(candidate).length > JSON.stringify(existing).length;
+    return this.bootstrapTopologySnapshotOwner
+      .isAuthoritativeSnapshotRowNewer(candidate, existing);
   }
 
   /**
@@ -3059,24 +2115,8 @@ class BootstrapAPI {
    * @private
    */
   getLatencyTopologyHints(nodeId) {
-    const systemTableCache = assertCritical(
-      this.systemTableCache,
-      BOOTSTRAP_API_ERROR.SYSTEM_TABLE_CACHE_REQUIRED,
-    );
-    const config = ConfigurationManager.getInstance();
-    const propagationMode = config.get(CONFIG_KEY.LATENCY_PROPAGATION_MODE) || null;
-    const joiningNode = systemTableCache.get(TABLES.NODES, nodeId) || null;
-    const groups = systemTableCache.getAll(TABLES.LATENCY_GROUPS) || [];
-    const interGroupLatencies =
-      systemTableCache.getAll(TABLES.INTER_GROUP_LATENCIES) || [];
-
-    return {
-      suggestedGroupId: joiningNode?.[COLUMN.LATENCY_GROUP_ID] || null,
-      groupCount: groups.length,
-      interGroupEdgeCount: interGroupLatencies.length,
-      propagationMode,
-      timestamp: Date.now(),
-    };
+    return this.bootstrapTopologySnapshotOwner
+      .getLatencyTopologyHints(nodeId);
   }
 
   /**
@@ -3217,20 +2257,8 @@ class BootstrapAPI {
    * @return {string[]} Ready node IDs.
    */
   getReadyNodes() {
-    const systemTableCache = assertCritical(
-      this.systemTableCache,
-      BOOTSTRAP_API_ERROR.SYSTEM_TABLE_CACHE_REQUIRED,
-    );
-    const readyNodes = systemTableCache.getReadyNodes();
-
-    // Always include seed node - it's responding to this request so it's available
-    // The seed node's heartbeat may have failed to update its lease, but it's clearly
-    // operational if it's processing this bootstrap request
-    if (this.seedNodeId && !readyNodes.includes(this.seedNodeId)) {
-      readyNodes.push(this.seedNodeId);
-    }
-
-    return readyNodes;
+    return this.bootstrapClusterViewOwner
+      .getReadyNodes();
   }
 
   /**
@@ -3239,34 +2267,8 @@ class BootstrapAPI {
    * @return {Object} Table policies keyed by table name.
    */
   getTablePolicies() {
-    const systemTableCache = assertCritical(
-      this.systemTableCache,
-      BOOTSTRAP_API_ERROR.SYSTEM_TABLE_CACHE_REQUIRED,
-    );
-    const tables = systemTableCache.getAll(TABLES.TABLES) || [];
-    const policies = {};
-
-    for (const table of tables) {
-      const tableName = table.table_id || table.table_name;
-      if (!tableName) {
-        continue;
-      }
-
-      let policy = table.table_policies;
-      if (typeof policy === TYPEOF.STRING && policy.length > NUM.ZERO) {
-        try {
-          policy = JSON.parse(policy);
-        } catch (error) {
-          throw new Error(
-            `Invalid table policy for ${tableName}: ${error.message}`,
-          );
-        }
-      }
-
-      policies[tableName] = policy || {};
-    }
-
-    return policies;
+    return this.bootstrapClusterViewOwner
+      .getTablePolicies();
   }
 
   /**
@@ -3274,14 +2276,8 @@ class BootstrapAPI {
    * @return {Object|null} Current epoch data or null if unavailable.
    */
   getCurrentEpoch() {
-    const epochManager = this.epochManager ||
-      this.bootstrapService?.getEpochManager?.();
-    if (!epochManager) {
-      return null;
-    }
-
-    const epoch = epochManager.getCurrentEpoch();
-    return typeof epoch?.toObject === TYPEOF.FUNCTION ? epoch.toObject() : epoch;
+    return this.bootstrapClusterViewOwner
+      .getCurrentEpoch();
   }
 
   /**
@@ -3289,14 +2285,8 @@ class BootstrapAPI {
    * @return {Object} Cluster configuration.
    */
   getClusterConfiguration() {
-    const config = ConfigurationManager.getInstance();
-
-    return {
-      raft: config.getCategory(CONFIG_CATEGORY.RAFT),
-      messageGroup: config.getCategory(CONFIG_CATEGORY.MESSAGE_GROUP),
-      partition: config.getCategory(CONFIG_CATEGORY.PARTITION),
-      logging: config.getCategory(CONFIG_CATEGORY.LOGGING),
-    };
+    return this.bootstrapClusterViewOwner
+      .getClusterConfiguration();
   }
 
   /**
@@ -3304,54 +2294,8 @@ class BootstrapAPI {
    * @return {Object} Cluster state.
    */
   getClusterState() {
-    const nodes = [];
-    const messageGroups = [];
-
-    // Add seed node
-    nodes.push({
-      nodeId: this.seedNodeId,
-      nodeAddress: this.seedNodeAddress,
-      status: SERVICE_STATUS.ACTIVE,
-      isSeed: true,
-    });
-
-    // Add nodes from system table cache (source of truth)
-    const systemTableCache = assertCritical(
-      this.systemTableCache,
-      BOOTSTRAP_API_ERROR.SYSTEM_TABLE_CACHE_REQUIRED,
-    );
-    const allNodes = systemTableCache.getAll(TABLES.NODES) || [];
-    for (const node of allNodes) {
-      // Skip seed node (already added)
-      if (node.node_id === this.seedNodeId) {
-        continue;
-      }
-      nodes.push({
-        nodeId: node.node_id,
-        nodeAddress: node.node_address,
-        status: node.status || BOOTSTRAP_API_CLUSTER_STATE.UNKNOWN,
-        isSeed: false,
-      });
-    }
-
-    // Get message groups
-    const groups = this.getMessageGroups();
-    for (const group of groups) {
-      messageGroups.push({
-        groupId: group.group_id,
-        replicaCount: group.replicas?.length || NUM.ZERO,
-        replicas: group.replicas || [],
-      });
-    }
-
-    return {
-      seedNodeId: this.seedNodeId,
-      nodeCount: nodes.length,
-      nodes,
-      messageGroupCount: messageGroups.length,
-      messageGroups,
-      timestamp: Date.now(),
-    };
+    return this.bootstrapClusterViewOwner
+      .getClusterState();
   }
 
   /**
