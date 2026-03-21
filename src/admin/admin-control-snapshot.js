@@ -13,9 +13,11 @@
 
 import {
   COLUMN,
+  ENDPOINT_STATUS,
   NUM,
   TABLES,
   TIME_MS,
+  TRANSPORT_TYPE,
   TYPEOF,
 } from '../constants/index.js';
 import {PARTITION_TRANSITION_METADATA_FIELD} from '../partition/partition-constants.js';
@@ -40,6 +42,14 @@ import {
   firstStringField,
   uniqueSorted,
 } from './admin-helpers.js';
+import {
+  buildReadinessByNodeId,
+  hasCanonicalWebSocketEndpoint,
+  hasCanonicalWebSocketEndpoints,
+  isCanonicalWebSocketEndpointRow,
+  isCanonicallyActiveNode,
+  resolveCanonicalActiveNodeIds,
+} from '../control-plane/active-node-projection.js';
 import {evaluateSharedMetadataNodeCoverage} from
   './admin-shared-metadata-consistency.js';
 
@@ -131,25 +141,34 @@ class AdminControlSnapshot {
       );
     }
 
-    const nodeRows =
-      this.systemTableCache.getAll(TABLES.NODES);
     const tableRows =
       this.systemTableCache.getAll(TABLES.TABLES);
     const partitionRows =
       this.systemTableCache.getAll(TABLES.PARTITIONS);
-    const serviceRows =
-      this.systemTableCache.getAll(TABLES.SERVICES);
     const replicaOperationRows =
       this.systemTableCache.getAll(TABLES.REPLICA_OPERATIONS);
     const capturedAt = this.nowFn();
-
-    const activeNodeRows = nodeRows.filter((row) =>
-      String(
-        firstStringField(row, COLUMN.STATUS, 'state') || '',
-      ).toLowerCase() === STATUS_ACTIVE);
-    const nodeIds = uniqueSorted(activeNodeRows
-      .map((row) => firstStringField(row, COLUMN.NODE_ID, 'id'))
-      .filter(Boolean));
+    const controlPlaneDiagnostics =
+      await this.buildControlPlaneDiagnosticsSnapshot({
+        capturedAt,
+        tableRows,
+        allowAuthoritativeReadinessRefresh:
+          options.allowAuthoritativeReadinessRefresh,
+        allowStaleReadinessOnCacheChange:
+          options.allowStaleReadinessOnCacheChange,
+      });
+    const nodeRows =
+      this.systemTableCache.getAll(TABLES.NODES);
+    const serviceRows =
+      this.systemTableCache.getAll(TABLES.SERVICES);
+    const nodeEndpointRows =
+      this.systemTableCache.getAll(TABLES.NODE_ENDPOINTS);
+    const nodeIds = this.resolveControlSnapshotActiveNodeIds(
+      nodeRows,
+      serviceRows,
+      nodeEndpointRows,
+      controlPlaneDiagnostics,
+    );
     const partitionIds = uniqueSorted(partitionRows
       .map((row) =>
         firstStringField(row, COLUMN.PARTITION_ID, 'id'))
@@ -174,15 +193,7 @@ class AdminControlSnapshot {
       nodes: nodeIds,
       partitions: partitionIds,
       cdcTelemetry: this.buildLocalCdcTelemetry(),
-      controlPlaneDiagnostics:
-        await this.buildControlPlaneDiagnosticsSnapshot({
-          capturedAt,
-          tableRows,
-          allowAuthoritativeReadinessRefresh:
-            options.allowAuthoritativeReadinessRefresh,
-          allowStaleReadinessOnCacheChange:
-            options.allowStaleReadinessOnCacheChange,
-        }),
+      controlPlaneDiagnostics,
       leaders: leaderSummary.leaders,
       replicaRoles: leaderSummary.replicaRoles,
       replicaRoleDiagnostics:
@@ -259,6 +270,50 @@ class AdminControlSnapshot {
       );
     }
     return this.buildLocalControlSnapshot();
+  }
+
+  resolveControlSnapshotActiveNodeIds(
+    nodeRows = [],
+    serviceRows = [],
+    nodeEndpointRows = [],
+    controlPlaneDiagnostics = null,
+  ) {
+    return resolveCanonicalActiveNodeIds({
+      nodeRows,
+      serviceRows,
+      nodeEndpointRows,
+      readinessByNodeId: buildReadinessByNodeId({
+        readinessByNodeId:
+          controlPlaneDiagnostics?.readinessByNodeId || null,
+      }),
+      nowMs: this.nowFn(),
+    });
+  }
+
+  isControlSnapshotActiveNode(
+    nodeRow,
+    readinessByNodeId,
+    nodeEndpointRows,
+    options = {},
+  ) {
+    return isCanonicallyActiveNode(nodeRow, {
+      readinessByNodeId,
+      nodeEndpointRows,
+      nowMs: this.nowFn(),
+      requireWebSocketEndpoint: options.requireWebSocketEndpoint,
+    });
+  }
+
+  hasAnyActiveWebSocketEndpoint(nodeEndpointRows = []) {
+    return hasCanonicalWebSocketEndpoints(nodeEndpointRows);
+  }
+
+  hasActiveWebSocketEndpoint(nodeId, nodeEndpointRows = []) {
+    return hasCanonicalWebSocketEndpoint(nodeId, nodeEndpointRows);
+  }
+
+  isActiveWebSocketEndpoint(endpointRow) {
+    return isCanonicalWebSocketEndpointRow(endpointRow);
   }
 
   /**

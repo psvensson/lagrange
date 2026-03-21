@@ -887,6 +887,7 @@ class AdminServiceDiscovery {
         {
           queryTimeoutMs:
             AUTHORITATIVE_DISCOVERY_REPAIR.QUERY_TIMEOUT_MS,
+          allowSqlFallback: true,
           sessionId:
             `${String(options.reason || 'repair')}` +
             `:${tableName}:${now}`,

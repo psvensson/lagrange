@@ -8,6 +8,9 @@ import {
 } from '../../constants/index.js';
 import {CONFIG_CATEGORY} from '../../config/config-constants.js';
 import {
+  resolveCanonicalActiveNodeIds,
+} from '../../control-plane/active-node-projection.js';
+import {
   BOOTSTRAP_API_CLUSTER_STATE,
   BOOTSTRAP_API_ERROR,
 } from '../bootstrap-api-constants.js';
@@ -33,6 +36,10 @@ class BootstrapClusterViewOwner {
     return this.delegates.getMessageGroups?.() || [];
   }
 
+  getControlPlaneReadinessService() {
+    return this.delegates.getControlPlaneReadinessService?.() || null;
+  }
+
   getEpochManager() {
     return this.delegates.getEpochManager?.() || null;
   }
@@ -42,7 +49,46 @@ class BootstrapClusterViewOwner {
       this.getSystemTableCache(),
       BOOTSTRAP_API_ERROR.SYSTEM_TABLE_CACHE_REQUIRED,
     );
-    const readyNodes = systemTableCache.getReadyNodes();
+    const nodeRows = systemTableCache.getAll(TABLES.NODES) || [];
+    const serviceRows = systemTableCache.getAll(TABLES.SERVICES) || [];
+    const nodeEndpointRows =
+      systemTableCache.getAll(TABLES.NODE_ENDPOINTS) || [];
+    const readinessService = this.getControlPlaneReadinessService();
+    const readinessByNodeId = {};
+    if (readinessService &&
+        typeof readinessService.getNodeReadinessSync === TYPEOF.FUNCTION) {
+      const candidateNodeIds = new Set();
+      for (const nodeRow of nodeRows) {
+        const nodeId = nodeRow?.node_id || nodeRow?.nodeId || null;
+        if (nodeId) {
+          candidateNodeIds.add(nodeId);
+        }
+      }
+      for (const serviceRow of serviceRows) {
+        const nodeId = serviceRow?.node_id || serviceRow?.nodeId || null;
+        if (nodeId) {
+          candidateNodeIds.add(nodeId);
+        }
+      }
+      for (const endpointRow of nodeEndpointRows) {
+        const nodeId = endpointRow?.node_id || endpointRow?.nodeId || null;
+        if (nodeId) {
+          candidateNodeIds.add(nodeId);
+        }
+      }
+      for (const nodeId of candidateNodeIds) {
+        const readiness = readinessService.getNodeReadinessSync(nodeId);
+        if (readiness && typeof readiness === TYPEOF.OBJECT) {
+          readinessByNodeId[nodeId] = readiness;
+        }
+      }
+    }
+    const readyNodes = resolveCanonicalActiveNodeIds({
+      nodeRows,
+      serviceRows,
+      nodeEndpointRows,
+      readinessByNodeId,
+    });
 
     if (this.getSeedNodeId() && !readyNodes.includes(this.getSeedNodeId())) {
       readyNodes.push(this.getSeedNodeId());
@@ -106,11 +152,14 @@ class BootstrapClusterViewOwner {
   getClusterState() {
     const nodes = [];
     const messageGroups = [];
+    const activeNodeIds = new Set(this.getReadyNodes());
 
     nodes.push({
       nodeId: this.getSeedNodeId(),
       nodeAddress: this.getSeedNodeAddress(),
-      status: SERVICE_STATUS.ACTIVE,
+      status: activeNodeIds.has(this.getSeedNodeId()) ?
+        SERVICE_STATUS.ACTIVE :
+        BOOTSTRAP_API_CLUSTER_STATE.UNKNOWN,
       isSeed: true,
     });
 
@@ -126,7 +175,9 @@ class BootstrapClusterViewOwner {
       nodes.push({
         nodeId: node.node_id,
         nodeAddress: node.node_address,
-        status: node.status || BOOTSTRAP_API_CLUSTER_STATE.UNKNOWN,
+        status: activeNodeIds.has(node.node_id) ?
+          SERVICE_STATUS.ACTIVE :
+          (node.status || BOOTSTRAP_API_CLUSTER_STATE.UNKNOWN),
         isSeed: false,
       });
     }

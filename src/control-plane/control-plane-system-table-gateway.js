@@ -1842,7 +1842,7 @@ class ControlPlaneSystemTableGateway {
           replicaFallbackConsistency:
             options?.replicaFallbackConsistency ||
             CONTROL_PLANE_REPLICA_FALLBACK_CONSISTENCY,
-          allowSqlFallback: false,
+          allowSqlFallback: options?.allowSqlFallback === true,
           queryOptions: this.buildQueryOptions(options),
         },
       );

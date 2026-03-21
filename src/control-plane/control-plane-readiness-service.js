@@ -288,13 +288,39 @@ class ControlPlaneReadinessService {
    */
   async getAllNodeReadiness(options = {}) {
     const nodeRows = await this.readNodeRows(options);
-    const readiness = [];
-
+    const nodeIds = new Set();
     for (const nodeRow of nodeRows) {
       const nodeId = nodeRow?.[COLUMN.NODE_ID] || null;
-      if (!nodeId) {
-        continue;
+      if (nodeId) {
+        nodeIds.add(nodeId);
       }
+    }
+    if (typeof this.systemTableCache?.getAll === TYPEOF.FUNCTION) {
+      const serviceRows =
+        this.systemTableCache.getAll(TABLES.SERVICES) || [];
+      const nodeEndpointRows =
+        this.systemTableCache.getAll(TABLES.NODE_ENDPOINTS) || [];
+      for (const serviceRow of serviceRows) {
+        const nodeId = serviceRow?.[COLUMN.NODE_ID] || null;
+        if (nodeId) {
+          nodeIds.add(nodeId);
+        }
+      }
+      for (const endpointRow of nodeEndpointRows) {
+        const nodeId = endpointRow?.[COLUMN.NODE_ID] || null;
+        if (nodeId) {
+          nodeIds.add(nodeId);
+        }
+      }
+    }
+    for (const nodeId of this.lastReadinessSnapshotByNodeId.keys()) {
+      if (nodeId) {
+        nodeIds.add(nodeId);
+      }
+    }
+    const readiness = [];
+
+    for (const nodeId of [...nodeIds].sort()) {
       readiness.push(await this.getNodeReadiness(nodeId, options));
     }
 
@@ -375,6 +401,14 @@ class ControlPlaneReadinessService {
     }
 
     if (!nodeRow) {
+      const fresherStoredSnapshot = this.getFresherStoredReadinessSnapshot(
+        nodeId,
+        null,
+        publication,
+      );
+      if (fresherStoredSnapshot) {
+        return fresherStoredSnapshot;
+      }
       const missingReadiness = this.buildMissingNodeReadiness(
         nodeId,
         observedAt,

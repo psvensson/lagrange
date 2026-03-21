@@ -103,6 +103,46 @@ test('ControlPlaneSystemTableGateway readRows returns a typed failure when ' +
   );
 });
 
+test('ControlPlaneSystemTableGateway executeRead honors explicit routed ' +
+  'authoritative read opt-in', async (t) => {
+  const calls = [];
+  const gateway = new ControlPlaneSystemTableGateway({
+    nodeId: 'node-gateway',
+    cdcIntegrationService: {
+      async executeAuthoritativeSystemTableRead(
+        tableName,
+        sql,
+        params,
+        options,
+      ) {
+        calls.push({tableName, sql, params, options});
+        return {
+          success: true,
+          rows: [{node_id: 'node-a'}],
+        };
+      },
+    },
+  });
+
+  const result = await gateway.executeRead({
+    owner: 'admin-service-discovery',
+    tableName: TABLES.NODES,
+    sql: 'SELECT * FROM nodes',
+    params: [],
+    strategy: 'authoritative_required',
+  }, {
+    allowSqlFallback: true,
+  });
+
+  t.equal(result.success, true, 'authoritative read should still succeed');
+  t.equal(calls.length, 1, 'gateway should execute one authoritative read');
+  t.equal(
+    calls[0].options.allowSqlFallback,
+    true,
+    'gateway should pass explicit routed-authoritative opt-in to the owner',
+  );
+});
+
 test('ControlPlaneSystemTableGateway emits read telemetry with owner and ' +
   'strategy details', async (t) => {
   const metricEvents = [];

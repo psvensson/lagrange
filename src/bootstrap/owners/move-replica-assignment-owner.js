@@ -20,10 +20,19 @@ import {
   BOOTSTRAP_API_REGISTER_SERVICE_ERROR_CODE,
   BOOTSTRAP_API_SQL,
 } from '../bootstrap-api-constants.js';
+import {
+  isRetryableControlPlaneError,
+  getControlPlaneRetryAfterMs,
+} from '../../control-plane/control-plane-error-classification.js';
+
+const MOVE_REPLICA_ASSIGNMENT_SQL_RETRY_FLOOR_MS = 250;
+const MOVE_REPLICA_ASSIGNMENT_SQL_RETRY_CEILING_MS = 5000;
 
 class MoveReplicaAssignmentOwner {
   constructor(options = {}) {
     this.delegates = options.delegates || {};
+    this.nextReservationSqlRetryAtMs = 0;
+    this.nextRenewalWriteRetryAtByAssignmentId = new Map();
   }
 
   getSeedNodeId() {
@@ -78,6 +87,150 @@ class MoveReplicaAssignmentOwner {
       code,
       options,
     ) || new Error(message);
+  }
+
+  isRetryableMoveReplicaAssignmentPersistenceFailure(value) {
+    return isRetryableControlPlaneError(value);
+  }
+
+  getRetryableMoveReplicaAssignmentBackoffMs(value) {
+    const retryAfterMs = getControlPlaneRetryAfterMs(value);
+    if (Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO) {
+      return Math.min(
+        MOVE_REPLICA_ASSIGNMENT_SQL_RETRY_CEILING_MS,
+        Math.max(
+          MOVE_REPLICA_ASSIGNMENT_SQL_RETRY_FLOOR_MS,
+          Math.floor(retryAfterMs),
+        ),
+      );
+    }
+    return MOVE_REPLICA_ASSIGNMENT_SQL_RETRY_FLOOR_MS;
+  }
+
+  armReservationSqlRetryBackoff(value, now = Date.now()) {
+    this.nextReservationSqlRetryAtMs = now +
+      this.getRetryableMoveReplicaAssignmentBackoffMs(value);
+  }
+
+  clearReservationSqlRetryBackoff() {
+    this.nextReservationSqlRetryAtMs = NUM.ZERO;
+  }
+
+  shouldAttemptReservationSqlRefresh(now = Date.now()) {
+    return this.nextReservationSqlRetryAtMs <= now;
+  }
+
+  armRenewalWriteRetryBackoff(assignmentId, value, now = Date.now()) {
+    if (!assignmentId) {
+      return;
+    }
+    this.nextRenewalWriteRetryAtByAssignmentId.set(
+      assignmentId,
+      now + this.getRetryableMoveReplicaAssignmentBackoffMs(value),
+    );
+  }
+
+  clearRenewalWriteRetryBackoff(assignmentId) {
+    if (!assignmentId) {
+      return;
+    }
+    this.nextRenewalWriteRetryAtByAssignmentId.delete(assignmentId);
+  }
+
+  shouldAttemptRenewalWrite(assignmentId, now = Date.now()) {
+    if (!assignmentId) {
+      return true;
+    }
+    const retryAt =
+      this.nextRenewalWriteRetryAtByAssignmentId.get(assignmentId) || NUM.ZERO;
+    return retryAt <= now;
+  }
+
+  getMoveReplicaAssignmentRowsFromCache() {
+    const systemTableCache = this.getSystemTableCache();
+    const isMoveReplicaAssignmentRow = (row) => {
+      const type = row?.type || row?.operation_type || null;
+      return type === BOOTSTRAP_API_ASSIGNMENT.OPERATION_TYPE;
+    };
+
+    if (typeof systemTableCache?.filter === TYPEOF.FUNCTION) {
+      return systemTableCache.filter(
+        TABLES.REPLICA_OPERATIONS,
+        isMoveReplicaAssignmentRow,
+      ) || [];
+    }
+
+    if (typeof systemTableCache?.getAll === TYPEOF.FUNCTION) {
+      return (systemTableCache.getAll(TABLES.REPLICA_OPERATIONS) || [])
+        .filter(isMoveReplicaAssignmentRow);
+    }
+
+    return null;
+  }
+
+  collectMoveReplicaAssignmentReservationsFromRows(rows, byAssignmentId) {
+    const reservations = this.getMoveReplicaAssignmentReservations();
+    for (const row of Array.isArray(rows) ? rows : []) {
+      const normalized = this.normalizeMoveReplicaAssignmentReservationRow(row);
+      if (!normalized) {
+        continue;
+      }
+      byAssignmentId.set(normalized.assignmentId, normalized);
+      reservations?.set(normalized.assignmentId, normalized);
+    }
+  }
+
+  async collectMoveReplicaAssignmentReservations(options = {}) {
+    const now = Number.isFinite(options.now) ?
+      Math.floor(options.now) :
+      Date.now();
+    const byAssignmentId = new Map();
+    const reservations = this.getMoveReplicaAssignmentReservations();
+
+    for (const reservation of reservations?.values?.() || []) {
+      const normalized = this.normalizeMoveReplicaAssignmentReservationRow(reservation);
+      if (!normalized) {
+        continue;
+      }
+      byAssignmentId.set(normalized.assignmentId, normalized);
+    }
+
+    const cacheRows = this.getMoveReplicaAssignmentRowsFromCache();
+    if (Array.isArray(cacheRows) && cacheRows.length > NUM.ZERO) {
+      this.collectMoveReplicaAssignmentReservationsFromRows(cacheRows, byAssignmentId);
+      return [...byAssignmentId.values()];
+    }
+    if (byAssignmentId.size > NUM.ZERO) {
+      return [...byAssignmentId.values()];
+    }
+
+    if (!this.getSqlQueryEngine() || !this.shouldAttemptReservationSqlRefresh(now)) {
+      return [...byAssignmentId.values()];
+    }
+
+    let queryResult = null;
+    try {
+      queryResult = await this.executeBootstrapControlPlaneQuery(
+        BOOTSTRAP_API_SQL.SELECT_MOVE_ASSIGNMENT_RESERVATIONS,
+        [BOOTSTRAP_API_ASSIGNMENT.OPERATION_TYPE],
+      );
+    } catch (error) {
+      if (this.isRetryableMoveReplicaAssignmentPersistenceFailure(error)) {
+        this.armReservationSqlRetryBackoff(error, now);
+      }
+      return [...byAssignmentId.values()];
+    }
+
+    if (queryResult?.success === false) {
+      if (this.isRetryableMoveReplicaAssignmentPersistenceFailure(queryResult)) {
+        this.armReservationSqlRetryBackoff(queryResult, now);
+      }
+      return [...byAssignmentId.values()];
+    }
+
+    this.clearReservationSqlRetryBackoff();
+    this.collectMoveReplicaAssignmentReservationsFromRows(queryResult?.rows, byAssignmentId);
+    return [...byAssignmentId.values()];
   }
 
   isMoveReplicaHandoffRequest(serviceData) {
@@ -315,7 +468,8 @@ class MoveReplicaAssignmentOwner {
     const reservations = this.getMoveReplicaAssignmentReservations();
     reservations?.set(renewedReservation.assignmentId, renewedReservation);
 
-    if (this.getSqlQueryEngine()) {
+    if (this.getSqlQueryEngine() &&
+        this.shouldAttemptRenewalWrite(renewedReservation.assignmentId, now)) {
       try {
         const updateResult = await this.executeBootstrapControlPlaneQuery(
           BOOTSTRAP_API_SQL.UPDATE_REPLICA_OPERATION,
@@ -330,6 +484,16 @@ class MoveReplicaAssignmentOwner {
           ],
         );
         if (updateResult?.success === false) {
+          if (this.isRetryableMoveReplicaAssignmentPersistenceFailure(
+            updateResult,
+          )) {
+            this.armRenewalWriteRetryBackoff(
+              renewedReservation.assignmentId,
+              updateResult,
+              now,
+            );
+            return force ? null : reservation;
+          }
           this.getLogger().warn(
             BOOTSTRAP_API_LOG_MSG.MOVE_REPLICA_ASSIGNMENT_VALIDATION_FAILED,
             {
@@ -342,7 +506,16 @@ class MoveReplicaAssignmentOwner {
           );
           return force ? null : reservation;
         }
+        this.clearRenewalWriteRetryBackoff(renewedReservation.assignmentId);
       } catch (error) {
+        if (this.isRetryableMoveReplicaAssignmentPersistenceFailure(error)) {
+          this.armRenewalWriteRetryBackoff(
+            renewedReservation.assignmentId,
+            error,
+            now,
+          );
+          return force ? null : reservation;
+        }
         this.getLogger().warn(
           BOOTSTRAP_API_LOG_MSG.MOVE_REPLICA_ASSIGNMENT_RENEWAL_WRITE_FAILED,
           {
@@ -577,64 +750,20 @@ class MoveReplicaAssignmentOwner {
 
   async getActiveMoveReplicaAssignmentReservations() {
     const now = Date.now();
-    const byAssignmentId = new Map();
-    const reservations = this.getMoveReplicaAssignmentReservations();
-
-    for (const reservation of reservations?.values?.() || []) {
-      const normalized = this.normalizeMoveReplicaAssignmentReservationRow(reservation);
-      if (!normalized || !this.isMoveReplicaAssignmentReservationActive(normalized, now)) {
-        continue;
-      }
-      byAssignmentId.set(normalized.assignmentId, normalized);
-    }
-
-    if (this.getSqlQueryEngine()) {
-      const queryResult = await this.executeBootstrapControlPlaneQuery(
-        BOOTSTRAP_API_SQL.SELECT_MOVE_ASSIGNMENT_RESERVATIONS,
-        [BOOTSTRAP_API_ASSIGNMENT.OPERATION_TYPE],
-      );
-      if (queryResult?.success !== false) {
-        const rows = Array.isArray(queryResult?.rows) ? queryResult.rows : [];
-        for (const row of rows) {
-          const normalized = this.normalizeMoveReplicaAssignmentReservationRow(row);
-          if (!normalized || !this.isMoveReplicaAssignmentReservationActive(normalized, now)) {
-            continue;
-          }
-          byAssignmentId.set(normalized.assignmentId, normalized);
-          reservations?.set(normalized.assignmentId, normalized);
-        }
-      }
-    }
-
-    return [...byAssignmentId.values()];
+    const reservations =
+      await this.collectMoveReplicaAssignmentReservations({now});
+    return reservations.filter((reservation) =>
+      this.isMoveReplicaAssignmentReservationActive(reservation, now),
+    );
   }
 
   async getBlockingMoveReplicaBootstrapAdmissions(now = Date.now()) {
     const reservations = [];
     const byAssignmentId = new Map();
-    const pushReservation = (reservation) => {
-      const normalized = this.normalizeMoveReplicaAssignmentReservationRow(reservation);
-      if (!normalized) {
-        return;
-      }
-      byAssignmentId.set(normalized.assignmentId, normalized);
-    };
-
-    for (const reservation of this.getMoveReplicaAssignmentReservations()?.values?.() || []) {
-      pushReservation(reservation);
-    }
-
-    if (this.getSqlQueryEngine()) {
-      const queryResult = await this.executeBootstrapControlPlaneQuery(
-        BOOTSTRAP_API_SQL.SELECT_MOVE_ASSIGNMENT_RESERVATIONS,
-        [BOOTSTRAP_API_ASSIGNMENT.OPERATION_TYPE],
-      );
-      if (queryResult?.success !== false) {
-        const rows = Array.isArray(queryResult?.rows) ? queryResult.rows : [];
-        for (const row of rows) {
-          pushReservation(row);
-        }
-      }
+    const collectedReservations =
+      await this.collectMoveReplicaAssignmentReservations({now});
+    for (const reservation of collectedReservations) {
+      byAssignmentId.set(reservation.assignmentId, reservation);
     }
 
     for (const reservation of byAssignmentId.values()) {
@@ -801,17 +930,10 @@ class MoveReplicaAssignmentOwner {
       pushReservation(reservation);
     }
 
-    if (this.getSqlQueryEngine()) {
-      const queryResult = await this.executeBootstrapControlPlaneQuery(
-        BOOTSTRAP_API_SQL.SELECT_MOVE_ASSIGNMENT_RESERVATIONS,
-        [BOOTSTRAP_API_ASSIGNMENT.OPERATION_TYPE],
-      );
-      if (queryResult?.success !== false) {
-        const rows = Array.isArray(queryResult?.rows) ? queryResult.rows : [];
-        for (const row of rows) {
-          pushReservation(row);
-        }
-      }
+    const cacheOrSqlReservations =
+      await this.collectMoveReplicaAssignmentReservations({now});
+    for (const reservation of cacheOrSqlReservations) {
+      pushReservation(reservation);
     }
 
     for (const reservation of reservations) {
@@ -884,6 +1006,13 @@ class MoveReplicaAssignmentOwner {
     const now = Date.now();
     const assignmentId = uuidv4();
     const leaseExpiresAt = now + this.getMoveReplicaAssignmentLeaseMs();
+    const stepsHistory = [{
+      phase: 'reserved',
+      step: WORKFLOW_STEP.PENDING,
+      status: BOOTSTRAP_API_HANDOFF_STATUS.PREPARING,
+      timestamp: now,
+      leaseExpiresAt,
+    }];
     const reservation = {
       assignmentId,
       replicaId,
@@ -893,16 +1022,13 @@ class MoveReplicaAssignmentOwner {
       status: BOOTSTRAP_API_HANDOFF_STATUS.PREPARING,
       leaseExpiresAt,
       updatedAt: now,
+      stepsHistory,
     };
 
+    const reservations = this.getMoveReplicaAssignmentReservations();
+    reservations?.set(assignmentId, reservation);
+
     if (this.getSqlQueryEngine()) {
-      const stepsHistory = [{
-        phase: 'reserved',
-        step: WORKFLOW_STEP.PENDING,
-        status: reservation.status,
-        timestamp: now,
-        leaseExpiresAt,
-      }];
       const params = [
         assignmentId,
         BOOTSTRAP_API_ASSIGNMENT.OPERATION_TYPE,
@@ -920,19 +1046,54 @@ class MoveReplicaAssignmentOwner {
         SERVICE_TYPE.MESSAGE_GROUP,
         assignment.groupId || null,
       ];
-      const persistResult = await this.executeBootstrapControlPlaneQuery(
-        BOOTSTRAP_API_SQL.INSERT_REPLICA_OPERATION,
-        params,
-      );
-      if (persistResult?.success === false) {
-        throw this.buildBootstrapControlPlaneQueryError(
-          persistResult,
-          'Failed to persist MOVE_REPLICA assignment reservation',
+      try {
+        const persistResult = await this.executeBootstrapControlPlaneQuery(
+          BOOTSTRAP_API_SQL.INSERT_REPLICA_OPERATION,
+          params,
+        );
+        if (persistResult?.success === false) {
+          if (!this.isRetryableMoveReplicaAssignmentPersistenceFailure(
+            persistResult,
+          )) {
+            reservations?.delete(assignmentId);
+            throw this.buildBootstrapControlPlaneQueryError(
+              persistResult,
+              'Failed to persist MOVE_REPLICA assignment reservation',
+            );
+          }
+          this.getLogger().warn(
+            BOOTSTRAP_API_LOG_MSG.MOVE_REPLICA_ASSIGNMENT_RESERVATION_WRITE_FAILED,
+            {
+              assignmentId,
+              replicaId,
+              targetNodeId,
+              sourceNodeId: reservation.sourceNodeId,
+              retryAfterMs: persistResult?.retryAfterMs || null,
+              error:
+                persistResult?.error ||
+                'failed to persist MOVE_REPLICA assignment reservation',
+            },
+          );
+        }
+      } catch (error) {
+        if (!this.isRetryableMoveReplicaAssignmentPersistenceFailure(error)) {
+          reservations?.delete(assignmentId);
+          throw error;
+        }
+        this.getLogger().warn(
+          BOOTSTRAP_API_LOG_MSG.MOVE_REPLICA_ASSIGNMENT_RESERVATION_WRITE_FAILED,
+          {
+            assignmentId,
+            replicaId,
+            targetNodeId,
+            sourceNodeId: reservation.sourceNodeId,
+            retryAfterMs: error?.retryAfterMs || null,
+            error: error?.message || String(error),
+          },
         );
       }
     }
 
-    this.getMoveReplicaAssignmentReservations()?.set(assignmentId, reservation);
     this.getLogger().info(BOOTSTRAP_API_LOG_MSG.MOVE_REPLICA_ASSIGNMENT_RESERVED, {
       assignmentId,
       replicaId,

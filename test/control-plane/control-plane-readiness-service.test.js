@@ -815,6 +815,96 @@ async (t) => {
   t.end();
 });
 
+test('ControlPlaneReadinessService getAllNodeReadiness retains fresh stored readiness for service-visible nodes whose node row lags cache',
+async (t) => {
+  const now = 360000;
+  const cache = createCache({
+    nodes: [
+      {
+        ...createActiveNode('node-visible'),
+        [COLUMN.CONNECTION_STATE]: STATE.READY,
+        [COLUMN.LAST_HEARTBEAT]: now - 1000,
+        [COLUMN.READY_LEASE_EXPIRES_AT]: now + 60000,
+      },
+      {
+        ...createActiveNode('node-lagged'),
+        [COLUMN.CONNECTION_STATE]: STATE.READY,
+        [COLUMN.LAST_HEARTBEAT]: now - 1000,
+        [COLUMN.READY_LEASE_EXPIRES_AT]: now + 60000,
+      },
+    ],
+    services: [
+      createMessageGroupService('node-visible'),
+      createMessageGroupService('node-lagged'),
+    ],
+  });
+  const readinessService = new ControlPlaneReadinessService({
+    nodeId: 'seed-node',
+    systemTableCache: cache,
+    cacheMutationTarget: cache,
+    messageRouter: {
+      getConnectionState() {
+        return STATE.CONNECTED;
+      },
+    },
+    storageAccountingService: createAccountingService({
+      'node-visible': {
+        nodeId: 'node-visible',
+        budgetBytes: 1000,
+        pressureState: 'normal',
+      },
+      'node-lagged': {
+        nodeId: 'node-lagged',
+        budgetBytes: 1000,
+        pressureState: 'normal',
+      },
+    }),
+    cdcIntegrationService: {
+      async executeAuthoritativeSystemTableRead() {
+        return {success: false, rows: []};
+      },
+    },
+    cdcGroupPropagationService: createPublicationService({
+      currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+      reasonCode: null,
+      enteredAt: '2026-03-04T00:00:00.000Z',
+      recentTransitions: [],
+    }),
+    now: () => now,
+  });
+
+  const initialLaggedReadiness =
+    await readinessService.getNodeReadiness('node-lagged', {
+      allowAuthoritativeRefresh: false,
+    });
+  t.equal(
+    initialLaggedReadiness.dimensions.clusterMemberHealthy,
+    true,
+    'fixture should capture a healthy readiness snapshot before the node row lags',
+  );
+
+  cache.applySystemTableChange(TABLES.NODES, 'DELETE', {
+    [COLUMN.NODE_ID]: 'node-lagged',
+  });
+
+  const readinessEntries = await readinessService.getAllNodeReadiness({
+    allowAuthoritativeRefresh: false,
+  });
+  const readinessByNodeId = Object.fromEntries(
+    readinessEntries.map((entry) => [entry.nodeId, entry]),
+  );
+
+  t.ok(
+    readinessByNodeId['node-lagged'],
+    'bulk readiness should still enumerate service-visible nodes when a fresh stored snapshot exists',
+  );
+  t.equal(
+    readinessByNodeId['node-lagged'].dimensions.clusterMemberHealthy,
+    true,
+    'bulk readiness should reuse the fresh stored snapshot for the lagged node',
+  );
+});
+
 test('ControlPlaneReadinessService repairs medium-stale connected heartbeats ' +
   'before the node becomes unhealthy',
 async (t) => {

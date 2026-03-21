@@ -356,6 +356,15 @@ async function bootstrapMoveReplicaAssignment(t, options = {}) {
   });
   await api.initialize(0, {listen: false});
   api.setSqlQueryEngine(sqlQueryEngine);
+  if (typeof options.configureApi === 'function') {
+    await options.configureApi({
+      api,
+      rows,
+      cache,
+      sqlQueryEngine,
+      cdcIntegrationService,
+    });
+  }
   t.teardown(async () => {
     await api.shutdown();
   });
@@ -1389,6 +1398,167 @@ test('BootstrapAPI register-service preserves MOVE_REPLICA assignment after retr
       200,
       'register-service succeeds even when handoff durable write throws ' +
       '(in-memory reservation is authoritative under pressure)',
+    );
+  });
+
+test('BootstrapAPI bootstrap preserves MOVE_REPLICA assignment after retryable reservation persistence failure',
+  async (t) => {
+    let insertAttempts = 0;
+    const fixture = await bootstrapMoveReplicaAssignment(t, {
+      joiningNodeId: '550e8400-e29b-41d4-a716-4466554403ac',
+      configureApi: async ({api}) => {
+        const originalExecute = api.executeBootstrapControlPlaneQuery.bind(api);
+        api.executeBootstrapControlPlaneQuery = async (sql, params = []) => {
+          if (String(sql).includes('INSERT INTO replica_operations')) {
+            insertAttempts += 1;
+            return {
+              success: false,
+              error: 'Distributed operation failed due to participant failures',
+              errorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE',
+              retryAfterMs: 1000,
+              tableName: 'replica_operations',
+            };
+          }
+          return originalExecute(sql, params);
+        };
+      },
+    });
+    const {api, assignment, joiningNodeId, rows} = fixture;
+
+    t.equal(
+      insertAttempts,
+      1,
+      'bootstrap should attempt to persist exactly one assignment reservation row',
+    );
+    t.notOk(
+      rows.replica_operations.find((row) => row.operation_id === assignment.assignmentId),
+      'retryable reservation persistence failure should not invent a durable row',
+    );
+    t.ok(
+      api.moveReplicaAssignmentReservations.has(assignment.assignmentId),
+      'in-memory reservation should remain authoritative under retryable write pressure',
+    );
+
+    const competingBootstrap = await api.getFastify().inject({
+      method: 'POST',
+      url: '/bootstrap',
+      payload: {
+        nodeId: '550e8400-e29b-41d4-a716-4466554403ad',
+        nodeAddress: 'ws://localhost:9133',
+      },
+    });
+    t.equal(
+      competingBootstrap.statusCode,
+      503,
+      'bootstrap should still defer competing joins while the in-memory reservation is open',
+    );
+
+    const registerResponse = await api.getFastify().inject({
+      method: 'POST',
+      url: '/register-service',
+      payload: buildRegisterPayload(joiningNodeId, assignment, {
+        assignment_id: assignment.assignmentId,
+      }),
+    });
+    t.equal(
+      registerResponse.statusCode,
+      200,
+      'register-service should accept the assignment token after retryable reservation write failure',
+    );
+  });
+
+test('BootstrapAPI bootstrap admission reuses cached MOVE_REPLICA summary without replica_operations SQL rereads',
+  async (t) => {
+    const fixture = await bootstrapMoveReplicaAssignment(t, {
+      joiningNodeId: '550e8400-e29b-41d4-a716-4466554403ae',
+    });
+    const {api} = fixture;
+    const originalExecute =
+      api.executeBootstrapControlPlaneQuery.bind(api);
+    let reservationSelectCount = 0;
+
+    api.executeBootstrapControlPlaneQuery = async (sql, params = []) => {
+      if (String(sql).includes('FROM replica_operations') &&
+          String(sql).includes('WHERE type = ?')) {
+        reservationSelectCount += 1;
+      }
+      return originalExecute(sql, params);
+    };
+
+    const competingBootstrap = await api.getFastify().inject({
+      method: 'POST',
+      url: '/bootstrap',
+      payload: {
+        nodeId: '550e8400-e29b-41d4-a716-4466554403af',
+        nodeAddress: 'ws://localhost:9134',
+      },
+    });
+
+    t.equal(
+      competingBootstrap.statusCode,
+      503,
+      'competing bootstrap should still be deferred while the reservation is open',
+    );
+    t.equal(
+      reservationSelectCount,
+      0,
+      'bootstrap admission should reuse cache/in-memory reservation summary before falling back to SQL',
+    );
+  });
+
+test('BootstrapAPI MOVE_REPLICA reservation SQL fallback backs off after retryable lookup pressure',
+  async (t) => {
+    const fixture = await bootstrapMoveReplicaAssignment(t, {
+      joiningNodeId: '550e8400-e29b-41d4-a716-4466554403b0',
+    });
+    const {api, assignment, rows} = fixture;
+    const cachedReservation =
+      api.moveReplicaAssignmentReservations.get(assignment.assignmentId);
+    api.moveReplicaAssignmentReservations.delete(assignment.assignmentId);
+    rows.replica_operations = [];
+
+    const originalExecute =
+      api.executeBootstrapControlPlaneQuery.bind(api);
+    let reservationSelectCount = 0;
+    api.executeBootstrapControlPlaneQuery = async (sql, params = []) => {
+      if (String(sql).includes('FROM replica_operations') &&
+          String(sql).includes('WHERE type = ?')) {
+        reservationSelectCount += 1;
+        return {
+          success: false,
+          error: 'Distributed operation failed due to participant failures',
+          errorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE',
+          retryAfterMs: 1000,
+          tableName: 'replica_operations',
+        };
+      }
+      return originalExecute(sql, params);
+    };
+
+    const firstBlocking =
+      await api.getBlockingMoveReplicaBootstrapAdmissions();
+    const secondBlocking =
+      await api.getBlockingMoveReplicaBootstrapAdmissions();
+
+    t.equal(
+      reservationSelectCount,
+      1,
+      'retryable reservation summary lookup should back off instead of hammering SQL',
+    );
+    t.same(
+      firstBlocking,
+      secondBlocking,
+      'bounded fallback should return the same locally-known result during backoff',
+    );
+    t.equal(
+      firstBlocking.length,
+      0,
+      'without cache or durable row visibility the bounded fallback should fail closed to no synthetic reservations',
+    );
+
+    api.moveReplicaAssignmentReservations.set(
+      assignment.assignmentId,
+      cachedReservation,
     );
   });
 

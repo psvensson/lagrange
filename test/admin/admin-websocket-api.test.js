@@ -21,7 +21,7 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {createInProcWebSocketPair} from '../../src/test-helpers/inproc-ws.js';
 import {TraceCollector} from '../../src/debug/trace-collector.js';
-import {COLUMN, TABLES} from '../../src/constants/index.js';
+import {COLUMN, TABLES, SERVICE_TYPE} from '../../src/constants/index.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
@@ -2435,6 +2435,173 @@ test('AdminWebSocketAPI - local control snapshot exposes structured control-plan
     await api.shutdown();
   });
 
+test('AdminWebSocketAPI - local control snapshot derives active nodes from readiness and canonical websocket endpoints',
+  async (t) => {
+    const cache = createPopulatedCache();
+    cache.applySystemTableChange(TABLES.NODES, 'UPDATE', {
+      id: 'node-1',
+      node_id: 'node-1',
+      status: 'active',
+      connection_state: 'ready',
+      last_heartbeat: 1000,
+      ready_lease_expires_at: 2000,
+    });
+    cache.applySystemTableChange(TABLES.NODES, 'INSERT', {
+      id: 'node-2',
+      node_id: 'node-2',
+      status: 'active',
+      connection_state: 'ready',
+      last_heartbeat: 1000,
+      ready_lease_expires_at: 2000,
+    });
+    cache.applySystemTableChange(TABLES.NODES, 'INSERT', {
+      id: 'node-3',
+      node_id: 'node-3',
+      status: 'active',
+      connection_state: 'ready',
+      last_heartbeat: 1000,
+      ready_lease_expires_at: 2000,
+    });
+    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, 'INSERT', {
+      endpoint_id: 'node-1-ws',
+      node_id: 'node-1',
+      transport_type: 'ws',
+      status: 'active',
+      address: 'ws://node-1:8082',
+    });
+    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, 'INSERT', {
+      endpoint_id: 'node-2-ws',
+      node_id: 'node-2',
+      transport_type: 'ws',
+      status: 'active',
+      address: 'ws://node-2:8082',
+    });
+
+    const api = new AdminWebSocketAPI({
+      nodeId: 'node-1',
+      systemTableCache: cache,
+      controlPlaneReadinessService: {
+        async getAllNodeReadiness() {
+          return [{
+            nodeId: 'node-1',
+            dimensions: {
+              [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
+            },
+          }, {
+            nodeId: 'node-2',
+            dimensions: {
+              [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: false,
+            },
+          }, {
+            nodeId: 'node-3',
+            dimensions: {
+              [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
+            },
+          }];
+        },
+      },
+    });
+
+    await api.initialize(0, {listen: false});
+    t.teardown(async () => {
+      await api.shutdown();
+    });
+
+    const response = await api.getFastify().inject({
+      method: 'GET',
+      url: '/api/admin/control-snapshot?scope=local',
+    });
+
+    t.equal(response.statusCode, 200, 'should return 200 for local snapshot');
+    t.same(
+      response.json().nodes,
+      ['node-1'],
+      'snapshot should publish only readiness-healthy nodes with canonical websocket endpoints',
+    );
+  });
+
+test('AdminWebSocketAPI - local control snapshot keeps readiness-healthy service-visible nodes when node rows lag the cache',
+  async (t) => {
+    const cache = createPopulatedCache();
+    cache.applySystemTableChange(TABLES.NODES, 'UPDATE', {
+      id: 'node-1',
+      node_id: 'node-1',
+      status: 'active',
+      connection_state: 'ready',
+      last_heartbeat: 1000,
+      ready_lease_expires_at: 2000,
+    });
+    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+      service_id: 'svc-node-1',
+      service_type: SERVICE_TYPE.MESSAGE_GROUP,
+      node_id: 'node-1',
+      status: 'active',
+      address: 'node-1/message-group/svc-node-1',
+      group_id: 'mg-node-1',
+      replica_id: 'svc-node-1',
+    });
+    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+      service_id: 'svc-node-2',
+      service_type: SERVICE_TYPE.MESSAGE_GROUP,
+      node_id: 'node-2',
+      status: 'active',
+      address: 'node-2/message-group/svc-node-2',
+      group_id: 'mg-node-2',
+      replica_id: 'svc-node-2',
+    });
+    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, 'INSERT', {
+      endpoint_id: 'node-1-ws',
+      node_id: 'node-1',
+      transport_type: 'ws',
+      status: 'active',
+      address: 'ws://node-1:8082',
+    });
+    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, 'INSERT', {
+      endpoint_id: 'node-2-ws',
+      node_id: 'node-2',
+      transport_type: 'ws',
+      status: 'active',
+      address: 'ws://node-2:8082',
+    });
+
+    const api = new AdminWebSocketAPI({
+      nodeId: 'node-1',
+      systemTableCache: cache,
+      controlPlaneReadinessService: {
+        async getAllNodeReadiness() {
+          return [{
+            nodeId: 'node-1',
+            dimensions: {
+              [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
+            },
+          }, {
+            nodeId: 'node-2',
+            dimensions: {
+              [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
+            },
+          }];
+        },
+      },
+    });
+
+    await api.initialize(0, {listen: false});
+    t.teardown(async () => {
+      await api.shutdown();
+    });
+
+    const response = await api.getFastify().inject({
+      method: 'GET',
+      url: '/api/admin/control-snapshot?scope=local',
+    });
+
+    t.equal(response.statusCode, 200, 'should return 200 for local snapshot');
+    t.same(
+      response.json().nodes,
+      ['node-1', 'node-2'],
+      'snapshot should keep readiness-healthy peers visible when their node row lags behind active service and endpoint evidence',
+    );
+  });
+
 test('AdminWebSocketAPI - local control snapshot query avoids distributed fanout',
   async (t) => {
     let executeRequestCalls = 0;
@@ -2935,6 +3102,17 @@ test(
   'AdminWebSocketAPI - local control snapshot repairs shared metadata node coverage gaps',
   async (t) => {
     const writableCache = createAuthoritativeRepairCache('node-local');
+    const now = Date.now();
+    writableCache.applySystemTableChange(TABLES.NODES, 'UPDATE', {
+      id: 'node-local',
+      node_id: 'node-local',
+      address: 'localhost:8080',
+      node_address: 'localhost:8080',
+      status: 'active',
+      connection_state: 'ready',
+      last_heartbeat: now,
+      ready_lease_expires_at: now + 10000,
+    });
     writableCache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
       service_id: 'peer-service-r1',
       service_type: 'partition',
@@ -2944,6 +3122,13 @@ test(
       raft_role: 'leader',
       status: 'active',
       address: 'node-peer/partition/peer-table-p1-r1',
+    });
+    writableCache.applySystemTableChange(TABLES.NODE_ENDPOINTS, 'INSERT', {
+      endpoint_id: 'endpoint-node-local',
+      node_id: 'node-local',
+      transport_type: 'ws',
+      address: 'ws://node-local:8082',
+      status: 'active',
     });
     writableCache.applySystemTableChange(TABLES.NODE_ENDPOINTS, 'INSERT', {
       endpoint_id: 'endpoint-node-peer',
@@ -2962,7 +3147,8 @@ test(
         node_address: 'localhost:8081',
         status: 'active',
         connection_state: 'ready',
-        last_heartbeat: Date.now(),
+        last_heartbeat: now,
+        ready_lease_expires_at: now + 10000,
       },
     ];
     const repairEngine = createSystemTableRepairQueryEngine({
@@ -3866,6 +4052,13 @@ test(
       }),
       true,
       'authoritative gateway repair should request repairEligible routing',
+    );
+    t.equal(
+      authoritativeGateway.executeReadCalls.every((call) => {
+        return call?.options?.allowSqlFallback === true;
+      }),
+      true,
+      'authoritative gateway repair should opt into routed authoritative reads',
     );
     t.equal(
       sqlCalls.length,
