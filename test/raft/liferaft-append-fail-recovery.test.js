@@ -136,6 +136,81 @@ class HeartbeatCommitAdvanceLog {
   end() {}
 }
 
+class AppendAckCommitBroadcastLog {
+  constructor(node) {
+    this.node = node;
+    this.committedIndex = 0;
+    this.entries = [{
+      index: 1,
+      term: 1,
+      committed: false,
+      responses: [],
+      command: {type: 'cdc_test'},
+    }];
+  }
+
+  async getLastInfo() {
+    return {
+      index: 1,
+      term: this.node.term,
+      committedIndex: this.committedIndex,
+    };
+  }
+
+  async get() {
+    return this.entries[0];
+  }
+
+  async getEntryInfoBefore() {
+    return {
+      index: 0,
+      term: this.node.term,
+      committedIndex: this.committedIndex,
+    };
+  }
+
+  async has() {
+    return true;
+  }
+
+  async removeEntriesAfter() {}
+
+  async saveCommand(command, term, index) {
+    return {
+      index,
+      term,
+      committed: false,
+      responses: [],
+      command,
+    };
+  }
+
+  async commandAck(index) {
+    return {
+      index,
+      term: this.node.term,
+      committed: false,
+      responses: ['node-2', 'node-3'],
+    };
+  }
+
+  async getUncommittedEntriesUpToIndex(index) {
+    return this.entries.filter((entry) =>
+      entry.index <= index && entry.committed !== true,
+    );
+  }
+
+  async commit(index) {
+    this.committedIndex = index;
+    const entry = this.entries.find((candidate) => candidate.index === index);
+    if (entry) {
+      entry.committed = true;
+    }
+  }
+
+  end() {}
+}
+
 test('liferaft append-fail recovery skips retry when recovered entry is null',
   async (t) => {
     const writes = [];
@@ -216,6 +291,59 @@ test('liferaft heartbeat append advances follower commit index',
         [{type: 'cdc_test'}],
         'heartbeat append should emit committed entries',
       );
+    } finally {
+      raft.end();
+    }
+  },
+);
+
+test('liferaft append ack immediately broadcasts committedIndex heartbeat',
+  async (t) => {
+    const outgoing = [];
+    const raft = new LifeRaft('node-1', {
+      heartbeat: '10s',
+      'election min': '20s',
+      'election max': '30s',
+      Log: AppendAckCommitBroadcastLog,
+    });
+
+    raft.change({
+      state: LifeRaft.LEADER,
+      leader: 'node-1',
+      term: 1,
+    });
+    raft.nodes = [
+      {address: 'node-2'},
+      {address: 'node-3'},
+    ];
+    raft.message = (who, packet) => {
+      outgoing.push({who, packet});
+      return raft;
+    };
+
+    try {
+      const incoming = raft.listeners('data')[0];
+      await incoming({
+        type: 'append ack',
+        data: {
+          index: 1,
+        },
+        address: 'node-2',
+        leader: 'node-1',
+        state: LifeRaft.FOLLOWER,
+        term: 1,
+      }, () => {});
+
+      await new Promise((resolve) => setImmediate(resolve));
+
+      t.equal(outgoing.length, 1,
+        'leader should immediately broadcast one commit heartbeat');
+      t.equal(outgoing[0].who, LifeRaft.FOLLOWER,
+        'heartbeat should target followers');
+      t.equal(outgoing[0].packet.type, 'append',
+        'broadcast should use append heartbeat');
+      t.equal(outgoing[0].packet.last.committedIndex, 1,
+        'heartbeat should carry the advanced committed index');
     } finally {
       raft.end();
     }

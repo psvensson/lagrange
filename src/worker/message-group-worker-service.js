@@ -53,6 +53,8 @@ const MESSAGE_GROUP_WORKER_DEFAULT = Object.freeze({
   MEMORY_DB_PATH: ':memory:',
   /** Maximum CDC relay hops when forwarding from stale follower targets */
   CDC_RELAY_MAX_HOPS: NUM.TWO,
+  /** Max time to wait for one CDC entry to commit locally */
+  RAFT_COMMIT_TIMEOUT_MS: 2000,
 });
 
 /**
@@ -71,6 +73,7 @@ const MESSAGE_GROUP_WORKER_ERROR_MSG = Object.freeze({
   SEED_CACHE_MISSING_ENTRIES:
     'SEED_CACHE rejected: entries array is required',
   SEED_CACHE_APPLY_FAILED: 'Failed to apply SEED_CACHE entry',
+  RAFT_COMMIT_TIMEOUT: 'Raft commit timeout',
 });
 
 /**
@@ -124,6 +127,10 @@ const CDC_REPLICATION_TYPE = 'CDC_REPLICATION';
 const INSERT_SQL_COLUMNS_PATTERN = /^\s*INSERT(?:\s+OR\s+REPLACE)?\s+INTO\s+(?:"([^"]+)"|`([^`]+)`|([A-Za-z_][A-Za-z0-9_]*))\s*\(([^)]+)\)/i;
 const RAFT_PACKET_TYPE_APPEND_ACK = 'append ack';
 const RAFT_PACKET_TYPE_APPEND_FAIL = 'append fail';
+
+function isPromiseLike(value) {
+  return !!value && typeof value.then === 'function';
+}
 
 /**
  * MessageGroupWorkerService - Message group replica running in worker
@@ -200,6 +207,12 @@ class MessageGroupWorkerService extends ReplicaWorkerBase {
 
     /** @type {boolean} Whether leader activation has completed */
     this.leaderActivated = false;
+
+    /** @type {Map<string, Object>} Pending CDC commits keyed by entry ID */
+    this.pendingCDCCommits = new Map();
+
+    /** @type {number} Monotonic counter for CDC commit correlation IDs */
+    this.nextCDCCommitId = NUM.ZERO;
 
     /**
      * Whether the service is in bootstrap phase.
@@ -438,6 +451,8 @@ class MessageGroupWorkerService extends ReplicaWorkerBase {
         data.data,
       );
 
+      this.resolvePendingCDCCommit(data.entryId);
+
       this.logger.debug(
         MESSAGE_GROUP_WORKER_LOG_MSG.CDC_EVENT_APPLIED,
         {
@@ -476,6 +491,10 @@ class MessageGroupWorkerService extends ReplicaWorkerBase {
     if (this.cdcSubscribed) {
       await this.unsubscribeFromCDC();
     }
+
+    this.clearPendingCDCCommits(
+      'MessageGroupWorkerService stopped before CDC commit',
+    );
 
     // Shutdown RaftGroup
     if (this.raftGroup) {
@@ -637,7 +656,9 @@ class MessageGroupWorkerService extends ReplicaWorkerBase {
       },
     );
 
-    if (this.isLeaderReplica()) {
+    const isLeaderReplica = this.isLeaderReplica();
+
+    if (isLeaderReplica) {
       // Leader: replicate via Raft, then apply on commit
       await this.replicateCDCEvent(cdcEvent);
     } else {
@@ -649,15 +670,17 @@ class MessageGroupWorkerService extends ReplicaWorkerBase {
       );
     }
 
-    this.logger.debug(
-      MESSAGE_GROUP_WORKER_LOG_MSG.CDC_EVENT_APPLIED,
-      {
-        groupId: this.groupId,
-        replicaId: this.replicaId,
-        tableName: cdcEvent.tableName,
-        operation: cdcEvent.operation,
-      },
-    );
+    if (!isLeaderReplica) {
+      this.logger.debug(
+        MESSAGE_GROUP_WORKER_LOG_MSG.CDC_EVENT_APPLIED,
+        {
+          groupId: this.groupId,
+          replicaId: this.replicaId,
+          tableName: cdcEvent.tableName,
+          operation: cdcEvent.operation,
+        },
+      );
+    }
   }
 
   /**
@@ -689,6 +712,7 @@ class MessageGroupWorkerService extends ReplicaWorkerBase {
     // Create Raft log entry for CDC replication
     const command = {
       type: CDC_REPLICATION_TYPE,
+      entryId: this.createCDCCommitEntryId(),
       tableName: cdcEvent.tableName,
       operation: cdcEvent.operation,
       data: cdcEvent.data,
@@ -697,23 +721,170 @@ class MessageGroupWorkerService extends ReplicaWorkerBase {
       sequenceNumber: cdcEvent.sequenceNumber,
     };
 
-    // Append to Raft log (will be replicated to followers)
+    const commitPromise = this.waitForCDCCommit(
+      command.entryId,
+      MESSAGE_GROUP_WORKER_DEFAULT.RAFT_COMMIT_TIMEOUT_MS,
+    );
+    commitPromise.catch(() => {});
+
+    try {
+      await this.proposeCDCCommand(raft, command);
+    } catch (error) {
+      this.rejectPendingCDCCommit(command.entryId, error);
+      throw error;
+    }
+
+    await commitPromise;
+
+    this.logger.debug(
+      MESSAGE_GROUP_WORKER_LOG_MSG.CDC_REPLICATED,
+      {
+        groupId: this.groupId,
+        replicaId: this.replicaId,
+        entryId: command.entryId,
+      },
+    );
+  }
+
+  /**
+   * Create a unique correlation ID for one CDC commit.
+   * @return {string} CDC entry ID.
+   * @private
+   */
+  createCDCCommitEntryId() {
+    this.nextCDCCommitId += NUM.ONE;
+    return `${this.replicaId}:cdc:${this.nextCDCCommitId}`;
+  }
+
+  /**
+   * Propose a CDC command to the raw raft instance.
+   * Supports both promise-returning raft nodes and callback-only mocks.
+   * @param {Object} raft - Raw raft instance.
+   * @param {Object} command - CDC command payload.
+   * @return {Promise<void>}
+   * @private
+   */
+  proposeCDCCommand(raft, command) {
     return new Promise((resolve, reject) => {
-      raft.command(JSON.stringify(command), (error) => {
-        if (error) {
-          reject(error);
-        } else {
-          this.logger.debug(
-            MESSAGE_GROUP_WORKER_LOG_MSG.CDC_REPLICATED,
-            {
-              groupId: this.groupId,
-              replicaId: this.replicaId,
-            },
-          );
-          resolve();
+      let settled = false;
+
+      const settleResolve = () => {
+        if (settled) {
+          return;
         }
+        settled = true;
+        resolve();
+      };
+
+      const settleReject = (error) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        reject(error);
+      };
+
+      try {
+        const proposal = raft.command(
+          JSON.stringify(command),
+          (error) => {
+            if (error) {
+              settleReject(error);
+            } else {
+              settleResolve();
+            }
+          },
+        );
+
+        if (isPromiseLike(proposal)) {
+          proposal.then(() => {
+            settleResolve();
+          }).catch((error) => {
+            settleReject(error);
+          });
+        }
+      } catch (error) {
+        settleReject(error);
+      }
+    });
+  }
+
+  /**
+   * Wait for the matching CDC entry to commit locally.
+   * @param {string} entryId - CDC entry correlation ID.
+   * @param {number} timeoutMs - Max wait budget.
+   * @return {Promise<void>}
+   * @private
+   */
+  waitForCDCCommit(entryId, timeoutMs) {
+    return new Promise((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        this.rejectPendingCDCCommit(
+          entryId,
+          new Error(
+            `${MESSAGE_GROUP_WORKER_ERROR_MSG.RAFT_COMMIT_TIMEOUT} after ${timeoutMs}ms`,
+          ),
+        );
+      }, timeoutMs);
+
+      this.pendingCDCCommits.set(entryId, {
+        resolve,
+        reject,
+        timeoutId,
       });
     });
+  }
+
+  /**
+   * Resolve one pending CDC commit.
+   * @param {string} entryId - CDC entry correlation ID.
+   * @return {boolean} True when a pending commit was resolved.
+   * @private
+   */
+  resolvePendingCDCCommit(entryId) {
+    if (!entryId) {
+      return false;
+    }
+
+    const pending = this.pendingCDCCommits.get(entryId);
+    if (!pending) {
+      return false;
+    }
+
+    clearTimeout(pending.timeoutId);
+    this.pendingCDCCommits.delete(entryId);
+    pending.resolve();
+    return true;
+  }
+
+  /**
+   * Reject one pending CDC commit.
+   * @param {string} entryId - CDC entry correlation ID.
+   * @param {Error|string} error - Rejection reason.
+   * @return {boolean} True when a pending commit was rejected.
+   * @private
+   */
+  rejectPendingCDCCommit(entryId, error) {
+    const pending = this.pendingCDCCommits.get(entryId);
+    if (!pending) {
+      return false;
+    }
+
+    clearTimeout(pending.timeoutId);
+    this.pendingCDCCommits.delete(entryId);
+    pending.reject(error instanceof Error ? error : new Error(String(error)));
+    return true;
+  }
+
+  /**
+   * Reject all pending CDC commits.
+   * @param {string} reason - Rejection reason.
+   * @private
+   */
+  clearPendingCDCCommits(reason) {
+    for (const entryId of this.pendingCDCCommits.keys()) {
+      this.rejectPendingCDCCommit(entryId, reason);
+    }
   }
 
   /**

@@ -6,6 +6,7 @@ const RAFT_EVENT = Object.freeze({
 
 const RAFT_PACKET_TYPE = Object.freeze({
   APPEND: 'append',
+  APPEND_ACK: 'append ack',
   APPEND_FAIL: 'append fail',
 });
 
@@ -21,6 +22,14 @@ function isRecoverableAppendEntry(entry) {
     Object.prototype.hasOwnProperty.call(entry, 'command');
 }
 
+function getCommittedIndex(raft) {
+  return hasFiniteNumber(raft?.log?.committedIndex) ?
+    raft.log.committedIndex :
+    NUMERIC_ZERO;
+}
+
+const NUMERIC_ZERO = 0;
+
 function patchIncomingDataListener(raft) {
   const listeners = raft.listeners(RAFT_EVENT.DATA);
   const originalListener = Array.isArray(listeners) ? listeners[0] : null;
@@ -33,6 +42,8 @@ function patchIncomingDataListener(raft) {
   raft.removeListener(RAFT_EVENT.DATA, originalListener);
 
   const patchedListener = async (packet, write = () => {}) => {
+    const committedIndexBefore = getCommittedIndex(raft);
+
     if (packet?.type === RAFT_PACKET_TYPE.APPEND_FAIL) {
       const recoveredEntry = await raft.log?.get?.(packet?.data?.index);
       if (!isRecoverableAppendEntry(recoveredEntry)) {
@@ -49,7 +60,17 @@ function patchIncomingDataListener(raft) {
       }
     }
 
-    return originalListener(packet, write);
+    const result = await originalListener(packet, write);
+    const committedIndexAfter = getCommittedIndex(raft);
+
+    if (packet?.type === RAFT_PACKET_TYPE.APPEND_ACK &&
+        raft.state === BaseLifeRaft.LEADER &&
+        committedIndexAfter > committedIndexBefore) {
+      const heartbeatPacket = await raft.packet(RAFT_PACKET_TYPE.APPEND);
+      raft.message(BaseLifeRaft.FOLLOWER, heartbeatPacket);
+    }
+
+    return result;
   };
 
   patchedListener.__lagrangePatched = true;

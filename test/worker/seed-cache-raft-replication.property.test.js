@@ -91,7 +91,13 @@ describe('Property 23: SEED_CACHE Raft Replication', () => {
       command: (commandStr, callback) => {
         const command = JSON.parse(commandStr);
         replicatedCommands.push(command);
-        callback(null);
+        if (callback) {
+          callback(null);
+        }
+        queueMicrotask(() => {
+          service.handleCommittedEntry(JSON.stringify(command)).catch(() => {});
+        });
+        return Promise.resolve();
       },
     };
 
@@ -403,13 +409,24 @@ describe('Property 23: SEED_CACHE Raft Replication', () => {
           mockRaft.command = (commandStr, callback) => {
             const command = JSON.parse(commandStr);
             replicatedCommands.push(command);
+            const shouldFail = commandCount === actualFailIndex;
+            commandCount++;
 
-            if (commandCount === actualFailIndex) {
-              callback(new Error('Raft replication failed'));
-            } else {
+            if (shouldFail) {
+              if (callback) {
+                callback(new Error('Raft replication failed'));
+              }
+              return undefined;
+            }
+
+            if (callback) {
               callback(null);
             }
-            commandCount++;
+            queueMicrotask(() => {
+              service.handleCommittedEntry(JSON.stringify(command))
+                .catch(() => {});
+            });
+            return Promise.resolve();
           };
 
           try {

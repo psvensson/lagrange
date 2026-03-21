@@ -10,6 +10,9 @@ const STARTUP_CONVERGENCE_TIMEOUT_KIND = Object.freeze({
   NO_PROGRESS: 'no_progress',
   ABSOLUTE_DEADLINE_EXHAUSTED: 'absolute_deadline_exhausted',
 });
+const STARTUP_CONVERGENCE_SIGNAL = Object.freeze({
+  POLL_TICK: 'poll_tick',
+});
 const DEFAULT_ROUTER_EVENTS = Object.freeze([
   TRANSPORT_EVENT.CONNECTION_ESTABLISHED,
   TRANSPORT_EVENT.CONNECTION_CLOSED,
@@ -111,6 +114,10 @@ async function waitForStartupConvergence(options = {}) {
     options.timeoutMs > NUM.ZERO ?
     Math.floor(options.timeoutMs) :
     NUM.ZERO;
+  const pollIntervalMs = Number.isFinite(options.pollIntervalMs) &&
+    options.pollIntervalMs > NUM.ZERO ?
+    Math.floor(options.pollIntervalMs) :
+    null;
   const subscriptions = Array.isArray(options.subscriptions) ?
     options.subscriptions :
     [];
@@ -167,13 +174,20 @@ async function waitForStartupConvergence(options = {}) {
       return Promise.resolve(signal);
     }
 
+    const usingPollCadence = pollIntervalMs !== null;
+    const waitMs = usingPollCadence ?
+      Math.min(remainingMs, pollIntervalMs) :
+      remainingMs;
+
     return new Promise((resolve) => {
       const timer = setTimeoutFn(() => {
         if (waitResolver === onSignal) {
           waitResolver = null;
         }
-        resolve(null);
-      }, remainingMs);
+        resolve(usingPollCadence ?
+          {kind: STARTUP_CONVERGENCE_SIGNAL.POLL_TICK} :
+          null);
+      }, waitMs);
       const onSignal = (signal) => {
         clearTimeoutFn(timer);
         resolve(signal);

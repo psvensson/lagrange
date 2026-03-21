@@ -754,9 +754,12 @@ class SeedCacheHydrationPhase {
     const cache = d.getSystemTableCache();
     const timeoutMs = config.leadershipWaitTimeoutMs ||
       BOOTSTRAP_DEFAULT.leadershipWaitTimeoutMs;
+    const pollIntervalMs = config.leadershipWaitInitialDelayMs ||
+      BOOTSTRAP_DEFAULT.leadershipWaitInitialDelayMs;
     try {
       await waitForStartupConvergence({
         timeoutMs,
+        pollIntervalMs,
         subscriptions: [
           (notify) => subscribeToSystemTableCacheChanges(cache, notify, {
             tableNames: [TABLES.NODES],

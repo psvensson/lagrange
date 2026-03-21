@@ -490,6 +490,58 @@ describe('MessageGroupWorkerService', () => {
     });
   });
 
+  describe('replicateCDCEvent', () => {
+    it('should wait for committed CDC entry before resolving', async () => {
+      service = createServiceWithBridge(mockLogger);
+      service.initialized = true;
+      service.systemCache = {
+        applyCDCEvent: mock.fn(),
+        close: mock.fn(),
+        isInitialized: mock.fn(() => true),
+      };
+
+      const proposedCommands = [];
+      service.raftGroup = {
+        getRaftInstance: () => ({
+          command: (commandStr) => {
+            const command = JSON.parse(commandStr);
+            proposedCommands.push(command);
+            queueMicrotask(() => {
+              service.handleCommittedEntry(JSON.stringify(command))
+                .catch(() => {});
+            });
+            return Promise.resolve();
+          },
+        }),
+        shutdown: async () => {},
+      };
+
+      const promise = service.replicateCDCEvent({
+        tableName: 'nodes',
+        operation: CDC_OPERATION.INSERT,
+        data: {
+          node_id: 'node-1',
+          node_address: 'localhost:8080',
+        },
+      });
+
+      let settled = false;
+      promise.then(() => {
+        settled = true;
+      });
+
+      await new Promise((resolve) => setImmediate(resolve));
+
+      assert.strictEqual(proposedCommands.length, 1);
+      assert.strictEqual(
+        service.pendingCDCCommits.size,
+        0,
+        'commit should resolve pending CDC entry',
+      );
+      assert.strictEqual(settled, true, 'promise should resolve after commit');
+    });
+  });
+
   describe('getSystemCache', () => {
     it('should return system cache instance', async () => {
       service = await createInitializedService(mockLogger);

@@ -315,6 +315,7 @@ class ServiceRegistrationVisibilityOwner {
     let lastDiagnostics = null;
     await waitForStartupConvergence({
       timeoutMs,
+      pollIntervalMs,
       subscriptions: [
         (notify) => subscribeToSystemTableCacheChanges(
           this.getSystemTableCache(),

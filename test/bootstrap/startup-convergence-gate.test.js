@@ -98,6 +98,25 @@ test('waitForStartupConvergence re-evaluates immediately after local repair',
     t.equal(repairs, 1, 'local repair should only run once');
   });
 
+test('waitForStartupConvergence re-evaluates on poll cadence without signals',
+  async (t) => {
+    let ready = false;
+    const timer = setTimeout(() => {
+      ready = true;
+    }, 10);
+    t.teardown(() => {
+      clearTimeout(timer);
+    });
+
+    const result = await waitForStartupConvergence({
+      timeoutMs: 100,
+      pollIntervalMs: 5,
+      evaluate: () => ({ready}),
+    });
+
+    t.equal(result.ready, true, 'poll cadence should detect readiness change');
+  });
+
 test('waitForStartupConvergence reports timeout context', async (t) => {
   try {
     await waitForStartupConvergence({
