@@ -27,8 +27,8 @@ import {
   ControlPlaneReadinessService,
 } from '../control-plane/control-plane-readiness-service.js';
 import {
-  ControlPlaneSystemTableGateway,
-} from '../control-plane/control-plane-system-table-gateway.js';
+  createControlPlaneRuntimeBundle,
+} from '../control-plane/control-plane-runtime-bundle.js';
 import {
   isNodeReadyWithConnection,
   isNodeReadyWithTransport,
@@ -173,12 +173,13 @@ class UnifiedRebalancer extends EventEmitter {
     this.sqlQueryEngine = options.sqlQueryEngine || null;
     this.controlPlaneSystemTableGateway =
       options.controlPlaneSystemTableGateway ||
-      new ControlPlaneSystemTableGateway({
+      createControlPlaneRuntimeBundle({
         nodeId: this.nodeId,
-        sqlQueryEngine: this.sqlQueryEngine,
-        cdcIntegrationService: this.cdcIntegrationService,
-        messageRouter: this.messageRouter,
-      });
+        getSqlQueryEngine: () => this.sqlQueryEngine,
+        getCdcIntegrationService: () => this.cdcIntegrationService,
+        getSystemTableCache: () => this.systemTableCache,
+        getMessageRouter: () => this.messageRouter,
+      }).controlPlaneSystemTableGateway;
 
     // RebalanceCoordinator for delegated operation execution (Requirements 2.5)
     this.rebalanceCoordinator = assertCritical(
@@ -400,24 +401,6 @@ class UnifiedRebalancer extends EventEmitter {
     }
     if (Object.hasOwn(options, 'sqlQueryEngine')) {
       this.sqlQueryEngine = options.sqlQueryEngine || null;
-    }
-
-    if (this.controlPlaneSystemTableGateway) {
-      if (typeof this.controlPlaneSystemTableGateway
-        .setSqlQueryEngine === TYPEOF.FUNCTION) {
-        this.controlPlaneSystemTableGateway
-          .setSqlQueryEngine(this.sqlQueryEngine);
-      }
-      if (typeof this.controlPlaneSystemTableGateway
-        .setCdcIntegrationService === TYPEOF.FUNCTION) {
-        this.controlPlaneSystemTableGateway
-          .setCdcIntegrationService(this.cdcIntegrationService);
-      }
-      if (typeof this.controlPlaneSystemTableGateway
-        .setMessageRouter === TYPEOF.FUNCTION) {
-        this.controlPlaneSystemTableGateway
-          .setMessageRouter(this.messageRouter);
-      }
     }
 
     if (this.controlPlaneReadinessService &&

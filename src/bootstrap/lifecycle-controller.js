@@ -36,7 +36,6 @@ class LifecycleController extends EventEmitter {
       LIFECYCLE_DEFAULT.RETRY_AFTER_MS;
 
     this._phase = LIFECYCLE_PHASE.INIT;
-    this._legacyState = LIFECYCLE_LEGACY_STATE.STARTING;
     this._ready = false;
     this._reasons = [];
     this._degradedReasons = [];
@@ -90,7 +89,9 @@ class LifecycleController extends EventEmitter {
   evaluate() {
     const now = this._now();
     const previousPhase = this._phase;
-    const previousLegacyState = this._legacyState;
+    const previousLegacyState = this.resolveLegacyState(previousPhase, {
+      beforeFirstEvaluation: this._lastEvaluatedAt === null,
+    });
     const previousReady = this._ready;
     const previousReasons = this._reasons;
     const dependencyStatus = this.collectDependencyStatus();
@@ -153,7 +154,6 @@ class LifecycleController extends EventEmitter {
     }
 
     this._phase = nextPhase;
-    this._legacyState = this.mapLegacyState(nextPhase);
     this._ready = nextReady;
     this._reasons = [...nextReasons];
     this._degradedReasons = degradedReasons;
@@ -168,7 +168,6 @@ class LifecycleController extends EventEmitter {
         previousLegacyState,
         previousReady,
         phase: this._phase,
-        legacyState: this._legacyState,
         ready: this._ready,
         reasons: this._reasons,
         degradedReasons: this._degradedReasons,
@@ -202,14 +201,15 @@ class LifecycleController extends EventEmitter {
 
     const now = this._now();
     const previousPhase = this._phase;
-    const previousLegacyState = this._legacyState;
+    const previousLegacyState = this.resolveLegacyState(previousPhase, {
+      beforeFirstEvaluation: this._lastEvaluatedAt === null,
+    });
     const previousReady = this._ready;
     const previousReasons = this._reasons;
     const reasons = this.normalizeReasons(options.reasons);
     const degradedReasons = this.normalizeReasons(options.degradedReasons);
 
     this._phase = phase;
-    this._legacyState = this.mapLegacyState(phase);
     this._ready = typeof options.ready === 'boolean' ?
       options.ready :
       phase === LIFECYCLE_PHASE.TRAFFIC_READY;
@@ -222,7 +222,6 @@ class LifecycleController extends EventEmitter {
       previousLegacyState,
       previousReady,
       phase: this._phase,
-      legacyState: this._legacyState,
       ready: this._ready,
       reasons: this._reasons,
       degradedReasons: this._degradedReasons,
@@ -277,7 +276,7 @@ class LifecycleController extends EventEmitter {
     return {
       ready: this._ready,
       phase: this._phase,
-      state: this._legacyState,
+      state: this.resolveLegacyState(this._phase),
       reasons: [...this._reasons],
       degradedReasons: [...this._degradedReasons],
       draining: this._draining,
@@ -404,6 +403,13 @@ class LifecycleController extends EventEmitter {
     return LIFECYCLE_LEGACY_STATE.DEGRADED;
   }
 
+  resolveLegacyState(phase, options = {}) {
+    if (options.beforeFirstEvaluation === true) {
+      return LIFECYCLE_LEGACY_STATE.STARTING;
+    }
+    return this.mapLegacyState(phase);
+  }
+
   isTransitionAllowed(fromPhase, toPhase) {
     const allowedTransitions = LIFECYCLE_ALLOWED_TRANSITIONS[fromPhase] || EMPTY_REASONS;
     return allowedTransitions.includes(toPhase);
@@ -489,7 +495,7 @@ class LifecycleController extends EventEmitter {
       previousState: transition.previousLegacyState,
       previousReady: transition.previousReady,
       phase: transition.phase,
-      state: transition.legacyState,
+      state: this.resolveLegacyState(transition.phase),
       ready: transition.ready,
       reasons: [...transition.reasons],
       degradedReasons: [...transition.degradedReasons],

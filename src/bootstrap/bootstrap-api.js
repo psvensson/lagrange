@@ -37,9 +37,6 @@ import {
   getSystemCachePrimaryKeyFieldOrFallback,
 } from '../cache/system-cache-key-descriptor.js';
 import {
-  getMissingSystemServiceLeaders,
-  getMissingSystemServiceLeaderCount,
-  getOwnerRecords,
   resolveCanonicalLeaderService,
 } from '../cache/leader-readiness-gate.js';
 import {
@@ -47,7 +44,6 @@ import {
 } from '../node/node-readiness-policy.js';
 import {
   BOOTSTRAP_ASSIGNMENT_STRATEGY,
-  BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT,
   BOOTSTRAP_PHASE,
   BOOTSTRAP_PIPELINE_ERROR_CODE,
 } from './bootstrap-constants.js';
@@ -96,8 +92,8 @@ import {
 } from '../control-plane/control-plane-readiness-constants.js';
 import {AuthoritativeControlPlaneView} from
   '../control-plane/authoritative-control-plane-view.js';
-import {ControlPlaneSystemTableGateway} from
-  '../control-plane/control-plane-system-table-gateway.js';
+import {createControlPlaneRuntimeBundle} from
+  '../control-plane/control-plane-runtime-bundle.js';
 import {
   PRESSURE_WORK_CLASS,
 } from '../control-plane/pressure-governor.js';
@@ -111,29 +107,13 @@ import {resolveAdvertisedWebSocketAddress} from
   '../transport/node-address-resolution.js';
 import {ServiceRegistrationVisibilityOwner} from
   './owners/service-registration-visibility-owner.js';
+import {ServiceLeaderReadinessOwner} from
+  './owners/service-leader-readiness-owner.js';
 
 /**
  * Bootstrap response strategies.
  */
 const BootstrapStrategy = BOOTSTRAP_ASSIGNMENT_STRATEGY;
-const BOOTSTRAP_REQUIRED_LEADER_TABLES = Object.freeze([
-  TABLES.NODES,
-  TABLES.TABLES,
-  TABLES.PARTITIONS,
-  TABLES.SERVICES,
-  TABLES.MESSAGE_GROUPS,
-  TABLES.REPLICA_OPERATIONS,
-  TABLES.NODE_ENDPOINTS,
-  TABLES.CONFIG,
-]);
-const TRAFFIC_REQUIRED_LEADER_TABLES = Object.freeze([
-  TABLES.NODES,
-  TABLES.TABLES,
-  TABLES.PARTITIONS,
-  TABLES.SERVICES,
-  TABLES.NODE_ENDPOINTS,
-]);
-
 /**
  * Node statuses that indicate the node is dead and eligible
  * for re-registration via the bootstrap API.
@@ -199,7 +179,14 @@ class BootstrapAPI {
     this.epochManager = options.epochManager || null;
     this.messageRouter = options.messageRouter || null;
     this.controlPlaneSystemTableGateway =
-      options.controlPlaneSystemTableGateway || null;
+      options.controlPlaneSystemTableGateway ||
+      createControlPlaneRuntimeBundle({
+        nodeId: this.seedNodeId || BOOTSTRAP_API_SUBSYSTEM,
+        getSqlQueryEngine: () => this.sqlQueryEngine,
+        getCdcIntegrationService: () => this.getCdcIntegrationService(),
+        getSystemTableCache: () => this.systemTableCache,
+        getMessageRouter: () => this.messageRouter,
+      }).controlPlaneSystemTableGateway;
     this.authoritativeControlPlaneView =
       options.authoritativeControlPlaneView || null;
     this.maxConcurrentBootstrapRequests =
@@ -255,6 +242,21 @@ class BootstrapAPI {
           getLogger: () => this.logger,
         },
       });
+    this.serviceLeaderReadinessOwner =
+      new ServiceLeaderReadinessOwner({
+        delegates: {
+          getSystemTableCache: () => this.systemTableCache,
+          getPartitionServices: () => this.partitionServices,
+          getBootstrapService: () => this.bootstrapService,
+          getSeedNodeId: () => this.seedNodeId,
+          getMissingServiceLeaders: () =>
+            this.getMissingServiceLeaders ===
+              BootstrapAPI.prototype.getMissingServiceLeaders ?
+              null :
+              this.getMissingServiceLeaders(),
+          getLogger: () => this.logger,
+        },
+      });
 
     // Fastify instance
     this.fastify = null;
@@ -268,12 +270,6 @@ class BootstrapAPI {
    */
   setSqlQueryEngine(sqlQueryEngine) {
     this.sqlQueryEngine = sqlQueryEngine;
-    if (this.controlPlaneSystemTableGateway &&
-        !this.controlPlaneSystemTableGateway.sqlQueryEngine &&
-        typeof this.controlPlaneSystemTableGateway.setSqlQueryEngine ===
-          TYPEOF.FUNCTION) {
-      this.controlPlaneSystemTableGateway.setSqlQueryEngine(sqlQueryEngine);
-    }
     if (this.partitionServices &&
         typeof this.partitionServices.values === 'function') {
       for (const partitionService of this.partitionServices.values()) {
@@ -297,13 +293,6 @@ class BootstrapAPI {
    */
   setCdcIntegrationService(cdcIntegrationService) {
     this.cdcIntegrationService = cdcIntegrationService || null;
-    if (this.controlPlaneSystemTableGateway &&
-        typeof this.controlPlaneSystemTableGateway.setCdcIntegrationService ===
-          TYPEOF.FUNCTION) {
-      this.controlPlaneSystemTableGateway.setCdcIntegrationService(
-        this.cdcIntegrationService,
-      );
-    }
     if (this.authoritativeControlPlaneView &&
         this.authoritativeControlPlaneView.cdcIntegrationService !==
           this.cdcIntegrationService) {
@@ -386,49 +375,6 @@ class BootstrapAPI {
    * @private
    */
   getControlPlaneSystemTableGateway() {
-    const cdcIntegrationService = this.getCdcIntegrationService();
-    if (!this.controlPlaneSystemTableGateway &&
-        this.sqlQueryEngine &&
-        typeof this.sqlQueryEngine.executeQuery === TYPEOF.FUNCTION) {
-      this.controlPlaneSystemTableGateway = new ControlPlaneSystemTableGateway({
-        nodeId: this.seedNodeId || BOOTSTRAP_API_SUBSYSTEM,
-        sqlQueryEngine: this.sqlQueryEngine,
-        cdcIntegrationService,
-        systemTableCache: this.systemTableCache,
-        messageRouter: this.messageRouter,
-      });
-    }
-    if (!this.controlPlaneSystemTableGateway) {
-      return null;
-    }
-    if (!this.controlPlaneSystemTableGateway.sqlQueryEngine &&
-        this.sqlQueryEngine &&
-        typeof this.controlPlaneSystemTableGateway.setSqlQueryEngine ===
-          TYPEOF.FUNCTION) {
-      this.controlPlaneSystemTableGateway.setSqlQueryEngine(this.sqlQueryEngine);
-    }
-    if (!this.controlPlaneSystemTableGateway.messageRouter &&
-        this.messageRouter &&
-        typeof this.controlPlaneSystemTableGateway.setMessageRouter ===
-          TYPEOF.FUNCTION) {
-      this.controlPlaneSystemTableGateway.setMessageRouter(this.messageRouter);
-    }
-    if (!this.controlPlaneSystemTableGateway.systemTableCache &&
-        this.systemTableCache &&
-        typeof this.controlPlaneSystemTableGateway.setSystemTableCache ===
-          TYPEOF.FUNCTION) {
-      this.controlPlaneSystemTableGateway.setSystemTableCache(
-        this.systemTableCache,
-      );
-    }
-    if (!this.controlPlaneSystemTableGateway.cdcIntegrationService &&
-        cdcIntegrationService &&
-        typeof this.controlPlaneSystemTableGateway.setCdcIntegrationService ===
-          TYPEOF.FUNCTION) {
-      this.controlPlaneSystemTableGateway.setCdcIntegrationService(
-        cdcIntegrationService,
-      );
-    }
     return this.controlPlaneSystemTableGateway;
   }
 
@@ -951,27 +897,8 @@ class BootstrapAPI {
    * @return {Object}
    */
   getLeaderReadinessStatusForProbe() {
-    if (!this.systemTableCache) {
-      return {ready: false};
-    }
-
-    const missing = this.normalizeLeaderStatusForRequiredTables(
-      this.getMissingServiceLeaders(),
-      TRAFFIC_REQUIRED_LEADER_TABLES,
-    );
-    const blockingMissing =
-      this.getBlockingLeaderStatusForReadiness(missing);
-    const missingCount = this.countMissingLeaderInfo(blockingMissing);
-    return {
-      ready: missingCount === NUM.ZERO,
-      ...blockingMissing,
-      nonBlockingMissingMessageGroupLeaders:
-        missing.missingMessageGroupLeaders || [],
-      nonBlockingMissingMessageGroupLeaderNodes:
-        missing.missingMessageGroupLeaderNodes || [],
-      nonBlockingMissingMessageGroupLeaderAddresses:
-        missing.missingMessageGroupLeaderAddresses || [],
-    };
+    return this.serviceLeaderReadinessOwner
+      .getLeaderReadinessStatusForProbe();
   }
 
   /**
@@ -4145,48 +4072,7 @@ class BootstrapAPI {
    * @private
    */
   async waitForPartitionLeaders() {
-    if (typeof this.bootstrapService?.waitForPartitionLeadership === TYPEOF.FUNCTION) {
-      await this.bootstrapService.waitForPartitionLeadership();
-      return;
-    }
-
-    const services = this.partitionServices;
-    if (!services || services.size === NUM.ZERO) {
-      return;
-    }
-
-    const partitionIds = new Set();
-    for (const service of services.values()) {
-      if (service?.partitionId) {
-        partitionIds.add(service.partitionId);
-      }
-    }
-    if (partitionIds.size === NUM.ZERO) {
-      return;
-    }
-
-    const configuredTimeoutMs =
-      this.bootstrapService?.config?.leadershipWaitTimeoutMs;
-    const timeoutMs = Math.min(
-      configuredTimeoutMs || BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT.TIMEOUT_CAP_MS,
-      BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT.TIMEOUT_CAP_MS,
-    );
-    let delay = this.bootstrapService?.config?.leadershipWaitInitialDelayMs ||
-      BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT.INITIAL_DELAY_MS;
-    const maxDelay = this.bootstrapService?.config?.leadershipWaitMaxDelayMs ||
-      BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT.MAX_DELAY_MS;
-    const backoff = this.bootstrapService?.config?.leadershipWaitBackoffMultiplier ||
-      BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT.BACKOFF_MULTIPLIER;
-    const start = Date.now();
-
-    while (Date.now() - start < timeoutMs) {
-      const leaders = this.getSystemPartitionLeaders();
-      if (Object.keys(leaders).length > NUM.ZERO) {
-        return;
-      }
-      await new Promise((resolve) => setTimeout(resolve, delay));
-      delay = Math.min(delay * backoff, maxDelay);
-    }
+    return this.serviceLeaderReadinessOwner.waitForPartitionLeaders();
   }
 
   /**
@@ -4541,14 +4427,7 @@ class BootstrapAPI {
    * @private
    */
   getMissingServiceLeaders() {
-    const systemTableCache = assertCritical(
-      this.systemTableCache,
-      BOOTSTRAP_API_ERROR.SYSTEM_TABLE_CACHE_REQUIRED,
-    );
-
-    return getMissingSystemServiceLeaders(systemTableCache, {
-      requireLeaderNodeId: true,
-    });
+    return this.serviceLeaderReadinessOwner.getMissingServiceLeaders();
   }
 
   /**
@@ -4558,9 +4437,7 @@ class BootstrapAPI {
    * @private
    */
   getLeaderReadinessPartitionSets() {
-    return this.getLeaderReadinessPartitionSetsForTables(
-      BOOTSTRAP_REQUIRED_LEADER_TABLES,
-    );
+    return this.serviceLeaderReadinessOwner.getLeaderReadinessPartitionSets();
   }
 
   /**
@@ -4572,30 +4449,8 @@ class BootstrapAPI {
    * @private
    */
   getLeaderReadinessPartitionSetsForTables(requiredTablesList = []) {
-    const systemTableCache = assertCritical(
-      this.systemTableCache,
-      BOOTSTRAP_API_ERROR.SYSTEM_TABLE_CACHE_REQUIRED,
-    );
-    const partitions = systemTableCache.getAll(TABLES.PARTITIONS) || [];
-
-    const knownPartitionIds = new Set();
-    const requiredPartitionIds = new Set();
-    const requiredTables = new Set(requiredTablesList);
-
-    for (const partition of partitions) {
-      const partitionId = partition[COLUMN.PARTITION_ID];
-      if (!partitionId) {
-        continue;
-      }
-      knownPartitionIds.add(partitionId);
-
-      const tableName = partition[COLUMN.TABLE_ID] || partition.table_name;
-      if (requiredTables.has(tableName)) {
-        requiredPartitionIds.add(partitionId);
-      }
-    }
-
-    return {knownPartitionIds, requiredPartitionIds};
+    return this.serviceLeaderReadinessOwner
+      .getLeaderReadinessPartitionSetsForTables(requiredTablesList);
   }
 
   /**
@@ -4608,24 +4463,10 @@ class BootstrapAPI {
    */
   filterMissingRequiredPartitionIds(
       partitionIds = [],
-      requiredTablesList = BOOTSTRAP_REQUIRED_LEADER_TABLES,
+      requiredTablesList,
   ) {
-    if (!Array.isArray(partitionIds) || partitionIds.length === NUM.ZERO) {
-      return [];
-    }
-
-    const {
-      knownPartitionIds,
-      requiredPartitionIds,
-    } = this.getLeaderReadinessPartitionSetsForTables(requiredTablesList);
-
-    if (knownPartitionIds.size === NUM.ZERO || requiredPartitionIds.size === NUM.ZERO) {
-      return partitionIds;
-    }
-
-    return partitionIds.filter((partitionId) =>
-      !knownPartitionIds.has(partitionId) || requiredPartitionIds.has(partitionId),
-    );
+    return this.serviceLeaderReadinessOwner
+      .filterMissingRequiredPartitionIds(partitionIds, requiredTablesList);
   }
 
   /**
@@ -4636,38 +4477,8 @@ class BootstrapAPI {
    * @private
    */
   getCachedLeaderMetadataByServiceType(serviceType, idColumn) {
-    const systemTableCache = assertCritical(
-      this.systemTableCache,
-      BOOTSTRAP_API_ERROR.SYSTEM_TABLE_CACHE_REQUIRED,
-    );
-    const ownerRecords = getOwnerRecords(systemTableCache, serviceType);
-    const metadata = new Map();
-
-    for (const ownerRecord of ownerRecords) {
-      const entityId = ownerRecord?.[idColumn];
-      if (!entityId) {
-        continue;
-      }
-      const {
-        leaderNodeId,
-        leaderService,
-      } = resolveCanonicalLeaderService(
-        systemTableCache,
-        serviceType,
-        entityId,
-      );
-      const existing = {
-        hasLeaderRecord: false,
-        hasNodeId: false,
-        hasAddress: false,
-      };
-      existing.hasLeaderRecord = Boolean(leaderNodeId && leaderService);
-      existing.hasNodeId = Boolean(leaderNodeId);
-      existing.hasAddress = Boolean(leaderService?.[COLUMN.ADDRESS]);
-      metadata.set(entityId, existing);
-    }
-
-    return metadata;
+    return this.serviceLeaderReadinessOwner
+      .getCachedLeaderMetadataByServiceType(serviceType, idColumn);
   }
 
   /**
@@ -4677,17 +4488,7 @@ class BootstrapAPI {
    * @private
    */
   isLiveServiceLeader(service) {
-    if (!service) {
-      return false;
-    }
-
-    const role = typeof service.getRole === TYPEOF.FUNCTION ?
-      service.getRole() :
-      service.role;
-    return service.isLeader === true ||
-      role === RAFT_ROLE.LEADER ||
-      (typeof service.isLeaderReplica === TYPEOF.FUNCTION &&
-        service.isLeaderReplica());
+    return this.serviceLeaderReadinessOwner.isLiveServiceLeader(service);
   }
 
   /**
@@ -4699,56 +4500,10 @@ class BootstrapAPI {
    */
   normalizeLeaderStatusForRequiredTables(
       missing = {},
-      requiredTablesList = BOOTSTRAP_REQUIRED_LEADER_TABLES,
+      requiredTablesList,
   ) {
-    const cachedPartitionLeaders = this.getCachedLeaderMetadataByServiceType(
-      SERVICE_TYPE.PARTITION,
-      COLUMN.PARTITION_ID,
-    );
-    const cachedMessageGroupLeaders = this.getCachedLeaderMetadataByServiceType(
-      SERVICE_TYPE.MESSAGE_GROUP,
-      COLUMN.GROUP_ID,
-    );
-
-    return {
-      ...missing,
-      missingPartitionLeaders: this.filterMissingRequiredPartitionIds(
-        missing.missingPartitionLeaders || [],
-        requiredTablesList,
-      ).filter((partitionId) => {
-        const cached = cachedPartitionLeaders.get(partitionId);
-        return !cached || !cached.hasLeaderRecord;
-      }),
-      missingPartitionLeaderNodes: this.filterMissingRequiredPartitionIds(
-        missing.missingPartitionLeaderNodes || [],
-        requiredTablesList,
-      ).filter((partitionId) => {
-        const cached = cachedPartitionLeaders.get(partitionId);
-        return !cached || !cached.hasLeaderRecord || !cached.hasNodeId;
-      }),
-      missingPartitionLeaderAddresses: this.filterMissingRequiredPartitionIds(
-        missing.missingPartitionLeaderAddresses || [],
-        requiredTablesList,
-      ).filter((partitionId) => {
-        const cached = cachedPartitionLeaders.get(partitionId);
-        return !cached || !cached.hasLeaderRecord || !cached.hasAddress;
-      }),
-      missingMessageGroupLeaders:
-        (missing.missingMessageGroupLeaders || []).filter((groupId) => {
-          const cached = cachedMessageGroupLeaders.get(groupId);
-          return !cached || !cached.hasLeaderRecord;
-        }),
-      missingMessageGroupLeaderNodes:
-        (missing.missingMessageGroupLeaderNodes || []).filter((groupId) => {
-          const cached = cachedMessageGroupLeaders.get(groupId);
-          return !cached || !cached.hasLeaderRecord || !cached.hasNodeId;
-        }),
-      missingMessageGroupLeaderAddresses:
-        (missing.missingMessageGroupLeaderAddresses || []).filter((groupId) => {
-          const cached = cachedMessageGroupLeaders.get(groupId);
-          return !cached || !cached.hasLeaderRecord || !cached.hasAddress;
-        }),
-    };
+    return this.serviceLeaderReadinessOwner
+      .normalizeLeaderStatusForRequiredTables(missing, requiredTablesList);
   }
 
   /**
@@ -4760,12 +4515,8 @@ class BootstrapAPI {
    * @private
    */
   getBlockingLeaderStatusForReadiness(missing = {}) {
-    return {
-      ...missing,
-      missingMessageGroupLeaders: [],
-      missingMessageGroupLeaderNodes: [],
-      missingMessageGroupLeaderAddresses: [],
-    };
+    return this.serviceLeaderReadinessOwner
+      .getBlockingLeaderStatusForReadiness(missing);
   }
 
   /**
@@ -4776,53 +4527,7 @@ class BootstrapAPI {
    * @private
    */
   async waitForServiceLeaders() {
-    const missing = this.normalizeLeaderStatusForRequiredTables(
-      this.getMissingServiceLeaders(),
-      BOOTSTRAP_REQUIRED_LEADER_TABLES,
-    );
-    const blockingMissing =
-      this.getBlockingLeaderStatusForReadiness(missing);
-    const missingCount = this.countMissingLeaderInfo(blockingMissing);
-
-    if (missingCount === NUM.ZERO) {
-      this.logger.info(BOOTSTRAP_API_LOG_MSG.LEADERS_READY || 'All service leaders ready', {
-        seedNodeId: this.seedNodeId,
-        elapsedMs: NUM.ZERO,
-      });
-      return {
-        ready: true,
-        ...missing,
-        nonBlockingMissingMessageGroupLeaders:
-          missing.missingMessageGroupLeaders || [],
-        nonBlockingMissingMessageGroupLeaderNodes:
-          missing.missingMessageGroupLeaderNodes || [],
-        nonBlockingMissingMessageGroupLeaderAddresses:
-          missing.missingMessageGroupLeaderAddresses || [],
-      };
-    }
-
-    this.logger.debug(BOOTSTRAP_API_LOG_MSG.LEADERS_NOT_READY, {
-      seedNodeId: this.seedNodeId,
-      missingCount,
-      ...blockingMissing,
-      nonBlockingMissingMessageGroupLeaders:
-        missing.missingMessageGroupLeaders || [],
-      nonBlockingMissingMessageGroupLeaderNodes:
-        missing.missingMessageGroupLeaderNodes || [],
-      nonBlockingMissingMessageGroupLeaderAddresses:
-        missing.missingMessageGroupLeaderAddresses || [],
-    });
-
-    return {
-      ready: false,
-      ...missing,
-      nonBlockingMissingMessageGroupLeaders:
-        missing.missingMessageGroupLeaders || [],
-      nonBlockingMissingMessageGroupLeaderNodes:
-        missing.missingMessageGroupLeaderNodes || [],
-      nonBlockingMissingMessageGroupLeaderAddresses:
-        missing.missingMessageGroupLeaderAddresses || [],
-    };
+    return this.serviceLeaderReadinessOwner.waitForServiceLeaders();
   }
 
   /**
@@ -4833,7 +4538,7 @@ class BootstrapAPI {
    * @private
    */
   countMissingLeaderInfo(missing) {
-    return getMissingSystemServiceLeaderCount(missing);
+    return this.serviceLeaderReadinessOwner.countMissingLeaderInfo(missing);
   }
 
   /**
@@ -4844,79 +4549,7 @@ class BootstrapAPI {
    * @return {Object} Partition leader addresses by table name.
    */
   getSystemPartitionLeaders() {
-    const leaders = {};
-
-    // Prefer live partition services when available.
-    if (this.partitionServices && this.partitionServices.size > NUM.ZERO) {
-      for (const service of this.partitionServices.values()) {
-        const tableName = service.tableId || service.tableName;
-        if (!tableName || leaders[tableName]) {
-          continue;
-        }
-
-        const role = typeof service.getRole === TYPEOF.FUNCTION ?
-          service.getRole() :
-          service.role;
-        const isLeader = service.isLeader === true ||
-          role === RAFT_ROLE.LEADER ||
-          (typeof service.isLeaderReplica === TYPEOF.FUNCTION && service.isLeaderReplica());
-
-        if (!isLeader) {
-          continue;
-        }
-
-        const nodeId = service.nodeId || this.seedNodeId;
-        const replicaId = service.replicaId || service.service_id;
-        const address = service.unifiedAddress ||
-          `${nodeId}${ADDRESS.SEPARATOR}${ENTITY_TYPE.PARTITION}` +
-          `${ADDRESS.SEPARATOR}${replicaId}`;
-
-        leaders[tableName] = {
-          partitionId: service.partitionId,
-          replicaId,
-          nodeId,
-          address,
-        };
-      }
-
-      if (Object.keys(leaders).length > NUM.ZERO) {
-        return leaders;
-      }
-    }
-
-    const systemTableCache = assertCritical(
-      this.systemTableCache,
-      BOOTSTRAP_API_ERROR.SYSTEM_TABLE_CACHE_REQUIRED,
-    );
-
-    // Get partitions from system cache - the single source of truth
-    const partitions = systemTableCache.getAll(TABLES.PARTITIONS) || [];
-    for (const partition of partitions) {
-      const tableName = partition.table_id || partition.table_name;
-      if (!tableName || leaders[tableName]) {
-        continue;
-      }
-      const {
-        leaderNodeId,
-        leaderService,
-      } = resolveCanonicalLeaderService(
-        systemTableCache,
-        SERVICE_TYPE.PARTITION,
-        partition[COLUMN.PARTITION_ID],
-      );
-
-      if (leaderService) {
-        leaders[tableName] = {
-          partitionId: partition[COLUMN.PARTITION_ID],
-          replicaId: leaderService[COLUMN.REPLICA_ID] ||
-            leaderService[COLUMN.SERVICE_ID],
-          nodeId: leaderNodeId,
-          address: leaderService[COLUMN.ADDRESS],
-        };
-      }
-    }
-
-    return leaders;
+    return this.serviceLeaderReadinessOwner.getSystemPartitionLeaders();
   }
 
   /**

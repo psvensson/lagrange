@@ -22,8 +22,8 @@ import {
   ControlPlaneReadinessService,
 } from '../control-plane/control-plane-readiness-service.js';
 import {
-  ControlPlaneSystemTableGateway,
-} from '../control-plane/control-plane-system-table-gateway.js';
+  createControlPlaneRuntimeBundle,
+} from '../control-plane/control-plane-runtime-bundle.js';
 import {
   PRESSURE_WORK_CLASS,
   PressureGovernor,
@@ -229,12 +229,13 @@ class RebalanceCoordinator extends EventEmitter {
     );
     this.controlPlaneSystemTableGateway =
       options.controlPlaneSystemTableGateway ||
-      new ControlPlaneSystemTableGateway({
+      createControlPlaneRuntimeBundle({
         nodeId: this.nodeId,
-        sqlQueryEngine: options.sqlQueryEngine || null,
-        cdcIntegrationService: this.cdcIntegrationService,
-        messageRouter: options.messageRouter || null,
-      });
+        getSqlQueryEngine: () => this.sqlQueryEngine,
+        getCdcIntegrationService: () => this.cdcIntegrationService,
+        getSystemTableCache: () => this.systemTableCache,
+        getMessageRouter: () => this.messageRouter,
+      }).controlPlaneSystemTableGateway;
     this.messageRouter = assertCritical(
       options.messageRouter,
       REBALANCE_COORDINATOR_ERROR_MSG.ROUTER_MISSING,
@@ -473,24 +474,6 @@ class RebalanceCoordinator extends EventEmitter {
     if (Object.hasOwn(options, 'transactionCoordinator')) {
       this.transactionCoordinator =
         options.transactionCoordinator || null;
-    }
-
-    if (this.controlPlaneSystemTableGateway) {
-      if (typeof this.controlPlaneSystemTableGateway
-        .setSqlQueryEngine === 'function') {
-        this.controlPlaneSystemTableGateway
-          .setSqlQueryEngine(this.sqlQueryEngine);
-      }
-      if (typeof this.controlPlaneSystemTableGateway
-        .setCdcIntegrationService === 'function') {
-        this.controlPlaneSystemTableGateway
-          .setCdcIntegrationService(this.cdcIntegrationService);
-      }
-      if (typeof this.controlPlaneSystemTableGateway
-        .setMessageRouter === 'function') {
-        this.controlPlaneSystemTableGateway
-          .setMessageRouter(this.messageRouter);
-      }
     }
 
     if (this.repository &&

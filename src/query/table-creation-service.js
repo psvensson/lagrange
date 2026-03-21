@@ -11,8 +11,10 @@ import {CONFIG_KEY} from '../config/config-constants.js';
 import {NUM, STATE, TABLES} from '../constants/index.js';
 import {
   CONTROL_PLANE_MUTATION_OPERATION,
-  ControlPlaneSystemTableGateway,
 } from '../control-plane/control-plane-system-table-gateway.js';
+import {
+  createControlPlaneRuntimeBundle,
+} from '../control-plane/control-plane-runtime-bundle.js';
 import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
 import {
   QUERY_ERROR_CODE,
@@ -39,7 +41,11 @@ class TableCreationService {
     this.systemCache = null;
     this.cdcIntegrationService = options.cdcIntegrationService || null;
     this.controlPlaneSystemTableGateway =
-      options.controlPlaneSystemTableGateway || null;
+      options.controlPlaneSystemTableGateway ||
+      createControlPlaneRuntimeBundle({
+        getCdcIntegrationService: () => this.cdcIntegrationService,
+        getSystemTableCache: () => this.systemCache,
+      }).controlPlaneSystemTableGateway;
     this.partitionSplitMergeManager = null;
     this.tablePolicyByTableId = new Map();
     this.partitionSizeByPartitionId = new Map();
@@ -651,17 +657,6 @@ class TableCreationService {
   }
 
   getControlPlaneSystemTableGateway() {
-    if (this.controlPlaneSystemTableGateway) {
-      if (!this.controlPlaneSystemTableGateway.cdcIntegrationService &&
-          this.cdcIntegrationService) {
-        this.controlPlaneSystemTableGateway
-          .setCdcIntegrationService(this.cdcIntegrationService);
-      }
-      return this.controlPlaneSystemTableGateway;
-    }
-    this.controlPlaneSystemTableGateway = new ControlPlaneSystemTableGateway({
-      cdcIntegrationService: this.cdcIntegrationService,
-    });
     return this.controlPlaneSystemTableGateway;
   }
 

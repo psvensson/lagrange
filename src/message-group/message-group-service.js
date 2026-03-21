@@ -33,9 +33,11 @@ import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../control-plane/control-plane-readiness-constants.js';
 import {
-  ControlPlaneSystemTableGateway,
   CONTROL_PLANE_READ_STRATEGY,
 } from '../control-plane/control-plane-system-table-gateway.js';
+import {
+  createControlPlaneRuntimeBundle,
+} from '../control-plane/control-plane-runtime-bundle.js';
 import {
   PRESSURE_WORK_CLASS,
 } from '../control-plane/pressure-governor.js';
@@ -134,7 +136,7 @@ const DIRECT_ONLY_MESSAGE_TYPES = new Set([
 const MESSAGE_DELIVERY_MODE = Object.freeze({
   AUTO: 'auto',
   DIRECT_ONLY: 'direct_only',
-  DIRECT_WITH_RAFT_FALLBACK: 'direct_with_raft_fallback',
+  DIRECT_WITH_RAFT_DURABILITY: 'direct_with_raft_durability',
 });
 
 function shouldDeferImmediateDeliveryRetry(result) {
@@ -238,8 +240,8 @@ function normalizeMessageDeliveryMode(deliveryMode) {
   if (deliveryMode === MESSAGE_DELIVERY_MODE.DIRECT_ONLY) {
     return MESSAGE_DELIVERY_MODE.DIRECT_ONLY;
   }
-  if (deliveryMode === MESSAGE_DELIVERY_MODE.DIRECT_WITH_RAFT_FALLBACK) {
-    return MESSAGE_DELIVERY_MODE.DIRECT_WITH_RAFT_FALLBACK;
+  if (deliveryMode === MESSAGE_DELIVERY_MODE.DIRECT_WITH_RAFT_DURABILITY) {
+    return MESSAGE_DELIVERY_MODE.DIRECT_WITH_RAFT_DURABILITY;
   }
   return MESSAGE_DELIVERY_MODE.AUTO;
 }
@@ -391,7 +393,14 @@ class MessageGroupService extends EventEmitter {
     this.tablePolicyService = options.tablePolicyService || null;
     this.rebalanceCoordinator = options.rebalanceCoordinator || null;
     this.controlPlaneSystemTableGateway =
-      options.controlPlaneSystemTableGateway || null;
+      options.controlPlaneSystemTableGateway ||
+      createControlPlaneRuntimeBundle({
+        nodeId: this.nodeId,
+        getSqlQueryEngine: () => this.cdcIntegrationService?.sqlQueryEngine || null,
+        getCdcIntegrationService: () => this.cdcIntegrationService,
+        getSystemTableCache: () => this.systemTableCache,
+        getMessageRouter: () => this.transport,
+      }).controlPlaneSystemTableGateway;
     this.rebalancer = null;
 
     // Message tracking
@@ -1837,7 +1846,7 @@ class MessageGroupService extends EventEmitter {
         this.isDirectOnlyControlPlanePayload(payload)) {
       return MESSAGE_DELIVERY_MODE.DIRECT_ONLY;
     }
-    return MESSAGE_DELIVERY_MODE.DIRECT_WITH_RAFT_FALLBACK;
+    return MESSAGE_DELIVERY_MODE.DIRECT_WITH_RAFT_DURABILITY;
   }
 
   /**
@@ -3751,25 +3760,6 @@ class MessageGroupService extends EventEmitter {
   }
 
   getControlPlaneSystemTableGateway() {
-    if (!this.controlPlaneSystemTableGateway) {
-      this.controlPlaneSystemTableGateway =
-        new ControlPlaneSystemTableGateway({
-          nodeId: this.nodeId,
-          cdcIntegrationService: this.cdcIntegrationService,
-          sqlQueryEngine: this.cdcIntegrationService?.sqlQueryEngine || null,
-          systemTableCache: this.systemTableCache,
-          messageRouter: this.transport,
-        });
-    } else {
-      this.controlPlaneSystemTableGateway
-        .setCdcIntegrationService(this.cdcIntegrationService);
-      this.controlPlaneSystemTableGateway
-        .setSqlQueryEngine(this.cdcIntegrationService?.sqlQueryEngine || null);
-      this.controlPlaneSystemTableGateway
-        .setSystemTableCache(this.systemTableCache);
-      this.controlPlaneSystemTableGateway
-        .setMessageRouter(this.transport);
-    }
     return this.controlPlaneSystemTableGateway;
   }
 
@@ -4281,14 +4271,6 @@ class MessageGroupService extends EventEmitter {
       this.rebalancer.messageRouter = this.transport;
       this.rebalancer.sqlQueryEngine =
         this.cdcIntegrationService?.sqlQueryEngine || null;
-      if (this.rebalancer.controlPlaneSystemTableGateway &&
-          typeof this.rebalancer.controlPlaneSystemTableGateway
-            .setSqlQueryEngine === TYPEOF.FUNCTION) {
-        this.rebalancer.controlPlaneSystemTableGateway
-          .setSqlQueryEngine(
-            this.cdcIntegrationService?.sqlQueryEngine || null,
-          );
-      }
       this.rebalancer.setLeader(backgroundReady && this.isLeaderReplica());
       return;
     }

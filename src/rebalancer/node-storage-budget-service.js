@@ -16,8 +16,10 @@ import {
 } from '../constants/index.js';
 import {
   CONTROL_PLANE_MUTATION_OPERATION,
-  ControlPlaneSystemTableGateway,
 } from '../control-plane/control-plane-system-table-gateway.js';
+import {
+  createControlPlaneRuntimeBundle,
+} from '../control-plane/control-plane-runtime-bundle.js';
 import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
 import {
   STORAGE_BUDGET_CONFIG_KEY,
@@ -45,7 +47,11 @@ class NodeStorageBudgetService {
     this.nodeId = options.nodeId || null;
     this.cdcIntegrationService = options.cdcIntegrationService || null;
     this.controlPlaneSystemTableGateway =
-      options.controlPlaneSystemTableGateway || null;
+      options.controlPlaneSystemTableGateway ||
+      createControlPlaneRuntimeBundle({
+        nodeId: this.nodeId,
+        getCdcIntegrationService: () => this.cdcIntegrationService,
+      }).controlPlaneSystemTableGateway;
     this.config = ConfigurationManager.getInstance();
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
@@ -264,18 +270,6 @@ class NodeStorageBudgetService {
   }
 
   getControlPlaneSystemTableGateway() {
-    if (this.controlPlaneSystemTableGateway) {
-      if (!this.controlPlaneSystemTableGateway.cdcIntegrationService &&
-          this.cdcIntegrationService) {
-        this.controlPlaneSystemTableGateway
-          .setCdcIntegrationService(this.cdcIntegrationService);
-      }
-      return this.controlPlaneSystemTableGateway;
-    }
-    this.controlPlaneSystemTableGateway = new ControlPlaneSystemTableGateway({
-      nodeId: this.nodeId,
-      cdcIntegrationService: this.cdcIntegrationService,
-    });
     return this.controlPlaneSystemTableGateway;
   }
 }

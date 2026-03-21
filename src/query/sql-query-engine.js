@@ -100,8 +100,10 @@ import {AuthoritativeControlPlaneView} from
   '../control-plane/authoritative-control-plane-view.js';
 import {
   CONTROL_PLANE_MUTATION_OPERATION,
-  ControlPlaneSystemTableGateway,
 } from '../control-plane/control-plane-system-table-gateway.js';
+import {
+  createControlPlaneRuntimeBundle,
+} from '../control-plane/control-plane-runtime-bundle.js';
 import {
   CONTROL_PLANE_MUTATION_WORK_CLASS,
 } from '../control-plane/control-plane-mutation-readiness.js';
@@ -187,9 +189,16 @@ class SQLQueryEngine {
     this.systemCache = options.systemCache || null;
     this.messageRouter = options.messageRouter || null;
     this.cdcIntegrationService = options.cdcIntegrationService || null;
-    this.controlPlaneSystemTableGateway =
-      options.controlPlaneSystemTableGateway || null;
     this.nodeId = options.nodeId || QUERY_SUBSYSTEM.SQL_QUERY_ENGINE;
+    this.controlPlaneSystemTableGateway =
+      options.controlPlaneSystemTableGateway ||
+      createControlPlaneRuntimeBundle({
+        nodeId: this.nodeId,
+        getSqlQueryEngine: () => this,
+        getCdcIntegrationService: () => this.cdcIntegrationService,
+        getSystemTableCache: () => this.systemCache,
+        getMessageRouter: () => this.messageRouter,
+      }).controlPlaneSystemTableGateway;
     this.rebalanceCoordinator = options.rebalanceCoordinator || null;
     this.controlPlaneReadinessService =
       options.controlPlaneReadinessService ||
@@ -454,9 +463,6 @@ class SQLQueryEngine {
    */
   setSystemCache(cache) {
     this.systemCache = cache;
-    if (this.controlPlaneSystemTableGateway) {
-      this.controlPlaneSystemTableGateway.setSystemTableCache(cache);
-    }
     this.partitionResolver.setSystemCache(cache);
     this.tableCreationService.setSystemCache(cache);
     this.queryExecutor.setSystemCache(cache);
@@ -489,9 +495,6 @@ class SQLQueryEngine {
   setMessageRouter(router) {
     this.messageRouter = router;
     this.queryExecutor.setMessageRouter(router);
-    if (this.controlPlaneSystemTableGateway) {
-      this.controlPlaneSystemTableGateway.setMessageRouter(router);
-    }
   }
 
   /**
@@ -525,34 +528,9 @@ class SQLQueryEngine {
   setCDCIntegrationService(service) {
     this.cdcIntegrationService = service;
     this.tableCreationService.setCDCIntegrationService(service);
-    if (this.controlPlaneSystemTableGateway) {
-      this.controlPlaneSystemTableGateway.setCdcIntegrationService(service);
-    }
   }
 
   getControlPlaneSystemTableGateway() {
-    if (this.controlPlaneSystemTableGateway) {
-      if (!this.controlPlaneSystemTableGateway.cdcIntegrationService &&
-          this.cdcIntegrationService) {
-        this.controlPlaneSystemTableGateway
-          .setCdcIntegrationService(this.cdcIntegrationService);
-      }
-      if (!this.controlPlaneSystemTableGateway.messageRouter &&
-          this.messageRouter) {
-        this.controlPlaneSystemTableGateway.setMessageRouter(this.messageRouter);
-      }
-      if (!this.controlPlaneSystemTableGateway.systemTableCache &&
-          this.systemCache) {
-        this.controlPlaneSystemTableGateway.setSystemTableCache(this.systemCache);
-      }
-      return this.controlPlaneSystemTableGateway;
-    }
-    this.controlPlaneSystemTableGateway = new ControlPlaneSystemTableGateway({
-      nodeId: this.nodeId,
-      cdcIntegrationService: this.cdcIntegrationService,
-      messageRouter: this.messageRouter,
-      systemTableCache: this.systemCache,
-    });
     return this.controlPlaneSystemTableGateway;
   }
 

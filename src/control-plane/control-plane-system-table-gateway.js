@@ -268,6 +268,22 @@ class ControlPlaneSystemTableGateway {
     this.cdcIntegrationService = options.cdcIntegrationService || null;
     this.systemTableCache = options.systemTableCache || null;
     this.messageRouter = options.messageRouter || null;
+    this.sqlQueryEngineProvider =
+      typeof options.getSqlQueryEngine === TYPEOF.FUNCTION ?
+        options.getSqlQueryEngine :
+        null;
+    this.cdcIntegrationServiceProvider =
+      typeof options.getCdcIntegrationService === TYPEOF.FUNCTION ?
+        options.getCdcIntegrationService :
+        null;
+    this.systemTableCacheProvider =
+      typeof options.getSystemTableCache === TYPEOF.FUNCTION ?
+        options.getSystemTableCache :
+        null;
+    this.messageRouterProvider =
+      typeof options.getMessageRouter === TYPEOF.FUNCTION ?
+        options.getMessageRouter :
+        null;
     this.pressureGovernor = options.pressureGovernor || null;
     this.logger = options.logger || null;
     this.now = typeof options.now === TYPEOF.FUNCTION ?
@@ -346,6 +362,38 @@ class ControlPlaneSystemTableGateway {
     this.messageRouter = messageRouter || null;
   }
 
+  resolveSqlQueryEngine() {
+    if (this.sqlQueryEngine) {
+      return this.sqlQueryEngine;
+    }
+    const providedSqlQueryEngine = this.sqlQueryEngineProvider?.() || null;
+    if (providedSqlQueryEngine) {
+      return providedSqlQueryEngine;
+    }
+    return this.resolveCdcIntegrationService()?.sqlQueryEngine || null;
+  }
+
+  resolveCdcIntegrationService() {
+    if (this.cdcIntegrationService) {
+      return this.cdcIntegrationService;
+    }
+    return this.cdcIntegrationServiceProvider?.() || null;
+  }
+
+  resolveSystemTableCache() {
+    if (this.systemTableCache) {
+      return this.systemTableCache;
+    }
+    return this.systemTableCacheProvider?.() || null;
+  }
+
+  resolveMessageRouter() {
+    if (this.messageRouter) {
+      return this.messageRouter;
+    }
+    return this.messageRouterProvider?.() || null;
+  }
+
   /**
    * Reconcile authoritative rows into the writable system-table cache.
    * This is the only runtime cache-repair ingress outside CDC delivery.
@@ -360,8 +408,12 @@ class ControlPlaneSystemTableGateway {
     authoritativeRows = [],
     options = {},
   ) {
-    const writableCache = options?.cacheMutationTarget || this.systemTableCache;
-    const readableCache = options?.systemTableCache || this.systemTableCache || writableCache;
+    const defaultCache = this.resolveSystemTableCache();
+    const writableCache = options?.cacheMutationTarget || defaultCache;
+    const readableCache =
+      options?.systemTableCache ||
+      defaultCache ||
+      writableCache;
     if (!writableCache ||
         typeof writableCache.applySystemTableChange !== TYPEOF.FUNCTION ||
         !readableCache) {
@@ -467,14 +519,14 @@ class ControlPlaneSystemTableGateway {
     if (this.pressureGovernor) {
       this.pressureGovernor.configure({
         nodeId: this.nodeId,
-        messageRouter: this.messageRouter,
+        messageRouter: this.resolveMessageRouter(),
         logger: this.logger,
       });
       return this.pressureGovernor;
     }
     this.pressureGovernor = PressureGovernor.getShared({
       nodeId: this.nodeId,
-      messageRouter: this.messageRouter,
+      messageRouter: this.resolveMessageRouter(),
       logger: this.logger,
     });
     return this.pressureGovernor;
@@ -484,11 +536,14 @@ class ControlPlaneSystemTableGateway {
    * @return {boolean}
    */
   supportsReadRows() {
+    const systemTableCache = this.resolveSystemTableCache();
+    const cdcIntegrationService = this.resolveCdcIntegrationService();
+    const sqlQueryEngine = this.resolveSqlQueryEngine();
     return (
-      Boolean(this.systemTableCache) ||
-      typeof this.cdcIntegrationService
+      Boolean(systemTableCache) ||
+      typeof cdcIntegrationService
         ?.executeAuthoritativeSystemTableRead === TYPEOF.FUNCTION ||
-      typeof this.sqlQueryEngine?.executeQuery === TYPEOF.FUNCTION
+      typeof sqlQueryEngine?.executeQuery === TYPEOF.FUNCTION
     );
   }
 
@@ -1267,19 +1322,23 @@ class ControlPlaneSystemTableGateway {
    * @private
    */
   assertSqlQueryEngine() {
-    if (!this.sqlQueryEngine ||
-        typeof this.sqlQueryEngine.executeQuery !== TYPEOF.FUNCTION) {
+    const sqlQueryEngine = this.resolveSqlQueryEngine();
+    if (!sqlQueryEngine ||
+        typeof sqlQueryEngine.executeQuery !== TYPEOF.FUNCTION) {
       throw new Error(GATEWAY_ERROR_MSG.SQL_ENGINE_REQUIRED);
     }
+    return sqlQueryEngine;
   }
 
   /**
    * @private
    */
   assertCdcIntegrationService() {
-    if (!this.cdcIntegrationService) {
+    const cdcIntegrationService = this.resolveCdcIntegrationService();
+    if (!cdcIntegrationService) {
       throw new Error(GATEWAY_ERROR_MSG.CDC_REQUIRED);
     }
+    return cdcIntegrationService;
   }
 
   /**
@@ -1289,7 +1348,7 @@ class ControlPlaneSystemTableGateway {
    * @return {Promise<Object>}
    */
   async executeQuery(sql, params = [], options = {}) {
-    this.assertSqlQueryEngine();
+    const sqlQueryEngine = this.assertSqlQueryEngine();
     const descriptor = this.resolveSystemTableQueryDescriptor(sql, options);
     const pressureDecision = this.evaluateExecuteQueryPressure(
       descriptor,
@@ -1313,7 +1372,7 @@ class ControlPlaneSystemTableGateway {
       this.inFlightQueryRequestsByKey,
       queryKey,
       () => {
-        return this.sqlQueryEngine.executeQuery(
+        return sqlQueryEngine.executeQuery(
           sql,
           params,
           this.buildQueryOptions(options),
@@ -1335,6 +1394,7 @@ class ControlPlaneSystemTableGateway {
    * @return {Promise<Object>}
    */
   async readRows(tableName, sql, params = [], options = {}) {
+    const cdcIntegrationService = this.resolveCdcIntegrationService();
     const strategy = normalizeReadStrategy(
       options?.strategy ||
       options?.readStrategy ||
@@ -1350,7 +1410,7 @@ class ControlPlaneSystemTableGateway {
                 options?.requireAuthoritative === true ?
                   CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE_REQUIRED :
                   (
-                    typeof this.cdcIntegrationService
+                    typeof cdcIntegrationService
                       ?.executeAuthoritativeSystemTableRead === TYPEOF.FUNCTION ?
                       CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE :
                       CONTROL_PLANE_READ_STRATEGY.OWNER_LOCAL_NON_PROPAGATED
@@ -1542,7 +1602,7 @@ class ControlPlaneSystemTableGateway {
    * @return {Promise<Object>}
    */
   async submitMutation(mutation = {}, options = {}) {
-    this.assertCdcIntegrationService();
+    const cdcIntegrationService = this.assertCdcIntegrationService();
     const operation = normalizeMutationOperation(mutation?.operation);
     const tableName = normalizeSystemTableName(mutation?.tableName);
     if (!operation) {
@@ -1574,7 +1634,7 @@ class ControlPlaneSystemTableGateway {
         if (!mutation?.row || typeof mutation.row !== TYPEOF.OBJECT) {
           throw new Error(GATEWAY_ERROR_MSG.MUTATION_ROW_REQUIRED);
         }
-        return this.normalizeMutationResult(await this.cdcIntegrationService.insertSystemTableRow(
+        return this.normalizeMutationResult(await cdcIntegrationService.insertSystemTableRow(
           tableName,
           mutation.row,
           writeOptions,
@@ -1588,7 +1648,7 @@ class ControlPlaneSystemTableGateway {
         if (!mutation?.data || typeof mutation.data !== TYPEOF.OBJECT) {
           throw new Error(GATEWAY_ERROR_MSG.MUTATION_DATA_REQUIRED);
         }
-        return this.normalizeMutationResult(await this.cdcIntegrationService.updateSystemTableRow(
+        return this.normalizeMutationResult(await cdcIntegrationService.updateSystemTableRow(
           tableName,
           mutation.whereClause,
           mutation.data,
@@ -1599,7 +1659,7 @@ class ControlPlaneSystemTableGateway {
         if (!mutation?.row || typeof mutation.row !== TYPEOF.OBJECT) {
           throw new Error(GATEWAY_ERROR_MSG.MUTATION_ROW_REQUIRED);
         }
-        return this.normalizeMutationResult(await this.cdcIntegrationService.upsertSystemTableRow(
+        return this.normalizeMutationResult(await cdcIntegrationService.upsertSystemTableRow(
           tableName,
           mutation.row,
           writeOptions,
@@ -1609,7 +1669,7 @@ class ControlPlaneSystemTableGateway {
           typeof mutation.whereClause !== TYPEOF.OBJECT) {
         throw new Error(GATEWAY_ERROR_MSG.MUTATION_WHERE_REQUIRED);
       }
-      return this.normalizeMutationResult(await this.cdcIntegrationService.deleteSystemTableRow(
+      return this.normalizeMutationResult(await cdcIntegrationService.deleteSystemTableRow(
         tableName,
         mutation.whereClause,
         writeOptions,
@@ -1669,13 +1729,14 @@ class ControlPlaneSystemTableGateway {
    * @private
    */
   async executeCacheRead(tableName, readIntent, options) {
+    const systemTableCache = this.resolveSystemTableCache();
     const readFromCache = typeof readIntent?.readFromCache === TYPEOF.FUNCTION ?
       readIntent.readFromCache :
       null;
     const cachePredicate = typeof readIntent?.cachePredicate === TYPEOF.FUNCTION ?
       readIntent.cachePredicate :
       null;
-    if (!this.systemTableCache && !readFromCache) {
+    if (!systemTableCache && !readFromCache) {
       return {
         success: false,
         tableName,
@@ -1688,12 +1749,12 @@ class ControlPlaneSystemTableGateway {
 
     let rows = [];
     if (readFromCache) {
-      const cacheRows = await readFromCache(this.systemTableCache, readIntent, options);
+      const cacheRows = await readFromCache(systemTableCache, readIntent, options);
       rows = Array.isArray(cacheRows) ? cacheRows : [];
-    } else if (cachePredicate && typeof this.systemTableCache?.filter === TYPEOF.FUNCTION) {
-      rows = this.systemTableCache.filter(tableName, cachePredicate) || [];
-    } else if (typeof this.systemTableCache?.getAll === TYPEOF.FUNCTION) {
-      rows = this.systemTableCache.getAll(tableName) || [];
+    } else if (cachePredicate && typeof systemTableCache?.filter === TYPEOF.FUNCTION) {
+      rows = systemTableCache.filter(tableName, cachePredicate) || [];
+    } else if (typeof systemTableCache?.getAll === TYPEOF.FUNCTION) {
+      rows = systemTableCache.getAll(tableName) || [];
     }
 
     return {
@@ -1716,7 +1777,8 @@ class ControlPlaneSystemTableGateway {
    * @private
    */
   async executeAuthoritativeRead(tableName, sql, params, strategy, options) {
-    if (typeof this.cdcIntegrationService?.executeAuthoritativeSystemTableRead !==
+    const cdcIntegrationService = this.resolveCdcIntegrationService();
+    if (typeof cdcIntegrationService?.executeAuthoritativeSystemTableRead !==
       TYPEOF.FUNCTION) {
       return {
         success: false,
@@ -1732,7 +1794,7 @@ class ControlPlaneSystemTableGateway {
     }
 
     const authoritativeResult =
-      await this.cdcIntegrationService.executeAuthoritativeSystemTableRead(
+      await cdcIntegrationService.executeAuthoritativeSystemTableRead(
         tableName,
         sql,
         params,
@@ -1775,7 +1837,8 @@ class ControlPlaneSystemTableGateway {
    * @private
    */
   async executeOwnerLocalRead(tableName, sql, params, options) {
-    if (typeof this.sqlQueryEngine?.executeQuery !== TYPEOF.FUNCTION) {
+    const sqlQueryEngine = this.resolveSqlQueryEngine();
+    if (typeof sqlQueryEngine?.executeQuery !== TYPEOF.FUNCTION) {
       return {
         success: false,
         tableName,
@@ -1785,7 +1848,7 @@ class ControlPlaneSystemTableGateway {
         error: 'sql_query_engine_unavailable',
       };
     }
-    const result = await this.sqlQueryEngine.executeQuery(
+    const result = await sqlQueryEngine.executeQuery(
       sql,
       params,
       this.buildQueryOptions(options),

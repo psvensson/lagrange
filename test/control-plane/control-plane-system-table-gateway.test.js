@@ -1095,3 +1095,61 @@ test('ControlPlaneSystemTableGateway executeQuery defers opted-in raw ' +
   );
   t.equal(sqlCalls, 0, 'deferred raw reads should not hit routed SQL');
 });
+
+test('ControlPlaneSystemTableGateway resolves runtime dependencies through providers',
+  async (t) => {
+    let sqlQueryEngine = null;
+    let authoritativeReads = 0;
+    const cache = {
+      getAll() {
+        return [{node_id: 'node-a'}];
+      },
+    };
+    const gateway = new ControlPlaneSystemTableGateway({
+      getSqlQueryEngine: () => sqlQueryEngine,
+      getCdcIntegrationService: () => ({
+        sqlQueryEngine,
+        async executeAuthoritativeSystemTableRead() {
+          authoritativeReads += 1;
+          return {
+            success: true,
+            rows: [{node_id: 'node-a'}],
+          };
+        },
+      }),
+      getSystemTableCache: () => cache,
+    });
+
+    t.equal(gateway.supportsReadRows(), true,
+      'provider-backed cache should satisfy read support');
+
+    sqlQueryEngine = {
+      async executeQuery() {
+        return {
+          success: true,
+          rows: [{service_id: 'svc-1'}],
+        };
+      },
+    };
+
+    const queryResult = await gateway.executeQuery(
+      'SELECT * FROM services WHERE service_id = ?',
+      ['svc-1'],
+      {
+        controlPlaneTableName: TABLES.SERVICES,
+        controlPlaneOperationKind: 'read',
+      },
+    );
+    t.equal(queryResult.success, true,
+      'provider-backed SQL engine should execute raw system-table reads');
+
+    const authoritativeResult = await gateway.readRows(
+      TABLES.NODES,
+      'SELECT * FROM nodes WHERE node_id = ?',
+      ['node-a'],
+    );
+    t.equal(authoritativeResult.success, true,
+      'provider-backed authoritative read owner should execute reads');
+    t.equal(authoritativeReads, 1,
+      'gateway should evaluate provider-backed authoritative owner once');
+  });

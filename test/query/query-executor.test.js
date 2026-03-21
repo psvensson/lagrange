@@ -1225,6 +1225,84 @@ test('QueryExecutor - executeOnPartition fails closed on stale service leader hi
     t.equal(deliveries, 0, 'write path should not dispatch using stale service hints');
   });
 
+test('QueryExecutor - executeOnPartition fails closed when canonical leader ' +
+  'metadata is known but its service row is missing', async (t) => {
+  let deliveries = 0;
+  const systemCache = {
+    partitions: [
+      {
+        partition_id: 'p1',
+        leader_node_id: 'node1',
+      },
+    ],
+    services: [
+      {
+        service_id: 'p1-follower-visible',
+        service_type: 'partition',
+        partition_id: 'p1',
+        node_id: 'node2',
+        raft_role: 'follower',
+        address: 'node2/partition/p1',
+        status: 'active',
+      },
+      {
+        service_id: 'p1-stale-peer-leader',
+        service_type: 'partition',
+        partition_id: 'p1',
+        node_id: 'node3',
+        raft_role: 'leader',
+        address: 'node3/partition/p1',
+        status: 'active',
+      },
+    ],
+    get(type, key) {
+      if (type === 'partitions') {
+        return this.partitions.find((partition) => partition.partition_id === key) || null;
+      }
+      return null;
+    },
+    filter(type, predicate) {
+      if (type === 'services') {
+        return this.services.filter(predicate);
+      }
+      if (type === 'partitions') {
+        return this.partitions.filter(predicate);
+      }
+      return [];
+    },
+  };
+  const messageRouter = {
+    deliver: async () => {
+      deliveries += 1;
+      return {acknowledged: true, success: true, rows: []};
+    },
+  };
+
+  const executor = new QueryExecutor({
+    messageRouter,
+    systemCache,
+  });
+  executor.leaderRetryAttempts = 1;
+  executor.leaderRetryDelayMs = 1;
+
+  const result = await executor.executeOnPartition(
+    'p1',
+    'INSERT INTO users (id) VALUES (\'1\')',
+    [],
+    false,
+    false,
+    false,
+  );
+
+  t.equal(result.success, false);
+  t.equal(result.error, ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE);
+  t.equal(
+    deliveries,
+    0,
+    'steady-state writes must not widen routing to non-canonical replicas',
+  );
+});
+
 test('QueryExecutor - executeOnPartition dispatches writes during the fresh ' +
   'bootstrap leader window', async (t) => {
   let deliveries = 0;
@@ -1525,8 +1603,8 @@ test('QueryExecutor - executeOnPartition repairs the canonical leader service ' 
   );
 });
 
-test('QueryExecutor - executeOnPartition falls back to redirect-safe replicas ' +
-  'when the canonical leader service row remains missing', async (t) => {
+test('QueryExecutor - executeOnPartition fails closed when the canonical ' +
+  'leader service row remains missing after repair', async (t) => {
   const deliveries = [];
   const readinessCalls = [];
   const systemCache = {
@@ -1611,19 +1689,17 @@ test('QueryExecutor - executeOnPartition falls back to redirect-safe replicas ' 
     false,
   );
 
-  t.equal(result.success, true);
+  t.equal(result.success, false);
+  t.equal(result.error, ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE);
   t.same(
     readinessCalls.map((call) => call.nodeId),
     ['leader-node'],
-    'write routing should still attempt one authoritative refresh before falling back',
+    'write routing should still attempt one authoritative refresh before failing closed',
   );
   t.same(
     deliveries,
-    [
-      'follower-node/partition/p1',
-      'leader-node/partition/p1',
-    ],
-    'fallback writes should route through redirect-capable replicas when the leader row remains locally invisible',
+    [],
+    'steady-state writes must not widen to redirect-capable replicas when canonical leader service metadata remains absent',
   );
 });
 

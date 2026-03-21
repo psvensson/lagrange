@@ -991,7 +991,6 @@ class QueryExecutor {
       this.getWriteRetryAttemptLimit();
     let lastError = null;
     let awaitedRoutingRepair = false;
-    let allowWriteLeaderGapFallback = false;
     const routingReadinessDimension =
       executionOptions.routingReadinessDimension ||
       this.defaultRoutingReadinessDimension;
@@ -1007,40 +1006,22 @@ class QueryExecutor {
         preferLeader,
         preferSameLatencyGroup,
         routingReadinessDimension,
-        allowWriteLeaderGapFallback,
       );
       if (!awaitedRoutingRepair &&
           serviceCandidates.length === NUM.ZERO &&
           await this.maybeAwaitDeniedPartitionRoutingRepair(routingSnapshot)) {
         awaitedRoutingRepair = true;
-        allowWriteLeaderGapFallback = !forRead;
         this.throwIfCancelled(cancellationToken);
         ({
           candidates: serviceCandidates,
           routingSnapshot,
         } = this.resolvePartitionServiceCandidates(
-          partitionId,
-          forRead,
-          preferLeader,
-          preferSameLatencyGroup,
-          routingReadinessDimension,
-          allowWriteLeaderGapFallback,
-        ));
-      } else if (!forRead &&
-          !allowWriteLeaderGapFallback &&
-          this.shouldUseWriteLeaderGapFallback(routingSnapshot)) {
-        allowWriteLeaderGapFallback = true;
-        ({
-          candidates: serviceCandidates,
-          routingSnapshot,
-        } = this.resolvePartitionServiceCandidates(
-          partitionId,
-          forRead,
-          preferLeader,
-          preferSameLatencyGroup,
-          routingReadinessDimension,
-          allowWriteLeaderGapFallback,
-        ));
+            partitionId,
+            forRead,
+            preferLeader,
+            preferSameLatencyGroup,
+            routingReadinessDimension,
+          ));
       }
       if (serviceCandidates.length === 0) {
         const hasRoutableService = routingSnapshot.routableServiceCount >
@@ -1372,7 +1353,6 @@ class QueryExecutor {
    * @param {boolean} preferLeader
    * @param {boolean} preferSameLatencyGroup
    * @param {string} routingReadinessDimension
-   * @param {boolean} allowWriteLeaderGapFallback
    * @return {{candidates: Array<Object>, routingSnapshot: Object}}
    * @private
    */
@@ -1382,7 +1362,6 @@ class QueryExecutor {
     preferLeader = false,
     preferSameLatencyGroup = false,
     routingReadinessDimension = this.defaultRoutingReadinessDimension,
-    allowWriteLeaderGapFallback = false,
   ) {
     const prioritizeLeader = preferLeader || !forRead;
     const routingSnapshot = this.getPartitionRoutingSnapshot(
@@ -1451,23 +1430,12 @@ class QueryExecutor {
         };
       }
       if (canonicalLeaderServices.length === NUM.ZERO) {
-        const fallbackServices = allowWriteLeaderGapFallback ?
-          this.getWriteLeaderGapFallbackServices(orderedServices) :
-          [];
         this.logCanonicalLeaderRoutingGap(partitionId, {
           reason: LEADER_GAP_REASON_SERVICE_MISSING,
           canonicalLeaderNodeId,
           services: orderedServices,
-          fallbackServices,
           routingSnapshot,
         });
-        if (fallbackServices.length > NUM.ZERO) {
-          fallbackServices.forEach(addService);
-          return {
-            candidates,
-            routingSnapshot,
-          };
-        }
         return {
           candidates: [],
           routingSnapshot,
@@ -1594,41 +1562,6 @@ class QueryExecutor {
       }
       return NUM.ZERO;
     });
-  }
-
-  /**
-   * Order redirect-safe write fallback replicas for canonical leader-service
-   * visibility gaps. Local replicas go first, then stale leader hints, then
-   * the remaining routable replicas.
-   * @param {Object[]} services
-   * @return {Object[]}
-   * @private
-   */
-  getWriteLeaderGapFallbackServices(services = []) {
-    const fallbackServices = [];
-    const seen = new Set();
-    const addService = (service) => {
-      if (!service) {
-        return;
-      }
-      const dedupeKey =
-        service.service_id || service.replica_id || service.address;
-      if (!dedupeKey || seen.has(dedupeKey)) {
-        return;
-      }
-      seen.add(dedupeKey);
-      fallbackServices.push(service);
-    };
-
-    services
-      .filter((service) => service?.node_id === this.nodeId)
-      .forEach(addService);
-    services
-      .filter((service) => service?.raft_role === RAFT_ROLE.LEADER)
-      .forEach(addService);
-    services.forEach(addService);
-
-    return fallbackServices;
   }
 
   /**
@@ -1869,25 +1802,6 @@ class QueryExecutor {
       return null;
     }));
     return true;
-  }
-
-  /**
-   * Return true when write execution can safely fall back to already-routable
-   * replicas because the canonical leader identity is known but its service
-   * row is temporarily missing locally.
-   * @param {Object|null} routingSnapshot
-   * @return {boolean}
-   * @private
-   */
-  shouldUseWriteLeaderGapFallback(routingSnapshot) {
-    return Boolean(
-      routingSnapshot &&
-      routingSnapshot.leaderKnown === true &&
-      typeof routingSnapshot.canonicalLeaderNodeId === 'string' &&
-      routingSnapshot.canonicalLeaderNodeId.length > NUM.ZERO &&
-      Number(routingSnapshot.canonicalLeaderServiceCount) === NUM.ZERO &&
-      Number(routingSnapshot.routableServiceCount) > NUM.ZERO,
-    );
   }
 
   /**
@@ -2356,11 +2270,6 @@ class QueryExecutor {
       .filter((service) => service?.raft_role === RAFT_ROLE.LEADER)
       .map((service) => service?.node_id)
       .filter((nodeId) => typeof nodeId === 'string' && nodeId.length > NUM.ZERO))];
-    const fallbackNodeIds = [...new Set((Array.isArray(options.fallbackServices) ?
-      options.fallbackServices :
-      [])
-      .map((service) => service?.node_id)
-      .filter((nodeId) => typeof nodeId === 'string' && nodeId.length > NUM.ZERO))];
 
     if (reason === LEADER_GAP_REASON_SERVICE_MISSING) {
       this.logger.warn(
@@ -2370,7 +2279,6 @@ class QueryExecutor {
           leaderNodeId: options.canonicalLeaderNodeId || null,
           routableNodeIds,
           staleLeaderNodeIds,
-          fallbackNodeIds,
           routingSnapshot: this.summarizePartitionRoutingSnapshot(
             options.routingSnapshot,
           ),
