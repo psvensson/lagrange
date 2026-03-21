@@ -4617,6 +4617,9 @@ test('SQLQueryEngine - executeManagedSplit rejects non-leader callers', async (t
       async insertSystemTableRow() {
         return {success: true};
       },
+      async upsertSystemTableRow() {
+        return {success: true};
+      },
     },
     partitionSplitMergeManager: {
       async splitPartition() {
@@ -4806,6 +4809,20 @@ test('SQLQueryEngine - executeManagedSplit dispatches both child metadata writes
         }
         return {success: true};
       },
+      async upsertSystemTableRow(tableName, row, options = {}) {
+        if (tableName === TABLES.PARTITIONS) {
+          childInsertCalls.push({
+            tableName,
+            partitionId: row.partition_id,
+            options,
+          });
+          if (row.partition_id === 'users-p-left') {
+            notifyLeftInsertStarted();
+            await leftInsertPromise;
+          }
+        }
+        return {success: true};
+      },
     },
   });
 
@@ -4903,6 +4920,9 @@ test('SQLQueryEngine - executeManagedSplit provisions child partitions with ' +
         return {success: true, affectedRows: 1};
       },
       async insertSystemTableRow() {
+        return {success: true};
+      },
+      async upsertSystemTableRow() {
         return {success: true};
       },
     },
@@ -5010,6 +5030,9 @@ async (t) => {
         return {success: true, affectedRows: 1};
       },
       async insertSystemTableRow() {
+        return {success: true};
+      },
+      async upsertSystemTableRow() {
         return {success: true};
       },
     },
@@ -5164,6 +5187,15 @@ test('SQLQueryEngine - executeManagedSplit defers before child metadata ' +
           tableName,
           partitionId: row.partition_id,
         });
+        return {success: true};
+      },
+      async upsertSystemTableRow(tableName, row) {
+        if (tableName === TABLES.PARTITIONS) {
+          childInsertCalls.push({
+            tableName,
+            partitionId: row.partition_id,
+          });
+        }
         return {success: true};
       },
     },

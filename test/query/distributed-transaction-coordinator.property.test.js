@@ -704,3 +704,56 @@ test(
     t.pass('recovery sweep resolves timed-out transactions to terminal state');
   },
 );
+
+test(
+  'Periodic recovery sweep logs failures instead of surfacing unhandled rejections',
+  async (t) => {
+    const unhandledRejections = [];
+    const loggedErrors = [];
+    const onUnhandledRejection = (reason) => {
+      unhandledRejections.push(reason);
+    };
+    process.on('unhandledRejection', onUnhandledRejection);
+
+    const coordinator = new DistributedTransactionCoordinator({
+      recoverySweepIntervalMs: 5,
+      loadRecoveryStateForSweep: async () => {
+        throw new Error('sweep boom');
+      },
+      logger: {
+        error(message, data) {
+          loggedErrors.push({message, data});
+        },
+      },
+    });
+
+    try {
+      coordinator.startRecoverySweep();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    } finally {
+      coordinator.stopRecoverySweep();
+      process.off('unhandledRejection', onUnhandledRejection);
+    }
+
+    t.equal(
+      unhandledRejections.length,
+      0,
+      'periodic recovery failures should not escape as unhandled rejections',
+    );
+    t.equal(
+      loggedErrors.length > 0,
+      true,
+      'periodic recovery failures should be logged',
+    );
+    t.equal(
+      loggedErrors[0]?.message,
+      'Distributed transaction recovery sweep failed',
+      'failure log should identify the recovery sweep owner',
+    );
+    t.equal(
+      loggedErrors[0]?.data?.error,
+      'sweep boom',
+      'failure log should preserve the original sweep error',
+    );
+  },
+);

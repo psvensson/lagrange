@@ -81,25 +81,29 @@ function createMockCache(data = {}) {
 /**
  * Create a partition record.
  * @param {string} partitionId - Partition ID.
+ * @param {Object} [options={}] - Record options.
+ * @param {string|null} [options.leaderNodeId=null] - Canonical leader node ID.
  * @return {Object} Partition record.
  */
-function createPartitionRecord(partitionId) {
+function createPartitionRecord(partitionId, options = {}) {
   return {
     [COLUMN.PARTITION_ID]: partitionId,
     [COLUMN.TABLE_ID]: `table-${partitionId}`,
-    [COLUMN.LEADER_NODE_ID]: null,
+    [COLUMN.LEADER_NODE_ID]: options.leaderNodeId ?? null,
   };
 }
 
 /**
  * Create a message group record.
  * @param {string} groupId - Group ID.
+ * @param {Object} [options={}] - Record options.
+ * @param {string|null} [options.leaderNodeId=null] - Canonical leader node ID.
  * @return {Object} Message group record.
  */
-function createMessageGroupRecord(groupId) {
+function createMessageGroupRecord(groupId, options = {}) {
   return {
     [COLUMN.GROUP_ID]: groupId,
-    [COLUMN.LEADER_NODE_ID]: null,
+    [COLUMN.LEADER_NODE_ID]: options.leaderNodeId ?? null,
   };
 }
 
@@ -244,24 +248,23 @@ function buildCacheFromState(state) {
     }
     seenPartitionIds.add(p.partitionId);
 
-    partitionRecords.push(createPartitionRecord(p.partitionId));
+    const leaderNodeId = p.hasLeader ? p.nodeId : null;
+    partitionRecords.push(createPartitionRecord(p.partitionId, {leaderNodeId}));
 
     if (p.hasLeader) {
       serviceRecords.push(createPartitionLeaderService(p.partitionId, {
         address: p.address,
         nodeId: p.nodeId,
       }));
+    }
 
-      // Check for missing address
-      if (!p.address) {
-        expectedMissingPartitionLeaderAddresses.push(p.partitionId);
-      }
-      // Check for missing node ID
-      if (!p.nodeId) {
-        expectedMissingPartitionLeaderNodes.push(p.partitionId);
-      }
-    } else {
+    const hasCanonicalLeader = p.hasLeader && Boolean(p.nodeId);
+    if (!hasCanonicalLeader) {
       expectedMissingPartitionLeaders.push(p.partitionId);
+      continue;
+    }
+    if (!p.address) {
+      expectedMissingPartitionLeaderAddresses.push(p.partitionId);
     }
   }
 
@@ -273,24 +276,23 @@ function buildCacheFromState(state) {
     }
     seenGroupIds.add(mg.groupId);
 
-    messageGroupRecords.push(createMessageGroupRecord(mg.groupId));
+    const leaderNodeId = mg.hasLeader ? mg.nodeId : null;
+    messageGroupRecords.push(createMessageGroupRecord(mg.groupId, {leaderNodeId}));
 
     if (mg.hasLeader) {
       serviceRecords.push(createMessageGroupLeaderService(mg.groupId, {
         address: mg.address,
         nodeId: mg.nodeId,
       }));
+    }
 
-      // Check for missing address
-      if (!mg.address) {
-        expectedMissingMessageGroupLeaderAddresses.push(mg.groupId);
-      }
-      // Check for missing node ID
-      if (!mg.nodeId) {
-        expectedMissingMessageGroupLeaderNodes.push(mg.groupId);
-      }
-    } else {
+    const hasCanonicalLeader = mg.hasLeader && Boolean(mg.nodeId);
+    if (!hasCanonicalLeader) {
       expectedMissingMessageGroupLeaders.push(mg.groupId);
+      continue;
+    }
+    if (!mg.address) {
+      expectedMissingMessageGroupLeaderAddresses.push(mg.groupId);
     }
   }
 
@@ -481,19 +483,22 @@ t.test('LeaderReadinessGate Property Tests', async (t) => {
           const {cache} = buildCacheFromState(state);
           const result = getMissingSystemServiceLeaders(cache);
 
-          // Every partition without a leader should be in missingPartitionLeaders
+          // Every partition without canonical owner-row leader should be missing.
           for (const p of uniquePartitions) {
-            if (!p.hasLeader) {
+            const hasCanonicalLeader = p.hasLeader && Boolean(p.nodeId);
+            if (!hasCanonicalLeader) {
               if (!result.missingPartitionLeaders.includes(p.partitionId)) {
                 return false;
               }
             }
           }
 
-          // Every partition in missingPartitionLeaders should not have a leader
+          // Every partition marked missing should lack a canonical leader.
           for (const partitionId of result.missingPartitionLeaders) {
             const partition = uniquePartitions.find((p) => p.partitionId === partitionId);
-            if (partition && partition.hasLeader) {
+            if (partition &&
+                partition.hasLeader &&
+                Boolean(partition.nodeId)) {
               return false;
             }
           }
@@ -534,19 +539,22 @@ t.test('LeaderReadinessGate Property Tests', async (t) => {
           const {cache} = buildCacheFromState(state);
           const result = getMissingSystemServiceLeaders(cache);
 
-          // Every message group without a leader should be in missingMessageGroupLeaders
+          // Every group without canonical owner-row leader should be missing.
           for (const mg of uniqueGroups) {
-            if (!mg.hasLeader) {
+            const hasCanonicalLeader = mg.hasLeader && Boolean(mg.nodeId);
+            if (!hasCanonicalLeader) {
               if (!result.missingMessageGroupLeaders.includes(mg.groupId)) {
                 return false;
               }
             }
           }
 
-          // Every group in missingMessageGroupLeaders should not have a leader
+          // Every group marked missing should lack a canonical leader.
           for (const groupId of result.missingMessageGroupLeaders) {
             const group = uniqueGroups.find((mg) => mg.groupId === groupId);
-            if (group && group.hasLeader) {
+            if (group &&
+                group.hasLeader &&
+                Boolean(group.nodeId)) {
               return false;
             }
           }
@@ -584,14 +592,15 @@ t.test('LeaderReadinessGate Property Tests', async (t) => {
             }
             seenPartitions.add(p.partitionId);
 
-            // If partition has leader but no address, it should be in missingAddresses
-            if (p.hasLeader && !p.address) {
+            const hasCanonicalLeader = p.hasLeader && Boolean(p.nodeId);
+
+            // Canonical leader without address should be listed as missing address.
+            if (hasCanonicalLeader && !p.address) {
               if (!result.missingPartitionLeaderAddresses.includes(p.partitionId)) {
                 return false;
               }
             }
-            // If partition has leader with address, it should NOT be in missingAddresses
-            if (p.hasLeader && p.address) {
+            if (hasCanonicalLeader && p.address) {
               if (result.missingPartitionLeaderAddresses.includes(p.partitionId)) {
                 return false;
               }
@@ -606,14 +615,15 @@ t.test('LeaderReadinessGate Property Tests', async (t) => {
             }
             seenGroups.add(mg.groupId);
 
-            // If message group has leader but no address, it should be in missingAddresses
-            if (mg.hasLeader && !mg.address) {
+            const hasCanonicalLeader = mg.hasLeader && Boolean(mg.nodeId);
+
+            // Canonical leader without address should be listed as missing address.
+            if (hasCanonicalLeader && !mg.address) {
               if (!result.missingMessageGroupLeaderAddresses.includes(mg.groupId)) {
                 return false;
               }
             }
-            // If message group has leader with address, it should NOT be in missingAddresses
-            if (mg.hasLeader && mg.address) {
+            if (hasCanonicalLeader && mg.address) {
               if (result.missingMessageGroupLeaderAddresses.includes(mg.groupId)) {
                 return false;
               }

@@ -67,6 +67,12 @@ const BOOTSTRAP_API_LOG_MSG = Object.freeze({
     'Reserved MOVE_REPLICA assignment for joining node',
   MOVE_REPLICA_ASSIGNMENT_RENEWED:
     'Renewed MOVE_REPLICA assignment reservation for original target node',
+  MOVE_REPLICA_ASSIGNMENT_RENEWAL_WRITE_FAILED:
+    'Best-effort MOVE_REPLICA assignment lease renewal write failed' +
+    ' (in-memory reservation remains authoritative)',
+  MOVE_REPLICA_HANDOFF_INITIATION_WRITE_FAILED:
+    'Best-effort MOVE_REPLICA handoff initiation write failed' +
+    ' (in-memory reservation remains authoritative)',
   MOVE_REPLICA_ASSIGNMENT_RECONCILED:
     'Reconciled observed MOVE_REPLICA assignment to committed state',
   MOVE_REPLICA_ASSIGNMENT_EXPIRED:

@@ -33,6 +33,7 @@ import {PeerAddressResolver} from '../raft/peer-address-resolver.js';
 import {SQLiteLogAdapter} from '../raft/sqlite-log-adapter.js';
 import {isRaftPacket} from '../raft/raft-packet-utils.js';
 import Database from 'better-sqlite3';
+import {WORKER_RAFT_RUNTIME_DEFAULT} from './worker-raft-runtime-defaults.js';
 
 /**
  * Default configuration values for MessageGroupWorkerService.
@@ -40,13 +41,14 @@ import Database from 'better-sqlite3';
  */
 const MESSAGE_GROUP_WORKER_DEFAULT = Object.freeze({
   /** Default heartbeat interval in milliseconds */
-  HEARTBEAT_MS: 150,
+  HEARTBEAT_MS: WORKER_RAFT_RUNTIME_DEFAULT.HEARTBEAT_MS,
   /** Default minimum election timeout in milliseconds */
-  ELECTION_MIN_MS: 1000,
+  ELECTION_MIN_MS: WORKER_RAFT_RUNTIME_DEFAULT.ELECTION_MIN_MS,
   /** Default maximum election timeout in milliseconds */
-  ELECTION_MAX_MS: 3000,
+  ELECTION_MAX_MS: WORKER_RAFT_RUNTIME_DEFAULT.ELECTION_MAX_MS,
   /** Jitter added per replica index to stagger election timeouts */
-  ELECTION_JITTER_PER_REPLICA_MS: 500,
+  ELECTION_JITTER_PER_REPLICA_MS:
+    WORKER_RAFT_RUNTIME_DEFAULT.ELECTION_JITTER_PER_REPLICA_MS,
   /** In-memory database path */
   MEMORY_DB_PATH: ':memory:',
   /** Maximum CDC relay hops when forwarding from stale follower targets */
@@ -166,6 +168,9 @@ class MessageGroupWorkerService extends ReplicaWorkerBase {
     /** @type {Array<string>} Peer unified addresses */
     this.peerAddresses = options.peerAddresses || [];
 
+    /** @type {boolean} Whether to defer election start until explicitly armed */
+    this.deferElection = options.deferElection === true;
+
     /** @type {Object|null} AddressManager instance */
     this.addressManager = options.addressManager || null;
 
@@ -192,6 +197,9 @@ class MessageGroupWorkerService extends ReplicaWorkerBase {
 
     /** @type {boolean} Whether CDC subscriptions are active */
     this.cdcSubscribed = false;
+
+    /** @type {boolean} Whether leader activation has completed */
+    this.leaderActivated = false;
 
     /**
      * Whether the service is in bootstrap phase.
@@ -265,7 +273,7 @@ class MessageGroupWorkerService extends ReplicaWorkerBase {
       unifiedAddress: this.unifiedAddress,
       peerAddresses: this.peerAddresses,
       logAdapter: this.logAdapter,
-      deferElection: false,
+      deferElection: this.deferElection,
       heartbeatMs:
         MESSAGE_GROUP_WORKER_DEFAULT.HEARTBEAT_MS,
       electionMinMs:
@@ -299,16 +307,15 @@ class MessageGroupWorkerService extends ReplicaWorkerBase {
    */
   wireRaftGroupEvents() {
     this.raftGroup.on(RAFT_GROUP_EVENT.LEADER, () => {
-      const wasLeader = this.raftGroup.isLeaderReplica() &&
-        this.cdcSubscribed;
+      const wasLeaderActivated = this.leaderActivated;
+      this.leaderActivated = true;
 
       this.logger.info(MESSAGE_GROUP_WORKER_LOG_MSG.BECAME_LEADER, {
         groupId: this.groupId,
         replicaId: this.replicaId,
       });
 
-      // Subscribe to CDC events when becoming leader
-      if (!wasLeader) {
+      if (!wasLeaderActivated && !this.cdcSubscribed) {
         this.subscribeToCDC().catch((error) => {
           this.logger.error(
             MESSAGE_GROUP_WORKER_ERROR_MSG.CDC_SUBSCRIPTION_FAILED,
@@ -323,9 +330,9 @@ class MessageGroupWorkerService extends ReplicaWorkerBase {
     });
 
     this.raftGroup.on(RAFT_GROUP_EVENT.FOLLOWER, () => {
+      this.leaderActivated = false;
       const wasLeader = this.cdcSubscribed;
 
-      // Unsubscribe from CDC events when losing leadership
       if (wasLeader) {
         this.unsubscribeFromCDC().catch((error) => {
           this.logger.error(
@@ -341,9 +348,9 @@ class MessageGroupWorkerService extends ReplicaWorkerBase {
     });
 
     this.raftGroup.on(RAFT_GROUP_EVENT.CANDIDATE, () => {
+      this.leaderActivated = false;
       const wasLeader = this.cdcSubscribed;
 
-      // Unsubscribe from CDC events when losing leadership
       if (wasLeader) {
         this.unsubscribeFromCDC().catch((error) => {
           this.logger.error(
@@ -359,6 +366,7 @@ class MessageGroupWorkerService extends ReplicaWorkerBase {
     });
 
     this.raftGroup.on(RAFT_GROUP_EVENT.LEADER_CHANGE, (newLeader) => {
+      this.leaderActivated = false;
       const wasLeader = this.cdcSubscribed;
       const isNowLeader =
         newLeader === this.unifiedAddress;
@@ -372,19 +380,7 @@ class MessageGroupWorkerService extends ReplicaWorkerBase {
         },
       );
 
-      // Handle leadership transition
-      if (isNowLeader && !wasLeader) {
-        this.subscribeToCDC().catch((error) => {
-          this.logger.error(
-            MESSAGE_GROUP_WORKER_ERROR_MSG.CDC_SUBSCRIPTION_FAILED,
-            {
-              groupId: this.groupId,
-              replicaId: this.replicaId,
-              error: error.message,
-            },
-          );
-        });
-      } else if (!isNowLeader && wasLeader) {
+      if (!isNowLeader && wasLeader) {
         this.unsubscribeFromCDC().catch((error) => {
           this.logger.error(
             MESSAGE_GROUP_WORKER_ERROR_MSG.CDC_UNSUBSCRIPTION_FAILED,
@@ -461,8 +457,7 @@ class MessageGroupWorkerService extends ReplicaWorkerBase {
    * @protected
    */
   async onStart() {
-    // If already leader, subscribe to CDC
-    if (this.isLeaderReplica() && !this.cdcSubscribed) {
+    if (this.isLeaderActivated() && !this.cdcSubscribed) {
       await this.subscribeToCDC();
     }
   }
@@ -475,6 +470,8 @@ class MessageGroupWorkerService extends ReplicaWorkerBase {
    * @protected
    */
   async onStop() {
+    this.leaderActivated = false;
+
     // Unsubscribe from CDC events
     if (this.cdcSubscribed) {
       await this.unsubscribeFromCDC();
@@ -1006,6 +1003,7 @@ class MessageGroupWorkerService extends ReplicaWorkerBase {
     return {
       type: LEADERSHIP_MESSAGE_TYPE.LEADERSHIP_STATUS,
       isLeader: this.isLeaderReplica(),
+      leaderActivated: this.isLeaderActivated(),
       term: this.getCurrentTerm(),
       leaderId: this.getLeaderId(),
       replicaId: this.replicaId,
@@ -1373,6 +1371,14 @@ class MessageGroupWorkerService extends ReplicaWorkerBase {
   }
 
   /**
+   * Check if leader activation has completed.
+   * @return {boolean} True if activation completed.
+   */
+  isLeaderActivated() {
+    return this.leaderActivated;
+  }
+
+  /**
    * Get the current leader ID.
    * @return {string|null} Leader replica ID or null.
    */
@@ -1425,6 +1431,7 @@ class MessageGroupWorkerService extends ReplicaWorkerBase {
       groupId: this.groupId,
       role: this.getRole(),
       isLeader: this.isLeaderReplica(),
+      leaderActivated: this.isLeaderActivated(),
       leaderId: this.getLeaderId(),
       term: this.getCurrentTerm(),
       cdcSubscribed: this.cdcSubscribed,

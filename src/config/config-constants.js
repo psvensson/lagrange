@@ -429,6 +429,7 @@ const CONFIG_SCHEMA = {
       properties: {
         wsHost: {type: ['string', 'null']},
         messageTimeoutMs: {type: 'number', minimum: 100},
+        ackTimeoutQuarantineThreshold: {type: 'number', minimum: 1},
         pingTimeoutMs: {type: 'number', minimum: 100},
         reconnectIntervalMs: {type: 'number', minimum: 100},
         reconnectMaxAttempts: {type: 'number', minimum: 1},
@@ -647,6 +648,7 @@ const DEFAULT_CONFIG = {
   transport: {
     wsHost: null,
     messageTimeoutMs: 5000,
+    ackTimeoutQuarantineThreshold: 2,
     pingTimeoutMs: 1000,
     reconnectIntervalMs: 1000,
     reconnectMaxAttempts: 10,

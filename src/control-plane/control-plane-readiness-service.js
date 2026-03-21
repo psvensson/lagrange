@@ -16,10 +16,9 @@ import {
 import {PRESSURE_STATE} from '../rebalancer/storage-capacity-constants.js';
 import {AuthoritativeControlPlaneView} from
   './authoritative-control-plane-view.js';
-import {ControlPlaneSystemTableGateway} from
-  './control-plane-system-table-gateway.js';
-import {getRegisteredControlPlaneSystemTableGateway} from
-  './control-plane-gateway-registry.js';
+import {
+  resolveControlPlaneSystemTableGateway,
+} from './control-plane-gateway-resolution.js';
 import {
   CONTROL_PLANE_PUBLICATION_MODE,
   CONTROL_PLANE_READINESS_DEFAULT,
@@ -165,9 +164,14 @@ class ControlPlaneReadinessService {
     this.authoritativeControlPlaneView =
       options.authoritativeControlPlaneView || null;
     this.controlPlaneSystemTableGateway =
-      options.controlPlaneSystemTableGateway ||
-      getRegisteredControlPlaneSystemTableGateway() ||
-      null;
+      resolveControlPlaneSystemTableGateway({
+        controlPlaneSystemTableGateway:
+          options.controlPlaneSystemTableGateway || null,
+        nodeId: this.nodeId,
+        cdcIntegrationService: this.cdcIntegrationService,
+        systemTableCache: this.systemTableCache,
+        messageRouter: this.messageRouter,
+      });
     this.now = typeof options.now === TYPEOF.FUNCTION ?
       options.now :
       () => Date.now();
@@ -195,6 +199,102 @@ class ControlPlaneReadinessService {
     this.logger = loggingService.isInitialized() ?
       loggingService.forSubsystem(CONTROL_PLANE_READINESS_SUBSYSTEM) :
       console;
+  }
+
+  /**
+   * Log one-time diagnostics for missing readiness owners.
+   * In non-strict mode the service degrades intentionally, so warn instead
+   * of emitting a hard-error signal.
+   * @param {string} message
+   * @param {string} owner
+   * @private
+   */
+  logMissingOwner(message, owner) {
+    const level = this.strictOwnerDependencies ? 'error' : 'warn';
+    const logFn = typeof this.logger?.[level] === TYPEOF.FUNCTION ?
+      this.logger[level].bind(this.logger) :
+      null;
+    if (!logFn) {
+      return;
+    }
+
+    logFn(message, {
+      nodeId: this.nodeId,
+      owner,
+      strictOwnerDependencies: this.strictOwnerDependencies,
+    });
+  }
+
+  /**
+   * Synchronize mutable runtime dependencies after construction.
+   * @param {Object} [options={}]
+   */
+  syncOwnerDependencies(options = {}) {
+    const previousSystemTableCache = this.systemTableCache;
+    const systemTableCacheProvided =
+      Object.hasOwn(options, 'systemTableCache');
+    const cacheMutationTargetProvided =
+      Object.hasOwn(options, 'cacheMutationTarget');
+
+    if (systemTableCacheProvided) {
+      this.systemTableCache = options.systemTableCache || null;
+    }
+    if (cacheMutationTargetProvided) {
+      this.cacheMutationTarget = options.cacheMutationTarget || null;
+    } else if (systemTableCacheProvided) {
+      this.cacheMutationTarget = this.systemTableCache;
+    }
+    if (Object.hasOwn(options, 'messageRouter')) {
+      this.messageRouter = options.messageRouter || null;
+    }
+    if (Object.hasOwn(options, 'cdcIntegrationService')) {
+      this.cdcIntegrationService = options.cdcIntegrationService || null;
+    }
+    if (Object.hasOwn(options, 'storageAccountingService')) {
+      this.storageAccountingService =
+        options.storageAccountingService || null;
+    }
+    if (Object.hasOwn(options, 'cdcGroupPropagationService')) {
+      this.cdcGroupPropagationService =
+        options.cdcGroupPropagationService || null;
+    }
+    if (Object.hasOwn(options, 'controlPlaneSystemTableGateway')) {
+      this.controlPlaneSystemTableGateway =
+        options.controlPlaneSystemTableGateway || null;
+    }
+
+    if (this.authoritativeControlPlaneView &&
+        typeof this.authoritativeControlPlaneView
+          .syncOwnerDependencies === TYPEOF.FUNCTION) {
+      this.authoritativeControlPlaneView.syncOwnerDependencies({
+        cdcIntegrationService: this.cdcIntegrationService,
+        messageRouter: this.messageRouter,
+      });
+    }
+
+    if (this.controlPlaneSystemTableGateway) {
+      if (typeof this.controlPlaneSystemTableGateway
+        .setCdcIntegrationService === TYPEOF.FUNCTION) {
+        this.controlPlaneSystemTableGateway
+          .setCdcIntegrationService(this.cdcIntegrationService);
+      }
+      if (typeof this.controlPlaneSystemTableGateway
+        .setMessageRouter === TYPEOF.FUNCTION) {
+        this.controlPlaneSystemTableGateway
+          .setMessageRouter(this.messageRouter);
+      }
+    }
+
+    if (systemTableCacheProvided &&
+        previousSystemTableCache !== this.systemTableCache) {
+      if (this.cacheChangeListener &&
+          typeof previousSystemTableCache?.offCacheChange ===
+            TYPEOF.FUNCTION) {
+        previousSystemTableCache.offCacheChange(this.cacheChangeListener);
+      }
+      this.cacheChangeListener = null;
+      this.subscribeToCacheChanges();
+    }
   }
 
   /**
@@ -799,10 +899,8 @@ class ControlPlaneReadinessService {
     if (!this.shouldRepairAuthoritativeNodeEvidence(context)) {
       return;
     }
-    this.maybeStartBackgroundReadinessRefresh(
-      context.nodeId,
-      options,
-    );
+    this.ensureAuthoritativeNodeEvidence(context.nodeId, options)
+      .catch((_error) => null);
   }
 
   /**
@@ -919,12 +1017,9 @@ class ControlPlaneReadinessService {
 
     if (!this.loggedMissingPublicationOwner) {
       this.loggedMissingPublicationOwner = true;
-      this.logger.error(
+      this.logMissingOwner(
         'ControlPlaneReadinessService missing CDC publication owner',
-        {
-          nodeId: this.nodeId,
-          owner: CONTROL_PLANE_READINESS_OWNER.CDC_GROUP_PROPAGATION,
-        },
+        CONTROL_PLANE_READINESS_OWNER.CDC_GROUP_PROPAGATION,
       );
     }
 
@@ -1744,8 +1839,9 @@ class ControlPlaneReadinessService {
    * @private
    */
   async applyAuthoritativeRows(tableName, rows, cachedRows, causeId) {
+    const gateway = this.getControlPlaneSystemTableGateway();
     const result =
-      await this.controlPlaneSystemTableGateway.reconcileAuthoritativeCacheRows(
+      await gateway.reconcileAuthoritativeCacheRows(
         tableName,
         rows,
         {
@@ -1756,6 +1852,26 @@ class ControlPlaneReadinessService {
         },
       );
     return result?.mutationCount || NUM.ZERO;
+  }
+
+  /**
+   * Resolve the canonical system-table gateway for readiness repair.
+   * @return {ControlPlaneSystemTableGateway}
+   * @private
+   */
+  getControlPlaneSystemTableGateway() {
+    if (this.controlPlaneSystemTableGateway) {
+      return this.controlPlaneSystemTableGateway;
+    }
+    this.controlPlaneSystemTableGateway =
+      resolveControlPlaneSystemTableGateway({
+        nodeId: this.nodeId,
+        cdcIntegrationService: this.cdcIntegrationService,
+        systemTableCache: this.systemTableCache,
+        messageRouter: this.messageRouter,
+        now: this.now,
+      });
+    return this.controlPlaneSystemTableGateway;
   }
 
   /**
@@ -1844,12 +1960,9 @@ class ControlPlaneReadinessService {
 
     if (!this.loggedMissingStorageAccountingOwner) {
       this.loggedMissingStorageAccountingOwner = true;
-      this.logger.error(
+      this.logMissingOwner(
         'ControlPlaneReadinessService missing storage accounting owner',
-        {
-          nodeId: this.nodeId,
-          owner: CONTROL_PLANE_READINESS_OWNER.STORAGE_ACCOUNTING,
-        },
+        CONTROL_PLANE_READINESS_OWNER.STORAGE_ACCOUNTING,
       );
     }
 

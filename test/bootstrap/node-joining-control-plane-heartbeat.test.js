@@ -129,7 +129,8 @@ test('NodeJoiningService does not block READY heartbeats on cluster mesh reconci
         return {acknowledged: true};
       },
     };
-    service.shouldReconnectClusterMesh = () => true;
+    service.joinReadinessEvaluator.shouldReconnectClusterMesh =
+      () => true;
     service.connectToClusterNodes = async () => {
       connectAttempts++;
       await new Promise(() => {});
@@ -177,7 +178,8 @@ test('NodeJoiningService does not block CONNECTED publication on cluster mesh re
         return {acknowledged: true};
       },
     };
-    service.shouldReconnectClusterMesh = () => true;
+    service.joinReadinessEvaluator.shouldReconnectClusterMesh =
+      () => true;
     service.connectToClusterNodes = async () => {
       connectAttempts++;
       await new Promise(() => {});

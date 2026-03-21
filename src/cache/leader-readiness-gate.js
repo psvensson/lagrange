@@ -6,10 +6,12 @@ import {
   TABLES,
   TYPEOF,
 } from '../constants/index.js';
+import {RAFT_ROLE} from '../raft/constants.js';
 import {INITIAL_PARTITION_IDS} from '../bootstrap/system-table-schemas-constants.js';
 
 const DEFAULT_OPTIONS = Object.freeze({
   requireLeaderNodeId: false,
+  allowLeaderServiceFallback: false,
 });
 const OWNER_TABLE_BY_SERVICE_TYPE = Object.freeze({
   [SERVICE_TYPE.PARTITION]: TABLES.PARTITIONS,
@@ -101,11 +103,44 @@ const findCanonicalLeaderService = (
   }
   const idColumn = getOwnerIdColumn(serviceType);
   const requireAddress = options.requireAddress === true;
-  return services.find((service) =>
+  const leaderNodeServices = services.filter((service) =>
     service?.[COLUMN.SERVICE_TYPE] === serviceType &&
     service?.[idColumn] === entityId &&
     service?.[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE &&
     service?.[COLUMN.NODE_ID] === leaderNodeId &&
+    (!requireAddress || Boolean(service?.[COLUMN.ADDRESS])),
+  );
+  if (leaderNodeServices.length === NUM.ZERO) {
+    return null;
+  }
+  if (leaderNodeServices.length === NUM.ONE) {
+    return leaderNodeServices[NUM.ZERO];
+  }
+
+  const explicitLeaderServices = leaderNodeServices.filter((service) =>
+    String(service?.[COLUMN.RAFT_ROLE] || '').toLowerCase() === RAFT_ROLE.LEADER,
+  );
+  if (explicitLeaderServices.length === NUM.ONE) {
+    return explicitLeaderServices[NUM.ZERO];
+  }
+
+  return null;
+};
+
+const findObservableLeaderService = (
+    services,
+    serviceType,
+    entityId,
+    options = {},
+) => {
+  const idColumn = getOwnerIdColumn(serviceType);
+  const requireAddress = options.requireAddress === true;
+  return services.find((service) =>
+    service?.[COLUMN.SERVICE_TYPE] === serviceType &&
+    service?.[idColumn] === entityId &&
+    service?.[COLUMN.STATUS] === SERVICE_STATUS.ACTIVE &&
+    typeof service?.[COLUMN.NODE_ID] === TYPEOF.STRING &&
+    service[COLUMN.NODE_ID].length > NUM.ZERO &&
     (!requireAddress || Boolean(service?.[COLUMN.ADDRESS])),
   ) || null;
 };
@@ -126,16 +161,29 @@ const resolveCanonicalLeaderService = (
   const ownerRecord = getOwnerRecord(cache, serviceType, entityId);
   const leaderNodeId = ownerRecord?.[COLUMN.LEADER_NODE_ID] || null;
   const services = getAllRecords(cache, TABLES.SERVICES);
+  const leaderService = findCanonicalLeaderService(
+    services,
+    serviceType,
+    entityId,
+    leaderNodeId,
+    options,
+  ) || (
+    options.allowLeaderServiceFallback === true &&
+    !leaderNodeId ?
+      findObservableLeaderService(
+        services,
+        serviceType,
+        entityId,
+        options,
+      ) :
+      null
+  );
   return {
     ownerRecord,
-    leaderNodeId,
-    leaderService: findCanonicalLeaderService(
-      services,
-      serviceType,
-      entityId,
-      leaderNodeId,
-      options,
-    ),
+    leaderNodeId: leaderNodeId ||
+      leaderService?.[COLUMN.NODE_ID] ||
+      null,
+    leaderService,
   };
 };
 
@@ -213,7 +261,11 @@ const getMissingSystemServiceLeaders = (systemTableCache, options = {}) => {
       systemTableCache,
       SERVICE_TYPE.PARTITION,
       partitionId,
-      {requireAddress: false},
+      {
+        requireAddress: false,
+        allowLeaderServiceFallback:
+          config.allowLeaderServiceFallback === true,
+      },
     );
 
     if (!leaderService) {
@@ -251,7 +303,11 @@ const getMissingSystemServiceLeaders = (systemTableCache, options = {}) => {
       systemTableCache,
       SERVICE_TYPE.MESSAGE_GROUP,
       groupId,
-      {requireAddress: false},
+      {
+        requireAddress: false,
+        allowLeaderServiceFallback:
+          config.allowLeaderServiceFallback === true,
+      },
     );
 
     if (!leaderService) {
@@ -298,6 +354,8 @@ const getBlockingSystemServiceLeaders = (
       isSystemTableWriteReady;
   const missing = getMissingSystemServiceLeaders(systemTableCache, {
     requireLeaderNodeId: options.requireLeaderNodeId === true,
+    allowLeaderServiceFallback:
+      options.allowLeaderServiceFallback === true,
   });
   const missingPartitionLeaders = [];
   const missingPartitionLeaderNodes = [];

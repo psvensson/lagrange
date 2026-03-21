@@ -1344,6 +1344,54 @@ test('BootstrapAPI register-service preserves MOVE_REPLICA assignment after retr
     );
   });
 
+test('BootstrapAPI register-service preserves MOVE_REPLICA assignment after retryable participant failure',
+  async (t) => {
+    // After the gateway-resilience fix, handoff durable-write failures
+    // are best-effort: the in-memory reservation is authoritative and
+    // the registration succeeds even when updateMoveReplicaHandoffOperation
+    // throws.  Per doctrine §5: slower under pressure, never less correct.
+    // Boundary: metadata mutation ingress under load.
+    const fixture = await bootstrapMoveReplicaAssignment(t, {
+      joiningNodeId: '550e8400-e29b-41d4-a716-4466554403ab',
+    });
+    const {api, assignment, joiningNodeId} = fixture;
+    const originalUpdateHandoffOperation =
+      api.updateMoveReplicaHandoffOperation.bind(api);
+    let updateAttempts = 0;
+
+    api.updateMoveReplicaHandoffOperation = async (handoffContext) => {
+      updateAttempts += 1;
+      if (updateAttempts === 1) {
+        const error = new Error(
+          'Distributed operation failed due to participant failures',
+        );
+        error.statusCode = 503;
+        error.errorCode = 'DISTRIBUTED_PARTICIPANT_FAILURE';
+        error.retryAfterMs = 1000;
+        error.details = {
+          tableName: 'replica_operations',
+        };
+        throw error;
+      }
+      return originalUpdateHandoffOperation(handoffContext);
+    };
+
+    const firstResponse = await api.getFastify().inject({
+      method: 'POST',
+      url: '/register-service',
+      payload: buildRegisterPayload(joiningNodeId, assignment, {
+        assignment_id: assignment.assignmentId,
+      }),
+    });
+
+    t.equal(
+      firstResponse.statusCode,
+      200,
+      'register-service succeeds even when handoff durable write throws ' +
+      '(in-memory reservation is authoritative under pressure)',
+    );
+  });
+
 test('BootstrapAPI register-service timeout diagnostics include mismatch fields', async (t) => {
   initializeTestEnvironment();
   const rows = {
@@ -1451,5 +1499,110 @@ test('BootstrapAPI register-service timeout diagnostics include mismatch fields'
     responseBody.details?.lastVisibilityCheck?.observed?.node_id,
     'seed-node-1',
     'timeout diagnostics should include observed stale owner',
+  );
+});
+
+test('BootstrapAPI sweep must not invalidate reservation when source ' +
+  'replica is present locally but cache row is missing (CDC delay under load)',
+async (t) => {
+  // Regression: under load, CDC propagation delay can cause the
+  // system cache to lack the service row for the source replica.
+  // The sweep must not terminate the reservation when the source
+  // replica is still present locally in messageGroupServices.
+  // Boundary: bootstrap-to-runtime handoff / CDC dissemination.
+  const fixture = await bootstrapMoveReplicaAssignment(t, {
+    joiningNodeId: '550e8400-e29b-41d4-a716-446655440350',
+    assignmentLeaseMs: 60_000,
+  });
+  const {api, assignment, rows} = fixture;
+
+  // Simulate CDC delay: remove the source replica's service row
+  // from the cache fixture so the cache returns null for it.
+  const replicaToMove = assignment.replicaToMove;
+  const sourceIndex = rows.services.findIndex((row) =>
+    row.service_id === replicaToMove,
+  );
+  t.ok(sourceIndex >= 0, 'fixture should include source replica service row');
+  rows.services.splice(sourceIndex, 1);
+
+  // The source replica IS still present locally on the seed.
+  t.ok(
+    api.messageGroupServices.has(replicaToMove),
+    'source replica should still be present locally in messageGroupServices',
+  );
+
+  // Run the expiry sweep — this should NOT invalidate the reservation.
+  await api.expireMoveReplicaAssignmentReservations();
+
+  const reservationRow = rows.replica_operations.find((row) =>
+    row.operation_id === assignment.assignmentId,
+  );
+  t.equal(
+    reservationRow?.status,
+    'creating',
+    'sweep must not terminate reservation when source replica is locally present',
+  );
+
+  // The reservation should still be usable for register-service.
+  const response = await api.getFastify().inject({
+    method: 'POST',
+    url: '/register-service',
+    payload: buildRegisterPayload(
+      fixture.joiningNodeId,
+      assignment,
+      {assignment_id: assignment.assignmentId},
+    ),
+  });
+  t.equal(
+    response.statusCode,
+    200,
+    'register-service should succeed after sweep preserves locally-present reservation',
+  );
+});
+
+test('register-service succeeds when renewal SQL write throws ' +
+  'DISTRIBUTED_PARTICIPANT_FAILURE (uses in-memory reservation under pressure)',
+async (t) => {
+  // Regression: under load, the control-plane gateway throws
+  // DISTRIBUTED_PARTICIPANT_FAILURE during the lease renewal write
+  // in validateMoveReplicaAssignmentToken.  The renewal is a
+  // best-effort lease extension; the in-memory reservation is
+  // already valid.  Per doctrine §5 the validation must succeed
+  // (slower under pressure, never less correct).
+  // Boundary: metadata mutation ingress under load.
+  const fixture = await bootstrapMoveReplicaAssignment(t, {
+    joiningNodeId: '550e8400-e29b-41d4-a716-446655440360',
+    assignmentLeaseMs: 60_000,
+  });
+  const {api, assignment, joiningNodeId} = fixture;
+
+  // Force the gateway to throw on any SQL write, simulating
+  // DISTRIBUTED_PARTICIPANT_FAILURE under load.
+  const gateway = api.getControlPlaneSystemTableGateway();
+  t.ok(gateway, 'gateway should exist after bootstrap');
+  const originalExecuteQuery = gateway.executeQuery.bind(gateway);
+  gateway.executeQuery = async (sql, params, options) => {
+    if (String(sql).includes('UPDATE replica_operations SET')) {
+      throw new Error(
+        'Distributed operation failed due to participant failures',
+      );
+    }
+    return originalExecuteQuery(sql, params, options);
+  };
+
+  const response = await api.getFastify().inject({
+    method: 'POST',
+    url: '/register-service',
+    payload: buildRegisterPayload(
+      joiningNodeId,
+      assignment,
+      {assignment_id: assignment.assignmentId},
+    ),
+  });
+  t.equal(
+    response.statusCode,
+    200,
+    'register-service must succeed even when renewal write throws ' +
+    '(in-memory reservation is authoritative)',
   );
 });

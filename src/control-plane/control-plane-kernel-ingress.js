@@ -77,7 +77,6 @@ class ControlPlaneKernelIngress {
   resolveTargetCandidates(options = {}) {
     this.pruneExpiredState();
     const targets = [];
-    const fallbackTargets = [];
     const allowBootstrapHints = options.allowBootstrapHints !== false;
     const allowSelfTarget = options.allowSelfTarget === true;
     const requiredTables = Array.isArray(options.requiredTables) ?
@@ -89,28 +88,28 @@ class ControlPlaneKernelIngress {
         'leader_only';
     const assignment = this.getBootstrapResponse()?.messageGroupAssignment ||
       null;
+    const localTargetAddress = allowSelfTarget ?
+      this.resolveLocalTargetAddress(assignment, {
+        localTargetMode,
+        requiredTables,
+      }) :
+      null;
     const pushOrderedTarget = (address) => {
       if (typeof address !== TYPEOF.STRING || address.length === NUM.ZERO) {
         return;
       }
-      if (this.isTargetReachable(address)) {
-        pushUniqueAddress(targets, address);
+      if (!this.isTargetReachable(address)) {
         return;
       }
-      pushUniqueAddress(fallbackTargets, address);
+      pushUniqueAddress(targets, address);
     };
 
+    if (localTargetAddress) {
+      pushOrderedTarget(localTargetAddress);
+    }
     const confirmedIngressLease = this.getConfirmedIngressLease();
     if (confirmedIngressLease) {
       pushOrderedTarget(confirmedIngressLease.targetAddress);
-    }
-    if (allowSelfTarget) {
-      pushOrderedTarget(
-        this.resolveLocalTargetAddress(assignment, {
-          localTargetMode,
-          requiredTables,
-        }),
-      );
     }
     if (allowBootstrapHints) {
       for (const address of this.resolveBootstrapTargetAddresses(assignment)) {
@@ -118,7 +117,7 @@ class ControlPlaneKernelIngress {
       }
     }
 
-    return [...targets, ...fallbackTargets];
+    return targets;
   }
 
   getConfirmedIngressLease() {
@@ -227,8 +226,6 @@ class ControlPlaneKernelIngress {
     ];
     const seedTargets = [];
     const remoteTargets = [];
-    const seedFallbackTargets = [];
-    const remoteFallbackTargets = [];
 
     for (const address of hintCandidates) {
       const parsed = parseMessageGroupAddress(address);
@@ -246,23 +243,19 @@ class ControlPlaneKernelIngress {
       }
       const reachable = this.isConnectedNode(parsed.nodeId);
       if (seedNodeId && parsed.nodeId === seedNodeId) {
-        pushUniqueAddress(
-          reachable ? seedTargets : seedFallbackTargets,
-          address,
-        );
+        if (reachable) {
+          pushUniqueAddress(seedTargets, address);
+        }
         continue;
       }
-      pushUniqueAddress(
-        reachable ? remoteTargets : remoteFallbackTargets,
-        address,
-      );
+      if (reachable) {
+        pushUniqueAddress(remoteTargets, address);
+      }
     }
 
     return [
       ...seedTargets,
       ...remoteTargets,
-      ...seedFallbackTargets,
-      ...remoteFallbackTargets,
     ];
   }
 

@@ -315,7 +315,7 @@ test(
   },
 );
 
-test('queryIncompleteOperations prefers authoritative local leader reads for replica_operations',
+test('queryIncompleteOperations uses owner-local SQL reads for replica_operations',
   async (t) => {
     const authoritativeReadCalls = [];
     const sqlQueryCalls = [];
@@ -387,23 +387,13 @@ test('queryIncompleteOperations prefers authoritative local leader reads for rep
     coordinator.initialize();
     try {
       const operations = await coordinator.queryIncompleteOperations();
-      t.equal(operations.length, 1, 'should return the authoritative local operation row');
-      t.equal(sqlQueryCalls.length, 0, 'should skip routed SQL when local leader read is available');
-      t.equal(authoritativeReadCalls.length, 1, 'should use the shared authoritative read helper');
+      t.equal(operations.length, 0, 'owner-local SQL read should govern in-flight operation visibility');
+      t.equal(sqlQueryCalls.length, 1, 'should use one owner-local SQL read when cache is empty');
+      t.equal(authoritativeReadCalls.length, 0, 'should not depend on the authoritative read helper for owner rows');
       t.equal(
-        authoritativeReadCalls[0]?.tableName,
-        'replica_operations',
-        'should scope the local authoritative read to replica_operations',
-      );
-      t.equal(
-        authoritativeReadCalls[0]?.options?.localReadConsistency,
-        'local_leader',
-        'should require a local leader before trusting local replica_operations reads',
-      );
-      t.equal(
-        authoritativeReadCalls[0]?.options?.queryOptions?.timeoutMs,
+        sqlQueryCalls[0]?.options?.timeoutMs,
         CONTROL_PLANE_TIMEOUT_DEFAULT.SQL_QUERY_TIMEOUT_MS,
-        'should preserve control-plane timeout options on fallback-capable reads',
+        'should preserve control-plane timeout options on owner-local reads',
       );
     } finally {
       await coordinator.shutdown();
@@ -562,7 +552,7 @@ test(
 );
 
 test(
-  'queryIncompleteOperations trusts an empty cache observation boundary without routed SQL',
+  'queryIncompleteOperations falls back to routed SQL when cache is empty and router pressure is clear',
   async (t) => {
     let sqlQueryCalls = 0;
     const coordinator = new RebalanceCoordinator({
@@ -595,7 +585,7 @@ test(
       sqlQueryEngine: {
         async executeQuery() {
           sqlQueryCalls += 1;
-          throw new Error('routed SQL should not run for an empty cache answer');
+          return {success: true, rows: []};
         },
       },
       enableTimeouts: false,
@@ -607,12 +597,12 @@ test(
       t.same(
         operations,
         [],
-        'empty cache observation boundary should be treated as authoritative',
+        'empty cache with clear pressure should still return no in-flight operations',
       );
       t.equal(
         sqlQueryCalls,
-        0,
-        'empty cache observation boundary should bypass routed replica_operations scans',
+        1,
+        'empty cache with clear pressure should fall back to one routed replica_operations scan',
       );
     } finally {
       await coordinator.shutdown();
@@ -1116,7 +1106,7 @@ test('timeout checker backs off empty incomplete-operation scans', async (t) => 
     },
     enableTimeouts: false,
   });
-  coordinator.incompleteOperationQueryEmptyBackoffMs = 60_000;
+  coordinator.workflowOwner.incompleteOperationQueryEmptyBackoffMs = 60_000;
 
   coordinator.initialize();
   try {
@@ -1129,8 +1119,10 @@ test('timeout checker backs off empty incomplete-operation scans', async (t) => 
       'empty timeout scans should back off instead of querying on every loop',
     );
 
-    coordinator.lastEmptyIncompleteOperationQueryAtMs =
-      Date.now() - coordinator.incompleteOperationQueryEmptyBackoffMs - 1;
+    coordinator.workflowOwner.lastEmptyIncompleteOperationQueryAtMs =
+      Date.now() -
+      coordinator.workflowOwner.incompleteOperationQueryEmptyBackoffMs -
+      1;
     await coordinator.checkTimeouts();
     t.equal(
       incompleteQueryAttempts,

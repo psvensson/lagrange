@@ -143,6 +143,8 @@ class StorageAdmissionService {
         cdcIntegrationService: options.cdcIntegrationService || null,
         cdcGroupPropagationService:
           options.cdcGroupPropagationService || null,
+        controlPlaneSystemTableGateway:
+          options.controlPlaneSystemTableGateway || null,
         now: this.now,
       });
 

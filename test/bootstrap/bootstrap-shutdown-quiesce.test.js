@@ -57,7 +57,7 @@ test('BootstrapService cleanup quiesces rebalancers before service shutdown', as
     }],
   ]);
 
-  await service.cleanup();
+  await service.seedCleanupHandler.cleanup();
 
   const partitionQuiesceIndex = callOrder.indexOf('partition-quiesce');
   const partitionShutdownIndex = callOrder.indexOf('partition-shutdown');

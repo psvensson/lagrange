@@ -24,9 +24,6 @@ import {v4 as uuidv4} from 'uuid';
 import {LoggingService} from '../logging/logging-service.js';
 import {assertCritical} from '../utils/assert.js';
 import {NodeService} from '../node/node-service.js';
-import {
-  MESSAGE_GROUP_ASSIGNMENT_STRATEGY as AssignmentStrategy,
-} from './message-group-assignment.js';
 import {ReplicaHandlerSetup} from './shared/replica-handler-setup.js';
 import {CDCIntegrationSetup} from './shared/cdc-integration-setup.js';
 import {ControlPlaneSetup} from './shared/control-plane-setup.js';
@@ -35,10 +32,6 @@ import {
   buildMessageGroupOwnerNotReadyError,
   resolveOperationalMessageGroupSelection,
 } from './shared/message-group-selection.js';
-import {
-  detachBootstrapOwnedCdcSubscriber,
-  isBootstrapOwnedCdcPropagationActive,
-} from './shared/bootstrap-cdc-propagation-scope.js';
 import {PartitionService} from '../partition/partition-service.js';
 import {
   NodeLifecycleStateMachine,
@@ -70,7 +63,10 @@ import {
 import {
   BOOTSTRAP_EVENT,
   BOOTSTRAP_SUBSYSTEM,
+  JOIN_DELEGATE_BUNDLE,
+  JOIN_PLAN_SEGMENT,
   JOINING_PHASE,
+  JOINING_PHASE_TO_SUB_PHASE,
 } from './bootstrap-constants.js';
 import {
   CDC_REESTABLISHMENT,
@@ -153,7 +149,10 @@ import {RAFT_ROLE} from '../raft/constants.js';
 import {CDC_EVENT} from '../cdc/cdc-constants.js';
 import {createJoiningPhaseOwners} from './owners/join-phase-owners.js';
 import {StartupPipelineRunner} from './pipeline/startup-pipeline-runner.js';
-import {createJoinStartupPlan} from './pipeline/join-startup-plan.js';
+import {
+  createJoinStartupPlan,
+  assertJoinPlanSegments,
+} from './pipeline/join-startup-plan.js';
 import {
   PgWireStartupSafetyGate,
 } from './pgwire-startup-safety-gate.js';
@@ -167,17 +166,8 @@ import {
   activateMessageGroupServiceRows,
 } from './shared/message-group-service-activation.js';
 import {
-  resolveCanonicalRequiredSchemaVersion as _resolveCanonicalRequiredSchemaVersion,
-  resolveCanonicalAppliedSchemaVersion as _resolveCanonicalAppliedSchemaVersion,
-  extractCanonicalSnapshotSchemaVersion as _extractCanonicalSnapshotSchemaVersion,
-  extractCanonicalCacheSchemaVersion as _extractCanonicalCacheSchemaVersion,
-  extractCanonicalTableMetadataSchemaVersion
-  as _extractCanonicalTableMetadataSchemaVersion,
-  extractJoinSchemaVersionFromRecord as _extractJoinSchemaVersionFromRecord,
-  selectNewestJoinSchemaVersion as _selectNewestJoinSchemaVersion,
-  normalizeJoinSchemaVersion as _normalizeJoinSchemaVersion,
-  compareJoinSchemaVersions as _compareJoinSchemaVersions,
-  tryParseJoinSchemaHlc as _tryParseJoinSchemaHlc,
+  extractJoinSchemaVersionFromRecord,
+  compareJoinSchemaVersions,
 } from './join-schema-version-resolver.js';
 import {
   MessageGroupServiceAdapter,
@@ -497,9 +487,11 @@ class NodeJoiningService extends EventEmitter {
         getNodeCapabilities: () =>
           this.getNodeCapabilities(),
         resolveMeshConnectivityNodeRows: () =>
-          this.resolveMeshConnectivityNodeRows(),
+          this.joinReadinessEvaluator
+            .resolveMeshConnectivityNodeRows(),
         buildClusterMeshSignature: (rows) =>
-          this.buildClusterMeshSignature(rows),
+          this.joinReadinessEvaluator
+            .buildClusterMeshSignature(rows),
         setLastClusterMeshSignature: (sig) => {
           this.joinReadinessEvaluator
             .lastClusterMeshSignature = sig;
@@ -507,87 +499,19 @@ class NodeJoiningService extends EventEmitter {
       },
     });
 
+    // Build concern-scoped delegate bundles for extracted phase modules.
+    // Each bundle groups delegates by concern (D2.2) so owners receive
+    // only the dependencies they need.
+    this._joinDelegateBundles = this._buildJoinDelegateBundles();
+
     // Join cleanup handler (extracted helper)
+    // Uses cleanupOnly composition so it receives cleanup + readiness
+    // delegates but not phase execution or runtime wiring (D2.2).
     this.joinCleanupHandler = new JoinCleanupHandler({
       nodeId: this.nodeId,
-      delegates: {
-        getLogger: () => this.logger,
-        getNow: () => this.now,
-        getPhase: () => this.phase,
-        setPhase: (p) => {
-          this.phase = p;
-        },
-        getLastError: () => this.lastError,
-        setLastError: (e) => {
-          this.lastError = e;
-        },
-        getStartTime: () => this.startTime,
-        getBootstrapResponse: () => this.bootstrapResponse,
-        getMessageGroupServices: () => this.messageGroupServices,
-        getJoinMembershipPublished: () =>
-          this.joinMembershipPublished,
-        setJoinMembershipPublished: (value) => {
-          this.joinMembershipPublished = value === true;
-        },
-        getPartitionServices: () => this.partitionServices,
-        getTransport: () => this.transport,
-        setTransport: (v) => {
-          this.transport = v;
-        },
-        getMessageRouter: () => this.messageRouter,
-        setMessageRouter: (v) => {
-          this.messageRouter = v;
-        },
-        getCdcIntegrationService: () =>
-          this.cdcIntegrationService,
-        setCdcIntegrationService: (v) => {
-          this.cdcIntegrationService = v;
-        },
-        getLifecycleStateMachine: () =>
-          this.lifecycleStateMachine,
-        getRebalanceCoordinator: () =>
-          this.rebalanceCoordinator,
-        setRebalanceCoordinator: (v) => {
-          this.rebalanceCoordinator = v;
-        },
-        getLatencyTopology: () => this.latencyTopology,
-        setLatencyTopology: (v) => {
-          this.latencyTopology = v;
-        },
-        getReplicaStateMachine: () => this.replicaStateMachine,
-        setReplicaStateMachine: (v) => {
-          this.replicaStateMachine = v;
-        },
-        getRpcClient: () => this.rpcClient,
-        setRpcClient: (v) => {
-          this.rpcClient = v;
-        },
-        getHeartbeatService: () => this.heartbeatService,
-        setHeartbeatService: (v) => {
-          this.heartbeatService = v;
-        },
-        getLeaseService: () => this.leaseService,
-        setLeaseService: (v) => {
-          this.leaseService = v;
-        },
-        getEndpointService: () => this.endpointService,
-        setEndpointService: (v) => {
-          this.endpointService = v;
-        },
-        getDispatchService: () => this.dispatchService,
-        setDispatchService: (v) => {
-          this.dispatchService = v;
-        },
-        sendControlPlaneNodeStateUpdate: (options) =>
-          this.sendControlPlaneNodeStateUpdate(options),
-        getReplicaHandler: () => this.replicaHandler,
-        setReplicaHandler: (v) => {
-          this.replicaHandler = v;
-        },
-        stopJoiningLifecycleOwners: () =>
-          this.stopJoiningLifecycleOwners(),
-        emit: (event, data) => this.emit(event, data),
-      },
+      delegates: this._composeJoinDelegates(
+        this._joinDelegateBundles, {cleanupOnly: true},
+      ),
     });
 
     // Query system state phase (extracted helper)
@@ -781,6 +705,321 @@ class NodeJoiningService extends EventEmitter {
 
     // Error tracking
     this.lastError = null;
+
+    // Tracks join phases completed before JOINING state for
+    // retroactive sub-phase application (D5.1, Req 4.1).
+    this._completedJoinPhases = [];
+  }
+
+  /**
+   * Build concern-scoped delegate bundles for join bootstrap (D2.2).
+   *
+   * Splits the monolithic join delegate surface into four bundles:
+   * - phaseExecution: core accessors, service collections, lifecycle
+   *   owners, and phase helper callbacks needed during phase execution
+   * - readiness: lifecycle state machine and readiness state accessors
+   * - cleanup: resource teardown helpers and state mutators for cleanup
+   * - runtimeWiring: post-phase wiring accessors for runtime owners
+   *
+   * @return {Object} Keyed by JOIN_DELEGATE_BUNDLE concern names.
+   */
+  _buildJoinDelegateBundles() {
+    return {
+      [JOIN_DELEGATE_BUNDLE.PHASE_EXECUTION]:
+        this._buildJoinPhaseExecutionDelegates(),
+      [JOIN_DELEGATE_BUNDLE.READINESS]:
+        this._buildJoinReadinessDelegates(),
+      [JOIN_DELEGATE_BUNDLE.CLEANUP]:
+        this._buildJoinCleanupDelegates(),
+      [JOIN_DELEGATE_BUNDLE.RUNTIME_WIRING]:
+        this._buildJoinRuntimeWiringDelegates(),
+    };
+  }
+
+  /**
+   * Compose join delegates from bundles for a specific consumer.
+   *
+   * @param {Object} bundles - Output of _buildJoinDelegateBundles().
+   * @param {Object} [options={}] - Composition options.
+   * @param {boolean} [options.cleanupOnly=false] - When true, returns
+   *   only cleanup + readiness delegates (for JoinCleanupHandler).
+   * @return {Object} Merged delegate map.
+   */
+  _composeJoinDelegates(bundles, options = {}) {
+    if (options.cleanupOnly) {
+      return {
+        ...bundles[JOIN_DELEGATE_BUNDLE.CLEANUP],
+        ...bundles[JOIN_DELEGATE_BUNDLE.READINESS],
+      };
+    }
+    return {
+      ...bundles[JOIN_DELEGATE_BUNDLE.PHASE_EXECUTION],
+      ...bundles[JOIN_DELEGATE_BUNDLE.READINESS],
+      ...bundles[JOIN_DELEGATE_BUNDLE.CLEANUP],
+      ...bundles[JOIN_DELEGATE_BUNDLE.RUNTIME_WIRING],
+    };
+  }
+
+  /**
+   * Phase execution delegates for join bootstrap.
+   * Core accessors, service collections, lifecycle owners, and
+   * phase helper callbacks needed during phase execution.
+   * @return {Object} Phase execution delegate map.
+   * @private
+   */
+  _buildJoinPhaseExecutionDelegates() {
+    const self = this;
+    return {
+      // -- Core accessors --
+      getNodeId: () => self.nodeId,
+      getNodeAddress: () => self.nodeAddress,
+      getAdvertisedNodeWsAddress: () =>
+        self.advertisedNodeWsAddress,
+      getWsPort: () => self.wsPort ?? self.config.wsPort,
+      getConfig: () => self.config,
+      getLogger: () => self.logger,
+      getNow: () => self.now,
+      getSleep: () => self.sleep,
+      getRandom: () => self.random,
+      getPhase: () => self.phase,
+      getStartTime: () => self.startTime,
+      getHttpPostImpl: () => self.httpPostImpl,
+
+      // -- Service collections --
+      getMessageRouter: () => self.messageRouter,
+      getTransport: () => self.transport,
+      getMessageGroupServices: () =>
+        self.messageGroupServices,
+      getPartitionServices: () => self.partitionServices,
+      getJoinMessageGroupReplicas: () =>
+        self.joinMessageGroupReplicas,
+
+      // -- Bootstrap response --
+      getBootstrapResponse: () => self.bootstrapResponse,
+      setBootstrapResponse: (v) => {
+        self.bootstrapResponse = v;
+      },
+      getSeedNodeAddress: () => self.seedNodeAddress,
+      getSeedNodeId: () => self.seedNodeId,
+      setSeedNodeId: (v) => {
+        self.seedNodeId = v;
+      },
+      getSeedNodeWsAddress: () => self.seedNodeWsAddress,
+      setSeedNodeWsAddress: (v) => {
+        self.seedNodeWsAddress = v;
+      },
+
+      // -- State mutators --
+      setMessageRouter: (v) => {
+        self.messageRouter = v;
+      },
+      setTransport: (v) => {
+        self.transport = v;
+      },
+      pushJoinMessageGroupReplica: (replica) => {
+        self.joinMessageGroupReplicas.push(replica);
+      },
+      removeJoinMessageGroupReplica: (replica) => {
+        self.joinMessageGroupReplicas =
+          self.joinMessageGroupReplicas.filter(
+            (s) => s !== replica,
+          );
+      },
+      resetJoinMessageGroupReplicas: () => {
+        self.joinMessageGroupReplicas = [];
+      },
+
+      // -- Phase helper callbacks (D2.3: direct owner invocation) --
+      resolveJoinReplicaOptions: (id, type) =>
+        self.resolveJoinReplicaOptions(id, type),
+      assertReplicaStartupOwnership: (id) =>
+        self.assertReplicaStartupOwnership(id),
+      queueJoinServiceReplica: (desc, opts) =>
+        self.queueJoinServiceReplica(desc, opts),
+      createJoinServiceDescriptor: (type, id) =>
+        self.createJoinServiceDescriptor(type, id),
+      triggerJoinReconciler: (reason) =>
+        self.triggerJoinReconciler(reason),
+      resolveJoinRetryPolicy: () =>
+        self.resolveJoinRetryPolicy(),
+      classifySeedContactFailure: (err, msg) =>
+        self.classifySeedContactFailure(err, msg),
+      computeSeedContactRetryDelayMs: (opts) =>
+        self.computeSeedContactRetryDelayMs(opts),
+      upsertSystemTableRow: (table, data) =>
+        self.upsertSystemTableRow(table, data),
+      registerMessageGroupService: (gId, rId, svc, opts) =>
+        self.registerMessageGroupService(
+          gId, rId, svc, opts,
+        ),
+      getIdentifyPayload: () =>
+        self.getIdentifyBootstrapPayload(),
+      getNodeCapabilities: () =>
+        self.getNodeCapabilities(),
+      getLeaderMessageGroupService: () =>
+        self.getLeaderMessageGroupService(),
+      initializeJoiningLifecycleOwners: () =>
+        self.initializeJoiningLifecycleOwners(),
+      ensureBootstrapSnapshotHydrated: async () => {
+        if (self.systemCacheHydrated) {
+          return;
+        }
+        await self.hydrateSystemCacheFromBootstrap();
+        self.systemCacheHydrated = true;
+      },
+      sendControlPlaneNodeStateUpdate: (opts) =>
+        self.sendControlPlaneNodeStateUpdate(opts),
+      shouldRetryControlPlaneNodeStateUpdate: (error) =>
+        self.shouldRetryControlPlaneNodeStateUpdate(error),
+      resolveMeshConnectivityNodeRows: () =>
+        self.joinReadinessEvaluator
+          .resolveMeshConnectivityNodeRows(),
+      buildClusterMeshSignature: (rows) =>
+        self.joinReadinessEvaluator
+          .buildClusterMeshSignature(rows),
+      setLastClusterMeshSignature: (sig) => {
+        self.joinReadinessEvaluator
+          .lastClusterMeshSignature = sig;
+      },
+      hasMessageGroupLeaderInCache: (cache) =>
+        self.hasMessageGroupLeaderInCache(cache),
+      getMessageGroupServicesSize: () =>
+        self.messageGroupServices.size,
+      emit: (event, data) => self.emit(event, data),
+    };
+  }
+
+  /**
+   * Readiness delegates for join bootstrap.
+   * Lifecycle state machine and readiness state accessors.
+   * @return {Object} Readiness delegate map.
+   * @private
+   */
+  _buildJoinReadinessDelegates() {
+    const self = this;
+    return {
+      getLifecycleStateMachine: () =>
+        self.lifecycleStateMachine,
+      getBootstrapReadinessState: () =>
+        self.bootstrapReadinessState,
+    };
+  }
+
+  /**
+   * Cleanup delegates for join bootstrap.
+   * Resource teardown helpers and state mutators for cleanup.
+   * @return {Object} Cleanup delegate map.
+   * @private
+   */
+  _buildJoinCleanupDelegates() {
+    const self = this;
+    return {
+      // -- Core accessors needed for cleanup diagnostics --
+      getNodeId: () => self.nodeId,
+      getLogger: () => self.logger,
+      getNow: () => self.now,
+      getPhase: () => self.phase,
+      getStartTime: () => self.startTime,
+
+      // -- Service collections --
+      getMessageGroupServices: () =>
+        self.messageGroupServices,
+      getPartitionServices: () => self.partitionServices,
+      getMessageRouter: () => self.messageRouter,
+      getTransport: () => self.transport,
+      getBootstrapResponse: () => self.bootstrapResponse,
+
+      // -- State mutators --
+      setPhase: (p) => {
+        self.phase = p;
+      },
+      setLastError: (e) => {
+        self.lastError = e;
+      },
+      getLastError: () => self.lastError,
+      setTransport: (v) => {
+        self.transport = v;
+      },
+      setMessageRouter: (v) => {
+        self.messageRouter = v;
+      },
+
+      // -- Membership state --
+      getJoinMembershipPublished: () =>
+        self.joinMembershipPublished,
+      setJoinMembershipPublished: (value) => {
+        self.joinMembershipPublished = value === true;
+      },
+
+      // -- Resource teardown helpers --
+      getCdcIntegrationService: () =>
+        self.cdcIntegrationService,
+      setCdcIntegrationService: (v) => {
+        self.cdcIntegrationService = v;
+      },
+      getRebalanceCoordinator: () =>
+        self.rebalanceCoordinator,
+      setRebalanceCoordinator: (v) => {
+        self.rebalanceCoordinator = v;
+      },
+      getLatencyTopology: () => self.latencyTopology,
+      setLatencyTopology: (v) => {
+        self.latencyTopology = v;
+      },
+      getReplicaStateMachine: () =>
+        self.replicaStateMachine,
+      setReplicaStateMachine: (v) => {
+        self.replicaStateMachine = v;
+      },
+      getRpcClient: () => self.rpcClient,
+      setRpcClient: (v) => {
+        self.rpcClient = v;
+      },
+      getHeartbeatService: () => self.heartbeatService,
+      setHeartbeatService: (v) => {
+        self.heartbeatService = v;
+      },
+      getLeaseService: () => self.leaseService,
+      setLeaseService: (v) => {
+        self.leaseService = v;
+      },
+      getEndpointService: () => self.endpointService,
+      setEndpointService: (v) => {
+        self.endpointService = v;
+      },
+      getDispatchService: () => self.dispatchService,
+      setDispatchService: (v) => {
+        self.dispatchService = v;
+      },
+      getReplicaHandler: () => self.replicaHandler,
+      setReplicaHandler: (v) => {
+        self.replicaHandler = v;
+      },
+      sendControlPlaneNodeStateUpdate: (options) =>
+        self.sendControlPlaneNodeStateUpdate(options),
+      stopJoiningLifecycleOwners: () =>
+        self.stopJoiningLifecycleOwners(),
+      emit: (event, data) => self.emit(event, data),
+    };
+  }
+
+  /**
+   * Runtime wiring delegates for join bootstrap.
+   * Post-phase wiring accessors for runtime owners.
+   * @return {Object} Runtime wiring delegate map.
+   * @private
+   */
+  _buildJoinRuntimeWiringDelegates() {
+    const self = this;
+    return {
+      getSystemTableCache: () =>
+        NodeService.getInstance().getSystemTableCache(),
+      getMessageRouter: () => self.messageRouter,
+      getRebalanceCoordinator: () =>
+        self.rebalanceCoordinator,
+      getCdcIntegrationService: () =>
+        self.cdcIntegrationService,
+    };
   }
 
   /**
@@ -792,15 +1031,34 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   async runJoinInfrastructurePhases(startupPipelineRunner, joinPlan) {
+    const infraPhases = joinPlan.segments[JOIN_PLAN_SEGMENT.INFRASTRUCTURE];
     await startupPipelineRunner.run({
-      phases: joinPlan.phases.slice(1, 2),
+      phases: infraPhases.slice(NUM.ZERO, NUM.ONE),
     });
     this.lifecycleStateMachine.transition(NodeState.DISCOVERING);
     await startupPipelineRunner.run({
-      phases: joinPlan.phases.slice(2, 4),
+      phases: infraPhases.slice(NUM.ONE),
     });
     await this.initializeJoinInfrastructure();
     this.lifecycleStateMachine.transition(NodeState.JOINING);
+    this._applyDeferredJoinSubPhases();
+  }
+
+  /**
+   * Apply sub-phase transitions for join phases that completed
+   * before the lifecycle state machine reached JOINING state.
+   * Walks through deferred phases in order so the sub-phase chain
+   * is consistent with the declarative map (D5.1, Req 4.1, 4.4).
+   * @private
+   */
+  _applyDeferredJoinSubPhases() {
+    for (const phaseName of this._completedJoinPhases) {
+      const subPhase = JOINING_PHASE_TO_SUB_PHASE[phaseName];
+      if (subPhase) {
+        this.lifecycleStateMachine.transitionSubPhase(subPhase);
+      }
+    }
+    this._completedJoinPhases = [];
   }
 
   /**
@@ -892,6 +1150,7 @@ class NodeJoiningService extends EventEmitter {
       {
         checkpoint: JOIN_CHECKPOINT.SEED_CONTACTED,
         phase: JOIN_SESSION_PHASE.SEED_CONTACTED,
+        segment: JOIN_PLAN_SEGMENT.SEED_CONTACT,
         shouldRerun: () => {
           return !this.bootstrapResponse ||
             !this.seedNodeId ||
@@ -899,13 +1158,14 @@ class NodeJoiningService extends EventEmitter {
         },
         run: async () => {
           await startupPipelineRunner.run({
-            phases: joinPlan.phases.slice(0, 1),
+            phases: joinPlan.segments[JOIN_PLAN_SEGMENT.SEED_CONTACT],
           });
         },
       },
       {
         checkpoint: JOIN_CHECKPOINT.JOIN_INFRASTRUCTURE_READY,
         phase: JOIN_SESSION_PHASE.INFRASTRUCTURE_READY,
+        segment: JOIN_PLAN_SEGMENT.INFRASTRUCTURE,
         shouldRerun: () => !this.hasJoinInfrastructureReady(),
         run: async () => {
           await this.runJoinInfrastructurePhases(
@@ -917,9 +1177,10 @@ class NodeJoiningService extends EventEmitter {
       {
         checkpoint: JOIN_CHECKPOINT.MEMBERSHIP_WRITTEN,
         phase: JOIN_SESSION_PHASE.MEMBERSHIP_WRITTEN,
+        segment: JOIN_PLAN_SEGMENT.MEMBERSHIP,
         run: async () => {
           await startupPipelineRunner.run({
-            phases: joinPlan.phases.slice(4, 5),
+            phases: joinPlan.segments[JOIN_PLAN_SEGMENT.MEMBERSHIP],
           });
           await this.activateMessageGroupServiceRows();
           this.startJoinOpportunisticBackfill();
@@ -928,14 +1189,17 @@ class NodeJoiningService extends EventEmitter {
       {
         checkpoint: JOIN_CHECKPOINT.READY_LEASE_ASSIGNED,
         phase: JOIN_SESSION_PHASE.READY_LEASE_ASSIGNED,
+        segment: JOIN_PLAN_SEGMENT.READINESS,
         run: async () => {
-          await this.waitForCanonicalJoinReadinessConvergence();
+          await this.joinReadinessEvaluator
+            .waitForCanonicalJoinReadinessConvergence();
           await this.signalReadyForReplicas();
         },
       },
       {
         checkpoint: JOIN_CHECKPOINT.FINALIZED,
         phase: JOIN_SESSION_PHASE.FINALIZED,
+        segment: JOIN_PLAN_SEGMENT.READINESS,
         shouldRerun: () => {
           return this.phase !== JoiningPhase.COMPLETE ||
             this.lifecycleStateMachine.getState() !== NodeState.READY ||
@@ -972,6 +1236,7 @@ class NodeJoiningService extends EventEmitter {
         eventSink: this,
       });
       const joinPlan = createJoinStartupPlan(this);
+      assertJoinPlanSegments(joinPlan);
       await this.joinCoordinator.run({
         nodeId: this.nodeId,
         sessionId: this.joinSessionId,
@@ -1154,360 +1419,6 @@ class NodeJoiningService extends EventEmitter {
   }
 
   /**
-   * Wait for canonical join readiness convergence before transitioning READY.
-   * @return {Promise<void>}
-   * @private
-   */
-  async waitForCanonicalJoinReadinessConvergence() {
-    return this.joinReadinessEvaluator
-      .waitForCanonicalJoinReadinessConvergence();
-  }
-
-  /**
-   * Resolve join-readiness timeout.
-   * @return {number}
-   * @private
-   */
-  resolveJoinReadinessTimeoutMs() {
-    return this.joinReadinessEvaluator.resolveJoinReadinessTimeoutMs();
-  }
-
-  /**
-   * Resolve join-readiness poll interval.
-   * @return {number}
-   * @private
-   */
-  resolveJoinReadinessPollIntervalMs() {
-    return this.joinReadinessEvaluator
-      .resolveJoinReadinessPollIntervalMs();
-  }
-
-  /**
-   * Refresh discovery-critical propagated tables while canonical join
-   * readiness is blocked on topology visibility.
-   * @param {Object|null} evaluation
-   * @param {number} pollIntervalMs
-   * @return {Promise<void>}
-   * @private
-   */
-  async repairCanonicalJoinReadinessIfNeeded(
-    evaluation,
-    pollIntervalMs,
-  ) {
-    return this.joinReadinessEvaluator
-      .repairCanonicalJoinReadinessIfNeeded(evaluation, pollIntervalMs);
-  }
-
-  /**
-   * Determine the table scope for canonical join schema checks.
-   * @return {string}
-   * @private
-   */
-  resolveJoinReadinessTableName() {
-    return this.joinReadinessEvaluator.resolveJoinReadinessTableName();
-  }
-
-  /**
-   * Collect one canonical join-readiness snapshot.
-   * @return {Promise<{snapshot: Object, error: Error|null}>}
-   * @private
-   */
-  async collectCanonicalJoinReadinessSnapshot() {
-    return this.joinReadinessEvaluator
-      .collectCanonicalJoinReadinessSnapshot();
-  }
-
-  /**
-   * Build canonical join-readiness snapshot from local control-plane state.
-   * @param {Object} context
-   * @return {Object}
-   * @private
-   */
-  buildCanonicalJoinReadinessSnapshot(context = {}) {
-    return this.joinReadinessEvaluator
-      .buildCanonicalJoinReadinessSnapshot(context);
-  }
-
-  /**
-   * Check whether control-plane target address is currently reachable.
-   * @param {string|null} targetAddress
-   * @return {boolean}
-   * @private
-   */
-  isControlPlaneAddressReachable(targetAddress) {
-    return this.joinReadinessEvaluator
-      .isControlPlaneAddressReachable(targetAddress);
-  }
-
-  /**
-   * Evaluate topology readiness for canonical join convergence.
-   * @param {Object|null} systemTableCache
-   * @return {Object}
-   * @private
-   */
-  evaluateCanonicalJoinTopologyReadiness(systemTableCache) {
-    return this.joinReadinessEvaluator
-      .evaluateCanonicalJoinTopologyReadiness(systemTableCache);
-  }
-
-  /**
-   * Ensure local discovery-critical endpoint rows cover every ACTIVE node.
-   * @param {Object|null} systemTableCache
-   * @return {Object}
-   * @private
-   */
-  evaluateCanonicalJoinEndpointVisibility(systemTableCache) {
-    return this.joinReadinessEvaluator
-      .evaluateCanonicalJoinEndpointVisibility(systemTableCache);
-  }
-
-  /**
-   * Return ACTIVE node ids visible in the local cache.
-   * @param {Object|null} systemTableCache
-   * @return {string[]}
-   * @private
-   */
-  getCanonicalJoinActiveNodeIds(systemTableCache) {
-    return this.joinReadinessEvaluator
-      .getCanonicalJoinActiveNodeIds(systemTableCache);
-  }
-
-  /**
-   * Resolve node rows used for mesh connectivity.
-   * @return {{source: string, rows: Object[]}}
-   * @private
-   */
-  resolveMeshConnectivityNodeRows() {
-    return this.joinReadinessEvaluator
-      .resolveMeshConnectivityNodeRows();
-  }
-
-  /**
-   * Build a stable mesh-membership signature for connection
-   * reconciliation.
-   * @param {Array<Object>} nodeRows
-   * @return {string}
-   * @private
-   */
-  buildClusterMeshSignature(nodeRows) {
-    return this.joinReadinessEvaluator
-      .buildClusterMeshSignature(nodeRows);
-  }
-
-  /**
-   * Determine whether steady-state READY heartbeats need mesh
-   * reconciliation.
-   * @return {boolean}
-   * @private
-   */
-  shouldReconnectClusterMesh() {
-    return this.joinReadinessEvaluator.shouldReconnectClusterMesh();
-  }
-
-  /**
-   * Collect non-terminal replica operations from local cache.
-   * @param {Object|null} systemTableCache
-   * @return {Array<Object>}
-   * @private
-   */
-  collectCanonicalInFlightReplicaOperationDetails(systemTableCache) {
-    return this.joinReadinessEvaluator
-      .collectCanonicalInFlightReplicaOperationDetails(
-        systemTableCache,
-      );
-  }
-
-  /**
-   * Resolve node IDs required for join-readiness diagnostics.
-   * @param {Object|null} systemTableCache
-   * @return {Array<string>}
-   * @private
-   */
-  resolveJoinReadinessRequiredNodeIds(systemTableCache) {
-    return this.joinReadinessEvaluator
-      .resolveJoinReadinessRequiredNodeIds(systemTableCache);
-  }
-
-  /**
-   * Evaluate one canonical join-readiness snapshot.
-   * @param {Object} snapshot
-   * @return {Object}
-   * @private
-   */
-  evaluateCanonicalJoinReadinessSnapshot(snapshot) {
-    return this.joinReadinessEvaluator
-      .evaluateCanonicalJoinReadinessSnapshot(snapshot);
-  }
-
-  /**
-   * Classify canonical join-readiness reasons with stable precedence.
-   * @param {Object} snapshot
-   * @return {Array<string>}
-   */
-  classifyCanonicalJoinReadinessReasons(snapshot) {
-    return this.joinReadinessEvaluator
-      .classifyCanonicalJoinReadinessReasons(snapshot);
-  }
-
-  /**
-   * Normalize one canonical join-readiness snapshot.
-   * @param {Object} snapshot
-   * @return {Object}
-   * @private
-   */
-  normalizeCanonicalJoinReadinessSnapshot(snapshot) {
-    return this.joinReadinessEvaluator
-      .normalizeCanonicalJoinReadinessSnapshot(snapshot);
-  }
-
-  /**
-   * Build per-node schema diagnostics for join timeout reporting.
-   * @param {Object} evaluation
-   * @return {Object}
-   * @private
-   */
-  buildJoinSchemaDiagnosticsByNode(evaluation) {
-    return this.joinReadinessEvaluator
-      .buildJoinSchemaDiagnosticsByNode(evaluation);
-  }
-
-  /**
-   * Rank one join-readiness reason according to stable precedence.
-   * @param {string} reason
-   * @return {number}
-   * @private
-   */
-  getJoinReadinessReasonRank(reason) {
-    return this.joinReadinessEvaluator
-      .getJoinReadinessReasonRank(reason);
-  }
-
-  /**
-   * Resolve the required schema version for canonical join checks.
-   * @param {string} tableName
-   * @param {Object|null} systemTableCache
-   * @return {string|null}
-   * @private
-   */
-  resolveCanonicalRequiredSchemaVersion(tableName, systemTableCache) {
-    return _resolveCanonicalRequiredSchemaVersion(
-      tableName,
-      systemTableCache,
-      this.bootstrapResponse?.systemTableSnapshots,
-    );
-  }
-
-  /**
-   * Resolve the applied schema version for canonical join checks.
-   * @param {string} tableName
-   * @param {Object|null} systemTableCache
-   * @return {string|null}
-   * @private
-   */
-  resolveCanonicalAppliedSchemaVersion(tableName, systemTableCache) {
-    return _resolveCanonicalAppliedSchemaVersion(
-      tableName,
-      systemTableCache,
-    );
-  }
-
-  /**
-   * Extract required schema version candidate from bootstrap snapshot scope.
-   * @param {string} tableName
-   * @return {string|null}
-   * @private
-   */
-  extractCanonicalSnapshotSchemaVersion(tableName) {
-    return _extractCanonicalSnapshotSchemaVersion(
-      this.bootstrapResponse?.systemTableSnapshots,
-      tableName,
-    );
-  }
-
-  /**
-   * Extract schema version candidate from local cache rows for one table.
-   * @param {Object|null} systemTableCache
-   * @param {string} tableName
-   * @return {string|null}
-   * @private
-   */
-  extractCanonicalCacheSchemaVersion(systemTableCache, tableName) {
-    return _extractCanonicalCacheSchemaVersion(
-      systemTableCache,
-      tableName,
-    );
-  }
-
-  /**
-   * Extract schema version candidate from `tables` metadata row.
-   * @param {Object|null} systemTableCache
-   * @param {string} tableName
-   * @return {string|null}
-   * @private
-   */
-  extractCanonicalTableMetadataSchemaVersion(
-    systemTableCache,
-    tableName,
-  ) {
-    return _extractCanonicalTableMetadataSchemaVersion(
-      systemTableCache,
-      tableName,
-    );
-  }
-
-  /**
-   * Extract one schema-version candidate from a record.
-   * @param {Object} record
-   * @return {string|null}
-   * @private
-   */
-  extractJoinSchemaVersionFromRecord(record) {
-    return _extractJoinSchemaVersionFromRecord(record);
-  }
-
-  /**
-   * Keep the newest schema-version watermark.
-   * @param {string|null} current
-   * @param {string|null} candidate
-   * @return {string|null}
-   * @private
-   */
-  selectNewestJoinSchemaVersion(current, candidate) {
-    return _selectNewestJoinSchemaVersion(current, candidate);
-  }
-
-  /**
-   * Normalize a schema-version value to canonical string representation.
-   * @param {*} value
-   * @return {string|null}
-   * @private
-   */
-  normalizeJoinSchemaVersion(value) {
-    return _normalizeJoinSchemaVersion(value);
-  }
-
-  /**
-   * Compare schema versions supporting HLC and numeric fallback.
-   * @param {string} left
-   * @param {string} right
-   * @return {number}
-   * @private
-   */
-  compareJoinSchemaVersions(left, right) {
-    return _compareJoinSchemaVersions(left, right);
-  }
-
-  /**
-   * Parse HLC-like schema version.
-   * @param {string} value
-   * @return {{physical: number, logical: number, nodeId: string}|null}
-   * @private
-   */
-  tryParseJoinSchemaHlc(value) {
-    return _tryParseJoinSchemaHlc(value);
-  }
-
-  /**
    * Activate non-critical periodic control-plane writers once the joining
    * node reaches READY.
    * @return {void}
@@ -1545,17 +1456,38 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   async executePhase(phaseName, phaseFunction) {
+    const subPhase = JOINING_PHASE_TO_SUB_PHASE[phaseName];
+    if (subPhase) {
+      if (this.lifecycleStateMachine.getState() ===
+          NodeState.JOINING) {
+        const currentSubPhase =
+          this.lifecycleStateMachine.getSubPhase();
+        if (currentSubPhase !== subPhase) {
+          this.lifecycleStateMachine.transitionSubPhase(subPhase);
+        }
+      } else {
+        this._completedJoinPhases.push(phaseName);
+      }
+    }
     this.phase = phaseName;
     this.phaseStartTime = this.now();
 
+    const state = this.lifecycleStateMachine.getState();
+    const activeSubPhase =
+      this.lifecycleStateMachine.getSubPhase() || null;
+
     this.logger.info(JOINING_LOG_MSG.PHASE_STARTING, {
       nodeId: this.nodeId,
+      state,
       phase: phaseName,
+      subPhase: activeSubPhase,
     });
 
     this.emit(JoiningEvent.PHASE_START, {
       phase: phaseName,
       nodeId: this.nodeId,
+      state,
+      subPhase: activeSubPhase,
     });
 
     try {
@@ -1567,13 +1499,17 @@ class NodeJoiningService extends EventEmitter {
 
       this.logger.info(JOINING_LOG_MSG.PHASE_COMPLETED, {
         nodeId: this.nodeId,
+        state,
         phase: phaseName,
+        subPhase: activeSubPhase,
         duration: phaseDuration,
       });
 
       this.emit(JoiningEvent.PHASE_COMPLETE, {
         phase: phaseName,
         nodeId: this.nodeId,
+        state,
+        subPhase: activeSubPhase,
         duration: phaseDuration,
       });
     } catch (error) {
@@ -1581,7 +1517,9 @@ class NodeJoiningService extends EventEmitter {
 
       this.logger.error(JOINING_LOG_MSG.PHASE_FAILED, {
         nodeId: this.nodeId,
+        state,
         phase: phaseName,
+        subPhase: activeSubPhase,
         duration: phaseDuration,
         error: error.message,
         stack: error.stack,
@@ -1590,6 +1528,8 @@ class NodeJoiningService extends EventEmitter {
       this.emit(JoiningEvent.PHASE_FAILED, {
         phase: phaseName,
         nodeId: this.nodeId,
+        state,
+        subPhase: activeSubPhase,
         duration: phaseDuration,
         error: error.message,
       });
@@ -2001,38 +1941,18 @@ class NodeJoiningService extends EventEmitter {
   async activateMessageGroupServiceRows() {
     return activateMessageGroupServiceRows({
       nodeId: this.nodeId,
-      systemTableWriter: this.cdcIntegrationService,
+      activateReplica: async ({groupId, replicaId, service}) => {
+        await this.registerMessageGroupService(
+          groupId,
+          replicaId,
+          service,
+          {status: SERVICE_STATUS.ACTIVE},
+        );
+      },
       messageRouter: this.messageRouter,
-      deferTransientFailures: true,
       handlerRegistered: this.messageGroupServiceHandlerRegistered,
       endpointsPublished: this.messageGroupServiceEndpointsPublished,
       messageGroupServices: this.messageGroupServices,
-      onDeferredActivation: ({groupId, replicaId, error}) => {
-        this.logger.warn(
-          'Deferring message-group service row activation during join',
-          {
-            nodeId: this.nodeId,
-            groupId,
-            replicaId,
-            error: error?.message || String(error),
-          },
-        );
-      },
-      resolveExtraFields: (replicaId) => {
-        const assignment =
-          this.bootstrapResponse?.messageGroupAssignment || null;
-        if (!assignment ||
-            assignment.strategy !== AssignmentStrategy.MOVE_REPLICA ||
-            assignment.replicaToMove !== replicaId ||
-            typeof assignment.assignmentId !== TYPEOF.STRING ||
-            assignment.assignmentId.length === NUM.ZERO) {
-          return null;
-        }
-        return {
-          [JOIN_BACKFILL_QUERY.ASSIGNMENT_ID_FIELD]:
-            assignment.assignmentId,
-        };
-      },
     });
   }
 
@@ -2381,7 +2301,7 @@ class NodeJoiningService extends EventEmitter {
         normalizedState === 'failed' ||
         normalizedState === 'shutting_down' ||
         normalizedState === 'stopped' ||
-        !this.shouldReconnectClusterMesh()) {
+        !this.joinReadinessEvaluator.shouldReconnectClusterMesh()) {
       return;
     }
 
@@ -2800,7 +2720,7 @@ class NodeJoiningService extends EventEmitter {
    */
   handleMeshConnectivityCDCEvent(event) {
     if (!this.isMeshConnectivityCDCEvent(event) ||
-        !this.shouldReconnectClusterMesh()) {
+        !this.joinReadinessEvaluator.shouldReconnectClusterMesh()) {
       return;
     }
 
@@ -3313,10 +3233,10 @@ class NodeJoiningService extends EventEmitter {
    * @private
    */
   isBackfillRowNewer(candidate, existing) {
-    const candidateVersion = this.extractJoinSchemaVersionFromRecord(candidate);
-    const existingVersion = this.extractJoinSchemaVersionFromRecord(existing);
+    const candidateVersion = extractJoinSchemaVersionFromRecord(candidate);
+    const existingVersion = extractJoinSchemaVersionFromRecord(existing);
     if (candidateVersion && existingVersion) {
-      return this.compareJoinSchemaVersions(
+      return compareJoinSchemaVersions(
         candidateVersion,
         existingVersion,
       ) > NUM.ZERO;
@@ -3590,14 +3510,8 @@ class NodeJoiningService extends EventEmitter {
       this.partitionServices.set(options.replicaId, partition);
 
       const tableName = options.tableName;
-      const joinOwnedCdcPropagationActive =
-        isBootstrapOwnedCdcPropagationActive(
-          this.phase,
-          JoiningPhase.COMPLETE,
-        );
       if (tableName &&
-          shouldAttachPartitionCdcPropagation(tableName) &&
-          joinOwnedCdcPropagationActive) {
+          shouldAttachPartitionCdcPropagation(tableName)) {
         const subscriptionSelection =
           this.resolveOperationalMessageGroupSelection({
             requiredTables: [tableName],
@@ -3624,29 +3538,7 @@ class NodeJoiningService extends EventEmitter {
           options.replicaId,
           subscriptionMessageGroupService?.groupId || 'message-group',
         ].join(':');
-        let joinCdcSubscriberDetached = false;
         const cdcSubscriber = async (cdcEvent) => {
-          if (!isBootstrapOwnedCdcPropagationActive(
-            this.phase,
-            JoiningPhase.COMPLETE,
-          )) {
-            if (!joinCdcSubscriberDetached) {
-              joinCdcSubscriberDetached =
-                detachBootstrapOwnedCdcSubscriber({
-                  partition,
-                  subscriber: cdcSubscriber,
-                  logger: this.logger,
-                  logMessage:
-                    'Detached join-owned CDC propagation subscriber after join completion',
-                  nodeId: this.nodeId,
-                  tableName,
-                  partitionId: options.partitionId,
-                  replicaId: options.replicaId,
-                  lifecyclePhase: this.phase,
-                });
-            }
-            return;
-          }
           if (cdcEvent.tableName === tableName) {
             this.logger.debug(JOINING_LOG_MSG.CDC_EVENT_RECEIVED, {
               tableName: cdcEvent.tableName,

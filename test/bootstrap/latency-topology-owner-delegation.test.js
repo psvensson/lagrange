@@ -29,14 +29,15 @@ test('BootstrapService partition CDC propagation requires topology owner',
     const service = new BootstrapService({nodeId: 'node-a'});
 
     await assert.rejects(
-      service.propagatePartitionCDCEvent(
-        {},
-        {
-          tableName: TABLES.NODES,
-          operation: 'INSERT',
-          data: {node_id: 'node-z'},
-        },
-      ),
+      service.seedCacheHydrationPhase
+        .propagatePartitionCDCEvent(
+          {},
+          {
+            tableName: TABLES.NODES,
+            operation: 'INSERT',
+            data: {node_id: 'node-z'},
+          },
+        ),
       /Latency topology services are not initialized/,
     );
 
@@ -65,10 +66,11 @@ test('BootstrapService delegates partition CDC propagation to topology owner',
       data: {node_id: 'node-z'},
     };
 
-    const result = await service.propagatePartitionCDCEvent(
-      messageGroupService,
-      cdcEvent,
-    );
+    const result = await service.seedCacheHydrationPhase
+      .propagatePartitionCDCEvent(
+        messageGroupService,
+        cdcEvent,
+      );
 
     assert.equal(result.success, true);
     assert.equal(result.delegated, true);

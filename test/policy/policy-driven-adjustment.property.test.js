@@ -39,11 +39,20 @@ function createMockCDCService() {
   const updates = [];
   return {
     updates,
-    updateSystemTableRow: async (tableName, id, data) => {
+    updateSystemTableRow: async (tableName, whereClause, data, options) => {
       updates.push({
-        tableName, id, data, timestamp: Date.now(),
+        tableName,
+        whereClause,
+        data,
+        options,
+        timestamp: Date.now(),
       });
-      return {success: true};
+      return {
+        success: true,
+        partitionResult: {
+          affectedRows: 1,
+        },
+      };
     },
   };
 }
@@ -106,7 +115,7 @@ test('Property 35: Policy-Driven Automatic Adjustment',
             if (mockCDC.updates[0].tableName !== 'tables') {
               return false;
             }
-            if (mockCDC.updates[0].id !== 'table-1') {
+            if (mockCDC.updates[0].whereClause?.table_id !== 'table-1') {
               return false;
             }
 

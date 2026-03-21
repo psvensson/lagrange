@@ -1,8 +1,8 @@
 {
   "scenarioName": "fail-test",
-  "startedAt": 1773590912539,
-  "endedAt": 1773590912971,
-  "durationMs": 432,
+  "startedAt": 1774076047457,
+  "endedAt": 1774076047869,
+  "durationMs": 412,
   "files": {
     "events": "test-output/fail-test/events.ndjson",
     "samples": "test-output/fail-test/samples.ndjson",

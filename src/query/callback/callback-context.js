@@ -15,6 +15,11 @@
  */
 
 import {TYPEOF} from '../../constants/index.js';
+import {
+  NESTED_CALL_CLASSIFICATION,
+  NESTED_CALL_ERROR_MSG,
+} from '../runtime-constants.js';
+import {classifyNestedCall} from '../nested-call-classifier.js';
 
 /**
  * Build a bounded callback context that exposes the same
@@ -54,6 +59,20 @@ function buildCallbackContext(execCtx, planDiagnostics, debugApi) {
     useBroadcast: (ref) =>
       execCtx.useBroadcast(ref),
     call: (query, params, handler, opts) => {
+      if (typeof query === TYPEOF.STRING) {
+        const result = classifyNestedCall(query);
+        if (planDiagnostics &&
+            typeof planDiagnostics.recordClassification === TYPEOF.FUNCTION) {
+          planDiagnostics.recordClassification(
+            query,
+            result.classification,
+            result.reason,
+          );
+        }
+        if (result.classification === NESTED_CALL_CLASSIFICATION.UNBOUNDED) {
+          throw new Error(NESTED_CALL_ERROR_MSG.UNBOUNDED_REJECTED);
+        }
+      }
       budgetEnforcer.recordNestedCall();
       budgetEnforcer.incrementInflight();
       let callResult;

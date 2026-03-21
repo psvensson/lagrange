@@ -7,6 +7,9 @@ inclusion: always
 These rules are non-negotiable. Every rule applies to every code change, every
 new file, and every refactor. When in doubt, the rule wins.
 
+Read this document together with `doctrine.md`. The doctrine defines the
+short-form architectural intent; these rules make it enforceable.
+
 ---
 
 The system is called lagrange.
@@ -364,6 +367,143 @@ Required pattern:
 4. If multiple rows qualify, apply per-row transitions (or an explicit
    transaction wrapper that preserves row identity), not a single broad update.
 
+### 1.4.14 Runtime Shared-Metadata Access Must Cross Canonical Gateways
+
+Runtime access to shared metadata must cross canonical ingress owners rather
+than raw helper calls.
+
+Required pattern:
+
+1. Semantic owners submit shared-metadata writes through one canonical runtime
+   mutation gateway.
+2. Semantic decisions over shared metadata use one canonical read gateway or
+   one declared owner-fed read model for that decision path.
+3. Bootstrap-only shortcuts remain phase-scoped and are not valid runtime
+   ingress paths.
+
+It is FORBIDDEN to:
+
+- Call raw system-table mutation helpers directly from runtime feature code
+  when a canonical gateway owner exists.
+- Add a second runtime read ingress that performs equivalent cache/SQL
+  decisions outside the declared owner path.
+- Keep bootstrap-era helper paths reachable from steady-state runtime code.
+
+### 1.4.15 Phase-To-Steady-State Handoff Must Be Explicit
+
+Bootstrap, join, and recovery phases may initialize runtime mechanisms, but
+steady-state correctness must not depend on phase-owned wiring after completion.
+
+Required pattern:
+
+1. If a phase establishes a subscriber, bridge, queue, retry loop, or cache
+   hydration path needed by steady state, ownership must transfer explicitly to
+   a runtime owner before phase completion.
+2. Phase completion must remove only temporary scaffolding, never the sole live
+   dissemination, observation, or admission path.
+3. Handoff completion must be represented by one owner transition, not inferred
+   from phase timers or "good enough" cache visibility.
+
+It is FORBIDDEN to:
+
+- Tear down a phase-owned subscriber or bridge when no steady-state owner has
+  taken over the same responsibility.
+- Leave runtime correctness dependent on a phase-scoped retry loop, buffer, or
+  cache patch.
+- Hide missing handoff ownership behind fallback reads, broad repairs, or
+  timeout inflation.
+
+### 1.4.16 Boundary Closure Is Mandatory After Repeated Bugs
+
+When more than one correctness bug appears at the same architectural boundary,
+the next fix must reduce the number of runtime paths through that boundary.
+
+Examples of a boundary include:
+
+- metadata mutation ingress
+- metadata read ingress
+- bootstrap-to-runtime handoff
+- CDC dissemination
+- readiness classification
+- transport admission
+
+Required pattern:
+
+1. Identify the boundary explicitly in the spec, task, or fix notes.
+2. Remove, merge, or structurally block at least one redundant path across that
+   boundary.
+3. Add regression coverage that proves the reduced boundary is now the only
+   legal path.
+
+It is FORBIDDEN to:
+
+- Land a third local symptom fix on the same porous boundary with no
+  architectural consolidation plan.
+- Treat repeated boundary failures as unrelated bugs when they share the same
+  owner gap or ingress overlap.
+
+### 1.4.17 Shared Pressure Contract Must Span All Ingress Paths
+
+Separate planes may keep separate ingress owners, but they must reuse the same
+pressure/admission contract.
+
+Required pattern:
+
+1. Metadata/control-plane ingress and query-plane ingress classify work with a
+   shared contract for work class, resource keys, retry/defer semantics, and
+   structured overload reasons.
+2. Backpressure is emitted by owners as structured admission outcomes, not
+   reconstructed by call-site-specific retry code.
+3. Capacity reservations or priority isolation must be expressed through the
+   shared pressure contract, not through hidden local queues.
+
+It is FORBIDDEN to:
+
+- Invent per-feature overload semantics when a shared pressure owner exists or
+  should exist.
+- Let one plane discover overload only by timeout while another receives
+  structured defer/reject signals.
+
+### 1.4.18 Resource Lifetime Must Be Owned, Bounded, And Observable
+
+Every queue, buffer, subscription registry, deferred-work map, retry registry,
+or single-flight registry must have one owner and one bounding rule.
+
+Required pattern:
+
+1. Define the owning component, capacity or bound, expiry/teardown rule, and
+   diagnostic surface for each resource-lifetime structure.
+2. Expose enough structured diagnostics to prove plateau under repeated
+   join/restart/load cycles.
+3. Treat sustained memory or subscriber growth as a correctness bug, not as
+   operational tuning.
+
+It is FORBIDDEN to:
+
+- Introduce runtime collections that accumulate work, listeners, or retries
+  with no explicit owner and no plateau rule.
+- Rely on process lifetime, GC luck, or eventual scenario end to clean up
+  control-plane resources.
+
+### 1.4.19 Transitional Runtime Delegators Need An Expiry Plan
+
+Temporary runtime delegators or compatibility adapters are allowed only when
+their removal is planned and enforced.
+
+Required pattern:
+
+1. The same spec or task list that introduces a transitional delegator must
+   include its removal task and the target canonical owner.
+2. A structural guard (CI audit, import guard, or equivalent) must prevent new
+   call sites from binding to the transitional path.
+3. The delegator must preserve one semantic owner. It may forward, but it may
+   not add a second decision path.
+
+It is FORBIDDEN to:
+
+- Add a temporary runtime delegator with no explicit removal checkpoint.
+- Let a delegator become a permanent second ingress for the same semantic.
+
 ### 1.5 Verification Checklist (run this before writing code)
 
 Before generating or modifying code, answer these questions:
@@ -401,8 +541,20 @@ Before generating or modifying code, answer these questions:
     exist? -> Stop.
 21. Am I designing a state mutation that produces a different outcome on
     retry than on first execution? -> Stop.
+22. Has this same architectural boundary produced more than one recent bug, and
+    am I still patching it locally without reducing the number of paths? ->
+    Stop.
+23. Am I leaving steady-state correctness dependent on bootstrap, join, or
+    recovery phase wiring after the phase completes? -> Stop.
+24. Am I introducing a queue, buffer, subscription set, retry map, or
+    single-flight registry with no explicit owner, bound, and cleanup rule? ->
+    Stop.
+25. Am I adding a runtime shared-metadata read/write path that bypasses the
+    canonical gateway owner? -> Stop.
+26. Am I keeping a temporary delegator alive without a removal task and
+    structural guard against new callers? -> Stop.
 
-If the answer to any of 4–21 is yes, you are violating this contract.
+If the answer to any of 4–26 is yes, you are violating this contract.
 
 ### 1.5.1 Owner Wiring and Fallback Elimination Procedure
 
@@ -426,12 +578,21 @@ readiness), complete this procedure before closing the task:
    from secondary data.
 6. Add or update a regression that proves the injected owner path is actually
    used and fails when that owner is bypassed.
+7. If the bug is part of a repeated boundary failure, remove or structurally
+   block at least one redundant path before closing the task.
+8. If the code touches phase-established runtime wiring, prove the runtime
+   owner remains after phase completion and no phase teardown removes the only
+   live path.
 
 Mandatory pre-merge scan for touched files:
 
 - Search for direct owner field mutation where a setter exists.
 - Search for synthetic fallback decisions when owner dependencies are absent.
 - Search for duplicate decision logic that reimplements owner behavior locally.
+- Search for phase-scoped runtime subscribers, bridges, or retry loops that
+  remain required after phase completion.
+- Search for direct shared-metadata reads or writes that bypass the canonical
+  gateway owner.
 
 ### 1.6 Deterministic Control-Plane Progression
 
@@ -706,10 +867,18 @@ It is FORBIDDEN to:
   partition(s). There is exactly one write path. No component may write
   directly to `SystemTableCache`; all mutations flow through CDC events
   generated by partition leaders.
+- Runtime shared-metadata writes MUST enter through the owning semantic
+  component and the canonical runtime mutation gateway. Raw runtime writes via
+  ad-hoc SQL helpers or direct CDC helper calls are forbidden when the gateway
+  owner exists.
 - Reading system information: components may read directly from the local
   `SystemTableCache` for performance-critical hot paths (rebalancer,
   control-plane readiness checks, bootstrap API, node readiness policy).
   The SQL engine also uses the system cache internally for routing.
+- Runtime shared-metadata reads for one semantic decision MUST use one declared
+  ingress path only: either the canonical read gateway or the declared owner-fed
+  read model. Do not mix raw cache, SQL, and helper reads for one decision
+  path.
 - Direct cache reads are permitted because the cache is strictly read-only
   from the consumer perspective — it is updated only by CDC events, which
   guarantees consistency with the authoritative partition state.
@@ -724,6 +893,9 @@ It is FORBIDDEN to:
   from bootstrap snapshots (before CDC subscriptions are active).
 - These bypasses MUST be removed immediately after bootstrap completes.
 - These are the ONLY exceptions to the single write path rule.
+- If bootstrap or join establishes a runtime CDC bridge, subscription, or
+  propagation path, ownership must hand off explicitly to a steady-state
+  runtime owner before phase teardown.
 
 Bootstrap-only write exceptions must NOT leak into steady-state runtime paths.
 If runtime code can still call a bootstrap shortcut after initialization, that

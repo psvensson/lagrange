@@ -26,10 +26,8 @@ import {assertCritical} from '../utils/assert.js';
 import {AuthoritativeControlPlaneView} from
   './authoritative-control-plane-view.js';
 import {
-  ControlPlaneSystemTableGateway,
-} from './control-plane-system-table-gateway.js';
-import {getRegisteredControlPlaneSystemTableGateway} from
-  './control-plane-gateway-registry.js';
+  resolveControlPlaneSystemTableGateway,
+} from './control-plane-gateway-resolution.js';
 import {
   HEARTBEAT_CONFIG_KEY,
   HEARTBEAT_DEFAULT,
@@ -172,9 +170,14 @@ class HeartbeatService extends EventEmitter {
     this.authoritativeControlPlaneView =
       options.authoritativeControlPlaneView || null;
     this.controlPlaneSystemTableGateway =
-      options.controlPlaneSystemTableGateway ||
-      getRegisteredControlPlaneSystemTableGateway() ||
-      null;
+      resolveControlPlaneSystemTableGateway({
+        controlPlaneSystemTableGateway:
+          options.controlPlaneSystemTableGateway || null,
+        nodeId: this.nodeId,
+        cdcIntegrationService: this.cdcIntegrationService,
+        systemTableCache: this.systemTableCache,
+        now: this.now,
+      });
 
     const config = ConfigurationManager.getInstance();
     this.heartbeatIntervalMs =
@@ -1181,6 +1184,7 @@ class HeartbeatService extends EventEmitter {
         `SELECT * FROM ${SYSTEM_TABLE_NAME.NODES} WHERE node_id = ?`,
         [this.nodeId],
         {
+          allowSqlFallback: false,
           queryTimeoutMs: this.reporterVisibilityQueryTimeoutMs,
         },
       );

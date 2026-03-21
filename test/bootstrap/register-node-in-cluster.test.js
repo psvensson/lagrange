@@ -232,19 +232,20 @@ test('registerNodeInCluster() - should skip cache waits before CDC subscriptions
     throw new Error('legacy node-state owner path should not be used');
   };
   service.getNodeStorageBudgetService = () => ({
-    registerNodeBudget: async ({nodeRow, upsertOptions}) => {
-      await mockCDCService.upsertSystemTableRow(TABLES.NODES, nodeRow, upsertOptions);
-      return {
-        result: {success: true},
-        budgetRow: nodeRow,
-        resolution: {
-          isValid: true,
-          budgetBytes: 1024,
-          source: 'test',
-          diskBytes: 1024,
-        },
-      };
-    },
+    resolveBudgetRow: (nodeRow) => ({
+      budgetRow: {
+        ...nodeRow,
+        storage_budget_bytes: 1024,
+        storage_budget_source: 'test',
+        storage_budget_updated_at: nodeRow.created_at,
+      },
+      resolution: {
+        isValid: true,
+        budgetBytes: 1024,
+        source: 'test',
+        diskBytes: 1024,
+      },
+    }),
   });
 
     await service.registerNodeInCluster();
@@ -315,14 +316,23 @@ test('registerNodeInCluster() - should fail narrowly on seed participant failure
     service.cdcIntegrationService = {
       sqlQueryEngine: {},
       upsertSystemTableRow: async (tableName, rowData) => {
+        if (tableName === TABLES.NODES) {
+          throw participantFailure;
+        }
         upsertCalls.push({tableName, rowData});
         return {success: true};
       },
     };
     service.getNodeStorageBudgetService = () => ({
-      registerNodeBudget: async () => {
-        throw participantFailure;
-      },
+      resolveBudgetRow: (nodeRow) => ({
+        budgetRow: nodeRow,
+        resolution: {
+          isValid: true,
+          budgetBytes: 1024,
+          source: 'test',
+          diskBytes: 1024,
+        },
+      }),
     });
     service.sendControlPlaneNodeStateUpdate = async () => {
       throw new Error('legacy node-state owner path should not be used');

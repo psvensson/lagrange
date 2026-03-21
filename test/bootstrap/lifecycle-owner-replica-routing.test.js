@@ -28,32 +28,44 @@ test('BootstrapService routes replica lifecycle through unified adapters', async
   let createCount = 0;
   let startCount = 0;
 
-  service.createBootstrapMessageGroupReplica = async () => {
-    createCount += 1;
-    return {status: SERVICE_LIFECYCLE_STATE.CREATED};
-  };
-  service.startBootstrapMessageGroupReplica = async () => {
-    startCount += 1;
-    return {status: SERVICE_LIFECYCLE_STATE.RUNNING};
-  };
+  // Patch phase owners directly — delegate bundles route to them (D2.3).
+  service.seedMessageGroupsPhase
+    .createBootstrapMessageGroupReplica = async () => {
+      createCount += 1;
+      return {status: SERVICE_LIFECYCLE_STATE.CREATED};
+    };
+  service.seedMessageGroupsPhase
+    .startBootstrapMessageGroupReplica = async () => {
+      startCount += 1;
+      return {status: SERVICE_LIFECYCLE_STATE.RUNNING};
+    };
 
-  await service.initializeUnifiedLifecycleOwners();
+  await service.seedInfrastructurePhase
+    .initializeUnifiedLifecycleOwners();
 
-  const descriptor = service.createBootstrapServiceDescriptor(
-    UNIFIED_SERVICE_TYPE.MESSAGE_GROUP,
-    'mg-1-r0',
-  );
-  service.queueBootstrapServiceReplica(descriptor, {
-    serviceType: UNIFIED_SERVICE_TYPE.MESSAGE_GROUP,
-    replicaId: 'mg-1-r0',
-  });
+  const descriptor = service.seedInfrastructurePhase
+    .createBootstrapServiceDescriptor(
+      UNIFIED_SERVICE_TYPE.MESSAGE_GROUP,
+      'mg-1-r0',
+    );
+  service.seedInfrastructurePhase
+    .queueBootstrapServiceReplica(descriptor, {
+      serviceType: UNIFIED_SERVICE_TYPE.MESSAGE_GROUP,
+      replicaId: 'mg-1-r0',
+    });
 
-  await service.triggerBootstrapReconciler('test_bootstrap_lifecycle_routing');
+  await service.seedInfrastructurePhase
+    .triggerBootstrapReconciler(
+      'test_bootstrap_lifecycle_routing',
+    );
 
-  t.equal(createCount, 1, 'create hook should execute via lifecycle adapter');
-  t.equal(startCount, 1, 'start hook should execute via lifecycle adapter');
+  t.equal(createCount, 1,
+    'create hook should execute via lifecycle adapter');
+  t.equal(startCount, 1,
+    'start hook should execute via lifecycle adapter');
 
-  service.stopUnifiedLifecycleOwners();
+  service.seedInfrastructurePhase
+    .stopUnifiedLifecycleOwners();
 });
 
 test('NodeJoiningService routes replica lifecycle through unified adapters', async (t) => {
@@ -89,8 +101,10 @@ test('NodeJoiningService routes replica lifecycle through unified adapters', asy
 
   await service.triggerJoinReconciler('test_join_lifecycle_routing');
 
-  t.equal(createCount, 1, 'create hook should execute via lifecycle adapter');
-  t.equal(startCount, 1, 'start hook should execute via lifecycle adapter');
+  t.equal(createCount, 1,
+    'create hook should execute via lifecycle adapter');
+  t.equal(startCount, 1,
+    'start hook should execute via lifecycle adapter');
 
   service.stopJoiningLifecycleOwners();
 });

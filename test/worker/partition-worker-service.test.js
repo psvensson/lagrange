@@ -291,6 +291,7 @@ describe('PartitionWorkerService', () => {
         RAFT_GROUP_ROLE.FOLLOWER,
       );
       assert.strictEqual(service.isLeaderReplica(), false);
+      assert.strictEqual(service.isLeaderActivated(), false);
     });
   });
 
@@ -634,6 +635,10 @@ describe('PartitionWorkerService', () => {
       const term = service.getCurrentTerm();
       assert.strictEqual(typeof term, 'number');
     });
+
+    it('should return leader activation status', () => {
+      assert.strictEqual(service.isLeaderActivated(), false);
+    });
   });
 
   describe('getStats', () => {
@@ -663,6 +668,7 @@ describe('PartitionWorkerService', () => {
       assert.strictEqual(stats.tableId, 'table-1');
       assert.strictEqual(stats.role, RAFT_GROUP_ROLE.FOLLOWER);
       assert.strictEqual(stats.isLeader, false);
+      assert.strictEqual(stats.leaderActivated, false);
       assert.strictEqual(stats.leaderId, null);
       assert.strictEqual(typeof stats.term, 'number');
       assert.strictEqual(stats.cdcSubscriberCount, 0);

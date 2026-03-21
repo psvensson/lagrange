@@ -57,6 +57,7 @@
   "test-output:prune:dry": "node scripts/prune-test-output.js",
   "test-output:prune": "node scripts/prune-test-output.js --apply",
   "guard:guidelines:file": "node scripts/check-guidelines-llm.js",
+  "steering:llm:pack": "node scripts/generate-steering-llm-pack.js",
     "guard:scenario-policy:file": "node scripts/check-scenario-policy-sql.js",
     "guard:guidelines:staged": "node scripts/check-guidelines-staged.js",
     "hooks:install": "node scripts/install-git-hooks.js"

@@ -13,6 +13,7 @@ import {test} from '../../src/test-helpers/tap.js';
 import fc from 'fast-check';
 import {ReplicaDispatchService} from
   '../../src/control-plane/replica-dispatch-service.js';
+import {OperationType} from '../../src/rebalancer/replica-status.js';
 import {ConfigurationManager} from
   '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
@@ -51,7 +52,11 @@ function initEnv() {
 const operationArb = fc.record({
   operation_id: fc.string({minLength: 5, maxLength: 15})
     .map((s) => `op-${s.replace(/[^a-zA-Z0-9]/g, 'x')}`),
-  type: fc.constantFrom('add_replica', 'remove_replica', 'move_replica'),
+  type: fc.constantFrom(
+    OperationType.ADD,
+    OperationType.REMOVE,
+    OperationType.REPLACE,
+  ),
   partition_id: fc.string({minLength: 3, maxLength: 10})
     .map((s) => `part-${s.replace(/[^a-zA-Z0-9]/g, 'x')}`),
   replica_id: fc.string({minLength: 3, maxLength: 10})

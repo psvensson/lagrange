@@ -2011,9 +2011,7 @@ test(
         'should initialize message-group rebalancer after traffic-ready lifecycle',
       );
     } finally {
-      service?.rebalancer?.cancelScheduledCheck?.();
-      await service?.rebalancer?.shutdown?.();
-      service.rebalancer = null;
+      await service?.shutdown?.();
       await cleanup();
     }
   },
@@ -2693,6 +2691,61 @@ test('MessageGroupService - applyCDCEvent fails closed on Raft propose error', a
       /raft propose failed/,
       'should surface Raft replication failure to caller',
     );
+
+    await service.shutdown();
+  } finally {
+    await cleanup();
+  }
+});
+
+test('MessageGroupService - applyCDCEvent defers strict CDC on ' +
+  'followers before leader routing when ingress is not ready', async (t) => {
+  const {router, nodeId, cleanup} = await createTestTransport();
+  try {
+    const service = new MessageGroupService({
+      groupId: 'mg-strict-defer',
+      replicaId: 'mg-strict-defer-r2',
+      nodeId,
+      transport: router,
+    });
+
+    await service.initialize();
+    service.replicaIds = ['mg-strict-defer-r1', 'mg-strict-defer-r2'];
+    service.role = RaftRole.FOLLOWER;
+    if (service.raft) {
+      Object.defineProperty(service.raft, 'state', {
+        value: LifeRaft.FOLLOWER,
+        writable: true,
+        configurable: true,
+      });
+    } else {
+      service.raft = {state: LifeRaft.FOLLOWER};
+    }
+    service.canAcceptCDCEvent = () => ({
+      ready: false,
+      reason: 'join convergence incomplete',
+      retryAfterMs: 250,
+    });
+    service.forwardCDCEventToLeader = async () => {
+      throw new Error('strict CDC should defer before leader routing');
+    };
+
+    try {
+      await service.applyCDCEvent('nodes', 'UPDATE', {
+        node_id: 'node-deferred',
+        status: 'active',
+      });
+      t.fail(
+        'follower strict CDC should defer instead of attempting leader routing',
+      );
+    } catch (error) {
+      t.equal(error?.deferRetry, true,
+        'strict CDC defer should preserve deferRetry metadata');
+      t.equal(error?.retryAfterMs, 250,
+        'strict CDC defer should preserve retryAfterMs');
+      t.match(error?.message, /join convergence incomplete/i,
+        'strict CDC defer should preserve the readiness reason');
+    }
 
     await service.shutdown();
   } finally {

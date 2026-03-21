@@ -246,21 +246,17 @@ class ConnectWebSocketPhase {
     const sleep = typeof this.delegates.getSleep === TYPEOF.FUNCTION ?
       this.delegates.getSleep() :
       (delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs));
-    const resolveJoinRetryPolicy =
-      typeof this.delegates.resolveJoinRetryPolicy === TYPEOF.FUNCTION ?
-        this.delegates.resolveJoinRetryPolicy :
-        null;
     const computeRetryDelayMs =
       typeof this.delegates.computeSeedContactRetryDelayMs === TYPEOF.FUNCTION ?
         this.delegates.computeSeedContactRetryDelayMs :
         null;
 
-    if (!resolveJoinRetryPolicy || typeof sleep !== TYPEOF.FUNCTION) {
+    if (typeof sleep !== TYPEOF.FUNCTION) {
       await messageRouter.connectToNode(seedNodeId, seedWsAddress);
       return;
     }
 
-    const retryPolicy = resolveJoinRetryPolicy();
+    const retryPolicy = this.resolveSeedWebSocketRetryPolicy();
     const retryTimeoutMs = Number.isFinite(retryPolicy?.retryTimeoutMs) ?
       Math.max(NUM.ONE, Math.floor(retryPolicy.retryTimeoutMs)) :
       NUM.ZERO;
@@ -339,6 +335,43 @@ class ConnectWebSocketPhase {
     }
 
     throw lastError;
+  }
+
+  /**
+   * Resolve bounded retry policy for seed websocket connectivity.
+   * Keep this independent from HTTP seed-contact timeout so mocked
+   * or fast-fail join paths do not inherit the full HTTP retry budget.
+   * @return {Object}
+   * @private
+   */
+  resolveSeedWebSocketRetryPolicy() {
+    const config = typeof this.delegates.getConfig === TYPEOF.FUNCTION ?
+      this.delegates.getConfig() || {} :
+      {};
+    const retryTimeoutMs =
+      Number.isFinite(config.leadershipWaitTimeoutMs) ?
+        Math.max(NUM.ONE, Math.floor(config.leadershipWaitTimeoutMs)) :
+        NUM.ZERO;
+    const initialDelayMs =
+      Number.isFinite(config.leadershipWaitInitialDelayMs) ?
+        Math.max(NUM.TEN, Math.floor(config.leadershipWaitInitialDelayMs)) :
+        NUM.HUNDRED;
+    const maxDelayMs =
+      Number.isFinite(config.leadershipWaitMaxDelayMs) ?
+        Math.max(initialDelayMs, Math.floor(config.leadershipWaitMaxDelayMs)) :
+        initialDelayMs;
+    const backoffMultiplier =
+      Number.isFinite(config.leadershipWaitBackoffMultiplier) &&
+      config.leadershipWaitBackoffMultiplier > NUM.ONE ?
+        config.leadershipWaitBackoffMultiplier :
+        NUM.TWO;
+
+    return {
+      retryTimeoutMs,
+      initialDelayMs,
+      maxDelayMs,
+      backoffMultiplier,
+    };
   }
 
   /**

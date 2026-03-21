@@ -2452,6 +2452,71 @@ t.test('MessageRouter unit tests', async (t) => {
       );
     });
 
+  t.test('first ACK timeout stays on the current socket until the quarantine threshold is reached',
+    async (t) => {
+      cleanupTestEnvironment();
+      const config = ConfigurationManager.getInstance();
+      config.initialize({
+        node: {id: 'node-a'},
+        logging: {level: 'error'},
+        transport: {
+          messageTimeoutMs: 100,
+          reconnectIntervalMs: 100,
+          ackTimeoutQuarantineThreshold: 2,
+        },
+      });
+      const logging = LoggingService.getInstance();
+      logging.initialize({level: 'error'});
+
+      const router = new MessageRouter({
+        nodeId: 'node-a',
+      });
+      await router.initialize({startServer: false});
+      t.teardown(async () => {
+        await router.shutdown().catch(() => {});
+      });
+
+      router.nodeConnections.set('node-b', {
+        nodeId: 'node-b',
+        nodeAddress: 'ws://node-b:9999',
+        connectionId: 'node-b-stale',
+        ws: {
+          readyState: 1,
+          send: () => {},
+        },
+        state: ConnectionState.CONNECTED,
+        isIncoming: false,
+        reconnectAttempts: 0,
+        reconnectTimeout: null,
+        pingInterval: null,
+        address: 'ws://node-b:9999',
+        isSelfConnection: false,
+        ackTimeoutStreak: 0,
+        lastAckAt: null,
+        lastAckTimeoutAt: null,
+      });
+
+      const result = await router.deliver(
+        'node-b/service/no-ack',
+        {type: 'TEST'},
+      );
+
+      t.equal(result.acknowledged, false,
+        'delivery should still fail when the ACK times out');
+      t.equal(result.errorCode, 'ROUTER_MESSAGE_TIMEOUT',
+        'timeout should still surface the deferred timeout error');
+      t.equal(
+        router.nodeConnections.get('node-b')?.state,
+        ConnectionState.CONNECTED,
+        'the first timeout should keep the current socket when below threshold',
+      );
+      t.equal(
+        router.nodeConnections.get('node-b')?.ackTimeoutStreak,
+        1,
+        'the timeout streak should increment for the active connection',
+      );
+    });
+
   t.test('ack timeout quarantines stale remote connection so the next delivery can reconnect',
     async (t) => {
       cleanupTestEnvironment();
@@ -2462,6 +2527,7 @@ t.test('MessageRouter unit tests', async (t) => {
         transport: {
           messageTimeoutMs: 100,
           reconnectIntervalMs: 100,
+          ackTimeoutQuarantineThreshold: 1,
         },
       });
       const logging = LoggingService.getInstance();
@@ -2495,6 +2561,9 @@ t.test('MessageRouter unit tests', async (t) => {
         pingInterval: null,
         address: 'ws://node-b:9999',
         isSelfConnection: false,
+        ackTimeoutStreak: 0,
+        lastAckAt: null,
+        lastAckTimeoutAt: null,
       });
 
       const firstResult = await router.deliver(

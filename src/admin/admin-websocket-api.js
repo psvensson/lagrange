@@ -41,6 +41,8 @@ import {
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../control-plane/control-plane-readiness-constants.js';
+import {getRegisteredControlPlaneSystemTableGateway} from
+  '../control-plane/control-plane-gateway-registry.js';
 import {
   PRESSURE_GOVERNOR_ACTION,
   PRESSURE_WORK_CLASS,
@@ -106,6 +108,8 @@ import {
   normalizeIdentifier,
   normalizeSql,
 } from './admin-helpers.js';
+import {evaluateSharedMetadataNodeCoverage} from
+  './admin-shared-metadata-consistency.js';
 import {
   AdminServiceDiscovery,
   parseDiscoveryBooleanQuery,
@@ -201,6 +205,10 @@ class AdminWebSocketAPI {
     this.systemTableCache = options.systemTableCache || null;
     this.cacheMutationTarget = options.cacheMutationTarget || null;
     this.sqlQueryEngine = options.sqlQueryEngine || null;
+    this.controlPlaneSystemTableGateway =
+      options.controlPlaneSystemTableGateway ||
+      getRegisteredControlPlaneSystemTableGateway() ||
+      null;
     this.messageRouter = options.messageRouter || null;
     this.nodeId = options.nodeId || ADMIN_DEFAULT.NODE_ID;
     this.enforcementMode = options.enforcementMode ||
@@ -298,6 +306,7 @@ class AdminWebSocketAPI {
       nodeId: this.nodeId,
       logger: this.logger,
       cacheMutationTarget: this.cacheMutationTarget,
+      controlPlaneSystemTableGateway: this.controlPlaneSystemTableGateway,
       cdcIntegrationService: this.cdcIntegrationService,
       partitionServicesProvider: this.partitionServicesProvider,
       partitionServices: this.partitionServices,
@@ -1143,19 +1152,10 @@ class AdminWebSocketAPI {
       };
     }
 
-    const pressureDecision = this.evaluateLocalObservationPressure();
-    const pressureDegraded =
-      pressureDecision?.action === PRESSURE_GOVERNOR_ACTION.DEGRADE ||
-      pressureDecision?.action === PRESSURE_GOVERNOR_ACTION.DEFER ||
-      pressureDecision?.action === PRESSURE_GOVERNOR_ACTION.REJECT;
-    const localObservationLane =
-      this.isLocalObservationLaneExecution(executionContext);
-    const localOnly = localObservationLane || pressureDegraded;
-
     return {
-      allowAuthoritativeRepair: !localOnly,
-      allowAuthoritativeReadinessRefresh: !localOnly,
-      allowStaleReadinessOnCacheChange: localOnly,
+      allowAuthoritativeRepair: false,
+      allowAuthoritativeReadinessRefresh: false,
+      allowStaleReadinessOnCacheChange: true,
     };
   }
 
@@ -1272,6 +1272,12 @@ class AdminWebSocketAPI {
       return null;
     }
 
+    if (this.shouldRouteSystemTableObservationThroughAuthoritativeRead(
+      tableName,
+    )) {
+      return null;
+    }
+
     try {
       let rows = this.systemTableCache.getAll(tableName);
       rows = Array.isArray(rows) ? rows.map((row) => ({...row})) : [];
@@ -1312,6 +1318,34 @@ class AdminWebSocketAPI {
     } catch (_error) {
       return null;
     }
+  }
+
+  /**
+   * Return true when a local cache observation query should defer to the
+   * canonical authoritative read path because the local shared-metadata graph
+   * is internally inconsistent.
+   * @param {string} tableName
+   * @return {boolean}
+   * @private
+   */
+  shouldRouteSystemTableObservationThroughAuthoritativeRead(tableName) {
+    if (!tableName ||
+        !this.systemTableCache ||
+        typeof this.systemTableCache.getAll !== TYPEOF.FUNCTION) {
+      return false;
+    }
+
+    if (!ADMIN_CACHE_OBSERVATION_TABLES.has(tableName)) {
+      return false;
+    }
+
+    const nodeCoverage = evaluateSharedMetadataNodeCoverage({
+      nodeRows: this.systemTableCache.getAll(TABLES.NODES),
+      serviceRows: this.systemTableCache.getAll(TABLES.SERVICES),
+      partitionRows: this.systemTableCache.getAll(TABLES.PARTITIONS),
+      nodeEndpointRows: this.systemTableCache.getAll(TABLES.NODE_ENDPOINTS),
+    });
+    return nodeCoverage.hasCoverageGap === true;
   }
 
   /**

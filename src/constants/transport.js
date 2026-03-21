@@ -43,6 +43,8 @@ const WS_MESSAGE_TYPE = Object.freeze({
 const TRANSPORT_CONFIG_KEY = Object.freeze({
   WS_HOST: 'transport.wsHost',
   MESSAGE_TIMEOUT_MS: 'transport.messageTimeoutMs',
+  ACK_TIMEOUT_QUARANTINE_THRESHOLD:
+    'transport.ackTimeoutQuarantineThreshold',
   PING_TIMEOUT_MS: 'transport.pingTimeoutMs',
   RECONNECT_INTERVAL_MS: 'transport.reconnectIntervalMs',
   RECONNECT_MAX_ATTEMPTS: 'transport.reconnectMaxAttempts',
@@ -61,6 +63,7 @@ const TRANSPORT_DEFAULT = Object.freeze({
   WS_PROTOCOL: PROTOCOL.WS,
   LOCAL_ADDRESS_PREFIX: 'ws-',
   MESSAGE_TIMEOUT_MS: 5000,
+  ACK_TIMEOUT_QUARANTINE_THRESHOLD: 2,
   PING_TIMEOUT_MS: 1000,
   RECONNECT_INTERVAL_MS: 1000,
   RECONNECT_MAX_ATTEMPTS: 10,

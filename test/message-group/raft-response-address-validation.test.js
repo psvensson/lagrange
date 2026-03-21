@@ -33,23 +33,39 @@ import {ENTITY_TYPE} from '../../src/constants/index.js';
 /**
  * Create a test transport (MessageRouter) for testing.
  * @param {string} nodeId - Node ID.
- * @param {number} port - WebSocket port.
+ * @param {number} preferredPort - Preferred WebSocket port.
  * @return {Promise<Object>} Router and cleanup function.
  */
-async function createTestTransport(nodeId, port) {
-  const router = new MessageRouter({
-    nodeId,
-    wsPort: port,
-  });
-  await router.initialize({startServer: true});
+async function createTestTransport(nodeId, preferredPort) {
+  let lastError = null;
 
-  return {
-    router,
-    nodeId,
-    cleanup: async () => {
-      await router.shutdown();
-    },
-  };
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const port = attempt === 0 ? preferredPort : getUniquePort();
+    const router = new MessageRouter({
+      nodeId,
+      wsPort: port,
+    });
+
+    try {
+      await router.initialize({startServer: true});
+      return {
+        router,
+        nodeId,
+        port,
+        cleanup: async () => {
+          await router.shutdown();
+        },
+      };
+    } catch (error) {
+      lastError = error;
+      await router.shutdown?.().catch(() => {});
+      if (error?.code !== 'EADDRINUSE') {
+        throw error;
+      }
+    }
+  }
+
+  throw lastError;
 }
 
 test('Raft response address validation', async (t) => {
@@ -72,7 +88,7 @@ test('Raft response address validation', async (t) => {
       // Connect joining node to seed node
       await joiningTransport.router.connectToNode(
         seedNodeId,
-        `ws://localhost:${seedPort}`,
+        `ws://localhost:${seedTransport.port}`,
       );
 
       // Wait for connection

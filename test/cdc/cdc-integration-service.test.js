@@ -405,6 +405,56 @@ test('CDCIntegrationService - defers routed writes under pressure when allowed',
     t.equal(sqlCalls, 0, 'deferred routed writes should not hit routed SQL');
   });
 
+test('CDCIntegrationService logs retryable table-write failures as warnings',
+  async (t) => {
+    const service = new CDCIntegrationService({
+      nodeId: 'test-node',
+      sqlQueryEngine: {
+        async executeQuery() {
+          return {
+            success: false,
+            error: 'Distributed operation failed due to participant failures',
+            errorCode: 'CONTROL_PLANE_PRESSURE_DEGRADED',
+            retryAfterMs: 250,
+          };
+        },
+      },
+    });
+    service.initialize();
+
+    const warnings = [];
+    const errors = [];
+    service.logger = {
+      debug() {},
+      info() {},
+      warn(...args) {
+        warnings.push(args);
+      },
+      error(...args) {
+        errors.push(args);
+      },
+    };
+
+    await t.rejects(
+      service.updateSystemTableRow(
+        SYSTEM_TABLE_NAME.SERVICES,
+        {service_id: 'svc-1'},
+        {status: 'active'},
+        {skipCacheWait: true},
+      ),
+      'retryable control-plane deferrals should still fail closed',
+    );
+
+    t.equal(warnings.length, 1,
+      'retryable table-write deferrals should log one warning');
+    t.equal(errors.length, 0,
+      'retryable table-write deferrals should not log hard errors');
+    t.equal(warnings[0][1]?.code, 'CONTROL_PLANE_PRESSURE_DEGRADED',
+      'warning should preserve the typed error code');
+    t.equal(warnings[0][1]?.retryAfterMs, 250,
+      'warning should preserve the retry-after hint');
+  });
+
 test('CDCIntegrationService - insertSystemTableRow waits for propagated tables', async (t) => {
   const mockSqlEngine = createMockSqlQueryEngine();
   const {cache, state} = createCacheWaitProbe();

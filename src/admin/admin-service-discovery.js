@@ -35,16 +35,17 @@ import {
 import {getSystemCachePrimaryKeyField} from
   '../cache/system-cache-key-descriptor.js';
 import {isTableCdcReadinessRelevant} from '../cache/cdc-table-policy.js';
-import {createSqlRequest} from '../query/sql-request.js';
-import {EXECUTION_MODE} from '../query/sql-adapter-constants.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../control-plane/control-plane-readiness-constants.js';
-import {ControlPlaneSystemTableGateway} from
-  '../control-plane/control-plane-system-table-gateway.js';
+import {
+  ControlPlaneSystemTableGateway,
+  CONTROL_PLANE_READ_STRATEGY,
+} from '../control-plane/control-plane-system-table-gateway.js';
 import {getRegisteredControlPlaneSystemTableGateway} from
   '../control-plane/control-plane-gateway-registry.js';
 import {
+  AUTHORITATIVE_REPAIR_TRIGGER,
   DEFAULT_AUTHORITATIVE_REPAIR_TABLES,
   deriveAuthoritativeRepairTables,
   evaluateAuthoritativeRepairPolicy,
@@ -63,6 +64,8 @@ import {
   normalizeSql,
   uniqueSorted,
 } from './admin-helpers.js';
+import {evaluateSharedMetadataNodeCoverage} from
+  './admin-shared-metadata-consistency.js';
 
 // ── file-local constants ────────────────────────────────────────────────────
 const EMPTY_STRING = '';
@@ -356,20 +359,16 @@ class AdminServiceDiscovery {
    * @param {string} deps.nodeId
    * @param {Object} deps.logger
    * @param {Object|null} deps.cacheMutationTarget
-   * @param {Object|null} deps.cdcIntegrationService
    * @param {Function|null} deps.partitionServicesProvider
    * @param {Map|null} deps.partitionServices
    * @param {Function} deps.buildPreflightCacheFreshnessSummary
    * @param {Function} deps.buildControlSnapshotReplicaOperationSummary
-   * @param {Function} deps.executeSqlRequestWithTimeout
    */
   constructor(deps = {}) {
     this.systemTableCache = deps.systemTableCache || null;
     this.nodeId = deps.nodeId || null;
     this.logger = deps.logger || null;
     this.cacheMutationTarget = deps.cacheMutationTarget || null;
-    this.cdcIntegrationService =
-      deps.cdcIntegrationService || null;
     this.partitionServicesProvider =
       typeof deps.partitionServicesProvider === TYPEOF.FUNCTION ?
         deps.partitionServicesProvider :
@@ -378,7 +377,6 @@ class AdminServiceDiscovery {
       deps.partitionServices instanceof Map ?
         deps.partitionServices :
         null;
-    this.sqlQueryEngine = deps.sqlQueryEngine || null;
     this.controlPlaneSystemTableGateway =
       deps.controlPlaneSystemTableGateway ||
       getRegisteredControlPlaneSystemTableGateway() ||
@@ -391,10 +389,6 @@ class AdminServiceDiscovery {
       typeof deps.buildControlSnapshotReplicaOperationSummary ===
         TYPEOF.FUNCTION ?
         deps.buildControlSnapshotReplicaOperationSummary :
-        null;
-    this.executeSqlRequestWithTimeout =
-      typeof deps.executeSqlRequestWithTimeout === TYPEOF.FUNCTION ?
-        deps.executeSqlRequestWithTimeout :
         null;
     this.nowFn =
       typeof deps.nowFn === TYPEOF.FUNCTION ?
@@ -489,13 +483,18 @@ class AdminServiceDiscovery {
     const snapshot =
       this.buildLocalServiceDiscoverySnapshot(options);
     const allowAuthoritativeRepair =
-      options.allowAuthoritativeRepair !== false;
+      options.allowAuthoritativeRepair === true;
     const repairEvaluation =
       this.evaluateAuthoritativeDiscoveryRepair(
         snapshot,
         options,
       );
-    if (!allowAuthoritativeRepair) {
+    const autoRepairConsistencyGap = Array.isArray(
+      repairEvaluation?.triggerCodes,
+    ) && repairEvaluation.triggerCodes.includes(
+      AUTHORITATIVE_REPAIR_TRIGGER.DISCOVERY_NODE_COVERAGE_GAP,
+    );
+    if (!allowAuthoritativeRepair && !autoRepairConsistencyGap) {
       return snapshot;
     }
     if (repairEvaluation?.shouldRepair !== true) {
@@ -584,6 +583,12 @@ class AdminServiceDiscovery {
       typeof this.systemTableCache.count === TYPEOF.FUNCTION ?
         this.systemTableCache.count(TABLES.SERVICE_ENDPOINTS) :
         this.systemTableCache.getAll(TABLES.SERVICE_ENDPOINTS).length;
+    const nodeCoverage = evaluateSharedMetadataNodeCoverage({
+      nodeRows: this.systemTableCache.getAll(TABLES.NODES),
+      serviceRows: this.systemTableCache.getAll(TABLES.SERVICES),
+      partitionRows: this.systemTableCache.getAll(TABLES.PARTITIONS),
+      nodeEndpointRows: this.systemTableCache.getAll(TABLES.NODE_ENDPOINTS),
+    });
     const staleReplicaOpsInFlightCount = Number(
       snapshot?.replicaOperations?.staleInFlightCount,
     );
@@ -597,6 +602,7 @@ class AdminServiceDiscovery {
       readyReplicaCount,
       selectedNodeCount: selectedNodeIds.size,
       serviceEndpointsCount,
+      nodeCoverageGap: nodeCoverage.hasCoverageGap,
       staleReplicaOpsInFlightCount,
       hasCacheGapReasons,
     });
@@ -816,8 +822,8 @@ class AdminServiceDiscovery {
    */
   hasAuthoritativeDiscoveryReadOwner() {
     return Boolean(
-      this.cdcIntegrationService &&
-      typeof this.cdcIntegrationService.executeAuthoritativeSystemTableRead ===
+      this.controlPlaneSystemTableGateway &&
+      typeof this.controlPlaneSystemTableGateway.executeRead ===
         TYPEOF.FUNCTION,
     );
   }
@@ -827,15 +833,7 @@ class AdminServiceDiscovery {
    * @return {boolean}
    */
   canReadAuthoritativeDiscoveryRows() {
-    if (this.hasAuthoritativeDiscoveryReadOwner()) {
-      return true;
-    }
-    const hasLocalSource =
-      this.resolveLocalPartitionServices() instanceof Map;
-    const hasSqlFallback =
-      typeof this.executeSqlRequestWithTimeout ===
-      TYPEOF.FUNCTION;
-    return hasLocalSource || hasSqlFallback;
+    return this.hasAuthoritativeDiscoveryReadOwner();
   }
 
   /**
@@ -860,215 +858,6 @@ class AdminServiceDiscovery {
   }
 
   /**
-   * Resolve every local partition service that hosts one partition.
-   * @param {Map<string, Object>|null} partitionServices
-   * @param {string} partitionId
-   * @return {Object[]}
-   */
-  resolveLocalPartitionServicesForPartition(
-    partitionServices, partitionId,
-  ) {
-    if (!(partitionServices instanceof Map) || !partitionId) {
-      return ADMIN_CACHE_DUMP.EMPTY;
-    }
-
-    const matches = [];
-    const seenServices = new Set();
-    const directMatch = partitionServices.get(partitionId) || null;
-    if (directMatch && !seenServices.has(directMatch)) {
-      matches.push(directMatch);
-      seenServices.add(directMatch);
-    }
-
-    for (const partitionService of partitionServices.values()) {
-      if (!partitionService ||
-          partitionService.partitionId !== partitionId ||
-          seenServices.has(partitionService)) {
-        continue;
-      }
-      matches.push(partitionService);
-      seenServices.add(partitionService);
-    }
-
-    return matches;
-  }
-
-  /**
-   * Resolve cached system-table partition IDs for one table.
-   * @param {string} tableName
-   * @return {string[]}
-   */
-  resolveSystemTablePartitionIds(tableName) {
-    if (!this.systemTableCache) {
-      return ADMIN_CACHE_DUMP.EMPTY;
-    }
-
-    const partitionPredicate = (row) => {
-      const rowTableName = firstStringField(
-        row,
-        COLUMN.TABLE_NAME,
-        'table_name',
-        'tableName',
-      );
-      const rowTableId = firstStringField(
-        row,
-        COLUMN.TABLE_ID,
-        'table_id',
-        'tableId',
-      );
-      return rowTableName === tableName || rowTableId === tableName;
-    };
-    const partitionRows =
-      typeof this.systemTableCache.filter === TYPEOF.FUNCTION ?
-        this.systemTableCache.filter(
-          TABLES.PARTITIONS,
-          partitionPredicate,
-        ) :
-        typeof this.systemTableCache.getAll === TYPEOF.FUNCTION ?
-          (this.systemTableCache.getAll(TABLES.PARTITIONS) || [])
-            .filter(partitionPredicate) :
-          ADMIN_CACHE_DUMP.EMPTY;
-    return [...new Set(partitionRows
-      .map((row) =>
-        firstStringField(
-          row,
-          COLUMN.PARTITION_ID,
-          'partition_id',
-          'partitionId',
-          'id',
-        ))
-      .filter(Boolean))];
-  }
-
-  /**
-   * Query authoritative rows from node-local partition replicas.
-   * @param {string} tableName
-   * @return {{available: boolean, rows: Object[]}}
-   */
-  queryLocalAuthoritativeSystemTableRows(tableName) {
-    const partitionServices = this.resolveLocalPartitionServices();
-    if (!(partitionServices instanceof Map)) {
-      return {
-        available: false,
-        rows: ADMIN_CACHE_DUMP.EMPTY,
-      };
-    }
-
-    const partitionIds =
-      this.resolveSystemTablePartitionIds(tableName);
-    if (partitionIds.length === NUM.ZERO) {
-      return {
-        available: false,
-        rows: ADMIN_CACHE_DUMP.EMPTY,
-      };
-    }
-
-    const sql = `SELECT * FROM ${tableName}`;
-    const rowSets = [];
-    let available = false;
-    for (const partitionId of partitionIds) {
-      const localServices =
-        this.resolveLocalPartitionServicesForPartition(
-          partitionServices,
-          partitionId,
-        );
-      for (const partitionService of localServices) {
-        if (partitionService?.initialized !== true ||
-            typeof partitionService?.db?.prepare !== TYPEOF.FUNCTION) {
-          continue;
-        }
-        try {
-          const rows = partitionService.db.prepare(sql).all();
-          rowSets.push(Array.isArray(rows) ? rows : ADMIN_CACHE_DUMP.EMPTY);
-          available = true;
-        } catch (error) {
-          this.logger?.warn?.(
-            'Failed to read authoritative discovery rows ' +
-              'from local partition replica',
-            {
-              nodeId: this.nodeId,
-              tableName,
-              partitionId,
-              replicaId:
-                partitionService?.replicaId ||
-                partitionService?.service_id ||
-                null,
-              error: error.message,
-            },
-          );
-        }
-      }
-    }
-
-    return {
-      available,
-      rows: available ?
-        this.mergeAuthoritativeSystemTableRowSets(tableName, rowSets) :
-        ADMIN_CACHE_DUMP.EMPTY,
-    };
-  }
-
-  /**
-   * Merge replicated authoritative row sets by primary key.
-   * @param {string} tableName
-   * @param {Object[][]} rowSets
-   * @return {Object[]}
-   */
-  mergeAuthoritativeSystemTableRowSets(tableName, rowSets) {
-    const keyField =
-      getSystemCachePrimaryKeyField(tableName) || 'id';
-    const mergedRows = new Map();
-
-    for (const rowSet of rowSets) {
-      const rows = Array.isArray(rowSet) ?
-        rowSet :
-        ADMIN_CACHE_DUMP.EMPTY;
-      for (const row of rows) {
-        const key = row?.[keyField] ?? row?.id;
-        if (typeof key === TYPEOF.UNDEFINED ||
-            key === null) {
-          continue;
-        }
-        const existing = mergedRows.get(key);
-        if (!existing ||
-            this.isAuthoritativeRepairRowNewer(row, existing)) {
-          mergedRows.set(key, row);
-        }
-      }
-    }
-
-    return [...mergedRows.values()];
-  }
-
-  /**
-   * Prefer the fresher authoritative repair row.
-   * @param {Object} candidate
-   * @param {Object} existing
-   * @return {boolean}
-   */
-  isAuthoritativeRepairRowNewer(candidate, existing) {
-    const candidateVersion =
-      extractSchemaVersionFromRecord(candidate);
-    const existingVersion =
-      extractSchemaVersionFromRecord(existing);
-    if (candidateVersion && existingVersion) {
-      return compareSchemaVersionValues(
-        candidateVersion,
-        existingVersion,
-      ) > NUM.ZERO;
-    }
-    if (candidateVersion && !existingVersion) {
-      return true;
-    }
-    if (!candidateVersion && existingVersion) {
-      return false;
-    }
-
-    return JSON.stringify(candidate).length >
-      JSON.stringify(existing).length;
-  }
-
-  /**
    * Read one authoritative system-table row set through the injected CDC
    * owner when available.
    * @param {string} tableName
@@ -1079,29 +868,33 @@ class AdminServiceDiscovery {
   async readAuthoritativeSystemTableRowsViaOwner(
     tableName, options = {},
   ) {
-    if (!this.hasAuthoritativeDiscoveryReadOwner()) {
+    if (!this.hasAuthoritativeDiscoveryReadOwner() ||
+        typeof this.controlPlaneSystemTableGateway?.executeRead !==
+          TYPEOF.FUNCTION) {
       return null;
     }
 
     const now = options.nowMs || Date.now();
     const queryResult =
-      await this.cdcIntegrationService.executeAuthoritativeSystemTableRead(
-        tableName,
-        `SELECT * FROM ${tableName}`,
-        ADMIN_CACHE_DUMP.EMPTY,
+      await this.controlPlaneSystemTableGateway.executeRead(
         {
-          queryOptions: {
-            timeoutMs:
-              AUTHORITATIVE_DISCOVERY_REPAIR.QUERY_TIMEOUT_MS,
-            sessionId:
-              `${String(options.reason || 'repair')}` +
-              `:${tableName}:${now}`,
-            routingReadinessDimension:
-              CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
-          },
+          tableName,
+          sql: `SELECT * FROM ${tableName}`,
+          params: ADMIN_CACHE_DUMP.EMPTY,
+          strategy: CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE_REQUIRED,
+          owner: 'admin-service-discovery',
+        },
+        {
+          queryTimeoutMs:
+            AUTHORITATIVE_DISCOVERY_REPAIR.QUERY_TIMEOUT_MS,
+          sessionId:
+            `${String(options.reason || 'repair')}` +
+            `:${tableName}:${now}`,
+          routingReadinessDimension:
+            CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
         },
       );
-    if (queryResult?.success === false) {
+    if (queryResult?.success !== true) {
       throw new Error(
         queryResult.error ||
           'authoritative_query_failed',
@@ -1118,9 +911,7 @@ class AdminServiceDiscovery {
 
   /**
    * Resolve one authoritative row set for bounded discovery repair.
-   * Prefers the injected CDC authoritative-read owner, then falls back to
-   * direct local partition reads so control snapshots do not depend on the
-   * hot routed SQL lane when the owner is unavailable.
+   * Uses the canonical control-plane read gateway only.
    * @param {string} tableName
    * @param {Object} options
    * @return {Promise<{tableName: string, rows: Object[]}>}
@@ -1136,48 +927,7 @@ class AdminServiceDiscovery {
     if (ownerRows) {
       return ownerRows;
     }
-
-    const localRows =
-      this.queryLocalAuthoritativeSystemTableRows(tableName);
-    if (localRows.available) {
-      return {
-        tableName,
-        rows: localRows.rows,
-      };
-    }
-
-    if (typeof this.executeSqlRequestWithTimeout !==
-        TYPEOF.FUNCTION) {
-      throw new Error('authoritative_row_source_unavailable');
-    }
-
-    const now = options.nowMs || Date.now();
-    const queryResult =
-      await this.executeSqlRequestWithTimeout(
-        createSqlRequest({
-          statement: `SELECT * FROM ${tableName}`,
-          parameters: ADMIN_CACHE_DUMP.EMPTY,
-          sessionId:
-            `${String(options.reason || 'repair')}` +
-            `:${tableName}:${now}`,
-          executionMode:
-            EXECUTION_MODE.SQL_STATEMENT,
-        }),
-        AUTHORITATIVE_DISCOVERY_REPAIR
-          .QUERY_TIMEOUT_MS,
-      );
-    if (queryResult?.success === false) {
-      throw new Error(
-        queryResult.error ||
-          'authoritative_query_failed',
-      );
-    }
-    return {
-      tableName,
-      rows: Array.isArray(queryResult?.rows) ?
-        queryResult.rows :
-        ADMIN_CACHE_DUMP.EMPTY,
-    };
+    throw new Error('authoritative_row_source_unavailable');
   }
 
   /**
@@ -2047,6 +1797,13 @@ class AdminServiceDiscovery {
     const now = this.nowFn();
     const repairTableNames =
       this.resolveAuthoritativeDiscoveryRepairTables(options);
+    if (repairTableNames.length === NUM.ZERO) {
+      return {
+        applied: false,
+        skipped: true,
+        tableCount: NUM.ZERO,
+      };
+    }
     if (this.authoritativeDiscoveryRepairPromise) {
       return this.authoritativeDiscoveryRepairPromise;
     }
@@ -2061,8 +1818,9 @@ class AdminServiceDiscovery {
     if (recentRepairResult) {
       return recentRepairResult;
     }
-    if (now - this.lastAuthoritativeDiscoveryRepairAtMs <
-        AUTHORITATIVE_DISCOVERY_REPAIR.COOLDOWN_MS &&
+    if (options?.bypassReuse !== true &&
+        now - this.lastAuthoritativeDiscoveryRepairAtMs <
+          AUTHORITATIVE_DISCOVERY_REPAIR.COOLDOWN_MS &&
         this.lastAuthoritativeDiscoveryRepairCoversTables(
           repairTableNames,
         )) {
@@ -2080,44 +1838,76 @@ class AdminServiceDiscovery {
         ':' + String(now);
       let repairedTableCount = NUM.ZERO;
       let repairedRowCount = NUM.ZERO;
+      const repairedTableNames = [];
+      const authoritativeRowsByTable = new Map();
+      const failedTables = [];
       const errors = [];
       for (const tableName of repairTableNames) {
-        let result = null;
         try {
-          result = await this.readAuthoritativeSystemTableRows(
+          const result = await this.readAuthoritativeSystemTableRows(
             tableName,
             {
               nowMs: now,
               reason: options.reason || 'repair',
             },
           );
+          authoritativeRowsByTable.set(tableName, {
+            tableName: result.tableName,
+            rows: result.rows,
+          });
         } catch (error) {
-          errors.push(String(
-            error?.message ||
-            error ||
-            'unknown_error',
-          ));
-          continue;
-        }
-        repairedRowCount +=
-          await this.applyAuthoritativeSystemTableRows(
-            result.tableName,
-            result.rows,
-            causeId,
+          failedTables.push(tableName);
+          errors.push(
+            `${tableName}:` +
+            String(
+              error?.message ||
+              error ||
+              'unknown_error',
+            ),
           );
-        repairedTableCount += NUM.ONE;
+        }
+      }
+
+      if (failedTables.length === NUM.ZERO) {
+        for (const tableName of repairTableNames) {
+          const result = authoritativeRowsByTable.get(tableName);
+          try {
+            repairedRowCount +=
+              await this.applyAuthoritativeSystemTableRows(
+                result?.tableName || tableName,
+                result?.rows || ADMIN_CACHE_DUMP.EMPTY,
+                causeId,
+              );
+            repairedTableCount += NUM.ONE;
+            repairedTableNames.push(tableName);
+          } catch (error) {
+            failedTables.push(tableName);
+            errors.push(
+              `${tableName}:` +
+              String(
+                error?.message ||
+                error ||
+                'unknown_error',
+              ),
+            );
+            break;
+          }
+        }
       }
 
       const completedAtMs = this.nowFn();
       this.lastAuthoritativeDiscoveryRepairAtMs = completedAtMs;
-      if (repairedTableCount > NUM.ZERO) {
+      const repairApplied =
+        failedTables.length === NUM.ZERO &&
+        repairedTableCount === repairTableNames.length;
+      if (repairApplied) {
         this.lastAuthoritativeDiscoveryRepairCompletedAtMs =
           completedAtMs;
         this.lastAuthoritativeDiscoveryRepairResult = {
           applied: true,
           skipped: false,
           tableCount: repairedTableCount,
-          tableNames: [...repairTableNames],
+          tableNames: [...repairedTableNames],
           repairedRowCount,
           completedAtMs,
           reused: false,
@@ -2126,10 +1916,23 @@ class AdminServiceDiscovery {
         this.lastAuthoritativeDiscoveryRepairCompletedAtMs = NUM.ZERO;
         this.lastAuthoritativeDiscoveryRepairResult = null;
       }
-      if (errors.length > NUM.ZERO) {
-        this.logger.warn(
-          'Authoritative discovery cache repair ' +
-            'completed with errors', {
+      const result = this.lastAuthoritativeDiscoveryRepairResult || {
+        applied: false,
+        skipped: false,
+        tableCount: repairedTableCount,
+        tableNames: [...repairedTableNames],
+        requestedTableCount: repairTableNames.length,
+        requestedTableNames: [...repairTableNames],
+        repairedRowCount,
+        failedTables: [...failedTables],
+        errorCount: errors.length,
+        errors,
+        completedAtMs,
+        reused: false,
+      };
+      if (!repairApplied) {
+        this.logger?.warn?.(
+          'Authoritative discovery cache repair failed', {
             nodeId: this.nodeId,
             reason: options.reason || null,
             tableName: options.tableName || null,
@@ -2137,12 +1940,13 @@ class AdminServiceDiscovery {
             repairTableNames,
             repairedTableCount,
             repairedRowCount,
+            failedTables,
             errorCount: errors.length,
             errors,
           },
         );
       } else {
-        this.logger.info(
+        this.logger?.info?.(
           'Authoritative discovery cache repair completed', {
             nodeId: this.nodeId,
             reason: options.reason || null,
@@ -2155,11 +1959,7 @@ class AdminServiceDiscovery {
         );
       }
 
-      return this.lastAuthoritativeDiscoveryRepairResult || {
-        applied: false,
-        skipped: false,
-        tableCount: repairedTableCount,
-      };
+      return result;
     };
 
     this.authoritativeDiscoveryRepairPromise = runRepair()

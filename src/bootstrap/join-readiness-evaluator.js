@@ -460,6 +460,8 @@ class JoinReadinessEvaluator {
 
   /**
    * Build canonical join-readiness snapshot from local control-plane state.
+   * This is the owner that combines topology, endpoint visibility, routing,
+   * and topology-epoch convergence into one readiness view.
    * @param {Object} context
    * @return {Object}
    */
@@ -479,6 +481,8 @@ class JoinReadinessEvaluator {
       this.isControlPlaneAddressReachable(targetAddress);
     const topology =
       this.evaluateCanonicalJoinTopologyReadiness(systemTableCache);
+    const endpointVisibility =
+      this.evaluateCanonicalJoinEndpointVisibility(systemTableCache);
     const bootstrapResponse = this.delegates.getBootstrapResponse();
     const requiredSchemaVersion = resolveCanonicalRequiredSchemaVersion(
       tableName,
@@ -495,6 +499,7 @@ class JoinReadinessEvaluator {
       tableName,
       routingReady,
       topologyReady: topology.ready &&
+        endpointVisibility.ready === true &&
         this.isBootstrapTopologyEpochSatisfied({
           topologySnapshotEpoch,
           appliedTopologyEpoch,
@@ -520,9 +525,9 @@ class JoinReadinessEvaluator {
       excludedWarmingTargetCount:
         topology.excludedWarmingTargetCount,
       missingNodeEndpointNodeIds:
-        topology.missingNodeEndpointNodeIds,
+        endpointVisibility.missingNodeEndpointNodeIds,
       missingPostgresWireNodeIds:
-        topology.missingPostgresWireNodeIds,
+        endpointVisibility.missingPostgresWireNodeIds,
     };
   }
 
@@ -654,8 +659,6 @@ class JoinReadinessEvaluator {
    *   inFlightReplicaOperationDetails: Array<Object>,
    *   excludedSelfTargetedCount: number,
    *   excludedWarmingTargetCount: number,
-   *   missingNodeEndpointNodeIds: string[],
-   *   missingPostgresWireNodeIds: string[],
    * }}
    */
   evaluateCanonicalJoinTopologyReadiness(systemTableCache) {
@@ -699,22 +702,16 @@ class JoinReadinessEvaluator {
       operationDetails.excludedSelfTargetedCount;
     const excludedWarmingTargetCount =
       operationDetails.excludedWarmingTargetCount;
-    const endpointVisibility =
-      this.evaluateCanonicalJoinEndpointVisibility(systemTableCache);
-
     return {
       ready: missingCount === NUM.ZERO &&
-        inFlightReplicaOperations === NUM.ZERO &&
-        endpointVisibility.ready === true,
+        inFlightReplicaOperations === NUM.ZERO,
       missingLeaders,
       inFlightReplicaOperations,
       inFlightReplicaOperationDetails,
       excludedSelfTargetedCount,
       excludedWarmingTargetCount,
-      missingNodeEndpointNodeIds:
-        endpointVisibility.missingNodeEndpointNodeIds,
-      missingPostgresWireNodeIds:
-        endpointVisibility.missingPostgresWireNodeIds,
+      missingNodeEndpointNodeIds: [],
+      missingPostgresWireNodeIds: [],
     };
   }
 

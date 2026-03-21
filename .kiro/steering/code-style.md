@@ -28,11 +28,11 @@ Do not use strings and number directly in the code, but import them from files c
 
 ## Post-Write System Guidelines Verification
 
-**After writing or modifying any code, verify that it conforms to the system
-guidelines before considering the work done.**
+**After writing or modifying any code, verify that it conforms to the doctrine
+and system guidelines before considering the work done.**
 
 This is not optional. Every completed change must pass a self-review against
-the system guidelines (`system guidelines.md`). Specifically:
+`doctrine.md` and the system guidelines (`system guidelines.md`). Specifically:
 
 1. **Zero duplication** - Confirm no new parallel implementation, shadow state,
    or duplicated logic was introduced. Re-check the verification checklist in

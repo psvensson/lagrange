@@ -366,6 +366,23 @@ const REBALANCER_SKIP_REASON = Object.freeze({
   OPERATION_ALREADY_EXECUTING: 'operation_already_executing',
   OPERATION_OWNED_BY_ANOTHER_NODE: 'operation_owned_by_another_node',
   AWAITING_READY_ADD_CAPACITY: 'awaiting_ready_add_capacity',
+  NODE_NOT_READY: 'node_not_ready',
+});
+
+/**
+ * Granular readiness skip reasons that map policy rejection
+ * dimensions to stable rebalancer diagnostic codes.
+ * Used alongside REBALANCER_SKIP_REASON.NODE_NOT_READY to
+ * preserve reason granularity (Requirement 5.3, Design D6.3).
+ * @enum {string}
+ */
+const READINESS_SKIP_DETAIL = Object.freeze({
+  LEASE_EXPIRED: 'lease',
+  STATUS_NOT_ACTIVE: 'status',
+  CONNECTION_DOWN: 'connection',
+  OUTBOUND_QUEUE_UNAVAILABLE: 'outbound_queue',
+  PING_FAILED: 'ping',
+  REPAIR_INELIGIBLE: 'repair_ineligible',
 });
 
 const REBALANCER_QUEUE_NAME = Object.freeze({
@@ -397,6 +414,7 @@ export {
   MOVE_REASON,
   OPERATION_TRANSITION_REASON,
   PLACEMENT_DEGRADED_REASON,
+  READINESS_SKIP_DETAIL,
   REBALANCER_SUBSYSTEM,
   REBALANCER_ENTITY_TYPE,
   REBALANCER_TRIGGER,

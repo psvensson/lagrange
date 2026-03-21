@@ -43,10 +43,11 @@ function initializeTestEnvironment() {
  * This test replicates the bug where two joining nodes get assigned the same
  * message group replica because the bootstrap API reads from stale data.
  *
- * Expected behavior: Each joining node should get a DIFFERENT replica.
- * Bug behavior: Both nodes get mg-1-r1 assigned.
+ * Expected behavior: once the first MOVE_REPLICA handoff has converged,
+ * the next joining node should get a DIFFERENT replica.
+ * Bug behavior: stale bootstrap topology can still recycle the first replica.
  */
-test('BootstrapAPI - consecutive joins must assign different replicas', async (t) => {
+test('BootstrapAPI - consecutive joins must assign different replicas after the first handoff converges', async (t) => {
   initializeTestEnvironment();
 
   // Simulate seed node with 3 message group replicas all on the same node
@@ -167,16 +168,42 @@ test('BootstrapAPI - consecutive joins must assign different replicas', async (t
   const firstAssignedReplica = body1.messageGroupAssignment.replicaToMove;
   t.ok(firstAssignedReplica, 'should assign a replica to first node');
 
-  // Simulate CDC propagation - the services table is updated and CDC updates the cache
-  // In production, this happens when the joining node registers its service
+  // A second bootstrap should stay deferred while the first MOVE_REPLICA
+  // handoff is still non-terminal.
+  const node3Id = '550e8400-e29b-41d4-a716-446655440003';
+  const blockedResponse = await api.getFastify().inject({
+    method: 'POST',
+    url: '/bootstrap',
+    payload: {nodeId: node3Id, nodeAddress: 'ws://localhost:9091'},
+  });
+
+  t.equal(blockedResponse.statusCode, 503,
+    'bootstrap should remain deferred while the first MOVE_REPLICA handoff is still stabilizing');
+  t.ok(
+    (JSON.parse(blockedResponse.body).reasons || [])
+      .includes('MOVE_REPLICA_HANDOFF_STABILIZING'),
+    'bootstrap defer should surface the handoff stabilization reason',
+  );
+
+  // Simulate convergence of the first handoff:
+  // - canonical services ownership moves to the target node
+  // - the source replica disappears locally
+  // - the target node becomes ready
   mockSystemTableCache.applyServiceUpdate(
     firstAssignedReplica,
     node2Id,
     `${node2Id}/message-group/${firstAssignedReplica}`,
   );
+  mockMessageGroupServices.delete(firstAssignedReplica);
+  systemCacheData.nodes.push({
+    node_id: node2Id,
+    status: SERVICE_STATUS.ACTIVE,
+    connection_state: 'ready',
+    last_heartbeat: Date.now(),
+    ready_lease_expires_at: Date.now() + 60_000,
+  });
 
-  // Second node joins - should get a DIFFERENT replica
-  const node3Id = '550e8400-e29b-41d4-a716-446655440003';
+  // Second node joins after convergence - it should get a DIFFERENT replica
   const response2 = await api.getFastify().inject({
     method: 'POST',
     url: '/bootstrap',
@@ -190,11 +217,8 @@ test('BootstrapAPI - consecutive joins must assign different replicas', async (t
   const secondAssignedReplica = body2.messageGroupAssignment.replicaToMove;
   t.ok(secondAssignedReplica, 'should assign a replica to second node');
 
-  // THE BUG: Both nodes get the same replica assigned
-  // This test should FAIL with the current code because getMessageGroups()
-  // reads from messageGroupServices (which is stale) instead of systemTableCache
   t.not(firstAssignedReplica, secondAssignedReplica,
-    'second node must get a DIFFERENT replica than first node');
+    'second node must get a DIFFERENT replica once the first handoff has converged');
 
   await api.shutdown();
 });
@@ -327,7 +351,7 @@ test('BootstrapAPI - getMessageGroups should prefer system cache over stale serv
   });
 
 test(
-  'BootstrapAPI - register-service should not return before services cache reflects ownership',
+  'BootstrapAPI - register-service waits for services cache visibility before the next MOVE_REPLICA assignment',
   async (t) => {
     initializeTestEnvironment();
 
@@ -403,30 +427,23 @@ test(
 
     const mockSqlQueryEngine = {
       async executeQuery(sql, params) {
-        if (typeof sql === 'string' && sql.includes('INSERT OR REPLACE INTO services')) {
-          const [
-            serviceId,
-            _serviceType,
-            targetNodeId,
-            _partitionId,
-            _groupId,
-            _replicaId,
-            _raftRole,
-            status,
-            address,
-            _createdAt,
-            updatedAt,
-          ] = params;
+        return {success: true};
+      },
+    };
+    const mockCdcIntegrationService = {
+      sqlQueryEngine: mockSqlQueryEngine,
+      async upsertSystemTableRow(tableName, rowData) {
+        if (tableName === 'services') {
           const timer = setTimeout(() => {
             delayedTimers.delete(timer);
             const row = systemCacheData.services.find((service) => {
-              return service.service_id === serviceId;
+              return service.service_id === rowData.service_id;
             });
             if (row) {
-              row.node_id = targetNodeId;
-              row.address = address;
-              row.status = status;
-              row.updated_at = updatedAt;
+              row.node_id = rowData.node_id;
+              row.address = rowData.address;
+              row.status = rowData.status;
+              row.updated_at = rowData.updated_at;
             }
           }, 80);
           delayedTimers.add(timer);
@@ -443,6 +460,7 @@ test(
       seedNodeAddress: 'ws://localhost:8080',
       systemTableCache: mockSystemTableCache,
       messageGroupServices: new Map(),
+      cdcIntegrationService: mockCdcIntegrationService,
       sqlQueryEngine: mockSqlQueryEngine,
     });
     await api.initialize(0, {listen: false});
@@ -476,6 +494,14 @@ test(
       },
     });
     t.equal(registerResult.statusCode, 200, 'register-service should succeed');
+
+    systemCacheData.nodes.push({
+      node_id: node2Id,
+      status: SERVICE_STATUS.ACTIVE,
+      connection_state: 'ready',
+      last_heartbeat: Date.now(),
+      ready_lease_expires_at: Date.now() + 60_000,
+    });
 
     const node3Id = '550e8400-e29b-41d4-a716-446655440013';
     const bootstrap2 = await api.getFastify().inject({

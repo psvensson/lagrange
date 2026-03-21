@@ -2,6 +2,9 @@ import {AddressManager} from '../../address/address-manager.js';
 import {MessageGroupServiceRowOwner} from
   '../../message-group/message-group-service-row-owner.js';
 import {
+  isRetryableControlPlaneError,
+} from '../../control-plane/control-plane-error-classification.js';
+import {
   ENTITY_TYPE,
   TYPEOF,
 } from '../../constants/index.js';
@@ -11,6 +14,8 @@ const MESSAGE_GROUP_SERVICE_ACTIVATION_ERROR = Object.freeze({
     'Message-group service activation requires nodeId',
   WRITER_REQUIRED:
     'Message-group service activation requires system table writer',
+  ACTIVATOR_REQUIRED:
+    'Message-group service activation requires a replica activator',
   ROUTER_REQUIRED:
     'Message-group service activation requires router registration lookup',
   HANDLER_REQUIRED:
@@ -21,15 +26,6 @@ const MESSAGE_GROUP_SERVICE_ACTIVATION_ERROR = Object.freeze({
     `Message-group service activation requires replica handler ` +
     `registration for ${replicaId}`,
 });
-const TRANSIENT_ACTIVATION_ERROR_FRAGMENTS = Object.freeze([
-  'Distributed operation failed due to participant failures',
-  'Outbound queue for node',
-  'No connection to node',
-  'Connection to node',
-  'Message timeout',
-  'closed',
-]);
-
 function resolveReplicaUnifiedAddress(nodeId, replicaId, service) {
   if (service &&
       typeof service.getUnifiedAddress === TYPEOF.FUNCTION) {
@@ -47,22 +43,20 @@ function resolveReplicaUnifiedAddress(nodeId, replicaId, service) {
 }
 
 function isTransientActivationError(error) {
-  if (error?.deferRetry === true ||
-      error?.code === 'CONTROL_PLANE_PRESSURE_DEGRADED') {
-    return true;
-  }
-  const message = error?.message || '';
-  return TRANSIENT_ACTIVATION_ERROR_FRAGMENTS.some((fragment) =>
-    message.includes(fragment),
-  );
+  return isRetryableControlPlaneError(error);
 }
 
 async function activateMessageGroupServiceRows(options = {}) {
   if (typeof options.nodeId !== TYPEOF.STRING || options.nodeId.length === 0) {
     throw new Error(MESSAGE_GROUP_SERVICE_ACTIVATION_ERROR.NODE_ID_REQUIRED);
   }
-  if (!options.systemTableWriter) {
-    throw new Error(MESSAGE_GROUP_SERVICE_ACTIVATION_ERROR.WRITER_REQUIRED);
+  const activateReplica =
+    typeof options.activateReplica === TYPEOF.FUNCTION ?
+      options.activateReplica :
+      null;
+  const systemTableWriter = options.systemTableWriter || null;
+  if (!activateReplica && !systemTableWriter) {
+    throw new Error(MESSAGE_GROUP_SERVICE_ACTIVATION_ERROR.ACTIVATOR_REQUIRED);
   }
   if (options.handlerRegistered !== true) {
     throw new Error(MESSAGE_GROUP_SERVICE_ACTIVATION_ERROR.HANDLER_REQUIRED);
@@ -88,8 +82,8 @@ async function activateMessageGroupServiceRows(options = {}) {
   const messageGroupServices = options.messageGroupServices instanceof Map ?
     options.messageGroupServices :
     new Map();
-  const owner = new MessageGroupServiceRowOwner({
-    systemTableWriter: options.systemTableWriter,
+  const owner = activateReplica ? null : new MessageGroupServiceRowOwner({
+    systemTableWriter,
     now: typeof options.now === TYPEOF.FUNCTION ?
       options.now :
       () => Date.now(),
@@ -117,13 +111,18 @@ async function activateMessageGroupServiceRows(options = {}) {
     }
 
     try {
-      await owner.activateReplica({
+      const activationContext = {
         groupId,
         replicaId,
         nodeId: options.nodeId,
         service,
         extraFields: resolveExtraFields(replicaId, service),
-      });
+      };
+      if (activateReplica) {
+        await activateReplica(activationContext);
+      } else {
+        await owner.activateReplica(activationContext);
+      }
       activatedCount += 1;
     } catch (error) {
       if (options.deferTransientFailures === true &&

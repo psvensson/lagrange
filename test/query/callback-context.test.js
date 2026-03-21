@@ -22,6 +22,12 @@ import {LineageTracker} from
   '../../src/query/lineage-tracker.js';
 import {PlanDiagnostics} from
   '../../src/query/plan-diagnostics.js';
+import {
+  DIAGNOSTICS_FIELD as DF,
+  NESTED_CALL_CLASSIFICATION as CLS,
+  NESTED_CALL_ERROR_MSG as ERR,
+  NESTED_CALL_REASON as REASON,
+} from '../../src/query/runtime-constants.js';
 
 /**
  * Create a minimal ExecutionContext for testing.
@@ -80,13 +86,16 @@ describe('buildCallbackContext', () => {
 });
 
 describe('callback context call behavior', () => {
-  it('should preserve iterator-mode call semantics', async () => {
+  it('should preserve iterator-mode call semantics for bounded queries', async () => {
     const ctx = createTestContext({
       queryExecutor: async () => ({rows: [{id: 1}, {id: 2}]}),
     });
     const cbCtx = buildCallbackContext(ctx);
 
-    const iter = cbCtx.call('SELECT * FROM users');
+    const iter = cbCtx.call(
+      'SELECT * FROM users WHERE id = ?',
+      [1],
+    );
     assert.equal(
       typeof iter?.[Symbol.asyncIterator],
       'function',
@@ -99,26 +108,28 @@ describe('callback context call behavior', () => {
     assert.deepEqual(observed, [1, 2]);
   });
 
-  it('should allow stage-mode calls without callback-level classification',
+  it('should reject unbounded stage-mode nested calls',
     async () => {
       const ctx = createTestContext({
         queryExecutor: async () => ({rows: [{id: 1}]}),
       });
       const cbCtx = buildCallbackContext(ctx);
-      const result = await cbCtx.call(
-        'SELECT * FROM users',
-        [],
-        async (rows) => ({
-          rowCount: Array.isArray(rows) ? rows.length : 0,
-        }),
-      );
 
-      assert.ok(Array.isArray(result));
-      assert.equal(result.length, 1);
-      assert.deepEqual(result[0], {rowCount: 1});
+      await assert.rejects(
+        async () => {
+          await cbCtx.call(
+            'SELECT * FROM users',
+            [],
+            async (rows) => ({
+              rowCount: Array.isArray(rows) ? rows.length : 0,
+            }),
+          );
+        },
+        (err) => err?.message === ERR.UNBOUNDED_REJECTED,
+      );
     });
 
-  it('should not classify callback-level calls in diagnostics',
+  it('should classify callback-level nested calls in diagnostics',
     async () => {
       const ctx = createTestContext({
         queryExecutor: async () => ({rows: [{id: 1}]}),
@@ -126,17 +137,29 @@ describe('callback context call behavior', () => {
       const diag = new PlanDiagnostics({queryId: 'diag-2'});
       const cbCtx = buildCallbackContext(ctx, diag);
 
-      for await (const _row of cbCtx.call('SELECT * FROM users')) {
+      for await (const _row of cbCtx.call(
+        'SELECT * FROM users WHERE id = ?',
+        [1],
+      )) {
         break;
       }
-      await cbCtx.call(
-        'SELECT * FROM users',
-        [],
-        async (_rows) => null,
+      await assert.rejects(
+        async () => {
+          await cbCtx.call(
+            'SELECT * FROM users',
+            [],
+            async (_rows) => null,
+          );
+        },
+        (err) => err?.message === ERR.UNBOUNDED_REJECTED,
       );
 
       const decisions = diag.getDecisions();
-      assert.equal(decisions.length, 0);
+      assert.equal(decisions.length, 2);
+      assert.equal(decisions[0][DF.CLASSIFICATION], CLS.BOUNDED);
+      assert.equal(decisions[0][DF.REASON], REASON.PK_POINT_LOOKUP);
+      assert.equal(decisions[1][DF.CLASSIFICATION], CLS.UNBOUNDED);
+      assert.equal(decisions[1][DF.REASON], REASON.FULL_TABLE_SCAN);
     });
 });
 

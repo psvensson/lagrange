@@ -65,6 +65,7 @@ function buildAuthoritativeReadKey(tableName, sql, params, options, queryTimeout
     workClass: options?.workClass || PRESSURE_WORK_CLASS.INTERACTIVE,
     allowPressureDegrade: options?.allowPressureDegrade !== false,
     allowPressureDefer: options?.allowPressureDefer === true,
+    allowSqlFallback: options?.allowSqlFallback !== false,
     localReadConsistency: options?.localReadConsistency ||
       AUTHORITATIVE_CONTROL_PLANE_LOCAL_READ_CONSISTENCY,
     routingReadinessDimension:
@@ -145,6 +146,19 @@ class AuthoritativeControlPlaneView {
       AUTHORITATIVE_CONTROL_PLANE_DEFAULT_QUERY_TIMEOUT_MS,
     );
     this.inFlightReadsByKey = new Map();
+  }
+
+  /**
+   * Synchronize mutable runtime dependencies after construction.
+   * @param {Object} [options={}]
+   */
+  syncOwnerDependencies(options = {}) {
+    if (Object.hasOwn(options, 'cdcIntegrationService')) {
+      this.cdcIntegrationService = options.cdcIntegrationService || null;
+    }
+    if (Object.hasOwn(options, 'messageRouter')) {
+      this.messageRouter = options.messageRouter || null;
+    }
   }
 
   /**
@@ -271,7 +285,9 @@ class AuthoritativeControlPlaneView {
           {
             localReadConsistency:
               AUTHORITATIVE_CONTROL_PLANE_LOCAL_READ_CONSISTENCY,
-            allowSqlFallback: false,
+            allowSqlFallback:
+              options?.allowSqlFallback !== false &&
+              pressureDecision.action !== PRESSURE_GOVERNOR_ACTION.DEGRADE,
             queryOptions,
           },
         );
@@ -353,6 +369,14 @@ class AuthoritativeControlPlaneView {
       nodeRow?.[COLUMN.LAST_HEARTBEAT] ??
         nodeRow?.last_heartbeat,
     );
+    const snapshotObservedAtMs =
+      Number.isFinite(nodeRead?.observedAtMs) ?
+        nodeRead.observedAtMs :
+        (
+          Number.isFinite(serviceRead?.observedAtMs) ?
+            serviceRead.observedAtMs :
+            this.now()
+        );
 
     return Object.freeze({
       nodeId: normalizedNodeId,
@@ -368,7 +392,7 @@ class AuthoritativeControlPlaneView {
           Number.isFinite(lastHeartbeat) ? lastHeartbeat : null,
         heartbeatAgeMs:
           Number.isFinite(lastHeartbeat) ?
-            Math.max(NUM.ZERO, this.now() - lastHeartbeat) :
+            Math.max(NUM.ZERO, snapshotObservedAtMs - lastHeartbeat) :
             null,
       }),
       tables: Object.freeze({

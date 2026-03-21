@@ -196,12 +196,16 @@ test('Control plane dispatch integration', async (t) => {
       });
       rebalanceCoordinator.initialize();
 
+      const controlPlaneSystemTableGateway =
+        rebalanceCoordinator.controlPlaneSystemTableGateway;
+
       // Create decomposed control-plane services
       const heartbeatSvc = new HeartbeatService({
         nodeId: seedNodeId,
         nodeAddress: `ws://localhost:${seedWsPort}`,
         cdcIntegrationService,
         systemTableCache,
+        controlPlaneSystemTableGateway,
       });
       heartbeatSvc.initialize();
 
@@ -209,23 +213,18 @@ test('Control plane dispatch integration', async (t) => {
         nodeId: seedNodeId,
         nodeLeaseOwner: heartbeatSvc,
         systemTableCache,
-        sqlQueryEngine: cdcIntegrationService.sqlQueryEngine,
+        sqlQueryEngine,
+        controlPlaneSystemTableGateway,
       });
       leaseSvc.initialize();
 
-      const endpointGateway = new ControlPlaneSystemTableGateway({
-        nodeId: seedNodeId,
-        sqlQueryEngine: cdcIntegrationService.sqlQueryEngine,
-        cdcIntegrationService,
-        messageRouter: realMessageRouter,
-      });
       const endpointSvc = new EndpointService({
         nodeId: seedNodeId,
         serviceEndpointsOwner: createSystemMetadataOwners({
-          controlPlaneSystemTableGateway: endpointGateway,
+          controlPlaneSystemTableGateway,
           systemTableCache,
         }).serviceEndpointsOwner,
-        controlPlaneSystemTableGateway: endpointGateway,
+        controlPlaneSystemTableGateway,
       });
       endpointSvc.initialize();
 
@@ -235,7 +234,8 @@ test('Control plane dispatch integration', async (t) => {
         cdcIntegrationService,
         systemTableCache,
         rebalanceCoordinator,
-        sqlQueryEngine: cdcIntegrationService.sqlQueryEngine,
+        sqlQueryEngine,
+        controlPlaneSystemTableGateway,
       });
       dispatchSvc.initialize();
 

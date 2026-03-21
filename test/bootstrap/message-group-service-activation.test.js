@@ -91,3 +91,38 @@ test('activateMessageGroupServiceRows can defer transient writer failures',
     t.equal(deferred.length, 1, 'transient activation failure should be surfaced via deferred callback');
     t.equal(deferred[0]?.replicaId, 'mg-1-r1', 'callback should identify the deferred replica');
   });
+
+test('activateMessageGroupServiceRows supports callback activator path',
+  async (t) => {
+    const activated = [];
+
+    await t.resolves(
+      activateMessageGroupServiceRows({
+        nodeId: 'node-a',
+        activateReplica: async (context) => {
+          activated.push({
+            groupId: context.groupId,
+            replicaId: context.replicaId,
+            nodeId: context.nodeId,
+          });
+        },
+        messageRouter: {
+          isRegistered: () => true,
+        },
+        handlerRegistered: true,
+        endpointsPublished: true,
+        messageGroupServices: new Map([
+          ['mg-1-r1', {groupId: 'mg-1'}],
+        ]),
+      }),
+      'activation callback should allow activation without direct writer usage',
+    );
+
+    t.equal(activated.length, 1,
+      'activation callback should run once per replica');
+    t.same(activated[0], {
+      groupId: 'mg-1',
+      replicaId: 'mg-1-r1',
+      nodeId: 'node-a',
+    }, 'activation callback should receive replica context');
+  });

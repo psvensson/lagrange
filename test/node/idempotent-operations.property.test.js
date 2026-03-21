@@ -117,9 +117,10 @@ test('Property 13: Idempotent Operations', async (t) => {
           const mockCDC = createMockCDCService();
           const mockCache = createMockSystemTableCache();
           const {factory} = createMockPartitionServiceFactory();
+          const stateMachineCDC = createMockCDCService();
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
-            cdcIntegrationService: mockCDC,
+            cdcIntegrationService: stateMachineCDC,
           });
 
           const manager = new ReplicaLifecycleManager({
@@ -211,9 +212,10 @@ test('Property 13: Idempotent Operations', async (t) => {
           const mockCDC = createMockCDCService();
           const mockCache = createMockSystemTableCache();
           const {factory} = createMockPartitionServiceFactory();
+          const stateMachineCDC = createMockCDCService();
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
-            cdcIntegrationService: mockCDC,
+            cdcIntegrationService: stateMachineCDC,
           });
 
           const manager = new ReplicaLifecycleManager({
@@ -297,9 +299,10 @@ test('Property 13: Idempotent Operations', async (t) => {
           const mockCDC = createMockCDCService();
           const mockCache = createMockSystemTableCache();
           const {factory} = createMockPartitionServiceFactory();
+          const stateMachineCDC = createMockCDCService();
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
-            cdcIntegrationService: mockCDC,
+            cdcIntegrationService: stateMachineCDC,
           });
 
           const manager = new ReplicaLifecycleManager({
@@ -356,9 +359,10 @@ test('Property 13: Idempotent Operations', async (t) => {
           const mockCDC = createMockCDCService();
           const mockCache = createMockSystemTableCache();
           const {factory} = createMockPartitionServiceFactory();
+          const stateMachineCDC = createMockCDCService();
           const stateMachine = new ReplicaStateMachine({
             nodeId: 'test-node',
-            cdcIntegrationService: mockCDC,
+            cdcIntegrationService: stateMachineCDC,
           });
 
           const manager = new ReplicaLifecycleManager({

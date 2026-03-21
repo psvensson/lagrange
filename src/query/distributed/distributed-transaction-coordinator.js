@@ -55,6 +55,7 @@ const PARTICIPANT_RETRY_DEFAULT = Object.freeze({
 });
 
 const PARTICIPANT_RETRY_LOG_MSG = 'Distributed transaction participant retry';
+const RECOVERY_SWEEP_LOG_MSG = 'Distributed transaction recovery sweep failed';
 const RECOVERY_SWEEP_DEFAULT_INTERVAL_MS = 1000;
 const TIMEOUT_ERROR_MESSAGES = new Set([
   QUERY_ERROR_MSG.QUERY_TIMEOUT,
@@ -618,7 +619,11 @@ class DistributedTransactionCoordinator {
       return;
     }
     this.recoverySweepTimer = setInterval(() => {
-      void this.runRecoverySweep();
+      void this.runRecoverySweep().catch((error) => {
+        this.logger?.error?.(RECOVERY_SWEEP_LOG_MSG, {
+          error: error?.message || String(error),
+        });
+      });
     }, this.recoverySweepIntervalMs);
     this.recoverySweepTimer.unref();
   }

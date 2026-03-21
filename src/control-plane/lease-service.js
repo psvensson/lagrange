@@ -19,10 +19,8 @@ import {emitInvariant} from '../invariants/invariant-emitter.js';
 import {INVARIANT_ID} from '../invariants/invariant-catalog.js';
 import {assertCritical} from '../utils/assert.js';
 import {
-  ControlPlaneSystemTableGateway,
-} from './control-plane-system-table-gateway.js';
-import {getRegisteredControlPlaneSystemTableGateway} from
-  './control-plane-gateway-registry.js';
+  resolveControlPlaneSystemTableGateway,
+} from './control-plane-gateway-resolution.js';
 import {
   LEASE_CONFIG_KEY,
   LEASE_DEFAULT_OPTIONS,
@@ -57,9 +55,18 @@ class LeaseService extends EventEmitter {
     this.systemTableCache = options.systemTableCache;
     this.sqlQueryEngine = options.sqlQueryEngine;
     this.controlPlaneSystemTableGateway =
-      options.controlPlaneSystemTableGateway ||
-      getRegisteredControlPlaneSystemTableGateway() ||
-      null;
+      resolveControlPlaneSystemTableGateway({
+        controlPlaneSystemTableGateway:
+          options.controlPlaneSystemTableGateway || null,
+        sourceGateway:
+          options.nodeLeaseOwner?.controlPlaneSystemTableGateway || null,
+        nodeId: this.nodeId,
+        cdcIntegrationService:
+          options.nodeLeaseOwner?.cdcIntegrationService || null,
+        sqlQueryEngine: this.sqlQueryEngine || null,
+        systemTableCache: this.systemTableCache,
+        messageRouter: options.messageRouter || null,
+      });
     this.messageGroupServices =
       options.messageGroupServices ?? createDefaultMessageGroupServices();
     this.messageRouter = options.messageRouter || null;
@@ -175,15 +182,12 @@ class LeaseService extends EventEmitter {
     }
 
     const now = this.now();
-    let nodes = [];
-    if (this.controlPlaneSystemTableGateway) {
-      const result = await this.controlPlaneSystemTableGateway.readRows(
-        TABLES.NODES,
-        LEASE_SQL.SELECT_ALL_NODES,
-        LEASE_EMPTY_QUERY_PARAMS,
-      );
-      nodes = result.rows || [];
-    }
+    const result = await this.getControlPlaneSystemTableGateway().readRows(
+      TABLES.NODES,
+      LEASE_SQL.SELECT_ALL_NODES,
+      LEASE_EMPTY_QUERY_PARAMS,
+    );
+    const nodes = result.rows || [];
 
     const expired = nodes.filter((node) => {
       const leaseExpiry = Number(node.ready_lease_expires_at);
@@ -278,6 +282,33 @@ class LeaseService extends EventEmitter {
     ).toLowerCase();
     return routerState === STATE.CONNECTED ||
       routerState === STATE.READY;
+  }
+
+  /**
+   * Resolve the canonical system-table gateway for lease sweeps.
+   * @return {ControlPlaneSystemTableGateway}
+   * @private
+   */
+  getControlPlaneSystemTableGateway() {
+    if (this.controlPlaneSystemTableGateway) {
+      return this.controlPlaneSystemTableGateway;
+    }
+    this.controlPlaneSystemTableGateway =
+      resolveControlPlaneSystemTableGateway({
+        sourceGateway:
+          this.nodeLeaseOwner?.controlPlaneSystemTableGateway || null,
+        nodeId: this.nodeId,
+        cdcIntegrationService:
+          this.nodeLeaseOwner?.cdcIntegrationService || null,
+        sqlQueryEngine: this.sqlQueryEngine || null,
+        systemTableCache: this.systemTableCache,
+        messageRouter: this.messageRouter || null,
+      });
+    assertCritical(
+      this.controlPlaneSystemTableGateway,
+      'LeaseService requires controlPlaneSystemTableGateway',
+    );
+    return this.controlPlaneSystemTableGateway;
   }
 }
 

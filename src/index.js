@@ -347,6 +347,7 @@ async function connectLogsTablePersistence(
     logsTableService.initialize({
       cdcIntegrationService,
       logsOwner: systemMetadataOwners.logsOwner,
+      messageRouter: cdcIntegrationService?.messageRouter || null,
       controlPlaneSystemTableGateway,
     });
     const flushedCount = await logsTableService.connectToLoggingService();
@@ -467,6 +468,710 @@ function shutdownDynamicConfigWiring(dynamicConfigWiring, logger) {
 }
 
 /**
+ * Wire readiness transition diagnostics for one startup branch.
+ * @param {Object} readinessState
+ * @param {Object} logger
+ * @param {string} nodeId
+ */
+function wireReadinessStateDiagnostics(readinessState, logger, nodeId) {
+  readinessState.on(READINESS_EVENT.TRANSITION, (transition) => {
+    logger.info(ENTRYPOINT_LOG_MSG.READINESS_TRANSITION, {
+      nodeId,
+      previousState: transition.previousState,
+      previousReady: transition.previousReady,
+      state: transition.state,
+      ready: transition.ready,
+      reasons: transition.reasons,
+      timestamp: transition.timestamp,
+    });
+  });
+  readinessState.on(READINESS_EVENT.BLOCKED_DURATION, (event) => {
+    logger.info(ENTRYPOINT_LOG_MSG.READINESS_BLOCKED_DURATION, {
+      nodeId,
+      reason: event.reason,
+      durationMs: event.durationMs,
+      totalDurationMs: event.totalDurationMs,
+      timestamp: event.timestamp,
+    });
+  });
+}
+
+/**
+ * Create a readiness owner with shared entrypoint diagnostics wiring.
+ * @param {Object} logger
+ * @param {string} nodeId
+ * @return {BootstrapReadinessState}
+ */
+function createReadinessStateWithDiagnostics(logger, nodeId) {
+  const readinessState = new BootstrapReadinessState();
+  wireReadinessStateDiagnostics(readinessState, logger, nodeId);
+  return readinessState;
+}
+
+/**
+ * Hydrate runtime-owned service references into an already-initialized
+ * BootstrapAPI instance.
+ * @param {Object} options
+ * @param {BootstrapAPI} options.bootstrapAPI
+ * @param {Object} options.systemTableCache
+ * @param {Map} options.messageGroupServices
+ * @param {Map} options.partitionServices
+ * @param {Object|null} options.replicaHandler
+ * @param {Object|null} options.epochManager
+ * @param {Object|null} options.messageRouter
+ */
+function hydrateBootstrapApiRuntime(options) {
+  options.bootstrapAPI.systemTableCache = options.systemTableCache;
+  options.bootstrapAPI.messageGroupServices = options.messageGroupServices;
+  options.bootstrapAPI.partitionServices = options.partitionServices;
+  options.bootstrapAPI.replicaHandler = options.replicaHandler;
+  options.bootstrapAPI.epochManager = options.epochManager;
+  options.bootstrapAPI.messageRouter = options.messageRouter;
+}
+
+/**
+ * Resolve read/write system cache handles from one message-group map.
+ * @param {Map} messageGroupServices
+ * @return {{systemTableCache: Object|null, cacheMutationTarget: Object|null}}
+ */
+function resolveSystemCacheHandles(messageGroupServices) {
+  let systemTableCache = null;
+  let cacheMutationTarget = null;
+  if (!messageGroupServices ||
+      typeof messageGroupServices.values !== 'function') {
+    return {systemTableCache, cacheMutationTarget};
+  }
+
+  for (const messageGroupService of messageGroupServices.values()) {
+    if (messageGroupService.getReadOnlyCache) {
+      systemTableCache = messageGroupService.getReadOnlyCache();
+    } else if (messageGroupService.systemTableCache) {
+      systemTableCache = messageGroupService.systemTableCache;
+    }
+    if (messageGroupService.getWritableCache) {
+      cacheMutationTarget = messageGroupService.getWritableCache();
+    } else if (messageGroupService.systemTableCache) {
+      cacheMutationTarget = messageGroupService.systemTableCache;
+    }
+    break;
+  }
+
+  return {systemTableCache, cacheMutationTarget};
+}
+
+/**
+ * Attach split-completion stabilization reset wiring for child partitions.
+ * @param {Object} options
+ * @param {Object} options.partitionSplitMergeManager
+ * @param {Map} options.partitionServices
+ */
+function wireSplitCompletionStabilizationReset(options) {
+  options.partitionSplitMergeManager.on(
+    SPLIT_MERGE_EVENT.SPLIT_COMPLETED,
+    (result) => {
+      const childPartitionIds = [
+        result?.leftPartition?.partitionId,
+        result?.rightPartition?.partitionId,
+      ].filter(Boolean);
+      for (const childPartitionId of childPartitionIds) {
+        const partitionService =
+          resolvePartitionServiceByPartitionId(
+            options.partitionServices,
+            childPartitionId,
+          );
+        if (!partitionService?.rebalancer) {
+          continue;
+        }
+        partitionService.rebalancer.recordStateChange(
+          STABILIZATION_RESET_TRIGGER.SPLIT_COMPLETED,
+        );
+      }
+    },
+  );
+}
+
+/**
+ * Create SQL query engine + split manager composition for one runtime branch.
+ * @param {Object} options
+ * @param {string} options.nodeId
+ * @param {Object} options.systemTableCache
+ * @param {Object|null} options.messageRouter
+ * @param {Object} options.owner
+ * @param {Map} options.partitionServices
+ * @param {Object} options.logger
+ * @return {Promise<{sqlQueryEngine: Object|null, detachMigrationRecovery: Function}>}
+ */
+async function createSqlRuntimeComposition(options) {
+  if (!options.messageRouter) {
+    return {
+      sqlQueryEngine: null,
+      detachMigrationRecovery: () => {},
+    };
+  }
+
+  const {SQLQueryEngine} = await import('./query/sql-query-engine.js');
+  const wasmExecutor = createSqlCallbackWasmExecutor();
+  const sqlQueryEngine = new SQLQueryEngine({
+    systemCache: options.systemTableCache,
+    messageRouter: options.messageRouter,
+    cdcIntegrationService: options.owner.cdcIntegrationService,
+    nodeId: options.nodeId,
+    rebalanceCoordinator: options.owner.rebalanceCoordinator,
+    controlPlaneReadinessService:
+      options.owner.rebalanceCoordinator
+        ?.controlPlaneReadinessService || null,
+    runtimeDriverRegistry: options.owner.runtimeDriverRegistry,
+    serviceRuntimeLifecycle: options.owner.serviceRuntimeLifecycle,
+    wasmExecutor,
+    migrationAutoWire: false,
+  });
+
+  wireMigrationWorkflowOwners({
+    sqlCore: sqlQueryEngine,
+    systemTableCache: options.systemTableCache,
+    transactionCoordinator: sqlQueryEngine.transactionCoordinator,
+    logger: options.logger,
+    now: () => Date.now(),
+  });
+
+  const {PartitionSplitMergeManager} =
+    await import('./partition/partition-split-merge-manager.js');
+  const partitionSplitMergeManager = new PartitionSplitMergeManager({
+    nodeId: options.nodeId,
+    messageRouter: options.messageRouter,
+    tablePolicyService: options.owner.tablePolicyService,
+    listPartitions: () => sqlQueryEngine.listManagedSplitPartitions(),
+    getPartitionMetrics: createManagedSplitMetricsProvider({
+      partitionServices: options.partitionServices,
+    }),
+    executeSplitCandidate: (partitionId) =>
+      sqlQueryEngine.executeManagedSplit(partitionId),
+    storageAdmissionService:
+      options.owner.rebalanceCoordinator?.storageAdmissionService ||
+      null,
+    storageAccountingService:
+      options.owner.rebalanceCoordinator?.storageAccountingService ||
+      null,
+  });
+  sqlQueryEngine.setPartitionSplitMergeManager(partitionSplitMergeManager);
+  wireSplitCompletionStabilizationReset({
+    partitionSplitMergeManager,
+    partitionServices: options.partitionServices,
+  });
+
+  const detachMigrationRecovery = wireMigrationRecoveryOnLeaderElection({
+    sqlQueryEngine,
+    partitionServices: options.partitionServices,
+    logger: options.logger,
+  });
+
+  return {
+    sqlQueryEngine,
+    detachMigrationRecovery,
+  };
+}
+
+/**
+ * Start admin + live query startup composition.
+ * @param {Object} options
+ * @param {string} options.nodeId
+ * @param {Object} options.systemTableCache
+ * @param {Object|null} options.cacheMutationTarget
+ * @param {Object|null} options.sqlQueryEngine
+ * @param {Object} options.owner
+ * @param {Object|null} options.messageRouter
+ * @param {Map} options.partitionServices
+ * @return {Promise<{adminAPI: Object, liveQueryWiring: Object, adminPort: number}>}
+ */
+async function startAdminRuntimeComposition(options) {
+  const adminStartup = createAdminAPIWithLiveQuery({
+    nodeId: options.nodeId,
+    systemTableCache: options.systemTableCache,
+    cacheMutationTarget:
+      options.cacheMutationTarget || options.systemTableCache,
+    sqlQueryEngine: options.sqlQueryEngine || null,
+    cdcIntegrationService: options.owner.cdcIntegrationService,
+    messageRouter: options.messageRouter,
+    serviceDiagnosticsProvider:
+      createServiceDiagnosticsProvider(options.owner),
+    heartbeatService: options.owner.heartbeatService,
+    partitionServicesProvider: () => options.partitionServices,
+  });
+  const adminAPI = adminStartup.adminAPI;
+  const liveQueryWiring = adminStartup.liveQueryWiring;
+  const adminPort = ADMIN_DEFAULT.WEBSOCKET_PORT;
+  await adminAPI.initialize(adminPort);
+  return {
+    adminAPI,
+    liveQueryWiring,
+    adminPort,
+  };
+}
+
+/**
+ * Resolve logs table service from one startup persistence handle.
+ * @param {Object|null} logsPersistence
+ * @return {Promise<LogsTableService|null>}
+ */
+async function resolveLogsTableServiceFromPersistence(logsPersistence) {
+  if (!logsPersistence) {
+    return null;
+  }
+  const syncService = logsPersistence.getService?.();
+  if (syncService) {
+    return syncService;
+  }
+  return logsPersistence.promise || null;
+}
+
+/**
+ * Build one shared shutdown signal handler for seed/join branches.
+ * @param {Object} options
+ * @param {Object} options.logger
+ * @param {string} options.nodeId
+ * @param {Object} options.bootstrapAPI
+ * @param {Object|null} options.heartbeatService
+ * @param {Object|null} options.logsPersistence
+ * @param {Object|null} options.dynamicConfigWiring
+ * @param {Function} options.detachMigrationRecovery
+ * @param {Function} options.ownerCleanup
+ * @param {Object} options.adminAPI
+ * @param {Object} options.liveQueryWiring
+ * @param {string} options.failureMessage
+ * @return {(signal: string) => Promise<void>}
+ */
+function createShutdownSignalHandler(options) {
+  let shutdownSignalCount = 0;
+  return async (signal) => {
+    shutdownSignalCount++;
+    if (shutdownSignalCount > 1) {
+      options.logger.warn('Shutdown already in progress, forcing process exit', {
+        signal,
+      });
+      process.exit(1);
+      return;
+    }
+
+    options.logger.info(ENTRYPOINT_LOG_MSG.SHUTDOWN, {signal});
+    try {
+      const drainDeadlineMs =
+        Date.now() + ENTRYPOINT_DEFAULT.READINESS_DRAIN_DEADLINE_MS;
+      const drainingSnapshot = options.bootstrapAPI.markDraining({
+        drainDeadlineMs,
+      });
+      options.logger.info(ENTRYPOINT_LOG_MSG.READINESS_DRAINING, {
+        nodeId: options.nodeId,
+        phase: drainingSnapshot?.phase || null,
+        reasons: drainingSnapshot?.reasons || [],
+        drainDeadlineMs,
+      });
+      await publishNodeShutdownStatus(
+        options.heartbeatService,
+        options.logger,
+        options.nodeId,
+      );
+      options.logsPersistence?.cancel?.();
+      const logsTableService = await resolveLogsTableServiceFromPersistence(
+        options.logsPersistence,
+      );
+      await shutdownLogsTablePersistence(logsTableService, options.logger);
+      shutdownDynamicConfigWiring(options.dynamicConfigWiring, options.logger);
+      if (typeof options.detachMigrationRecovery === 'function') {
+        options.detachMigrationRecovery();
+      }
+      await options.ownerCleanup();
+      await options.bootstrapAPI.shutdown();
+      await options.adminAPI.shutdown();
+      options.liveQueryWiring.shutdown();
+      process.exit(0);
+    } catch (error) {
+      options.logger.error(options.failureMessage, {
+        signal,
+        error: error.message,
+      });
+      process.exit(1);
+    }
+  };
+}
+
+/**
+ * Register shared shutdown signal listeners for process lifecycle.
+ * @param {Function} shutdownHandler
+ */
+function registerShutdownSignalHandlers(shutdownHandler) {
+  process.on('SIGINT', () => {
+    void shutdownHandler('SIGINT');
+  });
+  process.on('SIGTERM', () => {
+    void shutdownHandler('SIGTERM');
+  });
+}
+
+/**
+ * Compose and start one joining-node runtime path.
+ * @param {Object} options
+ * @param {Object} options.config
+ * @param {Object} options.mainLogger
+ * @param {Object} options.dataDirectoryManager
+ * @param {Object} options.rolloutControls
+ * @param {string} options.seedNodeAddress
+ * @param {Object} options.env
+ * @return {Promise<void>}
+ */
+async function startJoinNode(options) {
+  const {config, mainLogger, dataDirectoryManager, rolloutControls} = options;
+  const seedNodeAddress = String(options.seedNodeAddress || '');
+  const env = options.env || process.env;
+
+  mainLogger.info(ENTRYPOINT_LOG_MSG.JOINING_CLUSTER, {
+    seedNodeAddress,
+  });
+
+  const seedUrl = seedNodeAddress.startsWith('http') ?
+    seedNodeAddress :
+    `${ENTRYPOINT_DEFAULT.HTTP_PREFIX}${seedNodeAddress}`;
+
+  const restApiPort =
+    config.get(CONFIG_KEY.NODE_REST_API_PORT) || ENTRYPOINT_DEFAULT.REST_API_PORT;
+  const wsPort =
+    config.get(CONFIG_KEY.NODE_WS_PORT) ||
+    (restApiPort + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET);
+  const joiningNodeAddress =
+    config.get(CONFIG_KEY.NODE_ADDRESS) ||
+    `${ENTRYPOINT_DEFAULT.LOCALHOST}:${restApiPort}`;
+  const advertisedNodeWsAddress =
+    resolveAdvertisedWebSocketAddress({
+      advertisedAddress: config.get(
+        CONFIG_KEY.NODE_ADVERTISED_WS_ADDRESS,
+      ),
+      nodeAddress: joiningNodeAddress,
+      wsPort,
+      wsHost: config.get(TRANSPORT_CONFIG_KEY.WS_HOST),
+    });
+  const joiningConfig = {};
+  const joinHttpTimeoutMs = parsePositiveTimeoutMs(
+    env[ENTRYPOINT_ENV.JOINING_HTTP_TIMEOUT_MS],
+  );
+  if (joinHttpTimeoutMs !== null) {
+    joiningConfig.httpTimeoutMs = joinHttpTimeoutMs;
+  }
+  const joinLeadershipWaitTimeoutMs = parsePositiveTimeoutMs(
+    env[ENTRYPOINT_ENV.JOINING_LEADERSHIP_WAIT_TIMEOUT_MS],
+  );
+  if (joinLeadershipWaitTimeoutMs !== null) {
+    joiningConfig.leadershipWaitTimeoutMs = joinLeadershipWaitTimeoutMs;
+  }
+
+  const nodeId = config.get(CONFIG_KEY.NODE_ID);
+  const joinReadinessState = createReadinessStateWithDiagnostics(
+    mainLogger,
+    nodeId,
+  );
+  const nodeJoiningService = new NodeJoiningService({
+    nodeId,
+    nodeAddress: joiningNodeAddress,
+    advertisedNodeWsAddress,
+    seedNodeAddress: seedUrl,
+    wsPort: wsPort,
+    dataDir: dataDirectoryManager.getDataDir(),
+    rolloutControls,
+    readinessState: joinReadinessState,
+    config: Object.keys(joiningConfig).length > 0 ?
+      joiningConfig :
+      undefined,
+  });
+  const bootstrapAPI = new BootstrapAPI({
+    seedNodeId: nodeId,
+    seedNodeAddress: joiningNodeAddress,
+    seedNodeWsAddress: advertisedNodeWsAddress,
+    wsPort: wsPort,
+    messageGroupServices: nodeJoiningService.messageGroupServices,
+    partitionServices: nodeJoiningService.partitionServices,
+    replicaHandler: nodeJoiningService.replicaHandler,
+    systemTableCache: null,
+    bootstrapService: null,
+    epochManager: nodeJoiningService.epochManager,
+    messageRouter: nodeJoiningService.messageRouter,
+    readinessState: joinReadinessState,
+    controlPlaneWriteHealthProvider:
+      createControlPlaneWriteHealthProvider(nodeJoiningService),
+    rolloutControls,
+  });
+
+  await bootstrapAPI.initialize();
+
+  const joinResult = await nodeJoiningService.join();
+
+  if (!joinResult.success) {
+    mainLogger.error(ENTRYPOINT_LOG_MSG.FAILED_JOIN, {
+      error: joinResult.error,
+      phase: joinResult.phase,
+    });
+    await bootstrapAPI.shutdown();
+    process.exit(1);
+  }
+
+  let joinLogsPersistence = null;
+
+  mainLogger.info(ENTRYPOINT_LOG_MSG.JOINED_CLUSTER, {
+    messageGroupCount: joinResult.messageGroupServices.size,
+    duration: joinResult.duration,
+  });
+
+  const joinCacheHandles = resolveSystemCacheHandles(
+    joinResult.messageGroupServices,
+  );
+  let systemTableCache = joinCacheHandles.systemTableCache;
+  let cacheMutationTarget = joinCacheHandles.cacheMutationTarget;
+  systemTableCache = assertCritical(
+    systemTableCache,
+    ENTRYPOINT_ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED,
+  );
+  hydrateBootstrapApiRuntime({
+    bootstrapAPI,
+    systemTableCache,
+    messageGroupServices: joinResult.messageGroupServices,
+    partitionServices: joinResult.partitionServices,
+    replicaHandler: joinResult.replicaHandler,
+    epochManager: nodeJoiningService.epochManager,
+    messageRouter: joinResult.messageRouter,
+  });
+
+  const joinSqlRuntime = await createSqlRuntimeComposition({
+    nodeId,
+    systemTableCache,
+    messageRouter: joinResult.messageRouter,
+    owner: nodeJoiningService,
+    partitionServices: joinResult.partitionServices,
+    logger: mainLogger,
+  });
+  const sqlQueryEngine = joinSqlRuntime.sqlQueryEngine;
+  const detachJoinMigrationRecovery =
+    joinSqlRuntime.detachMigrationRecovery;
+  bootstrapAPI.setSqlQueryEngine(sqlQueryEngine);
+
+  const joinDynamicConfigWiring = await startDynamicConfigWiring({
+    nodeId,
+    systemTableCache,
+    sqlQueryEngine,
+    messageGroupServices: joinResult.messageGroupServices,
+    partitionServices: joinResult.partitionServices,
+    runtimeOwner: nodeJoiningService,
+  }, mainLogger);
+
+  const joinAdminRuntime = await startAdminRuntimeComposition({
+    nodeId,
+    systemTableCache,
+    cacheMutationTarget: cacheMutationTarget || systemTableCache,
+    sqlQueryEngine,
+    owner: nodeJoiningService,
+    messageRouter: joinResult.messageRouter,
+    partitionServices: joinResult.partitionServices,
+  });
+  const adminAPI = joinAdminRuntime.adminAPI;
+  const liveQueryWiring = joinAdminRuntime.liveQueryWiring;
+  const adminPort = joinAdminRuntime.adminPort;
+
+  mainLogger.info(ENTRYPOINT_LOG_MSG.NODE_READY, {
+    nodeId,
+    adminWebSocketPort: adminPort,
+    dataDir: dataDirectoryManager.getDataDir(),
+  });
+
+  joinLogsPersistence = startLogsTablePersistence(
+    nodeJoiningService.cdcIntegrationService,
+    mainLogger,
+    rolloutControls,
+    joinReadinessState,
+  );
+
+  const handleShutdownSignal = createShutdownSignalHandler({
+    logger: mainLogger,
+    nodeId,
+    bootstrapAPI,
+    heartbeatService: nodeJoiningService.heartbeatService,
+    logsPersistence: joinLogsPersistence,
+    dynamicConfigWiring: joinDynamicConfigWiring,
+    detachMigrationRecovery: detachJoinMigrationRecovery,
+    ownerCleanup: () => nodeJoiningService.cleanup(),
+    adminAPI,
+    liveQueryWiring,
+    failureMessage: 'Failed to shutdown joining node cleanly',
+  });
+  registerShutdownSignalHandlers(handleShutdownSignal);
+}
+
+/**
+ * Compose and start one seed-node runtime path.
+ * @param {Object} options
+ * @param {Object} options.config
+ * @param {Object} options.mainLogger
+ * @param {Object} options.dataDirectoryManager
+ * @param {Object} options.rolloutControls
+ * @return {Promise<void>}
+ */
+async function startSeedNode(options) {
+  const {config, mainLogger, dataDirectoryManager, rolloutControls} = options;
+  const nodeId = config.get(CONFIG_KEY.NODE_ID);
+
+  mainLogger.info(ENTRYPOINT_LOG_MSG.STARTING_SEED);
+
+  const restApiPort =
+    config.get(CONFIG_KEY.NODE_REST_API_PORT) || ENTRYPOINT_DEFAULT.REST_API_PORT;
+  const wsPort =
+    config.get(CONFIG_KEY.NODE_WS_PORT) ||
+    (restApiPort + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET);
+  const seedNodeHttpAddress =
+    config.get(CONFIG_KEY.NODE_ADDRESS) ||
+    `${ENTRYPOINT_DEFAULT.LOCALHOST}:${restApiPort}`;
+  const advertisedNodeWsAddress =
+    resolveAdvertisedWebSocketAddress({
+      advertisedAddress: config.get(
+        CONFIG_KEY.NODE_ADVERTISED_WS_ADDRESS,
+      ),
+      nodeAddress: seedNodeHttpAddress,
+      wsPort,
+      wsHost: config.get(TRANSPORT_CONFIG_KEY.WS_HOST),
+    });
+
+  const readinessState = createReadinessStateWithDiagnostics(
+    mainLogger,
+    nodeId,
+  );
+  const bootstrapService = new BootstrapService({
+    nodeId,
+    nodeAddress: seedNodeHttpAddress,
+    advertisedNodeWsAddress,
+    dataDirectoryManager,
+    wsPort: wsPort,
+    rolloutControls,
+    readinessState,
+  });
+
+  const bootstrapAPI = new BootstrapAPI({
+    seedNodeId: nodeId,
+    seedNodeAddress: seedNodeHttpAddress,
+    seedNodeWsAddress: advertisedNodeWsAddress,
+    wsPort: wsPort,
+    messageGroupServices: bootstrapService.messageGroupServices,
+    partitionServices: bootstrapService.partitionServices,
+    replicaHandler: bootstrapService.replicaHandler,
+    systemTableCache: bootstrapService.systemTableCache,
+    bootstrapService: bootstrapService,
+    epochManager: bootstrapService.epochManager,
+    messageRouter: bootstrapService.messageRouter,
+    readinessState,
+    controlPlaneWriteHealthProvider:
+      createControlPlaneWriteHealthProvider(bootstrapService),
+    rolloutControls,
+  });
+
+  await bootstrapAPI.initialize();
+
+  const bootstrapResult = await bootstrapService.bootstrap();
+
+  if (!bootstrapResult.success) {
+    mainLogger.error(ENTRYPOINT_LOG_MSG.BOOTSTRAP_FAILED, {
+      error: bootstrapResult.error,
+    });
+    process.exit(1);
+  }
+
+  let seedLogsPersistence = null;
+
+  mainLogger.info(ENTRYPOINT_LOG_MSG.BOOTSTRAP_COMPLETED, {
+    servicesCreated: bootstrapResult.servicesCreated,
+    partitionsCreated: bootstrapResult.partitionsCreated,
+    messageGroupsCreated: bootstrapResult.messageGroupsCreated,
+  });
+
+  const systemTableCache = NodeService.getInstance().getSystemTableCache();
+  hydrateBootstrapApiRuntime({
+    bootstrapAPI,
+    systemTableCache,
+    messageGroupServices: bootstrapResult.messageGroupServices,
+    partitionServices: bootstrapResult.partitionServices,
+    replicaHandler: bootstrapResult.replicaHandler,
+    epochManager: bootstrapResult.epochManager,
+    messageRouter: bootstrapResult.messageRouter,
+  });
+
+  try {
+    await bootstrapService.startWebSocketServer();
+    mainLogger.info(ENTRYPOINT_LOG_MSG.WS_STARTED);
+  } catch (wsError) {
+    mainLogger.warn(ENTRYPOINT_LOG_MSG.WS_START_FAILED, {
+      error: wsError.message,
+    });
+  }
+
+  const seedSqlRuntime = await createSqlRuntimeComposition({
+    nodeId,
+    systemTableCache,
+    messageRouter: bootstrapResult.messageRouter,
+    owner: bootstrapService,
+    partitionServices: bootstrapResult.partitionServices,
+    logger: mainLogger,
+  });
+  const sqlQueryEngine = seedSqlRuntime.sqlQueryEngine;
+  const detachSeedMigrationRecovery =
+    seedSqlRuntime.detachMigrationRecovery;
+
+  const seedDynamicConfigWiring = await startDynamicConfigWiring({
+    nodeId,
+    systemTableCache,
+    sqlQueryEngine,
+    messageGroupServices: bootstrapResult.messageGroupServices,
+    partitionServices: bootstrapResult.partitionServices,
+    runtimeOwner: bootstrapService,
+  }, mainLogger);
+
+  bootstrapAPI.setSqlQueryEngine(sqlQueryEngine);
+
+  const seedAdminRuntime = await startAdminRuntimeComposition({
+    nodeId,
+    systemTableCache,
+    cacheMutationTarget: systemTableCache,
+    sqlQueryEngine,
+    owner: bootstrapService,
+    messageRouter: bootstrapResult.messageRouter,
+    partitionServices: bootstrapResult.partitionServices,
+  });
+  const adminAPI = seedAdminRuntime.adminAPI;
+  const liveQueryWiring = seedAdminRuntime.liveQueryWiring;
+  const adminPort = seedAdminRuntime.adminPort;
+
+  mainLogger.info(ENTRYPOINT_LOG_MSG.NODE_READY, {
+    nodeId,
+    restApiPort: config.get(CONFIG_KEY.NODE_REST_API_PORT),
+    adminWebSocketPort: adminPort,
+    dataDir: dataDirectoryManager.getDataDir(),
+  });
+
+  seedLogsPersistence = startLogsTablePersistence(
+    bootstrapService.cdcIntegrationService,
+    mainLogger,
+    rolloutControls,
+    readinessState,
+  );
+
+  const handleShutdownSignal = createShutdownSignalHandler({
+    logger: mainLogger,
+    nodeId,
+    bootstrapAPI,
+    heartbeatService: bootstrapService.heartbeatService,
+    logsPersistence: seedLogsPersistence,
+    dynamicConfigWiring: seedDynamicConfigWiring,
+    detachMigrationRecovery: detachSeedMigrationRecovery,
+    ownerCleanup: () => bootstrapService.shutdown(),
+    adminAPI,
+    liveQueryWiring,
+    failureMessage: 'Failed to shutdown seed node cleanly',
+  });
+  registerShutdownSignalHandlers(handleShutdownSignal);
+}
+
+/**
  * Main application entry point.
  */
 async function main() {
@@ -545,618 +1250,23 @@ async function main() {
   const rolloutControls = resolveRolloutControlsFromEnvironment(process.env);
 
   if (seedNodeAddress) {
-    // Join existing cluster
-    mainLogger.info(ENTRYPOINT_LOG_MSG.JOINING_CLUSTER, {
-      seedNodeAddress,
-    });
-
-    // Ensure seed node address has protocol
-    const seedUrl = seedNodeAddress.startsWith('http') ?
-      seedNodeAddress :
-      `${ENTRYPOINT_DEFAULT.HTTP_PREFIX}${seedNodeAddress}`;
-
-    // Determine WebSocket port for this joining node
-    const restApiPort =
-      config.get(CONFIG_KEY.NODE_REST_API_PORT) || ENTRYPOINT_DEFAULT.REST_API_PORT;
-    const wsPort =
-      config.get(CONFIG_KEY.NODE_WS_PORT) ||
-      (restApiPort + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET);
-    const joiningNodeAddress =
-      config.get(CONFIG_KEY.NODE_ADDRESS) ||
-      `${ENTRYPOINT_DEFAULT.LOCALHOST}:${restApiPort}`;
-    const advertisedNodeWsAddress =
-      resolveAdvertisedWebSocketAddress({
-        advertisedAddress: config.get(
-          CONFIG_KEY.NODE_ADVERTISED_WS_ADDRESS,
-        ),
-        nodeAddress: joiningNodeAddress,
-        wsPort,
-        wsHost: config.get(TRANSPORT_CONFIG_KEY.WS_HOST),
-      });
-    const joiningConfig = {};
-    const joinHttpTimeoutMs = parsePositiveTimeoutMs(
-      process.env[ENTRYPOINT_ENV.JOINING_HTTP_TIMEOUT_MS],
-    );
-    if (joinHttpTimeoutMs !== null) {
-      joiningConfig.httpTimeoutMs = joinHttpTimeoutMs;
-    }
-    const joinLeadershipWaitTimeoutMs = parsePositiveTimeoutMs(
-      process.env[ENTRYPOINT_ENV.JOINING_LEADERSHIP_WAIT_TIMEOUT_MS],
-    );
-    if (joinLeadershipWaitTimeoutMs !== null) {
-      joiningConfig.leadershipWaitTimeoutMs = joinLeadershipWaitTimeoutMs;
-    }
-
-    const joinReadinessState = new BootstrapReadinessState();
-    joinReadinessState.on(READINESS_EVENT.TRANSITION, (transition) => {
-      mainLogger.info(ENTRYPOINT_LOG_MSG.READINESS_TRANSITION, {
-        nodeId: config.get(CONFIG_KEY.NODE_ID),
-        previousState: transition.previousState,
-        previousReady: transition.previousReady,
-        state: transition.state,
-        ready: transition.ready,
-        reasons: transition.reasons,
-        timestamp: transition.timestamp,
-      });
-    });
-    joinReadinessState.on(READINESS_EVENT.BLOCKED_DURATION, (event) => {
-      mainLogger.info(ENTRYPOINT_LOG_MSG.READINESS_BLOCKED_DURATION, {
-        nodeId: config.get(CONFIG_KEY.NODE_ID),
-        reason: event.reason,
-        durationMs: event.durationMs,
-        totalDurationMs: event.totalDurationMs,
-        timestamp: event.timestamp,
-      });
-    });
-    const nodeJoiningService = new NodeJoiningService({
-      nodeId: config.get(CONFIG_KEY.NODE_ID),
-      nodeAddress: joiningNodeAddress,
-      advertisedNodeWsAddress,
-      seedNodeAddress: seedUrl,
-      wsPort: wsPort,
-      dataDir: dataDirectoryManager.getDataDir(),
-      rolloutControls,
-      readinessState: joinReadinessState,
-      config: Object.keys(joiningConfig).length > 0 ?
-        joiningConfig :
-        undefined,
-    });
-    const bootstrapAPI = new BootstrapAPI({
-      seedNodeId: config.get(CONFIG_KEY.NODE_ID),
-      seedNodeAddress: joiningNodeAddress,
-      seedNodeWsAddress: advertisedNodeWsAddress,
-      wsPort: wsPort,
-      messageGroupServices: nodeJoiningService.messageGroupServices,
-      partitionServices: nodeJoiningService.partitionServices,
-      replicaHandler: nodeJoiningService.replicaHandler,
-      systemTableCache: null,
-      bootstrapService: null,
-      epochManager: nodeJoiningService.epochManager,
-      messageRouter: nodeJoiningService.messageRouter,
-      readinessState: joinReadinessState,
-      controlPlaneWriteHealthProvider:
-        createControlPlaneWriteHealthProvider(nodeJoiningService),
-      rolloutControls,
-    });
-
-    await bootstrapAPI.initialize();
-
-    const joinResult = await nodeJoiningService.join();
-
-    if (!joinResult.success) {
-      mainLogger.error(ENTRYPOINT_LOG_MSG.FAILED_JOIN, {
-        error: joinResult.error,
-        phase: joinResult.phase,
-      });
-      await bootstrapAPI.shutdown();
-      process.exit(1);
-    }
-
-    let joinLogsPersistence = null;
-
-    mainLogger.info(ENTRYPOINT_LOG_MSG.JOINED_CLUSTER, {
-      messageGroupCount: joinResult.messageGroupServices.size,
-      duration: joinResult.duration,
-    });
-
-    // Get system table cache from first message group service
-    let systemTableCache = null;
-    let cacheMutationTarget = null;
-    for (const mgService of joinResult.messageGroupServices.values()) {
-      if (mgService.getReadOnlyCache) {
-        systemTableCache = mgService.getReadOnlyCache();
-      } else if (mgService.systemTableCache) {
-        systemTableCache = mgService.systemTableCache;
-      }
-      if (mgService.getWritableCache) {
-        cacheMutationTarget = mgService.getWritableCache();
-      } else if (mgService.systemTableCache) {
-        cacheMutationTarget = mgService.systemTableCache;
-      }
-      break;
-    }
-    systemTableCache = assertCritical(
-      systemTableCache,
-      ENTRYPOINT_ERROR_MSG.SYSTEM_TABLE_CACHE_REQUIRED,
-    );
-    bootstrapAPI.systemTableCache = systemTableCache;
-    bootstrapAPI.messageGroupServices = joinResult.messageGroupServices;
-    bootstrapAPI.partitionServices = joinResult.partitionServices;
-    bootstrapAPI.replicaHandler = joinResult.replicaHandler;
-    bootstrapAPI.epochManager = nodeJoiningService.epochManager;
-    bootstrapAPI.messageRouter = joinResult.messageRouter;
-
-    // Create SQL query engine for transparent query routing
-    let sqlQueryEngine = null;
-    let detachJoinMigrationRecovery = () => {};
-    if (joinResult.messageRouter) {
-      const {SQLQueryEngine} = await import('./query/sql-query-engine.js');
-      const wasmExecutor = createSqlCallbackWasmExecutor();
-      sqlQueryEngine = new SQLQueryEngine({
-        systemCache: systemTableCache,
-        messageRouter: joinResult.messageRouter,
-        cdcIntegrationService: nodeJoiningService.cdcIntegrationService,
-        nodeId: config.get(CONFIG_KEY.NODE_ID),
-        rebalanceCoordinator: nodeJoiningService.rebalanceCoordinator,
-        controlPlaneReadinessService:
-          nodeJoiningService.rebalanceCoordinator
-            ?.controlPlaneReadinessService || null,
-        runtimeDriverRegistry: nodeJoiningService.runtimeDriverRegistry,
-        serviceRuntimeLifecycle: nodeJoiningService.serviceRuntimeLifecycle,
-        wasmExecutor,
-        migrationAutoWire: false,
-      });
-      wireMigrationWorkflowOwners({
-        sqlCore: sqlQueryEngine,
-        systemTableCache,
-        transactionCoordinator: sqlQueryEngine.transactionCoordinator,
-        logger: mainLogger,
-        now: () => Date.now(),
-      });
-      const {PartitionSplitMergeManager} =
-        await import('./partition/partition-split-merge-manager.js');
-      const partitionSplitMergeManager = new PartitionSplitMergeManager({
-        nodeId: config.get(CONFIG_KEY.NODE_ID),
-        messageRouter: joinResult.messageRouter,
-        tablePolicyService: nodeJoiningService.tablePolicyService,
-        listPartitions: () => sqlQueryEngine.listManagedSplitPartitions(),
-        getPartitionMetrics: createManagedSplitMetricsProvider({
-          partitionServices: joinResult.partitionServices,
-        }),
-        executeSplitCandidate: (partitionId) =>
-          sqlQueryEngine.executeManagedSplit(partitionId),
-        storageAdmissionService:
-          nodeJoiningService.rebalanceCoordinator?.storageAdmissionService ||
-          null,
-        storageAccountingService:
-          nodeJoiningService.rebalanceCoordinator?.storageAccountingService ||
-          null,
-      });
-      sqlQueryEngine.setPartitionSplitMergeManager(partitionSplitMergeManager);
-
-      partitionSplitMergeManager.on(
-        SPLIT_MERGE_EVENT.SPLIT_COMPLETED,
-        (result) => {
-          const childPartitionIds = [
-            result?.leftPartition?.partitionId,
-            result?.rightPartition?.partitionId,
-          ].filter(Boolean);
-          for (const childPartitionId of childPartitionIds) {
-            const partitionService =
-              resolvePartitionServiceByPartitionId(
-                joinResult.partitionServices,
-                childPartitionId,
-              );
-            if (!partitionService?.rebalancer) {
-              continue;
-            }
-            partitionService.rebalancer.recordStateChange(
-              STABILIZATION_RESET_TRIGGER.SPLIT_COMPLETED,
-            );
-          }
-        },
-      );
-
-      detachJoinMigrationRecovery = wireMigrationRecoveryOnLeaderElection({
-        sqlQueryEngine,
-        partitionServices: joinResult.partitionServices,
-        logger: mainLogger,
-      });
-    }
-    bootstrapAPI.setSqlQueryEngine(sqlQueryEngine);
-
-    const joinDynamicConfigWiring = await startDynamicConfigWiring({
-      nodeId: config.get(CONFIG_KEY.NODE_ID),
-      systemTableCache,
-      sqlQueryEngine,
-      messageGroupServices: joinResult.messageGroupServices,
-      partitionServices: joinResult.partitionServices,
-      runtimeOwner: nodeJoiningService,
-    }, mainLogger);
-
-    // Start Admin WebSocket API for this node
-    const joinAdminStartup = createAdminAPIWithLiveQuery({
-      nodeId: config.get(CONFIG_KEY.NODE_ID),
-      systemTableCache,
-      cacheMutationTarget: cacheMutationTarget || systemTableCache,
-      sqlQueryEngine,
-      cdcIntegrationService: nodeJoiningService.cdcIntegrationService,
-      messageRouter: joinResult.messageRouter,
-      serviceDiagnosticsProvider:
-        createServiceDiagnosticsProvider(nodeJoiningService),
-      heartbeatService: nodeJoiningService.heartbeatService,
-      partitionServicesProvider: () => joinResult.partitionServices,
-    });
-    const adminAPI = joinAdminStartup.adminAPI;
-    const liveQueryWiring = joinAdminStartup.liveQueryWiring;
-
-    const adminPort = ADMIN_DEFAULT.WEBSOCKET_PORT;
-    await adminAPI.initialize(adminPort);
-
-    mainLogger.info(ENTRYPOINT_LOG_MSG.NODE_READY, {
-      nodeId: config.get(CONFIG_KEY.NODE_ID),
-      adminWebSocketPort: adminPort,
-      dataDir: dataDirectoryManager.getDataDir(),
-    });
-
-    joinLogsPersistence = startLogsTablePersistence(
-      nodeJoiningService.cdcIntegrationService,
+    await startJoinNode({
+      config,
       mainLogger,
-      rolloutControls,
-      joinReadinessState,
-    );
-
-    // Keep the process running
-    let shutdownSignalCount = 0;
-    const handleShutdownSignal = async (signal) => {
-      shutdownSignalCount++;
-      if (shutdownSignalCount > 1) {
-        mainLogger.warn('Shutdown already in progress, forcing process exit', {
-          signal,
-        });
-        process.exit(1);
-        return;
-      }
-
-      mainLogger.info(ENTRYPOINT_LOG_MSG.SHUTDOWN, {signal});
-      try {
-        const drainDeadlineMs =
-          Date.now() + ENTRYPOINT_DEFAULT.READINESS_DRAIN_DEADLINE_MS;
-        const drainingSnapshot = bootstrapAPI.markDraining({
-          drainDeadlineMs,
-        });
-        mainLogger.info(ENTRYPOINT_LOG_MSG.READINESS_DRAINING, {
-          nodeId: config.get(CONFIG_KEY.NODE_ID),
-          phase: drainingSnapshot?.phase || null,
-          reasons: drainingSnapshot?.reasons || [],
-          drainDeadlineMs,
-        });
-        await publishNodeShutdownStatus(
-          nodeJoiningService.heartbeatService,
-          mainLogger,
-          config.get(CONFIG_KEY.NODE_ID),
-        );
-        joinLogsPersistence?.cancel();
-        const joinLogsTableService = joinLogsPersistence ?
-          (joinLogsPersistence.getService() || await joinLogsPersistence.promise) :
-          null;
-        await shutdownLogsTablePersistence(joinLogsTableService, mainLogger);
-        shutdownDynamicConfigWiring(joinDynamicConfigWiring, mainLogger);
-        detachJoinMigrationRecovery();
-        await nodeJoiningService.cleanup();
-        await bootstrapAPI.shutdown();
-        await adminAPI.shutdown();
-        liveQueryWiring.shutdown();
-        process.exit(0);
-      } catch (error) {
-        mainLogger.error('Failed to shutdown joining node cleanly', {
-          signal,
-          error: error.message,
-        });
-        process.exit(1);
-      }
-    };
-
-    process.on('SIGINT', () => {
-      void handleShutdownSignal('SIGINT');
-    });
-
-    process.on('SIGTERM', () => {
-      void handleShutdownSignal('SIGTERM');
-    });
-  } else {
-    // Start as seed node - bootstrap the system
-    mainLogger.info(ENTRYPOINT_LOG_MSG.STARTING_SEED);
-
-    // Determine WebSocket port for cross-node communication
-    // Use REST API port + 1000 as default (e.g., 8080 -> 9080)
-    const restApiPort =
-      config.get(CONFIG_KEY.NODE_REST_API_PORT) || ENTRYPOINT_DEFAULT.REST_API_PORT;
-    const wsPort =
-      config.get(CONFIG_KEY.NODE_WS_PORT) ||
-      (restApiPort + ENTRYPOINT_DEFAULT.WS_PORT_OFFSET);
-    const seedNodeHttpAddress =
-      config.get(CONFIG_KEY.NODE_ADDRESS) ||
-      `${ENTRYPOINT_DEFAULT.LOCALHOST}:${restApiPort}`;
-    const advertisedNodeWsAddress =
-      resolveAdvertisedWebSocketAddress({
-        advertisedAddress: config.get(
-          CONFIG_KEY.NODE_ADVERTISED_WS_ADDRESS,
-        ),
-        nodeAddress: seedNodeHttpAddress,
-        wsPort,
-        wsHost: config.get(TRANSPORT_CONFIG_KEY.WS_HOST),
-      });
-
-    const readinessState = new BootstrapReadinessState();
-    readinessState.on(READINESS_EVENT.TRANSITION, (transition) => {
-      mainLogger.info(ENTRYPOINT_LOG_MSG.READINESS_TRANSITION, {
-        nodeId: config.get(CONFIG_KEY.NODE_ID),
-        previousState: transition.previousState,
-        previousReady: transition.previousReady,
-        state: transition.state,
-        ready: transition.ready,
-        reasons: transition.reasons,
-        timestamp: transition.timestamp,
-      });
-    });
-    readinessState.on(READINESS_EVENT.BLOCKED_DURATION, (event) => {
-      mainLogger.info(ENTRYPOINT_LOG_MSG.READINESS_BLOCKED_DURATION, {
-        nodeId: config.get(CONFIG_KEY.NODE_ID),
-        reason: event.reason,
-        durationMs: event.durationMs,
-        totalDurationMs: event.totalDurationMs,
-        timestamp: event.timestamp,
-      });
-    });
-    const bootstrapService = new BootstrapService({
-      nodeId: config.get(CONFIG_KEY.NODE_ID),
-      nodeAddress: seedNodeHttpAddress,
-      advertisedNodeWsAddress,
       dataDirectoryManager,
-      wsPort: wsPort,
       rolloutControls,
-      readinessState,
+      seedNodeAddress,
+      env: process.env,
     });
-
-    // Start Bootstrap API early so /health reports liveness during
-    // bootstrap phases. Readiness is still exposed via `ready: false`.
-    const bootstrapAPI = new BootstrapAPI({
-      seedNodeId: config.get(CONFIG_KEY.NODE_ID),
-      seedNodeAddress: seedNodeHttpAddress,
-      seedNodeWsAddress: advertisedNodeWsAddress,
-      wsPort: wsPort,
-      messageGroupServices: bootstrapService.messageGroupServices,
-      partitionServices: bootstrapService.partitionServices,
-      replicaHandler: bootstrapService.replicaHandler,
-      systemTableCache: bootstrapService.systemTableCache,
-      bootstrapService: bootstrapService,
-      epochManager: bootstrapService.epochManager,
-      messageRouter: bootstrapService.messageRouter,
-      readinessState,
-      controlPlaneWriteHealthProvider:
-        createControlPlaneWriteHealthProvider(bootstrapService),
-      rolloutControls,
-    });
-
-    await bootstrapAPI.initialize();
-
-    const bootstrapResult = await bootstrapService.bootstrap();
-
-    if (!bootstrapResult.success) {
-      mainLogger.error(ENTRYPOINT_LOG_MSG.BOOTSTRAP_FAILED, {
-        error: bootstrapResult.error,
-      });
-      process.exit(1);
-    }
-
-    let seedLogsPersistence = null;
-
-    mainLogger.info(ENTRYPOINT_LOG_MSG.BOOTSTRAP_COMPLETED, {
-      servicesCreated: bootstrapResult.servicesCreated,
-      partitionsCreated: bootstrapResult.partitionsCreated,
-      messageGroupsCreated: bootstrapResult.messageGroupsCreated,
-    });
-
-    // Wire runtime dependencies into already-running bootstrap API.
-    // Get system table cache from NodeService singleton.
-    const systemTableCache = NodeService.getInstance().getSystemTableCache();
-    bootstrapAPI.systemTableCache = systemTableCache;
-    bootstrapAPI.messageGroupServices = bootstrapResult.messageGroupServices;
-    bootstrapAPI.partitionServices = bootstrapResult.partitionServices;
-    bootstrapAPI.replicaHandler = bootstrapResult.replicaHandler;
-    bootstrapAPI.epochManager = bootstrapResult.epochManager;
-    bootstrapAPI.messageRouter = bootstrapResult.messageRouter;
-
-    // Start WebSocket server for cross-node communication
-    // This allows joining nodes to connect and receive lifecycle messages
-    try {
-      await bootstrapService.startWebSocketServer();
-      mainLogger.info(ENTRYPOINT_LOG_MSG.WS_STARTED);
-    } catch (wsError) {
-      mainLogger.warn(ENTRYPOINT_LOG_MSG.WS_START_FAILED, {
-        error: wsError.message,
-      });
-    }
-
-    // Build partition registry keyed by partitionId (not replicaId)
-    // Create SQL query engine for transparent query routing
-    const {SQLQueryEngine} = await import('./query/sql-query-engine.js');
-    const wasmExecutor = createSqlCallbackWasmExecutor();
-    let detachSeedMigrationRecovery = () => {};
-    const sqlQueryEngine = new SQLQueryEngine({
-      systemCache: systemTableCache,
-      messageRouter: bootstrapResult.messageRouter,
-      cdcIntegrationService: bootstrapService.cdcIntegrationService,
-      nodeId: config.get(CONFIG_KEY.NODE_ID),
-      rebalanceCoordinator: bootstrapService.rebalanceCoordinator,
-      controlPlaneReadinessService:
-        bootstrapService.rebalanceCoordinator
-          ?.controlPlaneReadinessService || null,
-      runtimeDriverRegistry: bootstrapService.runtimeDriverRegistry,
-      serviceRuntimeLifecycle: bootstrapService.serviceRuntimeLifecycle,
-      wasmExecutor,
-      migrationAutoWire: false,
-    });
-    wireMigrationWorkflowOwners({
-      sqlCore: sqlQueryEngine,
-      systemTableCache,
-      transactionCoordinator: sqlQueryEngine.transactionCoordinator,
-      logger: mainLogger,
-      now: () => Date.now(),
-    });
-    const {PartitionSplitMergeManager} =
-      await import('./partition/partition-split-merge-manager.js');
-    const partitionSplitMergeManager = new PartitionSplitMergeManager({
-      nodeId: config.get(CONFIG_KEY.NODE_ID),
-      messageRouter: bootstrapResult.messageRouter,
-      tablePolicyService: bootstrapService.tablePolicyService,
-      listPartitions: () => sqlQueryEngine.listManagedSplitPartitions(),
-      getPartitionMetrics: createManagedSplitMetricsProvider({
-        partitionServices: bootstrapResult.partitionServices,
-      }),
-      executeSplitCandidate: (partitionId) =>
-        sqlQueryEngine.executeManagedSplit(partitionId),
-      storageAdmissionService:
-        bootstrapService.rebalanceCoordinator?.storageAdmissionService || null,
-      storageAccountingService:
-        bootstrapService.rebalanceCoordinator?.storageAccountingService || null,
-    });
-    sqlQueryEngine.setPartitionSplitMergeManager(partitionSplitMergeManager);
-
-    partitionSplitMergeManager.on(
-      SPLIT_MERGE_EVENT.SPLIT_COMPLETED,
-      (result) => {
-        const childPartitionIds = [
-          result?.leftPartition?.partitionId,
-          result?.rightPartition?.partitionId,
-        ].filter(Boolean);
-        for (const childPartitionId of childPartitionIds) {
-          const partitionService =
-            resolvePartitionServiceByPartitionId(
-              bootstrapResult.partitionServices,
-              childPartitionId,
-            );
-          if (!partitionService?.rebalancer) {
-            continue;
-          }
-          partitionService.rebalancer.recordStateChange(
-            STABILIZATION_RESET_TRIGGER.SPLIT_COMPLETED,
-          );
-        }
-      },
-    );
-
-    detachSeedMigrationRecovery = wireMigrationRecoveryOnLeaderElection({
-      sqlQueryEngine,
-      partitionServices: bootstrapResult.partitionServices,
-      logger: mainLogger,
-    });
-
-    const seedDynamicConfigWiring = await startDynamicConfigWiring({
-      nodeId: config.get(CONFIG_KEY.NODE_ID),
-      systemTableCache,
-      sqlQueryEngine,
-      messageGroupServices: bootstrapResult.messageGroupServices,
-      partitionServices: bootstrapResult.partitionServices,
-      runtimeOwner: bootstrapService,
-    }, mainLogger);
-
-    // Set SQL query engine on bootstrap API for distributed node registration
-    bootstrapAPI.setSqlQueryEngine(sqlQueryEngine);
-
-    // Start Admin WebSocket API
-    const seedAdminStartup = createAdminAPIWithLiveQuery({
-      nodeId: config.get(CONFIG_KEY.NODE_ID),
-      systemTableCache,
-      cacheMutationTarget: systemTableCache,
-      sqlQueryEngine,
-      cdcIntegrationService: bootstrapService.cdcIntegrationService,
-      messageRouter: bootstrapResult.messageRouter,
-      serviceDiagnosticsProvider:
-        createServiceDiagnosticsProvider(bootstrapService),
-      heartbeatService: bootstrapService.heartbeatService,
-      partitionServicesProvider: () => bootstrapResult.partitionServices,
-    });
-    const adminAPI = seedAdminStartup.adminAPI;
-    const liveQueryWiring = seedAdminStartup.liveQueryWiring;
-
-    const adminPort = ADMIN_DEFAULT.WEBSOCKET_PORT;
-    await adminAPI.initialize(adminPort);
-
-    mainLogger.info(ENTRYPOINT_LOG_MSG.NODE_READY, {
-      nodeId: config.get(CONFIG_KEY.NODE_ID),
-      restApiPort: config.get(CONFIG_KEY.NODE_REST_API_PORT),
-      adminWebSocketPort: adminPort,
-      dataDir: dataDirectoryManager.getDataDir(),
-    });
-
-    seedLogsPersistence = startLogsTablePersistence(
-      bootstrapService.cdcIntegrationService,
-      mainLogger,
-      rolloutControls,
-      readinessState,
-    );
-
-    // Keep the process running
-    let shutdownSignalCount = 0;
-    const handleShutdownSignal = async (signal) => {
-      shutdownSignalCount++;
-      if (shutdownSignalCount > 1) {
-        mainLogger.warn('Shutdown already in progress, forcing process exit', {
-          signal,
-        });
-        process.exit(1);
-        return;
-      }
-
-      mainLogger.info(ENTRYPOINT_LOG_MSG.SHUTDOWN, {signal});
-      try {
-        const drainDeadlineMs =
-          Date.now() + ENTRYPOINT_DEFAULT.READINESS_DRAIN_DEADLINE_MS;
-        const drainingSnapshot = bootstrapAPI.markDraining({
-          drainDeadlineMs,
-        });
-        mainLogger.info(ENTRYPOINT_LOG_MSG.READINESS_DRAINING, {
-          nodeId: config.get(CONFIG_KEY.NODE_ID),
-          phase: drainingSnapshot?.phase || null,
-          reasons: drainingSnapshot?.reasons || [],
-          drainDeadlineMs,
-        });
-        await publishNodeShutdownStatus(
-          bootstrapService.heartbeatService,
-          mainLogger,
-          config.get(CONFIG_KEY.NODE_ID),
-        );
-        seedLogsPersistence?.cancel();
-        const seedLogsTableService = seedLogsPersistence ?
-          (seedLogsPersistence.getService() || await seedLogsPersistence.promise) :
-          null;
-        await shutdownLogsTablePersistence(seedLogsTableService, mainLogger);
-        shutdownDynamicConfigWiring(seedDynamicConfigWiring, mainLogger);
-        detachSeedMigrationRecovery();
-        await bootstrapService.shutdown();
-        await bootstrapAPI.shutdown();
-        await adminAPI.shutdown();
-        liveQueryWiring.shutdown();
-        process.exit(0);
-      } catch (error) {
-        mainLogger.error('Failed to shutdown seed node cleanly', {
-          signal,
-          error: error.message,
-        });
-        process.exit(1);
-      }
-    };
-
-    process.on('SIGINT', () => {
-      void handleShutdownSignal('SIGINT');
-    });
-
-    process.on('SIGTERM', () => {
-      void handleShutdownSignal('SIGTERM');
-    });
+    return;
   }
+
+  await startSeedNode({
+    config,
+    mainLogger,
+    dataDirectoryManager,
+    rolloutControls,
+  });
 }
 
 main().catch((err) => {

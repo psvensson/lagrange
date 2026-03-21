@@ -25,6 +25,8 @@ import {CONTROL_PLANE_READINESS_DIMENSION} from
   '../control-plane/control-plane-readiness-constants.js';
 import {evaluateAuthoritativeRepairPolicy} from
   './admin-authoritative-repair-policy.js';
+import {AUTHORITATIVE_REPAIR_TRIGGER} from
+  './admin-authoritative-repair-policy.js';
 import {summarizeReplicaOperationLiveness} from
   '../rebalancer/replica-operation-liveness.js';
 import {
@@ -38,6 +40,8 @@ import {
   firstStringField,
   uniqueSorted,
 } from './admin-helpers.js';
+import {evaluateSharedMetadataNodeCoverage} from
+  './admin-shared-metadata-consistency.js';
 
 // ── file-local constants ────────────────────────────────────────────────────
 const LEADER_RAFT_ROLE = 'leader';
@@ -198,13 +202,20 @@ class AdminControlSnapshot {
     const forceAuthoritativeRepair =
       options.forceAuthoritativeRepair === true;
     const allowAuthoritativeRepair =
-      options.allowAuthoritativeRepair !== false;
+      options.allowAuthoritativeRepair === true;
     const repairEvaluation =
       this.evaluateAuthoritativeControlSnapshotRepair();
     if (!this.canRunAuthoritativeControlSnapshotRepair()) {
       return snapshot;
     }
-    if (!forceAuthoritativeRepair && !allowAuthoritativeRepair) {
+    const autoRepairConsistencyGap = Array.isArray(
+      repairEvaluation?.triggerCodes,
+    ) && repairEvaluation.triggerCodes.includes(
+      AUTHORITATIVE_REPAIR_TRIGGER.DISCOVERY_NODE_COVERAGE_GAP,
+    );
+    if (!forceAuthoritativeRepair &&
+        !allowAuthoritativeRepair &&
+        !autoRepairConsistencyGap) {
       return snapshot;
     }
     if (!forceAuthoritativeRepair &&
@@ -219,12 +230,33 @@ class AdminControlSnapshot {
         bypassReuse: forceAuthoritativeRepair,
         triggerCodes: repairEvaluation?.triggerCodes,
       });
-    } catch (_error) {
-      repair = null;
+    } catch (error) {
+      const wrappedError = new Error(
+        'Authoritative control snapshot repair failed: ' +
+        String(
+          error?.message ||
+          error ||
+          'unknown_error',
+        ),
+      );
+      wrappedError.cause = error;
+      throw wrappedError;
     }
 
     if (repair?.applied !== true) {
-      return snapshot;
+      const errors = Array.isArray(repair?.errors) ?
+        repair.errors :
+        ADMIN_CACHE_DUMP.EMPTY;
+      const detail =
+        errors[NUM.ZERO] ||
+        repair?.error ||
+        (repair?.skipped === true ?
+          'repair_skipped' :
+          'repair_not_applied');
+      throw new Error(
+        'Authoritative control snapshot repair failed: ' +
+        String(detail),
+      );
     }
     return this.buildLocalControlSnapshot();
   }
@@ -272,10 +304,19 @@ class AdminControlSnapshot {
     const nodeRows = this.systemTableCache.getAll(TABLES.NODES);
     const tableRows = this.systemTableCache.getAll(TABLES.TABLES);
     const partitionRows = this.systemTableCache.getAll(TABLES.PARTITIONS);
+    const serviceRows = this.systemTableCache.getAll(TABLES.SERVICES);
+    const nodeEndpointRows =
+      this.systemTableCache.getAll(TABLES.NODE_ENDPOINTS);
     const topologyGap = this.hasControlSnapshotPartitionTopologyGap(
       tableRows,
       partitionRows,
     );
+    const nodeCoverage = evaluateSharedMetadataNodeCoverage({
+      nodeRows,
+      serviceRows,
+      partitionRows,
+      nodeEndpointRows,
+    });
     const replicaOperationRows =
       this.systemTableCache.getAll(TABLES.REPLICA_OPERATIONS);
     const replicaOperationSummary =
@@ -288,6 +329,7 @@ class AdminControlSnapshot {
         capturedAt,
       ),
       staleThresholdMs: CONTROL_SNAPSHOT_CACHE_STALE_THRESHOLD_MS,
+      nodeCoverageGap: nodeCoverage.hasCoverageGap,
       topologyGap,
       staleReplicaOpsInFlightCount:
         replicaOperationSummary.staleInFlightCount,

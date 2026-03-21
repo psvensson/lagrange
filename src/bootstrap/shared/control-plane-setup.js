@@ -198,6 +198,14 @@ class ControlPlaneSetup {
         });
     }
 
+    const controlPlaneSystemTableGateway = new ControlPlaneSystemTableGateway({
+      nodeId,
+      sqlQueryEngine: cdcIntegrationService.sqlQueryEngine,
+      cdcIntegrationService,
+      messageRouter,
+    });
+    registerControlPlaneSystemTableGateway(controlPlaneSystemTableGateway);
+
     let controlPlaneReadinessService =
       rebalanceCoordinator?.controlPlaneReadinessService || null;
     if (!controlPlaneReadinessService) {
@@ -209,6 +217,7 @@ class ControlPlaneSetup {
         storageAccountingService,
         cdcIntegrationService,
         cdcGroupPropagationService: cdcGroupPropagationService || null,
+        controlPlaneSystemTableGateway,
         strictOwnerDependencies: true,
       });
     }
@@ -246,6 +255,7 @@ class ControlPlaneSetup {
         controlPlaneReadinessService,
         cdcGroupPropagationService: cdcGroupPropagationService || null,
         bootstrapReadinessState: bootstrapReadinessState || null,
+        controlPlaneSystemTableGateway,
         executorOutcomeEmitter,
       });
       rebalanceCoordinator.initialize();
@@ -263,6 +273,10 @@ class ControlPlaneSetup {
       rebalanceCoordinator.controlPlaneReadinessService =
         controlPlaneReadinessService;
     }
+    if (!rebalanceCoordinator.controlPlaneSystemTableGateway) {
+      rebalanceCoordinator.controlPlaneSystemTableGateway =
+        controlPlaneSystemTableGateway;
+    }
     if (!rebalanceCoordinator.bootstrapReadinessState &&
         bootstrapReadinessState) {
       rebalanceCoordinator.bootstrapReadinessState = bootstrapReadinessState;
@@ -276,13 +290,6 @@ class ControlPlaneSetup {
       rebalanceCoordinator.transactionCoordinator = transactionCoordinator;
     }
 
-    const controlPlaneSystemTableGateway = new ControlPlaneSystemTableGateway({
-      nodeId,
-      sqlQueryEngine: cdcIntegrationService.sqlQueryEngine,
-      cdcIntegrationService,
-      messageRouter,
-    });
-    registerControlPlaneSystemTableGateway(controlPlaneSystemTableGateway);
     const systemMetadataOwners = createSystemMetadataOwners({
       controlPlaneSystemTableGateway,
       systemTableCache,
@@ -294,6 +301,15 @@ class ControlPlaneSetup {
       controlPlaneReadinessService.servicesOwner =
         systemMetadataOwners.servicesOwner;
     }
+    if (typeof controlPlaneReadinessService.syncOwnerDependencies === 'function') {
+      controlPlaneReadinessService.syncOwnerDependencies({
+        systemTableCache,
+        cacheMutationTarget: systemTableCache,
+        messageRouter,
+        cdcIntegrationService,
+        controlPlaneSystemTableGateway,
+      });
+    }
 
     // Create decomposed control plane services
     const heartbeatService = new HeartbeatService({
@@ -302,6 +318,7 @@ class ControlPlaneSetup {
       advertisedNodeWsAddress,
       cdcIntegrationService,
       systemTableCache,
+      controlPlaneSystemTableGateway,
       verifyReporterVisibilityOnSuccess: true,
     });
     heartbeatService.initialize();
@@ -313,6 +330,7 @@ class ControlPlaneSetup {
       systemTableCache,
       sqlQueryEngine: cdcIntegrationService.sqlQueryEngine,
       messageRouter,
+      controlPlaneSystemTableGateway,
     });
     leaseService.initialize();
 
@@ -333,6 +351,7 @@ class ControlPlaneSetup {
       controlPlaneReadinessService,
       storageAccountingService,
       cdcGroupPropagationService: cdcGroupPropagationService || null,
+      controlPlaneSystemTableGateway,
       nodesOwner: systemMetadataOwners.nodesOwner,
       servicesOwner: systemMetadataOwners.servicesOwner,
       replicaOperationsOwner: systemMetadataOwners.replicaOperationsOwner,

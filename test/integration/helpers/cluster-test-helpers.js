@@ -18,6 +18,9 @@ import {LogsTableService} from '../../../src/logging/logs-table-service.js';
 import {NodeService} from '../../../src/node/node-service.js';
 import {AddressManager} from '../../../src/address/address-manager.js';
 import {ServiceThreadManager} from '../../../src/threading/service-thread-manager.js';
+import {
+  clearRegisteredControlPlaneSystemTableGateway,
+} from '../../../src/control-plane/control-plane-gateway-registry.js';
 import {createPortAllocator} from '../../../src/test-helpers/port-allocator.js';
 import {URL} from 'url';
 
@@ -74,6 +77,7 @@ export function initializeTestEnvironment(options = {}) {
   LoggingService.resetInstance();
   NodeService.resetInstance();
   AddressManager.resetInstance();
+  clearRegisteredControlPlaneSystemTableGateway();
 
   // Initialize configuration with fast Raft elections
   const config = ConfigurationManager.getInstance();
@@ -144,6 +148,7 @@ export async function cleanupTestEnvironment() {
   ConfigurationManager.resetInstance();
   LoggingService.resetInstance();
   AddressManager.resetInstance();
+  clearRegisteredControlPlaneSystemTableGateway();
 }
 
 /**

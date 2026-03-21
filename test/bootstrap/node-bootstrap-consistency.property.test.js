@@ -215,7 +215,7 @@ test('Property 11: Node Bootstrap Consistency', {timeout: 90000}, async (t) => {
     }
   });
 
-  await t.test('duplicate node ID is rejected', async (t) => {
+  await t.test('repeated bootstrap attempt for the same node is deferred, rejected, or idempotent', async (t) => {
     let bootstrapService = null;
     let seedApi = null;
 
@@ -264,9 +264,12 @@ test('Property 11: Node Bootstrap Consistency', {timeout: 90000}, async (t) => {
       });
       t.ok(response1, 'first registration should succeed');
 
-      // Second registration with the same node ID should either:
-      // - be rejected with a duplicate/conflict error, or
-      // - be accepted idempotently with a valid bootstrap response.
+      // A second bootstrap for the same node may now hit the stricter
+      // MOVE_REPLICA admission guard before the duplicate/conflict surface.
+      // All of these outcomes are valid:
+      // - rejected as a duplicate/conflict
+      // - deferred while the earlier MOVE_REPLICA handoff stabilizes
+      // - accepted idempotently with a valid bootstrap response
       const joiningWsPort2 = getUniquePort();
       let secondResponse = null;
       let error = null;
@@ -281,8 +284,12 @@ test('Property 11: Node Bootstrap Consistency', {timeout: 90000}, async (t) => {
 
       if (error) {
         t.ok(
-          error.message.includes('409') || error.message.includes('already registered'),
-          'error should indicate duplicate',
+          error.message.includes('409') ||
+            error.message.includes('already registered') ||
+            error.message.includes('HTTP 503') ||
+            error.message.includes('BOOTSTRAP_NOT_READY') ||
+            error.message.includes('MOVE_REPLICA_HANDOFF_STABILIZING'),
+          'error should indicate duplicate rejection or in-progress bootstrap deferral',
         );
       } else {
         t.ok(secondResponse, 'idempotent second registration should return a response');

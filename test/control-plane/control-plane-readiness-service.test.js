@@ -2452,6 +2452,51 @@ test('ControlPlaneReadinessService fails closed without storage owner',
     t.end();
   });
 
+test('ControlPlaneReadinessService warns once when non-strict storage owner ' +
+  'is unavailable',
+async (t) => {
+  const cache = createCache({
+    nodes: [createActiveNode('node-4-warn')],
+    services: [createMessageGroupService('node-4-warn')],
+  });
+  const readinessService = new ControlPlaneReadinessService({
+    nodeId: 'node-4-warn',
+    systemTableCache: cache,
+    cdcGroupPropagationService: createPublicationService({
+      currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+      reasonCode: null,
+      enteredAt: '2026-03-04T00:00:00.000Z',
+      recentTransitions: [],
+    }),
+    now: () => 1500,
+  });
+  const warnCalls = [];
+  const errorCalls = [];
+  readinessService.logger = {
+    warn(message, details) {
+      warnCalls.push({message, details});
+    },
+    error(message, details) {
+      errorCalls.push({message, details});
+    },
+  };
+
+  await readinessService.getNodeReadiness('node-4-warn');
+  await readinessService.getNodeReadiness('node-4-warn');
+
+  t.equal(warnCalls.length, 1);
+  t.equal(errorCalls.length, 0);
+  t.match(warnCalls[0], {
+    message: 'ControlPlaneReadinessService missing storage accounting owner',
+    details: {
+      nodeId: 'node-4-warn',
+      owner: 'StorageCapacityAccountingService',
+      strictOwnerDependencies: false,
+    },
+  });
+  t.end();
+});
+
 test('ControlPlaneReadinessService fails closed without publication owner',
   async (t) => {
     let statsCalls = 0;
@@ -2497,6 +2542,52 @@ test('ControlPlaneReadinessService fails closed without publication owner',
     t.equal(statsCalls, 0, 'readiness should not synthesize publication via getStats fallback');
     t.end();
   });
+
+test('ControlPlaneReadinessService warns once when non-strict publication ' +
+  'owner is unavailable',
+async (t) => {
+  const cache = createCache({
+    nodes: [createActiveNode('node-5-warn')],
+    services: [createMessageGroupService('node-5-warn')],
+  });
+  const readinessService = new ControlPlaneReadinessService({
+    nodeId: 'node-5-warn',
+    systemTableCache: cache,
+    storageAccountingService: createAccountingService({
+      'node-5-warn': {
+        nodeId: 'node-5-warn',
+        budgetBytes: 1000,
+        pressureState: 'normal',
+      },
+    }),
+    now: () => 1500,
+  });
+  const warnCalls = [];
+  const errorCalls = [];
+  readinessService.logger = {
+    warn(message, details) {
+      warnCalls.push({message, details});
+    },
+    error(message, details) {
+      errorCalls.push({message, details});
+    },
+  };
+
+  await readinessService.getNodeReadiness('node-5-warn');
+  await readinessService.getNodeReadiness('node-5-warn');
+
+  t.equal(warnCalls.length, 1);
+  t.equal(errorCalls.length, 0);
+  t.match(warnCalls[0], {
+    message: 'ControlPlaneReadinessService missing CDC publication owner',
+    details: {
+      nodeId: 'node-5-warn',
+      owner: 'CDCGroupPropagationService',
+      strictOwnerDependencies: false,
+    },
+  });
+  t.end();
+});
 
 test('ControlPlaneReadinessService strict mode throws without storage owner',
   async (t) => {

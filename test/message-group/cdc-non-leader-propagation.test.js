@@ -891,6 +891,13 @@ test(
       });
 
       const forwardedPayloads = [];
+      const originalGetConnectionState = router.getConnectionState.bind(router);
+      router.getConnectionState = (targetNodeId) => {
+        if (targetNodeId === 'remote-node-2') {
+          return STATE.CONNECTED;
+        }
+        return originalGetConnectionState(targetNodeId);
+      };
       router.deliver = async (address, payload, options) => {
         forwardedPayloads.push({address, payload, options});
         return {acknowledged: true, success: true};
@@ -1071,10 +1078,10 @@ test(
       const originalGetConnectionState = router.getConnectionState.bind(router);
       router.getConnectionState = (targetNodeId) => {
         if (targetNodeId === 'node-relay') {
-          return 'connected';
+          return STATE.CONNECTED;
         }
         if (targetNodeId === 'node-leader') {
-          return 'disconnected';
+          return STATE.DISCONNECTED;
         }
         return originalGetConnectionState(targetNodeId);
       };
@@ -1194,10 +1201,10 @@ test(
       const originalGetConnectionState = router.getConnectionState.bind(router);
       router.getConnectionState = (targetNodeId) => {
         if (targetNodeId === 'node-relay') {
-          return 'connected';
+          return STATE.CONNECTED;
         }
         if (targetNodeId === 'node-leader') {
-          return 'disconnected';
+          return STATE.CONNECTED;
         }
         return originalGetConnectionState(targetNodeId);
       };
@@ -2968,6 +2975,117 @@ test(
       assert.equal(proposeCount, 1, 'Leader MG should propose CDC event via Raft');
 
       router.deliver = originalDeliver;
+    } finally {
+      await cleanup();
+    }
+  },
+);
+
+test(
+  'CDC forward error messages stay bounded when delivery errors nest across retries',
+  async (t) => {
+    // Boundary: CDC dissemination (doctrine §6, §7)
+    // Bug: forwardCDCPayloadToLeader embeds the full remote error message
+    // into its own error, and proposeCDCCommand wraps that again. When the
+    // remote side also fails its own forward, error messages grow without
+    // bound across retry cycles — eventually causing stack overflow or
+    // memory exhaustion on the seed node.
+    const port = testPortCounter++;
+    const nodeId = `test-node-${port}`;
+    const router = new MessageRouter({nodeId, wsPort: port});
+    await router.initialize({startServer: true});
+
+    let shutdownCalled = false;
+    const cleanup = async () => {
+      if (shutdownCalled) return;
+      shutdownCalled = true;
+      try {
+        if (mg && mg.raft) {
+          await mg.shutdown();
+        }
+      } catch (_e) {
+        // best-effort
+      }
+      await router.shutdown();
+    };
+
+    let mg;
+    try {
+      mg = new MessageGroupService({
+        groupId: 'mg-err-bound',
+        replicaId: 'mg-err-bound-r1',
+        nodeId,
+        transport: router,
+      });
+      await mg.initialize();
+      mg.replicaIds = ['mg-err-bound-r1', 'mg-err-bound-r2'];
+      await mg.subscribeToCDC(NON_SYSTEM_CDC_TABLE);
+
+      mg.isLeader = false;
+      mg.role = 'follower';
+      mg.leaderId = 'mg-err-bound-r2';
+      mg.peerAddresses = [
+        'remote-node/message-group/mg-err-bound-r2',
+      ];
+      if (mg.raft) {
+        Object.defineProperty(mg.raft, 'state', {
+          value: LifeRaft.FOLLOWER,
+          writable: true,
+          configurable: true,
+        });
+      }
+
+      // Simulate a remote replica returning an already-huge error message
+      // from previous CDC forward cycles. In the real failure, two
+      // replicas on the same node bounce CDC forwards back and forth,
+      // each wrapping the previous error. After many cycles the error
+      // message exceeds stack limits and causes RangeError.
+      const hugeRemoteError = MESSAGE_GROUP_CDC_ERROR_MSG
+        .FORWARD_DELIVERY_REJECTED
+        .repeat(100);
+      router.deliver = async () => {
+        return {
+          acknowledged: true,
+          success: false,
+          error: hugeRemoteError,
+        };
+      };
+
+      // The forward should fail, but the error message must stay bounded
+      // regardless of how large the remote error was.
+      const maxErrorLength = 512;
+      try {
+        await mg.forwardCDCPayloadToLeader(
+          {
+            type: MESSAGE_GROUP_APPLICATION_MESSAGE_TYPE
+              .LATENCY_CDC_PROPAGATION,
+            tableName: NON_SYSTEM_CDC_TABLE,
+            operation: 'INSERT',
+            data: {partition_id: 'err-bound-partition'},
+            timestamp: '1234567890:99',
+            sourceNodeId: nodeId,
+            relayDepth: 0,
+          },
+          {
+            tableName: NON_SYSTEM_CDC_TABLE,
+            operation: 'INSERT',
+            relayDepth: 0,
+          },
+        );
+        t.fail('forwardCDCPayloadToLeader should reject');
+      } catch (error) {
+        t.ok(
+          error.message.length <= maxErrorLength,
+          `error message length ${error.message.length} should be ` +
+          `<= ${maxErrorLength} to prevent unbounded growth ` +
+          '(doctrine §7: resource lifetime must be bounded)',
+        );
+        t.match(
+          error.message,
+          /not acknowledged|unknown/i,
+          'error should still contain the forward failure reason',
+        );
+      }
     } finally {
       await cleanup();
     }

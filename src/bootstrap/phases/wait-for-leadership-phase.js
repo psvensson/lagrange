@@ -13,11 +13,10 @@ import {
   INITIAL_PARTITION_IDS,
 } from '../system-table-schemas-constants.js';
 import {
-  getBlockingSystemServiceLeaders as getBlockingLeaders,
   getMissingSystemServiceLeaders as getMissingLeaders,
-  getMissingSystemServiceLeaderCount,
   isSystemTableWriteReady,
 } from '../../cache/leader-readiness-gate.js';
+import {createSystemLeaderReadinessSnapshot} from '../system-readiness-snapshot.js';
 import {
   JOINING_ERROR_MSG,
   JOINING_LOG_MSG,
@@ -136,17 +135,9 @@ class WaitForLeadershipPhase {
     });
 
     while (now() - startTime < timeoutMs) {
-      const missing =
-        this.getMissingSystemServiceLeaders(systemTableCache);
-      const blockingMissing =
-        this.getBlockingSystemServiceLeaders(
-          missing,
-          systemTableCache,
-        );
-      const missingCount =
-        getMissingSystemServiceLeaderCount(blockingMissing);
-
-      if (missingCount === NUM.ZERO) {
+      const readiness =
+        this.createSystemServiceLeadershipSnapshot(systemTableCache);
+      if (readiness.ready) {
         return;
       }
 
@@ -156,16 +147,13 @@ class WaitForLeadershipPhase {
 
     const missing =
       this.getMissingSystemServiceLeaders(systemTableCache);
-    const blockingMissing =
-      this.getBlockingSystemServiceLeaders(
-        missing,
-        systemTableCache,
-      );
+    const readiness =
+      this.createSystemServiceLeadershipSnapshot(systemTableCache);
+    const blockingMissing = readiness.missingLeaders;
     const leadershipTimeout = JOINING_ERROR_MSG.leadershipTimeout;
     const error = new Error(leadershipTimeout(timeoutMs));
     error.missingLeaders = blockingMissing;
-    error.missingCount =
-      getMissingSystemServiceLeaderCount(blockingMissing);
+    error.missingCount = readiness.missingCount;
     error.nonBlockingMissingLeaders = {
       missingMessageGroupLeaders:
         missing.missingMessageGroupLeaders,
@@ -255,14 +243,18 @@ class WaitForLeadershipPhase {
    * @return {Object} Blocking subset for state-query readiness.
    */
   getBlockingSystemServiceLeaders(_missing, systemTableCache) {
-    return getBlockingLeaders(
+    return this.createSystemServiceLeadershipSnapshot(
       systemTableCache,
-      this.getRequiredSystemWriteTables(),
-      {
-        isTableWriteSatisfied: (cache, tableName) =>
-          this.isSystemTableWriteRoutable(cache, tableName),
-      },
-    );
+    ).missingLeaders;
+  }
+
+  createSystemServiceLeadershipSnapshot(systemTableCache) {
+    return createSystemLeaderReadinessSnapshot({
+      systemTableCache,
+      requiredTables: this.getRequiredSystemWriteTables(),
+      isTableWriteSatisfied: (cache, tableName) =>
+        this.isSystemTableWriteRoutable(cache, tableName),
+    });
   }
 }
 

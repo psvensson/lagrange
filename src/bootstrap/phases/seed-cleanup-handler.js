@@ -12,6 +12,7 @@ import {
   BOOTSTRAP_EVENT,
   BOOTSTRAP_LOG_MSG,
   BOOTSTRAP_PHASE,
+  CLEANUP_RESULT,
 } from '../bootstrap-constants.js';
 import {
   NodeState,
@@ -22,12 +23,6 @@ import {
   NUM,
   TYPEOF,
 } from '../../constants/index.js';
-
-const CLEANUP_RESULT = Object.freeze({
-  SUCCESS: 'success',
-  ERROR: 'error',
-  SKIPPED: 'skipped',
-});
 
 /**
  * All cleanup steps in reverse phase order.

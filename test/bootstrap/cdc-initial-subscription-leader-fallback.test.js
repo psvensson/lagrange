@@ -40,7 +40,7 @@ test(
     const propagatedEvents = [];
 
     // Mock propagatePartitionCDCEvent to capture calls
-    service.propagatePartitionCDCEvent =
+    service.seedCacheHydrationPhase.propagatePartitionCDCEvent =
       async (_messageGroup, cdcEvent) => {
         propagatedEvents.push(cdcEvent);
       };
@@ -94,7 +94,7 @@ test(
       ['partitions-p1-r1', mockPartition],
     ]);
 
-    await service.subscribeToCDC(
+    await service.seedCacheHydrationPhase.subscribeToCDC(
       'partitions',
       'partitions-p1',
       ['partitions-p1-r1'],
@@ -170,7 +170,7 @@ test(
       }],
     ]);
 
-    await service.subscribeToCDC(
+    await service.seedCacheHydrationPhase.subscribeToCDC(
       'partitions',
       'partitions-p1',
       ['partitions-p1-r1'],
@@ -238,7 +238,8 @@ test(
       ['mg-1-r2', makeMessageGroup()],
     ]);
 
-    await service.subscribeToCDC('tables', 'tables-p1', [
+    await service.seedCacheHydrationPhase.subscribeToCDC(
+      'tables', 'tables-p1', [
       'tables-p1-r1',
       'tables-p1-r2',
       'tables-p1-r3',

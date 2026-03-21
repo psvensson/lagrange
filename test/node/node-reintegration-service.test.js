@@ -301,6 +301,7 @@ test('NodeReintegrationService - routes reintegration writes through control-pla
       'critical',
       'reintegration completion should use the control-plane critical lane',
     );
+    service.shutdown();
   });
 
 test('NodeReintegrationService - skips self node', async (t) => {

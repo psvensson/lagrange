@@ -207,6 +207,7 @@ describe('MessageGroupWorkerService', () => {
 
       assert.strictEqual(service.cdcSubscriptions.size, 0);
       assert.strictEqual(service.cdcSubscribed, false);
+      assert.strictEqual(service.isLeaderActivated(), false);
     });
   });
 
@@ -244,6 +245,7 @@ describe('MessageGroupWorkerService', () => {
         RAFT_GROUP_ROLE.FOLLOWER,
       );
       assert.strictEqual(service.isLeaderReplica(), false);
+      assert.strictEqual(service.isLeaderActivated(), false);
     });
 
     it('should not be subscribed to CDC initially', async () => {
@@ -691,6 +693,10 @@ describe('MessageGroupWorkerService', () => {
       assert.strictEqual(service.isCDCSubscribed(), false);
     });
 
+    it('should return leader activation status', () => {
+      assert.strictEqual(service.isLeaderActivated(), false);
+    });
+
     it('should return CDC subscription count', () => {
       assert.strictEqual(service.getCDCSubscriptionCount(), 0);
     });
@@ -722,6 +728,7 @@ describe('MessageGroupWorkerService', () => {
       assert.strictEqual(stats.groupId, 'group-1');
       assert.strictEqual(stats.role, RAFT_GROUP_ROLE.FOLLOWER);
       assert.strictEqual(stats.isLeader, false);
+      assert.strictEqual(stats.leaderActivated, false);
       assert.strictEqual(stats.leaderId, null);
       assert.strictEqual(typeof stats.term, 'number');
       assert.strictEqual(stats.cdcSubscribed, false);

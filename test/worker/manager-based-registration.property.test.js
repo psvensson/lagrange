@@ -369,8 +369,12 @@ describe('Property 20: Manager-Based Registration', () => {
             const handler = registeredHandlers.get(expectedAddress);
             assert.ok(handler, 'Handler should be registered');
 
-            // Call the handler with a test message
-            await handler(testMessage);
+            // Handlers receive router envelopes and forward envelope.payload.
+            const testEnvelope = {
+              messageId: 'msg-test',
+              payload: testMessage,
+            };
+            await handler(testEnvelope);
 
             // Verify pool.run was called with DELIVER_MESSAGE operation
             const deliverCalls = mockPool.run.mock.calls.filter(
@@ -393,7 +397,7 @@ describe('Property 20: Manager-Based Registration', () => {
             assert.deepStrictEqual(
               deliverCall.arguments[0].message,
               testMessage,
-              'Message content should be preserved',
+              'Envelope payload should be preserved',
             );
           } finally {
             cleanupManager(manager);

@@ -1,0 +1,2221 @@
+/**
+ * OperationWorkflowOwner — single-flight owner keys, transition/claim
+ * progression, and observed-progress reconciliation entry.
+ *
+ * Extracted from RebalanceCoordinator per D7.1 / Requirement 6.2.
+ * The coordinator facade delegates workflow progression to this owner.
+ */
+
+import {
+  ControlPlaneReadinessService,
+} from '../control-plane/control-plane-readiness-service.js';
+import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+} from '../control-plane/control-plane-readiness-constants.js';
+import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
+import {
+  WORKFLOW_STEP, NUM, METRICS_LOG_TAG,
+  UNIFIED_SERVICE_TYPE,
+} from '../constants/index.js';
+import {SERVICE_TYPE} from '../constants/service.js';
+import {
+  TIMEOUT_BUDGET_CLASSIFICATION,
+  TIMEOUT_BUDGET_DEFAULT,
+  buildTimeoutClassification,
+  createChildTimeoutBudget,
+  createTopLevelOperationBudget,
+} from '../control-plane/timeout-budget.js';
+import {
+  OPERATION_METADATA_KEY,
+  ReplicaStatus,
+  WORKFLOW_STEP_TO_STATUS,
+  OperationType,
+  isCoordinatorOwnedOperationType,
+} from './replica-status.js';
+import {
+  ReplicaOperationMessageType,
+  ReplicaOperationField,
+  ReplicaOperationResponseStatus,
+} from './replica-operation-constants.js';
+import {RAFT_ROLE} from '../raft/constants.js';
+import {
+  REBALANCE_COORDINATOR_ERROR_MSG,
+  REBALANCE_COORDINATOR_EVENT,
+  REBALANCE_COORDINATOR_LOG_MSG,
+  REBALANCER_SKIP_REASON,
+  OPERATION_TRANSITION_REASON,
+} from './rebalancer-constants.js';
+import {
+  EXECUTOR_OUTCOME_FIELD,
+  EXECUTOR_OUTCOME_ACTION,
+  EXECUTOR_OUTCOME_ACTION_MAP,
+} from './executor-outcome-constants.js';
+import {
+  SQL_RECONCILIATION_REASON,
+} from '../control-plane/read-model-contract.js';
+
+const CRITICAL_SYSTEM_PARTITION_IDS = new Set(
+  Object.values(SYSTEM_TABLE_NAME).map((name) => `${name}-p1`),
+);
+
+const DEFAULT_MIN_REPLICA_COUNT = NUM.THREE;
+
+const FAILURE_LOG_LEVEL = Object.freeze({
+  ERROR: 'error',
+  WARN: 'warn',
+});
+
+const OPERATION_SINGLE_FLIGHT_SCOPE = Object.freeze({
+  CREATE: 'create',
+  CREATE_BUDGET: 'create-budget',
+  OPERATION: 'operation',
+});
+
+const OPERATION_SINGLE_FLIGHT_KEY_SEPARATOR = ':';
+
+const OPERATION_HANDLER = Object.freeze({
+  [SERVICE_TYPE.PARTITION]: 'replica-handler',
+  [SERVICE_TYPE.MESSAGE_GROUP]: 'message-group-handler',
+  [UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE]: 'runtime-service-handler',
+});
+
+const OBSERVED_PROGRESS_RELEVANT_SERVICE_STATUSES = Object.freeze(
+  new Set([
+    ReplicaStatus.SYNCING,
+    ReplicaStatus.ACTIVE,
+    ReplicaStatus.FAILED,
+  ]),
+);
+
+const OBSERVED_PROGRESS_RELEVANT_WORKFLOW_STEPS = Object.freeze(
+  new Set([
+    WORKFLOW_STEP.CREATING,
+    WORKFLOW_STEP.SYNCING,
+    WORKFLOW_STEP.STOPPING,
+  ]),
+);
+
+
+/**
+ * Owns single-flight owner-key execution, workflow step advancement,
+ * claim/dispatch progression, and observed-progress reconciliation.
+ *
+ * Dependencies are injected by the coordinator facade at construction.
+ */
+class OperationWorkflowOwner {
+  /**
+   * @param {Object} options
+   * @param {Object} options.repository - ReplicaOperationRepository.
+   * @param {Object} options.operationLane - OperationLane instance.
+   * @param {Object} options.operationWorkflowCoordinator -
+   *   DurableWorkflowCoordinator.
+   * @param {Object} options.controlPlaneReadinessService -
+   *   ControlPlaneReadinessService.
+   * @param {Object} options.messageRouter - MessageRouter.
+   * @param {Object} options.tablePolicyService - TablePolicyService.
+   * @param {Object} options.transactionCoordinator -
+   *   DistributedTransactionCoordinator.
+   * @param {Object} options.logger - Logger instance.
+   * @param {Object} options.emitter - EventEmitter (coordinator facade).
+   * @param {Object} options.config - Timeout/budget configuration.
+   * @param {string} options.nodeId - Local node ID.
+   * @param {Object} options.stats - Shared stats counters.
+   * @param {Function} options.isShuttingDown - Shutdown predicate.
+   * @param {Function} options.isInitialized - Initialization predicate.
+   * @param {Function} options.releaseReservationForOperation -
+   *   Reservation release callback.
+ * @param {Function} options.reconcileReservations -
+ *   Reservation reconciliation callback.
+ * @param {Function} options.allocateCanonicalReplicaId -
+ *   Replica ID allocation callback.
+ * @param {Function} options.getActualReplicaStatus -
+ *   Authoritative replica status read callback.
+  */
+  constructor(options) {
+    this.repository = options.repository;
+    this.operationLane = options.operationLane;
+    this.operationWorkflowCoordinator =
+      options.operationWorkflowCoordinator;
+    this.operationWorkflowRunExclusive =
+      this.operationLane.run.bind(this.operationLane);
+    this.controlPlaneReadinessService =
+      options.controlPlaneReadinessService;
+    this.messageRouter = options.messageRouter;
+    this.tablePolicyService = options.tablePolicyService;
+    this.transactionCoordinator =
+      options.transactionCoordinator || null;
+    this.logger = options.logger;
+    this.emitter = options.emitter;
+    this.config = options.config;
+    this.nodeId = options.nodeId;
+    this.stats = options.stats;
+    this._isShuttingDown = options.isShuttingDown;
+    this._isInitialized = options.isInitialized;
+    this.releaseReservationForOperation =
+      options.releaseReservationForOperation;
+    this.reconcileReservations =
+      options.reconcileReservations;
+    this.allocateCanonicalReplicaId =
+      options.allocateCanonicalReplicaId;
+    this.getActualReplicaStatus =
+      options.getActualReplicaStatus;
+    this.lastEmptyIncompleteOperationQueryAtMs = NUM.ZERO;
+    this.incompleteOperationQueryEmptyBackoffMs =
+      options.incompleteOperationQueryEmptyBackoffMs || NUM.ZERO;
+
+    if (typeof this.getActualReplicaStatus !== 'function') {
+      throw new Error(
+        'OperationWorkflowOwner requires getActualReplicaStatus()',
+      );
+    }
+  }
+
+  /** @return {boolean} */
+  get isShuttingDown() {
+    return this._isShuttingDown();
+  }
+
+  /** @return {boolean} */
+  get isInitialized() {
+    return this._isInitialized();
+  }
+
+  // --- Single-flight key construction ---
+
+  /**
+   * Build one operation single-flight key.
+   * @param {string} scope - Lock scope prefix.
+   * @param {string} key - Scope-specific key.
+   * @return {string}
+   */
+  buildOperationSingleFlightKey(scope, key) {
+    return [scope, key].join(
+      OPERATION_SINGLE_FLIGHT_KEY_SEPARATOR,
+    );
+  }
+
+  /**
+   * @param {string} dedupeKey
+   * @return {string}
+   */
+  getCreateOperationSingleFlightKey(dedupeKey) {
+    return this.buildOperationSingleFlightKey(
+      OPERATION_SINGLE_FLIGHT_SCOPE.CREATE,
+      dedupeKey,
+    );
+  }
+
+  /**
+   * @param {string} scope
+   * @return {string}
+   */
+  getCreateBudgetSingleFlightKey(scope) {
+    return this.buildOperationSingleFlightKey(
+      OPERATION_SINGLE_FLIGHT_SCOPE.CREATE_BUDGET,
+      scope,
+    );
+  }
+
+  /**
+   * @param {string} operationId
+   * @return {string}
+   */
+  getExecuteOperationSingleFlightKey(operationId) {
+    return this.buildOperationSingleFlightKey(
+      OPERATION_SINGLE_FLIGHT_SCOPE.OPERATION,
+      operationId,
+    );
+  }
+
+  /**
+   * @param {string} operationId
+   * @return {string}
+   */
+  getOperationOwnerSingleFlightKey(operationId) {
+    return this.buildOperationSingleFlightKey(
+      OPERATION_SINGLE_FLIGHT_SCOPE.OPERATION,
+      operationId,
+    );
+  }
+
+
+  // --- Workflow step advancement ---
+
+  /**
+   * Register an operation as a workflow if not already tracked.
+   * @param {Object} operation - Operation record.
+   */
+  ensureOperationWorkflow(operation) {
+    const workflowId = operation.operationId;
+    if (this.operationWorkflowCoordinator
+      .getWorkflowById(workflowId)) {
+      return;
+    }
+    const record = {
+      workflowId,
+      ownerKey: workflowId,
+      step: operation.workflowStep || null,
+      transitionHistory: [],
+    };
+    const workflow = this.operationWorkflowCoordinator
+      .createWorkflowRecord(record);
+    this.operationWorkflowCoordinator.setWorkflowState(workflow);
+  }
+
+  /**
+   * Resolve a canonical transition reason from step progression.
+   * @param {string} previousStep
+   * @param {string} nextStep
+   * @return {string}
+   */
+  resolveTransitionReason(previousStep, nextStep) {
+    if (nextStep === WORKFLOW_STEP.SENDING) {
+      return OPERATION_TRANSITION_REASON.DISPATCH_SENDING;
+    }
+    if (nextStep === WORKFLOW_STEP.CREATING) {
+      return OPERATION_TRANSITION_REASON.DISPATCH_CREATING;
+    }
+    if (nextStep === WORKFLOW_STEP.STOPPING) {
+      return OPERATION_TRANSITION_REASON.DISPATCH_STOPPING;
+    }
+    if (nextStep === WORKFLOW_STEP.ACTIVE &&
+        previousStep === WORKFLOW_STEP.SYNCING) {
+      return OPERATION_TRANSITION_REASON.RECONCILE_ACTIVE;
+    }
+    if (nextStep === WORKFLOW_STEP.ACTIVE) {
+      return OPERATION_TRANSITION_REASON.DISPATCH_ALREADY_EXISTS;
+    }
+    if (nextStep === WORKFLOW_STEP.REMOVED) {
+      return OPERATION_TRANSITION_REASON.OPERATION_COMPLETED;
+    }
+    if (nextStep === WORKFLOW_STEP.FAILED) {
+      return OPERATION_TRANSITION_REASON.OPERATION_FAILED;
+    }
+    return OPERATION_TRANSITION_REASON.DISPATCH_SENDING;
+  }
+
+  /**
+   * Execute a step transition atomically using the distributed
+   * transaction coordinator.
+   * @param {Object} operation
+   * @param {string} step
+   * @param {string} reason
+   * @param {Function} persistFn
+   * @return {Promise<void>}
+   */
+  async executeAtomicTransition(operation, step, reason, persistFn) {
+    return this.repository
+      .runReplicaOperationTransitionExclusive(
+        async () => {
+          this.ensureOperationWorkflow(operation);
+
+          if (this.operationWorkflowCoordinator
+            .isTransitionIdempotent(
+              operation.operationId, step,
+            )) {
+            return;
+          }
+
+          const txCoordinator = this.transactionCoordinator;
+          if (!txCoordinator ||
+              typeof txCoordinator.begin !== 'function' ||
+              typeof txCoordinator.commit !== 'function' ||
+              typeof txCoordinator.rollback !== 'function') {
+            throw new Error(
+              REBALANCE_COORDINATOR_ERROR_MSG
+                .TRANSACTION_COORDINATOR_REQUIRED,
+            );
+          }
+
+          const sessionId =
+            `${operation.operationId}:${step}`;
+          const beginResult =
+            await txCoordinator.begin(sessionId);
+          if (!beginResult.success) {
+            throw new Error(beginResult.error);
+          }
+          try {
+            await this.operationWorkflowCoordinator
+              .transitionStep(
+                operation.operationId,
+                {nextStep: step, reason},
+              );
+            await persistFn(sessionId);
+            const commitResult =
+              await txCoordinator.commit(sessionId);
+            if (!commitResult.success) {
+              throw new Error(commitResult.error);
+            }
+          } catch (error) {
+            await txCoordinator.rollback(sessionId);
+            throw error;
+          }
+        },
+      );
+  }
+
+  /**
+   * Update operation workflow step.
+   * @param {Object} operation
+   * @param {string} step
+   * @param {string} [reason]
+   * @return {Promise<void>}
+   */
+  async updateStep(operation, step, reason) {
+    const previousStep = operation.workflowStep;
+    if (previousStep === step) {
+      return;
+    }
+    const transitionReason = reason ||
+      this.resolveTransitionReason(previousStep, step);
+    const now = Date.now();
+
+    const targetNodeId = operation.targetNodeId;
+    const targetReadiness = targetNodeId ?
+      this.controlPlaneReadinessService
+        .getNodeReadinessSync(targetNodeId) :
+      null;
+    const readinessSnapshot =
+      ControlPlaneReadinessService.compactSnapshotSummary(
+        targetReadiness,
+        CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+      );
+
+    const persistFn = async (sessionId) => {
+      operation.workflowStep = step;
+      operation.updatedAt = now;
+      const stepEntry = {
+        step,
+        timestamp: now,
+        previousStep,
+        reason: transitionReason,
+        ownerKey: operation.operationId,
+      };
+      if (readinessSnapshot) {
+        stepEntry[OPERATION_METADATA_KEY.READINESS_SNAPSHOT] =
+          readinessSnapshot;
+      }
+      operation.stepsHistory.push(stepEntry);
+      operation.status =
+        WORKFLOW_STEP_TO_STATUS[step] || operation.status;
+      await this.repository.persistOperationUpdate(
+        operation, {sessionId},
+      );
+    };
+
+    await this.executeAtomicTransition(
+      operation, step, transitionReason, persistFn,
+    );
+
+    this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.STEP_CHANGED, {
+      operationId: operation.operationId,
+      previousStep,
+      newStep: step,
+      reason: transitionReason,
+      status: operation.status,
+      partitionId: operation.partitionId,
+    });
+
+    this.emitter.emit(
+      REBALANCE_COORDINATOR_EVENT.STEP_CHANGED,
+      {operation, previousStep, newStep: step, reason: transitionReason},
+    );
+  }
+
+  /**
+   * Complete an operation successfully.
+   * @param {Object} operation
+   * @return {Promise<void>}
+   */
+  async completeOperation(operation) {
+    const now = Date.now();
+    const finalStep = operation.type === OperationType.ADD ?
+      WORKFLOW_STEP.ACTIVE :
+      WORKFLOW_STEP.REMOVED;
+    if (operation.workflowStep === finalStep &&
+        operation.completedAt !== null &&
+        operation.completedAt !== undefined) {
+      return;
+    }
+    const previousStep = operation.workflowStep;
+
+    const targetNodeId = operation.targetNodeId;
+    const targetReadiness = targetNodeId ?
+      this.controlPlaneReadinessService
+        .getNodeReadinessSync(targetNodeId) :
+      null;
+    const readinessSnapshot =
+      ControlPlaneReadinessService.compactSnapshotSummary(
+        targetReadiness,
+        CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+      );
+
+    const persistFn = async (sessionId) => {
+      operation.workflowStep = finalStep;
+      operation.status = WORKFLOW_STEP_TO_STATUS[finalStep];
+      operation.updatedAt = now;
+      operation.completedAt = now;
+      const stepEntry = {
+        step: finalStep,
+        timestamp: now,
+        previousStep,
+        reason: OPERATION_TRANSITION_REASON.OPERATION_COMPLETED,
+        ownerKey: operation.operationId,
+      };
+      if (readinessSnapshot) {
+        stepEntry[OPERATION_METADATA_KEY.READINESS_SNAPSHOT] =
+          readinessSnapshot;
+      }
+      operation.stepsHistory.push(stepEntry);
+      await this.repository.persistOperationUpdate(
+        operation, {sessionId},
+      );
+    };
+
+    await this.executeAtomicTransition(
+      operation,
+      finalStep,
+      OPERATION_TRANSITION_REASON.OPERATION_COMPLETED,
+      persistFn,
+    );
+
+    await this.releaseReservationForOperation(operation);
+
+    this.stats.operationsCompleted++;
+
+    this.logger.info(
+      REBALANCE_COORDINATOR_LOG_MSG.OPERATION_COMPLETED,
+      {
+        operationId: operation.operationId,
+        type: operation.type,
+        partitionId: operation.partitionId,
+        targetNodeId: operation.targetNodeId,
+      },
+    );
+
+    this.emitter.emit(
+      REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED,
+      {operation},
+    );
+
+    try {
+      this.logger.info(METRICS_LOG_TAG.REBALANCE_OPERATION, {
+        operationId: operation.operationId,
+        entityType: operation.entityType,
+        finalState: operation.status,
+        totalDurationMs: now - operation.createdAt,
+      });
+    } catch (_metricsErr) {
+      // Metrics logging failures must not propagate to callers
+    }
+  }
+
+  /**
+   * Fail an operation.
+   * @param {Object} operation
+   * @param {string} errorMessage
+   * @param {Object} [options]
+   * @return {Promise<void>}
+   */
+  async failOperation(operation, errorMessage, options = {}) {
+    const now = Date.now();
+    if (operation.workflowStep === WORKFLOW_STEP.FAILED &&
+        operation.completedAt !== null &&
+        operation.completedAt !== undefined) {
+      return;
+    }
+    const normalizedError = this.normalizeErrorMessage(
+      errorMessage, 'Unknown error',
+    );
+    const isSafetyBlocked =
+      this.isSafetyPolicyFailure(normalizedError);
+    const logLevel = options.logLevel ||
+      (isSafetyBlocked ?
+        FAILURE_LOG_LEVEL.WARN : FAILURE_LOG_LEVEL.ERROR);
+    const logMessage = options.logMessage ||
+      (isSafetyBlocked ?
+        REBALANCE_COORDINATOR_LOG_MSG
+          .OPERATION_BLOCKED_BY_SAFETY_POLICY :
+        REBALANCE_COORDINATOR_LOG_MSG.OPERATION_FAILED);
+    const previousStep = operation.workflowStep;
+    const transitionReason = isSafetyBlocked ?
+      OPERATION_TRANSITION_REASON.SAFETY_POLICY_BLOCKED :
+      OPERATION_TRANSITION_REASON.OPERATION_FAILED;
+
+    const targetNodeId = operation.targetNodeId;
+    const targetReadiness = targetNodeId ?
+      this.controlPlaneReadinessService
+        .getNodeReadinessSync(targetNodeId) :
+      null;
+    const readinessSnapshot =
+      ControlPlaneReadinessService.compactSnapshotSummary(
+        targetReadiness,
+        CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+      );
+
+    const persistFn = async (sessionId) => {
+      operation.workflowStep = WORKFLOW_STEP.FAILED;
+      operation.status = ReplicaStatus.FAILED;
+      operation.updatedAt = now;
+      operation.completedAt = now;
+      operation.errorMessage = normalizedError;
+      const failedStepEntry = {
+        step: WORKFLOW_STEP.FAILED,
+        timestamp: now,
+        previousStep,
+        reason: transitionReason,
+        ownerKey: operation.operationId,
+      };
+      if (options.stepMetadata &&
+          typeof options.stepMetadata === 'object') {
+        Object.assign(failedStepEntry, options.stepMetadata);
+      }
+      if (readinessSnapshot) {
+        failedStepEntry[
+          OPERATION_METADATA_KEY.READINESS_SNAPSHOT
+        ] = readinessSnapshot;
+      }
+      operation.stepsHistory.push(failedStepEntry);
+      await this.repository.persistOperationUpdate(
+        operation, {sessionId},
+      );
+    };
+
+    await this.executeAtomicTransition(
+      operation,
+      WORKFLOW_STEP.FAILED,
+      transitionReason,
+      persistFn,
+    );
+
+    await this.releaseReservationForOperation(operation);
+
+    this.stats.operationsFailed++;
+
+    const logPayload = {
+      operationId: operation.operationId,
+      type: operation.type,
+      partitionId: operation.partitionId,
+      targetNodeId: operation.targetNodeId,
+      errorMessage: normalizedError,
+    };
+
+    const logMethod =
+      logLevel === FAILURE_LOG_LEVEL.WARN &&
+      typeof this.logger.warn === 'function' ?
+        this.logger.warn.bind(this.logger) :
+        this.logger.error.bind(this.logger);
+
+    logMethod(logMessage, logPayload);
+
+    this.emitter.emit(
+      REBALANCE_COORDINATOR_EVENT.OPERATION_FAILED,
+      {operation, errorMessage: normalizedError},
+    );
+
+    try {
+      this.logger.info(METRICS_LOG_TAG.REBALANCE_OPERATION, {
+        operationId: operation.operationId,
+        entityType: operation.entityType,
+        finalState: operation.status,
+        totalDurationMs: now - operation.createdAt,
+      });
+    } catch (_metricsErr) {
+      // Metrics logging failures must not propagate to callers
+    }
+  }
+
+
+  // --- Claim / dispatch / execution ---
+
+  /**
+   * Claim a PENDING operation for dispatch.
+   * @param {string} operationId
+   * @return {Promise<Object|null>}
+   */
+  async claimDispatchTransition(operationId) {
+    if (this.isShuttingDown || !this.isInitialized) {
+      return null;
+    }
+
+    const operation =
+      await this.repository.queryOperationById(operationId);
+    if (!operation) {
+      return null;
+    }
+
+    if (operation.workflowStep !== WORKFLOW_STEP.PENDING) {
+      return null;
+    }
+    if (!isCoordinatorOwnedOperationType(operation.type)) {
+      return null;
+    }
+
+    if (!this.repository.isOperationLocallyOwned(operation)) {
+      return null;
+    }
+
+    await this.updateStep(
+      operation,
+      WORKFLOW_STEP.SENDING,
+      OPERATION_TRANSITION_REASON.DISPATCH_SENDING,
+    );
+
+    return operation;
+  }
+
+  /**
+   * Dispatch one operation through the single-flight lane.
+   * @param {string|Object} operationInput
+   * @return {Promise<Object>}
+   */
+  async dispatchOperation(operationInput) {
+    if (this.isShuttingDown || !this.isInitialized) {
+      return {
+        success: false,
+        skipped: true,
+        reason: 'shutdown_in_progress',
+        operationId: this.getOperationIdFromInput(operationInput),
+      };
+    }
+
+    const operationId =
+      this.getOperationIdFromInput(operationInput);
+    const singleFlightKey = operationId ?
+      this.getExecuteOperationSingleFlightKey(operationId) :
+      null;
+    if (!singleFlightKey) {
+      return {
+        success: false,
+        skipped: true,
+        reason: 'operation_id_required',
+        operationId: null,
+      };
+    }
+
+    return this.operationWorkflowRunExclusive(
+      singleFlightKey,
+      () => this.dispatchOperationInternal(operationInput),
+    );
+  }
+
+  /**
+   * Resolve an operation id from one supported caller payload.
+   * @param {string|Object} operationInput
+   * @return {string|null}
+   */
+  getOperationIdFromInput(operationInput) {
+    if (typeof operationInput === 'string' &&
+        operationInput.length > NUM.ZERO) {
+      return operationInput;
+    }
+    if (!operationInput ||
+        typeof operationInput !== 'object') {
+      return null;
+    }
+    if (typeof operationInput.operationId === 'string' &&
+        operationInput.operationId.length > NUM.ZERO) {
+      return operationInput.operationId;
+    }
+    if (typeof operationInput.operation_id === 'string' &&
+        operationInput.operation_id.length > NUM.ZERO) {
+      return operationInput.operation_id;
+    }
+    return null;
+  }
+
+  /**
+   * Normalize one dispatch input to a canonical operation object.
+   * @param {string|Object} operationInput
+   * @return {Promise<Object|null>}
+   */
+  async resolveDispatchOperation(operationInput) {
+    if (typeof operationInput === 'string' &&
+        operationInput.length > NUM.ZERO) {
+      return this.repository.queryOperationById(operationInput);
+    }
+    if (!operationInput ||
+        typeof operationInput !== 'object') {
+      return null;
+    }
+    if (typeof operationInput.operationId === 'string' &&
+        operationInput.operationId.length > NUM.ZERO) {
+      return isCoordinatorOwnedOperationType(
+        operationInput.type,
+      ) ?
+        operationInput :
+        null;
+    }
+    if (typeof operationInput.operation_id === 'string' &&
+        operationInput.operation_id.length > NUM.ZERO) {
+      const operation =
+        this.repository.rowToOperation(operationInput);
+      return isCoordinatorOwnedOperationType(operation?.type) ?
+        operation :
+        null;
+    }
+    return null;
+  }
+
+  /**
+   * Execute one dispatch attempt after ownership serialization.
+   * @param {string|Object} operationInput
+   * @return {Promise<Object>}
+   */
+  async dispatchOperationInternal(operationInput) {
+    const operation =
+      await this.resolveDispatchOperation(operationInput);
+    const operationId =
+      this.getOperationIdFromInput(operationInput);
+
+    if (!operation) {
+      return {
+        success: false,
+        skipped: true,
+        reason: 'operation_not_found',
+        operationId,
+      };
+    }
+
+    if (!this.repository.isOperationLocallyOwned(operation)) {
+      return {
+        success: false,
+        skipped: true,
+        reason:
+          REBALANCER_SKIP_REASON.OPERATION_OWNED_BY_ANOTHER_NODE,
+        operationId: operation.operationId,
+      };
+    }
+
+    const replaceRemovePhase =
+      this.repository.isReplaceRemovePhase(operation);
+    const dispatchableWorkflowStep = operation.workflowStep;
+    if (replaceRemovePhase) {
+      if (dispatchableWorkflowStep !== WORKFLOW_STEP.ACTIVE) {
+        return {
+          success: false,
+          skipped: true,
+          reason: 'operation_not_dispatchable',
+          operationId: operation.operationId,
+        };
+      }
+    } else if (
+      dispatchableWorkflowStep === WORKFLOW_STEP.PENDING
+    ) {
+      await this.updateStep(
+        operation,
+        WORKFLOW_STEP.SENDING,
+        OPERATION_TRANSITION_REASON.DISPATCH_SENDING,
+      );
+    } else if (
+      dispatchableWorkflowStep !== WORKFLOW_STEP.SENDING
+    ) {
+      return {
+        success: false,
+        skipped: true,
+        reason: 'operation_not_dispatchable',
+        operationId: operation.operationId,
+      };
+    }
+
+    return this.executeOperationInternal(operation);
+  }
+
+  /**
+   * Execute operation through the single-flight lane.
+   * @param {Object} operation
+   * @return {Promise<Object>}
+   */
+  async executeOperation(operation) {
+    if (this.isShuttingDown || !this.isInitialized) {
+      return {
+        success: false,
+        skipped: true,
+        reason: 'shutdown_in_progress',
+        operationId: operation?.operationId,
+      };
+    }
+
+    const operationId = operation?.operationId;
+    const singleFlightKey = operationId ?
+      this.getExecuteOperationSingleFlightKey(operationId) :
+      null;
+    if (singleFlightKey &&
+        this.operationWorkflowCoordinator
+          .inFlightExecutionsByOwnerKey.has(singleFlightKey)) {
+      return {
+        success: false,
+        skipped: true,
+        reason:
+          REBALANCER_SKIP_REASON.OPERATION_ALREADY_EXECUTING,
+        operationId,
+      };
+    }
+
+    if (!singleFlightKey) {
+      return this.executeOperationInternal(operation);
+    }
+
+    return this.operationWorkflowRunExclusive(
+      singleFlightKey,
+      () => this.executeOperationInternal(operation),
+    );
+  }
+
+
+  /**
+   * Execute operation body once per operation ID.
+   * @param {Object} operation
+   * @return {Promise<Object>}
+   */
+  async executeOperationInternal(operation) {
+    if (!this.messageRouter) {
+      throw new Error(
+        REBALANCE_COORDINATOR_ERROR_MSG.ROUTER_MISSING,
+      );
+    }
+
+    if (!this.repository.isOperationLocallyOwned(operation)) {
+      return {
+        success: false,
+        skipped: true,
+        reason:
+          REBALANCER_SKIP_REASON.OPERATION_OWNED_BY_ANOTHER_NODE,
+        operationId: operation?.operationId,
+      };
+    }
+
+    const replaceRemovePhase =
+      this.repository.isReplaceRemovePhase(operation);
+    const replaceSourceReplicaId =
+      this.repository.getReplaceSourceReplicaId(operation);
+
+    if (!replaceRemovePhase) {
+      await this.updateStep(operation, WORKFLOW_STEP.SENDING);
+    }
+
+    const removeSafetyError =
+      await this.getRemoveSafetyError(operation);
+    if (removeSafetyError) {
+      await this.failOperation(operation, removeSafetyError, {
+        logLevel: FAILURE_LOG_LEVEL.WARN,
+        logMessage: REBALANCE_COORDINATOR_LOG_MSG
+          .OPERATION_BLOCKED_BY_SAFETY_POLICY,
+      });
+      return {
+        success: false,
+        operationId: operation.operationId,
+        error: removeSafetyError,
+      };
+    }
+
+    const entityType =
+      operation.entityType || SERVICE_TYPE.PARTITION;
+    const entityId =
+      operation.entityId || operation.partitionId;
+    const handlerType = OPERATION_HANDLER[entityType] ||
+      OPERATION_HANDLER[SERVICE_TYPE.PARTITION];
+    let dispatchNodeId = operation.targetNodeId;
+    let messageType =
+      ReplicaOperationMessageType.CREATE_REPLICA;
+    let requestReplicaId = operation.replicaId;
+    let requestReason = null;
+
+    if (operation.type === OperationType.REMOVE) {
+      messageType =
+        ReplicaOperationMessageType.REMOVE_REPLICA;
+    } else if (operation.type === OperationType.REPLACE) {
+      if (replaceRemovePhase) {
+        dispatchNodeId = operation.sourceNodeId;
+        messageType =
+          ReplicaOperationMessageType.REMOVE_REPLICA;
+        requestReplicaId = replaceSourceReplicaId;
+        requestReason = 'replace_source_removal';
+      } else {
+        messageType =
+          ReplicaOperationMessageType.CREATE_REPLICA;
+        if (!operation.replicaId ||
+            operation.replicaId === replaceSourceReplicaId) {
+          operation.replicaId =
+            await this.allocateCanonicalReplicaId({
+              partitionId: operation.partitionId,
+              entityType,
+              entityId,
+              excludeReplicaIds: replaceSourceReplicaId ?
+                [replaceSourceReplicaId] :
+                [],
+            });
+        }
+        requestReplicaId = operation.replicaId;
+      }
+    }
+
+    if (operation.type === OperationType.REPLACE &&
+        replaceRemovePhase &&
+        !requestReplicaId) {
+      const replaceSourceMissing =
+        'Missing source replica for REPLACE operation ' +
+        operation.operationId;
+      await this.failOperation(
+        operation, replaceSourceMissing,
+      );
+      return {
+        success: false,
+        operationId: operation.operationId,
+        error: replaceSourceMissing,
+      };
+    }
+
+    const target =
+      `${dispatchNodeId}/service/${handlerType}`;
+    const request = {
+      [ReplicaOperationField.TYPE]: messageType,
+      [ReplicaOperationField.OPERATION_ID]:
+        operation.operationId,
+      [ReplicaOperationField.PARTITION_ID]:
+        operation.partitionId,
+      [ReplicaOperationField.REPLICA_ID]: requestReplicaId,
+      [ReplicaOperationField.SOURCE_NODE_ID]:
+        operation.sourceNodeId,
+      [ReplicaOperationField.ENTITY_TYPE]: entityType,
+      [ReplicaOperationField.ENTITY_ID]: entityId,
+    };
+    if (requestReason) {
+      request[ReplicaOperationField.REASON] = requestReason;
+    }
+    if (Array.isArray(
+      operation[ReplicaOperationField.REPLICA_IDS],
+    ) &&
+        operation[ReplicaOperationField.REPLICA_IDS].length >
+          NUM.ZERO) {
+      request[ReplicaOperationField.REPLICA_IDS] =
+        operation[ReplicaOperationField.REPLICA_IDS];
+    }
+    if (Array.isArray(
+      operation[ReplicaOperationField.PEER_ADDRESSES],
+    ) &&
+        operation[ReplicaOperationField.PEER_ADDRESSES].length >
+          NUM.ZERO) {
+      request[ReplicaOperationField.PEER_ADDRESSES] =
+        operation[ReplicaOperationField.PEER_ADDRESSES];
+    }
+    if (operation[
+      ReplicaOperationField.BOOTSTRAP_TABLE_METADATA
+    ] &&
+        typeof operation[
+          ReplicaOperationField.BOOTSTRAP_TABLE_METADATA
+        ] === 'object') {
+      request[ReplicaOperationField.BOOTSTRAP_TABLE_METADATA] =
+        operation[
+          ReplicaOperationField.BOOTSTRAP_TABLE_METADATA
+        ];
+    }
+    if (operation[
+      ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA
+    ] &&
+        typeof operation[
+          ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA
+        ] === 'object') {
+      request[
+        ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA
+      ] = operation[
+        ReplicaOperationField.BOOTSTRAP_PARTITION_METADATA
+      ];
+    }
+
+    this.logger.debug(
+      REBALANCE_COORDINATOR_LOG_MSG.SEND_OPERATION,
+      {
+        operationId: operation.operationId,
+        target,
+        type: messageType,
+        entityType,
+        entityId,
+        replaceRemovePhase,
+      },
+    );
+
+    const response = await this.messageRouter.deliver(
+      target,
+      request,
+      {
+        targetNodeId: dispatchNodeId,
+        deliveryPriority: 'background',
+      },
+    );
+
+    if (!response.acknowledged) {
+      const errorMsg = this.normalizeErrorMessage(
+        response.error,
+        REBALANCE_COORDINATOR_ERROR_MSG.MESSAGE_NOT_ACKED,
+      );
+      await this.failOperation(operation, errorMsg);
+      return {
+        success: false,
+        operationId: operation.operationId,
+        error: errorMsg,
+      };
+    }
+
+    return this._handleDispatchResponse(
+      operation, response, replaceRemovePhase,
+    );
+  }
+
+  /**
+   * Process executor dispatch response and advance workflow.
+   * @param {Object} operation
+   * @param {Object} response
+   * @param {boolean} replaceRemovePhase
+   * @return {Promise<Object>}
+   * @private
+   */
+  async _handleDispatchResponse(
+    operation, response, replaceRemovePhase,
+  ) {
+    if (response.status ===
+        ReplicaOperationResponseStatus.INITIATED ||
+        response.status ===
+        ReplicaOperationResponseStatus.IN_PROGRESS) {
+      let nextStep = WORKFLOW_STEP.CREATING;
+      if (operation.type === OperationType.REMOVE ||
+          (operation.type === OperationType.REPLACE &&
+            replaceRemovePhase)) {
+        nextStep = WORKFLOW_STEP.STOPPING;
+      }
+      await this.updateStep(operation, nextStep);
+      return {
+        success: true,
+        operationId: operation.operationId,
+        status: 'in_progress',
+      };
+    }
+
+    if (response.status ===
+        ReplicaOperationResponseStatus.ALREADY_EXISTS) {
+      if (operation.type === OperationType.REPLACE &&
+          !replaceRemovePhase) {
+        await this.updateStep(
+          operation, WORKFLOW_STEP.ACTIVE,
+        );
+        return {
+          success: true,
+          operationId: operation.operationId,
+          status:
+            ReplicaOperationResponseStatus.ALREADY_EXISTS,
+        };
+      }
+      await this.completeOperation(operation);
+      return {
+        success: true,
+        operationId: operation.operationId,
+        status:
+          ReplicaOperationResponseStatus.ALREADY_EXISTS,
+      };
+    }
+
+    if (response.status ===
+        ReplicaOperationResponseStatus.COMPLETED) {
+      if (operation.type === OperationType.REPLACE &&
+          !replaceRemovePhase) {
+        await this.updateStep(
+          operation, WORKFLOW_STEP.ACTIVE,
+        );
+        return {
+          success: true,
+          operationId: operation.operationId,
+          status: ReplicaOperationResponseStatus.COMPLETED,
+        };
+      }
+      await this.completeOperation(operation);
+      return {
+        success: true,
+        operationId: operation.operationId,
+        status: ReplicaOperationResponseStatus.COMPLETED,
+      };
+    }
+
+    if (response.status ===
+        ReplicaOperationResponseStatus.NOT_FOUND &&
+        operation.type === OperationType.REPLACE &&
+        replaceRemovePhase) {
+      await this.completeOperation(operation);
+      return {
+        success: true,
+        operationId: operation.operationId,
+        status: ReplicaOperationResponseStatus.NOT_FOUND,
+      };
+    }
+
+    const errorMsg = this.normalizeErrorMessage(
+      response.error, 'Unknown error',
+    );
+    await this.failOperation(operation, errorMsg);
+    return {
+      success: false,
+      operationId: operation.operationId,
+      error: errorMsg,
+    };
+  }
+
+
+  // --- Safety checks ---
+
+  /**
+   * @param {string} partitionId
+   * @return {boolean}
+   */
+  isCriticalSystemPartition(partitionId) {
+    return typeof partitionId === 'string' &&
+      CRITICAL_SYSTEM_PARTITION_IDS.has(partitionId);
+  }
+
+  /**
+   * @param {Object} replicaRow
+   * @return {boolean}
+   */
+  isVoterReadyRoutableReplica(replicaRow) {
+    if (!replicaRow) {
+      return false;
+    }
+    if (replicaRow.status !== ReplicaStatus.ACTIVE) {
+      return false;
+    }
+    if (!replicaRow.address) {
+      return false;
+    }
+    const raftRole = typeof replicaRow.raft_role === 'string' ?
+      replicaRow.raft_role.toLowerCase() :
+      null;
+    if (!raftRole || raftRole === RAFT_ROLE.LEARNER) {
+      return false;
+    }
+    return this.isNodeReadyForRouting(replicaRow.node_id);
+  }
+
+  /**
+   * @param {Object} replicaRow
+   * @param {Object} operation
+   * @return {boolean}
+   */
+  isOperationReplicaRow(replicaRow, operation) {
+    if (!replicaRow || !operation) {
+      return false;
+    }
+    if (!operation.replicaId) {
+      return false;
+    }
+    return replicaRow.service_id === operation.replicaId ||
+      replicaRow.replica_id === operation.replicaId;
+  }
+
+  /**
+   * @param {string} partitionId
+   * @return {Promise<number>}
+   */
+  async getCriticalMinReplicaCount(partitionId) {
+    if (!this.tablePolicyService ||
+        typeof this.tablePolicyService.getPolicyForPartition !==
+        'function') {
+      return DEFAULT_MIN_REPLICA_COUNT;
+    }
+
+    try {
+      const policy =
+        await this.tablePolicyService.getPolicyForPartition(
+          partitionId,
+        );
+      const minReplicaCount = Number(policy?.minReplicaCount);
+      if (Number.isFinite(minReplicaCount) &&
+          minReplicaCount > NUM.ZERO) {
+        return Math.floor(minReplicaCount);
+      }
+    } catch (error) {
+      this.logger.warn(
+        'Failed to resolve minReplicaCount for critical' +
+        ' partition safety check', {
+          partitionId,
+          error: error.message,
+        });
+    }
+
+    return DEFAULT_MIN_REPLICA_COUNT;
+  }
+
+  /**
+   * @param {string} nodeId
+   * @return {boolean}
+   */
+  isNodeReadyForRouting(nodeId) {
+    if (!nodeId) {
+      return false;
+    }
+    const readiness = this.controlPlaneReadinessService
+      .getNodeReadinessSync(nodeId);
+    if (!readiness || !readiness.dimensions) {
+      return false;
+    }
+    return readiness.dimensions[
+      CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE
+    ] === true;
+  }
+
+  /**
+   * Get safety validation error for REMOVE operations.
+   * @param {Object} operation
+   * @return {Promise<string|null>}
+   */
+  async getRemoveSafetyError(operation) {
+    if (!operation) {
+      return null;
+    }
+
+    const isRemoveOperation =
+      operation.type === OperationType.REMOVE;
+    const isReplaceRemovePhase =
+      this.repository.isReplaceRemovePhase(operation);
+    if (!isRemoveOperation && !isReplaceRemovePhase) {
+      return null;
+    }
+
+    if (!this.isCriticalSystemPartition(
+      operation.partitionId,
+    )) {
+      return null;
+    }
+
+    const systemTableCache =
+      this.repository.systemTableCache;
+    if (!systemTableCache ||
+        typeof systemTableCache.filter !== 'function') {
+      return `Critical partition ${operation.partitionId}` +
+        ' safety check unavailable';
+    }
+
+    const criticalReplicaRows = systemTableCache.filter(
+      SYSTEM_TABLE_NAME.SERVICES,
+      (row) =>
+        row.partition_id === operation.partitionId &&
+        row.service_type === SERVICE_TYPE.PARTITION,
+    ) || [];
+
+    const currentVoterReadyRows = criticalReplicaRows.filter(
+      (row) => this.isVoterReadyRoutableReplica(row),
+    );
+
+    const operationReplicaId =
+      operation.type === OperationType.REPLACE ?
+        this.repository.getReplaceSourceReplicaId(
+          operation,
+        ) :
+        operation.replicaId;
+
+    if (!operationReplicaId) {
+      return `Critical partition ${operation.partitionId}` +
+        ' safety check unavailable';
+    }
+
+    const removingVoterReady = currentVoterReadyRows.some(
+      (row) => this.isOperationReplicaRow(row, {
+        ...operation,
+        replicaId: operationReplicaId,
+      }),
+    );
+
+    if (!removingVoterReady) {
+      return null;
+    }
+
+    if (isReplaceRemovePhase) {
+      const replacementReplicaId =
+        this.repository.getReplaceTargetReplicaId(operation);
+      if (!replacementReplicaId) {
+        return `Critical partition ` +
+          `${operation.partitionId} replacement replica` +
+          ' is unavailable';
+      }
+      const replacementReplica = criticalReplicaRows.find(
+        (row) => {
+          return row?.service_id === replacementReplicaId ||
+            row?.replica_id === replacementReplicaId;
+        },
+      );
+      if (!this.isVoterReadyRoutableReplica(
+        replacementReplica,
+      )) {
+        return `Critical partition ` +
+          `${operation.partitionId} replacement replica ` +
+          `${replacementReplicaId} is not voter-ready`;
+      }
+    }
+
+    const minReplicaCount =
+      await this.getCriticalMinReplicaCount(
+        operation.partitionId,
+      );
+    const projectedVoterReadyCount = Math.max(
+      NUM.ZERO,
+      currentVoterReadyRows.length - NUM.ONE,
+    );
+    if (projectedVoterReadyCount >= minReplicaCount) {
+      return null;
+    }
+
+    return `Critical partition ${operation.partitionId}` +
+      ' would drop voter-ready replicas below minimum' +
+      ` (${projectedVoterReadyCount}/${minReplicaCount})`;
+  }
+
+  /**
+   * Evaluate safety error for a move intent.
+   * @param {Object} move
+   * @return {Promise<string|null>}
+   */
+  async getMoveSafetyError(move) {
+    if (!move) {
+      return null;
+    }
+    const normalizedType = typeof move.type === 'string' ?
+      move.type.toUpperCase() :
+      move.type;
+    const operation = {
+      type: normalizedType,
+      partitionId: move.partitionId || move.entityId,
+      replicaId: move.replicaId,
+      targetNodeId: move.nodeId,
+    };
+    return this.getRemoveSafetyError(operation);
+  }
+
+
+  // --- Observed-progress reconciliation ---
+
+  /**
+   * @param {Object} operation
+   * @return {boolean}
+   */
+  isObservedProgressOperationCandidate(operation) {
+    if (!operation ||
+        this.repository.isOperationTerminal(operation) ||
+        !this.repository.isOperationLocallyOwned(operation)) {
+      return false;
+    }
+
+    if (OBSERVED_PROGRESS_RELEVANT_WORKFLOW_STEPS.has(
+      operation.workflowStep,
+    )) {
+      return true;
+    }
+
+    return operation.type === OperationType.REPLACE &&
+      operation.workflowStep === WORKFLOW_STEP.ACTIVE;
+  }
+
+  /**
+   * @param {Object} serviceRow
+   * @param {string} cacheOperation
+   * @return {string[]}
+   */
+  findObservedProgressOperationIds(serviceRow, cacheOperation) {
+    if (!serviceRow || typeof serviceRow !== 'object') {
+      return [];
+    }
+
+    if (cacheOperation !== 'DELETE') {
+      const status =
+        String(serviceRow.status || '').toLowerCase();
+      if (!OBSERVED_PROGRESS_RELEVANT_SERVICE_STATUSES
+        .has(status)) {
+        return [];
+      }
+    }
+
+    const targetNodeId = String(
+      serviceRow.node_id || serviceRow.nodeId || '',
+    );
+    const replicaId = String(
+      serviceRow.service_id ||
+        serviceRow.serviceId ||
+        serviceRow.replica_id ||
+        serviceRow.replicaId ||
+        '',
+    );
+    const partitionId = String(
+      serviceRow.partition_id ||
+        serviceRow.partitionId ||
+        '',
+    );
+    if (targetNodeId.length === NUM.ZERO ||
+        (replicaId.length === NUM.ZERO &&
+          partitionId.length === NUM.ZERO)) {
+      return [];
+    }
+
+    const matchingRows =
+      this.repository.filterReplicaOperationRowsFromCache(
+        (row) => {
+          const operation =
+            this.repository.rowToOperation(row);
+          if (!this.isObservedProgressOperationCandidate(
+            operation,
+          )) {
+            return false;
+          }
+          if (operation.targetNodeId !== targetNodeId) {
+            return false;
+          }
+          if (replicaId.length > NUM.ZERO &&
+              operation.replicaId === replicaId) {
+            return true;
+          }
+          return partitionId.length > NUM.ZERO &&
+            operation.partitionId === partitionId;
+        },
+      ) || [];
+
+    return [...new Set(matchingRows
+      .map((row) =>
+        row?.operation_id || row?.operationId || null,
+      )
+      .filter((opId) =>
+        typeof opId === 'string' && opId.length > NUM.ZERO,
+      ))];
+  }
+
+  /**
+   * @param {string} operationId
+   * @return {Promise<boolean>}
+   */
+  async reconcileObservedProgressOperation(operationId) {
+    if (typeof operationId !== 'string' ||
+        operationId.length === NUM.ZERO) {
+      return false;
+    }
+    const operation =
+      await this.repository.queryOperationById(operationId);
+    if (!this.isObservedProgressOperationCandidate(operation)) {
+      return false;
+    }
+    return this.reconcileOperationProgress(operation);
+  }
+
+  /**
+   * Observe services cache progress and re-enter the owner lane.
+   * @param {string} tableName
+   * @param {string} cacheOperation
+   * @param {Object} record
+   */
+  handleObservedReplicaStateChange(
+    tableName, cacheOperation, record,
+  ) {
+    if (this.isShuttingDown || !this.isInitialized ||
+        tableName !== SYSTEM_TABLE_NAME.SERVICES) {
+      return;
+    }
+
+    const operationIds =
+      this.findObservedProgressOperationIds(
+        record, cacheOperation,
+      );
+    for (const operationId of operationIds) {
+      this.operationWorkflowRunExclusive(
+        this.getOperationOwnerSingleFlightKey(operationId),
+        () => this.reconcileObservedProgressOperation(
+          operationId,
+        ),
+      ).catch((error) => {
+        this.logger.error(
+          REBALANCE_COORDINATOR_LOG_MSG
+            .OBSERVED_PROGRESS_TRANSITION_FAILED,
+          {
+            operationId,
+            tableName,
+            cacheOperation,
+            error: error.message,
+          },
+        );
+      });
+    }
+  }
+
+
+  // --- Reconciliation and timeout ---
+
+  /**
+   * Reconcile one in-flight operation against observed replica state.
+   * @param {Object} operation
+   * @return {Promise<boolean>}
+   */
+  async reconcileOperationProgress(operation) {
+    if (!operation) {
+      return false;
+    }
+    if (!this.repository.isOperationLocallyOwned(operation)) {
+      return false;
+    }
+
+    if (operation.type === OperationType.REPLACE &&
+        operation.workflowStep === WORKFLOW_STEP.ACTIVE) {
+      await this.executeOperation(operation);
+      return true;
+    }
+
+    if (operation.workflowStep === WORKFLOW_STEP.STOPPING &&
+        (operation.type === OperationType.REMOVE ||
+          operation.type === OperationType.REPLACE)) {
+      const removingReplicaId =
+        operation.type === OperationType.REPLACE ?
+          this.repository.getReplaceSourceReplicaId(
+            operation,
+          ) :
+          operation.replicaId;
+      const removingNodeId =
+        operation.type === OperationType.REPLACE ?
+          operation.sourceNodeId :
+          operation.targetNodeId;
+      if (!removingReplicaId) {
+        await this.failOperation(
+          operation,
+          'Replica missing during STOPPING reconciliation',
+        );
+        return true;
+      }
+
+      const actualStatus =
+        await this.getActualReplicaStatus(
+          removingReplicaId,
+          operation.partitionId,
+          removingNodeId,
+        );
+
+      if (actualStatus === null) {
+        await this.completeOperation(operation);
+        return true;
+      }
+
+      if (actualStatus === ReplicaStatus.FAILED) {
+        await this.failOperation(
+          operation,
+          'Replica failed during remove reconciliation',
+        );
+        return true;
+      }
+
+      return false;
+    }
+
+    if (operation.workflowStep !== WORKFLOW_STEP.CREATING &&
+        operation.workflowStep !== WORKFLOW_STEP.SYNCING) {
+      return false;
+    }
+
+    const actualStatus =
+      await this.getActualReplicaStatus(
+        operation.replicaId,
+        operation.partitionId,
+        operation.targetNodeId,
+      );
+
+    if (actualStatus === ReplicaStatus.SYNCING &&
+        operation.workflowStep === WORKFLOW_STEP.CREATING) {
+      await this.updateStep(
+        operation, WORKFLOW_STEP.SYNCING,
+      );
+      return true;
+    }
+
+    if (actualStatus === ReplicaStatus.ACTIVE) {
+      if (operation.type === OperationType.REPLACE) {
+        await this.updateStep(
+          operation, WORKFLOW_STEP.ACTIVE,
+        );
+        await this.executeOperation(operation);
+      } else {
+        await this.completeOperation(operation);
+      }
+      return true;
+    }
+
+    if (actualStatus === ReplicaStatus.FAILED) {
+      await this.failOperation(
+        operation,
+        'Replica failed during operation reconciliation',
+      );
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * @param {string} step
+   * @return {number}
+   */
+  getTimeoutForStep(step) {
+    switch (step) {
+    case WORKFLOW_STEP.PENDING:
+    case WORKFLOW_STEP.SENDING:
+      return this.config.pendingTimeoutMs;
+    case WORKFLOW_STEP.CREATING:
+      return this.config.creatingTimeoutMs;
+    case WORKFLOW_STEP.SYNCING:
+      return this.config.syncingTimeoutMs;
+    case WORKFLOW_STEP.STOPPING:
+      return this.config.removingTimeoutMs;
+    default:
+      return this.config.pendingTimeoutMs;
+    }
+  }
+
+  /**
+   * Per-operation timeout/progress reconciliation.
+   * Called after reconcileOperationProgress returns false.
+   * @param {Object} operation
+   * @param {number} now
+   * @return {Promise<void>}
+   */
+  async reconcileTimeoutOperation(operation, now) {
+
+    const operationBudget = createTopLevelOperationBudget({
+      configuredBudgetMs:
+        TIMEOUT_BUDGET_DEFAULT
+          .REBALANCE_OPERATION_BUDGET_MS,
+      operationName: 'rebalance',
+      startedAtMs:
+        operation.createdAt || operation.updatedAt,
+      now: () => now,
+    });
+
+    const stepTimeout = this.getTimeoutForStep(
+      operation.workflowStep,
+    );
+    const stepAllocation = createChildTimeoutBudget(
+      operationBudget,
+      {
+        requestedBudgetMs: stepTimeout,
+        minimumBudgetMs:
+          TIMEOUT_BUDGET_DEFAULT
+            .MINIMUM_OPERATION_BUDGET_MS,
+        classification:
+          TIMEOUT_BUDGET_CLASSIFICATION
+            .REBALANCE_OPERATION_TIMEOUT,
+        nestedOperation:
+          `rebalance:${String(
+            operation.workflowStep || 'unknown',
+          ).toLowerCase()}`,
+        now: () => now,
+      },
+    );
+
+    const elapsed = now - operation.updatedAt;
+    const stepExceeded = elapsed >= stepTimeout;
+    const budgetExhausted = !stepAllocation.allowed;
+
+    if (stepExceeded || budgetExhausted) {
+      const timeoutClassification = budgetExhausted ?
+        stepAllocation.timeoutClassification :
+        buildTimeoutClassification({
+          budget: operationBudget,
+          classification:
+            TIMEOUT_BUDGET_CLASSIFICATION
+              .REBALANCE_OPERATION_TIMEOUT,
+          nestedOperation:
+            `rebalance:${String(
+              operation.workflowStep || 'unknown',
+            ).toLowerCase()}`,
+          now: () => now,
+        });
+
+      this.logger.warn(
+        REBALANCE_COORDINATOR_LOG_MSG.OPERATION_TIMED_OUT,
+        {
+          operationId: operation.operationId,
+          workflowStep: operation.workflowStep,
+          elapsed,
+          timeout: stepTimeout,
+          budgetExhausted,
+          timeoutClassification,
+        },
+      );
+
+      await this.failOperation(
+        operation,
+        `Timeout in ${operation.workflowStep} step ` +
+          `after ${elapsed}ms`,
+        {
+          stepMetadata: {
+            timeoutClassification,
+            timeoutMs: stepTimeout,
+            elapsedMs: elapsed,
+            timedOutAtMs: now,
+            budgetExhausted,
+          },
+        },
+      );
+
+      this.stats.operationsTimedOut++;
+    }
+  }
+
+  /**
+   * Check for timed out operations.
+   * @return {Promise<void>}
+   */
+  async checkTimeouts() {
+    if (this.isShuttingDown || !this.isInitialized) {
+      return;
+    }
+
+    const now = Date.now();
+    if (
+      this.lastEmptyIncompleteOperationQueryAtMs > NUM.ZERO &&
+      now - this.lastEmptyIncompleteOperationQueryAtMs <
+        this.incompleteOperationQueryEmptyBackoffMs
+    ) {
+      return;
+    }
+
+    const incompleteOps =
+      await this.repository.queryIncompleteOperations();
+    if (incompleteOps.length === NUM.ZERO) {
+      this.lastEmptyIncompleteOperationQueryAtMs = now;
+      return;
+    }
+    this.lastEmptyIncompleteOperationQueryAtMs = NUM.ZERO;
+
+    for (const operation of incompleteOps) {
+      if (!this.repository.isOperationLocallyOwned(
+        operation,
+      )) {
+        continue;
+      }
+      if (this.repository.isOperationTerminal(operation)) {
+        continue;
+      }
+
+      const singleFlightKey =
+        this.getOperationOwnerSingleFlightKey(
+          operation.operationId,
+        );
+
+      this.operationWorkflowRunExclusive(
+        singleFlightKey,
+        () => this.reconcileTimeoutOperation(
+          operation, Date.now(),
+        ),
+      ).catch((error) => {
+        this.logger.error(
+          REBALANCE_COORDINATOR_LOG_MSG
+            .QUERY_OPERATIONS_FAILED,
+          {
+            operationId: operation.operationId,
+            error: error.message,
+            nodeId: this.nodeId,
+          },
+        );
+      });
+    }
+  }
+
+
+  // --- Executor outcome routing ---
+
+  /**
+   * Handle an executor outcome event.
+   * @param {Object} outcome
+   */
+  handleExecutorOutcome(outcome) {
+    if (this.isShuttingDown || !this.isInitialized) {
+      return;
+    }
+
+    const operationId =
+      outcome?.[EXECUTOR_OUTCOME_FIELD.OPERATION_ID];
+    if (!operationId) {
+      return;
+    }
+
+    const singleFlightKey =
+      this.getOperationOwnerSingleFlightKey(operationId);
+
+    this.operationWorkflowRunExclusive(
+      singleFlightKey,
+      () => this.reconcileExecutorOutcome(outcome),
+    ).catch((error) => {
+      this.logger.error(
+        REBALANCE_COORDINATOR_LOG_MSG
+          .OUTCOME_TRANSITION_FAILED,
+        {
+          operationId,
+          outcomeType:
+            outcome?.[EXECUTOR_OUTCOME_FIELD.OUTCOME_TYPE],
+          error: error.message,
+        },
+      );
+    });
+  }
+
+  /**
+   * Reconcile a single executor outcome.
+   * @param {Object} outcome
+   * @return {Promise<boolean>}
+   */
+  async reconcileExecutorOutcome(outcome) {
+    const operationId =
+      outcome[EXECUTOR_OUTCOME_FIELD.OPERATION_ID];
+    const outcomeType =
+      outcome[EXECUTOR_OUTCOME_FIELD.OUTCOME_TYPE];
+    const workflowStep =
+      outcome[EXECUTOR_OUTCOME_FIELD.WORKFLOW_STEP];
+    const errorMessage =
+      outcome[EXECUTOR_OUTCOME_FIELD.ERROR_MESSAGE];
+
+    this.logger.debug(
+      REBALANCE_COORDINATOR_LOG_MSG.OUTCOME_RECEIVED,
+      {operationId, outcomeType, workflowStep},
+    );
+
+    const operation =
+      await this.repository.queryOperationById(operationId);
+    if (!operation) {
+      this.logger.debug(
+        REBALANCE_COORDINATOR_LOG_MSG
+          .OUTCOME_OPERATION_NOT_FOUND,
+        {operationId, outcomeType},
+      );
+      return false;
+    }
+
+    if (this.repository.isOperationTerminal(operation)) {
+      this.logger.debug(
+        REBALANCE_COORDINATOR_LOG_MSG
+          .OUTCOME_OPERATION_TERMINAL,
+        {
+          operationId,
+          outcomeType,
+          step: operation.workflowStep,
+        },
+      );
+      return false;
+    }
+
+    if (!this.repository.isOperationLocallyOwned(operation)) {
+      this.logger.debug(
+        REBALANCE_COORDINATOR_LOG_MSG
+          .OUTCOME_OPERATION_NOT_LOCAL,
+        {operationId, outcomeType},
+      );
+      return false;
+    }
+
+    const mapping = EXECUTOR_OUTCOME_ACTION_MAP[outcomeType];
+    if (!mapping) {
+      this.logger.warn(
+        REBALANCE_COORDINATOR_LOG_MSG
+          .OUTCOME_UNKNOWN_ACTION,
+        {operationId, outcomeType},
+      );
+      return false;
+    }
+
+    if (mapping.action ===
+        EXECUTOR_OUTCOME_ACTION.UPDATE_STEP) {
+      await this.updateStep(
+        operation,
+        workflowStep,
+        OPERATION_TRANSITION_REASON.EXECUTOR_OUTCOME,
+      );
+    } else if (mapping.action ===
+        EXECUTOR_OUTCOME_ACTION.COMPLETE) {
+      await this.completeOperation(operation);
+    } else if (mapping.action ===
+        EXECUTOR_OUTCOME_ACTION.FAIL) {
+      await this.failOperation(
+        operation,
+        errorMessage || outcomeType,
+      );
+    } else {
+      this.logger.warn(
+        REBALANCE_COORDINATOR_LOG_MSG
+          .OUTCOME_UNKNOWN_ACTION,
+        {
+          operationId,
+          outcomeType,
+          action: mapping.action,
+        },
+      );
+      return false;
+    }
+
+    this.emitter.emit(
+      REBALANCE_COORDINATOR_EVENT.OUTCOME_ROUTED,
+      {operationId, outcomeType, action: mapping.action},
+    );
+
+    return true;
+  }
+
+  // --- Recovery ---
+
+  /**
+   * @param {string} step
+   * @return {boolean}
+   */
+  isPreSyncStep(step) {
+    return [
+      WORKFLOW_STEP.PENDING,
+      WORKFLOW_STEP.SENDING,
+      WORKFLOW_STEP.CREATING,
+    ].includes(step);
+  }
+
+  /**
+   * Per-operation recovery logic.
+   * @param {Object} op
+   * @return {Promise<void>}
+   */
+  async reconcileRecoveryOperation(op) {
+    if (this.isPreSyncStep(op.workflowStep)) {
+      await this.failOperation(
+        op, 'Node recovery - incomplete operation',
+      );
+      this.logger.info(
+        REBALANCE_COORDINATOR_LOG_MSG.RECOVERY_MARK_FAILED,
+        {
+          operationId: op.operationId,
+          workflowStep: op.workflowStep,
+          partitionId: op.partitionId,
+        },
+      );
+    } else if (op.workflowStep === WORKFLOW_STEP.SYNCING) {
+      await this.reconcileSyncingOperation(op);
+    } else if (op.workflowStep === WORKFLOW_STEP.STOPPING) {
+      await this.failOperation(
+        op,
+        'Node recovery - incomplete removal operation',
+      );
+      this.logger.info(
+        REBALANCE_COORDINATOR_LOG_MSG
+          .RECOVERY_MARK_REMOVE_FAILED,
+        {
+          operationId: op.operationId,
+          workflowStep: op.workflowStep,
+          partitionId: op.partitionId,
+        },
+      );
+    }
+  }
+
+  /**
+   * Reconcile a SYNCING operation by checking actual replica status.
+   * @param {Object} operation
+   * @return {Promise<void>}
+   */
+  async reconcileSyncingOperation(operation) {
+    this.logger.info(
+      REBALANCE_COORDINATOR_LOG_MSG.RECONCILE_SYNCING,
+      {
+        operationId: operation.operationId,
+        partitionId: operation.partitionId,
+        targetNodeId: operation.targetNodeId,
+      },
+    );
+
+    const actualStatus =
+      await this.getActualReplicaStatus(
+        operation.replicaId,
+        operation.partitionId,
+        operation.targetNodeId,
+      );
+
+    this.repository.emitReplicaStatusDivergence(
+      operation.replicaId,
+      actualStatus,
+      SQL_RECONCILIATION_REASON.RECOVERY_REPLICA_STATUS,
+    );
+
+    if (actualStatus === ReplicaStatus.ACTIVE) {
+      await this.completeOperation(operation);
+      this.logger.info(
+        REBALANCE_COORDINATOR_LOG_MSG.RECONCILE_ACTIVE,
+        {
+          operationId: operation.operationId,
+          partitionId: operation.partitionId,
+        },
+      );
+    } else if (actualStatus === ReplicaStatus.FAILED) {
+      await this.failOperation(
+        operation, 'Replica failed during sync',
+      );
+      this.logger.info(
+        REBALANCE_COORDINATOR_LOG_MSG.RECONCILE_FAILED,
+        {
+          operationId: operation.operationId,
+          partitionId: operation.partitionId,
+        },
+      );
+    } else if (actualStatus === null) {
+      await this.failOperation(
+        operation,
+        'Replica not found during recovery reconciliation',
+      );
+      this.logger.warn(
+        REBALANCE_COORDINATOR_LOG_MSG
+          .RECONCILE_FAILED_NOT_FOUND,
+        {
+          operationId: operation.operationId,
+          partitionId: operation.partitionId,
+        },
+      );
+    } else {
+      this.logger.info(
+        REBALANCE_COORDINATOR_LOG_MSG
+          .RECONCILE_IN_PROGRESS,
+        {
+          operationId: operation.operationId,
+          partitionId: operation.partitionId,
+          actualStatus,
+        },
+      );
+    }
+  }
+
+  /**
+   * Handle node recovery.
+   * @return {Promise<Object>}
+   */
+  async handleRecovery() {
+    this.logger.info(
+      REBALANCE_COORDINATOR_LOG_MSG.RECOVERY_START,
+      {nodeId: this.nodeId},
+    );
+
+    const result = {
+      totalIncomplete: NUM.ZERO,
+      markedFailed: NUM.ZERO,
+      reconciled: NUM.ZERO,
+      errors: [],
+    };
+
+    const incompleteOps =
+      await this.repository.queryIncompleteOperations();
+    result.totalIncomplete = incompleteOps.length;
+
+    this.logger.info(
+      REBALANCE_COORDINATOR_LOG_MSG.RECOVERY_FOUND,
+      {count: incompleteOps.length, nodeId: this.nodeId},
+    );
+
+    for (const op of incompleteOps) {
+      if (!this.repository.isOperationLocallyOwned(op)) {
+        continue;
+      }
+
+      const originalStep = op.workflowStep;
+
+      const singleFlightKey =
+        this.getOperationOwnerSingleFlightKey(
+          op.operationId,
+        );
+
+      try {
+        await this.operationWorkflowRunExclusive(
+          singleFlightKey,
+          () => this.reconcileRecoveryOperation(op),
+        );
+      } catch (error) {
+        result.errors.push({
+          operationId: op.operationId,
+          error: error.message,
+        });
+        this.logger.error(
+          REBALANCE_COORDINATOR_LOG_MSG
+            .RECOVERY_MARK_FAILED,
+          {
+            operationId: op.operationId,
+            workflowStep: originalStep,
+            partitionId: op.partitionId,
+            error: error.message,
+          },
+        );
+        continue;
+      }
+
+      if (this.isPreSyncStep(originalStep) ||
+          originalStep === WORKFLOW_STEP.STOPPING) {
+        result.markedFailed++;
+      } else if (originalStep === WORKFLOW_STEP.SYNCING) {
+        result.reconciled++;
+      }
+    }
+
+    this.logger.info(
+      REBALANCE_COORDINATOR_LOG_MSG.RECOVERY_COMPLETED,
+      {nodeId: this.nodeId, ...result},
+    );
+
+    const reservationResult =
+      await this.reconcileReservations();
+    result.reservationsExpired = reservationResult.expired;
+    result.reservationsOrphansReleased =
+      reservationResult.orphansReleased;
+
+    this.emitter.emit(
+      REBALANCE_COORDINATOR_EVENT.RECOVERY_COMPLETED,
+      result,
+    );
+
+    return result;
+  }
+
+  // --- Helpers ---
+
+  /**
+   * @param {string} errorMessage
+   * @return {boolean}
+   */
+  isSafetyPolicyFailure(errorMessage) {
+    if (typeof errorMessage !== 'string' || !errorMessage) {
+      return false;
+    }
+    const normalized = errorMessage.toLowerCase();
+    return normalized.includes(
+      'would drop voter-ready replicas below minimum',
+    ) || normalized.includes('safety check unavailable');
+  }
+
+  /**
+   * @param {*} errorLike
+   * @param {string} fallbackMessage
+   * @return {string}
+   */
+  normalizeErrorMessage(errorLike, fallbackMessage) {
+    if (typeof errorLike === 'string' && errorLike.trim()) {
+      return errorLike;
+    }
+
+    if (!errorLike || typeof errorLike !== 'object') {
+      return fallbackMessage;
+    }
+
+    const candidateValues = [
+      errorLike.message,
+      errorLike.errorMessage,
+      errorLike.error?.message,
+      errorLike.error?.errorMessage,
+      errorLike.details?.message,
+      errorLike.details?.errorMessage,
+    ];
+
+    for (const candidate of candidateValues) {
+      if (typeof candidate === 'string' &&
+          candidate.trim()) {
+        return candidate;
+      }
+    }
+
+    return fallbackMessage;
+  }
+}
+
+export {OperationWorkflowOwner};

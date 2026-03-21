@@ -59,6 +59,7 @@ async function createPartitionReplica(options) {
     dbPath: options.dbPath,
     replicaIds: options.replicaIds,
     peerAddresses: options.peerAddresses,
+    deferElection: options.deferElection === true,
     logger,
   });
 
@@ -96,6 +97,7 @@ async function createMessageGroupReplica(options) {
     replicaId: options.replicaId,
     replicaIds: options.replicaIds,
     peerAddresses: options.peerAddresses,
+    deferElection: options.deferElection === true,
     logger,
   });
 

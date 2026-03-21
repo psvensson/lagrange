@@ -77,12 +77,17 @@ function createWriteReadySystemTableCache() {
   const servicesPartitionId = INITIAL_PARTITION_IDS[TABLES.SERVICES];
   const records = {
     [TABLES.PARTITIONS]: [
-      {[COLUMN.PARTITION_ID]: servicesPartitionId},
+      {
+        [COLUMN.PARTITION_ID]: servicesPartitionId,
+        [COLUMN.LEADER_NODE_ID]: 'node-1',
+      },
     ],
     [TABLES.SERVICES]: [
       {
+        [COLUMN.SERVICE_ID]: 'svc-services-leader',
         [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
         [COLUMN.PARTITION_ID]: servicesPartitionId,
+        [COLUMN.NODE_ID]: 'node-1',
         [COLUMN.RAFT_ROLE]: RAFT_ROLE.LEADER,
         [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
       },
@@ -90,6 +95,13 @@ function createWriteReadySystemTableCache() {
   };
 
   return {
+    get(tableName, key) {
+      const keyField = tableName === TABLES.PARTITIONS ?
+        COLUMN.PARTITION_ID :
+        COLUMN.SERVICE_ID;
+      const rows = records[tableName] || [];
+      return rows.find((row) => row?.[keyField] === key) || null;
+    },
     filter(tableName, predicate) {
       const rows = records[tableName] || [];
       return rows.filter(predicate);

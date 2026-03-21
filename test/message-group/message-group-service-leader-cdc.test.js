@@ -33,6 +33,15 @@ let testPortCounter = TEST_PORT_BASE;
 const TEST_GROUP_ID = 'mg-leader-cdc';
 const TEST_NODE_ID_PREFIX = 'leader-cdc-node-';
 
+function createImmediateLeaderActivationScheduler() {
+  return {
+    enqueue: (run) => {
+      run();
+      return {cancel: () => {}};
+    },
+  };
+}
+
 /**
  * Create a real WebSocket transport for testing.
  * Follows the same pattern as message-group-failover-cdc-continuity.test.js.
@@ -81,6 +90,9 @@ test(
         replicaId,
         nodeId,
         transport: router,
+        leaderActivationStabilizationMs: NUM.ZERO,
+        leaderActivationNodeSpacingMs: NUM.ZERO,
+        leaderActivationScheduler: createImmediateLeaderActivationScheduler(),
       });
 
       await service.initialize();
@@ -152,6 +164,9 @@ test(
         replicaId,
         nodeId,
         transport: router,
+        leaderActivationStabilizationMs: NUM.ZERO,
+        leaderActivationNodeSpacingMs: NUM.ZERO,
+        leaderActivationScheduler: createImmediateLeaderActivationScheduler(),
       });
 
       await service.initialize();

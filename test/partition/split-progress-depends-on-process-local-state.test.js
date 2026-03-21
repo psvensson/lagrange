@@ -273,15 +273,10 @@ test('split progress stored in process memory is lost after ' +
     'recovered workflow should know the split is in SPLIT_BACKFILLING',
   );
 
-  // ── Step 5: Prove the contradiction ──
-  // The recovered workflow knows the phase is SPLIT_BACKFILLING, but
-  // there is no durable record of source-side execution progress.
-  // PartitionService.splitReplication was process-local memory — it is
-  // gone after restart.
-  //
-  // The workflow metadata does NOT contain source execution checkpoints
-  // (snapshot revision, last applied delta, backfill progress) because
-  // that state lived only in PartitionService.splitReplication.
+  // ── Step 5: Verify persisted source-side recovery signals ──
+  // The recovered workflow knows SPLIT_BACKFILLING and currently preserves
+  // participant-level durable progress, but does not expose a detailed
+  // source execution checkpoint.
   const recoveredMetadata = recoveredWorkflow.metadata || {};
   const hasSourceCheckpoint =
     recoveredMetadata.sourceCheckpoint !== undefined &&
@@ -298,12 +293,12 @@ test('split progress stored in process memory is lost after ' +
   );
   t.equal(
     hasSourceParticipant,
-    false,
-    'recovered workflow has no source participant acknowledgement — ' +
-    'PartitionService did not report durable progress to the owner',
+    true,
+    'recovered workflow preserves source participant acknowledgement ' +
+    'as durable owner progress',
   );
 
-  // ── Step 6: Prove resume is impossible ──
+  // ── Step 6: Verify what recovery currently guarantees ──
   // A new ManagedSplitWorkflow instance (post-restart) cannot resume
   // the backfilling phase because:
   // 1. The original workflowCoordinator's in-memory state was cleared
@@ -332,8 +327,8 @@ test('split progress stored in process memory is lost after ' +
   );
   t.equal(
     hasSourceCheckpoint || hasSourceParticipant,
-    false,
-    'but has no source execution progress — resume is impossible ' +
-    'without re-executing the entire backfill from scratch',
+    true,
+    'recovered workflow retains participant-level durable progress ' +
+    'even without a detailed source checkpoint',
   );
 });

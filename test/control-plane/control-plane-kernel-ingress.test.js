@@ -256,7 +256,51 @@ test('ControlPlaneKernelIngress - prefers confirmed ingress lease and suppresses
     );
   });
 
-test('ControlPlaneKernelIngress - retains disconnected bootstrap ingress as fallback',
+test('ControlPlaneKernelIngress - prefers live local ingress over a stale confirmed remote lease',
+  async (t) => {
+    const ingress = new ControlPlaneKernelIngress({
+      nodeId: 'joining-node-4b',
+      getBootstrapResponse: () => ({
+        seedNodeId: 'seed-node-1',
+        messageGroupAssignment: {
+          strategy: AssignmentStrategy.MOVE_REPLICA,
+          groupId: 'mg-1',
+          peerAddresses: [
+            'seed-node-1/message-group/mg-1-r3',
+          ],
+        },
+      }),
+      getMessageRouter: () => ({
+        getConnectionState() {
+          return 'connected';
+        },
+      }),
+      getMessageGroupServices: () => new Map([
+        ['mg-1-r2', {
+          groupId: 'mg-1',
+          unifiedAddress: 'joining-node-4b/message-group/mg-1-r2',
+          isLeaderReplica: () => true,
+          isMetadataIngressReady: () => true,
+        }],
+      ]),
+    });
+
+    ingress.noteSuccessfulTarget('seed-node-1/message-group/mg-1-r3');
+
+    t.same(
+      ingress.resolveTargetCandidates({
+        allowBootstrapHints: true,
+        allowSelfTarget: true,
+      }),
+      [
+        'joining-node-4b/message-group/mg-1-r2',
+        'seed-node-1/message-group/mg-1-r3',
+      ],
+      'a live local ingress should outrank the stale remote lease',
+    );
+  });
+
+test('ControlPlaneKernelIngress - excludes disconnected bootstrap ingress candidates',
   async (t) => {
     const ingress = new ControlPlaneKernelIngress({
       nodeId: 'joining-node-5',
@@ -282,8 +326,7 @@ test('ControlPlaneKernelIngress - retains disconnected bootstrap ingress as fall
       ingress.resolveTargetCandidates({allowBootstrapHints: true}),
       [
         'seed-node-2/message-group/mg-1-r4',
-        'seed-node-1/message-group/mg-1-r3',
       ],
-      'disconnected ingress should remain eligible after connected targets so delivery can trigger reconnect',
+      'disconnected ingress should not be returned as a runtime delivery candidate',
     );
   });

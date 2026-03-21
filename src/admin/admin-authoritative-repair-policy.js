@@ -4,6 +4,8 @@ const AUTHORITATIVE_REPAIR_TRIGGER = Object.freeze({
   CACHE_STALE_WATERMARK: 'cache_stale_watermark',
   DISCOVERY_EMPTY_WITH_SERVICES_PRESENT:
     'discovery_empty_with_services_present',
+  DISCOVERY_NODE_COVERAGE_GAP:
+    'discovery_node_coverage_gap',
   DISCOVERY_ZERO_SCOPED_REPLICAS: 'discovery_zero_scoped_replicas',
   DISCOVERY_NO_READY_REPLICAS: 'discovery_no_ready_replicas',
   DISCOVERY_CACHE_GAP_REASON: 'discovery_cache_gap_reason',
@@ -131,8 +133,11 @@ function deriveAuthoritativeRepairTables(options = {}) {
       continue;
     }
     if (triggerCode ===
-          AUTHORITATIVE_REPAIR_TRIGGER
-            .DISCOVERY_EMPTY_WITH_SERVICES_PRESENT ||
+        AUTHORITATIVE_REPAIR_TRIGGER
+          .DISCOVERY_NODE_COVERAGE_GAP ||
+        triggerCode ===
+        AUTHORITATIVE_REPAIR_TRIGGER
+          .DISCOVERY_EMPTY_WITH_SERVICES_PRESENT ||
         triggerCode ===
           AUTHORITATIVE_REPAIR_TRIGGER
             .DISCOVERY_ZERO_SCOPED_REPLICAS ||
@@ -186,6 +191,13 @@ function evaluateAuthoritativeRepairPolicy(options = {}) {
     triggerCodes.push(
       AUTHORITATIVE_REPAIR_TRIGGER
         .DISCOVERY_EMPTY_WITH_SERVICES_PRESENT,
+    );
+  }
+
+  if (options.nodeCoverageGap === true) {
+    triggerCodes.push(
+      AUTHORITATIVE_REPAIR_TRIGGER
+        .DISCOVERY_NODE_COVERAGE_GAP,
     );
   }
 

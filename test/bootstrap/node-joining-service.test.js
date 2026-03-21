@@ -1032,7 +1032,7 @@ test('NodeJoiningService - NODE_STATE_UPDATE prefers local non-leader ingress ' 
   ], 'NODE_STATE_UPDATE should use the local ingress replica even before it becomes leader');
 });
 
-test('NodeJoiningService - keeps disconnected control-plane ingress as retryable candidate',
+test('NodeJoiningService - excludes disconnected control-plane ingress candidates',
   async (t) => {
     initializeTestEnvironment();
 
@@ -1069,13 +1069,14 @@ test('NodeJoiningService - keeps disconnected control-plane ingress as retryable
         allowBootstrapHints: true,
         allowSelfTarget: false,
       }),
-      ['seed-node-1/message-group/mg-1-r3'],
-      'known ingress should remain eligible even when the router must reconnect first',
+      [],
+      'disconnected ingress should not be returned until connectivity is re-established',
     );
 
-    await t.resolves(
+    await t.rejects(
       service.sendControlPlaneNodeStateUpdate({state: STATE.READY}),
-      'READY publication should still attempt delivery through the known ingress',
+      /No reachable control plane target address available/,
+      'READY publication should fail closed when no reachable control-plane ingress exists',
     );
   });
 
@@ -1193,6 +1194,68 @@ test('NodeJoiningService - reuses confirmed control-plane ingress after stale-ta
       service.controlPlaneKernelIngress.getConfirmedIngressLease()?.targetAddress,
       'seed-node-1/message-group/mg-1-r3',
       'successful retry should promote the fallback ingress into the kernel lease owner',
+    );
+  });
+
+test('NodeJoiningService - prefers live local control-plane ingress over a stale confirmed remote lease',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const service = new NodeJoiningService({
+      nodeId: 'joining-node-local-ingress',
+      nodeAddress: 'ws://localhost:90956',
+      seedNodeAddress: 'http://localhost:8080',
+    });
+
+    service.bootstrapResponse = {
+      seedNodeId: 'seed-node-1',
+      messageGroupAssignment: {
+        strategy: AssignmentStrategy.MOVE_REPLICA,
+        groupId: 'mg-1',
+        peerAddresses: [
+          'seed-node-1/message-group/mg-1-r3',
+        ],
+      },
+    };
+    service.messageRouter = {
+      getConnectionState() {
+        return 'connected';
+      },
+    };
+    service.controlPlaneKernelIngress = new ControlPlaneKernelIngress({
+      nodeId: service.nodeId,
+      ingressLeaseMs: 5000,
+      targetSuppressionMs: 5000,
+      getBootstrapResponse: () => service.bootstrapResponse,
+      getMessageRouter: () => service.messageRouter,
+      getMessageGroupServices: () => new Map([
+        ['mg-1-r1', {
+          groupId: 'mg-1',
+          unifiedAddress:
+            'joining-node-local-ingress/message-group/mg-1-r1',
+          isLeaderReplica: () => true,
+          isMetadataIngressReady: () => true,
+        }],
+      ]),
+    });
+    service.controlPlaneKernelIngress
+      .noteSuccessfulTarget('seed-node-1/message-group/mg-1-r3');
+
+    const deliveries = [];
+    service.messageRouter.deliver = async (targetAddress) => {
+      deliveries.push(targetAddress);
+      return {acknowledged: true};
+    };
+
+    await service.sendControlPlaneNodeStateUpdate({state: STATE.READY});
+
+    t.same(deliveries, [
+      'joining-node-local-ingress/message-group/mg-1-r1',
+    ], 'node-state publication should use the live local ingress before the stale remote lease');
+    t.equal(
+      service.controlPlaneKernelIngress.getConfirmedIngressLease()?.targetAddress,
+      'joining-node-local-ingress/message-group/mg-1-r1',
+      'successful local delivery should replace the stale remote lease',
     );
   });
 
@@ -1536,7 +1599,8 @@ test('NodeJoiningService - canonical endpoint CDC triggers one coalesced mesh re
     let releaseReconciliation;
     const connectCalls = [];
     service.messageRouter = {};
-    service.shouldReconnectClusterMesh = () => true;
+    service.joinReadinessEvaluator.shouldReconnectClusterMesh =
+      () => true;
     service.connectToClusterNodes = async () => {
       connectCalls.push('connect');
       await new Promise((resolve) => {
@@ -1715,7 +1779,7 @@ test('NodeJoiningService - steady ready heartbeats ignore stopped peers in mesh 
 
     await service.connectToClusterNodes();
     t.equal(
-      service.shouldReconnectClusterMesh(),
+      service.joinReadinessEvaluator.shouldReconnectClusterMesh(),
       false,
       'stopped peers should not keep mesh reconciliation armed',
     );
@@ -1781,7 +1845,7 @@ test('NodeJoiningService - shouldReconnectClusterMesh ignores peers already conn
       await service.connectToClusterNodes();
 
       t.equal(
-        service.shouldReconnectClusterMesh(),
+        service.joinReadinessEvaluator.shouldReconnectClusterMesh(),
         false,
         `mesh reconciliation should treat ${peerConnectionState} as already in progress`,
       );
@@ -1909,6 +1973,9 @@ test('NodeJoiningService - full join with CREATE_SELF_HOSTED', async (t) => {
     };
     service.initializeRuntimeServiceHandler = function() {
       // Skip runtime service handler initialization
+    };
+    service.registerMessageGroupService = async function() {
+      // Skip seed-side /register-service dependency in this unit fixture.
     };
     service.phaseWaitForLeadership = async function() {
       // Skip raft leadership wait in unit test environment
@@ -2157,7 +2224,8 @@ test('NodeJoiningService - activates message-group rows after membership write',
       order.push('opportunistic-backfill');
       return Promise.resolve();
     };
-    service.waitForCanonicalJoinReadinessConvergence = async () => {
+    service.joinReadinessEvaluator
+      .waitForCanonicalJoinReadinessConvergence = async () => {
       order.push('readiness');
     };
     service.signalReadyForReplicas = async () => {
@@ -2281,7 +2349,8 @@ test('NodeJoiningService - resumes same join session without replaying ' +
       throw new Error('query failed');
     }
   };
-  service.waitForCanonicalJoinReadinessConvergence = async () => {
+  service.joinReadinessEvaluator
+    .waitForCanonicalJoinReadinessConvergence = async () => {
     phaseCalls.push('readiness');
   };
   service.activateMessageGroupServiceRows = async () => {
@@ -2412,6 +2481,7 @@ test(
       service.messageGroupServiceEndpointsPublished = true;
     };
     service.signalReadyForReplicas = async () => {};
+    service.activateMessageGroupServiceRows = async () => {};
     service.systemCacheHydrated = true;
     service.joinReadinessSnapshotProvider = async () => {
       return {
@@ -2446,7 +2516,8 @@ test('NodeJoiningService - canonical join readiness reason classification is det
       seedNodeAddress: 'http://localhost:8080',
     });
 
-    const reasons = service.classifyCanonicalJoinReadinessReasons({
+    const reasons = service.joinReadinessEvaluator
+      .classifyCanonicalJoinReadinessReasons({
       routingReady: false,
       topologyReady: false,
       requiredSchemaVersion: '1740589945123:7:seed-1',
@@ -2485,12 +2556,14 @@ test('NodeJoiningService - canonical readiness accepts local kernel ingress',
       unifiedAddress:
         'joining-node-local-ingress/message-group/mg-local-r1',
       isLeaderReplica: () => true,
+      isMetadataIngressReady: () => true,
     });
 
-    const snapshot = service.buildCanonicalJoinReadinessSnapshot({
-      systemTableCache: new SystemTableCache(),
-      tableName: TABLES.SERVICES,
-    });
+    const snapshot = service.joinReadinessEvaluator
+      .buildCanonicalJoinReadinessSnapshot({
+        systemTableCache: new SystemTableCache(),
+        tableName: TABLES.SERVICES,
+      });
 
     t.equal(
       snapshot.controlPlaneTargetAddress,
@@ -2525,10 +2598,11 @@ test('NodeJoiningService - canonical readiness snapshot tracks active required n
       [COLUMN.STATUS]: 'active',
     });
 
-    const snapshot = service.buildCanonicalJoinReadinessSnapshot({
-      systemTableCache: cache,
-      tableName: TABLES.SERVICES,
-    });
+    const snapshot = service.joinReadinessEvaluator
+      .buildCanonicalJoinReadinessSnapshot({
+        systemTableCache: cache,
+        tableName: TABLES.SERVICES,
+      });
 
     t.same(
       snapshot.requiredNodeIds.sort(),
@@ -2569,10 +2643,11 @@ test('NodeJoiningService - canonical readiness snapshot uses bootstrap topology 
       },
     };
 
-    const snapshot = service.buildCanonicalJoinReadinessSnapshot({
-      systemTableCache: new SystemTableCache(),
-      tableName: TABLES.SERVICES,
-    });
+    const snapshot = service.joinReadinessEvaluator
+      .buildCanonicalJoinReadinessSnapshot({
+        systemTableCache: new SystemTableCache(),
+        tableName: TABLES.SERVICES,
+      });
 
     t.same(
       snapshot.requiredNodeIds.sort(),
@@ -2645,7 +2720,8 @@ test('NodeJoiningService - canonical join timeout preserves topology diagnostics
 
     let thrownError = null;
     try {
-      await service.waitForCanonicalJoinReadinessConvergence();
+      await service.joinReadinessEvaluator
+        .waitForCanonicalJoinReadinessConvergence();
     } catch (error) {
       thrownError = error;
     }
@@ -2751,7 +2827,8 @@ test('NodeJoiningService - canonical readiness blocked log includes control-plan
     });
 
     try {
-      await service.waitForCanonicalJoinReadinessConvergence();
+      await service.joinReadinessEvaluator
+        .waitForCanonicalJoinReadinessConvergence();
     } catch (_error) {
       // Expected timeout for the blocked readiness snapshot.
     }
@@ -2803,17 +2880,12 @@ test('NodeJoiningService - canonical join readiness repairs endpoint visibility'
     service.getMissingSystemServiceLeaders = () => ({});
     service.getBlockingSystemServiceLeaders = (missing) => missing;
     service.joinReadinessSnapshotProvider = async () => {
-      const topology = service.evaluateCanonicalJoinTopologyReadiness(cache);
       return {
+        ...service.joinReadinessEvaluator
+          .buildCanonicalJoinReadinessSnapshot({systemTableCache: cache}),
         routingReady: true,
-        topologyReady: topology.ready,
         requiredSchemaVersion: '1740589945123:7:seed-1',
         appliedSchemaVersion: '1740589945123:7:seed-1',
-        missingLeaders: topology.missingLeaders,
-        inFlightReplicaOperations: topology.inFlightReplicaOperations,
-        inFlightReplicaOperationDetails: topology.inFlightReplicaOperationDetails,
-        missingNodeEndpointNodeIds: topology.missingNodeEndpointNodeIds,
-        missingPostgresWireNodeIds: topology.missingPostgresWireNodeIds,
       };
     };
     service.backfillPropagatedCacheTablesFromAuthoritativeState = async (tableNames) => {
@@ -2843,7 +2915,8 @@ test('NodeJoiningService - canonical join readiness repairs endpoint visibility'
       [COLUMN.UPDATED_AT]: 2,
     });
 
-    await service.waitForCanonicalJoinReadinessConvergence();
+    await service.joinReadinessEvaluator
+      .waitForCanonicalJoinReadinessConvergence();
 
     t.equal(
       repairCalls.length,
@@ -2860,7 +2933,7 @@ test('NodeJoiningService - canonical join readiness repairs endpoint visibility'
     );
   });
 
-test('NodeJoiningService - canonical join topology waits for endpoint visibility',
+test('NodeJoiningService - canonical join readiness snapshot waits for endpoint visibility',
   async (t) => {
     initializeTestEnvironment();
 
@@ -2883,15 +2956,16 @@ test('NodeJoiningService - canonical join topology waits for endpoint visibility
       [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
     });
 
-    let topology = service.evaluateCanonicalJoinTopologyReadiness(cache);
-    t.equal(topology.ready, false, 'topology should fail closed without endpoints');
+    let snapshot = service.joinReadinessEvaluator
+      .buildCanonicalJoinReadinessSnapshot({systemTableCache: cache});
+    t.equal(snapshot.topologyReady, false, 'topology should fail closed without endpoints');
     t.same(
-      topology.missingNodeEndpointNodeIds,
+      snapshot.missingNodeEndpointNodeIds,
       ['joining-node-endpoint-gate'],
       'topology should require websocket node endpoints for the joining node',
     );
     t.same(
-      topology.missingPostgresWireNodeIds,
+      snapshot.missingPostgresWireNodeIds,
       ['joining-node-endpoint-gate'],
       'topology should require postgres-wire endpoints for the joining node',
     );
@@ -2903,10 +2977,11 @@ test('NodeJoiningService - canonical join topology waits for endpoint visibility
       [COLUMN.STATUS]: ENDPOINT_STATUS.ACTIVE,
     });
 
-    topology = service.evaluateCanonicalJoinTopologyReadiness(cache);
-    t.equal(topology.ready, false, 'topology should wait for every active postgres endpoint');
+    snapshot = service.joinReadinessEvaluator
+      .buildCanonicalJoinReadinessSnapshot({systemTableCache: cache});
+    t.equal(snapshot.topologyReady, false, 'topology should wait for every active postgres endpoint');
     t.same(
-      topology.missingPostgresWireNodeIds,
+      snapshot.missingPostgresWireNodeIds,
       ['joining-node-endpoint-gate'],
       'topology should identify nodes missing postgres-wire visibility',
     );
@@ -2918,8 +2993,9 @@ test('NodeJoiningService - canonical join topology waits for endpoint visibility
       health_status: 'healthy',
     });
 
-    topology = service.evaluateCanonicalJoinTopologyReadiness(cache);
-    t.equal(topology.ready, true, 'topology should become ready once endpoint visibility converges');
+    snapshot = service.joinReadinessEvaluator
+      .buildCanonicalJoinReadinessSnapshot({systemTableCache: cache});
+    t.equal(snapshot.topologyReady, true, 'topology should become ready once endpoint visibility converges');
   });
 
 test('NodeJoiningService - authoritative cache backfill closes the CDC blind window',
@@ -3014,24 +3090,26 @@ test('NodeJoiningService - authoritative cache backfill closes the CDC blind win
         },
       };
 
-      let topology = service.evaluateCanonicalJoinTopologyReadiness(cache);
-      t.equal(topology.ready, false,
+      let snapshot = service.joinReadinessEvaluator
+        .buildCanonicalJoinReadinessSnapshot({systemTableCache: cache});
+      t.equal(snapshot.topologyReady, false,
         'topology should fail before authoritative backfill restores missed rows');
       t.same(
-        topology.missingNodeEndpointNodeIds,
+        snapshot.missingNodeEndpointNodeIds,
         ['joining-node-backfill-gate'],
         'joining node websocket endpoint should be missing before backfill',
       );
       t.same(
-        topology.missingPostgresWireNodeIds,
+        snapshot.missingPostgresWireNodeIds,
         ['joining-node-backfill-gate'],
         'joining node postgres-wire endpoint should be missing before backfill',
       );
 
       await service.backfillPropagatedCacheTablesFromAuthoritativeState();
 
-      topology = service.evaluateCanonicalJoinTopologyReadiness(cache);
-      t.equal(topology.ready, true,
+      snapshot = service.joinReadinessEvaluator
+        .buildCanonicalJoinReadinessSnapshot({systemTableCache: cache});
+      t.equal(snapshot.topologyReady, true,
         'topology should converge after authoritative backfill restores missed rows');
       t.ok(
         queriedTables.includes(TABLES.NODE_ENDPOINTS),
@@ -3659,8 +3737,7 @@ test('NodeJoiningService - registerNodeInCluster seeds local discovery-critical 
         sqlQueryEngine: {},
       };
       service.getNodeStorageBudgetService = () => ({
-        registerNodeBudget: async ({nodeRow}) => ({
-          result: {success: true},
+        resolveBudgetRow: (nodeRow) => ({
           budgetRow: {
             ...nodeRow,
             [COLUMN.STORAGE_BUDGET_BYTES]: 1024,
@@ -4005,6 +4082,9 @@ test('NodeJoiningService - emits events', async (t) => {
     service.initializeControlPlaneService = async function() {};
     service.initializeRuntimeServiceHandler = function() {};
     service.signalReadyForReplicas = async function() {};
+    service.activateMessageGroupServiceRows = async function() {};
+    service.joinReadinessEvaluator
+      .waitForCanonicalJoinReadinessConvergence = async function() {};
 
     const events = [];
     service.on('phaseStart', (data) => events.push({type: 'start', phase: data.phase}));

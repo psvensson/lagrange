@@ -2,6 +2,9 @@ import {AddressManager} from '../../address/address-manager.js';
 import {PartitionServiceRowOwner} from
   '../../partition/partition-service-row-owner.js';
 import {
+  isRetryableControlPlaneError,
+} from '../../control-plane/control-plane-error-classification.js';
+import {
   ENTITY_TYPE,
   TYPEOF,
 } from '../../constants/index.js';
@@ -19,15 +22,6 @@ const PARTITION_SERVICE_ACTIVATION_ERROR = Object.freeze({
     `Partition service activation requires replica handler ` +
     `registration for ${replicaId}`,
 });
-const TRANSIENT_ACTIVATION_ERROR_FRAGMENTS = Object.freeze([
-  'Distributed operation failed due to participant failures',
-  'Outbound queue for node',
-  'No connection to node',
-  'Connection to node',
-  'Message timeout',
-  'closed',
-]);
-
 function resolveReplicaUnifiedAddress(nodeId, replicaId, service) {
   if (service &&
       typeof service.getUnifiedAddress === TYPEOF.FUNCTION) {
@@ -45,14 +39,7 @@ function resolveReplicaUnifiedAddress(nodeId, replicaId, service) {
 }
 
 function isTransientActivationError(error) {
-  if (error?.deferRetry === true ||
-      error?.code === 'CONTROL_PLANE_PRESSURE_DEGRADED') {
-    return true;
-  }
-  const message = error?.message || '';
-  return TRANSIENT_ACTIVATION_ERROR_FRAGMENTS.some((fragment) =>
-    message.includes(fragment),
-  );
+  return isRetryableControlPlaneError(error);
 }
 
 async function activatePartitionServiceRows(options = {}) {

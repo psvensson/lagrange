@@ -1480,7 +1480,7 @@ test('BootstrapAPI - releases bootstrap admission slot after request failure',
     await api.shutdown();
   });
 
-test('BootstrapAPI - returns bootstrap state while raft leaders are still settling', async (t) => {
+test('BootstrapAPI - returns bootstrap not ready while partition leaders are still settling', async (t) => {
   initializeTestEnvironment();
 
   const mockSystemTableCache = {
@@ -1538,10 +1538,10 @@ test('BootstrapAPI - returns bootstrap state while raft leaders are still settli
     },
   });
 
-  t.equal(response.statusCode, 200,
-    'should not block bootstrap admission solely on settling leader metadata');
+  t.equal(response.statusCode, 503,
+    'should block bootstrap admission while partition leader metadata is incomplete');
   const body = JSON.parse(response.body);
-  t.equal(body.success, true, 'should still return a successful bootstrap envelope');
+  t.equal(body.success, false, 'should return the canonical not-ready bootstrap envelope');
   t.equal(body.leaderReadiness.ready, false,
     'should expose degraded leader readiness in the bootstrap response');
   t.equal(body.leaderReadiness.missingPartitionLeaders[0], 'partition-1',

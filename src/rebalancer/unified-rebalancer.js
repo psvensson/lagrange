@@ -30,6 +30,9 @@ import {
   ControlPlaneSystemTableGateway,
 } from '../control-plane/control-plane-system-table-gateway.js';
 import {
+  isNodeReadyWithConnection,
+  isNodeReadyWithTransport,
+  isNodeRecordReady,
   wasNodeRecordReadyWhenWritten,
 } from '../node/node-readiness-policy.js';
 import {
@@ -37,7 +40,6 @@ import {
   PressureGovernor,
 } from '../control-plane/pressure-governor.js';
 import {
-  CONTROL_PLANE_MUTATION_WORK_CLASS,
   getLocalControlPlaneMutationReadinessBlocker,
 } from '../control-plane/control-plane-mutation-readiness.js';
 import {RAFT_ROLE} from '../raft/constants.js';
@@ -58,6 +60,7 @@ import {
   REBALANCER_SKIP_REASON,
   REBALANCER_SUBSYSTEM,
   REBALANCER_TRIGGER,
+  READINESS_SKIP_DETAIL,
   STABILIZATION_RESET_TRIGGER,
 } from './rebalancer-constants.js';
 import {
@@ -69,6 +72,7 @@ import {
   META_SERVICE_ID,
   NUM,
   STATE,
+  SERVICE_STATUS,
   TABLES,
   TRANSPORT_TYPE,
   TYPEOF,
@@ -304,6 +308,7 @@ class UnifiedRebalancer extends EventEmitter {
         storageAccountingService: this.storageAccountingService,
         cdcIntegrationService: this.cdcIntegrationService,
         cdcGroupPropagationService: this.cdcGroupPropagationService,
+        controlPlaneSystemTableGateway: this.controlPlaneSystemTableGateway,
       });
 
     // Cluster readiness gate (optional, for bootstrap-lifecycle-hardening)
@@ -368,6 +373,64 @@ class UnifiedRebalancer extends EventEmitter {
       entityType: this.entityType,
       hasCoordinator: !!coordinator,
     });
+  }
+
+  /**
+   * Synchronize mutable runtime dependencies after construction.
+   * @param {Object} [options={}]
+   */
+  syncOwnerDependencies(options = {}) {
+    if (Object.hasOwn(options, 'systemTableCache')) {
+      this.systemTableCache = options.systemTableCache || null;
+    }
+    if (Object.hasOwn(options, 'cdcIntegrationService')) {
+      this.cdcIntegrationService = options.cdcIntegrationService || null;
+    }
+    if (Object.hasOwn(options, 'tablePolicyService')) {
+      this.tablePolicyService = options.tablePolicyService || null;
+    }
+    if (Object.hasOwn(options, 'messageRouter')) {
+      this.messageRouter = options.messageRouter || null;
+    }
+    if (Object.hasOwn(options, 'sqlQueryEngine')) {
+      this.sqlQueryEngine = options.sqlQueryEngine || null;
+    }
+
+    if (this.controlPlaneSystemTableGateway) {
+      if (typeof this.controlPlaneSystemTableGateway
+        .setSqlQueryEngine === TYPEOF.FUNCTION) {
+        this.controlPlaneSystemTableGateway
+          .setSqlQueryEngine(this.sqlQueryEngine);
+      }
+      if (typeof this.controlPlaneSystemTableGateway
+        .setCdcIntegrationService === TYPEOF.FUNCTION) {
+        this.controlPlaneSystemTableGateway
+          .setCdcIntegrationService(this.cdcIntegrationService);
+      }
+      if (typeof this.controlPlaneSystemTableGateway
+        .setMessageRouter === TYPEOF.FUNCTION) {
+        this.controlPlaneSystemTableGateway
+          .setMessageRouter(this.messageRouter);
+      }
+    }
+
+    if (this.controlPlaneReadinessService &&
+        typeof this.controlPlaneReadinessService
+          .syncOwnerDependencies === TYPEOF.FUNCTION) {
+      this.controlPlaneReadinessService.syncOwnerDependencies({
+        systemTableCache: this.systemTableCache,
+        cacheMutationTarget: this.systemTableCache,
+        messageRouter: this.messageRouter,
+        cdcIntegrationService: this.cdcIntegrationService,
+      });
+    }
+
+    if (Object.hasOwn(options, 'rebalanceCoordinator')) {
+      this.setRebalanceCoordinator(options.rebalanceCoordinator || null);
+      return;
+    }
+
+    this.syncOwnerDependenciesFromCoordinator(this.rebalanceCoordinator);
   }
 
   /**
@@ -1069,25 +1132,24 @@ class UnifiedRebalancer extends EventEmitter {
       return false;
     }
 
-    // Transport-level checks beyond canonical readiness dimensions.
-    // Connection state, outbound queue, and optional ping verify live
-    // reachability that cache-based readiness cannot observe.
-    if (!this.isTransportReady(nodeId)) {
-      return false;
-    }
-
-    if (this.enableReadinessPing) {
-      return this.checkReadinessPing(nodeId);
-    }
-
-    return true;
+    // Delegate transport-level checks (connection, outbound queue, and
+    // optional ping) to the canonical readiness policy owner.
+    return isNodeReadyWithTransport({
+      nodeId,
+      systemTableCache: this.systemTableCache,
+      messageRouter: this.messageRouter,
+      requireOutboundQueue: true,
+      enableReadinessPing: this.enableReadinessPing,
+      readinessPingTimeoutMs: this.readinessPingTimeoutMs,
+    });
   }
 
   /**
-   * Check transport-level reachability for a node.
-   * Verifies connection state and outbound queue availability via
-   * the message router. These checks complement the canonical
-   * readiness dimensions which are cache-based.
+   * Thin adapter: check transport-level reachability for a node.
+   * Delegates to node-readiness-policy isNodeReadyWithTransport with
+   * rebalancer-specific defaults (outbound queue required, no ping).
+   * Kept for API compatibility; the main readiness path (isNodeReady)
+   * calls the policy owner directly.
    * @param {string} nodeId - Node ID.
    * @return {boolean} True when transport is ready.
    */
@@ -1110,7 +1172,11 @@ class UnifiedRebalancer extends EventEmitter {
   }
 
   /**
-   * Perform an optional readiness ping to verify live reachability.
+   * Thin adapter: perform an optional readiness ping via the policy
+   * owner. Composes isNodeReadyWithTransport with ping enabled and
+   * rebalancer-specific timeout.
+   * Kept for API compatibility; the main readiness path (isNodeReady)
+   * calls the policy owner directly.
    * @param {string} nodeId - Node ID.
    * @return {Promise<boolean>} True when ping succeeds.
    */
@@ -1124,6 +1190,72 @@ class UnifiedRebalancer extends EventEmitter {
       this.readinessPingTimeoutMs :
       NUM.ZERO;
     return router.pingNode(nodeId, pingTimeout);
+  }
+
+  /**
+   * Determine the specific readiness skip reason for a node.
+   * Checks each readiness dimension in order and returns the first
+   * failing reason, preserving granularity for diagnostics
+   * (Requirement 5.3, Design D6.3).
+   *
+   * @param {string} nodeId - Node ID.
+   * @return {Promise<string|null>} Skip detail from
+   *   READINESS_SKIP_DETAIL, or null when node is ready.
+   */
+  async getNodeReadinessSkipReason(nodeId) {
+    if (await this.isNodeReady(nodeId)) {
+      return null;
+    }
+
+    const readiness = this.controlPlaneReadinessService
+      .getNodeReadinessSync(nodeId);
+    if (!readiness || !readiness.dimensions ||
+        readiness.dimensions[
+          CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE
+        ] !== true) {
+      // Determine whether the rejection is lease or status.
+      const nodeRow = this.systemTableCache.get(
+        TABLES.NODES, nodeId,
+      );
+      if (!nodeRow) {
+        return READINESS_SKIP_DETAIL.REPAIR_INELIGIBLE;
+      }
+      if (nodeRow.status !== SERVICE_STATUS.ACTIVE) {
+        return READINESS_SKIP_DETAIL.STATUS_NOT_ACTIVE;
+      }
+      const leaseExpiry = Number(nodeRow.ready_lease_expires_at);
+      if (!Number.isFinite(leaseExpiry) || leaseExpiry <= Date.now()) {
+        return READINESS_SKIP_DETAIL.LEASE_EXPIRED;
+      }
+      return READINESS_SKIP_DETAIL.REPAIR_INELIGIBLE;
+    }
+
+    // Record-level checks passed; check transport dimensions.
+    const router = this.messageRouter;
+    if (!router || typeof router.getConnectionState !== TYPEOF.FUNCTION) {
+      return READINESS_SKIP_DETAIL.CONNECTION_DOWN;
+    }
+    if (router.getConnectionState(nodeId) !== STATE.CONNECTED) {
+      return READINESS_SKIP_DETAIL.CONNECTION_DOWN;
+    }
+
+    if (typeof router.isOutboundQueueAvailable === TYPEOF.FUNCTION &&
+        !router.isOutboundQueueAvailable(nodeId)) {
+      return READINESS_SKIP_DETAIL.OUTBOUND_QUEUE_UNAVAILABLE;
+    }
+
+    if (this.enableReadinessPing &&
+        typeof router.pingNode === TYPEOF.FUNCTION) {
+      const pingTimeout = Number.isFinite(this.readinessPingTimeoutMs) ?
+        this.readinessPingTimeoutMs :
+        NUM.ZERO;
+      const ok = await router.pingNode(nodeId, pingTimeout);
+      if (!ok) {
+        return READINESS_SKIP_DETAIL.PING_FAILED;
+      }
+    }
+
+    return READINESS_SKIP_DETAIL.REPAIR_INELIGIBLE;
   }
 
   /**
@@ -1166,9 +1298,37 @@ class UnifiedRebalancer extends EventEmitter {
    * @private
    */
   isOperationForEntity(operation) {
-    const entityType = operation.entity_type || EntityType.PARTITION;
-    const entityId = operation.entity_id || operation.partition_id;
+    const entityType =
+      operation?.entity_type ||
+      operation?.entityType ||
+      EntityType.PARTITION;
+    const entityId =
+      operation?.entity_id ||
+      operation?.entityId ||
+      operation?.partition_id ||
+      operation?.partitionId ||
+      null;
     return entityType === this.entityType && entityId === this.entityId;
+  }
+
+  /**
+   * @param {Object} operation
+   * @return {boolean}
+   * @private
+   */
+  isTrackedInFlightOperation(operation) {
+    const operationType =
+      operation?.type ||
+      operation?.operation_type ||
+      operation?.operationType ||
+      null;
+    if (operationType &&
+        !isCoordinatorOwnedOperationType(operationType)) {
+      return false;
+    }
+    return !TERMINAL_STATUSES.includes(
+      String(operation?.status || '').toLowerCase(),
+    );
   }
 
   /**
@@ -1181,10 +1341,7 @@ class UnifiedRebalancer extends EventEmitter {
     return this.systemTableCache.filter(
       SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
       (operation) => {
-        if (!isCoordinatorOwnedOperationType(operation?.type)) {
-          return false;
-        }
-        if (TERMINAL_STATUSES.includes(operation.status)) {
+        if (!this.isTrackedInFlightOperation(operation)) {
           return false;
         }
         return this.isOperationForEntity(operation);
@@ -1414,17 +1571,20 @@ class UnifiedRebalancer extends EventEmitter {
 
     try {
       if (move?.nodeId) {
-        const ready = await this.isNodeReady(move.nodeId);
-        if (!ready) {
+        const skipDetail =
+          await this.getNodeReadinessSkipReason(move.nodeId);
+        if (skipDetail !== null) {
           this.logger.debug(REBALANCER_LOG_MSG.SKIP_UNREADY_NODE, {
             entityId: this.entityId,
             nodeId: move.nodeId,
             moveType: move.type,
+            skipDetail,
           });
           return {
             success: false,
             skipped: true,
-            reason: 'node_not_ready',
+            reason: REBALANCER_SKIP_REASON.NODE_NOT_READY,
+            skipDetail,
             operation: move.type,
             nodeId: move.nodeId,
             replicaId: move.replicaId,
@@ -1507,21 +1667,30 @@ class UnifiedRebalancer extends EventEmitter {
       throw new Error(`Unsupported move type: ${move.type}`);
     }
 
-    // Create operation record via coordinator
+    const operationRequest = {
+      type: operationType,
+      partitionId: this.entityId,
+      entityType: this.entityType,
+      entityId: this.entityId,
+      nodeId: move.nodeId,
+      replicaId: move.replicaId,
+      sourceNodeId: move.sourceNodeId,
+      enforceConcurrentOperationBudget: true,
+    };
+    if (move?.controlPlaneMutationWorkClass) {
+      operationRequest.controlPlaneMutationWorkClass =
+        move.controlPlaneMutationWorkClass;
+    }
+
+    // Create operation record via coordinator.
+    // Periodic planning already gates on local mutation readiness before
+    // enqueueing moves, so direct move execution should only opt into
+    // background mutation gating when the caller explicitly requests it.
     let operation = null;
     try {
-      operation = await this.rebalanceCoordinator.createOperation({
-        type: operationType,
-        partitionId: this.entityId,
-        entityType: this.entityType,
-        entityId: this.entityId,
-        nodeId: move.nodeId,
-        replicaId: move.replicaId,
-        sourceNodeId: move.sourceNodeId,
-        enforceConcurrentOperationBudget: true,
-        controlPlaneMutationWorkClass:
-          CONTROL_PLANE_MUTATION_WORK_CLASS.BACKGROUND,
-      });
+      operation = await this.rebalanceCoordinator.createOperation(
+        operationRequest,
+      );
     } catch (error) {
       if (error?.rebalanceSkipReason) {
         return {
@@ -1622,16 +1791,17 @@ class UnifiedRebalancer extends EventEmitter {
     const interBatchDelayMs = Number.isFinite(this.interBatchDelayMs) &&
       this.interBatchDelayMs > 0 ? this.interBatchDelayMs : 0;
     const readinessByNodeId = new Map();
-    const isNodeReadyCached = async (nodeId) => {
+    const getSkipReasonCached = async (nodeId) => {
       if (!nodeId) {
-        return true;
+        return null;
       }
       if (readinessByNodeId.has(nodeId)) {
         return readinessByNodeId.get(nodeId);
       }
-      const ready = await this.isNodeReady(nodeId);
-      readinessByNodeId.set(nodeId, ready);
-      return ready;
+      const skipDetail =
+        await this.getNodeReadinessSkipReason(nodeId);
+      readinessByNodeId.set(nodeId, skipDetail);
+      return skipDetail;
     };
 
     const movesToExecute = [];
@@ -1642,8 +1812,9 @@ class UnifiedRebalancer extends EventEmitter {
       }
       if ((move?.type === MoveType.ADD || move?.type === MoveType.REPLACE) &&
           move?.nodeId) {
-        const addTargetReady = await isNodeReadyCached(move.nodeId);
-        if (!addTargetReady) {
+        const skipDetail =
+          await getSkipReasonCached(move.nodeId);
+        if (skipDetail !== null) {
           blockedAddNodeIds.add(move.nodeId);
         }
       }
@@ -1676,18 +1847,20 @@ class UnifiedRebalancer extends EventEmitter {
         break;
       }
       if (nodeId) {
-        const ready = await isNodeReadyCached(nodeId);
-        if (!ready) {
+        const skipDetail = await getSkipReasonCached(nodeId);
+        if (skipDetail !== null) {
           this.logger.debug(REBALANCER_LOG_MSG.SKIP_BATCH_UNREADY, {
             entityId: this.entityId,
             nodeId,
             moveCount: nodeMoves.length,
+            skipDetail,
           });
           for (const move of nodeMoves) {
             results.push({
               success: false,
               skipped: true,
-              reason: 'node_not_ready',
+              reason: REBALANCER_SKIP_REASON.NODE_NOT_READY,
+              skipDetail,
               operation: move.type,
               nodeId: move.nodeId,
               replicaId: move.replicaId,
@@ -1709,19 +1882,24 @@ class UnifiedRebalancer extends EventEmitter {
         results.push(...batchResults);
 
         if (nodeId) {
-          const stillReady = await this.isNodeReady(nodeId);
-          if (!stillReady) {
-            this.logger.debug(REBALANCER_LOG_MSG.NODE_DISCONNECTED_BATCH, {
-              entityId: this.entityId,
-              nodeId,
-              remainingMoves: nodeMoves.length - (i + batch.length),
-            });
+          const midBatchSkip =
+            await this.getNodeReadinessSkipReason(nodeId);
+          if (midBatchSkip !== null) {
+            this.logger.debug(
+              REBALANCER_LOG_MSG.NODE_DISCONNECTED_BATCH, {
+                entityId: this.entityId,
+                nodeId,
+                remainingMoves:
+                  nodeMoves.length - (i + batch.length),
+                skipDetail: midBatchSkip,
+              });
             const remainingMoves = nodeMoves.slice(i + batch.length);
             for (const move of remainingMoves) {
               results.push({
                 success: false,
                 skipped: true,
-                reason: 'node_not_ready',
+                reason: REBALANCER_SKIP_REASON.NODE_NOT_READY,
+                skipDetail: midBatchSkip,
                 operation: move.type,
                 nodeId: move.nodeId,
                 replicaId: move.replicaId,

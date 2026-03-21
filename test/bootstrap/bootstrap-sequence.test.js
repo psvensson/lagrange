@@ -119,21 +119,26 @@ test('BootstrapService - activates message-group rows after seed registration',
       wsPort: 12001,
     });
 
-    bootstrap.phaseInfrastructure = async () => {
-      order.push('infrastructure');
-    };
-    bootstrap.phaseMessageGroups = async () => {
-      order.push('message-groups');
-    };
-    bootstrap.phasePartitions = async () => {
-      order.push('partitions');
-    };
-    bootstrap.phaseRegistration = async () => {
-      order.push('registration');
-    };
-    bootstrap.phaseCacheHydration = async () => {
-      order.push('cache-hydration');
-    };
+    bootstrap.seedInfrastructurePhase.phaseInfrastructure =
+      async () => {
+        order.push('infrastructure');
+      };
+    bootstrap.seedMessageGroupsPhase.phaseMessageGroups =
+      async () => {
+        order.push('message-groups');
+      };
+    bootstrap.seedPartitionsPhase.phasePartitions =
+      async () => {
+        order.push('partitions');
+      };
+    bootstrap.seedRegistrationPhase.phaseRegistration =
+      async () => {
+        order.push('registration');
+      };
+    bootstrap.seedCacheHydrationPhase.phaseCacheHydration =
+      async () => {
+        order.push('cache-hydration');
+      };
     bootstrap.initializeReplicaHandler = () => {
       order.push('replica-handler');
     };
@@ -154,9 +159,10 @@ test('BootstrapService - activates message-group rows after seed registration',
     bootstrap.initializeRuntimeServiceHandler = () => {
       order.push('runtime-handler');
     };
-    bootstrap.startLatencyTopologyLifecycle = () => {
-      order.push('latency-topology');
-    };
+    bootstrap.seedCacheHydrationPhase
+      .startLatencyTopologyLifecycle = () => {
+        order.push('latency-topology');
+      };
     bootstrap.activateControlPlaneBackgroundWriters = () => {
       order.push('background-writers');
     };
@@ -434,7 +440,8 @@ test('Bootstrap sequence - partition leadership wait fails when no leaders', asy
   };
 
   try {
-    await bootstrap.waitForPartitionLeadership();
+    await bootstrap.seedPartitionsPhase
+      .waitForPartitionLeadership();
     t.fail('should throw when partition leadership is missing');
   } catch (error) {
     t.match(error.message, /Partition leaders not established within 5ms/,

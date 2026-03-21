@@ -34,8 +34,8 @@ function createMockCDCService() {
   const updates = [];
   return {
     updates,
-    updateSystemTableRow: async (tableName, id, updateData) => {
-      updates.push({tableName, id, data: updateData});
+    updateSystemTableRow: async (tableName, whereClause, updateData) => {
+      updates.push({tableName, whereClause, data: updateData});
       return {success: true};
     },
   };
@@ -327,7 +327,7 @@ test('TablePolicyService - updateTablePolicy writes via CDC',
       'Should have one CDC update');
     t.equal(mockCDC.updates[0].tableName, 'tables',
       'Should update tables table');
-    t.equal(mockCDC.updates[0].id, 'table-1',
+    t.same(mockCDC.updates[0].whereClause, {table_id: 'table-1'},
       'Should update correct table');
 
     const updatedPolicy =

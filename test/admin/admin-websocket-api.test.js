@@ -15,6 +15,8 @@ import {
 } from '../../src/admin/admin-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
 import {createReadOnlyCache} from '../../src/cache/read-only-system-table-cache.js';
+import {getSystemCachePrimaryKeyField} from
+  '../../src/cache/system-cache-key-descriptor.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {createInProcWebSocketPair} from '../../src/test-helpers/inproc-ws.js';
@@ -140,6 +142,132 @@ function getAuthoritativeRepairReadTables(statements = []) {
     })
     .filter(Boolean))]
     .sort();
+}
+
+/**
+ * Create a deterministic authoritative-cache reconcile gateway for tests.
+ * @param {SystemTableCache} writableCache
+ * @param {Object} [options={}]
+ * @param {Object|null} [options.queryEngine]
+ * @param {Object<string, Array<Object>|Function>} [options.readRowsByTable]
+ * @return {Object}
+ */
+function createAuthoritativeCacheGateway(writableCache, options = {}) {
+  const queryEngine = options.queryEngine || null;
+  const readRowsByTable = options.readRowsByTable || {};
+  const executeReadCalls = [];
+  const cloneRows = (rows) => Array.isArray(rows) ? rows.map((row) => ({...row})) : [];
+  const resolveAuthoritativeRows = async (tableName, readIntent = {}) => {
+    const tableOverride = readRowsByTable[tableName];
+    if (typeof tableOverride === 'function') {
+      return cloneRows(await tableOverride(tableName, readIntent));
+    }
+    if (Array.isArray(tableOverride)) {
+      return cloneRows(tableOverride);
+    }
+
+    if (queryEngine && typeof queryEngine.executeRequest === 'function') {
+      const queryResult = await queryEngine.executeRequest({
+        statement: readIntent?.sql || `SELECT * FROM ${tableName}`,
+        params: Array.isArray(readIntent?.params) ? readIntent.params : [],
+      });
+      if (queryResult?.success !== true) {
+        return null;
+      }
+      return cloneRows(queryResult?.rows);
+    }
+
+    return cloneRows(writableCache?.getAll(tableName));
+  };
+
+  return {
+    executeReadCalls,
+    async executeRead(readIntent = {}, readOptions = {}) {
+      const statement = String(readIntent?.sql || '').trim();
+      const statementMatch = statement.match(/^select \* from ([a-z_]+)$/i);
+      const tableName = String(
+        readIntent?.tableName ||
+          statementMatch?.[1] ||
+          '',
+      )
+        .trim()
+        .toLowerCase();
+      executeReadCalls.push({
+        tableName,
+        sql: statement,
+        strategy: readIntent?.strategy || null,
+        owner: readIntent?.owner || null,
+        options: {...readOptions},
+      });
+      if (tableName.length === 0) {
+        return {
+          success: false,
+          tableName: null,
+          rows: [],
+          error: 'table_name_required',
+        };
+      }
+      const rows = await resolveAuthoritativeRows(tableName, readIntent);
+      if (!rows) {
+        return {
+          success: false,
+          tableName,
+          rows: [],
+          error: 'authoritative_query_failed',
+        };
+      }
+      return {
+        success: true,
+        tableName,
+        rows,
+      };
+    },
+    async reconcileAuthoritativeCacheRows(
+      tableName,
+      authoritativeRows,
+      options = {},
+    ) {
+      const cacheTarget = options.cacheMutationTarget || writableCache;
+      const keyField =
+        options.primaryKeyField || getSystemCachePrimaryKeyField(tableName);
+      const cachedRows = Array.isArray(options.cachedRows) ?
+        options.cachedRows :
+        cacheTarget.getAll(tableName);
+      const cachedByKey = new Map(
+        cachedRows
+          .map((row) => [String(row?.[keyField] || ''), row])
+          .filter(([key]) => key.length > 0),
+      );
+      const authoritativeByKey = new Map(
+        (Array.isArray(authoritativeRows) ? authoritativeRows : [])
+          .map((row) => [String(row?.[keyField] || ''), row])
+          .filter(([key]) => key.length > 0),
+      );
+      let mutationCount = 0;
+
+      for (const [key, row] of authoritativeByKey.entries()) {
+        cacheTarget.applySystemTableChange(
+          tableName,
+          cachedByKey.has(key) ? 'UPDATE' : 'INSERT',
+          {...row},
+        );
+        mutationCount += 1;
+      }
+
+      for (const [key, row] of cachedByKey.entries()) {
+        if (authoritativeByKey.has(key)) {
+          continue;
+        }
+        cacheTarget.applySystemTableChange(tableName, 'DELETE', {...row});
+        mutationCount += 1;
+      }
+
+      return {
+        success: true,
+        mutationCount,
+      };
+    },
+  };
 }
 
 /**
@@ -2446,6 +2574,9 @@ test('AdminWebSocketAPI - forced control snapshot query routes through ' +
     nodeId: 'test-node',
     systemTableCache: createReadOnlyCache(writableCache),
     cacheMutationTarget: writableCache,
+    controlPlaneSystemTableGateway: createAuthoritativeCacheGateway(writableCache, {
+      queryEngine: repairEngine,
+    }),
     sqlQueryEngine: repairEngine,
   });
 
@@ -2464,7 +2595,97 @@ test('AdminWebSocketAPI - forced control snapshot query routes through ' +
 });
 
 test(
-  'AdminWebSocketAPI - local control snapshot repairs partition topology gaps',
+  'AdminWebSocketAPI - forced control snapshot query fails when authoritative repair cannot apply',
+  async (t) => {
+    const writableCache = createPopulatedCache();
+    const authoritativeGateway = createAuthoritativeCacheGateway(writableCache, {
+      readRowsByTable: {
+        [TABLES.PARTITIONS]: async () => {
+          throw new Error('authoritative_partitions_unavailable');
+        },
+      },
+    });
+    const api = new AdminWebSocketAPI({
+      nodeId: 'test-node',
+      systemTableCache: createReadOnlyCache(writableCache),
+      cacheMutationTarget: writableCache,
+      controlPlaneSystemTableGateway: authoritativeGateway,
+      sqlQueryEngine: createMockQueryEngine(),
+    });
+
+    await t.rejects(
+      api.buildControlSnapshotQueryResult({
+        forceAuthoritativeRepair: true,
+      }),
+      /authoritative control snapshot repair failed/i,
+      'forced control snapshot should fail closed when authoritative repair cannot complete',
+    );
+  },
+);
+
+test(
+  'AdminWebSocketAPI - control snapshot builder stays local unless force repair is explicit',
+  async (t) => {
+    const nowMs = 1740589945123;
+    const staleHeartbeatMs = nowMs - 45000;
+    const writableCache = createAuthoritativeRepairCache('node-local');
+    writableCache.applySystemTableChange(TABLES.NODES, 'UPDATE', {
+      id: 'node-local',
+      node_id: 'node-local',
+      address: 'localhost:8080',
+      node_address: 'localhost:8080',
+      status: 'active',
+      connection_state: 'ready',
+      last_heartbeat: staleHeartbeatMs,
+      ready_lease_expires_at: staleHeartbeatMs + 15000,
+    });
+
+    const authoritativeNodes = [
+      {
+        ...writableCache.get(TABLES.NODES, 'node-local'),
+        last_heartbeat: nowMs - 1000,
+      },
+    ];
+    const repairEngine = createSystemTableRepairQueryEngine({
+      [TABLES.NODES]: authoritativeNodes,
+      [TABLES.PARTITIONS]: writableCache.getAll(TABLES.PARTITIONS),
+      [TABLES.SERVICES]: writableCache.getAll(TABLES.SERVICES),
+      [TABLES.TABLES]: writableCache.getAll(TABLES.TABLES),
+      [TABLES.NODE_ENDPOINTS]: writableCache.getAll(TABLES.NODE_ENDPOINTS),
+      [TABLES.SERVICE_DEFINITIONS]:
+        writableCache.getAll(TABLES.SERVICE_DEFINITIONS),
+      [TABLES.SERVICE_ENDPOINTS]:
+        writableCache.getAll(TABLES.SERVICE_ENDPOINTS),
+      [TABLES.REPLICA_OPERATIONS]:
+        writableCache.getAll(TABLES.REPLICA_OPERATIONS),
+    });
+
+    const api = new AdminWebSocketAPI({
+      nodeId: 'node-local',
+      systemTableCache: createReadOnlyCache(writableCache),
+      cacheMutationTarget: writableCache,
+      sqlQueryEngine: repairEngine,
+      nowFn: () => nowMs,
+    });
+
+    const result = await api.buildControlSnapshotQueryResult();
+
+    t.equal(result.success, true, 'local control snapshot should still succeed');
+    t.equal(
+      repairEngine.executeRequestCalls.length,
+      0,
+      'non-forced control snapshot builder should not trigger authoritative reads',
+    );
+    t.equal(
+      writableCache.get(TABLES.NODES, 'node-local')?.last_heartbeat,
+      staleHeartbeatMs,
+      'non-forced control snapshot builder should preserve local cache state',
+    );
+  },
+);
+
+test(
+  'AdminWebSocketAPI - forced control snapshot repairs partition topology gaps',
   async (t) => {
     const tableId = 'table-benchmark-events';
     const sourcePartitionId = 'partition-benchmark-events-v1';
@@ -2531,10 +2752,15 @@ test(
       nodeId: 'test-node',
       systemTableCache: createReadOnlyCache(writableCache),
       cacheMutationTarget: writableCache,
+      controlPlaneSystemTableGateway: createAuthoritativeCacheGateway(writableCache, {
+        queryEngine: repairEngine,
+      }),
       sqlQueryEngine: repairEngine,
     });
 
-    const result = await api.buildControlSnapshotQueryResult();
+    const result = await api.buildControlSnapshotQueryResult({
+      forceAuthoritativeRepair: true,
+    });
     const snapshot = result?.rows?.[0] || null;
     const partitionIds = Array.isArray(snapshot?.partitions) ?
       snapshot.partitions :
@@ -2559,7 +2785,7 @@ test(
 );
 
 test(
-  'AdminWebSocketAPI - local control snapshot repairs stale replica operations without full discovery fanout',
+  'AdminWebSocketAPI - forced control snapshot repairs stale replica operations without full discovery fanout',
   async (t) => {
     const nowMs = 1740589945123;
     const writableCache = createAuthoritativeRepairCache('node-local');
@@ -2593,11 +2819,16 @@ test(
       nodeId: 'node-local',
       systemTableCache: createReadOnlyCache(writableCache),
       cacheMutationTarget: writableCache,
+      controlPlaneSystemTableGateway: createAuthoritativeCacheGateway(writableCache, {
+        queryEngine: repairEngine,
+      }),
       sqlQueryEngine: repairEngine,
       nowFn: () => nowMs,
     });
 
-    const result = await api.buildControlSnapshotQueryResult();
+    const result = await api.buildControlSnapshotQueryResult({
+      forceAuthoritativeRepair: true,
+    });
 
     t.equal(
       result?.rows?.[0]?.replicaOperations?.staleInFlightCount,
@@ -2613,7 +2844,7 @@ test(
 );
 
 test(
-  'AdminWebSocketAPI - local control snapshot repairs stale active node heartbeat rows',
+  'AdminWebSocketAPI - forced control snapshot repairs stale active node heartbeat rows',
   async (t) => {
     const nowMs = 1740589945123;
     const staleHeartbeatMs = nowMs - 45000;
@@ -2671,11 +2902,16 @@ test(
       nodeId: 'node-local',
       systemTableCache: createReadOnlyCache(writableCache),
       cacheMutationTarget: writableCache,
+      controlPlaneSystemTableGateway: createAuthoritativeCacheGateway(writableCache, {
+        queryEngine: repairEngine,
+      }),
       sqlQueryEngine: repairEngine,
       nowFn: () => nowMs,
     });
 
-    await api.buildControlSnapshotQueryResult();
+    await api.buildControlSnapshotQueryResult({
+      forceAuthoritativeRepair: true,
+    });
 
     t.equal(
       repairEngine.executeRequestCalls.includes(`SELECT * FROM ${TABLES.NODES}`),
@@ -2696,7 +2932,86 @@ test(
 );
 
 test(
-  'AdminWebSocketAPI - local control snapshots reuse recent authoritative discovery repairs',
+  'AdminWebSocketAPI - local control snapshot repairs shared metadata node coverage gaps',
+  async (t) => {
+    const writableCache = createAuthoritativeRepairCache('node-local');
+    writableCache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+      service_id: 'peer-service-r1',
+      service_type: 'partition',
+      node_id: 'node-peer',
+      partition_id: 'peer-table-p1',
+      replica_id: 'peer-table-p1-r1',
+      raft_role: 'leader',
+      status: 'active',
+      address: 'node-peer/partition/peer-table-p1-r1',
+    });
+    writableCache.applySystemTableChange(TABLES.NODE_ENDPOINTS, 'INSERT', {
+      endpoint_id: 'endpoint-node-peer',
+      node_id: 'node-peer',
+      transport_type: 'ws',
+      address: 'ws://node-peer:8082',
+      status: 'active',
+    });
+
+    const authoritativeNodes = [
+      ...writableCache.getAll(TABLES.NODES),
+      {
+        id: 'node-peer',
+        node_id: 'node-peer',
+        address: 'localhost:8081',
+        node_address: 'localhost:8081',
+        status: 'active',
+        connection_state: 'ready',
+        last_heartbeat: Date.now(),
+      },
+    ];
+    const repairEngine = createSystemTableRepairQueryEngine({
+      [TABLES.NODES]: authoritativeNodes,
+      [TABLES.PARTITIONS]: writableCache.getAll(TABLES.PARTITIONS),
+      [TABLES.SERVICES]: writableCache.getAll(TABLES.SERVICES),
+      [TABLES.TABLES]: writableCache.getAll(TABLES.TABLES),
+      [TABLES.NODE_ENDPOINTS]: writableCache.getAll(TABLES.NODE_ENDPOINTS),
+      [TABLES.SERVICE_DEFINITIONS]:
+        writableCache.getAll(TABLES.SERVICE_DEFINITIONS),
+      [TABLES.SERVICE_ENDPOINTS]:
+        writableCache.getAll(TABLES.SERVICE_ENDPOINTS),
+      [TABLES.REPLICA_OPERATIONS]:
+        writableCache.getAll(TABLES.REPLICA_OPERATIONS),
+    });
+
+    const api = new AdminWebSocketAPI({
+      nodeId: 'node-local',
+      systemTableCache: createReadOnlyCache(writableCache),
+      cacheMutationTarget: writableCache,
+      controlPlaneSystemTableGateway: createAuthoritativeCacheGateway(writableCache, {
+        queryEngine: repairEngine,
+      }),
+      sqlQueryEngine: repairEngine,
+    });
+
+    const result = await api.buildControlSnapshotQueryResult();
+
+    t.equal(result.success, true, 'control snapshot should succeed');
+    t.same(
+      result.rows[0].nodes.sort(),
+      ['node-local', 'node-peer'],
+      'control snapshot should publish repaired node coverage',
+    );
+    t.equal(
+      writableCache.get(TABLES.NODES, 'node-peer')?.node_id,
+      'node-peer',
+      'authoritative repair should hydrate the missing peer node row',
+    );
+    t.equal(
+      repairEngine.executeRequestCalls.includes(`SELECT * FROM ${TABLES.NODES}`),
+      true,
+      'coverage-gap repair should query authoritative nodes rows',
+    );
+  },
+);
+
+test(
+  'AdminWebSocketAPI - explicit control snapshot repair reuses recent authoritative discovery repairs unless forced',
   async (t) => {
     let nowMs = 1740589945123;
     const writableCache = createPopulatedCache();
@@ -2727,11 +3042,16 @@ test(
       nodeId: 'test-node',
       systemTableCache: createReadOnlyCache(writableCache),
       cacheMutationTarget: writableCache,
+      controlPlaneSystemTableGateway: createAuthoritativeCacheGateway(writableCache, {
+        queryEngine: repairEngine,
+      }),
       sqlQueryEngine: repairEngine,
       nowFn: () => nowMs,
     });
 
-    const firstResult = await api.buildControlSnapshotQueryResult();
+    const firstResult = await api.buildControlSnapshotQueryResult({
+      allowAuthoritativeRepair: true,
+    });
     t.equal(
       firstResult?.rows?.[0]?.replicaOperations?.staleInFlightCount,
       1,
@@ -2744,7 +3064,9 @@ test(
     );
 
     nowMs += 2000;
-    const secondResult = await api.buildControlSnapshotQueryResult();
+    const secondResult = await api.buildControlSnapshotQueryResult({
+      allowAuthoritativeRepair: true,
+    });
     t.equal(
       secondResult?.rows?.[0]?.replicaOperations?.staleInFlightCount,
       1,
@@ -2769,7 +3091,7 @@ test(
 );
 
 test(
-  'AdminWebSocketAPI - local control snapshot query degrades to local cache ' +
+  'AdminWebSocketAPI - local control snapshot query stays local ' +
     'when outbound transport is backpressured',
   async (t) => {
     const nowMs = 1740589945123;
@@ -2803,6 +3125,9 @@ test(
       nodeId: 'node-local',
       systemTableCache: createReadOnlyCache(writableCache),
       cacheMutationTarget: writableCache,
+      controlPlaneSystemTableGateway: createAuthoritativeCacheGateway(writableCache, {
+        queryEngine: repairEngine,
+      }),
       sqlQueryEngine: repairEngine,
       messageRouter: {
         getOutboundPressureSummary() {
@@ -2827,7 +3152,7 @@ test(
     t.equal(
       repairEngine.executeRequestCalls.length,
       0,
-      'backpressured local query should skip authoritative repair reads',
+      'backpressured local query should stay on local observation data',
     );
   },
 );
@@ -2892,6 +3217,11 @@ test(
       nodeId,
       systemTableCache: createReadOnlyCache(writableCache),
       cacheMutationTarget: writableCache,
+      controlPlaneSystemTableGateway: createAuthoritativeCacheGateway(writableCache, {
+        readRowsByTable: {
+          [TABLES.PARTITIONS]: authoritativePartitions,
+        },
+      }),
       partitionServices: createAuthoritativeRepairPartitionServices(
         writableCache,
         {
@@ -3129,11 +3459,15 @@ test(
       nodeId: 'test-node',
       systemTableCache: cache,
       cacheMutationTarget: writableCache,
+      controlPlaneSystemTableGateway: createAuthoritativeCacheGateway(writableCache, {
+        queryEngine: repairEngine,
+      }),
       sqlQueryEngine: repairEngine,
     });
 
     const result = await api.buildServiceDiscoveryQueryResult({
       tableName: 'benchmark_events',
+      allowAuthoritativeRepair: true,
     });
     const replicas = result?.rows?.[0]?.services?.[0]?.replicas || [];
 
@@ -3153,6 +3487,75 @@ test(
       repairEngine.executeRequestCalls.includes(`SELECT * FROM ${TABLES.SERVICES}`),
       true,
       'repair should query authoritative services rows',
+    );
+  },
+);
+
+test(
+  'AdminWebSocketAPI - service discovery builder stays local unless repair is explicit',
+  async (t) => {
+    const writableCache = createPopulatedCache();
+    writableCache.applySystemTableChange(TABLES.NODES, 'INSERT', {
+      id: 'node-2',
+      address: 'localhost:8081',
+      status: 'active',
+    });
+    writableCache.applySystemTableChange(TABLES.TABLES, 'INSERT', {
+      id: 'table-benchmark-events',
+      table_id: 'table-benchmark-events',
+      name: 'benchmark_events',
+      table_name: 'benchmark_events',
+    });
+    writableCache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
+      id: 'partition-benchmark-events-1',
+      partition_id: 'partition-benchmark-events-1',
+      table_id: 'table-benchmark-events',
+      table_name: 'benchmark_events',
+      keyStart: null,
+      keyEnd: null,
+    });
+
+    const authoritativeCache = createPopulatedCache();
+    seedRoutedTableDiscoveryRows(authoritativeCache);
+    const repairEngine = createSystemTableRepairQueryEngine({
+      [TABLES.NODES]: authoritativeCache.getAll(TABLES.NODES),
+      [TABLES.PARTITIONS]: authoritativeCache.getAll(TABLES.PARTITIONS),
+      [TABLES.TABLES]: authoritativeCache.getAll(TABLES.TABLES),
+      [TABLES.NODE_ENDPOINTS]: authoritativeCache.getAll(TABLES.NODE_ENDPOINTS),
+      [TABLES.SERVICE_DEFINITIONS]:
+        authoritativeCache.getAll(TABLES.SERVICE_DEFINITIONS),
+      [TABLES.SERVICE_ENDPOINTS]:
+        authoritativeCache.getAll(TABLES.SERVICE_ENDPOINTS),
+      [TABLES.REPLICA_OPERATIONS]:
+        authoritativeCache.getAll(TABLES.REPLICA_OPERATIONS),
+      [TABLES.SERVICES]: authoritativeCache.getAll(TABLES.SERVICES),
+    });
+    const api = new AdminWebSocketAPI({
+      nodeId: 'test-node',
+      systemTableCache: createReadOnlyCache(writableCache),
+      cacheMutationTarget: writableCache,
+      controlPlaneSystemTableGateway: createAuthoritativeCacheGateway(writableCache, {
+        queryEngine: repairEngine,
+      }),
+      sqlQueryEngine: repairEngine,
+    });
+
+    const result = await api.buildServiceDiscoveryQueryResult({
+      tableName: 'benchmark_events',
+      tableId: 'table-benchmark-events',
+    });
+    const snapshot = result?.rows?.[0] || null;
+
+    t.equal(result.success, true, 'local service discovery should still succeed');
+    t.equal(
+      snapshot?.serviceCount,
+      0,
+      'non-repair service discovery builder should return the local incomplete snapshot',
+    );
+    t.equal(
+      repairEngine.executeRequestCalls.length,
+      0,
+      'non-repair service discovery builder should not trigger authoritative reads',
     );
   },
 );
@@ -3218,6 +3621,9 @@ test(
       nodeId: 'test-node',
       systemTableCache: createReadOnlyCache(writableCache),
       cacheMutationTarget: writableCache,
+      controlPlaneSystemTableGateway: createAuthoritativeCacheGateway(writableCache, {
+        queryEngine: repairEngine,
+      }),
       sqlQueryEngine: repairEngine,
     });
 
@@ -3306,12 +3712,16 @@ test(
       nodeId: 'test-node',
       systemTableCache: createReadOnlyCache(writableCache),
       cacheMutationTarget: writableCache,
+      controlPlaneSystemTableGateway: createAuthoritativeCacheGateway(writableCache, {
+        queryEngine: repairEngine,
+      }),
       sqlQueryEngine: repairEngine,
     });
 
     const result = await api.buildServiceDiscoveryQueryResult({
       tableName: 'benchmark_events',
       tableId: 'table-benchmark-events',
+      allowAuthoritativeRepair: true,
     });
     const snapshot = result?.rows?.[0] || null;
     const replicas = snapshot?.services?.[0]?.replicas || [];
@@ -3342,8 +3752,8 @@ test(
 );
 
 test(
-  'AdminWebSocketAPI - table-scoped discovery repair uses injected ' +
-    'cdcIntegrationService authoritative reads before routed SQL',
+  'AdminWebSocketAPI - table-scoped discovery repair uses control-plane ' +
+    'gateway authoritative reads before routed SQL',
   async (t) => {
     const writableCache = createPopulatedCache();
     writableCache.applySystemTableChange(TABLES.NODES, 'INSERT', {
@@ -3385,13 +3795,27 @@ test(
 
     const authoritativeCache = createPopulatedCache();
     seedRoutedTableDiscoveryRows(authoritativeCache);
-    const authoritativeReadCalls = [];
-    const authoritativeReadOptions = [];
+    const authoritativeGateway = createAuthoritativeCacheGateway(writableCache, {
+      readRowsByTable: {
+        [TABLES.NODES]: authoritativeCache.getAll(TABLES.NODES),
+        [TABLES.PARTITIONS]: authoritativeCache.getAll(TABLES.PARTITIONS),
+        [TABLES.TABLES]: authoritativeCache.getAll(TABLES.TABLES),
+        [TABLES.NODE_ENDPOINTS]: authoritativeCache.getAll(TABLES.NODE_ENDPOINTS),
+        [TABLES.SERVICE_DEFINITIONS]:
+          authoritativeCache.getAll(TABLES.SERVICE_DEFINITIONS),
+        [TABLES.SERVICE_ENDPOINTS]:
+          authoritativeCache.getAll(TABLES.SERVICE_ENDPOINTS),
+        [TABLES.REPLICA_OPERATIONS]:
+          authoritativeCache.getAll(TABLES.REPLICA_OPERATIONS),
+        [TABLES.SERVICES]: authoritativeCache.getAll(TABLES.SERVICES),
+      },
+    });
     const sqlCalls = [];
     const api = new AdminWebSocketAPI({
       nodeId: 'test-node',
       systemTableCache: createReadOnlyCache(writableCache),
       cacheMutationTarget: writableCache,
+      controlPlaneSystemTableGateway: authoritativeGateway,
       sqlQueryEngine: {
         async executeRequest(request) {
           sqlCalls.push(String(request?.statement || ''));
@@ -3401,27 +3825,12 @@ test(
           };
         },
       },
-      cdcIntegrationService: {
-        async executeAuthoritativeSystemTableRead(
-          tableName,
-          _sql,
-          _params,
-          options,
-        ) {
-          authoritativeReadCalls.push(tableName);
-          authoritativeReadOptions.push(options || null);
-          return {
-            success: true,
-            rows: authoritativeCache.getAll(tableName),
-            source: 'local_partition_replica',
-          };
-        },
-      },
     });
 
     const result = await api.buildServiceDiscoveryQueryResult({
       tableName: 'benchmark_events',
       tableId: 'table-benchmark-events',
+      allowAuthoritativeRepair: true,
     });
     const snapshot = result?.rows?.[0] || null;
     const replicas = snapshot?.services?.[0]?.replicas || [];
@@ -3434,10 +3843,12 @@ test(
     t.equal(
       replicas.length,
       2,
-      'authoritative owner repair should restore both postgres-wire replicas',
+      'authoritative gateway repair should restore both postgres-wire replicas',
     );
     t.same(
-      [...new Set(authoritativeReadCalls)].sort(),
+      [...new Set(authoritativeGateway.executeReadCalls
+        .map((call) => call.tableName))]
+        .sort(),
       [
         TABLES.NODES,
         TABLES.PARTITIONS,
@@ -3446,20 +3857,20 @@ test(
         TABLES.SERVICE_DEFINITIONS,
         TABLES.SERVICE_ENDPOINTS,
       ].sort(),
-      'repair should read only the scoped authoritative discovery tables through cdcIntegrationService',
+      'repair should read only the scoped authoritative discovery tables through control-plane gateway',
     );
     t.equal(
-      authoritativeReadOptions.every((options) => {
-        return options?.queryOptions?.routingReadinessDimension ===
+      authoritativeGateway.executeReadCalls.every((call) => {
+        return call?.options?.routingReadinessDimension ===
           CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE;
       }),
       true,
-      'authoritative owner repair should request repairEligible routing for any SQL fallback',
+      'authoritative gateway repair should request repairEligible routing',
     );
     t.equal(
       sqlCalls.length,
       0,
-      'repair must not bypass the injected authoritative owner with routed SQL',
+      'repair must not bypass the authoritative gateway with routed SQL',
     );
   },
 );
@@ -3493,6 +3904,9 @@ test(
       nodeId: 'test-node',
       systemTableCache: createReadOnlyCache(writableCache),
       cacheMutationTarget: writableCache,
+      controlPlaneSystemTableGateway: createAuthoritativeCacheGateway(writableCache, {
+        queryEngine: repairEngine,
+      }),
       sqlQueryEngine: repairEngine,
     });
 
@@ -4644,6 +5058,9 @@ test(
       nodeId: 'test-node',
       systemTableCache: cache,
       cacheMutationTarget: writableCache,
+      controlPlaneSystemTableGateway: createAuthoritativeCacheGateway(writableCache, {
+        queryEngine: repairEngine,
+      }),
       sqlQueryEngine: repairEngine,
     });
 
@@ -5515,6 +5932,73 @@ test('AdminWebSocketAPI - local system-table observation query avoids routed SQL
       'local cache observation query should return cache-backed rows',
     );
     t.equal(executeRequestCalls, 0, 'local cache observation query should bypass routed SQL');
+  },
+);
+
+test('AdminWebSocketAPI - local system-table observation query routes through ' +
+  'authoritative read when shared metadata node coverage is inconsistent',
+  async (t) => {
+    let executeRequestCalls = 0;
+    const cache = createPopulatedCache();
+    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+      service_id: 'service-2',
+      service_type: 'partition',
+      node_id: 'node-2',
+      status: 'active',
+      partition_id: 'partition-2',
+      replica_id: 'partition-2-r1',
+      address: 'node-2/partition/partition-2-r1',
+    });
+    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, 'INSERT', {
+      endpoint_id: 'endpoint-node-2',
+      node_id: 'node-2',
+      transport_type: 'ws',
+      address: 'ws://node-2:8082',
+      status: 'active',
+    });
+
+    const api = new AdminWebSocketAPI({
+      nodeId: 'test-node',
+      systemTableCache: cache,
+      sqlQueryEngine: {
+        async executeRequest(request) {
+          executeRequestCalls++;
+          t.match(
+            String(request?.statement || ''),
+            /select \* from nodes/i,
+            'authoritative path should execute the nodes query',
+          );
+          return {
+            success: true,
+            rows: [
+              {id: 'node-1', node_id: 'node-1', status: 'active'},
+              {id: 'node-2', node_id: 'node-2', status: 'active'},
+            ],
+            count: 2,
+            partitions: ['nodes-p1'],
+            tableName: TABLES.NODES,
+          };
+        },
+      },
+    });
+
+    const result = await api.executeLocalQueryEnvelope({
+      queryId: 'q-node-coverage-gap',
+      sql: 'SELECT * FROM nodes WHERE status = ?',
+      params: ['active'],
+    });
+
+    t.equal(result.success, true, 'authoritative nodes query should succeed');
+    t.same(
+      result.rows.map((row) => row.node_id || row.id).sort(),
+      ['node-1', 'node-2'],
+      'authoritative path should surface all referenced nodes',
+    );
+    t.equal(
+      executeRequestCalls,
+      1,
+      'coverage-gap observation query should bypass the incomplete local cache',
+    );
   },
 );
 

@@ -110,7 +110,7 @@ const createMessageGroupServicesWithLeader = () => {
  */
 const applyCommonStubs = (service, systemTableCache, hydrationResult) => {
   service.getSystemTableCache = () => systemTableCache;
-  service.getLeaderMessageGroupService = () => ({
+  service.seedMessageGroupsPhase.getLeaderMessageGroupService = () => ({
     applyCDCEvent: async () => {},
   });
   service.seedCacheHydrationPhase.hydrateFromLocalPartitions =
@@ -156,7 +156,7 @@ test('phaseCacheHydration succeeds when CDC pipeline is ready',
     service.seedCacheHydrationPhase
       .subscribeToInitialSystemTableCDC = async () => {};
 
-    await service.phaseCacheHydration();
+    await service.seedCacheHydrationPhase.phaseCacheHydration();
     t.pass('phaseCacheHydration completed with ready CDC pipeline');
   });
 
@@ -194,7 +194,7 @@ test('phaseCacheHydration fails on CDC readiness gate timeout',
         });
 
     await t.rejects(
-      service.phaseCacheHydration(),
+      service.seedCacheHydrationPhase.phaseCacheHydration(),
       /readiness.*timed out|unmet/i,
       'phaseCacheHydration should fail with descriptive error on timeout',
     );
@@ -234,7 +234,7 @@ test('phaseCacheHydration timeout error lists unmet conditions',
         });
 
     try {
-      await service.phaseCacheHydration();
+      await service.seedCacheHydrationPhase.phaseCacheHydration();
       t.fail('should have thrown');
     } catch (err) {
       t.ok(

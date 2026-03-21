@@ -10,10 +10,10 @@ import {NodeState} from '../node/node-lifecycle-state-machine.js';
 import {LatencyTopologySetup} from './shared/latency-topology-setup.js';
 import {
   BOOTSTRAP_EVENT,
+  CLEANUP_RESULT,
   JOINING_PHASE,
 } from './bootstrap-constants.js';
 import {
-  JOINING_CLEANUP_RESULT,
   JOINING_CLEANUP_STEP,
   JOINING_LOG_MSG,
 } from './node-joining-constants.js';
@@ -111,7 +111,7 @@ class JoinCleanupHandler {
 
     this.delegates.emit(BOOTSTRAP_EVENT.FAILED, {
       nodeId: this.nodeId,
-      phase: this.delegates.getPhase(),
+      phase: failedPhase,
       duration,
       error: error.message,
     });
@@ -121,7 +121,7 @@ class JoinCleanupHandler {
       nodeId: this.nodeId,
       duration,
       error: error.message,
-      phase: this.delegates.getPhase(),
+      phase: failedPhase,
     };
   }
 
@@ -207,7 +207,7 @@ class JoinCleanupHandler {
     case JOINING_CLEANUP_STEP.CONNECTING_WEBSOCKET:
       return this._cleanupConnectingWebSocket();
     default:
-      return JOINING_CLEANUP_RESULT.SKIPPED;
+      return CLEANUP_RESULT.SKIPPED;
     }
   }
 
@@ -261,7 +261,7 @@ class JoinCleanupHandler {
           .FAILED_JOIN_CLEANUP_QUERYING_STATE_DONE, {
           nodeId: this.nodeId,
         });
-      return JOINING_CLEANUP_RESULT.SUCCESS;
+      return CLEANUP_RESULT.SUCCESS;
     } catch (err) {
       logger.warn(
         JOINING_LOG_MSG
@@ -270,7 +270,7 @@ class JoinCleanupHandler {
           error: err.message,
           stack: err.stack,
         });
-      return JOINING_CLEANUP_RESULT.ERROR;
+      return CLEANUP_RESULT.ERROR;
     }
   }
 
@@ -313,7 +313,7 @@ class JoinCleanupHandler {
           .FAILED_JOIN_CLEANUP_WAITING_LEADERSHIP_DONE, {
           nodeId: this.nodeId,
         });
-      return JOINING_CLEANUP_RESULT.SUCCESS;
+      return CLEANUP_RESULT.SUCCESS;
     } catch (err) {
       logger.warn(
         JOINING_LOG_MSG
@@ -322,7 +322,7 @@ class JoinCleanupHandler {
           error: err.message,
           stack: err.stack,
         });
-      return JOINING_CLEANUP_RESULT.ERROR;
+      return CLEANUP_RESULT.ERROR;
     }
   }
 
@@ -379,7 +379,7 @@ class JoinCleanupHandler {
         JOINING_LOG_MSG.FAILED_JOIN_CLEANUP_MESSAGE_GROUP_DONE, {
           nodeId: this.nodeId,
         });
-      return JOINING_CLEANUP_RESULT.SUCCESS;
+      return CLEANUP_RESULT.SUCCESS;
     } catch (err) {
       logger.warn(
         JOINING_LOG_MSG.FAILED_JOIN_CLEANUP_MESSAGE_GROUP_ERROR, {
@@ -387,7 +387,7 @@ class JoinCleanupHandler {
           error: err.message,
           stack: err.stack,
         });
-      return JOINING_CLEANUP_RESULT.ERROR;
+      return CLEANUP_RESULT.ERROR;
     }
   }
 
@@ -426,7 +426,7 @@ class JoinCleanupHandler {
         JOINING_LOG_MSG.FAILED_JOIN_CLEANUP_WEBSOCKET_DONE, {
           nodeId: this.nodeId,
         });
-      return JOINING_CLEANUP_RESULT.SUCCESS;
+      return CLEANUP_RESULT.SUCCESS;
     } catch (err) {
       logger.warn(
         JOINING_LOG_MSG.FAILED_JOIN_CLEANUP_WEBSOCKET_ERROR, {
@@ -434,7 +434,7 @@ class JoinCleanupHandler {
           error: err.message,
           stack: err.stack,
         });
-      return JOINING_CLEANUP_RESULT.ERROR;
+      return CLEANUP_RESULT.ERROR;
     }
   }
 
@@ -462,7 +462,7 @@ class JoinCleanupHandler {
       try {
         await rebalanceCoordinator.shutdown();
       } catch (error) {
-        logger.warn('Node joining cleanup step failed', {
+        logger.warn(JOINING_LOG_MSG.CLEANUP_STEP_FAILED, {
           nodeId: this.nodeId,
           step: 'rebalanceCoordinator.shutdown',
           error: error.message,

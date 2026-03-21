@@ -45,56 +45,54 @@ test('StartupPipelineRunner - runs phases in order', async (t) => {
   t.end();
 });
 
-test('StartupPipelineRunner - phase failure triggers reverse cleanup ordering',
-  async (t) => {
-    const cleanupOrder = [];
-    const runner = new StartupPipelineRunner();
+test('StartupPipelineRunner - phase failure propagates error ' +
+  'without pipeline-owned cleanup (D3.2: handler-owned cleanup)',
+async (t) => {
+  /**
+   * Cleanup is NOT managed by the pipeline runner. Phase failures
+   * propagate to the caller which owns cleanup orchestration
+   * through the canonical handler (SeedCleanupHandler /
+   * JoinCleanupHandler). This test proves the pipeline does not
+   * have runCleanup or shouldRunCleanupStep methods.
+   *
+   * Validates: Requirements 2.2, 2.5
+   */
+  const runner = new StartupPipelineRunner();
 
-    try {
-      await runner.run({
-        phases: [
-          {name: 'infrastructure', run: async () => {}},
-          {name: 'message-groups', run: async () => {}},
-          {
-            name: 'partitions',
-            run: async () => {
-              throw new Error('partitions failed');
-            },
-          },
-          {name: 'registration', run: async () => {}},
-        ],
-        cleanup: [
-          {
-            name: 'cleanup-registration',
-            phaseName: 'registration',
-            run: async () => cleanupOrder.push('registration'),
-          },
-          {
-            name: 'cleanup-partitions',
-            phaseName: 'partitions',
-            run: async () => cleanupOrder.push('partitions'),
-          },
-          {
-            name: 'cleanup-message-groups',
-            phaseName: 'message-groups',
-            run: async () => cleanupOrder.push('message-groups'),
-          },
-          {
-            name: 'cleanup-infrastructure',
-            phaseName: 'infrastructure',
-            run: async () => cleanupOrder.push('infrastructure'),
-          },
-        ],
-      });
-      t.fail('expected phase failure');
-    } catch (error) {
-      t.equal(error.message, 'partitions failed');
-    }
+  // Pipeline runner must not expose cleanup methods (D3.2)
+  t.equal(typeof runner.runCleanup, 'undefined',
+    'pipeline runner does not have runCleanup method');
+  t.equal(typeof runner.shouldRunCleanupStep, 'undefined',
+    'pipeline runner does not have shouldRunCleanupStep method');
 
-    t.same(cleanupOrder, [
-      'partitions',
-      'message-groups',
-      'infrastructure',
-    ]);
-    t.end();
-  });
+  // Cleanup event constants must not exist
+  t.notOk(STARTUP_PIPELINE_EVENT.CLEANUP_START,
+    'no CLEANUP_START event constant');
+  t.notOk(STARTUP_PIPELINE_EVENT.CLEANUP_COMPLETE,
+    'no CLEANUP_COMPLETE event constant');
+  t.notOk(STARTUP_PIPELINE_EVENT.CLEANUP_FAILED,
+    'no CLEANUP_FAILED event constant');
+
+  // Phase failure propagates directly to caller
+  try {
+    await runner.run({
+      phases: [
+        {name: 'infrastructure', run: async () => {}},
+        {name: 'message-groups', run: async () => {}},
+        {
+          name: 'partitions',
+          run: async () => {
+            throw new Error('partitions failed');
+          },
+        },
+        {name: 'registration', run: async () => {}},
+      ],
+    });
+    t.fail('expected phase failure');
+  } catch (error) {
+    t.equal(error.message, 'partitions failed',
+      'phase error propagates to caller for handler-owned cleanup');
+  }
+
+  t.end();
+});

@@ -17,8 +17,8 @@ afterEach(() => {
   clearRegisteredControlPlaneSystemTableGateway();
 });
 
-test('control-plane and admin consumers use the registered shared gateway ' +
-  'instead of constructing local replacements', async (t) => {
+test('runtime services require explicit gateway wiring while admin consumers ' +
+  'may use the registered shared gateway', async (t) => {
   const sentinelGateway = {id: 'shared-gateway'};
   registerControlPlaneSystemTableGateway(sentinelGateway);
 
@@ -41,23 +41,23 @@ test('control-plane and admin consumers use the registered shared gateway ' +
 
   t.equal(
     heartbeatService.controlPlaneSystemTableGateway,
-    sentinelGateway,
-    'HeartbeatService should use the registered gateway',
+    null,
+    'HeartbeatService should not use the registered gateway implicitly',
   );
   t.equal(
     leaseService.controlPlaneSystemTableGateway,
-    sentinelGateway,
-    'LeaseService should use the registered gateway',
+    null,
+    'LeaseService should not use the registered gateway implicitly',
   );
   t.equal(
     readinessService.controlPlaneSystemTableGateway,
-    sentinelGateway,
-    'ControlPlaneReadinessService should use the registered gateway',
+    null,
+    'ControlPlaneReadinessService should not use the registered gateway implicitly',
   );
   t.equal(
     dispatchService.controlPlaneSystemTableGateway,
-    sentinelGateway,
-    'ReplicaDispatchService should use the registered gateway',
+    null,
+    'ReplicaDispatchService should not use the registered gateway implicitly',
   );
   t.equal(
     serviceDiscovery.controlPlaneSystemTableGateway,

@@ -498,6 +498,19 @@ class MessageRouter extends EventEmitter {
     this.messageTimeoutMs =
       config.get(TRANSPORT_CONFIG_KEY.MESSAGE_TIMEOUT_MS) ||
       TRANSPORT_DEFAULT.MESSAGE_TIMEOUT_MS;
+    this.ackTimeoutQuarantineThreshold =
+      Number.isFinite(options.ackTimeoutQuarantineThreshold) &&
+      options.ackTimeoutQuarantineThreshold >= TRANSPORT_NUM.ONE ?
+        Math.floor(options.ackTimeoutQuarantineThreshold) :
+        Number.isFinite(
+          config.get(TRANSPORT_CONFIG_KEY.ACK_TIMEOUT_QUARANTINE_THRESHOLD),
+        ) &&
+        config.get(TRANSPORT_CONFIG_KEY.ACK_TIMEOUT_QUARANTINE_THRESHOLD) >=
+          TRANSPORT_NUM.ONE ?
+          Math.floor(
+            config.get(TRANSPORT_CONFIG_KEY.ACK_TIMEOUT_QUARANTINE_THRESHOLD),
+          ) :
+          TRANSPORT_DEFAULT.ACK_TIMEOUT_QUARANTINE_THRESHOLD;
     const configuredConnectTimeoutMs =
       config.get(WEBSOCKET_CONNECT_TIMEOUT_CONFIG_KEY);
     this.connectTimeoutMs =
@@ -1063,6 +1076,9 @@ class MessageRouter extends EventEmitter {
       reconnectDueAt: null,
       isIncoming: false,
       isSelfConnection: options.isSelfConnection || false,
+      ackTimeoutStreak: TRANSPORT_NUM.ZERO,
+      lastAckAt: null,
+      lastAckTimeoutAt: null,
       retired: false,
       createdAt: Date.now(),
     };
@@ -1144,6 +1160,8 @@ class MessageRouter extends EventEmitter {
           connectionInfo.state = ConnectionState.CONNECTED;
           connectionInfo.reconnectAttempts = TRANSPORT_NUM.ZERO;
           connectionInfo.reconnectDueAt = null;
+          connectionInfo.ackTimeoutStreak = TRANSPORT_NUM.ZERO;
+          connectionInfo.lastAckTimeoutAt = null;
           this.rememberReconnectAddress(
             connectionInfo,
             ws,
@@ -1262,6 +1280,8 @@ class MessageRouter extends EventEmitter {
     connectionInfo.state = ConnectionState.CONNECTED;
     connectionInfo.reconnectAttempts = TRANSPORT_NUM.ZERO;
     connectionInfo.reconnectDueAt = null;
+    connectionInfo.ackTimeoutStreak = TRANSPORT_NUM.ZERO;
+    connectionInfo.lastAckTimeoutAt = null;
     this.rememberReconnectAddress(
       connectionInfo,
       clientWs,
@@ -1771,6 +1791,14 @@ class MessageRouter extends EventEmitter {
       this.pendingMessages.delete(messageId);
 
       if (acknowledged) {
+        const connection = this.nodeConnections.get(pending.targetNodeId);
+        if (connection &&
+            connection.isIncoming !== true &&
+            connection.isSelfConnection !== true) {
+          connection.ackTimeoutStreak = TRANSPORT_NUM.ZERO;
+          connection.lastAckAt = Date.now();
+          connection.lastAckTimeoutAt = null;
+        }
         const resolved = {messageId, acknowledged: true, ...rest};
         if (error !== undefined) {
           resolved.error = error;
@@ -3294,6 +3322,9 @@ class MessageRouter extends EventEmitter {
       pingInterval: null,
       isIncoming: false,
       isSelfConnection: false,
+      ackTimeoutStreak: TRANSPORT_NUM.ZERO,
+      lastAckAt: null,
+      lastAckTimeoutAt: null,
       retired: false,
       createdAt: Date.now(),
     };
@@ -3536,12 +3567,32 @@ class MessageRouter extends EventEmitter {
       return activeConnection || null;
     }
 
+    activeConnection.ackTimeoutStreak =
+      (activeConnection.ackTimeoutStreak || TRANSPORT_NUM.ZERO) +
+      TRANSPORT_NUM.ONE;
+    activeConnection.lastAckTimeoutAt = Date.now();
+    if (activeConnection.ackTimeoutStreak <
+      this.ackTimeoutQuarantineThreshold) {
+      this.logger.debug('Observed ACK timeout below quarantine threshold', {
+        messageId,
+        targetAddress,
+        targetNodeId,
+        localNodeId: this.nodeId,
+        connectionId: activeConnection.connectionId,
+        ackTimeoutStreak: activeConnection.ackTimeoutStreak,
+        ackTimeoutQuarantineThreshold: this.ackTimeoutQuarantineThreshold,
+      });
+      return activeConnection;
+    }
+
     this.logger.warn('Quarantining target connection after ACK timeout', {
       messageId,
       targetAddress,
       targetNodeId,
       localNodeId: this.nodeId,
       connectionId: activeConnection.connectionId,
+      ackTimeoutStreak: activeConnection.ackTimeoutStreak,
+      ackTimeoutQuarantineThreshold: this.ackTimeoutQuarantineThreshold,
     });
     const staleWs = activeConnection.ws || null;
     const reconnectOwner = {
@@ -3560,6 +3611,9 @@ class MessageRouter extends EventEmitter {
       pingInterval: null,
       isIncoming: false,
       isSelfConnection: false,
+      ackTimeoutStreak: TRANSPORT_NUM.ZERO,
+      lastAckAt: activeConnection.lastAckAt || null,
+      lastAckTimeoutAt: activeConnection.lastAckTimeoutAt || null,
       retired: false,
       createdAt: Date.now(),
     };
@@ -3808,6 +3862,7 @@ class MessageRouter extends EventEmitter {
         state: connection.state,
         isIncoming: connection.isIncoming,
         reconnectAttempts: connection.reconnectAttempts,
+        ackTimeoutStreak: connection.ackTimeoutStreak || TRANSPORT_NUM.ZERO,
       };
     }
 

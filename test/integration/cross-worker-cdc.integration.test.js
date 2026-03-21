@@ -143,6 +143,54 @@ async function waitFor(condition, timeoutMs, intervalMs) {
   return false;
 }
 
+function isActivatedLeader(status) {
+  return status?.isLeader === true &&
+    status?.leaderActivated === true;
+}
+
+async function waitForReplicaRows(
+  workerManager,
+  handles,
+  rowId,
+  timeoutMs,
+  intervalMs,
+) {
+  const replicasWithRow = new Set();
+
+  const complete = await waitFor(
+    async () => {
+      for (const handle of handles) {
+        if (replicasWithRow.has(handle.replicaId)) {
+          continue;
+        }
+
+        const cacheResponse = await workerManager.deliverMessage(
+          handle.replicaId,
+          {
+            type: CACHE_MESSAGE_TYPE.CACHE_QUERY,
+            sql: `SELECT * FROM "${TEST_CONFIG.TABLE_NAME}" WHERE id = ?`,
+            params: [rowId],
+          },
+        );
+
+        if (cacheResponse.rows &&
+          cacheResponse.rows.length > NUM.ZERO) {
+          replicasWithRow.add(handle.replicaId);
+        }
+      }
+
+      return replicasWithRow.size === handles.length;
+    },
+    timeoutMs,
+    intervalMs,
+  );
+
+  return {
+    complete,
+    replicasWithRow,
+  };
+}
+
 /**
  * Generate unique node ID for test isolation.
  * @param {number} counter - Counter value.
@@ -281,7 +329,7 @@ test('Cross-Worker CDC Integration', {timeout: 120000}, async (t) => {
         async () => {
           for (const handle of partitionHandles) {
             const status = await workerManager.getLeadershipStatus(handle.replicaId);
-            if (status.isLeader) {
+            if (isActivatedLeader(status)) {
               partitionLeaderHandle = handle;
               return true;
             }
@@ -299,7 +347,7 @@ test('Cross-Worker CDC Integration', {timeout: 120000}, async (t) => {
         async () => {
           for (const handle of messageGroupHandles) {
             const status = await workerManager.getLeadershipStatus(handle.replicaId);
-            if (status.isLeader) {
+            if (isActivatedLeader(status)) {
               mgLeaderHandle = handle;
               return true;
             }
@@ -527,11 +575,18 @@ test('Cross-Worker CDC Integration', {timeout: 120000}, async (t) => {
       const mgLeaderElected = await waitFor(
         async () => {
           mgFollowerHandles.length = NUM.ZERO;
+          mgLeaderHandle = null;
           for (const handle of messageGroupHandles) {
             const status = await workerManager.getLeadershipStatus(handle.replicaId);
-            if (status.isLeader) {
+            if (isActivatedLeader(status)) {
               mgLeaderHandle = handle;
-            } else {
+            }
+          }
+          if (!mgLeaderHandle) {
+            return false;
+          }
+          for (const handle of messageGroupHandles) {
+            if (handle.replicaId !== mgLeaderHandle.replicaId) {
               mgFollowerHandles.push(handle);
             }
           }
@@ -596,37 +651,19 @@ test('Cross-Worker CDC Integration', {timeout: 120000}, async (t) => {
       // =====================================================================
       // PHASE 7: Verify CDC event was replicated to followers via Raft
       // =====================================================================
-      // Wait for Raft replication to propagate to followers
-      let followersWithData = NUM.ZERO;
-
-      const followersReceivedCDC = await waitFor(
-        async () => {
-          followersWithData = NUM.ZERO;
-
-          for (const followerHandle of mgFollowerHandles) {
-            const cacheResponse = await workerManager.deliverMessage(
-              followerHandle.replicaId,
-              {
-                type: CACHE_MESSAGE_TYPE.CACHE_QUERY,
-                sql: `SELECT * FROM "${TEST_CONFIG.TABLE_NAME}" WHERE id = ?`,
-                params: [testId],
-              },
-            );
-
-            if (cacheResponse.rows && cacheResponse.rows.length > NUM.ZERO) {
-              followersWithData++;
-            }
-          }
-
-          // All followers should have the data
-          return followersWithData === mgFollowerHandles.length;
-        },
+      // Avoid re-querying replicas that have already observed the row.
+      const followerReplication = await waitForReplicaRows(
+        workerManager,
+        mgFollowerHandles,
+        testId,
         TEST_CONFIG.CDC_PROPAGATION_TIMEOUT_MS,
-        TEST_CONFIG.CDC_PROPAGATION_POLL_MS,
+        Math.max(TEST_CONFIG.CDC_PROPAGATION_POLL_MS, 100),
       );
 
-      t.ok(followersReceivedCDC, 'CDC event replicated to all message group followers');
-      t.equal(followersWithData, mgFollowerHandles.length,
+      t.ok(followerReplication.complete,
+        'CDC event replicated to all message group followers');
+      t.equal(followerReplication.replicasWithRow.size,
+        mgFollowerHandles.length,
         `All ${mgFollowerHandles.length} followers have the replicated data`);
 
       // Verify data consistency across all message group replicas
@@ -761,7 +798,7 @@ test('Cross-Worker CDC Integration', {timeout: 120000}, async (t) => {
       await waitFor(
         async () => {
           const status = await workerManager.getLeadershipStatus(partitionHandle.replicaId);
-          if (status.isLeader) {
+          if (isActivatedLeader(status)) {
             partitionLeaderHandle = partitionHandle;
             return true;
           }
@@ -774,11 +811,18 @@ test('Cross-Worker CDC Integration', {timeout: 120000}, async (t) => {
       await waitFor(
         async () => {
           mgFollowerHandles.length = NUM.ZERO;
+          mgLeaderHandle = null;
           for (const handle of messageGroupHandles) {
             const status = await workerManager.getLeadershipStatus(handle.replicaId);
-            if (status.isLeader) {
+            if (isActivatedLeader(status)) {
               mgLeaderHandle = handle;
-            } else {
+            }
+          }
+          if (!mgLeaderHandle) {
+            return false;
+          }
+          for (const handle of messageGroupHandles) {
+            if (handle.replicaId !== mgLeaderHandle.replicaId) {
               mgFollowerHandles.push(handle);
             }
           }
@@ -842,29 +886,16 @@ test('Cross-Worker CDC Integration', {timeout: 120000}, async (t) => {
       t.ok(leaderReceivedCDC, 'Leader received CDC event directly');
 
       // Wait for followers to receive via Raft replication
-      const followersReceivedViaRaft = await waitFor(
-        async () => {
-          for (const followerHandle of mgFollowerHandles) {
-            const cacheResponse = await workerManager.deliverMessage(
-              followerHandle.replicaId,
-              {
-                type: CACHE_MESSAGE_TYPE.CACHE_QUERY,
-                sql: `SELECT * FROM "${TEST_CONFIG.TABLE_NAME}" WHERE id = ?`,
-                params: [testId],
-              },
-            );
-
-            if (!cacheResponse.rows || cacheResponse.rows.length === NUM.ZERO) {
-              return false;
-            }
-          }
-          return true;
-        },
+      const followerReplication = await waitForReplicaRows(
+        workerManager,
+        mgFollowerHandles,
+        testId,
         TEST_CONFIG.CDC_PROPAGATION_TIMEOUT_MS,
-        TEST_CONFIG.CDC_PROPAGATION_POLL_MS,
+        Math.max(TEST_CONFIG.CDC_PROPAGATION_POLL_MS, 100),
       );
 
-      t.ok(followersReceivedViaRaft, 'Followers received data via Raft replication');
+      t.ok(followerReplication.complete,
+        'Followers received data via Raft replication');
 
     } finally {
       for (const handle of [...partitionHandles, ...messageGroupHandles]) {

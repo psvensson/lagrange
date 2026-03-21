@@ -21,7 +21,9 @@ import {
   WorkClassScheduler,
 } from '../runtime/work-class-scheduler.js';
 import {
+  PRESSURE_GOVERNOR_ACTION,
   PRESSURE_WORK_CLASS,
+  PressureGovernor,
 } from '../control-plane/pressure-governor.js';
 import {
   createSystemMetadataOwnerRequiredError,
@@ -59,6 +61,14 @@ const LOGS_TABLE_OWNER = 'LogsTableService';
 const MIN_CHUNK_SIZE = 1;
 const MIN_YIELD_MS = 0;
 const MIN_SLEEP_MS = 1;
+const LOG_PRESSURE_FAMILY = Object.freeze({
+  CONNECTION_CLOSED: 'connection_closed',
+  NO_CONNECTION: 'no_connection',
+  MESSAGE_TIMEOUT: 'message_timeout',
+  QUERY_ROUTING_FAILED: 'query_routing_failed',
+  PARTICIPANT_FAILURE: 'participant_failure',
+  FORWARD_WRITE_FAILED: 'forward_write_failed',
+});
 
 /**
  * LogsTableService manages writing log entries to the logs system table.
@@ -81,6 +91,8 @@ class LogsTableService extends EventEmitter {
       required: CONTROL_PLANE_ROLLOUT_REQUIRED.LOGS_TABLE_SERVICE,
     });
     this.logsOwner = options.logsOwner || null;
+    this.messageRouter = options.messageRouter || null;
+    this.pressureGovernor = options.pressureGovernor || null;
 
     // Configuration
     const config = ConfigurationManager.getInstance();
@@ -224,6 +236,12 @@ class LogsTableService extends EventEmitter {
     if (options.logsOwner) {
       this.logsOwner = options.logsOwner;
     }
+    if (Object.prototype.hasOwnProperty.call(options, 'messageRouter')) {
+      this.messageRouter = options.messageRouter || null;
+    }
+    if (Object.prototype.hasOwnProperty.call(options, 'pressureGovernor')) {
+      this.pressureGovernor = options.pressureGovernor || null;
+    }
 
     // Start periodic flush timer
     this.startFlushTimer();
@@ -300,6 +318,8 @@ class LogsTableService extends EventEmitter {
       this.selfLoopPreventedWrites += 1;
       return;
     }
+
+    this.applySharedPressureDeferWindow();
 
     if (this.isPressureModeActive()) {
       if (this.shouldApplyRetainedBacklogCap() &&
@@ -709,7 +729,79 @@ class LogsTableService extends EventEmitter {
       flushWorkScheduled: this.flushWorkScheduled,
       workClassSchedulerEnabled: Boolean(this.workClassScheduler),
       consecutiveDeferredWriteFailures: this.consecutiveDeferredWriteFailures,
+      sharedPressureBackpressured: this.isSharedPressureBackpressured(),
     };
+  }
+
+  /**
+   * Return the shared pressure governor for background log persistence.
+   * @return {PressureGovernor}
+   * @private
+   */
+  getPressureGovernor() {
+    if (this.pressureGovernor) {
+      this.pressureGovernor.configure?.({
+        messageRouter: this.messageRouter || null,
+        logger: this.logger,
+      });
+      return this.pressureGovernor;
+    }
+
+    const config = ConfigurationManager.getInstance();
+    this.pressureGovernor = PressureGovernor.getShared({
+      nodeId: config.get(CONFIG_KEY.NODE_ID),
+      messageRouter: this.messageRouter || null,
+      logger: this.logger,
+    });
+    return this.pressureGovernor;
+  }
+
+  /**
+   * Evaluate the shared pressure policy for one background log write and arm a
+   * bounded defer window when transport is already hot.
+   * @private
+   */
+  applySharedPressureDeferWindow() {
+    const decision = this.getPressureGovernor().evaluate({
+      workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+      resourceKeys: [
+        'control-plane:write',
+        'control-plane:table:logs',
+        'transport:logs-writer',
+      ],
+      allowDegrade: true,
+      allowDefer: true,
+      retryAfterMs: this.retryDelayMs,
+    });
+    if (decision?.action !== PRESSURE_GOVERNOR_ACTION.DEFER &&
+        decision?.action !== PRESSURE_GOVERNOR_ACTION.DEGRADE) {
+      return;
+    }
+    const retryAfterMs = Number.isFinite(decision?.retryAfterMs) &&
+      decision.retryAfterMs > 0 ?
+      Math.floor(decision.retryAfterMs) :
+      Math.max(MIN_SLEEP_MS, this.retryDelayMs);
+    this.writeDeferredUntilMs = Math.max(
+      this.writeDeferredUntilMs || 0,
+      this.now() + retryAfterMs,
+    );
+    this.trimPendingWritesUnderPressure();
+    this.scheduleContinuationFlush(retryAfterMs);
+  }
+
+  /**
+   * Whether the shared pressure policy currently sees transport backpressure.
+   * @return {boolean}
+   * @private
+   */
+  isSharedPressureBackpressured() {
+    return this.getPressureGovernor().isBackpressured({
+      resourceKeys: [
+        'control-plane:write',
+        'control-plane:table:logs',
+        'transport:logs-writer',
+      ],
+    });
   }
 
   /**
@@ -785,12 +877,67 @@ class LogsTableService extends EventEmitter {
     if (!message) {
       return null;
     }
+    const metadata = entry?.metadata &&
+      typeof entry.metadata === 'object' ?
+      entry.metadata :
+      {};
+    const subsystem = typeof metadata.subsystem === 'string' ?
+      metadata.subsystem :
+      '';
+    const partitionId = typeof metadata.partitionId === 'string' ?
+      metadata.partitionId :
+      '';
+    const tableName = typeof metadata.tableName === 'string' ?
+      metadata.tableName :
+      '';
+    const transientFamily = this.resolveTransientPressureFamily(
+      message,
+      partitionId || tableName || '',
+    );
     return [
       String(entry?.level || 'INFO').toUpperCase(),
       entry?.nodeId || '',
-      entry?.serviceId || '',
-      message,
+      subsystem,
+      transientFamily || message,
     ].join('|');
+  }
+
+  /**
+   * Collapse repeated transport/control-plane outage noise to a stable family
+   * so pressure mode keeps one exemplar per affected subsystem/resource.
+   * @param {string} message
+   * @param {string} resourceId
+   * @return {string|null}
+   * @private
+   */
+  resolveTransientPressureFamily(message, resourceId = '') {
+    if (typeof message !== 'string' || message.length === 0) {
+      return null;
+    }
+    const normalizedResourceId = typeof resourceId === 'string' ?
+      resourceId.trim() :
+      '';
+    const suffix = normalizedResourceId || 'shared';
+    if (message.includes('Distributed operation failed due to participant failures')) {
+      return `${LOG_PRESSURE_FAMILY.PARTICIPANT_FAILURE}:${suffix}`;
+    }
+    if (message.includes('Connection to node') &&
+        message.includes('closed')) {
+      return `${LOG_PRESSURE_FAMILY.CONNECTION_CLOSED}:${suffix}`;
+    }
+    if (message.includes('No connection to node')) {
+      return `${LOG_PRESSURE_FAMILY.NO_CONNECTION}:${suffix}`;
+    }
+    if (message.includes('Message timeout')) {
+      return `${LOG_PRESSURE_FAMILY.MESSAGE_TIMEOUT}:${suffix}`;
+    }
+    if (message.includes('Query routing failed')) {
+      return `${LOG_PRESSURE_FAMILY.QUERY_ROUTING_FAILED}:${suffix}`;
+    }
+    if (message.includes('Failed to forward write to leader')) {
+      return `${LOG_PRESSURE_FAMILY.FORWARD_WRITE_FAILED}:${suffix}`;
+    }
+    return null;
   }
 
   /**

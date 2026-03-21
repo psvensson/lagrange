@@ -27,6 +27,7 @@ import {
   WORKER_HEALTH_STATUS,
   WORKER_ENTITY_TYPE,
   WORKER_ERROR_MSG,
+  FACADE_MESSAGE_TYPE,
   LEADERSHIP_MESSAGE_TYPE,
 } from './worker-constants.js';
 import {NUM} from '../constants/index.js';
@@ -477,6 +478,7 @@ class ReplicaWorkerManager extends EventEmitter {
     // Handle WORKER_SEND messages - route to target worker
     if (message.type === 'WORKER_SEND') {
       await this.routeWorkerMessage(message);
+      return;
     }
   }
 
@@ -521,8 +523,6 @@ class ReplicaWorkerManager extends EventEmitter {
       }
       return;
     }
-
-    // Deliver message to target replica using its dedicated execution pool.
     const response = await this.deliverMessage(targetReplicaId, payload);
 
     this.logger.debug('Worker message delivered', {
@@ -694,6 +694,38 @@ class ReplicaWorkerManager extends EventEmitter {
   }
 
   /**
+   * Start one replica group's deferred elections once every expected replica
+   * exists and is routable.
+   * @param {Array<string>} replicaIds
+   * @return {Promise<void>}
+   * @private
+   */
+  async maybeStartReplicaGroupElection(replicaIds) {
+    const expectedReplicaIds = Array.isArray(replicaIds) ?
+      [...new Set(replicaIds.filter((replicaId) =>
+        typeof replicaId === 'string' && replicaId.length > 0,
+      ))] :
+      [];
+    if (expectedReplicaIds.length <= NUM.ONE) {
+      return;
+    }
+
+    const allReplicasReady = expectedReplicaIds.every((replicaId) => {
+      const handle = this.workers.get(replicaId);
+      return handle?.status === WORKER_STATUS.RUNNING;
+    });
+    if (!allReplicasReady) {
+      return;
+    }
+
+    await Promise.all(expectedReplicaIds.map((replicaId) => {
+      return this.deliverMessage(replicaId, {
+        type: FACADE_MESSAGE_TYPE.START_ELECTION,
+      });
+    }));
+  }
+
+  /**
    * Create a new partition replica in a worker process.
    * After successful creation, registers handler with MessageRouter.
    * @param {Object} options - Partition configuration.
@@ -729,6 +761,8 @@ class ReplicaWorkerManager extends EventEmitter {
     const now = Date.now();
     const unifiedAddress = `${this.nodeId}/${WORKER_ENTITY_TYPE.PARTITION}/${options.replicaId}`;
     const timeoutMs = options.timeoutMs || MANAGER_DEFAULT.CREATE_REPLICA_TIMEOUT_MS;
+    const shouldDeferElection = Array.isArray(options.replicaIds) &&
+      options.replicaIds.length > NUM.ONE;
 
     // Create worker handle
     const handle = {
@@ -778,6 +812,7 @@ class ReplicaWorkerManager extends EventEmitter {
           dbPath: options.dbPath,
           replicaIds: options.replicaIds,
           peerAddresses: options.peerAddresses,
+          deferElection: shouldDeferElection,
         }),
         timeoutMs,
       );
@@ -801,6 +836,7 @@ class ReplicaWorkerManager extends EventEmitter {
       // Register handler with MessageRouter to forward messages to this worker
       // Requirements 11.1, 11.2 - Manager-based registration
       this.registerWorkerWithRouter(options.replicaId, unifiedAddress);
+      await this.maybeStartReplicaGroupElection(options.replicaIds);
 
       this.emit(WORKER_EVENT.REPLICA_CREATED, {
         replicaId: options.replicaId,
@@ -885,6 +921,8 @@ class ReplicaWorkerManager extends EventEmitter {
     const unifiedAddress =
       `${this.nodeId}/${WORKER_ENTITY_TYPE.MESSAGE_GROUP}/${options.replicaId}`;
     const timeoutMs = options.timeoutMs || MANAGER_DEFAULT.CREATE_REPLICA_TIMEOUT_MS;
+    const shouldDeferElection = Array.isArray(options.replicaIds) &&
+      options.replicaIds.length > NUM.ONE;
 
     // Create worker handle
     const handle = {
@@ -928,6 +966,7 @@ class ReplicaWorkerManager extends EventEmitter {
           replicaId: options.replicaId,
           replicaIds: options.replicaIds,
           peerAddresses: options.peerAddresses,
+          deferElection: shouldDeferElection,
         }),
         timeoutMs,
       );
@@ -951,6 +990,7 @@ class ReplicaWorkerManager extends EventEmitter {
       // Register handler with MessageRouter to forward messages to this worker
       // Requirements 11.1, 11.2 - Manager-based registration
       this.registerWorkerWithRouter(options.replicaId, unifiedAddress);
+      await this.maybeStartReplicaGroupElection(options.replicaIds);
 
       this.emit(WORKER_EVENT.REPLICA_CREATED, {
         replicaId: options.replicaId,
@@ -1105,7 +1145,7 @@ class ReplicaWorkerManager extends EventEmitter {
    * Query leadership status of a replica.
    * Sends GET_LEADERSHIP_STATUS message to the worker.
    * @param {string} replicaId - Replica ID to query.
-   * @return {Promise<{isLeader: boolean, term: number, leaderId: string|null}>}
+   * @return {Promise<{isLeader: boolean, leaderActivated: boolean, term: number, leaderId: string|null}>}
    *         Leadership status.
    * @see Requirements 10.4 - Leadership queries via message
    */
@@ -1134,6 +1174,7 @@ class ReplicaWorkerManager extends EventEmitter {
 
     return {
       isLeader: response.isLeader || false,
+      leaderActivated: response.leaderActivated === true,
       term: response.term || NUM.ZERO,
       leaderId: response.leaderId || null,
       replicaId: response.replicaId || replicaId,
@@ -1213,7 +1254,7 @@ class ReplicaWorkerManager extends EventEmitter {
   registerWorkerWithRouter(replicaId, unifiedAddress) {
     // Create handler that forwards messages to this worker via deliverMessage
     const deliverToWorker = async (envelope) => {
-      return this.deliverMessage(replicaId, envelope);
+      return this.deliverMessage(replicaId, envelope?.payload || envelope);
     };
 
     this.messageRouter.registerWorkerHandler(unifiedAddress, deliverToWorker);

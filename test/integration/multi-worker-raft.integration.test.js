@@ -140,6 +140,11 @@ async function waitFor(condition, timeoutMs, intervalMs) {
   return false;
 }
 
+function isActivatedLeader(status) {
+  return status?.isLeader === true &&
+    status?.leaderActivated === true;
+}
+
 /**
  * Generate unique node ID for test isolation.
  * @param {number} counter - Counter value.
@@ -260,7 +265,7 @@ test('Multi-Worker Raft Integration', {timeout: 30000}, async (t) => {
 
           for (const handle of handles) {
             const status = await workerManager.getLeadershipStatus(handle.replicaId);
-            if (status.isLeader) {
+            if (isActivatedLeader(status)) {
               leaderCount++;
               leaderHandle = handle;
             }
@@ -280,6 +285,7 @@ test('Multi-Worker Raft Integration', {timeout: 30000}, async (t) => {
       // Verify leader status
       const leaderStatus = await workerManager.getLeadershipStatus(leaderHandle.replicaId);
       t.ok(leaderStatus.isLeader, 'Leader reports isLeader=true');
+      t.ok(leaderStatus.leaderActivated, 'Leader activation completed');
       t.ok(leaderStatus.term >= NUM.ONE, 'Leader has valid term');
 
       // Verify followers
@@ -287,7 +293,7 @@ test('Multi-Worker Raft Integration', {timeout: 30000}, async (t) => {
       for (const handle of handles) {
         if (handle.replicaId !== leaderHandle.replicaId) {
           const status = await workerManager.getLeadershipStatus(handle.replicaId);
-          if (!status.isLeader) {
+          if (!isActivatedLeader(status)) {
             followerCount++;
           }
         }
@@ -413,7 +419,7 @@ test('Multi-Worker Raft Integration', {timeout: 30000}, async (t) => {
         async () => {
           for (const handle of handles) {
             const status = await workerManager.getLeadershipStatus(handle.replicaId);
-            if (status.isLeader) {
+            if (isActivatedLeader(status)) {
               return true;
             }
           }
@@ -532,7 +538,7 @@ test('Multi-Worker Raft Integration', {timeout: 30000}, async (t) => {
         async () => {
           for (const handle of handles) {
             const status = await workerManager.getLeadershipStatus(handle.replicaId);
-            if (status.isLeader) {
+            if (isActivatedLeader(status)) {
               leaderHandle = handle;
               return true;
             }
@@ -715,4 +721,3 @@ test('Multi-Worker Raft Integration', {timeout: 30000}, async (t) => {
     }
   });
 });
-

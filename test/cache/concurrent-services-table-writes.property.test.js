@@ -88,13 +88,15 @@ function createMockCache(data = {}) {
  * Create a partition record.
  * @param {string} partitionId - Partition ID.
  * @param {string} tableId - Table ID.
+ * @param {Object} [options={}] - Record options.
+ * @param {string|null} [options.leaderNodeId=null] - Canonical leader node ID.
  * @return {Object} Partition record.
  */
-function createPartitionRecord(partitionId, tableId = 'table-1') {
+function createPartitionRecord(partitionId, tableId = 'table-1', options = {}) {
   return {
     [COLUMN.PARTITION_ID]: partitionId,
     [COLUMN.TABLE_ID]: tableId,
-    [COLUMN.LEADER_NODE_ID]: null,
+    [COLUMN.LEADER_NODE_ID]: options.leaderNodeId ?? null,
   };
 }
 
@@ -192,7 +194,13 @@ function buildCacheFromOperations(operations) {
 
     // Add partition record if configured
     if (op.hasPartitionRecord) {
-      partitionRecords.push(createPartitionRecord(partitionId, tableName));
+      partitionRecords.push(createPartitionRecord(
+        partitionId,
+        tableName,
+        {
+          leaderNodeId: op.hasLeaderService ? 'node-1' : null,
+        },
+      ));
     }
 
     // Add leader service if configured
@@ -362,7 +370,11 @@ t.test('Concurrent Services Table Writes Property Tests', async (t) => {
         }),
         (config) => {
           const partitionId = INITIAL_PARTITION_IDS[TABLES.SERVICES];
-          const partitionRecords = [createPartitionRecord(partitionId, TABLES.SERVICES)];
+          const partitionRecords = [createPartitionRecord(
+            partitionId,
+            TABLES.SERVICES,
+            {leaderNodeId: 'node-1'},
+          )];
           const serviceRecords = [createPartitionLeaderService(partitionId, {
             address: config.leaderHasAddress ? 'ws://127.0.0.1:8080' : null,
             nodeId: 'node-1',
@@ -410,7 +422,11 @@ t.test('Concurrent Services Table Writes Property Tests', async (t) => {
         }),
         (config) => {
           const partitionId = INITIAL_PARTITION_IDS[config.tableName];
-          const partitionRecords = [createPartitionRecord(partitionId, config.tableName)];
+          const partitionRecords = [createPartitionRecord(
+            partitionId,
+            config.tableName,
+            {leaderNodeId: 'node-1'},
+          )];
           const serviceRecords = [createPartitionLeaderService(partitionId, {
             address: config.leaderHasAddress ? 'ws://127.0.0.1:8080' : null,
             nodeId: 'node-1',

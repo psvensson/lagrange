@@ -41,6 +41,8 @@ const ERROR_MSG = Object.freeze({
   NODE_ID_REQUIRED: 'nodeId',
   CDC_REQUIRED: 'cdcIntegrationService',
   NODE_ROW_REQUIRED: 'nodeRow',
+  REGISTER_NODE_BUDGET_REQUIRED: 'budgetService.registerNodeBudget',
+  RESOLVE_BUDGET_ROW_REQUIRED: 'budgetService.resolveBudgetRow',
 });
 
 /**
@@ -113,6 +115,12 @@ class NodeStorageBudgetSetup {
         'NodeStorageBudgetSetup', ERROR_MSG.NODE_ROW_REQUIRED,
       );
     }
+    if (typeof budgetService?.registerNodeBudget !== 'function') {
+      throw new DependencyError(
+        'NodeStorageBudgetSetup',
+        ERROR_MSG.REGISTER_NODE_BUDGET_REQUIRED,
+      );
+    }
 
     const loggingService = LoggingService.getInstance();
     const setupLogger = loggingService.isInitialized() ?
@@ -181,6 +189,12 @@ class NodeStorageBudgetSetup {
     if (!nodeRow) {
       throw new DependencyError(
         'NodeStorageBudgetSetup', ERROR_MSG.NODE_ROW_REQUIRED,
+      );
+    }
+    if (typeof budgetService?.resolveBudgetRow !== 'function') {
+      throw new DependencyError(
+        'NodeStorageBudgetSetup',
+        ERROR_MSG.RESOLVE_BUDGET_ROW_REQUIRED,
       );
     }
 

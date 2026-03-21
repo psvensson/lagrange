@@ -41,8 +41,10 @@ function patchIncomingDataListener(raft) {
     }
 
     if (packet?.type === RAFT_PACKET_TYPE.APPEND) {
-      const entry = Array.isArray(packet?.data) ? packet.data[0] : null;
-      if (!isRecoverableAppendEntry(entry)) {
+      const hasEntries = Array.isArray(packet?.data) &&
+        packet.data.length > 0;
+      const entry = hasEntries ? packet.data[0] : null;
+      if (hasEntries && !isRecoverableAppendEntry(entry)) {
         return write();
       }
     }

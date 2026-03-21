@@ -73,9 +73,14 @@ test('BootstrapService.phaseCacheHydration blocks mode swap when strict hydratio
     const hydrationResult = createHydrationResultWithMissingRequiredTable();
 
     service.getSystemTableCache = () => systemTableCache;
-    service.getLeaderMessageGroupService = () => ({applyCDCEvent: async () => {}});
-    service.hydrateFromLocalPartitions = async () => hydrationResult;
-    service.subscribeToInitialSystemTableCDC = async () => {};
+    service.seedMessageGroupsPhase
+      .getLeaderMessageGroupService = () => ({
+        applyCDCEvent: async () => {},
+      });
+    service.seedCacheHydrationPhase
+      .hydrateFromLocalPartitions = async () => hydrationResult;
+    service.seedCacheHydrationPhase
+      .subscribeToInitialSystemTableCDC = async () => {};
     service.cdcIntegrationService = {
       setSystemTableCache: () => {},
       setEpochManager: () => {},
@@ -84,12 +89,12 @@ test('BootstrapService.phaseCacheHydration blocks mode swap when strict hydratio
     service.tablePolicyService = {};
 
     let swapCalled = false;
-    service.swapSystemTableWriter = () => {
+    service.seedRegistrationPhase.swapSystemTableWriter = () => {
       swapCalled = true;
     };
 
     await t.rejects(
-      service.phaseCacheHydration(),
+      service.seedCacheHydrationPhase.phaseCacheHydration(),
       /hydration|incomplete|required/i,
       'phaseCacheHydration should fail when required hydration is incomplete',
     );

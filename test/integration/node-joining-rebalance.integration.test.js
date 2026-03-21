@@ -29,6 +29,9 @@ import {
   MoveType,
   NodeStatus,
 } from '../../src/rebalancer/unified-rebalancer.js';
+import {
+  REBALANCER_SKIP_REASON,
+} from '../../src/rebalancer/rebalancer-constants.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {
@@ -54,6 +57,9 @@ function createAlwaysReadyControlPlaneReadinessService() {
     getNodeReadinessSync: () => ({
       dimensions: {
         [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+        [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: true,
+        [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE]: true,
+        [CONTROL_PLANE_READINESS_DIMENSION.METADATA_PUBLICATION_HEALTHY]: true,
       },
     }),
   };
@@ -221,6 +227,12 @@ test('Node joining rebalancing integration', async (t) => {
         messageRouter: bootstrapResult.messageRouter,
         tablePolicyService,
         sqlQueryEngine,
+        controlPlaneSystemTableGateway: new ControlPlaneSystemTableGateway({
+          nodeId: seedNodeId,
+          sqlQueryEngine,
+          cdcIntegrationService,
+          messageRouter: bootstrapResult.messageRouter,
+        }),
         controlPlaneReadinessService:
           createAlwaysReadyControlPlaneReadinessService(),
         storageAdmissionService: createMockStorageAdmissionService(),
@@ -228,6 +240,9 @@ test('Node joining rebalancing integration', async (t) => {
         enableTimeouts: false,
       });
       rebalanceCoordinator.initialize();
+
+      const controlPlaneSystemTableGateway =
+        rebalanceCoordinator.controlPlaneSystemTableGateway;
 
       const partitionId = await waitForStablePartitionId(systemTableCache);
       t.ok(partitionId, 'should have a stable partition for rebalancing');
@@ -640,12 +655,16 @@ test('Node joining rebalancing integration', async (t) => {
       });
       rebalanceCoordinator.initialize();
 
+      const controlPlaneSystemTableGateway =
+        rebalanceCoordinator.controlPlaneSystemTableGateway;
+
       // Create decomposed control-plane services
       const heartbeatSvc = new HeartbeatService({
         nodeId: seedNodeId,
         nodeAddress: `ws://localhost:${seedWsPort}`,
         cdcIntegrationService,
         systemTableCache,
+        controlPlaneSystemTableGateway,
       });
       heartbeatSvc.initialize();
 
@@ -653,23 +672,18 @@ test('Node joining rebalancing integration', async (t) => {
         nodeId: seedNodeId,
         nodeLeaseOwner: heartbeatSvc,
         systemTableCache,
-        sqlQueryEngine: cdcIntegrationService.sqlQueryEngine,
+        sqlQueryEngine,
+        controlPlaneSystemTableGateway,
       });
       leaseSvc.initialize();
 
-      const endpointGateway = new ControlPlaneSystemTableGateway({
-        nodeId: seedNodeId,
-        sqlQueryEngine: cdcIntegrationService.sqlQueryEngine,
-        cdcIntegrationService,
-        messageRouter: bootstrapResult.messageRouter,
-      });
       const endpointSvc = new EndpointService({
         nodeId: seedNodeId,
         serviceEndpointsOwner: createSystemMetadataOwners({
-          controlPlaneSystemTableGateway: endpointGateway,
+          controlPlaneSystemTableGateway,
           systemTableCache,
         }).serviceEndpointsOwner,
-        controlPlaneSystemTableGateway: endpointGateway,
+        controlPlaneSystemTableGateway,
       });
       endpointSvc.initialize();
 
@@ -679,7 +693,8 @@ test('Node joining rebalancing integration', async (t) => {
         cdcIntegrationService,
         systemTableCache,
         rebalanceCoordinator,
-        sqlQueryEngine: cdcIntegrationService.sqlQueryEngine,
+        sqlQueryEngine,
+        controlPlaneSystemTableGateway,
       });
       dispatchSvc.initialize();
 
@@ -768,7 +783,8 @@ test('Node joining rebalancing integration', async (t) => {
       // If moves were skipped, verify it was due to node_not_ready (correct behavior)
       if (skippedCreateMoves.length > 0) {
         t.ok(
-          skippedCreateMoves.some((move) => move.reason === 'node_not_ready'),
+          skippedCreateMoves.some((move) =>
+            move.reason === REBALANCER_SKIP_REASON.NODE_NOT_READY),
           'skipped moves should be due to node_not_ready',
         );
       }

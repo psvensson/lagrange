@@ -71,10 +71,18 @@ describe('seed and joining startup integration', () => {
       source.match(/bootstrapAPI\.setSqlQueryEngine\(sqlQueryEngine\)/g) || [];
     const bootstrapApiShutdowns =
       source.match(/await bootstrapAPI\.shutdown\(\)/g) || [];
+    const shutdownHandlerUses =
+      source.match(/createShutdownSignalHandler\(/g) || [];
 
     assert.equal(bootstrapApiCreates.length, 2);
     assert.equal(bootstrapApiInitializations.length, 2);
     assert.equal(bootstrapApiSqlEngineHandoffs.length, 2);
-    assert.ok(bootstrapApiShutdowns.length >= 2);
+    assert.ok(
+      bootstrapApiShutdowns.length >= 2 ||
+      (
+        bootstrapApiShutdowns.length >= 1 &&
+        shutdownHandlerUses.length >= 2
+      ),
+    );
   });
 });

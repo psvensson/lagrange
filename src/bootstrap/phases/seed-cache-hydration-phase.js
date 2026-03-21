@@ -19,20 +19,13 @@ import {
   buildMessageGroupOwnerNotReadyError,
 } from '../shared/message-group-selection.js';
 import {
-  detachBootstrapOwnedCdcSubscriber,
-  isBootstrapOwnedCdcPropagationActive,
-} from '../shared/bootstrap-cdc-propagation-scope.js';
-import {
   CDCPipelineReadinessGate,
 } from '../../cdc/cdc-pipeline-readiness-gate.js';
 import {
   CDC_PIPELINE_READINESS_TIMEOUT_MS,
   CDC_LIFECYCLE_LOG_MSG,
 } from '../../constants/cdc-lifecycle-constants.js';
-import {
-  getBlockingSystemServiceLeaders,
-  getMissingSystemServiceLeaderCount,
-} from '../../cache/leader-readiness-gate.js';
+import {createSystemLeaderReadinessSnapshot} from '../system-readiness-snapshot.js';
 import {isNodeRecordReady} from '../../node/node-readiness-policy.js';
 import {
   CACHE_HYDRATION_TABLES,
@@ -588,29 +581,7 @@ class SeedCacheHydrationPhase {
           replicaId,
           messageGroup?.groupId || 'message-group',
         ].join(':');
-        let bootstrapCdcSubscriberDetached = false;
         const cdcSubscriber = async (cdcEvent) => {
-          if (!isBootstrapOwnedCdcPropagationActive(
-            d.getPhase(),
-            BOOTSTRAP_PHASE.COMPLETE,
-          )) {
-            if (!bootstrapCdcSubscriberDetached) {
-              bootstrapCdcSubscriberDetached =
-                detachBootstrapOwnedCdcSubscriber({
-                  partition,
-                  subscriber: cdcSubscriber,
-                  logger,
-                  logMessage:
-                    'Detached bootstrap cache-hydration CDC propagation subscriber after bootstrap completion',
-                  nodeId: d.getNodeId(),
-                  tableName,
-                  partitionId,
-                  replicaId,
-                  lifecyclePhase: d.getPhase(),
-                });
-            }
-            return;
-          }
           if (cdcEvent.tableName === tableName) {
             logger.debug(
               BOOTSTRAP_LOG_MSG.CDC_EVENT_RECEIVED, {
@@ -743,14 +714,12 @@ class SeedCacheHydrationPhase {
 
     const startTime = Date.now();
     while (Date.now() - startTime < timeoutMs) {
-      const missing = getBlockingSystemServiceLeaders(
-        cache,
-        SEED_REQUIRED_WRITE_TABLES,
-      );
-      const missingCount =
-        getMissingSystemServiceLeaderCount(missing);
+      const readiness = createSystemLeaderReadinessSnapshot({
+        systemTableCache: cache,
+        requiredTables: SEED_REQUIRED_WRITE_TABLES,
+      });
 
-      if (missingCount === NUM.ZERO) {
+      if (readiness.ready) {
         return;
       }
 
@@ -758,10 +727,11 @@ class SeedCacheHydrationPhase {
       delay = Math.min(delay * backoffMultiplier, maxDelay);
     }
 
-    const missing = getBlockingSystemServiceLeaders(
-      cache,
-      SEED_REQUIRED_WRITE_TABLES,
-    );
+    const readiness = createSystemLeaderReadinessSnapshot({
+      systemTableCache: cache,
+      requiredTables: SEED_REQUIRED_WRITE_TABLES,
+    });
+    const missing = readiness.missingLeaders;
     const allMissing = [
       ...missing.missingPartitionLeaders,
       ...missing.missingMessageGroupLeaders,
@@ -776,8 +746,7 @@ class SeedCacheHydrationPhase {
       ),
     );
     error.missingLeaders = missing;
-    error.missingCount =
-      getMissingSystemServiceLeaderCount(missing);
+    error.missingCount = readiness.missingCount;
     error.timeoutMs = timeoutMs;
     throw error;
   }

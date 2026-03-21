@@ -1,4 +1,5 @@
 import {NUM, RUNTIME_KIND, TABLES, TIME_MS} from '../constants/index.js';
+import {JOINING_SUB_PHASE} from '../node/node-constants.js';
 
 const DEFAULT_REPLICA_STAGGER_DELAY_MS = 50;
 const DEFAULT_MAX_CONCURRENT_SERVICE_ACTIONS = 16;
@@ -18,6 +19,17 @@ const BOOTSTRAP_PHASE = Object.freeze({
   CACHE_HYDRATION: 'cache_hydration',
   COMPLETE: 'complete',
   FAILED: 'failed',
+});
+
+/**
+ * Shared cleanup result constants for seed and join cleanup paths.
+ * Both SeedCleanupHandler and JoinCleanupHandler use these values
+ * so diagnostics shape is consistent (D3.3, Requirement 2.4).
+ */
+const CLEANUP_RESULT = Object.freeze({
+  SUCCESS: 'success',
+  ERROR: 'error',
+  SKIPPED: 'skipped',
 });
 
 /**
@@ -70,6 +82,26 @@ const JOINING_PHASE = Object.freeze({
   QUERYING_STATE: 'querying_state',
   COMPLETE: 'complete',
   FAILED: 'failed',
+});
+
+/**
+ * Declarative mapping from JOINING_PHASE to JOINING_SUB_PHASE
+ * for NodeLifecycleStateMachine sub-phase transitions during join.
+ * Mirrors bootstrap's PHASE_TO_SUB_PHASE pattern (D5.1, Req 4.1, 4.4).
+ */
+const JOINING_PHASE_TO_SUB_PHASE = Object.freeze({
+  [JOINING_PHASE.CONTACTING_SEED]:
+    JOINING_SUB_PHASE.CONTACTING_SEED,
+  [JOINING_PHASE.CONNECTING_WEBSOCKET]:
+    JOINING_SUB_PHASE.CONNECTING_WEBSOCKET,
+  [JOINING_PHASE.CREATING_MESSAGE_GROUP]:
+    JOINING_SUB_PHASE.CREATING_MESSAGE_GROUP,
+  [JOINING_PHASE.JOINING_MESSAGE_GROUP]:
+    JOINING_SUB_PHASE.JOINING_MESSAGE_GROUP,
+  [JOINING_PHASE.WAITING_LEADERSHIP]:
+    JOINING_SUB_PHASE.WAITING_LEADERSHIP,
+  [JOINING_PHASE.QUERYING_STATE]:
+    JOINING_SUB_PHASE.QUERYING_STATE,
 });
 
 const BOOTSTRAP_SUBSYSTEM = Object.freeze({
@@ -155,6 +187,41 @@ const BOOTSTRAP_REPLICA_REGISTRATION_TRACE = Object.freeze({
   EVENT_ERROR: 'error',
   EVENT_COMPLETE: 'complete',
   EVENT_SKIP_MISSING_PARTITION: 'skip_missing_partition',
+});
+
+/**
+ * Concern-scoped delegate bundle names for seed bootstrap.
+ * Each bundle groups delegates by concern so phase/readiness/cleanup
+ * owners receive only the dependencies they need (D2.2).
+ */
+const SEED_DELEGATE_BUNDLE = Object.freeze({
+  PHASE_EXECUTION: 'phaseExecution',
+  READINESS: 'readiness',
+  CLEANUP: 'cleanup',
+  RUNTIME_WIRING: 'runtimeWiring',
+});
+
+/**
+ * Concern-scoped delegate bundle names for join bootstrap.
+ * Mirrors SEED_DELEGATE_BUNDLE so join phase/readiness/cleanup
+ * owners receive only the dependencies they need (D2.2).
+ */
+const JOIN_DELEGATE_BUNDLE = Object.freeze({
+  PHASE_EXECUTION: 'phaseExecution',
+  READINESS: 'readiness',
+  CLEANUP: 'cleanup',
+  RUNTIME_WIRING: 'runtimeWiring',
+});
+
+/**
+ * Named segment keys for the join startup plan (D4.1, Req 3.1).
+ * Each key identifies a checkpoint boundary group of phases.
+ */
+const JOIN_PLAN_SEGMENT = Object.freeze({
+  SEED_CONTACT: 'seedContact',
+  INFRASTRUCTURE: 'infrastructure',
+  MEMBERSHIP: 'membership',
+  READINESS: 'readiness',
 });
 
 const BOOTSTRAP_PARTITION_LEADERSHIP_DEFAULT = Object.freeze({
@@ -349,6 +416,7 @@ const BOOTSTRAP_DEFAULT = Object.freeze({
 export {
   BOOTSTRAP_ASSIGNMENT_STRATEGY,
   BOOTSTRAP_CLEANUP_STEP,
+  CLEANUP_RESULT,
   BOOTSTRAP_DEFAULT,
   BOOTSTRAP_ERROR,
   BOOTSTRAP_EVENT,
@@ -373,5 +441,9 @@ export {
   BOOTSTRAP_UNIFIED_RECONCILE,
   DEFAULT_MAX_CONCURRENT_SERVICE_ACTIONS,
   DEFAULT_REPLICA_STAGGER_DELAY_MS,
+  JOIN_DELEGATE_BUNDLE,
+  JOIN_PLAN_SEGMENT,
   JOINING_PHASE,
+  JOINING_PHASE_TO_SUB_PHASE,
+  SEED_DELEGATE_BUNDLE,
 };

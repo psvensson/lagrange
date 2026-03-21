@@ -9,15 +9,13 @@ const __dirname = path.dirname(__filename);
 const srcRoot = path.join(__dirname, '..', '..', 'src');
 
 const SANCTIONED_APPLY_CALL_COUNTS = Object.freeze({
-  'admin/admin-service-discovery.js': 2,
   'bootstrap/bootstrap-cache-hydration-applier.js': 1,
   'bootstrap/node-joining-service.js': 1,
   'bootstrap/phases/create-message-group-phase.js': 1,
   'bootstrap/phases/query-system-state-phase.js': 2,
   'cdc/cdc-integration-service.js': 2,
-  'control-plane/control-plane-readiness-service.js': 2,
+  'control-plane/control-plane-system-table-gateway.js': 2,
   'message-group/cdc-handler.js': 1,
-  'node/replica-handler.js': 1,
 });
 
 /**

@@ -12,8 +12,8 @@ function createMockCDCService() {
   const updates = [];
   return {
     updates,
-    updateSystemTableRow: async (tableName, id, data) => {
-      updates.push({tableName, id, data});
+    updateSystemTableRow: async (tableName, whereClause, data) => {
+      updates.push({tableName, whereClause, data});
       return {success: true};
     },
   };
@@ -110,7 +110,7 @@ test('RaftRoleTracker - handles role change events from service',
       'Should have one CDC update');
     t.equal(mockCDC.updates[0].tableName, 'services',
       'Should update services table');
-    t.equal(mockCDC.updates[0].id, 'service-1',
+    t.same(mockCDC.updates[0].whereClause, {service_id: 'service-1'},
       'Should update correct service');
     t.equal(mockCDC.updates[0].data.raft_role, 'leader',
       'Should set role to leader');

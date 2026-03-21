@@ -8,7 +8,7 @@
  */
 
 import {PhaseGate} from './phase-gate.js';
-import {getMissingSystemServiceLeaders} from '../cache/leader-readiness-gate.js';
+import {createSystemLeaderReadinessSnapshot} from './system-readiness-snapshot.js';
 
 /**
  * CacheHydrationGate - Validates cache hydration completeness.
@@ -25,18 +25,12 @@ class CacheHydrationGate extends PhaseGate {
   validate(context) {
     const {systemTableCache} = context;
 
-    const missingLeaders = getMissingSystemServiceLeaders(systemTableCache);
-
-    const hasAllPartitionLeaders =
-      missingLeaders.missingPartitionLeaders.length === 0;
-    const hasAllMessageGroupLeaders =
-      missingLeaders.missingMessageGroupLeaders.length === 0;
-    const hasAllAddresses =
-      missingLeaders.missingPartitionLeaderAddresses.length === 0 &&
-      missingLeaders.missingMessageGroupLeaderAddresses.length === 0;
-
-    const success =
-      hasAllPartitionLeaders && hasAllMessageGroupLeaders && hasAllAddresses;
+    const readiness = createSystemLeaderReadinessSnapshot({
+      systemTableCache,
+      allowLeaderServiceFallback: true,
+    });
+    const missingLeaders = readiness.missingLeaders;
+    const success = readiness.ready;
 
     return {
       success,

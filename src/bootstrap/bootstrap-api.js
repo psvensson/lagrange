@@ -100,9 +100,11 @@ import {AuthoritativeControlPlaneView} from
 import {ControlPlaneSystemTableGateway} from
   '../control-plane/control-plane-system-table-gateway.js';
 import {
-  PRESSURE_GOVERNOR_ERROR_CODE,
   PRESSURE_WORK_CLASS,
 } from '../control-plane/pressure-governor.js';
+import {
+  isRetryableControlPlaneError,
+} from '../control-plane/control-plane-error-classification.js';
 import {
   buildBootstrapTopologySnapshotEnvelope,
 } from './bootstrap-topology-snapshot.js';
@@ -162,15 +164,6 @@ const REGISTERED_SERVICE_CACHE_OPTIONAL_FIELDS = Object.freeze([
   COLUMN.ADDRESS,
   COLUMN.GROUP_ID,
 ]);
-const RETRYABLE_BOOTSTRAP_CONTROL_PLANE_ERROR_FRAGMENTS = Object.freeze([
-  'Distributed operation failed due to participant failures',
-  'Outbound queue for node',
-  'No connection to node',
-  'Connection to node',
-  'Message timeout',
-  'closed',
-]);
-
 /**
  * BootstrapAPI provides REST endpoints for node bootstrap and discovery.
  */
@@ -448,14 +441,7 @@ class BootstrapAPI {
     if (!result || result.success !== false) {
       return false;
     }
-    if (result.errorCode ===
-        PRESSURE_GOVERNOR_ERROR_CODE.CONTROL_PLANE_PRESSURE_DEGRADED) {
-      return true;
-    }
-    const message = typeof result.error === TYPEOF.STRING ? result.error : '';
-    return RETRYABLE_BOOTSTRAP_CONTROL_PLANE_ERROR_FRAGMENTS.some((fragment) =>
-      message.includes(fragment),
-    );
+    return isRetryableControlPlaneError(result);
   }
 
   /**
@@ -1058,6 +1044,26 @@ class BootstrapAPI {
       response.state = snapshot.state;
     }
 
+    if (options.leaderReadiness &&
+        typeof options.leaderReadiness === TYPEOF.OBJECT) {
+      response.leaderReadiness = {
+        ...options.leaderReadiness,
+      };
+      for (const field of [
+        'missingPartitionLeaders',
+        'missingPartitionLeaderNodes',
+        'missingPartitionLeaderAddresses',
+        'missingMessageGroupLeaders',
+        'missingMessageGroupLeaderNodes',
+        'missingMessageGroupLeaderAddresses',
+      ]) {
+        if (!Array.isArray(options.leaderReadiness[field])) {
+          continue;
+        }
+        response[field] = [...options.leaderReadiness[field]];
+      }
+    }
+
     return response;
   }
 
@@ -1216,6 +1222,13 @@ class BootstrapAPI {
           missingMessageGroupLeaders: leaderStatus.missingMessageGroupLeaders,
           missingPartitionLeaderNodes: leaderStatus.missingPartitionLeaderNodes,
           missingMessageGroupLeaderNodes: leaderStatus.missingMessageGroupLeaderNodes,
+        });
+        reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE);
+        return this.buildBootstrapNotReadyResponse({
+          error: BOOTSTRAP_API_ERROR.BOOTSTRAP_NOT_READY,
+          code: BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE,
+          reasonCode: BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE,
+          leaderReadiness: leaderStatus,
         });
       }
 
@@ -1471,7 +1484,7 @@ class BootstrapAPI {
           );
         if (shouldPreserveRetryableHandoff) {
           this.logger.warn(
-            'Preserving MOVE_REPLICA handoff reservation after retryable target visibility timeout',
+            'Preserving MOVE_REPLICA handoff reservation after retryable register-service failure',
             {
               operationId: handoffContext.operationId,
               serviceId: handoffContext.replicaId,
@@ -1524,6 +1537,28 @@ class BootstrapAPI {
   }
 
   /**
+   * Decide whether one register-service handoff failure is retryable.
+   * @param {Error} error
+   * @return {boolean}
+   * @private
+   */
+  isRetryableMoveReplicaHandoffError(error) {
+    if (!error) {
+      return false;
+    }
+    if (error?.errorCode ===
+      BOOTSTRAP_PIPELINE_ERROR_CODE
+        .SERVICE_REGISTRATION_CACHE_VISIBILITY_TIMEOUT) {
+      return true;
+    }
+    if (Number.isFinite(error?.statusCode) &&
+        Math.floor(error.statusCode) === HTTP_STATUS.SERVICE_UNAVAILABLE) {
+      return true;
+    }
+    return Number.isFinite(error?.retryAfterMs);
+  }
+
+  /**
    * Decide whether a MOVE_REPLICA handoff must remain active after a
    * retryable target-registration failure.
    * @param {Object|null} handoffContext
@@ -1540,9 +1575,7 @@ class BootstrapAPI {
     if (!handoffContext || sourceRemovalCompleted === true) {
       return false;
     }
-    return error?.errorCode ===
-      BOOTSTRAP_PIPELINE_ERROR_CODE
-        .SERVICE_REGISTRATION_CACHE_VISIBILITY_TIMEOUT;
+    return this.isRetryableMoveReplicaHandoffError(error);
   }
 
   /**
@@ -2410,30 +2443,43 @@ class BootstrapAPI {
     );
 
     if (this.sqlQueryEngine) {
-      const updateResult = await this.executeBootstrapControlPlaneQuery(
-        BOOTSTRAP_API_SQL.UPDATE_REPLICA_OPERATION,
-        [
-          status,
-          step,
-          now,
-          leaseExpiresAt,
-          null,
-          JSON.stringify(stepsHistory),
-          renewedReservation.assignmentId,
-        ],
-      );
-      if (updateResult?.success === false) {
+      try {
+        const updateResult = await this.executeBootstrapControlPlaneQuery(
+          BOOTSTRAP_API_SQL.UPDATE_REPLICA_OPERATION,
+          [
+            status,
+            step,
+            now,
+            leaseExpiresAt,
+            null,
+            JSON.stringify(stepsHistory),
+            renewedReservation.assignmentId,
+          ],
+        );
+        if (updateResult?.success === false) {
+          this.logger.warn(
+            BOOTSTRAP_API_LOG_MSG
+              .MOVE_REPLICA_ASSIGNMENT_VALIDATION_FAILED,
+            {
+              assignmentId: renewedReservation.assignmentId,
+              status,
+              error:
+                updateResult.error ||
+                'failed to persist MOVE_REPLICA assignment lease renewal',
+            },
+          );
+          return force ? null : reservation;
+        }
+      } catch (renewalWriteError) {
         this.logger.warn(
-          BOOTSTRAP_API_LOG_MSG.MOVE_REPLICA_ASSIGNMENT_VALIDATION_FAILED,
+          BOOTSTRAP_API_LOG_MSG
+            .MOVE_REPLICA_ASSIGNMENT_RENEWAL_WRITE_FAILED,
           {
             assignmentId: renewedReservation.assignmentId,
             status,
-            error:
-              updateResult.error ||
-              'failed to persist MOVE_REPLICA assignment lease renewal',
+            error: renewalWriteError.message,
           },
         );
-        return force ? null : reservation;
       }
     }
 
@@ -2565,7 +2611,22 @@ class BootstrapAPI {
         reservation,
         now,
       );
-    if (!ownership.hasActiveServiceOwner || ownership.observedCommitted) {
+    if (ownership.observedCommitted) {
+      return false;
+    }
+
+    // Local replica presence combined with source node readiness
+    // is authoritative evidence the source is viable, even when
+    // CDC propagation delay causes the cache service row to be
+    // missing or stale.  This prevents the sweep from terminating
+    // reservations under load while still invalidating them when
+    // the source node genuinely loses readiness.
+    if (ownership.sourceReplicaPresentLocally &&
+        ownership.sourceNodeReady) {
+      return true;
+    }
+
+    if (!ownership.hasActiveServiceOwner) {
       return false;
     }
 
@@ -2935,7 +2996,19 @@ class BootstrapAPI {
       BOOTSTRAP_API_HANDOFF_STATUS.PREPARING,
     );
     if (assignmentContext) {
-      await this.updateMoveReplicaHandoffOperation(handoffContext);
+      try {
+        await this.updateMoveReplicaHandoffOperation(handoffContext);
+      } catch (handoffWriteError) {
+        this.logger.warn(
+          BOOTSTRAP_API_LOG_MSG
+            .MOVE_REPLICA_HANDOFF_INITIATION_WRITE_FAILED,
+          {
+            operationId: handoffContext.operationId,
+            assignmentId: assignmentContext.assignmentId,
+            error: handoffWriteError.message,
+          },
+        );
+      }
       this.moveReplicaAssignmentReservations.set(
         assignmentContext.assignmentId,
         {
@@ -2978,7 +3051,19 @@ class BootstrapAPI {
     executor,
   ) {
     this.recordMoveReplicaHandoffPhase(handoffContext, phase, workflowStep, status);
-    await this.updateMoveReplicaHandoffOperation(handoffContext);
+    try {
+      await this.updateMoveReplicaHandoffOperation(handoffContext);
+    } catch (phaseWriteError) {
+      this.logger.warn(
+        BOOTSTRAP_API_LOG_MSG
+          .MOVE_REPLICA_HANDOFF_INITIATION_WRITE_FAILED,
+        {
+          operationId: handoffContext.operationId,
+          phase,
+          error: phaseWriteError.message,
+        },
+      );
+    }
     await executor();
 
     this.logger.info(BOOTSTRAP_API_LOG_MSG.MOVE_REPLICA_HANDOFF_PHASE_APPLIED, {
@@ -3025,7 +3110,19 @@ class BootstrapAPI {
     );
     handoffContext.completedAt = handoffContext.updatedAt;
     handoffContext.errorMessage = null;
-    await this.updateMoveReplicaHandoffOperation(handoffContext);
+    try {
+      await this.updateMoveReplicaHandoffOperation(handoffContext);
+    } catch (completionWriteError) {
+      this.logger.warn(
+        BOOTSTRAP_API_LOG_MSG
+          .MOVE_REPLICA_HANDOFF_INITIATION_WRITE_FAILED,
+        {
+          operationId: handoffContext.operationId,
+          phase: BOOTSTRAP_API_HANDOFF_PHASE.COMMIT_METADATA,
+          error: completionWriteError.message,
+        },
+      );
+    }
     this.moveReplicaAssignmentReservations.set(handoffContext.operationId, {
       ...(this.moveReplicaAssignmentReservations.get(handoffContext.operationId) || {}),
       assignmentId: handoffContext.operationId,
@@ -4861,62 +4958,6 @@ class BootstrapAPI {
   }
 
   /**
-   * Build partition leader metadata from live partition services.
-   * @return {Map<string, Object>} Partition ID -> leader metadata.
-   * @private
-   */
-  getLivePartitionLeaders() {
-    const leaders = new Map();
-    if (!this.partitionServices || this.partitionServices.size === NUM.ZERO) {
-      return leaders;
-    }
-
-    for (const service of this.partitionServices.values()) {
-      const partitionId = service?.partitionId;
-      if (!partitionId || leaders.has(partitionId) || !this.isLiveServiceLeader(service)) {
-        continue;
-      }
-
-      const replicaId = service.replicaId || service.service_id;
-      const nodeId = service.nodeId || this.seedNodeId;
-      const address = service.unifiedAddress ||
-        `${nodeId}${ADDRESS.SEPARATOR}${ENTITY_TYPE.PARTITION}` +
-        `${ADDRESS.SEPARATOR}${replicaId}`;
-      leaders.set(partitionId, {nodeId, address});
-    }
-
-    return leaders;
-  }
-
-  /**
-   * Build message-group leader metadata from live services.
-   * @return {Map<string, Object>} Group ID -> leader metadata.
-   * @private
-   */
-  getLiveMessageGroupLeaders() {
-    const leaders = new Map();
-    if (!this.messageGroupServices || this.messageGroupServices.size === NUM.ZERO) {
-      return leaders;
-    }
-
-    for (const service of this.messageGroupServices.values()) {
-      const groupId = service?.groupId || service?.group_id;
-      if (!groupId || leaders.has(groupId) || !this.isLiveServiceLeader(service)) {
-        continue;
-      }
-
-      const replicaId = service.replicaId || service.service_id;
-      const nodeId = service.nodeId || this.seedNodeId;
-      const address = service.unifiedAddress ||
-        `${nodeId}${ADDRESS.SEPARATOR}${ENTITY_TYPE.MESSAGE_GROUP}` +
-        `${ADDRESS.SEPARATOR}${replicaId}`;
-      leaders.set(groupId, {nodeId, address});
-    }
-
-    return leaders;
-  }
-
-  /**
    * Normalize leader readiness diagnostics for one required-table set.
    * @param {Object} missing - Missing-leader diagnostics.
    * @param {Array<string>} [requiredTablesList]
@@ -4935,8 +4976,6 @@ class BootstrapAPI {
       SERVICE_TYPE.MESSAGE_GROUP,
       COLUMN.GROUP_ID,
     );
-    const livePartitionLeaders = this.getLivePartitionLeaders();
-    const liveMessageGroupLeaders = this.getLiveMessageGroupLeaders();
 
     return {
       ...missing,
@@ -4945,74 +4984,36 @@ class BootstrapAPI {
         requiredTablesList,
       ).filter((partitionId) => {
         const cached = cachedPartitionLeaders.get(partitionId);
-        if (!cached || !cached.hasLeaderRecord) {
-          return true;
-        }
-        return !livePartitionLeaders.has(partitionId);
+        return !cached || !cached.hasLeaderRecord;
       }),
       missingPartitionLeaderNodes: this.filterMissingRequiredPartitionIds(
         missing.missingPartitionLeaderNodes || [],
         requiredTablesList,
       ).filter((partitionId) => {
         const cached = cachedPartitionLeaders.get(partitionId);
-        if (!cached || !cached.hasLeaderRecord) {
-          return true;
-        }
-        if (cached.hasNodeId) {
-          return false;
-        }
-
-        const live = livePartitionLeaders.get(partitionId);
-        return !live || !live.nodeId;
+        return !cached || !cached.hasLeaderRecord || !cached.hasNodeId;
       }),
       missingPartitionLeaderAddresses: this.filterMissingRequiredPartitionIds(
         missing.missingPartitionLeaderAddresses || [],
         requiredTablesList,
       ).filter((partitionId) => {
         const cached = cachedPartitionLeaders.get(partitionId);
-        if (!cached || !cached.hasLeaderRecord) {
-          return true;
-        }
-        if (cached.hasAddress) {
-          return false;
-        }
-
-        const live = livePartitionLeaders.get(partitionId);
-        return !live || !live.address;
+        return !cached || !cached.hasLeaderRecord || !cached.hasAddress;
       }),
       missingMessageGroupLeaders:
         (missing.missingMessageGroupLeaders || []).filter((groupId) => {
           const cached = cachedMessageGroupLeaders.get(groupId);
-          if (!cached || !cached.hasLeaderRecord) {
-            return true;
-          }
-          return !liveMessageGroupLeaders.has(groupId);
+          return !cached || !cached.hasLeaderRecord;
         }),
       missingMessageGroupLeaderNodes:
         (missing.missingMessageGroupLeaderNodes || []).filter((groupId) => {
           const cached = cachedMessageGroupLeaders.get(groupId);
-          if (!cached || !cached.hasLeaderRecord) {
-            return true;
-          }
-          if (cached.hasNodeId) {
-            return false;
-          }
-
-          const live = liveMessageGroupLeaders.get(groupId);
-          return !live || !live.nodeId;
+          return !cached || !cached.hasLeaderRecord || !cached.hasNodeId;
         }),
       missingMessageGroupLeaderAddresses:
         (missing.missingMessageGroupLeaderAddresses || []).filter((groupId) => {
           const cached = cachedMessageGroupLeaders.get(groupId);
-          if (!cached || !cached.hasLeaderRecord) {
-            return true;
-          }
-          if (cached.hasAddress) {
-            return false;
-          }
-
-          const live = liveMessageGroupLeaders.get(groupId);
-          return !live || !live.address;
+          return !cached || !cached.hasLeaderRecord || !cached.hasAddress;
         }),
     };
   }

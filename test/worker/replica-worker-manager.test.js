@@ -45,6 +45,7 @@ describe('ReplicaWorkerManager', () => {
 
     // Create mock message router
     mockMessageRouter = {
+      deliver: mock.fn(async () => ({acknowledged: true})),
       registerWorkerHandler: mock.fn(),
       unregisterWorkerHandler: mock.fn(),
       hasWorkerHandler: mock.fn(() => false),
@@ -477,6 +478,37 @@ describe('ReplicaWorkerManager', () => {
       // Workers map should be cleaned up
       assert.strictEqual(manager.workers.size, 0);
     });
+
+    it('should start deferred elections after the full message group exists', async () => {
+      const replicaIds = ['replica-1', 'replica-2', 'replica-3'];
+
+      await manager.createMessageGroupReplica({
+        groupId: 'group-1',
+        replicaId: replicaIds[0],
+        replicaIds,
+      });
+      await manager.createMessageGroupReplica({
+        groupId: 'group-1',
+        replicaId: replicaIds[1],
+        replicaIds,
+      });
+      await manager.createMessageGroupReplica({
+        groupId: 'group-1',
+        replicaId: replicaIds[2],
+        replicaIds,
+      });
+
+      const startElectionCalls = mockPool.run.mock.calls.filter((call) => {
+        return call.arguments[0]?.operation === 'DELIVER_MESSAGE' &&
+          call.arguments[0]?.message?.type === 'START_ELECTION';
+      });
+
+      assert.strictEqual(startElectionCalls.length, 3);
+      assert.deepStrictEqual(
+        startElectionCalls.map((call) => call.arguments[0].replicaId).sort(),
+        [...replicaIds].sort(),
+      );
+    });
   });
 
   describe('stopReplica', () => {
@@ -601,7 +633,7 @@ describe('ReplicaWorkerManager', () => {
       manager.initialized = true;
     });
 
-    it('should register handler that forwards to deliverMessage', async () => {
+    it('should register handler that forwards payload to deliverMessage', async () => {
       await manager.createPartitionReplica({
         partitionId: 'partition-1',
         replicaId: 'replica-1',
@@ -612,7 +644,10 @@ describe('ReplicaWorkerManager', () => {
       const handler = call.arguments[1];
 
       // Call the handler with a test envelope
-      const testEnvelope = {type: 'test', data: 'hello'};
+      const testEnvelope = {
+        messageId: 'msg-1',
+        payload: {type: 'test', data: 'hello'},
+      };
       mockPool.run = mock.fn(async () => ({response: 'ok'}));
 
       await handler(testEnvelope);
@@ -622,7 +657,55 @@ describe('ReplicaWorkerManager', () => {
       const runCall = mockPool.run.mock.calls[0];
       assert.strictEqual(runCall.arguments[0].operation, 'DELIVER_MESSAGE');
       assert.strictEqual(runCall.arguments[0].replicaId, 'replica-1');
-      assert.deepStrictEqual(runCall.arguments[0].message, testEnvelope);
+      assert.deepStrictEqual(
+        runCall.arguments[0].message,
+        testEnvelope.payload,
+      );
+    });
+  });
+
+  describe('routeWorkerMessage', () => {
+    beforeEach(() => {
+      manager = new ReplicaWorkerManager({
+        nodeId: 'node-1',
+        messageRouter: mockMessageRouter,
+        logger: mockLogger,
+      });
+      manager.pool = mockPool;
+      manager.initialized = true;
+    });
+
+    it('should route local worker traffic through the worker task path', async () => {
+      await manager.createMessageGroupReplica({
+        groupId: 'group-1',
+        replicaId: 'replica-1',
+      });
+
+      mockPool.run.mock.resetCalls();
+
+      await manager.routeWorkerMessage({
+        type: 'WORKER_SEND',
+        sourceAddress: 'node-1/message-group/source-1',
+        targetAddress: 'node-1/message-group/replica-1',
+        payload: {type: 'append', term: 1, data: []},
+        messageId: 'msg-1',
+        correlationId: 'corr-1',
+      });
+
+      assert.strictEqual(mockPool.run.mock.calls.length, 1);
+      const runCall = mockPool.run.mock.calls[0];
+      assert.strictEqual(
+        runCall.arguments[0].operation,
+        'DELIVER_MESSAGE',
+      );
+      assert.strictEqual(
+        runCall.arguments[0].replicaId,
+        'replica-1',
+      );
+      assert.deepStrictEqual(
+        runCall.arguments[0].message,
+        {type: 'append', term: 1, data: []},
+      );
     });
   });
 

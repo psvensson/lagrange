@@ -318,6 +318,8 @@ test('Property 7: CDC Propagation for Endpoint Changes', async (t) => {
         (initialRecord, operations) => {
           const cache = new SystemTableCache();
           const endpointId = initialRecord[COLUMN.ENDPOINT_ID];
+          let logicalUpdatedAt =
+            Number(initialRecord[COLUMN.UPDATED_AT]) || Date.now();
 
           // Track expected state
           let exists = false;
@@ -326,11 +328,13 @@ test('Property 7: CDC Propagation for Endpoint Changes', async (t) => {
 
           // Apply operations and track expected state
           for (const op of operations) {
+            logicalUpdatedAt += 1;
             if (op.type === CDC_OPERATION.INSERT) {
               const record = {
                 ...initialRecord,
                 [COLUMN.STATUS]: op.status,
                 [COLUMN.PRIORITY]: op.priority,
+                [COLUMN.UPDATED_AT]: logicalUpdatedAt,
               };
               cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, CDC_OPERATION.INSERT, record);
               exists = true;
@@ -341,7 +345,7 @@ test('Property 7: CDC Propagation for Endpoint Changes', async (t) => {
                 [COLUMN.ENDPOINT_ID]: endpointId,
                 [COLUMN.STATUS]: op.status,
                 [COLUMN.PRIORITY]: op.priority,
-                [COLUMN.UPDATED_AT]: Date.now(),
+                [COLUMN.UPDATED_AT]: logicalUpdatedAt,
               };
               cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, CDC_OPERATION.UPDATE, updateData);
               expectedStatus = op.status;

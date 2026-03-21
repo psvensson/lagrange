@@ -38,7 +38,8 @@ test(
       }],
     ]);
 
-    const resolved = service.getLeaderMessageGroupService();
+    const resolved = service.seedMessageGroupsPhase
+      .getLeaderMessageGroupService();
 
     assert.equal(
       resolved,
@@ -67,9 +68,10 @@ test(
       ['mg-1-r2', leaderMessageGroup],
     ]);
 
-    const resolved = service.resolveCdcPropagationMessageGroup(
-      preferredMessageGroup,
-    );
+    const resolved = service.seedCacheHydrationPhase
+      .resolveCdcPropagationMessageGroup(
+        preferredMessageGroup,
+      );
 
     assert.equal(
       resolved,
@@ -97,9 +99,10 @@ test(
       }],
     ]);
 
-    const resolved = service.resolveCdcPropagationMessageGroup(
-      preferredMessageGroup,
-    );
+    const resolved = service.seedCacheHydrationPhase
+      .resolveCdcPropagationMessageGroup(
+        preferredMessageGroup,
+      );
 
     assert.equal(
       resolved,

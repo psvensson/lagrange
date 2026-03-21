@@ -6,8 +6,9 @@
  * Requirements: 1.1, 1.2, 1.5, 1.6, 1.7
  */
 
-import {test} from '../../src/test-helpers/tap.js';
+import {afterEach, beforeEach, test} from '../../src/test-helpers/tap.js';
 import {RaftGroup} from '../../src/raft/raft-group.js';
+import {LeaderActivationScheduler} from '../../src/raft/leader-activation-scheduler.js';
 import {
   RAFT_GROUP_ERROR_MSG,
   RAFT_GROUP_EVENT,
@@ -69,6 +70,14 @@ async function safeShutdown(group) {
   await group.shutdown();
   await new Promise((resolve) => setImmediate(resolve));
 }
+
+beforeEach(() => {
+  LeaderActivationScheduler.resetSharedForTests();
+});
+
+afterEach(() => {
+  LeaderActivationScheduler.resetSharedForTests();
+});
 
 /**
  * Build default valid options for RaftGroup construction.
@@ -297,3 +306,33 @@ test('double startElection is idempotent', async (t) => {
     await safeShutdown(group);
   }
 });
+
+test('leader activation is canceled when candidate follows before stabilization',
+  async (t) => {
+    let group;
+    try {
+      group = new RaftGroup(buildOptions({
+        replicaId: 'replica-1',
+        replicaIds: ['replica-1', 'replica-2'],
+        leaderActivationStabilizationMs: 10,
+        leaderActivationNodeSpacingMs: 0,
+      }));
+
+      group.initialize();
+
+      let leaderEvents = NUM.ZERO;
+      group.on(RAFT_GROUP_EVENT.LEADER, () => {
+        leaderEvents += 1;
+      });
+
+      group.raft.emit('leader');
+      group.raft.emit('candidate');
+
+      await new Promise((resolve) => setTimeout(resolve, 40));
+
+      t.equal(leaderEvents, NUM.ZERO);
+      t.equal(group.getRole(), RAFT_GROUP_ROLE.CANDIDATE);
+    } finally {
+      await safeShutdown(group);
+    }
+  });

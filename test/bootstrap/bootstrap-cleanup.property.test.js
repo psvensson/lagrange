@@ -505,41 +505,42 @@ test('Property 3: Seed bootstrap failure cleanup', async (t) => {
 
             // Track which cleanup steps execute
             const stepsExecuted = [];
+            const handler = service.seedCleanupHandler;
             const origCache =
-              service._cleanupCacheHydration.bind(service);
-            service._cleanupCacheHydration = async () => {
+              handler._cleanupCacheHydration.bind(handler);
+            handler._cleanupCacheHydration = async () => {
               stepsExecuted.push(
                 BOOTSTRAP_CLEANUP_STEP.CACHE_HYDRATION,
               );
               return origCache();
             };
             const origReg =
-              service._cleanupRegistration.bind(service);
-            service._cleanupRegistration = async (ctx) => {
+              handler._cleanupRegistration.bind(handler);
+            handler._cleanupRegistration = async (ctx) => {
               stepsExecuted.push(
                 BOOTSTRAP_CLEANUP_STEP.REGISTRATION,
               );
               return origReg(ctx);
             };
             const origPart =
-              service._cleanupPartitions.bind(service);
-            service._cleanupPartitions = async () => {
+              handler._cleanupPartitions.bind(handler);
+            handler._cleanupPartitions = async () => {
               stepsExecuted.push(
                 BOOTSTRAP_CLEANUP_STEP.PARTITIONS,
               );
               return origPart();
             };
             const origMg =
-              service._cleanupMessageGroups.bind(service);
-            service._cleanupMessageGroups = async () => {
+              handler._cleanupMessageGroups.bind(handler);
+            handler._cleanupMessageGroups = async () => {
               stepsExecuted.push(
                 BOOTSTRAP_CLEANUP_STEP.MESSAGE_GROUPS,
               );
               return origMg();
             };
             const origInfra =
-              service._cleanupInfrastructure.bind(service);
-            service._cleanupInfrastructure = async () => {
+              handler._cleanupInfrastructure.bind(handler);
+            handler._cleanupInfrastructure = async () => {
               stepsExecuted.push(
                 BOOTSTRAP_CLEANUP_STEP.INFRASTRUCTURE,
               );
@@ -602,33 +603,34 @@ test('Property 3: Seed bootstrap failure cleanup', async (t) => {
 
             // Track which cleanup steps execute
             const stepsExecuted = [];
+            const handler = service.seedCleanupHandler;
             const origInfra =
-              service._cleanupInfrastructure.bind(service);
-            service._cleanupInfrastructure = async () => {
+              handler._cleanupInfrastructure.bind(handler);
+            handler._cleanupInfrastructure = async () => {
               stepsExecuted.push(
                 BOOTSTRAP_CLEANUP_STEP.INFRASTRUCTURE,
               );
               return origInfra();
             };
-            service._cleanupCacheHydration = async () => {
+            handler._cleanupCacheHydration = async () => {
               stepsExecuted.push(
                 BOOTSTRAP_CLEANUP_STEP.CACHE_HYDRATION,
               );
               return 'success';
             };
-            service._cleanupRegistration = async () => {
+            handler._cleanupRegistration = async () => {
               stepsExecuted.push(
                 BOOTSTRAP_CLEANUP_STEP.REGISTRATION,
               );
               return 'success';
             };
-            service._cleanupPartitions = async () => {
+            handler._cleanupPartitions = async () => {
               stepsExecuted.push(
                 BOOTSTRAP_CLEANUP_STEP.PARTITIONS,
               );
               return 'success';
             };
-            service._cleanupMessageGroups = async () => {
+            handler._cleanupMessageGroups = async () => {
               stepsExecuted.push(
                 BOOTSTRAP_CLEANUP_STEP.MESSAGE_GROUPS,
               );

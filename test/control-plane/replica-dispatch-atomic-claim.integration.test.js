@@ -96,6 +96,26 @@ test(
       cdcIntegrationService: {
         upsertSystemTableRow: async () => ({success: true}),
         updateSystemTableRow: async (_tableName, whereClause, updateData) => {
+          const nodeId =
+            whereClause?.[COLUMN.NODE_ID] ||
+            whereClause?.node_id ||
+            whereClause?.nodeId ||
+            null;
+          if (nodeId) {
+            const existing = nodeStore.get(nodeId);
+            if (!existing) {
+              return {
+                success: true,
+                partitionResult: {affectedRows: 0},
+              };
+            }
+            nodeStore.set(nodeId, {...existing, ...updateData});
+            return {
+              success: true,
+              partitionResult: {affectedRows: 1},
+            };
+          }
+
           const isPendingClaim =
             whereClause?.operation_id === operationRow.operation_id &&
             whereClause?.workflow_step === WORKFLOW_STEP.PENDING &&
@@ -337,6 +357,32 @@ test(
       cdcIntegrationService: {
         upsertSystemTableRow: async () => ({success: true}),
         updateSystemTableRow: async (_tableName, whereClause, updateData) => {
+          const nodeId =
+            whereClause?.[COLUMN.NODE_ID] ||
+            whereClause?.node_id ||
+            whereClause?.nodeId ||
+            null;
+          if (nodeId) {
+            const existing = nodeStore.get(nodeId);
+            if (!existing) {
+              return {
+                success: true,
+                partitionResult: {
+                  affectedRows: 0,
+                },
+              };
+            }
+            nodeStore.set(nodeId, {
+              ...existing,
+              ...(updateData || {}),
+            });
+            return {
+              success: true,
+              partitionResult: {
+                affectedRows: 1,
+              },
+            };
+          }
           const isPendingClaim =
             whereClause?.operation_id === operationRow.operation_id &&
             whereClause?.workflow_step === WORKFLOW_STEP.PENDING &&
@@ -477,6 +523,19 @@ test(
           return {success: true};
         },
         updateSystemTableRow: async (_tableName, whereClause, updateData) => {
+          const nodeId =
+            whereClause?.[COLUMN.NODE_ID] ||
+            whereClause?.node_id ||
+            whereClause?.nodeId ||
+            null;
+          if (nodeId) {
+            return {
+              success: true,
+              partitionResult: {
+                affectedRows: 1,
+              },
+            };
+          }
           const isPendingClaim =
             whereClause?.operation_id === operationRow.operation_id &&
             whereClause?.workflow_step === WORKFLOW_STEP.PENDING &&
@@ -609,6 +668,25 @@ test(
       cdcIntegrationService: {
         upsertSystemTableRow: async () => ({success: true}),
         updateSystemTableRow: async (_tableName, whereClause, updateData) => {
+          const nodeId =
+            whereClause?.[COLUMN.NODE_ID] ||
+            whereClause?.node_id ||
+            whereClause?.nodeId ||
+            null;
+          if (nodeId) {
+            readyNodeRow.last_heartbeat =
+              updateData?.[COLUMN.LAST_HEARTBEAT] ??
+              readyNodeRow.last_heartbeat;
+            readyNodeRow.ready_lease_expires_at =
+              updateData?.[COLUMN.READY_LEASE_EXPIRES_AT] ??
+              readyNodeRow.ready_lease_expires_at;
+            return {
+              success: true,
+              partitionResult: {
+                affectedRows: 1,
+              },
+            };
+          }
           const isPendingClaim =
             whereClause?.operation_id === operationRow.operation_id &&
             whereClause?.workflow_step === WORKFLOW_STEP.PENDING &&
@@ -759,6 +837,29 @@ test(
       cdcIntegrationService: {
         upsertSystemTableRow: async () => ({success: true}),
         updateSystemTableRow: async (_tableName, whereClause, updateData) => {
+          const nodeId =
+            whereClause?.[COLUMN.NODE_ID] ||
+            whereClause?.node_id ||
+            whereClause?.nodeId ||
+            null;
+          if (nodeId) {
+            if (nodeId !== readyNodeRow.node_id) {
+              return {
+                success: true,
+                partitionResult: {
+                  affectedRows: 0,
+                },
+              };
+            }
+            Object.assign(readyNodeRow, updateData);
+            return {
+              success: true,
+              partitionResult: {
+                affectedRows: 1,
+              },
+            };
+          }
+
           const isPendingClaim =
             whereClause?.operation_id === operationRow.operation_id &&
             whereClause?.workflow_step === WORKFLOW_STEP.PENDING &&
@@ -942,6 +1043,29 @@ test(
       cdcIntegrationService: {
         upsertSystemTableRow: async () => ({success: true}),
         updateSystemTableRow: async (_tableName, whereClause, updateData) => {
+          const nodeId =
+            whereClause?.[COLUMN.NODE_ID] ||
+            whereClause?.node_id ||
+            whereClause?.nodeId ||
+            null;
+          if (nodeId) {
+            if (nodeId !== readyNodeRow.node_id) {
+              return {
+                success: true,
+                partitionResult: {
+                  affectedRows: 0,
+                },
+              };
+            }
+            Object.assign(readyNodeRow, updateData);
+            return {
+              success: true,
+              partitionResult: {
+                affectedRows: 1,
+              },
+            };
+          }
+
           const isPendingClaim =
             whereClause?.operation_id === operationRow.operation_id &&
             whereClause?.workflow_step === WORKFLOW_STEP.PENDING &&
@@ -1068,6 +1192,29 @@ test(
       cdcIntegrationService: {
         upsertSystemTableRow: async () => ({success: true}),
         updateSystemTableRow: async (_tableName, whereClause, updateData) => {
+          const nodeId =
+            whereClause?.[COLUMN.NODE_ID] ||
+            whereClause?.node_id ||
+            whereClause?.nodeId ||
+            null;
+          if (nodeId) {
+            if (nodeId !== readyNodeRow.node_id) {
+              return {
+                success: true,
+                partitionResult: {
+                  affectedRows: 0,
+                },
+              };
+            }
+            Object.assign(readyNodeRow, updateData);
+            return {
+              success: true,
+              partitionResult: {
+                affectedRows: 1,
+              },
+            };
+          }
+
           const isPendingClaim =
             whereClause?.operation_id === operationRow.operation_id &&
             whereClause?.workflow_step === WORKFLOW_STEP.PENDING &&
@@ -1212,6 +1359,29 @@ test(
       cdcIntegrationService: {
         upsertSystemTableRow: async () => ({success: true}),
         updateSystemTableRow: async (_tableName, whereClause, updateData) => {
+          const nodeId =
+            whereClause?.[COLUMN.NODE_ID] ||
+            whereClause?.node_id ||
+            whereClause?.nodeId ||
+            null;
+          if (nodeId) {
+            if (nodeId !== readyNodeRow.node_id) {
+              return {
+                success: true,
+                partitionResult: {
+                  affectedRows: 0,
+                },
+              };
+            }
+            Object.assign(readyNodeRow, updateData);
+            return {
+              success: true,
+              partitionResult: {
+                affectedRows: 1,
+              },
+            };
+          }
+
           const isPendingClaim =
             whereClause?.operation_id === operationRow.operation_id &&
             whereClause?.workflow_step === WORKFLOW_STEP.PENDING &&
@@ -1375,7 +1545,30 @@ test(
           }
           return {success: true};
         },
-        updateSystemTableRow: async (_tableName, whereClause) => {
+        updateSystemTableRow: async (_tableName, whereClause, updateData) => {
+          const nodeId =
+            whereClause?.[COLUMN.NODE_ID] ||
+            whereClause?.node_id ||
+            whereClause?.nodeId ||
+            null;
+          if (nodeId) {
+            const existing = nodeStore.get(nodeId);
+            if (!existing) {
+              return {
+                success: true,
+                partitionResult: {affectedRows: 0},
+              };
+            }
+            nodeStore.set(nodeId, {
+              ...existing,
+              ...(updateData || {}),
+            });
+            return {
+              success: true,
+              partitionResult: {affectedRows: 1},
+            };
+          }
+
           const isPendingClaim =
             whereClause?.operation_id === operationRow.operation_id &&
             whereClause?.workflow_step === WORKFLOW_STEP.PENDING;

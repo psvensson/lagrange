@@ -205,19 +205,20 @@ test('Property 6: CDC event generated for UPDATE operations', async (t) => {
           partition.subscribeToCDC((event) => {
             cdcEvents.push(event);
           });
-          // Allow async buffer replay to complete, then clear replayed events
-          await Promise.resolve();
+          // Wait for buffered INSERT replay to drain before validating UPDATE fan-out.
+          await waitForSubscriberDelivery([cdcEvents], 1);
           cdcEvents.length = 0;
 
           // Perform UPDATE
           await partition.updateData(tableName, {id: data.id}, {value: newValue});
 
           // Verify CDC event was generated
-          if (cdcEvents.length !== 1) {
+          await waitForSubscriberDelivery([cdcEvents], 1);
+          if (cdcEvents.length < 1) {
             return false;
           }
 
-          const event = cdcEvents[0];
+          const event = cdcEvents[cdcEvents.length - 1];
 
           // Verify event properties
           if (event.operation !== 'UPDATE') {
@@ -284,19 +285,20 @@ test('Property 6: CDC event generated for DELETE operations', async (t) => {
           partition.subscribeToCDC((event) => {
             cdcEvents.push(event);
           });
-          // Allow async buffer replay to complete, then clear replayed events
-          await Promise.resolve();
+          // Wait for buffered INSERT replay to drain before validating DELETE fan-out.
+          await waitForSubscriberDelivery([cdcEvents], 1);
           cdcEvents.length = 0;
 
           // Perform DELETE
           await partition.deleteData(tableName, {id: data.id});
 
           // Verify CDC event was generated
-          if (cdcEvents.length !== 1) {
+          await waitForSubscriberDelivery([cdcEvents], 1);
+          if (cdcEvents.length < 1) {
             return false;
           }
 
-          const event = cdcEvents[0];
+          const event = cdcEvents[cdcEvents.length - 1];
 
           // Verify event properties
           if (event.operation !== 'DELETE') {

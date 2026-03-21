@@ -318,6 +318,10 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
   CDC_CATCHUP_COMPLETED: 'CDC catch-up replay completed',
   PARTITION_SIZE_UPDATED: 'Partition size updated',
   INIT_STAGE_CALLBACK_FAILED: 'Partition initialization stage callback failed',
+  REBALANCER_DEPENDENCIES_APPLIED:
+    'Rebalancer dependencies applied via bundle',
+  COORDINATOR_REBOUND:
+    'Coordinator rebound via canonical rebind path',
   DELIVERING_WITH_ACK: 'Delivering message with ACK via PendingRequestTracker',
   TRACKER_SHUTDOWN: 'Tracker shutdown',
   TRACKER_SHUTDOWN_DELIVERY:
@@ -413,6 +417,8 @@ const PARTITION_SERVICE_ERROR_MSG = Object.freeze({
     'PartitionService rebalancer must implement setRebalanceCoordinator',
   REBALANCE_COORDINATOR_SHUTDOWN_FAILED:
     'Failed to shutdown rebalance coordinator',
+  REBALANCER_DEPENDENCY_BUNDLE_INCOMPLETE:
+    'Rebalancer dependency bundle is missing required fields',
   DELIVERY_NOT_ACK: 'Delivery not acknowledged',
   NESTED_ACK_UNSUPPORTED: 'Nested ACK responses are not supported',
   MESSAGE_DELIVERY_FAILED: 'Message delivery failed',

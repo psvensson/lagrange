@@ -265,6 +265,23 @@ function createMockCoordinator() {
     storageAccountingService,
     storageAdmissionService,
     controlPlaneReadinessService,
+    syncOwnerDependencies(options = {}) {
+      if (Object.hasOwn(options, 'systemTableCache')) {
+        this.systemTableCache = options.systemTableCache || null;
+      }
+      if (Object.hasOwn(options, 'cdcIntegrationService')) {
+        this.cdcIntegrationService = options.cdcIntegrationService || null;
+      }
+      if (Object.hasOwn(options, 'tablePolicyService')) {
+        this.tablePolicyService = options.tablePolicyService || null;
+      }
+      if (Object.hasOwn(options, 'messageRouter')) {
+        this.messageRouter = options.messageRouter || null;
+      }
+      if (Object.hasOwn(options, 'sqlQueryEngine')) {
+        this.sqlQueryEngine = options.sqlQueryEngine || null;
+      }
+    },
   };
 }
 
@@ -325,7 +342,7 @@ function createTestCoordinator(options = {}) {
         const [
           operationId, type, partitionId, replicaId, sourceNodeId, targetNodeId,
           status, workflowStep, createdAt, updatedAt, completedAt, errorMessage,
-          stepsHistory,
+          stepsHistory, entityType, entityId,
         ] = params;
 
         trackedOperations.set(operationId, {
@@ -342,6 +359,8 @@ function createTestCoordinator(options = {}) {
           completed_at: completedAt,
           error_message: errorMessage,
           steps_history: stepsHistory,
+          entity_type: entityType,
+          entity_id: entityId,
         });
         return {success: true};
       }

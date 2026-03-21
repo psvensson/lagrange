@@ -28,6 +28,7 @@ import {CDCEmitter} from '../cdc/cdc-emitter.js';
 import {SQLiteLogAdapter} from '../raft/sqlite-log-adapter.js';
 import {HLCClockService} from '../hlc/hlc-clock-service.js';
 import {isRaftPacket} from '../raft/raft-packet-utils.js';
+import {WORKER_RAFT_RUNTIME_DEFAULT} from './worker-raft-runtime-defaults.js';
 const RAFT_PACKET_TYPE_APPEND_ACK = 'append ack';
 const RAFT_PACKET_TYPE_APPEND_FAIL = 'append fail';
 
@@ -37,10 +38,11 @@ const RAFT_PACKET_TYPE_APPEND_FAIL = 'append fail';
  */
 const PARTITION_WORKER_DEFAULT = Object.freeze({
   MEMORY_DB_PATH: ':memory:',
-  HEARTBEAT_MS: 150,
-  ELECTION_MIN_MS: 1000,
-  ELECTION_MAX_MS: 3000,
-  ELECTION_JITTER_PER_REPLICA_MS: 500,
+  HEARTBEAT_MS: WORKER_RAFT_RUNTIME_DEFAULT.HEARTBEAT_MS,
+  ELECTION_MIN_MS: WORKER_RAFT_RUNTIME_DEFAULT.ELECTION_MIN_MS,
+  ELECTION_MAX_MS: WORKER_RAFT_RUNTIME_DEFAULT.ELECTION_MAX_MS,
+  ELECTION_JITTER_PER_REPLICA_MS:
+    WORKER_RAFT_RUNTIME_DEFAULT.ELECTION_JITTER_PER_REPLICA_MS,
 });
 
 /**
@@ -172,6 +174,9 @@ class PartitionWorkerService extends ReplicaWorkerBase {
 
     /** @type {Function|null} CDC forwarder subscribed to CDCEmitter */
     this.cdcSubscriberForwarder = null;
+
+    /** @type {boolean} Whether leader activation has completed */
+    this.leaderActivated = false;
   }
 
   /**
@@ -275,6 +280,7 @@ class PartitionWorkerService extends ReplicaWorkerBase {
    */
   wireRaftGroupEvents() {
     this.raftGroup.on(RAFT_GROUP_EVENT.LEADER, (info) => {
+      this.leaderActivated = true;
       this.logger.info(PARTITION_WORKER_LOG_MSG.BECAME_LEADER, {
         partitionId: this.partitionId,
         replicaId: this.replicaId,
@@ -282,7 +288,16 @@ class PartitionWorkerService extends ReplicaWorkerBase {
       });
     });
 
+    this.raftGroup.on(RAFT_GROUP_EVENT.FOLLOWER, () => {
+      this.leaderActivated = false;
+    });
+
+    this.raftGroup.on(RAFT_GROUP_EVENT.CANDIDATE, () => {
+      this.leaderActivated = false;
+    });
+
     this.raftGroup.on(RAFT_GROUP_EVENT.LEADER_CHANGE, (newLeader) => {
+      this.leaderActivated = false;
       this.logger.info(PARTITION_WORKER_LOG_MSG.LEADER_CHANGED, {
         partitionId: this.partitionId,
         replicaId: this.replicaId,
@@ -640,6 +655,7 @@ class PartitionWorkerService extends ReplicaWorkerBase {
       type: LEADERSHIP_MESSAGE_TYPE.LEADERSHIP_STATUS,
       isLeader: this.raftGroup ?
         this.raftGroup.isLeaderReplica() : false,
+      leaderActivated: this.isLeaderActivated(),
       term: this.raftGroup ?
         this.raftGroup.getCurrentTerm() : NUM.ZERO,
       leaderId: this.raftGroup ?
@@ -698,6 +714,14 @@ class PartitionWorkerService extends ReplicaWorkerBase {
   isLeaderReplica() {
     return this.raftGroup ?
       this.raftGroup.isLeaderReplica() : false;
+  }
+
+  /**
+   * Check if leader activation has completed.
+   * @return {boolean} True if activation completed.
+   */
+  isLeaderActivated() {
+    return this.leaderActivated;
   }
 
   /**
@@ -770,6 +794,7 @@ class PartitionWorkerService extends ReplicaWorkerBase {
       tableId: this.tableId,
       role: this.getRole(),
       isLeader: this.isLeaderReplica(),
+      leaderActivated: this.isLeaderActivated(),
       leaderId: this.getLeaderId(),
       term: this.getCurrentTerm(),
       replicaCount: this.replicaIds.length,

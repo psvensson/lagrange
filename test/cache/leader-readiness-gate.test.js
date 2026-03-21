@@ -218,6 +218,46 @@ test(
   },
 );
 
+test(
+  'getMissingSystemServiceLeaders - requires an explicit leader row when multiple replicas share the leader node',
+  async (t) => {
+    const cache = createMockCache({
+      partitions: [
+        createPartitionRecord('p1', {leaderNodeId: 'node-1'}),
+      ],
+      services: [
+        {
+          [COLUMN.SERVICE_ID]: 'p1-r2',
+          [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
+          [COLUMN.PARTITION_ID]: 'p1',
+          [COLUMN.RAFT_ROLE]: RAFT_ROLE.FOLLOWER,
+          [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+          [COLUMN.NODE_ID]: 'node-1',
+          [COLUMN.ADDRESS]: 'ws://node1:8081',
+        },
+        {
+          [COLUMN.SERVICE_ID]: 'p1-r3',
+          [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
+          [COLUMN.PARTITION_ID]: 'p1',
+          [COLUMN.RAFT_ROLE]: RAFT_ROLE.FOLLOWER,
+          [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+          [COLUMN.NODE_ID]: 'node-1',
+          [COLUMN.ADDRESS]: 'ws://node1:8082',
+        },
+      ],
+    });
+
+    const result = getMissingSystemServiceLeaders(cache);
+
+    t.same(result.missingPartitionLeaders, ['p1'],
+      'co-located follower rows must not satisfy leader presence');
+    t.same(result.missingPartitionLeaderNodes, [],
+      'owner leader_node_id still satisfies node metadata');
+    t.same(result.missingPartitionLeaderAddresses, [],
+      'addresses are present even though leader identity is unresolved');
+  },
+);
+
 test('getMissingSystemServiceLeaders - returns empty arrays when all message group leaders present',
   async (t) => {
     const cache = createMockCache({

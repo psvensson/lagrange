@@ -5701,31 +5701,63 @@ class PartitionService extends EventEmitter {
       return;
     }
 
+    this.rebindCoordinator(rebalanceCoordinator);
+  }
+
+  /**
+   * Canonical rebind API for coordinator replacement.
+   *
+   * This is the single path for updating the coordinator reference,
+   * propagating the change to the rebalancer, and emitting a
+   * diagnostic log. All coordinator replacement MUST route here.
+   *
+   * Validates: Requirements 7.2, 7.3
+   * Design: D8.2, D8.3
+   *
+   * @param {Object} newCoordinator - The new coordinator instance.
+   */
+  rebindCoordinator(newCoordinator) {
     const previousCoordinator = this.rebalanceCoordinator;
+    const hadPrevious = !!previousCoordinator;
+    const isReplacement = hadPrevious &&
+      previousCoordinator !== newCoordinator;
     const shouldShutdownPrevious =
       this.ownsRebalanceCoordinator &&
-      previousCoordinator &&
-      previousCoordinator !== rebalanceCoordinator &&
-      typeof previousCoordinator.shutdown === PARTITION_SERVICE_TYPE.FUNCTION;
+      isReplacement &&
+      typeof previousCoordinator.shutdown ===
+        PARTITION_SERVICE_TYPE.FUNCTION;
 
-    this.rebalanceCoordinator = rebalanceCoordinator;
+    this.rebalanceCoordinator = newCoordinator;
     this.ownsRebalanceCoordinator = false;
 
     if (this.rebalancer) {
-      const setRebalanceCoordinator = assertCritical(
+      const setCoordinator = assertCritical(
         typeof this.rebalancer.setRebalanceCoordinator ===
             PARTITION_SERVICE_TYPE.FUNCTION ?
-          this.rebalancer.setRebalanceCoordinator.bind(this.rebalancer) :
+          this.rebalancer.setRebalanceCoordinator
+            .bind(this.rebalancer) :
           null,
-        PARTITION_SERVICE_ERROR_MSG.REBALANCER_SET_COORDINATOR_REQUIRED,
+        PARTITION_SERVICE_ERROR_MSG
+          .REBALANCER_SET_COORDINATOR_REQUIRED,
       );
-      setRebalanceCoordinator(rebalanceCoordinator);
+      setCoordinator(newCoordinator);
     }
+
+    this.logger.info(
+      PARTITION_SERVICE_LOG_MSG.COORDINATOR_REBOUND,
+      {
+        partitionId: this.partitionId,
+        replicaId: this.replicaId,
+        hadPrevious,
+        isReplacement,
+      },
+    );
 
     if (shouldShutdownPrevious) {
       previousCoordinator.shutdown().catch((error) => {
         this.logger.warn(
-          PARTITION_SERVICE_ERROR_MSG.REBALANCE_COORDINATOR_SHUTDOWN_FAILED,
+          PARTITION_SERVICE_ERROR_MSG
+            .REBALANCE_COORDINATOR_SHUTDOWN_FAILED,
           {
             partitionId: this.partitionId,
             replicaId: this.replicaId,
@@ -5751,33 +5783,118 @@ class PartitionService extends EventEmitter {
   }
 
   /**
+   * Build a rebalancer dependency bundle from current PartitionService
+   * state. The bundle is the single shape consumed by
+   * applyRebalancerDependencies and initializeRebalancer.
+   *
+   * Requirements: 7.1 (explicit dependency bundles)
+   * Design: D8.1
+   * @return {Object|null} Bundle object, or null when any required
+   *   dependency is missing.
+   * @private
+   */
+  buildRebalancerDependencyBundle() {
+    const systemTableCache = this.systemTableCache;
+    const cdcIntegrationService = this.cdcIntegrationService;
+    const tablePolicyService = this.tablePolicyService;
+    const messageRouter = this.messageRouter;
+    const sqlQueryEngine = this.sqlQueryEngine;
+    const rebalanceCoordinator = this.rebalanceCoordinator;
+
+    if (!systemTableCache ||
+        !cdcIntegrationService ||
+        !tablePolicyService ||
+        !messageRouter ||
+        !sqlQueryEngine ||
+        !rebalanceCoordinator) {
+      return null;
+    }
+
+    return {
+      systemTableCache,
+      cdcIntegrationService,
+      tablePolicyService,
+      messageRouter,
+      sqlQueryEngine,
+      rebalanceCoordinator,
+    };
+  }
+
+  /**
+   * Apply a dependency bundle to an existing rebalancer instance.
+   * This is the single path for updating rebalancer owner
+   * dependencies after construction.
+   *
+   * Requirements: 7.1 (explicit dependency bundles), 7.4 (gating)
+   * Design: D8.1, D8.2
+   * @param {Object} bundle - Dependency bundle from
+   *   buildRebalancerDependencyBundle.
+   * @private
+   */
+  applyRebalancerDependencies(bundle) {
+    if (!bundle || !this.rebalancer) {
+      return;
+    }
+
+    let coordinatorRoutedThroughSetter = false;
+    if (bundle.rebalanceCoordinator) {
+      bundle.rebalanceCoordinator.systemTableCache = bundle.systemTableCache;
+      bundle.rebalanceCoordinator.cdcIntegrationService =
+        bundle.cdcIntegrationService;
+      bundle.rebalanceCoordinator.tablePolicyService =
+        bundle.tablePolicyService;
+      bundle.rebalanceCoordinator.sqlQueryEngine =
+        bundle.sqlQueryEngine;
+      if (typeof bundle.rebalanceCoordinator.syncOwnerDependencies ===
+          PARTITION_SERVICE_TYPE.FUNCTION) {
+        bundle.rebalanceCoordinator.syncOwnerDependencies(bundle);
+      }
+    }
+
+    if (typeof this.rebalancer.syncOwnerDependencies ===
+        PARTITION_SERVICE_TYPE.FUNCTION) {
+      this.rebalancer.syncOwnerDependencies(bundle);
+      coordinatorRoutedThroughSetter = !!bundle.rebalanceCoordinator;
+    } else {
+      this.rebalancer.systemTableCache = bundle.systemTableCache;
+      this.rebalancer.cdcIntegrationService = bundle.cdcIntegrationService;
+      this.rebalancer.tablePolicyService = bundle.tablePolicyService;
+      this.rebalancer.messageRouter = bundle.messageRouter;
+      this.rebalancer.sqlQueryEngine = bundle.sqlQueryEngine;
+      if (this.rebalancer.controlPlaneSystemTableGateway &&
+          typeof this.rebalancer.controlPlaneSystemTableGateway
+            .setSqlQueryEngine === PARTITION_SERVICE_TYPE.FUNCTION) {
+        this.rebalancer.controlPlaneSystemTableGateway
+          .setSqlQueryEngine(bundle.sqlQueryEngine);
+      }
+    }
+    if (bundle.rebalanceCoordinator &&
+        coordinatorRoutedThroughSetter !== true) {
+      const setRebalanceCoordinator = assertCritical(
+        typeof this.rebalancer.setRebalanceCoordinator ===
+            PARTITION_SERVICE_TYPE.FUNCTION ?
+          this.rebalancer.setRebalanceCoordinator.bind(this.rebalancer) :
+          null,
+        PARTITION_SERVICE_ERROR_MSG.REBALANCER_SET_COORDINATOR_REQUIRED,
+      );
+      setRebalanceCoordinator(bundle.rebalanceCoordinator);
+    }
+
+    this.logger.debug(
+      PARTITION_SERVICE_LOG_MSG.REBALANCER_DEPENDENCIES_APPLIED,
+      {partitionId: this.partitionId},
+    );
+  }
+
+  /**
    * Initialize rebalancer only when required dependencies are ready.
    * @private
    */
   maybeInitializeRebalancer() {
     const backgroundReady = this.isBackgroundWorkReady();
     if (this.rebalancer) {
-      this.rebalancer.systemTableCache = this.systemTableCache;
-      this.rebalancer.cdcIntegrationService = this.cdcIntegrationService;
-      this.rebalancer.tablePolicyService = this.tablePolicyService;
-      this.rebalancer.messageRouter = this.messageRouter;
-      this.rebalancer.sqlQueryEngine = this.sqlQueryEngine;
-      if (this.rebalancer.controlPlaneSystemTableGateway &&
-          typeof this.rebalancer.controlPlaneSystemTableGateway
-            .setSqlQueryEngine === PARTITION_SERVICE_TYPE.FUNCTION) {
-        this.rebalancer.controlPlaneSystemTableGateway
-          .setSqlQueryEngine(this.sqlQueryEngine);
-      }
-      if (this.rebalanceCoordinator) {
-        const setRebalanceCoordinator = assertCritical(
-          typeof this.rebalancer.setRebalanceCoordinator ===
-              PARTITION_SERVICE_TYPE.FUNCTION ?
-            this.rebalancer.setRebalanceCoordinator.bind(this.rebalancer) :
-            null,
-          PARTITION_SERVICE_ERROR_MSG.REBALANCER_SET_COORDINATOR_REQUIRED,
-        );
-        setRebalanceCoordinator(this.rebalanceCoordinator);
-      }
+      const bundle = this.buildRebalancerDependencyBundle();
+      this.applyRebalancerDependencies(bundle);
       if (typeof this.rebalancer.setLeader === PARTITION_SERVICE_TYPE.FUNCTION) {
         this.rebalancer.setLeader(backgroundReady && this.isLeader);
       }
@@ -5785,46 +5902,49 @@ class PartitionService extends EventEmitter {
     }
 
     if (!backgroundReady ||
-        !this.isLeader ||
-        !this.systemTableCache ||
-        !this.cdcIntegrationService ||
-        !this.tablePolicyService ||
-        !this.messageRouter ||
-        !this.sqlQueryEngine ||
-        !this.rebalanceCoordinator) {
+        !this.isLeader) {
       return;
     }
 
-    this.initializeRebalancer();
+    const bundle = this.buildRebalancerDependencyBundle();
+    if (!bundle) {
+      return;
+    }
+
+    this.initializeRebalancer(bundle);
   }
 
   /**
    * Initialize rebalancer components with required dependencies.
+   * @param {Object} [bundle] - Optional pre-built dependency bundle.
+   *   When omitted, dependencies are read from PartitionService state
+   *   and individually validated.
    * @private
    */
-  initializeRebalancer() {
+  initializeRebalancer(bundle) {
+    const src = bundle || this;
     const systemTableCache = assertCritical(
-      this.systemTableCache,
+      src.systemTableCache,
       PARTITION_SERVICE_ERROR_MSG.REBALANCER_CACHE_REQUIRED,
     );
     const cdcIntegrationService = assertCritical(
-      this.cdcIntegrationService,
+      src.cdcIntegrationService,
       PARTITION_SERVICE_ERROR_MSG.REBALANCER_CDC_REQUIRED,
     );
     const tablePolicyService = assertCritical(
-      this.tablePolicyService,
+      src.tablePolicyService,
       PARTITION_SERVICE_ERROR_MSG.REBALANCER_POLICY_REQUIRED,
     );
     const messageRouter = assertCritical(
-      this.messageRouter,
+      src.messageRouter,
       PARTITION_SERVICE_ERROR_MSG.REBALANCER_ROUTER_REQUIRED,
     );
     const sqlQueryEngine = assertCritical(
-      this.sqlQueryEngine,
+      src.sqlQueryEngine,
       PARTITION_SERVICE_ERROR_MSG.REBALANCER_SQL_ENGINE_REQUIRED,
     );
     const rebalanceCoordinator = assertCritical(
-      this.rebalanceCoordinator,
+      src.rebalanceCoordinator,
       PARTITION_SERVICE_ERROR_MSG.REBALANCER_COORDINATOR_REQUIRED,
     );
 
@@ -5832,6 +5952,16 @@ class PartitionService extends EventEmitter {
     rebalanceCoordinator.cdcIntegrationService = cdcIntegrationService;
     rebalanceCoordinator.tablePolicyService = tablePolicyService;
     rebalanceCoordinator.sqlQueryEngine = sqlQueryEngine;
+    if (typeof rebalanceCoordinator.syncOwnerDependencies ===
+        PARTITION_SERVICE_TYPE.FUNCTION) {
+      rebalanceCoordinator.syncOwnerDependencies({
+        systemTableCache,
+        cdcIntegrationService,
+        tablePolicyService,
+        messageRouter,
+        sqlQueryEngine,
+      });
+    }
     if (typeof rebalanceCoordinator.initialize ===
         PARTITION_SERVICE_TYPE.FUNCTION) {
       rebalanceCoordinator.initialize();
@@ -6377,10 +6507,12 @@ class PartitionService extends EventEmitter {
    */
   async quiesceRebalancing() {
     if (this.rebalancer) {
-      if (typeof this.rebalancer.setLeader === 'function') {
+      if (typeof this.rebalancer.setLeader ===
+          PARTITION_SERVICE_TYPE.FUNCTION) {
         this.rebalancer.setLeader(false);
       }
-      if (typeof this.rebalancer.shutdown === 'function') {
+      if (typeof this.rebalancer.shutdown ===
+          PARTITION_SERVICE_TYPE.FUNCTION) {
         this.rebalancer.shutdown();
       }
       this.rebalancer = null;
@@ -6390,7 +6522,8 @@ class PartitionService extends EventEmitter {
         await this.rebalanceCoordinator.shutdown();
       } catch (error) {
         this.logger.warn(
-          PARTITION_SERVICE_ERROR_MSG.REBALANCE_COORDINATOR_SHUTDOWN_FAILED,
+          PARTITION_SERVICE_ERROR_MSG
+            .REBALANCE_COORDINATOR_SHUTDOWN_FAILED,
           {
             partitionId: this.partitionId,
             replicaId: this.replicaId,

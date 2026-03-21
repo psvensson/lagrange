@@ -233,8 +233,8 @@ function buildCacheFromState(state) {
   const messageGroupRecords = [];
   const serviceRecords = [];
 
-  let allPartitionsHaveLeadersWithAddresses = true;
-  let allMessageGroupsHaveLeadersWithAddresses = true;
+  let allPartitionsHaveRoutableLeaders = true;
+  let allMessageGroupsHaveRoutableLeaders = true;
 
   // Deduplicate partition IDs
   const seenPartitionIds = new Set();
@@ -252,12 +252,12 @@ function buildCacheFromState(state) {
         nodeId: p.nodeId,
       }));
 
-      // Check for missing address - gate requires address
-      if (!p.address) {
-        allPartitionsHaveLeadersWithAddresses = false;
+      // Cache hydration requires both a routable address and node identity.
+      if (!p.address || !p.nodeId) {
+        allPartitionsHaveRoutableLeaders = false;
       }
     } else {
-      allPartitionsHaveLeadersWithAddresses = false;
+      allPartitionsHaveRoutableLeaders = false;
     }
   }
 
@@ -277,12 +277,11 @@ function buildCacheFromState(state) {
         nodeId: mg.nodeId,
       }));
 
-      // Check for missing address - gate requires address
-      if (!mg.address) {
-        allMessageGroupsHaveLeadersWithAddresses = false;
+      if (!mg.address || !mg.nodeId) {
+        allMessageGroupsHaveRoutableLeaders = false;
       }
     } else {
-      allMessageGroupsHaveLeadersWithAddresses = false;
+      allMessageGroupsHaveRoutableLeaders = false;
     }
   }
 
@@ -293,10 +292,10 @@ function buildCacheFromState(state) {
   });
 
   // Gate should pass only if all partitions AND all message groups have
-  // leaders with addresses
+  // leader metadata with routable address and node identity.
   const expectedSuccess =
-    allPartitionsHaveLeadersWithAddresses &&
-    allMessageGroupsHaveLeadersWithAddresses;
+    allPartitionsHaveRoutableLeaders &&
+    allMessageGroupsHaveRoutableLeaders;
 
   return {
     cache,
@@ -337,7 +336,7 @@ t.test('CacheHydrationGate Property Tests', async (t) => {
           const {cache, expectedSuccess} = buildCacheFromState(state);
           const result = gate.validate({systemTableCache: cache});
 
-          // The gate should pass if and only if all leaders have addresses
+          // The gate should pass if and only if all leaders are routable.
           return result.success === expectedSuccess;
         },
       ),
@@ -376,7 +375,7 @@ t.test('CacheHydrationGate Property Tests', async (t) => {
           const {cache, expectedSuccess} = buildCacheFromState(state);
           const result = gate.validate({systemTableCache: cache});
 
-          // Gate should pass only if all partitions have leaders with addresses
+          // Gate should pass only if all partitions have routable leaders.
           return result.success === expectedSuccess;
         },
       ),
@@ -415,7 +414,7 @@ t.test('CacheHydrationGate Property Tests', async (t) => {
           const {cache, expectedSuccess} = buildCacheFromState(state);
           const result = gate.validate({systemTableCache: cache});
 
-          // Gate should pass only if all message groups have leaders with addresses
+          // Gate should pass only if all message groups have routable leaders.
           return result.success === expectedSuccess;
         },
       ),

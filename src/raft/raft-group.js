@@ -11,6 +11,8 @@ import {isRaftPacket} from './raft-packet-utils.js';
 import {ADDRESS, NUM, STRING, TYPEOF} from '../constants/index.js';
 import {assertRaftProviderContract} from './raft-provider-contract.js';
 import {LiferaftProvider} from './liferaft-provider.js';
+import {LeaderActivationGate} from './leader-activation-gate.js';
+import {LeaderActivationScheduler} from './leader-activation-scheduler.js';
 import {
   RAFT_GROUP_ADDRESS,
   RAFT_GROUP_DEFAULT,
@@ -39,6 +41,21 @@ const HEARTBEAT_ELECTION_TIMER = 'heartbeat, election';
  * @type {string}
  */
 const LIFERAFT_DATA_EVENT = 'data';
+
+function resolveActivationNodeId(options = {}) {
+  if (typeof options.nodeId === TYPEOF.STRING &&
+      options.nodeId.length > NUM.ZERO) {
+    return options.nodeId;
+  }
+  if (typeof options.unifiedAddress !== TYPEOF.STRING ||
+      options.unifiedAddress.length === NUM.ZERO) {
+    return 'shared-node';
+  }
+  const [nodeId] = options.unifiedAddress.split(RAFT_GROUP_ADDRESS.SEPARATOR);
+  return typeof nodeId === TYPEOF.STRING && nodeId.length > NUM.ZERO ?
+    nodeId :
+    'shared-node';
+}
 
 /**
  * Composable class that encapsulates the complete liferaft lifecycle.
@@ -92,6 +109,26 @@ class RaftGroup extends EventEmitter {
       RAFT_GROUP_DEFAULT.ELECTION_JITTER_PER_REPLICA_MS;
 
     this.logger = options.logger || console;
+    this.activationNodeId = resolveActivationNodeId(options);
+    this.leaderActivationStabilizationMs =
+      Number.isFinite(options.leaderActivationStabilizationMs) &&
+      options.leaderActivationStabilizationMs >= NUM.ZERO ?
+        Math.floor(options.leaderActivationStabilizationMs) :
+        RAFT_GROUP_DEFAULT.LEADER_ACTIVATION_STABILIZATION_MS;
+    this.leaderActivationNodeSpacingMs =
+      Number.isFinite(options.leaderActivationNodeSpacingMs) &&
+      options.leaderActivationNodeSpacingMs >= NUM.ZERO ?
+        Math.floor(options.leaderActivationNodeSpacingMs) :
+        RAFT_GROUP_DEFAULT.LEADER_ACTIVATION_NODE_SPACING_MS;
+    this.leaderActivationScheduler = options.leaderActivationScheduler ||
+      LeaderActivationScheduler.getShared({
+        nodeId: this.activationNodeId,
+        spacingMs: this.leaderActivationNodeSpacingMs,
+      });
+    this.leaderActivationGate = new LeaderActivationGate({
+      holdoffMs: this.leaderActivationStabilizationMs,
+      activationScheduler: this.leaderActivationScheduler,
+    });
 
     // Raft state
     this.raft = null;
@@ -224,16 +261,7 @@ class RaftGroup extends EventEmitter {
       this.isLeader = true;
       this.leaderId = this.replicaId;
       const term = this.raftProvider.getCurrentTerm(this.raft);
-
-      this.logger.info(RAFT_GROUP_LOG_MSG.BECAME_LEADER, {
-        term,
-        replicaId: this.replicaId,
-      });
-
-      this.emit(RAFT_GROUP_EVENT.LEADER, {
-        leaderId: this.replicaId,
-        term,
-      });
+      this.scheduleLeaderActivation(term);
     });
 
     this.raft.on(RAFT_GROUP_LIFERAFT_EVENT.FOLLOWER, () => {
@@ -242,6 +270,7 @@ class RaftGroup extends EventEmitter {
       }
       this.role = RAFT_GROUP_ROLE.FOLLOWER;
       this.isLeader = false;
+      this.cancelLeaderActivation();
       this.emit(RAFT_GROUP_EVENT.FOLLOWER);
     });
 
@@ -251,6 +280,7 @@ class RaftGroup extends EventEmitter {
       }
       this.role = RAFT_GROUP_ROLE.CANDIDATE;
       this.isLeader = false;
+      this.cancelLeaderActivation();
       this.emit(RAFT_GROUP_EVENT.CANDIDATE);
     });
 
@@ -332,10 +362,8 @@ class RaftGroup extends EventEmitter {
     this.logger.info(RAFT_GROUP_LOG_MSG.SINGLE_REPLICA_LEADER, {
       replicaId: this.replicaId,
     });
-
-    this.emit(RAFT_GROUP_EVENT.LEADER, {
-      leaderId: this.replicaId,
-      term: this.raftProvider.getCurrentTerm(this.raft),
+    this.scheduleLeaderActivation(this.raftProvider.getCurrentTerm(this.raft), {
+      immediate: true,
     });
   }
 
@@ -425,6 +453,7 @@ class RaftGroup extends EventEmitter {
     this.logger.info(RAFT_GROUP_LOG_MSG.SHUTDOWN_START, {
       replicaId: this.replicaId,
     });
+    this.leaderActivationGate.shutdown();
 
     if (this.raft) {
       this.raftProvider.shutdownNode(this.raft);
@@ -481,6 +510,29 @@ class RaftGroup extends EventEmitter {
    */
   getRaftInstance() {
     return this.raft;
+  }
+
+  cancelLeaderActivation() {
+    this.leaderActivationGate.cancel({clearActivatedTerm: true});
+  }
+
+  scheduleLeaderActivation(term, options = {}) {
+    this.leaderActivationGate.schedule(term, () => {
+      if (!this.isLeaderReplica()) {
+        return;
+      }
+      this.logger.info(RAFT_GROUP_LOG_MSG.BECAME_LEADER, {
+        term,
+        replicaId: this.replicaId,
+      });
+      this.emit(RAFT_GROUP_EVENT.LEADER, {
+        leaderId: this.replicaId,
+        term,
+      });
+    }, {
+      immediate: options.immediate === true,
+      shouldActivate: () => this.isLeaderReplica(),
+    });
   }
 }
 

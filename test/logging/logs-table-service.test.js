@@ -8,7 +8,10 @@ import {LogsTableService, LOGS_TABLE_DEFAULT} from '../../src/logging/logs-table
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {WORK_CLASS} from '../../src/runtime/work-class-scheduler.js';
-import {PRESSURE_WORK_CLASS} from '../../src/control-plane/pressure-governor.js';
+import {
+  PRESSURE_GOVERNOR_ACTION,
+  PRESSURE_WORK_CLASS,
+} from '../../src/control-plane/pressure-governor.js';
 
 function createLogsOwner(writeImpl = async () => ({success: true})) {
   return {
@@ -859,6 +862,143 @@ test('LogsTableService only admits unique error-level logs once the deferred ' +
     'one warn drop and one warning eviction should be counted');
 
   currentNow = 2100;
+  await service.shutdown();
+});
+
+test('LogsTableService arms a shared-pressure defer window before the local ' +
+  'queue saturates', async (t) => {
+  LogsTableService.resetInstance();
+  let currentNow = 5000;
+  const pressureGovernor = {
+    evaluate(request) {
+      t.equal(
+        request.workClass,
+        PRESSURE_WORK_CLASS.BACKGROUND,
+        'logs persistence should evaluate as background work',
+      );
+      return {
+        action: PRESSURE_GOVERNOR_ACTION.DEGRADE,
+        retryAfterMs: 250,
+        summary: {backpressured: true},
+      };
+    },
+    isBackpressured() {
+      return true;
+    },
+    configure() {},
+  };
+  const service = new LogsTableService({
+    logsOwner: createLogsOwner(),
+    now: () => currentNow,
+    pressureGovernor,
+    pressureHighWatermark: 10,
+    pressureRetainedPendingWrites: 4,
+  });
+  service.initialize();
+
+  await service.writeLogEntry({
+    logId: 'pressure-info',
+    timestamp: currentNow,
+    level: 'INFO',
+    nodeId: 'test-node',
+    message: 'informational noise',
+    createdAt: currentNow,
+    metadata: {subsystem: 'query-executor'},
+  });
+
+  t.equal(
+    service.getStats().pendingWrites,
+    0,
+    'shared pressure should drop low-priority log noise before queue saturation',
+  );
+  t.equal(
+    service.writeDeferredUntilMs,
+    5250,
+    'shared pressure should arm a bounded defer window',
+  );
+
+  await service.shutdown();
+});
+
+test('LogsTableService collapses transient transport failures by family while ' +
+  'shared pressure is active', async (t) => {
+  LogsTableService.resetInstance();
+  let currentNow = 1000;
+  const pressureGovernor = {
+    evaluate() {
+      return {
+        action: PRESSURE_GOVERNOR_ACTION.DEGRADE,
+        retryAfterMs: 200,
+        summary: {backpressured: true},
+      };
+    },
+    isBackpressured() {
+      return true;
+    },
+    configure() {},
+  };
+  const service = new LogsTableService({
+    logsOwner: createLogsOwner(),
+    now: () => currentNow,
+    pressureGovernor,
+    maxPendingWrites: 10,
+    pressureHighWatermark: 10,
+    pressureRetainedPendingWrites: 4,
+  });
+  service.initialize();
+
+  await service.writeLogEntry({
+    logId: 'error-1',
+    timestamp: currentNow,
+    level: 'ERROR',
+    nodeId: 'test-node',
+    message: 'Connection to node alpha closed',
+    createdAt: currentNow,
+    metadata: {
+      subsystem: 'query-executor',
+      partitionId: 'logs-p1',
+    },
+  });
+  await service.writeLogEntry({
+    logId: 'error-2',
+    timestamp: currentNow + 1,
+    level: 'ERROR',
+    nodeId: 'test-node',
+    message: 'Connection to node beta closed',
+    createdAt: currentNow + 1,
+    metadata: {
+      subsystem: 'query-executor',
+      partitionId: 'logs-p1',
+    },
+  });
+  await service.writeLogEntry({
+    logId: 'error-3',
+    timestamp: currentNow + 2,
+    level: 'ERROR',
+    nodeId: 'test-node',
+    message: 'Connection to node gamma closed',
+    createdAt: currentNow + 2,
+    metadata: {
+      subsystem: 'query-executor',
+      partitionId: 'nodes-p1',
+    },
+  });
+
+  t.same(
+    service.pendingWrites.map((entry) => entry.message).sort(),
+    [
+      'Connection to node alpha closed',
+      'Connection to node gamma closed',
+    ],
+    'pressure mode should retain one exemplar per subsystem/resource family',
+  );
+  t.equal(
+    service.getStats().droppedWrites,
+    1,
+    'duplicate transient-family entries should be dropped under shared pressure',
+  );
+
+  currentNow = 2000;
   await service.shutdown();
 });
 

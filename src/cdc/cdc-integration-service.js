@@ -42,6 +42,11 @@ import {
   PRESSURE_WORK_CLASS,
   PressureGovernor,
 } from '../control-plane/pressure-governor.js';
+import {
+  getControlPlaneErrorCode,
+  getControlPlaneRetryAfterMs,
+  isRetryableControlPlaneError,
+} from '../control-plane/control-plane-error-classification.js';
 import {HLCClockService} from '../hlc/hlc-clock-service.js';
 import {
   QUERY_ERROR_CODE,
@@ -220,6 +225,19 @@ function shouldEmitTableWriteMetric(tableName) {
 
 function shouldLogTableWriteFailure(tableName) {
   return !TABLE_WRITE_FAILURE_LOG_SUPPRESSED_TABLES.has(tableName);
+}
+
+function logSystemTableWriteFailure(service, logMessage, details, error) {
+  const payload = {
+    ...details,
+    code: getControlPlaneErrorCode(error) || null,
+    retryAfterMs: getControlPlaneRetryAfterMs(error),
+  };
+  if (isRetryableControlPlaneError(error)) {
+    service.logger.warn(logMessage, payload);
+    return;
+  }
+  service.logger.error(logMessage, payload);
 }
 
 /**
@@ -1428,7 +1446,7 @@ class CDCIntegrationService extends EventEmitter {
             await delay(this.computeRetryDelayMs(baseDelayMs, attempt));
             continue;
           }
-          throw new Error(message);
+          throw buildSystemTableMutationError(result, message);
         }
 
         if (shouldEmitTableWriteMetric(tableName)) {
@@ -2569,12 +2587,12 @@ class CDCIntegrationService extends EventEmitter {
         this.stats.failures++;
 
         if (shouldLogTableWriteFailure(tableName)) {
-          this.logger.error(CDC_LOG_MSG.INSERT_FAILED, {
+          logSystemTableWriteFailure(this, CDC_LOG_MSG.INSERT_FAILED, {
             tableName,
             id: trackingId,
             error: error.message,
             nodeId: this.nodeId,
-          });
+          }, error);
         }
 
         this.emitErrorEvent({
@@ -2721,12 +2739,12 @@ class CDCIntegrationService extends EventEmitter {
         this.stats.failures++;
 
         if (shouldLogTableWriteFailure(tableName)) {
-          this.logger.error(CDC_LOG_MSG.UPDATE_FAILED, {
+          logSystemTableWriteFailure(this, CDC_LOG_MSG.UPDATE_FAILED, {
             tableName,
             id,
             error: error.message,
             nodeId: this.nodeId,
-          });
+          }, error);
         }
 
         this.emitErrorEvent({
@@ -2833,12 +2851,12 @@ class CDCIntegrationService extends EventEmitter {
         this.stats.failures++;
 
         if (shouldLogTableWriteFailure(tableName)) {
-          this.logger.error(CDC_LOG_MSG.DELETE_FAILED, {
+          logSystemTableWriteFailure(this, CDC_LOG_MSG.DELETE_FAILED, {
             tableName,
             id,
             error: error.message,
             nodeId: this.nodeId,
-          });
+          }, error);
         }
 
         this.emitErrorEvent({
@@ -2942,12 +2960,12 @@ class CDCIntegrationService extends EventEmitter {
         this.stats.failures++;
 
         if (shouldLogTableWriteFailure(tableName)) {
-          this.logger.error(CDC_LOG_MSG.UPSERT_FAILED, {
+          logSystemTableWriteFailure(this, CDC_LOG_MSG.UPSERT_FAILED, {
             tableName,
             id,
             error: error.message,
             nodeId: this.nodeId,
-          });
+          }, error);
         }
 
         this.emitErrorEvent({

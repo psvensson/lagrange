@@ -74,6 +74,32 @@ During any multi-step fix or feature, pause at least once to consider:
 Document these observations in commit messages or PR descriptions so the team
 can evaluate broader changes.
 
+## Bug-Cluster Escalation Policy
+
+When the second correctness bug appears at the same architectural boundary in
+one work cycle, the response must escalate from a local patch to boundary
+consolidation.
+
+Examples of a boundary:
+
+- metadata mutation ingress
+- metadata read ingress
+- bootstrap-to-runtime handoff
+- CDC dissemination
+- readiness classification
+- transport admission
+
+Required workflow:
+
+1. Name the shared boundary explicitly in the failing test or task notes.
+2. Add a targeted regression for the current symptom.
+3. Add or update an architectural task/spec that reduces the number of runtime
+   paths across that boundary.
+4. Do not close the second bug with only a local patch if the porous boundary
+   remains unchanged.
+5. The next regression in that area must prove the reduced boundary, not only
+   the immediate symptom.
+
 ## Owner-Path Regression Policy
 
 When a bug involves component ownership, lifecycle persistence, or system-table
@@ -126,6 +152,22 @@ Required workflow:
    regression that fails when writes are keyed by non-primary predicates instead
    of canonical primary key.
 
+## Gateway Boundary Regression Policy
+
+When a change touches shared metadata reads or writes, tests and CI checks must
+prove the canonical gateway boundary is still the only runtime ingress.
+
+Required coverage:
+
+1. Add or update a regression proving the caller routes through the canonical
+   metadata read or mutation gateway rather than raw helper access.
+2. If a semantic owner exists above the gateway, add coverage that the caller
+   goes through that owner rather than invoking the gateway directly.
+3. Add or update a structural guard that fails when non-owner runtime code
+   imports raw system-table mutation helpers or ad-hoc metadata read helpers.
+4. Prefer import-boundary or API-boundary guards over table-by-table
+   allowlists. The goal is to enforce one path structurally.
+
 ## Deterministic Control-Loop Regression Policy
 
 When a change touches control-plane progression (dispatch, rebalance, split,
@@ -153,6 +195,40 @@ Required coverage:
 8. **Cache observation boundary** - Add a regression proving cache divergence
    emits typed diagnostics/invariant input and that recovery re-enters the same
    owner queue rather than a direct mutation fallback.
+
+## Continuity And Lifetime Regression Policy
+
+When a change touches CDC propagation, watches, subscriptions, reconnect loops,
+buffers, queues, or phase-to-runtime handoff, tests must prove continuity and
+bounded lifetime, not just eventual correctness.
+
+Required coverage:
+
+1. **Phase completion continuity** - Prove the needed runtime path still exists
+   after bootstrap, join, or recovery phase completion.
+2. **Restart continuity** - Prove subscriptions, watches, or reconnect owners
+   re-establish without requiring manual repair or broad fallback reads.
+3. **Failover continuity** - Prove leadership or transport failover does not
+   leave the dissemination path detached or waiting on a dead phase owner.
+4. **Bounded lifetime** - Prove listener counts, queue depth, retry registries,
+   and deferred-work maps plateau under repeated cycles.
+5. **Typed handoff diagnostics** - If continuity breaks, assert typed owner or
+   handoff diagnostics rather than generic timeout failure.
+
+## Bounded-Memory Regression Policy
+
+When a bug involves buffering, retries, subscriptions, deferred work, or queue
+pressure, the fix is not closed until tests show memory-related state plateaus.
+
+Required coverage:
+
+1. Add a deterministic unit or integration regression for the owning component
+   that repeats the triggering cycle enough times to expose accumulation.
+2. Assert owned resource metrics such as queue depth, subscriber count,
+   in-flight map size, or buffered-event count return to a bounded plateau.
+3. If the distributed harness reported heap growth, add or refine diagnostics
+   that map the growth to an owning subsystem before rerunning the broad
+   scenario.
 
 ## Test Duration Hard Limit
 
@@ -374,6 +450,9 @@ distributed baseline:
 8. For each timeout failure, add or refine diagnostics that identify the owning
    subsystem (for example queue depth, in-flight work, and backpressure/admission
    signals) before rerunning broad harness scenarios.
+9. If two baseline failures cluster at the same architectural boundary, record
+   the boundary and open a consolidation task/spec before continuing with more
+   local fixes.
 
 ## Node Join Convergence SLO Strategy
 
@@ -516,6 +595,9 @@ For any component that:
 4. **Stale-state tolerance** — inject stale cache data or delayed CDC
    propagation and prove the component makes correct (possibly conservative)
    decisions rather than incorrect ones.
+5. **Resource plateau** — for components that buffer, subscribe, or defer work,
+   prove owned resource counts plateau instead of growing across repeated
+   pressure cycles.
 
 ### Test structure
 

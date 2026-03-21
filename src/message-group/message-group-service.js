@@ -32,8 +32,10 @@ import {
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../control-plane/control-plane-readiness-constants.js';
-import {ControlPlaneSystemTableGateway} from
-  '../control-plane/control-plane-system-table-gateway.js';
+import {
+  ControlPlaneSystemTableGateway,
+  CONTROL_PLANE_READ_STRATEGY,
+} from '../control-plane/control-plane-system-table-gateway.js';
 import {
   PRESSURE_WORK_CLASS,
 } from '../control-plane/pressure-governor.js';
@@ -114,8 +116,9 @@ const FLUSH_SKIP_READY = 'ready';
 const FLUSH_SKIP_SETTLING = 'settling';
 const FLUSH_SKIP_DISABLED = 'disabled';
 const CDC_FORWARD_MAX_RELAY_DEPTH = NUM.TWO;
+const CDC_FORWARD_ERROR_DETAIL_MAX_LENGTH = NUM.TWO_HUNDRED_FIFTY_SIX;
+const CDC_FORWARD_ERROR_TRUNCATION_SUFFIX = '...[truncated]';
 const CDC_BATCH_COMMAND_TYPE = 'CDC_BATCH';
-const FORWARD_TOPOLOGY_REPAIR_LOCAL_READ_CONSISTENCY = 'local_leader';
 const FORWARD_TOPOLOGY_REPAIR_DEFAULT = Object.freeze({
   COOLDOWN_MS: 1000,
   FAILURE_COOLDOWN_MS: 5000,
@@ -187,6 +190,23 @@ function wrapCdcProposeError(message, error) {
     wrappedError.retryable = false;
   }
   return wrappedError;
+}
+
+/**
+ * Truncate a nested error detail string to prevent unbounded error
+ * message growth across CDC forward retry cycles (doctrine §7).
+ * @param {string} detail - Error detail to bound.
+ * @return {string} Bounded detail string.
+ */
+function boundCdcForwardErrorDetail(detail) {
+  if (typeof detail !== TYPEOF.STRING ||
+      detail.length <= CDC_FORWARD_ERROR_DETAIL_MAX_LENGTH) {
+    return detail || '';
+  }
+  return detail.substring(
+    NUM.ZERO,
+    CDC_FORWARD_ERROR_DETAIL_MAX_LENGTH,
+  ) + CDC_FORWARD_ERROR_TRUNCATION_SUFFIX;
 }
 
 function isControlPlaneTransportTarget(targetService) {
@@ -428,7 +448,7 @@ class MessageGroupService extends EventEmitter {
       holdoffMs: this.leaderActivationStabilizationMs,
       activationScheduler: this.leaderActivationScheduler,
     });
-    this.lastLeaderCdcResubscribeTerm = null;
+    this.lastLeaderCdcResubscribeTerm = undefined;
 
     // Defer election start until all replicas are ready
     // When true, the Raft election timer won't start until startElection() is called
@@ -1237,11 +1257,13 @@ class MessageGroupService extends EventEmitter {
         this.cancelLeaderOwnedActivation();
         this.updateRebalancerLeadership();
         this.operationLedger.currentTerm = term;
+        this.lastLeaderCdcResubscribeTerm = undefined;
       },
       onCandidate: ({term}) => {
         this.cancelLeaderOwnedActivation();
         this.updateRebalancerLeadership();
         this.operationLedger.currentTerm = term;
+        this.lastLeaderCdcResubscribeTerm = undefined;
       },
       onCommit: (command) => {
         this.applyCommittedEntry(command);
@@ -2426,6 +2448,29 @@ class MessageGroupService extends EventEmitter {
     const requiresRaftReplication = !skipReplication && !isSingleReplicaGroup;
     const shouldApplyLocally = !requiresRaftReplication ||
       this.isCurrentRaftLeader();
+    if (requiresRaftReplication && !shouldApplyLocally) {
+      const strictEvent = normalizedEvents.find((event) => {
+        return this.shouldUseStrictCDCForwarding({
+          tableName: event.tableName,
+          operation: event.operation,
+        });
+      });
+      if (strictEvent) {
+        const readiness = this.canAcceptCDCEvent({
+          tableName: strictEvent.tableName,
+          operation: strictEvent.operation,
+        });
+        if (readiness.ready !== true) {
+          throw buildDeferredCdcForwardError(
+            readiness.reason ||
+              MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN,
+            Number.isFinite(readiness.retryAfterMs) ?
+              readiness.retryAfterMs :
+              this.resolveStrictCdcForwardRetryAfterMs(),
+          );
+        }
+      }
+    }
 
     const appliedEvents = [];
     if (shouldApplyLocally) {
@@ -2597,7 +2642,7 @@ class MessageGroupService extends EventEmitter {
       });
       throw wrapCdcProposeError(
         `${MESSAGE_GROUP_CDC_ERROR_MSG.RAFT_PROPOSE_FAILED}: ` +
-          `${error?.message || 'unknown error'}`,
+          `${boundCdcForwardErrorDetail(error?.message) || 'unknown error'}`,
         error,
       );
     }
@@ -3466,12 +3511,12 @@ class MessageGroupService extends EventEmitter {
    * @private
    */
   canRepairAuthoritativeForwardTopology() {
+    const gateway = this.getControlPlaneSystemTableGateway();
     return Boolean(
       this.systemTableCache &&
       typeof this.systemTableCache.applySystemTableChange === TYPEOF.FUNCTION &&
-      this.cdcIntegrationService &&
-      typeof this.cdcIntegrationService.executeAuthoritativeSystemTableRead ===
-        TYPEOF.FUNCTION,
+      gateway &&
+      typeof gateway.executeRead === TYPEOF.FUNCTION,
     );
   }
 
@@ -3539,28 +3584,42 @@ class MessageGroupService extends EventEmitter {
    * @private
    */
   async repairAuthoritativeForwardTopology(context = {}) {
-    const queryOptions = {
-      localReadConsistency: FORWARD_TOPOLOGY_REPAIR_LOCAL_READ_CONSISTENCY,
-      allowSqlFallback: true,
-      queryOptions: {
-        timeoutMs: this.forwardTopologyRepairQueryTimeoutMs,
-        sessionId:
-          `message-group-forward-topology:${this.groupId}:${this.now()}`,
-      },
+    const gateway = this.getControlPlaneSystemTableGateway();
+    if (!gateway || typeof gateway.executeRead !== TYPEOF.FUNCTION) {
+      return {
+        repaired: false,
+        outcome: 'failed',
+      };
+    }
+    const sessionId =
+      `message-group-forward-topology:${this.groupId}:${this.now()}`;
+    const readOptions = {
+      queryTimeoutMs: this.forwardTopologyRepairQueryTimeoutMs,
+      sessionId,
+      routingReadinessDimension: CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+      workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
     };
     const [groupResult, serviceResult] = await Promise.all([
-      this.cdcIntegrationService.executeAuthoritativeSystemTableRead(
-        TABLES.MESSAGE_GROUPS,
-        `SELECT * FROM ${TABLES.MESSAGE_GROUPS} WHERE ${COLUMN.GROUP_ID} = ?`,
-        [this.groupId],
-        queryOptions,
+      gateway.executeRead(
+        {
+          tableName: TABLES.MESSAGE_GROUPS,
+          sql: `SELECT * FROM ${TABLES.MESSAGE_GROUPS} WHERE ${COLUMN.GROUP_ID} = ?`,
+          params: [this.groupId],
+          strategy: CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE_REQUIRED,
+          owner: 'message-group-service',
+        },
+        readOptions,
       ),
-      this.cdcIntegrationService.executeAuthoritativeSystemTableRead(
-        TABLES.SERVICES,
-        `SELECT * FROM ${TABLES.SERVICES} WHERE ${COLUMN.GROUP_ID} = ? ` +
-          `AND ${COLUMN.SERVICE_TYPE} = ?`,
-        [this.groupId, SERVICE_TYPE.MESSAGE_GROUP],
-        queryOptions,
+      gateway.executeRead(
+        {
+          tableName: TABLES.SERVICES,
+          sql: `SELECT * FROM ${TABLES.SERVICES} WHERE ${COLUMN.GROUP_ID} = ? ` +
+            `AND ${COLUMN.SERVICE_TYPE} = ?`,
+          params: [this.groupId, SERVICE_TYPE.MESSAGE_GROUP],
+          strategy: CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE_REQUIRED,
+          owner: 'message-group-service',
+        },
+        readOptions,
       ),
     ]);
 
@@ -3582,12 +3641,16 @@ class MessageGroupService extends EventEmitter {
     if (nodeIds.length > NUM.ZERO) {
       const placeholders = nodeIds.map(() => '?').join(', ');
       const nodeResult =
-        await this.cdcIntegrationService.executeAuthoritativeSystemTableRead(
-          TABLES.NODES,
-          `SELECT * FROM ${TABLES.NODES} WHERE ${COLUMN.NODE_ID} ` +
-            `IN (${placeholders})`,
-          nodeIds,
-          queryOptions,
+        await gateway.executeRead(
+          {
+            tableName: TABLES.NODES,
+            sql: `SELECT * FROM ${TABLES.NODES} WHERE ${COLUMN.NODE_ID} ` +
+              `IN (${placeholders})`,
+            params: nodeIds,
+            strategy: CONTROL_PLANE_READ_STRATEGY.AUTHORITATIVE_REQUIRED,
+            owner: 'message-group-service',
+          },
+          readOptions,
         );
       if (nodeResult?.success === true && Array.isArray(nodeResult.rows)) {
         nodeRows = nodeResult.rows;
@@ -3981,7 +4044,7 @@ class MessageGroupService extends EventEmitter {
             error: deliveryErrorMessage,
           });
           const deliveryError = deliveryErrorMessage !== null ?
-              `: ${deliveryErrorMessage}` :
+              `: ${boundCdcForwardErrorDetail(deliveryErrorMessage)}` :
               '';
           const forwardErrorMessage =
             `${MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_DELIVERY_REJECTED}${deliveryError}`;
@@ -4019,7 +4082,8 @@ class MessageGroupService extends EventEmitter {
         }
         lastDeliveryError = strictForwarding ?
           buildDeferredCdcForwardError(
-            error?.message || MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN,
+            boundCdcForwardErrorDetail(error?.message) ||
+              MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN,
             strictForwardRetryAfterMs,
           ) :
           error;
@@ -4032,7 +4096,7 @@ class MessageGroupService extends EventEmitter {
     if (lastAddressError) {
       const message =
         `${MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_ADDRESS_UNRESOLVED}: ` +
-        `${lastAddressError.message}`;
+        `${boundCdcForwardErrorDetail(lastAddressError.message)}`;
       throw strictForwarding ?
         buildDeferredCdcForwardError(message, strictForwardRetryAfterMs) :
         new Error(message);

@@ -774,7 +774,8 @@ test('BootstrapService node-ready rebalance trigger ownership', async (t) => {
         },
       };
 
-      await bootstrapService.waitForReadyNodeInCache(nodeId);
+      await bootstrapService.seedCacheHydrationPhase
+        .waitForReadyNodeInCache(nodeId);
       t.pass('cache waiter should use lease-based readiness without transport coupling');
     },
   );
@@ -808,22 +809,25 @@ test('BootstrapService node-ready rebalance trigger ownership', async (t) => {
           return row ? {...row} : null;
         },
       };
-      bootstrapService.getLeaderMessageGroupService = () => ({
-        applyCDCEvent: async () => {},
-      });
-      bootstrapService.hydrateFromLocalPartitions = async () => {
-        repairCount++;
-        rowsByNodeId.set(nodeId, {...nodeRow});
-        return {
-          success: true,
-          tables: {
-            nodes: {success: true, rowCount: 1},
-          },
-          errors: [],
+      bootstrapService.seedMessageGroupsPhase
+        .getLeaderMessageGroupService = () => ({
+          applyCDCEvent: async () => {},
+        });
+      bootstrapService.seedCacheHydrationPhase
+        .hydrateFromLocalPartitions = async () => {
+          repairCount++;
+          rowsByNodeId.set(nodeId, {...nodeRow});
+          return {
+            success: true,
+            tables: {
+              nodes: {success: true, rowCount: 1},
+            },
+            errors: [],
+          };
         };
-      };
 
-      await bootstrapService.waitForReadyNodeInCache(nodeId);
+      await bootstrapService.seedCacheHydrationPhase
+        .waitForReadyNodeInCache(nodeId);
       t.equal(repairCount, 1,
         'cache waiter should repair propagated tables once before failing');
     },

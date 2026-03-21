@@ -34,7 +34,6 @@ import {
 } from '../message-group/message-group-service.js';
 import {PartitionService} from '../partition/partition-service.js';
 import {
-  BOOTSTRAP_CLEANUP_STEP,
   BOOTSTRAP_DEFAULT,
   BOOTSTRAP_ERROR,
   BOOTSTRAP_EVENT,
@@ -47,6 +46,7 @@ import {
   BOOTSTRAP_REPLICA_REGISTRATION_REASON,
   BOOTSTRAP_REPLICA_REGISTRATION_TRACE,
   BOOTSTRAP_SUBSYSTEM,
+  SEED_DELEGATE_BUNDLE,
 } from './bootstrap-constants.js';
 import {
   INITIAL_MESSAGE_GROUP_ID,
@@ -91,10 +91,6 @@ import {
 import {
   buildMessageGroupOwnerNotReadyError,
 } from './shared/message-group-selection.js';
-import {
-  detachBootstrapOwnedCdcSubscriber,
-  isBootstrapOwnedCdcPropagationActive,
-} from './shared/bootstrap-cdc-propagation-scope.js';
 import {createSeedPhaseOwners} from './owners/seed-phase-owners.js';
 import {StartupPipelineRunner} from './pipeline/startup-pipeline-runner.js';
 import {createSeedStartupPlan} from './pipeline/seed-startup-plan.js';
@@ -163,31 +159,6 @@ const PHASE_TO_SUB_PHASE = Object.freeze({
     BOOTSTRAP_SUB_PHASE.CACHE_HYDRATION,
 });
 
-/**
- * All cleanup steps in reverse phase order.
- * When a phase fails, cleanup runs from that phase backward
- * through INFRASTRUCTURE.
- */
-const CLEANUP_STEPS_REVERSE_ORDER = Object.freeze([
-  BOOTSTRAP_CLEANUP_STEP.CACHE_HYDRATION,
-  BOOTSTRAP_CLEANUP_STEP.REGISTRATION,
-  BOOTSTRAP_CLEANUP_STEP.PARTITIONS,
-  BOOTSTRAP_CLEANUP_STEP.MESSAGE_GROUPS,
-  BOOTSTRAP_CLEANUP_STEP.INFRASTRUCTURE,
-]);
-
-/**
- * Maps each bootstrap phase to its index in the cleanup order.
- * A failure at phase X means cleanup steps from index X onward
- * (in CLEANUP_STEPS_REVERSE_ORDER) should execute.
- */
-const PHASE_TO_CLEANUP_INDEX = Object.freeze({
-  [BootstrapPhase.CACHE_HYDRATION]: 0,
-  [BootstrapPhase.REGISTRATION]: 1,
-  [BootstrapPhase.PARTITIONS]: 2,
-  [BootstrapPhase.MESSAGE_GROUPS]: 3,
-  [BootstrapPhase.INFRASTRUCTURE]: 4,
-});
 
 /**
  * BootstrapService handles system initialization for seed nodes.
@@ -325,9 +296,15 @@ class BootstrapService extends EventEmitter {
     this.partitionReplicaProgressReporter = new ReplicaCreationProgressReporter({
       logger: this.logger,
       formatLine: (progress, status, error) =>
-        this.formatPartitionReplicaProgressLine(progress, status, error),
+        this.seedPartitionsPhase
+          .formatPartitionReplicaProgressLine(
+            progress, status, error,
+          ),
       buildContext: (progress, status, error) =>
-        this.buildPartitionReplicaProgressContext(progress, status, error),
+        this.seedPartitionsPhase
+          .buildPartitionReplicaProgressContext(
+            progress, status, error,
+          ),
     });
 
     // Error tracking
@@ -336,8 +313,13 @@ class BootstrapService extends EventEmitter {
     this.isShuttingDown = false;
     this.shutdownPromise = null;
 
-    // Build delegates for extracted phase modules
-    const seedDelegates = this._buildSeedDelegates();
+    // Build concern-scoped delegate bundles for extracted phase modules.
+    // Each bundle groups delegates by concern (D2.2) so owners receive
+    // only the dependencies they need.
+    const delegateBundles = this._buildSeedDelegateBundles();
+    const seedDelegates = this._composeSeedDelegates(
+      delegateBundles,
+    );
     this.seedInfrastructurePhase = new SeedInfrastructurePhase({
       delegates: seedDelegates,
     });
@@ -354,24 +336,75 @@ class BootstrapService extends EventEmitter {
       delegates: seedDelegates,
     });
     this.seedCleanupHandler = new SeedCleanupHandler({
-      delegates: seedDelegates,
+      delegates: this._composeSeedDelegates(delegateBundles, {
+        cleanupOnly: true,
+      }),
     });
   }
 
   /**
-   * Build the delegates object shared by all extracted seed phase
-   * modules. Each delegate is a thin accessor/mutator into
-   * BootstrapService instance state.
+   * Build concern-scoped delegate bundles for extracted seed phase
+   * modules (D2.2). Each bundle groups delegates by concern so
+   * phase/readiness/cleanup owners receive only the dependencies
+   * they need.
+   * @return {Object} Keyed by SEED_DELEGATE_BUNDLE values.
+   * @private
+   */
+  _buildSeedDelegateBundles() {
+    return {
+      [SEED_DELEGATE_BUNDLE.PHASE_EXECUTION]:
+        this._buildPhaseExecutionDelegates(),
+      [SEED_DELEGATE_BUNDLE.READINESS]:
+        this._buildReadinessDelegates(),
+      [SEED_DELEGATE_BUNDLE.CLEANUP]:
+        this._buildCleanupDelegates(),
+      [SEED_DELEGATE_BUNDLE.RUNTIME_WIRING]:
+        this._buildRuntimeWiringDelegates(),
+    };
+  }
+
+  /**
+   * Compose a flat delegates object from concern-scoped bundles.
+   * Phase owners consume the flat shape; the bundles provide
+   * structural visibility into which concern owns each delegate.
+   * @param {Object} bundles - Keyed by SEED_DELEGATE_BUNDLE.
+   * @param {Object} [options] - Composition options.
+   * @param {boolean} [options.cleanupOnly] - When true, compose
+   *   only cleanup + readiness bundles (for SeedCleanupHandler).
+   * @return {Object} Flat delegates object.
+   * @private
+   */
+  _composeSeedDelegates(bundles, options = {}) {
+    if (options.cleanupOnly) {
+      return {
+        ...bundles[SEED_DELEGATE_BUNDLE.CLEANUP],
+        ...bundles[SEED_DELEGATE_BUNDLE.READINESS],
+      };
+    }
+    return {
+      ...bundles[SEED_DELEGATE_BUNDLE.PHASE_EXECUTION],
+      ...bundles[SEED_DELEGATE_BUNDLE.READINESS],
+      ...bundles[SEED_DELEGATE_BUNDLE.CLEANUP],
+      ...bundles[SEED_DELEGATE_BUNDLE.RUNTIME_WIRING],
+    };
+  }
+
+  /**
+   * Phase execution delegates — accessors, mutators, collection
+   * helpers, and phase-helper callbacks consumed by seed phase
+   * owner modules (infrastructure, message groups, partitions,
+   * registration, cache hydration).
    * @return {Object}
    * @private
    */
-  _buildSeedDelegates() {
+  _buildPhaseExecutionDelegates() {
     const self = this;
     return {
-      // -- Accessors --
+      // -- Core accessors --
       getNodeId: () => self.nodeId,
       getNodeAddress: () => self.nodeAddress,
-      getAdvertisedNodeWsAddress: () => self.advertisedNodeWsAddress,
+      getAdvertisedNodeWsAddress: () =>
+        self.advertisedNodeWsAddress,
       getWsPort: () => self.wsPort,
       getConfig: () => self.config,
       getLogger: () => self.logger,
@@ -380,12 +413,16 @@ class BootstrapService extends EventEmitter {
       getServicesCreated: () => self.servicesCreated,
       getPartitionsCreated: () => self.partitionsCreated,
       getMessageGroupsCreated: () => self.messageGroupsCreated,
+
+      // -- Service collections --
       getMessageRouter: () => self.messageRouter,
       getTransport: () => self.transport,
       getMessageGroupServices: () => self.messageGroupServices,
       getPartitionServices: () => self.partitionServices,
       getMessageGroupReplicas: () => self.messageGroupReplicas,
       getPartitionReplicas: () => self.partitionReplicas,
+
+      // -- Lifecycle owners --
       getServiceLifecycleManager: () =>
         self.serviceLifecycleManager,
       getServiceReconciler: () => self.serviceReconciler,
@@ -395,30 +432,35 @@ class BootstrapService extends EventEmitter {
         self.bootstrapDesiredServiceDefinitions,
       getBootstrapReplicaOptionsByServiceId: () =>
         self.bootstrapReplicaOptionsByServiceId,
+
+      // -- Service resolution --
       getLeaderMessageGroupService: (options) =>
-        self.getLeaderMessageGroupService(options),
+        self.seedMessageGroupsPhase
+          .getLeaderMessageGroupService(options),
       getBootstrapMessageGroupService: () =>
-        self.getBootstrapMessageGroupService(),
+        self.seedMessageGroupsPhase
+          .getBootstrapMessageGroupService(),
       resolveOperationalMessageGroupSelection: (options) =>
-        self.resolveOperationalMessageGroupSelection(options),
+        self.seedMessageGroupsPhase
+          .resolveOperationalMessageGroupSelection(options),
+
+      // -- Runtime references --
       getSystemTableCache: () => self.getSystemTableCache(),
       getSystemTableCacheRef: () => self.systemTableCache,
-      getSystemTableCacheSafe: () =>
-        self._getSystemTableCacheSafe(),
       getCdcIntegrationService: () =>
         self.cdcIntegrationService,
       getEpochManager: () => self.epochManager,
-      getRebalanceCoordinator: () => self.rebalanceCoordinator,
+      getRebalanceCoordinator: () =>
+        self.rebalanceCoordinator,
       getLatencyTopology: () => self.latencyTopology,
       getSystemTableWriter: () => self.systemTableWriter,
       getTablePolicyService: () => self.tablePolicyService,
-      getLifecycleStateMachine: () =>
-        self.lifecycleStateMachine,
       getBootstrapReadinessState: () =>
         self.bootstrapReadinessState,
       getPartitionReplicaProgressReporter: () =>
         self.partitionReplicaProgressReporter,
-      getInitialMessageGroupId: () => INITIAL_MESSAGE_GROUP_ID,
+      getInitialMessageGroupId: () =>
+        INITIAL_MESSAGE_GROUP_ID,
 
       // -- Mutators --
       setNodeId: (v) => {
@@ -445,9 +487,6 @@ class BootstrapService extends EventEmitter {
       setPhase: (v) => {
         self.phase = v;
       },
-      setLastError: (v) => {
-        self.lastError = v;
-      },
       setPartitionsCreated: (v) => {
         self.partitionsCreated = v;
       },
@@ -471,9 +510,6 @@ class BootstrapService extends EventEmitter {
       },
       setLatencyTopology: (v) => {
         self.latencyTopology = v;
-      },
-      setIsShuttingDown: (v) => {
-        self.isShuttingDown = v;
       },
       incrementServicesCreated: () => {
         self.servicesCreated++;
@@ -508,67 +544,88 @@ class BootstrapService extends EventEmitter {
           );
       },
 
-      // -- Delegation to phase helpers --
-      createBootstrapServiceDescriptor: (serviceType, serviceId) =>
-        self.createBootstrapServiceDescriptor(
-          serviceType, serviceId,
-        ),
+      // -- Phase helper callbacks (D2.3: direct owner invocation) --
+      createBootstrapServiceDescriptor:
+        (serviceType, serviceId) =>
+          self.seedInfrastructurePhase
+            .createBootstrapServiceDescriptor(
+              serviceType, serviceId,
+            ),
       queueBootstrapServiceReplica: (descriptor, options) =>
-        self.queueBootstrapServiceReplica(
-          descriptor, options,
-        ),
-      resolveBootstrapReplicaOptions: (serviceId, serviceType) =>
         self.seedInfrastructurePhase
-          .resolveBootstrapReplicaOptions(
-            serviceId, serviceType,
+          .queueBootstrapServiceReplica(
+            descriptor, options,
           ),
+      resolveBootstrapReplicaOptions:
+        (serviceId, serviceType) =>
+          self.seedInfrastructurePhase
+            .resolveBootstrapReplicaOptions(
+              serviceId, serviceType,
+            ),
       triggerBootstrapReconciler: (reason) =>
-        self.triggerBootstrapReconciler(reason),
+        self.seedInfrastructurePhase
+          .triggerBootstrapReconciler(reason),
       createBootstrapMessageGroupReplica: (context) =>
-        self.createBootstrapMessageGroupReplica(context),
+        self.seedMessageGroupsPhase
+          .createBootstrapMessageGroupReplica(context),
       startBootstrapMessageGroupReplica: (handle, context) =>
-        self.startBootstrapMessageGroupReplica(
-          handle, context,
-        ),
+        self.seedMessageGroupsPhase
+          .startBootstrapMessageGroupReplica(
+            handle, context,
+          ),
       stopBootstrapMessageGroupReplica: (handle, context) =>
-        self.stopBootstrapMessageGroupReplica(
-          handle, context,
-        ),
+        self.seedMessageGroupsPhase
+          .stopBootstrapMessageGroupReplica(
+            handle, context,
+          ),
       createBootstrapPartitionReplica: (context) =>
-        self.createBootstrapPartitionReplica(context),
+        self.seedPartitionsPhase
+          .createBootstrapPartitionReplica(context),
       startBootstrapPartitionReplica: (handle, context) =>
-        self.startBootstrapPartitionReplica(
-          handle, context,
-        ),
+        self.seedPartitionsPhase
+          .startBootstrapPartitionReplica(
+            handle, context,
+          ),
       stopBootstrapPartitionReplica: (handle, context) =>
-        self.stopBootstrapPartitionReplica(
-          handle, context,
-        ),
+        self.seedPartitionsPhase
+          .stopBootstrapPartitionReplica(
+            handle, context,
+          ),
       waitForMessageGroupLeadership: (groupId, replicaIds) =>
         self.seedMessageGroupsPhase
-          .waitForMessageGroupLeadership(groupId, replicaIds),
+          .waitForMessageGroupLeadership(
+            groupId, replicaIds,
+          ),
       waitForPartitionLeadership: () =>
-        self.seedPartitionsPhase.waitForPartitionLeadership(),
+        self.seedPartitionsPhase
+          .waitForPartitionLeadership(),
       stopUnifiedLifecycleOwners: () =>
-        self.stopUnifiedLifecycleOwners(),
+        self.seedInfrastructurePhase
+          .stopUnifiedLifecycleOwners(),
       swapSystemTableWriter: () =>
         self.seedRegistrationPhase.swapSystemTableWriter(),
       ensureBootstrapCdcIntegrationService: () =>
         self.seedCacheHydrationPhase
           .ensureBootstrapCdcIntegrationService(),
       handleNodeReadyRebalanceTrigger: (cdcEvent, prevRow) =>
-        self.handleNodeReadyRebalanceTrigger(cdcEvent, prevRow),
+        self.handleNodeReadyRebalanceTrigger(
+          cdcEvent, prevRow,
+        ),
       propagatePartitionCDCEvent: (mgs, cdcEvent) =>
-        self.propagatePartitionCDCEvent(mgs, cdcEvent),
+        self.seedCacheHydrationPhase
+          .propagatePartitionCDCEvent(mgs, cdcEvent),
       resolveCdcPropagationMessageGroup: (preferred) =>
-        self.resolveCdcPropagationMessageGroup(preferred),
+        self.seedCacheHydrationPhase
+          .resolveCdcPropagationMessageGroup(preferred),
       applyCurrentEpochFromCache: () =>
         self.seedCacheHydrationPhase
           .applyCurrentEpochFromCache(),
       hydrateFromLocalPartitions: (stc, mg) =>
-        self.hydrateFromLocalPartitions(stc, mg),
+        self.seedCacheHydrationPhase
+          .hydrateFromLocalPartitions(stc, mg),
       createCdcPipelineReadinessGate: (stc) =>
-        self.createCdcPipelineReadinessGate(stc),
+        self.seedCacheHydrationPhase
+          .createCdcPipelineReadinessGate(stc),
       emit: (event, data) => self.emit(event, data),
       sleep: (ms) => self.sleep(ms),
 
@@ -576,16 +633,107 @@ class BootstrapService extends EventEmitter {
       resolvePartitionDbPath: (partitionId, replicaId) => {
         if (self.dataDirectoryManager &&
             self.dataDirectoryManager.isInitialized()) {
-          return self.dataDirectoryManager.getPartitionDbPath(
-            partitionId, replicaId,
-          );
+          return self.dataDirectoryManager
+            .getPartitionDbPath(partitionId, replicaId);
         } else if (self.config.partitionDbPath) {
           return self.config.partitionDbPath;
         }
         return BOOTSTRAP_DEFAULT.partitionDbPath;
       },
+    };
+  }
 
-      // -- Cleanup helpers --
+  /**
+   * Readiness delegates — lifecycle and readiness state accessors
+   * consumed by readiness evaluation and cleanup owners.
+   * @return {Object}
+   * @private
+   */
+  _buildReadinessDelegates() {
+    const self = this;
+    return {
+      getLifecycleStateMachine: () =>
+        self.lifecycleStateMachine,
+      getBootstrapReadinessState: () =>
+        self.bootstrapReadinessState,
+    };
+  }
+
+  /**
+   * Cleanup delegates — teardown helpers, state clearers, and
+   * diagnostic accessors consumed by SeedCleanupHandler.
+   * @return {Object}
+   * @private
+   */
+  _buildCleanupDelegates() {
+    const self = this;
+    return {
+      // -- Core accessors needed for cleanup diagnostics --
+      getNodeId: () => self.nodeId,
+      getLogger: () => self.logger,
+      getPhase: () => self.phase,
+      getStartTime: () => self.startTime,
+      getServicesCreated: () => self.servicesCreated,
+      getMessageGroupsCreated: () => self.messageGroupsCreated,
+      getInitialMessageGroupId: () =>
+        INITIAL_MESSAGE_GROUP_ID,
+
+      // -- Service collections --
+      getMessageGroupServices: () => self.messageGroupServices,
+      getPartitionServices: () => self.partitionServices,
+      getMessageRouter: () => self.messageRouter,
+      getTransport: () => self.transport,
+
+      // -- Runtime references --
+      getSystemTableCacheRef: () => self.systemTableCache,
+      getSystemTableCacheSafe: () =>
+        self._getSystemTableCacheSafe(),
+      getSystemTableWriter: () => self.systemTableWriter,
+      getRebalanceCoordinator: () =>
+        self.rebalanceCoordinator,
+      getLatencyTopology: () => self.latencyTopology,
+
+      // -- State mutators --
+      setPhase: (v) => {
+        self.phase = v;
+      },
+      setLastError: (v) => {
+        self.lastError = v;
+      },
+      setIsShuttingDown: (v) => {
+        self.isShuttingDown = v;
+      },
+      setMessageRouter: (v) => {
+        self.messageRouter = v;
+      },
+      setTransport: (v) => {
+        self.transport = v;
+      },
+      setSystemTableCacheRef: (v) => {
+        self.systemTableCache = v;
+      },
+      setSystemTableWriter: (v) => {
+        self.systemTableWriter = v;
+      },
+      setLatencyTopology: (v) => {
+        self.latencyTopology = v;
+      },
+
+      // -- Collection mutators --
+      resetMessageGroupReplicas: () => {
+        self.messageGroupReplicas = [];
+      },
+      resetPartitionReplicas: () => {
+        self.partitionReplicas = [];
+      },
+
+      // -- Phase helper callbacks (D2.3: direct owner invocation) --
+      stopUnifiedLifecycleOwners: () =>
+        self.seedInfrastructurePhase
+          .stopUnifiedLifecycleOwners(),
+      emit: (event, data) => self.emit(event, data),
+
+      // -- Resource teardown helpers --
       clearCdcIntegrationService: () => {
         self.cdcIntegrationService = null;
       },
@@ -641,6 +789,25 @@ class BootstrapService extends EventEmitter {
       clearNodeReadyRebalanceState: () => {
         self.clearNodeReadyRebalanceState();
       },
+    };
+  }
+
+  /**
+   * Runtime wiring delegates — post-phase wiring accessors
+   * consumed by runtime hydration and control-plane setup.
+   * @return {Object}
+   * @private
+   */
+  _buildRuntimeWiringDelegates() {
+    const self = this;
+    return {
+      getSystemTableCache: () => self.getSystemTableCache(),
+      getMessageRouter: () => self.messageRouter,
+      getRebalanceCoordinator: () =>
+        self.rebalanceCoordinator,
+      getCdcIntegrationService: () =>
+        self.cdcIntegrationService,
+      getEpochManager: () => self.epochManager,
     };
   }
 
@@ -707,7 +874,8 @@ class BootstrapService extends EventEmitter {
       const topologyStartMs = Date.now();
       const startTopologyAsync = () => {
         try {
-          this.startLatencyTopologyLifecycle();
+          this.seedCacheHydrationPhase
+            .startLatencyTopologyLifecycle();
           this.logger.info('metrics.bootstrap.post_pipeline.latency_topology', {
             nodeId: this.nodeId,
             durationMs: Date.now() - topologyStartMs,
@@ -801,19 +969,29 @@ class BootstrapService extends EventEmitter {
     this.phase = phaseName;
     this.phaseStartTime = Date.now();
 
+    const state = this.lifecycleStateMachine.getState();
+    const activeSubPhase =
+      this.lifecycleStateMachine.getSubPhase() || null;
+
     this.logger.info(BootstrapLog.PHASE_STARTING, {
       nodeId: this.nodeId,
+      state,
       phase: phaseName,
+      subPhase: activeSubPhase,
       servicesCreated: this.servicesCreated,
     });
 
     this.emit(BootstrapEvent.PHASE_START, {
       phase: phaseName,
       nodeId: this.nodeId,
+      state,
+      subPhase: activeSubPhase,
     });
     this.emit('phase:start', {
       phase: phaseName,
       nodeId: this.nodeId,
+      state,
+      subPhase: activeSubPhase,
     });
 
     try {
@@ -825,7 +1003,9 @@ class BootstrapService extends EventEmitter {
 
       this.logger.info(BootstrapLog.PHASE_COMPLETED, {
         nodeId: this.nodeId,
+        state,
         phase: phaseName,
+        subPhase: activeSubPhase,
         duration: phaseDuration,
         servicesCreated: this.servicesCreated,
       });
@@ -833,11 +1013,15 @@ class BootstrapService extends EventEmitter {
       this.emit(BootstrapEvent.PHASE_COMPLETE, {
         phase: phaseName,
         nodeId: this.nodeId,
+        state,
+        subPhase: activeSubPhase,
         duration: phaseDuration,
       });
       this.emit('phase:complete', {
         phase: phaseName,
         nodeId: this.nodeId,
+        state,
+        subPhase: activeSubPhase,
         duration: phaseDuration,
       });
     } catch (error) {
@@ -845,7 +1029,9 @@ class BootstrapService extends EventEmitter {
 
       this.logger.error(BootstrapLog.PHASE_FAILED, {
         nodeId: this.nodeId,
+        state,
         phase: phaseName,
+        subPhase: activeSubPhase,
         duration: phaseDuration,
         error: error.message,
         stack: error.stack,
@@ -854,12 +1040,16 @@ class BootstrapService extends EventEmitter {
       this.emit(BootstrapEvent.PHASE_FAILED, {
         phase: phaseName,
         nodeId: this.nodeId,
+        state,
+        subPhase: activeSubPhase,
         duration: phaseDuration,
         error: error.message,
       });
       this.emit('phase:failed', {
         phase: phaseName,
         nodeId: this.nodeId,
+        state,
+        subPhase: activeSubPhase,
         duration: phaseDuration,
         error: error.message,
       });
@@ -868,516 +1058,13 @@ class BootstrapService extends EventEmitter {
     }
   }
 
-  /**
-   * Build a canonical unified descriptor for bootstrap-managed replicas.
-   * @param {string} serviceType
-   * @param {string} serviceId
-   * @return {Object}
-   * @private
-   */
-  createBootstrapServiceDescriptor(serviceType, serviceId) {
-    return this.seedInfrastructurePhase
-      .createBootstrapServiceDescriptor(serviceType, serviceId);
-  }
-
-  /**
-   * Queue a bootstrap replica in desired state and option catalogs.
-   * @param {Object} descriptor
-   * @param {Object} options
-   * @return {void}
-   * @private
-   */
-  queueBootstrapServiceReplica(descriptor, options) {
-    return this.seedInfrastructurePhase
-      .queueBootstrapServiceReplica(descriptor, options);
-  }
-
-  /**
-   * Resolve bootstrap replica options for one serviceId.
-   * @param {string} serviceId
-   * @param {string} serviceType
-   * @return {Object}
-   * @private
-   */
-  resolveBootstrapReplicaOptions(serviceId, serviceType) {
-    return this.seedInfrastructurePhase
-      .resolveBootstrapReplicaOptions(serviceId, serviceType);
-  }
-
-  /**
-   * Build local actual-state rows for bootstrap service reconciliation.
-   * @return {Object[]}
-   * @private
-   */
-  buildBootstrapActualStateRows() {
-    return this.seedInfrastructurePhase
-      .buildBootstrapActualStateRows();
-  }
-
-  /**
-   * Initialize unified lifecycle owners for bootstrap orchestration.
-   * @return {Promise<void>}
-   * @private
-   */
-  async initializeUnifiedLifecycleOwners() {
-    return this.seedInfrastructurePhase
-      .initializeUnifiedLifecycleOwners();
-  }
-
-  /**
-   * Trigger one bootstrap reconciliation cycle.
-   * @param {string} reason
-   * @return {Promise<void>}
-   * @private
-   */
-  async triggerBootstrapReconciler(reason) {
-    return this.seedInfrastructurePhase
-      .triggerBootstrapReconciler(reason);
-  }
-
-  /**
-   * Stop unified lifecycle owners and clear bootstrap desired-state catalogs.
-   * @return {void}
-   * @private
-   */
-  stopUnifiedLifecycleOwners() {
-    return this.seedInfrastructurePhase
-      .stopUnifiedLifecycleOwners();
-  }
-
-  /**
-   * Unified lifecycle create hook for message-group replicas.
-   * @param {Object} context
-   * @return {Promise<Object>}
-   * @private
-   */
-  async createBootstrapMessageGroupReplica(context) {
-    return this.seedMessageGroupsPhase
-      .createBootstrapMessageGroupReplica(context);
-  }
-
-  /**
-   * Unified lifecycle start hook for message-group replicas.
-   * @param {Object} replicaHandle
-   * @param {Object} _context
-   * @return {Promise<Object>}
-   * @private
-   */
-  async startBootstrapMessageGroupReplica(replicaHandle, _context) {
-    return this.seedMessageGroupsPhase
-      .startBootstrapMessageGroupReplica(replicaHandle, _context);
-  }
-
-  /**
-   * Unified lifecycle stop hook for message-group replicas.
-   * @param {Object} replicaHandle
-   * @param {Object} _context
-   * @return {Promise<Object>}
-   * @private
-   */
-  async stopBootstrapMessageGroupReplica(replicaHandle, _context) {
-    return this.seedMessageGroupsPhase
-      .stopBootstrapMessageGroupReplica(replicaHandle, _context);
-  }
-
-  /**
-   * Unified lifecycle create hook for partition replicas.
-   * @param {Object} context
-   * @return {Promise<Object>}
-   * @private
-   */
-  async createBootstrapPartitionReplica(context) {
-    return this.seedPartitionsPhase
-      .createBootstrapPartitionReplica(context);
-  }
-
-  /**
-   * Unified lifecycle start hook for partition replicas.
-   * @param {Object} replicaHandle
-   * @param {Object} _context
-   * @return {Promise<Object>}
-   * @private
-   */
-  async startBootstrapPartitionReplica(replicaHandle, _context) {
-    return this.seedPartitionsPhase
-      .startBootstrapPartitionReplica(replicaHandle, _context);
-  }
-
-  /**
-   * Unified lifecycle stop hook for partition replicas.
-   * @param {Object} replicaHandle
-   * @param {Object} _context
-   * @return {Promise<Object>}
-   * @private
-   */
-  async stopBootstrapPartitionReplica(replicaHandle, _context) {
-    return this.seedPartitionsPhase
-      .stopBootstrapPartitionReplica(replicaHandle, _context);
-  }
-
-  /**
-   * Compatibility shim for deferred election activation during bootstrap.
-   * Replica create/start ownership remains in unified lifecycle adapters.
-   * @return {Promise<void>}
-   * @private
-   */
-  async startDeferredBootstrapReplicaElections() {
-    return this.seedPartitionsPhase
-      .startDeferredBootstrapReplicaElections();
-  }
-
-  /**
-   * Phase 1: Infrastructure setup.
-   * @return {Promise<void>}
-   * @private
-   */
-  async phaseInfrastructure() {
-    return this.seedInfrastructurePhase.phaseInfrastructure();
-  }
-
-
-  /**
-   * Phase 2: Message group creation.
-   * @return {Promise<void>}
-   * @private
-   */
-  async phaseMessageGroups() {
-    return this.seedMessageGroupsPhase.phaseMessageGroups();
-  }
-
-  /**
-   * Wait for message group leadership to be established.
-   * Implements exponential backoff up to 30 seconds.
-   * @param {string} groupId - Message group ID.
-   * @param {Array<string>} replicaIds - Replica IDs.
-   * @return {Promise<void>}
-   * @private
-   */
-  async waitForMessageGroupLeadership(groupId, replicaIds) {
-    return this.seedMessageGroupsPhase
-      .waitForMessageGroupLeadership(groupId, replicaIds);
-  }
-
-  /**
-   * Wait for all system table partitions to establish leadership.
-   * This ensures writes can succeed during the registration phase.
-   * @return {Promise<void>}
-   * @private
-   */
-  async waitForPartitionLeadership() {
-    return this.seedPartitionsPhase.waitForPartitionLeadership();
-  }
-
-  /**
-   * Wait for system leadership info to appear in the system cache.
-   * Ensures leaders and leader_node_id values are present before seeding.
-   * @return {Promise<void>}
-   * @private
-   */
-  async waitForSystemServiceLeadersInCache() {
-    return this.seedCacheHydrationPhase
-      .waitForSystemServiceLeadersInCache();
-  }
-
-  /**
-   * Wait for a node to appear as ready in the system table cache.
-   * Ensures ready node list is usable by joining nodes.
-   * @param {string} nodeId - Node ID to verify.
-   * @return {Promise<void>}
-   * @private
-   */
-  async waitForReadyNodeInCache(nodeId) {
-    return this.seedCacheHydrationPhase
-      .waitForReadyNodeInCache(nodeId);
-  }
-
-  /**
-   * Repair propagated cache tables from authoritative local partition reads.
-   * This closes CDC visibility holes that can otherwise leave the seed node
-   * with a stale cache long after durable control-plane writes committed.
-   * @param {Object} [options={}]
-   * @return {Promise<Object>}
-   * @private
-   */
-  async repairPropagatedCacheTablesFromLocalPartitions(options = {}) {
-    return this.seedCacheHydrationPhase
-      .repairPropagatedCacheTablesFromLocalPartitions(options);
-  }
-
-  /**
-   * Check which partitions have leaders.
-   * @param {Set<string>} partitionIds - Partition IDs to check.
-   * @return {Set<string>} Partition IDs that have leaders.
-   * @private
-   */
-  checkPartitionLeaders(partitionIds) {
-    return this.seedPartitionsPhase
-      .checkPartitionLeaders(partitionIds);
-  }
-
-  /**
-   * Ensure CDC integration service is initialized for bootstrap writes.
-   * @return {CDCIntegrationService} CDC integration service.
-   * @private
-   */
-  ensureBootstrapCdcIntegrationService() {
-    return this.seedCacheHydrationPhase
-      .ensureBootstrapCdcIntegrationService();
-  }
-
-  /**
-   * Ensure latency topology owners are initialized.
-   * @return {Object}
-   * @private
-   */
-  ensureLatencyTopologyOwners() {
-    return this.seedCacheHydrationPhase
-      .ensureLatencyTopologyOwners();
-  }
-
-  /**
-   * Start latency topology lifecycle owners.
-   * Runs assignment lifecycle without blocking bootstrap readiness.
-   * @private
-   */
-  startLatencyTopologyLifecycle() {
-    return this.seedCacheHydrationPhase
-      .startLatencyTopologyLifecycle();
-  }
-
-  /**
-   * Propagate partition CDC via topology-owned propagation path.
-   * @param {Object} messageGroupService
-   * @param {Object} cdcEvent
-   * @return {Promise<Object>}
-   * @private
-   */
-  async propagatePartitionCDCEvent(messageGroupService, cdcEvent) {
-    return this.seedCacheHydrationPhase
-      .propagatePartitionCDCEvent(messageGroupService, cdcEvent);
-  }
-
-  /**
-   * Ensure system table writer is initialized for bootstrap writes.
-   * @return {BootstrapSystemTableWriter|RoutedSqlSystemTableWriter}
-   * @private
-   */
-  ensureSystemTableWriter() {
-    return this.seedRegistrationPhase.ensureSystemTableWriter();
-  }
-
-  /**
-   * Swap writer to routed SQL implementation once cache is hydrated.
-   * @private
-   */
-  swapSystemTableWriter() {
-    return this.seedRegistrationPhase.swapSystemTableWriter();
-  }
-
-  /**
-   * Get the operational message-group service for runtime routing.
-   * Bootstrap-only formation selection must use getBootstrapMessageGroupService().
-   * @param {Object} [options]
-   * @param {Array<string>} [options.requiredTables]
-   * @return {Object|null} Message group service or null.
-   * @private
-   */
-  getLeaderMessageGroupService(options = {}) {
-    return this.seedMessageGroupsPhase
-      .getLeaderMessageGroupService(options);
-  }
-
-  /**
-   * Get a bootstrap-only message-group service before leadership exists.
-   * @return {Object|null}
-   * @private
-   */
-  getBootstrapMessageGroupService() {
-    return this.seedMessageGroupsPhase
-      .getBootstrapMessageGroupService();
-  }
-
-  /**
-   * Resolve the operational message-group selection with readiness metadata.
-   * @param {Object} [options]
-   * @param {Array<string>} [options.requiredTables]
-   * @return {Object}
-   * @private
-   */
-  resolveOperationalMessageGroupSelection(options = {}) {
-    return this.seedMessageGroupsPhase
-      .resolveOperationalMessageGroupSelection(options);
-  }
-
-  /**
-   * Resolve the message-group service to use for partition CDC propagation.
-   * Prefers the current local leader when available and falls back to
-   * the captured message-group service.
-   * @param {Object|null} preferredMessageGroupService
-   * @return {Object|null}
-   */
-  resolveCdcPropagationMessageGroup(preferredMessageGroupService) {
-    return this.seedCacheHydrationPhase
-      .resolveCdcPropagationMessageGroup(
-        preferredMessageGroupService,
-      );
-  }
-
-  /**
-   * Start progress reporting for one partition replica creation.
-   * @param {Object} details - Replica progress details.
-   * @return {Object} Reporter progress context.
-   * @private
-   */
-  startPartitionReplicaProgress(details) {
-    return this.seedPartitionsPhase
-      .startPartitionReplicaProgress(details);
-  }
-
-  /**
-   * Update partition creation progress based on stage callbacks.
-   * @param {Object|null} progress - Reporter progress context.
-   * @param {Object} stageEvent - Stage event from PartitionService.
-   * @private
-   */
-  updatePartitionReplicaProgress(progress, stageEvent) {
-    return this.seedPartitionsPhase
-      .updatePartitionReplicaProgress(progress, stageEvent);
-  }
-
-  /**
-   * Complete partition creation progress reporting.
-   * @param {Object|null} progress - Reporter progress context.
-   * @private
-   */
-  finishPartitionReplicaProgress(progress) {
-    return this.seedPartitionsPhase
-      .finishPartitionReplicaProgress(progress);
-  }
-
-  /**
-   * Fail partition creation progress reporting.
-   * @param {Object|null} progress - Reporter progress context.
-   * @param {Error|string|null} error - Failure reason.
-   * @private
-   */
-  failPartitionReplicaProgress(progress, error) {
-    return this.seedPartitionsPhase
-      .failPartitionReplicaProgress(progress, error);
-  }
-
-  /**
-   * Format one partition creation progress line.
-   * @param {Object} progress - Reporter progress context.
-   * @param {string|null} status - Optional terminal status.
-   * @param {Error|string|null} error - Optional error.
-   * @return {string} Formatted progress line.
-   * @private
-   */
-  formatPartitionReplicaProgressLine(progress, status, error) {
-    return this.seedPartitionsPhase
-      .formatPartitionReplicaProgressLine(
-        progress, status, error,
-      );
-  }
-
-  /**
-   * Build structured context for non-interactive partition progress logs.
-   * @param {Object} progress - Reporter progress context.
-   * @param {string|null} status - Optional terminal status.
-   * @param {Error|string|null} error - Optional error.
-   * @return {Object} Structured context object.
-   * @private
-   */
-  buildPartitionReplicaProgressContext(progress, status = null, error = null) {
-    return this.seedPartitionsPhase
-      .buildPartitionReplicaProgressContext(
-        progress, status, error,
-      );
-  }
-
-  /**
-   * Normalize replica creation errors for display.
-   * @param {Error|string|null} error - Error value.
-   * @return {string} Error message.
-   * @private
-   */
-  formatReplicaCreationError(error) {
-    return this.seedPartitionsPhase
-      .formatReplicaCreationError(error);
-  }
-
-  /**
-   * Get the AssignmentEpochManager instance.
-   * Returns the epoch manager created during bootstrap for epoch-based
-   * partition assignment coordination.
-   * Requirements: 3.4, 4.1 - Epoch-based initialization
-   * @return {AssignmentEpochManager|null} The epoch manager or null if not initialized.
-   */
-  getEpochManager() {
-    return this.epochManager;
-  }
-
-  /**
-   * Phase 3: Partition creation for system tables.
-   * @return {Promise<void>}
-   * @private
-   */
-  async phasePartitions() {
-    return this.seedPartitionsPhase.phasePartitions();
-  }
-
-  /**
-   * Initialize the AssignmentEpochManager with the initial epoch.
-   * Creates epoch 0 with all partition assignments from the seed node.
-   * Requirements: 3.4, 4.1 - Epoch-based initialization
-   * @private
-   */
-  async initializeEpochManager() {
-    return this.seedPartitionsPhase.initializeEpochManager();
-  }
-
-  /**
-   * Load persisted assignment epoch from the local config partition if present.
-   * @return {Promise<AssignmentEpoch|null>} Persisted epoch or null when absent.
-   * @private
-   */
-  async loadPersistedEpochFromLocalConfigPartition() {
-    return this.seedPartitionsPhase
-      .loadPersistedEpochFromLocalConfigPartition();
-  }
-
-  /**
-   * Apply authoritative epoch from the current cache snapshot.
-   * @private
-   */
-  applyCurrentEpochFromCache() {
-    return this.seedCacheHydrationPhase
-      .applyCurrentEpochFromCache();
-  }
-
-  /**
-   * Subscribe message groups to CDC events from a partition.
-   * @param {string} tableName - Table name.
-   * @param {string} partitionId - Partition ID.
-   * @param {Array<string>} replicaIds - Partition replica IDs.
-   * @return {Promise<void>}
-   * @private
-   */
-  async subscribeToCDC(tableName, partitionId, replicaIds) {
-    return this.seedCacheHydrationPhase
-      .subscribeToCDC(tableName, partitionId, replicaIds);
-  }
-
-  /**
-   * Subscribe to CDC for all initial system tables after cache hydration.
-   * @return {Promise<void>}
-   * @private
-   */
-  async subscribeToInitialSystemTableCDC() {
-    return this.seedCacheHydrationPhase
-      .subscribeToInitialSystemTableCDC();
-  }
+  // ---------------------------------------------------------------
+  // Phase-owner forwarding surface removed (D2.3 wrapper collapse).
+  // Callers now invoke phase owners directly:
+  //   seedInfrastructurePhase, seedMessageGroupsPhase,
+  //   seedPartitionsPhase, seedRegistrationPhase,
+  //   seedCacheHydrationPhase, seedCleanupHandler.
+  // ---------------------------------------------------------------
 
   /**
    * Handle node state CDC and schedule one rebalance trigger per node-ready join.
@@ -1558,7 +1245,8 @@ class BootstrapService extends EventEmitter {
     this.pendingNodeReadyRebalanceTimers.delete(nodeId);
 
     try {
-      await this.waitForReadyNodeInCache(nodeId);
+      await this.seedCacheHydrationPhase
+        .waitForReadyNodeInCache(nodeId);
     } catch (error) {
       this.nodeReadyRebalanceRetryEligibleNodeIds.add(nodeId);
       this.rebalanceTriggeredNodeIds.delete(nodeId);
@@ -1659,36 +1347,13 @@ class BootstrapService extends EventEmitter {
     return false;
   }
 
-  /**
-   * Phase 4: Service registration.
-   * Register all services in system tables.
-   * Uses bootstrap mode to write directly to local partitions, bypassing SQL routing.
-   * Requirements: 8.6 - Enable bootstrap mode before writes, disable after completion.
-   * @return {Promise<void>}
-   * @private
-   */
-  async phaseRegistration() {
-    return this.seedRegistrationPhase.phaseRegistration();
-  }
 
   /**
-   * Register the initial message group.
-   * @param {number} now - Current timestamp.
-   * @return {Promise<void>}
-   * @private
+   * Get the AssignmentEpochManager instance.
+   * @return {AssignmentEpochManager|null}
    */
-  async registerMessageGroup(now) {
-    return this.seedRegistrationPhase.registerMessageGroup(now);
-  }
-
-  /**
-   * Register all services in the services table.
-   * @param {number} now - Current timestamp.
-   * @return {Promise<void>}
-   * @private
-   */
-  async registerServices(now) {
-    return this.seedRegistrationPhase.registerServices(now);
+  getEpochManager() {
+    return this.epochManager;
   }
 
   async activateMessageGroupServiceRows() {
@@ -1714,107 +1379,6 @@ class BootstrapService extends EventEmitter {
     });
   }
 
-  /**
-   * Register built-in runtime service definitions.
-   * @return {Promise<void>}
-   * @private
-   */
-  async registerMetaServiceDefinitions() {
-    return this.seedRegistrationPhase
-      .registerMetaServiceDefinitions();
-  }
-
-  /**
-   * Register system tables metadata.
-   * @param {number} now - Current timestamp.
-   * @return {Promise<void>}
-   * @private
-   */
-  async registerSystemTables(now) {
-    return this.seedRegistrationPhase
-      .registerSystemTables(now);
-  }
-
-  /**
-   * Update partition sizes in the partitions table.
-   * @return {Promise<void>}
-   * @private
-   */
-  async updatePartitionSizes() {
-    return this.seedRegistrationPhase.updatePartitionSizes();
-  }
-
-  /**
-   * Seed dynamic configuration into the config system table.
-   * @return {Promise<void>}
-   * @private
-   */
-  async seedDynamicConfiguration() {
-    return this.seedRegistrationPhase
-      .seedDynamicConfiguration();
-  }
-
-  /**
-   * Persist the authoritative assignment epoch.
-   * @return {Promise<void>}
-   * @private
-   */
-  async persistCurrentEpochIfMissing() {
-    return this.seedRegistrationPhase
-      .persistCurrentEpochIfMissing();
-  }
-
-  /**
-   * Phase 5: Cache hydration.
-   * @return {Promise<void>}
-   * @private
-   */
-  async phaseCacheHydration() {
-    return this.seedCacheHydrationPhase
-      .phaseCacheHydration();
-  }
-
-  /**
-   * Hydrate cache by reading directly from local partition services.
-   * This bypasses SQL routing since cache is empty during hydration.
-   * Requirements: 7.3, 7.4
-   * @param {Object} systemTableCache - System table cache.
-   * @param {Object} leaderMessageGroup - Leader message group for CDC events.
-   * @return {Promise<Object>} Hydration result.
-   * @private
-   */
-  async hydrateFromLocalPartitions(
-    systemTableCache, leaderMessageGroup,
-  ) {
-    return this.seedCacheHydrationPhase
-      .hydrateFromLocalPartitions(
-        systemTableCache, leaderMessageGroup,
-      );
-  }
-
-  /**
-   * Verify cache hydration completed successfully.
-   * Checks that all expected system tables are populated.
-   * Requirements: 7.5
-   * @param {Object} systemTableCache - System table cache.
-   * @param {Object} result - Hydration result.
-   * @private
-   */
-  verifyCacheHydration(systemTableCache, result) {
-    return this.seedCacheHydrationPhase
-      .verifyCacheHydration(systemTableCache, result);
-  }
-
-  /**
-   * Count total rows hydrated across all tables.
-   * @param {Object} result - Hydration result.
-   * @return {number} Total row count.
-   * @private
-   */
-  countTotalRows(result) {
-    return this.seedCacheHydrationPhase
-      .countTotalRows(result);
-  }
 
   /**
    * Emit best-effort bootstrap replica registration diagnostics.
@@ -1843,7 +1407,8 @@ class BootstrapService extends EventEmitter {
    * @private
    */
   initializeReplicaHandler() {
-    const messageGroupService = this.getLeaderMessageGroupService();
+    const messageGroupService =
+      this.seedMessageGroupsPhase.getLeaderMessageGroupService();
 
     let dataDir = STORAGE_DEFAULT.DATA_DIR;
     if (this.dataDirectoryManager && this.dataDirectoryManager.isInitialized()) {
@@ -1888,18 +1453,13 @@ class BootstrapService extends EventEmitter {
       this.servicesCreated++;
 
       const tableName = options.tableName;
-      const bootstrapOwnedCdcPropagationActive =
-        isBootstrapOwnedCdcPropagationActive(
-          this.phase,
-          BootstrapPhase.COMPLETE,
-        );
       if (tableName &&
-          shouldAttachPartitionCdcPropagation(tableName) &&
-          bootstrapOwnedCdcPropagationActive) {
+          shouldAttachPartitionCdcPropagation(tableName)) {
         const subscriptionSelection =
-          this.resolveOperationalMessageGroupSelection({
-            requiredTables: [tableName],
-          });
+          this.seedMessageGroupsPhase
+            .resolveOperationalMessageGroupSelection({
+              requiredTables: [tableName],
+            });
         const subscriptionMessageGroupService =
           subscriptionSelection.service;
         if (!subscriptionMessageGroupService) {
@@ -1922,29 +1482,7 @@ class BootstrapService extends EventEmitter {
           options.replicaId,
           subscriptionMessageGroupService?.groupId || 'message-group',
         ].join(':');
-        let bootstrapCdcSubscriberDetached = false;
         const cdcSubscriber = async (cdcEvent) => {
-          if (!isBootstrapOwnedCdcPropagationActive(
-            this.phase,
-            BootstrapPhase.COMPLETE,
-          )) {
-            if (!bootstrapCdcSubscriberDetached) {
-              bootstrapCdcSubscriberDetached =
-                detachBootstrapOwnedCdcSubscriber({
-                  partition,
-                  subscriber: cdcSubscriber,
-                  logger: this.logger,
-                  logMessage:
-                    'Detached bootstrap-owned CDC propagation subscriber after bootstrap completion',
-                  nodeId: this.nodeId,
-                  tableName,
-                  partitionId: options.partitionId,
-                  replicaId: options.replicaId,
-                  lifecyclePhase: this.phase,
-                });
-            }
-            return;
-          }
           if (cdcEvent.tableName === tableName) {
             this.logger.debug(BootstrapLog.CDC_DYNAMIC_PARTITION_EVENT, {
               tableName: cdcEvent.tableName,
@@ -1953,9 +1491,10 @@ class BootstrapService extends EventEmitter {
               replicaId: options.replicaId,
             });
             const propagationSelection =
-              this.resolveOperationalMessageGroupSelection({
-                requiredTables: [tableName],
-              });
+              this.seedMessageGroupsPhase
+                .resolveOperationalMessageGroupSelection({
+                  requiredTables: [tableName],
+                });
             const propagationMessageGroupService =
               propagationSelection.service;
             if (!propagationMessageGroupService) {
@@ -1969,13 +1508,15 @@ class BootstrapService extends EventEmitter {
               );
             }
 
-            await this.propagatePartitionCDCEvent(
-              propagationMessageGroupService,
-              cdcEvent,
-            );
+            await this.seedCacheHydrationPhase
+              .propagatePartitionCDCEvent(
+                propagationMessageGroupService,
+                cdcEvent,
+              );
 
             if (tableName === TABLES.CONFIG) {
-              this.applyCurrentEpochFromCache();
+              this.seedCacheHydrationPhase
+                .applyCurrentEpochFromCache();
             }
           }
         };
@@ -2336,22 +1877,25 @@ class BootstrapService extends EventEmitter {
       cdcIntegrationService: this.cdcIntegrationService,
       systemTableCache,
       createMessageGroupReplica: async (options) => {
-        return this.createBootstrapMessageGroupReplica({
-          definition: descriptorForReplica(options.replicaId),
-          replicaOptions: options,
-        });
+        return this.seedMessageGroupsPhase
+          .createBootstrapMessageGroupReplica({
+            definition: descriptorForReplica(options.replicaId),
+            replicaOptions: options,
+          });
       },
       startMessageGroupReplica: async (options) => {
-        return this.startBootstrapMessageGroupReplica(
-          descriptorForReplica(options.replicaId),
-          {replicaOptions: options},
-        );
+        return this.seedMessageGroupsPhase
+          .startBootstrapMessageGroupReplica(
+            descriptorForReplica(options.replicaId),
+            {replicaOptions: options},
+          );
       },
       stopMessageGroupReplica: async (options) => {
-        return this.stopBootstrapMessageGroupReplica(
-          descriptorForReplica(options.replicaId),
-          {replicaOptions: options},
-        );
+        return this.seedMessageGroupsPhase
+          .stopBootstrapMessageGroupReplica(
+            descriptorForReplica(options.replicaId),
+            {replicaOptions: options},
+          );
       },
       resolveLocalMessageGroupReplica: (replicaId) =>
         this.messageGroupServices.get(replicaId) || null,
@@ -2375,7 +1919,8 @@ class BootstrapService extends EventEmitter {
     }
 
     try {
-      await this.waitForSystemServiceLeadersInCache();
+      await this.seedCacheHydrationPhase
+        .waitForSystemServiceLeadersInCache();
       const stats = await NodeService.getInstance().getNodeStats();
       const cpuCores = Number.isFinite(stats?.cpu?.count) ?
         stats.cpu.count : NUM.ZERO;
@@ -2432,7 +1977,8 @@ class BootstrapService extends EventEmitter {
           diskUsagePercent: stats.diskUsagePercent,
         },
       );
-      await this.waitForReadyNodeInCache(this.nodeId);
+      await this.seedCacheHydrationPhase
+        .waitForReadyNodeInCache(this.nodeId);
       this.messageGroupServiceEndpointsPublished = true;
     } catch (error) {
       this.logger.error(BootstrapLog.CONTROL_PLANE_REGISTER_FAILED, {
@@ -2441,6 +1987,15 @@ class BootstrapService extends EventEmitter {
       });
       throw error;
     }
+  }
+
+  /**
+   * Compatibility adapter for direct seed-readiness assertions.
+   * @return {Promise<void>}
+   */
+  async waitForSystemServiceLeadersInCache() {
+    return this.seedCacheHydrationPhase
+      .waitForSystemServiceLeadersInCache();
   }
 
   /**
@@ -2759,16 +2314,6 @@ class BootstrapService extends EventEmitter {
     };
   }
 
-  /**
-   * Get the leader partition for a system table.
-   * @param {string} tableName - Table name.
-   * @return {PartitionService|null} Leader partition or null.
-   * @private
-   */
-  getLeaderPartition(tableName) {
-    return this.seedRegistrationPhase
-      .getLeaderPartition(tableName);
-  }
 
   /**
    * Get the system table cache (source of truth for cluster metadata).
@@ -2787,6 +2332,16 @@ class BootstrapService extends EventEmitter {
       }
     }
     return assertCritical(null, bootstrapError.SYSTEM_CACHE_MISSING);
+  }
+
+  /**
+   * Delegate leader-partition resolution to the canonical seed registration
+   * owner while preserving the BootstrapService seam used by tests.
+   * @param {string} tableName
+   * @return {Object|null}
+   */
+  getLeaderPartition(tableName) {
+    return this.seedRegistrationPhase.getLeaderPartition(tableName);
   }
 
   /**
@@ -2911,151 +2466,32 @@ class BootstrapService extends EventEmitter {
   }
 
   /**
-   * Clean up a failed bootstrap in reverse phase order.
-   * Each cleanup step is wrapped in try/catch — errors are logged
-   * but never thrown. After cleanup, the lifecycle state machine
-   * transitions to STOPPED.
+   * Clean up a failed bootstrap by delegating to the canonical
+   * cleanup owner (SeedCleanupHandler — D3.1).
    * @param {string} failedPhase - The phase that failed.
    * @param {Object} cleanupContext - Context about what was created.
    * @return {Promise<void>}
    */
   async cleanupFailedBootstrap(failedPhase, cleanupContext) {
-    this.logger.info(BootstrapLog.FAILED_BOOTSTRAP_CLEANUP_START, {
-      nodeId: this.nodeId,
-      failedPhase,
-      createdPartitions:
-        cleanupContext.createdPartitions.length,
-      createdServices:
-        cleanupContext.createdServices.length,
-      createdMessageGroups:
-        cleanupContext.createdMessageGroups.length,
-    });
-
-    const startIndex = PHASE_TO_CLEANUP_INDEX[failedPhase];
-    const effectiveStart = startIndex !== undefined ?
-      startIndex : NUM.ZERO;
-
-    const stepsToRun =
-      CLEANUP_STEPS_REVERSE_ORDER.slice(effectiveStart);
-
-    const stepResults = {};
-
-    for (const step of stepsToRun) {
-      stepResults[step] = await this._executeCleanupStep(
-        step, cleanupContext,
-      );
-    }
-
-    const currentState =
-      this.lifecycleStateMachine.getState();
-    if (currentState !== NodeState.STOPPED) {
-      try {
-        this.lifecycleStateMachine.transition(
-          NodeState.STOPPED,
-        );
-      } catch (err) {
-        this.logger.warn(
-          BootstrapLog.FAILED_BOOTSTRAP_CLEANUP_COMPLETE, {
-            nodeId: this.nodeId,
-            transitionError: err.message,
-          });
-      }
-    }
-
-    this.logger.info(
-      BootstrapLog.FAILED_BOOTSTRAP_CLEANUP_SUMMARY, {
-        nodeId: this.nodeId,
-        failedPhase,
-        stepResults,
-      });
-  }
-
-  /**
-   * Execute a single cleanup step.
-   * @param {string} step - The cleanup step to execute.
-   * @param {Object} cleanupContext - Cleanup context.
-   * @return {Promise<string>} 'success' or 'error'.
-   * @private
-   */
-  async _executeCleanupStep(step, cleanupContext) {
-    switch (step) {
-    case BOOTSTRAP_CLEANUP_STEP.CACHE_HYDRATION:
-      return this._cleanupCacheHydration();
-    case BOOTSTRAP_CLEANUP_STEP.REGISTRATION:
-      return this._cleanupRegistration(cleanupContext);
-    case BOOTSTRAP_CLEANUP_STEP.PARTITIONS:
-      return this._cleanupPartitions();
-    case BOOTSTRAP_CLEANUP_STEP.MESSAGE_GROUPS:
-      return this._cleanupMessageGroups();
-    case BOOTSTRAP_CLEANUP_STEP.INFRASTRUCTURE:
-      return this._cleanupInfrastructure();
-    default:
-      return 'skipped';
-    }
-  }
-
-  /**
-   * Cleanup step: clear the system table cache.
-   * Delegates to SeedCleanupHandler.
-   * @return {Promise<string>} 'success' or 'error'.
-   * @private
-   */
-  async _cleanupCacheHydration() {
-    return this.seedCleanupHandler._cleanupCacheHydration();
-  }
-
-  /**
-   * Cleanup step: remove partial registration entries.
-   * Delegates to SeedCleanupHandler.
-   * @param {Object} cleanupContext - Cleanup context.
-   * @return {Promise<string>} 'success' or 'error'.
-   * @private
-   */
-  async _cleanupRegistration(cleanupContext) {
-    return this.seedCleanupHandler._cleanupRegistration(
-      cleanupContext,
+    await this.seedCleanupHandler.cleanupFailedBootstrap(
+      failedPhase, cleanupContext,
     );
   }
 
   /**
-   * Cleanup step: stop and destroy partition services.
-   * Delegates to SeedCleanupHandler.
-   * @return {Promise<string>} 'success' or 'error'.
+   * Execute a single cleanup step via the canonical cleanup
+   * owner (SeedCleanupHandler — D3.1).
+   * @param {string} step - The cleanup step to execute.
+   * @param {Object} cleanupContext - Cleanup context.
+   * @return {Promise<string>} 'success', 'error', or 'skipped'.
    * @private
    */
-  async _cleanupPartitions() {
-    return this.seedCleanupHandler._cleanupPartitions();
+  async _executeCleanupStep(step, cleanupContext) {
+    return this.seedCleanupHandler._executeCleanupStep(
+      step, cleanupContext,
+    );
   }
 
-  /**
-   * Cleanup step: stop and destroy message group services.
-   * Delegates to SeedCleanupHandler.
-   * @return {Promise<string>} 'success' or 'error'.
-   * @private
-   */
-  async _cleanupMessageGroups() {
-    return this.seedCleanupHandler._cleanupMessageGroups();
-  }
-
-  /**
-   * Cleanup step: stop the message router and transport.
-   * Delegates to SeedCleanupHandler.
-   * @return {Promise<string>} 'success' or 'error'.
-   * @private
-   */
-  async _cleanupInfrastructure() {
-    return this.seedCleanupHandler._cleanupInfrastructure();
-  }
-
-  /**
-   * Stop all rebalancer and coordinator activity.
-   * Delegates to SeedCleanupHandler.
-   * @return {Promise<void>}
-   * @private
-   */
-  async quiesceRebalancers() {
-    return this.seedCleanupHandler.quiesceRebalancers();
-  }
 
   /**
    * Safely get the system table cache without throwing.
@@ -3076,15 +2512,6 @@ class BootstrapService extends EventEmitter {
     return null;
   }
 
-  /**
-   * Clean up partially initialized services.
-   * Delegates to SeedCleanupHandler.
-   * @return {Promise<void>}
-   * @private
-   */
-  async cleanup() {
-    return this.seedCleanupHandler.cleanup();
-  }
 
   /**
    * Start WebSocket server for cross-node communication.
@@ -3177,16 +2604,6 @@ class BootstrapService extends EventEmitter {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  /**
-   * Create the shared CDC pipeline readiness gate.
-   * Tests override this to inject manual time instead of wall-clock waits.
-   * @param {Object} systemTableCache
-   * @return {CDCPipelineReadinessGate}
-   */
-  createCdcPipelineReadinessGate(systemTableCache) {
-    return this.seedCacheHydrationPhase
-      .createCdcPipelineReadinessGate(systemTableCache);
-  }
 
   /**
    * Shutdown the bootstrap service and all managed services.
@@ -3204,7 +2621,7 @@ class BootstrapService extends EventEmitter {
         partitionServices: this.partitionServices.size,
       });
 
-      await this.cleanup();
+      await this.seedCleanupHandler.cleanup();
 
       this.emit(BootstrapEvent.SHUTDOWN, {nodeId: this.nodeId});
     })();

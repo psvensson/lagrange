@@ -451,6 +451,7 @@ class NodeReintegrationService extends EventEmitter {
       this.pendingReintegrations.delete(nodeId);
       this.cleanupTimers.delete(nodeId);
     }, NODE_REINTEGRATION_DEFAULT.CLEANUP_DELAY_MS);
+    cleanupTimer.unref?.();
     this.cleanupTimers.set(nodeId, cleanupTimer);
   }
 
@@ -517,6 +518,7 @@ class NodeReintegrationService extends EventEmitter {
       this.pendingReintegrations.delete(nodeId);
       this.cleanupTimers.delete(nodeId);
     }, NODE_REINTEGRATION_DEFAULT.CLEANUP_DELAY_MS);
+    cleanupTimer.unref?.();
     this.cleanupTimers.set(nodeId, cleanupTimer);
   }
 

@@ -355,7 +355,9 @@ test('Property 14: Code Path Uniqueness', async (t) => {
           return transportFile.includes('transport') ||
             transportFile.includes('router') ||
             transportFile.includes('connection') ||
-            transportFile.includes('rpc');
+            transportFile.includes('rpc') ||
+            transportFile.includes('address') ||
+            transportFile.includes('resolution');
         },
       ),
       {numRuns: 10},

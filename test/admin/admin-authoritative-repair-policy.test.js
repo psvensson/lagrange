@@ -59,6 +59,20 @@ test('authoritative repair policy triggers for empty discovery with endpoints',
     );
   });
 
+test('authoritative repair policy triggers for shared metadata node coverage gaps',
+  async (t) => {
+    const result = evaluateAuthoritativeRepairPolicy({
+      nodeCoverageGap: true,
+    });
+    t.equal(result.shouldRepair, true);
+    t.equal(
+      result.triggerCodes.includes(
+        AUTHORITATIVE_REPAIR_TRIGGER.DISCOVERY_NODE_COVERAGE_GAP,
+      ),
+      true,
+    );
+  });
+
 test('authoritative repair policy triggers for stale in-flight replica operations',
   async (t) => {
     const result = evaluateAuthoritativeRepairPolicy({
@@ -136,6 +150,28 @@ test('authoritative repair policy narrows scoped discovery repair to topology ta
         TABLES.PARTITIONS,
         TABLES.SERVICES,
         TABLES.TABLES,
+        TABLES.SERVICE_DEFINITIONS,
+        TABLES.SERVICE_ENDPOINTS,
+      ],
+    );
+  });
+
+test('authoritative repair policy narrows node coverage gap repair to discovery tables',
+  async (t) => {
+    const tables = deriveAuthoritativeRepairTables({
+      triggerCodes: [
+        AUTHORITATIVE_REPAIR_TRIGGER.DISCOVERY_NODE_COVERAGE_GAP,
+      ],
+    });
+
+    t.same(
+      tables,
+      [
+        TABLES.NODES,
+        TABLES.PARTITIONS,
+        TABLES.SERVICES,
+        TABLES.TABLES,
+        TABLES.NODE_ENDPOINTS,
         TABLES.SERVICE_DEFINITIONS,
         TABLES.SERVICE_ENDPOINTS,
       ],

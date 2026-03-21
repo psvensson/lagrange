@@ -167,6 +167,7 @@ const JOINING_LOG_MSG = Object.freeze({
   MESSAGE_GROUP_CLEANED: 'Message group service cleaned up',
   MESSAGE_GROUP_CLEAN_FAILED: 'Error cleaning up message group service',
   CLEANUP_COMPLETE: 'Cleanup complete',
+  CLEANUP_STEP_FAILED: 'Node joining cleanup step failed',
   REPLICA_HANDLER_ROUTER_MISSING: 'MessageRouter not available for ReplicaHandler',
   REPLICA_HANDLER_ROUTER_REQUIRED: 'MessageRouter must be initialized before ReplicaHandler',
   CDC_EVENT_RECEIVED: 'CDC event received from partition on joining node',
@@ -264,6 +265,11 @@ const JOINING_ERROR_MSG = Object.freeze({
     `CDC subscription failed for ${tableName}: ${message}`,
   REPLICA_HANDLER_ROUTER_REQUIRED: 'MessageRouter must be initialized before ReplicaHandler',
   LATENCY_TOPOLOGY_MISSING: 'Latency topology services are not initialized',
+  JOIN_PLAN_SEGMENTS_MISSING: 'Join plan missing segments property',
+  joinPlanSegmentMissing: (segmentName) =>
+    `Join plan missing required segment: ${segmentName}`,
+  joinPlanSegmentEmpty: (segmentName) =>
+    `Join plan required segment is empty: ${segmentName}`,
 });
 
 const JOINING_CLEANUP_STEP = Object.freeze({
@@ -271,12 +277,6 @@ const JOINING_CLEANUP_STEP = Object.freeze({
   WAITING_LEADERSHIP: 'waiting_leadership',
   MESSAGE_GROUP: 'message_group',
   CONNECTING_WEBSOCKET: 'connecting_websocket',
-});
-
-const JOINING_CLEANUP_RESULT = Object.freeze({
-  SUCCESS: 'success',
-  ERROR: 'error',
-  SKIPPED: 'skipped',
 });
 
 const JOINING_ERROR_NAME = Object.freeze({
@@ -321,7 +321,6 @@ export {
   JOIN_BACKFILL_QUERY,
   JOIN_BACKFILL_SCOPE,
   JOIN_REPLICA_DEFAULT,
-  JOINING_CLEANUP_RESULT,
   JOINING_CLEANUP_STEP,
   JOINING_DEFAULT,
   JOINING_ERROR_MSG,

@@ -32,6 +32,7 @@ function createCacheForTable(tableName) {
     table_name: tableName,
     partition_key_start: null,
     partition_key_end: null,
+    leader_node_id: 'test-node',
   }];
   const services = [{
     service_id: `${tableName}-p1`,

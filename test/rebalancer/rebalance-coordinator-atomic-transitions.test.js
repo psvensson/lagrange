@@ -176,29 +176,19 @@ test('updateStep persists through the opened transaction session',
     }
   });
 
-test('getInFlightOperations keeps replica_operations owner reads on ' +
+test('getInFlightOperations keeps replica_operations owner-local reads on ' +
   'repairEligible routing', async (t) => {
   const observedRoutingDimensions = [];
   const coordinator = createMinimalCoordinator({
     cdcIntegrationService: {
       async waitForCacheUpdate() {},
-      async executeAuthoritativeSystemTableRead(
-        _tableName,
-        _sql,
-        _params,
-        options = {},
-      ) {
-        observedRoutingDimensions.push(
-          options?.queryOptions?.routingReadinessDimension || null,
-        );
-        return {success: true, rows: []};
-      },
     },
     sqlQueryEngine: {
-      async executeQuery() {
-        t.fail(
-          'authoritative replica_operations read should satisfy the owner query in this regression',
+      async executeQuery(_sql, _params, options = {}) {
+        observedRoutingDimensions.push(
+          options?.routingReadinessDimension || null,
         );
+        return {success: true, rows: []};
       },
     },
   });
@@ -207,7 +197,11 @@ test('getInFlightOperations keeps replica_operations owner reads on ' +
   try {
     const operations = await coordinator.getInFlightOperations();
 
-    t.same(operations, [], 'fixture authoritative read should return no in-flight operations');
+    t.same(
+      operations,
+      [],
+      'fixture owner-local read should return no in-flight operations',
+    );
     t.same(
       observedRoutingDimensions,
       [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE],

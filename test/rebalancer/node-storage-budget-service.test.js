@@ -327,7 +327,13 @@ test('registerNodeBudget - forwards upsert options to CDC writes', async (t) => 
   });
 
   assert.equal(upsertCalls.length, 1);
-  assert.deepEqual(upsertCalls[0].options, {skipCacheWait: true});
+  assert.equal(upsertCalls[0].options.skipCacheWait, true);
+  assert.equal(upsertCalls[0].options.workClass, 'interactive');
+  assert.equal(upsertCalls[0].options.deliveryPriority, 'critical');
+  assert.equal(
+    upsertCalls[0].options.routingReadinessDimension,
+    'repairEligible',
+  );
   teardown();
   t.end();
 });

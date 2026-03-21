@@ -85,6 +85,13 @@ test(
             sleepCalls.push(delayMs);
             nowMs += delayMs;
           },
+          getConfig: () => ({
+            httpTimeoutMs: 30000,
+            leadershipWaitTimeoutMs: 100,
+            leadershipWaitInitialDelayMs: 25,
+            leadershipWaitMaxDelayMs: 50,
+            leadershipWaitBackoffMultiplier: 2,
+          }),
           resolveJoinRetryPolicy: () => ({
             retryTimeoutMs: 100,
             initialDelayMs: 25,
@@ -208,6 +215,13 @@ test(
           }),
           getNow: () => () => 0,
           getSleep: () => async () => {},
+          getConfig: () => ({
+            httpTimeoutMs: 30000,
+            leadershipWaitTimeoutMs: 100,
+            leadershipWaitInitialDelayMs: 25,
+            leadershipWaitMaxDelayMs: 50,
+            leadershipWaitBackoffMultiplier: 2,
+          }),
           resolveJoinRetryPolicy: () => ({
             retryTimeoutMs: 100,
             initialDelayMs: 25,
@@ -311,6 +325,13 @@ test(
           }),
           getNow: () => () => 0,
           getSleep: () => async () => {},
+          getConfig: () => ({
+            httpTimeoutMs: 30000,
+            leadershipWaitTimeoutMs: 100,
+            leadershipWaitInitialDelayMs: 25,
+            leadershipWaitMaxDelayMs: 50,
+            leadershipWaitBackoffMultiplier: 2,
+          }),
           resolveJoinRetryPolicy: () => ({
             retryTimeoutMs: 100,
             initialDelayMs: 25,
@@ -431,6 +452,13 @@ test(
           getSleep: () => async (delayMs) => {
             nowMs += delayMs;
           },
+          getConfig: () => ({
+            httpTimeoutMs: 30000,
+            leadershipWaitTimeoutMs: 100,
+            leadershipWaitInitialDelayMs: 25,
+            leadershipWaitMaxDelayMs: 50,
+            leadershipWaitBackoffMultiplier: 2,
+          }),
           resolveJoinRetryPolicy: () => ({
             retryTimeoutMs: 100,
             initialDelayMs: 25,
@@ -552,6 +580,13 @@ test(
             sleepCalls.push(delayMs);
             nowMs += delayMs;
           },
+          getConfig: () => ({
+            httpTimeoutMs: 30000,
+            leadershipWaitTimeoutMs: 100,
+            leadershipWaitInitialDelayMs: 25,
+            leadershipWaitMaxDelayMs: 50,
+            leadershipWaitBackoffMultiplier: 2,
+          }),
           resolveJoinRetryPolicy: () => ({
             retryTimeoutMs: 100,
             initialDelayMs: 25,
@@ -678,6 +713,13 @@ test(
           }),
           getNow: () => () => 0,
           getSleep: () => async () => {},
+          getConfig: () => ({
+            httpTimeoutMs: 30000,
+            leadershipWaitTimeoutMs: 100,
+            leadershipWaitInitialDelayMs: 25,
+            leadershipWaitMaxDelayMs: 50,
+            leadershipWaitBackoffMultiplier: 2,
+          }),
           resolveJoinRetryPolicy: () => ({
             retryTimeoutMs: 100,
             initialDelayMs: 25,

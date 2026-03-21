@@ -18,6 +18,8 @@ const SYSTEM_TABLES = new Set([
 
 const DIRECT_WRITER_PATTERN =
   /cdcIntegrationService\.(insertSystemTableRow|updateSystemTableRow|upsertSystemTableRow|deleteSystemTableRow)\(/;
+const DIRECT_AUTHORITATIVE_READ_PATTERN =
+  /executeAuthoritativeSystemTableRead\(/;
 const DIRECT_SQL_PATTERN = /sqlQueryEngine\.executeQuery\(/;
 const DIRECT_CACHE_APPLY_PATTERN = /\.applySystemTableChange\(/;
 const BOOTSTRAP_ONLY_RUNTIME_IMPORT_PATTERN =
@@ -33,6 +35,11 @@ const DIRECT_WRITER_ALLOWLIST = [
 const DIRECT_SQL_ALLOWLIST = [
   'src/bootstrap/',
   'src/cdc/',
+  'src/control-plane/control-plane-system-table-gateway.js',
+];
+const DIRECT_AUTHORITATIVE_READ_ALLOWLIST = [
+  'src/cdc/cdc-integration-service.js',
+  'src/control-plane/authoritative-control-plane-view.js',
   'src/control-plane/control-plane-system-table-gateway.js',
 ];
 const DIRECT_CACHE_APPLY_ALLOWLIST = [
@@ -137,6 +144,14 @@ function collectViolations(rootDir) {
         !matchesAllowlist(relativePath, DIRECT_SQL_ALLOWLIST)) {
       violations.push({
         type: 'direct-system-table-read',
+        path: relativePath,
+      });
+    }
+
+    if (DIRECT_AUTHORITATIVE_READ_PATTERN.test(content) &&
+        !matchesAllowlist(relativePath, DIRECT_AUTHORITATIVE_READ_ALLOWLIST)) {
+      violations.push({
+        type: 'direct-authoritative-read-bypass',
         path: relativePath,
       });
     }

@@ -239,7 +239,7 @@ test('NodeJoiningService dynamic user partition CDC subscription', async (t) => 
   });
 });
 
-test('BootstrapService does not attach bootstrap-owned CDC propagation after bootstrap completes',
+test('BootstrapService keeps CDC propagation attached after bootstrap completes',
   async (t) => {
     initializeTestEnvironment();
 
@@ -256,19 +256,19 @@ test('BootstrapService does not attach bootstrap-owned CDC propagation after boo
     }) => {
       await createPartition(createPartitionService, TABLES.SERVICES, 'seed-node');
 
-      t.notOk(
+      t.ok(
         subscribedTables.includes(TABLES.SERVICES),
-        'bootstrap-owned runtime partitions should not keep attaching CDC propagation once bootstrap is complete',
+        'bootstrap-complete runtime partitions should still attach CDC propagation',
       );
-      t.notOk(
+      t.ok(
         handshakeSubscriberIds.some((subscriberId) =>
           String(subscriberId || '').includes(TABLES.SERVICES)),
-        'bootstrap-complete runtime partitions should not register bootstrap CDC handshakes',
+        'bootstrap-complete runtime partitions should still register CDC handshakes',
       );
     });
   });
 
-test('NodeJoiningService does not attach join-owned CDC propagation after join completes',
+test('NodeJoiningService keeps CDC propagation attached after join completes',
   async (t) => {
     initializeTestEnvironment();
 
@@ -286,14 +286,14 @@ test('NodeJoiningService does not attach join-owned CDC propagation after join c
     }) => {
       await createPartition(createPartitionService, TABLES.SERVICES, 'join-node');
 
-      t.notOk(
+      t.ok(
         subscribedTables.includes(TABLES.SERVICES),
-        'join-owned runtime partitions should not keep attaching CDC propagation once join is complete',
+        'join-complete runtime partitions should still attach CDC propagation',
       );
-      t.notOk(
+      t.ok(
         handshakeSubscriberIds.some((subscriberId) =>
           String(subscriberId || '').includes(TABLES.SERVICES)),
-        'join-complete runtime partitions should not register join-owned CDC handshakes',
+        'join-complete runtime partitions should still register CDC handshakes',
       );
     });
   });
