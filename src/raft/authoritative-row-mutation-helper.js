@@ -2,8 +2,9 @@ import {TIME_MS, TYPEOF} from '../constants/index.js';
 import {
   CONTROL_PLANE_MUTATION_OPERATION,
   CONTROL_PLANE_MUTATION_OUTCOME,
-  ControlPlaneSystemTableGateway,
 } from '../control-plane/control-plane-system-table-gateway.js';
+import {createControlPlaneRuntimeBundle} from
+  '../control-plane/control-plane-runtime-bundle.js';
 
 const CACHE_VISIBILITY_ERROR_FRAGMENT = 'Cache update not observed';
 const AUTHORITATIVE_ROW_MUTATION_REASON = Object.freeze({
@@ -153,12 +154,6 @@ class AuthoritativeRowMutationHelper {
 
   setCdcIntegrationService(cdcIntegrationService) {
     this.cdcIntegrationService = cdcIntegrationService;
-    if (this.controlPlaneSystemTableGateway &&
-        !this.controlPlaneSystemTableGateway.cdcIntegrationService &&
-        cdcIntegrationService) {
-      this.controlPlaneSystemTableGateway
-        .setCdcIntegrationService(cdcIntegrationService);
-    }
   }
 
   setControlPlaneSystemTableGateway(controlPlaneSystemTableGateway) {
@@ -441,26 +436,13 @@ class AuthoritativeRowMutationHelper {
 
   getControlPlaneSystemTableGateway() {
     if (this.controlPlaneSystemTableGateway) {
-      if (typeof this.controlPlaneSystemTableGateway
-        ?.setCdcIntegrationService === TYPEOF.FUNCTION &&
-          !this.controlPlaneSystemTableGateway.cdcIntegrationService &&
-          this.cdcIntegrationService) {
-        this.controlPlaneSystemTableGateway
-          .setCdcIntegrationService(this.cdcIntegrationService);
-      }
-      if (typeof this.controlPlaneSystemTableGateway
-        ?.setMessageRouter === TYPEOF.FUNCTION &&
-          !this.controlPlaneSystemTableGateway.messageRouter &&
-          this.messageRouter) {
-        this.controlPlaneSystemTableGateway.setMessageRouter(this.messageRouter);
-      }
       return this.controlPlaneSystemTableGateway;
     }
-    this.controlPlaneSystemTableGateway = new ControlPlaneSystemTableGateway({
+    this.controlPlaneSystemTableGateway = createControlPlaneRuntimeBundle({
       nodeId: this.nodeId,
-      cdcIntegrationService: this.cdcIntegrationService,
-      messageRouter: this.messageRouter,
-    });
+      getCdcIntegrationService: () => this.cdcIntegrationService,
+      getMessageRouter: () => this.messageRouter,
+    }).controlPlaneSystemTableGateway;
     return this.controlPlaneSystemTableGateway;
   }
 }

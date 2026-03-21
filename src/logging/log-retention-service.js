@@ -8,7 +8,8 @@ import {EventEmitter} from 'events';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
-import {ControlPlaneSystemTableGateway} from '../control-plane/control-plane-system-table-gateway.js';
+import {createControlPlaneRuntimeBundle} from
+  '../control-plane/control-plane-runtime-bundle.js';
 import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
 import {
   createSystemMetadataGatewayRequiredError,
@@ -377,18 +378,14 @@ class LogRetentionService extends EventEmitter {
    */
   getControlPlaneSystemTableGateway() {
     if (this.controlPlaneSystemTableGateway) {
-      if (!this.controlPlaneSystemTableGateway.sqlQueryEngine &&
-          this.sqlQueryEngine) {
-        this.controlPlaneSystemTableGateway.setSqlQueryEngine(this.sqlQueryEngine);
-      }
       return this.controlPlaneSystemTableGateway;
     }
     if (!this.sqlQueryEngine) {
       return null;
     }
-    this.controlPlaneSystemTableGateway = new ControlPlaneSystemTableGateway({
-      sqlQueryEngine: this.sqlQueryEngine,
-    });
+    this.controlPlaneSystemTableGateway = createControlPlaneRuntimeBundle({
+      getSqlQueryEngine: () => this.sqlQueryEngine,
+    }).controlPlaneSystemTableGateway;
     return this.controlPlaneSystemTableGateway;
   }
 }

@@ -21,8 +21,9 @@ import {
 } from '../control-plane/pressure-governor.js';
 import {
   CONTROL_PLANE_MUTATION_OPERATION,
-  ControlPlaneSystemTableGateway,
 } from '../control-plane/control-plane-system-table-gateway.js';
+import {createControlPlaneRuntimeBundle} from
+  '../control-plane/control-plane-runtime-bundle.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {HLCClockService} from '../hlc/hlc-clock-service.js';
 import {UnifiedRebalancer, EntityType} from '../rebalancer/unified-rebalancer.js';
@@ -262,6 +263,14 @@ class PartitionService extends EventEmitter {
           config.get(CONFIG_KEY.RAFT_LEADER_ACTIVATION_NODE_SPACING_MS) ??
           25
         );
+    this.controlPlaneSystemTableGateway =
+      createControlPlaneRuntimeBundle({
+        nodeId: this.nodeId,
+        getSqlQueryEngine: () => this.sqlQueryEngine,
+        getCdcIntegrationService: () => this.cdcIntegrationService,
+        getSystemTableCache: () => this.systemTableCache,
+        getMessageRouter: () => this.transport,
+      }).controlPlaneSystemTableGateway;
 
     // SQLite database
     this.db = null;
@@ -4878,11 +4887,7 @@ class PartitionService extends EventEmitter {
     try {
       const gateway =
         this.rebalancer?.controlPlaneSystemTableGateway ||
-        new ControlPlaneSystemTableGateway({
-          nodeId: this.nodeId,
-          cdcIntegrationService: this.cdcIntegrationService,
-          messageRouter: this.transport,
-        });
+        this.controlPlaneSystemTableGateway;
       await gateway.submitMutation({
         operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
         tableName: TABLES.PARTITIONS,
@@ -5861,12 +5866,6 @@ class PartitionService extends EventEmitter {
       this.rebalancer.tablePolicyService = bundle.tablePolicyService;
       this.rebalancer.messageRouter = bundle.messageRouter;
       this.rebalancer.sqlQueryEngine = bundle.sqlQueryEngine;
-      if (this.rebalancer.controlPlaneSystemTableGateway &&
-          typeof this.rebalancer.controlPlaneSystemTableGateway
-            .setSqlQueryEngine === PARTITION_SERVICE_TYPE.FUNCTION) {
-        this.rebalancer.controlPlaneSystemTableGateway
-          .setSqlQueryEngine(bundle.sqlQueryEngine);
-      }
     }
     if (bundle.rebalanceCoordinator &&
         coordinatorRoutedThroughSetter !== true) {

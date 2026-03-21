@@ -7,9 +7,8 @@
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {assertCritical} from '../utils/assert.js';
-import {
-  ControlPlaneSystemTableGateway,
-} from '../control-plane/control-plane-system-table-gateway.js';
+import {createControlPlaneRuntimeBundle} from
+  '../control-plane/control-plane-runtime-bundle.js';
 import {
   COLUMN,
   NUM,
@@ -45,9 +44,9 @@ class StorageCapacityAccountingService {
     this.sqlQueryEngine = options.sqlQueryEngine || null;
     this.controlPlaneSystemTableGateway =
       options.controlPlaneSystemTableGateway ||
-      new ControlPlaneSystemTableGateway({
-        sqlQueryEngine: this.sqlQueryEngine,
-      });
+      createControlPlaneRuntimeBundle({
+        getSqlQueryEngine: () => this.sqlQueryEngine,
+      }).controlPlaneSystemTableGateway;
     this.usesDefaultControlPlaneSystemTableGateway =
       !options.controlPlaneSystemTableGateway;
     this.config = ConfigurationManager.getInstance();
@@ -76,11 +75,6 @@ class StorageCapacityAccountingService {
       this.controlPlaneSystemTableGateway =
         options.controlPlaneSystemTableGateway;
       this.usesDefaultControlPlaneSystemTableGateway = false;
-    } else if (this.usesDefaultControlPlaneSystemTableGateway) {
-      this.controlPlaneSystemTableGateway =
-        new ControlPlaneSystemTableGateway({
-          sqlQueryEngine: this.sqlQueryEngine,
-        });
     }
 
     this.refreshConfig();

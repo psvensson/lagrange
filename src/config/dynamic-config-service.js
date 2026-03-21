@@ -10,8 +10,9 @@ import {CDC_OPERATION, NUM, STRING, TYPEOF} from '../constants/index.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
   CONTROL_PLANE_MUTATION_OPERATION,
-  ControlPlaneSystemTableGateway,
 } from '../control-plane/control-plane-system-table-gateway.js';
+import {createControlPlaneRuntimeBundle} from
+  '../control-plane/control-plane-runtime-bundle.js';
 import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
 import {
   CONFIG_DEFINITIONS,
@@ -701,29 +702,14 @@ class DynamicConfigService extends EventEmitter {
 
   getControlPlaneSystemTableGateway() {
     if (this.controlPlaneSystemTableGateway) {
-      if (!this.controlPlaneSystemTableGateway.cdcIntegrationService &&
-          this.cdcIntegrationService) {
-        this.controlPlaneSystemTableGateway
-          .setCdcIntegrationService(this.cdcIntegrationService);
-      }
-      if (!this.controlPlaneSystemTableGateway.sqlQueryEngine &&
-          this.sqlQueryEngine) {
-        this.controlPlaneSystemTableGateway.setSqlQueryEngine(this.sqlQueryEngine);
-      }
-      if (!this.controlPlaneSystemTableGateway.systemTableCache &&
-          this.systemTableCache) {
-        this.controlPlaneSystemTableGateway.setSystemTableCache(
-          this.systemTableCache,
-        );
-      }
       return this.controlPlaneSystemTableGateway;
     }
-    this.controlPlaneSystemTableGateway = new ControlPlaneSystemTableGateway({
+    this.controlPlaneSystemTableGateway = createControlPlaneRuntimeBundle({
       nodeId: this.nodeId,
-      cdcIntegrationService: this.cdcIntegrationService,
-      sqlQueryEngine: this.sqlQueryEngine,
-      systemTableCache: this.systemTableCache,
-    });
+      getCdcIntegrationService: () => this.cdcIntegrationService,
+      getSqlQueryEngine: () => this.sqlQueryEngine,
+      getSystemTableCache: () => this.systemTableCache,
+    }).controlPlaneSystemTableGateway;
     return this.controlPlaneSystemTableGateway;
   }
 

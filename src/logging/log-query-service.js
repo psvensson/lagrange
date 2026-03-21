@@ -9,7 +9,8 @@ import {EventEmitter} from 'events';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-constants.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
-import {ControlPlaneSystemTableGateway} from '../control-plane/control-plane-system-table-gateway.js';
+import {createControlPlaneRuntimeBundle} from
+  '../control-plane/control-plane-runtime-bundle.js';
 import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
 import {
   buildSystemMetadataOwnerNotReadyFailure,
@@ -524,23 +525,15 @@ class LogQueryService extends EventEmitter {
    */
   getControlPlaneSystemTableGateway() {
     if (this.controlPlaneSystemTableGateway) {
-      if (!this.controlPlaneSystemTableGateway.sqlQueryEngine &&
-          this.sqlQueryEngine) {
-        this.controlPlaneSystemTableGateway.setSqlQueryEngine(this.sqlQueryEngine);
-      }
-      if (!this.controlPlaneSystemTableGateway.systemTableCache &&
-          this.systemCache) {
-        this.controlPlaneSystemTableGateway.setSystemTableCache(this.systemCache);
-      }
       return this.controlPlaneSystemTableGateway;
     }
     if (!this.sqlQueryEngine && !this.systemCache) {
       return null;
     }
-    this.controlPlaneSystemTableGateway = new ControlPlaneSystemTableGateway({
-      sqlQueryEngine: this.sqlQueryEngine,
-      systemTableCache: this.systemCache,
-    });
+    this.controlPlaneSystemTableGateway = createControlPlaneRuntimeBundle({
+      getSqlQueryEngine: () => this.sqlQueryEngine,
+      getSystemTableCache: () => this.systemCache,
+    }).controlPlaneSystemTableGateway;
     return this.controlPlaneSystemTableGateway;
   }
 }

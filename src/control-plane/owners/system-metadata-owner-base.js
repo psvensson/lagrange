@@ -63,12 +63,20 @@ class SystemMetadataOwnerBase {
   }
 
   async executeCacheRead(readFromCache, options = {}) {
+    const cacheAwareOptions =
+      typeof options.systemTableCache === 'undefined' &&
+        this.getSystemTableCache() ?
+        {
+          ...options,
+          systemTableCache: this.getSystemTableCache(),
+        } :
+        options;
     return this.requireGateway().executeRead({
       owner: this.getOwnerName(),
       tableName: this.getTableName(),
       strategy: 'cache',
       readFromCache,
-    }, options);
+    }, cacheAwareOptions);
   }
 
   async readCachedByPrimaryKey(primaryKeyValue, options = {}) {

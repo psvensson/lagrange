@@ -869,15 +869,18 @@ test('dependency bundle — applyRebalancerDependencies syncs ' +
     rebalanceCoordinator: newCoordinator,
   });
 
-  t.equal(ps.rebalancer.controlPlaneSystemTableGateway.cdcIntegrationService,
+  t.equal(
+    ps.rebalancer.controlPlaneSystemTableGateway.resolveCdcIntegrationService(),
     newCdc,
-    'rebalancer gateway cdcIntegrationService synced via bundle');
-  t.equal(ps.rebalancer.controlPlaneSystemTableGateway.messageRouter,
+    'rebalancer gateway cdcIntegrationService resolves via bundle');
+  t.equal(
+    ps.rebalancer.controlPlaneSystemTableGateway.resolveMessageRouter(),
     newRouter,
-    'rebalancer gateway messageRouter synced via bundle');
-  t.equal(ps.rebalancer.controlPlaneSystemTableGateway.sqlQueryEngine,
+    'rebalancer gateway messageRouter resolves via bundle');
+  t.equal(
+    ps.rebalancer.controlPlaneSystemTableGateway.resolveSqlQueryEngine(),
     newSql,
-    'rebalancer gateway sqlQueryEngine synced via bundle');
+    'rebalancer gateway sqlQueryEngine resolves via bundle');
   t.equal(newCoordinator.repository.systemTableCache, newCache,
     'coordinator repository cache synced via bundle');
   t.equal(newCoordinator.repository.cdcIntegrationService, newCdc,

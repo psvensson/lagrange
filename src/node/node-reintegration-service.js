@@ -12,8 +12,9 @@ import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js'
 import {NUM} from '../constants/index.js';
 import {
   CONTROL_PLANE_MUTATION_OPERATION,
-  ControlPlaneSystemTableGateway,
 } from '../control-plane/control-plane-system-table-gateway.js';
+import {createControlPlaneRuntimeBundle} from
+  '../control-plane/control-plane-runtime-bundle.js';
 import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
 import {assertCritical} from '../utils/assert.js';
 import {
@@ -611,23 +612,13 @@ class NodeReintegrationService extends EventEmitter {
    */
   getControlPlaneSystemTableGateway() {
     if (this.controlPlaneSystemTableGateway) {
-      if (!this.controlPlaneSystemTableGateway.cdcIntegrationService &&
-          this.cdcIntegrationService) {
-        this.controlPlaneSystemTableGateway
-          .setCdcIntegrationService(this.cdcIntegrationService);
-      }
-      if (!this.controlPlaneSystemTableGateway.messageRouter &&
-          this.cdcIntegrationService?.messageRouter) {
-        this.controlPlaneSystemTableGateway
-          .setMessageRouter(this.cdcIntegrationService.messageRouter);
-      }
       return this.controlPlaneSystemTableGateway;
     }
-    this.controlPlaneSystemTableGateway = new ControlPlaneSystemTableGateway({
+    this.controlPlaneSystemTableGateway = createControlPlaneRuntimeBundle({
       nodeId: this.nodeId,
-      cdcIntegrationService: this.cdcIntegrationService,
-      messageRouter: this.cdcIntegrationService?.messageRouter || null,
-    });
+      getCdcIntegrationService: () => this.cdcIntegrationService,
+      getMessageRouter: () => this.cdcIntegrationService?.messageRouter || null,
+    }).controlPlaneSystemTableGateway;
     return this.controlPlaneSystemTableGateway;
   }
 

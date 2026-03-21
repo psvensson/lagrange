@@ -22,8 +22,9 @@ import {STORAGE_DEFAULT} from '../storage/storage-constants.js';
 import {assertCritical} from '../utils/assert.js';
 import {
   CONTROL_PLANE_MUTATION_OPERATION,
-  ControlPlaneSystemTableGateway,
 } from '../control-plane/control-plane-system-table-gateway.js';
+import {createControlPlaneRuntimeBundle} from
+  '../control-plane/control-plane-runtime-bundle.js';
 import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
 import {
   REPLICA_LIFECYCLE_ACK_STATUS,
@@ -801,17 +802,12 @@ class ReplicaLifecycleManager extends EventEmitter {
 
   getControlPlaneSystemTableGateway() {
     if (this.controlPlaneSystemTableGateway) {
-      if (!this.controlPlaneSystemTableGateway.cdcIntegrationService &&
-          this.cdcIntegrationService) {
-        this.controlPlaneSystemTableGateway
-          .setCdcIntegrationService(this.cdcIntegrationService);
-      }
       return this.controlPlaneSystemTableGateway;
     }
-    this.controlPlaneSystemTableGateway = new ControlPlaneSystemTableGateway({
+    this.controlPlaneSystemTableGateway = createControlPlaneRuntimeBundle({
       nodeId: this.nodeId,
-      cdcIntegrationService: this.cdcIntegrationService,
-    });
+      getCdcIntegrationService: () => this.cdcIntegrationService,
+    }).controlPlaneSystemTableGateway;
     return this.controlPlaneSystemTableGateway;
   }
 

@@ -9,8 +9,9 @@ import {LoggingService} from '../logging/logging-service.js';
 import {TABLES} from '../constants/index.js';
 import {
   CONTROL_PLANE_MUTATION_OPERATION,
-  ControlPlaneSystemTableGateway,
 } from '../control-plane/control-plane-system-table-gateway.js';
+import {createControlPlaneRuntimeBundle} from
+  '../control-plane/control-plane-runtime-bundle.js';
 import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
 import {
   FUNCTION_CONTEXT_TYPE,
@@ -380,22 +381,13 @@ class ContextManager {
 
   getControlPlaneSystemTableGateway() {
     if (this.controlPlaneSystemTableGateway) {
-      if (!this.controlPlaneSystemTableGateway.cdcIntegrationService &&
-          this.cdcIntegrationService) {
-        this.controlPlaneSystemTableGateway
-          .setCdcIntegrationService(this.cdcIntegrationService);
-      }
-      if (!this.controlPlaneSystemTableGateway.sqlQueryEngine &&
-          this.sqlQueryEngine) {
-        this.controlPlaneSystemTableGateway.setSqlQueryEngine(this.sqlQueryEngine);
-      }
       return this.controlPlaneSystemTableGateway;
     }
-    this.controlPlaneSystemTableGateway = new ControlPlaneSystemTableGateway({
-      cdcIntegrationService: this.cdcIntegrationService,
-      sqlQueryEngine: this.sqlQueryEngine,
-      systemTableCache: this.systemTableCache,
-    });
+    this.controlPlaneSystemTableGateway = createControlPlaneRuntimeBundle({
+      getCdcIntegrationService: () => this.cdcIntegrationService,
+      getSqlQueryEngine: () => this.sqlQueryEngine,
+      getSystemTableCache: () => this.systemTableCache,
+    }).controlPlaneSystemTableGateway;
     return this.controlPlaneSystemTableGateway;
   }
 }

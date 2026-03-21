@@ -13,8 +13,9 @@ import {NUM, SERVICE_TYPE, TYPEOF} from '../constants/index.js';
 import {ReplicaStatus} from '../rebalancer/replica-status.js';
 import {
   CONTROL_PLANE_MUTATION_OPERATION,
-  ControlPlaneSystemTableGateway,
 } from '../control-plane/control-plane-system-table-gateway.js';
+import {createControlPlaneRuntimeBundle} from
+  '../control-plane/control-plane-runtime-bundle.js';
 import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
 import {assertCritical} from '../utils/assert.js';
 import {
@@ -790,34 +791,14 @@ class FailureDetector extends EventEmitter {
    */
   getControlPlaneSystemTableGateway() {
     if (this.controlPlaneSystemTableGateway) {
-      if (!this.controlPlaneSystemTableGateway.sqlQueryEngine &&
-          this.sqlQueryEngine &&
-          typeof this.controlPlaneSystemTableGateway.setSqlQueryEngine ===
-            TYPEOF.FUNCTION) {
-        this.controlPlaneSystemTableGateway.setSqlQueryEngine(this.sqlQueryEngine);
-      }
-      if (!this.controlPlaneSystemTableGateway.cdcIntegrationService &&
-          this.cdcIntegrationService &&
-          typeof this.controlPlaneSystemTableGateway.setCdcIntegrationService ===
-            TYPEOF.FUNCTION) {
-        this.controlPlaneSystemTableGateway
-          .setCdcIntegrationService(this.cdcIntegrationService);
-      }
-      if (!this.controlPlaneSystemTableGateway.messageRouter &&
-          this.cdcIntegrationService?.messageRouter &&
-          typeof this.controlPlaneSystemTableGateway.setMessageRouter ===
-            TYPEOF.FUNCTION) {
-        this.controlPlaneSystemTableGateway
-          .setMessageRouter(this.cdcIntegrationService.messageRouter);
-      }
       return this.controlPlaneSystemTableGateway;
     }
-    this.controlPlaneSystemTableGateway = new ControlPlaneSystemTableGateway({
+    this.controlPlaneSystemTableGateway = createControlPlaneRuntimeBundle({
       nodeId: this.nodeId,
-      sqlQueryEngine: this.sqlQueryEngine,
-      cdcIntegrationService: this.cdcIntegrationService,
-      messageRouter: this.cdcIntegrationService?.messageRouter || null,
-    });
+      getSqlQueryEngine: () => this.sqlQueryEngine,
+      getCdcIntegrationService: () => this.cdcIntegrationService,
+      getMessageRouter: () => this.cdcIntegrationService?.messageRouter || null,
+    }).controlPlaneSystemTableGateway;
     return this.controlPlaneSystemTableGateway;
   }
 

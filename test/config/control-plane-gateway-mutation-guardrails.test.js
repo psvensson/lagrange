@@ -19,8 +19,36 @@ const HOT_RUNTIME_FILES = Object.freeze([
   'src/rebalancer/storage-capacity-migration.js',
 ]);
 
+const APPROVED_DIRECT_GATEWAY_CONSTRUCTORS = Object.freeze([
+  'src/control-plane/control-plane-runtime-bundle.js',
+]);
+
 function readSource(relativePath) {
   return fs.readFileSync(path.join(repoRoot, relativePath), 'utf8');
+}
+
+function collectSourceFiles(relativeDir) {
+  const absoluteDir = path.join(repoRoot, relativeDir);
+  const results = [];
+  const stack = [absoluteDir];
+
+  while (stack.length > 0) {
+    const currentDir = stack.pop();
+    const entries = fs.readdirSync(currentDir, {withFileTypes: true});
+    for (const entry of entries) {
+      const absolutePath = path.join(currentDir, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(absolutePath);
+        continue;
+      }
+      if (!entry.isFile() || !entry.name.endsWith('.js')) {
+        continue;
+      }
+      results.push(path.relative(repoRoot, absolutePath));
+    }
+  }
+
+  return results.sort();
 }
 
 describe('control-plane gateway mutation guardrails', () => {
@@ -52,6 +80,35 @@ describe('control-plane gateway mutation guardrails', () => {
       violations,
       [],
       'Late gateway dependency mutation is forbidden in hot runtime owners',
+    );
+  });
+
+  it('src does not mutate gateway dependencies after construction anywhere', () => {
+    const sourceFiles = collectSourceFiles('src');
+    const violations = sourceFiles.filter((filePath) => {
+      const source = readSource(filePath);
+      return /controlPlaneSystemTableGateway[\s\S]{0,120}\.set(SqlQueryEngine|CdcIntegrationService|SystemTableCache|MessageRouter)\s*\(/.test(source);
+    });
+
+    assert.deepEqual(
+      violations,
+      [],
+      'Late gateway dependency mutation is forbidden across src',
+    );
+  });
+
+  it('direct gateway construction remains confined to the approved owner list', () => {
+    const sourceFiles = collectSourceFiles('src');
+    const violations = sourceFiles.filter((filePath) => {
+      const source = readSource(filePath);
+      return /new\s+ControlPlaneSystemTableGateway\s*\(/.test(source) &&
+        !APPROVED_DIRECT_GATEWAY_CONSTRUCTORS.includes(filePath);
+    });
+
+    assert.deepEqual(
+      violations,
+      [],
+      'Direct gateway construction must stay confined to the approved owner list',
     );
   });
 });

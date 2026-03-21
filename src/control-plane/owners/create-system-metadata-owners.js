@@ -17,15 +17,6 @@ function createOwnerOptions(options = {}) {
 
 function createSystemMetadataOwners(options = {}) {
   const ownerOptions = createOwnerOptions(options);
-  if (ownerOptions.controlPlaneSystemTableGateway &&
-      !ownerOptions.controlPlaneSystemTableGateway.systemTableCache &&
-      typeof ownerOptions.controlPlaneSystemTableGateway.setSystemTableCache ===
-        'function' &&
-      ownerOptions.systemTableCache) {
-    ownerOptions.controlPlaneSystemTableGateway
-      .setSystemTableCache(ownerOptions.systemTableCache);
-  }
-
   return Object.freeze({
     nodesOwner: new NodesOwner(ownerOptions),
     servicesOwner: new ServicesOwner(ownerOptions),

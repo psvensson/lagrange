@@ -15,8 +15,9 @@ import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js'
 import {isSystemTableWriteReady} from '../cache/leader-readiness-gate.js';
 import {
   CONTROL_PLANE_MUTATION_OPERATION,
-  ControlPlaneSystemTableGateway,
 } from '../control-plane/control-plane-system-table-gateway.js';
+import {createControlPlaneRuntimeBundle} from
+  '../control-plane/control-plane-runtime-bundle.js';
 import {SessionKVStore} from './session-kv-store.js';
 import {SafetyInterval} from './safety-interval.js';
 import {TimerManager} from './timer-manager.js';
@@ -126,6 +127,13 @@ class WasmServiceReplica extends RaftReplicaBase {
     this.leaderNodeMutationHelper = this.createLeaderNodeMutationHelper();
     this.pendingLeaderNodeUpdate = null;
     this.persistedLeaderNodeId = null;
+    this.controlPlaneSystemTableGateway =
+      createControlPlaneRuntimeBundle({
+        nodeId: this.nodeId,
+        getCdcIntegrationService: () => this.cdcIntegrationService,
+        getSystemTableCache: () => this.systemTableCache,
+        getMessageRouter: () => this.transport,
+      }).controlPlaneSystemTableGateway;
 
     this._safetyBroadcastTimer = null;
 
@@ -619,11 +627,7 @@ class WasmServiceReplica extends RaftReplicaBase {
       return {success: true};
     }
 
-    return new ControlPlaneSystemTableGateway({
-      nodeId: this.nodeId,
-      cdcIntegrationService: this.cdcIntegrationService,
-      messageRouter: this.transport,
-    }).submitMutation({
+    return this.controlPlaneSystemTableGateway.submitMutation({
       operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
       tableName: TABLES.SERVICES,
       whereClause: {[COLUMN.SERVICE_ID]: this.replicaId},
@@ -665,11 +669,7 @@ class WasmServiceReplica extends RaftReplicaBase {
       return {success: true};
     }
 
-    return new ControlPlaneSystemTableGateway({
-      nodeId: this.nodeId,
-      cdcIntegrationService: this.cdcIntegrationService,
-      messageRouter: this.transport,
-    }).submitMutation({
+    return this.controlPlaneSystemTableGateway.submitMutation({
       operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
       tableName: TABLES.SERVICES,
       whereClause: {[COLUMN.SERVICE_ID]: this.replicaId},

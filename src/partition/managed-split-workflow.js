@@ -10,8 +10,9 @@ import {
 } from '../control-plane/pressure-governor.js';
 import {
   CONTROL_PLANE_MUTATION_OPERATION,
-  ControlPlaneSystemTableGateway,
 } from '../control-plane/control-plane-system-table-gateway.js';
+import {createControlPlaneRuntimeBundle} from
+  '../control-plane/control-plane-runtime-bundle.js';
 import {
   CONTROL_PLANE_READINESS_REASON,
 } from '../control-plane/control-plane-readiness-constants.js';
@@ -2453,11 +2454,11 @@ class ManagedSplitWorkflow {
     if (this.controlPlaneSystemTableGateway) {
       return this.controlPlaneSystemTableGateway;
     }
-    this.controlPlaneSystemTableGateway = new ControlPlaneSystemTableGateway({
+    this.controlPlaneSystemTableGateway = createControlPlaneRuntimeBundle({
       nodeId: this.nodeId,
-      cdcIntegrationService: this.getCDCIntegrationService(),
-      messageRouter: this.messageRouter,
-    });
+      getCdcIntegrationService: () => this.getCDCIntegrationService(),
+      getMessageRouter: () => this.messageRouter,
+    }).controlPlaneSystemTableGateway;
     return this.controlPlaneSystemTableGateway;
   }
 }

@@ -107,6 +107,8 @@ import {resolveAdvertisedWebSocketAddress} from
   '../transport/node-address-resolution.js';
 import {ServiceRegistrationVisibilityOwner} from
   './owners/service-registration-visibility-owner.js';
+import {ServiceRegistrationHandoffOwner} from
+  './owners/service-registration-handoff-owner.js';
 import {ServiceLeaderReadinessOwner} from
   './owners/service-leader-readiness-owner.js';
 
@@ -240,6 +242,64 @@ class BootstrapAPI {
           buildRegisterServiceValidationError: (...args) =>
             this.buildRegisterServiceValidationError(...args),
           getLogger: () => this.logger,
+        },
+      });
+    this.serviceRegistrationHandoffOwner =
+      new ServiceRegistrationHandoffOwner({
+        delegates: {
+          getLogger: () => this.logger,
+          getSqlQueryEngine: () => this.sqlQueryEngine,
+          validateMoveReplicaAssignmentToken: (serviceData) =>
+            this.validateMoveReplicaAssignmentToken(serviceData),
+          assertSingleOwnerReplicaRegistration: (serviceData, assignmentContext) =>
+            this.assertSingleOwnerReplicaRegistration(
+              serviceData,
+              assignmentContext,
+            ),
+          startMoveReplicaHandoff: (serviceData, assignmentContext) =>
+            this.startMoveReplicaHandoff(serviceData, assignmentContext),
+          readCurrentRegisteredServiceRow: (serviceId) =>
+            this.readCurrentRegisteredServiceRow(serviceId),
+          executeMoveReplicaHandoffPhase: (...args) =>
+            this.executeMoveReplicaHandoffPhase(...args),
+          verifyMoveReplicaHandoffTarget: (handoffContext, serviceData) =>
+            this.verifyMoveReplicaHandoffTarget(handoffContext, serviceData),
+          buildRegisteredServiceMutationRow: (serviceData) =>
+            this.buildRegisteredServiceMutationRow(serviceData),
+          executeBootstrapControlPlaneMutation: (operation, options) =>
+            this.executeBootstrapControlPlaneMutation(operation, options),
+          buildBootstrapControlPlaneQueryError: (result, fallbackMessage) =>
+            this.buildBootstrapControlPlaneQueryError(result, fallbackMessage),
+          buildBootstrapControlPlaneMutationError: (error, tableName, fallbackMessage) =>
+            this.buildBootstrapControlPlaneMutationError(
+              error,
+              tableName,
+              fallbackMessage,
+            ),
+          buildExpectedRegisteredServiceData: (serviceData) =>
+            this.buildExpectedRegisteredServiceData(serviceData),
+          waitForRegisteredServiceCacheVisibility: (expectedService) =>
+            this.waitForRegisteredServiceCacheVisibility(expectedService),
+          removeLocalSourceReplicaForMoveReplica: (serviceData) =>
+            this.removeLocalSourceReplicaForMoveReplica(serviceData),
+          completeMoveReplicaHandoff: (handoffContext) =>
+            this.completeMoveReplicaHandoff(handoffContext),
+          restoreRegisteredServiceRowAfterFailedHandoff:
+            (previousServiceRow, requestedServiceData, error) =>
+              this.restoreRegisteredServiceRowAfterFailedHandoff(
+                previousServiceRow,
+                requestedServiceData,
+                error,
+              ),
+          shouldPreserveMoveReplicaHandoffReservation:
+            (handoffContext, error, sourceRemovalCompleted) =>
+              this.shouldPreserveMoveReplicaHandoffReservation(
+                handoffContext,
+                error,
+                sourceRemovalCompleted,
+              ),
+          failMoveReplicaHandoff: (handoffContext, error) =>
+            this.failMoveReplicaHandoff(handoffContext, error),
         },
       });
     this.serviceLeaderReadinessOwner =
@@ -1279,191 +1339,8 @@ class BootstrapAPI {
    * @return {Promise<Object>} Registration response.
    */
   async handleRegisterServiceRequest(request, reply) {
-    const serviceData = request.body || {};
-    let assignmentContext = null;
-
-    this.logger.info(BOOTSTRAP_API_LOG_MSG.RECEIVED_REGISTER_SERVICE, {
-      serviceId: serviceData[COLUMN.SERVICE_ID],
-      serviceType: serviceData[COLUMN.SERVICE_TYPE],
-      nodeId: serviceData[COLUMN.NODE_ID],
-      groupId: serviceData[COLUMN.GROUP_ID],
-    });
-
-    // Validate required fields
-    if (!serviceData[COLUMN.SERVICE_ID]) {
-      reply.code(HTTP_STATUS.BAD_REQUEST);
-      return {success: false, error: BOOTSTRAP_API_ERROR.SERVICE_ID_REQUIRED};
-    }
-
-    if (!serviceData[COLUMN.SERVICE_TYPE]) {
-      reply.code(HTTP_STATUS.BAD_REQUEST);
-      return {success: false, error: BOOTSTRAP_API_ERROR.SERVICE_TYPE_REQUIRED};
-    }
-
-    if (!serviceData[COLUMN.NODE_ID]) {
-      reply.code(HTTP_STATUS.BAD_REQUEST);
-      return {success: false, error: BOOTSTRAP_API_ERROR.SERVICE_NODE_ID_REQUIRED};
-    }
-
-    let handoffContext = null;
-    let previousRegisteredServiceRow = null;
-    let targetServiceRowWritten = false;
-    let sourceRemovalCompleted = false;
-    try {
-      // Use SQL query engine to insert/update the service
-      if (!this.sqlQueryEngine) {
-        this.logger.error(BOOTSTRAP_API_LOG_MSG.SQL_ENGINE_MISSING);
-        reply.code(HTTP_STATUS.SERVICE_UNAVAILABLE);
-        return {success: false, error: BOOTSTRAP_API_ERROR.SQL_ENGINE_UNAVAILABLE};
-      }
-
-      assignmentContext = await this.validateMoveReplicaAssignmentToken(serviceData);
-      this.assertSingleOwnerReplicaRegistration(serviceData, assignmentContext);
-      handoffContext = await this.startMoveReplicaHandoff(serviceData, assignmentContext);
-      if (handoffContext) {
-        previousRegisteredServiceRow =
-          await this.readCurrentRegisteredServiceRow(
-            serviceData[COLUMN.SERVICE_ID],
-          );
-      }
-
-      if (handoffContext) {
-        await this.executeMoveReplicaHandoffPhase(
-          handoffContext,
-          BOOTSTRAP_API_HANDOFF_PHASE.VERIFY_TARGET,
-          WORKFLOW_STEP.SYNCING,
-          BOOTSTRAP_API_HANDOFF_STATUS.VERIFYING,
-          () => this.verifyMoveReplicaHandoffTarget(handoffContext, serviceData),
-        );
-      }
-
-      const registeredServiceRow =
-        this.buildRegisteredServiceMutationRow(serviceData);
-      try {
-        const mutationResult = await this.executeBootstrapControlPlaneMutation({
-          operation: 'upsert',
-          tableName: TABLES.SERVICES,
-          row: registeredServiceRow,
-        }, {
-          skipCacheWait: true,
-        });
-        if (mutationResult?.success === false) {
-          throw this.buildBootstrapControlPlaneQueryError(
-            mutationResult,
-            BOOTSTRAP_API_ERROR.SERVICE_REGISTRATION_FAILED,
-          );
-        }
-      } catch (mutationError) {
-        throw this.buildBootstrapControlPlaneMutationError(
-          mutationError,
-          TABLES.SERVICES,
-          BOOTSTRAP_API_ERROR.SERVICE_REGISTRATION_FAILED,
-        );
-      }
-      targetServiceRowWritten = true;
-
-      const expectedRegisteredService =
-        this.buildExpectedRegisteredServiceData(registeredServiceRow);
-      await this.waitForRegisteredServiceCacheVisibility(expectedRegisteredService);
-
-      if (handoffContext) {
-        await this.executeMoveReplicaHandoffPhase(
-          handoffContext,
-          BOOTSTRAP_API_HANDOFF_PHASE.REMOVE_SOURCE,
-          WORKFLOW_STEP.STOPPING,
-          BOOTSTRAP_API_HANDOFF_STATUS.REMOVING,
-          async () => {
-            await this.removeLocalSourceReplicaForMoveReplica(serviceData);
-            sourceRemovalCompleted = true;
-          },
-        );
-        await this.completeMoveReplicaHandoff(handoffContext);
-      }
-
-      this.logger.info(BOOTSTRAP_API_LOG_MSG.SERVICE_REGISTERED, {
-        serviceId: serviceData[COLUMN.SERVICE_ID],
-        serviceType: serviceData[COLUMN.SERVICE_TYPE],
-        nodeId: serviceData[COLUMN.NODE_ID],
-        groupId: serviceData[COLUMN.GROUP_ID],
-        assignmentId: assignmentContext?.assignmentId || null,
-        operationId: handoffContext?.operationId || null,
-      });
-
-      return {
-        success: true,
-        serviceId: serviceData[COLUMN.SERVICE_ID],
-        assignmentId: assignmentContext?.assignmentId || null,
-        operationId: handoffContext?.operationId || null,
-      };
-    } catch (error) {
-      if (handoffContext &&
-          targetServiceRowWritten &&
-          !sourceRemovalCompleted) {
-        await this.restoreRegisteredServiceRowAfterFailedHandoff(
-          previousRegisteredServiceRow,
-          serviceData,
-          error,
-        );
-      }
-      if (handoffContext) {
-        const shouldPreserveRetryableHandoff =
-          this.shouldPreserveMoveReplicaHandoffReservation(
-            handoffContext,
-            error,
-            sourceRemovalCompleted,
-          );
-        if (shouldPreserveRetryableHandoff) {
-          this.logger.warn(
-            'Preserving MOVE_REPLICA handoff reservation after retryable register-service failure',
-            {
-              operationId: handoffContext.operationId,
-              serviceId: handoffContext.replicaId,
-              sourceNodeId: handoffContext.sourceNodeId,
-              targetNodeId: handoffContext.targetNodeId,
-              code: error?.errorCode || null,
-              error: error?.message || null,
-            },
-          );
-        } else {
-          await this.failMoveReplicaHandoff(handoffContext, error);
-        }
-      }
-      if (Number.isFinite(error?.statusCode) &&
-          typeof error?.errorCode === TYPEOF.STRING) {
-        const isCacheVisibilityTimeout =
-          error.errorCode ===
-            BOOTSTRAP_PIPELINE_ERROR_CODE.SERVICE_REGISTRATION_CACHE_VISIBILITY_TIMEOUT;
-        const typedErrorLogMessage = isCacheVisibilityTimeout ?
-          BOOTSTRAP_API_LOG_MSG.SERVICE_REGISTRATION_CACHE_VISIBILITY_TIMEOUT :
-          BOOTSTRAP_API_LOG_MSG.MOVE_REPLICA_ASSIGNMENT_VALIDATION_FAILED;
-        this.logger.warn(typedErrorLogMessage, {
-          serviceId: serviceData[COLUMN.SERVICE_ID],
-          assignmentId: serviceData[BOOTSTRAP_API_ASSIGNMENT.FIELD_ID] || null,
-          code: error.errorCode,
-          error: error.message,
-          details: error.details || null,
-        });
-        reply.code(Math.floor(error.statusCode));
-        return {
-          success: false,
-          error: error.message,
-          code: error.errorCode,
-          ...(Number.isFinite(error.retryAfterMs) ?
-            {retryAfterMs: Math.floor(error.retryAfterMs)} :
-            {}),
-          ...(error.details && typeof error.details === TYPEOF.OBJECT ?
-            {details: error.details} :
-            {}),
-        };
-      }
-      this.logger.error(BOOTSTRAP_API_LOG_MSG.REGISTER_SERVICE_FAILED, {
-        serviceId: serviceData[COLUMN.SERVICE_ID],
-        error: error.message,
-        stack: error.stack,
-      });
-      reply.code(HTTP_STATUS.INTERNAL_SERVER_ERROR);
-      throw error;
-    }
+    return this.serviceRegistrationHandoffOwner
+      .handleRegisterServiceRequest(request, reply);
   }
 
   /**

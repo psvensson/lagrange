@@ -6,7 +6,8 @@
 
 import {LoggingService} from '../logging/logging-service.js';
 import {TABLES} from '../constants/index.js';
-import {ControlPlaneSystemTableGateway} from '../control-plane/control-plane-system-table-gateway.js';
+import {createControlPlaneRuntimeBundle} from
+  '../control-plane/control-plane-runtime-bundle.js';
 import {
   createSystemMetadataGatewayRequiredError,
 } from '../control-plane/system-metadata-access-error.js';
@@ -280,20 +281,6 @@ class FunctionRegistry {
    */
   getControlPlaneSystemTableGateway() {
     if (this.controlPlaneSystemTableGateway) {
-      if (!this.controlPlaneSystemTableGateway.sqlQueryEngine &&
-          this.sqlQueryEngine) {
-        this.controlPlaneSystemTableGateway.setSqlQueryEngine(this.sqlQueryEngine);
-      }
-      if (!this.controlPlaneSystemTableGateway.cdcIntegrationService &&
-          this.cdcIntegrationService) {
-        this.controlPlaneSystemTableGateway
-          .setCdcIntegrationService(this.cdcIntegrationService);
-      }
-      if (!this.controlPlaneSystemTableGateway.systemTableCache &&
-          this.systemTableCache) {
-        this.controlPlaneSystemTableGateway
-          .setSystemTableCache(this.systemTableCache);
-      }
       return this.controlPlaneSystemTableGateway;
     }
     if (!this.sqlQueryEngine &&
@@ -301,11 +288,11 @@ class FunctionRegistry {
         !this.systemTableCache) {
       return null;
     }
-    this.controlPlaneSystemTableGateway = new ControlPlaneSystemTableGateway({
-      sqlQueryEngine: this.sqlQueryEngine,
-      cdcIntegrationService: this.cdcIntegrationService,
-      systemTableCache: this.systemTableCache,
-    });
+    this.controlPlaneSystemTableGateway = createControlPlaneRuntimeBundle({
+      getSqlQueryEngine: () => this.sqlQueryEngine,
+      getCdcIntegrationService: () => this.cdcIntegrationService,
+      getSystemTableCache: () => this.systemTableCache,
+    }).controlPlaneSystemTableGateway;
     return this.controlPlaneSystemTableGateway;
   }
 }
