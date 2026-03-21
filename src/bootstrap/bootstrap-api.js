@@ -12,7 +12,7 @@
  */
 
 import Fastify from 'fastify';
-import {v4 as uuidv4, validate as uuidValidate} from 'uuid';
+import {validate as uuidValidate} from 'uuid';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {assertCritical} from '../utils/assert.js';
@@ -113,6 +113,8 @@ import {ServiceLeaderReadinessOwner} from
   './owners/service-leader-readiness-owner.js';
 import {MoveReplicaAssignmentOwner} from
   './owners/move-replica-assignment-owner.js';
+import {MoveReplicaHandoffOwner} from
+  './owners/move-replica-handoff-owner.js';
 
 /**
  * Bootstrap response strategies.
@@ -244,6 +246,34 @@ class BootstrapAPI {
           buildRegisterServiceValidationError: (...args) =>
             this.buildRegisterServiceValidationError(...args),
           getLogger: () => this.logger,
+        },
+      });
+    this.moveReplicaHandoffOwner =
+      new MoveReplicaHandoffOwner({
+        delegates: {
+          getLogger: () => this.logger,
+          getSeedNodeId: () => this.seedNodeId,
+          getSeedNodeAddress: () => this.seedNodeAddress,
+          getSystemTableCache: () => this.systemTableCache,
+          getMessageGroupServices: () => this.messageGroupServices,
+          getMessageRouter: () =>
+            this.messageRouter || this.bootstrapService?.messageRouter || null,
+          getMoveReplicaAssignmentReservations: () =>
+            this.moveReplicaAssignmentReservations,
+          buildRegisterServiceValidationError: (...args) =>
+            this.buildRegisterServiceValidationError(...args),
+          buildRegisteredServiceMutationRow: (serviceData) =>
+            this.buildRegisteredServiceMutationRow(serviceData),
+          executeBootstrapControlPlaneMutation: (operation, options) =>
+            this.executeBootstrapControlPlaneMutation(operation, options),
+          buildBootstrapControlPlaneQueryError: (result, fallbackMessage) =>
+            this.buildBootstrapControlPlaneQueryError(result, fallbackMessage),
+          waitForRegisteredServiceCacheVisibility: (expectedService) =>
+            this.waitForRegisteredServiceCacheVisibility(expectedService),
+          insertMoveReplicaHandoffOperation: (handoffContext) =>
+            this.insertMoveReplicaHandoffOperation(handoffContext),
+          updateMoveReplicaHandoffOperation: (handoffContext) =>
+            this.updateMoveReplicaHandoffOperation(handoffContext),
         },
       });
     this.serviceRegistrationHandoffOwner =
@@ -1413,10 +1443,12 @@ class BootstrapAPI {
     error,
     sourceRemovalCompleted,
   ) {
-    if (!handoffContext || sourceRemovalCompleted === true) {
-      return false;
-    }
-    return this.isRetryableMoveReplicaHandoffError(error);
+    return this.moveReplicaHandoffOwner
+      .shouldPreserveMoveReplicaHandoffReservation(
+        handoffContext,
+        error,
+        sourceRemovalCompleted,
+      );
   }
 
   /**
@@ -1639,41 +1671,12 @@ class BootstrapAPI {
     requestedServiceData,
     error,
   ) {
-    if (!previousServiceRow ||
-        typeof previousServiceRow !== TYPEOF.OBJECT) {
-      return;
-    }
-
-    try {
-      const rollbackResult = await this.executeBootstrapControlPlaneMutation({
-        operation: 'upsert',
-        tableName: TABLES.SERVICES,
-        row: this.buildRegisteredServiceMutationRow(previousServiceRow),
-      }, {
-        skipCacheWait: true,
-      });
-      if (rollbackResult?.success === false) {
-        throw this.buildBootstrapControlPlaneQueryError(
-          rollbackResult,
-          BOOTSTRAP_API_ERROR.SERVICE_REGISTRATION_FAILED,
-        );
-      }
-      await this.waitForRegisteredServiceCacheVisibility(previousServiceRow);
-      this.logger.warn('Restored previous service owner after failed MOVE_REPLICA target registration', {
-        serviceId: requestedServiceData?.[COLUMN.SERVICE_ID] || null,
-        targetNodeId: requestedServiceData?.[COLUMN.NODE_ID] || null,
-        restoredNodeId: previousServiceRow?.[COLUMN.NODE_ID] || null,
-        error: error?.message || String(error),
-      });
-    } catch (rollbackError) {
-      this.logger.error('Failed to restore previous service owner after MOVE_REPLICA target registration failure', {
-        serviceId: requestedServiceData?.[COLUMN.SERVICE_ID] || null,
-        targetNodeId: requestedServiceData?.[COLUMN.NODE_ID] || null,
-        restoredNodeId: previousServiceRow?.[COLUMN.NODE_ID] || null,
-        error: rollbackError?.message || String(rollbackError),
-        originalError: error?.message || String(error),
-      });
-    }
+    return this.moveReplicaHandoffOwner
+      .restoreRegisteredServiceRowAfterFailedHandoff(
+        previousServiceRow,
+        requestedServiceData,
+        error,
+      );
   }
 
   /**
@@ -1870,50 +1873,8 @@ class BootstrapAPI {
    * @private
    */
   assertSingleOwnerReplicaRegistration(serviceData, assignmentContext) {
-    if (serviceData?.[COLUMN.SERVICE_TYPE] !== SERVICE_TYPE.MESSAGE_GROUP) {
-      return;
-    }
-
-    const serviceId = serviceData?.[COLUMN.SERVICE_ID];
-    const targetNodeId = serviceData?.[COLUMN.NODE_ID];
-    const existingRow = this.systemTableCache?.get(TABLES.SERVICES, serviceId);
-    if (!existingRow) {
-      return;
-    }
-
-    const existingNodeId = existingRow[COLUMN.NODE_ID] || null;
-    const existingStatus = String(existingRow[COLUMN.STATUS] || STRING.UNKNOWN).toLowerCase();
-    if (!existingNodeId ||
-      existingNodeId === targetNodeId ||
-      existingStatus !== SERVICE_STATUS.ACTIVE) {
-      return;
-    }
-
-    const assignmentMatchesConflict = assignmentContext &&
-      assignmentContext.replicaId === serviceId &&
-      assignmentContext.targetNodeId === targetNodeId &&
-      assignmentContext.sourceNodeId === existingNodeId;
-    if (assignmentMatchesConflict) {
-      return;
-    }
-
-    // Allow a restarting node to reclaim its self-hosted message
-    // group. When a node restarts with CREATE_SELF_HOSTED, it
-    // generates deterministic replica IDs that may collide with
-    // replicas previously moved to other nodes. The canonical
-    // home node (whose ID derives the group ID) is allowed to
-    // reclaim those replicas.
-    if (this.isCanonicalGroupHomeNode(
-      serviceData?.[COLUMN.GROUP_ID], targetNodeId,
-    )) {
-      return;
-    }
-
-    throw this.buildRegisterServiceValidationError(
-      HTTP_STATUS.CONFLICT,
-      BOOTSTRAP_API_ERROR.REPLICA_OWNER_CONFLICT,
-      BOOTSTRAP_API_REGISTER_SERVICE_ERROR_CODE.REPLICA_OWNER_CONFLICT,
-    );
+    return this.moveReplicaHandoffOwner
+      .assertSingleOwnerReplicaRegistration(serviceData, assignmentContext);
   }
 
   /**
@@ -1926,113 +1887,8 @@ class BootstrapAPI {
    * @return {boolean} True if the node is the canonical home.
    */
   isCanonicalGroupHomeNode(groupId, nodeId) {
-    if (!groupId || !nodeId) {
-      return false;
-    }
-    const mgAssignment = new MessageGroupAssignment({
-      seedNodeAddress: this.seedNodeAddress,
-    });
-    const canonicalGroupId = mgAssignment.generateGroupId(nodeId);
-    return groupId === canonicalGroupId;
-  }
-
-  /**
-   * Build operation context for MOVE_REPLICA handoff tracking.
-   * @param {Object} serviceData - Incoming register-service payload.
-   * @return {Object} Handoff context.
-   * @private
-   */
-  buildMoveReplicaHandoffContext(serviceData) {
-    const serviceId = serviceData[COLUMN.SERVICE_ID];
-    const existing = this.systemTableCache?.get(TABLES.SERVICES, serviceId) || {};
-    const now = Date.now();
-    const groupId = serviceData[COLUMN.GROUP_ID] || existing[COLUMN.GROUP_ID] || serviceId;
-    const sourceNodeId = existing[COLUMN.NODE_ID] || this.seedNodeId;
-    const targetNodeId = serviceData[COLUMN.NODE_ID];
-
-    return {
-      operationId: uuidv4(),
-      type: BOOTSTRAP_API_HANDOFF_OPERATION.TYPE,
-      partitionId: groupId,
-      entityType: SERVICE_TYPE.MESSAGE_GROUP,
-      entityId: groupId,
-      replicaId: serviceId,
-      sourceNodeId,
-      targetNodeId,
-      status: BOOTSTRAP_API_HANDOFF_STATUS.PREPARING,
-      workflowStep: WORKFLOW_STEP.CREATING,
-      createdAt: now,
-      updatedAt: now,
-      completedAt: null,
-      errorMessage: null,
-      stepsHistory: [],
-    };
-  }
-
-  /**
-   * Build handoff context from a pre-reserved assignment token.
-   * @param {Object} serviceData
-   * @param {Object} assignmentContext
-   * @return {Object}
-   * @private
-   */
-  buildMoveReplicaHandoffContextFromAssignment(serviceData, assignmentContext) {
-    const now = Date.now();
-    const groupId = serviceData[COLUMN.GROUP_ID] || assignmentContext.groupId || null;
-    const existingStepsHistory = Array.isArray(assignmentContext?.stepsHistory) ?
-      assignmentContext.stepsHistory.map((step) => ({...step})) :
-      [];
-    return {
-      operationId: assignmentContext.assignmentId,
-      type: BOOTSTRAP_API_ASSIGNMENT.OPERATION_TYPE,
-      partitionId: groupId,
-      entityType: SERVICE_TYPE.MESSAGE_GROUP,
-      entityId: groupId,
-      replicaId: assignmentContext.replicaId,
-      sourceNodeId: assignmentContext.sourceNodeId || this.seedNodeId,
-      targetNodeId: assignmentContext.targetNodeId,
-      status: assignmentContext.status || BOOTSTRAP_API_HANDOFF_STATUS.COMMITTED,
-      workflowStep: WORKFLOW_STEP.PENDING,
-      createdAt: now,
-      updatedAt: now,
-      completedAt: Number.isFinite(assignmentContext.leaseExpiresAt) ?
-        Math.floor(assignmentContext.leaseExpiresAt) :
-        null,
-      errorMessage: null,
-      stepsHistory: existingStepsHistory,
-    };
-  }
-
-  /**
-   * Record handoff phase transition in the operation context.
-   * @param {Object} handoffContext - Operation context.
-   * @param {string} phase - Handoff phase identifier.
-   * @param {string} workflowStep - Workflow step value.
-   * @param {string} status - Replica operation status.
-   * @private
-   */
-  recordMoveReplicaHandoffPhase(handoffContext, phase, workflowStep, status) {
-    const now = Date.now();
-    handoffContext.workflowStep = workflowStep;
-    handoffContext.status = status;
-    handoffContext.updatedAt = now;
-    handoffContext.stepsHistory.push({
-      phase,
-      step: workflowStep,
-      status,
-      timestamp: now,
-    });
-
-    const existingReservation =
-      this.moveReplicaAssignmentReservations.get(handoffContext.operationId);
-    if (existingReservation) {
-      this.moveReplicaAssignmentReservations.set(handoffContext.operationId, {
-        ...existingReservation,
-        status,
-        updatedAt: now,
-        stepsHistory: handoffContext.stepsHistory,
-      });
-    }
+    return this.moveReplicaHandoffOwner
+      .isCanonicalGroupHomeNode(groupId, nodeId);
   }
 
   /**
@@ -2128,55 +1984,8 @@ class BootstrapAPI {
     if (!this.isMoveReplicaHandoffRequest(serviceData)) {
       return null;
     }
-
-    const handoffContext = assignmentContext ?
-      this.buildMoveReplicaHandoffContextFromAssignment(
-        serviceData,
-        assignmentContext,
-      ) :
-      this.buildMoveReplicaHandoffContext(serviceData);
-    this.recordMoveReplicaHandoffPhase(
-      handoffContext,
-      BOOTSTRAP_API_HANDOFF_PHASE.PREPARE_TARGET,
-      WORKFLOW_STEP.CREATING,
-      BOOTSTRAP_API_HANDOFF_STATUS.PREPARING,
-    );
-    if (assignmentContext) {
-      try {
-        await this.updateMoveReplicaHandoffOperation(handoffContext);
-      } catch (handoffWriteError) {
-        this.logger.warn(
-          BOOTSTRAP_API_LOG_MSG
-            .MOVE_REPLICA_HANDOFF_INITIATION_WRITE_FAILED,
-          {
-            operationId: handoffContext.operationId,
-            assignmentId: assignmentContext.assignmentId,
-            error: handoffWriteError.message,
-          },
-        );
-      }
-      this.moveReplicaAssignmentReservations.set(
-        assignmentContext.assignmentId,
-        {
-          ...assignmentContext,
-          status: BOOTSTRAP_API_HANDOFF_STATUS.PREPARING,
-          updatedAt: handoffContext.updatedAt,
-          leaseExpiresAt: handoffContext.completedAt,
-          stepsHistory: handoffContext.stepsHistory,
-        },
-      );
-    } else {
-      await this.insertMoveReplicaHandoffOperation(handoffContext);
-    }
-
-    this.logger.info(BOOTSTRAP_API_LOG_MSG.MOVE_REPLICA_HANDOFF_STARTED, {
-      operationId: handoffContext.operationId,
-      serviceId: handoffContext.replicaId,
-      sourceNodeId: handoffContext.sourceNodeId,
-      targetNodeId: handoffContext.targetNodeId,
-    });
-
-    return handoffContext;
+    return this.moveReplicaHandoffOwner
+      .startMoveReplicaHandoff(serviceData, assignmentContext);
   }
 
   /**
@@ -2196,29 +2005,14 @@ class BootstrapAPI {
     status,
     executor,
   ) {
-    this.recordMoveReplicaHandoffPhase(handoffContext, phase, workflowStep, status);
-    try {
-      await this.updateMoveReplicaHandoffOperation(handoffContext);
-    } catch (phaseWriteError) {
-      this.logger.warn(
-        BOOTSTRAP_API_LOG_MSG
-          .MOVE_REPLICA_HANDOFF_INITIATION_WRITE_FAILED,
-        {
-          operationId: handoffContext.operationId,
-          phase,
-          error: phaseWriteError.message,
-        },
+    return this.moveReplicaHandoffOwner
+      .executeMoveReplicaHandoffPhase(
+        handoffContext,
+        phase,
+        workflowStep,
+        status,
+        executor,
       );
-    }
-    await executor();
-
-    this.logger.info(BOOTSTRAP_API_LOG_MSG.MOVE_REPLICA_HANDOFF_PHASE_APPLIED, {
-      operationId: handoffContext.operationId,
-      phase,
-      workflowStep,
-      status,
-      serviceId: handoffContext.replicaId,
-    });
   }
 
   /**
@@ -2229,16 +2023,8 @@ class BootstrapAPI {
    * @private
    */
   verifyMoveReplicaHandoffTarget(handoffContext, serviceData) {
-    if (handoffContext.sourceNodeId === handoffContext.targetNodeId) {
-      throw new Error('MOVE_REPLICA target node must differ from source node');
-    }
-
-    const expectedAddress = `${handoffContext.targetNodeId}${ADDRESS.SEPARATOR}` +
-      `${ENTITY_TYPE.MESSAGE_GROUP}${ADDRESS.SEPARATOR}${handoffContext.replicaId}`;
-    const suppliedAddress = serviceData[COLUMN.ADDRESS];
-    if (suppliedAddress && suppliedAddress !== expectedAddress) {
-      throw new Error('MOVE_REPLICA target address mismatch');
-    }
+    return this.moveReplicaHandoffOwner
+      .verifyMoveReplicaHandoffTarget(handoffContext, serviceData);
   }
 
   /**
@@ -2248,46 +2034,8 @@ class BootstrapAPI {
    * @private
    */
   async completeMoveReplicaHandoff(handoffContext) {
-    this.recordMoveReplicaHandoffPhase(
-      handoffContext,
-      BOOTSTRAP_API_HANDOFF_PHASE.COMMIT_METADATA,
-      WORKFLOW_STEP.ACTIVE,
-      BOOTSTRAP_API_HANDOFF_STATUS.COMMITTED,
-    );
-    handoffContext.completedAt = handoffContext.updatedAt;
-    handoffContext.errorMessage = null;
-    try {
-      await this.updateMoveReplicaHandoffOperation(handoffContext);
-    } catch (completionWriteError) {
-      this.logger.warn(
-        BOOTSTRAP_API_LOG_MSG
-          .MOVE_REPLICA_HANDOFF_INITIATION_WRITE_FAILED,
-        {
-          operationId: handoffContext.operationId,
-          phase: BOOTSTRAP_API_HANDOFF_PHASE.COMMIT_METADATA,
-          error: completionWriteError.message,
-        },
-      );
-    }
-    this.moveReplicaAssignmentReservations.set(handoffContext.operationId, {
-      ...(this.moveReplicaAssignmentReservations.get(handoffContext.operationId) || {}),
-      assignmentId: handoffContext.operationId,
-      replicaId: handoffContext.replicaId,
-      sourceNodeId: handoffContext.sourceNodeId,
-      targetNodeId: handoffContext.targetNodeId,
-      groupId: handoffContext.partitionId,
-      status: BOOTSTRAP_API_HANDOFF_STATUS.COMMITTED,
-      leaseExpiresAt: handoffContext.completedAt,
-      updatedAt: handoffContext.updatedAt,
-      stepsHistory: handoffContext.stepsHistory,
-    });
-
-    this.logger.info(BOOTSTRAP_API_LOG_MSG.MOVE_REPLICA_HANDOFF_COMPLETED, {
-      operationId: handoffContext.operationId,
-      serviceId: handoffContext.replicaId,
-      sourceNodeId: handoffContext.sourceNodeId,
-      targetNodeId: handoffContext.targetNodeId,
-    });
+    return this.moveReplicaHandoffOwner
+      .completeMoveReplicaHandoff(handoffContext);
   }
 
   /**
@@ -2298,44 +2046,8 @@ class BootstrapAPI {
    * @private
    */
   async failMoveReplicaHandoff(handoffContext, error) {
-    try {
-      this.recordMoveReplicaHandoffPhase(
-        handoffContext,
-        BOOTSTRAP_API_HANDOFF_PHASE.FAILED,
-        WORKFLOW_STEP.FAILED,
-        BOOTSTRAP_API_HANDOFF_STATUS.FAILED,
-      );
-      handoffContext.completedAt = handoffContext.updatedAt;
-      handoffContext.errorMessage = error?.message || 'unknown MOVE_REPLICA handoff failure';
-      await this.updateMoveReplicaHandoffOperation(handoffContext);
-      this.moveReplicaAssignmentReservations.set(handoffContext.operationId, {
-        ...(this.moveReplicaAssignmentReservations.get(handoffContext.operationId) || {}),
-        assignmentId: handoffContext.operationId,
-        replicaId: handoffContext.replicaId,
-        sourceNodeId: handoffContext.sourceNodeId,
-        targetNodeId: handoffContext.targetNodeId,
-        groupId: handoffContext.partitionId,
-        status: BOOTSTRAP_API_HANDOFF_STATUS.FAILED,
-        leaseExpiresAt: handoffContext.completedAt,
-        updatedAt: handoffContext.updatedAt,
-        stepsHistory: handoffContext.stepsHistory,
-      });
-    } catch (persistError) {
-      this.logger.error(BOOTSTRAP_API_LOG_MSG.MOVE_REPLICA_HANDOFF_FAILED, {
-        operationId: handoffContext.operationId,
-        serviceId: handoffContext.replicaId,
-        error: persistError.message,
-      });
-      return;
-    }
-
-    this.logger.error(BOOTSTRAP_API_LOG_MSG.MOVE_REPLICA_HANDOFF_FAILED, {
-      operationId: handoffContext.operationId,
-      serviceId: handoffContext.replicaId,
-      sourceNodeId: handoffContext.sourceNodeId,
-      targetNodeId: handoffContext.targetNodeId,
-      error: error?.message || null,
-    });
+    return this.moveReplicaHandoffOwner
+      .failMoveReplicaHandoff(handoffContext, error);
   }
 
   /**
@@ -2346,66 +2058,8 @@ class BootstrapAPI {
    * @private
    */
   async removeLocalSourceReplicaForMoveReplica(serviceData) {
-    const serviceId = serviceData?.[COLUMN.SERVICE_ID];
-    const serviceType = serviceData?.[COLUMN.SERVICE_TYPE];
-    const targetNodeId = serviceData?.[COLUMN.NODE_ID];
-
-    if (!serviceId || !targetNodeId) {
-      return;
-    }
-
-    if (serviceType !== SERVICE_TYPE.MESSAGE_GROUP) {
-      return;
-    }
-
-    if (targetNodeId === this.seedNodeId) {
-      return;
-    }
-
-    const localService = this.messageGroupServices.get(serviceId);
-    if (!localService) {
-      return;
-    }
-
-    const existingService = this.systemTableCache?.get(TABLES.SERVICES, serviceId);
-    const localAddress = localService.unifiedAddress ||
-      existingService?.[COLUMN.ADDRESS] ||
-      `${this.seedNodeId}${ADDRESS.SEPARATOR}` +
-      `${ENTITY_TYPE.MESSAGE_GROUP}${ADDRESS.SEPARATOR}${serviceId}`;
-
-    this.logger.info(BOOTSTRAP_API_LOG_MSG.MOVE_REPLICA_SOURCE_REMOVAL_START, {
-      serviceId,
-      sourceNodeId: this.seedNodeId,
-      targetNodeId,
-      localAddress,
-    });
-
-    try {
-      if (typeof localService.shutdown === TYPEOF.FUNCTION) {
-        await localService.shutdown();
-      }
-      this.messageGroupServices.delete(serviceId);
-
-      const messageRouter = this.messageRouter || this.bootstrapService?.messageRouter;
-      if (messageRouter && typeof messageRouter.unregister === TYPEOF.FUNCTION) {
-        messageRouter.unregister(localAddress);
-      }
-
-      this.logger.info(BOOTSTRAP_API_LOG_MSG.MOVE_REPLICA_SOURCE_REMOVED, {
-        serviceId,
-        sourceNodeId: this.seedNodeId,
-        targetNodeId,
-        localAddress,
-      });
-    } catch (error) {
-      this.logger.error(BOOTSTRAP_API_LOG_MSG.MOVE_REPLICA_SOURCE_REMOVAL_FAILED, {
-        serviceId,
-        sourceNodeId: this.seedNodeId,
-        targetNodeId,
-        error: error.message,
-      });
-      throw error;
-    }
+    return this.moveReplicaHandoffOwner
+      .removeLocalSourceReplicaForMoveReplica(serviceData);
   }
 
   /**
