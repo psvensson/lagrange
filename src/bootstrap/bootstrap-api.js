@@ -111,6 +111,8 @@ import {ServiceRegistrationHandoffOwner} from
   './owners/service-registration-handoff-owner.js';
 import {ServiceLeaderReadinessOwner} from
   './owners/service-leader-readiness-owner.js';
+import {MoveReplicaAssignmentOwner} from
+  './owners/move-replica-assignment-owner.js';
 
 /**
  * Bootstrap response strategies.
@@ -300,6 +302,38 @@ class BootstrapAPI {
               ),
           failMoveReplicaHandoff: (handoffContext, error) =>
             this.failMoveReplicaHandoff(handoffContext, error),
+        },
+      });
+    this.moveReplicaAssignmentOwner =
+      new MoveReplicaAssignmentOwner({
+        delegates: {
+          getSeedNodeId: () => this.seedNodeId,
+          getSystemTableCache: () => this.systemTableCache,
+          getMessageGroupServices: () => this.messageGroupServices,
+          getSqlQueryEngine: () => this.sqlQueryEngine,
+          getLogger: () => this.logger,
+          getMessageRouter: () =>
+            this.messageRouter || this.bootstrapService?.messageRouter || null,
+          getMoveReplicaAssignmentReservations: () =>
+            this.moveReplicaAssignmentReservations,
+          getMoveReplicaAssignmentLeaseMs: () =>
+            this.moveReplicaAssignmentLeaseMs,
+          getMoveReplicaAssignmentSweepIntervalMs: () =>
+            this.moveReplicaAssignmentSweepIntervalMs,
+          getBootstrapAdmissionRetryAfterMs: () =>
+            this.bootstrapAdmissionRetryAfterMs,
+          executeBootstrapControlPlaneQuery: (sql, params) =>
+            this.executeBootstrapControlPlaneQuery(sql, params),
+          buildBootstrapControlPlaneQueryError: (result, message) =>
+            this.buildBootstrapControlPlaneQueryError(result, message),
+          buildRegisterServiceValidationError:
+            (statusCode, message, code, options) =>
+              this.buildRegisterServiceValidationError(
+                statusCode,
+                message,
+                code,
+                options,
+              ),
         },
       });
     this.serviceLeaderReadinessOwner =
@@ -1649,25 +1683,8 @@ class BootstrapAPI {
    * @private
    */
   isMoveReplicaHandoffRequest(serviceData) {
-    const serviceId = serviceData?.[COLUMN.SERVICE_ID];
-    const serviceType = serviceData?.[COLUMN.SERVICE_TYPE];
-    const targetNodeId = serviceData?.[COLUMN.NODE_ID];
-    const assignmentId = serviceData?.[BOOTSTRAP_API_ASSIGNMENT.FIELD_ID];
-
-    if (!serviceId || !targetNodeId) {
-      return false;
-    }
-    if (serviceType !== SERVICE_TYPE.MESSAGE_GROUP) {
-      return false;
-    }
-    if (targetNodeId === this.seedNodeId) {
-      return false;
-    }
-    if (typeof assignmentId === TYPEOF.STRING &&
-        assignmentId.length > NUM.ZERO) {
-      return true;
-    }
-    return this.messageGroupServices.has(serviceId);
+    return this.moveReplicaAssignmentOwner
+      .isMoveReplicaHandoffRequest(serviceData);
   }
 
   /**
@@ -1704,89 +1721,8 @@ class BootstrapAPI {
    * @private
    */
   async getMoveReplicaAssignmentReservationById(assignmentId) {
-    const cached = this.normalizeMoveReplicaAssignmentReservationRow(
-      this.moveReplicaAssignmentReservations.get(assignmentId),
-    );
-    if (cached) {
-      return {
-        reservation: cached,
-        lookupUnavailable: false,
-        error: null,
-      };
-    }
-
-    const cachedRow = this.normalizeMoveReplicaAssignmentReservationRow(
-      this.systemTableCache?.get(TABLES.REPLICA_OPERATIONS, assignmentId),
-    );
-    if (cachedRow) {
-      this.moveReplicaAssignmentReservations.set(assignmentId, cachedRow);
-      return {
-        reservation: cachedRow,
-        lookupUnavailable: false,
-        error: null,
-      };
-    }
-
-    if (!this.sqlQueryEngine) {
-      return {
-        reservation: null,
-        lookupUnavailable: false,
-        error: null,
-      };
-    }
-
-    let queryResult = null;
-    try {
-      queryResult = await this.executeBootstrapControlPlaneQuery(
-        BOOTSTRAP_API_SQL.SELECT_REPLICA_OPERATION_BY_ID,
-        [assignmentId],
-      );
-    } catch (error) {
-      return {
-        reservation: null,
-        lookupUnavailable: true,
-        error: error?.message || String(error),
-      };
-    }
-    if (queryResult?.success === false) {
-      return {
-        reservation: null,
-        lookupUnavailable: true,
-        error:
-          queryResult.error ||
-          BOOTSTRAP_API_ERROR.ASSIGNMENT_TOKEN_LOOKUP_UNAVAILABLE,
-      };
-    }
-    const row = Array.isArray(queryResult?.rows) ? queryResult.rows[NUM.ZERO] : null;
-    if (!row) {
-      return {
-        reservation: null,
-        lookupUnavailable: false,
-        error: null,
-      };
-    }
-    const type = row.type || row.operation_type || null;
-    if (type !== BOOTSTRAP_API_ASSIGNMENT.OPERATION_TYPE) {
-      return {
-        reservation: null,
-        lookupUnavailable: false,
-        error: null,
-      };
-    }
-    const normalized = this.normalizeMoveReplicaAssignmentReservationRow(row);
-    if (!normalized) {
-      return {
-        reservation: null,
-        lookupUnavailable: false,
-        error: null,
-      };
-    }
-    this.moveReplicaAssignmentReservations.set(assignmentId, normalized);
-    return {
-      reservation: normalized,
-      lookupUnavailable: false,
-      error: null,
-    };
+    return this.moveReplicaAssignmentOwner
+      .getMoveReplicaAssignmentReservationById(assignmentId);
   }
 
   /**
@@ -1796,103 +1732,8 @@ class BootstrapAPI {
    * @private
    */
   async validateMoveReplicaAssignmentToken(serviceData) {
-    if (!this.isMoveReplicaHandoffRequest(serviceData)) {
-      return null;
-    }
-
-    const assignmentId = serviceData[BOOTSTRAP_API_ASSIGNMENT.FIELD_ID];
-    if (typeof assignmentId !== TYPEOF.STRING || assignmentId.length === NUM.ZERO) {
-      throw this.buildRegisterServiceValidationError(
-        HTTP_STATUS.BAD_REQUEST,
-        BOOTSTRAP_API_ERROR.ASSIGNMENT_TOKEN_REQUIRED,
-        BOOTSTRAP_API_REGISTER_SERVICE_ERROR_CODE.ASSIGNMENT_TOKEN_REQUIRED,
-      );
-    }
-
-    const reservationLookup =
-      await this.getMoveReplicaAssignmentReservationById(assignmentId);
-    if (reservationLookup.lookupUnavailable) {
-      throw this.buildRegisterServiceValidationError(
-        HTTP_STATUS.SERVICE_UNAVAILABLE,
-        BOOTSTRAP_API_ERROR.ASSIGNMENT_TOKEN_LOOKUP_UNAVAILABLE,
-        BOOTSTRAP_API_REGISTER_SERVICE_ERROR_CODE
-          .ASSIGNMENT_TOKEN_LOOKUP_UNAVAILABLE,
-        {
-          retryAfterMs: this.moveReplicaAssignmentSweepIntervalMs,
-          details: {
-            assignmentId,
-            cause:
-              reservationLookup.error ||
-              BOOTSTRAP_API_ERROR.ASSIGNMENT_TOKEN_LOOKUP_UNAVAILABLE,
-          },
-        },
-      );
-    }
-    const reservation = reservationLookup.reservation;
-    if (!reservation) {
-      throw this.buildRegisterServiceValidationError(
-        HTTP_STATUS.CONFLICT,
-        BOOTSTRAP_API_ERROR.ASSIGNMENT_TOKEN_UNKNOWN,
-        BOOTSTRAP_API_REGISTER_SERVICE_ERROR_CODE.ASSIGNMENT_TOKEN_UNKNOWN,
-      );
-    }
-
-    if (BOOTSTRAP_API_ASSIGNMENT.TERMINAL_STATUSES.includes(reservation.status)) {
-      throw this.buildRegisterServiceValidationError(
-        HTTP_STATUS.CONFLICT,
-        BOOTSTRAP_API_ERROR.ASSIGNMENT_TOKEN_UNKNOWN,
-        BOOTSTRAP_API_REGISTER_SERVICE_ERROR_CODE.ASSIGNMENT_TOKEN_UNKNOWN,
-      );
-    }
-
-    const requestedReplicaId = serviceData[COLUMN.REPLICA_ID] || serviceData[COLUMN.SERVICE_ID];
-    const requestedNodeId = serviceData[COLUMN.NODE_ID];
-    if (reservation.replicaId !== requestedReplicaId ||
-        reservation.targetNodeId !== requestedNodeId ||
-        (reservation.groupId && serviceData[COLUMN.GROUP_ID] &&
-          reservation.groupId !== serviceData[COLUMN.GROUP_ID])) {
-      throw this.buildRegisterServiceValidationError(
-        HTTP_STATUS.CONFLICT,
-        BOOTSTRAP_API_ERROR.ASSIGNMENT_TOKEN_MISMATCH,
-        BOOTSTRAP_API_REGISTER_SERVICE_ERROR_CODE.ASSIGNMENT_TOKEN_MISMATCH,
-      );
-    }
-
-    const now = Date.now();
-    if (!Number.isFinite(reservation.leaseExpiresAt) || reservation.leaseExpiresAt <= now) {
-      const renewedReservation =
-        await this.renewMoveReplicaAssignmentReservation(
-          reservation,
-          {
-            now,
-            force: true,
-            phase: 'lease_renewed',
-          },
-        );
-      if (renewedReservation) {
-        return renewedReservation;
-      }
-      await this.markMoveReplicaAssignmentReservationTerminal(
-        assignmentId,
-        BOOTSTRAP_API_HANDOFF_STATUS.FAILED,
-        WORKFLOW_STEP.FAILED,
-        'assignment token expired',
-      );
-      throw this.buildRegisterServiceValidationError(
-        HTTP_STATUS.CONFLICT,
-        BOOTSTRAP_API_ERROR.ASSIGNMENT_TOKEN_EXPIRED,
-        BOOTSTRAP_API_REGISTER_SERVICE_ERROR_CODE.ASSIGNMENT_TOKEN_EXPIRED,
-      );
-    }
-
-    return this.renewMoveReplicaAssignmentReservation(
-      reservation,
-      {
-        now,
-        force: false,
-        phase: 'validated',
-      },
-    );
+    return this.moveReplicaAssignmentOwner
+      .validateMoveReplicaAssignmentToken(serviceData);
   }
 
   /**
@@ -1905,14 +1746,8 @@ class BootstrapAPI {
    * @private
    */
   shouldRenewMoveReplicaAssignmentReservation(reservation, now = Date.now()) {
-    if (!Number.isFinite(reservation?.leaseExpiresAt)) {
-      return false;
-    }
-    const renewalWindowMs = Math.max(
-      NUM.ONE,
-      Math.floor(this.moveReplicaAssignmentLeaseMs / NUM.TWO),
-    );
-    return reservation.leaseExpiresAt - now <= renewalWindowMs;
+    return this.moveReplicaAssignmentOwner
+      .shouldRenewMoveReplicaAssignmentReservation(reservation, now);
   }
 
   /**
@@ -1930,106 +1765,8 @@ class BootstrapAPI {
     reservation,
     options = {},
   ) {
-    const now = Number.isFinite(options.now) ?
-      Math.floor(options.now) :
-      Date.now();
-    const force = options.force === true;
-    const phase = typeof options.phase === TYPEOF.STRING &&
-      options.phase.length > NUM.ZERO ?
-      options.phase :
-      'lease_renewed';
-
-    if (force) {
-      if (!this.canReviveExpiredMoveReplicaAssignmentReservation(reservation)) {
-        return null;
-      }
-    } else if (!this.shouldRenewMoveReplicaAssignmentReservation(
-      reservation,
-      now,
-    )) {
-      return reservation;
-    }
-
-    const leaseExpiresAt = now + this.moveReplicaAssignmentLeaseMs;
-    const status = reservation.status || BOOTSTRAP_API_HANDOFF_STATUS.PREPARING;
-    const step = WORKFLOW_STEP.PENDING;
-    const existingStepsHistory = Array.isArray(reservation.stepsHistory) ?
-      reservation.stepsHistory :
-      [];
-    const stepsHistory = [
-      ...existingStepsHistory,
-      {
-        phase,
-        step,
-        status,
-        timestamp: now,
-        leaseExpiresAt,
-      },
-    ];
-    const renewedReservation = {
-      ...reservation,
-      status,
-      leaseExpiresAt,
-      updatedAt: now,
-      stepsHistory,
-    };
-
-    this.moveReplicaAssignmentReservations.set(
-      renewedReservation.assignmentId,
-      renewedReservation,
-    );
-
-    if (this.sqlQueryEngine) {
-      try {
-        const updateResult = await this.executeBootstrapControlPlaneQuery(
-          BOOTSTRAP_API_SQL.UPDATE_REPLICA_OPERATION,
-          [
-            status,
-            step,
-            now,
-            leaseExpiresAt,
-            null,
-            JSON.stringify(stepsHistory),
-            renewedReservation.assignmentId,
-          ],
-        );
-        if (updateResult?.success === false) {
-          this.logger.warn(
-            BOOTSTRAP_API_LOG_MSG
-              .MOVE_REPLICA_ASSIGNMENT_VALIDATION_FAILED,
-            {
-              assignmentId: renewedReservation.assignmentId,
-              status,
-              error:
-                updateResult.error ||
-                'failed to persist MOVE_REPLICA assignment lease renewal',
-            },
-          );
-          return force ? null : reservation;
-        }
-      } catch (renewalWriteError) {
-        this.logger.warn(
-          BOOTSTRAP_API_LOG_MSG
-            .MOVE_REPLICA_ASSIGNMENT_RENEWAL_WRITE_FAILED,
-          {
-            assignmentId: renewedReservation.assignmentId,
-            status,
-            error: renewalWriteError.message,
-          },
-        );
-      }
-    }
-
-    this.logger.info(BOOTSTRAP_API_LOG_MSG.MOVE_REPLICA_ASSIGNMENT_RENEWED, {
-      assignmentId: renewedReservation.assignmentId,
-      replicaId: renewedReservation.replicaId,
-      targetNodeId: renewedReservation.targetNodeId,
-      sourceNodeId: renewedReservation.sourceNodeId,
-      phase,
-      leaseExpiresAt,
-    });
-
-    return renewedReservation;
+    return this.moveReplicaAssignmentOwner
+      .renewMoveReplicaAssignmentReservation(reservation, options);
   }
 
   /**
@@ -2042,14 +1779,8 @@ class BootstrapAPI {
    * @private
    */
   isMoveReplicaAssignmentSourceReplicaPresentLocally(reservation) {
-    if (!reservation?.replicaId) {
-      return false;
-    }
-    if (reservation.sourceNodeId &&
-        reservation.sourceNodeId !== this.seedNodeId) {
-      return false;
-    }
-    return this.messageGroupServices?.has?.(reservation.replicaId) === true;
+    return this.moveReplicaAssignmentOwner
+      .isMoveReplicaAssignmentSourceReplicaPresentLocally(reservation);
   }
 
   /**
@@ -2063,47 +1794,8 @@ class BootstrapAPI {
     reservation,
     now = Date.now(),
   ) {
-    const existingRow =
-      this.systemTableCache?.get(TABLES.SERVICES, reservation?.replicaId) || null;
-    const existingNodeId = existingRow?.[COLUMN.NODE_ID] || null;
-    const existingStatus = String(
-      existingRow?.[COLUMN.STATUS] || STRING.UNKNOWN,
-    ).toLowerCase();
-    const hasActiveServiceOwner = existingStatus === SERVICE_STATUS.ACTIVE;
-    const sourceOwnsActiveReplica = hasActiveServiceOwner &&
-      existingNodeId === (reservation?.sourceNodeId || null);
-    const targetOwnsActiveReplica = hasActiveServiceOwner &&
-      existingNodeId === (reservation?.targetNodeId || null);
-    const sourceNodeRow = reservation?.sourceNodeId ?
-      this.systemTableCache?.get(TABLES.NODES, reservation.sourceNodeId) || null :
-      null;
-    const targetNodeRow = reservation?.targetNodeId ?
-      this.systemTableCache?.get(TABLES.NODES, reservation.targetNodeId) || null :
-      null;
-    const sourceNodeReady = !sourceNodeRow ||
-      isNodeRecordReady(sourceNodeRow, {now});
-    const targetNodeReady = !!targetNodeRow &&
-      isNodeRecordReady(targetNodeRow, {now});
-    const sourceReplicaPresentLocally =
-      this.isMoveReplicaAssignmentSourceReplicaPresentLocally(reservation);
-    const continuingTargetAdoption = targetOwnsActiveReplica &&
-      sourceReplicaPresentLocally;
-    const observedCommitted = targetOwnsActiveReplica &&
-      !sourceReplicaPresentLocally;
-
-    return {
-      existingRow,
-      existingNodeId,
-      existingStatus,
-      hasActiveServiceOwner,
-      sourceOwnsActiveReplica,
-      targetOwnsActiveReplica,
-      sourceNodeReady,
-      targetNodeReady,
-      sourceReplicaPresentLocally,
-      continuingTargetAdoption,
-      observedCommitted,
-    };
+    return this.moveReplicaAssignmentOwner
+      .evaluateMoveReplicaAssignmentReservationOwnership(reservation, now);
   }
 
   /**
@@ -2114,19 +1806,8 @@ class BootstrapAPI {
    * @private
    */
   canReviveExpiredMoveReplicaAssignmentReservation(reservation) {
-    if (!reservation?.replicaId || !reservation?.targetNodeId) {
-      return false;
-    }
-    if (BOOTSTRAP_API_ASSIGNMENT.TERMINAL_STATUSES.includes(reservation.status)) {
-      return false;
-    }
-    const ownership =
-      this.evaluateMoveReplicaAssignmentReservationOwnership(reservation);
-    if (!ownership.hasActiveServiceOwner || ownership.observedCommitted) {
-      return false;
-    }
-    return ownership.sourceOwnsActiveReplica ||
-      ownership.continuingTargetAdoption;
+    return this.moveReplicaAssignmentOwner
+      .canReviveExpiredMoveReplicaAssignmentReservation(reservation);
   }
 
   /**
@@ -2140,46 +1821,8 @@ class BootstrapAPI {
    * @private
    */
   hasViableMoveReplicaAssignmentSource(reservation, now = Date.now()) {
-    if (!reservation?.replicaId) {
-      return false;
-    }
-    const ownership =
-      this.evaluateMoveReplicaAssignmentReservationOwnership(
-        reservation,
-        now,
-      );
-    if (ownership.observedCommitted) {
-      return false;
-    }
-
-    // Local replica presence combined with source node readiness
-    // is authoritative evidence the source is viable, even when
-    // CDC propagation delay causes the cache service row to be
-    // missing or stale.  This prevents the sweep from terminating
-    // reservations under load while still invalidating them when
-    // the source node genuinely loses readiness.
-    if (ownership.sourceReplicaPresentLocally &&
-        ownership.sourceNodeReady) {
-      return true;
-    }
-
-    if (!ownership.hasActiveServiceOwner) {
-      return false;
-    }
-
-    if (!reservation.sourceNodeId) {
-      return ownership.continuingTargetAdoption ||
-        ownership.targetOwnsActiveReplica;
-    }
-
-    if (ownership.continuingTargetAdoption) {
-      return true;
-    }
-
-    if (!ownership.sourceOwnsActiveReplica) {
-      return false;
-    }
-    return ownership.sourceNodeReady;
+    return this.moveReplicaAssignmentOwner
+      .hasViableMoveReplicaAssignmentSource(reservation, now);
   }
 
   /**
@@ -2193,40 +1836,11 @@ class BootstrapAPI {
     reservation,
     now = Date.now(),
   ) {
-    if (!reservation ||
-        typeof reservation.assignmentId !== TYPEOF.STRING ||
-        reservation.assignmentId.length === NUM.ZERO) {
-      return 'invalid_reservation';
-    }
-    if (!reservation.replicaId || !reservation.targetNodeId) {
-      return 'missing_assignment_fields';
-    }
-    if (BOOTSTRAP_API_ASSIGNMENT.TERMINAL_STATUSES.includes(reservation.status)) {
-      return 'terminal';
-    }
-    if (!BOOTSTRAP_API_ASSIGNMENT.ACTIVE_RESERVATION_STATUSES.includes(
-      reservation.status,
-    )) {
-      return 'inactive_status';
-    }
-    const ownership =
-      this.evaluateMoveReplicaAssignmentReservationOwnership(
+    return this.moveReplicaAssignmentOwner
+      .getMoveReplicaAssignmentReservationInvalidationReason(
         reservation,
         now,
       );
-    if (ownership.observedCommitted) {
-      return null;
-    }
-    if (!Number.isFinite(reservation.leaseExpiresAt)) {
-      return 'missing_lease';
-    }
-    if (reservation.leaseExpiresAt <= now) {
-      return 'lease_expired';
-    }
-    if (!this.hasViableMoveReplicaAssignmentSource(reservation, now)) {
-      return 'source_owner_unavailable';
-    }
-    return null;
   }
 
   /**
@@ -2241,16 +1855,11 @@ class BootstrapAPI {
     reservation,
     now = Date.now(),
   ) {
-    if (!reservation ||
-        BOOTSTRAP_API_ASSIGNMENT.TERMINAL_STATUSES.includes(
-          reservation.status,
-        )) {
-      return false;
-    }
-    return this.evaluateMoveReplicaAssignmentReservationOwnership(
-      reservation,
-      now,
-    ).observedCommitted;
+    return this.moveReplicaAssignmentOwner
+      .shouldReconcileMoveReplicaAssignmentReservationToCommitted(
+        reservation,
+        now,
+      );
   }
 
   /**
@@ -3164,60 +2773,8 @@ class BootstrapAPI {
    * @private
    */
   normalizeMoveReplicaAssignmentReservationRow(row) {
-    if (!row || typeof row !== TYPEOF.OBJECT) {
-      return null;
-    }
-    const assignmentId = row[COLUMN.OPERATION_ID] || row.operation_id || row.operationId;
-    const normalizedAssignmentId = assignmentId || row.assignmentId || null;
-    const replicaId =
-      row[COLUMN.REPLICA_ID] || row.replica_id || row.replicaId || null;
-    const targetNodeId =
-      row[COLUMN.TARGET_NODE_ID] || row.target_node_id || row.targetNodeId ||
-      null;
-    const sourceNodeId =
-      row.source_node_id || row.sourceNodeId || row.sourceNode || row.sourceNodeId || null;
-    const groupId = row[COLUMN.PARTITION_ID] || row.partition_id || row.partitionId || null;
-    const status = String(row[COLUMN.STATUS] || row.status || STRING.UNKNOWN)
-      .toLowerCase();
-    const leaseRaw = row.completed_at ?? row.completedAt ?? row.leaseExpiresAt ?? null;
-    const leaseExpiresAt = Number.isFinite(Number(leaseRaw)) ?
-      Math.floor(Number(leaseRaw)) :
-      null;
-    const updatedAtRaw = row[COLUMN.UPDATED_AT] ?? row.updated_at ?? row.updatedAt;
-    const updatedAt = Number.isFinite(Number(updatedAtRaw)) ?
-      Math.floor(Number(updatedAtRaw)) :
-      Date.now();
-    const stepsHistoryRaw = row.steps_history ?? row.stepsHistory ?? null;
-    let stepsHistory = [];
-    if (Array.isArray(stepsHistoryRaw)) {
-      stepsHistory = stepsHistoryRaw;
-    } else if (typeof stepsHistoryRaw === TYPEOF.STRING &&
-        stepsHistoryRaw.length > NUM.ZERO) {
-      try {
-        const parsedStepsHistory = JSON.parse(stepsHistoryRaw);
-        if (Array.isArray(parsedStepsHistory)) {
-          stepsHistory = parsedStepsHistory;
-        }
-      } catch (_error) {
-        stepsHistory = [];
-      }
-    }
-
-    if (!normalizedAssignmentId || !replicaId || !targetNodeId) {
-      return null;
-    }
-
-    return {
-      assignmentId: normalizedAssignmentId,
-      replicaId,
-      sourceNodeId,
-      targetNodeId,
-      groupId,
-      status,
-      leaseExpiresAt,
-      updatedAt,
-      stepsHistory,
-    };
+    return this.moveReplicaAssignmentOwner
+      .normalizeMoveReplicaAssignmentReservationRow(row);
   }
 
   /**
@@ -3226,42 +2783,8 @@ class BootstrapAPI {
    * @private
    */
   async getActiveMoveReplicaAssignmentReservations() {
-    const now = Date.now();
-    const byAssignmentId = new Map();
-
-    for (const reservation of this.moveReplicaAssignmentReservations.values()) {
-      const normalized = this.normalizeMoveReplicaAssignmentReservationRow(reservation);
-      if (!normalized) {
-        continue;
-      }
-      if (!this.isMoveReplicaAssignmentReservationActive(normalized, now)) {
-        continue;
-      }
-      byAssignmentId.set(normalized.assignmentId, normalized);
-    }
-
-    if (this.sqlQueryEngine) {
-      const queryResult = await this.executeBootstrapControlPlaneQuery(
-        BOOTSTRAP_API_SQL.SELECT_MOVE_ASSIGNMENT_RESERVATIONS,
-        [BOOTSTRAP_API_ASSIGNMENT.OPERATION_TYPE],
-      );
-      if (queryResult?.success !== false) {
-        const rows = Array.isArray(queryResult?.rows) ? queryResult.rows : [];
-        for (const row of rows) {
-          const normalized = this.normalizeMoveReplicaAssignmentReservationRow(row);
-          if (!normalized) {
-            continue;
-          }
-          if (!this.isMoveReplicaAssignmentReservationActive(normalized, now)) {
-            continue;
-          }
-          byAssignmentId.set(normalized.assignmentId, normalized);
-          this.moveReplicaAssignmentReservations.set(normalized.assignmentId, normalized);
-        }
-      }
-    }
-
-    return [...byAssignmentId.values()];
+    return this.moveReplicaAssignmentOwner
+      .getActiveMoveReplicaAssignmentReservations();
   }
 
   /**
@@ -3274,52 +2797,8 @@ class BootstrapAPI {
    * @private
    */
   async getBlockingMoveReplicaBootstrapAdmissions(now = Date.now()) {
-    const reservations = [];
-    const byAssignmentId = new Map();
-    const pushReservation = (reservation) => {
-      const normalized =
-        this.normalizeMoveReplicaAssignmentReservationRow(reservation);
-      if (!normalized) {
-        return;
-      }
-      byAssignmentId.set(normalized.assignmentId, normalized);
-    };
-
-    for (const reservation of this.moveReplicaAssignmentReservations.values()) {
-      pushReservation(reservation);
-    }
-
-    if (this.sqlQueryEngine) {
-      const queryResult = await this.executeBootstrapControlPlaneQuery(
-        BOOTSTRAP_API_SQL.SELECT_MOVE_ASSIGNMENT_RESERVATIONS,
-        [BOOTSTRAP_API_ASSIGNMENT.OPERATION_TYPE],
-      );
-      if (queryResult?.success !== false) {
-        const rows = Array.isArray(queryResult?.rows) ? queryResult.rows : [];
-        for (const row of rows) {
-          pushReservation(row);
-        }
-      }
-    }
-
-    for (const reservation of byAssignmentId.values()) {
-      if (!this.isMoveReplicaBootstrapAdmissionBlocked(reservation, now)) {
-        continue;
-      }
-      reservations.push(reservation);
-    }
-
-    reservations.sort((left, right) => {
-      const leftUpdatedAt = Number.isFinite(left?.updatedAt) ?
-        left.updatedAt :
-        NUM.ZERO;
-      const rightUpdatedAt = Number.isFinite(right?.updatedAt) ?
-        right.updatedAt :
-        NUM.ZERO;
-      return leftUpdatedAt - rightUpdatedAt;
-    });
-
-    return reservations;
+    return this.moveReplicaAssignmentOwner
+      .getBlockingMoveReplicaBootstrapAdmissions(now);
   }
 
   /**
@@ -3334,13 +2813,8 @@ class BootstrapAPI {
     reservation,
     now = Date.now(),
   ) {
-    if (this.isMoveReplicaAssignmentReservationOpen(reservation, now)) {
-      return true;
-    }
-    return this.isCommittedMoveReplicaHandoffStabilizing(
-      reservation,
-      now,
-    );
+    return this.moveReplicaAssignmentOwner
+      .isMoveReplicaBootstrapAdmissionBlocked(reservation, now);
   }
 
   /**
@@ -3357,36 +2831,8 @@ class BootstrapAPI {
     reservation,
     now = Date.now(),
   ) {
-    if (!reservation ||
-        typeof reservation.assignmentId !== TYPEOF.STRING ||
-        reservation.assignmentId.length === NUM.ZERO) {
-      return false;
-    }
-    if (!reservation.replicaId || !reservation.targetNodeId) {
-      return false;
-    }
-    if (BOOTSTRAP_API_ASSIGNMENT.TERMINAL_STATUSES.includes(
-      reservation.status,
-    )) {
-      return false;
-    }
-    if (!BOOTSTRAP_API_ASSIGNMENT.ACTIVE_RESERVATION_STATUSES.includes(
-      reservation.status,
-    )) {
-      return false;
-    }
-    const ownership =
-      this.evaluateMoveReplicaAssignmentReservationOwnership(
-        reservation,
-        now,
-      );
-    if (ownership.observedCommitted) {
-      return false;
-    }
-    if (ownership.continuingTargetAdoption) {
-      return true;
-    }
-    return this.hasViableMoveReplicaAssignmentSource(reservation, now);
+    return this.moveReplicaAssignmentOwner
+      .isMoveReplicaAssignmentReservationOpen(reservation, now);
   }
 
   /**
@@ -3403,30 +2849,8 @@ class BootstrapAPI {
     reservation,
     now = Date.now(),
   ) {
-    if (!reservation) {
-      return false;
-    }
-    const observedOwnership =
-      this.evaluateMoveReplicaAssignmentReservationOwnership(
-        reservation,
-        now,
-      );
-    const logicallyCommitted =
-      reservation.status === BOOTSTRAP_API_HANDOFF_STATUS.COMMITTED ||
-      observedOwnership.observedCommitted;
-    if (!logicallyCommitted) {
-      return false;
-    }
-
-    const stabilizationExpiresAt = Number.isFinite(reservation.updatedAt) ?
-      reservation.updatedAt + this.moveReplicaAssignmentLeaseMs :
-      null;
-    if (!Number.isFinite(stabilizationExpiresAt) ||
-        stabilizationExpiresAt <= now) {
-      return false;
-    }
-
-    return !this.isMoveReplicaAssignmentTargetReady(reservation, now);
+    return this.moveReplicaAssignmentOwner
+      .isCommittedMoveReplicaHandoffStabilizing(reservation, now);
   }
 
   /**
@@ -3441,25 +2865,8 @@ class BootstrapAPI {
     reservation,
     now = Date.now(),
   ) {
-    if (!reservation?.targetNodeId || !reservation?.replicaId) {
-      return false;
-    }
-
-    const targetNodeRow =
-      this.systemTableCache?.get(TABLES.NODES, reservation.targetNodeId) || null;
-    if (!targetNodeRow || !isNodeRecordReady(targetNodeRow, {now})) {
-      return false;
-    }
-
-    const existingServiceRow =
-      this.systemTableCache?.get(TABLES.SERVICES, reservation.replicaId) || null;
-    const existingNodeId = existingServiceRow?.[COLUMN.NODE_ID] || null;
-    const existingStatus = String(
-      existingServiceRow?.[COLUMN.STATUS] || STRING.UNKNOWN,
-    ).toLowerCase();
-
-    return existingNodeId === reservation.targetNodeId &&
-      existingStatus === SERVICE_STATUS.ACTIVE;
+    return this.moveReplicaAssignmentOwner
+      .isMoveReplicaAssignmentTargetReady(reservation, now);
   }
 
   /**
@@ -3474,37 +2881,11 @@ class BootstrapAPI {
     reservation,
     now = Date.now(),
   ) {
-    const admissionFloor = Number.isFinite(this.bootstrapAdmissionRetryAfterMs) &&
-      this.bootstrapAdmissionRetryAfterMs > NUM.ZERO ?
-      this.bootstrapAdmissionRetryAfterMs :
-      BOOTSTRAP_API_DEFAULT.BOOTSTRAP_ADMISSION_RETRY_AFTER_MS;
-    const sweepInterval = Number.isFinite(this.moveReplicaAssignmentSweepIntervalMs) &&
-      this.moveReplicaAssignmentSweepIntervalMs > NUM.ZERO ?
-      this.moveReplicaAssignmentSweepIntervalMs :
-      admissionFloor;
-
-    if (!reservation) {
-      return admissionFloor;
-    }
-
-    const blockingUntilMs =
-      reservation.status === BOOTSTRAP_API_HANDOFF_STATUS.COMMITTED &&
-        Number.isFinite(reservation.updatedAt) ?
-        reservation.updatedAt + this.moveReplicaAssignmentLeaseMs :
-        reservation.leaseExpiresAt;
-    if (!Number.isFinite(blockingUntilMs)) {
-      return Math.max(admissionFloor, sweepInterval);
-    }
-
-    const remainingMs = Math.max(NUM.ZERO, blockingUntilMs - now);
-    if (remainingMs === NUM.ZERO) {
-      return admissionFloor;
-    }
-
-    return Math.max(
-      admissionFloor,
-      Math.min(sweepInterval, remainingMs),
-    );
+    return this.moveReplicaAssignmentOwner
+      .resolveMoveReplicaBootstrapAdmissionRetryAfterMs(
+        reservation,
+        now,
+      );
   }
 
   /**
@@ -3515,10 +2896,8 @@ class BootstrapAPI {
    * @private
    */
   isMoveReplicaAssignmentReservationActive(reservation, now = Date.now()) {
-    return this.getMoveReplicaAssignmentReservationInvalidationReason(
-      reservation,
-      now,
-    ) === null;
+    return this.moveReplicaAssignmentOwner
+      .isMoveReplicaAssignmentReservationActive(reservation, now);
   }
 
   /**
@@ -3527,92 +2906,8 @@ class BootstrapAPI {
    * @private
    */
   async expireMoveReplicaAssignmentReservations() {
-    const now = Date.now();
-    const reservations = [];
-    const seenAssignmentIds = new Set();
-
-    const pushReservation = (reservation) => {
-      const normalized = this.normalizeMoveReplicaAssignmentReservationRow(reservation);
-      if (!normalized) {
-        return;
-      }
-      if (seenAssignmentIds.has(normalized.assignmentId)) {
-        return;
-      }
-      seenAssignmentIds.add(normalized.assignmentId);
-      reservations.push(normalized);
-    };
-
-    for (const reservation of this.moveReplicaAssignmentReservations.values()) {
-      pushReservation(reservation);
-    }
-
-    if (this.sqlQueryEngine) {
-      const queryResult = await this.executeBootstrapControlPlaneQuery(
-        BOOTSTRAP_API_SQL.SELECT_MOVE_ASSIGNMENT_RESERVATIONS,
-        [BOOTSTRAP_API_ASSIGNMENT.OPERATION_TYPE],
-      );
-      if (queryResult?.success !== false) {
-        const rows = Array.isArray(queryResult?.rows) ? queryResult.rows : [];
-        for (const row of rows) {
-          pushReservation(row);
-        }
-      }
-    }
-
-    for (const reservation of reservations) {
-      if (this.shouldReconcileMoveReplicaAssignmentReservationToCommitted(
-        reservation,
-        now,
-      )) {
-        await this.reconcileMoveReplicaAssignmentReservationToCommitted(
-          reservation,
-          now,
-        );
-        continue;
-      }
-      const invalidationReason =
-        this.getMoveReplicaAssignmentReservationInvalidationReason(
-          reservation,
-          now,
-        );
-      if (invalidationReason === null) {
-        continue;
-      }
-      if (invalidationReason === 'terminal' ||
-          invalidationReason === 'inactive_status' ||
-          invalidationReason === 'invalid_reservation') {
-        this.moveReplicaAssignmentReservations.delete(reservation.assignmentId);
-        continue;
-      }
-      if (invalidationReason === 'lease_expired') {
-        // Keep expired reservations non-terminal here so a delayed but still
-        // canonical target may revive the handoff during register-service.
-        this.moveReplicaAssignmentReservations.set(
-          reservation.assignmentId,
-          reservation,
-        );
-        continue;
-      }
-      this.moveReplicaAssignmentReservations.set(
-        reservation.assignmentId,
-        reservation,
-      );
-      await this.markMoveReplicaAssignmentReservationTerminal(
-        reservation.assignmentId,
-        BOOTSTRAP_API_HANDOFF_STATUS.FAILED,
-        WORKFLOW_STEP.FAILED,
-        invalidationReason === 'source_owner_unavailable' ?
-          'assignment source owner unavailable' :
-          'assignment reservation invalid',
-      );
-      this.logger.info(BOOTSTRAP_API_LOG_MSG.MOVE_REPLICA_ASSIGNMENT_EXPIRED, {
-        assignmentId: reservation.assignmentId,
-        replicaId: reservation.replicaId,
-        targetNodeId: reservation.targetNodeId,
-        invalidationReason,
-      });
-    }
+    return this.moveReplicaAssignmentOwner
+      .expireMoveReplicaAssignmentReservations();
   }
 
   /**
@@ -3667,85 +2962,8 @@ class BootstrapAPI {
    * @private
    */
   async reserveMoveReplicaAssignment(targetNodeId, assignment) {
-    const replicaId = assignment?.replicaToMove;
-    if (!replicaId) {
-      throw new Error('MOVE_REPLICA reservation requires replicaToMove');
-    }
-
-    const activeReservations = await this.getActiveMoveReplicaAssignmentReservations();
-    const conflictingReservation = activeReservations.find((reservation) =>
-      reservation.replicaId === replicaId,
-    );
-    if (conflictingReservation) {
-      this.logger.warn(BOOTSTRAP_API_LOG_MSG.MOVE_REPLICA_ASSIGNMENT_CONFLICT, {
-        requestedNodeId: targetNodeId,
-        replicaId,
-        conflictingAssignmentId: conflictingReservation.assignmentId,
-        conflictingTargetNodeId: conflictingReservation.targetNodeId,
-      });
-      throw new Error('MOVE_REPLICA reservation conflict');
-    }
-
-    const now = Date.now();
-    const assignmentId = uuidv4();
-    const leaseExpiresAt = now + this.moveReplicaAssignmentLeaseMs;
-    const reservation = {
-      assignmentId,
-      replicaId,
-      sourceNodeId: assignment.sourceNodeId || null,
-      targetNodeId,
-      groupId: assignment.groupId || null,
-      status: BOOTSTRAP_API_HANDOFF_STATUS.PREPARING,
-      leaseExpiresAt,
-      updatedAt: now,
-    };
-
-    if (this.sqlQueryEngine) {
-      const stepsHistory = [{
-        phase: 'reserved',
-        step: WORKFLOW_STEP.PENDING,
-        status: reservation.status,
-        timestamp: now,
-        leaseExpiresAt,
-      }];
-      const params = [
-        assignmentId,
-        BOOTSTRAP_API_ASSIGNMENT.OPERATION_TYPE,
-        assignment.groupId || null,
-        replicaId,
-        assignment.sourceNodeId || null,
-        targetNodeId,
-        reservation.status,
-        WORKFLOW_STEP.PENDING,
-        now,
-        now,
-        leaseExpiresAt,
-        null,
-        JSON.stringify(stepsHistory),
-        SERVICE_TYPE.MESSAGE_GROUP,
-        assignment.groupId || null,
-      ];
-      const persistResult = await this.executeBootstrapControlPlaneQuery(
-        BOOTSTRAP_API_SQL.INSERT_REPLICA_OPERATION,
-        params,
-      );
-      if (persistResult?.success === false) {
-        throw this.buildBootstrapControlPlaneQueryError(
-          persistResult,
-          'Failed to persist MOVE_REPLICA assignment reservation',
-        );
-      }
-    }
-
-    this.moveReplicaAssignmentReservations.set(assignmentId, reservation);
-    this.logger.info(BOOTSTRAP_API_LOG_MSG.MOVE_REPLICA_ASSIGNMENT_RESERVED, {
-      assignmentId,
-      replicaId,
-      targetNodeId,
-      sourceNodeId: reservation.sourceNodeId,
-      leaseExpiresAt,
-    });
-    return reservation;
+    return this.moveReplicaAssignmentOwner
+      .reserveMoveReplicaAssignment(targetNodeId, assignment);
   }
 
   /**
@@ -3763,38 +2981,13 @@ class BootstrapAPI {
     workflowStep,
     errorMessage = null,
   ) {
-    const existing = this.moveReplicaAssignmentReservations.get(assignmentId);
-    const now = Date.now();
-    const nextReservation = {
-      ...(existing || {}),
-      assignmentId,
-      status,
-      updatedAt: now,
-      leaseExpiresAt: now,
-    };
-    this.moveReplicaAssignmentReservations.set(assignmentId, nextReservation);
-
-    if (this.sqlQueryEngine) {
-      const updateResult = await this.executeBootstrapControlPlaneQuery(
-        BOOTSTRAP_API_SQL.UPDATE_REPLICA_OPERATION,
-        [
-          status,
-          workflowStep,
-          now,
-          now,
-          errorMessage,
-          JSON.stringify(existing?.stepsHistory || []),
-          assignmentId,
-        ],
+    return this.moveReplicaAssignmentOwner
+      .markMoveReplicaAssignmentReservationTerminal(
+        assignmentId,
+        status,
+        workflowStep,
+        errorMessage,
       );
-      if (updateResult?.success === false) {
-        this.logger.warn(BOOTSTRAP_API_LOG_MSG.MOVE_REPLICA_ASSIGNMENT_VALIDATION_FAILED, {
-          assignmentId,
-          status,
-          error: updateResult.error || 'failed to persist reservation terminal status',
-        });
-      }
-    }
   }
 
   /**
@@ -3810,77 +3003,11 @@ class BootstrapAPI {
     reservation,
     now = Date.now(),
   ) {
-    if (!reservation?.assignmentId) {
-      return;
-    }
-
-    const existingStepsHistory = Array.isArray(reservation.stepsHistory) ?
-      reservation.stepsHistory :
-      [];
-    const lastStep = existingStepsHistory[existingStepsHistory.length - 1] || null;
-    const stepsHistory = lastStep?.phase === 'observed_committed' &&
-      lastStep?.step === WORKFLOW_STEP.ACTIVE &&
-      lastStep?.status === BOOTSTRAP_API_HANDOFF_STATUS.COMMITTED ?
-      existingStepsHistory :
-      [
-        ...existingStepsHistory,
-        {
-          phase: 'observed_committed',
-          step: WORKFLOW_STEP.ACTIVE,
-          status: BOOTSTRAP_API_HANDOFF_STATUS.COMMITTED,
-          timestamp: now,
-        },
-      ];
-
-    const nextReservation = {
-      ...reservation,
-      status: BOOTSTRAP_API_HANDOFF_STATUS.COMMITTED,
-      leaseExpiresAt: now,
-      updatedAt: now,
-      stepsHistory,
-    };
-    this.moveReplicaAssignmentReservations.set(
-      reservation.assignmentId,
-      nextReservation,
-    );
-
-    if (this.sqlQueryEngine) {
-      const updateResult = await this.executeBootstrapControlPlaneQuery(
-        BOOTSTRAP_API_SQL.UPDATE_REPLICA_OPERATION,
-        [
-          BOOTSTRAP_API_HANDOFF_STATUS.COMMITTED,
-          WORKFLOW_STEP.ACTIVE,
-          now,
-          now,
-          null,
-          JSON.stringify(stepsHistory),
-          reservation.assignmentId,
-        ],
+    return this.moveReplicaAssignmentOwner
+      .reconcileMoveReplicaAssignmentReservationToCommitted(
+        reservation,
+        now,
       );
-      if (updateResult?.success === false) {
-        this.logger.warn(
-          BOOTSTRAP_API_LOG_MSG.MOVE_REPLICA_ASSIGNMENT_VALIDATION_FAILED,
-          {
-            assignmentId: reservation.assignmentId,
-            status: BOOTSTRAP_API_HANDOFF_STATUS.COMMITTED,
-            error:
-              updateResult.error ||
-              'failed to reconcile MOVE_REPLICA assignment to committed state',
-          },
-        );
-        return;
-      }
-    }
-
-    this.logger.info(
-      BOOTSTRAP_API_LOG_MSG.MOVE_REPLICA_ASSIGNMENT_RECONCILED,
-      {
-        assignmentId: reservation.assignmentId,
-        replicaId: reservation.replicaId,
-        targetNodeId: reservation.targetNodeId,
-        sourceNodeId: reservation.sourceNodeId || null,
-      },
-    );
   }
 
   /**
