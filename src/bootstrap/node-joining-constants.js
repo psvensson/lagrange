@@ -10,6 +10,11 @@ const JOINING_DEFAULT = Object.freeze({
   leadershipWaitMaxDelayMs: 5000,
   leadershipWaitBackoffMultiplier: 2,
   leadershipWaitJitterRatio: 0.2,
+  autoResumeRetryableFailures: false,
+  retryableFailureResumeMaxAttempts: 4,
+  retryableFailureResumeBaseDelayMs: 250,
+  retryableFailureResumeMaxDelayMs: 5000,
+  retryableFailureResumeMaxElapsedMs: TIME_MS.MINUTE * 3,
   readySignalMaxAttempts: 6,
   readySignalRetryDelayMs: 1000,
   readySignalRetryMaxDelayMs: 5000,
@@ -153,6 +158,10 @@ const JOINING_LOG_MSG = Object.freeze({
   NODE_STATE_UPDATE_RETRYING:
     'Retrying NODE_STATE_UPDATE against a different control-plane target',
   NODE_STATE_UPDATE_FAILED: 'Failed to send NODE_STATE_UPDATE to control plane',
+  RETRYABLE_FAILURE_RESUMING:
+    'Resuming join session after retryable control-plane failure',
+  RETRYABLE_FAILURE_RESUME_EXHAUSTED:
+    'Join retryable resume budget exhausted',
   WS_INFRA_READY: 'WebSocket infrastructure setup complete',
   STATE_QUERY_START: 'Querying system state',
   STATE_QUERY_HYDRATING_CACHE: 'Hydrating system table cache',

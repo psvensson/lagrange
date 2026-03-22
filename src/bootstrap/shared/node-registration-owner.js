@@ -8,6 +8,10 @@ import {
 import {createBootstrapCacheHydrationApplier} from
   '../bootstrap-cache-hydration-applier.js';
 import {
+  getControlPlaneRetryAfterMs,
+  isRetryableControlPlaneError,
+} from '../../control-plane/control-plane-error-classification.js';
+import {
   JOINING_ERROR_MSG,
   JOINING_LOG_MSG,
 } from '../node-joining-constants.js';
@@ -18,6 +22,7 @@ import {
   SERVICE_STATUS,
   STATE,
   TABLES,
+  TIME_MS,
   TRANSPORT_TYPE,
   TYPEOF,
 } from '../../constants/index.js';
@@ -28,6 +33,11 @@ const LOG_META_ENDPOINT_REGISTER_FAILED =
   'Failed to register built-in meta service endpoints';
 const LOG_NODE_REGISTER_ERROR_PREFIX =
   'Failed to register node: ';
+const LOG_JOIN_ADMISSION_WRITE_RETRY =
+  'Retrying join admission system-table write after retryable failure';
+const JOIN_ADMISSION_WRITE_RETRY_TIMEOUT_MS = TIME_MS.SECOND * NUM.TWO;
+const JOIN_ADMISSION_WRITE_RETRY_BASE_DELAY_MS = NUM.HUNDRED;
+const JOIN_ADMISSION_WRITE_RETRY_MAX_DELAY_MS = TIME_MS.SECOND;
 
 const hasFunction = (value) => typeof value === TYPEOF.FUNCTION;
 
@@ -65,9 +75,10 @@ class NodeRegistrationOwner {
           nodeId: this.nodeId,
         });
 
-      const nodeUpsertResult = await this.upsertSystemTableRow(
+      const nodeUpsertResult = await this.upsertSystemTableRowWithRetry(
         TABLES.NODES,
         budgetRow,
+        {admissionTarget: 'node membership publication'},
       );
       if (nodeUpsertResult?.success !== true) {
         throw new Error(
@@ -204,9 +215,10 @@ class NodeRegistrationOwner {
       [COLUMN.UPDATED_AT]: now,
     };
 
-    const endpointResult = await this.upsertSystemTableRow(
+    const endpointResult = await this.upsertSystemTableRowWithRetry(
       TABLES.NODE_ENDPOINTS,
       endpointData,
+      {admissionTarget: 'node websocket endpoint publication'},
     );
     if (!endpointResult?.success) {
       throw new Error(
@@ -231,7 +243,14 @@ class NodeRegistrationOwner {
       await registerBuiltInMetaServiceEndpoints({
         upsertRow: async (tableName, row) => {
           endpointRows.push(row);
-          return this.upsertSystemTableRow(tableName, row);
+          return this.upsertSystemTableRowWithRetry(
+            tableName,
+            row,
+            {
+              admissionTarget:
+                'built-in meta service endpoint publication',
+            },
+          );
         },
         nodeId: this.nodeId,
         nodeAddress: this.nodeAddress,
@@ -271,6 +290,55 @@ class NodeRegistrationOwner {
       .executeQuery(sql, params, upsertOptions);
   }
 
+  async upsertSystemTableRowWithRetry(
+    tableName,
+    rowData,
+    options = {},
+  ) {
+    const startMs = this.delegates.getNow()();
+    const deadlineMs =
+      startMs + this.getJoinAdmissionWriteRetryTimeoutMs();
+    let nextDelayMs = JOIN_ADMISSION_WRITE_RETRY_BASE_DELAY_MS;
+    let attempt = NUM.ZERO;
+
+    while (true) {
+      attempt += NUM.ONE;
+      try {
+        const result = await this.upsertSystemTableRow(
+          tableName,
+          rowData,
+        );
+        if (result?.success !== false) {
+          return result;
+        }
+        if (!this.shouldRetryJoinAdmissionWrite(result, deadlineMs)) {
+          return result;
+        }
+        nextDelayMs = await this.delayJoinAdmissionWriteRetry(
+          deadlineMs,
+          nextDelayMs,
+          result,
+          tableName,
+          attempt,
+          options,
+        );
+        continue;
+      } catch (error) {
+        if (!this.shouldRetryJoinAdmissionWrite(error, deadlineMs)) {
+          throw error;
+        }
+        nextDelayMs = await this.delayJoinAdmissionWriteRetry(
+          deadlineMs,
+          nextDelayMs,
+          error,
+          tableName,
+          attempt,
+          options,
+        );
+      }
+    }
+  }
+
   getJoinTimeUpsertOptions() {
     const options = {deliveryPriority: 'critical'};
     if (this.delegates.getCdcSubscriptionsActive?.() !== true) {
@@ -299,6 +367,85 @@ class NodeRegistrationOwner {
       'UPSERT',
       rowData,
     );
+  }
+
+  getJoinAdmissionWriteRetryTimeoutMs() {
+    const configured =
+      this.delegates.getConfig?.()?.joinAdmissionWriteRetryTimeoutMs;
+    if (Number.isFinite(configured) && configured >= NUM.ZERO) {
+      return Math.floor(configured);
+    }
+    return JOIN_ADMISSION_WRITE_RETRY_TIMEOUT_MS;
+  }
+
+  shouldRetryJoinAdmissionWrite(resultOrError, deadlineMs) {
+    if (!isRetryableControlPlaneError(resultOrError)) {
+      return false;
+    }
+    return this.delegates.getNow()() < deadlineMs;
+  }
+
+  async delayJoinAdmissionWriteRetry(
+    deadlineMs,
+    nextDelayMs,
+    resultOrError,
+    tableName,
+    attempt,
+    options = {},
+  ) {
+    const now = this.delegates.getNow()();
+    const remainingMs = Math.max(NUM.ZERO, deadlineMs - now);
+    if (remainingMs <= NUM.ZERO) {
+      return nextDelayMs;
+    }
+
+    const retryAfterMs = getControlPlaneRetryAfterMs(resultOrError);
+    const boundedDelayMs = Math.min(
+      remainingMs,
+      Math.min(
+        JOIN_ADMISSION_WRITE_RETRY_MAX_DELAY_MS,
+        Math.max(
+          JOIN_ADMISSION_WRITE_RETRY_BASE_DELAY_MS,
+          retryAfterMs > NUM.ZERO ? retryAfterMs : nextDelayMs,
+        ),
+      ),
+    );
+
+    this.delegates.getLogger().warn(
+      LOG_JOIN_ADMISSION_WRITE_RETRY,
+      {
+        nodeId: this.nodeId,
+        tableName,
+        attempt,
+        retryAfterMs:
+          retryAfterMs > NUM.ZERO ? retryAfterMs : null,
+        delayMs: boundedDelayMs,
+        remainingMs,
+        admissionTarget: options.admissionTarget || null,
+        error:
+          resultOrError?.error ||
+          resultOrError?.message ||
+          'retryable join admission write failure',
+      },
+    );
+
+    await this.sleep(boundedDelayMs);
+    return Math.min(
+      JOIN_ADMISSION_WRITE_RETRY_MAX_DELAY_MS,
+      Math.max(
+        JOIN_ADMISSION_WRITE_RETRY_BASE_DELAY_MS,
+        nextDelayMs * NUM.TWO,
+      ),
+    );
+  }
+
+  async sleep(delayMs) {
+    const sleepImpl = this.delegates.getSleep?.();
+    if (hasFunction(sleepImpl)) {
+      await sleepImpl(delayMs);
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
   }
 }
 

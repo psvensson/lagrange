@@ -145,6 +145,10 @@ class BootstrapAPI {
     this.cdcIntegrationService = options.cdcIntegrationService ||
       this.bootstrapService?.cdcIntegrationService ||
       null;
+    this.controlPlaneReadinessService =
+      options.controlPlaneReadinessService ||
+      this.bootstrapService?.controlPlaneReadinessService ||
+      null;
     this.epochManager = options.epochManager || null;
     this.messageRouter = options.messageRouter || null;
     this.controlPlaneSystemTableGateway =
@@ -429,6 +433,10 @@ class BootstrapAPI {
           getSeedNodeId: () => this.seedNodeId,
           getSeedNodeAddress: () => this.seedNodeAddress,
           getMessageGroups: () => this.getMessageGroups(),
+          getControlPlaneReadinessService: () =>
+            this.controlPlaneReadinessService ||
+            this.bootstrapService?.controlPlaneReadinessService ||
+            null,
           getEpochManager: () =>
             this.epochManager || this.bootstrapService?.getEpochManager?.(),
         },

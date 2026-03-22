@@ -24,8 +24,13 @@ import {
 } from './control-plane-runtime-bundle.js';
 import {
   OperationType,
+  OPERATION_METADATA_KEY,
+  getOperationMetadataStringArray,
   isCoordinatorOwnedOperationType,
 } from '../rebalancer/replica-status.js';
+import {
+  ReplicaOperationField,
+} from '../rebalancer/replica-operation-constants.js';
 import {REBALANCE_COORDINATOR_EVENT} from '../rebalancer/rebalancer-constants.js';
 import {
   COLUMN,
@@ -773,14 +778,32 @@ class ReplicaDispatchService extends EventEmitter {
           operationId,
         );
       } else {
-        const operation = await this.rebalanceCoordinator
+        const claimedOperation = await this.rebalanceCoordinator
           .claimDispatchTransition(operationId);
-        if (!operation) {
+        if (!claimedOperation) {
           this.logger.debug(DISPATCH_LOG_MSG.CLAIM_SKIPPED, {
             operationId,
             nodeId: this.nodeId,
           });
           return;
+        }
+        const rowOperation = this.buildOperationFromRow(row);
+        const operation = {
+          ...claimedOperation,
+        };
+        if (!Array.isArray(operation.stepsHistory) &&
+            Array.isArray(rowOperation.stepsHistory)) {
+          operation.stepsHistory = rowOperation.stepsHistory;
+        }
+        if (!Array.isArray(operation[ReplicaOperationField.REPLICA_IDS]) &&
+            Array.isArray(rowOperation[ReplicaOperationField.REPLICA_IDS])) {
+          operation[ReplicaOperationField.REPLICA_IDS] =
+            rowOperation[ReplicaOperationField.REPLICA_IDS];
+        }
+        if (!Array.isArray(operation[ReplicaOperationField.PEER_ADDRESSES]) &&
+            Array.isArray(rowOperation[ReplicaOperationField.PEER_ADDRESSES])) {
+          operation[ReplicaOperationField.PEER_ADDRESSES] =
+            rowOperation[ReplicaOperationField.PEER_ADDRESSES];
         }
         dispatchResult = await this.rebalanceCoordinator
           .executeOperation(operation);
@@ -1465,7 +1488,7 @@ class ReplicaDispatchService extends EventEmitter {
   buildOperationFromRow(row) {
     const stepsHistory = row.steps_history ?
       JSON.parse(row.steps_history) : [];
-    return {
+    const operation = {
       operationId: row.operation_id,
       type: row.type,
       partitionId: row.partition_id,
@@ -1482,6 +1505,21 @@ class ReplicaDispatchService extends EventEmitter {
       errorMessage: row.error_message,
       stepsHistory,
     };
+    const replicaIds = getOperationMetadataStringArray(
+      stepsHistory,
+      OPERATION_METADATA_KEY.REPLICA_IDS,
+    );
+    if (replicaIds.length > NUM.ZERO) {
+      operation[ReplicaOperationField.REPLICA_IDS] = replicaIds;
+    }
+    const peerAddresses = getOperationMetadataStringArray(
+      stepsHistory,
+      OPERATION_METADATA_KEY.PEER_ADDRESSES,
+    );
+    if (peerAddresses.length > NUM.ZERO) {
+      operation[ReplicaOperationField.PEER_ADDRESSES] = peerAddresses;
+    }
+    return operation;
   }
 
   /**

@@ -17,6 +17,7 @@ const DEFAULT_TIMELINE_ENTRIES_PER_OPERATION = 16;
 const HOURS_PER_DAY = NUM.THREE * NUM.EIGHT;
 const MINUTES_PER_HOUR = NUM.THIRTY * NUM.TWO;
 const SERVICE_TYPE_PARTITION = 'partition';
+const SERVICE_TYPE_MESSAGE_GROUP = 'message_group';
 const BOOTSTRAP_MOVE_ASSIGNMENT_OPERATION_TYPE = 'MOVE_ASSIGNMENT';
 const STALE_TIMEOUT_CLASSIFICATION_LOOKBACK_MS =
   TIME_MS.MINUTE *
@@ -134,6 +135,18 @@ function normalizeReplicaOperationRecord(row, options = {}) {
       'entity_id',
       'entityId',
     ) || UNKNOWN_PARTITION_GROUP_ID),
+    entityType: String(firstStringField(
+      row,
+      'entity_type',
+      'entityType',
+    ) || SERVICE_TYPE_PARTITION).toLowerCase(),
+    entityId: String(firstStringField(
+      row,
+      'entity_id',
+      'entityId',
+      'partition_id',
+      'partitionId',
+    ) || UNKNOWN_PARTITION_GROUP_ID),
     sourceNodeId: String(firstStringField(
       row,
       'source_node_id',
@@ -187,9 +200,14 @@ function hasObservedActiveTargetReplica(record, options = {}) {
   }
 
   const replicaId = String(record?.replicaId || '');
-  const partitionId = String(record?.partitionGroupId || '');
+  const entityType = String(
+    record?.entityType || SERVICE_TYPE_PARTITION,
+  ).toLowerCase();
+  const entityId = String(
+    record?.entityId || record?.partitionGroupId || '',
+  );
   const targetNodeId = String(record?.targetNodeId || '');
-  if (!replicaId || !partitionId || !targetNodeId) {
+  if (!replicaId || !entityId || !targetNodeId) {
     return false;
   }
 
@@ -203,7 +221,7 @@ function hasObservedActiveTargetReplica(record, options = {}) {
       'serviceType',
       'type',
     ) || '').toLowerCase();
-    if (serviceType && serviceType !== SERVICE_TYPE_PARTITION) {
+    if (serviceType && serviceType !== entityType) {
       continue;
     }
     if (String(firstStringField(
@@ -219,14 +237,6 @@ function hasObservedActiveTargetReplica(record, options = {}) {
     ) || '') !== targetNodeId) {
       continue;
     }
-    if (String(firstStringField(
-      serviceRow,
-      'partition_id',
-      'partitionId',
-      'id',
-    ) || '') !== partitionId) {
-      continue;
-    }
     const serviceReplicaId = firstStringField(
       serviceRow,
       'replica_id',
@@ -236,6 +246,28 @@ function hasObservedActiveTargetReplica(record, options = {}) {
       'id',
     );
     if (serviceReplicaId === replicaId) {
+      if (entityType === SERVICE_TYPE_PARTITION) {
+        if (String(firstStringField(
+          serviceRow,
+          'partition_id',
+          'partitionId',
+          'id',
+        ) || '') === entityId) {
+          return true;
+        }
+        continue;
+      }
+      if (entityType === SERVICE_TYPE_MESSAGE_GROUP) {
+        if (String(firstStringField(
+          serviceRow,
+          'group_id',
+          'groupId',
+          'id',
+        ) || '') === entityId) {
+          return true;
+        }
+        continue;
+      }
       return true;
     }
   }

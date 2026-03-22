@@ -272,6 +272,7 @@ class AdminWebSocketAPI {
       nodeId: this.nodeId,
       cacheMutationTarget: this.cacheMutationTarget,
       sqlQueryEngine: this.sqlQueryEngine,
+      messageRouter: this.messageRouter,
       cdcIntegrationService: this.cdcIntegrationService,
       controlPlaneReadinessService: this.controlPlaneReadinessService,
       heartbeatService: this.heartbeatService,

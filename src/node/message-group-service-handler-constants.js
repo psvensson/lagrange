@@ -22,6 +22,8 @@ const MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG = Object.freeze({
     'Message-group replica already exists in active state',
   CREATE_IN_PROGRESS:
     'Message-group replica creation already in progress',
+  CREATE_TOPOLOGY_INVALID:
+    'CREATE_REPLICA rejected due to incomplete message-group topology',
   OPERATION_IN_PROGRESS: 'Operation already in progress',
   ASYNC_CREATE_FAILED: 'Async message-group replica creation failed',
   CREATE_COMPLETED: 'Message-group replica creation completed',
@@ -65,6 +67,8 @@ const MESSAGE_GROUP_SERVICE_HANDLER_ERROR_MSG = Object.freeze({
     'MessageGroupServiceHandler requires cdcIntegrationService',
   CACHE_REQUIRED:
     'MessageGroupServiceHandler requires systemTableCache',
+  CREATE_TOPOLOGY_REQUIRED: (groupId, replicaId) =>
+    `CREATE_REPLICA for ${groupId} requires canonical peer topology for ${replicaId}`,
   REPLICA_HANDLER_NOT_REGISTERED: (replicaId) =>
     `Message-group replica handler was not registered for ${replicaId}`,
 });

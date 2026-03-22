@@ -217,6 +217,87 @@ describe('MessageGroupServiceHandler', () => {
       assert.equal(cdc.operations[0].type, 'upsert');
     });
 
+  it('creates a message-group replica from explicit topology when cache is sparse',
+    async () => {
+      const {handler, cdc, calls} = createHandler({
+        cache: createMockCache({
+          services: [],
+          replica_operations: [],
+        }),
+        messageRouter: {
+          isRegistered(address) {
+            return address === 'test-node/message-group/mg-1-r4';
+          },
+        },
+      });
+
+      const response = await handler.handleCreateReplica({
+        [ReplicaOperationField.OPERATION_ID]: 'op-create-explicit',
+        [ReplicaOperationField.ENTITY_ID]: 'mg-1',
+        [ReplicaOperationField.REPLICA_ID]: 'mg-1-r4',
+        [ReplicaOperationField.REPLICA_IDS]: [
+          'mg-1-r1',
+          'mg-1-r2',
+          'mg-1-r3',
+          'mg-1-r4',
+        ],
+        [ReplicaOperationField.PEER_ADDRESSES]: [
+          'node-a/message-group/mg-1-r1',
+          'node-b/message-group/mg-1-r2',
+          'node-c/message-group/mg-1-r3',
+          'test-node/message-group/mg-1-r4',
+        ],
+      });
+
+      assert.equal(
+        response.status,
+        ReplicaOperationResponseStatus.INITIATED,
+      );
+
+      await flushImmediate();
+      await flushImmediate();
+
+      assert.equal(calls.length, 2);
+      assert.deepEqual(
+        calls[0].options.replicaIds,
+        ['mg-1-r1', 'mg-1-r2', 'mg-1-r3', 'mg-1-r4'],
+      );
+      assert.deepEqual(
+        calls[0].options.peerAddresses,
+        [
+          'test-node/message-group/mg-1-r4',
+          'node-a/message-group/mg-1-r1',
+          'node-b/message-group/mg-1-r2',
+          'node-c/message-group/mg-1-r3',
+        ],
+      );
+      assert.equal(cdc.upserts.length, 1);
+    });
+
+  it('rejects incomplete explicit topology for a message-group replica',
+    async () => {
+      const {handler, calls} = createHandler({
+        cache: createMockCache({
+          services: [],
+          replica_operations: [],
+        }),
+      });
+
+      const response = await handler.handleCreateReplica({
+        [ReplicaOperationField.OPERATION_ID]: 'op-create-invalid-topology',
+        [ReplicaOperationField.ENTITY_ID]: 'mg-1',
+        [ReplicaOperationField.REPLICA_ID]: 'mg-1-r4',
+        [ReplicaOperationField.REPLICA_IDS]: ['mg-1-r4'],
+        [ReplicaOperationField.PEER_ADDRESSES]: [
+          'test-node/message-group/mg-1-r4',
+        ],
+      });
+
+      assert.equal(response.status, ReplicaOperationResponseStatus.ERROR);
+      assert.match(response.error, /requires canonical peer topology/);
+      assert.equal(calls.length, 0);
+    });
+
   it('fails closed when the local replica handler is not registered',
     async () => {
       const {handler, cdc, calls} = createHandler({

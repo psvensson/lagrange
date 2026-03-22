@@ -203,3 +203,67 @@ test(
     );
   },
 );
+
+test(
+  'JoinReadinessEvaluator - excludes observed-converged message-group ADD rows from topology blockers',
+  async (t) => {
+    const harness = createEvaluatorHarness();
+    const cache = {
+      getAll(tableName) {
+        switch (tableName) {
+          case 'nodes':
+            return [{
+              node_id: 'seed-node',
+              status: 'active',
+            }, {
+              node_id: 'target-node',
+              status: 'active',
+            }];
+          case 'services':
+            return [{
+              service_id: 'mg-1-r2',
+              replica_id: 'mg-1-r2',
+              service_type: 'message_group',
+              group_id: 'mg-1',
+              node_id: 'target-node',
+              status: 'active',
+            }];
+          case 'replica_operations':
+            return [{
+              operation_id: 'add-mg-1',
+              type: 'ADD',
+              entity_type: 'message_group',
+              entity_id: 'mg-1',
+              replica_id: 'mg-1-r2',
+              source_node_id: 'seed-node',
+              target_node_id: 'target-node',
+              status: 'creating',
+              workflow_step: 'CREATING',
+              updated_at: 1234,
+            }];
+          default:
+            return [];
+        }
+      },
+    };
+    harness.evaluator.delegates.getMissingSystemServiceLeaders = () => ({
+      partitions: [],
+      messageGroups: [],
+    });
+    harness.evaluator.delegates.getBlockingSystemServiceLeaders = () => ({
+      partitions: [],
+      messageGroups: [],
+    });
+
+    const result =
+      harness.evaluator.collectCanonicalInFlightReplicaOperationDetails(
+        cache,
+      );
+
+    t.equal(
+      result.inFlightOperations.length,
+      0,
+      'topology gating should not count a message-group ADD whose target already owns the active service row',
+    );
+  },
+);

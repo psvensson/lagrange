@@ -678,4 +678,89 @@ test('REPLACE replica workflow', async (t) => {
       }
     },
   );
+
+  await t.test(
+    'RebalanceCoordinator derives canonical topology for message-group CREATE_REPLICA',
+    async (t) => {
+      const deliveries = [];
+      const messageRouter = {
+        async deliver(target, payload) {
+          deliveries.push({target, payload});
+          return {
+            acknowledged: true,
+            status: 'initiated',
+          };
+        },
+      };
+
+      const coordinator = createTestCoordinator({
+        nodeId: 'seed-node',
+        enableTimeouts: false,
+        messageRouter,
+        cacheData: {
+          services: [
+            {
+              service_id: 'mg-1-r1',
+              replica_id: 'mg-1-r1',
+              service_type: 'message_group',
+              group_id: 'mg-1',
+              node_id: 'seed-node',
+              status: 'active',
+              address: 'seed-node/message-group/mg-1-r1',
+            },
+            {
+              service_id: 'mg-1-r2',
+              replica_id: 'mg-1-r2',
+              service_type: 'message_group',
+              group_id: 'mg-1',
+              node_id: 'node-2',
+              status: 'active',
+              address: 'node-2/message-group/mg-1-r2',
+            },
+            {
+              service_id: 'mg-1-r3',
+              replica_id: 'mg-1-r3',
+              service_type: 'message_group',
+              group_id: 'mg-1',
+              node_id: 'node-3',
+              status: 'active',
+              address: 'node-3/message-group/mg-1-r3',
+            },
+          ],
+        },
+      });
+      coordinator.initialize();
+
+      try {
+        const operation = await coordinator.createOperation({
+          type: OperationType.ADD,
+          partitionId: 'mg-1',
+          entityType: 'message_group',
+          entityId: 'mg-1',
+          nodeId: 'node-4',
+          replicaId: 'mg-1-r4',
+        });
+
+        await coordinator.executeOperation(operation);
+
+        t.same(
+          deliveries[0]?.payload?.[ReplicaOperationField.REPLICA_IDS],
+          ['mg-1-r1', 'mg-1-r2', 'mg-1-r3', 'mg-1-r4'],
+          'message-group create payload should include canonical replica ids',
+        );
+        t.same(
+          deliveries[0]?.payload?.[ReplicaOperationField.PEER_ADDRESSES],
+          [
+            'seed-node/message-group/mg-1-r1',
+            'node-2/message-group/mg-1-r2',
+            'node-3/message-group/mg-1-r3',
+            'node-4/message-group/mg-1-r4',
+          ],
+          'message-group create payload should include canonical peer addresses',
+        );
+      } finally {
+        await coordinator.shutdown();
+      }
+    },
+  );
 });

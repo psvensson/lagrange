@@ -369,6 +369,68 @@ test('PartitionService - flushes services role update when local services leader
     await partition.shutdown();
   });
 
+test('PartitionService - flushes partition leader update when local partitions leader exists',
+  async (t) => {
+    const updates = [];
+    const partition = new PartitionService({
+      partitionId: 'partitions-p1',
+      tableId: 'partitions',
+      tableName: 'partitions',
+      replicaId: 'partitions-p1-r1',
+      replicaIds: ['partitions-p1-r1'],
+      nodeId: 'node-1',
+      dbPath: ':memory:',
+      suppressLifecycleLogs: true,
+      systemTableCache: new SystemTableCache(),
+      cdcIntegrationService: {
+        canWriteSystemTableLocally: (tableName) =>
+          tableName === SYSTEM_TABLE_NAME.PARTITIONS,
+        updateSystemTableRow: async (tableName, whereClause, data) => {
+          updates.push({tableName, whereClause, data});
+          return {success: true};
+        },
+      },
+    });
+
+    partition.isLeader = true;
+    partition.pendingLeaderNodeUpdate = 'node-1';
+    partition.persistedLeaderNodeId = null;
+
+    const result = await partition.flushLeaderNodeUpdate();
+
+    t.equal(
+      result.reason,
+      'applied',
+      'should persist when the local partitions leader owns the write',
+    );
+    t.equal(updates.length, 1, 'should issue one partitions-table write');
+    t.equal(
+      updates[0].tableName,
+      SYSTEM_TABLE_NAME.PARTITIONS,
+      'should target partitions',
+    );
+    t.same(updates[0].whereClause, {
+      [COLUMN.PARTITION_ID]: 'partitions-p1',
+    }, 'should update the local partitions owner row');
+    t.equal(
+      updates[0].data?.[COLUMN.LEADER_NODE_ID],
+      'node-1',
+      'should publish the elected leader node id',
+    );
+    t.equal(
+      partition.pendingLeaderNodeUpdate,
+      null,
+      'pending leader update should clear after success',
+    );
+    t.equal(
+      partition.persistedLeaderNodeId,
+      'node-1',
+      'persisted leader update should track the published owner metadata',
+    );
+
+    await partition.shutdown();
+  });
+
 
 test('PartitionService - creates table from schema', async (t) => {
   const schema = {
@@ -2234,7 +2296,7 @@ test('PartitionService - persists initial follower role for multi-replica startu
   });
 
 test(
-  'PartitionService - defers role metadata publication until traffic ready',
+  'PartitionService - publishes role metadata before traffic ready when services leader is local',
   async (t) => {
     const updates = [];
     const now = Date.now();
@@ -2271,16 +2333,16 @@ test(
     partition.pendingRoleUpdate = RaftRole.LEADER;
     partition.persistedRole = null;
 
-    const deferredResult = await partition.flushRoleUpdate();
+    const publishResult = await partition.flushRoleUpdate();
     t.equal(
-      deferredResult.reason,
-      'settling',
-      'partition role publication should stay deferred until lifecycle reaches metadata-safe readiness',
+      publishResult.reason,
+      'applied',
+      'partition role publication should not wait on lifecycle readiness once the local services leader can accept the write',
     );
     t.equal(
       updates.length,
-      0,
-      'partition role publication should not write while lifecycle is still settling',
+      1,
+      'partition role publication should write immediately when the local services leader is available',
     );
 
     systemTableCache.applySystemTableChange(TABLES.NODES, CDCOperation.UPDATE, {
@@ -2298,8 +2360,8 @@ test(
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     const noopResult = await partition.flushRoleUpdate();
-    t.equal(noopResult.reason, 'noop', 'ready-heartbeat transition should not force a duplicate write');
-    t.equal(updates.length, 1, 'control-ready leader-lag transition should release one deferred services write');
+    t.equal(noopResult.reason, 'noop', 'later readiness transitions should not force duplicate writes');
+    t.equal(updates.length, 1, 'later readiness transitions should not create duplicate role writes');
 
     await partition.shutdown();
   },

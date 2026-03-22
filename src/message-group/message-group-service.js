@@ -107,7 +107,6 @@ const LEADER_NODE_PERSIST_ERROR_MSG =
   'Failed to persist message group leader update';
 const FLUSH_SKIP_NOT_OWNER = 'not-owner';
 const FLUSH_SKIP_READY = 'ready';
-const FLUSH_SKIP_SETTLING = 'settling';
 const FLUSH_SKIP_DISABLED = 'disabled';
 const CDC_FORWARD_MAX_RELAY_DEPTH = NUM.TWO;
 const CDC_FORWARD_ERROR_DETAIL_MAX_LENGTH = NUM.TWO_HUNDRED_FIFTY_SIX;
@@ -661,14 +660,11 @@ class MessageGroupService extends EventEmitter {
         raft_role: role,
       }),
       prepareFlush: () => ({
-        skip: !this.publishRoleMetadata ||
-          !this.isMetadataPublicationReady(),
+        skip: !this.publishRoleMetadata,
         clearPending: !this.publishRoleMetadata,
         reason: !this.publishRoleMetadata ?
           FLUSH_SKIP_DISABLED :
-          (!this.isMetadataPublicationReady() ?
-            FLUSH_SKIP_SETTLING :
-            FLUSH_SKIP_READY),
+          FLUSH_SKIP_READY,
       }),
       readRowFromCache: (systemTableCache) =>
         systemTableCache?.get?.(TABLES.SERVICES, this.replicaId) || null,
@@ -1867,6 +1863,7 @@ class MessageGroupService extends EventEmitter {
           new Error(deliveryResult.error || failureDescription);
       }
       messageEnvelope.status = MessageStatus.DELIVERED;
+      this.pendingMessages.delete(messageId);
       const {delivered: _d, attempt: _a, ...transportResult} = deliveryResult;
       return {
         messageId,
@@ -1886,6 +1883,7 @@ class MessageGroupService extends EventEmitter {
           null,
       });
       messageEnvelope.status = MessageStatus.FAILED;
+      this.pendingMessages.delete(messageId);
       throw error;
     }
   }
@@ -3152,7 +3150,12 @@ class MessageGroupService extends EventEmitter {
    * @private
    */
   isMessageGroupsLeaderAvailable() {
-    return isSystemTableWriteReady(this.systemTableCache, SYSTEM_TABLE_NAME.MESSAGE_GROUPS);
+    if (isSystemTableWriteReady(this.systemTableCache, SYSTEM_TABLE_NAME.MESSAGE_GROUPS)) {
+      return true;
+    }
+    return this.cdcIntegrationService?.canWriteSystemTableLocally?.(
+      SYSTEM_TABLE_NAME.MESSAGE_GROUPS,
+    ) === true;
   }
 
   /**

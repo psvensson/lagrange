@@ -48,6 +48,23 @@ function createNodeEvent(nodeId, timestamp = '1000000000000') {
   };
 }
 
+/**
+ * Create a CDC event for a non-system table.
+ * @param {string} id
+ * @param {string} [timestamp]
+ * @return {Object} CDC event
+ */
+function createUserTableEvent(id, timestamp = '1000000000000') {
+  return {
+    tableName: 'user_events',
+    operation: CDC_OPERATION.INSERT,
+    data: {id},
+    timestamp,
+    sourcePartition: 'partition-user-events-p1',
+    sourceReplica: 'partition-user-events-p1-r1',
+  };
+}
+
 test('CDCEventBuffer unit tests', async (t) => {
   t.test('empty buffer replay returns 0', async (t) => {
     const logger = createMockLogger();
@@ -125,6 +142,133 @@ test('CDCEventBuffer unit tests', async (t) => {
     t.equal(count, 2, 'second replay should deliver all preserved events');
     t.equal(buffer.size(), 0, 'buffer should clear after successful replay');
   });
+
+  t.test(
+    'internal cache propagation tables keep only the latest buffered event ' +
+    'per primary key',
+    async (t) => {
+      const logger = createMockLogger();
+      const buffer = new CDCEventBuffer({capacity: 10, logger});
+
+      const staleNodeEvent = createNodeEvent('node-1', '1000000000001');
+      const otherNodeEvent = createNodeEvent('node-2', '1000000000002');
+      const latestNodeEvent = {
+        ...createNodeEvent('node-1', '1000000000003'),
+        operation: CDC_OPERATION.UPDATE,
+        data: {node_id: 'node-1', status: 'ready'},
+      };
+
+      buffer.buffer(staleNodeEvent);
+      buffer.buffer(otherNodeEvent);
+      buffer.buffer(latestNodeEvent);
+
+      t.equal(
+        buffer.size(),
+        2,
+        'older buffered event for the same node is coalesced away',
+      );
+
+      const replayed = [];
+      const count = await buffer.replay((event) => {
+        replayed.push(event);
+      });
+
+      t.equal(count, 2, 'only the latest distinct rows are replayed');
+      t.same(
+        replayed.map((event) => event.data.node_id),
+        ['node-2', 'node-1'],
+        'latest event keeps its most recent position in the replay order',
+      );
+      t.equal(
+        replayed[1].timestamp,
+        latestNodeEvent.timestamp,
+        'the newest event version wins for the coalesced row',
+      );
+      t.equal(
+        replayed[1].operation,
+        CDC_OPERATION.UPDATE,
+        'the newest event operation is preserved',
+      );
+    },
+  );
+
+  t.test(
+    'non-internal CDC tables do not coalesce repeated primary-key events',
+    async (t) => {
+      const logger = createMockLogger();
+      const buffer = new CDCEventBuffer({capacity: 10, logger});
+
+      const firstEvent = createUserTableEvent('event-1', '1000000000001');
+      const secondEvent = {
+        ...createUserTableEvent('event-1', '1000000000002'),
+        operation: CDC_OPERATION.UPDATE,
+      };
+
+      buffer.buffer(firstEvent);
+      buffer.buffer(secondEvent);
+
+      t.equal(
+        buffer.size(),
+        2,
+        'user-table CDC retains every buffered event',
+      );
+
+      const replayed = [];
+      await buffer.replay((event) => {
+        replayed.push(event);
+      });
+
+      t.same(
+        replayed.map((event) => event.timestamp),
+        ['1000000000001', '1000000000002'],
+        'user-table replay preserves both versions',
+      );
+    },
+  );
+
+  t.test(
+    'failed replay preserves the coalesced latest tail for internal tables',
+    async (t) => {
+      const logger = createMockLogger();
+      const buffer = new CDCEventBuffer({capacity: 10, logger});
+
+      const otherNodeEvent = createNodeEvent('node-2', '1000000000001');
+      const staleNodeEvent = createNodeEvent('node-1', '1000000000002');
+      const latestNodeEvent = {
+        ...createNodeEvent('node-1', '1000000000003'),
+        operation: CDC_OPERATION.UPDATE,
+      };
+
+      buffer.buffer(otherNodeEvent);
+      buffer.buffer(staleNodeEvent);
+      buffer.buffer(latestNodeEvent);
+
+      await t.rejects(
+        buffer.replay(async () => {
+          throw new Error('transient-replay-failure');
+        }),
+        /transient-replay-failure/,
+        'replay should still surface subscriber failure',
+      );
+
+      t.equal(
+        buffer.size(),
+        2,
+        'failed replay keeps only the latest coalesced tail in the buffer',
+      );
+
+      const replayed = [];
+      await buffer.replay((event) => {
+        replayed.push(event);
+      });
+
+      t.same(
+        replayed.map((event) => event.timestamp),
+        ['1000000000001', '1000000000003'],
+        'replayed tail preserves the newest coalesced event',
+      );
+    },
+  );
 
   t.test('buffer at exact capacity boundary', async (t) => {
     const capacity = 5;

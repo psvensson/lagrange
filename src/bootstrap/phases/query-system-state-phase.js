@@ -11,6 +11,10 @@ import {assertCritical} from '../../utils/assert.js';
 import {NodeService} from '../../node/node-service.js';
 import {NodeRegistrationOwner} from '../shared/node-registration-owner.js';
 import {
+  getControlPlaneRetryAfterMs,
+  isRetryableControlPlaneError,
+} from '../../control-plane/control-plane-error-classification.js';
+import {
   CACHE_DEFAULT,
   CACHE_HYDRATION_TABLES,
 } from '../../cache/cache-constants.js';
@@ -62,6 +66,11 @@ const LOG_OPPORTUNISTIC_BACKFILL_COMPLETE =
   'Completed opportunistic join backfill for non-critical propagated tables';
 const LOG_OPPORTUNISTIC_BACKFILL_FAILED =
   'Opportunistic join backfill failed for non-critical propagated tables';
+const LOG_NODE_REGISTRATION_RETRY =
+  'Retrying join node registration after retryable admission failure';
+const JOIN_NODE_REGISTRATION_MAX_ATTEMPTS = NUM.TWO;
+const JOIN_NODE_REGISTRATION_RETRY_DELAY_MS = NUM.TWO * NUM.HUNDRED;
+const JOIN_NODE_REGISTRATION_MAX_DELAY_MS = NUM.THOUSAND;
 
 /**
  * Handles the query-system-state phase of the join process.
@@ -86,7 +95,9 @@ class QuerySystemStatePhase {
       advertisedNodeWsAddress: this.advertisedNodeWsAddress,
       delegates: {
         getLogger: () => this.delegates.getLogger(),
+        getConfig: () => this.delegates.getConfig?.() || {},
         getNow: () => this.delegates.getNow(),
+        getSleep: () => this.delegates.getSleep?.(),
         getWsPort: () => this.delegates.getWsPort?.(),
         getCdcIntegrationService: () =>
           this.delegates.getCdcIntegrationService(),
@@ -643,7 +654,49 @@ class QuerySystemStatePhase {
    * @return {Promise<void>}
    */
   async registerNodeInCluster() {
-    return this.nodeRegistrationOwner.registerNodeInCluster();
+    const logger = this.delegates.getLogger();
+    const maxAttempts = this.resolveJoinRegistrationMaxAttempts();
+    let attempt = NUM.ZERO;
+    let nextDelayMs = JOIN_NODE_REGISTRATION_RETRY_DELAY_MS;
+
+    while (true) {
+      attempt += NUM.ONE;
+      try {
+        return await this.nodeRegistrationOwner.registerNodeInCluster();
+      } catch (error) {
+        const retryable =
+          this.delegates.getJoinMembershipPublished?.() !== true &&
+          isRetryableControlPlaneError(error) &&
+          attempt < maxAttempts;
+        if (!retryable) {
+          throw error;
+        }
+
+        const retryAfterMs = getControlPlaneRetryAfterMs(error);
+        const delayMs = Math.min(
+          JOIN_NODE_REGISTRATION_MAX_DELAY_MS,
+          Math.max(
+            JOIN_NODE_REGISTRATION_RETRY_DELAY_MS,
+            retryAfterMs > NUM.ZERO ? retryAfterMs : nextDelayMs,
+          ),
+        );
+
+        logger.warn(LOG_NODE_REGISTRATION_RETRY, {
+          nodeId: this.nodeId,
+          attempt,
+          maxAttempts,
+          delayMs,
+          retryAfterMs: retryAfterMs > NUM.ZERO ? retryAfterMs : null,
+          error: error?.message || String(error),
+        });
+
+        await this.sleep(delayMs);
+        nextDelayMs = Math.min(
+          JOIN_NODE_REGISTRATION_MAX_DELAY_MS,
+          delayMs * NUM.TWO,
+        );
+      }
+    }
   }
 
   /**
@@ -708,6 +761,24 @@ class QuerySystemStatePhase {
       options.skipCacheWait = true;
     }
     return options;
+  }
+
+  resolveJoinRegistrationMaxAttempts() {
+    const configured =
+      this.delegates.getConfig?.()?.joinRegistrationMaxAttempts;
+    if (Number.isFinite(configured) && configured >= NUM.ONE) {
+      return Math.max(NUM.ONE, Math.floor(configured));
+    }
+    return JOIN_NODE_REGISTRATION_MAX_ATTEMPTS;
+  }
+
+  async sleep(delayMs) {
+    const sleepImpl = this.delegates.getSleep?.();
+    if (typeof sleepImpl === TYPEOF.FUNCTION) {
+      await sleepImpl(delayMs);
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
   }
 
   /**

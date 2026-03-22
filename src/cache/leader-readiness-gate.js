@@ -124,7 +124,23 @@ const findCanonicalLeaderService = (
     return explicitLeaderServices[NUM.ZERO];
   }
 
-  return null;
+  // Services.raft_role is advisory follower metadata for many replicas. When
+  // multiple active replicas for the same entity are co-located on the owner
+  // node, routing still treats any active addressed replica on that node as a
+  // usable canonical target.
+  return [...leaderNodeServices].sort((left, right) => {
+    const leftKey =
+      left?.[COLUMN.SERVICE_ID] ||
+      left?.replica_id ||
+      left?.[COLUMN.ADDRESS] ||
+      '';
+    const rightKey =
+      right?.[COLUMN.SERVICE_ID] ||
+      right?.replica_id ||
+      right?.[COLUMN.ADDRESS] ||
+      '';
+    return String(leftKey).localeCompare(String(rightKey));
+  })[NUM.ZERO] || null;
 };
 
 const findObservableLeaderService = (

@@ -298,6 +298,144 @@ test('registerNodeInCluster() - should use the registration owner path for nodes
     );
   });
 
+test('registerNodeInCluster() - should retry transient participant failures during node admission',
+  async (t) => {
+    const upsertCalls = [];
+    const participantFailure = new Error(
+      'Distributed operation failed due to participant failures',
+    );
+    participantFailure.code = 'DISTRIBUTED_PARTICIPANT_FAILURE';
+    participantFailure.retryAfterMs = 250;
+
+    const service = new NodeJoiningService({
+      nodeId: 'test-node-admission-retry',
+      nodeAddress: 'ws://localhost:9012',
+      seedNodeAddress: 'ws://seed:8000',
+    });
+    service.config.joinAdmissionWriteRetryTimeoutMs = 1000;
+    service.sleep = async () => {};
+
+    let nodeWriteAttempts = 0;
+    service.cdcIntegrationService = {
+      sqlQueryEngine: {},
+      upsertSystemTableRow: async (tableName, rowData) => {
+        upsertCalls.push({tableName, rowData});
+        if (tableName === TABLES.NODES) {
+          nodeWriteAttempts += 1;
+          if (nodeWriteAttempts === 1) {
+            throw participantFailure;
+          }
+        }
+        return {success: true};
+      },
+    };
+    service.getNodeStorageBudgetService = () => ({
+      resolveBudgetRow: (nodeRow) => ({
+        budgetRow: nodeRow,
+        resolution: {
+          isValid: true,
+          budgetBytes: 1024,
+          source: 'test',
+          diskBytes: 1024,
+        },
+      }),
+    });
+    service.sendControlPlaneNodeStateUpdate = async () => {
+      throw new Error('legacy node-state owner path should not be used');
+    };
+
+    await service.registerNodeInCluster();
+
+    t.equal(
+      nodeWriteAttempts,
+      2,
+      'join admission should retry the canonical nodes write once after a retryable failure',
+    );
+    t.equal(
+      service.joinMembershipPublished,
+      true,
+      'membership should be marked published after the retried admission succeeds',
+    );
+    t.equal(
+      service.messageGroupServiceEndpointsPublished,
+      true,
+      'endpoint publication should still complete after the retried admission succeeds',
+    );
+    t.ok(
+      upsertCalls.some((call) => call.tableName === TABLES.NODE_ENDPOINTS),
+      'endpoint publication should continue after the nodes write retry succeeds',
+    );
+  });
+
+test('registerNodeInCluster() - should retry admission at phase scope when the first routed write exhausts the owner retry window',
+  async (t) => {
+    const participantFailure = new Error(
+      'Distributed operation failed due to participant failures',
+    );
+    participantFailure.code = 'DISTRIBUTED_PARTICIPANT_FAILURE';
+
+    const service = new NodeJoiningService({
+      nodeId: 'test-node-phase-admission-retry',
+      nodeAddress: 'ws://localhost:9013',
+      seedNodeAddress: 'ws://seed:8000',
+    });
+
+    let nowMs = 0;
+    let nodeWriteAttempts = 0;
+    service.now = () => nowMs;
+    service.sleep = async (delayMs) => {
+      nowMs += delayMs;
+    };
+    service.config.joinAdmissionWriteRetryTimeoutMs = 2000;
+    service.config.joinRegistrationMaxAttempts = 2;
+
+    service.cdcIntegrationService = {
+      sqlQueryEngine: {},
+      upsertSystemTableRow: async (tableName) => {
+        if (tableName === TABLES.NODES) {
+          nodeWriteAttempts += 1;
+          if (nodeWriteAttempts === 1) {
+            nowMs = 5000;
+            throw participantFailure;
+          }
+        }
+        return {success: true};
+      },
+    };
+    service.getNodeStorageBudgetService = () => ({
+      resolveBudgetRow: (nodeRow) => ({
+        budgetRow: nodeRow,
+        resolution: {
+          isValid: true,
+          budgetBytes: 1024,
+          source: 'test',
+          diskBytes: 1024,
+        },
+      }),
+    });
+    service.sendControlPlaneNodeStateUpdate = async () => {
+      throw new Error('legacy node-state owner path should not be used');
+    };
+
+    await service.registerNodeInCluster();
+
+    t.equal(
+      nodeWriteAttempts,
+      2,
+      'phase-scoped join admission should rerun node registration after the first routed attempt ages out the inner retry budget',
+    );
+    t.equal(
+      service.joinMembershipPublished,
+      true,
+      'phase-scoped retry should still complete membership publication',
+    );
+    t.equal(
+      service.messageGroupServiceEndpointsPublished,
+      true,
+      'phase-scoped retry should still complete endpoint publication',
+    );
+  });
+
 test('registerNodeInCluster() - should fail narrowly on seed participant failure before endpoint publication',
   async (t) => {
     const upsertCalls = [];
@@ -312,6 +450,7 @@ test('registerNodeInCluster() - should fail narrowly on seed participant failure
       nodeAddress: 'ws://localhost:9011',
       seedNodeAddress: 'ws://seed:8000',
     });
+    service.config.joinAdmissionWriteRetryTimeoutMs = 0;
 
     service.cdcIntegrationService = {
       sqlQueryEngine: {},

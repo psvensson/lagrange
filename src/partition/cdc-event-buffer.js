@@ -22,6 +22,9 @@ import {
 import {
   getSystemCachePrimaryKeyFieldOrFallback,
 } from '../cache/system-cache-key-descriptor.js';
+import {
+  isTableInternalCachePropagationEnabled,
+} from '../cache/cdc-table-policy.js';
 
 const BUFFER_SUBSYSTEM = 'CDCEventBuffer';
 
@@ -38,6 +41,30 @@ function buildEventIdentity(cdcEvent) {
   );
   const pkValue = cdcEvent.data ? cdcEvent.data[pkField] : '';
   return `${cdcEvent.tableName}:${cdcEvent.operation}:${pkValue}:${cdcEvent.timestamp}`;
+}
+
+/**
+ * Build a coalescing identity for internal cache propagation tables.
+ * Falls back to null when the event cannot be safely coalesced.
+ *
+ * @param {Object} cdcEvent - CDC event object.
+ * @return {string|null} Coalescing identity or null.
+ */
+function buildInternalCoalescingIdentity(cdcEvent) {
+  if (!isTableInternalCachePropagationEnabled(cdcEvent?.tableName)) {
+    return null;
+  }
+
+  const pkField = getSystemCachePrimaryKeyFieldOrFallback(
+    cdcEvent.tableName,
+  );
+
+  if (!cdcEvent?.data ||
+      !Object.prototype.hasOwnProperty.call(cdcEvent.data, pkField)) {
+    return null;
+  }
+
+  return `${cdcEvent.tableName}:${pkField}:${cdcEvent.data[pkField]}`;
 }
 
 /**
@@ -72,6 +99,18 @@ class CDCEventBuffer {
    * @return {boolean} true if buffered, false if an event was dropped.
    */
   buffer(cdcEvent) {
+    const coalescingIdentity = buildInternalCoalescingIdentity(cdcEvent);
+    if (coalescingIdentity) {
+      const compactedEvents = this.events.filter((bufferedEvent) =>
+        buildInternalCoalescingIdentity(bufferedEvent) !== coalescingIdentity,
+      );
+      if (compactedEvents.length !== this.events.length) {
+        compactedEvents.push(cdcEvent);
+        this.events = compactedEvents;
+        return true;
+      }
+    }
+
     if (this.events.length >= this.capacity) {
       const dropped = this.events.shift();
       this.logger.warn(CDC_LIFECYCLE_LOG_MSG.EVENT_DROPPED_OVERFLOW, {
@@ -194,4 +233,8 @@ class CDCEventBuffer {
   }
 }
 
-export {CDCEventBuffer, buildEventIdentity};
+export {
+  CDCEventBuffer,
+  buildEventIdentity,
+  buildInternalCoalescingIdentity,
+};

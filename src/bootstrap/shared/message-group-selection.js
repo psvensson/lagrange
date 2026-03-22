@@ -111,6 +111,61 @@ function resolveRelayReadiness(service, requiredTables) {
   );
 }
 
+async function resolveMetadataIngressReadinessAsync(
+  service,
+  requiredTables,
+  fallbackReason,
+) {
+  const baseReadiness = service?.getMetadataIngressReadiness ?
+    normalizeSelectionReadiness(
+      service.getMetadataIngressReadiness({requiredTables}),
+      fallbackReason,
+    ) :
+    {
+      ready: false,
+      retryAfterMs: NUM.ZERO,
+      reason: fallbackReason,
+    };
+  if (baseReadiness.ready === true ||
+      requiredTables.length === NUM.ZERO ||
+      typeof service?.resolveMetadataIngressForwardSelection !== TYPEOF.FUNCTION) {
+    return baseReadiness;
+  }
+
+  try {
+    const selection =
+      await service.resolveMetadataIngressForwardSelection({
+        requiredTables,
+      });
+    if (service?.isCurrentRaftLeader?.() === true ||
+        (Array.isArray(selection?.targets) &&
+          selection.targets.length > NUM.ZERO)) {
+      const retryAfterMs = Number.isFinite(
+        selection?.strictForwardRetryAfterMs,
+      ) ?
+        selection.strictForwardRetryAfterMs :
+        baseReadiness.retryAfterMs;
+      return {
+        ready: true,
+        retryAfterMs,
+        reason: null,
+      };
+    }
+    return {
+      ready: false,
+      retryAfterMs: Math.max(
+        baseReadiness.retryAfterMs,
+        Number.isFinite(selection?.strictForwardRetryAfterMs) ?
+          selection.strictForwardRetryAfterMs :
+          NUM.ZERO,
+      ),
+      reason: baseReadiness.reason,
+    };
+  } catch (_error) {
+    return baseReadiness;
+  }
+}
+
 function recordNotReadyCandidate(summary, readiness) {
   if (readiness.ready === true) {
     return summary;
@@ -186,6 +241,80 @@ function resolveOperationalMessageGroupSelection(
   };
 }
 
+async function resolveOperationalMessageGroupSelectionAsync(
+  messageGroupServices,
+  options = {},
+) {
+  const services = listMessageGroupServices(messageGroupServices);
+  const requiredTables = normalizeRequiredTables(options.requiredTables);
+  let deferredSummary = {
+    reason: MESSAGE_GROUP_SELECTION_REASON.OWNER_NOT_READY,
+    retryAfterMs: NUM.ZERO,
+  };
+
+  for (const service of services) {
+    if (service?.isLeaderReplica?.() !== true) {
+      continue;
+    }
+    const readiness =
+      requiredTables.length > NUM.ZERO ?
+        await resolveMetadataIngressReadinessAsync(
+          service,
+          requiredTables,
+          MESSAGE_GROUP_SELECTION_REASON.OWNER_NOT_READY,
+        ) :
+        resolveLeaderReadiness(service, requiredTables);
+    if (readiness.ready === true) {
+      return {
+        service,
+        ready: true,
+        retryAfterMs: readiness.retryAfterMs,
+        reason: null,
+        route: 'leader',
+      };
+    }
+    deferredSummary = recordNotReadyCandidate(
+      deferredSummary,
+      readiness,
+    );
+  }
+
+  for (const service of services) {
+    if (service?.isLeaderReplica?.() === true) {
+      continue;
+    }
+    const readiness =
+      requiredTables.length > NUM.ZERO ?
+        await resolveMetadataIngressReadinessAsync(
+          service,
+          requiredTables,
+          MESSAGE_GROUP_SELECTION_REASON.OWNER_NOT_READY,
+        ) :
+        resolveRelayReadiness(service, requiredTables);
+    if (readiness.ready === true) {
+      return {
+        service,
+        ready: true,
+        retryAfterMs: readiness.retryAfterMs,
+        reason: null,
+        route: 'relay',
+      };
+    }
+    deferredSummary = recordNotReadyCandidate(
+      deferredSummary,
+      readiness,
+    );
+  }
+
+  return {
+    service: null,
+    ready: false,
+    retryAfterMs: deferredSummary.retryAfterMs,
+    reason: deferredSummary.reason,
+    route: null,
+  };
+}
+
 function getBootstrapMessageGroupService(messageGroupServices) {
   const services = listMessageGroupServices(messageGroupServices);
   for (const service of services) {
@@ -225,4 +354,5 @@ export {
   buildMessageGroupOwnerNotReadyError,
   getBootstrapMessageGroupService,
   resolveOperationalMessageGroupSelection,
+  resolveOperationalMessageGroupSelectionAsync,
 };

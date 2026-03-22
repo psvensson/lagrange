@@ -208,7 +208,26 @@ class MessageGroupServiceHandler extends EventEmitter {
       };
     }
 
-    const replicaOptions = this.buildReplicaOptions(groupId, replicaId, request);
+    let replicaOptions;
+    try {
+      replicaOptions = this.buildReplicaOptions(groupId, replicaId, request);
+    } catch (error) {
+      this.logger.warn(
+        MESSAGE_GROUP_SERVICE_HANDLER_LOG_MSG.CREATE_TOPOLOGY_INVALID,
+        {
+          operationId,
+          groupId,
+          replicaId,
+          error: error.message,
+          nodeId: this.nodeId,
+        },
+      );
+      return {
+        status: ReplicaOperationResponseStatus.ERROR,
+        error: error.message,
+        nodeId: this.nodeId,
+      };
+    }
 
     this.localReplicas.set(replicaId, {
       replicaId,
@@ -530,6 +549,10 @@ class MessageGroupServiceHandler extends EventEmitter {
         row?.service_type === SERVICE_TYPE.MESSAGE_GROUP &&
         row?.group_id === groupId,
     ) || [];
+    const topologyMustBeComplete =
+      requestedReplicaIds.length > 0 ||
+      requestedPeerAddresses.length > 0 ||
+      services.length > 0;
 
     const replicaIds = [];
     const peerAddresses = [];
@@ -582,6 +605,20 @@ class MessageGroupServiceHandler extends EventEmitter {
       if (!peerAddresses.includes(requestedPeerAddress)) {
         peerAddresses.push(requestedPeerAddress);
       }
+    }
+
+    const hasPeerReplica = replicaIds.some((value) => value !== replicaId);
+    const hasPeerAddress = peerAddresses.some((value) => value !== selfAddress);
+    if (topologyMustBeComplete &&
+        (!hasPeerReplica ||
+          !hasPeerAddress ||
+          peerAddresses.length < replicaIds.length)) {
+      throw new Error(
+        MESSAGE_GROUP_SERVICE_HANDLER_ERROR_MSG.CREATE_TOPOLOGY_REQUIRED(
+          groupId,
+          replicaId,
+        ),
+      );
     }
 
     return {

@@ -159,7 +159,55 @@ const REPLACE_WORKFLOW_STEPS = [
 const OPERATION_METADATA_KEY = Object.freeze({
   SOURCE_REPLICA_ID: 'sourceReplicaId',
   READINESS_SNAPSHOT: 'readinessSnapshot',
+  REPLICA_IDS: 'replicaIds',
+  PEER_ADDRESSES: 'peerAddresses',
 });
+
+function getOperationMetadataValue(stepsHistory, metadataKey) {
+  if (!Array.isArray(stepsHistory) ||
+      typeof metadataKey !== 'string' ||
+      metadataKey.length === 0) {
+    return null;
+  }
+
+  for (const stepEntry of stepsHistory) {
+    if (!stepEntry || typeof stepEntry !== 'object') {
+      continue;
+    }
+
+    const value = stepEntry[metadataKey];
+    if (value !== undefined && value !== null) {
+      return value;
+    }
+  }
+
+  return null;
+}
+
+function getOperationMetadataString(stepsHistory, metadataKey) {
+  const value = getOperationMetadataValue(stepsHistory, metadataKey);
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+function getOperationMetadataStringArray(stepsHistory, metadataKey) {
+  const value = getOperationMetadataValue(stepsHistory, metadataKey);
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const normalized = [];
+  const seen = new Set();
+  for (const entry of value) {
+    if (typeof entry !== 'string' ||
+        entry.length === 0 ||
+        seen.has(entry)) {
+      continue;
+    }
+    seen.add(entry);
+    normalized.push(entry);
+  }
+  return normalized;
+}
 
 /**
  * Get the workflow steps for an operation type.
@@ -343,4 +391,7 @@ export {
   COORDINATOR_OWNED_OPERATION_TYPES,
   COORDINATOR_OWNED_OPERATION_TYPES_SQL_CLAUSE,
   isCoordinatorOwnedOperationType,
+  getOperationMetadataValue,
+  getOperationMetadataString,
+  getOperationMetadataStringArray,
 };

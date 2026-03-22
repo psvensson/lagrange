@@ -443,6 +443,9 @@ class BootstrapService extends EventEmitter {
       resolveOperationalMessageGroupSelection: (options) =>
         self.seedMessageGroupsPhase
           .resolveOperationalMessageGroupSelection(options),
+      resolveOperationalMessageGroupSelectionAsync: (options) =>
+        self.seedMessageGroupsPhase
+          .resolveOperationalMessageGroupSelectionAsync(options),
 
       // -- Runtime references --
       getSystemTableCache: () => self.getSystemTableCache(),
@@ -1456,8 +1459,8 @@ class BootstrapService extends EventEmitter {
       if (tableName &&
           shouldAttachPartitionCdcPropagation(tableName)) {
         const subscriptionSelection =
-          this.seedMessageGroupsPhase
-            .resolveOperationalMessageGroupSelection({
+          await this.seedMessageGroupsPhase
+            .resolveOperationalMessageGroupSelectionAsync({
               requiredTables: [tableName],
             });
         const subscriptionMessageGroupService =
@@ -1491,8 +1494,8 @@ class BootstrapService extends EventEmitter {
               replicaId: options.replicaId,
             });
             const propagationSelection =
-              this.seedMessageGroupsPhase
-                .resolveOperationalMessageGroupSelection({
+              await this.seedMessageGroupsPhase
+                .resolveOperationalMessageGroupSelectionAsync({
                   requiredTables: [tableName],
                 });
             const propagationMessageGroupService =

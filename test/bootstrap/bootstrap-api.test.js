@@ -13,7 +13,14 @@ import {
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {CACHE_HYDRATION_TABLES} from '../../src/cache/cache-constants.js';
-import {SERVICE_STATUS, SERVICE_TYPE, STATE, TABLES} from '../../src/constants/index.js';
+import {
+  ENDPOINT_STATUS,
+  SERVICE_STATUS,
+  SERVICE_TYPE,
+  STATE,
+  TABLES,
+  TRANSPORT_TYPE,
+} from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {BootstrapReadinessState} from '../../src/bootstrap/bootstrap-readiness-state.js';
 import {LIFECYCLE_REASON} from '../../src/bootstrap/lifecycle-controller-constants.js';
@@ -2333,11 +2340,13 @@ test('BootstrapAPI - getReadyNodes includes seed node when lease expired', async
         return [
           {
             node_id: 'seed-node-1',
+            status: 'active',
             connection_state: STATE.READY,
             ready_lease_expires_at: expiredLease, // Expired
           },
           {
             node_id: 'other-node',
+            status: 'active',
             connection_state: STATE.READY,
             ready_lease_expires_at: now + 10000, // Valid
           },
@@ -2464,6 +2473,75 @@ test('BootstrapAPI - getReadyNodes handles empty cache', async (t) => {
 
   await api.shutdown();
 });
+
+test('BootstrapAPI - getReadyNodes requires canonical websocket endpoint visibility for non-seed nodes',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const now = Date.now();
+    const validLease = now + 10000;
+    const mockCache = {
+      get: () => null,
+      getAll: (tableName) => {
+        if (tableName === TABLES.NODES) {
+          return [
+            {
+              node_id: 'seed-node-1',
+              status: 'active',
+              connection_state: STATE.READY,
+              ready_lease_expires_at: validLease,
+            },
+            {
+              node_id: 'node-2',
+              status: 'active',
+              connection_state: STATE.READY,
+              ready_lease_expires_at: validLease,
+            },
+            {
+              node_id: 'node-3',
+              status: 'active',
+              connection_state: STATE.READY,
+              ready_lease_expires_at: validLease,
+            },
+          ];
+        }
+        if (tableName === TABLES.NODE_ENDPOINTS) {
+          return [{
+            endpoint_id: 'node-3-ws',
+            node_id: 'node-3',
+            transport_type: TRANSPORT_TYPE.WEBSOCKET,
+            status: ENDPOINT_STATUS.ACTIVE,
+            address: 'ws://node-3:8082',
+          }];
+        }
+        return [];
+      },
+      filter: (tableName, predicate) => {
+        const all = mockCache.getAll(tableName);
+        return all.filter(predicate);
+      },
+      find: () => null,
+      getReadyNodes: () => ['seed-node-1', 'node-2', 'node-3'],
+    };
+
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: mockCache,
+    });
+
+    await api.initialize(0, {listen: false});
+
+    const readyNodes = api.getReadyNodes();
+
+    t.same(
+      readyNodes.sort(),
+      ['node-3', 'seed-node-1'],
+      'non-seed nodes should need canonical websocket endpoints before bootstrap advertises them as ready',
+    );
+
+    await api.shutdown();
+  });
 
 
 test('BootstrapAPI - buildSystemTableSnapshots includes node_endpoints', async (t) => {

@@ -2404,6 +2404,151 @@ test('NodeJoiningService - resumes same join session without replaying ' +
   );
 });
 
+test('NodeJoiningService - auto-resumes retryable join failures in the same process',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const sleepCalls = [];
+    let queryAttempts = 0;
+    const phaseCalls = [];
+    const service = new NodeJoiningService({
+      nodeId: 'joining-node-auto-resume-1',
+      nodeAddress: 'ws://localhost:9098',
+      seedNodeAddress: 'http://localhost:8080',
+      sleep: async (delayMs) => {
+        sleepCalls.push(delayMs);
+      },
+      config: {
+        autoResumeRetryableFailures: true,
+        retryableFailureResumeBaseDelayMs: 10,
+        retryableFailureResumeMaxDelayMs: 25,
+      },
+    });
+
+    service.lifecycleStateMachine.transition = () => {};
+    service.handleJoiningFailure = async (error) => ({
+      success: false,
+      nodeId: service.nodeId,
+      duration: 0,
+      error: error.message,
+      phase: service.getPhase(),
+      retryable: true,
+      retryAfterMs: error.retryAfterMs,
+    });
+    service.phaseContactSeed = async () => {
+      phaseCalls.push('contact');
+      service.bootstrapResponse = {
+        success: true,
+        seedNodeId: 'seed-node-1',
+        seedNodeWsAddress: 'ws://localhost:8080',
+        messageGroupAssignment: {
+          strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
+          groupId: 'mg-1',
+          replicaCount: 1,
+        },
+        systemTableSnapshots: {
+          nodes: [],
+          partitions: [],
+          services: [],
+          tables: [],
+          message_groups: [],
+          replica_operations: [],
+        },
+      };
+      service.seedNodeId = 'seed-node-1';
+      service.seedNodeWsAddress = 'ws://localhost:8080';
+    };
+    service.phaseConnectWebSocket = async () => {
+      phaseCalls.push('connect');
+      service.messageRouter = {
+        deliver: async () => ({acknowledged: true}),
+      };
+      service.controlPlaneTargetAddress = 'seed-node-1/message-group/mg-1-r0';
+    };
+    service.phaseCreateSelfHostedMessageGroup = async () => {
+      phaseCalls.push('message-group');
+      service.messageGroupServices.set('mg-1-r0', {
+        groupId: 'mg-1',
+        unifiedAddress: 'joining-node-auto-resume-1/message-group/mg-1-r0',
+        isLeaderReplica: () => true,
+        getLeaderId: () => 'mg-1-r0',
+      });
+    };
+    service.phaseJoinExistingMessageGroup = async () => {};
+    service.phaseWaitForLeadership = async () => {
+      phaseCalls.push('leadership');
+    };
+    service.createCdcIntegrationService = () => {
+      phaseCalls.push('cdc');
+      service.cdcIntegrationService = {
+        ready: true,
+        updateSystemTableRow: async () => ({success: true}),
+      };
+      return service.cdcIntegrationService;
+    };
+    service.ensureLatencyTopologyOwners = () => {
+      phaseCalls.push('latency-owners');
+      service.latencyTopology = {ready: true};
+    };
+    service.initializeReplicaHandler = () => {
+      phaseCalls.push('replica-handler');
+    };
+    service.initializeMessageGroupServiceHandler = () => {
+      phaseCalls.push('message-group-handler');
+    };
+    service.initializeControlPlaneService = async () => {
+      phaseCalls.push('control-plane');
+      service.heartbeatService = {ready: true};
+    };
+    service.initializeRuntimeServiceHandler = () => {
+      phaseCalls.push('runtime-handler');
+    };
+    service.phaseQuerySystemState = async () => {
+      phaseCalls.push('query');
+      queryAttempts += 1;
+      if (queryAttempts === 1) {
+        const error = new Error('Connection to node seed-node-1 closed');
+        error.retryAfterMs = 15;
+        throw error;
+      }
+    };
+    service.joinReadinessEvaluator
+      .waitForCanonicalJoinReadinessConvergence = async () => {
+        phaseCalls.push('readiness');
+      };
+    service.activateMessageGroupServiceRows = async () => {
+      phaseCalls.push('activate-message-group-rows');
+    };
+    service.signalReadyForReplicas = async () => {
+      phaseCalls.push('ready-signal');
+    };
+    service.activateControlPlaneBackgroundWriters = () => {
+      phaseCalls.push('activate');
+    };
+    service.startLatencyTopologyLifecycle = () => {
+      phaseCalls.push('latency-start');
+    };
+
+    const result = await service.join();
+
+    t.equal(result.success, true, 'join should succeed after one retryable auto-resume');
+    t.same(
+      sleepCalls,
+      [15],
+      'auto-resume should honor retryAfterMs before retrying',
+    );
+    t.equal(
+      phaseCalls.filter((step) => step === 'contact').length,
+      1,
+      'auto-resume should keep the same session and skip completed checkpoints',
+    );
+    t.equal(
+      phaseCalls.filter((step) => step === 'query').length,
+      2,
+      'auto-resume should rerun the failed membership checkpoint',
+    );
+  });
+
 test(
   'NodeJoiningService - does not transition READY when canonical join readiness has ' +
     'unknown schema version',
@@ -4216,6 +4361,7 @@ test('NodeJoiningService - replica factory subscribes exactly the propagated cac
           initialized: true,
           isLeaderReplica: () => true,
           isMetadataIngressReady: () => true,
+          getMetadataIngressReadiness: () => ({ready: true}),
           getLeaderId: () => null,
           subscribeToCDC: async (tableName) => {
             subscribedTables.push(tableName);

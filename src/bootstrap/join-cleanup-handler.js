@@ -122,6 +122,10 @@ class JoinCleanupHandler {
       duration,
       error: error.message,
       phase: failedPhase,
+      retryable: error?.retryable === true,
+      retryAfterMs: Number.isFinite(error?.retryAfterMs) ?
+        Math.max(NUM.ZERO, Math.floor(error.retryAfterMs)) :
+        NUM.ZERO,
     };
   }
 

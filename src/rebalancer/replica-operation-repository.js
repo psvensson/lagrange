@@ -38,9 +38,14 @@ import {
   OPERATION_METADATA_KEY,
   TERMINAL_STATUSES,
   OperationType,
+  getOperationMetadataString,
+  getOperationMetadataStringArray,
   isTerminalStep,
   isCoordinatorOwnedOperationType,
 } from './replica-status.js';
+import {
+  ReplicaOperationField,
+} from './replica-operation-constants.js';
 import {
   REBALANCE_COORDINATOR_EVENT,
   REBALANCE_COORDINATOR_LOG_MSG,
@@ -117,6 +122,10 @@ const INCOMPLETE_OPERATION_QUERY_SLOW_THRESHOLD_MS = TIME_MS.SECOND;
 const INCOMPLETE_OPERATION_QUERY_WARN_THROTTLE_MS =
   TIME_MS.SECOND * NUM.TEN;
 const INCOMPLETE_OPERATION_QUERY_ROW_WARN_THRESHOLD = 1000;
+const INCOMPLETE_OPERATION_QUERY_RETRYABLE_BACKOFF_FLOOR_MS =
+  TIME_MS.SECOND / NUM.FOUR;
+const INCOMPLETE_OPERATION_QUERY_RETRYABLE_BACKOFF_CEILING_MS =
+  TIME_MS.SECOND * NUM.FIVE;
 const COORDINATOR_OWNER_COMPONENT = 'RebalanceCoordinator';
 
 function buildControlPlaneFailurePayload(nodeId, resultOrError) {
@@ -174,6 +183,7 @@ class ReplicaOperationRepository {
     this.logger = options.logger;
     this.emitter = options.emitter || null;
     this.lastIncompleteOperationQueryWarningAtMs = NUM.ZERO;
+    this.nextIncompleteOperationSqlRetryAtMs = NUM.ZERO;
     this.replicaOperationTransitionQueue = Promise.resolve();
   }
 
@@ -195,6 +205,26 @@ class ReplicaOperationRepository {
     if (Object.hasOwn(options, 'logger')) {
       this.logger = options.logger || console;
     }
+  }
+
+  /**
+   * Bound retryable SQL backoff for replica_operations owner reads.
+   * @param {Object} result
+   * @return {number}
+   * @private
+   */
+  getRetryableIncompleteOperationReadBackoffMs(result) {
+    const retryAfterMs = getControlPlaneRetryAfterMs(result);
+    if (Number.isFinite(retryAfterMs) && retryAfterMs > NUM.ZERO) {
+      return Math.min(
+        INCOMPLETE_OPERATION_QUERY_RETRYABLE_BACKOFF_CEILING_MS,
+        Math.max(
+          INCOMPLETE_OPERATION_QUERY_RETRYABLE_BACKOFF_FLOOR_MS,
+          retryAfterMs,
+        ),
+      );
+    }
+    return INCOMPLETE_OPERATION_QUERY_RETRYABLE_BACKOFF_FLOOR_MS;
   }
 
   // ── Row <-> Operation Translation ──────────────────────────────
@@ -241,6 +271,20 @@ class ReplicaOperationRepository {
 
     operation.sourceReplicaId =
       this.getReplaceSourceReplicaId(operation);
+    const replicaIds = getOperationMetadataStringArray(
+      stepsHistory,
+      OPERATION_METADATA_KEY.REPLICA_IDS,
+    );
+    if (replicaIds.length > NUM.ZERO) {
+      operation[ReplicaOperationField.REPLICA_IDS] = replicaIds;
+    }
+    const peerAddresses = getOperationMetadataStringArray(
+      stepsHistory,
+      OPERATION_METADATA_KEY.PEER_ADDRESSES,
+    );
+    if (peerAddresses.length > NUM.ZERO) {
+      operation[ReplicaOperationField.PEER_ADDRESSES] = peerAddresses;
+    }
     return operation;
   }
 
@@ -320,16 +364,10 @@ class ReplicaOperationRepository {
       return null;
     }
 
-    for (const stepEntry of operation.stepsHistory) {
-      const sourceReplicaId =
-        stepEntry?.[OPERATION_METADATA_KEY.SOURCE_REPLICA_ID];
-      if (typeof sourceReplicaId === 'string' &&
-          sourceReplicaId.length > 0) {
-        return sourceReplicaId;
-      }
-    }
-
-    return null;
+    return getOperationMetadataString(
+      operation.stepsHistory,
+      OPERATION_METADATA_KEY.SOURCE_REPLICA_ID,
+    );
   }
 
   /**
@@ -577,6 +615,10 @@ class ReplicaOperationRepository {
     if (cachedRows !== null) {
       const cachedOperations =
         mapAndSortOperations(cachedRows);
+      if (cachedOperations.length === NUM.ZERO &&
+          this.nextIncompleteOperationSqlRetryAtMs > Date.now()) {
+        return [];
+      }
       if (cachedOperations.length > NUM.ZERO ||
           skipSqlFallbackWhenCacheEmpty) {
         return cachedOperations;
@@ -606,6 +648,9 @@ class ReplicaOperationRepository {
       const logPayload =
         buildControlPlaneFailurePayload(this.nodeId, result);
       if (isRetryableControlPlaneError(result)) {
+        this.nextIncompleteOperationSqlRetryAtMs =
+          Date.now() +
+          this.getRetryableIncompleteOperationReadBackoffMs(result);
         this.logger.warn(
           REBALANCE_COORDINATOR_LOG_MSG
             .QUERY_OPERATIONS_FAILED,
@@ -620,6 +665,7 @@ class ReplicaOperationRepository {
       }
       return [];
     }
+    this.nextIncompleteOperationSqlRetryAtMs = NUM.ZERO;
 
     const shouldWarnOnQueryPressure =
       queryDurationMs >=

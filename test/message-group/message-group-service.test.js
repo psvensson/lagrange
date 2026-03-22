@@ -1878,8 +1878,72 @@ test('MessageGroupService - flushes services role update when local services lea
   },
 );
 
+test('MessageGroupService - flushes message-group leader update when local owner exists',
+  async (t) => {
+    const {router, nodeId, cleanup} = await createTestTransport();
+    const updates = [];
+    const mockCdcIntegrationService = {
+      canWriteSystemTableLocally: (tableName) =>
+        tableName === SYSTEM_TABLE_NAME.MESSAGE_GROUPS,
+      updateSystemTableRow: async (tableName, whereClause, data) => {
+        updates.push({tableName, whereClause, data});
+        return {success: true};
+      },
+    };
+
+    try {
+      const service = new MessageGroupService({
+        groupId: 'mg-1',
+        replicaId: 'mg-1-r1',
+        nodeId,
+        transport: router,
+        cdcIntegrationService: mockCdcIntegrationService,
+      });
+
+      service.systemTableCache = new SystemTableCache();
+      service.isLeader = true;
+      service.pendingLeaderNodeUpdate = nodeId;
+      service.persistedLeaderNodeId = null;
+
+      const result = await service.flushLeaderNodeUpdate();
+
+      t.equal(
+        result.reason,
+        'applied',
+        'should persist when the local message_groups leader owns the write',
+      );
+      t.equal(updates.length, 1, 'should issue one message_groups-table write');
+      t.equal(
+        updates[0].tableName,
+        SYSTEM_TABLE_NAME.MESSAGE_GROUPS,
+        'should target message_groups',
+      );
+      t.same(updates[0].whereClause, {
+        [COLUMN.GROUP_ID]: 'mg-1',
+      }, 'should update the local message-group owner row');
+      t.equal(
+        updates[0].data?.[COLUMN.LEADER_NODE_ID],
+        nodeId,
+        'should publish the elected leader node id',
+      );
+      t.equal(
+        service.pendingLeaderNodeUpdate,
+        null,
+        'pending leader update should clear after success',
+      );
+      t.equal(
+        service.persistedLeaderNodeId,
+        nodeId,
+        'persisted leader update should track the published owner metadata',
+      );
+    } finally {
+      await cleanup();
+    }
+  },
+);
+
 test(
-  'MessageGroupService - defers role metadata publication until traffic ready',
+  'MessageGroupService - publishes role metadata before traffic ready when services leader is local',
   async (t) => {
     const {router, nodeId, cleanup} = await createTestTransport();
     const updates = [];
@@ -1918,16 +1982,16 @@ test(
       service.pendingRoleUpdate = RaftRole.LEADER;
       service.persistedRole = null;
 
-      const deferredResult = await service.flushRoleUpdate();
+      const publishResult = await service.flushRoleUpdate();
       t.equal(
-        deferredResult.reason,
-        'settling',
-        'role publication should stay deferred until lifecycle reaches metadata-safe readiness',
+        publishResult.reason,
+        'applied',
+        'role publication should not wait on lifecycle readiness once the local services leader can accept the write',
       );
       t.equal(
         updates.length,
-        0,
-        'service metadata should not publish while lifecycle is still settling',
+        1,
+        'service metadata should publish immediately when the local services leader is available',
       );
 
       const now = Date.now();
@@ -1950,8 +2014,8 @@ test(
       await new Promise((resolve) => setTimeout(resolve, 0));
 
       const noopResult = await service.flushRoleUpdate();
-      t.equal(noopResult.reason, 'noop', 'no duplicate write is needed after the deferred publish succeeds');
-      t.equal(updates.length, 1, 'control-ready leader-lag transition should release exactly one deferred write');
+      t.equal(noopResult.reason, 'noop', 'no duplicate write is needed after the initial publish succeeds');
+      t.equal(updates.length, 1, 'later readiness transitions should not create duplicate role writes');
     } finally {
       await cleanup();
     }
@@ -2114,6 +2178,45 @@ test('MessageGroupService - sendMessage creates message envelope', async (t) => 
   }
 });
 
+test('MessageGroupService - QUERY direct-only delivery clears pending envelope ' +
+  'after success',
+async (t) => {
+  const transport = {
+    async deliver() {
+      return {
+        acknowledged: true,
+        success: true,
+        rows: [{value: 1}],
+      };
+    },
+    async initialize() {},
+    async shutdown() {},
+    setServiceNodeResolver() {},
+  };
+
+  const service = new MessageGroupService({
+    groupId: 'mg-query-cleanup-success',
+    replicaId: 'mg-query-cleanup-success-r1',
+    nodeId: 'node-query-cleanup-success',
+    transport,
+  });
+
+  service.initialized = true;
+  service.retryMaxAttempts = 1;
+  service.sleep = async () => {};
+
+  const result = await service.sendMessage('node-x/partition/p1', {
+    type: 'QUERY',
+    sql: 'SELECT 1',
+    params: [],
+  });
+
+  t.equal(result.status, MessageStatus.DELIVERED,
+    'query delivery should succeed directly');
+  t.equal(service.pendingMessages.size, 0,
+    'direct-only success should not retain pending envelopes');
+});
+
 test('MessageGroupService - QUERY payload uses fast non-durable delivery path',
   async (t) => {
     let deliverCalls = 0;
@@ -2163,6 +2266,8 @@ test('MessageGroupService - QUERY payload uses fast non-durable delivery path',
       0,
       'query message should not be persisted to raft when direct delivery fails',
     );
+    t.equal(service.pendingMessages.size, 0,
+      'query fast-path failure should not retain pending envelopes');
   });
 
 test('MessageGroupService - QUERY payload preserves deferred retry metadata',
@@ -2219,6 +2324,8 @@ test('MessageGroupService - QUERY payload preserves deferred retry metadata',
         'query failure should preserve retryAfterMs for upstream owners');
       t.equal(persistCalls, 0,
         'query delivery should still skip raft persistence on direct failure');
+      t.equal(service.pendingMessages.size, 0,
+        'deferred direct-only query failure should not retain pending envelopes');
     }
   });
 
@@ -2275,6 +2382,8 @@ test('MessageGroupService - idempotent control-plane payloads use direct-only de
         'control-plane failure should preserve retryAfterMs for upstream owners');
       t.equal(persistCalls, 0,
         'idempotent control-plane messages should not be persisted to raft');
+      t.equal(service.pendingMessages.size, 0,
+        'direct-only control-plane failure should not retain pending envelopes');
     }
   });
 

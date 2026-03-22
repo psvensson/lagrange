@@ -614,9 +614,15 @@ class SeedCacheHydrationPhase {
             }
 
             const propagationSelection =
-              d.resolveOperationalMessageGroupSelection({
-                requiredTables: [tableName],
-              });
+              await (
+                d.resolveOperationalMessageGroupSelectionAsync ?
+                  d.resolveOperationalMessageGroupSelectionAsync({
+                    requiredTables: [tableName],
+                  }) :
+                  d.resolveOperationalMessageGroupSelection({
+                    requiredTables: [tableName],
+                  })
+              );
             const propagationMgs = propagationSelection.service;
             if (propagationMgs) {
               await d.propagatePartitionCDCEvent(

@@ -12,6 +12,7 @@
 
 import {EventEmitter} from 'events';
 import {v4 as uuidv4} from 'uuid';
+import {AddressManager} from '../address/address-manager.js';
 import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
@@ -37,6 +38,7 @@ import {DurableWorkflowCoordinator} from '../workflow/durable-workflow-coordinat
 import {OperationLane} from '../workflow/operation-lane.js';
 import {
   WORKFLOW_STEP, NUM, TIME_MS, METRICS_LOG_TAG,
+  ENTITY_TYPE,
   UNIFIED_SERVICE_TYPE,
 } from '../constants/index.js';
 import {SERVICE_TYPE} from '../constants/service.js';
@@ -1358,6 +1360,96 @@ class RebalanceCoordinator extends EventEmitter {
   }
 
   /**
+   * Build canonical bootstrap topology for message-group create dispatch.
+   * Existing message-group replicas must never bootstrap from a target-local
+   * one-replica view; the coordinator must carry authoritative topology.
+   *
+   * @param {Object} context
+   * @return {{replicaIds: string[], peerAddresses: string[]}|null}
+   * @private
+   */
+  buildOperationBootstrapTopology(context) {
+    const {
+      normalizedMoveType,
+      entityType,
+      entityId,
+      partitionId,
+      targetNodeId,
+      targetReplicaId,
+    } = context;
+
+    if (entityType !== SERVICE_TYPE.MESSAGE_GROUP ||
+        (normalizedMoveType !== OperationType.ADD &&
+          normalizedMoveType !== OperationType.REPLACE)) {
+      return null;
+    }
+
+    const serviceRows = this.repository.getEntityServiceRows({
+      partitionId,
+      entityType,
+      entityId,
+    });
+    if (!Array.isArray(serviceRows) || serviceRows.length === NUM.ZERO) {
+      throw new Error(
+        `Cannot create ${entityType} operation for ${entityId} without existing canonical topology`,
+      );
+    }
+
+    const addressManager = AddressManager.getInstance();
+    const replicaIds = [];
+    const peerAddresses = [];
+    const seenReplicaIds = new Set();
+    const seenPeerAddresses = new Set();
+
+    const appendReplicaTopology = (replicaId, nodeId, address) => {
+      if (typeof replicaId === 'string' &&
+          replicaId.length > NUM.ZERO &&
+          !seenReplicaIds.has(replicaId)) {
+        seenReplicaIds.add(replicaId);
+        replicaIds.push(replicaId);
+      }
+
+      const resolvedAddress = address ||
+        (typeof nodeId === 'string' && nodeId.length > NUM.ZERO &&
+        typeof replicaId === 'string' && replicaId.length > NUM.ZERO ?
+          addressManager.format(
+            nodeId,
+            ENTITY_TYPE.MESSAGE_GROUP,
+            replicaId,
+          ) :
+          null);
+      if (typeof resolvedAddress === 'string' &&
+          resolvedAddress.length > NUM.ZERO &&
+          !seenPeerAddresses.has(resolvedAddress)) {
+        seenPeerAddresses.add(resolvedAddress);
+        peerAddresses.push(resolvedAddress);
+      }
+    };
+
+    for (const row of serviceRows) {
+      appendReplicaTopology(
+        row?.service_id || row?.replica_id || null,
+        row?.node_id || null,
+        row?.address || null,
+      );
+    }
+
+    appendReplicaTopology(targetReplicaId, targetNodeId, null);
+
+    if (replicaIds.length <= NUM.ONE ||
+        peerAddresses.length < replicaIds.length) {
+      throw new Error(
+        `Canonical topology for ${entityType} ${entityId} is incomplete`,
+      );
+    }
+
+    return {
+      replicaIds,
+      peerAddresses,
+    };
+  }
+
+  /**
    * Create and persist one operation after dedupe checks pass.
    * @param {Object} context
    * @return {Promise<Object>}
@@ -1410,6 +1502,26 @@ class RebalanceCoordinator extends EventEmitter {
     });
     operation.entityType = entityType;
     operation.entityId = entityId;
+    const bootstrapTopology = this.buildOperationBootstrapTopology({
+      normalizedMoveType,
+      entityType,
+      entityId,
+      partitionId,
+      targetNodeId: move.nodeId,
+      targetReplicaId: operationReplicaId,
+    });
+    if (bootstrapTopology && operation.stepsHistory.length > NUM.ZERO) {
+      operation[ReplicaOperationField.REPLICA_IDS] =
+        bootstrapTopology.replicaIds;
+      operation[ReplicaOperationField.PEER_ADDRESSES] =
+        bootstrapTopology.peerAddresses;
+      operation.stepsHistory[NUM.ZERO][
+        OPERATION_METADATA_KEY.REPLICA_IDS
+      ] = bootstrapTopology.replicaIds;
+      operation.stepsHistory[NUM.ZERO][
+        OPERATION_METADATA_KEY.PEER_ADDRESSES
+      ] = bootstrapTopology.peerAddresses;
+    }
 
     // Capture readiness snapshot for the target node at creation time
     // (Req 4.2 — persist readiness snapshot with decisions)

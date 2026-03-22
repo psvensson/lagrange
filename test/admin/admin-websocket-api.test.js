@@ -2602,6 +2602,89 @@ test('AdminWebSocketAPI - local control snapshot keeps readiness-healthy service
     );
   });
 
+test('AdminWebSocketAPI - local control snapshot keeps readiness-healthy peers when node_endpoints lag repaired service rows',
+  async (t) => {
+    const cache = createPopulatedCache();
+    cache.applySystemTableChange(TABLES.NODES, 'UPDATE', {
+      id: 'node-1',
+      node_id: 'node-1',
+      status: 'active',
+      connection_state: 'ready',
+      last_heartbeat: 1000,
+      ready_lease_expires_at: 2000,
+    });
+    cache.applySystemTableChange(TABLES.NODES, 'INSERT', {
+      id: 'node-2',
+      node_id: 'node-2',
+      status: 'active',
+      connection_state: 'ready',
+      last_heartbeat: 1000,
+      ready_lease_expires_at: 2000,
+    });
+    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+      service_id: 'svc-node-1',
+      service_type: SERVICE_TYPE.MESSAGE_GROUP,
+      node_id: 'node-1',
+      status: 'active',
+      address: 'node-1/message-group/svc-node-1',
+      group_id: 'mg-node-1',
+      replica_id: 'svc-node-1',
+    });
+    cache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+      service_id: 'svc-node-2',
+      service_type: SERVICE_TYPE.MESSAGE_GROUP,
+      node_id: 'node-2',
+      status: 'active',
+      address: 'node-2/message-group/svc-node-2',
+      group_id: 'mg-node-2',
+      replica_id: 'svc-node-2',
+    });
+    cache.applySystemTableChange(TABLES.NODE_ENDPOINTS, 'INSERT', {
+      endpoint_id: 'node-1-ws',
+      node_id: 'node-1',
+      transport_type: 'ws',
+      status: 'active',
+      address: 'ws://node-1:8082',
+    });
+
+    const api = new AdminWebSocketAPI({
+      nodeId: 'node-1',
+      systemTableCache: cache,
+      controlPlaneReadinessService: {
+        async getAllNodeReadiness() {
+          return [{
+            nodeId: 'node-1',
+            dimensions: {
+              [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
+            },
+          }, {
+            nodeId: 'node-2',
+            dimensions: {
+              [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
+            },
+          }];
+        },
+      },
+    });
+
+    await api.initialize(0, {listen: false});
+    t.teardown(async () => {
+      await api.shutdown();
+    });
+
+    const response = await api.getFastify().inject({
+      method: 'GET',
+      url: '/api/admin/control-snapshot?scope=local',
+    });
+
+    t.equal(response.statusCode, 200, 'should return 200 for local snapshot');
+    t.same(
+      response.json().nodes,
+      ['node-1', 'node-2'],
+      'snapshot should keep healthy peers visible when service rows are repaired before endpoint rows',
+    );
+  });
+
 test('AdminWebSocketAPI - local control snapshot query avoids distributed fanout',
   async (t) => {
     let executeRequestCalls = 0;
@@ -3011,6 +3094,89 @@ test(
 );
 
 test(
+  'AdminWebSocketAPI - forced control snapshot degrades when stale replica-operation repair fails',
+  async (t) => {
+    const nowMs = 1740589945123;
+    const staleHeartbeatMs = nowMs - 45000;
+    const writableCache = createAuthoritativeRepairCache('node-local');
+
+    writableCache.applySystemTableChange(TABLES.NODES, 'UPDATE', {
+      id: 'node-local',
+      node_id: 'node-local',
+      address: 'localhost:8080',
+      node_address: 'localhost:8080',
+      status: 'active',
+      connection_state: 'ready',
+      last_heartbeat: staleHeartbeatMs,
+      ready_lease_expires_at: staleHeartbeatMs + 15000,
+    });
+    writableCache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'INSERT', {
+      operation_id: 'op-stale-local',
+      partition_id: `${TABLES.NODES}-p1`,
+      entity_type: 'partition',
+      entity_id: `${TABLES.NODES}-p1`,
+      operation_type: 'ADD',
+      status: 'creating',
+      target_node_id: 'node-peer',
+      workflow_step: 'CREATING',
+      created_at: nowMs - 180000,
+      updated_at: nowMs - 180000,
+    });
+
+    const failingReplicaOpEngine = {
+      executeRequestCalls: [],
+      async executeRequest(request) {
+        const statement = String(request?.statement || '').trim();
+        this.executeRequestCalls.push(statement);
+        if (/^select \* from replica_operations$/i.test(statement)) {
+          return {
+            success: false,
+            rows: [],
+            count: 0,
+            error: 'replica_operations_timeout',
+          };
+        }
+        return {success: true, rows: [], count: 0};
+      },
+    };
+
+    const api = new AdminWebSocketAPI({
+      nodeId: 'node-local',
+      systemTableCache: createReadOnlyCache(writableCache),
+      cacheMutationTarget: writableCache,
+      controlPlaneSystemTableGateway: createAuthoritativeCacheGateway(
+        writableCache,
+        {
+          queryEngine: failingReplicaOpEngine,
+        },
+      ),
+      sqlQueryEngine: failingReplicaOpEngine,
+      nowFn: () => nowMs,
+    });
+
+    const result = await api.buildControlSnapshotQueryResult({
+      forceAuthoritativeRepair: true,
+    });
+
+    t.equal(
+      result?.success,
+      true,
+      'forced control snapshot should still succeed when only replica-operation repair fails',
+    );
+    t.equal(
+      result?.rows?.[0]?.replicaOperations?.staleInFlightCount,
+      1,
+      'local snapshot should fall back to the local stale replica-operation view when advisory repair fails',
+    );
+    t.same(
+      getAuthoritativeRepairReadTables(failingReplicaOpEngine.executeRequestCalls),
+      [TABLES.REPLICA_OPERATIONS].sort(),
+      'degraded local snapshot should attempt only the scoped replica_operations repair',
+    );
+  },
+);
+
+test(
   'AdminWebSocketAPI - forced control snapshot repairs stale active node heartbeat rows',
   async (t) => {
     const nowMs = 1740589945123;
@@ -3192,6 +3358,72 @@ test(
       repairEngine.executeRequestCalls.includes(`SELECT * FROM ${TABLES.NODES}`),
       true,
       'coverage-gap repair should query authoritative nodes rows',
+    );
+  },
+);
+
+test(
+  'AdminWebSocketAPI - local control snapshot repairs transport-connected peer coverage gaps',
+  async (t) => {
+    const writableCache = createAuthoritativeRepairCache('node-local');
+    const nowMs = 1740589945123;
+    const authoritativeNodeRows = [
+      ...writableCache.getAll(TABLES.NODES),
+      {
+        id: 'node-peer',
+        node_id: 'node-peer',
+        address: 'localhost:8081',
+        node_address: 'localhost:8081',
+        status: 'active',
+        connection_state: 'ready',
+        last_heartbeat: nowMs - 1000,
+        ready_lease_expires_at: nowMs + 15000,
+      },
+    ];
+    const repairEngine = createSystemTableRepairQueryEngine({
+      [TABLES.NODES]: authoritativeNodeRows,
+      [TABLES.PARTITIONS]: writableCache.getAll(TABLES.PARTITIONS),
+      [TABLES.SERVICES]: writableCache.getAll(TABLES.SERVICES),
+      [TABLES.TABLES]: writableCache.getAll(TABLES.TABLES),
+      [TABLES.NODE_ENDPOINTS]: writableCache.getAll(TABLES.NODE_ENDPOINTS),
+      [TABLES.SERVICE_DEFINITIONS]:
+        writableCache.getAll(TABLES.SERVICE_DEFINITIONS),
+      [TABLES.SERVICE_ENDPOINTS]:
+        writableCache.getAll(TABLES.SERVICE_ENDPOINTS),
+      [TABLES.REPLICA_OPERATIONS]:
+        writableCache.getAll(TABLES.REPLICA_OPERATIONS),
+    });
+
+    const api = new AdminWebSocketAPI({
+      nodeId: 'node-local',
+      systemTableCache: createReadOnlyCache(writableCache),
+      cacheMutationTarget: writableCache,
+      controlPlaneSystemTableGateway: createAuthoritativeCacheGateway(
+        writableCache,
+        {
+          queryEngine: repairEngine,
+        },
+      ),
+      sqlQueryEngine: repairEngine,
+      messageRouter: {
+        getConnectedNodes() {
+          return ['node-peer'];
+        },
+      },
+      nowFn: () => nowMs,
+    });
+
+    await api.buildControlSnapshotQueryResult();
+
+    t.equal(
+      repairEngine.executeRequestCalls.includes(`SELECT * FROM ${TABLES.NODES}`),
+      true,
+      'transport-connected peers missing from node rows should trigger authoritative nodes repair',
+    );
+    t.equal(
+      writableCache.get(TABLES.NODES, 'node-peer')?.node_id,
+      'node-peer',
+      'transport-connected peer repair should hydrate the missing peer node row',
     );
   },
 );

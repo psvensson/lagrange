@@ -63,7 +63,7 @@ async function withCapturedReplicaFactory(service, t, assertFactory) {
           groupId: 'mg-1',
           initialized: true,
           isLeaderReplica: () => true,
-          isMetadataIngressReady: () => true,
+          getMetadataIngressReadiness: () => ({ready: true}),
           getLeaderId: () => null,
           subscribeToCDC: async (tableName) => {
             subscribedTables.push(tableName);

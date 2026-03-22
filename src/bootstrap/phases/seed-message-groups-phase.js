@@ -29,6 +29,7 @@ import {
 import {
   getBootstrapMessageGroupService as selectBootstrapMessageGroupService,
   resolveOperationalMessageGroupSelection,
+  resolveOperationalMessageGroupSelectionAsync,
 } from '../shared/message-group-selection.js';
 
 /**
@@ -339,6 +340,21 @@ class SeedMessageGroupsPhase {
   resolveOperationalMessageGroupSelection(options = {}) {
     const d = this.delegates;
     return resolveOperationalMessageGroupSelection(
+      d.getMessageGroupServices(),
+      options,
+    );
+  }
+
+  /**
+   * Resolve operational ingress after allowing authoritative topology repair
+   * for strict system-table CDC.
+   * @param {Object} [options]
+   * @param {Array<string>} [options.requiredTables]
+   * @return {Promise<Object>}
+   */
+  async resolveOperationalMessageGroupSelectionAsync(options = {}) {
+    const d = this.delegates;
+    return resolveOperationalMessageGroupSelectionAsync(
       d.getMessageGroupServices(),
       options,
     );

@@ -168,7 +168,6 @@ const DEFAULT_TRANSACTION_SESSION_ID = 'default';
 const QUERY_PAYLOAD_FIELD_MIGRATION_OPERATION = 'migrationOperation';
 const QUERY_PAYLOAD_FIELD_MIGRATION_ID = 'migrationId';
 const PARTITION_REPLICA_COUNT_FIELD = 'replica_count';
-const FLUSH_SKIP_SETTLING = 'settling';
 const CRITICAL_SYSTEM_PARTITION_IDS = new Set(
   Object.values(SYSTEM_TABLE_NAME).map((tableName) => `${tableName}-p1`),
 );
@@ -712,11 +711,9 @@ class PartitionService extends EventEmitter {
         raft_role: role,
       }),
       prepareFlush: () => ({
-        skip: !this.isMetadataPublicationReady(),
+        skip: false,
         clearPending: false,
-        reason: !this.isMetadataPublicationReady() ?
-          FLUSH_SKIP_SETTLING :
-          'ready',
+        reason: 'ready',
       }),
       readRowFromCache: (systemTableCache) =>
         systemTableCache?.get?.(TABLES.SERVICES, this.replicaId) || null,
@@ -6026,7 +6023,12 @@ class PartitionService extends EventEmitter {
    * @private
    */
   isPartitionsLeaderAvailable() {
-    return isSystemTableWriteReady(this.systemTableCache, SYSTEM_TABLE_NAME.PARTITIONS);
+    if (isSystemTableWriteReady(this.systemTableCache, SYSTEM_TABLE_NAME.PARTITIONS)) {
+      return true;
+    }
+    return this.cdcIntegrationService?.canWriteSystemTableLocally?.(
+      SYSTEM_TABLE_NAME.PARTITIONS,
+    ) === true;
   }
 
   /**

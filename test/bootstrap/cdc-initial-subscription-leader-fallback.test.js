@@ -83,7 +83,7 @@ test(
       initialized: true,
       subscribeToCDC: async () => {},
       isLeaderReplica: () => true,
-      isMetadataIngressReady: () => true,
+      getMetadataIngressReadiness: () => ({ready: true}),
     };
 
     service.messageGroupServices = new Map([
@@ -160,6 +160,9 @@ test(
     service.messageGroupServices = new Map([
       ['mg-1-r1', {
         initialized: true,
+        systemTableCache: {
+          get: () => null,
+        },
         subscribeToCDC: async () => {},
         isLeaderReplica: () => false,
         getMetadataIngressReadiness: () => ({
@@ -189,6 +192,99 @@ test(
         return true;
       },
       'subscriber should surface typed defer semantics so partition CDC can replay later',
+    );
+
+    teardownEnvironment();
+    t.end();
+  },
+);
+
+test(
+  'subscribeToCDC repairs strict ingress selection before deferring',
+  async (t) => {
+    setupEnvironment();
+
+    const service = new BootstrapService({nodeId: 'node-a'});
+    const propagatedEvents = [];
+    let capturedCdcSubscriber = null;
+    let repairSelectionCalls = 0;
+
+    service.seedCacheHydrationPhase.propagatePartitionCDCEvent =
+      async (_messageGroup, cdcEvent) => {
+        propagatedEvents.push(cdcEvent);
+      };
+    service.latencyTopology = {
+      cdcGroupPropagationService: {
+        propagateCDCEvent: async () => {},
+      },
+    };
+
+    const mockPartition = {
+      subscribeToCDCWithHandshake: async (subscriber, options = {}) => {
+        capturedCdcSubscriber = subscriber;
+        return {
+          subscriberId: options.subscriberId || null,
+          subscriptionEpoch: 1,
+          catchup: {
+            mode: 'none',
+            bufferedEventsReplayed: 0,
+          },
+        };
+      },
+      isLeader: false,
+    };
+
+    service.partitionServices = new Map([
+      ['nodes-p1-r1', mockPartition],
+    ]);
+    service.messageGroupServices = new Map([
+      ['mg-1-r1', {
+        initialized: true,
+        systemTableCache: {
+          get: () => null,
+        },
+        subscribeToCDC: async () => {},
+        isLeaderReplica: () => false,
+        getMetadataIngressReadiness: () => ({
+          ready: false,
+          reason: 'leader metadata incomplete',
+          retryAfterMs: 250,
+        }),
+        resolveMetadataIngressForwardSelection: async () => {
+          repairSelectionCalls += 1;
+          return {
+            strictForwarding: true,
+            strictForwardRetryAfterMs: 250,
+            targets: [{
+              serviceId: 'mg-1-r2',
+              address: 'seed-node/message-group/mg-1-r2',
+            }],
+            suppressedCount: 0,
+          };
+        },
+      }],
+    ]);
+
+    await service.seedCacheHydrationPhase.subscribeToCDC(
+      'nodes',
+      'nodes-p1',
+      ['nodes-p1-r1'],
+    );
+
+    await capturedCdcSubscriber({
+      tableName: 'nodes',
+      operation: 'UPSERT',
+      data: {node_id: 'node-b'},
+    });
+
+    assert.equal(
+      propagatedEvents.length,
+      1,
+      'strict ingress selection should use authoritative repair before declaring owner-not-ready',
+    );
+    assert.ok(
+      repairSelectionCalls >= 1,
+      'strict ingress selection should invoke the repair-aware selection path',
     );
 
     teardownEnvironment();

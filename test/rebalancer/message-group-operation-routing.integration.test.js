@@ -15,6 +15,9 @@ import {
   SERVICE_STATUS,
   STATE,
 } from '../../src/constants/index.js';
+import {
+  ReplicaOperationField,
+} from '../../src/rebalancer/replica-operation-constants.js';
 import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {
@@ -155,6 +158,109 @@ test('Message-group operation routing integration', async (t) => {
   );
 
   await t.test(
+    'dispatch rehydrates persisted message-group topology metadata',
+    async (t) => {
+      let receivedOperation = null;
+      const now = Date.now();
+      const opRow = {
+        operation_id: 'op-mg-topology-1',
+        type: 'ADD',
+        partition_id: 'mg-1',
+        replica_id: 'mg-1-r4',
+        source_node_id: 'node-1',
+        target_node_id: 'node-4',
+        status: 'pending',
+        workflow_step: WORKFLOW_STEP.PENDING,
+        created_at: now,
+        updated_at: now,
+        entity_type: 'message_group',
+        entity_id: 'mg-1',
+        steps_history: JSON.stringify([{
+          step: WORKFLOW_STEP.PENDING,
+          replicaIds: ['mg-1-r1', 'mg-1-r2', 'mg-1-r3', 'mg-1-r4'],
+          peerAddresses: [
+            'node-1/message-group/mg-1-r1',
+            'node-2/message-group/mg-1-r2',
+            'node-3/message-group/mg-1-r3',
+            'node-4/message-group/mg-1-r4',
+          ],
+        }]),
+      };
+
+      const service = new ReplicaDispatchService({
+        nodeId: 'node-1',
+        messageRouter: {
+          getConnectionState: () => STATE.CONNECTED,
+        },
+        cdcIntegrationService: {
+          upsertSystemTableRow: async () => ({success: true}),
+          updateSystemTableRow: async () => ({
+            success: true,
+            partitionResult: {affectedRows: 1},
+          }),
+        },
+        systemTableCache: {
+          get: () => null,
+          getAll: () => [],
+        },
+        controlPlaneReadinessService: {
+          getNodeReadinessSync(nodeId) {
+            return {
+              nodeId,
+              dimensions: {
+                [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+                [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]: true,
+              },
+            };
+          },
+        },
+        rebalanceCoordinator: {
+          claimDispatchTransition: async () => ({
+            operationId: opRow.operation_id,
+            type: opRow.type,
+            partitionId: opRow.partition_id,
+            replicaId: opRow.replica_id,
+            sourceNodeId: opRow.source_node_id,
+            targetNodeId: opRow.target_node_id,
+            status: opRow.status,
+            workflowStep: opRow.workflow_step,
+            createdAt: opRow.created_at,
+            updatedAt: opRow.updated_at,
+            entityType: opRow.entity_type,
+            entityId: opRow.entity_id,
+            stepsHistory: JSON.parse(opRow.steps_history),
+          }),
+          executeOperation: async (operation) => {
+            receivedOperation = operation;
+          },
+        },
+      });
+      service.initialize();
+
+      try {
+        await service.dispatchOperationRow(opRow);
+        t.same(
+          receivedOperation?.[ReplicaOperationField.REPLICA_IDS],
+          ['mg-1-r1', 'mg-1-r2', 'mg-1-r3', 'mg-1-r4'],
+          'dispatch should restore persisted replica ids',
+        );
+        t.same(
+          receivedOperation?.[ReplicaOperationField.PEER_ADDRESSES],
+          [
+            'node-1/message-group/mg-1-r1',
+            'node-2/message-group/mg-1-r2',
+            'node-3/message-group/mg-1-r3',
+            'node-4/message-group/mg-1-r4',
+          ],
+          'dispatch should restore persisted peer addresses',
+        );
+      } finally {
+        service.stop();
+      }
+    },
+  );
+
+  await t.test(
     'coordinator routes message-group operation to message-group handler',
     async (t) => {
       const deliveries = [];
@@ -233,7 +339,38 @@ test('Message-group operation routing integration', async (t) => {
         nodeId: 'node-1',
         systemTableCache: {
           get: () => null,
-          filter: () => [],
+          filter: (tableName, predicate) => {
+            if (tableName !== SYSTEM_TABLE_NAME.SERVICES) {
+              return [];
+            }
+            const rows = [
+              {
+                service_id: 'mg-1-r1',
+                replica_id: 'mg-1-r1',
+                service_type: SERVICE_TYPE.MESSAGE_GROUP,
+                group_id: 'mg-1',
+                node_id: 'node-1',
+                address: 'node-1/message-group/mg-1-r1',
+              },
+              {
+                service_id: 'mg-1-r2',
+                replica_id: 'mg-1-r2',
+                service_type: SERVICE_TYPE.MESSAGE_GROUP,
+                group_id: 'mg-1',
+                node_id: 'node-2',
+                address: 'node-2/message-group/mg-1-r2',
+              },
+              {
+                service_id: 'mg-1-r3',
+                replica_id: 'mg-1-r3',
+                service_type: SERVICE_TYPE.MESSAGE_GROUP,
+                group_id: 'mg-1',
+                node_id: 'node-3',
+                address: 'node-3/message-group/mg-1-r3',
+              },
+            ];
+            return rows.filter(predicate);
+          },
         },
         cdcIntegrationService: {
           upsertSystemTableRow: async () => ({success: true}),
@@ -313,6 +450,66 @@ test('Message-group operation routing integration', async (t) => {
         t.ok(
           insertQuery.params.includes('message_group'),
           'insert params should include message_group entity type',
+        );
+        const stepsHistory = JSON.parse(insertQuery.params[12]);
+        t.same(
+          stepsHistory[0]?.replicaIds,
+          ['mg-1-r1', 'mg-1-r2', 'mg-1-r3', 'mg-1-r4'],
+          'inserted steps history should persist canonical replica ids',
+        );
+      } finally {
+        await coordinator.shutdown();
+      }
+    },
+  );
+
+  await t.test(
+    'coordinator fails closed when message-group topology is unavailable',
+    async (t) => {
+      const coordinator = new RebalanceCoordinator({
+        nodeId: 'node-1',
+        systemTableCache: {
+          get: () => null,
+          filter: () => [],
+        },
+        cdcIntegrationService: {
+          upsertSystemTableRow: async () => ({success: true}),
+          updateSystemTableRow: async () => ({success: true}),
+        },
+        messageRouter: {
+          deliver: async () => ({acknowledged: true, status: 'initiated'}),
+        },
+        tablePolicyService: {
+          getPolicyForPartition: () => ({}),
+        },
+        sqlQueryEngine: {
+          executeQuery: async () => ({success: true, rows: [], changes: 1}),
+        },
+        transactionCoordinator: createMockTransactionCoordinator(),
+        controlPlaneReadinessService: createMockControlPlaneReadinessService(),
+        storageAdmissionService: {
+          checkAdd: async () => ({allowed: true, decisionType: 'admitted'}),
+          checkReplace: async () => ({allowed: true, decisionType: 'admitted'}),
+        },
+        storageAccountingService: {
+          estimateReplicaBytes: () => 1,
+        },
+        enableTimeouts: false,
+      });
+      coordinator.initialize();
+
+      try {
+        await t.rejects(
+          coordinator.createOperation({
+            type: 'ADD',
+            partitionId: 'mg-1',
+            entityType: 'message_group',
+            entityId: 'mg-1',
+            nodeId: 'node-4',
+            replicaId: 'mg-1-r4',
+          }),
+          /without existing canonical topology/,
+          'message-group createOperation should fail closed when topology is missing',
         );
       } finally {
         await coordinator.shutdown();

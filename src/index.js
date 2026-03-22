@@ -863,6 +863,7 @@ async function startJoinNode(options) {
   if (joinLeadershipWaitTimeoutMs !== null) {
     joiningConfig.leadershipWaitTimeoutMs = joinLeadershipWaitTimeoutMs;
   }
+  joiningConfig.autoResumeRetryableFailures = true;
 
   const nodeId = config.get(CONFIG_KEY.NODE_ID);
   const joinReadinessState = createReadinessStateWithDiagnostics(

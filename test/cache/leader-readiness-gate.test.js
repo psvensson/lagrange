@@ -219,7 +219,7 @@ test(
 );
 
 test(
-  'getMissingSystemServiceLeaders - requires an explicit leader row when multiple replicas share the leader node',
+  'getMissingSystemServiceLeaders - accepts colocated active replicas on the canonical leader node when role metadata is advisory',
   async (t) => {
     const cache = createMockCache({
       partitions: [
@@ -249,12 +249,12 @@ test(
 
     const result = getMissingSystemServiceLeaders(cache);
 
-    t.same(result.missingPartitionLeaders, ['p1'],
-      'co-located follower rows must not satisfy leader presence');
+    t.same(result.missingPartitionLeaders, [],
+      'co-located active rows on the canonical leader node should satisfy leader presence');
     t.same(result.missingPartitionLeaderNodes, [],
       'owner leader_node_id still satisfies node metadata');
     t.same(result.missingPartitionLeaderAddresses, [],
-      'addresses are present even though leader identity is unresolved');
+      'addresses are present on the canonical leader node');
   },
 );
 

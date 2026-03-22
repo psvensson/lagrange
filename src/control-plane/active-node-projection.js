@@ -127,6 +127,10 @@ function isCanonicallyActiveNode(nodeRow, options = {}) {
       !hasCanonicalWebSocketEndpoint(
         normalizedNode.nodeId,
         nodeEndpointRows,
+      ) &&
+      !hasCanonicalActiveService(
+        normalizedNode.nodeId,
+        options.serviceRows,
       )) {
     return false;
   }

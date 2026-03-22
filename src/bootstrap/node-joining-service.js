@@ -31,6 +31,7 @@ import {LatencyTopologySetup} from './shared/latency-topology-setup.js';
 import {
   buildMessageGroupOwnerNotReadyError,
   resolveOperationalMessageGroupSelection,
+  resolveOperationalMessageGroupSelectionAsync,
 } from './shared/message-group-selection.js';
 import {PartitionService} from '../partition/partition-service.js';
 import {
@@ -130,6 +131,10 @@ import {
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../control-plane/control-plane-readiness-constants.js';
+import {
+  getControlPlaneRetryAfterMs,
+  isRetryableControlPlaneError,
+} from '../control-plane/control-plane-error-classification.js';
 import {STORAGE_DEFAULT} from '../storage/storage-constants.js';
 import {
   COLUMN,
@@ -524,6 +529,7 @@ class NodeJoiningService extends EventEmitter {
         getLogger: () => this.logger,
         getConfig: () => this.config,
         getNow: () => this.now,
+        getSleep: () => this.sleep,
         getWsPort: () => this.wsPort ?? this.config.wsPort,
         getBootstrapResponse: () => this.bootstrapResponse,
         setBootstrapTopologySnapshotMeta: (value) => {
@@ -585,6 +591,8 @@ class NodeJoiningService extends EventEmitter {
         setJoinMembershipPublished: (value) => {
           this.joinMembershipPublished = value === true;
         },
+        getJoinMembershipPublished: () =>
+          this.joinMembershipPublished,
         getNodeCapabilities: () =>
           this.getNodeCapabilities(),
         setMessageGroupServiceEndpointsPublished: (value) => {
@@ -1229,40 +1237,152 @@ class NodeJoiningService extends EventEmitter {
       joinSessionId: this.joinSessionId,
     });
 
-    try {
-      this.lifecycleStateMachine.transition(NodeState.CONNECTING);
+    const resumePolicy = this.resolveRetryableJoinResumePolicy();
+    let attempt = NUM.ZERO;
 
-      const startupPipelineRunner = new StartupPipelineRunner({
-        logger: this.logger,
-        eventSink: this,
-      });
-      const joinPlan = createJoinStartupPlan(this);
-      assertJoinPlanSegments(joinPlan);
-      await this.joinCoordinator.run({
-        nodeId: this.nodeId,
-        sessionId: this.joinSessionId,
-        steps: this.buildJoinCheckpointSteps(
-          startupPipelineRunner,
-          joinPlan,
-        ),
-      });
+    while (true) {
+      attempt += NUM.ONE;
+      try {
+        this.lifecycleStateMachine.transition(NodeState.CONNECTING);
 
-      return {
-        success: true,
-        nodeId: this.nodeId,
-        duration: this.now() - this.startTime,
-        messageGroupServices: this.messageGroupServices,
-        partitionServices: this.partitionServices,
-        replicaHandler: this.replicaHandler,
-        replicaStateMachine: this.replicaStateMachine,
-        transport: this.transport,
-        messageRouter: this.messageRouter,
-        bootstrapResponse: this.bootstrapResponse,
-        lifecycleStateMachine: this.lifecycleStateMachine,
-      };
-    } catch (error) {
-      return this.handleJoiningFailure(error);
+        const startupPipelineRunner = new StartupPipelineRunner({
+          logger: this.logger,
+          eventSink: this,
+        });
+        const joinPlan = createJoinStartupPlan(this);
+        assertJoinPlanSegments(joinPlan);
+        await this.joinCoordinator.run({
+          nodeId: this.nodeId,
+          sessionId: this.joinSessionId,
+          steps: this.buildJoinCheckpointSteps(
+            startupPipelineRunner,
+            joinPlan,
+          ),
+        });
+
+        return {
+          success: true,
+          nodeId: this.nodeId,
+          duration: this.now() - this.startTime,
+          messageGroupServices: this.messageGroupServices,
+          partitionServices: this.partitionServices,
+          replicaHandler: this.replicaHandler,
+          replicaStateMachine: this.replicaStateMachine,
+          transport: this.transport,
+          messageRouter: this.messageRouter,
+          bootstrapResponse: this.bootstrapResponse,
+          lifecycleStateMachine: this.lifecycleStateMachine,
+        };
+      } catch (error) {
+        const failureResult = await this.handleJoiningFailure(error);
+        if (!this.shouldAutoResumeRetryableJoinFailure(
+          error,
+          failureResult,
+          attempt,
+          resumePolicy,
+        )) {
+          return failureResult;
+        }
+
+        const delayMs = this.computeRetryableJoinResumeDelayMs(
+          error,
+          attempt,
+          resumePolicy,
+        );
+        this.logger.warn(JOINING_LOG_MSG.RETRYABLE_FAILURE_RESUMING, {
+          nodeId: this.nodeId,
+          joinSessionId: this.joinSessionId,
+          attempt,
+          maxAttempts: resumePolicy.maxAttempts,
+          retryAfterMs: delayMs,
+          phase: failureResult.phase,
+          error: failureResult.error,
+        });
+        await this.sleep(delayMs);
+      }
     }
+  }
+
+  resolveRetryableJoinResumePolicy() {
+    return {
+      enabled: this.config.autoResumeRetryableFailures === true,
+      maxAttempts: Number.isFinite(
+        this.config.retryableFailureResumeMaxAttempts,
+      ) ?
+        Math.max(
+          NUM.ONE,
+          Math.floor(this.config.retryableFailureResumeMaxAttempts),
+        ) :
+        JOINING_DEFAULT.retryableFailureResumeMaxAttempts,
+      baseDelayMs: Number.isFinite(
+        this.config.retryableFailureResumeBaseDelayMs,
+      ) ?
+        Math.max(
+          NUM.ONE,
+          Math.floor(this.config.retryableFailureResumeBaseDelayMs),
+        ) :
+        JOINING_DEFAULT.retryableFailureResumeBaseDelayMs,
+      maxDelayMs: Number.isFinite(
+        this.config.retryableFailureResumeMaxDelayMs,
+      ) ?
+        Math.max(
+          NUM.ONE,
+          Math.floor(this.config.retryableFailureResumeMaxDelayMs),
+        ) :
+        JOINING_DEFAULT.retryableFailureResumeMaxDelayMs,
+      maxElapsedMs: Number.isFinite(
+        this.config.retryableFailureResumeMaxElapsedMs,
+      ) ?
+        Math.max(
+          NUM.ZERO,
+          Math.floor(this.config.retryableFailureResumeMaxElapsedMs),
+        ) :
+        JOINING_DEFAULT.retryableFailureResumeMaxElapsedMs,
+    };
+  }
+
+  shouldAutoResumeRetryableJoinFailure(
+    error,
+    failureResult,
+    attempt,
+    policy,
+  ) {
+    if (policy?.enabled !== true) {
+      return false;
+    }
+    if (error?.name === JOINING_ERROR_NAME.ABORT) {
+      return false;
+    }
+    const elapsedMs = this.now() - this.startTime;
+    if (attempt >= policy.maxAttempts ||
+        elapsedMs >= policy.maxElapsedMs) {
+      this.logger.warn(
+        JOINING_LOG_MSG.RETRYABLE_FAILURE_RESUME_EXHAUSTED,
+        {
+          nodeId: this.nodeId,
+          joinSessionId: this.joinSessionId,
+          attempt,
+          maxAttempts: policy.maxAttempts,
+          elapsedMs,
+          maxElapsedMs: policy.maxElapsedMs,
+          phase: failureResult?.phase || this.getPhase(),
+          error: failureResult?.error || error?.message || null,
+        },
+      );
+      return false;
+    }
+    return isRetryableControlPlaneError(error);
+  }
+
+  computeRetryableJoinResumeDelayMs(error, attempt, policy) {
+    const hintedDelayMs = getControlPlaneRetryAfterMs(error);
+    if (hintedDelayMs > NUM.ZERO) {
+      return Math.min(policy.maxDelayMs, hintedDelayMs);
+    }
+    const exponentialDelayMs = policy.baseDelayMs * (
+      NUM.TWO ** Math.max(NUM.ZERO, attempt - NUM.ONE)
+    );
+    return Math.min(policy.maxDelayMs, exponentialDelayMs);
   }
 
   /**
@@ -1862,6 +1982,27 @@ class NodeJoiningService extends EventEmitter {
         ControlPlaneMessageType.NODE_STATE_UPDATE,
       );
     return resolveOperationalMessageGroupSelection(
+      this.messageGroupServices,
+      {requiredTables},
+    );
+  }
+
+  /**
+   * Resolve operational ingress after authoritative strict-forward repair for
+   * system-table CDC during join convergence.
+   * @param {Object} [options]
+   * @param {Array<string>} [options.requiredTables]
+   * @return {Promise<Object>}
+   * @private
+   */
+  async resolveOperationalMessageGroupSelectionAsync(options = {}) {
+    const requiredTables = Array.isArray(options.requiredTables) &&
+      options.requiredTables.length > 0 ?
+      options.requiredTables :
+      getControlPlaneMessageRequiredTables(
+        ControlPlaneMessageType.NODE_STATE_UPDATE,
+      );
+    return resolveOperationalMessageGroupSelectionAsync(
       this.messageGroupServices,
       {requiredTables},
     );
@@ -3440,7 +3581,7 @@ class NodeJoiningService extends EventEmitter {
       if (tableName &&
           shouldAttachPartitionCdcPropagation(tableName)) {
         const subscriptionSelection =
-          this.resolveOperationalMessageGroupSelection({
+          await this.resolveOperationalMessageGroupSelectionAsync({
             requiredTables: [tableName],
           });
         const subscriptionMessageGroupService =
@@ -3474,7 +3615,7 @@ class NodeJoiningService extends EventEmitter {
               replicaId: options.replicaId,
             });
             const propagationSelection =
-              this.resolveOperationalMessageGroupSelection({
+              await this.resolveOperationalMessageGroupSelectionAsync({
                 requiredTables: [tableName],
               });
             const propagationMessageGroupService =

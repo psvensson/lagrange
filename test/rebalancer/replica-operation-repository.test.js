@@ -115,6 +115,28 @@ test('rowToOperation parses steps_history JSON', async (t) => {
   t.same(op.stepsHistory, history);
 });
 
+test('rowToOperation rehydrates replica topology metadata', async (t) => {
+  const repo = createTestRepository();
+  const history = [{
+    step: WORKFLOW_STEP.PENDING,
+    replicaIds: ['mg-1-r1', 'mg-1-r2', 'mg-1-r3'],
+    peerAddresses: [
+      'node-1/message-group/mg-1-r1',
+      'node-2/message-group/mg-1-r2',
+      'node-3/message-group/mg-1-r3',
+    ],
+  }];
+  const row = makeRow({
+    entity_type: SERVICE_TYPE.MESSAGE_GROUP,
+    entity_id: 'mg-1',
+    steps_history: JSON.stringify(history),
+  });
+  const op = repo.rowToOperation(row);
+
+  t.same(op.replicaIds, history[0].replicaIds);
+  t.same(op.peerAddresses, history[0].peerAddresses);
+});
+
 test('rowToOperation defaults entity_type to partition',
   async (t) => {
     const repo = createTestRepository();
@@ -188,6 +210,40 @@ test('queryIncompleteOperations logs retryable read failures as warnings',
       'warning should preserve the typed pressure code');
     t.equal(warnings[0][1]?.retryAfterMs, 250,
       'warning should preserve the retry-after hint');
+  });
+
+test('queryIncompleteOperations backs off SQL retries after retryable read failures',
+  async (t) => {
+    let readCalls = 0;
+    const repo = createTestRepository({
+      controlPlaneSystemTableGateway: {
+        readRows: async () => {
+          readCalls += 1;
+          return {
+            success: false,
+            error: 'Distributed operation failed due to participant failures',
+            errorCode: 'CONTROL_PLANE_PRESSURE_DEGRADED',
+            retryAfterMs: 500,
+          };
+        },
+        executeQuery: async () => ({success: true}),
+      },
+      systemTableCache: {
+        get: () => null,
+        getAll: () => [],
+        filter: () => [],
+      },
+    });
+
+    const first = await repo.queryIncompleteOperations();
+    const second = await repo.queryIncompleteOperations();
+
+    t.same(first, [],
+      'first retryable failure should fail closed to empty results');
+    t.same(second, [],
+      'subsequent reads during cooldown should reuse the empty observation');
+    t.equal(readCalls, 1,
+      'retryable failures should arm a cooldown instead of hammering replica_operations SQL');
   });
 
 // ── isOperationTerminal ─────────────────────────────────────────
