@@ -282,6 +282,148 @@ test(
 );
 
 test(
+  'ConnectWebSocketPhase preserves deferred query transport selection until an initialized relay is available',
+  async () => {
+    const originalCreate = MessageRouterSetup.create;
+    let currentRouter = null;
+    let queryTransportResolver = null;
+    const relayService = {
+      initialized: true,
+      sendMessage: async () => ({acknowledged: true}),
+    };
+    let currentSelection = {
+      service: null,
+      ready: false,
+      reason: 'operational message-group ingress not ready',
+      retryAfterMs: 25,
+      route: null,
+    };
+
+    const router = {
+      nodeConnections: new Map(),
+      async connectToNode(nodeId, address) {
+        this.nodeConnections.set(nodeId, {state: 'connected', address});
+      },
+      getConnectionState(nodeId) {
+        return this.nodeConnections.get(nodeId)?.state || null;
+      },
+      getConnectedNodes() {
+        return Array.from(this.nodeConnections.keys());
+      },
+      hasSelfConnection() {
+        return true;
+      },
+      setQueryMessageGroupServiceResolver(resolver) {
+        queryTransportResolver = resolver;
+      },
+    };
+
+    MessageRouterSetup.create = async () => router;
+
+    try {
+      const phase = new ConnectWebSocketPhase({
+        nodeId: 'joining-node-query-transport-selection',
+        delegates: {
+          getWsPort: () => 9090,
+          getIdentifyPayload: () => ({role: 'joining'}),
+          getNodeAddress: () => 'joining-node-query-transport-selection:8080',
+          getLogger: () => ({
+            info() {},
+            warn() {},
+            error(errorMessage) {
+              throw new Error(`unexpected error log: ${errorMessage}`);
+            },
+            debug() {},
+          }),
+          getNow: () => () => 0,
+          getSleep: () => async () => {},
+          getConfig: () => ({
+            httpTimeoutMs: 30000,
+            leadershipWaitTimeoutMs: 100,
+            leadershipWaitInitialDelayMs: 25,
+            leadershipWaitMaxDelayMs: 50,
+            leadershipWaitBackoffMultiplier: 2,
+          }),
+          resolveJoinRetryPolicy: () => ({
+            retryTimeoutMs: 100,
+            initialDelayMs: 25,
+            maxDelayMs: 50,
+            backoffMultiplier: 2,
+          }),
+          computeSeedContactRetryDelayMs: ({baseDelayMs, maxDelayMs}) =>
+            Math.min(baseDelayMs, maxDelayMs),
+          getMessageRouter: () => currentRouter,
+          setMessageRouter(routerInstance) {
+            currentRouter = routerInstance;
+          },
+          setTransport() {},
+          initializeJoiningLifecycleOwners: async () => {},
+          triggerJoinReconciler: async () => {},
+          getSeedNodeWsAddress: () => 'ws://seed-node:8082',
+          getSeedNodeId: () => 'seed-node',
+          resolveMeshConnectivityNodeRows: () => ({
+            source: 'cache',
+            rows: [
+              {
+                node_id: 'joining-node-query-transport-selection',
+                node_address: 'joining-node-query-transport-selection:8080',
+              },
+            ],
+          }),
+          buildClusterMeshSignature: () => 'mesh-signature',
+          setLastClusterMeshSignature: () => {},
+          sendControlPlaneNodeStateUpdate: async () => {},
+          getNodeCapabilities: () => ['sql'],
+          getLeaderMessageGroupService: () => {
+            throw new Error('query transport should use the dedicated selection delegate');
+          },
+          resolveQueryTransportMessageGroupSelection: () => currentSelection,
+        },
+      });
+
+      await phase.phaseConnectWebSocket();
+
+      assert.equal(
+        typeof queryTransportResolver,
+        'function',
+        'phase should install a query transport resolver on the router',
+      );
+      assert.deepEqual(
+        queryTransportResolver(),
+        {
+          service: null,
+          reason: 'operational message-group ingress not ready',
+          retryAfterMs: 25,
+        },
+        'deferred query transport selection should preserve structured retry context',
+      );
+
+      currentSelection = {
+        service: relayService,
+        ready: true,
+        reason: null,
+        retryAfterMs: 0,
+        route: 'relay',
+      };
+
+      const resolvedSelection = queryTransportResolver();
+      assert.equal(
+        resolvedSelection.service,
+        relayService,
+        'initialized relay should become the bound query transport service',
+      );
+      assert.equal(
+        resolvedSelection.route,
+        'relay',
+        'resolver should preserve the dedicated relay route classification',
+      );
+    } finally {
+      MessageRouterSetup.create = originalCreate;
+    }
+  },
+);
+
+test(
   'ConnectWebSocketPhase hydrates bootstrap snapshots before later join phases depend on cache state',
   async () => {
     const originalCreate = MessageRouterSetup.create;

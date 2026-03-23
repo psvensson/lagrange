@@ -36,12 +36,42 @@ const MESH_CONNECTED_OR_IN_FLIGHT_STATES = new Set([
   CONNECTION_STATE.RECONNECTING,
 ]);
 
-function resolveInitializedQueryMessageGroupService(getService) {
-  if (typeof getService !== TYPEOF.FUNCTION) {
+function resolveQueryTransportSelection(getSelection) {
+  if (typeof getSelection !== TYPEOF.FUNCTION) {
     return null;
   }
-  const service = getService();
-  return service?.initialized === true ? service : null;
+  const selection = getSelection();
+  if (selection &&
+      typeof selection.sendMessage === TYPEOF.FUNCTION) {
+    return selection.initialized === true ? selection : null;
+  }
+  if (!selection || typeof selection !== TYPEOF.OBJECT) {
+    return null;
+  }
+
+  const service = selection.service;
+  if (service &&
+      typeof service.sendMessage === TYPEOF.FUNCTION &&
+      service.initialized === true) {
+    return {
+      ...selection,
+      service,
+    };
+  }
+
+  return {
+    service: null,
+    reason:
+      typeof selection.reason === TYPEOF.STRING &&
+      selection.reason.length > NUM.ZERO ?
+        selection.reason :
+        null,
+    retryAfterMs:
+      Number.isFinite(selection.retryAfterMs) &&
+      selection.retryAfterMs > NUM.ZERO ?
+        Math.floor(selection.retryAfterMs) :
+        NUM.ZERO,
+  };
 }
 
 function getConnectedPeerNodeIds(messageRouter, localNodeId) {
@@ -119,8 +149,13 @@ class ConnectWebSocketPhase {
     if (typeof messageRouter.setQueryMessageGroupServiceResolver ===
         TYPEOF.FUNCTION) {
       messageRouter.setQueryMessageGroupServiceResolver(() =>
-        resolveInitializedQueryMessageGroupService(
-          () => this.delegates.getLeaderMessageGroupService(),
+        resolveQueryTransportSelection(
+          () =>
+            typeof this.delegates
+              .resolveQueryTransportMessageGroupSelection ===
+              TYPEOF.FUNCTION ?
+              this.delegates.resolveQueryTransportMessageGroupSelection() :
+              this.delegates.getLeaderMessageGroupService(),
         ),
       );
     }

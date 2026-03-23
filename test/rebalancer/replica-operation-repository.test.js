@@ -251,6 +251,55 @@ test('queryIncompleteOperations backs off SQL retries after retryable read failu
       'retryable failures should arm a cooldown instead of hammering replica_operations SQL');
   });
 
+test('queryIncompleteOperations backs off when authoritative row source is ' +
+  'temporarily unavailable',
+async (t) => {
+  let readCalls = 0;
+  const warnings = [];
+  const errors = [];
+  const repo = createTestRepository({
+    controlPlaneSystemTableGateway: {
+      readRows: async () => {
+        readCalls += 1;
+        return {
+          success: false,
+          error: 'authoritative_row_source_unavailable',
+        };
+      },
+      executeQuery: async () => ({success: true}),
+    },
+    systemTableCache: {
+      get: () => null,
+      getAll: () => [],
+      filter: () => [],
+    },
+  });
+  repo.logger = {
+    info() {},
+    debug() {},
+    warn(...args) {
+      warnings.push(args);
+    },
+    error(...args) {
+      errors.push(args);
+    },
+  };
+
+  const first = await repo.queryIncompleteOperations();
+  const second = await repo.queryIncompleteOperations();
+
+  t.same(first, [],
+    'authoritative-source gaps should fail closed to empty results');
+  t.same(second, [],
+    'subsequent reads during cooldown should reuse the empty observation');
+  t.equal(readCalls, 1,
+    'authoritative-source gaps should arm cooldown instead of hammering routed SQL');
+  t.equal(warnings.length, 1,
+    'authoritative-source gaps should log one warning');
+  t.equal(errors.length, 0,
+    'authoritative-source gaps should not log hard errors while cooling down');
+});
+
 test('queryIncompleteOperations uses the local-safe owner-read path when ' +
   'canonical participation defers only on self query transport', async (t) => {
   let readCalls = 0;

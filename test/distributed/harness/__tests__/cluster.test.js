@@ -95,6 +95,8 @@ import {
   RAFT_PROVIDER_DEFAULTS,
   NODE_CLIENT_SERVICE_DISCOVERY_SQL,
   NODE_CLIENT_SERVICE_ID_ADMIN_META,
+  NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE,
+  NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
 } from '../constants.js';
 import {ENTRYPOINT_ENV} from '../../../../src/constants/entrypoint.js';
 
@@ -120,6 +122,8 @@ test('Unit: createCluster exposes every required method', async () => {
     'getNodes',
     'addNode',
     'randomNonSeed',
+    'resolveBenchmarkReadyLoadNodes',
+    'waitForBenchmarkReadyLoadNodes',
     'waitForLoadReadinessStability',
     'waitForConvergence',
     'assertConsistency',
@@ -308,6 +312,198 @@ test('Unit: startLoad emits progress and completion playback events', async () =
     'load.completed should include final metrics',
   );
 });
+
+test('Unit: startLoad honors an explicit node subset', async () => {
+  const cluster = createCluster({
+    size: 2,
+    docker: {socketPath: '/var/run/docker.sock'},
+    image: 'distributed-db:test',
+  });
+
+  const selectedNode = {
+    id: 'node-selected',
+    closeQueryConnection: () => {},
+    async queryWithTimeout() {
+      return {rows: []};
+    },
+  };
+  const excludedNode = {
+    id: 'node-excluded',
+    closeQueryConnection: () => {},
+    async queryWithTimeout() {
+      return {rows: []};
+    },
+  };
+
+  cluster._nodes.set(selectedNode.id, selectedNode);
+  cluster._nodes.set(excludedNode.id, excludedNode);
+
+  const run = cluster.startLoad({
+    nodes: [selectedNode],
+    opsPerSec: 5,
+    duration: 250,
+    maxInFlight: 1,
+  });
+  const metrics = await run.waitComplete();
+
+  assert.deepEqual(
+    Object.keys(metrics.perNode || {}),
+    ['node-selected'],
+    'load metrics should only track nodes from the explicit subset',
+  );
+});
+
+test('Unit: resolveBenchmarkReadyLoadNodes only trusts local replica readiness',
+  async () => {
+    const cluster = createCluster({
+      size: 2,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+    });
+
+    const buildDiscoverySnapshot = (localNodeId, localReady, remoteNodeId) => ({
+      rows: [{
+        services: [{
+          protocol: NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
+          serviceIds: [NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE],
+          replicas: [
+            {
+              nodeId: localNodeId,
+              benchmarkAdmission: {
+                state: localReady ? 'ready' : 'blocked',
+              },
+            },
+            {
+              nodeId: remoteNodeId,
+              benchmarkAdmission: {
+                state: 'ready',
+              },
+            },
+          ],
+        }],
+      }],
+    });
+
+    const readyNode = {
+      id: 'node-ready',
+      closeQueryConnection: () => {},
+      async queryWithTimeout(sql) {
+        assert.match(
+          sql,
+          /service_discovery_local/,
+          'cluster should read benchmark-ready nodes from service discovery',
+        );
+        return buildDiscoverySnapshot('node-ready', true, 'node-blocked');
+      },
+    };
+    const blockedNode = {
+      id: 'node-blocked',
+      closeQueryConnection: () => {},
+      async queryWithTimeout() {
+        return buildDiscoverySnapshot('node-blocked', false, 'node-ready');
+      },
+    };
+
+    cluster._nodes.set(readyNode.id, readyNode);
+    cluster._nodes.set(blockedNode.id, blockedNode);
+
+    const loadNodes = await cluster.resolveBenchmarkReadyLoadNodes({
+      tableName: 'benchmark_events',
+    });
+
+    assert.deepStrictEqual(
+      loadNodes.map((node) => node.id),
+      ['node-ready'],
+      'only nodes whose own local discovery marks their replica ready should be selected',
+    );
+  });
+
+test('Unit: waitForBenchmarkReadyLoadNodes waits for a stable ready quorum',
+  async () => {
+    const cluster = createCluster({
+      size: 3,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+    });
+    const readyNodes = [
+      {id: 'node-1'},
+      {id: 'node-2'},
+      {id: 'node-3'},
+    ];
+    let attempts = 0;
+
+    cluster.resolveBenchmarkReadyLoadNodes = async () => {
+      attempts += 1;
+      return attempts < 3 ? readyNodes.slice(0, 1) : readyNodes;
+    };
+
+    const selectedNodes = await cluster.waitForBenchmarkReadyLoadNodes({
+      tableName: 'benchmark_events',
+      minNodeCount: 3,
+      stableWindowMs: 1,
+      timeoutMs: 100,
+      pollIntervalMs: 1,
+    });
+
+    assert.deepEqual(
+      selectedNodes.map((node) => node.id),
+      readyNodes.map((node) => node.id),
+      'benchmark-ready gate should return the stable ready quorum',
+    );
+    assert.ok(
+      attempts >= 3,
+      'benchmark-ready gate should keep polling until quorum is stable',
+    );
+  });
+
+test('Unit: waitForBenchmarkReadyLoadNodes allows stable quorum completion after timeout boundary',
+  async () => {
+    const cluster = createCluster({
+      size: 3,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+    });
+    const readyNodes = [
+      {id: 'node-1'},
+      {id: 'node-2'},
+    ];
+    let attempts = 0;
+
+    cluster.resolveBenchmarkReadyLoadNodes = async () => {
+      attempts += 1;
+      return attempts === 1 ? readyNodes.slice(0, 1) : readyNodes;
+    };
+
+    const originalDateNow = Date.now;
+    let fakeNowMs = 0;
+    Date.now = () => fakeNowMs;
+    cluster._sleep = async () => {
+      fakeNowMs += 5;
+    };
+
+    try {
+      const selectedNodes = await cluster.waitForBenchmarkReadyLoadNodes({
+        tableName: 'benchmark_events',
+        minNodeCount: 2,
+        stableWindowMs: 10,
+        timeoutMs: 10,
+        pollIntervalMs: 5,
+      });
+
+      assert.deepEqual(
+        selectedNodes.map((node) => node.id),
+        readyNodes.map((node) => node.id),
+        'benchmark-ready gate should allow an in-progress stable quorum window to complete past the initial timeout boundary',
+      );
+    } finally {
+      Date.now = originalDateNow;
+    }
+
+    assert.ok(
+      attempts >= 4,
+      'benchmark-ready gate should continue polling long enough to satisfy the stable quorum window after readiness first appears',
+    );
+  });
 
 test('Unit: Cluster.stop cancels active load runs', async () => {
   const cluster = createCluster({
@@ -1721,7 +1917,7 @@ test('Unit: _waitForBootstrapApi probes lightweight bootstrap readiness endpoint
     );
   });
 
-test('Unit: _waitForBootstrapApi requires stable success window before proceeding',
+test('Unit: _waitForBootstrapApi returns on first bootstrap-ready success',
   async () => {
     const cluster = createCluster({
       size: 1,
@@ -1729,11 +1925,11 @@ test('Unit: _waitForBootstrapApi requires stable success window before proceedin
       image: 'distributed-db:test',
       timeouts: {
         nodeStartup: 200,
-        bootstrapReadyStableWindowMs: 2,
+        bootstrapReadyStableWindowMs: 2000,
       },
     });
 
-    const bootstrapStatuses = [503, 200, 503, 200, 200];
+    const bootstrapStatuses = [503, 200, 503, 503];
     let bootstrapCallCount = 0;
     cluster._httpRequest = async () => {
       const status = bootstrapStatuses[Math.min(
@@ -1756,50 +1952,12 @@ test('Unit: _waitForBootstrapApi requires stable success window before proceedin
     });
 
     assert.ok(
-      bootstrapCallCount > 2,
-      'should keep probing until join-ready status stays stable',
+      bootstrapCallCount === 2,
+      'should stop probing after the first bootstrap-ready success',
     );
   });
 
-test('Unit: _waitForBootstrapApi requires sustained success across stable window',
-  async () => {
-    const cluster = createCluster({
-      size: 1,
-      docker: {socketPath: '/var/run/docker.sock'},
-      image: 'distributed-db:test',
-      timeouts: {
-        nodeStartup: 200,
-        bootstrapReadyStableWindowMs: 2,
-      },
-    });
-
-    let bootstrapCallCount = 0;
-    cluster._httpRequest = async () => {
-      bootstrapCallCount += 1;
-      if (bootstrapCallCount === 1) {
-        return 503;
-      }
-      return 200;
-    };
-    cluster._sleep = async () => {
-      await new Promise((resolve) => setTimeout(resolve, 1));
-    };
-    cluster._collectFailureLogs = async () => {
-      throw new Error('should not collect failure logs on success');
-    };
-
-    await cluster._waitForBootstrapApi({
-      id: '00000000-0000-4000-8000-000000000001',
-      ip: '127.0.0.1',
-    });
-
-    assert.ok(
-      bootstrapCallCount >= 3,
-      'should keep probing until join-ready status remains stable',
-    );
-  });
-
-test('Unit: _waitForBootstrapApi allows stable-window completion after startup deadline',
+test('Unit: _waitForBootstrapApi extends past startup timeout while progress advances',
   async () => {
     const cluster = createCluster({
       size: 1,
@@ -1811,15 +1969,54 @@ test('Unit: _waitForBootstrapApi allows stable-window completion after startup d
       },
     });
 
+    const probeResponses = [
+      {
+        status: 503,
+        body: {
+          ready: false,
+          phase: 'INIT',
+          reasons: ['BOOTSTRAP_PHASE_INCOMPLETE'],
+        },
+      },
+      {
+        status: 503,
+        body: {
+          ready: false,
+          phase: 'CONTROL_READY',
+          phaseRank: 1,
+          reasons: ['SQL_ENGINE_UNAVAILABLE'],
+        },
+      },
+      {
+        status: 503,
+        body: {
+          ready: false,
+          phase: 'JOIN_READY',
+          phaseRank: 2,
+          reasons: ['READINESS_STABLE_WINDOW_PENDING'],
+          stableWindowMs: 10,
+          stableElapsedMs: 5,
+        },
+      },
+      {
+        status: 200,
+        body: {
+          ready: true,
+          phase: 'JOIN_READY',
+          phaseRank: 2,
+          reasons: [],
+        },
+      },
+    ];
     let bootstrapCallCount = 0;
     cluster._httpRequest = async () => {
+      const response = probeResponses[Math.min(
+        bootstrapCallCount,
+        probeResponses.length - 1,
+      )];
       bootstrapCallCount += 1;
-      if (bootstrapCallCount === 1) {
-        return 503;
-      }
-      return 200;
+      return response;
     };
-
     const originalDateNow = Date.now;
     let fakeNowMs = 0;
     Date.now = () => fakeNowMs;
@@ -1841,8 +2038,89 @@ test('Unit: _waitForBootstrapApi allows stable-window completion after startup d
 
     assert.ok(
       bootstrapCallCount >= 4,
-      'should continue probing long enough to satisfy stable window ' +
-      'after initial join-ready success',
+      'should keep probing past the base startup timeout while readiness advances',
+    );
+  });
+
+test('Unit: _waitForBootstrapApi times out after bootstrap progress stalls',
+  async () => {
+    const cluster = createCluster({
+      size: 1,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+      timeouts: {
+        nodeStartup: 10,
+        bootstrapReadyStableWindowMs: 10,
+      },
+    });
+
+    const probeResponses = [
+      {
+        status: 503,
+        body: {
+          ready: false,
+          phase: 'CONTROL_READY',
+          phaseRank: 1,
+          reasons: ['SQL_ENGINE_UNAVAILABLE'],
+        },
+      },
+      {
+        status: -1,
+        body: null,
+      },
+      {
+        status: -1,
+        body: null,
+      },
+      {
+        status: -1,
+        body: null,
+      },
+    ];
+    let bootstrapCallCount = 0;
+    cluster._httpRequest = async () => {
+      const response = probeResponses[Math.min(
+        bootstrapCallCount,
+        probeResponses.length - 1,
+      )];
+      bootstrapCallCount += 1;
+      return response;
+    };
+
+    const originalDateNow = Date.now;
+    let fakeNowMs = 0;
+    Date.now = () => fakeNowMs;
+    cluster._sleep = async () => {
+      fakeNowMs += 5;
+    };
+    cluster._collectFailureLogs = async () => {
+      collected = true;
+    };
+    let collected = false;
+
+    await assert.rejects(
+      async () => {
+        try {
+          await cluster._waitForBootstrapApi({
+            id: '00000000-0000-4000-8000-000000000001',
+            ip: '127.0.0.1',
+          });
+        } finally {
+          Date.now = originalDateNow;
+        }
+      },
+      (error) => {
+        assert.ok(collected, 'should collect failure logs before throwing');
+        assert.match(error.message, /timeoutReason=no_progress/);
+        assert.match(error.message, /bestPhase=CONTROL_READY/);
+        assert.match(error.message, /lastProgressElapsedMs=/);
+        return true;
+      },
+    );
+
+    assert.ok(
+      bootstrapCallCount >= 3,
+      'should continue probing until the no-progress budget is exhausted',
     );
   });
 
@@ -2145,8 +2423,8 @@ test('Unit: _probeClusterActiveState prefers traffic readiness probe',
   });
 
 test(
-  'Unit: _probeClusterActiveState keeps ACTIVE gate closed while node is ' +
-    'join-ready but not traffic-ready',
+  'Unit: _probeClusterActiveState allows startup admin projection for ' +
+    'traffic-local blockers',
   async () => {
     const cluster = createCluster({
       size: 1,
@@ -2160,9 +2438,10 @@ test(
       async probeTrafficReadiness(_options) {
         return {
           status: 503,
-          phase: 'JOIN_READY',
-          state: 'join_ready',
-          reasons: ['READINESS_STABLE_WINDOW_PENDING'],
+          phase: 'CONTROL_READY',
+          phaseRank: 1,
+          state: 'warming',
+          reasons: ['local_query_transport_not_ready'],
         };
       },
       async probeBootstrapReadiness(_options) {
@@ -2196,18 +2475,79 @@ test(
     const probeResult = await cluster._probeClusterActiveState(Date.now() + 1000);
     assert.strictEqual(
       probeResult.allActive,
+      true,
+      'ACTIVE gate should open once admin readiness and snapshot coverage are complete',
+    );
+    assert.strictEqual(
+      probeResult.nodeDiagnostics[0].active,
+      true,
+      'node should be projected active for startup when only traffic-local blockers remain',
+    );
+    assert.strictEqual(
+      probeResult.nodeDiagnostics[0].phase,
+      'CONTROL_READY',
+      'diagnostics should preserve readiness phase when startup admin projection is used',
+    );
+    assert.strictEqual(
+      probeResult.nodeDiagnostics[0].activitySource,
+      'startup_admin_projection',
+      'diagnostics should record when startup admin projection admitted the node',
+    );
+  },
+);
+
+test(
+  'Unit: _probeClusterActiveState keeps ACTIVE gate closed for hard ' +
+    'traffic blockers even when admin readiness is up',
+  async () => {
+    const cluster = createCluster({
+      size: 1,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+    });
+
+    const node = {
+      id: 'node-a',
+      role: NODE_ROLES.SEED,
+      async probeTrafficReadiness(_options) {
+        return {
+          status: 503,
+          phase: 'CONTROL_READY',
+          phaseRank: 1,
+          state: 'warming',
+          reasons: ['SQL_ENGINE_UNAVAILABLE'],
+        };
+      },
+      async getReachabilityDiagnostics(_options) {
+        return {
+          adminReady: true,
+          lastError: null,
+        };
+      },
+      async getControlSnapshot() {
+        return {
+          rows: [{
+            nodes: ['node-a'],
+          }],
+        };
+      },
+      async getLogs(_options) {
+        return '';
+      },
+    };
+
+    cluster._nodes.set('node-a', node);
+
+    const probeResult = await cluster._probeClusterActiveState(Date.now() + 1000);
+    assert.strictEqual(
+      probeResult.allActive,
       false,
-      'ACTIVE gate should stay closed until traffic readiness succeeds',
+      'ACTIVE gate should stay closed on hard readiness blockers',
     );
     assert.strictEqual(
       probeResult.nodeDiagnostics[0].active,
       false,
-      'node should remain inactive while only bootstrap join readiness is projected',
-    );
-    assert.strictEqual(
-      probeResult.nodeDiagnostics[0].phase,
-      'JOIN_READY',
-      'diagnostics should preserve readiness phase when traffic gate is still closed',
+      'hard readiness blockers should not be projected active',
     );
   },
 );

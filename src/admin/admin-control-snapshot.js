@@ -41,6 +41,7 @@ import {
   CONSISTENCY_MISMATCH_KIND,
 } from './admin-constants.js';
 import {
+  filterActiveServingPartitionRows,
   firstStringField,
   uniqueSorted,
 } from './admin-helpers.js';
@@ -274,18 +275,38 @@ class AdminControlSnapshot {
       nodeEndpointRows,
       controlPlaneDiagnostics,
     );
-    const partitionIds = uniqueSorted(partitionRows
+    const activePartitionRows =
+      filterActiveServingPartitionRows(
+        partitionRows,
+        tableRows,
+      );
+    const activePartitionIdSet = new Set(activePartitionRows
+      .map((row) =>
+        firstStringField(row, COLUMN.PARTITION_ID, 'partitionId', 'id'))
+      .filter(Boolean));
+    const activePartitionServiceRows = serviceRows.filter((serviceRow) => {
+      const partitionId = firstStringField(
+        serviceRow,
+        COLUMN.PARTITION_ID,
+        'partitionId',
+        'id',
+      );
+      return partitionId && activePartitionIdSet.has(partitionId);
+    });
+    const partitionIds = uniqueSorted(activePartitionRows
       .map((row) =>
         firstStringField(row, COLUMN.PARTITION_ID, 'id'))
       .filter(Boolean));
 
     const leaderSummary =
       this.buildControlSnapshotLeaderSummary(
-        partitionRows,
-        serviceRows,
+        activePartitionRows,
+        activePartitionServiceRows,
       );
     const voterCounts =
-      this.buildControlSnapshotVoterCounts(serviceRows);
+      this.buildControlSnapshotVoterCounts(
+        activePartitionServiceRows,
+      );
     const replicaOperations =
       this.buildControlSnapshotReplicaOperationSummary(
         replicaOperationRows,

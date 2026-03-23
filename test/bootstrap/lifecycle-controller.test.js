@@ -36,6 +36,10 @@ test('LifecycleController - allows legal phase transitions and records metadata'
     const history = lifecycle.getTransitionHistory();
     t.equal(snapshot.phase, LIFECYCLE_PHASE.TRAFFIC_READY,
       'should end in traffic-ready phase');
+    t.equal(snapshot.phaseRank, 3,
+      'snapshot should expose monotonic phase rank');
+    t.equal(snapshot.transitionCount, 3,
+      'snapshot should expose readiness transition count');
     t.equal(history.length, 3, 'should record each legal transition');
     t.equal(history[0].previousPhase, LIFECYCLE_PHASE.INIT,
       'history should include previous phase');
@@ -104,6 +108,8 @@ test('LifecycleController - propagates hard dependency reasons and does not bloc
     t.equal(snapshot.phase, LIFECYCLE_PHASE.TRAFFIC_READY,
       'stable window completion promotes to traffic-ready');
     t.equal(snapshot.ready, true, 'stable lifecycle should become ready');
+    t.ok(Number.isFinite(snapshot.stableSinceMs),
+      'snapshot should expose stable-window origin timestamp');
     t.ok(snapshot.degradedReasons.includes(LIFECYCLE_REASON.OBSERVABILITY_BACKLOG),
       'soft blockers should remain visible post-promotion');
   });

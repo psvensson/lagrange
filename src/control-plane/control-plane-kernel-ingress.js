@@ -109,7 +109,15 @@ class ControlPlaneKernelIngress {
     }
     const confirmedIngressLease = this.getConfirmedIngressLease();
     if (confirmedIngressLease) {
-      pushOrderedTarget(confirmedIngressLease.targetAddress);
+      const confirmedTargetParts = parseMessageGroupAddress(
+        confirmedIngressLease.targetAddress,
+      );
+      const confirmedLocalTarget =
+        confirmedTargetParts?.nodeId === this.nodeId;
+      if (!confirmedLocalTarget ||
+          confirmedIngressLease.targetAddress === localTargetAddress) {
+        pushOrderedTarget(confirmedIngressLease.targetAddress);
+      }
     }
     if (allowBootstrapHints) {
       for (const address of this.resolveBootstrapTargetAddresses(assignment)) {

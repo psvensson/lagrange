@@ -1041,6 +1041,49 @@ test('waitForConvergence — waits for in-flight replica operations to settle',
     );
   });
 
+test('waitForConvergence — prefers a converged reachable snapshot over a stale first snapshot',
+  async () => {
+    const partitionId = 'p1';
+    const overTargetRows = [
+      buildPartitionReplicaRow(partitionId, 'a', 'leader'),
+      buildPartitionReplicaRow(partitionId, 'b', 'follower'),
+      buildPartitionReplicaRow(partitionId, 'c', 'follower'),
+      buildPartitionReplicaRow(partitionId, 'd', 'follower'),
+    ];
+    const stableRows = [
+      buildPartitionReplicaRow(partitionId, 'a', 'leader'),
+      buildPartitionReplicaRow(partitionId, 'b', 'follower'),
+      buildPartitionReplicaRow(partitionId, 'c', 'follower'),
+    ];
+    const staleNode = buildSequencedConvergenceNode({
+      id: 'mock-stale-convergence-node',
+      partitionIds: [partitionId],
+      snapshots: [overTargetRows, overTargetRows, overTargetRows],
+      operationSnapshots: [
+        [{operation_id: 'op-1', status: 'syncing'}],
+        [{operation_id: 'op-1', status: 'syncing'}],
+        [{operation_id: 'op-1', status: 'syncing'}],
+      ],
+    });
+    const convergedNode = buildSequencedConvergenceNode({
+      id: 'mock-converged-convergence-node',
+      partitionIds: [partitionId],
+      snapshots: [stableRows, stableRows, stableRows],
+      operationSnapshots: [[], [], []],
+    });
+
+    const result = await waitForConvergence([staleNode, convergedNode], {
+      settleTimeoutMs: 120,
+      quietWindowMs: 0,
+      maxSustainedOverTargetMs: 100,
+      sampleIntervalMs: 10,
+      targetVoterCount: 3,
+    });
+
+    assert.strictEqual(typeof result.settledAfterMs, 'number');
+    assert.ok(result.settledAfterMs >= 0);
+  });
+
 test('waitForConvergence — timeout diagnostics include in-flight operation counts',
   async () => {
     const partitionId = 'p1';

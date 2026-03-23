@@ -594,6 +594,82 @@ function seedTableDiscoveryRowsWithLocalFollower(cache) {
 }
 
 /**
+ * Stage split-child partition metadata for benchmark_events without
+ * advancing the table's active serving partition version.
+ *
+ * @param {SystemTableCache} cache
+ * @param {Object} [options={}]
+ * @param {number} [options.activePartitionVersion=1]
+ * @param {number} [options.partitionCount=1]
+ * @return {Object}
+ */
+function stageFutureBenchmarkSplitChildren(
+  cache, options = {},
+) {
+  const tableId = 'table-benchmark-events';
+  const sourcePartitionId = 'partition-benchmark-events-1';
+  const leftPartitionId = 'partition-benchmark-events-left';
+  const rightPartitionId = 'partition-benchmark-events-right';
+  const activePartitionVersion = Number.isInteger(
+    options.activePartitionVersion,
+  ) ?
+    options.activePartitionVersion :
+    1;
+  const partitionCount = Number.isInteger(options.partitionCount) ?
+    options.partitionCount :
+    1;
+
+  cache.applySystemTableChange(TABLES.TABLES, 'UPDATE', {
+    id: tableId,
+    table_id: tableId,
+    name: 'benchmark_events',
+    table_name: 'benchmark_events',
+    active_partition_version: activePartitionVersion,
+    partition_count: partitionCount,
+    partition_transition_state: 'split_backfilling',
+    partition_transition_metadata: JSON.stringify({
+      workflowId: 'split-table-benchmark-events-v2',
+      sourcePartitionId,
+      targetPartitionVersion: 2,
+      targetPartitionIds: [leftPartitionId, rightPartitionId],
+    }),
+  });
+  cache.applySystemTableChange(TABLES.PARTITIONS, 'UPDATE', {
+    id: sourcePartitionId,
+    partition_id: sourcePartitionId,
+    table_id: tableId,
+    table_name: 'benchmark_events',
+    partition_version: 1,
+    state: 'NORMAL',
+    leader_node_id: 'node-1',
+  });
+  cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
+    id: leftPartitionId,
+    partition_id: leftPartitionId,
+    table_id: tableId,
+    table_name: 'benchmark_events',
+    partition_version: 2,
+    state: 'NORMAL',
+    leader_node_id: null,
+  });
+  cache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
+    id: rightPartitionId,
+    partition_id: rightPartitionId,
+    table_id: tableId,
+    table_name: 'benchmark_events',
+    partition_version: 2,
+    state: 'NORMAL',
+    leader_node_id: null,
+  });
+
+  return {
+    sourcePartitionId,
+    leftPartitionId,
+    rightPartitionId,
+  };
+}
+
+/**
  * Seed table-scoped discovery rows without a local TABLES row.
  * This verifies applied schema watermark fallback from partition metadata.
  *
@@ -1361,6 +1437,110 @@ test('AdminWebSocketAPI - repeated load lane requests reuse cached readiness',
       'load-lane readiness should consistently request the ' +
         'cached snapshot window',
     );
+
+    ws.close();
+    await api.shutdown();
+  });
+
+test('AdminWebSocketAPI - load lane blocks benchmark table queries until local benchmark admission is ready',
+  async (t) => {
+    let executedQueryCount = 0;
+    const cache = createPopulatedCache();
+    seedTableDiscoveryRowsWithLocalCandidate(cache);
+    const api = new AdminWebSocketAPI({
+      nodeId: 'node-2',
+      systemTableCache: cache,
+      sqlQueryEngine: {
+        executeRequest: async () => {
+          executedQueryCount += 1;
+          return {
+            success: true,
+            rows: [{count: 1}],
+            count: 1,
+            tableName: 'benchmark_events',
+          };
+        },
+      },
+    });
+
+    await api.initialize(0, {listen: false});
+    const {ws} = await connectAndReceive(api, 2000, {
+      query: {lane: 'load'},
+    });
+
+    ws.send(JSON.stringify({
+      type: MessageType.QUERY,
+      queryId: 'q-load-benchmark-blocked',
+      sql: 'SELECT count(*) FROM benchmark_events WHERE payload = 1',
+    }));
+
+    const result = await waitForMessage(ws);
+    t.equal(result.type, MessageType.QUERY_RESULT,
+      'should return query_result envelope');
+    t.equal(result.queryId, 'q-load-benchmark-blocked',
+      'should preserve query id');
+    t.equal(result.errorCode, ErrorCode.INTERNAL_ERROR,
+      'blocked benchmark admission should surface as typed admin error');
+    t.equal(result.deferRetry, true,
+      'blocked benchmark admission should remain retryable');
+    t.equal(result.retryAfterMs, 250,
+      'blocked benchmark admission should carry bounded retry metadata');
+    t.match(
+      String(result.error || ''),
+      /benchmarkReady=false/i,
+      'blocked benchmark admission should report benchmark readiness state',
+    );
+    t.match(
+      String(result.error || ''),
+      /local_replica_not_voter_ready/i,
+      'blocked benchmark admission should expose canonical readiness reasons',
+    );
+    t.equal(executedQueryCount, 0,
+      'blocked benchmark admission should reject before SQL execution');
+
+    ws.close();
+    await api.shutdown();
+  });
+
+test('AdminWebSocketAPI - load lane admits benchmark table queries on stable local follower',
+  async (t) => {
+    let executedQueryCount = 0;
+    const cache = createPopulatedCache();
+    seedTableDiscoveryRowsWithLocalFollower(cache);
+    const api = new AdminWebSocketAPI({
+      nodeId: 'node-2',
+      systemTableCache: cache,
+      sqlQueryEngine: {
+        executeRequest: async () => {
+          executedQueryCount += 1;
+          return {
+            success: true,
+            rows: [{count: 1}],
+            count: 1,
+            tableName: 'benchmark_events',
+          };
+        },
+      },
+    });
+
+    await api.initialize(0, {listen: false});
+    const {ws} = await connectAndReceive(api, 2000, {
+      query: {lane: 'load'},
+    });
+
+    ws.send(JSON.stringify({
+      type: MessageType.QUERY,
+      queryId: 'q-load-benchmark-ready',
+      sql: 'SELECT count(*) FROM benchmark_events WHERE payload = 1',
+    }));
+
+    const result = await waitForMessage(ws);
+    t.equal(result.type, MessageType.QUERY_RESULT,
+      'should return query_result envelope');
+    t.equal(result.error, undefined,
+      'stable local follower should admit benchmark query');
+    t.equal(executedQueryCount, 1,
+      'admitted benchmark query should execute exactly once');
 
     ws.close();
     await api.shutdown();
@@ -3125,6 +3305,123 @@ test(
 );
 
 test(
+  'AdminWebSocketAPI - local control snapshot excludes staged split children before cutover',
+  async (t) => {
+    const nodeId = 'node-local';
+    const tableId = 'table-benchmark-events';
+    const sourcePartitionId = 'partition-benchmark-events-v1';
+    const leftPartitionId = 'partition-benchmark-events-left';
+    const rightPartitionId = 'partition-benchmark-events-right';
+    const writableCache = createAuthoritativeRepairCache(nodeId);
+    writableCache.applySystemTableChange(TABLES.TABLES, 'INSERT', {
+      id: tableId,
+      table_id: tableId,
+      name: 'benchmark_events',
+      table_name: 'benchmark_events',
+      active_partition_version: 1,
+      partition_count: 1,
+      partition_transition_state: 'split_backfilling',
+      partition_transition_metadata: JSON.stringify({
+        workflowId: 'split-table-benchmark-events-v2',
+        sourcePartitionId,
+        targetPartitionVersion: 2,
+        targetPartitionIds: [leftPartitionId, rightPartitionId],
+      }),
+    });
+    writableCache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
+      id: sourcePartitionId,
+      partition_id: sourcePartitionId,
+      table_id: tableId,
+      table_name: 'benchmark_events',
+      partition_version: 1,
+      state: 'NORMAL',
+      leader_node_id: nodeId,
+    });
+    writableCache.applySystemTableChange(TABLES.SERVICES, 'INSERT', {
+      service_id: `${sourcePartitionId}-r1`,
+      service_type: 'partition',
+      node_id: nodeId,
+      partition_id: sourcePartitionId,
+      replica_id: `${sourcePartitionId}-r1`,
+      raft_role: 'leader',
+      status: 'active',
+      address: `${nodeId}/partition/${sourcePartitionId}-r1`,
+    });
+    writableCache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
+      id: leftPartitionId,
+      partition_id: leftPartitionId,
+      table_id: tableId,
+      table_name: 'benchmark_events',
+      partition_version: 2,
+      state: 'NORMAL',
+      leader_node_id: null,
+    });
+    writableCache.applySystemTableChange(TABLES.PARTITIONS, 'INSERT', {
+      id: rightPartitionId,
+      partition_id: rightPartitionId,
+      table_id: tableId,
+      table_name: 'benchmark_events',
+      partition_version: 2,
+      state: 'NORMAL',
+      leader_node_id: null,
+    });
+    const api = new AdminWebSocketAPI({
+      nodeId,
+      systemTableCache: writableCache,
+      sqlQueryEngine: createMockQueryEngine(),
+    });
+
+    const result = await api.buildControlSnapshotQueryResult();
+    const snapshot = result?.rows?.[0] || null;
+    const partitionIds = Array.isArray(snapshot?.partitions) ?
+      snapshot.partitions :
+      [];
+
+    t.equal(
+      partitionIds.includes(sourcePartitionId),
+      true,
+      'control snapshot should keep the active source partition visible',
+    );
+    t.equal(
+      partitionIds.includes(leftPartitionId),
+      false,
+      'control snapshot should hide staged left child partitions before cutover',
+    );
+    t.equal(
+      partitionIds.includes(rightPartitionId),
+      false,
+      'control snapshot should hide staged right child partitions before cutover',
+    );
+    t.equal(
+      snapshot?.leaders?.[sourcePartitionId],
+      nodeId,
+      'control snapshot should keep the active source leader published',
+    );
+    t.equal(
+      Object.prototype.hasOwnProperty.call(
+        snapshot?.leaders || {},
+        leftPartitionId,
+      ),
+      false,
+      'control snapshot should not publish staged child leaders before cutover',
+    );
+    t.equal(
+      snapshot?.voterCounts?.[sourcePartitionId],
+      1,
+      'control snapshot should keep the active source voter count published',
+    );
+    t.equal(
+      Object.prototype.hasOwnProperty.call(
+        snapshot?.voterCounts || {},
+        leftPartitionId,
+      ),
+      false,
+      'control snapshot should not publish staged child voter counts before cutover',
+    );
+  },
+);
+
+test(
   'AdminWebSocketAPI - forced control snapshot repairs stale replica operations without full discovery fanout',
   async (t) => {
     const nowMs = 1740589945123;
@@ -4619,6 +4916,171 @@ test(
         reason.code === 'schema_partition_unavailable'),
       false,
       'node-2 should not be excluded for lacking local partition replica',
+    );
+
+    await api.shutdown();
+  },
+);
+
+test(
+  'AdminWebSocketAPI - table-scoped discovery honors canonical partition leaders when replica roles are stale',
+  async (t) => {
+    const cache = createPopulatedCache();
+    seedTableDiscoveryRowsWithLocalFollower(cache);
+    cache.applySystemTableChange(TABLES.PARTITIONS, 'UPDATE', {
+      id: 'partition-benchmark-events-1',
+      partition_id: 'partition-benchmark-events-1',
+      leader_node_id: 'node-1',
+    });
+    cache.applySystemTableChange(TABLES.SERVICES, 'UPDATE', {
+      id: 'service-benchmark-events-node-1',
+      service_type: 'partition',
+      partition_id: 'partition-benchmark-events-1',
+      node_id: 'node-1',
+      status: 'active',
+      raft_role: 'follower',
+      address: '10.0.0.1:7001',
+    });
+    const api = new AdminWebSocketAPI({
+      nodeId: 'test-node',
+      systemTableCache: cache,
+      sqlQueryEngine: createMockQueryEngine(),
+    });
+
+    await api.initialize(0, {listen: false});
+    const response = await api.getFastify().inject({
+      method: 'GET',
+      url: '/api/admin/discovery/services?' +
+        'serviceId=sys-postgres-wire&protocol=postgresql&tableName=benchmark_events',
+    });
+    const payload = response.json();
+
+    t.equal(response.statusCode, 200, 'should return 200');
+    const replicas = Array.isArray(payload?.services?.[0]?.replicas) ?
+      payload.services[0].replicas :
+      [];
+    const readinessByNodeId = new Map(replicas.map((replica) => [
+      String(replica?.nodeId || ''),
+      replica?.readiness || null,
+    ]));
+    const admissionByNodeId = new Map(replicas.map((replica) => [
+      String(replica?.nodeId || ''),
+      replica?.benchmarkAdmission || null,
+    ]));
+
+    t.equal(
+      readinessByNodeId.get('node-1')?.leadershipStable,
+      true,
+      'canonical partition owner metadata should keep leadership stable',
+    );
+    t.equal(
+      readinessByNodeId.get('node-1')?.benchmarkReady,
+      true,
+      'canonical leader host should remain benchmark ready despite stale raft_role',
+    );
+    t.equal(
+      readinessByNodeId.get('node-2')?.benchmarkReady,
+      true,
+      'routed peer should remain benchmark ready when canonical leader coverage is intact',
+    );
+    t.equal(
+      readinessByNodeId.get('node-1')?.reasons?.some((reason) =>
+        reason.code === 'leadership_unstable'),
+      false,
+      'canonical leader coverage should suppress stale leader-role false negatives',
+    );
+    t.equal(
+      admissionByNodeId.get('node-1')?.state,
+      'ready',
+      'benchmark admission should stay ready on the canonical leader host',
+    );
+    t.equal(
+      admissionByNodeId.get('node-2')?.state,
+      'ready',
+      'benchmark admission should stay ready on routed peers',
+    );
+
+    await api.shutdown();
+  },
+);
+
+test(
+  'AdminWebSocketAPI - table-scoped discovery excludes staged split children before cutover',
+  async (t) => {
+    const cache = createPopulatedCache();
+    seedTableDiscoveryRowsWithLocalFollower(cache);
+    stageFutureBenchmarkSplitChildren(cache, {
+      activePartitionVersion: 1,
+      partitionCount: 1,
+    });
+    const api = new AdminWebSocketAPI({
+      nodeId: 'test-node',
+      systemTableCache: cache,
+      sqlQueryEngine: createMockQueryEngine(),
+    });
+
+    await api.initialize(0, {listen: false});
+    const response = await api.getFastify().inject({
+      method: 'GET',
+      url: '/api/admin/discovery/services?' +
+        'serviceId=sys-postgres-wire&protocol=postgresql&tableName=benchmark_events',
+    });
+    const payload = response.json();
+
+    t.equal(response.statusCode, 200, 'should return 200');
+    const replicas = Array.isArray(payload?.services?.[0]?.replicas) ?
+      payload.services[0].replicas :
+      [];
+    const readinessByNodeId = new Map(replicas.map((replica) => [
+      String(replica?.nodeId || ''),
+      replica?.readiness || null,
+    ]));
+    const admissionByNodeId = new Map(replicas.map((replica) => [
+      String(replica?.nodeId || ''),
+      replica?.benchmarkAdmission || null,
+    ]));
+
+    t.equal(
+      readinessByNodeId.get('node-1')?.schemaReady,
+      true,
+      'active source partition coverage should keep schema ready before cutover',
+    );
+    t.equal(
+      readinessByNodeId.get('node-1')?.leadershipStable,
+      true,
+      'staged child rows should not destabilize leadership before cutover',
+    );
+    t.equal(
+      readinessByNodeId.get('node-1')?.benchmarkReady,
+      true,
+      'active source leader should remain benchmark ready before cutover',
+    );
+    t.equal(
+      readinessByNodeId.get('node-2')?.benchmarkReady,
+      true,
+      'routed peer should remain benchmark ready before cutover',
+    );
+    t.equal(
+      readinessByNodeId.get('node-1')?.reasons?.some((reason) =>
+        reason.code === 'schema_partition_unavailable'),
+      false,
+      'staged child rows should not create schema coverage gaps before cutover',
+    );
+    t.equal(
+      readinessByNodeId.get('node-1')?.reasons?.some((reason) =>
+        reason.code === 'leadership_unstable'),
+      false,
+      'staged child rows should not create leadership instability before cutover',
+    );
+    t.equal(
+      admissionByNodeId.get('node-1')?.state,
+      'ready',
+      'benchmark admission should stay ready on the active source leader before cutover',
+    );
+    t.equal(
+      admissionByNodeId.get('node-2')?.state,
+      'ready',
+      'benchmark admission should stay ready on routed peers before cutover',
     );
 
     await api.shutdown();

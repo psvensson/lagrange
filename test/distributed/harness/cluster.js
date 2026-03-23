@@ -11,6 +11,7 @@ import http from 'node:http';
 import {DockerProvider} from './docker-provider.js';
 import {ChaosPrimitives} from './chaos.js';
 import {LoadGenerator} from './load-generator.js';
+import {buildServiceDiscoverySql} from './node-client.js';
 import {ENTRYPOINT_ENV} from '../../../src/constants/entrypoint.js';
 import {
   waitForConvergence,
@@ -37,6 +38,8 @@ import {
   NODE_CLIENT_CONTROL_SNAPSHOT_FORCE_REPAIR_SQL,
   NODE_CLIENT_SERVICE_DISCOVERY_SQL,
   NODE_CLIENT_SERVICE_ID_ADMIN_META,
+  NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE,
+  NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL,
   CONTAINER_LOG_TAIL_LINES,
 } from './constants.js';
 
@@ -44,6 +47,7 @@ const BOOTSTRAP_POLL_INTERVAL_MS = 500;
 const ACTIVE_POLL_INTERVAL_MS = 1000;
 const LOAD_READINESS_STABLE_WINDOW_MS = 5000;
 const LOAD_READINESS_STABILITY_TIMEOUT_MS = 30000;
+const BOOTSTRAP_PROGRESS_TIMEOUT_MAX_MULTIPLIER = 3;
 const ACTIVE_WAIT_MIN_CLUSTER_SIZE = 1;
 const ACTIVE_WAIT_TIMEOUT_SCALE_PERCENT_PER_EXTRA_NODE = 25;
 const ACTIVE_WAIT_TIMEOUT_SCALE_PERCENT_DENOMINATOR = 100;
@@ -52,6 +56,7 @@ const ACTIVE_STATE = 'ACTIVE';
 const INACTIVE_STATE = 'inactive';
 const UNKNOWN_STATE = 'unknown';
 const UNKNOWN_PHASE = 'unknown';
+const UNKNOWN_REASON = 'unknown';
 const DATA_DIR_PATH = '/data';
 const ZERO = 0;
 const MIN_TIMEOUT_MS = 1;
@@ -60,7 +65,7 @@ const HTTP_OK_UPPER = 299;
 const FETCH_TIMEOUT_MS = 1000;
 const CONTROL_SNAPSHOT_PROBE_TIMEOUT_MS = 3000;
 const BOOTSTRAP_WAIT_REQUEST_TIMEOUT_MS = 10000;
-const BOOTSTRAP_READY_STABLE_WINDOW_MS = 10000;
+const BOOTSTRAP_READY_STABLE_WINDOW_MS = 2000;
 const ADMIN_QUERY_TIMEOUT_MS = 15000;
 const REQUEST_TIMEOUT_OPTION_DEFAULT_MS = ADMIN_QUERY_TIMEOUT_MS;
 const LOG_COLLECTION_TIMEOUT_MS = 1000;
@@ -116,11 +121,18 @@ const LOAD_RUN_ENTITY = 'load-run';
 const LOAD_PROGRESS_INTERVAL_MS = 1000;
 const CONTROL_SNAPSHOT_NODES_FIELD = 'nodes';
 const SERVICE_DISCOVERY_SERVICES_FIELD = 'services';
+const SERVICE_DISCOVERY_SERVICE_PROTOCOL_FIELD = 'protocol';
 const SERVICE_DISCOVERY_SERVICE_IDS_FIELD = 'serviceIds';
 const SERVICE_DISCOVERY_REPLICAS_FIELD = 'replicas';
 const SERVICE_DISCOVERY_REPLICA_NODE_ID_FIELD = 'nodeId';
 const SERVICE_DISCOVERY_REPLICA_SERVICE_ID_FIELD = 'serviceId';
 const SERVICE_DISCOVERY_REPLICA_READINESS_FIELD = 'readiness';
+const SERVICE_DISCOVERY_REPLICA_BENCHMARK_ADMISSION_FIELD =
+  'benchmarkAdmission';
+const SERVICE_DISCOVERY_READINESS_BENCHMARK_READY_FIELD =
+  'benchmarkReady';
+const SERVICE_DISCOVERY_BENCHMARK_ADMISSION_STATE_FIELD = 'state';
+const SERVICE_DISCOVERY_BENCHMARK_ADMISSION_STATE_READY = 'ready';
 const SERVICE_DISCOVERY_READINESS_ROUTING_READY_FIELD = 'routingReady';
 const CLUSTER_STAGE_SETUP_NETWORK_CREATING = 'setup.network.creating';
 const CLUSTER_STAGE_SETUP_NETWORK_CREATED = 'setup.network.created';
@@ -146,6 +158,17 @@ const STARTUP_GATE_STATE = Object.freeze({
   CLUSTER_ACTIVE: STARTUP_GATE_STATE_CLUSTER_ACTIVE,
 });
 const STARTUP_GATE_WAITING_EVENT_INTERVAL = 20;
+const READINESS_PHASE_RANK = Object.freeze({
+  INIT: 0,
+  CONTROL_READY: 1,
+  JOIN_READY: 2,
+  TRAFFIC_READY: 3,
+  DEGRADED: 1,
+});
+const STARTUP_ACTIVE_PROJECTION_REASON = Object.freeze(new Set([
+  'local_query_transport_not_ready',
+  'readiness_stable_window_pending',
+]));
 const CHAOS_FAULT_STATUS_INJECTED = 'injected';
 const CHAOS_FAULT_STATUS_RECOVERED = 'recovered';
 const CHAOS_RECOVERY_ACTIONS = new Set([
@@ -186,6 +209,86 @@ function resolveChaosFaultStatus(action) {
     return CHAOS_FAULT_STATUS_RECOVERED;
   }
   return CHAOS_FAULT_STATUS_INJECTED;
+}
+
+function resolveLocalBenchmarkReadyNodeIdFromDiscovery(
+  discoverySnapshot,
+  localNodeId,
+) {
+  const normalizedLocalNodeId = String(localNodeId || '');
+  if (normalizedLocalNodeId.length === ZERO) {
+    return null;
+  }
+  const rows = Array.isArray(discoverySnapshot?.rows) ?
+    discoverySnapshot.rows :
+    [];
+  const firstRow = rows.length > ZERO &&
+    rows[ZERO] &&
+    typeof rows[ZERO] === 'object' ?
+    rows[ZERO] :
+    null;
+  if (!firstRow) {
+    return null;
+  }
+
+  const services = Array.isArray(firstRow[SERVICE_DISCOVERY_SERVICES_FIELD]) ?
+    firstRow[SERVICE_DISCOVERY_SERVICES_FIELD] :
+    [];
+  for (const service of services) {
+    if (!service || typeof service !== 'object') {
+      continue;
+    }
+    const protocol =
+      String(service[SERVICE_DISCOVERY_SERVICE_PROTOCOL_FIELD] || '');
+    if (protocol !== NODE_CLIENT_SERVICE_PROTOCOL_POSTGRESQL) {
+      continue;
+    }
+    const serviceIds = Array.isArray(service[SERVICE_DISCOVERY_SERVICE_IDS_FIELD]) ?
+      service[SERVICE_DISCOVERY_SERVICE_IDS_FIELD] :
+      [];
+    if (!serviceIds.includes(NODE_CLIENT_SERVICE_ID_POSTGRES_WIRE)) {
+      continue;
+    }
+    const replicas = Array.isArray(service[SERVICE_DISCOVERY_REPLICAS_FIELD]) ?
+      service[SERVICE_DISCOVERY_REPLICAS_FIELD] :
+      [];
+    for (const replica of replicas) {
+      if (!replica || typeof replica !== 'object') {
+        continue;
+      }
+      const nodeId = String(
+        replica[SERVICE_DISCOVERY_REPLICA_NODE_ID_FIELD] || '',
+      );
+      if (nodeId !== normalizedLocalNodeId) {
+        continue;
+      }
+      const benchmarkAdmission =
+        replica[SERVICE_DISCOVERY_REPLICA_BENCHMARK_ADMISSION_FIELD];
+      if (benchmarkAdmission &&
+          typeof benchmarkAdmission === 'object') {
+        const admissionState = String(
+          benchmarkAdmission[
+            SERVICE_DISCOVERY_BENCHMARK_ADMISSION_STATE_FIELD
+          ] || '',
+        ).toLowerCase();
+        return admissionState ===
+          SERVICE_DISCOVERY_BENCHMARK_ADMISSION_STATE_READY ?
+          normalizedLocalNodeId :
+          null;
+      }
+      const readiness =
+        replica[SERVICE_DISCOVERY_REPLICA_READINESS_FIELD];
+      return readiness &&
+        typeof readiness === 'object' &&
+        readiness[
+          SERVICE_DISCOVERY_READINESS_BENCHMARK_READY_FIELD
+        ] === true ?
+        normalizedLocalNodeId :
+        null;
+    }
+  }
+
+  return null;
 }
 const DOCKER_HOST_CONFIG_BINDS_KEY = 'Binds';
 const CONTAINER_RUNNING_STATUS = 'running';
@@ -411,7 +514,24 @@ function formatSnapshotCoverage(snapshotCoverage) {
   }
   const expectedNodeCount = Number(snapshotCoverage.expectedNodeCount) || 0;
   const bestCoverageNodeCount = Number(snapshotCoverage.bestCoverageNodeCount) || 0;
-  return String(bestCoverageNodeCount) + '/' + String(expectedNodeCount);
+  const selectedNodeId = typeof snapshotCoverage.selectedNodeId === 'string' &&
+    snapshotCoverage.selectedNodeId.length > ZERO ?
+    snapshotCoverage.selectedNodeId :
+    null;
+  const selectedCapturedAtMs = Number.isFinite(
+    snapshotCoverage.selectedCapturedAtMs,
+  ) ?
+    Math.floor(snapshotCoverage.selectedCapturedAtMs) :
+    null;
+  return String(bestCoverageNodeCount) +
+    '/' +
+    String(expectedNodeCount) +
+    (selectedNodeId ?
+      '@' + selectedNodeId :
+      '') +
+    (selectedCapturedAtMs !== null ?
+      '#ts=' + String(selectedCapturedAtMs) :
+      '');
 }
 
 /**
@@ -604,6 +724,190 @@ function buildHealthProbeResult(url, statusCode) {
     url,
     error: ok ? null : REACHABILITY_STATUS_HTTP + String(statusCode),
   });
+}
+
+function resolveReadinessPhaseRank(phase) {
+  const normalizedPhase = typeof phase === 'string' ?
+    phase.toUpperCase() :
+    '';
+  return READINESS_PHASE_RANK[normalizedPhase] || ZERO;
+}
+
+function normalizeReadinessProbeResult(probeResponse) {
+  const normalized = {
+    status: HTTP_ERROR_STATUS,
+    phase: null,
+    phaseRank: ZERO,
+    state: null,
+    reasons: [],
+    retryAfterMs: null,
+    stableWindowMs: null,
+    stableElapsedMs: ZERO,
+    stableSinceMs: null,
+    readinessEpoch: null,
+    timestamp: null,
+  };
+
+  if (typeof probeResponse === 'number') {
+    normalized.status = probeResponse;
+    return normalized;
+  }
+
+  if (!probeResponse || typeof probeResponse !== 'object') {
+    return normalized;
+  }
+
+  normalized.status = Number.isFinite(probeResponse.status) ?
+    Math.floor(probeResponse.status) :
+    HTTP_ERROR_STATUS;
+
+  const body = probeResponse.body;
+  if (!body || typeof body !== 'object') {
+    return normalized;
+  }
+
+  normalized.phase = typeof body.phase === 'string' ? body.phase : null;
+  normalized.phaseRank = Number.isFinite(body.phaseRank) ?
+    Math.max(ZERO, Math.floor(body.phaseRank)) :
+    resolveReadinessPhaseRank(normalized.phase);
+  normalized.state = typeof body.state === 'string' ? body.state : null;
+  normalized.reasons = Array.isArray(body.reasons) ?
+    body.reasons.map((reason) => String(reason)) :
+    [];
+  normalized.retryAfterMs = Number.isFinite(body.retryAfterMs) ?
+    Math.floor(body.retryAfterMs) :
+    null;
+  normalized.stableWindowMs = Number.isFinite(body.stableWindowMs) ?
+    Math.max(ZERO, Math.floor(body.stableWindowMs)) :
+    null;
+  normalized.stableElapsedMs = Number.isFinite(body.stableElapsedMs) ?
+    Math.max(ZERO, Math.floor(body.stableElapsedMs)) :
+    ZERO;
+  normalized.stableSinceMs = Number.isFinite(body.stableSinceMs) ?
+    Math.floor(body.stableSinceMs) :
+    null;
+  normalized.readinessEpoch = Number.isFinite(body.readinessEpoch) ?
+    Math.max(ZERO, Math.floor(body.readinessEpoch)) :
+    (Number.isFinite(body.transitionCount) ?
+      Math.max(ZERO, Math.floor(body.transitionCount)) :
+      null);
+  normalized.timestamp = Number.isFinite(body.timestamp) ?
+    Math.floor(body.timestamp) :
+    null;
+  return normalized;
+}
+
+function buildBootstrapProgressSnapshot(probeResult) {
+  const success = probeResult?.status >= HTTP_OK_LOWER &&
+    probeResult?.status <= HTTP_OK_UPPER;
+  const reasons = Array.isArray(probeResult?.reasons) ?
+    probeResult.reasons :
+    [];
+  return {
+    success,
+    status: Number.isFinite(probeResult?.status) ?
+      Math.floor(probeResult.status) :
+      HTTP_ERROR_STATUS,
+    statusRank: success ?
+      2 :
+      (Number.isFinite(probeResult?.status) &&
+      probeResult.status > HTTP_ERROR_STATUS ? 1 : ZERO),
+    phase: typeof probeResult?.phase === 'string' ?
+      probeResult.phase :
+      UNKNOWN_PHASE,
+    phaseRank: Number.isFinite(probeResult?.phaseRank) ?
+      Math.max(ZERO, Math.floor(probeResult.phaseRank)) :
+      resolveReadinessPhaseRank(probeResult?.phase),
+    reasons,
+    reasonCount: reasons.length,
+    stableElapsedMs: Number.isFinite(probeResult?.stableElapsedMs) ?
+      Math.max(ZERO, Math.floor(probeResult.stableElapsedMs)) :
+      ZERO,
+    stableWindowMs: Number.isFinite(probeResult?.stableWindowMs) ?
+      Math.max(ZERO, Math.floor(probeResult.stableWindowMs)) :
+      null,
+    readinessEpoch: Number.isFinite(probeResult?.readinessEpoch) ?
+      Math.max(ZERO, Math.floor(probeResult.readinessEpoch)) :
+      null,
+  };
+}
+
+function compareBootstrapProgress(left, right) {
+  if (!left) {
+    return ZERO;
+  }
+  if (!right) {
+    return 1;
+  }
+  if (left.success !== right.success) {
+    return left.success ? 1 : -1;
+  }
+  if (left.phaseRank !== right.phaseRank) {
+    return left.phaseRank > right.phaseRank ? 1 : -1;
+  }
+  if (left.statusRank !== right.statusRank) {
+    return left.statusRank > right.statusRank ? 1 : -1;
+  }
+  if (left.reasonCount !== right.reasonCount) {
+    return left.reasonCount < right.reasonCount ? 1 : -1;
+  }
+  if (left.stableElapsedMs !== right.stableElapsedMs) {
+    return left.stableElapsedMs > right.stableElapsedMs ? 1 : -1;
+  }
+  return ZERO;
+}
+
+function summarizeBootstrapProgress(progress) {
+  if (!progress || typeof progress !== 'object') {
+    return {
+      phase: UNKNOWN_PHASE,
+      status: HTTP_ERROR_STATUS,
+      reasons: UNKNOWN_REASON,
+    };
+  }
+  const reasons = Array.isArray(progress.reasons) && progress.reasons.length > ZERO ?
+    progress.reasons.join(',') :
+    'none';
+  return {
+    phase: typeof progress.phase === 'string' ? progress.phase : UNKNOWN_PHASE,
+    status: Number.isFinite(progress.status) ?
+      Math.floor(progress.status) :
+      HTTP_ERROR_STATUS,
+    reasons,
+  };
+}
+
+function resolveBootstrapProbeSleepMs(probeResult, defaultIntervalMs) {
+  const retryAfterMs = Number.isFinite(probeResult?.retryAfterMs) ?
+    Math.max(ZERO, Math.floor(probeResult.retryAfterMs)) :
+    null;
+  if (retryAfterMs === null || retryAfterMs <= ZERO) {
+    return defaultIntervalMs;
+  }
+  return Math.max(defaultIntervalMs, retryAfterMs);
+}
+
+function canProjectStartupActiveFromReadiness(readiness, adminDiagnostics) {
+  if (adminDiagnostics?.adminReady !== true) {
+    return false;
+  }
+  const phaseRank = Number.isFinite(readiness?.phaseRank) ?
+    Math.max(ZERO, Math.floor(readiness.phaseRank)) :
+    resolveReadinessPhaseRank(readiness?.phase);
+  if (phaseRank < READINESS_PHASE_RANK.CONTROL_READY) {
+    return false;
+  }
+  const reasons = Array.isArray(readiness?.reasons) ?
+    readiness.reasons :
+    [];
+  if (reasons.length === ZERO) {
+    return false;
+  }
+  return reasons.every((reason) =>
+    STARTUP_ACTIVE_PROJECTION_REASON.has(
+      String(reason || '').toLowerCase(),
+    ),
+  );
 }
 
 /**
@@ -1413,42 +1717,7 @@ class NodeHandle {
       method: HTTP_METHOD_GET,
       includeBody: true,
     });
-
-    const normalized = {
-      status: HTTP_ERROR_STATUS,
-      phase: null,
-      state: null,
-      reasons: [],
-      retryAfterMs: null,
-    };
-
-    if (typeof probeResponse === 'number') {
-      normalized.status = probeResponse;
-      return normalized;
-    }
-
-    if (!probeResponse || typeof probeResponse !== 'object') {
-      return normalized;
-    }
-
-    normalized.status = Number.isFinite(probeResponse.status) ?
-      Math.floor(probeResponse.status) :
-      HTTP_ERROR_STATUS;
-
-    const body = probeResponse.body;
-    if (!body || typeof body !== 'object') {
-      return normalized;
-    }
-
-    normalized.phase = typeof body.phase === 'string' ? body.phase : null;
-    normalized.state = typeof body.state === 'string' ? body.state : null;
-    normalized.reasons = Array.isArray(body.reasons) ?
-      body.reasons.map((reason) => String(reason)) :
-      [];
-    normalized.retryAfterMs = Number.isFinite(body.retryAfterMs) ?
-      Math.floor(body.retryAfterMs) :
-      null;
-    return normalized;
+    return normalizeReadinessProbeResult(probeResponse);
   }
 
   /**
@@ -1470,42 +1739,7 @@ class NodeHandle {
       method: HTTP_METHOD_GET,
       includeBody: true,
     });
-
-    const normalized = {
-      status: HTTP_ERROR_STATUS,
-      phase: null,
-      state: null,
-      reasons: [],
-      retryAfterMs: null,
-    };
-
-    if (typeof probeResponse === 'number') {
-      normalized.status = probeResponse;
-      return normalized;
-    }
-
-    if (!probeResponse || typeof probeResponse !== 'object') {
-      return normalized;
-    }
-
-    normalized.status = Number.isFinite(probeResponse.status) ?
-      Math.floor(probeResponse.status) :
-      HTTP_ERROR_STATUS;
-
-    const body = probeResponse.body;
-    if (!body || typeof body !== 'object') {
-      return normalized;
-    }
-
-    normalized.phase = typeof body.phase === 'string' ? body.phase : null;
-    normalized.state = typeof body.state === 'string' ? body.state : null;
-    normalized.reasons = Array.isArray(body.reasons) ?
-      body.reasons.map((reason) => String(reason)) :
-      [];
-    normalized.retryAfterMs = Number.isFinite(body.retryAfterMs) ?
-      Math.floor(body.retryAfterMs) :
-      null;
-    return normalized;
+    return normalizeReadinessProbeResult(probeResponse);
   }
 
   _resolveAdminRoutingReadiness(discoverySnapshot) {
@@ -2729,12 +2963,133 @@ class Cluster {
     );
   }
 
-  startLoad(options) {
+  async resolveBenchmarkReadyLoadNodes(options = {}) {
     const nodes = Array.from(this._nodes.values());
+    if (nodes.length === ZERO) {
+      return [];
+    }
+    const timeoutMs = resolvePositiveTimeoutMs(
+      options?.timeoutMs,
+      ADMIN_QUERY_TIMEOUT_MS,
+    );
+    const discoverySql = buildServiceDiscoverySql({
+      tableName: options?.tableName,
+      tableId: options?.tableId,
+    });
+    const readyNodes = [];
+
+    for (const node of nodes) {
+      if (!node || typeof node !== 'object') {
+        continue;
+      }
+      try {
+        const discoverySnapshot =
+          typeof node.queryWithTimeout === 'function' ?
+            await node.queryWithTimeout(
+              discoverySql,
+              [],
+              {
+                lane: ADMIN_SOCKET_LANE_SNAPSHOT,
+                timeoutMs,
+              },
+            ) :
+            await node.query(discoverySql, []);
+        const readyNodeId = resolveLocalBenchmarkReadyNodeIdFromDiscovery(
+          discoverySnapshot,
+          node.id,
+        );
+        if (readyNodeId === String(node.id || '')) {
+          readyNodes.push(node);
+        }
+      } catch (_error) {
+        continue;
+      }
+    }
+
+    return readyNodes;
+  }
+
+  async waitForBenchmarkReadyLoadNodes(options = {}) {
+    const minNodeCount = Number.isInteger(options?.minNodeCount) &&
+      options.minNodeCount > ZERO ?
+      options.minNodeCount :
+      ONE;
+    const stableWindowMs = resolvePositiveTimeoutMs(
+      options?.stableWindowMs,
+      LOAD_READINESS_STABLE_WINDOW_MS,
+    );
+    const timeoutMs = resolvePositiveTimeoutMs(
+      options?.timeoutMs,
+      LOAD_READINESS_STABILITY_TIMEOUT_MS,
+    );
+    const pollIntervalMs = resolvePositiveTimeoutMs(
+      options?.pollIntervalMs,
+      ACTIVE_POLL_INTERVAL_MS,
+    );
+    const tableName = typeof options?.tableName === 'string' ?
+      options.tableName.trim() :
+      '';
+    const deadlineAtMs = Date.now() + timeoutMs;
+    let readySinceMs = null;
+    let lastReadyNodes = [];
+    const sleep = typeof this._sleep === 'function' ?
+      (ms) => this._sleep(ms) :
+      (ms) => new Promise((resolve) => {
+        setTimeout(resolve, ms);
+      });
+
+    while (true) {
+      const readyNodes = await this.resolveBenchmarkReadyLoadNodes({
+        tableName,
+        tableId: options?.tableId,
+        timeoutMs: options?.queryTimeoutMs,
+      });
+      lastReadyNodes = readyNodes;
+
+      if (readyNodes.length >= minNodeCount) {
+        const nowMs = Date.now();
+        if (stableWindowMs <= ZERO) {
+          return readyNodes;
+        }
+        if (readySinceMs === null) {
+          readySinceMs = nowMs;
+        }
+        if (nowMs - readySinceMs >= stableWindowMs) {
+          return readyNodes;
+        }
+      } else {
+        readySinceMs = null;
+      }
+
+      const nowMs = Date.now();
+      if (nowMs > deadlineAtMs && readySinceMs === null) {
+        break;
+      }
+
+      await sleep(pollIntervalMs);
+    }
+
+    throw new Error(
+      'Timed out after ' + timeoutMs +
+      'ms waiting for at least ' + minNodeCount +
+      ' benchmark-ready load nodes' +
+      (tableName.length > ZERO ? ' for table ' + tableName : '') +
+      '; lastReadyNodeCount=' + lastReadyNodes.length,
+    );
+  }
+
+  startLoad(options) {
     const requestedOptions =
       options && typeof options === 'object' ?
         options :
         {};
+    const explicitNodes = Array.isArray(requestedOptions.nodes) ?
+      requestedOptions.nodes.filter((node) =>
+        node && typeof node === 'object') :
+      null;
+    const nodes = explicitNodes && explicitNodes.length > ZERO ?
+      [...explicitNodes] :
+      Array.from(this._nodes.values());
     const benchmarkConfig =
       this._config?.benchmark && typeof this._config.benchmark === 'object' ?
         this._config.benchmark :
@@ -3166,122 +3521,156 @@ class Cluster {
   async _waitForBootstrapApi(seedNode) {
     const startupTimeout = this._config.timeouts?.nodeStartup ||
       TIMEOUTS.NODE_STARTUP;
-    const stableWindowMs = Math.max(
-      0,
+    const configuredStableWindowMs = Math.max(
+      ZERO,
       this._config.timeouts?.bootstrapReadyStableWindowMs ??
         BOOTSTRAP_READY_STABLE_WINDOW_MS,
     );
-    const timeout = startupTimeout + stableWindowMs;
-    const deadline = Date.now() + timeout;
+    const hardTimeoutMs = startupTimeout *
+      BOOTSTRAP_PROGRESS_TIMEOUT_MAX_MULTIPLIER;
+    const startedAt = Date.now();
+    const hardDeadline = startedAt + hardTimeoutMs;
     const bootstrapJoinReadyUrl =
       'http://' + seedNode.ip + ':' + PORTS.REST + BOOTSTRAP_JOIN_READY_PATH;
     const statusCounts = new Map();
     const phaseCounts = new Map();
     const reasonCounts = new Map();
-    let successWindowStartedAt = null;
-    const pollResult = await pollUntilCondition({
-      deadline,
-      intervalMs: BOOTSTRAP_POLL_INTERVAL_MS,
-      sleep: (ms) => this._sleep(ms),
-      probe: async () => {
-        const probeResponse = await this._httpRequest({
-          url: bootstrapJoinReadyUrl,
-          timeoutMs: BOOTSTRAP_WAIT_REQUEST_TIMEOUT_MS,
-          method: HTTP_METHOD_GET,
-          includeBody: true,
-        });
-        const normalizedProbe =
-          this._normalizeBootstrapReadinessProbeResult(probeResponse);
-        const status = normalizedProbe.status;
-        statusCounts.set(
-          status,
-          (statusCounts.get(status) || 0) + 1,
-        );
-        if (normalizedProbe.phase) {
-          phaseCounts.set(
-            normalizedProbe.phase,
-            (phaseCounts.get(normalizedProbe.phase) || 0) + 1,
-          );
-        }
-        for (const reason of normalizedProbe.reasons) {
-          reasonCounts.set(
-            reason,
-            (reasonCounts.get(reason) || 0) + 1,
-          );
-        }
-        const now = Date.now();
-        const success = status >= HTTP_OK_LOWER &&
-          status <= HTTP_OK_UPPER;
-        if (success) {
-          if (successWindowStartedAt === null) {
-            successWindowStartedAt = now;
-          }
-        } else {
-          successWindowStartedAt = null;
-        }
-        const stableElapsedMs = successWindowStartedAt === null ?
-          0 :
-          now - successWindowStartedAt;
-        return {
-          status,
-          phase: normalizedProbe.phase,
-          success,
-          state: normalizedProbe.state,
-          reasons: normalizedProbe.reasons,
-          retryAfterMs: normalizedProbe.retryAfterMs,
-          stableElapsedMs,
-          stable: success && stableElapsedMs >= stableWindowMs,
-        };
-      },
-      isSuccess: (result) => {
-        return result.stable === true;
-      },
-      onAttempt: ({attempts, elapsedMs, lastResult}) => {
-        this._recordPeriodicStartupWaitingStage(
-          CLUSTER_STAGE_SETUP_SEED_BOOTSTRAP_WAITING,
-          {
-            attempts,
-            elapsedMs,
-          },
-          {
-            nodeId: seedNode.id,
-            lastStatus: lastResult?.status ?? null,
-            lastPhase: lastResult?.phase ?? null,
-            lastState: lastResult?.state ?? null,
-            lastReasons: lastResult?.reasons || [],
-            stableWindowMs,
-            stableElapsedMs: lastResult?.stableElapsedMs ?? 0,
-          },
-        );
-      },
-    });
+    let attempts = ZERO;
+    let lastResult = null;
+    let bestProgress = null;
+    let lastProgressAt = startedAt;
+    let timeoutReason = 'hard_deadline';
 
-    if (pollResult.success) {
-      return;
+    while (Date.now() <= hardDeadline) {
+      attempts += 1;
+      const probeResponse = await this._httpRequest({
+        url: bootstrapJoinReadyUrl,
+        timeoutMs: BOOTSTRAP_WAIT_REQUEST_TIMEOUT_MS,
+        method: HTTP_METHOD_GET,
+        includeBody: true,
+      });
+      const normalizedProbe =
+        this._normalizeBootstrapReadinessProbeResult(probeResponse);
+      const status = normalizedProbe.status;
+      statusCounts.set(
+        status,
+        (statusCounts.get(status) || ZERO) + 1,
+      );
+      if (normalizedProbe.phase) {
+        phaseCounts.set(
+          normalizedProbe.phase,
+          (phaseCounts.get(normalizedProbe.phase) || ZERO) + 1,
+        );
+      }
+      for (const reason of normalizedProbe.reasons) {
+        reasonCounts.set(
+          reason,
+          (reasonCounts.get(reason) || ZERO) + 1,
+        );
+      }
+
+      const success = status >= HTTP_OK_LOWER &&
+        status <= HTTP_OK_UPPER;
+      lastResult = {
+        ...normalizedProbe,
+        success,
+      };
+
+      const progress = buildBootstrapProgressSnapshot(lastResult);
+      if (compareBootstrapProgress(progress, bestProgress) > ZERO) {
+        bestProgress = progress;
+        lastProgressAt = Date.now();
+      }
+
+      if (success) {
+        return;
+      }
+
+      const elapsedMs = Date.now() - startedAt;
+      this._recordPeriodicStartupWaitingStage(
+        CLUSTER_STAGE_SETUP_SEED_BOOTSTRAP_WAITING,
+        {
+          attempts,
+          elapsedMs,
+        },
+        {
+          nodeId: seedNode.id,
+          lastStatus: lastResult?.status ?? null,
+          lastPhase: lastResult?.phase ?? null,
+          lastPhaseRank: lastResult?.phaseRank ?? ZERO,
+          lastState: lastResult?.state ?? null,
+          lastReasons: lastResult?.reasons || [],
+          stableWindowMs: lastResult?.stableWindowMs ??
+            configuredStableWindowMs,
+          stableElapsedMs: lastResult?.stableElapsedMs ?? ZERO,
+          readinessEpoch: lastResult?.readinessEpoch ?? null,
+          noProgressTimeoutMs: startupTimeout,
+          hardTimeoutMs,
+        },
+      );
+
+      const now = Date.now();
+      if ((now - lastProgressAt) >= startupTimeout) {
+        timeoutReason = 'no_progress';
+        break;
+      }
+
+      const sleepBudgetMs = Math.max(
+        ZERO,
+        Math.min(
+          hardDeadline,
+          lastProgressAt + startupTimeout,
+        ) - now,
+      );
+      if (sleepBudgetMs <= ZERO) {
+        timeoutReason = 'no_progress';
+        break;
+      }
+
+      const desiredSleepMs = resolveBootstrapProbeSleepMs(
+        lastResult,
+        BOOTSTRAP_POLL_INTERVAL_MS,
+      );
+      await this._sleep(Math.min(desiredSleepMs, sleepBudgetMs));
     }
 
     await this._collectFailureLogs();
     const statusSummary = formatCountSummary(statusCounts);
     const phaseSummary = formatCountSummary(phaseCounts);
     const reasonSummary = formatCountSummary(reasonCounts);
-    const lastStatus = pollResult.lastResult?.status ?? null;
-    const lastPhase = pollResult.lastResult?.phase || UNKNOWN_PHASE;
-    const lastState = pollResult.lastResult?.state || UNKNOWN_STATE;
-    const lastReasons = Array.isArray(pollResult.lastResult?.reasons) &&
-      pollResult.lastResult.reasons.length > 0 ?
-      pollResult.lastResult.reasons.join(',') :
+    const lastStatus = lastResult?.status ?? null;
+    const lastPhase = lastResult?.phase || UNKNOWN_PHASE;
+    const lastState = lastResult?.state || UNKNOWN_STATE;
+    const lastReasons = Array.isArray(lastResult?.reasons) &&
+      lastResult.reasons.length > ZERO ?
+      lastResult.reasons.join(',') :
       'none';
+    const bestProgressSummary = summarizeBootstrapProgress(bestProgress);
+    const elapsedMs = Date.now() - startedAt;
+    const lastProgressElapsedMs = Math.max(
+      ZERO,
+      Date.now() - lastProgressAt,
+    );
     throw new Error(
       'Seed node bootstrap API did not become join-ready ' +
-      'within ' + timeout + 'ms' +
-      ' (attempts=' + pollResult.attempts +
-      ', startupTimeoutMs=' + startupTimeout +
+      'within ' + elapsedMs + 'ms' +
+      ' (attempts=' + attempts +
+      ', timeoutReason=' + timeoutReason +
+      ', noProgressTimeoutMs=' + startupTimeout +
+      ', hardTimeoutMs=' + hardTimeoutMs +
       ', lastStatus=' + String(lastStatus) +
       ', lastPhase=' + lastPhase +
       ', lastState=' + lastState +
       ', lastReasons=' + lastReasons +
-      ', stableWindowMs=' + stableWindowMs +
-      ', elapsedMs=' + pollResult.elapsedMs +
+      ', bestStatus=' + String(bestProgressSummary.status) +
+      ', bestPhase=' + bestProgressSummary.phase +
+      ', bestReasons=' + bestProgressSummary.reasons +
+      ', stableWindowMs=' +
+        (lastResult?.stableWindowMs ?? configuredStableWindowMs) +
+      ', stableElapsedMs=' + (lastResult?.stableElapsedMs ?? ZERO) +
+      ', readinessEpoch=' + String(lastResult?.readinessEpoch ?? 'none') +
+      ', lastProgressElapsedMs=' + lastProgressElapsedMs +
+      ', elapsedMs=' + elapsedMs +
       ', statusCounts=' + (statusSummary || 'none') +
       ', phaseCounts=' + (phaseSummary || 'none') +
       ', reasonCounts=' + (reasonSummary || 'none') +
@@ -3290,41 +3679,7 @@ class Cluster {
   }
 
   _normalizeBootstrapReadinessProbeResult(probeResponse) {
-    const normalized = {
-      status: HTTP_ERROR_STATUS,
-      phase: null,
-      state: null,
-      reasons: [],
-      retryAfterMs: null,
-    };
-
-    if (typeof probeResponse === 'number') {
-      normalized.status = probeResponse;
-      return normalized;
-    }
-
-    if (!probeResponse || typeof probeResponse !== 'object') {
-      return normalized;
-    }
-
-    normalized.status = Number.isFinite(probeResponse.status) ?
-      Math.floor(probeResponse.status) :
-      HTTP_ERROR_STATUS;
-
-    const body = probeResponse.body;
-    if (!body || typeof body !== 'object') {
-      return normalized;
-    }
-
-    normalized.phase = typeof body.phase === 'string' ? body.phase : null;
-    normalized.state = typeof body.state === 'string' ? body.state : null;
-    normalized.reasons = Array.isArray(body.reasons) ?
-      body.reasons.map((reason) => String(reason)) :
-      [];
-    normalized.retryAfterMs = Number.isFinite(body.retryAfterMs) ?
-      Math.floor(body.retryAfterMs) :
-      null;
-    return normalized;
+    return normalizeReadinessProbeResult(probeResponse);
   }
 
   async _probeClusterActiveState(deadline) {
@@ -3340,6 +3695,7 @@ class Cluster {
         let state = INACTIVE_STATE;
         let phase = null;
         let reasons = [];
+        let activitySource = 'status';
 
         if (typeof node.probeTrafficReadiness === 'function') {
           const readiness = await withTimeout(
@@ -3359,14 +3715,14 @@ class Cluster {
             [];
           if (active) {
             state = ACTIVE_STATE.toLowerCase();
+            activitySource = 'traffic_readiness';
           } else if (typeof readiness.state === 'string' &&
               readiness.state.length > 0) {
             state = readiness.state.toLowerCase();
           } else if (phase && phase.length > 0) {
             state = phase.toLowerCase();
           }
-          if (active &&
-              typeof node.getReachabilityDiagnostics === 'function') {
+          if (typeof node.getReachabilityDiagnostics === 'function') {
             try {
               const adminDiagnostics = await withTimeout(
                 node.getReachabilityDiagnostics({
@@ -3375,7 +3731,16 @@ class Cluster {
                 probeTimeoutMs,
                 'Node admin readiness probe timed out for ' + node.id,
               );
-              if (adminDiagnostics?.adminReady !== true) {
+              if (adminDiagnostics?.adminReady === true &&
+                  !active &&
+                  canProjectStartupActiveFromReadiness(
+                    readiness,
+                    adminDiagnostics,
+                  )) {
+                active = true;
+                state = ACTIVE_STATE.toLowerCase();
+                activitySource = 'startup_admin_projection';
+              } else if (adminDiagnostics?.adminReady !== true) {
                 active = false;
                 state = INACTIVE_STATE;
                 const adminLastError =
@@ -3418,14 +3783,14 @@ class Cluster {
             [];
           if (active) {
             state = ACTIVE_STATE.toLowerCase();
+            activitySource = 'bootstrap_readiness';
           } else if (typeof readiness.state === 'string' &&
               readiness.state.length > 0) {
             state = readiness.state.toLowerCase();
           } else if (phase && phase.length > 0) {
             state = phase.toLowerCase();
           }
-          if (active &&
-              typeof node.getReachabilityDiagnostics === 'function') {
+          if (typeof node.getReachabilityDiagnostics === 'function') {
             try {
               const adminDiagnostics = await withTimeout(
                 node.getReachabilityDiagnostics({
@@ -3434,7 +3799,16 @@ class Cluster {
                 probeTimeoutMs,
                 'Node admin readiness probe timed out for ' + node.id,
               );
-              if (adminDiagnostics?.adminReady !== true) {
+              if (adminDiagnostics?.adminReady === true &&
+                  !active &&
+                  canProjectStartupActiveFromReadiness(
+                    readiness,
+                    adminDiagnostics,
+                  )) {
+                active = true;
+                state = ACTIVE_STATE.toLowerCase();
+                activitySource = 'startup_admin_projection';
+              } else if (adminDiagnostics?.adminReady !== true) {
                 active = false;
                 state = INACTIVE_STATE;
                 const adminLastError =
@@ -3472,6 +3846,7 @@ class Cluster {
           state = active ?
             ACTIVE_STATE.toLowerCase() :
             (this._extractNodeState(status) || INACTIVE_STATE);
+          activitySource = 'status_query';
         }
 
         return {
@@ -3480,6 +3855,7 @@ class Cluster {
           state,
           phase,
           reasons,
+          activitySource,
           error: null,
         };
       } catch (error) {
@@ -3507,19 +3883,32 @@ class Cluster {
   }
 
   _extractControlSnapshotNodes(snapshotResult) {
+    return this._extractControlSnapshotSummary(snapshotResult).nodes;
+  }
+
+  _extractControlSnapshotSummary(snapshotResult) {
     const rows = Array.isArray(snapshotResult?.rows) ?
       snapshotResult.rows :
       [];
     if (rows.length === 0) {
-      return [];
+      return {
+        nodes: [],
+        capturedAtMs: null,
+      };
     }
     const row = rows[0];
     const nodes = Array.isArray(row?.[CONTROL_SNAPSHOT_NODES_FIELD]) ?
       row[CONTROL_SNAPSHOT_NODES_FIELD] :
       [];
-    return nodes
-      .map((nodeId) => String(nodeId))
-      .filter((nodeId) => nodeId.length > 0);
+    const capturedAtMs = Number.isFinite(row?.capturedAt) ?
+      Math.floor(row.capturedAt) :
+      null;
+    return {
+      nodes: nodes
+        .map((nodeId) => String(nodeId))
+        .filter((nodeId) => nodeId.length > 0),
+      capturedAtMs,
+    };
   }
 
   async _probeControlSnapshotCoverage(deadline, expectedNodeIds = []) {
@@ -3548,7 +3937,9 @@ class Cluster {
           timeoutMs: snapshotTimeoutMs,
           lane: ADMIN_SOCKET_LANE_SNAPSHOT,
         });
-        const observedNodeIds = this._extractControlSnapshotNodes(snapshotResult);
+        const snapshotSummary =
+          this._extractControlSnapshotSummary(snapshotResult);
+        const observedNodeIds = snapshotSummary.nodes;
         const observedNodeSet = new Set(observedNodeIds);
         let missingExpectedNodeCount = 0;
         for (const expectedNodeId of expectedNodeSet) {
@@ -3561,6 +3952,7 @@ class Cluster {
           error: null,
           observedNodeCount: observedNodeSet.size,
           missingExpectedNodeCount,
+          capturedAtMs: snapshotSummary.capturedAtMs,
         });
         if (missingExpectedNodeCount === 0) {
           break;
@@ -3571,6 +3963,7 @@ class Cluster {
           error: normalizeProbeError(error),
           observedNodeCount: 0,
           missingExpectedNodeCount: expectedNodeSet.size,
+          capturedAtMs: null,
         });
       }
     }
@@ -3581,10 +3974,40 @@ class Cluster {
     const completeCoverage = snapshotProbeResults.some(
       (result) => result.missingExpectedNodeCount === 0,
     );
+    let selectedResult = null;
+    for (const result of snapshotProbeResults) {
+      if (!selectedResult) {
+        selectedResult = result;
+        continue;
+      }
+      if (result.missingExpectedNodeCount !==
+          selectedResult.missingExpectedNodeCount) {
+        if (result.missingExpectedNodeCount <
+            selectedResult.missingExpectedNodeCount) {
+          selectedResult = result;
+        }
+        continue;
+      }
+      if (result.observedNodeCount !== selectedResult.observedNodeCount) {
+        if (result.observedNodeCount > selectedResult.observedNodeCount) {
+          selectedResult = result;
+        }
+        continue;
+      }
+      if (Number.isFinite(result.capturedAtMs) &&
+          (!Number.isFinite(selectedResult.capturedAtMs) ||
+          result.capturedAtMs > selectedResult.capturedAtMs)) {
+        selectedResult = result;
+      }
+    }
     return {
       completeCoverage,
       expectedNodeCount: expectedNodeSet.size,
       bestCoverageNodeCount,
+      selectedNodeId: selectedResult?.nodeId || null,
+      selectedCapturedAtMs: Number.isFinite(selectedResult?.capturedAtMs) ?
+        selectedResult.capturedAtMs :
+        null,
     };
   }
 

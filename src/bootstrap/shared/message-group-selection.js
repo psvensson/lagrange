@@ -111,6 +111,47 @@ function resolveRelayReadiness(service, requiredTables) {
   );
 }
 
+function resolveQueryTransportMessageGroupSelection(messageGroupServices) {
+  const services = listMessageGroupServices(messageGroupServices);
+
+  for (const service of services) {
+    if (service?.isLeaderReplica?.() !== true ||
+        isMessageGroupInitialized(service) !== true ||
+        typeof service?.sendMessage !== TYPEOF.FUNCTION) {
+      continue;
+    }
+    return {
+      service,
+      ready: true,
+      retryAfterMs: NUM.ZERO,
+      reason: null,
+      route: 'leader',
+    };
+  }
+
+  for (const service of services) {
+    if (isMessageGroupInitialized(service) !== true ||
+        typeof service?.sendMessage !== TYPEOF.FUNCTION) {
+      continue;
+    }
+    return {
+      service,
+      ready: true,
+      retryAfterMs: NUM.ZERO,
+      reason: null,
+      route: service?.isLeaderReplica?.() === true ? 'leader' : 'relay',
+    };
+  }
+
+  return {
+    service: null,
+    ready: false,
+    retryAfterMs: NUM.ZERO,
+    reason: MESSAGE_GROUP_SELECTION_REASON.OWNER_NOT_READY,
+    route: null,
+  };
+}
+
 async function resolveMetadataIngressReadinessAsync(
   service,
   requiredTables,
@@ -355,4 +396,5 @@ export {
   getBootstrapMessageGroupService,
   resolveOperationalMessageGroupSelection,
   resolveOperationalMessageGroupSelectionAsync,
+  resolveQueryTransportMessageGroupSelection,
 };

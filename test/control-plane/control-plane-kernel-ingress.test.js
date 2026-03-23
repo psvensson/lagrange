@@ -300,6 +300,66 @@ test('ControlPlaneKernelIngress - prefers live local ingress over a stale confir
     );
   });
 
+test('ControlPlaneKernelIngress - does not reuse a stale confirmed local lease ' +
+  'when metadata ingress is no longer ready', async (t) => {
+  let localIngressReady = true;
+  const ingress = new ControlPlaneKernelIngress({
+    nodeId: 'joining-node-4c',
+    getBootstrapResponse: () => ({
+      seedNodeId: 'seed-node-1',
+      messageGroupAssignment: {
+        strategy: AssignmentStrategy.MOVE_REPLICA,
+        groupId: 'mg-1',
+        peerAddresses: [
+          'seed-node-1/message-group/mg-1-r3',
+        ],
+      },
+    }),
+    getMessageRouter: () => ({
+      getConnectionState() {
+        return 'connected';
+      },
+    }),
+    getMessageGroupServices: () => new Map([
+      ['mg-1-r2', {
+        groupId: 'mg-1',
+        unifiedAddress: 'joining-node-4c/message-group/mg-1-r2',
+        isLeaderReplica: () => false,
+        isMetadataIngressReady: () => localIngressReady,
+      }],
+    ]),
+  });
+
+  ingress.noteSuccessfulTarget('joining-node-4c/message-group/mg-1-r2');
+
+  t.same(
+    ingress.resolveTargetCandidates({
+      allowBootstrapHints: true,
+      allowSelfTarget: true,
+      localTargetMode: 'any_replica',
+    }),
+    [
+      'joining-node-4c/message-group/mg-1-r2',
+      'seed-node-1/message-group/mg-1-r3',
+    ],
+    'a confirmed local lease may be reused while the ingress stays ready',
+  );
+
+  localIngressReady = false;
+
+  t.same(
+    ingress.resolveTargetCandidates({
+      allowBootstrapHints: true,
+      allowSelfTarget: true,
+      localTargetMode: 'any_replica',
+    }),
+    [
+      'seed-node-1/message-group/mg-1-r3',
+    ],
+    'a stale local lease must be dropped once the local ingress is no longer ready',
+  );
+});
+
 test('ControlPlaneKernelIngress - excludes disconnected bootstrap ingress candidates',
   async (t) => {
     const ingress = new ControlPlaneKernelIngress({

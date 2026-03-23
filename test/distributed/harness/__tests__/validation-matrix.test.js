@@ -15,6 +15,16 @@ describe('validation-matrix helpers', () => {
           failed: 3,
           errors: 5,
           attemptErrors: 11,
+          perNode: {
+            'node-a': {
+              attemptErrors: 6,
+              admissionSignals: 6,
+            },
+            'node-b': {
+              attemptErrors: 5,
+              admissionSignals: 0,
+            },
+          },
           targetOperations: 100,
           undispatchedOperations: 17,
           queueDelay: {p95: 1800},
@@ -27,6 +37,7 @@ describe('validation-matrix helpers', () => {
     assert.deepEqual(metrics, {
       failedOperations: 5,
       attemptErrors: 11,
+      nonAdmissionAttemptErrors: 5,
       queueDelayP95Ms: 1800,
       undispatchedRatio: 0.17,
       timeoutWaits: 9,
@@ -42,6 +53,7 @@ describe('validation-matrix helpers', () => {
         metrics: {
           failedOperations: 3,
           attemptErrors: 7,
+          nonAdmissionAttemptErrors: 4,
           queueDelayP95Ms: 1400,
           undispatchedRatio: 0.11,
           timeoutWaits: 2,
@@ -54,6 +66,7 @@ describe('validation-matrix helpers', () => {
         metrics: {
           failedOperations: 0,
           attemptErrors: 2,
+          nonAdmissionAttemptErrors: 1,
           queueDelayP95Ms: 650,
           undispatchedRatio: 0.04,
           timeoutWaits: 0,
@@ -66,6 +79,7 @@ describe('validation-matrix helpers', () => {
         metrics: {
           failedOperations: 0,
           attemptErrors: 0,
+          nonAdmissionAttemptErrors: 0,
           queueDelayP95Ms: 120,
           undispatchedRatio: 0.01,
           timeoutWaits: 0,
@@ -78,6 +92,7 @@ describe('validation-matrix helpers', () => {
     assert.equal(summary.failureModes.multiModal, false);
     assert.equal(summary.failureModes.dominantMode, 'load:dispatch_backlog');
     assert.equal(summary.distributions.failedOperations.max, 3);
+    assert.equal(summary.distributions.nonAdmissionAttemptErrors.p95, 1);
     assert.equal(summary.distributions.queueDelayP95Ms.p50, 650);
     assert.equal(summary.distributions.undispatchedRatio.p95, 0.04);
   });
@@ -91,6 +106,7 @@ describe('validation-matrix helpers', () => {
         metrics: {
           failedOperations: 0,
           attemptErrors: 12,
+          nonAdmissionAttemptErrors: 12,
           queueDelayP95Ms: 4000,
           undispatchedRatio: 0.2,
           timeoutWaits: 0,
@@ -103,6 +119,7 @@ describe('validation-matrix helpers', () => {
         metrics: {
           failedOperations: 0,
           attemptErrors: 1,
+          nonAdmissionAttemptErrors: 1,
           queueDelayP95Ms: 300,
           undispatchedRatio: 0.03,
           timeoutWaits: 0,
@@ -115,6 +132,7 @@ describe('validation-matrix helpers', () => {
         metrics: {
           failedOperations: 0,
           attemptErrors: 0,
+          nonAdmissionAttemptErrors: 0,
           queueDelayP95Ms: 200,
           undispatchedRatio: 0.02,
           timeoutWaits: 0,
@@ -131,8 +149,34 @@ describe('validation-matrix helpers', () => {
     );
     assert.ok(
       gate.failedCriteria.some((criterion) =>
+        criterion.metric === 'nonAdmissionAttemptErrors.p95'),
+      'expected non-admission attempt-error criterion to fail',
+    );
+    assert.ok(
+      gate.failedCriteria.some((criterion) =>
         criterion.metric === 'queueDelayP95Ms.p95'),
       'expected queue-delay criterion to fail',
     );
+  });
+
+  it('does not hard-fail admission-only retries when observed runs are otherwise healthy', () => {
+    const summary = summarizeValidationRuns([{
+      passed: true,
+      rootCauseClass: null,
+      dominantReason: null,
+      metrics: {
+        failedOperations: 0,
+        attemptErrors: 17,
+        nonAdmissionAttemptErrors: 0,
+        queueDelayP95Ms: 40,
+        undispatchedRatio: 0,
+        timeoutWaits: 0,
+      },
+    }]);
+
+    const gate = assessShipReadiness(summary, {
+      minimumRuns: 1,
+    });
+    assert.equal(gate.decision, 'ship');
   });
 });

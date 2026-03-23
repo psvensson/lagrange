@@ -185,8 +185,8 @@ test('ReplicaDispatchService updates existing node rows for NODE_STATE_UPDATE',
     );
     t.equal(
       updates[0].options?.workClass,
-      'interactive',
-      'ready publication should stay on the interactive work class',
+      'critical',
+      'ready publication should bypass pressure deferral on the critical lane',
     );
     t.equal(
       updates[0].row.connection_state,
@@ -209,6 +209,105 @@ test('ReplicaDispatchService updates existing node rows for NODE_STATE_UPDATE',
 
     service.stop();
   });
+
+test('ReplicaDispatchService keeps READY node-state publication on the ' +
+  'critical lane under pressure', async (t) => {
+  initEnv();
+
+  const scheduled = [];
+  const readyRetryEnqueues = [];
+  const now = Date.now();
+  const cacheNode = {
+    node_id: 'node-pressure-ready',
+    node_address: 'localhost:8085',
+    cpu_cores: 8,
+    memory_mb: 16384,
+    disk_gb: 500,
+    status: SERVICE_STATUS.ACTIVE,
+    connection_state: STATE.CONNECTED,
+    capabilities: '[]',
+    last_heartbeat: now - 1000,
+    ready_lease_expires_at: null,
+    created_at: now - 5000,
+  };
+  const gatewayCalls = [];
+
+  const service = createService({
+    cacheNode,
+    cdcIntegrationService: {
+      updateSystemTableRow: async () => ({success: true}),
+      upsertSystemTableRow: async () => ({success: true}),
+      isTransientCdcError() {
+        return false;
+      },
+    },
+    controlPlaneSystemTableGateway: {
+      async updateSystemTableRow(tableName, whereClause, row, options) {
+        gatewayCalls.push({tableName, whereClause, row, options});
+        if (options?.workClass !== 'critical') {
+          const error = new Error('control_plane_pressure_degraded');
+          error.code = 'CONTROL_PLANE_PRESSURE_DEGRADED';
+          error.retryAfterMs = 250;
+          throw error;
+        }
+        return {
+          success: true,
+          partitionResult: {affectedRows: 1},
+        };
+      },
+    },
+    setTimeoutFn(callback, delayMs) {
+      const handle = {callback, delayMs};
+      scheduled.push(handle);
+      return handle;
+    },
+    clearTimeoutFn() {},
+  });
+  const originalNodeReadyRetryQueue = service.nodeReadyRetryQueue;
+  service.nodeReadyRetryQueue = {
+    enqueue(nodeId, reason, context) {
+      readyRetryEnqueues.push({nodeId, reason, context});
+      return true;
+    },
+    shutdown() {},
+  };
+
+  await service.reconcileNodeStateUpdate('node-pressure-ready', {
+    payload: {
+      [ControlPlaneField.TYPE]: ControlPlaneMessageType.NODE_STATE_UPDATE,
+      [ControlPlaneField.NODE_ID]: 'node-pressure-ready',
+      [ControlPlaneField.NODE_ADDRESS]: 'localhost:8085',
+      [ControlPlaneField.STATE]: STATE.READY,
+      [ControlPlaneField.HEARTBEAT_AT]: now,
+    },
+  });
+
+  t.equal(gatewayCalls.length, 1,
+    'READY publication should attempt the canonical node update once');
+  t.equal(
+    gatewayCalls[0]?.options?.workClass,
+    'critical',
+    'READY publication must bypass pressure deferral on the critical lane',
+  );
+  t.equal(
+    scheduled.length,
+    0,
+    'READY publication should not arm a deferred retry timer',
+  );
+  t.equal(
+    service.nodeStateUpdateDeferredRetries.size,
+    0,
+    'READY publication should not remain parked in the deferred retry map',
+  );
+  t.equal(
+    readyRetryEnqueues.length,
+    1,
+    'successful READY publication should re-enter the ready retry owner path',
+  );
+
+  service.nodeReadyRetryQueue = originalNodeReadyRetryQueue;
+  service.stop();
+});
 
 test('ReplicaDispatchService uses injected owners for shared metadata cache reads',
   async (t) => {

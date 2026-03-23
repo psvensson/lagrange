@@ -98,6 +98,7 @@ class BootstrapReadinessOwner {
     if (!started) {
       response.retryAfterMs = snapshot.retryAfterMs;
     }
+    this.appendReadinessProgressFields(response, snapshot);
 
     this.recordReadinessProbeResult(BOOTSTRAP_API_ROUTE.STARTUPZ, statusCode);
     reply.code(statusCode);
@@ -205,8 +206,41 @@ class BootstrapReadinessOwner {
     if (Number.isFinite(snapshot.retryAfterMs)) {
       response.retryAfterMs = snapshot.retryAfterMs;
     }
+    this.appendReadinessProgressFields(response, snapshot);
     if (typeof options.scope === TYPEOF.STRING && options.scope.length > NUM.ZERO) {
       response.scope = options.scope;
+    }
+    return response;
+  }
+
+  appendReadinessProgressFields(response, snapshot) {
+    if (!response || typeof response !== TYPEOF.OBJECT ||
+        !snapshot || typeof snapshot !== TYPEOF.OBJECT) {
+      return response;
+    }
+    if (Number.isFinite(snapshot.phaseRank)) {
+      response.phaseRank = Math.max(NUM.ZERO, Math.floor(snapshot.phaseRank));
+    }
+    if (Number.isFinite(snapshot.transitionCount)) {
+      response.readinessEpoch = Math.max(
+        NUM.ZERO,
+        Math.floor(snapshot.transitionCount),
+      );
+    }
+    if (Number.isFinite(snapshot.stableWindowMs)) {
+      response.stableWindowMs = Math.max(
+        NUM.ZERO,
+        Math.floor(snapshot.stableWindowMs),
+      );
+    }
+    if (Number.isFinite(snapshot.stableElapsedMs)) {
+      response.stableElapsedMs = Math.max(
+        NUM.ZERO,
+        Math.floor(snapshot.stableElapsedMs),
+      );
+    }
+    if (Number.isFinite(snapshot.stableSinceMs)) {
+      response.stableSinceMs = Math.floor(snapshot.stableSinceMs);
     }
     return response;
   }

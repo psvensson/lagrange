@@ -280,6 +280,38 @@ class MessageGroupForwardingOwner {
       STRICT_CDC_FORWARD_SYSTEM_TABLES.has(tableName);
   }
 
+  shouldUseCanonicalLocalIngressForStrictCDC(selection = null) {
+    const service = this.service;
+    if (selection?.strictForwarding !== true ||
+        service.shouldAllowJoinConvergenceStrictTargeting() !== true) {
+      return false;
+    }
+
+    if (service.isLocalForwardTarget(
+      selection?.cacheLeaderService?.[COLUMN.SERVICE_ID] || null,
+      selection?.cacheLeaderService?.[COLUMN.ADDRESS] || null,
+    )) {
+      return true;
+    }
+
+    if (service.isLocalForwardTarget(
+      service.normalizeLeaderReplicaId(service.leaderId),
+    )) {
+      return true;
+    }
+
+    // MOVE_REPLICA joiners can receive strict CDC directly before any
+    // authoritative or live leader hints are locally visible. In that window,
+    // fail closed causes a bootstrap deadlock because the local cache updates
+    // needed to make ingress "ready" can only arrive through this strict path.
+    if (Array.isArray(selection?.targets) &&
+        selection.targets.length === NUM.ZERO) {
+      return true;
+    }
+
+    return service.resolveCanonicalLeaderNodeIdFromCache() === service.nodeId;
+  }
+
   canAcceptCDCEvent(cdcEvent = {}) {
     const service = this.service;
     if (service.isCurrentRaftLeader()) {
@@ -292,6 +324,13 @@ class MessageGroupForwardingOwner {
     });
     if (!selection.strictForwarding) {
       return {ready: true};
+    }
+    if (this.shouldUseCanonicalLocalIngressForStrictCDC(selection)) {
+      return {
+        ready: true,
+        localIngress: true,
+        retryAfterMs: selection.strictForwardRetryAfterMs,
+      };
     }
     if (selection.targets.length > NUM.ZERO) {
       return {ready: true};

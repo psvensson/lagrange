@@ -7,6 +7,7 @@ import {dirname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {
   DEFAULT_SCENARIO,
+  DEFAULT_SHIP_GATE,
   extractNodeJoinLoadMetrics,
   summarizeValidationRuns,
   assessShipReadiness,
@@ -245,7 +246,13 @@ async function runValidationMatrix(options) {
   }
 
   const summary = summarizeValidationRuns(runResults);
-  const gate = assessShipReadiness(summary);
+  const validationGate = assessShipReadiness(summary, {
+    minimumRuns: Math.min(
+      DEFAULT_SHIP_GATE.minimumRuns,
+      Math.max(1, runCount),
+    ),
+  });
+  const shipReadinessGate = assessShipReadiness(summary);
   const payload = {
     generatedAt: new Date().toISOString(),
     scenario,
@@ -255,7 +262,8 @@ async function runValidationMatrix(options) {
     seedStep,
     runResults,
     summary,
-    shipReadinessGate: gate,
+    validationGate,
+    shipReadinessGate,
   };
 
   await writeFile(
@@ -270,14 +278,19 @@ async function runValidationMatrix(options) {
     `fail=${summary.failedRuns} failureRate=${summary.failureRate}\n`,
   );
   process.stdout.write(
-    `[validation] ship-decision=${gate.decision} ` +
-    `failed-criteria=${gate.failedCriteria.length}\n`,
+    `[validation] decision=${validationGate.decision} ` +
+    `failed-criteria=${validationGate.failedCriteria.length}\n`,
+  );
+  process.stdout.write(
+    `[validation] ship-decision=${shipReadinessGate.decision} ` +
+    `failed-criteria=${shipReadinessGate.failedCriteria.length}\n`,
   );
 
   return {
     outputPath,
     summary,
-    gate,
+    gate: validationGate,
+    shipReadinessGate,
     runResults,
   };
 }

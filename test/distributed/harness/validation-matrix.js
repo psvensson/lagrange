@@ -8,9 +8,9 @@ const DEFAULT_SHIP_GATE = Object.freeze({
   minimumRuns: 3,
   maxFailureRate: 0,
   maxFailedOperationsP95: 0,
-  maxAttemptErrorsP95: 0,
+  maxNonAdmissionAttemptErrorsP95: 0,
   maxQueueDelayP95MsP95: 250,
-  maxUndispatchedRatioP95: 0.05,
+  maxUndispatchedRatioP95: 0.1,
   maxTimeoutWaitsP95: 0,
 });
 
@@ -83,6 +83,47 @@ function resolveLoadMetricsFromScenarioEntry(scenarioEntry) {
   return {};
 }
 
+function resolveAdmissionSignalCount(loadMetrics) {
+  const explicitAdmissionSignals = normalizeNonNegativeInteger(
+    loadMetrics?.admissionSignals,
+    null,
+  );
+  if (explicitAdmissionSignals !== null) {
+    return explicitAdmissionSignals;
+  }
+  const perNodeMetrics = loadMetrics?.perNode &&
+    typeof loadMetrics.perNode === 'object' ?
+    loadMetrics.perNode :
+    {};
+  let admissionSignalCount = ZERO;
+  for (const nodeMetrics of Object.values(perNodeMetrics)) {
+    admissionSignalCount += normalizeNonNegativeInteger(
+      nodeMetrics?.admissionSignals,
+      ZERO,
+    );
+  }
+  return admissionSignalCount;
+}
+
+function resolveNonAdmissionAttemptErrors(loadMetrics) {
+  const explicitNonAdmissionAttemptErrors = normalizeNonNegativeInteger(
+    loadMetrics?.nonAdmissionAttemptErrors,
+    null,
+  );
+  if (explicitNonAdmissionAttemptErrors !== null) {
+    return explicitNonAdmissionAttemptErrors;
+  }
+  const attemptErrors = normalizeNonNegativeInteger(
+    loadMetrics?.attemptErrors,
+    ZERO,
+  );
+  const admissionSignals = Math.min(
+    attemptErrors,
+    resolveAdmissionSignalCount(loadMetrics),
+  );
+  return Math.max(ZERO, attemptErrors - admissionSignals);
+}
+
 function extractNodeJoinLoadMetrics(report, scenario = DEFAULT_SCENARIO) {
   const scenarioEntry = resolveScenarioEntry(report, scenario);
   if (!scenarioEntry) {
@@ -103,6 +144,7 @@ function extractNodeJoinLoadMetrics(report, scenario = DEFAULT_SCENARIO) {
   return {
     failedOperations: Math.max(failedCount, errorCount),
     attemptErrors: normalizeNonNegativeInteger(loadMetrics.attemptErrors, ZERO),
+    nonAdmissionAttemptErrors: resolveNonAdmissionAttemptErrors(loadMetrics),
     queueDelayP95Ms: normalizeNonNegativeInteger(
       loadMetrics?.queueDelay?.p95,
       ZERO,
@@ -111,8 +153,11 @@ function extractNodeJoinLoadMetrics(report, scenario = DEFAULT_SCENARIO) {
       undispatchedOperations / targetOperations :
       ZERO,
     timeoutWaits: normalizeNonNegativeInteger(
-      loadMetrics?.waitReasons?.timeoutWaits,
-      ZERO,
+      loadMetrics?.nonAdmissionTimeoutWaits,
+      normalizeNonNegativeInteger(
+        loadMetrics?.waitReasons?.timeoutWaits,
+        ZERO,
+      ),
     ),
   };
 }
@@ -160,6 +205,9 @@ function summarizeValidationRuns(runs = []) {
       ),
       attemptErrors: summarizeSeries(
         metrics.map((metric) => metric.attemptErrors),
+      ),
+      nonAdmissionAttemptErrors: summarizeSeries(
+        metrics.map((metric) => metric.nonAdmissionAttemptErrors),
       ),
       queueDelayP95Ms: summarizeSeries(
         metrics.map((metric) => metric.queueDelayP95Ms),
@@ -238,9 +286,9 @@ function assessShipReadiness(summary, options = {}) {
       'lte',
     ),
     evaluateNumericGate(
-      'attemptErrors.p95',
-      distributions?.attemptErrors?.p95,
-      gate.maxAttemptErrorsP95,
+      'nonAdmissionAttemptErrors.p95',
+      distributions?.nonAdmissionAttemptErrors?.p95,
+      gate.maxNonAdmissionAttemptErrorsP95,
       'lte',
     ),
     evaluateNumericGate(

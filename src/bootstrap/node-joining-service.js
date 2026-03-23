@@ -38,6 +38,7 @@ import {
   buildMessageGroupOwnerNotReadyError,
   resolveOperationalMessageGroupSelection,
   resolveOperationalMessageGroupSelectionAsync,
+  resolveQueryTransportMessageGroupSelection,
 } from './shared/message-group-selection.js';
 import {PartitionService} from '../partition/partition-service.js';
 import {
@@ -476,6 +477,8 @@ class NodeJoiningService extends EventEmitter {
         },
         getLeaderMessageGroupService: () =>
           this.getLeaderMessageGroupService(),
+        resolveQueryTransportMessageGroupSelection: () =>
+          this.resolveQueryTransportMessageGroupSelection(),
         initializeJoiningLifecycleOwners: () =>
           this.initializeJoiningLifecycleOwners(),
         triggerJoinReconciler: (reason) =>
@@ -2072,6 +2075,19 @@ class NodeJoiningService extends EventEmitter {
     return resolveOperationalMessageGroupSelection(
       this.messageGroupServices,
       {requiredTables},
+    );
+  }
+
+  /**
+   * Resolve the local message-group transport used for query/data-plane
+   * participation. This deliberately avoids control-plane metadata-ingress
+   * gating so bootstrap reads can proceed during join convergence.
+   * @return {Object}
+   * @private
+   */
+  resolveQueryTransportMessageGroupSelection() {
+    return resolveQueryTransportMessageGroupSelection(
+      this.messageGroupServices,
     );
   }
 

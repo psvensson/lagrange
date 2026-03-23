@@ -63,6 +63,7 @@ import {
   ADMIN_SERVICE_DISCOVERY,
 } from './admin-constants.js';
 import {
+  filterActiveServingPartitionRows,
   firstStringField,
   normalizeDiscoveryTableId,
   normalizeIdentifier,
@@ -835,6 +836,7 @@ class AdminServiceDiscovery {
     const leadershipStable =
       this.resolveDiscoveryLeadershipStable(
         tablePartitionContext.partitionIds,
+        partitionRows,
         serviceRows,
       );
     const localTargetReplicaStateByNodeId =
@@ -1306,6 +1308,7 @@ class AdminServiceDiscovery {
     }
 
     const tableIds = new Set();
+    const matchingTableRows = [];
     let appliedSchemaVersion = null;
     let cdcReadinessApplies = false;
     for (const tableRow of tableRows) {
@@ -1330,6 +1333,7 @@ class AdminServiceDiscovery {
       if (!matchesTableName && !matchesTableId) {
         continue;
       }
+      matchingTableRows.push(tableRow);
       if (rowTableId) {
         tableIds.add(rowTableId);
       }
@@ -1347,18 +1351,8 @@ class AdminServiceDiscovery {
       tableIds.add(tableId);
     }
 
-    const partitionIds = new Set();
+    const matchingPartitionRows = [];
     for (const partitionRow of partitionRows) {
-      const partitionId = firstStringField(
-        partitionRow,
-        COLUMN.PARTITION_ID,
-        'partition_id',
-        'partitionId',
-        'id',
-      );
-      if (!partitionId) {
-        continue;
-      }
       const rowTableName = firstStringField(
         partitionRow,
         COLUMN.TABLE_NAME,
@@ -1377,7 +1371,7 @@ class AdminServiceDiscovery {
       const matchesTableId =
         rowTableId && tableIds.has(rowTableId);
       if (matchesTableName || matchesTableId) {
-        partitionIds.add(partitionId);
+        matchingPartitionRows.push(partitionRow);
         const rowSchemaVersion =
           extractSchemaVersionFromRecord(partitionRow);
         appliedSchemaVersion = selectNewestSchemaVersion(
@@ -1386,9 +1380,30 @@ class AdminServiceDiscovery {
         );
       }
     }
+    const activeServingPartitionRows =
+      filterActiveServingPartitionRows(
+        matchingPartitionRows,
+        matchingTableRows,
+      );
+    const partitionIds = new Set();
+    for (const partitionRow of activeServingPartitionRows) {
+      const partitionId = firstStringField(
+        partitionRow,
+        COLUMN.PARTITION_ID,
+        'partition_id',
+        'partitionId',
+        'id',
+      );
+      if (!partitionId) {
+        continue;
+      }
+      partitionIds.add(partitionId);
+    }
 
     return {
-      tableFound: partitionIds.size > NUM.ZERO,
+      tableFound:
+        matchingTableRows.length > NUM.ZERO ||
+        matchingPartitionRows.length > NUM.ZERO,
       partitionIds,
       appliedSchemaVersion,
       cdcReadinessApplies,
@@ -1454,16 +1469,20 @@ class AdminServiceDiscovery {
   /**
    * Resolve leader-coverage stability for target partitions.
    * @param {Set<string>} partitionIds
+   * @param {Array<Object>} partitionRows
    * @param {Array<Object>} serviceRows
    * @return {boolean}
    */
-  resolveDiscoveryLeadershipStable(partitionIds, serviceRows) {
+  resolveDiscoveryLeadershipStable(
+    partitionIds, partitionRows, serviceRows,
+  ) {
     if (!(partitionIds instanceof Set) ||
         partitionIds.size === NUM.ZERO) {
       return true;
     }
 
-    const partitionsWithLeaders = new Set();
+    const activeReplicaNodeIdsByPartition = new Map();
+    const advisoryLeaderPartitionIds = new Set();
     for (const serviceRow of serviceRows) {
       const serviceType = firstStringField(
         serviceRow,
@@ -1491,6 +1510,24 @@ class AdminServiceDiscovery {
       if (String(status || '').toLowerCase() !== STATUS_ACTIVE) {
         continue;
       }
+      const nodeId = firstStringField(
+        serviceRow,
+        COLUMN.NODE_ID,
+        'node_id',
+        'nodeId',
+      );
+      if (!nodeId) {
+        continue;
+      }
+      let activeReplicaNodeIds =
+        activeReplicaNodeIdsByPartition.get(partitionId);
+      if (!activeReplicaNodeIds) {
+        activeReplicaNodeIds = new Set();
+        activeReplicaNodeIdsByPartition.set(
+          partitionId, activeReplicaNodeIds,
+        );
+      }
+      activeReplicaNodeIds.add(nodeId);
       const raftRole = firstStringField(
         serviceRow,
         COLUMN.RAFT_ROLE,
@@ -1501,10 +1538,49 @@ class AdminServiceDiscovery {
           LEADER_RAFT_ROLE) {
         continue;
       }
-      partitionsWithLeaders.add(partitionId);
+      advisoryLeaderPartitionIds.add(partitionId);
     }
 
-    return partitionsWithLeaders.size === partitionIds.size;
+    const partitionRowsById = new Map();
+    for (const partitionRow of partitionRows) {
+      const partitionId = firstStringField(
+        partitionRow,
+        COLUMN.PARTITION_ID,
+        'partition_id',
+        'partitionId',
+        'id',
+      );
+      if (!partitionId || !partitionIds.has(partitionId) ||
+          partitionRowsById.has(partitionId)) {
+        continue;
+      }
+      partitionRowsById.set(partitionId, partitionRow);
+    }
+
+    for (const partitionId of partitionIds) {
+      const partitionRow =
+        partitionRowsById.get(partitionId) || null;
+      const canonicalLeaderNodeId = firstStringField(
+        partitionRow,
+        COLUMN.LEADER_NODE_ID,
+        'leader_node_id',
+        'leaderNodeId',
+      );
+      if (canonicalLeaderNodeId) {
+        const activeReplicaNodeIds =
+          activeReplicaNodeIdsByPartition.get(partitionId);
+        if (!(activeReplicaNodeIds instanceof Set) ||
+            !activeReplicaNodeIds.has(canonicalLeaderNodeId)) {
+          return false;
+        }
+        continue;
+      }
+      if (!advisoryLeaderPartitionIds.has(partitionId)) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   /**

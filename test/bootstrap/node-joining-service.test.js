@@ -1032,6 +1032,92 @@ test('NodeJoiningService - NODE_STATE_UPDATE prefers local non-leader ingress ' 
   ], 'NODE_STATE_UPDATE should use the local ingress replica even before it becomes leader');
 });
 
+test('NodeJoiningService - query transport selection uses initialized local ' +
+  'relay during join convergence', (t) => {
+  initializeTestEnvironment();
+  t.plan(3);
+
+  const service = new NodeJoiningService({
+    nodeId: 'joining-node-query-transport-relay',
+    nodeAddress: 'ws://localhost:90942',
+    seedNodeAddress: 'http://localhost:8080',
+  });
+
+  const relayService = {
+    initialized: true,
+    sendMessage: async () => ({acknowledged: true}),
+    isLeaderReplica: () => false,
+    getMetadataIngressReadiness: () => ({
+      ready: false,
+      reason: 'operational message-group ingress not ready',
+      retryAfterMs: 50,
+    }),
+  };
+  service.messageGroupServices.set('mg-1-r1', relayService);
+
+  t.equal(
+    service.resolveOperationalMessageGroupSelection().service,
+    null,
+    'metadata-ingress selection should continue to block the relay',
+  );
+
+  const selection = service.resolveQueryTransportMessageGroupSelection();
+
+  t.equal(
+    selection.service,
+    relayService,
+    'query transport selection should still bind the initialized local relay',
+  );
+  t.equal(
+    selection.route,
+    'relay',
+    'query transport selection should report the relay route',
+  );
+});
+
+test('NodeJoiningService - connect websocket phase wires the dedicated query ' +
+  'transport selector', (t) => {
+  initializeTestEnvironment();
+  t.plan(3);
+
+  const service = new NodeJoiningService({
+    nodeId: 'joining-node-query-transport-phase-wiring',
+    nodeAddress: 'ws://localhost:90943',
+    seedNodeAddress: 'http://localhost:8080',
+  });
+
+  const relayService = {
+    initialized: true,
+    sendMessage: async () => ({acknowledged: true}),
+    isLeaderReplica: () => false,
+    getMetadataIngressReadiness: () => ({
+      ready: false,
+      reason: 'operational message-group ingress not ready',
+      retryAfterMs: 25,
+    }),
+  };
+  service.messageGroupServices.set('mg-1-r1', relayService);
+
+  t.equal(
+    service.connectWebSocketPhase.delegates.getLeaderMessageGroupService(),
+    null,
+    'operational selector should still block the relay while metadata ingress is deferred',
+  );
+  t.equal(
+    typeof service.connectWebSocketPhase.delegates
+      .resolveQueryTransportMessageGroupSelection,
+    'function',
+    'connect websocket phase should receive the dedicated query transport selector',
+  );
+  t.equal(
+    service.connectWebSocketPhase.delegates
+      .resolveQueryTransportMessageGroupSelection()
+      ?.service,
+    relayService,
+    'connect websocket phase should route query transport through the dedicated relay selection',
+  );
+});
+
 test('NodeJoiningService - excludes disconnected control-plane ingress candidates',
   async (t) => {
     initializeTestEnvironment();

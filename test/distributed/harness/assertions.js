@@ -685,16 +685,98 @@ async function queryNodeConsistencyState(node, options = {}) {
   }
 }
 
+function resolveSnapshotExpectedPartitionIds(snapshot) {
+  const expectedPartitionIds = snapshot?.expectedPartitionIds instanceof Set ?
+    new Set(snapshot.expectedPartitionIds) :
+    new Set();
+  if (snapshot?.voterCounts instanceof Map &&
+      snapshot.voterCounts.size > expectedPartitionIds.size) {
+    for (const partitionId of snapshot.voterCounts.keys()) {
+      expectedPartitionIds.add(partitionId);
+    }
+  }
+  return expectedPartitionIds;
+}
+
+function buildConvergenceSnapshotDebt(snapshot, targetVoterCount) {
+  const expectedPartitionIds = resolveSnapshotExpectedPartitionIds(snapshot);
+  let missingLeaderCount = 0;
+  for (const partitionId of expectedPartitionIds) {
+    if (!snapshot?.leaders?.has(partitionId)) {
+      missingLeaderCount += 1;
+    }
+  }
+
+  let overTargetCount = 0;
+  let overTargetExcess = 0;
+  if (snapshot?.voterCounts instanceof Map) {
+    for (const voterCount of snapshot.voterCounts.values()) {
+      if (voterCount > targetVoterCount) {
+        overTargetCount += 1;
+        overTargetExcess += voterCount - targetVoterCount;
+      }
+    }
+  }
+
+  return {
+    missingLeaderCount,
+    overTargetCount,
+    overTargetExcess,
+    inFlightReplicaOperationCount:
+      Number(snapshot?.inFlightReplicaOperationCount || 0),
+  };
+}
+
+function compareConvergenceSnapshotDebt(left, right) {
+  const keys = [
+    'missingLeaderCount',
+    'overTargetCount',
+    'inFlightReplicaOperationCount',
+    'overTargetExcess',
+  ];
+  for (const key of keys) {
+    const delta = Number(left?.[key] || 0) - Number(right?.[key] || 0);
+    if (delta !== 0) {
+      return delta;
+    }
+  }
+  return 0;
+}
+
+function isConvergedSnapshot(snapshot, targetVoterCount) {
+  const expectedPartitionIds = resolveSnapshotExpectedPartitionIds(snapshot);
+  const allHaveLeaders = expectedPartitionIds.size > 0 &&
+    [...expectedPartitionIds].every((partitionId) =>
+      snapshot?.leaders?.has(partitionId),
+    );
+  const hasOverTarget = snapshot?.voterCounts instanceof Map &&
+    [...snapshot.voterCounts.values()].some(
+      (voterCount) => voterCount > targetVoterCount,
+    );
+  const hasInFlightReplicaOperations =
+    Number(snapshot?.inFlightReplicaOperationCount || 0) > 0;
+  return allHaveLeaders &&
+    !hasOverTarget &&
+    !hasInFlightReplicaOperations;
+}
+
 /**
  * Query a single reachable node for cluster convergence state.
  * Uses one node snapshot to avoid counting the same cluster-wide
  * services rows multiple times across nodes.
  *
  * @param {Array<Object>} nodes - NodeHandle instances.
+ * @param {Object} [options]
  * @returns {Promise<Object>} Snapshot details.
  */
-async function queryReachableClusterSnapshot(nodes) {
+async function queryReachableClusterSnapshot(nodes, options = {}) {
+  const targetVoterCount = Number.isInteger(options?.targetVoterCount) &&
+    options.targetVoterCount > 0 ?
+    options.targetVoterCount :
+    CONVERGENCE_DEFAULTS.targetVoterCount;
   let lastError = null;
+  let bestSnapshot = null;
+  let bestSnapshotDebt = null;
   for (const node of nodes) {
     try {
       const report = await probeNodeReachability(node);
@@ -725,10 +807,24 @@ async function queryReachableClusterSnapshot(nodes) {
           snapshot.voterCounts.size + ')';
         continue;
       }
-      return snapshot;
+      if (isConvergedSnapshot(snapshot, targetVoterCount)) {
+        return snapshot;
+      }
+      const snapshotDebt = buildConvergenceSnapshotDebt(
+        snapshot,
+        targetVoterCount,
+      );
+      if (!bestSnapshot ||
+          compareConvergenceSnapshotDebt(snapshotDebt, bestSnapshotDebt) < 0) {
+        bestSnapshot = snapshot;
+        bestSnapshotDebt = snapshotDebt;
+      }
     } catch (err) {
       lastError = err?.message || String(err);
     }
+  }
+  if (bestSnapshot) {
+    return bestSnapshot;
   }
   // All nodes either unreachable or returned incomplete
   // snapshots. Re-query the first reachable node to return
@@ -805,7 +901,9 @@ async function waitForConvergence(nodes, options = {}) {
 
   while (Date.now() <= deadline) {
     const now = Date.now();
-    const snapshot = await queryReachableClusterSnapshot(nodes);
+    const snapshot = await queryReachableClusterSnapshot(nodes, {
+      targetVoterCount,
+    });
     latestRows = snapshot.servicesRows;
     latestExpectedPartitionIds = snapshot.expectedPartitionIds;
     latestOperationRows = snapshot.operationRows;
@@ -824,10 +922,10 @@ async function waitForConvergence(nodes, options = {}) {
     // available, derive expected partitions from voter-count
     // keys so the convergence check does not stall on a
     // partially hydrated partition set.
-    if (latestCounts.size > 0 &&
-        latestCounts.size > latestExpectedPartitionIds.size) {
-      latestExpectedPartitionIds = new Set(latestCounts.keys());
-    }
+    latestExpectedPartitionIds = resolveSnapshotExpectedPartitionIds({
+      expectedPartitionIds: latestExpectedPartitionIds,
+      voterCounts: latestCounts,
+    });
 
     // Detect leader changes.
     for (const [pid, addr] of latestLeaders) {

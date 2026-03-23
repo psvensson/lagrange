@@ -8,6 +8,7 @@ import {
 
 const RETRYABLE_CONTROL_PLANE_ERROR_FRAGMENTS = Object.freeze([
   'Distributed operation failed due to participant failures',
+  'authoritative_row_source_unavailable',
   'Outbound queue for node',
   'No connection to node',
   'Connection to node',

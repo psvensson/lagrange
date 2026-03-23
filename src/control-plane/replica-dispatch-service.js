@@ -1278,7 +1278,11 @@ class ReplicaDispatchService extends EventEmitter {
       queryTimeoutMs: this.nodeStateUpdateQueryTimeoutMs,
       skipCacheWait: true,
       workClass: isReady ?
-        PRESSURE_WORK_CLASS.INTERACTIVE :
+        // READY publication is the durable cluster-readiness signal that
+        // unblocks critical system topology settlement during join/recovery.
+        // It must not be parked behind pressure deferral the way routine
+        // non-ready churn can be.
+        PRESSURE_WORK_CLASS.CRITICAL :
         PRESSURE_WORK_CLASS.BACKGROUND,
     };
   }

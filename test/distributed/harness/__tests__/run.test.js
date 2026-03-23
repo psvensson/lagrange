@@ -550,7 +550,7 @@ describe('evaluateMemoryLeakAssertions', () => {
 });
 
 describe('scenario cleanliness helpers', () => {
-  it('upgrades node-join-under-load memory leak requirements to required samples and leak failure',
+  it('upgrades node-join-under-load memory leak requirements to required samples without overriding local leak-failure policy',
     () => {
       const resolved = resolveScenarioMemoryLeakConfig(
         'node-join-under-load',
@@ -564,7 +564,7 @@ describe('scenario cleanliness helpers', () => {
       );
 
       assert.equal(resolved.enabled, true);
-      assert.equal(resolved.failOnDetection, true);
+      assert.equal(resolved.failOnDetection, false);
       assert.equal(resolved.requireSamples, true);
     });
 

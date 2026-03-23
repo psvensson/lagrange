@@ -256,6 +256,36 @@ test('strict pacing does not exceed configured rate target', async () => {
   }
 });
 
+test('load queries use the dedicated load lane when timeout-aware node handles are available',
+  async () => {
+    const observedLanes = [];
+    const node = {
+      id: 'lane-aware-node',
+      async queryWithTimeout(_sql, _params = [], options = {}) {
+        observedLanes.push(options?.lane || null);
+        return {rows: []};
+      },
+    };
+    const gen = new LoadGenerator([node], {
+      opsPerSec: 50,
+      duration: 120,
+      maxInFlight: 4,
+    });
+    const run = gen.start();
+    try {
+      const metrics = await run.waitComplete();
+      assert.ok(metrics.success > ZERO, 'expected at least one successful load query');
+      assert.ok(observedLanes.length > ZERO, 'expected timeout-aware load queries to be observed');
+      assert.deepEqual(
+        [...new Set(observedLanes)],
+        ['load'],
+        'load-generator should route timeout-aware load queries through the dedicated load lane',
+      );
+    } finally {
+      run.cancel();
+    }
+  });
+
 test('load dispatch is spread across nodes', async () => {
   const calls = {
     n1: ZERO,
@@ -288,6 +318,57 @@ test('load dispatch is spread across nodes', async () => {
   }
 });
 
+test('nodeResolver refreshes the tracked node set with stable per-node keys',
+  async () => {
+    const initialNode = {
+      id: 'initial-node',
+      async query() {
+        return {rows: []};
+      },
+    };
+    const lateNode = {
+      id: 'late-node',
+      async query() {
+        return {rows: []};
+      },
+    };
+    let dynamicNodes = [initialNode];
+
+    const gen = new LoadGenerator([initialNode], {
+      opsPerSec: 10,
+      duration: 100,
+      maxInFlight: 2,
+      nodeMaxInFlight: 1,
+      nodeResolver: () => dynamicNodes,
+    });
+    const run = gen.start();
+    try {
+      dynamicNodes = [initialNode, lateNode];
+      run._syncAvailableNodesFromResolver();
+      assert.equal(
+        typeof run._nodeResolver,
+        'function',
+        'LoadGenerator.start should forward nodeResolver into the active load run',
+      );
+      assert.deepEqual(
+        run._availableNodes.map((node) => node.id),
+        ['initial-node', 'late-node'],
+        'refreshed load runs should adopt the resolver-provided node set',
+      );
+      assert.ok(
+        run._nodeHealthByKey.has('node-late-node'),
+        'newly admitted nodes should receive stable health tracking keys',
+      );
+      assert.ok(
+        run._nodeMetricsByKey.has('node-late-node'),
+        'newly admitted nodes should receive stable metrics tracking keys',
+      );
+    } finally {
+      run.cancel();
+      await run.waitComplete();
+    }
+  });
+
 test('benchmark workload uses a unique event-id prefix for each run', async () => {
   const recordedSql = [];
   const node = {
@@ -298,7 +379,7 @@ test('benchmark workload uses a unique event-id prefix for each run', async () =
     },
   };
   const extractEventIds = (statements) => statements
-    .filter((sql) => sql.startsWith('INSERT INTO benchmark_events '))
+    .filter((sql) => sql.startsWith('INSERT OR IGNORE INTO benchmark_events '))
     .map((sql) => {
       const match = sql.match(/VALUES \('([^']+)'/);
       return match ? match[1] : null;
@@ -480,6 +561,74 @@ test('write timeouts do not fail over to another node', async () => {
   }
 });
 
+test('benchmark INSERT timeouts fail over idempotently', async () => {
+  let timedOutCalls = ZERO;
+  let healthyNodeCalls = ZERO;
+  const replayedSql = [];
+  const nodes = [
+    {
+      id: 'slow-benchmark-writer',
+      async queryWithTimeout(sql) {
+        timedOutCalls++;
+        replayedSql.push(sql);
+        const error = new Error('query timed out after 2000ms');
+        error.code = 'ETIMEDOUT';
+        throw error;
+      },
+    },
+    {
+      id: 'healthy-benchmark-writer',
+      async queryWithTimeout(sql) {
+        healthyNodeCalls++;
+        replayedSql.push(sql);
+        return {rows: []};
+      },
+    },
+  ];
+  const gen = new LoadGenerator(nodes, {
+    opsPerSec: 10,
+    duration: 100,
+    operations: ['INSERT'],
+    workloadProfile: 'benchmark_events_mixed',
+    queryTimeoutMs: 2000,
+    maxInFlight: 1,
+    nodeMaxInFlight: 1,
+  });
+  const run = gen.start();
+  try {
+    const metrics = await run.waitComplete();
+    assert.ok(
+      timedOutCalls > ZERO,
+      'expected timed-out benchmark writer to be attempted',
+    );
+    assert.ok(
+      healthyNodeCalls > ZERO,
+      'timed-out benchmark INSERT should fail over to another node',
+    );
+    assert.equal(
+      metrics.failed,
+      ZERO,
+      'idempotent benchmark INSERT retries should avoid failed operations',
+    );
+    assert.equal(
+      metrics.errors,
+      ZERO,
+      'idempotent benchmark INSERT retries should avoid operation errors',
+    );
+    assert.ok(
+      metrics.attemptErrors > ZERO,
+      'timed-out benchmark INSERT should still contribute attemptErrors',
+    );
+    assert.ok(
+      replayedSql.every((sql) =>
+        sql.startsWith('INSERT OR IGNORE INTO benchmark_events ')),
+      'benchmark INSERT retries should use idempotent INSERT OR IGNORE SQL',
+    );
+  } finally {
+    run.cancel();
+  }
+});
+
 test('read timeouts still fail over to another node', async () => {
   let timedOutCalls = ZERO;
   let goodNodeCalls = ZERO;
@@ -519,6 +668,76 @@ test('read timeouts still fail over to another node', async () => {
     run.cancel();
   }
 });
+
+test('benchmark retry-safe operations suppress terminal failures when only transient control-plane errors remain',
+  async () => {
+    let timedOutCalls = ZERO;
+    let admissionBlockedCalls = ZERO;
+    const nodes = [
+      {
+        id: 'timed-out-benchmark-node',
+        async queryWithTimeout() {
+          timedOutCalls++;
+          const error = new Error('query timed out after 2000ms');
+          error.code = 'ETIMEDOUT';
+          throw error;
+        },
+      },
+      {
+        id: 'admission-blocked-benchmark-node',
+        async queryWithTimeout() {
+          admissionBlockedCalls++;
+          const error = new Error('query_admission_deferred');
+          error.code = 'routing_not_ready';
+          throw error;
+        },
+      },
+    ];
+    const gen = new LoadGenerator(nodes, {
+      opsPerSec: 10,
+      duration: 100,
+      operations: ['SELECT'],
+      workloadProfile: 'benchmark_events_mixed',
+      maxInFlight: 1,
+      nodeMaxInFlight: 1,
+      queryTimeoutMs: 2000,
+    });
+    const run = gen.start();
+    try {
+      const metrics = await run.waitComplete();
+      assert.ok(timedOutCalls > ZERO, 'expected benchmark timeout attempts');
+      assert.ok(
+        admissionBlockedCalls > ZERO,
+        'expected admission-blocked fallback attempts',
+      );
+      assert.equal(
+        metrics.failed,
+        ZERO,
+        'retry-safe benchmark operations should not hard-fail on transient control-plane turbulence alone',
+      );
+      assert.equal(
+        metrics.errors,
+        ZERO,
+        'retry-safe benchmark operations should not increment operation errors on transient control-plane turbulence alone',
+      );
+      assert.ok(
+        metrics.attemptErrors > ZERO,
+        'transient benchmark control-plane failures should remain visible in attemptErrors',
+      );
+      assert.equal(
+        Number(metrics?.nonAdmissionAttemptErrors || ZERO),
+        ZERO,
+        'retry-safe benchmark turbulence should not count against non-admission attempt-error gates',
+      );
+      assert.equal(
+        Number(metrics?.nonAdmissionTimeoutWaits || ZERO),
+        ZERO,
+        'retry-safe benchmark turbulence should not count against timeout wait gates',
+      );
+    } finally {
+      run.cancel();
+    }
+  });
 
 test('circuit breaker suppresses retries on repeatedly failing nodes', async () => {
   let failingNodeCalls = ZERO;
@@ -896,6 +1115,63 @@ test('admission-control treats query admission defers as admission signals',
       assert.ok(
         metrics.attemptErrors > ZERO,
         'expected query admission defers to remain visible in attemptErrors',
+      );
+    } finally {
+      run.cancel();
+    }
+  });
+
+test('externally admission-blocked nodes are skipped before dispatch attempts',
+  async () => {
+    let blockedCalls = ZERO;
+    const nodes = [
+      {
+        id: 'externally-blocked-node',
+        isLoadAdmissionReady() {
+          return false;
+        },
+        async query(_sql) {
+          blockedCalls++;
+          throw new Error('externally blocked node should not be queried');
+        },
+      },
+      {
+        id: 'healthy-node',
+        async query(_sql) {
+          return {rows: []};
+        },
+      },
+    ];
+
+    const gen = new LoadGenerator(nodes, {
+      opsPerSec: 160,
+      duration: 140,
+      admissionBackoffMs: ADMISSION_BACKOFF_MS,
+    });
+    const run = gen.start();
+    try {
+      const metrics = await run.waitComplete();
+      assert.equal(
+        blockedCalls,
+        ZERO,
+        'expected externally blocked nodes to be skipped before query dispatch',
+      );
+      assert.equal(
+        Number(metrics?.perNode?.['externally-blocked-node']?.attemptErrors || ZERO),
+        ZERO,
+        'expected externally blocked nodes to avoid synthetic attempt errors',
+      );
+      assert.ok(
+        Number(
+          metrics?.perNode?.['externally-blocked-node']?.waitReasons?.nodeAdmissionBlocked ||
+            ZERO,
+        ) > ZERO,
+        'expected skipped externally blocked nodes to remain visible as wait pressure',
+      );
+      assert.equal(
+        Number(metrics?.nonAdmissionAttemptErrors || ZERO),
+        ZERO,
+        'expected healthy-only execution to avoid non-admission attempt errors',
       );
     } finally {
       run.cancel();
@@ -1478,6 +1754,98 @@ test('adaptive dispatch guardrail reduces effective dispatch pressure during sus
         Number(metrics.dispatchGuardrail.minEffectiveMaxInFlight || configuredMaxInFlight) <
           configuredMaxInFlight,
         'expected guardrail to reduce effective dispatch pressure below configured maxInFlight',
+      );
+    } finally {
+      run.cancel();
+    }
+  });
+
+test('adaptive dispatch guardrail preserves healthy-node slot budget when ' +
+  'only one node is admission-blocked',
+  async () => {
+    const nodes = [
+      {
+        id: 'isolated-blocked-node',
+        breakerOwner: BREAKER_OWNER_NODE_CLIENT,
+        async query(_sql) {
+          const error = new Error('query_admission_deferred');
+          error.code = NODE_CLIENT_ERROR_CODE_OPERATION;
+          error.deferRetry = true;
+          error.retryAfterMs = 200;
+          throw error;
+        },
+      },
+      {
+        id: 'healthy-node-a',
+        async query(_sql) {
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          return {rows: []};
+        },
+      },
+      {
+        id: 'healthy-node-b',
+        async query(_sql) {
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          return {rows: []};
+        },
+      },
+      {
+        id: 'healthy-node-c',
+        async query(_sql) {
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          return {rows: []};
+        },
+      },
+      {
+        id: 'healthy-node-d',
+        async query(_sql) {
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          return {rows: []};
+        },
+      },
+    ];
+
+    const configuredMaxInFlight = 20;
+    const configuredNodeMaxInFlight = 4;
+    const dispatchReadyNodeCount = 4;
+    const gen = new LoadGenerator(nodes, {
+      opsPerSec: 900,
+      duration: 260,
+      maxInFlight: configuredMaxInFlight,
+      nodeMaxInFlight: configuredNodeMaxInFlight,
+      admissionBackoffMs: 10,
+      adaptiveDispatchGuardrail: {
+        enabled: true,
+        pressureSignalThreshold: 2,
+        queueDepthThreshold: 4,
+        reductionStepRatio: 0.25,
+        minMaxInFlight: 2,
+        recoveryQuietTicks: 4,
+      },
+    });
+    const run = gen.start();
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 160));
+      run.cancel();
+      const metrics = await run.waitComplete();
+      assert.ok(
+        Number(metrics?.waitReasons?.nodeAdmissionBlocked || ZERO) > ZERO,
+        'expected isolated admission stress to be observed',
+      );
+      assert.ok(
+        metrics.dispatchGuardrail,
+        'expected dispatch guardrail diagnostics to be present',
+      );
+      assert.ok(
+        Number(metrics.dispatchGuardrail.engagedTransitions || ZERO) > ZERO,
+        'expected adaptive guardrail to still observe the blocked node',
+      );
+      assert.ok(
+        Number(
+          metrics.dispatchGuardrail.minEffectiveMaxInFlight || ZERO,
+        ) >= dispatchReadyNodeCount * configuredNodeMaxInFlight,
+        'expected global guardrail to preserve the aggregate slot budget of ' +
+          'dispatch-ready nodes instead of collapsing healthy-node throughput',
       );
     } finally {
       run.cancel();

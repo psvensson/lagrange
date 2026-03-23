@@ -14,6 +14,17 @@ import {
 const HARD_CLASS = LIFECYCLE_DEPENDENCY_CLASS.HARD;
 const SOFT_CLASS = LIFECYCLE_DEPENDENCY_CLASS.SOFT;
 const EMPTY_REASONS = Object.freeze([]);
+const LIFECYCLE_PHASE_RANK = Object.freeze({
+  [LIFECYCLE_PHASE.INIT]: 0,
+  [LIFECYCLE_PHASE.CONTROL_READY]: 1,
+  [LIFECYCLE_PHASE.JOIN_READY]: 2,
+  [LIFECYCLE_PHASE.TRAFFIC_READY]: 3,
+  [LIFECYCLE_PHASE.DEGRADED]: 1,
+});
+
+function resolveLifecyclePhaseRank(phase) {
+  return LIFECYCLE_PHASE_RANK[phase] || 0;
+}
 
 /**
  * LifecycleController is the single owner for startup/join/traffic lifecycle.
@@ -273,19 +284,25 @@ class LifecycleController extends EventEmitter {
    */
   getSnapshot() {
     const now = this._now();
+    const stableSinceMs = this._stableWindowStartedAt === null ?
+      null :
+      this._stableWindowStartedAt;
     return {
       ready: this._ready,
       phase: this._phase,
+      phaseRank: resolveLifecyclePhaseRank(this._phase),
       state: this.resolveLegacyState(this._phase),
       reasons: [...this._reasons],
       degradedReasons: [...this._degradedReasons],
       draining: this._draining,
       drainDeadlineMs: this._drainDeadlineMs,
       retryAfterMs: this._ready ? 0 : this._defaultRetryAfterMs,
+      transitionCount: this._transitionCount,
       stableWindowMs: this._stableWindowMs,
       stableElapsedMs: this._stableWindowStartedAt === null ?
         0 :
         Math.max(0, now - this._stableWindowStartedAt),
+      stableSinceMs,
       consecutiveFailureCount: this._consecutiveFailureCount,
       timestamp: now,
     };

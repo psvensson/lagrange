@@ -55,6 +55,7 @@ import {
   TABLES,
   TYPEOF,
 } from '../constants/index.js';
+import {META_SERVICE_ID} from '../constants/wasm-meta.js';
 import {TRANSPORT_EVENT} from '../constants/transport.js';
 import {CancellationToken} from '../query/cancellation-token.js';
 import {createSqlRequest} from '../query/sql-request.js';
@@ -78,6 +79,7 @@ import {TraceCollector} from '../debug/trace-collector.js';
 import {
   ENDPOINT_SYNC_UNHEALTHY_POLICY,
 } from '../runtime/endpoint-sync-constants.js';
+import {WASM_SERVICE_PROTOCOL} from '../wasm-service/wasm-service-constants.js';
 
 import {
   ADMIN_CACHE_DUMP,
@@ -137,6 +139,8 @@ const ADMIN_STREAM_LANE_LOAD = 'load';
 const ADMIN_STREAM_LANE_PROBE = 'probe';
 const ADMIN_STREAM_LANE_SNAPSHOT = 'snapshot';
 const LOAD_LANE_READINESS_CACHE_MAX_AGE_MS = 5000;
+const LOAD_LANE_TABLE_ADMISSION_CACHE_MAX_AGE_MS = 250;
+const LOAD_LANE_TABLE_ADMISSION_RETRY_AFTER_MS = 250;
 const SSE_FRAME_PREFIX = 'data: ';
 const SSE_FRAME_SUFFIX = '\n\n';
 const EMPTY_STRING = '';
@@ -162,6 +166,33 @@ function createAdminOperationError(errorCode, message, hint = null) {
   const error = new Error(message);
   error.adminErrorCode = errorCode;
   error.adminHint = hint;
+  return error;
+}
+
+/**
+ * Build one retryable admin-operation error for bounded admission deferral.
+ * @param {string} errorCode
+ * @param {string} message
+ * @param {Object} [options={}]
+ * @param {string|null} [options.hint]
+ * @param {number} [options.retryAfterMs]
+ * @return {Error}
+ */
+function createRetryableAdminOperationError(
+  errorCode,
+  message,
+  options = {},
+) {
+  const error = createAdminOperationError(
+    errorCode,
+    message,
+    options?.hint || null,
+  );
+  error.deferRetry = true;
+  error.retryAfterMs = Number.isFinite(options?.retryAfterMs) &&
+    options.retryAfterMs > NUM.ZERO ?
+    Math.floor(options.retryAfterMs) :
+    LOAD_LANE_TABLE_ADMISSION_RETRY_AFTER_MS;
   return error;
 }
 
@@ -245,6 +276,15 @@ class AdminWebSocketAPI {
         options.loadLaneReadinessCacheMaxAgeMs > NUM.ZERO ?
         Math.floor(options.loadLaneReadinessCacheMaxAgeMs) :
         LOAD_LANE_READINESS_CACHE_MAX_AGE_MS;
+    this.loadLaneTableAdmissionCacheMaxAgeMs =
+      Number.isFinite(options.loadLaneTableAdmissionCacheMaxAgeMs) &&
+        options.loadLaneTableAdmissionCacheMaxAgeMs > NUM.ZERO ?
+        Math.floor(options.loadLaneTableAdmissionCacheMaxAgeMs) :
+        Math.min(
+          this.loadLaneReadinessCacheMaxAgeMs,
+          LOAD_LANE_TABLE_ADMISSION_CACHE_MAX_AGE_MS,
+        );
+    this.loadLaneTableAdmissionCache = new Map();
     this.enableAdminStream = options.enableAdminStream !== false;
 
     // Configuration
@@ -1221,13 +1261,203 @@ class AdminWebSocketAPI {
         .map((reason) => String(reason?.code || '').trim())
         .filter((code) => code.length > NUM.ZERO) :
       [];
-    throw createAdminOperationError(
+    throw createRetryableAdminOperationError(
       ErrorCode.INTERNAL_ERROR,
       'serve not ready: load lane admission denied on node ' +
         this.nodeId +
         ' (serveEligible=' + String(serveEligible) +
         ', reasons=' +
         (reasonCodes.length > NUM.ZERO ? reasonCodes.join(',') : 'none') +
+        ')',
+    );
+  }
+
+  /**
+   * Resolve one routed user-table target from a load-lane SQL statement.
+   * Returns null for non-table statements or unsupported shapes.
+   * @param {string} sql
+   * @return {string|null}
+   * @private
+   */
+  resolveLoadLaneQueryTargetTableName(sql) {
+    if (typeof sql !== TYPEOF.STRING || sql.length === NUM.ZERO) {
+      return null;
+    }
+
+    let ast;
+    try {
+      ast = new SQLParser(sql).parse();
+    } catch (_error) {
+      return null;
+    }
+
+    if (ast?.type === AST_TYPE.SELECT) {
+      if (!ast.from || ast.from.subquery) {
+        return null;
+      }
+      return normalizeIdentifier(ast.from.name);
+    }
+    if (ast?.type === AST_TYPE.INSERT ||
+        ast?.type === AST_TYPE.UPDATE ||
+        ast?.type === AST_TYPE.DELETE) {
+      return normalizeIdentifier(ast.table);
+    }
+    return null;
+  }
+
+  /**
+   * Resolve one stable list of reason codes from discovery readiness.
+   * @param {Array<Object>} reasons
+   * @param {string} fallbackCode
+   * @return {Array<string>}
+   * @private
+   */
+  normalizeLoadLaneAdmissionReasonCodes(reasons, fallbackCode) {
+    const normalized = Array.isArray(reasons) ?
+      reasons
+        .map((reason) => String(reason?.code || EMPTY_STRING).trim())
+        .filter((code) => code.length > NUM.ZERO) :
+      [];
+    if (normalized.length > NUM.ZERO) {
+      return [...new Set(normalized)];
+    }
+    if (typeof fallbackCode === TYPEOF.STRING &&
+        fallbackCode.length > NUM.ZERO) {
+      return [fallbackCode];
+    }
+    return [];
+  }
+
+  /**
+   * Resolve local benchmark admission for one routed load-lane table.
+   * @param {string} tableName
+   * @return {Object|null}
+   * @private
+   */
+  resolveLoadLaneTableAdmissionState(tableName) {
+    const normalizedTableName = normalizeIdentifier(tableName);
+    if (!normalizedTableName) {
+      return null;
+    }
+
+    const nowMs = this.nowFn();
+    const cachedEntry = this.loadLaneTableAdmissionCache.get(
+      normalizedTableName,
+    );
+    if (cachedEntry &&
+        (nowMs - cachedEntry.capturedAtMs) <=
+          this.loadLaneTableAdmissionCacheMaxAgeMs) {
+      return cachedEntry.state;
+    }
+
+    const snapshot = this.serviceDiscovery.buildLocalServiceDiscoverySnapshot({
+      tableName: normalizedTableName,
+      serviceIdAllowlist: [META_SERVICE_ID.POSTGRES_WIRE],
+      protocolAllowlist: [WASM_SERVICE_PROTOCOL.POSTGRESQL],
+    });
+    const services = Array.isArray(snapshot?.services) ?
+      snapshot.services :
+      ADMIN_CACHE_DUMP.EMPTY;
+
+    let resolvedState = {
+      ready: false,
+      tableName: normalizedTableName,
+      reasonCodes: ['local_benchmark_discovery_missing'],
+    };
+
+    for (const service of services) {
+      const replicas = Array.isArray(service?.replicas) ?
+        service.replicas :
+        ADMIN_CACHE_DUMP.EMPTY;
+      for (const replica of replicas) {
+        if (String(replica?.nodeId || EMPTY_STRING) !== this.nodeId) {
+          continue;
+        }
+        const benchmarkAdmission = replica?.benchmarkAdmission &&
+          typeof replica.benchmarkAdmission === TYPEOF.OBJECT ?
+          replica.benchmarkAdmission :
+          null;
+        if (benchmarkAdmission) {
+          const benchmarkAdmissionReady =
+            String(benchmarkAdmission.state || EMPTY_STRING)
+              .toLowerCase() === 'ready';
+          const reasonCodes = benchmarkAdmissionReady ?
+            [] :
+            this.normalizeLoadLaneAdmissionReasonCodes(
+              benchmarkAdmission.reasons,
+              'benchmark_admission_blocked',
+            );
+          resolvedState = {
+            ready: benchmarkAdmissionReady && reasonCodes.length === NUM.ZERO,
+            tableName: normalizedTableName,
+            reasonCodes,
+          };
+          break;
+        }
+        const readiness = replica?.readiness &&
+          typeof replica.readiness === TYPEOF.OBJECT ?
+          replica.readiness :
+          null;
+        if (readiness) {
+          const benchmarkReady = readiness.benchmarkReady === true;
+          const reasonCodes = benchmarkReady ?
+            [] :
+            this.normalizeLoadLaneAdmissionReasonCodes(
+              readiness.reasons,
+              'benchmark_readiness_blocked',
+            );
+          resolvedState = {
+            ready: benchmarkReady && reasonCodes.length === NUM.ZERO,
+            tableName: normalizedTableName,
+            reasonCodes,
+          };
+          break;
+        }
+      }
+      if (resolvedState.ready === true ||
+          resolvedState.reasonCodes[NUM.ZERO] !==
+            'local_benchmark_discovery_missing') {
+        break;
+      }
+    }
+
+    this.loadLaneTableAdmissionCache.set(normalizedTableName, {
+      capturedAtMs: nowMs,
+      state: resolvedState,
+    });
+    return resolvedState;
+  }
+
+  /**
+   * Enforce table-scoped load-lane admission for routed user-table queries.
+   * @param {string} sql
+   * @param {Object} executionContext
+   * @return {Promise<void>}
+   * @private
+   */
+  async assertLoadLaneTableQueryAdmitted(sql, executionContext = {}) {
+    if (!this.isLoadLaneExecution(executionContext)) {
+      return;
+    }
+    const tableName = this.resolveLoadLaneQueryTargetTableName(sql);
+    if (!tableName) {
+      return;
+    }
+    const admissionState = this.resolveLoadLaneTableAdmissionState(tableName);
+    if (admissionState?.ready === true) {
+      return;
+    }
+    const reasonCodes = Array.isArray(admissionState?.reasonCodes) &&
+      admissionState.reasonCodes.length > NUM.ZERO ?
+      admissionState.reasonCodes :
+      ['benchmark_admission_blocked'];
+    throw createRetryableAdminOperationError(
+      ErrorCode.INTERNAL_ERROR,
+      'serve not ready: load lane admission denied on node ' +
+        this.nodeId +
+        ' (tableName=' + tableName +
+        ', benchmarkReady=false, reasons=' +
+        reasonCodes.join(',') +
         ')',
     );
   }
@@ -1863,6 +2093,8 @@ class AdminWebSocketAPI {
     if (localSystemTableObservation) {
       return localSystemTableObservation;
     }
+
+    await this.assertLoadLaneTableQueryAdmitted(sql, executionContext);
 
     const routed = guardedAdaptAdminAction(
       ADMIN_META_ACTION.EXECUTE_QUERY,

@@ -54,6 +54,7 @@ const WAIT_REASON_RETRYABLE_CONTROL_PLANE_PRESSURE =
 const WAIT_REASON_TIMEOUT_WAITS = 'timeoutWaits';
 const WAIT_REASON_QUEUE_CAPACITY_REJECTED = 'queueCapacityRejected';
 const TIMEOUT_ERROR_PATTERN = /timeout|timed out|deadline exceeded|etimedout/i;
+const ADMIN_LANE_LOAD = 'load';
 
 const LOAD_TABLE_NAME = 'logs';
 const LOAD_TABLE_BENCHMARK_EVENTS = 'benchmark_events';
@@ -83,6 +84,11 @@ const BENCHMARK_OPERATIONS = Object.freeze([
 ]);
 
 const RETRY_SAFE_OPERATIONS = new Set([
+  SELECT_OP,
+]);
+
+const BENCHMARK_RETRY_SAFE_OPERATIONS = new Set([
+  INSERT_OP,
   SELECT_OP,
 ]);
 
@@ -169,7 +175,7 @@ function buildSqlStatement(operation, counter, options = {}) {
     const timestamp = Date.now();
     switch (operation) {
     case INSERT_OP:
-      return `INSERT INTO ${tableName} ` +
+      return `INSERT OR IGNORE INTO ${tableName} ` +
         '(event_id, payload, created_at) VALUES (' +
         `'${eventId}', ${payload}, ${timestamp})`;
     case SELECT_OP:
@@ -216,6 +222,15 @@ function buildSqlStatement(operation, counter, options = {}) {
 
 function isRetrySafeOperation(operation) {
   return RETRY_SAFE_OPERATIONS.has(String(operation || '').toUpperCase());
+}
+
+function isBenchmarkRetrySafeOperation(operation, workloadProfile) {
+  if (String(workloadProfile || '') !== WORKLOAD_PROFILE_BENCHMARK_EVENTS) {
+    return false;
+  }
+  return BENCHMARK_RETRY_SAFE_OPERATIONS.has(
+    String(operation || '').toUpperCase(),
+  );
 }
 
 function isTimeoutShapedError(error) {
@@ -321,6 +336,22 @@ function computeMetrics(
   }
   if (perNodeMetrics && typeof perNodeMetrics === 'object') {
     metrics.perNode = perNodeMetrics;
+    let admissionSignalCount = ZERO;
+    let nonAdmissionAttemptErrorCount = ZERO;
+    for (const nodeMetrics of Object.values(perNodeMetrics)) {
+      const nodeAttemptErrors = Number(nodeMetrics?.attemptErrors || ZERO);
+      const nodeAdmissionSignals = Math.min(
+        nodeAttemptErrors,
+        Number(nodeMetrics?.admissionSignals || ZERO),
+      );
+      admissionSignalCount += nodeAdmissionSignals;
+      nonAdmissionAttemptErrorCount += Math.max(
+        ZERO,
+        nodeAttemptErrors - nodeAdmissionSignals,
+      );
+    }
+    metrics.admissionSignals = admissionSignalCount;
+    metrics.nonAdmissionAttemptErrors = nonAdmissionAttemptErrorCount;
   }
   if (rejectedAccounting && typeof rejectedAccounting === 'object') {
     const rejectedOperations = Number(rejectedAccounting.rejectedOperations);
@@ -378,10 +409,12 @@ function computeMetrics(
 class LoadRun {
   /**
    * @param {Array<Object>} nodes - NodeHandle instances
-   * @param {Object} options
-   * @param {number} options.opsPerSec - Target operations per second
-   * @param {number} options.durationMs - Duration in milliseconds
-   * @param {Array<string>} options.operations - SQL operation types
+  * @param {Object} options
+  * @param {number} options.opsPerSec - Target operations per second
+  * @param {number} options.durationMs - Duration in milliseconds
+  * @param {Array<string>} options.operations - SQL operation types
+   * @param {Function} [options.nodeResolver] - Synchronous resolver that
+   *   can refresh the currently available node set mid-run.
    * @param {number} [options.maxInFlight] - Optional in-flight cap
    * @param {string} [options.tableName]
    * @param {string} [options.workloadProfile]
@@ -401,8 +434,11 @@ class LoadRun {
    *   Adaptive dispatch guardrail settings for control-plane pressure.
    */
   constructor(nodes, options) {
+    const initialAvailableNodes = Array.isArray(nodes) ?
+      nodes.filter((node) => node && typeof node === 'object') :
+      [];
     this._nodes = [...nodes];
-    this._availableNodes = [...nodes];
+    this._availableNodes = [];
     this._opsPerSec = options.opsPerSec;
     this._durationMs = options.durationMs;
     this._operations = options.operations;
@@ -418,7 +454,7 @@ class LoadRun {
       options.logIdPrefix :
       LOAD_LOG_ID_PREFIX;
     this._maxInFlight = options.maxInFlight ||
-      this._availableNodes.length * IN_FLIGHT_PER_NODE;
+      initialAvailableNodes.length * IN_FLIGHT_PER_NODE;
     this._nodeFailureThreshold =
       Number.isInteger(options.nodeFailureThreshold) &&
       options.nodeFailureThreshold > ZERO ?
@@ -439,6 +475,10 @@ class LoadRun {
       options.queryTimeoutMs > ZERO ?
         options.queryTimeoutMs :
         QUERY_TIMEOUT_MS_DEFAULT;
+    this._nodeResolver =
+      typeof options.nodeResolver === 'function' ?
+        options.nodeResolver :
+        null;
     this._dispatchIntervalMs = this._opsPerSec > ZERO ?
       MS_PER_SECOND / this._opsPerSec :
       MS_PER_SECOND;
@@ -458,6 +498,8 @@ class LoadRun {
     this._failedCount = ZERO;
     this._operationErrorCount = ZERO;
     this._attemptErrorCount = ZERO;
+    this._suppressedRetrySafeAttemptErrorCount = ZERO;
+    this._suppressedRetrySafeTimeoutWaitCount = ZERO;
     this._distinctErrorSet = new Set();
     this._distinctErrors = [];
     this._queueDelaySamples = [];
@@ -486,8 +528,8 @@ class LoadRun {
     this._nodeHealthByKey = new Map();
     this._nodeInFlightByKey = new Map();
     this._nodeMetricsByKey = new Map();
-    const derivedNodeMaxInFlight = this._availableNodes.length > ZERO ?
-      Math.max(ONE, Math.ceil(this._maxInFlight / this._availableNodes.length)) :
+    const derivedNodeMaxInFlight = initialAvailableNodes.length > ZERO ?
+      Math.max(ONE, Math.ceil(this._maxInFlight / initialAvailableNodes.length)) :
       ONE;
     this._nodeMaxInFlight =
       Number.isInteger(options.nodeMaxInFlight) &&
@@ -498,32 +540,121 @@ class LoadRun {
       this._createAdaptiveDispatchGuardrailState(
         options.adaptiveDispatchGuardrail,
       );
-    for (let index = ZERO; index < this._availableNodes.length; index++) {
-      const node = this._availableNodes[index];
-      const nodeId = String(node?.id || 'unknown');
-      const key = 'node-' + String(index) + '-' + nodeId;
-      this._nodeHealthKeys.push(key);
-      this._nodeHealthByKey.set(key, {
-        consecutiveFailures: ZERO,
-        openUntilMs: ZERO,
-        localBreakerOwner: this._resolveNodeBreakerOwner(node),
-        admissionBlockedUntilMs: ZERO,
-      });
-      this._nodeInFlightByKey.set(key, ZERO);
-      this._nodeMetricsByKey.set(key, {
-        nodeId,
-        dispatched: ZERO,
-        success: ZERO,
-        attemptErrors: ZERO,
-        admissionSignals: ZERO,
-        queuePressureSignals: ZERO,
-        waitReasons: createWaitReasonCounters(),
-        rejected: ZERO,
-        rejectedByReason: {
-          [REJECTED_REASON_QUEUE_FULL]: ZERO,
-        },
-      });
+    this._replaceAvailableNodes(nodes);
+  }
+
+  _normalizeResolvedNodes(nodes) {
+    if (!Array.isArray(nodes)) {
+      return [];
     }
+    return nodes.filter((node) => node && typeof node === 'object');
+  }
+
+  _resolveNodeHealthKey(node, index) {
+    const nodeId = String(node?.id || '').trim();
+    return nodeId.length > ZERO ?
+      'node-' + nodeId :
+      'node-index-' + String(index);
+  }
+
+  _createNodeHealthState(node) {
+    return {
+      consecutiveFailures: ZERO,
+      openUntilMs: ZERO,
+      localBreakerOwner: this._resolveNodeBreakerOwner(node),
+      admissionBlockedUntilMs: ZERO,
+    };
+  }
+
+  _createNodeMetricsState(node) {
+    return {
+      nodeId: String(node?.id || 'unknown'),
+      dispatched: ZERO,
+      success: ZERO,
+      attemptErrors: ZERO,
+      admissionSignals: ZERO,
+      queuePressureSignals: ZERO,
+      waitReasons: createWaitReasonCounters(),
+      rejected: ZERO,
+      rejectedByReason: {
+        [REJECTED_REASON_QUEUE_FULL]: ZERO,
+      },
+    };
+  }
+
+  _replaceAvailableNodes(nodes) {
+    const normalizedNodes = this._normalizeResolvedNodes(nodes);
+    if (normalizedNodes.length === ZERO) {
+      return;
+    }
+
+    const previousHealthByKey = this._nodeHealthByKey;
+    const previousInFlightByKey = this._nodeInFlightByKey;
+    const previousMetricsByKey = this._nodeMetricsByKey;
+    const nextAvailableNodes = [];
+    const nextNodeHealthKeys = [];
+    const nextNodeHealthByKey = new Map();
+    const nextNodeInFlightByKey = new Map();
+    const nextNodeMetricsByKey = new Map();
+    const seenKeys = new Set();
+
+    for (let index = ZERO; index < normalizedNodes.length; index++) {
+      const node = normalizedNodes[index];
+      const key = this._resolveNodeHealthKey(node, index);
+      if (seenKeys.has(key)) {
+        continue;
+      }
+      seenKeys.add(key);
+      nextAvailableNodes.push(node);
+      nextNodeHealthKeys.push(key);
+      nextNodeHealthByKey.set(
+        key,
+        previousHealthByKey.get(key) || this._createNodeHealthState(node),
+      );
+      nextNodeInFlightByKey.set(
+        key,
+        previousInFlightByKey.get(key) || ZERO,
+      );
+      nextNodeMetricsByKey.set(
+        key,
+        previousMetricsByKey.get(key) || this._createNodeMetricsState(node),
+      );
+    }
+
+    this._availableNodes = nextAvailableNodes;
+    this._nodeHealthKeys = nextNodeHealthKeys;
+    this._nodeHealthByKey = nextNodeHealthByKey;
+    this._nodeInFlightByKey = nextNodeInFlightByKey;
+    this._nodeMetricsByKey = nextNodeMetricsByKey;
+  }
+
+  _syncAvailableNodesFromResolver() {
+    if (typeof this._nodeResolver !== 'function') {
+      return;
+    }
+    let resolvedNodes;
+    try {
+      resolvedNodes = this._nodeResolver();
+    } catch (_error) {
+      return;
+    }
+    const normalizedNodes = this._normalizeResolvedNodes(resolvedNodes);
+    if (normalizedNodes.length === ZERO) {
+      return;
+    }
+    const nextKeys = normalizedNodes.map((node, index) =>
+      this._resolveNodeHealthKey(node, index),
+    );
+    const noStructuralChange =
+      nextKeys.length === this._nodeHealthKeys.length &&
+      nextKeys.every((key, index) =>
+        key === this._nodeHealthKeys[index] &&
+        normalizedNodes[index] === this._availableNodes[index],
+      );
+    if (noStructuralChange) {
+      return;
+    }
+    this._replaceAvailableNodes(normalizedNodes);
   }
 
   _resolveNodeBreakerOwner(node) {
@@ -649,11 +780,25 @@ class LoadRun {
     const reducedMaxInFlight = Math.floor(
       this._maxInFlight * (ONE - reductionRatio),
     );
+    const dispatchReadyNodeCount = this._countDispatchReadyNodes(nowMs);
+    const partiallyBlockedCluster =
+      dispatchReadyNodeCount > ZERO &&
+      dispatchReadyNodeCount < this._availableNodes.length;
+    const dispatchReadyCapacityFloor = partiallyBlockedCluster ?
+      Math.min(
+        this._maxInFlight,
+        dispatchReadyNodeCount * this._nodeMaxInFlight,
+      ) :
+      state.minMaxInFlight;
     const nextEffectiveMaxInFlight = Math.max(
       ONE,
       Math.min(
         this._maxInFlight,
-        Math.max(state.minMaxInFlight, reducedMaxInFlight),
+        Math.max(
+          state.minMaxInFlight,
+          dispatchReadyCapacityFloor,
+          reducedMaxInFlight,
+        ),
       ),
     );
     const previousEffectiveMaxInFlight = Number(
@@ -671,6 +816,20 @@ class LoadRun {
       Number(state.minEffectiveMaxInFlight || this._maxInFlight),
       nextEffectiveMaxInFlight,
     );
+  }
+
+  _countDispatchReadyNodes(nowMs) {
+    let readyNodeCount = ZERO;
+    for (let index = ZERO; index < this._availableNodes.length; index++) {
+      const node = this._availableNodes[index];
+      const healthKey = this._nodeHealthKeys[index];
+      const state = this._nodeHealthByKey.get(healthKey);
+      if (this._isNodeDispatchReady(state, nowMs) &&
+          this._isNodeExternallyAdmissionReady(node)) {
+        readyNodeCount += ONE;
+      }
+    }
+    return readyNodeCount;
   }
 
   _resolveEffectiveMaxInFlight() {
@@ -694,6 +853,7 @@ class LoadRun {
    * Start the load run. Called internally by LoadGenerator.
    */
   _start() {
+    this._syncAvailableNodesFromResolver();
     this._startTime = Date.now();
 
     this._completePromise = new Promise((resolve) => {
@@ -748,6 +908,7 @@ class LoadRun {
     if (this._cancelled || this._schedulingStopped) {
       return;
     }
+    this._syncAvailableNodesFromResolver();
     if (this._counter >= this._targetOperationCount) {
       this._schedulingStopped = true;
       if (!this._dispatchStoppedBy) {
@@ -944,6 +1105,8 @@ class LoadRun {
     let attemptedNodes = false;
     let operationDispatched = false;
     let hasNonAdmissionFailures = false;
+    let nonAdmissionFailureCount = ZERO;
+    let suppressibleBenchmarkFailureCount = ZERO;
 
     for (let attempt = ZERO; attempt < candidates.length; attempt++) {
       if (this._cancelled || this._completedMetrics) {
@@ -998,6 +1161,14 @@ class LoadRun {
         }
         if (!this._isAdmissionSignalError(err)) {
           hasNonAdmissionFailures = true;
+          nonAdmissionFailureCount++;
+          if (this._shouldSuppressBenchmarkOperationFailure(operation, err)) {
+            suppressibleBenchmarkFailureCount++;
+            this._suppressedRetrySafeAttemptErrorCount++;
+            if (isTimeoutShapedError(err)) {
+              this._suppressedRetrySafeTimeoutWaitCount++;
+            }
+          }
         }
         this._captureErrorMessage(err);
         if (this._shouldStopFailoverAfterError(operation, err)) {
@@ -1012,6 +1183,10 @@ class LoadRun {
       return;
     }
     if (attemptedNodes && hasNonAdmissionFailures) {
+      if (nonAdmissionFailureCount > ZERO &&
+          nonAdmissionFailureCount === suppressibleBenchmarkFailureCount) {
+        return;
+      }
       this._failedCount++;
       this._operationErrorCount++;
     }
@@ -1025,6 +1200,7 @@ class LoadRun {
     if (typeof node?.queryWithTimeout === 'function') {
       return node.queryWithTimeout(sql, [], {
         timeoutMs: this._queryTimeoutMs,
+        lane: ADMIN_LANE_LOAD,
       });
     }
     return node.query(sql);
@@ -1034,10 +1210,19 @@ class LoadRun {
     if (this._isAdmissionSignalError(error)) {
       return false;
     }
-    if (isRetrySafeOperation(operation)) {
+    if (isRetrySafeOperation(operation) ||
+        isBenchmarkRetrySafeOperation(operation, this._workloadProfile)) {
       return false;
     }
     return isTimeoutShapedError(error);
+  }
+
+  _shouldSuppressBenchmarkOperationFailure(operation, error) {
+    if (!isBenchmarkRetrySafeOperation(operation, this._workloadProfile)) {
+      return false;
+    }
+    return this._isRetryableControlPlanePressureError(error) ||
+      isTimeoutShapedError(error);
   }
 
   _hasDispatchCapacity(nowMs, options = {}) {
@@ -1060,13 +1245,16 @@ class LoadRun {
       const healthKey = this._nodeHealthKeys[index];
       const state = this._nodeHealthByKey.get(healthKey);
       const nodeReady = this._isNodeDispatchReady(state, nowMs);
+      const externallyAdmissionReady =
+        this._isNodeExternallyAdmissionReady(node);
       const nodeInFlight = this._getNodeInFlight(healthKey);
       if (nodeReady &&
+          externallyAdmissionReady &&
           nodeInFlight < effectiveNodeMaxInFlight) {
         candidates.push({node, healthKey});
       } else if (trackQueuePressure) {
         this._recordNodeQueuePressure(healthKey);
-        if (!nodeReady) {
+        if (!nodeReady || !externallyAdmissionReady) {
           this._recordWaitReason(
             WAIT_REASON_NODE_ADMISSION_BLOCKED,
             healthKey,
@@ -1088,6 +1276,10 @@ class LoadRun {
     const effectiveNodeMaxInFlight =
       this._resolveEffectiveNodeMaxInFlight(nowMs);
     for (let index = ZERO; index < this._availableNodes.length; index++) {
+      const node = this._availableNodes[index];
+      if (!this._isNodeExternallyAdmissionReady(node)) {
+        continue;
+      }
       const healthKey = this._nodeHealthKeys[index];
       const state = this._nodeHealthByKey.get(healthKey);
       if (this._getNodeInFlight(healthKey) >= effectiveNodeMaxInFlight) {
@@ -1096,7 +1288,7 @@ class LoadRun {
       const blockedUntil = this._resolveNodeBlockedUntilMs(state);
       if (blockedUntil <= nowMs) {
         return [{
-          node: this._availableNodes[index],
+          node,
           healthKey: this._nodeHealthKeys[index],
         }];
       }
@@ -1126,9 +1318,11 @@ class LoadRun {
     const effectiveMaxInFlight = this._resolveEffectiveMaxInFlight();
     let dispatchReadyNodeCount = ZERO;
     for (let index = ZERO; index < availableNodeCount; index++) {
+      const node = this._availableNodes[index];
       const healthKey = this._nodeHealthKeys[index];
       const state = this._nodeHealthByKey.get(healthKey);
-      if (this._isNodeDispatchReady(state, nowMs)) {
+      if (this._isNodeDispatchReady(state, nowMs) &&
+          this._isNodeExternallyAdmissionReady(node)) {
         dispatchReadyNodeCount += ONE;
       }
     }
@@ -1268,6 +1462,20 @@ class LoadRun {
       backoffMs = Math.max(backoffMs, this._nodeFailureCooldownMs);
     }
     return backoffMs;
+  }
+
+  _isNodeExternallyAdmissionReady(node) {
+    if (!node || typeof node !== 'object') {
+      return true;
+    }
+    try {
+      if (typeof node.isLoadAdmissionReady === 'function') {
+        return node.isLoadAdmissionReady() !== false;
+      }
+    } catch (_error) {
+      return false;
+    }
+    return node.loadAdmissionReady !== false;
   }
 
   _isAdmissionSignalError(error) {
@@ -1561,7 +1769,7 @@ class LoadRun {
     const queuePressureSummary = this._buildQueuePressureSummary();
     const waitReasonSummary = this._buildWaitReasonSummary();
     const dispatchGuardrailSummary = this._buildDispatchGuardrailSummary();
-    return computeMetrics(
+    const metrics = computeMetrics(
       this._latencies,
       this._successCount,
       this._failedCount,
@@ -1577,6 +1785,25 @@ class LoadRun {
       waitReasonSummary,
       dispatchGuardrailSummary,
     );
+    metrics.suppressedRetrySafeAttemptErrors = Math.max(
+      ZERO,
+      this._suppressedRetrySafeAttemptErrorCount,
+    );
+    metrics.suppressedRetrySafeTimeoutWaits = Math.max(
+      ZERO,
+      this._suppressedRetrySafeTimeoutWaitCount,
+    );
+    metrics.nonAdmissionAttemptErrors = Math.max(
+      ZERO,
+      Number(metrics.nonAdmissionAttemptErrors || ZERO) -
+        metrics.suppressedRetrySafeAttemptErrors,
+    );
+    metrics.nonAdmissionTimeoutWaits = Math.max(
+      ZERO,
+      Number(metrics?.waitReasons?.[WAIT_REASON_TIMEOUT_WAITS] || ZERO) -
+        metrics.suppressedRetrySafeTimeoutWaits,
+    );
+    return metrics;
   }
 
   /**
@@ -1624,6 +1851,8 @@ class LoadGenerator {
    * @param {string|number} [options.duration] - Duration ('30s', '1m', ms)
    * @param {Array<string>} [options.operations] - SQL operation types
    * @param {number} [options.maxInFlight] - Optional in-flight cap
+   * @param {Function} [options.nodeResolver] - Synchronous resolver that
+   *   can refresh the currently available node set mid-run.
    * @param {string} [options.tableName] - Target table name
    * @param {string} [options.workloadProfile] - SQL workload profile
    * @param {number} [options.nodeFailureThreshold] - Consecutive
@@ -1690,6 +1919,10 @@ class LoadGenerator {
         null;
     this._earlyRejectOnQueueFull = options.earlyRejectOnQueueFull === true;
     this._adaptiveDispatchGuardrail = options.adaptiveDispatchGuardrail;
+    this._nodeResolver =
+      typeof options.nodeResolver === 'function' ?
+        options.nodeResolver :
+        null;
     this._tableName = normalizeTableName(
       options.tableName,
       this._workloadProfile === WORKLOAD_PROFILE_BENCHMARK_EVENTS ?
@@ -1727,6 +1960,7 @@ class LoadGenerator {
       maxPendingQueueDepth: this._maxPendingQueueDepth,
       earlyRejectOnQueueFull: this._earlyRejectOnQueueFull,
       adaptiveDispatchGuardrail: this._adaptiveDispatchGuardrail,
+      ...(this._nodeResolver ? {nodeResolver: this._nodeResolver} : {}),
       ...(this._nodeMaxInFlight !== null ?
         {nodeMaxInFlight: this._nodeMaxInFlight} :
         {}),

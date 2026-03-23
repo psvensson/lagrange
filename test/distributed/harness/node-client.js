@@ -1717,4 +1717,8 @@ class NodeClient {
   }
 }
 
-export {NodeClient, NodeClientError};
+export {
+  buildServiceDiscoverySql,
+  NodeClient,
+  NodeClientError,
+};

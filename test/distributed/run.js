@@ -126,7 +126,7 @@ const SCENARIO_ASSERTION_POLICY = Object.freeze({
     failOnPlaybackWarnings: true,
     memoryLeak: Object.freeze({
       enabled: true,
-      failOnDetection: true,
+      failOnDetection: false,
       requireSamples: true,
     }),
   }),

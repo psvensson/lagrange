@@ -1226,6 +1226,310 @@ test(
 );
 
 test(
+  'MessageGroupService - strict CDC propagation uses canonical local ingress during join convergence when owner row moved',
+  async (t) => {
+    const {router, nodeId, cleanup} = await createTestTransport();
+    try {
+      const service = new MessageGroupService({
+        groupId: 'mg-strict-local-join-ingress',
+        replicaId: 'mg-strict-local-join-ingress-r1',
+        nodeId,
+        replicaIds: [
+          'mg-strict-local-join-ingress-r1',
+          'mg-strict-local-join-ingress-r2',
+          'mg-strict-local-join-ingress-r3',
+        ],
+        transport: router,
+      });
+
+      service.isJoiningExistingGroup = true;
+      service.raft = {
+        state: LifeRaft.FOLLOWER,
+      };
+      service.forwardCDCEventToLeader = async () => {
+        throw new Error(
+          'canonical local join ingress should not forward strict CDC again',
+        );
+      };
+
+      service.systemTableCache.applySystemTableChange(
+        TABLES.MESSAGE_GROUPS,
+        CDC_OPERATION.UPSERT,
+        {
+          [COLUMN.GROUP_ID]: 'mg-strict-local-join-ingress',
+          [COLUMN.LEADER_NODE_ID]: nodeId,
+        },
+      );
+      service.systemTableCache.applySystemTableChange(
+        TABLES.SERVICES,
+        CDC_OPERATION.UPSERT,
+        {
+          [COLUMN.SERVICE_ID]: 'mg-strict-local-join-ingress-r1',
+          [COLUMN.GROUP_ID]: 'mg-strict-local-join-ingress',
+          [COLUMN.NODE_ID]: nodeId,
+          [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.MESSAGE_GROUP,
+          [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+          [COLUMN.ADDRESS]:
+            `${nodeId}/message-group/mg-strict-local-join-ingress-r1`,
+          [COLUMN.RAFT_ROLE]: RaftRole.FOLLOWER,
+          [COLUMN.UPDATED_AT]: Date.now(),
+        },
+      );
+      service.systemTableCache.applySystemTableChange(
+        TABLES.SERVICES,
+        CDC_OPERATION.UPSERT,
+        {
+          [COLUMN.SERVICE_ID]: 'mg-strict-local-join-ingress-r3',
+          [COLUMN.GROUP_ID]: 'mg-strict-local-join-ingress',
+          [COLUMN.NODE_ID]: 'seed-node',
+          [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.MESSAGE_GROUP,
+          [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+          [COLUMN.ADDRESS]:
+            'seed-node/message-group/mg-strict-local-join-ingress-r3',
+          [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
+          [COLUMN.UPDATED_AT]: Date.now() - 1,
+        },
+      );
+
+      const readiness = service.canAcceptCDCEvent({
+        tableName: TABLES.NODES,
+        operation: CDC_OPERATION.UPSERT,
+      });
+
+      t.equal(
+        readiness.ready,
+        true,
+        'canonical leader_node_id on the local join-suppressed replica should keep strict CDC ingress routable',
+      );
+      t.equal(
+        readiness.localIngress,
+        true,
+        'strict readiness should identify the canonical local ingress path',
+      );
+
+      const result = await service.handleLatencyCdcPropagationMessage(
+        'msg-strict-local-join-ingress',
+        {
+          type: 'latency.cdc.propagation',
+          tableName: TABLES.NODES,
+          operation: CDC_OPERATION.UPSERT,
+          data: {
+            [COLUMN.NODE_ID]: 'node-strict-local-join-ingress',
+            [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+          },
+        },
+      );
+
+      t.equal(result.acknowledged, true, 'canonical local ingress should acknowledge strict CDC');
+      t.equal(
+        result.success,
+        undefined,
+        'canonical local ingress should consume strict CDC locally rather than returning a deferred failure',
+      );
+      t.equal(
+        service.systemTableCache.get(TABLES.NODES, 'node-strict-local-join-ingress')?.[
+          COLUMN.STATUS
+        ],
+        SERVICE_STATUS.ACTIVE,
+        'canonical local ingress should apply the strict CDC event to the local cache during join convergence',
+      );
+    } finally {
+      await cleanup();
+    }
+  },
+);
+
+test(
+  'MessageGroupService - strict CDC propagation uses local live leader hints during join convergence before owner-row cache catches up',
+  async (t) => {
+    const {router, nodeId, cleanup} = await createTestTransport();
+    try {
+      const service = new MessageGroupService({
+        groupId: 'mg-strict-local-live-hint',
+        replicaId: 'mg-strict-local-live-hint-r1',
+        nodeId,
+        replicaIds: [
+          'mg-strict-local-live-hint-r1',
+          'mg-strict-local-live-hint-r2',
+          'mg-strict-local-live-hint-r3',
+        ],
+        transport: router,
+      });
+
+      service.isJoiningExistingGroup = true;
+      service.raft = {
+        state: LifeRaft.FOLLOWER,
+      };
+      service.leaderId = 'mg-strict-local-live-hint-r1';
+      service.forwardCDCEventToLeader = async () => {
+        throw new Error(
+          'local live leader join hints should not re-forward strict CDC',
+        );
+      };
+
+      service.systemTableCache.applySystemTableChange(
+        TABLES.MESSAGE_GROUPS,
+        CDC_OPERATION.UPSERT,
+        {
+          [COLUMN.GROUP_ID]: 'mg-strict-local-live-hint',
+          [COLUMN.LEADER_NODE_ID]: 'seed-node',
+        },
+      );
+      service.systemTableCache.applySystemTableChange(
+        TABLES.SERVICES,
+        CDC_OPERATION.UPSERT,
+        {
+          [COLUMN.SERVICE_ID]: 'mg-strict-local-live-hint-r1',
+          [COLUMN.GROUP_ID]: 'mg-strict-local-live-hint',
+          [COLUMN.NODE_ID]: nodeId,
+          [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.MESSAGE_GROUP,
+          [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+          [COLUMN.ADDRESS]:
+            `${nodeId}/message-group/mg-strict-local-live-hint-r1`,
+          [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
+          [COLUMN.UPDATED_AT]: Date.now(),
+        },
+      );
+
+      const readiness = service.canAcceptCDCEvent({
+        tableName: TABLES.NODES,
+        operation: CDC_OPERATION.UPSERT,
+      });
+
+      t.equal(
+        readiness.ready,
+        true,
+        'local live leader hints should keep strict CDC ingress routable while the owner-row cache is still stale',
+      );
+      t.equal(
+        readiness.localIngress,
+        true,
+        'strict readiness should identify local live leader hints as a join-convergence ingress signal',
+      );
+
+      const result = await service.handleLatencyCdcPropagationMessage(
+        'msg-strict-local-live-hint',
+        {
+          type: 'latency.cdc.propagation',
+          tableName: TABLES.NODES,
+          operation: CDC_OPERATION.UPSERT,
+          data: {
+            [COLUMN.NODE_ID]: 'node-strict-local-live-hint',
+            [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+          },
+        },
+      );
+
+      t.equal(result.acknowledged, true, 'local live leader ingress should acknowledge strict CDC');
+      t.equal(
+        service.systemTableCache.get(TABLES.NODES, 'node-strict-local-live-hint')?.[
+          COLUMN.STATUS
+        ],
+        SERVICE_STATUS.ACTIVE,
+        'local live leader ingress should apply strict CDC while authoritative owner rows catch up',
+      );
+    } finally {
+      await cleanup();
+    }
+  },
+);
+
+test(
+  'MessageGroupService - strict CDC propagation falls back to addressed local ingress during join convergence when no strict target is viable',
+  async (t) => {
+    const {router, nodeId, cleanup} = await createTestTransport();
+    try {
+      const service = new MessageGroupService({
+        groupId: 'mg-strict-local-addressed-fallback',
+        replicaId: 'mg-strict-local-addressed-fallback-r1',
+        nodeId,
+        replicaIds: [
+          'mg-strict-local-addressed-fallback-r1',
+          'mg-strict-local-addressed-fallback-r2',
+          'mg-strict-local-addressed-fallback-r3',
+        ],
+        transport: router,
+      });
+
+      service.isJoiningExistingGroup = true;
+      service.raft = {
+        state: LifeRaft.FOLLOWER,
+      };
+      service.leaderId = 'mg-strict-local-addressed-fallback-r3';
+      service.forwardCDCEventToLeader = async () => {
+        throw new Error(
+          'addressed local join ingress should not re-forward strict CDC',
+        );
+      };
+
+      service.systemTableCache.applySystemTableChange(
+        TABLES.MESSAGE_GROUPS,
+        CDC_OPERATION.UPSERT,
+        {
+          [COLUMN.GROUP_ID]: 'mg-strict-local-addressed-fallback',
+          [COLUMN.LEADER_NODE_ID]: 'seed-node',
+        },
+      );
+      service.systemTableCache.applySystemTableChange(
+        TABLES.SERVICES,
+        CDC_OPERATION.UPSERT,
+        {
+          [COLUMN.SERVICE_ID]: 'mg-strict-local-addressed-fallback-r3',
+          [COLUMN.GROUP_ID]: 'mg-strict-local-addressed-fallback',
+          [COLUMN.NODE_ID]: 'seed-node',
+          [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.MESSAGE_GROUP,
+          [COLUMN.STATUS]: SERVICE_STATUS.STOPPED,
+          [COLUMN.ADDRESS]:
+            'seed-node/message-group/mg-strict-local-addressed-fallback-r3',
+          [COLUMN.RAFT_ROLE]: RaftRole.LEADER,
+          [COLUMN.UPDATED_AT]: Date.now() - 1,
+        },
+      );
+
+      const readiness = service.canAcceptCDCEvent({
+        tableName: TABLES.NODES,
+        operation: CDC_OPERATION.UPSERT,
+      });
+
+      t.equal(
+        readiness.ready,
+        true,
+        'join convergence should keep strict CDC ingress locally routable when no viable non-local strict target exists yet',
+      );
+      t.equal(
+        readiness.localIngress,
+        true,
+        'strict readiness should fall back to the addressed local join ingress when strict targets are still stale',
+      );
+
+      const result = await service.handleLatencyCdcPropagationMessage(
+        'msg-strict-local-addressed-fallback',
+        {
+          type: 'latency.cdc.propagation',
+          tableName: TABLES.NODES,
+          operation: CDC_OPERATION.UPSERT,
+          data: {
+            [COLUMN.NODE_ID]: 'node-strict-local-addressed-fallback',
+            [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+          },
+        },
+      );
+
+      t.equal(result.acknowledged, true, 'addressed local fallback should acknowledge strict CDC');
+      t.equal(
+        service.systemTableCache.get(TABLES.NODES, 'node-strict-local-addressed-fallback')?.[
+          COLUMN.STATUS
+        ],
+        SERVICE_STATUS.ACTIVE,
+        'addressed local fallback should apply strict CDC while strict target metadata converges',
+      );
+    } finally {
+      await cleanup();
+    }
+  },
+);
+
+test(
   'MessageGroupService - strict CDC forward retries selection after authoritative topology repair',
   async (t) => {
     const {router, nodeId, cleanup} = await createTestTransport();

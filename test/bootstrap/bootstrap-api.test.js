@@ -648,9 +648,13 @@ test('BootstrapAPI - exposes explicit liveness, startup, and readiness probes', 
   const readinessSnapshot = {
     ready: false,
     phase: 'INIT',
+    phaseRank: 0,
     state: 'bootstrapping',
     reasons: ['BOOTSTRAP_PHASE_INCOMPLETE'],
     retryAfterMs: 250,
+    transitionCount: 1,
+    stableWindowMs: 10000,
+    stableElapsedMs: 0,
     timestamp: Date.now(),
   };
   const readinessState = {
@@ -703,9 +707,17 @@ test('BootstrapAPI - exposes explicit liveness, startup, and readiness probes', 
   const readyBody = JSON.parse(readyResponse.body);
   t.equal(readyBody.ready, false, 'readyz should expose ready=false');
   t.equal(readyBody.phase, 'INIT', 'readyz should expose lifecycle phase');
+  t.equal(readyBody.phaseRank, 0,
+    'readyz should expose lifecycle phase rank');
   t.same(readyBody.reasons, ['BOOTSTRAP_PHASE_INCOMPLETE'],
     'readyz should expose blocker reasons');
   t.equal(readyBody.retryAfterMs, 250, 'readyz should expose retry hint');
+  t.type(readyBody.readinessEpoch, 'number',
+    'readyz should expose readiness epoch');
+  t.type(readyBody.stableWindowMs, 'number',
+    'readyz should expose stable window size');
+  t.equal(readyBody.stableElapsedMs, 0,
+    'readyz should expose current stable elapsed time');
 
   const bootstrapReadyResponse = await api.getFastify().inject({
     method: 'GET',
@@ -718,6 +730,8 @@ test('BootstrapAPI - exposes explicit liveness, startup, and readiness probes', 
     'bootstrap readiness probe should expose ready=false');
   t.equal(bootstrapReadyBody.phase, 'INIT',
     'bootstrap readiness probe should expose lifecycle phase');
+  t.equal(bootstrapReadyBody.phaseRank, 0,
+    'bootstrap readiness probe should expose lifecycle phase rank');
   t.equal(bootstrapReadyBody.scope, 'bootstrap_join',
     'bootstrap readiness probe should declare bootstrap_join scope');
 
@@ -773,6 +787,61 @@ test('BootstrapAPI - bootstrap join readiness tolerates isolated leader metadata
       'bootstrap join readiness should project ready=true for startup gate');
     t.same(bootstrapReadyBody.reasons, [],
       'bootstrap join readiness should clear tolerated blocker reasons');
+
+    await api.shutdown();
+  });
+
+test('BootstrapAPI - readiness probes surface monotonic progress metadata',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const readinessSnapshot = {
+      ready: false,
+      phase: 'JOIN_READY',
+      phaseRank: 2,
+      state: 'warming',
+      reasons: [LIFECYCLE_REASON.READINESS_STABLE_WINDOW_PENDING],
+      retryAfterMs: 250,
+      stableWindowMs: 1000,
+      stableElapsedMs: 400,
+      stableSinceMs: 1700000000000,
+      transitionCount: 7,
+      timestamp: 1700000000400,
+    };
+    const readinessState = {
+      evaluate() {
+        return readinessSnapshot;
+      },
+      getSnapshot() {
+        return readinessSnapshot;
+      },
+      recordProbeResult() {},
+    };
+
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: createEmptySystemTableCache(),
+      readinessState,
+    });
+
+    await api.initialize(0, {listen: false});
+
+    const bootstrapReadyResponse = await api.getFastify().inject({
+      method: 'GET',
+      url: '/bootstrap/ready',
+    });
+    const bootstrapReadyBody = JSON.parse(bootstrapReadyResponse.body);
+    t.equal(bootstrapReadyBody.phaseRank, 2,
+      'bootstrap readiness should expose phase rank');
+    t.equal(bootstrapReadyBody.readinessEpoch, 7,
+      'bootstrap readiness should expose readiness epoch');
+    t.equal(bootstrapReadyBody.stableWindowMs, 1000,
+      'bootstrap readiness should expose stable window');
+    t.equal(bootstrapReadyBody.stableElapsedMs, 400,
+      'bootstrap readiness should expose stable elapsed time');
+    t.equal(bootstrapReadyBody.stableSinceMs, 1700000000000,
+      'bootstrap readiness should expose stable-window origin');
 
     await api.shutdown();
   });

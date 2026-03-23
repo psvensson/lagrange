@@ -2145,6 +2145,28 @@ class MessageGroupService extends EventEmitter {
             operation,
           };
         }
+        if (readiness.localIngress === true) {
+          const applyOptions = {
+            skipSubscriptionCheck: true,
+          };
+          if (eventTimestamp) {
+            applyOptions.timestamp = eventTimestamp;
+          }
+          if (causeId) {
+            applyOptions.causeId = causeId;
+          }
+          if (replayOnly) {
+            applyOptions.replayOnly = true;
+          }
+          await this.applyCDCEvent(tableName, operation, data, applyOptions);
+          return {
+            messageId,
+            status: MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_PROPAGATED,
+            acknowledged: true,
+            tableName,
+            operation,
+          };
+        }
       }
       if (relayDepth >= CDC_FORWARD_MAX_RELAY_DEPTH) {
         throw new Error(MESSAGE_GROUP_CDC_ERROR_MSG.FORWARD_LEADER_UNKNOWN);
@@ -2231,6 +2253,18 @@ class MessageGroupService extends EventEmitter {
             retryAfterMs: Number.isFinite(readiness.retryAfterMs) ?
               readiness.retryAfterMs :
               this.resolveStrictCdcForwardRetryAfterMs(),
+            eventCount: events.length,
+          };
+        }
+        if (readiness.localIngress === true) {
+          await this.applyCDCBatch(events, {
+            skipSubscriptionCheck: true,
+            replayOnly,
+          });
+          return {
+            messageId,
+            status: MESSAGE_GROUP_APPLICATION_STATUS.LATENCY_CDC_BATCH_PROPAGATED,
+            acknowledged: true,
             eventCount: events.length,
           };
         }
@@ -2449,23 +2483,30 @@ class MessageGroupService extends EventEmitter {
     if (normalizedEvents.length === NUM.ZERO) {
       return;
     }
+    const strictEvent = normalizedEvents.find((event) => {
+      return this.shouldUseStrictCDCForwarding({
+        tableName: event.tableName,
+        operation: event.operation,
+      });
+    });
+    const strictEventReadiness = strictEvent ?
+      this.canAcceptCDCEvent({
+        tableName: strictEvent.tableName,
+        operation: strictEvent.operation,
+      }) :
+      null;
+    const useCanonicalLocalStrictIngress =
+      strictEventReadiness?.localIngress === true;
     const isSingleReplicaGroup = Array.isArray(this.replicaIds) &&
       this.replicaIds.length <= NUM.ONE;
-    const requiresRaftReplication = !skipReplication && !isSingleReplicaGroup;
+    const requiresRaftReplication = !skipReplication &&
+      !useCanonicalLocalStrictIngress &&
+      !isSingleReplicaGroup;
     const shouldApplyLocally = !requiresRaftReplication ||
       this.isCurrentRaftLeader();
     if (requiresRaftReplication && !shouldApplyLocally) {
-      const strictEvent = normalizedEvents.find((event) => {
-        return this.shouldUseStrictCDCForwarding({
-          tableName: event.tableName,
-          operation: event.operation,
-        });
-      });
       if (strictEvent) {
-        const readiness = this.canAcceptCDCEvent({
-          tableName: strictEvent.tableName,
-          operation: strictEvent.operation,
-        });
+        const readiness = strictEventReadiness;
         if (readiness.ready !== true) {
           throw buildDeferredCdcForwardError(
             readiness.reason ||
