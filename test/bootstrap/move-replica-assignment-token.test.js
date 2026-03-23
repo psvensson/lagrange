@@ -1407,9 +1407,14 @@ test('BootstrapAPI bootstrap preserves MOVE_REPLICA assignment after retryable r
     const fixture = await bootstrapMoveReplicaAssignment(t, {
       joiningNodeId: '550e8400-e29b-41d4-a716-4466554403ac',
       configureApi: async ({api}) => {
-        const originalExecute = api.executeBootstrapControlPlaneQuery.bind(api);
-        api.executeBootstrapControlPlaneQuery = async (sql, params = []) => {
-          if (String(sql).includes('INSERT INTO replica_operations')) {
+        const originalExecute =
+          api.executeBootstrapControlPlaneMutation.bind(api);
+        api.executeBootstrapControlPlaneMutation = async (
+          mutation,
+          options = {},
+        ) => {
+          if (mutation?.operation === 'insert' &&
+              mutation?.tableName === 'replica_operations') {
             insertAttempts += 1;
             return {
               success: false,
@@ -1419,7 +1424,7 @@ test('BootstrapAPI bootstrap preserves MOVE_REPLICA assignment after retryable r
               tableName: 'replica_operations',
             };
           }
-          return originalExecute(sql, params);
+          return originalExecute(mutation, options);
         };
       },
     });

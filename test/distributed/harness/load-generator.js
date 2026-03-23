@@ -7,6 +7,10 @@
 
 import {randomUUID} from 'node:crypto';
 import {LOAD_DEFAULTS} from './constants.js';
+import {
+  getControlPlaneRetryAfterMs,
+  isRetryableControlPlaneError,
+} from '../../../src/control-plane/control-plane-error-classification.js';
 
 const DURATION_SECONDS_SUFFIX = 's';
 const DURATION_MINUTES_SUFFIX = 'm';
@@ -37,6 +41,12 @@ const DISPATCH_STOP_REASON_TARGET = 'target';
 const DISPATCH_STOP_REASON_DURATION = 'duration';
 const DISPATCH_STOP_REASON_CANCELLED = 'cancelled';
 const REJECTED_REASON_QUEUE_FULL = 'queueFull';
+const WAIT_REASON_NODE_SLOT_UNAVAILABLE = 'nodeSlotUnavailable';
+const WAIT_REASON_NODE_ADMISSION_BLOCKED = 'nodeAdmissionBlocked';
+const WAIT_REASON_RETRYABLE_CONTROL_PLANE_PRESSURE =
+  'retryableControlPlanePressure';
+const WAIT_REASON_TIMEOUT_WAITS = 'timeoutWaits';
+const WAIT_REASON_QUEUE_CAPACITY_REJECTED = 'queueCapacityRejected';
 const TIMEOUT_ERROR_PATTERN = /timeout|timed out|deadline exceeded|etimedout/i;
 
 const LOAD_TABLE_NAME = 'logs';
@@ -95,6 +105,16 @@ function normalizeTableName(tableName, fallback = LOAD_TABLE_NAME) {
     return fallback;
   }
   return candidate;
+}
+
+function createWaitReasonCounters() {
+  return {
+    [WAIT_REASON_NODE_SLOT_UNAVAILABLE]: ZERO,
+    [WAIT_REASON_NODE_ADMISSION_BLOCKED]: ZERO,
+    [WAIT_REASON_RETRYABLE_CONTROL_PLANE_PRESSURE]: ZERO,
+    [WAIT_REASON_TIMEOUT_WAITS]: ZERO,
+    [WAIT_REASON_QUEUE_CAPACITY_REJECTED]: ZERO,
+  };
 }
 
 /**
@@ -213,7 +233,7 @@ function computeMetrics(
   latencies, successCount, failedCount, operationErrorCount, durationMs,
   distinctErrors, attemptErrorCount = ZERO, queueDelays = [],
   dispatchAccounting = null, perNodeMetrics = null, rejectedAccounting = null,
-  queuePressure = null,
+  queuePressure = null, waitReasons = null,
 ) {
   const sorted = [...latencies].sort((a, b) => a - b);
   const total = successCount + failedCount;
@@ -316,6 +336,10 @@ function computeMetrics(
       },
     };
   }
+  metrics.waitReasons = {
+    ...createWaitReasonCounters(),
+    ...(waitReasons && typeof waitReasons === 'object' ? waitReasons : {}),
+  };
   return metrics;
 }
 
@@ -408,6 +432,7 @@ class LoadRun {
     this._distinctErrors = [];
     this._queueDelaySamples = [];
     this._pendingQueueDepthSamples = [];
+    this._waitReasons = createWaitReasonCounters();
     this._rejectedOperations = ZERO;
     this._rejectedByReason = {
       [REJECTED_REASON_QUEUE_FULL]: ZERO,
@@ -458,6 +483,7 @@ class LoadRun {
         attemptErrors: ZERO,
         admissionSignals: ZERO,
         queuePressureSignals: ZERO,
+        waitReasons: createWaitReasonCounters(),
         rejected: ZERO,
         rejectedByReason: {
           [REJECTED_REASON_QUEUE_FULL]: ZERO,
@@ -660,6 +686,11 @@ class LoadRun {
       this._rejectedByReason[reason] = ZERO;
     }
     this._rejectedByReason[reason] += accepted;
+    this._recordWaitReason(
+      WAIT_REASON_QUEUE_CAPACITY_REJECTED,
+      null,
+      accepted,
+    );
 
     const nodeCount = this._nodeHealthKeys.length;
     if (nodeCount === ZERO) {
@@ -683,6 +714,10 @@ class LoadRun {
         nodeMetrics.rejectedByReason[reason] = ZERO;
       }
       nodeMetrics.rejectedByReason[reason] += ONE;
+      this._recordWaitReason(
+        WAIT_REASON_QUEUE_CAPACITY_REJECTED,
+        nodeKey,
+      );
     }
   }
 
@@ -726,10 +761,11 @@ class LoadRun {
       const node = candidate.node;
       const nodeHealthKey = candidate.healthKey;
       const nodeState = this._nodeHealthByKey.get(nodeHealthKey);
-      if (!this._isNodeDispatchReady(nodeState, Date.now())) {
+      const attemptStartedAt = Date.now();
+      if (!this._isNodeDispatchReady(nodeState, attemptStartedAt)) {
         continue;
       }
-      if (!this._tryAcquireNodeSlot(nodeHealthKey)) {
+      if (!this._tryAcquireNodeSlot(nodeHealthKey, attemptStartedAt)) {
         continue;
       }
       if (!operationDispatched) {
@@ -755,6 +791,18 @@ class LoadRun {
         this._recordNodeFailure(nodeHealthKey, err);
         this._attemptErrorCount++;
         this._recordNodeAttemptFailure(nodeHealthKey, err);
+        if (this._isRetryableControlPlanePressureError(err)) {
+          this._recordWaitReason(
+            WAIT_REASON_RETRYABLE_CONTROL_PLANE_PRESSURE,
+            nodeHealthKey,
+          );
+        }
+        if (isTimeoutShapedError(err)) {
+          this._recordWaitReason(
+            WAIT_REASON_TIMEOUT_WAITS,
+            nodeHealthKey,
+          );
+        }
         if (!this._isAdmissionSignalError(err)) {
           hasNonAdmissionFailures = true;
         }
@@ -812,6 +860,8 @@ class LoadRun {
   _buildAvailableNodeCandidates(nowMs, options = {}) {
     const trackQueuePressure = options.trackQueuePressure === true;
     const candidates = [];
+    const effectiveNodeMaxInFlight =
+      this._resolveEffectiveNodeMaxInFlight(nowMs);
     for (let index = ZERO; index < this._availableNodes.length; index++) {
       const node = this._availableNodes[index];
       const healthKey = this._nodeHealthKeys[index];
@@ -819,10 +869,21 @@ class LoadRun {
       const nodeReady = this._isNodeDispatchReady(state, nowMs);
       const nodeInFlight = this._getNodeInFlight(healthKey);
       if (nodeReady &&
-          nodeInFlight < this._nodeMaxInFlight) {
+          nodeInFlight < effectiveNodeMaxInFlight) {
         candidates.push({node, healthKey});
       } else if (trackQueuePressure) {
         this._recordNodeQueuePressure(healthKey);
+        if (!nodeReady) {
+          this._recordWaitReason(
+            WAIT_REASON_NODE_ADMISSION_BLOCKED,
+            healthKey,
+          );
+        } else if (nodeInFlight >= effectiveNodeMaxInFlight) {
+          this._recordWaitReason(
+            WAIT_REASON_NODE_SLOT_UNAVAILABLE,
+            healthKey,
+          );
+        }
       }
     }
     return candidates;
@@ -831,10 +892,12 @@ class LoadRun {
   _buildRecoveryNodeCandidate(nowMs) {
     let selectedIndex = null;
     let selectedOpenUntil = Number.POSITIVE_INFINITY;
+    const effectiveNodeMaxInFlight =
+      this._resolveEffectiveNodeMaxInFlight(nowMs);
     for (let index = ZERO; index < this._availableNodes.length; index++) {
       const healthKey = this._nodeHealthKeys[index];
       const state = this._nodeHealthByKey.get(healthKey);
-      if (this._getNodeInFlight(healthKey) >= this._nodeMaxInFlight) {
+      if (this._getNodeInFlight(healthKey) >= effectiveNodeMaxInFlight) {
         continue;
       }
       const blockedUntil = this._resolveNodeBlockedUntilMs(state);
@@ -862,9 +925,35 @@ class LoadRun {
     return Number(this._nodeInFlightByKey.get(healthKey) || ZERO);
   }
 
-  _tryAcquireNodeSlot(healthKey) {
+  _resolveEffectiveNodeMaxInFlight(nowMs) {
+    const availableNodeCount = this._availableNodes.length;
+    if (availableNodeCount <= ZERO) {
+      return this._nodeMaxInFlight;
+    }
+    let dispatchReadyNodeCount = ZERO;
+    for (let index = ZERO; index < availableNodeCount; index++) {
+      const healthKey = this._nodeHealthKeys[index];
+      const state = this._nodeHealthByKey.get(healthKey);
+      if (this._isNodeDispatchReady(state, nowMs)) {
+        dispatchReadyNodeCount += ONE;
+      }
+    }
+    if (dispatchReadyNodeCount <= ZERO ||
+        dispatchReadyNodeCount >= availableNodeCount) {
+      return this._nodeMaxInFlight;
+    }
+    const dynamicCap = Math.max(
+      ONE,
+      Math.ceil(this._maxInFlight / dispatchReadyNodeCount),
+    );
+    return Math.max(this._nodeMaxInFlight, dynamicCap);
+  }
+
+  _tryAcquireNodeSlot(healthKey, nowMs = Date.now()) {
     const current = this._getNodeInFlight(healthKey);
-    if (current >= this._nodeMaxInFlight) {
+    const effectiveNodeMaxInFlight =
+      this._resolveEffectiveNodeMaxInFlight(nowMs);
+    if (current >= effectiveNodeMaxInFlight) {
       return false;
     }
     this._nodeInFlightByKey.set(healthKey, current + ONE);
@@ -944,12 +1033,47 @@ class LoadRun {
     state.openUntilMs = Date.now() + this._nodeFailureCooldownMs;
   }
 
+  _recordWaitReason(reason, healthKey = null, count = ONE) {
+    const increment = Number.isFinite(count) ?
+      Math.max(ZERO, Math.floor(count)) :
+      ZERO;
+    if (increment <= ZERO) {
+      return;
+    }
+    if (!Object.hasOwn(this._waitReasons, reason)) {
+      this._waitReasons[reason] = ZERO;
+    }
+    this._waitReasons[reason] += increment;
+    if (healthKey === null) {
+      return;
+    }
+    const nodeMetrics = this._nodeMetricsByKey.get(healthKey);
+    if (!nodeMetrics) {
+      return;
+    }
+    if (!nodeMetrics.waitReasons ||
+        typeof nodeMetrics.waitReasons !== 'object') {
+      nodeMetrics.waitReasons = createWaitReasonCounters();
+    }
+    if (!Object.hasOwn(nodeMetrics.waitReasons, reason)) {
+      nodeMetrics.waitReasons[reason] = ZERO;
+    }
+    nodeMetrics.waitReasons[reason] += increment;
+  }
+
   _resolveAdmissionBackoffMs(state, error) {
+    let backoffMs = this._admissionBackoffMs;
+    if (this._isRetryableControlPlanePressureError(error)) {
+      backoffMs = Math.max(
+        backoffMs,
+        getControlPlaneRetryAfterMs(error),
+      );
+    }
     if (state?.localBreakerOwner === NODE_BREAKER_OWNER_NODE_CLIENT &&
         this._isCircuitOpenAdmissionError(error)) {
-      return Math.max(this._admissionBackoffMs, this._nodeFailureCooldownMs);
+      backoffMs = Math.max(backoffMs, this._nodeFailureCooldownMs);
     }
-    return this._admissionBackoffMs;
+    return backoffMs;
   }
 
   _isAdmissionSignalError(error) {
@@ -959,11 +1083,26 @@ class LoadRun {
         code === NODE_CLIENT_ADMISSION_ERROR_ROUTING_NOT_READY) {
       return true;
     }
+    if (this._isRetryableControlPlanePressureError(error)) {
+      return true;
+    }
     const message = String(error?.message || '').toLowerCase();
     return message.includes('circuit breaker is open') ||
+      message.includes('query_admission_deferred') ||
+      message.includes('query_admission_rejected') ||
       message.includes('routing not ready') ||
       message.includes('serve not ready') ||
       message.includes('load lane admission denied');
+  }
+
+  _isRetryableControlPlanePressureError(error) {
+    if (error?.deferRetry === true) {
+      return true;
+    }
+    if (getControlPlaneRetryAfterMs(error) > ZERO) {
+      return true;
+    }
+    return isRetryableControlPlaneError(error);
   }
 
   _isCircuitOpenAdmissionError(error) {
@@ -1113,6 +1252,7 @@ class LoadRun {
           attemptErrors: ZERO,
           admissionSignals: ZERO,
           queuePressureSignals: ZERO,
+          waitReasons: createWaitReasonCounters(),
           rejected: ZERO,
           rejectedByReason: {
             [REJECTED_REASON_QUEUE_FULL]: ZERO,
@@ -1128,6 +1268,16 @@ class LoadRun {
       summary[nodeId].queuePressureSignals += Number(
         nodeMetrics?.queuePressureSignals || ZERO,
       );
+      const waitReasons = nodeMetrics?.waitReasons &&
+        typeof nodeMetrics.waitReasons === 'object' ?
+        nodeMetrics.waitReasons :
+        createWaitReasonCounters();
+      for (const [reason, count] of Object.entries(waitReasons)) {
+        if (!Object.hasOwn(summary[nodeId].waitReasons, reason)) {
+          summary[nodeId].waitReasons[reason] = ZERO;
+        }
+        summary[nodeId].waitReasons[reason] += Number(count || ZERO);
+      }
       summary[nodeId].rejected += Number(nodeMetrics?.rejected || ZERO);
       const rejectedByReason = nodeMetrics?.rejectedByReason &&
         typeof nodeMetrics.rejectedByReason === 'object' ?
@@ -1170,6 +1320,13 @@ class LoadRun {
     };
   }
 
+  _buildWaitReasonSummary() {
+    return {
+      ...createWaitReasonCounters(),
+      ...this._waitReasons,
+    };
+  }
+
   _computeCurrentMetrics() {
     const elapsed = this._startTime ?
       Date.now() - this._startTime :
@@ -1183,6 +1340,7 @@ class LoadRun {
       },
     };
     const queuePressureSummary = this._buildQueuePressureSummary();
+    const waitReasonSummary = this._buildWaitReasonSummary();
     return computeMetrics(
       this._latencies,
       this._successCount,
@@ -1196,6 +1354,7 @@ class LoadRun {
       perNodeMetrics,
       rejectedAccounting,
       queuePressureSummary,
+      waitReasonSummary,
     );
   }
 

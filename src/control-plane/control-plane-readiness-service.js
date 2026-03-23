@@ -21,6 +21,8 @@ import {
   createControlPlaneRuntimeBundle,
 } from './control-plane-runtime-bundle.js';
 import {
+  CONTROL_PLANE_PARTICIPATION_DECISION,
+  CONTROL_PLANE_PARTICIPATION_KIND,
   CONTROL_PLANE_PUBLICATION_MODE,
   CONTROL_PLANE_READINESS_DEFAULT,
   CONTROL_PLANE_READINESS_DIMENSION,
@@ -31,6 +33,7 @@ import {
 import {
   compactEligibilitySnapshot,
   createEligibilitySnapshot,
+  evaluateEligibilityDecision,
 } from './eligibility-snapshot.js';
 import {DurableWorkflowCoordinator} from '../workflow/durable-workflow-coordinator.js';
 import {OperationLane} from '../workflow/operation-lane.js';
@@ -91,6 +94,104 @@ function normalizeDiagnosticTimestampMs(value) {
     return Number.isFinite(parsed) ? parsed : null;
   }
   return null;
+}
+
+function normalizeLocalQueryTransportEvidence(readiness) {
+  if (!readiness || typeof readiness !== TYPEOF.OBJECT) {
+    return Object.freeze({
+      state: 'unknown',
+      ready: null,
+      reason: null,
+      retryAfterMs: null,
+    });
+  }
+  const ready = typeof readiness.ready === 'boolean' ? readiness.ready : null;
+  return Object.freeze({
+    state:
+      ready === true ?
+        'ready' :
+        ready === false ?
+          'deferred' :
+          'unknown',
+    ready,
+    reason:
+      typeof readiness.reason === TYPEOF.STRING &&
+        readiness.reason.length > NUM.ZERO ?
+        readiness.reason :
+        null,
+    retryAfterMs:
+      Number.isFinite(readiness.retryAfterMs) &&
+        readiness.retryAfterMs > NUM.ZERO ?
+        Math.floor(readiness.retryAfterMs) :
+        null,
+  });
+}
+
+function normalizeControlPlaneParticipationKind(value) {
+  if (value === CONTROL_PLANE_PARTICIPATION_KIND
+    .REPLICA_OPERATION_OWNER_READ) {
+    return CONTROL_PLANE_PARTICIPATION_KIND.REPLICA_OPERATION_OWNER_READ;
+  }
+  return CONTROL_PLANE_PARTICIPATION_KIND.ROUTED_READ;
+}
+
+function resolveParticipationDecisionDimension(
+  participationKind,
+  decisionDimension,
+) {
+  if (typeof decisionDimension === TYPEOF.STRING &&
+      decisionDimension.length > NUM.ZERO) {
+    return decisionDimension;
+  }
+  switch (participationKind) {
+    case CONTROL_PLANE_PARTICIPATION_KIND.REPLICA_OPERATION_OWNER_READ:
+    case CONTROL_PLANE_PARTICIPATION_KIND.ROUTED_READ:
+    default:
+      return CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE;
+  }
+}
+
+function buildParticipationErrorCode(participation) {
+  if (participation?.reasonCode ===
+      CONTROL_PLANE_READINESS_REASON.LOCAL_QUERY_TRANSPORT_NOT_READY) {
+    return 'ROUTER_QUERY_TRANSPORT_NOT_READY';
+  }
+  return participation?.decision ===
+    CONTROL_PLANE_PARTICIPATION_DECISION.DEFER ?
+    'CONTROL_PLANE_PARTICIPATION_DEFERRED' :
+    'CONTROL_PLANE_PARTICIPATION_BLOCKED';
+}
+
+function buildParticipationErrorMessage(participation) {
+  if (participation?.reasonCode ===
+      CONTROL_PLANE_READINESS_REASON.LOCAL_QUERY_TRANSPORT_NOT_READY &&
+      typeof participation?.localQueryTransport?.reason === TYPEOF.STRING &&
+      participation.localQueryTransport.reason.length > NUM.ZERO) {
+    return participation.localQueryTransport.reason;
+  }
+  return participation?.decision ===
+    CONTROL_PLANE_PARTICIPATION_DECISION.DEFER ?
+    'Control-plane participation deferred by canonical readiness' :
+    'Control-plane participation blocked by canonical readiness';
+}
+
+function shouldAllowLocalExecutionForParticipation({
+  localNodeId = null,
+  targetNodeId = null,
+  participationKind = null,
+  localQueryTransport = null,
+} = {}) {
+  if (localNodeId !== targetNodeId) {
+    return false;
+  }
+  if (participationKind !==
+      CONTROL_PLANE_PARTICIPATION_KIND.REPLICA_OPERATION_OWNER_READ) {
+    return false;
+  }
+  if (localQueryTransport?.ready !== false) {
+    return false;
+  }
+  return true;
 }
 
 class ControlPlaneReadinessService {
@@ -436,6 +537,7 @@ class ControlPlaneReadinessService {
     const dimensions = this.buildDimensions({
       nodeId,
       nodeRow,
+      nodeEvidence,
       lifecycleState,
       serviceRows,
       capacity,
@@ -548,6 +650,7 @@ class ControlPlaneReadinessService {
     const dimensions = this.buildDimensions({
       nodeId,
       nodeRow,
+      nodeEvidence,
       lifecycleState,
       serviceRows,
       capacity: null,
@@ -596,6 +699,172 @@ class ControlPlaneReadinessService {
       options,
     );
     return snapshot;
+  }
+
+  /**
+   * Return one canonical control-plane participation decision for the
+   * requested node and work kind.
+   * @param {string} nodeId
+   * @param {Object} [options={}]
+   * @return {Promise<Object>}
+   */
+  async getControlPlaneParticipation(nodeId, options = {}) {
+    const participationKind = normalizeControlPlaneParticipationKind(
+      options?.participationKind,
+    );
+    const decisionDimension = resolveParticipationDecisionDimension(
+      participationKind,
+      options?.decisionDimension,
+    );
+    const readiness = await this.getNodeReadiness(nodeId, {
+      ...options,
+      decisionDimension,
+    });
+    return this.buildControlPlaneParticipation({
+      nodeId,
+      readiness,
+      participationKind,
+      decisionDimension,
+    });
+  }
+
+  /**
+   * Return one synchronous canonical control-plane participation decision.
+   * @param {string} nodeId
+   * @param {Object} [options={}]
+   * @return {Object}
+   */
+  getControlPlaneParticipationSync(nodeId, options = {}) {
+    const participationKind = normalizeControlPlaneParticipationKind(
+      options?.participationKind,
+    );
+    const decisionDimension = resolveParticipationDecisionDimension(
+      participationKind,
+      options?.decisionDimension,
+    );
+    const readiness = this.getNodeReadinessSync(nodeId, {
+      ...options,
+      decisionDimension,
+    });
+    return this.buildControlPlaneParticipation({
+      nodeId,
+      readiness,
+      participationKind,
+      decisionDimension,
+    });
+  }
+
+  /**
+   * Build one bounded participation decision from the canonical readiness
+   * snapshot.
+   * @param {Object} context
+   * @return {Object}
+   * @private
+   */
+  buildControlPlaneParticipation(context) {
+    const snapshot =
+      context?.readiness &&
+      typeof context.readiness === TYPEOF.OBJECT ?
+        context.readiness :
+        null;
+    const decisionDimension = resolveParticipationDecisionDimension(
+      normalizeControlPlaneParticipationKind(context?.participationKind),
+      context?.decisionDimension,
+    );
+    const decision = snapshot?.dimensions &&
+      typeof snapshot.dimensions === TYPEOF.OBJECT ?
+      evaluateEligibilityDecision(snapshot, decisionDimension) :
+      Object.freeze({
+        nodeId: context?.nodeId || null,
+        decisionDimension,
+        eligible: false,
+        failedDimensions: Object.freeze([decisionDimension]),
+        reasonCodes: Object.freeze([]),
+      });
+    const summary = compactEligibilitySnapshot(snapshot, decisionDimension);
+    const localQueryTransport = snapshot?.nodeEvidence ?
+      Object.freeze({
+        state: snapshot.nodeEvidence.localQueryTransportState || null,
+        ready:
+          typeof snapshot.nodeEvidence.localQueryTransportReady === 'boolean' ?
+            snapshot.nodeEvidence.localQueryTransportReady :
+            null,
+        reason: snapshot.nodeEvidence.localQueryTransportReason || null,
+        retryAfterMs:
+          Number.isFinite(
+            snapshot.nodeEvidence.localQueryTransportRetryAfterMs,
+          ) ?
+            snapshot.nodeEvidence.localQueryTransportRetryAfterMs :
+            null,
+      }) :
+      null;
+    const reasonCodes = Array.isArray(decision?.reasonCodes) ?
+      decision.reasonCodes :
+      Object.freeze([]);
+    const localExecutionAllowed = shouldAllowLocalExecutionForParticipation({
+      localNodeId: this.nodeId,
+      targetNodeId: context?.nodeId || null,
+      participationKind: normalizeControlPlaneParticipationKind(
+        context?.participationKind,
+      ),
+      localQueryTransport,
+    });
+    const reasonCode =
+      reasonCodes.length > NUM.ZERO ? reasonCodes[NUM.ZERO] : null;
+    const deferRetry =
+      reasonCode ===
+        CONTROL_PLANE_READINESS_REASON.LOCAL_QUERY_TRANSPORT_NOT_READY &&
+      Number.isFinite(localQueryTransport?.retryAfterMs) &&
+      localQueryTransport.retryAfterMs > NUM.ZERO;
+    const participation = {
+      nodeId: context?.nodeId || null,
+      participationKind: normalizeControlPlaneParticipationKind(
+        context?.participationKind,
+      ),
+      decisionDimension,
+      eligible: decision?.eligible === true,
+      decision:
+        decision?.eligible === true ?
+          CONTROL_PLANE_PARTICIPATION_DECISION.READY :
+          (
+            deferRetry ?
+              CONTROL_PLANE_PARTICIPATION_DECISION.DEFER :
+              CONTROL_PLANE_PARTICIPATION_DECISION.BLOCKED
+          ),
+      reasonCode,
+      reasonCodes,
+      retryAfterMs:
+        Number.isFinite(localQueryTransport?.retryAfterMs) &&
+          localQueryTransport.retryAfterMs > NUM.ZERO ?
+          localQueryTransport.retryAfterMs :
+          null,
+      deferRetry,
+      localExecutionAllowed,
+      errorCode: null,
+      error: null,
+      localQueryTransport,
+      snapshot,
+      failedDimensions: Array.isArray(decision?.failedDimensions) ?
+        decision.failedDimensions :
+        Object.freeze([]),
+      summary: summary ? Object.freeze({
+        decisionDimension: summary.decisionDimension || decisionDimension,
+        observedAt: summary.observedAt || null,
+        lifecycleState: summary.lifecycleState || null,
+        reasonCodes: summary.reasonCodes || Object.freeze([]),
+        failedDimensions: Array.isArray(decision?.failedDimensions) ?
+          decision.failedDimensions :
+          Object.freeze([]),
+      }) : null,
+    };
+
+    if (participation.decision !==
+        CONTROL_PLANE_PARTICIPATION_DECISION.READY) {
+      participation.errorCode = buildParticipationErrorCode(participation);
+      participation.error = buildParticipationErrorMessage(participation);
+    }
+
+    return Object.freeze(participation);
   }
 
   /**
@@ -1061,6 +1330,11 @@ class ControlPlaneReadinessService {
    * @private
    */
   buildDimensions(context) {
+    const localQueryTransportRoutable =
+      this.isLocalQueryTransportRoutableForNode(
+        context.nodeId,
+        context.nodeEvidence,
+      );
     const publicationHealthy = this.isPublicationHealthy(context.publication);
     const processAlive =
       !CONTROL_PLANE_READINESS_DEFAULT.NON_RUNNING_PROCESS_STATES.includes(
@@ -1070,7 +1344,9 @@ class ControlPlaneReadinessService {
       context.nodeId,
       context.nodeRow,
     );
-    const routingReady = this.hasRoutableService(context.serviceRows);
+    const routingReady =
+      this.hasRoutableService(context.serviceRows) &&
+      localQueryTransportRoutable;
     const loadReady = this.isLoadReady(context.nodeRow);
     const controlPlaneWritable = clusterMemberHealthy &&
       routingReady &&
@@ -1150,6 +1426,11 @@ class ControlPlaneReadinessService {
   buildReasons(context) {
     const reasons = [];
     const dimensions = context.dimensions;
+    const localQueryTransportBlocked =
+      this.isLocalQueryTransportBlockedForNode(
+        context.nodeId,
+        context.nodeEvidence,
+      );
 
     if (!dimensions.processAlive) {
       reasons.push(buildReason(
@@ -1170,12 +1451,33 @@ class ControlPlaneReadinessService {
       ));
     }
     if (!dimensions.routingReady) {
-      reasons.push(buildReason(
-        CONTROL_PLANE_READINESS_REASON.ROUTING_NOT_READY,
-        CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY,
-        CONTROL_PLANE_READINESS_OWNER.SYSTEM_TABLE_CACHE,
-        context.observedAt,
-      ));
+      if (localQueryTransportBlocked) {
+        reasons.push(buildReason(
+          CONTROL_PLANE_READINESS_REASON.LOCAL_QUERY_TRANSPORT_NOT_READY,
+          CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY,
+          CONTROL_PLANE_READINESS_OWNER.MESSAGE_ROUTER,
+          context.observedAt,
+          {
+            localQueryTransportState:
+              context.nodeEvidence?.localQueryTransportState || null,
+            localQueryTransportReason:
+              context.nodeEvidence?.localQueryTransportReason || null,
+            localQueryTransportRetryAfterMs:
+              Number.isFinite(
+                context.nodeEvidence?.localQueryTransportRetryAfterMs,
+              ) ?
+                context.nodeEvidence.localQueryTransportRetryAfterMs :
+                null,
+          },
+        ));
+      } else {
+        reasons.push(buildReason(
+          CONTROL_PLANE_READINESS_REASON.ROUTING_NOT_READY,
+          CONTROL_PLANE_READINESS_DIMENSION.ROUTING_READY,
+          CONTROL_PLANE_READINESS_OWNER.SYSTEM_TABLE_CACHE,
+          context.observedAt,
+        ));
+      }
     }
     if (!dimensions.loadReady) {
       reasons.push(buildReason(
@@ -1216,6 +1518,35 @@ class ControlPlaneReadinessService {
     }
 
     return Object.freeze(reasons);
+  }
+
+  /**
+   * Return whether one node remains eligible for routed control-plane reads
+   * given locally observable query/data-plane transport evidence.
+   * Only the self node has direct local transport evidence.
+   * @param {string} nodeId
+   * @param {Object|null} nodeEvidence
+   * @return {boolean}
+   * @private
+   */
+  isLocalQueryTransportRoutableForNode(nodeId, nodeEvidence = null) {
+    if (nodeId !== this.nodeId) {
+      return true;
+    }
+    return nodeEvidence?.localQueryTransportReady !== false;
+  }
+
+  /**
+   * Return true when one node's routed-read eligibility is blocked by the
+   * canonical local query/data-plane transport owner.
+   * @param {string} nodeId
+   * @param {Object|null} nodeEvidence
+   * @return {boolean}
+   * @private
+   */
+  isLocalQueryTransportBlockedForNode(nodeId, nodeEvidence = null) {
+    return nodeId === this.nodeId &&
+      nodeEvidence?.localQueryTransportReady === false;
   }
 
   /**
@@ -1462,6 +1793,22 @@ class ControlPlaneReadinessService {
           dimensions[
             CONTROL_PLANE_READINESS_DIMENSION.METADATA_PUBLICATION_HEALTHY
           ] === true,
+        localQueryTransportState:
+          typeof nodeEvidence.localQueryTransportState === TYPEOF.STRING ?
+            nodeEvidence.localQueryTransportState :
+            null,
+        localQueryTransportReady:
+          typeof nodeEvidence.localQueryTransportReady === 'boolean' ?
+            nodeEvidence.localQueryTransportReady :
+            null,
+        localQueryTransportReason:
+          typeof nodeEvidence.localQueryTransportReason === TYPEOF.STRING ?
+            nodeEvidence.localQueryTransportReason :
+            null,
+        localQueryTransportRetryAfterMs:
+          Number.isFinite(nodeEvidence.localQueryTransportRetryAfterMs) ?
+            nodeEvidence.localQueryTransportRetryAfterMs :
+            null,
         publicationMode:
           typeof publication.currentMode === TYPEOF.STRING ?
             publication.currentMode :
@@ -2105,6 +2452,7 @@ class ControlPlaneReadinessService {
   buildClusterMemberHealthDetails(nodeId, nodeRow) {
     const now = this.now();
     const transportState = this.getNodeTransportState(nodeId, nodeRow);
+    const localQueryTransport = this.getLocalQueryTransportEvidence(nodeId);
     const lastHeartbeat = Number(nodeRow?.[COLUMN.LAST_HEARTBEAT]);
     const readyLeaseExpiresAt = Number(nodeRow?.[COLUMN.READY_LEASE_EXPIRES_AT]);
     const heartbeatAgeMs = Number.isFinite(lastHeartbeat) ?
@@ -2120,6 +2468,16 @@ class ControlPlaneReadinessService {
       rowConnectionState: transportState.rowState,
       routerConnectionState: transportState.routerState,
       transportConnected: transportState.connected,
+      localQueryTransportState: localQueryTransport?.state || null,
+      localQueryTransportReady:
+        typeof localQueryTransport?.ready === 'boolean' ?
+          localQueryTransport.ready :
+          null,
+      localQueryTransportReason: localQueryTransport?.reason || null,
+      localQueryTransportRetryAfterMs:
+        Number.isFinite(localQueryTransport?.retryAfterMs) ?
+          localQueryTransport.retryAfterMs :
+          null,
       lastHeartbeat: Number.isFinite(lastHeartbeat) ? lastHeartbeat : null,
       heartbeatAgeMs: Number.isFinite(heartbeatAgeMs) ? heartbeatAgeMs : null,
       readyLeaseExpiresAt: Number.isFinite(readyLeaseExpiresAt) ?
@@ -2130,6 +2488,27 @@ class ControlPlaneReadinessService {
       readyNow: isNodeRecordReady(nodeRow, {now}),
       readyWhenWritten: wasNodeRecordReadyWhenWritten(nodeRow, {now}),
     });
+  }
+
+  /**
+   * Resolve bounded local query/data-plane transport evidence for self-node
+   * readiness diagnostics.
+   * @param {string} nodeId
+   * @return {{state:string,ready:boolean|null,reason:string|null,retryAfterMs:number|null}|null}
+   * @private
+   */
+  getLocalQueryTransportEvidence(nodeId) {
+    if (nodeId !== this.nodeId) {
+      return null;
+    }
+    if (!this.messageRouter ||
+        typeof this.messageRouter.getQueryDataPlaneTransportReadiness !==
+          TYPEOF.FUNCTION) {
+      return normalizeLocalQueryTransportEvidence(null);
+    }
+    return normalizeLocalQueryTransportEvidence(
+      this.messageRouter.getQueryDataPlaneTransportReadiness(),
+    );
   }
 
   /**

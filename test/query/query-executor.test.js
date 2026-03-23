@@ -20,6 +20,7 @@ import {
 import {MIGRATION_PARTITION_OPERATION} from '../../src/migration/migration-constants.js';
 import {
   CONTROL_PLANE_PUBLICATION_MODE,
+  CONTROL_PLANE_READINESS_REASON,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
   ControlPlaneReadinessService,
@@ -2833,6 +2834,185 @@ test('QueryExecutor - isRoutablePartitionService accepts active service ' +
     executor.isRoutablePartitionService(service),
     true,
     'missing capacity data must not make an active healthy replica unroutable',
+  );
+  t.end();
+});
+
+test('QueryExecutor - filters self routed-read candidates when canonical ' +
+  'readiness reports local query transport deferred', async (t) => {
+  const nodeId = 'node-self-routing-gate';
+  const cache = createReadinessCache({
+    nodes: [{
+      [COLUMN.NODE_ID]: nodeId,
+      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+      [COLUMN.READY_LEASE_EXPIRES_AT]: 3000,
+      [COLUMN.LAST_HEARTBEAT]: 1000,
+      [COLUMN.CPU_USAGE_PERCENT]: 10,
+      [COLUMN.MEMORY_USAGE_PERCENT]: 10,
+      [COLUMN.DISK_USAGE_PERCENT]: 10,
+    }],
+    services: [{
+      [COLUMN.SERVICE_ID]: 'p-self-r1',
+      [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
+      partition_id: 'p-self',
+      [COLUMN.NODE_ID]: nodeId,
+      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+      [COLUMN.ADDRESS]: `${nodeId}/partition/p-self`,
+      raft_role: 'leader',
+    }],
+  });
+  const readinessService = new ControlPlaneReadinessService({
+    nodeId,
+    systemTableCache: cache,
+    messageRouter: {
+      getConnectionState() {
+        return STATE.CONNECTED;
+      },
+      getQueryDataPlaneTransportReadiness() {
+        return {
+          ready: false,
+          reason: 'query ingress owner not ready',
+          retryAfterMs: 777,
+        };
+      },
+    },
+    storageAccountingService: {
+      async getCapacitySnapshotForNode(targetNodeId) {
+        return {
+          nodeId: targetNodeId,
+          budgetBytes: 1000,
+          pressureState: 'normal',
+        };
+      },
+    },
+    cdcGroupPropagationService: createReadinessPublicationService({
+      currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+      reasonCode: null,
+      enteredAt: '2026-03-04T00:00:00.000Z',
+      recentTransitions: [],
+    }),
+    now: () => 1500,
+  });
+  const executor = new QueryExecutor({
+    messageRouter: createMockMessageRouter(),
+    systemCache: cache,
+    controlPlaneReadinessService: readinessService,
+  });
+  const warnings = [];
+  executor.logger = {
+    warn(message, context) {
+      warnings.push({message, context});
+    },
+  };
+
+  const candidates = executor.getPartitionServiceCandidates('p-self', true);
+
+  t.same(
+    candidates,
+    [],
+    'self candidate should be filtered through canonical readiness while local query transport is deferred',
+  );
+  t.equal(warnings.length, 1);
+  t.equal(
+    warnings[0].context.routingSnapshot.reasonCode,
+    QUERY_ROUTING_DIAGNOSTIC_REASON.ALL_SERVICES_FILTERED_BY_READINESS,
+  );
+  t.ok(
+    warnings[0].context.routingSnapshot.deniedByNodeId[nodeId]
+      .reasonCodes.includes(
+        CONTROL_PLANE_READINESS_REASON.LOCAL_QUERY_TRANSPORT_NOT_READY,
+      ),
+    'routing denial should expose the local query transport gating reason',
+  );
+  t.end();
+});
+
+test('QueryExecutor - consumes canonical participation contract for self ' +
+  'routed-read gating', async (t) => {
+  const nodeId = 'node-self-participation-gate';
+  const cache = createReadinessCache({
+    nodes: [{
+      [COLUMN.NODE_ID]: nodeId,
+      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+      [COLUMN.READY_LEASE_EXPIRES_AT]: 3000,
+      [COLUMN.LAST_HEARTBEAT]: 1000,
+      [COLUMN.CPU_USAGE_PERCENT]: 10,
+      [COLUMN.MEMORY_USAGE_PERCENT]: 10,
+      [COLUMN.DISK_USAGE_PERCENT]: 10,
+    }],
+    services: [{
+      [COLUMN.SERVICE_ID]: 'p-self-participation-r1',
+      [COLUMN.SERVICE_TYPE]: SERVICE_TYPE.PARTITION,
+      partition_id: 'p-self-participation',
+      [COLUMN.NODE_ID]: nodeId,
+      [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+      [COLUMN.ADDRESS]: `${nodeId}/partition/p-self-participation`,
+      raft_role: 'leader',
+    }],
+  });
+  let participationCalls = 0;
+  const executor = new QueryExecutor({
+    messageRouter: createMockMessageRouter(),
+    systemCache: cache,
+    controlPlaneReadinessService: {
+      getControlPlaneParticipationSync(targetNodeId) {
+        participationCalls += 1;
+        return {
+          nodeId: targetNodeId,
+          eligible: false,
+          decision: 'defer',
+          decisionDimension: 'repairEligible',
+          reasonCode:
+            CONTROL_PLANE_READINESS_REASON.LOCAL_QUERY_TRANSPORT_NOT_READY,
+          reasonCodes: [
+            CONTROL_PLANE_READINESS_REASON.LOCAL_QUERY_TRANSPORT_NOT_READY,
+          ],
+          retryAfterMs: 654,
+          deferRetry: true,
+          summary: {
+            decisionDimension: 'repairEligible',
+            observedAt: '2026-03-22T00:00:00.000Z',
+            lifecycleState: SERVICE_STATUS.ACTIVE,
+            reasonCodes: [
+              CONTROL_PLANE_READINESS_REASON
+                .LOCAL_QUERY_TRANSPORT_NOT_READY,
+            ],
+            failedDimensions: ['routingReady', 'repairEligible'],
+          },
+        };
+      },
+    },
+  });
+  const warnings = [];
+  executor.logger = {
+    warn(message, context) {
+      warnings.push({message, context});
+    },
+  };
+
+  const candidates = executor.getPartitionServiceCandidates(
+    'p-self-participation',
+    true,
+  );
+
+  t.same(
+    candidates,
+    [],
+    'routed reads should defer through the shared participation contract',
+  );
+  t.equal(participationCalls, 1,
+    'query routing should consult the canonical participation contract');
+  t.equal(warnings.length, 1);
+  t.equal(
+    warnings[0].context.routingSnapshot.reasonCode,
+    QUERY_ROUTING_DIAGNOSTIC_REASON.ALL_SERVICES_FILTERED_BY_READINESS,
+  );
+  t.ok(
+    warnings[0].context.routingSnapshot.deniedByNodeId[nodeId]
+      .reasonCodes.includes(
+        CONTROL_PLANE_READINESS_REASON.LOCAL_QUERY_TRANSPORT_NOT_READY,
+      ),
+    'routing denial should preserve the canonical participation reason',
   );
   t.end();
 });

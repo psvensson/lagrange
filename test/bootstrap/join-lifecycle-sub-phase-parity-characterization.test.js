@@ -375,6 +375,63 @@ test('Join terminal sub-phase QUERYING_STATE should preserve READY transition',
     );
   });
 
+test('Join completeSuccessfulJoin keeps same-state READY idempotent through lifecycle owner',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const service = new NodeJoiningService({
+      nodeId: TEST_NODE_ID,
+      nodeAddress: TEST_NODE_ADDRESS,
+      seedNodeAddress: 'http://localhost:8080',
+    });
+
+    service.lifecycleStateMachine.transition(NodeState.CONNECTING);
+    service.lifecycleStateMachine.transition(NodeState.DISCOVERING);
+    service.lifecycleStateMachine.transition(NodeState.JOINING);
+    service.lifecycleStateMachine.transition(NodeState.READY);
+
+    const transitionErrors = [];
+    service.lifecycleStateMachine.on(
+      NODE_LIFECYCLE_EVENT.TRANSITION_ERROR,
+      (payload) => {
+        transitionErrors.push(payload);
+      },
+    );
+
+    const originalTransition =
+      service.lifecycleStateMachine.transition.bind(service.lifecycleStateMachine);
+    let transitionCalls = 0;
+    service.lifecycleStateMachine.transition = (newState) => {
+      transitionCalls += 1;
+      return originalTransition(newState);
+    };
+
+    service.messageGroupServices = new Map();
+    service.activateControlPlaneBackgroundWriters = () => {};
+    service.startLatencyTopologyLifecycle = () => {};
+    service.logger = SILENT_LOGGER;
+    service.startTime = 0;
+    service.now = () => 100;
+
+    service.completeSuccessfulJoin();
+
+    t.equal(
+      transitionCalls,
+      1,
+      'completeSuccessfulJoin should still route through the lifecycle owner',
+    );
+    t.equal(
+      transitionErrors.length,
+      0,
+      'same-state READY should not emit transitionError noise',
+    );
+    t.equal(
+      service.lifecycleStateMachine.getState(),
+      NodeState.READY,
+      'lifecycle state should remain READY',
+    );
+  });
+
 // ---------------------------------------------------------------------------
 // Declarative phase-to-sub-phase mapping contract (Validates: Requirements 4.4)
 // ---------------------------------------------------------------------------

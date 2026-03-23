@@ -154,6 +154,11 @@ test('partial catchup schedules follow-up replay at initial delay',
         PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS,
         'replay delay should be reset to initial value after handshake',
       );
+      t.equal(
+        partition.getStats().cdcReplay.replayRetryDepth,
+        NUM.ONE,
+        'partition stats should expose replay retry depth after handshake failure',
+      );
 
       const replayTimers = scheduledTimers.filter(
         (timer) => timer.delay ===
@@ -180,6 +185,78 @@ test('partial catchup schedules follow-up replay at initial delay',
       }
     } finally {
       globalThis.setTimeout = originalSetTimeout;
+      await partition.shutdown();
+    }
+  });
+
+test('buffered replay growth is exposed via partition stats', async (t) => {
+  const partition = createTestPartition();
+  await partition.initialize();
+
+  const originalSetTimeout = globalThis.setTimeout;
+  globalThis.setTimeout = () => ({timer: true});
+
+  try {
+    partition.bufferCDCEventForRetry(
+      buildNodeCdcEvent('node-buffer-growth-1', NUM.ONE),
+      'test-buffer-growth',
+    );
+    partition.bufferCDCEventForRetry(
+      buildNodeCdcEvent('node-buffer-growth-2', NUM.TWO),
+      'test-buffer-growth',
+    );
+
+    const stats = partition.getStats().cdcReplay;
+    t.equal(
+      stats.replayBufferGrowthCount,
+      NUM.TWO,
+      'partition stats should expose buffered replay growth count',
+    );
+    t.equal(
+      stats.bufferedEvents,
+      NUM.TWO,
+      'partition stats should expose current buffered replay depth',
+    );
+  } finally {
+    globalThis.setTimeout = originalSetTimeout;
+    await partition.shutdown();
+  }
+});
+
+test('buffered replay marks replay-only delivery on replayed events',
+  async (t) => {
+    const partition = createTestPartition();
+    await partition.initialize();
+
+    try {
+      partition.cdcEventBuffer.buffer(
+        buildNodeCdcEvent('node-replay-only', NUM.ONE),
+      );
+
+      const deliveredEvents = [];
+      const handshake = await partition.subscribeToCDCWithHandshake(
+        async (cdcEvent) => {
+          deliveredEvents.push(cdcEvent);
+        },
+        {subscriberId: 'replay-only-subscriber'},
+      );
+
+      t.equal(
+        handshake.catchup.mode,
+        PARTITION_SERVICE_CDC.CATCHUP_MODE_BACKFILL,
+        'handshake should treat buffered events as catchup replay',
+      );
+      t.equal(
+        deliveredEvents.length,
+        NUM.ONE,
+        'subscriber should receive the replayed buffered event',
+      );
+      t.equal(
+        deliveredEvents[0]?.replayOnly,
+        true,
+        'replayed buffered events should be marked as replay-only churn',
+      );
+    } finally {
       await partition.shutdown();
     }
   });

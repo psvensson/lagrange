@@ -20,6 +20,18 @@ const CONTROL_PLANE_READINESS_OWNER = Object.freeze({
   SYSTEM_TABLE_CACHE: 'SystemTableCache',
   STORAGE_ACCOUNTING: 'StorageCapacityAccountingService',
   CDC_GROUP_PROPAGATION: 'CDCGroupPropagationService',
+  MESSAGE_ROUTER: 'MessageRouter',
+});
+
+const CONTROL_PLANE_PARTICIPATION_KIND = Object.freeze({
+  ROUTED_READ: 'routed_read',
+  REPLICA_OPERATION_OWNER_READ: 'replica_operation_owner_read',
+});
+
+const CONTROL_PLANE_PARTICIPATION_DECISION = Object.freeze({
+  READY: 'ready',
+  DEFER: 'defer',
+  BLOCKED: 'blocked',
 });
 
 const CONTROL_PLANE_READINESS_REASON = Object.freeze({
@@ -27,6 +39,7 @@ const CONTROL_PLANE_READINESS_REASON = Object.freeze({
   PROCESS_NOT_ALIVE: 'process_not_alive',
   CLUSTER_MEMBER_UNHEALTHY: 'cluster_member_unhealthy',
   ROUTING_NOT_READY: 'routing_not_ready',
+  LOCAL_QUERY_TRANSPORT_NOT_READY: 'local_query_transport_not_ready',
   LOAD_NOT_READY: 'load_not_ready',
   STORAGE_BUDGET_UNAVAILABLE: 'storage_budget_unavailable',
   STORAGE_PRESSURE_HARD: 'storage_pressure_hard',
@@ -71,6 +84,8 @@ const READINESS_SNAPSHOT_KEY = Object.freeze({
 });
 
 export {
+  CONTROL_PLANE_PARTICIPATION_DECISION,
+  CONTROL_PLANE_PARTICIPATION_KIND,
   CONTROL_PLANE_PUBLICATION_MODE,
   CONTROL_PLANE_READINESS_DEFAULT,
   CONTROL_PLANE_READINESS_DIMENSION,

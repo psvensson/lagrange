@@ -588,6 +588,8 @@ test('LogsTableService defers transient control-plane write failures instead ' +
   LogsTableService.resetInstance();
 
   const scheduledTimeouts = [];
+  const warnCalls = [];
+  const originalConsoleWarn = console.warn;
   let writeAttempts = 0;
   let currentNow = 1000;
   const transientError =
@@ -600,6 +602,9 @@ test('LogsTableService defers transient control-plane write failures instead ' +
       }),
     maxRetries: 3,
     retryDelayMs: 10,
+    maxPendingWrites: 2,
+    pressureHighWatermark: 2,
+    pressureRetainedPendingWrites: 2,
     setTimeoutFn(callback, delayMs) {
       const handle = {callback, delayMs};
       scheduledTimeouts.push(handle);
@@ -613,6 +618,12 @@ test('LogsTableService defers transient control-plane write failures instead ' +
     now: () => currentNow,
   });
   service.initialize();
+  console.warn = (...args) => {
+    warnCalls.push(args);
+  };
+  t.teardown(() => {
+    console.warn = originalConsoleWarn;
+  });
 
   await service.writeLogEntry({
     logId: 'log-defer-1',
@@ -663,6 +674,25 @@ test('LogsTableService defers transient control-plane write failures instead ' +
     75,
     'continuation flush should honor retryAfterMs',
   );
+  t.equal(warnCalls.length, 1, 'should emit one bounded defer warning');
+  t.equal(typeof warnCalls[0][1], 'object',
+    'defer warning should include structured diagnostics');
+  t.equal(warnCalls[0][1]?.pendingWrites, 2,
+    'defer warning should include pending write count');
+  t.equal(warnCalls[0][1]?.retainedPressureBacklogCap, 2,
+    'defer warning should include retained backlog cap');
+  t.equal(warnCalls[0][1]?.maxPendingWrites, service.maxPendingWrites,
+    'defer warning should include max pending writes');
+  t.equal(warnCalls[0][1]?.isWriting, false,
+    'defer warning should include write-in-progress state');
+  t.equal(warnCalls[0][1]?.requeuedEntries, 2,
+    'defer warning should report how many entries were requeued');
+  t.equal(warnCalls[0][1]?.droppedEntries, 0,
+    'defer warning should report how many entries were dropped');
+  t.equal(service.getStats().pendingWriteGrowthCount, 2,
+    'stats should expose pending-write growth events');
+  t.equal(service.getStats().retainedBacklogGrowthCount, 0,
+    'stats should expose retained-backlog growth events');
 
   currentNow = 1100;
   service.logsOwner = createLogsOwner(async () => ({success: true}));

@@ -4,6 +4,10 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {
+  ControlPlaneMessageType,
+  getControlPlaneMessageRequiredTables,
+} from '../../src/control-plane/control-plane-constants.js';
+import {
   SeedInfrastructurePhase,
 } from '../../src/bootstrap/phases/seed-infrastructure-phase.js';
 import {
@@ -32,10 +36,14 @@ test(
 
     const originalCreate = MessageRouterSetup.create;
     let installedResolver = null;
+    const leaderServiceCalls = [];
     const leaderService = {
       initialized: false,
       sendMessage: async () => ({acknowledged: true}),
     };
+    const requiredTables = getControlPlaneMessageRequiredTables(
+      ControlPlaneMessageType.NODE_STATE_UPDATE,
+    );
 
     MessageRouterSetup.create = async () => ({
       hasSelfConnection() {
@@ -71,7 +79,10 @@ test(
           },
           getConfig: () => ({wsPort: 12020}),
           getWsPort: () => 12020,
-          getLeaderMessageGroupService: () => leaderService,
+          getLeaderMessageGroupService: (options) => {
+            leaderServiceCalls.push(options);
+            return leaderService;
+          },
           setMessageRouter(router) {
             messageRouter = router;
           },
@@ -98,12 +109,22 @@ test(
         null,
         'uninitialized message-group service should not be exposed as query transport',
       );
+      assert.deepEqual(
+        leaderServiceCalls[0],
+        {requiredTables},
+        'seed query transport resolver should request control-plane required tables',
+      );
 
       leaderService.initialized = true;
       assert.equal(
         installedResolver(),
         leaderService,
         'initialized message-group service should become the query transport',
+      );
+      assert.deepEqual(
+        leaderServiceCalls[1],
+        {requiredTables},
+        'seed query transport resolver should keep required-table selection stable',
       );
     } finally {
       MessageRouterSetup.create = originalCreate;

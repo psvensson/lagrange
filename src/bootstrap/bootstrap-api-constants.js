@@ -25,6 +25,7 @@ const BOOTSTRAP_API_DEFAULT = Object.freeze({
   BOOTSTRAP_ADMISSION_RETRY_AFTER_MS: 1000,
   MOVE_REPLICA_ASSIGNMENT_LEASE_MS: NUM.THIRTY_THOUSAND,
   MOVE_REPLICA_ASSIGNMENT_SWEEP_INTERVAL_MS: NUM.THOUSAND,
+  SERVICE_REGISTRATION_WRITE_RETRY_TIMEOUT_MS: NUM.TWO * NUM.THOUSAND,
   SERVICE_REGISTRATION_CACHE_VISIBILITY_TIMEOUT_MS: NUM.FIVE_THOUSAND,
   SERVICE_REGISTRATION_CACHE_VISIBILITY_POLL_INTERVAL_MS: NUM.TEN,
 });
@@ -86,6 +87,10 @@ const BOOTSTRAP_API_LOG_MSG = Object.freeze({
     'MOVE_REPLICA assignment reservation conflict detected',
   MOVE_REPLICA_ASSIGNMENT_VALIDATION_FAILED:
     'MOVE_REPLICA assignment token validation failed',
+  SERVICE_REGISTRATION_DEFERRED:
+    'Register-service metadata publication deferred',
+  SERVICE_REGISTRATION_WRITE_RETRY:
+    'Retrying register-service metadata write after retryable failure',
   SERVICE_REGISTRATION_CACHE_VISIBILITY_TIMEOUT:
     'Service registration cache visibility timeout diagnostics',
   SERVICE_REGISTERED: 'Service registered in services table',
@@ -167,12 +172,12 @@ const BOOTSTRAP_API_SQL = Object.freeze({
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   INSERT_REPLICA_OPERATION: `INSERT INTO replica_operations (
         operation_id, type, partition_id, replica_id, source_node_id, target_node_id,
-        status, workflow_step, created_at, updated_at, completed_at, error_message,
-        steps_history, entity_type, entity_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        status, workflow_step, created_at, updated_at, completed_at, lease_expires_at,
+        error_message, steps_history, entity_type, entity_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   UPDATE_REPLICA_OPERATION: `UPDATE replica_operations SET
         status = ?, workflow_step = ?, updated_at = ?, completed_at = ?,
-        error_message = ?, steps_history = ?
+        lease_expires_at = ?, error_message = ?, steps_history = ?
       WHERE operation_id = ?`,
   SELECT_REPLICA_OPERATION_BY_ID: `SELECT *
       FROM replica_operations

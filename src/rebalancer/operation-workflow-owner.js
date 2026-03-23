@@ -238,6 +238,37 @@ class OperationWorkflowOwner {
     );
   }
 
+  /**
+   * Delay authoritative empty-owner scans until the cache has had one bounded
+   * chance to observe local replica_operations rows. An empty cache is not
+   * proof of zero operations; it is only a reason to wait briefly.
+   * @param {number} [now=Date.now()]
+   * @return {boolean}
+   */
+  shouldDelayEmptyIncompleteOperationQuery(now = Date.now()) {
+    if (this.incompleteOperationQueryEmptyBackoffMs <= NUM.ZERO) {
+      return false;
+    }
+    if (this.lastEmptyIncompleteOperationQueryAtMs <= NUM.ZERO) {
+      this.lastEmptyIncompleteOperationQueryAtMs = now;
+      return true;
+    }
+    if (now - this.lastEmptyIncompleteOperationQueryAtMs <
+        this.incompleteOperationQueryEmptyBackoffMs) {
+      return true;
+    }
+    this.lastEmptyIncompleteOperationQueryAtMs = NUM.ZERO;
+    return false;
+  }
+
+  /**
+   * Clear bounded empty-owner scan deferral once local work is observed.
+   * @return {void}
+   */
+  clearEmptyIncompleteOperationQueryDelay() {
+    this.lastEmptyIncompleteOperationQueryAtMs = NUM.ZERO;
+  }
+
 
   // --- Workflow step advancement ---
 
@@ -1775,13 +1806,28 @@ class OperationWorkflowOwner {
       return;
     }
 
-    const incompleteOps =
+    const canUseCacheObservationBoundary =
+      this.repository.hasReplicaOperationCacheObservationBoundary();
+    const cachedIncompleteOps = canUseCacheObservationBoundary ?
+      await this.repository.queryIncompleteOperations({
+        skipSqlFallbackWhenCacheEmpty: true,
+      }) :
+      [];
+    if (cachedIncompleteOps.length > NUM.ZERO) {
+      this.clearEmptyIncompleteOperationQueryDelay();
+    } else if (canUseCacheObservationBoundary &&
+        this.shouldDelayEmptyIncompleteOperationQuery(now)) {
+      return;
+    }
+
+    const incompleteOps = cachedIncompleteOps.length > NUM.ZERO ?
+      cachedIncompleteOps :
       await this.repository.queryIncompleteOperations();
     if (incompleteOps.length === NUM.ZERO) {
       this.lastEmptyIncompleteOperationQueryAtMs = now;
       return;
     }
-    this.lastEmptyIncompleteOperationQueryAtMs = NUM.ZERO;
+    this.clearEmptyIncompleteOperationQueryDelay();
 
     for (const operation of incompleteOps) {
       if (!this.repository.isOperationLocallyOwned(

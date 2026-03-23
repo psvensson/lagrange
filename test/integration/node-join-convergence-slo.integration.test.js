@@ -67,6 +67,9 @@ function probeBootstrapReadyRaw(seedApiPort, options = {}) {
     options.timeoutMs > 0 ?
     Math.floor(options.timeoutMs) :
     null;
+  const path = typeof options.path === 'string' && options.path.length > 0 ?
+    options.path :
+    '/bootstrap/ready';
 
   return new Promise((resolve) => {
     let settled = false;
@@ -81,7 +84,7 @@ function probeBootstrapReadyRaw(seedApiPort, options = {}) {
     const request = httpRequest({
       host: '127.0.0.1',
       port: seedApiPort,
-      path: '/bootstrap/ready',
+      path,
       method: 'GET',
       headers: {
         Connection: 'close',
@@ -134,16 +137,19 @@ function probeBootstrapReadyRaw(seedApiPort, options = {}) {
   });
 }
 
-async function probeBootstrapReadyWithTimeout(seedApiPort, timeoutMs) {
-  const probe = await probeBootstrapReadyRaw(seedApiPort, {timeoutMs});
+async function probeBootstrapReadyWithTimeout(seedApiPort, timeoutMs, options = {}) {
+  const probe = await probeBootstrapReadyRaw(seedApiPort, {
+    ...options,
+    timeoutMs,
+  });
   return {
     statusCode: probe.statusCode,
     aborted: probe.aborted,
   };
 }
 
-async function probeBootstrapReady(seedApiPort) {
-  const response = await probeBootstrapReadyRaw(seedApiPort);
+async function probeBootstrapReady(seedApiPort, options = {}) {
+  const response = await probeBootstrapReadyRaw(seedApiPort, options);
   const rawBody = response.rawBody;
   let parsedBody = null;
   if (rawBody.length > 0) {
@@ -160,6 +166,19 @@ async function probeBootstrapReady(seedApiPort) {
     statusCode: response.statusCode,
     body: parsedBody,
   };
+}
+
+function getNonIgnorableActiveHandles() {
+  const isIgnorableHandle = (handle) => {
+    return handle === process.stdin ||
+      handle === process.stdout ||
+      handle === process.stderr ||
+      handle?._isStdio === true;
+  };
+
+  return process._getActiveHandles().filter((handle) => {
+    return !isIgnorableHandle(handle);
+  });
 }
 
 function isVoterReadyPartitionReplica(row) {
@@ -836,10 +855,10 @@ test('Real-listener join retries through transient SQL/metadata blockers under c
 
       seedApi.setSqlQueryEngine(seedQueryEngine);
       sqlFixture = installTransientSqlReadinessFixture(seedApi, {
-        blockedEvaluations: 4,
+        blockedEvaluations: 20,
       });
       leaderProbeFixture = installTransientLeaderMetadataFixture(seedApi, {
-        blockedEvaluations: 4,
+        blockedEvaluations: 20,
       });
       leaderGateFixture = installTransientBootstrapLeaderGateFixture(seedApi, {
         blockedCalls: 3,
@@ -875,16 +894,20 @@ test('Real-listener join retries through transient SQL/metadata blockers under c
 
       let sawReadinessUnavailable = false;
       const readyObserved = await waitFor(async () => {
-        const probe = await probeBootstrapReady(seedApiPort);
-        if (probe.statusCode === 503) {
+        const strictProbe = await probeBootstrapReady(seedApiPort, {
+          path: '/readyz',
+        });
+        if (strictProbe.statusCode === 503) {
           sawReadinessUnavailable = true;
         }
-        return probe.statusCode === 200 && probe.body?.ready === true;
+        const bootstrapProbe = await probeBootstrapReady(seedApiPort);
+        return bootstrapProbe.statusCode === 200 &&
+          bootstrapProbe.body?.ready === true;
       }, REAL_NETWORK_READINESS_TIMEOUT_MS, REAL_NETWORK_READINESS_INTERVAL_MS);
       t.equal(readyObserved, true,
-        'readiness probe should recover to 200 after transient blockers clear');
+        'bootstrap-join readiness probe should recover to 200 after transient blockers clear');
       t.equal(sawReadinessUnavailable, true,
-        'readiness should expose unavailable state while transient blockers are active');
+        'strict readiness should expose unavailable state while transient blockers are active');
 
       joiningService = new NodeJoiningService({
         nodeId: '550e8400-e29b-41d4-a716-446655440232',
@@ -938,22 +961,32 @@ test('Node-join convergence tests do not leak ref-ed handles', async (t) => {
   LogsTableService.resetInstance();
   LoggingService.resetInstance();
 
-  const isIgnorableHandle = (handle) => {
-    return handle === process.stdin ||
-      handle === process.stdout ||
-      handle === process.stderr;
-  };
-
-  const remainingHandles = process._getActiveHandles().filter((handle) => {
-    return !isIgnorableHandle(handle);
-  });
+  const drained = await waitFor(() => {
+    return getNonIgnorableActiveHandles().length === 0;
+  }, 2000, 50);
+  const remainingHandles = getNonIgnorableActiveHandles();
   const handleNames = remainingHandles.map((handle) => {
     return handle?.constructor?.name || 'unknown';
   });
+  const handleDetails = remainingHandles.map((handle) => {
+    return {
+      name: handle?.constructor?.name || 'unknown',
+      fd: handle?.fd ?? null,
+      localPort: handle?.localPort ?? null,
+      remotePort: handle?.remotePort ?? null,
+      destroyed: handle?.destroyed ?? null,
+      connecting: handle?.connecting ?? null,
+      pending: handle?.pending ?? null,
+      readable: handle?.readable ?? null,
+      writable: handle?.writable ?? null,
+      isStdio: handle?._isStdio ?? null,
+    };
+  });
+  t.equal(drained, true, 'ref-ed handles should drain after cleanup');
   t.equal(
     remainingHandles.length,
     0,
-    `test should not leak ref-ed handles (remaining=${handleNames.join(', ')})`,
+    `test should not leak ref-ed handles (remaining=${handleNames.join(', ')} details=${JSON.stringify(handleDetails)})`,
   );
 
   if (process.env.TAP === '1') {

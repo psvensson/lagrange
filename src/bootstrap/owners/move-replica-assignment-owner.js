@@ -75,6 +75,13 @@ class MoveReplicaAssignmentOwner {
     return this.delegates.executeBootstrapControlPlaneQuery?.(sql, params);
   }
 
+  async executeBootstrapControlPlaneMutation(mutation, options) {
+    return this.delegates.executeBootstrapControlPlaneMutation?.(
+      mutation,
+      options,
+    );
+  }
+
   buildBootstrapControlPlaneQueryError(result, message) {
     return this.delegates.buildBootstrapControlPlaneQueryError?.(result, message) ||
       new Error(message);
@@ -144,6 +151,57 @@ class MoveReplicaAssignmentOwner {
     const retryAt =
       this.nextRenewalWriteRetryAtByAssignmentId.get(assignmentId) || NUM.ZERO;
     return retryAt <= now;
+  }
+
+  buildMoveReplicaAssignmentReplicaOperationRow(
+    reservation,
+    workflowStep,
+    options = {},
+  ) {
+    return {
+      operation_id: reservation.assignmentId,
+      type: BOOTSTRAP_API_ASSIGNMENT.OPERATION_TYPE,
+      partition_id: reservation.groupId || null,
+      replica_id: reservation.replicaId,
+      source_node_id: reservation.sourceNodeId || null,
+      target_node_id: reservation.targetNodeId,
+      status: reservation.status,
+      workflow_step: workflowStep,
+      created_at: Number.isFinite(options.createdAt) ?
+        Math.floor(options.createdAt) :
+        reservation.updatedAt,
+      updated_at: reservation.updatedAt,
+      completed_at: Number.isFinite(options.completedAt) ?
+        Math.floor(options.completedAt) :
+        null,
+      lease_expires_at: Number.isFinite(reservation.leaseExpiresAt) ?
+        Math.floor(reservation.leaseExpiresAt) :
+        null,
+      error_message: options.errorMessage || null,
+      steps_history: JSON.stringify(reservation.stepsHistory || []),
+      entity_type: SERVICE_TYPE.MESSAGE_GROUP,
+      entity_id: reservation.groupId || null,
+    };
+  }
+
+  buildMoveReplicaAssignmentReplicaOperationUpdateData(
+    reservation,
+    workflowStep,
+    options = {},
+  ) {
+    return {
+      status: reservation.status,
+      workflow_step: workflowStep,
+      updated_at: reservation.updatedAt,
+      completed_at: Number.isFinite(options.completedAt) ?
+        Math.floor(options.completedAt) :
+        null,
+      lease_expires_at: Number.isFinite(reservation.leaseExpiresAt) ?
+        Math.floor(reservation.leaseExpiresAt) :
+        null,
+      error_message: options.errorMessage || null,
+      steps_history: JSON.stringify(reservation.stepsHistory || []),
+    };
   }
 
   getMoveReplicaAssignmentRowsFromCache() {
@@ -471,18 +529,20 @@ class MoveReplicaAssignmentOwner {
     if (this.getSqlQueryEngine() &&
         this.shouldAttemptRenewalWrite(renewedReservation.assignmentId, now)) {
       try {
-        const updateResult = await this.executeBootstrapControlPlaneQuery(
-          BOOTSTRAP_API_SQL.UPDATE_REPLICA_OPERATION,
-          [
-            status,
+        const updateResult = await this.executeBootstrapControlPlaneMutation({
+          operation: 'update',
+          tableName: TABLES.REPLICA_OPERATIONS,
+          whereClause: {
+            operation_id: renewedReservation.assignmentId,
+          },
+          data: this.buildMoveReplicaAssignmentReplicaOperationUpdateData(
+            renewedReservation,
             step,
-            now,
-            leaseExpiresAt,
-            null,
-            JSON.stringify(stepsHistory),
-            renewedReservation.assignmentId,
-          ],
-        );
+            {
+              completedAt: null,
+            },
+          ),
+        });
         if (updateResult?.success === false) {
           if (this.isRetryableMoveReplicaAssignmentPersistenceFailure(
             updateResult,
@@ -707,7 +767,12 @@ class MoveReplicaAssignmentOwner {
       row.source_node_id || row.sourceNodeId || row.sourceNode || row.sourceNodeId || null;
     const groupId = row[COLUMN.PARTITION_ID] || row.partition_id || row.partitionId || null;
     const status = String(row[COLUMN.STATUS] || row.status || STRING.UNKNOWN).toLowerCase();
-    const leaseRaw = row.completed_at ?? row.completedAt ?? row.leaseExpiresAt ?? null;
+    const leaseRaw =
+      row.lease_expires_at ??
+      row.leaseExpiresAt ??
+      row.completed_at ??
+      row.completedAt ??
+      null;
     const leaseExpiresAt = Number.isFinite(Number(leaseRaw)) ?
       Math.floor(Number(leaseRaw)) :
       null;
@@ -1029,28 +1094,16 @@ class MoveReplicaAssignmentOwner {
     reservations?.set(assignmentId, reservation);
 
     if (this.getSqlQueryEngine()) {
-      const params = [
-        assignmentId,
-        BOOTSTRAP_API_ASSIGNMENT.OPERATION_TYPE,
-        assignment.groupId || null,
-        replicaId,
-        assignment.sourceNodeId || null,
-        targetNodeId,
-        reservation.status,
-        WORKFLOW_STEP.PENDING,
-        now,
-        now,
-        leaseExpiresAt,
-        null,
-        JSON.stringify(stepsHistory),
-        SERVICE_TYPE.MESSAGE_GROUP,
-        assignment.groupId || null,
-      ];
       try {
-        const persistResult = await this.executeBootstrapControlPlaneQuery(
-          BOOTSTRAP_API_SQL.INSERT_REPLICA_OPERATION,
-          params,
-        );
+        const persistResult = await this.executeBootstrapControlPlaneMutation({
+          operation: 'insert',
+          tableName: TABLES.REPLICA_OPERATIONS,
+          row: this.buildMoveReplicaAssignmentReplicaOperationRow(
+            reservation,
+            WORKFLOW_STEP.PENDING,
+            {createdAt: now},
+          ),
+        });
         if (persistResult?.success === false) {
           if (!this.isRetryableMoveReplicaAssignmentPersistenceFailure(
             persistResult,
@@ -1123,18 +1176,21 @@ class MoveReplicaAssignmentOwner {
     reservations?.set(assignmentId, nextReservation);
 
     if (this.getSqlQueryEngine()) {
-      const updateResult = await this.executeBootstrapControlPlaneQuery(
-        BOOTSTRAP_API_SQL.UPDATE_REPLICA_OPERATION,
-        [
-          status,
+      const updateResult = await this.executeBootstrapControlPlaneMutation({
+        operation: 'update',
+        tableName: TABLES.REPLICA_OPERATIONS,
+        whereClause: {
+          operation_id: assignmentId,
+        },
+        data: this.buildMoveReplicaAssignmentReplicaOperationUpdateData(
+          nextReservation,
           workflowStep,
-          now,
-          now,
-          errorMessage,
-          JSON.stringify(existing?.stepsHistory || []),
-          assignmentId,
-        ],
-      );
+          {
+            completedAt: now,
+            errorMessage,
+          },
+        ),
+      });
       if (updateResult?.success === false) {
         this.getLogger().warn(
           BOOTSTRAP_API_LOG_MSG.MOVE_REPLICA_ASSIGNMENT_VALIDATION_FAILED,
@@ -1188,18 +1244,20 @@ class MoveReplicaAssignmentOwner {
     );
 
     if (this.getSqlQueryEngine()) {
-      const updateResult = await this.executeBootstrapControlPlaneQuery(
-        BOOTSTRAP_API_SQL.UPDATE_REPLICA_OPERATION,
-        [
-          BOOTSTRAP_API_HANDOFF_STATUS.COMMITTED,
+      const updateResult = await this.executeBootstrapControlPlaneMutation({
+        operation: 'update',
+        tableName: TABLES.REPLICA_OPERATIONS,
+        whereClause: {
+          operation_id: reservation.assignmentId,
+        },
+        data: this.buildMoveReplicaAssignmentReplicaOperationUpdateData(
+          nextReservation,
           WORKFLOW_STEP.ACTIVE,
-          now,
-          now,
-          null,
-          JSON.stringify(stepsHistory),
-          reservation.assignmentId,
-        ],
-      );
+          {
+            completedAt: now,
+          },
+        ),
+      });
       if (updateResult?.success === false) {
         this.getLogger().warn(
           BOOTSTRAP_API_LOG_MSG.MOVE_REPLICA_ASSIGNMENT_VALIDATION_FAILED,

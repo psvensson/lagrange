@@ -2124,6 +2124,33 @@ class MessageRouter extends EventEmitter {
   }
 
   /**
+   * Return the canonical local query/data-plane transport readiness snapshot.
+   * Reuses the existing query transport selection owner instead of duplicating
+   * resolver logic in callers.
+   * @return {{ready:boolean,reason:string|null,retryAfterMs:number}}
+   */
+  getQueryDataPlaneTransportReadiness() {
+    const selection = this.resolveQueryDataPlaneTransportSelection();
+    return {
+      ready: Boolean(selection?.service),
+      reason:
+        selection?.service ?
+          null :
+          (
+            typeof selection?.reason === TRANSPORT_TYPEOF.STRING &&
+            selection.reason.length > TRANSPORT_NUM.ZERO ?
+              selection.reason :
+              ROUTER_ERROR_MSG.QUERY_MESSAGE_GROUP_TRANSPORT_REQUIRED
+          ),
+      retryAfterMs:
+        Number.isFinite(selection?.retryAfterMs) &&
+          selection.retryAfterMs > TRANSPORT_NUM.ZERO ?
+          Math.floor(selection.retryAfterMs) :
+          TRANSPORT_NUM.ZERO,
+    };
+  }
+
+  /**
    * Check whether a payload is a query/data-plane message.
    * @param {Object} message - Delivery payload.
    * @return {boolean} True for query/data-plane payloads.

@@ -3,6 +3,7 @@ import {
   getTrafficReadinessSnapshot,
   isMetadataPublicationReady,
   isTrafficReady,
+  waitForMetadataPublicationReadiness,
 } from '../../src/bootstrap/traffic-readiness-utils.js';
 import {
   LIFECYCLE_PHASE,
@@ -52,6 +53,35 @@ test('traffic-readiness-utils - metadata publication opens for control-ready lea
       isTrafficReady(readinessState),
       false,
       'strict traffic readiness should remain blocked while lifecycle is control-ready',
+    );
+  });
+
+test('traffic-readiness-utils - metadata publication wait resolves immediately for control-ready leader lag',
+  async (t) => {
+    let slept = false;
+    const readinessState = createReadinessState({
+      ready: false,
+      phase: LIFECYCLE_PHASE.CONTROL_READY,
+      reasons: [LIFECYCLE_REASON.LEADER_METADATA_INCOMPLETE],
+      retryAfterMs: 50,
+    });
+
+    const snapshot = await waitForMetadataPublicationReadiness({
+      readinessState,
+      sleep: async () => {
+        slept = true;
+      },
+    });
+
+    t.equal(
+      snapshot?.phase,
+      LIFECYCLE_PHASE.CONTROL_READY,
+      'metadata publication wait should accept control-ready leader lag',
+    );
+    t.equal(
+      slept,
+      false,
+      'metadata publication wait should not sleep when publication is already allowed',
     );
   });
 

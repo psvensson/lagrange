@@ -134,6 +134,8 @@ const LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY = Object.freeze({
   ANY_REPLICA: 'any_replica',
   LOCAL_LEADER: 'local_leader',
 });
+const QUERY_TRANSPORT_NOT_READY_ERROR_CODE =
+  'ROUTER_QUERY_TRANSPORT_NOT_READY';
 
 function normalizeDeliveryPriority(value, fallback = null) {
   return typeof value === TYPEOF.STRING && value.length > NUM.ZERO ?
@@ -219,6 +221,27 @@ function normalizeAuthoritativeFallbackOutcome(value) {
     AUTHORITATIVE_FALLBACK_OUTCOME.RECOVERED;
 }
 
+function normalizeLocalQueryTransportReadiness(readiness) {
+  if (!readiness || typeof readiness !== TYPEOF.OBJECT) {
+    return null;
+  }
+  const ready = readiness.ready === true;
+  return {
+    state: ready ? 'ready' : 'deferred',
+    ready,
+    reason:
+      typeof readiness.reason === TYPEOF.STRING &&
+        readiness.reason.length > NUM.ZERO ?
+        readiness.reason :
+        null,
+    retryAfterMs:
+      Number.isFinite(readiness.retryAfterMs) &&
+        readiness.retryAfterMs > NUM.ZERO ?
+        Math.floor(readiness.retryAfterMs) :
+        NUM.ZERO,
+  };
+}
+
 function shouldEmitTableWriteMetric(tableName) {
   return !TABLE_WRITE_METRIC_SUPPRESSED_TABLES.has(tableName);
 }
@@ -227,11 +250,65 @@ function shouldLogTableWriteFailure(tableName) {
   return !TABLE_WRITE_FAILURE_LOG_SUPPRESSED_TABLES.has(tableName);
 }
 
+function normalizeSystemTableWriteMode(service, error) {
+  if (typeof error?.writeMode === TYPEOF.STRING &&
+      error.writeMode.length > NUM.ZERO) {
+    return error.writeMode;
+  }
+  if (service?.writeRouter?.mode === WRITE_ROUTER_MODE.BOOTSTRAP_DIRECT ||
+      service?.bootstrapMode === true) {
+    return WRITE_ROUTER_MODE.BOOTSTRAP_DIRECT;
+  }
+  return WRITE_ROUTER_MODE.SQL_ROUTED;
+}
+
+function isCacheVisibilityTimeoutError(error) {
+  return error?.timeoutClassification?.classification ===
+    TIMEOUT_BUDGET_CLASSIFICATION.CACHE_VISIBILITY_TIMEOUT;
+}
+
+function annotateSystemTableMutationError(error, context = {}) {
+  if (!error || typeof error !== TYPEOF.OBJECT) {
+    return error;
+  }
+  if (Number.isFinite(context.attempt)) {
+    error.attempt = Math.max(NUM.ONE, Math.floor(context.attempt));
+  }
+  if (typeof context.writeMode === TYPEOF.STRING &&
+      context.writeMode.length > NUM.ZERO) {
+    error.writeMode = context.writeMode;
+  }
+  if (context.cacheWaitTimedOut === true) {
+    error.cacheWaitTimedOut = true;
+  }
+  return error;
+}
+
 function logSystemTableWriteFailure(service, logMessage, details, error) {
   const payload = {
     ...details,
     code: getControlPlaneErrorCode(error) || null,
     retryAfterMs: getControlPlaneRetryAfterMs(error),
+    causeId: typeof details?.causeId === TYPEOF.STRING ?
+      details.causeId :
+      null,
+    operation: typeof details?.operation === TYPEOF.STRING ?
+      details.operation :
+      null,
+    writeMode: normalizeSystemTableWriteMode(service, error),
+    bootstrapMode:
+      service?.writeRouter?.mode === WRITE_ROUTER_MODE.BOOTSTRAP_DIRECT ||
+      service?.bootstrapMode === true,
+    primaryKey: sortMutationKeyObject(details?.primaryKey || null),
+    attempt: Number.isFinite(details?.attempt) ?
+      Math.max(NUM.ONE, Math.floor(details.attempt)) :
+      (Number.isFinite(error?.attempt) ?
+        Math.max(NUM.ONE, Math.floor(error.attempt)) :
+        null),
+    cacheWaitTimedOut:
+      details?.cacheWaitTimedOut === true ||
+      error?.cacheWaitTimedOut === true ||
+      isCacheVisibilityTimeoutError(error),
   };
   if (isRetryableControlPlaneError(error)) {
     service.logger.warn(logMessage, payload);
@@ -941,6 +1018,28 @@ class CDCIntegrationService extends EventEmitter {
       };
     }
 
+    const localQueryTransportReadiness =
+      this.getLocalQueryTransportReadiness();
+    if (localQueryTransportReadiness?.ready === false) {
+      return {
+        success: false,
+        error:
+          localQueryTransportReadiness.reason ||
+          'query_data_plane_transport_not_ready',
+        errorCode: QUERY_TRANSPORT_NOT_READY_ERROR_CODE,
+        deferRetry: true,
+        retryAfterMs: localQueryTransportReadiness.retryAfterMs,
+        localQueryTransport: {
+          state: localQueryTransportReadiness.state || 'deferred',
+          ready: false,
+          reason: localQueryTransportReadiness.reason || null,
+          retryAfterMs: localQueryTransportReadiness.retryAfterMs,
+        },
+        rows: [],
+        source: 'query_transport_preflight',
+      };
+    }
+
     if (options.allowSqlFallback === false) {
       return {
         success: false,
@@ -1000,6 +1099,24 @@ class CDCIntegrationService extends EventEmitter {
       rows: Array.isArray(queryResult.rows) ? queryResult.rows : [],
       source: 'sql_query_engine',
     };
+  }
+
+  /**
+   * Resolve the canonical local query/data-plane transport readiness snapshot.
+   * This reuses the message-router transport owner instead of duplicating
+   * query-ingress selection logic in the authoritative read path.
+   * @return {{ready:boolean,reason:string|null,retryAfterMs:number}|null}
+   * @private
+   */
+  getLocalQueryTransportReadiness() {
+    if (!this.messageRouter ||
+        typeof this.messageRouter.getQueryDataPlaneTransportReadiness !==
+          TYPEOF.FUNCTION) {
+      return null;
+    }
+    return normalizeLocalQueryTransportReadiness(
+      this.messageRouter.getQueryDataPlaneTransportReadiness(),
+    );
   }
 
   /**
@@ -1469,6 +1586,13 @@ class CDCIntegrationService extends EventEmitter {
       } catch (error) {
         const message = error?.message || String(error);
         if (!this.isTransientCdcError(message) || attempt >= maxAttempts) {
+          annotateSystemTableMutationError(error, {
+            attempt,
+            writeMode:
+              this.writeRouter?.mode === WRITE_ROUTER_MODE.BOOTSTRAP_DIRECT ?
+                WRITE_ROUTER_MODE.BOOTSTRAP_DIRECT :
+                WRITE_ROUTER_MODE.SQL_ROUTED,
+          });
           throw error;
         }
 
@@ -2592,6 +2716,11 @@ class CDCIntegrationService extends EventEmitter {
             id: trackingId,
             error: error.message,
             nodeId: this.nodeId,
+            causeId: typeof options?.causeId === TYPEOF.STRING ?
+              options.causeId :
+              null,
+            operation: CDC_OPERATION.INSERT,
+            primaryKey: trackingId ? {[idField]: trackingId} : null,
           }, error);
         }
 
@@ -2744,6 +2873,11 @@ class CDCIntegrationService extends EventEmitter {
             id,
             error: error.message,
             nodeId: this.nodeId,
+            causeId: typeof options?.causeId === TYPEOF.STRING ?
+              options.causeId :
+              null,
+            operation: CDC_OPERATION.UPDATE,
+            primaryKey: {[idField]: id},
           }, error);
         }
 
@@ -2856,6 +2990,11 @@ class CDCIntegrationService extends EventEmitter {
             id,
             error: error.message,
             nodeId: this.nodeId,
+            causeId: typeof options?.causeId === TYPEOF.STRING ?
+              options.causeId :
+              null,
+            operation: CDC_OPERATION.DELETE,
+            primaryKey: {[idField]: id},
           }, error);
         }
 
@@ -2965,6 +3104,11 @@ class CDCIntegrationService extends EventEmitter {
             id,
             error: error.message,
             nodeId: this.nodeId,
+            causeId: typeof options?.causeId === TYPEOF.STRING ?
+              options.causeId :
+              null,
+            operation: CDC_OPERATION.UPSERT,
+            primaryKey: {[idField]: id},
           }, error);
         }
 

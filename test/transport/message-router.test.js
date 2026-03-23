@@ -300,6 +300,29 @@ t.test('MessageRouter unit tests', async (t) => {
       await router.shutdown();
     });
 
+  t.test('should expose canonical query transport readiness from resolver selections',
+    async (t) => {
+      const router = new MessageRouter({nodeId: 'test-node'});
+      await router.initialize();
+
+      router.setQueryMessageGroupServiceResolver(() => ({
+        service: null,
+        reason: 'query ingress owner not ready',
+        retryAfterMs: 321,
+      }));
+
+      const readiness = router.getQueryDataPlaneTransportReadiness();
+
+      t.equal(readiness.ready, false,
+        'readiness should report the query transport as unavailable');
+      t.equal(readiness.reason, 'query ingress owner not ready',
+        'readiness should preserve the canonical owner reason');
+      t.equal(readiness.retryAfterMs, 321,
+        'readiness should preserve the typed retry hint');
+
+      await router.shutdown();
+    });
+
   t.test('should deliver locally for async handler without connection', async (t) => {
     const router = new MessageRouter({nodeId: 'test-node'});
     await router.initialize();

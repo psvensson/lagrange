@@ -42,6 +42,12 @@ import {
   ControlPlaneSystemTableGateway,
   CONTROL_PLANE_READ_STRATEGY,
 } from '../control-plane/control-plane-system-table-gateway.js';
+import {
+  getControlPlaneErrorCode,
+  getControlPlaneErrorMessage,
+  getControlPlaneRetryAfterMs,
+  isRetryableControlPlaneError,
+} from '../control-plane/control-plane-error-classification.js';
 import {getRegisteredControlPlaneSystemTableGateway} from
   '../control-plane/control-plane-gateway-registry.js';
 import {
@@ -66,6 +72,8 @@ import {
 } from './admin-helpers.js';
 import {evaluateSharedMetadataNodeCoverage} from
   './admin-shared-metadata-consistency.js';
+import {shouldAttemptAuthoritativeRepair} from
+  './admin-authoritative-repair-evaluation.js';
 
 // ── file-local constants ────────────────────────────────────────────────────
 const EMPTY_STRING = '';
@@ -73,6 +81,13 @@ const LEADER_RAFT_ROLE = 'leader';
 const SERVICE_TYPE_PARTITION = 'partition';
 const STATUS_ACTIVE = 'active';
 const SERVICE_DISCOVERY_REASON_DETAIL_SEPARATOR = ':';
+const AUTHORITATIVE_REPAIR_CAUSE = Object.freeze({
+  QUERY_PARTICIPANT_FAILURE: 'query_participant_failure',
+  QUERY_TIMEOUT: 'query_timeout',
+  CONTROL_PLANE_BACKPRESSURE: 'control_plane_backpressure',
+  LEADER_RESOLUTION_GAP: 'leader_resolution_gap',
+  REPLAY_BACKLOG: 'replay_backlog',
+});
 
 const SERVICE_DISCOVERY_READINESS_REASON = Object.freeze({
   ROUTING_NOT_READY: 'routing_not_ready',
@@ -126,6 +141,21 @@ const SERVICE_DISCOVERY_SCHEMA_VERSION_FIELD_CANDIDATES = Object.freeze([
 const AUTHORITATIVE_REPAIR_COOLDOWN_MS = 1000;
 const AUTHORITATIVE_REPAIR_QUERY_TIMEOUT_MS = 1500;
 const AUTHORITATIVE_REPAIR_STALE_THRESHOLD_MS = 5000;
+const AUTHORITATIVE_REPAIR_TIMEOUT_FRAGMENT = 'timeout';
+const AUTHORITATIVE_REPAIR_LEADER_GAP_FRAGMENTS = Object.freeze([
+  'leader is unknown',
+  'leader unknown',
+  'no handler',
+  'no leader',
+  'partition_service_not_found',
+  'partition service not found',
+]);
+const AUTHORITATIVE_REPAIR_REPLAY_BACKLOG_FRAGMENTS = Object.freeze([
+  'buffered cdc replay',
+  'replay backlog',
+  'replay buffer',
+  'buffered backlog',
+]);
 const AUTHORITATIVE_REPAIR_REUSE_WINDOW_MS =
   AUTHORITATIVE_REPAIR_STALE_THRESHOLD_MS;
 const AUTHORITATIVE_DISCOVERY_REPAIR = Object.freeze({
@@ -163,6 +193,144 @@ function compareSchemaVersionValues(left, right) {
     return leftNumber - rightNumber;
   }
   return String(left).localeCompare(String(right));
+}
+
+function pushUniqueCause(causeChain, cause) {
+  if (typeof cause !== TYPEOF.STRING || cause.length === NUM.ZERO) {
+    return;
+  }
+  if (!causeChain.includes(cause)) {
+    causeChain.push(cause);
+  }
+}
+
+function normalizeFirstFailedParticipant(participant, tableName = null) {
+  if (!participant || typeof participant !== TYPEOF.OBJECT) {
+    return null;
+  }
+  return {
+    partitionId: typeof participant.partitionId === TYPEOF.STRING ?
+      participant.partitionId :
+      null,
+    participantNodeId: typeof participant.participantNodeId === TYPEOF.STRING ?
+      participant.participantNodeId :
+      null,
+    participantAddress:
+      typeof participant.participantAddress === TYPEOF.STRING ?
+        participant.participantAddress :
+        null,
+    errorCode: getControlPlaneErrorCode(participant) || null,
+    error: getControlPlaneErrorMessage(participant) || null,
+    durationMs: Number.isFinite(participant.durationMs) ?
+      Math.max(NUM.ZERO, Math.floor(participant.durationMs)) :
+      null,
+    retryAfterMs: getControlPlaneRetryAfterMs(participant) || null,
+    backpressured:
+      typeof participant.backpressured === 'boolean' ?
+        participant.backpressured :
+        isRetryableControlPlaneError(participant),
+    failedTable:
+      typeof participant.failedTable === TYPEOF.STRING ?
+        participant.failedTable :
+        tableName,
+  };
+}
+
+function normalizeLocalQueryTransportDiagnostic(localQueryTransport) {
+  if (!localQueryTransport || typeof localQueryTransport !== TYPEOF.OBJECT) {
+    return null;
+  }
+  const ready = typeof localQueryTransport.ready === 'boolean' ?
+    localQueryTransport.ready :
+    null;
+  return {
+    state:
+      typeof localQueryTransport.state === TYPEOF.STRING &&
+        localQueryTransport.state.length > NUM.ZERO ?
+        localQueryTransport.state :
+        ready === true ?
+          'ready' :
+          ready === false ?
+            'deferred' :
+            'unknown',
+    ready,
+    reason:
+      typeof localQueryTransport.reason === TYPEOF.STRING &&
+        localQueryTransport.reason.length > NUM.ZERO ?
+        localQueryTransport.reason :
+        null,
+    retryAfterMs: getControlPlaneRetryAfterMs(localQueryTransport) || null,
+  };
+}
+
+function deriveAuthoritativeRepairCauseChain(error, firstFailedParticipant) {
+  const causeChain = [];
+  const errorCode = getControlPlaneErrorCode(error);
+  const errorMessage = getControlPlaneErrorMessage(error).toLowerCase();
+  const participantMessage =
+    getControlPlaneErrorMessage(firstFailedParticipant).toLowerCase();
+
+  if (errorCode === 'DISTRIBUTED_PARTICIPANT_FAILURE' ||
+      Array.isArray(error?.participantFailures) &&
+      error.participantFailures.length > NUM.ZERO ||
+      errorMessage.includes('participant failures')) {
+    pushUniqueCause(
+      causeChain,
+      AUTHORITATIVE_REPAIR_CAUSE.QUERY_PARTICIPANT_FAILURE,
+    );
+  }
+  if (errorMessage.includes(AUTHORITATIVE_REPAIR_TIMEOUT_FRAGMENT) ||
+      participantMessage.includes(AUTHORITATIVE_REPAIR_TIMEOUT_FRAGMENT)) {
+    pushUniqueCause(causeChain, AUTHORITATIVE_REPAIR_CAUSE.QUERY_TIMEOUT);
+  }
+  if (isRetryableControlPlaneError(error) ||
+      isRetryableControlPlaneError(firstFailedParticipant)) {
+    pushUniqueCause(
+      causeChain,
+      AUTHORITATIVE_REPAIR_CAUSE.CONTROL_PLANE_BACKPRESSURE,
+    );
+  }
+  if (AUTHORITATIVE_REPAIR_LEADER_GAP_FRAGMENTS.some((fragment) =>
+    errorMessage.includes(fragment) || participantMessage.includes(fragment))) {
+    pushUniqueCause(
+      causeChain,
+      AUTHORITATIVE_REPAIR_CAUSE.LEADER_RESOLUTION_GAP,
+    );
+  }
+  if (AUTHORITATIVE_REPAIR_REPLAY_BACKLOG_FRAGMENTS.some((fragment) =>
+    errorMessage.includes(fragment) || participantMessage.includes(fragment))) {
+    pushUniqueCause(
+      causeChain,
+      AUTHORITATIVE_REPAIR_CAUSE.REPLAY_BACKLOG,
+    );
+  }
+
+  return causeChain;
+}
+
+function summarizeAuthoritativeRepairError(tableName, error) {
+  const firstFailedParticipant = normalizeFirstFailedParticipant(
+    error?.firstFailedParticipant ||
+      (Array.isArray(error?.participantFailures) ?
+        error.participantFailures[NUM.ZERO] :
+        null),
+    tableName,
+  );
+  return {
+    tableName,
+    error: getControlPlaneErrorMessage(error) || 'unknown_error',
+    errorCode: getControlPlaneErrorCode(error) || null,
+    retryAfterMs: getControlPlaneRetryAfterMs(error) || null,
+    readSource:
+      typeof error?.readSource === TYPEOF.STRING ?
+        error.readSource :
+        null,
+    localQueryTransport:
+      normalizeLocalQueryTransportDiagnostic(error?.localQueryTransport),
+    firstFailedParticipant,
+    causeChain:
+      deriveAuthoritativeRepairCauseChain(error, firstFailedParticipant),
+  };
 }
 
 /**
@@ -489,15 +657,10 @@ class AdminServiceDiscovery {
         snapshot,
         options,
       );
-    const autoRepairConsistencyGap = Array.isArray(
-      repairEvaluation?.triggerCodes,
-    ) && repairEvaluation.triggerCodes.includes(
-      AUTHORITATIVE_REPAIR_TRIGGER.DISCOVERY_NODE_COVERAGE_GAP,
-    );
-    if (!allowAuthoritativeRepair && !autoRepairConsistencyGap) {
-      return snapshot;
-    }
-    if (repairEvaluation?.shouldRepair !== true) {
+    if (!shouldAttemptAuthoritativeRepair({
+      repairEvaluation,
+      allowAuthoritativeRepair,
+    })) {
       return snapshot;
     }
     const repair =
@@ -896,10 +1059,39 @@ class AdminServiceDiscovery {
         },
       );
     if (queryResult?.success !== true) {
-      throw new Error(
+      const error = new Error(
         queryResult.error ||
           'authoritative_query_failed',
       );
+      error.code = queryResult?.errorCode || null;
+      error.retryAfterMs = getControlPlaneRetryAfterMs(queryResult) || null;
+      error.readSource =
+        typeof queryResult?.source === TYPEOF.STRING ?
+          queryResult.source :
+          null;
+      error.localQueryTransport =
+        normalizeLocalQueryTransportDiagnostic(queryResult?.localQueryTransport);
+      error.tableName = tableName;
+      error.failedPartitions = Array.isArray(queryResult?.failedPartitions) ?
+        [...queryResult.failedPartitions] :
+        [];
+      error.partitionErrors = Array.isArray(queryResult?.partitionErrors) ?
+        queryResult.partitionErrors.map((entry) => ({...entry})) :
+        [];
+      error.participantFailures = Array.isArray(queryResult?.participantFailures) ?
+        queryResult.participantFailures.map((entry) => ({...entry})) :
+        [];
+      error.firstFailedParticipant =
+        queryResult?.firstFailedParticipant &&
+        typeof queryResult.firstFailedParticipant === TYPEOF.OBJECT ?
+          {...queryResult.firstFailedParticipant} :
+          null;
+      error.distributedMetrics =
+        queryResult?.distributedMetrics &&
+        typeof queryResult.distributedMetrics === TYPEOF.OBJECT ?
+          queryResult.distributedMetrics :
+          null;
+      throw error;
     }
 
     return {
@@ -1843,6 +2035,7 @@ class AdminServiceDiscovery {
       const authoritativeRowsByTable = new Map();
       const failedTables = [];
       const errors = [];
+      const errorSummaries = [];
       for (const tableName of repairTableNames) {
         try {
           const result = await this.readAuthoritativeSystemTableRows(
@@ -1858,6 +2051,9 @@ class AdminServiceDiscovery {
           });
         } catch (error) {
           failedTables.push(tableName);
+          errorSummaries.push(
+            summarizeAuthoritativeRepairError(tableName, error),
+          );
           errors.push(
             `${tableName}:` +
             String(
@@ -1883,6 +2079,9 @@ class AdminServiceDiscovery {
             repairedTableNames.push(tableName);
           } catch (error) {
             failedTables.push(tableName);
+            errorSummaries.push(
+              summarizeAuthoritativeRepairError(tableName, error),
+            );
             errors.push(
               `${tableName}:` +
               String(
@@ -1928,9 +2127,36 @@ class AdminServiceDiscovery {
         failedTables: [...failedTables],
         errorCount: errors.length,
         errors,
+        causeChain: errorSummaries.flatMap((summary) =>
+          Array.isArray(summary?.causeChain) ? summary.causeChain : [],
+        ).filter((value, index, values) => values.indexOf(value) === index),
+        readSource:
+          errorSummaries.find((summary) => summary?.readSource)?.readSource ||
+          null,
+        localQueryTransport:
+          errorSummaries.find((summary) => summary?.localQueryTransport)
+            ?.localQueryTransport || null,
+        firstFailedParticipant:
+          errorSummaries.find((summary) => summary?.firstFailedParticipant)
+            ?.firstFailedParticipant || null,
         completedAtMs,
         reused: false,
       };
+      const errorCodes = [...new Set(
+        errorSummaries
+          .map((summary) => summary?.errorCode || null)
+          .concat(
+            errors.map((value) => {
+              const message = String(value || '');
+              const separatorIndex = message.indexOf(':');
+              const summary = separatorIndex >= NUM.ZERO ?
+                message.slice(separatorIndex + NUM.ONE).trim() :
+                message.trim();
+              return summary.length > NUM.ZERO ? summary : null;
+            }),
+          )
+          .filter(Boolean),
+      )].slice(NUM.ZERO, 5);
       if (!repairApplied) {
         this.logger?.warn?.(
           'Authoritative discovery cache repair failed', {
@@ -1939,11 +2165,18 @@ class AdminServiceDiscovery {
             tableName: options.tableName || null,
             tableId: options.tableId || null,
             repairTableNames,
+            requestedTableCount: repairTableNames.length,
             repairedTableCount,
             repairedRowCount,
             failedTables,
             errorCount: errors.length,
+            errorCodes,
             errors,
+            causeChain: result.causeChain || [],
+            readSource: result.readSource || null,
+            localQueryTransport: result.localQueryTransport || null,
+            firstFailedParticipant:
+              result.firstFailedParticipant || null,
           },
         );
       } else {

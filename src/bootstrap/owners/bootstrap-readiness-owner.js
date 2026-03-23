@@ -22,6 +22,9 @@ import {
   LIFECYCLE_PHASE,
   LIFECYCLE_REASON,
 } from '../lifecycle-controller-constants.js';
+import {
+  getLocalQueryTransportReadiness,
+} from '../shared/local-query-transport-readiness.js';
 
 const BOOTSTRAP_JOIN_NON_BLOCKING_REASONS = Object.freeze([
   BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE,
@@ -266,6 +269,17 @@ class BootstrapReadinessOwner {
       },
     );
 
+    const localQueryTransportReadiness =
+      this.getLocalQueryTransportReadiness();
+    readinessState.setDependency(
+      'local_query_transport_ready',
+      localQueryTransportReadiness.ready !== false,
+      {
+        reasonCode: LIFECYCLE_REASON.LOCAL_QUERY_TRANSPORT_NOT_READY,
+        details: localQueryTransportReadiness,
+      },
+    );
+
     const controlPlaneWriteHealth = this.getControlPlaneWriteHealth();
     readinessState.setDependency(
       'control_plane_write_health',
@@ -344,6 +358,13 @@ class BootstrapReadinessOwner {
       return true;
     }
     return Boolean(this.getMessageRouter() || bootstrapService?.messageRouter);
+  }
+
+  getLocalQueryTransportReadiness() {
+    const bootstrapService = this.getBootstrapService();
+    return getLocalQueryTransportReadiness(
+      this.getMessageRouter() || bootstrapService?.messageRouter || null,
+    );
   }
 
   isSqlEngineDependencyReady() {

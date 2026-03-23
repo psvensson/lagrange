@@ -315,7 +315,7 @@ test(
   },
 );
 
-test('queryIncompleteOperations uses owner-local SQL reads for replica_operations',
+test('queryIncompleteOperations uses gateway-owned owner-local authoritative reads for replica_operations',
   async (t) => {
     const authoritativeReadCalls = [];
     const sqlQueryCalls = [];
@@ -387,13 +387,23 @@ test('queryIncompleteOperations uses owner-local SQL reads for replica_operation
     coordinator.initialize();
     try {
       const operations = await coordinator.queryIncompleteOperations();
-      t.equal(operations.length, 0, 'owner-local SQL read should govern in-flight operation visibility');
-      t.equal(sqlQueryCalls.length, 1, 'should use one owner-local SQL read when cache is empty');
-      t.equal(authoritativeReadCalls.length, 0, 'should not depend on the authoritative read helper for owner rows');
+      t.equal(operations.length, 1, 'owner-local authoritative read should surface the local in-flight operation');
       t.equal(
-        sqlQueryCalls[0]?.options?.timeoutMs,
+        operations[0]?.operationId,
+        'op-local-1',
+        'coordinator should translate the authoritative owner-local row',
+      );
+      t.equal(sqlQueryCalls.length, 0, 'should not reconstruct owner-local reads through the SQL query engine');
+      t.equal(authoritativeReadCalls.length, 1, 'should use the authoritative local-read owner for owner rows');
+      t.equal(
+        authoritativeReadCalls[0]?.options?.queryOptions?.timeoutMs,
         CONTROL_PLANE_TIMEOUT_DEFAULT.SQL_QUERY_TIMEOUT_MS,
-        'should preserve control-plane timeout options on owner-local reads',
+        'should preserve control-plane timeout options on owner-local authoritative reads',
+      );
+      t.equal(
+        authoritativeReadCalls[0]?.options?.allowSqlFallback,
+        false,
+        'owner-local authoritative reads should disable routed SQL fallback',
       );
     } finally {
       await coordinator.shutdown();
@@ -611,6 +621,65 @@ test(
 );
 
 test(
+  'canStartAddOperation reuses empty cache observation boundary before routed SQL',
+  async (t) => {
+    let sqlQueryCalls = 0;
+    const coordinator = new RebalanceCoordinator({
+      nodeId: 'node-1',
+      transactionCoordinator: buildTransactionCoordinator(),
+      systemTableCache: {
+        filter(tableName) {
+          if (tableName !== 'replica_operations') {
+            return [];
+          }
+          return [];
+        },
+        get() {
+          return null;
+        },
+      },
+      cdcIntegrationService: {
+        async waitForCacheUpdate() {},
+      },
+      messageRouter: {
+        async deliver() {
+          return {acknowledged: true, status: 'completed'};
+        },
+      },
+      tablePolicyService: {
+        async getPolicyForPartition() {
+          return {minReplicaCount: 1};
+        },
+      },
+      sqlQueryEngine: {
+        async executeQuery() {
+          sqlQueryCalls += 1;
+          return {success: true, rows: []};
+        },
+      },
+      enableTimeouts: false,
+    });
+
+    coordinator.initialize();
+    try {
+      const canStart = await coordinator.canStartAddOperation();
+      t.equal(
+        canStart,
+        false,
+        'empty cache should defer add scheduling until authoritative confirmation is allowed',
+      );
+      t.equal(
+        sqlQueryCalls,
+        0,
+        'add scheduling admission should not route replica_operations SQL on empty cache',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  },
+);
+
+test(
   'canStartRemoveOperation returns false without routed reads while router is backpressured',
   async (t) => {
     let sqlQueryCalls = 0;
@@ -655,6 +724,119 @@ test(
         sqlQueryCalls,
         0,
         'router pressure should avoid routed concurrent-remove count reads',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  },
+);
+
+test(
+  'canStartRemoveOperation reuses empty cache observation boundary before routed SQL',
+  async (t) => {
+    let sqlQueryCalls = 0;
+    const coordinator = new RebalanceCoordinator({
+      nodeId: 'node-1',
+      transactionCoordinator: buildTransactionCoordinator(),
+      systemTableCache: {
+        filter(tableName) {
+          if (tableName !== 'replica_operations') {
+            return [];
+          }
+          return [];
+        },
+        get() {
+          return null;
+        },
+      },
+      cdcIntegrationService: {
+        async waitForCacheUpdate() {},
+      },
+      messageRouter: {
+        async deliver() {
+          return {acknowledged: true, status: 'completed'};
+        },
+      },
+      tablePolicyService: {
+        async getPolicyForPartition() {
+          return {minReplicaCount: 1};
+        },
+      },
+      sqlQueryEngine: {
+        async executeQuery() {
+          sqlQueryCalls += 1;
+          return {success: true, rows: []};
+        },
+      },
+      enableTimeouts: false,
+    });
+
+    coordinator.initialize();
+    try {
+      const canStart = await coordinator.canStartRemoveOperation();
+      t.equal(
+        canStart,
+        false,
+        'empty cache should defer remove scheduling until authoritative confirmation is allowed',
+      );
+      t.equal(
+        sqlQueryCalls,
+        0,
+        'remove scheduling admission should not route replica_operations SQL on empty cache',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  },
+);
+
+test(
+  'checkTimeouts reuses empty cache observation boundary before routed SQL',
+  async (t) => {
+    let sqlQueryCalls = 0;
+    const coordinator = new RebalanceCoordinator({
+      nodeId: 'node-1',
+      transactionCoordinator: buildTransactionCoordinator(),
+      systemTableCache: {
+        filter(tableName) {
+          if (tableName !== 'replica_operations') {
+            return [];
+          }
+          return [];
+        },
+        get() {
+          return null;
+        },
+      },
+      cdcIntegrationService: {
+        async waitForCacheUpdate() {},
+      },
+      messageRouter: {
+        async deliver() {
+          return {acknowledged: true, status: 'completed'};
+        },
+      },
+      tablePolicyService: {
+        async getPolicyForPartition() {
+          return {minReplicaCount: 1};
+        },
+      },
+      sqlQueryEngine: {
+        async executeQuery() {
+          sqlQueryCalls += 1;
+          throw new Error('timeout scans should not route replica_operations SQL');
+        },
+      },
+      enableTimeouts: false,
+    });
+
+    coordinator.initialize();
+    try {
+      await coordinator.checkTimeouts();
+      t.equal(
+        sqlQueryCalls,
+        0,
+        'timeout scans should stay on the empty cache observation boundary',
       );
     } finally {
       await coordinator.shutdown();

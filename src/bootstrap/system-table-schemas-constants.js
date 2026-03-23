@@ -436,6 +436,7 @@ const REPLICA_OPERATIONS_SCHEMA = {
     {name: 'created_at', type: COLUMN_TYPE.INTEGER, notNull: true},
     {name: 'updated_at', type: COLUMN_TYPE.INTEGER, notNull: true},
     {name: 'completed_at', type: COLUMN_TYPE.INTEGER},
+    {name: 'lease_expires_at', type: COLUMN_TYPE.INTEGER},
     {name: 'error_message', type: COLUMN_TYPE.TEXT},
     {name: 'steps_history', type: COLUMN_TYPE.TEXT, notNull: true}, // JSON array
   ],

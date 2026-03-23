@@ -271,6 +271,103 @@ test(
 );
 
 test(
+  'replay-only CDC forwarding on non-leader MG yields the critical router ' +
+    'lane to fresh control-plane traffic',
+  async (_t) => {
+    const port = testPortCounter++;
+    const nodeId = `test-node-${port}`;
+    const router = new MessageRouter({nodeId, wsPort: port});
+    await router.initialize({startServer: true});
+
+    let shutdownCalled = false;
+    const cleanup = async () => {
+      if (shutdownCalled) return;
+      shutdownCalled = true;
+      try {
+        if (mg && mg.raft) {
+          await mg.shutdown();
+        }
+      } catch (_e) {
+        // best-effort
+      }
+      await router.shutdown();
+    };
+
+    let mg;
+    try {
+      mg = new MessageGroupService({
+        groupId: 'mg-replay-priority',
+        replicaId: 'mg-replay-priority-r1',
+        nodeId,
+        transport: router,
+      });
+      await mg.initialize();
+      mg.replicaIds = ['mg-replay-priority-r1', 'mg-replay-priority-r2'];
+
+      await mg.subscribeToCDC(TABLES.NODES);
+
+      mg.isLeader = false;
+      mg.role = 'follower';
+      mg.leaderId = 'mg-replay-priority-r2';
+      if (mg.raft) {
+        Object.defineProperty(mg.raft, 'state', {
+          value: 3,
+          writable: true,
+          configurable: true,
+        });
+      }
+      mg.resolveCDCForwardSelection = () => ({
+        strictForwarding: true,
+        strictForwardRetryAfterMs: 250,
+        targets: [{
+          serviceId: 'mg-replay-priority-r2',
+          address: 'seed-node/message-group/mg-replay-priority-r2',
+        }],
+        suppressedCount: 0,
+      });
+      mg.maybeRepairAuthoritativeForwardTopology = async () => false;
+      mg.shouldRepairForwardTopology = () => false;
+      mg.shouldSuppressForwardTarget = () => false;
+
+      const forwardedPayloads = [];
+      router.deliver = async (address, payload, options) => {
+        forwardedPayloads.push({address, payload, options});
+        return {acknowledged: true};
+      };
+
+      await mg.applyCDCEvent(
+        TABLES.NODES,
+        CDC_OPERATION.INSERT,
+        {
+          node_id: 'node-replay-priority',
+          status: SERVICE_STATUS.ACTIVE,
+          connection_state: STATE.CONNECTED,
+        },
+        {replayOnly: true},
+      );
+
+      assert.equal(
+        forwardedPayloads.length,
+        1,
+        'non-leader replay should still forward exactly once to the leader',
+      );
+      assert.equal(
+        forwardedPayloads[0].payload.replayOnly,
+        true,
+        'forwarded replay payload should preserve replay-only context',
+      );
+      assert.equal(
+        forwardedPayloads[0].options?.deliveryPriority,
+        'background',
+        'replay-only forwarding should use the background router lane so fresh control-plane traffic can overtake it',
+      );
+    } finally {
+      await cleanup();
+    }
+  },
+);
+
+test(
   'applyCDCEvent on non-leader MG preserves causeId across retry forwards',
   async (t) => {
     const port = testPortCounter++;

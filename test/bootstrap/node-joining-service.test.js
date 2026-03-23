@@ -3003,6 +3003,58 @@ test('NodeJoiningService - canonical readiness blocked log includes control-plan
     );
   });
 
+test('NodeJoiningService - canonical readiness treats self target as unreachable until local query transport is ready',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const service = new NodeJoiningService({
+      nodeId: 'joining-node-self-transport-gate',
+      nodeAddress: 'ws://localhost:9090',
+      seedNodeAddress: 'http://localhost:8080',
+    });
+
+    service.messageRouter = {
+      getQueryDataPlaneTransportReadiness() {
+        return {
+          ready: false,
+          state: 'deferred',
+          reason: 'Query/data-plane message-group transport is not configured',
+          retryAfterMs: 100,
+        };
+      },
+    };
+
+    t.equal(
+      service.joinReadinessEvaluator.isControlPlaneAddressReachable(
+        'joining-node-self-transport-gate/message-group/mg-local-r1',
+      ),
+      false,
+      'self target should stay ineligible while local query transport is deferred',
+    );
+
+    service.messageRouter.getQueryDataPlaneTransportReadiness = () => ({
+      ready: true,
+      state: 'ready',
+    });
+
+    t.equal(
+      service.joinReadinessEvaluator.isControlPlaneAddressReachable(
+        'joining-node-self-transport-gate/message-group/mg-local-r1',
+      ),
+      true,
+      'self target should become reachable once local query transport is ready',
+    );
+    t.same(
+      service.joinReadinessEvaluator.resolveControlPlaneTargetConnectionStates([
+        'joining-node-self-transport-gate/message-group/mg-local-r1',
+      ]),
+      {
+        'joining-node-self-transport-gate/message-group/mg-local-r1': 'self',
+      },
+      'diagnostics should report self once the local query transport is ready',
+    );
+  });
+
 test('NodeJoiningService - canonical join readiness repairs endpoint visibility',
   async (t) => {
     initializeTestEnvironment();

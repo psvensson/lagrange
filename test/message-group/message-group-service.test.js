@@ -962,6 +962,59 @@ test(
 );
 
 test(
+  'MessageGroupService - strict CDC uses live leader bootstrap hints during join convergence before authoritative leader rows arrive',
+  async (t) => {
+    const {router, nodeId, cleanup} = await createTestTransport();
+    try {
+      const service = new MessageGroupService({
+        groupId: 'mg-join-live-hint',
+        replicaId: 'mg-join-live-hint-r2',
+        nodeId,
+        replicaIds: [
+          'mg-join-live-hint-r1',
+          'mg-join-live-hint-r2',
+          'mg-join-live-hint-r3',
+        ],
+        peerAddresses: [
+          'seed-node/message-group/mg-join-live-hint-r1',
+          'seed-node/message-group/mg-join-live-hint-r2',
+          'seed-node/message-group/mg-join-live-hint-r3',
+        ],
+        transport: router,
+      });
+
+      service.initialized = true;
+      service.isJoiningExistingGroup = true;
+      service.raft = {state: LifeRaft.FOLLOWER};
+      service.leaderId = 'mg-join-live-hint-r1';
+      router.getConnectionState = (targetNodeId) => {
+        return targetNodeId === 'seed-node' ? STATE.CONNECTED : null;
+      };
+
+      const readiness = service.getMetadataIngressReadiness({
+        requiredTables: [TABLES.NODES, TABLES.NODE_ENDPOINTS],
+      });
+      const selection = service.resolveCDCForwardSelection({
+        tableName: TABLES.NODES,
+      });
+
+      t.equal(
+        readiness.ready,
+        true,
+        'join convergence should keep strict metadata ingress available when live leader identity is known but authoritative rows have not arrived yet',
+      );
+      t.equal(
+        selection.targets[0]?.address,
+        'seed-node/message-group/mg-join-live-hint-r1',
+        'strict selection should resolve the live leader through canonical bootstrap hints when the services cache is still empty',
+      );
+    } finally {
+      await cleanup();
+    }
+  },
+);
+
+test(
   'MessageGroupService - metadata ingress forwarding reuses canonical target selection',
   async (t) => {
     const transport = {
@@ -1284,6 +1337,79 @@ test(
     }
   },
 );
+
+test('MessageGroupService - forward rejection logs bounded leader diagnostics',
+  async (t) => {
+    const transport = {
+      async deliver() {
+        return {
+          acknowledged: true,
+          success: false,
+          noHandler: true,
+          error: 'No handler for address: remote-node/message-group/mg-forward-diag-r2',
+        };
+      },
+      async initialize() {},
+      async shutdown() {},
+      setServiceNodeResolver() {},
+    };
+
+    const warningLogs = [];
+    const service = new MessageGroupService({
+      groupId: 'mg-forward-diag',
+      replicaId: 'mg-forward-diag-r1',
+      nodeId: 'node-forward-diag',
+      transport,
+    });
+    service.logger.warn = (msg, fields) => {
+      warningLogs.push({msg, fields});
+    };
+    service.resolveCDCForwardSelection = () => ({
+      strictForwarding: true,
+      strictForwardRetryAfterMs: 275,
+      targets: [{
+        serviceId: 'mg-forward-diag-r2',
+        address: 'remote-node/message-group/mg-forward-diag-r2',
+      }],
+      suppressedCount: 0,
+    });
+    service.maybeRepairAuthoritativeForwardTopology = async () => false;
+    service.shouldRepairForwardTopology = () => false;
+    service.shouldSuppressForwardTarget = () => false;
+
+    await t.rejects(
+      service.forwardCDCPayloadToLeader(
+        {type: 'CDC_PROPAGATION'},
+        {
+          tableName: TABLES.SERVICES,
+          operation: CDC_OPERATION.UPSERT,
+          causeId: 'cause-forward-diagnostics',
+        },
+      ),
+      /forward/i,
+      'strict forwarding should still fail closed on handler rejection',
+    );
+
+    t.equal(warningLogs.length, 1, 'should log one bounded rejection event');
+    t.equal(warningLogs[0]?.msg, 'CDC forward to leader rejected');
+    t.equal(warningLogs[0]?.fields?.leaderServiceId, 'mg-forward-diag-r2',
+      'warning should identify the rejected leader service');
+    t.equal(
+      warningLogs[0]?.fields?.deliveryRejectedByHandler,
+      true,
+      'warning should classify handler rejection explicitly',
+    );
+    t.equal(warningLogs[0]?.fields?.noHandler, true,
+      'warning should preserve the no-handler signal');
+    t.equal(warningLogs[0]?.fields?.acknowledged, true,
+      'warning should preserve delivery acknowledgement state');
+    t.equal(warningLogs[0]?.fields?.success, false,
+      'warning should preserve delivery success state');
+    t.equal(warningLogs[0]?.fields?.strictForwarding, true,
+      'warning should indicate strict forwarding mode');
+    t.equal(warningLogs[0]?.fields?.strictForwardRetryAfterMs, 275,
+      'warning should preserve strict forwarding retry-after');
+  });
 
 test('MessageGroupService - buildPeerAddress follows cache updates after relocation', async (t) => {
   const {router, nodeId, cleanup} = await createTestTransport();
@@ -2405,7 +2531,11 @@ test('MessageGroupService - Raft CDC propose failures preserve deferred retry ' 
     transport,
   });
 
-  service.raft = {};
+  const errorLogs = [];
+  service.logger.error = (msg, fields) => {
+    errorLogs.push({msg, fields});
+  };
+  service.raft = {state: LifeRaft.FOLLOWER};
   service.raftProvider = {
     async proposeWithLeaderRouting(_raft, command, options) {
       await options.forwardToLeader(command);
@@ -2444,6 +2574,18 @@ test('MessageGroupService - Raft CDC propose failures preserve deferred retry ' 
       'wrapped raft propose error should preserve non-retryable semantics');
     t.equal(error?.code, 'MG_LEADER_UNKNOWN',
       'wrapped raft propose error should preserve the upstream error code');
+    t.equal(errorLogs.length, 1, 'should log one bounded propose failure');
+    t.equal(errorLogs[0]?.msg, 'Raft CDC command failed');
+    t.equal(errorLogs[0]?.fields?.isCurrentRaftLeader, false,
+      'failure log should classify local leadership state');
+    t.equal(errorLogs[0]?.fields?.raftState, LifeRaft.FOLLOWER,
+      'failure log should preserve raft state');
+    t.equal(errorLogs[0]?.fields?.leaderTargetSource, 'forward_to_leader',
+      'failure log should identify the leader routing path');
+    t.equal(errorLogs[0]?.fields?.configuredRetryBudget, service.retryMaxAttempts || 1,
+      'failure log should preserve the configured retry budget');
+    t.equal(errorLogs[0]?.fields?.proposeTimeoutMs > 0, true,
+      'failure log should preserve the propose timeout budget');
   }
 });
 

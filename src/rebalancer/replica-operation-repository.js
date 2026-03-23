@@ -17,7 +17,9 @@
 import {v4 as uuidv4} from 'uuid';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
+  CONTROL_PLANE_PARTICIPATION_KIND,
   CONTROL_PLANE_READINESS_DIMENSION,
+  CONTROL_PLANE_READINESS_REASON,
 } from '../control-plane/control-plane-readiness-constants.js';
 import {
   PRESSURE_WORK_CLASS,
@@ -128,12 +130,43 @@ const INCOMPLETE_OPERATION_QUERY_RETRYABLE_BACKOFF_CEILING_MS =
   TIME_MS.SECOND * NUM.FIVE;
 const COORDINATOR_OWNER_COMPONENT = 'RebalanceCoordinator';
 
+function shouldDeferReplicaOperationOwnerRead(participation) {
+  return participation?.reasonCode ===
+    CONTROL_PLANE_READINESS_REASON.LOCAL_QUERY_TRANSPORT_NOT_READY;
+}
+
 function buildControlPlaneFailurePayload(nodeId, resultOrError) {
+  const participantFailures = Array.isArray(resultOrError?.participantFailures) ?
+    resultOrError.participantFailures
+      .filter((entry) => entry && typeof entry === 'object')
+      .slice(NUM.ZERO, NUM.THREE) :
+    [];
+  const firstFailedParticipant =
+    resultOrError?.firstFailedParticipant &&
+    typeof resultOrError.firstFailedParticipant === 'object' ?
+      resultOrError.firstFailedParticipant :
+      (participantFailures.length > NUM.ZERO ? participantFailures[NUM.ZERO] : null);
   return {
     error: resultOrError?.error || resultOrError?.message || null,
     nodeId,
     code: getControlPlaneErrorCode(resultOrError) || null,
     retryAfterMs: getControlPlaneRetryAfterMs(resultOrError),
+    reasonCode:
+      typeof resultOrError?.reasonCode === 'string' ?
+        resultOrError.reasonCode :
+        null,
+    participationKind:
+      typeof resultOrError?.participationKind === 'string' ?
+        resultOrError.participationKind :
+        null,
+    tableName:
+      typeof resultOrError?.tableName === 'string' ?
+        resultOrError.tableName :
+        (typeof firstFailedParticipant?.failedTable === 'string' ?
+          firstFailedParticipant.failedTable :
+          null),
+    participantFailures,
+    firstFailedParticipant,
   };
 }
 
@@ -180,6 +213,8 @@ class ReplicaOperationRepository {
     this.cdcIntegrationService = options.cdcIntegrationService;
     this.controlPlaneSystemTableGateway =
       options.controlPlaneSystemTableGateway;
+    this.controlPlaneReadinessService =
+      options.controlPlaneReadinessService || null;
     this.logger = options.logger;
     this.emitter = options.emitter || null;
     this.lastIncompleteOperationQueryWarningAtMs = NUM.ZERO;
@@ -201,6 +236,10 @@ class ReplicaOperationRepository {
     if (Object.hasOwn(options, 'controlPlaneSystemTableGateway')) {
       this.controlPlaneSystemTableGateway =
         options.controlPlaneSystemTableGateway || null;
+    }
+    if (Object.hasOwn(options, 'controlPlaneReadinessService')) {
+      this.controlPlaneReadinessService =
+        options.controlPlaneReadinessService || null;
     }
     if (Object.hasOwn(options, 'logger')) {
       this.logger = options.logger || console;
@@ -458,6 +497,21 @@ class ReplicaOperationRepository {
   }
 
   /**
+   * Return true when one cache observation boundary exists for
+   * replica_operations.
+   * @return {boolean}
+   */
+  hasReplicaOperationCacheObservationBoundary() {
+    return Boolean(
+      this.systemTableCache &&
+      (
+        typeof this.systemTableCache.filter === 'function' ||
+        typeof this.systemTableCache.getAll === 'function'
+      ),
+    );
+  }
+
+  /**
    * Get service rows for an entity from cache.
    * @param {object} params
    * @param {string} params.partitionId
@@ -530,12 +584,65 @@ class ReplicaOperationRepository {
    * @return {Promise<object>}
    */
   async executeReplicaOperationsRead(sql, params = []) {
+    const participationFailure =
+      this.buildReplicaOperationReadParticipationFailure();
+    if (participationFailure) {
+      return participationFailure;
+    }
     return this.controlPlaneSystemTableGateway.readRows(
       SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
       sql,
       params,
       REPLICA_OPERATION_READ_QUERY_OPTIONS,
     );
+  }
+
+  /**
+   * Return a bounded deferred result when the canonical readiness owner says
+   * the local replica_operations owner path should not issue a routed read yet.
+   * @return {Object|null}
+   * @private
+   */
+  buildReplicaOperationReadParticipationFailure() {
+    if (!this.controlPlaneReadinessService ||
+        typeof this.controlPlaneReadinessService
+          .getControlPlaneParticipationSync !== 'function') {
+      return null;
+    }
+    const participation =
+      this.controlPlaneReadinessService.getControlPlaneParticipationSync(
+        this.nodeId,
+        {
+          participationKind:
+            CONTROL_PLANE_PARTICIPATION_KIND
+              .REPLICA_OPERATION_OWNER_READ,
+          decisionDimension:
+            CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+        },
+    );
+    if (!participation || participation.eligible === true) {
+      return null;
+    }
+    if (participation.localExecutionAllowed === true) {
+      return null;
+    }
+    if (!shouldDeferReplicaOperationOwnerRead(participation)) {
+      return null;
+    }
+    return {
+      success: false,
+      tableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+      error:
+        participation.error ||
+        'Control-plane participation deferred by canonical readiness',
+      errorCode: participation.errorCode || null,
+      code: participation.errorCode || null,
+      reasonCode: participation.reasonCode || null,
+      participationKind: participation.participationKind || null,
+      retryAfterMs: getControlPlaneRetryAfterMs(participation) || null,
+      deferRetry: participation.deferRetry === true,
+      rows: [],
+    };
   }
 
   /**
@@ -911,16 +1018,20 @@ class ReplicaOperationRepository {
    * Get count of non-terminal REMOVE operations.
    * @return {Promise<number>}
    */
-  async getConcurrentRemoveCount() {
+  async getConcurrentRemoveCount(options = {}) {
     const cachedRows =
       this.filterReplicaOperationRowsFromCache(
         (row) => row?.type === OperationType.REMOVE,
       );
     if (cachedRows !== null) {
-      return cachedRows
+      const cachedCount = cachedRows
         .map((row) => this.rowToOperation(row))
         .filter((op) => !this.isOperationTerminal(op))
         .length;
+      if (cachedCount > NUM.ZERO ||
+          options.skipSqlFallbackWhenCacheEmpty === true) {
+        return cachedCount;
+      }
     }
 
     const result = await this.executeReplicaOperationsRead(

@@ -8,10 +8,6 @@ import {
 import {createBootstrapCacheHydrationApplier} from
   '../bootstrap-cache-hydration-applier.js';
 import {
-  getControlPlaneRetryAfterMs,
-  isRetryableControlPlaneError,
-} from '../../control-plane/control-plane-error-classification.js';
-import {
   JOINING_ERROR_MSG,
   JOINING_LOG_MSG,
 } from '../node-joining-constants.js';
@@ -28,6 +24,8 @@ import {
 } from '../../constants/index.js';
 import {resolveAdvertisedWebSocketAddress} from
   '../../transport/node-address-resolution.js';
+import {runRetryableControlPlaneWrite} from
+  './retryable-control-plane-write.js';
 
 const LOG_META_ENDPOINT_REGISTER_FAILED =
   'Failed to register built-in meta service endpoints';
@@ -36,8 +34,6 @@ const LOG_NODE_REGISTER_ERROR_PREFIX =
 const LOG_JOIN_ADMISSION_WRITE_RETRY =
   'Retrying join admission system-table write after retryable failure';
 const JOIN_ADMISSION_WRITE_RETRY_TIMEOUT_MS = TIME_MS.SECOND * NUM.TWO;
-const JOIN_ADMISSION_WRITE_RETRY_BASE_DELAY_MS = NUM.HUNDRED;
-const JOIN_ADMISSION_WRITE_RETRY_MAX_DELAY_MS = TIME_MS.SECOND;
 
 const hasFunction = (value) => typeof value === TYPEOF.FUNCTION;
 
@@ -295,48 +291,38 @@ class NodeRegistrationOwner {
     rowData,
     options = {},
   ) {
-    const startMs = this.delegates.getNow()();
-    const deadlineMs =
-      startMs + this.getJoinAdmissionWriteRetryTimeoutMs();
-    let nextDelayMs = JOIN_ADMISSION_WRITE_RETRY_BASE_DELAY_MS;
-    let attempt = NUM.ZERO;
-
-    while (true) {
-      attempt += NUM.ONE;
-      try {
-        const result = await this.upsertSystemTableRow(
-          tableName,
-          rowData,
-        );
-        if (result?.success !== false) {
-          return result;
-        }
-        if (!this.shouldRetryJoinAdmissionWrite(result, deadlineMs)) {
-          return result;
-        }
-        nextDelayMs = await this.delayJoinAdmissionWriteRetry(
-          deadlineMs,
-          nextDelayMs,
-          result,
-          tableName,
+    return runRetryableControlPlaneWrite(
+      () => this.upsertSystemTableRow(tableName, rowData),
+      {
+        timeoutMs: this.getJoinAdmissionWriteRetryTimeoutMs(),
+        now: () => this.delegates.getNow()(),
+        onRetry: ({
           attempt,
-          options,
-        );
-        continue;
-      } catch (error) {
-        if (!this.shouldRetryJoinAdmissionWrite(error, deadlineMs)) {
-          throw error;
-        }
-        nextDelayMs = await this.delayJoinAdmissionWriteRetry(
-          deadlineMs,
-          nextDelayMs,
-          error,
-          tableName,
-          attempt,
-          options,
-        );
-      }
-    }
+          delayMs,
+          remainingMs,
+          retryAfterMs,
+          resultOrError,
+        }) => {
+          this.delegates.getLogger().warn(
+            LOG_JOIN_ADMISSION_WRITE_RETRY,
+            {
+              nodeId: this.nodeId,
+              tableName,
+              attempt,
+              retryAfterMs,
+              delayMs,
+              remainingMs,
+              admissionTarget: options.admissionTarget || null,
+              error:
+                resultOrError?.error ||
+                resultOrError?.message ||
+                'retryable join admission write failure',
+            },
+          );
+        },
+        sleep: (delayMs) => this.sleep(delayMs),
+      },
+    );
   }
 
   getJoinTimeUpsertOptions() {
@@ -376,67 +362,6 @@ class NodeRegistrationOwner {
       return Math.floor(configured);
     }
     return JOIN_ADMISSION_WRITE_RETRY_TIMEOUT_MS;
-  }
-
-  shouldRetryJoinAdmissionWrite(resultOrError, deadlineMs) {
-    if (!isRetryableControlPlaneError(resultOrError)) {
-      return false;
-    }
-    return this.delegates.getNow()() < deadlineMs;
-  }
-
-  async delayJoinAdmissionWriteRetry(
-    deadlineMs,
-    nextDelayMs,
-    resultOrError,
-    tableName,
-    attempt,
-    options = {},
-  ) {
-    const now = this.delegates.getNow()();
-    const remainingMs = Math.max(NUM.ZERO, deadlineMs - now);
-    if (remainingMs <= NUM.ZERO) {
-      return nextDelayMs;
-    }
-
-    const retryAfterMs = getControlPlaneRetryAfterMs(resultOrError);
-    const boundedDelayMs = Math.min(
-      remainingMs,
-      Math.min(
-        JOIN_ADMISSION_WRITE_RETRY_MAX_DELAY_MS,
-        Math.max(
-          JOIN_ADMISSION_WRITE_RETRY_BASE_DELAY_MS,
-          retryAfterMs > NUM.ZERO ? retryAfterMs : nextDelayMs,
-        ),
-      ),
-    );
-
-    this.delegates.getLogger().warn(
-      LOG_JOIN_ADMISSION_WRITE_RETRY,
-      {
-        nodeId: this.nodeId,
-        tableName,
-        attempt,
-        retryAfterMs:
-          retryAfterMs > NUM.ZERO ? retryAfterMs : null,
-        delayMs: boundedDelayMs,
-        remainingMs,
-        admissionTarget: options.admissionTarget || null,
-        error:
-          resultOrError?.error ||
-          resultOrError?.message ||
-          'retryable join admission write failure',
-      },
-    );
-
-    await this.sleep(boundedDelayMs);
-    return Math.min(
-      JOIN_ADMISSION_WRITE_RETRY_MAX_DELAY_MS,
-      Math.max(
-        JOIN_ADMISSION_WRITE_RETRY_BASE_DELAY_MS,
-        nextDelayMs * NUM.TWO,
-      ),
-    );
   }
 
   async sleep(delayMs) {

@@ -1,6 +1,7 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {
   CONTROL_PLANE_PHASE_SCOPE,
+  CONTROL_PLANE_READ_STRATEGY,
   CONTROL_PLANE_MUTATION_MERGE_POLICY,
   CONTROL_PLANE_MUTATION_OUTCOME,
   CONTROL_PLANE_MUTATION_OPERATION,
@@ -141,6 +142,135 @@ test('ControlPlaneSystemTableGateway executeRead honors explicit routed ' +
     true,
     'gateway should pass explicit routed-authoritative opt-in to the owner',
   );
+});
+
+test('ControlPlaneSystemTableGateway executeRead routes owner-local reads ' +
+  'through the authoritative local-read owner first', async (t) => {
+  const authoritativeCalls = [];
+  let sqlQueryCalls = 0;
+  const gateway = new ControlPlaneSystemTableGateway({
+    nodeId: 'node-gateway',
+    cdcIntegrationService: {
+      async executeAuthoritativeSystemTableRead(
+        tableName,
+        sql,
+        params,
+        options,
+      ) {
+        authoritativeCalls.push({tableName, sql, params, options});
+        return {
+          success: true,
+          rows: [{operation_id: 'op-1'}],
+          source: 'local_partition_replica',
+        };
+      },
+    },
+    sqlQueryEngine: {
+      async executeQuery() {
+        sqlQueryCalls += 1;
+        return {
+          success: true,
+          rows: [{operation_id: 'op-sql'}],
+        };
+      },
+    },
+  });
+
+  const result = await gateway.executeRead({
+    owner: 'replica-operation-repository',
+    tableName: TABLES.REPLICA_OPERATIONS,
+    sql: 'SELECT * FROM replica_operations WHERE 1 = 0',
+    params: [],
+    strategy: CONTROL_PLANE_READ_STRATEGY.OWNER_LOCAL_NON_PROPAGATED,
+  });
+
+  t.equal(result.success, true, 'owner-local authoritative read should succeed');
+  t.equal(
+    result.outcome,
+    'owner_local_non_propagated',
+    'gateway should preserve the owner-local outcome',
+  );
+  t.equal(
+    authoritativeCalls.length,
+    1,
+    'gateway should use the authoritative local-read owner once',
+  );
+  t.equal(
+    sqlQueryCalls,
+    0,
+    'gateway should not reconstruct owner-local reads through the query engine',
+  );
+  t.equal(
+    authoritativeCalls[0].options.allowSqlFallback,
+    false,
+    'owner-local reads should not re-enable routed SQL fallback',
+  );
+  t.equal(
+    authoritativeCalls[0].options.localReadConsistency,
+    'local_leader',
+    'owner-local reads should prefer the local leader replica',
+  );
+  t.equal(
+    authoritativeCalls[0].options.replicaFallbackConsistency,
+    'any_replica',
+    'owner-local reads should keep bounded local replica fallback',
+  );
+  t.equal(
+    authoritativeCalls[0].options.queryOptions.routingReadinessDimension,
+    CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+    'owner-local reads should preserve repairEligible routing diagnostics',
+  );
+});
+
+test('ControlPlaneSystemTableGateway owner-local reads fail closed when the ' +
+  'authoritative local-read owner cannot satisfy them', async (t) => {
+  let sqlQueryCalls = 0;
+  const gateway = new ControlPlaneSystemTableGateway({
+    nodeId: 'node-gateway',
+    cdcIntegrationService: {
+      async executeAuthoritativeSystemTableRead() {
+        return {
+          success: false,
+          error: 'query_data_plane_transport_not_ready',
+          errorCode: 'ROUTER_QUERY_TRANSPORT_NOT_READY',
+          retryAfterMs: 250,
+          rows: [],
+          source: 'query_transport_preflight',
+        };
+      },
+    },
+    sqlQueryEngine: {
+      async executeQuery() {
+        sqlQueryCalls += 1;
+        return {
+          success: true,
+          rows: [{operation_id: 'op-sql'}],
+        };
+      },
+    },
+  });
+
+  const result = await gateway.executeRead({
+    owner: 'replica-operation-repository',
+    tableName: TABLES.REPLICA_OPERATIONS,
+    sql: 'SELECT * FROM replica_operations WHERE 1 = 0',
+    params: [],
+    strategy: CONTROL_PLANE_READ_STRATEGY.OWNER_LOCAL_NON_PROPAGATED,
+  });
+
+  t.equal(result.success, false, 'owner-local read should fail closed');
+  t.equal(
+    result.outcome,
+    'owner_not_ready',
+    'gateway should preserve a typed owner-not-ready outcome',
+  );
+  t.equal(
+    result.errorCode,
+    'ROUTER_QUERY_TRANSPORT_NOT_READY',
+    'gateway should preserve the authoritative local-read error code',
+  );
+  t.equal(sqlQueryCalls, 0,
+    'gateway should not silently route through the query engine');
 });
 
 test('ControlPlaneSystemTableGateway emits read telemetry with owner and ' +

@@ -38,6 +38,7 @@ class JoinCoordinator {
       if (checkpointSatisfied && !shouldRerun) {
         continue;
       }
+      const rerunningSatisfiedStep = checkpointSatisfied && shouldRerun;
 
       try {
         await step.run(session);
@@ -51,6 +52,12 @@ class JoinCoordinator {
           retryable: error?.retryable !== false,
         });
         throw error;
+      }
+
+      if (rerunningSatisfiedStep &&
+          this.joinSessionStore.getCheckpointIndex(step.checkpoint) <
+            this.joinSessionStore.getCheckpointIndex(session.checkpoint)) {
+        continue;
       }
 
       session = await this.joinSessionStore.advanceCheckpoint({

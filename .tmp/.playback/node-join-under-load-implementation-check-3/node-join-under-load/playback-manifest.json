@@ -1,0 +1,19 @@
+{
+  "scenarioName": "node-join-under-load",
+  "startedAt": 1774177673876,
+  "endedAt": 1774177855724,
+  "durationMs": 181848,
+  "files": {
+    "events": ".tmp/.playback/node-join-under-load-implementation-check-3/node-join-under-load/events.ndjson",
+    "samples": ".tmp/.playback/node-join-under-load-implementation-check-3/node-join-under-load/samples.ndjson",
+    "snapshots": ".tmp/.playback/node-join-under-load-implementation-check-3/node-join-under-load/snapshots.ndjson",
+    "manifest": ".tmp/.playback/node-join-under-load-implementation-check-3/node-join-under-load/playback-manifest.json",
+    "viewer": ".tmp/.playback/node-join-under-load-implementation-check-3/node-join-under-load/playback-viewer.html"
+  },
+  "counts": {
+    "events": 106,
+    "samples": 60,
+    "snapshots": 61
+  },
+  "warnings": []
+}

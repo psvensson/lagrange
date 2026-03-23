@@ -62,6 +62,12 @@ import {ReplicaHandlerSetup} from './shared/replica-handler-setup.js';
 import {ReplicaState} from '../node/replica-state-machine.js';
 import {NodeStorageBudgetSetup} from './shared/node-storage-budget-setup.js';
 import {ControlPlaneSetup} from './shared/control-plane-setup.js';
+import {
+  waitForLocalQueryTransportReadiness,
+} from './shared/local-query-transport-readiness.js';
+import {
+  waitForTrafficReadiness,
+} from './traffic-readiness-utils.js';
 import {assertCritical} from '../utils/assert.js';
 import {STORAGE_DEFAULT} from '../storage/storage-constants.js';
 import {createRuntimeStartupWiring} from '../runtime/runtime-startup-wiring.js';
@@ -237,6 +243,7 @@ class BootstrapService extends EventEmitter {
     this.dispatchService = null;
     this.rebalanceCoordinator = null;
     this.controlPlaneBackgroundWritersActivated = false;
+    this.controlPlaneBackgroundWriterActivationPromise = null;
     this.messageGroupServiceHandlerRegistered = false;
     this.messageGroupServiceEndpointsPublished = false;
 
@@ -914,7 +921,7 @@ class BootstrapService extends EventEmitter {
         this.lifecycleStateMachine.transition(NodeState.CONNECTING);
       }
       this.phase = BootstrapPhase.COMPLETE;
-      this.activateControlPlaneBackgroundWriters();
+      void this.activateControlPlaneBackgroundWriters();
       const duration = Date.now() - this.startTime;
 
       this.logger.info(BootstrapLog.COMPLETED, {
@@ -1912,6 +1919,35 @@ class BootstrapService extends EventEmitter {
   }
 
   /**
+   * Wait for local query/data-plane transport readiness before the
+   * seed advertises READY through the control plane.
+   * @return {Promise<void>}
+   * @private
+   */
+  async awaitLocalQueryTransportReadinessForReadySignal() {
+    await waitForLocalQueryTransportReadiness({
+      messageRouter: this.messageRouter,
+      sleep: (delayMs) => this.sleep(delayMs),
+      onRetry: ({attempt, maxAttempts, delayMs, readiness}) => {
+        this.logger.warn(
+          'Retrying seed control-plane registration until local query transport is ready',
+          {
+          nodeId: this.nodeId,
+          attempt,
+          maxAttempts,
+          nextDelayMs: delayMs,
+          error:
+            readiness?.reason ||
+            'Local query/data-plane transport is not ready',
+          gate: 'local_query_transport',
+          localQueryTransport: readiness,
+          },
+        );
+      },
+    });
+  }
+
+  /**
    * Register the seed node using the control plane path.
    * @return {Promise<void>}
    * @private
@@ -1924,6 +1960,7 @@ class BootstrapService extends EventEmitter {
     try {
       await this.seedCacheHydrationPhase
         .waitForSystemServiceLeadersInCache();
+      await this.awaitLocalQueryTransportReadinessForReadySignal();
       const stats = await NodeService.getInstance().getNodeStats();
       const cpuCores = Number.isFinite(stats?.cpu?.count) ?
         stats.cpu.count : NUM.ZERO;
@@ -1995,28 +2032,71 @@ class BootstrapService extends EventEmitter {
   /**
    * Activate non-critical periodic control-plane writers after bootstrap
    * reaches the active startup barrier.
-   * @return {void}
+   * @return {Promise<void>}
    * @private
    */
-  activateControlPlaneBackgroundWriters() {
+  async activateControlPlaneBackgroundWriters() {
     if (this.controlPlaneBackgroundWritersActivated) {
       return;
     }
-
-    if (this.leaseService) {
-      this.leaseService.start();
+    if (this.controlPlaneBackgroundWriterActivationPromise) {
+      return this.controlPlaneBackgroundWriterActivationPromise;
     }
-    if (this.heartbeatService) {
-      this.heartbeatService.start({
-        nodeAddress: this.nodeAddress,
-        getStats: () => NodeService.getInstance().getNodeStats(),
+
+    this.controlPlaneBackgroundWriterActivationPromise = (async () => {
+      try {
+        await waitForTrafficReadiness({
+          readinessState: this.bootstrapReadinessState,
+          sleep: (delayMs) => this.sleep(delayMs),
+          onRetry: ({attempt, maxAttempts, delayMs, snapshot}) => {
+            this.logger.warn(
+              'Retrying seed steady-state control-plane writers until lifecycle traffic readiness is satisfied',
+              {
+                nodeId: this.nodeId,
+                attempt,
+                maxAttempts,
+                nextDelayMs: delayMs,
+                lifecycleReadiness: snapshot || null,
+              },
+            );
+          },
+        });
+      } catch (error) {
+        this.logger.warn(
+          'Deferring seed steady-state control-plane writers until lifecycle traffic readiness is satisfied',
+          {
+            nodeId: this.nodeId,
+            error: error?.message || String(error),
+            lifecycleReadiness: error?.lifecycleReadiness || null,
+          },
+        );
+        this.controlPlaneBackgroundWriterActivationPromise = null;
+        return;
+      }
+
+      if (this.controlPlaneBackgroundWritersActivated) {
+        this.controlPlaneBackgroundWriterActivationPromise = null;
+        return;
+      }
+
+      if (this.leaseService) {
+        this.leaseService.start();
+      }
+      if (this.heartbeatService) {
+        this.heartbeatService.start({
+          nodeAddress: this.nodeAddress,
+          getStats: () => NodeService.getInstance().getNodeStats(),
+        });
+      }
+
+      this.controlPlaneBackgroundWritersActivated = true;
+      this.controlPlaneBackgroundWriterActivationPromise = null;
+      this.logger.info(BootstrapLog.CONTROL_PLANE_BACKGROUND_WRITERS_ACTIVE, {
+        nodeId: this.nodeId,
       });
-    }
+    })();
 
-    this.controlPlaneBackgroundWritersActivated = true;
-    this.logger.info(BootstrapLog.CONTROL_PLANE_BACKGROUND_WRITERS_ACTIVE, {
-      nodeId: this.nodeId,
-    });
+    return this.controlPlaneBackgroundWriterActivationPromise;
   }
 
   /**

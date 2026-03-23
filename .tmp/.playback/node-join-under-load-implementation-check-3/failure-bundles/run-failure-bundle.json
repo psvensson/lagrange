@@ -1,0 +1,128 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-03-22T11:10:55.729Z",
+  "reportPath": ".tmp/node-join-under-load-implementation-check-3.report.json",
+  "reportSummary": {
+    "total": 1,
+    "passed": 0,
+    "failed": 1,
+    "duration": 181353
+  },
+  "standardSummary": {
+    "historicalReportsConsidered": 2,
+    "scenariosComparedToPrevious": 1,
+    "scenariosComparedToPostgresBaseline": 0,
+    "diagnosticsCoverageSummary": {
+      "scenariosWithCoverage": 0,
+      "scenariosWithoutCoverage": 1,
+      "totalSamples": 0,
+      "coverageRate": 0,
+      "scenarios": [
+        {
+          "scenario": "node-join-under-load",
+          "status": "unavailable",
+          "reason": "not_reported",
+          "sampleCount": 0
+        }
+      ]
+    },
+    "writePathAttributionSummary": {
+      "scenariosWithDiagnostics": 0,
+      "topPhases": []
+    },
+    "scaleEfficiencySummary": {
+      "observationCount": 0,
+      "comparableGroupCount": 0,
+      "groups": [],
+      "topOpportunities": []
+    },
+    "scenarios": [
+      {
+        "scenario": "node-join-under-load",
+        "similarityKey": "node-join-under-load|default",
+        "current": {
+          "passed": false,
+          "clusterSize": 5,
+          "durationMs": 181353,
+          "performanceMetricsAvailable": false,
+          "validForPerformanceComparison": false,
+          "performanceInvalidReason": "metrics_unavailable",
+          "observedOpsPerSec": 0,
+          "observedP99LatencyMs": 0,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "previousSimilarRun": {
+          "reportTimestamp": "2026-03-22T10:55:24.123Z",
+          "reportPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/.tmp/node-join-under-load-implementation-check-2.report.json",
+          "passed": false,
+          "clusterSize": 5,
+          "durationMs": 180888,
+          "performanceMetricsAvailable": false,
+          "validForPerformanceComparison": false,
+          "performanceInvalidReason": "metrics_unavailable",
+          "observedOpsPerSec": 0,
+          "observedP99LatencyMs": 0,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "deltaVsPrevious": {
+          "passedChanged": false,
+          "clusterSizeChanged": false,
+          "durationMs": 465,
+          "durationRatio": 0.002570651452832692,
+          "opsPerSec": 0,
+          "opsPerSecRatio": null,
+          "opsPerSecPerNode": 0,
+          "opsPerSecPerNodeRatio": null,
+          "p99LatencyMs": 0,
+          "p99LatencyMsRatio": null
+        },
+        "postgresBaseline": null,
+        "parity": null,
+        "writePathTopPhases": []
+      }
+    ]
+  },
+  "benchmarkRegressionGate": {
+    "enabled": false,
+    "status": "skipped",
+    "reason": "disabled",
+    "settings": {
+      "enabled": false,
+      "maxThroughputRegressionRatio": 0.1,
+      "minimumThroughputRatioSutToBaseline": null,
+      "baselineProvider": "liferaft",
+      "failIfBaselineMissing": false,
+      "approvedMitigationId": null,
+      "parityMismatchPolicy": "warn"
+    },
+    "currentProvider": "liferaft",
+    "baselineProvider": "liferaft",
+    "comparedScenarioCount": 0,
+    "failedScenarioCount": 0,
+    "mitigatedScenarioCount": 0,
+    "missingBaselineScenarios": [],
+    "comparisons": [],
+    "parityMismatchCount": 0,
+    "lowThroughputRatioCount": 0,
+    "warnings": []
+  },
+  "failedScenarioCount": 1,
+  "scenarios": [
+    {
+      "scenario": "node-join-under-load",
+      "summary": {
+        "passed": false,
+        "error": "Expected no failed load operations during node join: observed 288",
+        "phase": null,
+        "rootCauseClass": null,
+        "dominantReason": null
+      },
+      "jsonPath": ".tmp/.playback/node-join-under-load-implementation-check-3/node-join-under-load/failure-bundle.json",
+      "markdownPath": ".tmp/.playback/node-join-under-load-implementation-check-3/node-join-under-load/failure-bundle.md"
+    }
+  ]
+}

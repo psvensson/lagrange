@@ -111,6 +111,12 @@ function resolveReadinessSnapshot(entry) {
 
 function resolveControlPlaneDiagnostics(entry) {
   const snapshotsByNodeId = resolveControlSnapshot(entry);
+  const directDiagnostics =
+    entry?.details?.diagnostics?.controlPlaneDiagnostics &&
+    typeof entry.details.diagnostics.controlPlaneDiagnostics === 'object' &&
+    !Array.isArray(entry.details.diagnostics.controlPlaneDiagnostics) ?
+      entry.details.diagnostics.controlPlaneDiagnostics :
+      null;
   const publicationModeByNodeId = {};
   const heartbeatPublicationByNodeId = {};
   const readinessByNodeId = {};
@@ -195,7 +201,8 @@ function resolveControlPlaneDiagnostics(entry) {
       Object.keys(readinessTransitionsByNodeId).length === ZERO &&
       Object.keys(placementEligibilityByNodeId).length === ZERO &&
       Object.keys(workflowAdmissionsByWorkflowId).length === ZERO &&
-      timeoutClassifications.length === ZERO) {
+      timeoutClassifications.length === ZERO &&
+      directDiagnostics === null) {
     return null;
   }
 
@@ -208,6 +215,7 @@ function resolveControlPlaneDiagnostics(entry) {
     placementEligibilityByNodeId,
     workflowAdmissionsByWorkflowId,
     timeoutClassifications,
+    ...(directDiagnostics || {}),
   };
 }
 
@@ -709,6 +717,7 @@ function buildScenarioFailureBundle({
       phase: diagnostics?.failedPhase?.phase || null,
       rootCauseClass: failure?.rootCauseClass || null,
       dominantReason: failure?.dominantReason || null,
+      bottleneckEstimate: entry?.bottleneckEstimate || null,
     },
     reportSummary,
     standardSummary,
@@ -718,6 +727,7 @@ function buildScenarioFailureBundle({
       failedPhase: diagnostics.failedPhase || null,
       noProgress,
       invariantBreaches: diagnostics.invariantBreaches || entry.invariantBreaches || null,
+      controlPlaneDiagnostics: diagnostics.controlPlaneDiagnostics || null,
       rootCauseBundle: diagnostics.rootCauseBundle || null,
     },
     controlSnapshot: resolveControlSnapshot(entry),
@@ -984,6 +994,7 @@ function renderScenarioFailureBundleMarkdown(bundle) {
       `- Phase: ${bundle.summary.phase || UNKNOWN_VALUE}`,
       `- Root Cause Class: ${bundle.summary.rootCauseClass || UNKNOWN_VALUE}`,
       `- Dominant Reason: ${bundle.summary.dominantReason || UNKNOWN_VALUE}`,
+      `- Bottleneck: ${bundle.summary.bottleneckEstimate?.kind || UNKNOWN_VALUE}`,
       `- Report: ${bundle.reportPath || UNKNOWN_VALUE}`,
     ].join('\n'),
   ];

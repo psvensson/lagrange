@@ -5,6 +5,7 @@ import {
 } from '../../constants/index.js';
 import {
   BOOTSTRAP_API_ASSIGNMENT,
+  BOOTSTRAP_API_DEFAULT,
   BOOTSTRAP_API_ERROR,
   BOOTSTRAP_API_LOG_MSG,
 } from '../bootstrap-api-constants.js';
@@ -16,6 +17,8 @@ import {
   BOOTSTRAP_PIPELINE_ERROR_CODE,
 } from '../bootstrap-constants.js';
 import {TABLES} from '../../constants/index.js';
+import {runRetryableControlPlaneWrite} from
+  '../shared/retryable-control-plane-write.js';
 
 class ServiceRegistrationHandoffOwner {
   constructor(options = {}) {
@@ -28,6 +31,85 @@ class ServiceRegistrationHandoffOwner {
 
   getSqlQueryEngine() {
     return this.delegates.getSqlQueryEngine?.() || null;
+  }
+
+  getNow() {
+    return this.delegates.getNow?.() || Date.now();
+  }
+
+  getRegisterServiceWriteRetryTimeoutMs() {
+    return this.delegates.getRegisterServiceWriteRetryTimeoutMs?.() ||
+      BOOTSTRAP_API_DEFAULT.SERVICE_REGISTRATION_WRITE_RETRY_TIMEOUT_MS;
+  }
+
+  async sleep(delayMs) {
+    const sleepImpl = this.delegates.getSleep?.();
+    if (typeof sleepImpl === TYPEOF.FUNCTION) {
+      await sleepImpl(delayMs);
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+
+  async writeRegisteredServiceRowWithRetry(serviceData, registeredServiceRow) {
+    return runRetryableControlPlaneWrite(
+      () => this.delegates.executeBootstrapControlPlaneMutation({
+        operation: 'upsert',
+        tableName: TABLES.SERVICES,
+        row: registeredServiceRow,
+      }, {
+        skipCacheWait: true,
+      }),
+      {
+        timeoutMs: this.getRegisterServiceWriteRetryTimeoutMs(),
+        now: () => this.getNow(),
+        onRetry: ({
+          attempt,
+          delayMs,
+          remainingMs,
+          retryAfterMs,
+          resultOrError,
+        }) => {
+          this.getLogger().warn(
+            BOOTSTRAP_API_LOG_MSG.SERVICE_REGISTRATION_WRITE_RETRY,
+            {
+              serviceId: serviceData[COLUMN.SERVICE_ID],
+              serviceType: serviceData[COLUMN.SERVICE_TYPE],
+              nodeId: serviceData[COLUMN.NODE_ID],
+              groupId: serviceData[COLUMN.GROUP_ID] || null,
+              tableName: TABLES.SERVICES,
+              attempt,
+              retryAfterMs,
+              delayMs,
+              remainingMs,
+              error:
+                resultOrError?.error ||
+                resultOrError?.message ||
+                'retryable register-service metadata write failure',
+            },
+          );
+        },
+        sleep: (delayMs) => this.sleep(delayMs),
+      },
+    );
+  }
+
+  isRetryableRegisteredServicePublicationError(error) {
+    return Number.isFinite(error?.statusCode) &&
+      Math.floor(error.statusCode) === HTTP_STATUS.SERVICE_UNAVAILABLE &&
+      error?.details?.tableName === TABLES.SERVICES;
+  }
+
+  resolveTypedRegisterServiceErrorLogMessage(error) {
+    if (error?.errorCode ===
+        BOOTSTRAP_PIPELINE_ERROR_CODE
+          .SERVICE_REGISTRATION_CACHE_VISIBILITY_TIMEOUT) {
+      return BOOTSTRAP_API_LOG_MSG.SERVICE_REGISTRATION_CACHE_VISIBILITY_TIMEOUT;
+    }
+    if (this.isRetryableRegisteredServicePublicationError(error)) {
+      return BOOTSTRAP_API_LOG_MSG.SERVICE_REGISTRATION_DEFERRED;
+    }
+    return BOOTSTRAP_API_LOG_MSG.MOVE_REPLICA_ASSIGNMENT_VALIDATION_FAILED;
   }
 
   async handleRegisterServiceRequest(request, reply) {
@@ -101,13 +183,10 @@ class ServiceRegistrationHandoffOwner {
         this.delegates.buildRegisteredServiceMutationRow(serviceData);
       try {
         const mutationResult =
-          await this.delegates.executeBootstrapControlPlaneMutation({
-            operation: 'upsert',
-            tableName: TABLES.SERVICES,
-            row: registeredServiceRow,
-          }, {
-            skipCacheWait: true,
-          });
+          await this.writeRegisteredServiceRowWithRetry(
+            serviceData,
+            registeredServiceRow,
+          );
         if (mutationResult?.success === false) {
           throw this.delegates.buildBootstrapControlPlaneQueryError(
             mutationResult,
@@ -197,13 +276,8 @@ class ServiceRegistrationHandoffOwner {
       }
       if (Number.isFinite(error?.statusCode) &&
           typeof error?.errorCode === TYPEOF.STRING) {
-        const isCacheVisibilityTimeout =
-          error.errorCode ===
-            BOOTSTRAP_PIPELINE_ERROR_CODE
-              .SERVICE_REGISTRATION_CACHE_VISIBILITY_TIMEOUT;
-        const typedErrorLogMessage = isCacheVisibilityTimeout ?
-          BOOTSTRAP_API_LOG_MSG.SERVICE_REGISTRATION_CACHE_VISIBILITY_TIMEOUT :
-          BOOTSTRAP_API_LOG_MSG.MOVE_REPLICA_ASSIGNMENT_VALIDATION_FAILED;
+        const typedErrorLogMessage =
+          this.resolveTypedRegisterServiceErrorLogMessage(error);
         this.getLogger().warn(typedErrorLogMessage, {
           serviceId: serviceData[COLUMN.SERVICE_ID],
           assignmentId: serviceData[BOOTSTRAP_API_ASSIGNMENT.FIELD_ID] || null,

@@ -56,6 +56,16 @@ function buildRuntimeFailureScenario() {
             },
           },
         },
+        controlPlaneDiagnostics: {
+          logsTable: {
+            pendingWriteGrowthCount: 2,
+            retainedBacklogGrowthCount: 1,
+          },
+          cdcReplay: {
+            replayBufferGrowthCount: 3,
+            replayRetryDepth: 2,
+          },
+        },
         rootCauseBundle: {
           snapshotsByNodeId: {
             'node-1': {
@@ -483,6 +493,23 @@ describe('failure-bundle', () => {
         scenarioBundle.nodeDiagnostics['node-1'].errors[0],
         /node=node-1/i,
       );
+      assert.deepEqual(
+        scenarioBundle.diagnostics.controlPlaneDiagnostics,
+        {
+          logsTable: {
+            pendingWriteGrowthCount: 2,
+            retainedBacklogGrowthCount: 1,
+          },
+          cdcReplay: {
+            replayBufferGrowthCount: 3,
+            replayRetryDepth: 2,
+          },
+        },
+      );
+      assert.equal(
+        scenarioBundle.controlPlane.logsTable.pendingWriteGrowthCount,
+        2,
+      );
 
       const runBundle = JSON.parse(
         await readFile(resolve(tempDir, failureBundle.runBundle.jsonPath), UTF8_ENCODING),
@@ -620,5 +647,78 @@ describe('failure-bundle', () => {
       assert.match(markdown, /operation=queryLoad/);
       assert.match(markdown, /timeoutClass=timeout/);
       assert.match(markdown, /circuit breaker is open/);
+    });
+
+  it('includes bottleneck estimates in scenario failure bundle summaries',
+    async () => {
+      const reportPath = join(tempDir, 'report.json');
+      const writer = new ReportWriter(reportPath);
+      writer.addResult('postgres-baseline-comparison', {
+        passed: false,
+        duration: 100,
+        error: 'load failed',
+        loadMetrics: {
+          total: 400,
+          success: 380,
+          failed: 20,
+          errors: 20,
+          attemptErrors: 120,
+          latency: {avg: 12, p50: 10, p95: 14, p99: 18},
+          queueDelay: {avg: 80, p50: 60, p95: 900, p99: 1200, max: 1400},
+          opsPerSec: 20,
+          targetOperations: 1000,
+          dispatchedOperations: 400,
+          undispatchedOperations: 600,
+          waitReasons: {
+            nodeSlotUnavailable: 20,
+            nodeAdmissionBlocked: 5,
+            retryableControlPlanePressure: 4,
+            timeoutWaits: 3,
+            queueCapacityRejected: 0,
+          },
+        },
+        details: {
+          diagnostics: {
+            failure: {
+              rootCauseClass: 'load',
+              dominantReason: 'dispatch_backlog',
+              reasonCounts: {
+                dispatch_backlog: 1,
+              },
+              affectedNodeIds: [],
+            },
+            failedPhase: {
+              phase: 'load',
+              errors: [],
+              artifacts: {},
+            },
+          },
+        },
+      });
+      await writer.write();
+      const report = JSON.parse(await readFile(reportPath, UTF8_ENCODING));
+
+      const {scenarioBundles} = await writeFailureBundlesForReport({
+        scenarios: report.scenarios,
+        reportOutputPath: reportPath,
+        outputDir: tempDir,
+        reportSummary: report.summary,
+        standardSummary: report.standardSummary,
+        benchmarkRegressionGate: report.benchmarkRegressionGate,
+        workspaceRoot: tempDir,
+      });
+      assert.equal(scenarioBundles.length, 1);
+
+      const bundlePath = resolve(tempDir, scenarioBundles[0].links.jsonPath);
+      const scenarioBundle = JSON.parse(await readFile(bundlePath, UTF8_ENCODING));
+      assert.deepEqual(scenarioBundle.summary.bottleneckEstimate, {
+        kind: 'dispatch_queue_backlog',
+        primaryEvidence: {
+          undispatchedOperations: 600,
+          undispatchedRatio: 0.6,
+          queueDelayP95Ms: 900,
+        },
+        likelyWaitingTimeSource: 'dispatch_queue',
+      });
     });
 });

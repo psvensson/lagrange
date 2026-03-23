@@ -440,7 +440,10 @@ test('CDCIntegrationService logs retryable table-write failures as warnings',
         SYSTEM_TABLE_NAME.SERVICES,
         {service_id: 'svc-1'},
         {status: 'active'},
-        {skipCacheWait: true},
+        {
+          skipCacheWait: true,
+          causeId: 'cdc-write-failure:test',
+        },
       ),
       'retryable control-plane deferrals should still fail closed',
     );
@@ -453,6 +456,20 @@ test('CDCIntegrationService logs retryable table-write failures as warnings',
       'warning should preserve the typed error code');
     t.equal(warnings[0][1]?.retryAfterMs, 250,
       'warning should preserve the retry-after hint');
+    t.equal(warnings[0][1]?.causeId, 'cdc-write-failure:test',
+      'warning should preserve the write cause');
+    t.equal(warnings[0][1]?.operation, 'UPDATE',
+      'warning should identify the failed write operation');
+    t.equal(warnings[0][1]?.writeMode, 'sql-routed',
+      'warning should identify the write path');
+    t.equal(warnings[0][1]?.bootstrapMode, false,
+      'warning should indicate bootstrap mode state');
+    t.same(warnings[0][1]?.primaryKey, {service_id: 'svc-1'},
+      'warning should preserve the primary key');
+    t.equal(warnings[0][1]?.attempt, 1,
+      'warning should preserve the final SQL attempt number');
+    t.equal(warnings[0][1]?.cacheWaitTimedOut, false,
+      'warning should distinguish SQL failure from cache wait timeout');
   });
 
 test('CDCIntegrationService - insertSystemTableRow waits for propagated tables', async (t) => {
@@ -924,6 +941,55 @@ test('CDCIntegrationService - leader-only authoritative reads can fall back to l
     );
     t.equal(sqlReads.length, 0, 'should not reach routed SQL fallback');
     t.equal(result.rows.length, 1, 'should return the local replica rows');
+  });
+
+test('CDCIntegrationService - authoritative reads defer before routed SQL when local query transport is not ready',
+  async (t) => {
+    let sqlReadCount = 0;
+    const service = new CDCIntegrationService({
+      nodeId: 'test-node',
+      sqlQueryEngine: {
+        async executeQuery() {
+          sqlReadCount++;
+          return {
+            success: true,
+            rows: [{operation_id: 'op-should-not-run'}],
+          };
+        },
+      },
+      partitionServicesProvider: () => new Map(),
+    });
+    service.initialize();
+    service.setMessageRouter({
+      getQueryDataPlaneTransportReadiness() {
+        return {
+          ready: false,
+          reason: 'query ingress owner not ready',
+          retryAfterMs: 321,
+        };
+      },
+    });
+
+    const result = await service.executeAuthoritativeSystemTableRead(
+      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+      'SELECT * FROM replica_operations WHERE operation_id = ?',
+      ['op-deferred'],
+    );
+
+    t.equal(result.success, false,
+      'authoritative read should fail closed while local query transport is unavailable');
+    t.equal(result.errorCode, 'ROUTER_QUERY_TRANSPORT_NOT_READY',
+      'authoritative read should preserve the canonical typed transport error');
+    t.equal(result.deferRetry, true,
+      'authoritative read should preserve typed defer semantics');
+    t.equal(result.retryAfterMs, 321,
+      'authoritative read should preserve retryAfterMs from the transport owner');
+    t.equal(result.error, 'query ingress owner not ready',
+      'authoritative read should preserve the owner reason');
+    t.equal(result.source, 'query_transport_preflight',
+      'authoritative read should report the preflight gate as the source');
+    t.equal(sqlReadCount, 0,
+      'authoritative read should not fan out through routed SQL when local query transport is not ready');
   });
 
 test('CDCIntegrationService - authoritative merge prefers fresher heartbeat rows',

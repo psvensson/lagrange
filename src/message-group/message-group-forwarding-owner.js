@@ -60,9 +60,18 @@ class MessageGroupForwardingOwner {
       return null;
     }
 
-    const address =
+    let address =
       service.resolveLivePeerAddressFromRaftNodes(leaderServiceId) ||
       service.resolvePeerAddressFromCache(leaderServiceId);
+    if ((typeof address !== TYPEOF.STRING || address.length === NUM.ZERO) &&
+        service.shouldAllowJoinConvergenceStrictTargeting()) {
+      address = service.resolvePeerAddressFromHints(leaderServiceId);
+      if (typeof address === TYPEOF.STRING &&
+          address.length > NUM.ZERO &&
+          typeof service.logBootstrapHintFallback === TYPEOF.FUNCTION) {
+        service.logBootstrapHintFallback(leaderServiceId, address);
+      }
+    }
     if (typeof address !== TYPEOF.STRING || address.length === NUM.ZERO) {
       return null;
     }
@@ -987,6 +996,7 @@ class MessageGroupForwardingOwner {
       options.timestamp.length > NUM.ZERO ?
       options.timestamp :
       service.hlcClock.now().toString();
+    const replayOnly = options.replayOnly === true;
     const relayDepth = Number.isInteger(options.relayDepth) &&
       options.relayDepth >= NUM.ZERO ?
       options.relayDepth :
@@ -1001,17 +1011,20 @@ class MessageGroupForwardingOwner {
       sourceNodeId: service.nodeId,
       relayDepth,
       causeId,
+      replayOnly,
     };
     return service.forwardCDCPayloadToLeader(payload, {
       tableName,
       operation,
       relayDepth,
       causeId,
+      replayOnly,
     });
   }
 
   async forwardCDCBatchToLeader(events, options = {}) {
     const service = this.service;
+    const replayOnly = options.replayOnly === true;
     const relayDepth = Number.isInteger(options.relayDepth) &&
       options.relayDepth >= NUM.ZERO ?
       options.relayDepth :
@@ -1029,6 +1042,7 @@ class MessageGroupForwardingOwner {
           data: event.data,
           timestamp,
           causeId: normalizeCauseId(event.causeId),
+          replayOnly: event.replayOnly === true || replayOnly,
         };
       });
     if (normalizedEvents.length === NUM.ZERO) {
@@ -1042,12 +1056,16 @@ class MessageGroupForwardingOwner {
       events: normalizedEvents,
       sourceNodeId: service.nodeId,
       relayDepth,
+      replayOnly:
+        replayOnly || normalizedEvents.every((event) => event.replayOnly === true),
     };
     return service.forwardCDCPayloadToLeader(payload, {
       tableName: normalizedEvents[0].tableName,
       operation: `batch:${normalizedEvents.length}`,
       relayDepth,
       causeId: normalizeCauseId(normalizedEvents[0].causeId),
+      replayOnly:
+        replayOnly || normalizedEvents.every((event) => event.replayOnly === true),
     });
   }
 
@@ -1055,6 +1073,8 @@ class MessageGroupForwardingOwner {
     const service = this.service;
     const tableName = logContext.tableName || null;
     const operation = logContext.operation || null;
+    const replayOnly = logContext.replayOnly === true ||
+      payload?.replayOnly === true;
     const relayDepth = Number.isInteger(logContext.relayDepth) ?
       logContext.relayDepth :
       NUM.ZERO;
@@ -1112,7 +1132,7 @@ class MessageGroupForwardingOwner {
         const deliveryResult = await service.transport.deliver(
           leaderAddress,
           payload,
-          {deliveryPriority: 'critical'},
+          {deliveryPriority: replayOnly ? 'background' : 'critical'},
         );
         const deliveryAcked = deliveryResult?.acknowledged === true;
         const deliverySucceeded = deliveryResult?.success !== false;
@@ -1146,15 +1166,21 @@ class MessageGroupForwardingOwner {
             groupId: service.groupId,
             replicaId: service.replicaId,
             leaderId: target.serviceId,
+            leaderServiceId: target.serviceId,
             leaderAddress,
             tableName,
             operation,
             relayDepth,
             causeId,
             durationMs: service.now() - forwardStartMs,
+            deliveryRejectedByHandler,
             acknowledged: deliveryAcked,
             success: deliverySucceeded,
             noHandler: deliveryResult?.noHandler === true,
+            replayIsolationEngaged: replayOnly,
+            deliveryPriority: replayOnly ? 'background' : 'critical',
+            strictForwarding,
+            strictForwardRetryAfterMs,
             error: deliveryErrorMessage,
           });
           const deliveryError = deliveryErrorMessage !== null ?

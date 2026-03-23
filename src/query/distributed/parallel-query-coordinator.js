@@ -20,6 +20,29 @@ import {
 const QUERY_ID_PREFIX = 'q-';
 const QUERY_CANCELLED_ERROR = 'Query cancelled';
 
+function normalizeRetryAfterMs(value) {
+  return Number.isFinite(value) && value >= 0 ?
+    Math.floor(value) :
+    null;
+}
+
+function normalizeFailureString(value) {
+  return typeof value === 'string' && value.length > 0 ?
+    value :
+    null;
+}
+
+function resolveFailureBackpressureState(diagnostics = {}) {
+  if (typeof diagnostics?.backpressured === 'boolean') {
+    return diagnostics.backpressured;
+  }
+  if (diagnostics?.deferRetry === true) {
+    return true;
+  }
+  return Number.isFinite(diagnostics?.retryAfterMs) &&
+    diagnostics.retryAfterMs > 0;
+}
+
 /**
  * Tracks execution metrics for a single partition query.
  */
@@ -38,6 +61,13 @@ class PartitionQueryMetrics {
     this.status = QUERY_STATUS.PENDING; // pending, running, completed, failed, timeout
     this.error = null;
     this.isSpeculative = false;
+    this.errorCode = null;
+    this.retryAfterMs = null;
+    this.deferRetry = false;
+    this.participantNodeId = null;
+    this.participantAddress = null;
+    this.backpressured = false;
+    this.failedTable = null;
   }
 
   /**
@@ -65,11 +95,20 @@ class PartitionQueryMetrics {
    * Mark query as failed.
    * @param {Error} error - Error that occurred.
    */
-  fail(error) {
+  fail(error, diagnostics = {}) {
     this.endTime = Date.now();
     this.latencyMs = this.endTime - this.startTime;
     this.status = QUERY_STATUS.FAILED;
     this.error = error.message;
+    this.errorCode = normalizeFailureString(diagnostics?.errorCode);
+    this.retryAfterMs = normalizeRetryAfterMs(diagnostics?.retryAfterMs);
+    this.deferRetry = diagnostics?.deferRetry === true;
+    this.participantNodeId =
+      normalizeFailureString(diagnostics?.participantNodeId);
+    this.participantAddress =
+      normalizeFailureString(diagnostics?.participantAddress);
+    this.backpressured = resolveFailureBackpressureState(diagnostics);
+    this.failedTable = normalizeFailureString(diagnostics?.failedTable);
   }
 
   /**
@@ -685,6 +724,14 @@ class ParallelQueryCoordinator {
         success: false,
         status: partitionMetrics.status,
         error: QUERY_ERROR_MSG.PARTITION_NOT_FOUND,
+        errorCode: null,
+        retryAfterMs: null,
+        deferRetry: false,
+        participantNodeId: null,
+        participantAddress: null,
+        backpressured: false,
+        failedTable: null,
+        durationMs: partitionMetrics.latencyMs,
         rows: [],
       };
     }
@@ -698,13 +745,26 @@ class ParallelQueryCoordinator {
         options,
       );
       if (result && result.success === false) {
-        partitionMetrics.fail(new Error(result.error || QUERY_ERROR_MSG.QUERY_ROUTING_FAILED));
+        partitionMetrics.fail(
+          new Error(result.error || QUERY_ERROR_MSG.QUERY_ROUTING_FAILED),
+          result,
+        );
         metrics.addPartitionMetrics(partitionMetrics);
         return {
           partitionId,
           success: false,
           status: partitionMetrics.status,
           error: result.error || QUERY_ERROR_MSG.QUERY_ROUTING_FAILED,
+          errorCode: normalizeFailureString(result?.errorCode),
+          retryAfterMs: normalizeRetryAfterMs(result?.retryAfterMs),
+          deferRetry: result?.deferRetry === true,
+          participantNodeId:
+            normalizeFailureString(result?.participantNodeId),
+          participantAddress:
+            normalizeFailureString(result?.participantAddress),
+          backpressured: resolveFailureBackpressureState(result),
+          failedTable: normalizeFailureString(result?.failedTable),
+          durationMs: partitionMetrics.latencyMs,
           rows: result.rows || [],
         };
       }
@@ -721,7 +781,7 @@ class ParallelQueryCoordinator {
         changes: result.changes,
       };
     } catch (error) {
-      partitionMetrics.fail(error);
+      partitionMetrics.fail(error, error);
       metrics.addPartitionMetrics(partitionMetrics);
 
       return {
@@ -729,6 +789,16 @@ class ParallelQueryCoordinator {
         success: false,
         status: partitionMetrics.status,
         error: error.message,
+        errorCode: normalizeFailureString(error?.code || error?.errorCode),
+        retryAfterMs: normalizeRetryAfterMs(error?.retryAfterMs),
+        deferRetry: error?.deferRetry === true,
+        participantNodeId:
+          normalizeFailureString(error?.participantNodeId),
+        participantAddress:
+          normalizeFailureString(error?.participantAddress),
+        backpressured: resolveFailureBackpressureState(error),
+        failedTable: normalizeFailureString(error?.failedTable),
+        durationMs: partitionMetrics.latencyMs,
         rows: [],
       };
     }
@@ -864,6 +934,20 @@ class ParallelQueryCoordinator {
    * @private
    */
   formatMetrics(metrics) {
+    const participantFailures = Array.from(metrics.partitionMetrics.values())
+      .filter((metric) => metric.status === QUERY_STATUS.FAILED)
+      .map((metric) => ({
+        partitionId: metric.partitionId,
+        participantNodeId: metric.participantNodeId,
+        participantAddress: metric.participantAddress,
+        errorCode: metric.errorCode,
+        error: metric.error,
+        durationMs: metric.latencyMs,
+        retryAfterMs: metric.retryAfterMs,
+        deferRetry: metric.deferRetry,
+        backpressured: metric.backpressured,
+        failedTable: metric.failedTable,
+      }));
     return {
       queryId: metrics.queryId,
       partitionCount: metrics.partitionCount,
@@ -873,6 +957,9 @@ class ParallelQueryCoordinator {
       totalBytes: metrics.totalBytes,
       stragglers: metrics.stragglers,
       speculativeExecutions: metrics.speculativeExecutions,
+      participantFailures,
+      firstFailedParticipant:
+        participantFailures.length > 0 ? participantFailures[0] : null,
       partitionLatencies: Array.from(metrics.partitionMetrics.values()).map((m) => ({
         partitionId: m.partitionId,
         latencyMs: m.latencyMs,

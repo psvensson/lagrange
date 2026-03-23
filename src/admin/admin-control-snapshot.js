@@ -26,7 +26,6 @@ import {isLoadReadyReplicaRaftRole} from
 import {CONTROL_PLANE_READINESS_DIMENSION} from
   '../control-plane/control-plane-readiness-constants.js';
 import {
-  deriveAuthoritativeRepairTables,
   evaluateAuthoritativeRepairPolicy,
 } from
   './admin-authoritative-repair-policy.js';
@@ -55,6 +54,13 @@ import {
 } from '../control-plane/active-node-projection.js';
 import {evaluateSharedMetadataNodeCoverage} from
   './admin-shared-metadata-consistency.js';
+import {
+  hasAuthoritativeRepairTrigger,
+  isReplicaOperationsOnlyRepairScope,
+  isReplicaOperationsOnlyTableSet,
+  shouldAttemptAuthoritativeRepair,
+} from './admin-authoritative-repair-evaluation.js';
+import {LogsTableService} from '../logging/logs-table-service.js';
 
 // ── file-local constants ────────────────────────────────────────────────────
 const LEADER_RAFT_ROLE = 'leader';
@@ -72,6 +78,7 @@ const CDC_TELEMETRY_MODE = Object.freeze({
   STEADY: 'steady',
   CATCHUP: 'catchup',
 });
+const CONTROL_PLANE_DIAGNOSTICS_CDC_REPLAY_LIMIT = 5;
 
 /**
  * Normalize one arbitrary value to a non-negative integer.
@@ -84,6 +91,100 @@ function toNonNegativeInteger(value) {
     return NUM.ZERO;
   }
   return Math.floor(parsedValue);
+}
+
+function buildLogsTableRetentionDiagnostics() {
+  const stats = LogsTableService.instance &&
+    typeof LogsTableService.instance.getStats === TYPEOF.FUNCTION ?
+    LogsTableService.instance.getStats() :
+    null;
+  if (!stats || typeof stats !== TYPEOF.OBJECT) {
+    return null;
+  }
+  return {
+    pendingWrites: toNonNegativeInteger(stats.pendingWrites),
+    pendingWriteGrowthCount:
+      toNonNegativeInteger(stats.pendingWriteGrowthCount),
+    retainedBacklogGrowthCount:
+      toNonNegativeInteger(stats.retainedBacklogGrowthCount),
+    retainedPressureBacklogCap:
+      toNonNegativeInteger(stats.retainedPressureBacklogCap),
+    maxPendingWrites: toNonNegativeInteger(stats.maxPendingWrites),
+    isWriting: stats.isWriting === true,
+    consecutiveDeferredWriteFailures:
+      toNonNegativeInteger(stats.consecutiveDeferredWriteFailures),
+    sharedPressureBackpressured:
+      stats.sharedPressureBackpressured === true,
+  };
+}
+
+function buildCdcReplayRetentionDiagnostics(partitionServices) {
+  if (!(partitionServices instanceof Map) || partitionServices.size === NUM.ZERO) {
+    return null;
+  }
+
+  const entries = [];
+  for (const partitionService of partitionServices.values()) {
+    if (!partitionService ||
+        typeof partitionService.getStats !== TYPEOF.FUNCTION) {
+      continue;
+    }
+    const stats = partitionService.getStats();
+    const replay = stats?.cdcReplay &&
+      typeof stats.cdcReplay === TYPEOF.OBJECT ?
+      stats.cdcReplay :
+      null;
+    if (!replay) {
+      continue;
+    }
+    entries.push({
+      partitionId: String(stats?.partitionId || ''),
+      bufferedEvents: toNonNegativeInteger(replay.bufferedEvents),
+      replayBufferGrowthCount:
+        toNonNegativeInteger(replay.replayBufferGrowthCount),
+      replayRetryDepth: toNonNegativeInteger(replay.replayRetryDepth),
+      replayInFlight: replay.replayInFlight === true,
+    });
+  }
+
+  if (entries.length === NUM.ZERO) {
+    return null;
+  }
+
+  entries.sort((left, right) => {
+    const leftPressureScore =
+      left.bufferedEvents + left.replayBufferGrowthCount + left.replayRetryDepth;
+    const rightPressureScore =
+      right.bufferedEvents + right.replayBufferGrowthCount + right.replayRetryDepth;
+    if (leftPressureScore !== rightPressureScore) {
+      return rightPressureScore - leftPressureScore;
+    }
+    return left.partitionId.localeCompare(right.partitionId);
+  });
+
+  const byPartitionId = {};
+  let bufferedEvents = NUM.ZERO;
+  let replayBufferGrowthCount = NUM.ZERO;
+  let replayRetryDepth = NUM.ZERO;
+  for (const entry of entries) {
+    bufferedEvents += entry.bufferedEvents;
+    replayBufferGrowthCount += entry.replayBufferGrowthCount;
+    replayRetryDepth = Math.max(replayRetryDepth, entry.replayRetryDepth);
+  }
+  for (const entry of entries.slice(NUM.ZERO,
+    CONTROL_PLANE_DIAGNOSTICS_CDC_REPLAY_LIMIT)) {
+    byPartitionId[entry.partitionId] = entry;
+  }
+
+  return {
+    bufferedEvents,
+    replayBufferGrowthCount,
+    replayRetryDepth,
+    partitionCount: entries.length,
+    replayInFlightPartitionCount:
+      entries.filter((entry) => entry.replayInFlight).length,
+    byPartitionId,
+  };
 }
 
 // ── AdminControlSnapshot class ──────────────────────────────────────────────
@@ -219,22 +320,15 @@ class AdminControlSnapshot {
     const allowAuthoritativeRepair =
       options.allowAuthoritativeRepair === true;
     const repairEvaluation =
-      this.evaluateAuthoritativeControlSnapshotRepair();
+      this.evaluateAuthoritativeControlSnapshotRepair(snapshot);
     if (!this.canRunAuthoritativeControlSnapshotRepair()) {
       return snapshot;
     }
-    const autoRepairConsistencyGap = Array.isArray(
-      repairEvaluation?.triggerCodes,
-    ) && repairEvaluation.triggerCodes.includes(
-      AUTHORITATIVE_REPAIR_TRIGGER.DISCOVERY_NODE_COVERAGE_GAP,
-    );
-    if (!forceAuthoritativeRepair &&
-        !allowAuthoritativeRepair &&
-        !autoRepairConsistencyGap) {
-      return snapshot;
-    }
-    if (!forceAuthoritativeRepair &&
-        repairEvaluation?.shouldRepair !== true) {
+    if (!shouldAttemptAuthoritativeRepair({
+      repairEvaluation,
+      forceAuthoritativeRepair,
+      allowAuthoritativeRepair,
+    })) {
       return snapshot;
     }
 
@@ -292,23 +386,48 @@ class AdminControlSnapshot {
         String(detail),
       );
     }
-    return this.buildLocalControlSnapshot();
+    const repairedSnapshot =
+      await this.buildLocalControlSnapshot(options);
+    const repairedEvaluation =
+      this.evaluateAuthoritativeControlSnapshotRepair(
+        repairedSnapshot,
+      );
+    if (forceAuthoritativeRepair &&
+        hasAuthoritativeRepairTrigger(
+          repairedEvaluation,
+          AUTHORITATIVE_REPAIR_TRIGGER.DISCOVERY_NODE_COVERAGE_GAP,
+        )) {
+      const missingNodeIds = Array.isArray(
+        repairedEvaluation?.nodeCoverage?.activeProjection?.missingNodeIds,
+      ) ?
+        repairedEvaluation.nodeCoverage.activeProjection.missingNodeIds :
+        ADMIN_CACHE_DUMP.EMPTY;
+      throw new Error(
+        'Authoritative control snapshot repair left active-node ' +
+        'projection undercovered' +
+        (
+          missingNodeIds.length > NUM.ZERO ?
+            ': ' + missingNodeIds.join(',') :
+            ''
+        ),
+      );
+    }
+    return repairedSnapshot;
   }
 
   canDegradeAuthoritativeControlSnapshotRepairFailure(options = {}) {
-    const triggerCodes = Array.isArray(options.repairEvaluation?.triggerCodes) ?
-      options.repairEvaluation.triggerCodes.filter((value) =>
-        typeof value === TYPEOF.STRING && value.length > NUM.ZERO,
-      ) :
-      ADMIN_CACHE_DUMP.EMPTY;
-    const narrowedRepairTables =
-      deriveAuthoritativeRepairTables({triggerCodes});
-    const repairScopeIsReplicaOperationsOnly =
-      narrowedRepairTables.length > NUM.ZERO &&
-      narrowedRepairTables.every((tableName) =>
-        tableName === TABLES.REPLICA_OPERATIONS,
-      );
-    if (repairScopeIsReplicaOperationsOnly) {
+    if (hasAuthoritativeRepairTrigger(
+      options.repairEvaluation,
+      AUTHORITATIVE_REPAIR_TRIGGER.DISCOVERY_NODE_COVERAGE_GAP,
+    ) ||
+        options.repairEvaluation?.nodeCoverage?.activeProjection
+          ?.hasCoverageGap === true) {
+      return false;
+    }
+
+    if (isReplicaOperationsOnlyRepairScope(
+      options.repairEvaluation,
+    )) {
       return true;
     }
 
@@ -317,10 +436,7 @@ class AdminControlSnapshot {
         typeof value === TYPEOF.STRING && value.length > NUM.ZERO,
       ) :
       ADMIN_CACHE_DUMP.EMPTY;
-    return failedTables.length > NUM.ZERO &&
-      failedTables.every((tableName) =>
-        tableName === TABLES.REPLICA_OPERATIONS,
-      );
+    return isReplicaOperationsOnlyTableSet(failedTables);
   }
 
   resolveControlSnapshotActiveNodeIds(
@@ -391,8 +507,11 @@ class AdminControlSnapshot {
    * @private
    */
   shouldAttemptAuthoritativeControlSnapshotRepair() {
-    return this.evaluateAuthoritativeControlSnapshotRepair()
-      ?.shouldRepair === true;
+    return shouldAttemptAuthoritativeRepair({
+      repairEvaluation:
+        this.evaluateAuthoritativeControlSnapshotRepair(),
+      allowAuthoritativeRepair: true,
+    });
   }
 
   /**
@@ -401,18 +520,22 @@ class AdminControlSnapshot {
    * @return {Object|null}
    * @private
    */
-  evaluateAuthoritativeControlSnapshotRepair() {
+  evaluateAuthoritativeControlSnapshotRepair(snapshot = null) {
     if (!this.canRunAuthoritativeControlSnapshotRepair()) {
       return null;
     }
 
-    const capturedAt = this.nowFn();
+    const capturedAt = Number.isFinite(snapshot?.capturedAt) ?
+      snapshot.capturedAt :
+      this.nowFn();
     const nodeRows = this.systemTableCache.getAll(TABLES.NODES);
     const tableRows = this.systemTableCache.getAll(TABLES.TABLES);
     const partitionRows = this.systemTableCache.getAll(TABLES.PARTITIONS);
     const serviceRows = this.systemTableCache.getAll(TABLES.SERVICES);
     const nodeEndpointRows =
       this.systemTableCache.getAll(TABLES.NODE_ENDPOINTS);
+    const controlPlaneDiagnostics =
+      snapshot?.controlPlaneDiagnostics || null;
     const topologyGap = this.hasControlSnapshotPartitionTopologyGap(
       tableRows,
       partitionRows,
@@ -425,6 +548,13 @@ class AdminControlSnapshot {
     });
     const connectedNodeCoverage =
       this.evaluateConnectedNodeCoverageGap(nodeRows);
+    const activeProjectionCoverage =
+      this.evaluateActiveNodeProjectionCoverageGap({
+        nodeRows,
+        serviceRows,
+        nodeEndpointRows,
+        controlPlaneDiagnostics,
+      });
     const replicaOperationRows =
       this.systemTableCache.getAll(TABLES.REPLICA_OPERATIONS);
     const replicaOperationSummary =
@@ -439,12 +569,20 @@ class AdminControlSnapshot {
       staleThresholdMs: CONTROL_SNAPSHOT_CACHE_STALE_THRESHOLD_MS,
       nodeCoverageGap:
         nodeCoverage.hasCoverageGap ||
-        connectedNodeCoverage.hasCoverageGap,
+        connectedNodeCoverage.hasCoverageGap ||
+        activeProjectionCoverage.hasCoverageGap,
       topologyGap,
       staleReplicaOpsInFlightCount:
         replicaOperationSummary.staleInFlightCount,
     });
-    return evaluation;
+    return Object.freeze({
+      ...evaluation,
+      nodeCoverage: Object.freeze({
+        sharedMetadata: nodeCoverage,
+        connectedNodes: connectedNodeCoverage,
+        activeProjection: activeProjectionCoverage,
+      }),
+    });
   }
 
   evaluateConnectedNodeCoverageGap(nodeRows = []) {
@@ -481,6 +619,78 @@ class AdminControlSnapshot {
     const missingNodeIds = connectedNodeIds
       .filter((nodeId) => !observedNodeIds.has(nodeId));
 
+    return Object.freeze({
+      hasCoverageGap: missingNodeIds.length > NUM.ZERO,
+      missingNodeIds: Object.freeze(missingNodeIds),
+    });
+  }
+
+  evaluateActiveNodeProjectionCoverageGap(options = {}) {
+    const nodeRows = Array.isArray(options.nodeRows) ?
+      options.nodeRows :
+      ADMIN_CACHE_DUMP.EMPTY;
+    const serviceRows = Array.isArray(options.serviceRows) ?
+      options.serviceRows :
+      ADMIN_CACHE_DUMP.EMPTY;
+    const nodeEndpointRows = Array.isArray(options.nodeEndpointRows) ?
+      options.nodeEndpointRows :
+      ADMIN_CACHE_DUMP.EMPTY;
+    const readinessByNodeId = buildReadinessByNodeId({
+      readinessByNodeId:
+        options.controlPlaneDiagnostics?.readinessByNodeId || null,
+    });
+    const activeNodeIds = new Set(this.resolveControlSnapshotActiveNodeIds(
+      nodeRows,
+      serviceRows,
+      nodeEndpointRows,
+      options.controlPlaneDiagnostics || null,
+    ));
+    const visibleNodeIds = new Set();
+
+    for (const [nodeId, readinessEntry] of Object.entries(
+      readinessByNodeId || {},
+    )) {
+      const readinessDimensions = readinessEntry?.dimensions &&
+        typeof readinessEntry.dimensions === TYPEOF.OBJECT ?
+        readinessEntry.dimensions :
+        null;
+      if (!readinessDimensions ||
+          readinessDimensions[
+            CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY
+          ] !== true) {
+        continue;
+      }
+      visibleNodeIds.add(nodeId);
+    }
+
+    for (const endpointRow of nodeEndpointRows) {
+      if (!this.isActiveWebSocketEndpoint(endpointRow)) {
+        continue;
+      }
+      const nodeId = firstStringField(
+        endpointRow,
+        COLUMN.NODE_ID,
+        'node_id',
+        'nodeId',
+      );
+      if (nodeId) {
+        visibleNodeIds.add(nodeId);
+      }
+    }
+
+    if (this.messageRouter &&
+        typeof this.messageRouter.getConnectedNodes === TYPEOF.FUNCTION) {
+      for (const nodeId of this.messageRouter.getConnectedNodes() || []) {
+        if (typeof nodeId === TYPEOF.STRING &&
+            nodeId.length > NUM.ZERO) {
+          visibleNodeIds.add(nodeId);
+        }
+      }
+    }
+
+    const missingNodeIds = uniqueSorted(
+      [...visibleNodeIds].filter((nodeId) => !activeNodeIds.has(nodeId)),
+    );
     return Object.freeze({
       hasCoverageGap: missingNodeIds.length > NUM.ZERO,
       missingNodeIds: Object.freeze(missingNodeIds),
@@ -701,6 +911,13 @@ class AdminControlSnapshot {
         replicaOperationRows,
       );
     const splitEvaluation = this.resolveSplitEvaluationDiagnostics();
+    const partitionServices = this.resolveLocalPartitionServices &&
+      typeof this.resolveLocalPartitionServices === TYPEOF.FUNCTION ?
+      this.resolveLocalPartitionServices() :
+      null;
+    const logsTable = buildLogsTableRetentionDiagnostics();
+    const cdcReplay =
+      buildCdcReplayRetentionDiagnostics(partitionServices);
 
     return {
       schemaVersion: CONTROL_PLANE_DIAGNOSTICS_SCHEMA_VERSION,
@@ -718,6 +935,9 @@ class AdminControlSnapshot {
         workflowDiagnostics.timeoutClassifications,
       replicaOperations,
       splitEvaluation,
+      logsTable,
+      cdcReplay,
+      cdcReplayByPartitionId: cdcReplay?.byPartitionId || null,
     };
   }
 

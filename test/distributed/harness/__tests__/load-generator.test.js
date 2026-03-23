@@ -857,6 +857,235 @@ test('admission-control treats load-lane serve-not-ready denials as admission si
     }
   });
 
+test('admission-control treats query admission defers as admission signals',
+  async () => {
+    let admissionErrors = ZERO;
+    const nodes = [{
+      id: 'query-admission-node',
+      breakerOwner: BREAKER_OWNER_NODE_CLIENT,
+      async query(_sql) {
+        admissionErrors++;
+        const error = new Error(
+          'Admin API query failed for node query-admission-node on lane default: ' +
+            'query_admission_deferred',
+        );
+        error.code = NODE_CLIENT_ERROR_CODE_OPERATION;
+        throw error;
+      },
+    }];
+
+    const gen = new LoadGenerator(nodes, {
+      opsPerSec: 200,
+      duration: 140,
+      admissionBackoffMs: ADMISSION_BACKOFF_MS,
+    });
+    const run = gen.start();
+    try {
+      const metrics = await run.waitComplete();
+      assert.ok(admissionErrors > ZERO, 'expected admission defers to occur');
+      assert.equal(
+        metrics.failed,
+        ZERO,
+        'expected query admission defers to avoid operation failures',
+      );
+      assert.equal(
+        metrics.errors,
+        ZERO,
+        'expected query admission defers to avoid operation errors',
+      );
+      assert.ok(
+        metrics.attemptErrors > ZERO,
+        'expected query admission defers to remain visible in attemptErrors',
+      );
+    } finally {
+      run.cancel();
+    }
+  });
+
+test('admission-control treats typed retryable participant failures as admission signals',
+  async () => {
+    let admissionErrors = ZERO;
+    const nodes = [{
+      id: 'participant-pressure-node',
+      breakerOwner: BREAKER_OWNER_NODE_CLIENT,
+      async query(_sql) {
+        admissionErrors++;
+        const error = new Error(
+          'Distributed operation failed due to participant failures',
+        );
+        error.code = NODE_CLIENT_ERROR_CODE_OPERATION;
+        error.deferRetry = true;
+        error.retryAfterMs = 125;
+        throw error;
+      },
+    }];
+
+    const gen = new LoadGenerator(nodes, {
+      opsPerSec: 200,
+      duration: 140,
+      admissionBackoffMs: ADMISSION_BACKOFF_MS,
+    });
+    const run = gen.start();
+    try {
+      const metrics = await run.waitComplete();
+      assert.ok(
+        admissionErrors > ZERO,
+        'expected retryable participant failures to occur',
+      );
+      assert.equal(
+        metrics.failed,
+        ZERO,
+        'expected retryable participant failures to avoid operation failures',
+      );
+      assert.equal(
+        metrics.errors,
+        ZERO,
+        'expected retryable participant failures to avoid operation errors',
+      );
+      assert.ok(
+        metrics.attemptErrors > ZERO,
+        'expected retryable participant failures to remain visible in attemptErrors',
+      );
+    } finally {
+      run.cancel();
+    }
+  });
+
+test('typed retryAfterMs backoff suppresses reprobe storms on pressured nodes',
+  async () => {
+    let pressuredNodeCalls = ZERO;
+    let healthyNodeCalls = ZERO;
+    const nodes = [
+      {
+        id: 'typed-retry-pressure-node',
+        breakerOwner: BREAKER_OWNER_NODE_CLIENT,
+        async query(_sql) {
+          pressuredNodeCalls++;
+          const error = new Error(
+            'Distributed operation failed due to participant failures',
+          );
+          error.code = NODE_CLIENT_ERROR_CODE_OPERATION;
+          error.deferRetry = true;
+          error.retryAfterMs = 90;
+          throw error;
+        },
+      },
+      {
+        id: 'healthy-node',
+        async query(_sql) {
+          healthyNodeCalls++;
+          return {rows: []};
+        },
+      },
+    ];
+
+    const gen = new LoadGenerator(nodes, {
+      opsPerSec: 200,
+      duration: 160,
+      admissionBackoffMs: 5,
+    });
+    const run = gen.start();
+    try {
+      const metrics = await run.waitComplete();
+      assert.ok(
+        healthyNodeCalls > ZERO,
+        'expected healthy node to continue absorbing load',
+      );
+      assert.ok(
+        pressuredNodeCalls < 6,
+        'expected typed retryAfterMs to suppress reprobe storms; got ' +
+          `${pressuredNodeCalls} pressured-node attempts`,
+      );
+      assert.equal(metrics.failed, ZERO);
+      assert.equal(metrics.errors, ZERO);
+    } finally {
+      run.cancel();
+    }
+  });
+
+test('wait-reason metrics capture per-node slot saturation', async () => {
+  const nodes = [{
+    id: 'slot-bound-node',
+    async query(_sql) {
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      return {rows: []};
+    },
+  }];
+
+  const gen = new LoadGenerator(nodes, {
+    opsPerSec: 200,
+    duration: 220,
+    maxInFlight: 4,
+    nodeMaxInFlight: ONE,
+  });
+  const run = gen.start();
+  try {
+    await new Promise((resolve) => setTimeout(resolve, 160));
+    run.cancel();
+    const metrics = await run.waitComplete();
+    assert.ok(metrics.waitReasons, 'expected waitReasons metrics to be present');
+    assert.ok(
+      Number(metrics.waitReasons.nodeSlotUnavailable) > ZERO,
+      'expected nodeSlotUnavailable wait reason to be recorded',
+    );
+    assert.ok(
+      metrics.perNode['slot-bound-node'].waitReasons,
+      'expected per-node waitReasons to be present',
+    );
+    assert.ok(
+      Number(
+        metrics.perNode['slot-bound-node'].waitReasons.nodeSlotUnavailable,
+      ) > ZERO,
+      'expected per-node nodeSlotUnavailable wait reason to be recorded',
+    );
+  } finally {
+    run.cancel();
+  }
+});
+
+test('wait-reason metrics capture retryable control-plane pressure', async () => {
+  const nodes = [{
+    id: 'pressure-node',
+    breakerOwner: BREAKER_OWNER_NODE_CLIENT,
+    async query(_sql) {
+      const error = new Error(
+        'Distributed operation failed due to participant failures',
+      );
+      error.code = NODE_CLIENT_ERROR_CODE_OPERATION;
+      error.deferRetry = true;
+      error.retryAfterMs = 125;
+      throw error;
+    },
+  }];
+
+  const gen = new LoadGenerator(nodes, {
+    opsPerSec: 200,
+    duration: 140,
+    admissionBackoffMs: ADMISSION_BACKOFF_MS,
+  });
+  const run = gen.start();
+  try {
+    const metrics = await run.waitComplete();
+    assert.ok(metrics.waitReasons, 'expected waitReasons metrics to be present');
+    assert.ok(
+      Number(metrics.waitReasons.retryableControlPlanePressure) > ZERO,
+      'expected retryable control-plane pressure wait reason to be recorded',
+    );
+    assert.ok(
+      metrics.perNode['pressure-node'].waitReasons,
+      'expected per-node waitReasons to be present',
+    );
+    assert.ok(
+      Number(
+        metrics.perNode['pressure-node'].waitReasons.retryableControlPlanePressure,
+      ) > ZERO,
+      'expected per-node retryable control-plane pressure to be recorded',
+    );
+  } finally {
+    run.cancel();
+  }
+});
+
 test('queue-delay metrics are emitted when dispatch pacing falls behind', async () => {
   const nodes = [{
     id: 'slow-node',
@@ -921,8 +1150,8 @@ test('dispatch accounting balances target, dispatched, and undispatched operatio
       );
     } finally {
       run.cancel();
-  }
-});
+    }
+  });
 
 test('dispatched operations only count work that reached a node attempt', async () => {
   let breakerCalls = ZERO;
@@ -1125,6 +1354,69 @@ test('per-node in-flight bulkhead limits stalled node fanout', async () => {
     run.cancel();
   }
 });
+
+test('dispatch-ready nodes reuse blocked-node slot budget under admission pressure',
+  async () => {
+    let blockedCalls = ZERO;
+    const nodes = [
+      {
+        id: 'blocked-node',
+        breakerOwner: BREAKER_OWNER_NODE_CLIENT,
+        async query(_sql) {
+          blockedCalls++;
+          const error = new Error('query_admission_deferred');
+          error.code = NODE_CLIENT_ERROR_CODE_OPERATION;
+          error.deferRetry = true;
+          error.retryAfterMs = 500;
+          throw error;
+        },
+      },
+      {
+        id: 'healthy-a',
+        async query(_sql) {
+          return new Promise(() => {});
+        },
+      },
+      {
+        id: 'healthy-b',
+        async query(_sql) {
+          return new Promise(() => {});
+        },
+      },
+    ];
+
+    const gen = new LoadGenerator(nodes, {
+      opsPerSec: 600,
+      duration: 1000,
+      maxInFlight: 12,
+      nodeMaxInFlight: 2,
+      admissionBackoffMs: 10,
+    });
+    const run = gen.start();
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 120));
+      run.cancel();
+      const metrics = await run.waitComplete();
+      const healthyDispatched =
+        Number(metrics?.perNode?.['healthy-a']?.dispatched || ZERO) +
+        Number(metrics?.perNode?.['healthy-b']?.dispatched || ZERO);
+      assert.ok(
+        healthyDispatched >= 8,
+        'expected dispatch-ready nodes to borrow blocked-node budget; ' +
+          `healthyDispatched=${healthyDispatched}`,
+      );
+      assert.ok(
+        Number(metrics?.perNode?.['blocked-node']?.admissionSignals || ZERO) > ZERO,
+        'expected blocked node to emit admission signals',
+      );
+      assert.ok(
+        blockedCalls <= 2,
+        `expected retry-after backoff to suppress blocked node reprobes, got ${blockedCalls}`,
+      );
+    } finally {
+      run.cancel();
+    }
+  });
 
 test('cancel stops the load run immediately', async () => {
   const nodes = [createMockNode('n1')];

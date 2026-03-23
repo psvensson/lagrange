@@ -175,3 +175,98 @@ test('JoinCoordinator - reruns a completed checkpoint when local state is missin
     t.equal(rerunCount, 2,
       'completed checkpoint should rerun when explicit local-state guard requires it');
   });
+
+test('JoinCoordinator - preserves highest checkpoint when rerunning an earlier satisfied step',
+  async (t) => {
+    const store = new JoinSessionStore({
+      now: () => Date.now(),
+    });
+    const counters = {
+      infrastructure: 0,
+      membership: 0,
+      readyLease: 0,
+    };
+    let localInfrastructureReady = false;
+    const coordinator = new JoinCoordinator({
+      joinSessionStore: store,
+    });
+
+    await coordinator.run({
+      nodeId: 'node-f',
+      sessionId: 'session-6',
+      steps: [
+        {
+          checkpoint: JOIN_CHECKPOINT.JOIN_INFRASTRUCTURE_READY,
+          phase: 'infrastructure',
+          run: async () => {
+            counters.infrastructure += 1;
+            localInfrastructureReady = true;
+          },
+        },
+        {
+          checkpoint: JOIN_CHECKPOINT.MEMBERSHIP_WRITTEN,
+          phase: 'membership',
+          run: async () => {
+            counters.membership += 1;
+          },
+        },
+      ],
+    });
+
+    const persistedMembership = await store.loadSession({
+      nodeId: 'node-f',
+      sessionId: 'session-6',
+    });
+    t.equal(
+      persistedMembership?.checkpoint,
+      JOIN_CHECKPOINT.MEMBERSHIP_WRITTEN,
+      'first run should persist membership as the highest satisfied checkpoint',
+    );
+
+    localInfrastructureReady = false;
+    await coordinator.run({
+      nodeId: 'node-f',
+      sessionId: 'session-6',
+      steps: [
+        {
+          checkpoint: JOIN_CHECKPOINT.JOIN_INFRASTRUCTURE_READY,
+          phase: 'infrastructure',
+          shouldRerun: () => localInfrastructureReady === false,
+          run: async () => {
+            counters.infrastructure += 1;
+            localInfrastructureReady = true;
+          },
+        },
+        {
+          checkpoint: JOIN_CHECKPOINT.MEMBERSHIP_WRITTEN,
+          phase: 'membership',
+          run: async () => {
+            counters.membership += 1;
+          },
+        },
+        {
+          checkpoint: JOIN_CHECKPOINT.READY_LEASE_ASSIGNED,
+          phase: 'ready',
+          run: async () => {
+            counters.readyLease += 1;
+          },
+        },
+      ],
+    });
+
+    const resumed = await store.loadSession({
+      nodeId: 'node-f',
+      sessionId: 'session-6',
+    });
+    t.equal(
+      resumed?.checkpoint,
+      JOIN_CHECKPOINT.READY_LEASE_ASSIGNED,
+      'rerunning an earlier satisfied step should preserve high-water progress ' +
+      'and allow later steps to continue',
+    );
+    t.same(counters, {
+      infrastructure: 2,
+      membership: 1,
+      readyLease: 1,
+    }, 'only the earlier infrastructure step should rerun before later steps continue');
+  });

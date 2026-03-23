@@ -371,6 +371,111 @@ test('Unit: Cluster.stop cancels active load runs', async () => {
   }
 });
 
+test('Unit: Cluster.stop terminates reusable containers after each run',
+  async () => {
+    const cluster = createCluster({
+      size: 1,
+      docker: {
+        socketPath: '/var/run/docker.sock',
+        reuseContainers: true,
+        keepRunningContainers: true,
+      },
+      image: 'distributed-db:test',
+    });
+
+    const stopCalls = [];
+    const removeCalls = [];
+    const mockProvider = {
+      stopContainer: async (containerId) => {
+        stopCalls.push(containerId);
+      },
+      killContainer: async () => {},
+      removeContainer: async (containerId) => {
+        removeCalls.push(containerId);
+      },
+    };
+    const node = {
+      id: 'n1',
+      role: NODE_ROLES.SEED,
+      containerId: 'container-reuse-1',
+      _dockerProvider: mockProvider,
+      closeQueryConnection: () => {},
+    };
+
+    cluster._nodes.set(node.id, node);
+    cluster._providers = [mockProvider];
+    cluster._hostAssignment = [0];
+    cluster._logCollector.collectFinalSnapshot = async () => [];
+    cluster._logCollector.stopSubscription = async () => {};
+    cluster._playbackRecorder = {
+      suspendPolling: () => {},
+      stop: async () => null,
+      recordEvent: () => {},
+    };
+
+    await cluster.stop();
+
+    assert.deepStrictEqual(
+      stopCalls,
+      ['container-reuse-1'],
+      'reusable containers should be stopped so node processes are not left running',
+    );
+    assert.deepStrictEqual(
+      removeCalls,
+      [],
+      'reusable containers should not be removed during teardown',
+    );
+  });
+
+test('Unit: Cluster.stop force-kills containers when graceful stop fails',
+  async () => {
+    const cluster = createCluster({
+      size: 1,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+    });
+
+    const callOrder = [];
+    const mockProvider = {
+      stopContainer: async () => {
+        callOrder.push('stop');
+        throw new Error('simulated stop failure');
+      },
+      killContainer: async () => {
+        callOrder.push('kill');
+      },
+      removeContainer: async () => {
+        callOrder.push('remove');
+      },
+    };
+    const node = {
+      id: 'n1',
+      role: NODE_ROLES.SEED,
+      containerId: 'container-force-kill-1',
+      _dockerProvider: mockProvider,
+      closeQueryConnection: () => {},
+    };
+
+    cluster._nodes.set(node.id, node);
+    cluster._providers = [mockProvider];
+    cluster._hostAssignment = [0];
+    cluster._logCollector.collectFinalSnapshot = async () => [];
+    cluster._logCollector.stopSubscription = async () => {};
+    cluster._playbackRecorder = {
+      suspendPolling: () => {},
+      stop: async () => null,
+      recordEvent: () => {},
+    };
+
+    await cluster.stop();
+
+    assert.deepStrictEqual(
+      callOrder,
+      ['stop', 'kill', 'remove'],
+      'teardown should force-kill after stop failure before removing',
+    );
+  });
+
 /**
  * Unit: local vs remote Docker connection routing (Req 2.2)
  */
@@ -990,6 +1095,76 @@ test('Unit: NodeHandle.queryWithTimeout preserves admin stream errorCode',
           assert.strictEqual(error.code, 'routing_not_ready');
           assert.strictEqual(error.hint, 'retry on healthy node');
           assert.match(String(error.message), /routing not ready/i);
+          return true;
+        },
+      );
+    } finally {
+      node.closeQueryConnection();
+      await new Promise((resolve, reject) => {
+        server.close((err) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          resolve();
+        });
+      });
+    }
+  });
+
+test('Unit: NodeHandle.queryWithTimeout preserves retry metadata from admin stream',
+  async () => {
+    const server = new WebSocketServer({
+      host: '127.0.0.1',
+      port: 0,
+    });
+    await new Promise((resolve, reject) => {
+      server.once('listening', resolve);
+      server.once('error', reject);
+    });
+
+    const address = server.address();
+    assert.ok(address && typeof address === 'object',
+      'server should expose listen address');
+    const adminApiPort = address.port;
+
+    server.on('connection', (socket) => {
+      socket.send(JSON.stringify({
+        type: 'cache_dump',
+        data: {},
+      }));
+      socket.once('message', (data) => {
+        const parsed = JSON.parse(data.toString());
+        socket.send(JSON.stringify({
+          type: 'query_result',
+          queryId: parsed.queryId,
+          error: 'Distributed operation failed due to participant failures',
+          errorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE',
+          deferRetry: true,
+          retryAfterMs: 275,
+        }));
+      });
+    });
+
+    const node = new NodeHandle(
+      'node-1',
+      'container-1',
+      '127.0.0.1',
+      NODE_ROLES.SEED,
+      {getContainerLogs: async () => ''},
+      adminApiPort,
+    );
+
+    try {
+      await assert.rejects(
+        node.queryWithTimeout('SELECT 1'),
+        (error) => {
+          assert.strictEqual(
+            error.code,
+            'distributed_participant_failure',
+          );
+          assert.strictEqual(error.deferRetry, true);
+          assert.strictEqual(error.retryAfterMs, 275);
           return true;
         },
       );
@@ -3058,7 +3233,8 @@ test('Unit: _startNode reconnects reusable container with hostname alias',
         containerId: 'existing-container-id',
         aliases: ['ddb-test-reuse-1-1'],
       },
-      'reused containers should be reattached when the run-network endpoint is missing the hostname alias used in node addresses',
+      'reused containers should be reattached when run-network endpoint ' +
+      'is missing the hostname alias used in node addresses',
     );
     assert.strictEqual(node.containerId, 'existing-container-id');
     assert.strictEqual(node.ip, '10.0.0.55');

@@ -158,6 +158,11 @@ class NodeLifecycleStateMachine extends EventEmitter {
   transition(newState) {
     const currentState = this.state;
 
+    if (currentState === NodeState.READY &&
+        newState === NodeState.READY) {
+      return true;
+    }
+
     // Validate transition
     if (!this.isValidTransition(currentState, newState)) {
       const validTransitions = VALID_TRANSITIONS[currentState] || [];

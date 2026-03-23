@@ -37,9 +37,17 @@ const LOAD_METRICS_FIELD_DISPATCHED_OPERATIONS = 'dispatchedOperations';
 const LOAD_METRICS_FIELD_UNDISPATCHED_OPERATIONS = 'undispatchedOperations';
 const LOAD_METRICS_FIELD_UNDISPATCHED_BY_REASON = 'undispatchedByReason';
 const LOAD_METRICS_FIELD_PER_NODE = 'perNode';
+const LOAD_METRICS_FIELD_WAIT_REASONS = 'waitReasons';
 const LOAD_METRICS_UNDISPATCHED_REASON_CAPACITY = 'capacity';
 const LOAD_METRICS_UNDISPATCHED_REASON_DURATION_TIMEOUT = 'durationTimeout';
 const LOAD_METRICS_UNDISPATCHED_REASON_CANCELLED = 'cancelled';
+const LOAD_METRICS_WAIT_REASON_NODE_SLOT_UNAVAILABLE = 'nodeSlotUnavailable';
+const LOAD_METRICS_WAIT_REASON_NODE_ADMISSION_BLOCKED = 'nodeAdmissionBlocked';
+const LOAD_METRICS_WAIT_REASON_RETRYABLE_CONTROL_PLANE_PRESSURE =
+  'retryableControlPlanePressure';
+const LOAD_METRICS_WAIT_REASON_TIMEOUT_WAITS = 'timeoutWaits';
+const LOAD_METRICS_WAIT_REASON_QUEUE_CAPACITY_REJECTED =
+  'queueCapacityRejected';
 const DIAGNOSTICS_COVERAGE_STATUS_AVAILABLE = 'available';
 const PARITY_STATUS_UNKNOWN = 'unknown';
 const DIAGNOSTICS_COVERAGE_STATUS_UNAVAILABLE = 'unavailable';
@@ -145,6 +153,7 @@ function buildScenarioEntry(scenarioName, result) {
     playback: result.playback || null,
     trace: result.trace || null,
     traceAssertion: result.traceAssertion || null,
+    cleanlinessAssertion: result.cleanlinessAssertion || null,
     memoryLeak: result.memoryLeak || null,
     memoryLeakAssertion: result.memoryLeakAssertion || null,
     performanceDiagnostics: result.performanceDiagnostics || null,
@@ -173,6 +182,7 @@ function buildScenarioEntry(scenarioName, result) {
     entry.loadMetrics,
   );
 
+  entry.bottleneckEstimate = buildBottleneckEstimate(entry.loadMetrics);
   entry.partitionHotspots = buildPartitionHotspots(entry);
   entry.optimizationPriorities = buildOptimizationPriorities(entry);
 
@@ -309,6 +319,115 @@ function buildPerformanceMeasurementEntry(result, loadMetrics) {
   };
 }
 
+function buildBottleneckEstimate(loadMetrics) {
+  if (!loadMetrics || typeof loadMetrics !== 'object' || Array.isArray(loadMetrics)) {
+    return null;
+  }
+
+  const waitReasons = loadMetrics?.waitReasons &&
+    typeof loadMetrics.waitReasons === 'object' &&
+    !Array.isArray(loadMetrics.waitReasons) ?
+    loadMetrics.waitReasons :
+    {};
+  const nodeAdmissionBlocked = normalizeFiniteNumber(
+    waitReasons[LOAD_METRICS_WAIT_REASON_NODE_ADMISSION_BLOCKED],
+  ) || ZERO;
+  const retryableControlPlanePressure = normalizeFiniteNumber(
+    waitReasons[LOAD_METRICS_WAIT_REASON_RETRYABLE_CONTROL_PLANE_PRESSURE],
+  ) || ZERO;
+  const nodeSlotUnavailable = normalizeFiniteNumber(
+    waitReasons[LOAD_METRICS_WAIT_REASON_NODE_SLOT_UNAVAILABLE],
+  ) || ZERO;
+  const timeoutWaits = normalizeFiniteNumber(
+    waitReasons[LOAD_METRICS_WAIT_REASON_TIMEOUT_WAITS],
+  ) || ZERO;
+  const targetOperations =
+    normalizeFiniteNumber(loadMetrics?.[LOAD_METRICS_FIELD_TARGET_OPERATIONS]) ||
+    ZERO;
+  const undispatchedOperations =
+    normalizeFiniteNumber(
+      loadMetrics?.[LOAD_METRICS_FIELD_UNDISPATCHED_OPERATIONS],
+    ) || ZERO;
+  const undispatchedRatio = targetOperations > ZERO ?
+    undispatchedOperations / targetOperations :
+    ZERO;
+  const queueDelayP95Ms = normalizeFiniteNumber(
+    loadMetrics?.[LOAD_METRICS_FIELD_QUEUE_DELAY]?.p95,
+  ) || ZERO;
+
+  const admissionScore =
+    nodeAdmissionBlocked + retryableControlPlanePressure;
+  const queueScore =
+    undispatchedOperations + Math.round(queueDelayP95Ms / 10);
+  const timeoutScore = timeoutWaits;
+  const nodeSlotScore = nodeSlotUnavailable;
+  const dominantScore = Math.max(
+    admissionScore,
+    queueScore,
+    timeoutScore,
+    nodeSlotScore,
+  );
+
+  if (dominantScore <= ZERO) {
+    return {
+      kind: 'mixed_or_unknown',
+      primaryEvidence: {
+        attemptErrors: normalizeFiniteNumber(
+          loadMetrics?.[LOAD_METRICS_FIELD_ATTEMPT_ERRORS],
+        ) || ZERO,
+      },
+      likelyWaitingTimeSource: 'insufficient_signal',
+    };
+  }
+
+  if (queueScore >= admissionScore &&
+      queueScore >= timeoutScore &&
+      queueScore >= nodeSlotScore) {
+    return {
+      kind: 'dispatch_queue_backlog',
+      primaryEvidence: {
+        undispatchedOperations,
+        undispatchedRatio,
+        queueDelayP95Ms,
+      },
+      likelyWaitingTimeSource: 'dispatch_queue',
+    };
+  }
+
+  if (admissionScore >= timeoutScore &&
+      admissionScore >= nodeSlotScore) {
+    return {
+      kind: 'admission_pressure',
+      primaryEvidence: {
+        waitReason: LOAD_METRICS_WAIT_REASON_NODE_ADMISSION_BLOCKED,
+        count: nodeAdmissionBlocked,
+        retryableControlPlanePressure,
+      },
+      likelyWaitingTimeSource: 'admission_backoff',
+    };
+  }
+
+  if (nodeSlotScore >= timeoutScore) {
+    return {
+      kind: 'node_slot_saturation',
+      primaryEvidence: {
+        waitReason: LOAD_METRICS_WAIT_REASON_NODE_SLOT_UNAVAILABLE,
+        count: nodeSlotUnavailable,
+      },
+      likelyWaitingTimeSource: 'per_node_bulkhead',
+    };
+  }
+
+  return {
+    kind: 'timeout_limited',
+    primaryEvidence: {
+      waitReason: LOAD_METRICS_WAIT_REASON_TIMEOUT_WAITS,
+      count: timeoutWaits,
+    },
+    likelyWaitingTimeSource: 'query_timeout',
+  };
+}
+
 function resolvePerformanceMeasurement(entry) {
   const measurement = entry?.performanceMeasurement;
   if (measurement &&
@@ -438,6 +557,9 @@ function buildLoadMetricsEntry(loadMetrics) {
       normalizeUndispatchedReasonMetrics(
         loadMetrics?.[LOAD_METRICS_FIELD_UNDISPATCHED_BY_REASON],
       ),
+    [LOAD_METRICS_FIELD_WAIT_REASONS]: normalizeWaitReasonMetrics(
+      loadMetrics?.[LOAD_METRICS_FIELD_WAIT_REASONS],
+    ),
     [LOAD_METRICS_FIELD_PER_NODE]: normalizePerNodeMetrics(
       loadMetrics?.[LOAD_METRICS_FIELD_PER_NODE],
     ),
@@ -520,6 +642,7 @@ function normalizePerNodeMetrics(perNode) {
         success: ZERO,
         attemptErrors: ZERO,
         admissionSignals: ZERO,
+        waitReasons: normalizeWaitReasonMetrics(null),
       };
       continue;
     }
@@ -528,7 +651,25 @@ function normalizePerNodeMetrics(perNode) {
       success: normalizeFiniteNumber(nodeMetrics.success) || ZERO,
       attemptErrors: normalizeFiniteNumber(nodeMetrics.attemptErrors) || ZERO,
       admissionSignals: normalizeFiniteNumber(nodeMetrics.admissionSignals) || ZERO,
+      waitReasons: normalizeWaitReasonMetrics(nodeMetrics.waitReasons),
     };
+  }
+  return normalized;
+}
+
+function normalizeWaitReasonMetrics(waitReasons) {
+  const normalized = {
+    [LOAD_METRICS_WAIT_REASON_NODE_SLOT_UNAVAILABLE]: ZERO,
+    [LOAD_METRICS_WAIT_REASON_NODE_ADMISSION_BLOCKED]: ZERO,
+    [LOAD_METRICS_WAIT_REASON_RETRYABLE_CONTROL_PLANE_PRESSURE]: ZERO,
+    [LOAD_METRICS_WAIT_REASON_TIMEOUT_WAITS]: ZERO,
+    [LOAD_METRICS_WAIT_REASON_QUEUE_CAPACITY_REJECTED]: ZERO,
+  };
+  if (!waitReasons || typeof waitReasons !== 'object' || Array.isArray(waitReasons)) {
+    return normalized;
+  }
+  for (const [reasonKey, value] of Object.entries(waitReasons)) {
+    normalized[reasonKey] = normalizeFiniteNumber(value) || ZERO;
   }
   return normalized;
 }

@@ -84,6 +84,7 @@ describe('ReportWriter', () => {
       });
       assert.equal(entry.trace, null);
       assert.equal(entry.traceAssertion, null);
+      assert.equal(entry.cleanlinessAssertion, null);
       assert.equal(entry.memoryLeak, null);
       assert.equal(entry.memoryLeakAssertion, null);
       assert.deepEqual(entry.performanceMeasurement, {
@@ -137,6 +138,13 @@ describe('ReportWriter', () => {
           capacity: 0,
           durationTimeout: 0,
           cancelled: 0,
+        },
+        waitReasons: {
+          nodeSlotUnavailable: 0,
+          nodeAdmissionBlocked: 0,
+          retryableControlPlanePressure: 0,
+          timeoutWaits: 0,
+          queueCapacityRejected: 0,
         },
         perNode: {},
       });
@@ -215,6 +223,13 @@ describe('ReportWriter', () => {
           durationTimeout: 0,
           cancelled: 0,
         },
+        waitReasons: {
+          nodeSlotUnavailable: 0,
+          nodeAdmissionBlocked: 0,
+          retryableControlPlanePressure: 0,
+          timeoutWaits: 0,
+          queueCapacityRejected: 0,
+        },
         perNode: {},
       });
     });
@@ -255,6 +270,13 @@ describe('ReportWriter', () => {
           capacity: 0,
           durationTimeout: 0,
           cancelled: 0,
+        },
+        waitReasons: {
+          nodeSlotUnavailable: 0,
+          nodeAdmissionBlocked: 0,
+          retryableControlPlanePressure: 0,
+          timeoutWaits: 0,
+          queueCapacityRejected: 0,
         },
         perNode: {},
       });
@@ -319,20 +341,98 @@ describe('ReportWriter', () => {
           durationTimeout: 100,
           cancelled: 0,
         },
+        waitReasons: {
+          nodeSlotUnavailable: 0,
+          nodeAdmissionBlocked: 0,
+          retryableControlPlanePressure: 0,
+          timeoutWaits: 0,
+          queueCapacityRejected: 0,
+        },
         perNode: {
           n1: {
             dispatched: 3000,
             success: 2998,
             attemptErrors: 2,
             admissionSignals: 0,
+            waitReasons: {
+              nodeSlotUnavailable: 0,
+              nodeAdmissionBlocked: 0,
+              retryableControlPlanePressure: 0,
+              timeoutWaits: 0,
+              queueCapacityRejected: 0,
+            },
           },
           n2: {
             dispatched: 2000,
             success: 2000,
             attemptErrors: 0,
             admissionSignals: 0,
+            waitReasons: {
+              nodeSlotUnavailable: 0,
+              nodeAdmissionBlocked: 0,
+              retryableControlPlanePressure: 0,
+              timeoutWaits: 0,
+              queueCapacityRejected: 0,
+            },
           },
         },
+      });
+    });
+
+    it('preserves load wait-reason summaries for report and bundle consumers', () => {
+      const writer = new ReportWriter(outputPath);
+      writer.addResult('postgres-baseline-comparison', {
+        passed: true,
+        duration: 30000,
+        loadMetrics: {
+          total: 5000,
+          success: 4998,
+          failed: 2,
+          errors: 2,
+          attemptErrors: 12,
+          latency: {p50: 12, p95: 45, p99: 120},
+          queueDelay: {p50: 3, p95: 9, p99: 15, max: 20},
+          distinctErrors: ['timeout'],
+          opsPerSec: 166.5,
+          waitReasons: {
+            nodeSlotUnavailable: 10,
+            nodeAdmissionBlocked: 4,
+            retryableControlPlanePressure: 3,
+            timeoutWaits: 2,
+            queueCapacityRejected: 1,
+          },
+          perNode: {
+            n1: {
+              dispatched: 3000,
+              success: 2998,
+              attemptErrors: 2,
+              admissionSignals: 0,
+              waitReasons: {
+                nodeSlotUnavailable: 10,
+                nodeAdmissionBlocked: 4,
+                retryableControlPlanePressure: 3,
+                timeoutWaits: 2,
+                queueCapacityRejected: 0,
+              },
+            },
+          },
+        },
+      });
+
+      const entry = writer.scenarios[0];
+      assert.deepEqual(entry.loadMetrics.waitReasons, {
+        nodeSlotUnavailable: 10,
+        nodeAdmissionBlocked: 4,
+        retryableControlPlanePressure: 3,
+        timeoutWaits: 2,
+        queueCapacityRejected: 1,
+      });
+      assert.deepEqual(entry.loadMetrics.perNode.n1.waitReasons, {
+        nodeSlotUnavailable: 10,
+        nodeAdmissionBlocked: 4,
+        retryableControlPlanePressure: 3,
+        timeoutWaits: 2,
+        queueCapacityRejected: 0,
       });
     });
 
@@ -489,6 +589,7 @@ describe('ReportWriter', () => {
       assert.equal(entry.loadMetrics, null);
       assert.equal(entry.trace, null);
       assert.equal(entry.traceAssertion, null);
+      assert.equal(entry.cleanlinessAssertion, null);
       assert.equal(entry.partitionHotspots, null);
     });
 
@@ -601,6 +702,58 @@ describe('ReportWriter', () => {
         enabled: true,
         required: true,
         passed: true,
+      });
+    });
+
+    it('persists cleanliness assertion metadata', () => {
+      const entry = buildScenarioEntry('node-join-under-load', {
+        passed: false,
+        duration: 100,
+        cleanlinessAssertion: {
+          enabled: true,
+          required: true,
+          passed: false,
+          playbackWarnings: ['service-query-failed'],
+        },
+      });
+
+      assert.deepEqual(entry.cleanlinessAssertion, {
+        enabled: true,
+        required: true,
+        passed: false,
+        playbackWarnings: ['service-query-failed'],
+      });
+    });
+
+    it('preserves bounded control-plane diagnostics from scenario details', () => {
+      const entry = buildScenarioEntry('node-join-under-load', {
+        passed: false,
+        duration: 100,
+        details: {
+          diagnostics: {
+            controlPlaneDiagnostics: {
+              logsTable: {
+                pendingWriteGrowthCount: 2,
+                retainedBacklogGrowthCount: 1,
+              },
+              cdcReplay: {
+                replayBufferGrowthCount: 3,
+                replayRetryDepth: 2,
+              },
+            },
+          },
+        },
+      });
+
+      assert.deepEqual(entry.details.diagnostics.controlPlaneDiagnostics, {
+        logsTable: {
+          pendingWriteGrowthCount: 2,
+          retainedBacklogGrowthCount: 1,
+        },
+        cdcReplay: {
+          replayBufferGrowthCount: 3,
+          replayRetryDepth: 2,
+        },
       });
     });
 
@@ -752,6 +905,104 @@ describe('ReportWriter', () => {
         'number',
         'admission throttling evidence should include admission signal count',
       );
+    });
+
+    it('derives an admission-pressure bottleneck estimate from wait reasons', () => {
+      const entry = buildScenarioEntry('postgres-baseline-comparison', {
+        passed: true,
+        duration: 100,
+        loadMetrics: {
+          total: 1000,
+          success: 1000,
+          failed: 0,
+          errors: 0,
+          attemptErrors: 200,
+          latency: {avg: 12, p50: 10, p95: 14, p99: 18},
+          queueDelay: {avg: 1, p50: 1, p95: 2, p99: 3, max: 4},
+          opsPerSec: 50,
+          waitReasons: {
+            nodeSlotUnavailable: 2,
+            nodeAdmissionBlocked: 120,
+            retryableControlPlanePressure: 80,
+            timeoutWaits: 1,
+            queueCapacityRejected: 0,
+          },
+          perNode: {
+            n1: {
+              dispatched: 500,
+              success: 500,
+              attemptErrors: 100,
+              admissionSignals: 100,
+            },
+            n2: {
+              dispatched: 500,
+              success: 500,
+              attemptErrors: 100,
+              admissionSignals: 100,
+            },
+          },
+        },
+      });
+
+      assert.deepEqual(entry.bottleneckEstimate, {
+        kind: 'admission_pressure',
+        primaryEvidence: {
+          waitReason: 'nodeAdmissionBlocked',
+          count: 120,
+          retryableControlPlanePressure: 80,
+        },
+        likelyWaitingTimeSource: 'admission_backoff',
+      });
+    });
+
+    it('derives a dispatch-queue bottleneck estimate from backlog signals', () => {
+      const entry = buildScenarioEntry('postgres-baseline-comparison', {
+        passed: true,
+        duration: 100,
+        loadMetrics: {
+          total: 400,
+          success: 400,
+          failed: 0,
+          errors: 0,
+          latency: {avg: 12, p50: 10, p95: 14, p99: 18},
+          queueDelay: {avg: 80, p50: 60, p95: 900, p99: 1200, max: 1400},
+          opsPerSec: 20,
+          targetOperations: 1000,
+          dispatchedOperations: 400,
+          undispatchedOperations: 600,
+          waitReasons: {
+            nodeSlotUnavailable: 20,
+            nodeAdmissionBlocked: 5,
+            retryableControlPlanePressure: 4,
+            timeoutWaits: 3,
+            queueCapacityRejected: 0,
+          },
+          perNode: {
+            n1: {
+              dispatched: 200,
+              success: 200,
+              attemptErrors: 0,
+              admissionSignals: 0,
+            },
+            n2: {
+              dispatched: 200,
+              success: 200,
+              attemptErrors: 0,
+              admissionSignals: 0,
+            },
+          },
+        },
+      });
+
+      assert.deepEqual(entry.bottleneckEstimate, {
+        kind: 'dispatch_queue_backlog',
+        primaryEvidence: {
+          undispatchedOperations: 600,
+          undispatchedRatio: 0.6,
+          queueDelayP95Ms: 900,
+        },
+        likelyWaitingTimeSource: 'dispatch_queue',
+      });
     });
 
     it('builds partition hotspots from convergence diagnostics', () => {

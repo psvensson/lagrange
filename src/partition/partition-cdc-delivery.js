@@ -29,6 +29,32 @@ const CDC_NO_SUBSCRIBER_BUFFER_SUPPRESSED_TABLES = new Set([
 ]);
 const CDC_SUBSCRIBER_NOT_READY_MSG = 'CDC subscriber not ready for delivery';
 
+function incrementBoundedOwnerCounter(owner, fieldName, delta = NUM.ONE) {
+  if (!owner || typeof fieldName !== 'string' || fieldName.length === NUM.ZERO) {
+    return;
+  }
+  if (!Number.isFinite(delta) || delta <= NUM.ZERO) {
+    return;
+  }
+  const currentValue = Number.isFinite(owner[fieldName]) ?
+    owner[fieldName] :
+    NUM.ZERO;
+  owner[fieldName] = Math.min(
+    Number.MAX_SAFE_INTEGER,
+    currentValue + Math.max(NUM.ONE, Math.floor(delta)),
+  );
+}
+
+function markReplayOnlyCdcEvent(cdcEvent) {
+  if (!cdcEvent || typeof cdcEvent !== 'object') {
+    return cdcEvent;
+  }
+  return {
+    ...cdcEvent,
+    replayOnly: true,
+  };
+}
+
 /**
  * Parse external CDC allowed override from table policy JSON.
  * @param {string|Object|null} rawPolicy - Raw table_policies value.
@@ -246,6 +272,10 @@ class PartitionCDCDelivery {
 
     const buffered = this.owner.cdcEventBuffer.buffer(cdcEvent);
     if (buffered) {
+      incrementBoundedOwnerCounter(
+        this.owner,
+        'cdcReplayBufferGrowthCount',
+      );
       this.owner.cdcPipelineMetrics.increment(
         CDC_PIPELINE_METRIC.EVENTS_BUFFERED,
       );
@@ -256,6 +286,8 @@ class PartitionCDCDelivery {
           operation: cdcEvent.operation,
           reason,
           bufferedEvents: this.owner.cdcEventBuffer.size(),
+          replayBufferGrowthCount:
+            this.owner.cdcReplayBufferGrowthCount || NUM.ZERO,
         });
       this.scheduleBufferedCDCReplay(reason);
       return true;
@@ -313,11 +345,15 @@ class PartitionCDCDelivery {
     this.owner.cdcBufferReplayTimer = setTimeout(() => {
       this.owner.cdcBufferReplayTimer = null;
       this.flushBufferedCDCEvents(reason).catch((error) => {
+        incrementBoundedOwnerCounter(this.owner, 'cdcReplayRetryDepth');
         this.owner.logger.warn(
           PARTITION_SERVICE_LOG_MSG.CDC_BUFFER_REPLAY_FAILED, {
             partitionId: this.owner.partitionId,
             reason,
             error: error.message,
+            replayRetryDepth: this.owner.cdcReplayRetryDepth || NUM.ZERO,
+            replayBufferGrowthCount:
+              this.owner.cdcReplayBufferGrowthCount || NUM.ZERO,
           });
       });
     }, retryDelayMs);
@@ -346,7 +382,10 @@ class PartitionCDCDelivery {
           async (cdcEvent) => {
             const subscribers = [...this.owner.cdcSubscribers];
             for (const subscriber of subscribers) {
-              await this.deliverCDCEventToSubscriber(subscriber, cdcEvent);
+              await this.deliverCDCEventToSubscriber(
+                subscriber,
+                markReplayOnlyCdcEvent(cdcEvent),
+              );
             }
             this.owner.cdcPipelineMetrics.increment(
               CDC_PIPELINE_METRIC.EVENTS_DELIVERED,
@@ -361,6 +400,7 @@ class PartitionCDCDelivery {
 
       this.owner.cdcBufferReplayDelayMs =
         PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
+      this.owner.cdcReplayRetryDepth = NUM.ZERO;
       this.owner.logger.debug(
         PARTITION_SERVICE_LOG_MSG.CDC_BUFFER_REPLAY_COMPLETE, {
           partitionId: this.owner.partitionId,
@@ -374,6 +414,7 @@ class PartitionCDCDelivery {
       );
       this.owner.cdcBufferReplayDelayMs =
         this.resolveBufferedReplayDelayAfterError(error);
+      incrementBoundedOwnerCounter(this.owner, 'cdcReplayRetryDepth');
       this.owner.logger.warn(
         PARTITION_SERVICE_LOG_MSG.CDC_BUFFER_REPLAY_FAILED, {
           partitionId: this.owner.partitionId,
@@ -381,6 +422,9 @@ class PartitionCDCDelivery {
           error: error.message,
           retryDelayMs: this.owner.cdcBufferReplayDelayMs,
           bufferedEvents: this.owner.cdcEventBuffer.size(),
+          replayRetryDepth: this.owner.cdcReplayRetryDepth || NUM.ZERO,
+          replayBufferGrowthCount:
+            this.owner.cdcReplayBufferGrowthCount || NUM.ZERO,
         });
     } finally {
       this.owner.cdcBufferReplayInFlight = false;
@@ -562,17 +606,19 @@ class PartitionCDCDelivery {
 
       const trackingWrapper = async (cdcEvent) => {
         deliveredIdentities.add(buildEventIdentity(cdcEvent));
-        await wrapper(cdcEvent);
+        await wrapper(markReplayOnlyCdcEvent(cdcEvent));
       };
       try {
         bufferedEventsReplayed =
           await this.owner.cdcEventBuffer.replay(trackingWrapper);
+        this.owner.cdcReplayRetryDepth = NUM.ZERO;
       } catch (error) {
         this.owner.cdcPipelineMetrics.increment(
           CDC_PIPELINE_METRIC.DELIVERY_FAILURES,
         );
         this.owner.cdcBufferReplayDelayMs =
           this.resolveBufferedReplayDelayAfterError(error);
+        incrementBoundedOwnerCounter(this.owner, 'cdcReplayRetryDepth');
         preserveReplayDelayAfterHandshake =
           Number.isFinite(error?.retryAfterMs) && error.retryAfterMs > NUM.ZERO;
         this.owner.logger.warn(
@@ -583,6 +629,9 @@ class PartitionCDCDelivery {
             error: error.message,
             retryDelayMs: this.owner.cdcBufferReplayDelayMs,
             bufferedEvents: this.owner.cdcEventBuffer.size(),
+            replayRetryDepth: this.owner.cdcReplayRetryDepth || NUM.ZERO,
+            replayBufferGrowthCount:
+              this.owner.cdcReplayBufferGrowthCount || NUM.ZERO,
           });
       }
       catchupCompletedAt = Date.now();
@@ -622,7 +671,7 @@ class PartitionCDCDelivery {
         }
         deliveredIdentities.add(identity);
         const replayEvent = {
-          ...cdcEvent,
+          ...markReplayOnlyCdcEvent(cdcEvent),
           sequenceNumber: Number.isFinite(cdcEvent.sequenceNumber) ?
             cdcEvent.sequenceNumber :
             this.nextCDCEventSequenceNumber(),

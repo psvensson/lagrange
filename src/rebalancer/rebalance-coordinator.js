@@ -369,6 +369,8 @@ class RebalanceCoordinator extends EventEmitter {
         cdcIntegrationService: this.cdcIntegrationService,
         controlPlaneSystemTableGateway:
           this.controlPlaneSystemTableGateway,
+        controlPlaneReadinessService:
+          this.controlPlaneReadinessService,
         logger: this.logger,
         emitter: this,
       });
@@ -485,6 +487,8 @@ class RebalanceCoordinator extends EventEmitter {
         cdcIntegrationService: this.cdcIntegrationService,
         controlPlaneSystemTableGateway:
           this.controlPlaneSystemTableGateway,
+        controlPlaneReadinessService:
+          this.controlPlaneReadinessService,
         logger: this.logger,
       });
     }
@@ -2504,23 +2508,35 @@ class RebalanceCoordinator extends EventEmitter {
     }
 
     const now = Date.now();
-    const wfOwner = this.workflowOwner;
-    if (
-      wfOwner.lastEmptyIncompleteOperationQueryAtMs >
-        NUM.ZERO &&
-      now - wfOwner.lastEmptyIncompleteOperationQueryAtMs <
-        wfOwner.incompleteOperationQueryEmptyBackoffMs
-    ) {
+    if (this.workflowOwner &&
+        this.workflowOwner.lastEmptyIncompleteOperationQueryAtMs > NUM.ZERO &&
+        now - this.workflowOwner.lastEmptyIncompleteOperationQueryAtMs <
+          this.workflowOwner.incompleteOperationQueryEmptyBackoffMs) {
       return;
     }
 
-    const incompleteOps =
-      await this.queryIncompleteOperations();
-    if (incompleteOps.length === NUM.ZERO) {
-      wfOwner.lastEmptyIncompleteOperationQueryAtMs = now;
+    const canUseCacheObservationBoundary =
+      this.repository.hasReplicaOperationCacheObservationBoundary();
+    const cachedIncompleteOps = canUseCacheObservationBoundary ?
+      await this.queryIncompleteOperations({
+        skipSqlFallbackWhenCacheEmpty: true,
+      }) :
+      [];
+    if (cachedIncompleteOps.length > NUM.ZERO) {
+      this.clearEmptyIncompleteOperationQueryDelay();
+    } else if (canUseCacheObservationBoundary &&
+        this.shouldDelayEmptyIncompleteOperationQuery(now)) {
       return;
     }
-    wfOwner.lastEmptyIncompleteOperationQueryAtMs = NUM.ZERO;
+
+    const incompleteOps = cachedIncompleteOps.length > NUM.ZERO ?
+      cachedIncompleteOps :
+      await this.queryIncompleteOperations();
+    if (incompleteOps.length === NUM.ZERO) {
+      this.markEmptyIncompleteOperationQueryAt(now);
+      return;
+    }
+    this.clearEmptyIncompleteOperationQueryDelay();
 
     const timeoutReconcileTasks = [];
 
@@ -2937,8 +2953,8 @@ class RebalanceCoordinator extends EventEmitter {
    *
    * @return {Promise<number>} Count of concurrent ADD operations.
    */
-  async getConcurrentAddCount() {
-    const inFlight = await this.queryIncompleteOperations();
+  async getConcurrentAddCount(options = {}) {
+    const inFlight = await this.queryIncompleteOperations(options);
     return inFlight.filter((operation) => {
       return operation.type === OperationType.ADD ||
         operation.type === OperationType.REPLACE;
@@ -2950,8 +2966,8 @@ class RebalanceCoordinator extends EventEmitter {
    *
    * @return {Promise<number>} Count of concurrent REMOVE operations.
    */
-  async getConcurrentRemoveCount() {
-    return this.repository.getConcurrentRemoveCount();
+  async getConcurrentRemoveCount(options = {}) {
+    return this.repository.getConcurrentRemoveCount(options);
   }
 
   /**
@@ -2977,7 +2993,22 @@ class RebalanceCoordinator extends EventEmitter {
     if (this.isLocalRouterBackpressured()) {
       return false;
     }
+    const cachedCount = await this.getConcurrentAddCount({
+      skipSqlFallbackWhenCacheEmpty: true,
+    });
+    if (cachedCount > NUM.ZERO) {
+      this.clearEmptyIncompleteOperationQueryDelay();
+      return cachedCount < this.config.maxConcurrentAdds;
+    }
+    if (this.shouldDelayEmptyIncompleteOperationQuery()) {
+      return false;
+    }
     const count = await this.getConcurrentAddCount();
+    if (count === NUM.ZERO) {
+      this.markEmptyIncompleteOperationQueryAt();
+    } else {
+      this.clearEmptyIncompleteOperationQueryDelay();
+    }
     return count < this.config.maxConcurrentAdds;
   }
 
@@ -2990,8 +3021,72 @@ class RebalanceCoordinator extends EventEmitter {
     if (this.isLocalRouterBackpressured()) {
       return false;
     }
+    const cachedCount = await this.getConcurrentRemoveCount({
+      skipSqlFallbackWhenCacheEmpty: true,
+    });
+    if (cachedCount > NUM.ZERO) {
+      this.clearEmptyIncompleteOperationQueryDelay();
+      return cachedCount < this.config.maxConcurrentRemoves;
+    }
+    if (this.shouldDelayEmptyIncompleteOperationQuery()) {
+      return false;
+    }
     const count = await this.getConcurrentRemoveCount();
+    if (count === NUM.ZERO) {
+      this.markEmptyIncompleteOperationQueryAt();
+    } else {
+      this.clearEmptyIncompleteOperationQueryDelay();
+    }
     return count < this.config.maxConcurrentRemoves;
+  }
+
+  /**
+   * Delay authoritative empty-owner scans until the cache has had one bounded
+   * chance to observe local replica_operations rows. An empty cache is not
+   * proof of zero operations; it is only a reason to wait briefly.
+   * @param {number} [now=Date.now()]
+   * @return {boolean}
+   * @private
+   */
+  shouldDelayEmptyIncompleteOperationQuery(now = Date.now()) {
+    const wfOwner = this.workflowOwner;
+    if (!wfOwner ||
+        wfOwner.incompleteOperationQueryEmptyBackoffMs <= NUM.ZERO) {
+      return false;
+    }
+    if (wfOwner.lastEmptyIncompleteOperationQueryAtMs <= NUM.ZERO) {
+      wfOwner.lastEmptyIncompleteOperationQueryAtMs = now;
+      return true;
+    }
+    if (now - wfOwner.lastEmptyIncompleteOperationQueryAtMs <
+        wfOwner.incompleteOperationQueryEmptyBackoffMs) {
+      return true;
+    }
+    wfOwner.lastEmptyIncompleteOperationQueryAtMs = NUM.ZERO;
+    return false;
+  }
+
+  /**
+   * Record one bounded empty-owner scan observation timestamp.
+   * @param {number} [now=Date.now()]
+   * @return {void}
+   * @private
+   */
+  markEmptyIncompleteOperationQueryAt(now = Date.now()) {
+    if (this.workflowOwner) {
+      this.workflowOwner.lastEmptyIncompleteOperationQueryAtMs = now;
+    }
+  }
+
+  /**
+   * Clear bounded empty-owner scan deferral once local work is observed.
+   * @return {void}
+   * @private
+   */
+  clearEmptyIncompleteOperationQueryDelay() {
+    if (this.workflowOwner) {
+      this.workflowOwner.lastEmptyIncompleteOperationQueryAtMs = NUM.ZERO;
+    }
   }
 
   /**
@@ -3019,12 +3114,43 @@ class RebalanceCoordinator extends EventEmitter {
    * @private
    */
   logQueryOperationsFailure(error, context = {}) {
+    const participantFailures = Array.isArray(error?.participantFailures) ?
+      error.participantFailures
+        .filter((entry) => entry && typeof entry === 'object')
+        .slice(NUM.ZERO, NUM.THREE) :
+      [];
+    const firstFailedParticipant =
+      error?.firstFailedParticipant &&
+      typeof error.firstFailedParticipant === 'object' ?
+        error.firstFailedParticipant :
+        (participantFailures.length > NUM.ZERO ? participantFailures[NUM.ZERO] : null);
+    const tableName = typeof error?.tableName === 'string' &&
+      error.tableName.length > NUM.ZERO ?
+      error.tableName :
+      (typeof firstFailedParticipant?.failedTable === 'string' ?
+        firstFailedParticipant.failedTable :
+        null);
     const payload = {
       ...context,
+      queryDurationMs: Number.isFinite(context?.queryDurationMs) ?
+        Math.max(NUM.ZERO, Math.floor(context.queryDurationMs)) :
+        null,
+      rowCount: Number.isFinite(context?.rowCount) ?
+        Math.max(NUM.ZERO, Math.floor(context.rowCount)) :
+        null,
+      backpressured:
+        typeof context?.backpressured === 'boolean' ?
+          context.backpressured :
+          (typeof this.isLocalRouterBackpressured === 'function' ?
+            this.isLocalRouterBackpressured() :
+            false),
       error: error?.message || error?.error || null,
       nodeId: this.nodeId,
       code: getControlPlaneErrorCode(error) || null,
       retryAfterMs: getControlPlaneRetryAfterMs(error),
+      tableName,
+      participantFailures,
+      firstFailedParticipant,
     };
     if (isRetryableControlPlaneError(error)) {
       this.logger.warn(

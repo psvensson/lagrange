@@ -1225,6 +1225,15 @@ class NodeHandle {
           parsed.hint.length > ZERO) {
         error.hint = parsed.hint;
       }
+      if (parsed.deferRetry === true) {
+        error.deferRetry = true;
+      }
+      if (Number.isFinite(parsed.retryAfterMs)) {
+        error.retryAfterMs = Math.max(
+          ZERO,
+          Math.floor(parsed.retryAfterMs),
+        );
+      }
       pending.reject(error);
       return;
     }
@@ -1861,13 +1870,6 @@ class Cluster {
     return !hasRemoteHosts && dockerConfig.reuseContainers === true;
   }
 
-  _shouldKeepReuseContainersRunning() {
-    if (!this._isContainerReuseEnabled()) {
-      return false;
-    }
-    return this._config?.docker?.keepRunningContainers !== false;
-  }
-
   _buildReusableNetworkName() {
     return NETWORK.NAME_PREFIX +
       '-' +
@@ -2290,8 +2292,13 @@ class Cluster {
   async stop() {
     const errors = [];
     const reuseContainers = this._isContainerReuseEnabled();
-    const keepRunning = this._shouldKeepReuseContainersRunning();
-    this._playbackRecorder.suspendPolling();
+    if (typeof this._playbackRecorder.beginShutdown === 'function') {
+      await this._playbackRecorder.beginShutdown({
+        awaitInFlightCaptures: true,
+      });
+    } else {
+      this._playbackRecorder.suspendPolling();
+    }
     this._recordClusterStage(
       CLUSTER_STAGE_TEARDOWN_STARTING,
       {
@@ -2332,23 +2339,7 @@ class Cluster {
       } catch (_err) {
         // Best-effort stop
       }
-      if (!reuseContainers || !keepRunning) {
-        try {
-          await node._dockerProvider.stopContainer(
-            node.containerId,
-          );
-          this._recordPlaybackEvent(
-            PLAYBACK_EVENT_TYPE.NODE_STOPPED,
-            PLAYBACK_SCOPE_NODE,
-            nodeId,
-            {
-              containerId: node.containerId,
-            },
-          );
-        } catch (_err) {
-          // Best-effort stop
-        }
-      }
+      await this._stopNodeContainerForTeardown(nodeId, node, errors);
       if (!reuseContainers) {
         try {
           await node._dockerProvider.removeContainer(
@@ -2447,6 +2438,56 @@ class Cluster {
         errors.join('\n') + '\n',
       );
     }
+  }
+
+  async _stopNodeContainerForTeardown(nodeId, node, errors) {
+    const provider = node?._dockerProvider;
+    const containerId = node?.containerId;
+    if (!provider || typeof containerId !== 'string' ||
+        containerId.length === ZERO) {
+      return;
+    }
+
+    let stopped = false;
+    try {
+      await provider.stopContainer(containerId);
+      stopped = true;
+    } catch (error) {
+      if (isIgnorableContainerStopError(error)) {
+        stopped = true;
+      } else if (typeof provider.killContainer === 'function') {
+        try {
+          await provider.killContainer(containerId);
+          stopped = true;
+        } catch (killError) {
+          const stopMessage = String(error?.message || error);
+          const killMessage = String(killError?.message || killError);
+          errors.push(
+            'Failed to stop container for ' + nodeId +
+            ': ' + stopMessage +
+            '; kill fallback failed: ' + killMessage,
+          );
+        }
+      } else {
+        errors.push(
+          'Failed to stop container for ' + nodeId +
+          ': ' + String(error?.message || error),
+        );
+      }
+    }
+
+    if (!stopped) {
+      return;
+    }
+
+    this._recordPlaybackEvent(
+      PLAYBACK_EVENT_TYPE.NODE_STOPPED,
+      PLAYBACK_SCOPE_NODE,
+      nodeId,
+      {
+        containerId,
+      },
+    );
   }
 
   async _cancelActiveLoadRuns() {

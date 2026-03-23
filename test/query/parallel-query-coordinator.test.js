@@ -124,6 +124,68 @@ test('ParallelQueryCoordinator - per-fragment status is returned', async (t) => 
   t.equal(p2Result.status, 'failed');
 });
 
+test('ParallelQueryCoordinator - preserves bounded participant failure diagnostics',
+  async (t) => {
+    const coordinator = new ParallelQueryCoordinator({
+      partitionQueryExecutor: async (_sql, partitionId) => {
+        if (partitionId === 'p1') {
+          return {
+            success: true,
+            rows: [{id: 1}],
+            changes: 0,
+          };
+        }
+        return {
+          success: false,
+          error: 'Distributed operation failed due to participant failures',
+          errorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE',
+          retryAfterMs: 250,
+          deferRetry: true,
+          participantNodeId: 'node-pressure',
+          participantAddress: 'ws://node-pressure:7001',
+          backpressured: true,
+          failedTable: 'replica_operations',
+        };
+      },
+    });
+    coordinator.speculativeExecutionEnabled = false;
+
+    const result = await coordinator.executeParallel(
+      'SELECT * FROM replica_operations',
+      ['p1', 'p2'],
+      [],
+    );
+
+    const failedResult = result.results.find((entry) => entry.partitionId === 'p2');
+    t.equal(failedResult?.errorCode, 'DISTRIBUTED_PARTICIPANT_FAILURE',
+      'failed partition should preserve error code');
+    t.equal(failedResult?.retryAfterMs, 250,
+      'failed partition should preserve retry-after metadata');
+    t.equal(failedResult?.participantNodeId, 'node-pressure',
+      'failed partition should preserve participant node id');
+    t.equal(failedResult?.participantAddress, 'ws://node-pressure:7001',
+      'failed partition should preserve participant address');
+    t.equal(failedResult?.backpressured, true,
+      'failed partition should preserve backpressure state');
+    t.equal(failedResult?.failedTable, 'replica_operations',
+      'failed partition should preserve the failed table name');
+    t.equal(
+      result.metrics?.firstFailedParticipant?.participantNodeId,
+      'node-pressure',
+      'fanout metrics should expose the first failed participant summary',
+    );
+    t.equal(
+      result.metrics?.firstFailedParticipant?.failedTable,
+      'replica_operations',
+      'fanout metrics should expose the failed table name',
+    );
+    t.equal(
+      result.metrics?.firstFailedParticipant?.durationMs >= 0,
+      true,
+      'fanout metrics should preserve per-participant duration',
+    );
+  });
+
 test('ParallelQueryCoordinator - emits fanout metrics log', async (t) => {
   const partitions = new Map([
     ['p1', {

@@ -19,7 +19,9 @@ import {
   normalizeScenarioPayload,
   evaluateTraceAssertions,
   evaluateMemoryLeakAssertions,
+  evaluateScenarioCleanlinessAssertions,
   evaluateBenchmarkRegressionGate,
+  resolveScenarioMemoryLeakConfig,
   resolveBenchmarkGateConfig,
   resolveRunRaftProvider,
   resolveFastLocalMode,
@@ -193,6 +195,53 @@ describe('runScenarios', () => {
     resourceLimits: {},
   };
 
+  function buildFakeCluster() {
+    const nodes = [{id: 'node-1'}];
+    const collector = {
+      async collectContainerFallback(_provider, _nodes) {},
+      async writeOutput(_scenarioName, _entries, _nodeIds) {},
+      getBuffer() {
+        return [];
+      },
+    };
+    return {
+      _providers: {
+        local: {},
+      },
+      _hostAssignment: ['local'],
+      async start() {},
+      async stop() {},
+      setScenarioName(_name) {},
+      getNodes() {
+        return nodes;
+      },
+      getLogCollector() {
+        return collector;
+      },
+      getLogAnalyzer() {
+        return {
+          async runAnalyticalQueries(_seedNode) {
+            return {};
+          },
+          analyze(_entries, _queryResults, _partitionCount) {
+            return {summary: null};
+          },
+          async writeAnalysis(_scenarioName, _analysis) {},
+        };
+      },
+      getPlaybackManifest() {
+        return {
+          scenarioName: 'partial-result-fail',
+          warnings: [],
+          files: {},
+        };
+      },
+      getTraceManifest() {
+        return null;
+      },
+    };
+  }
+
   it('catches unhandled scenario error and marks failed', async () => {
     const failPath = new URL(
       '../__fixtures__/failing-scenario.js',
@@ -239,6 +288,44 @@ describe('runScenarios', () => {
     assert.equal(report.scenarios.length, 2);
     assert.equal(report.scenarios[0].scenario, 'first-fail');
     assert.equal(report.scenarios[1].scenario, 'second-fail');
+  });
+
+  it('preserves partialResult load metrics for failed scenarios', async () => {
+    const failPath = new URL(
+      '../__fixtures__/failing-partial-result-scenario.js',
+      import.meta.url,
+    ).pathname;
+
+    const scenarios = [{name: 'partial-result-fail', path: failPath}];
+
+    const {report, hasFailures} = await runScenarios(
+      baseConfig,
+      scenarios,
+      {
+        ...baseOptions,
+        clusterFactory() {
+          return buildFakeCluster();
+        },
+      },
+    );
+
+    assert.equal(hasFailures, true);
+    assert.equal(report.scenarios.length, 1);
+    const entry = report.scenarios[0];
+    assert.equal(entry.passed, false);
+    assert.ok(entry.details?.diagnostics?.partialResult);
+    assert.ok(
+      entry.loadMetrics,
+      'expected failed scenario report entry to preserve loadMetrics',
+    );
+    assert.equal(entry.loadMetrics.total, 120);
+    assert.ok(
+      entry.bottleneckEstimate,
+      'expected failed scenario report entry to derive bottleneckEstimate',
+    );
+    assert.equal(entry.bottleneckEstimate.kind, 'dispatch_queue_backlog');
+    assert.equal(entry.details.failurePhase, 'verify_load');
+    assert.equal(entry.details.dominantAssertion, 'dispatch_backlog');
   });
 
   it('records startedAt and duration for each scenario', async () => {
@@ -459,6 +546,61 @@ describe('evaluateMemoryLeakAssertions', () => {
     );
     assert.equal(result.passed, true);
     assert.equal(result.error, null);
+  });
+});
+
+describe('scenario cleanliness helpers', () => {
+  it('upgrades node-join-under-load memory leak requirements to required samples and leak failure',
+    () => {
+      const resolved = resolveScenarioMemoryLeakConfig(
+        'node-join-under-load',
+        {
+          memoryLeak: {
+            enabled: false,
+            failOnDetection: false,
+            requireSamples: false,
+          },
+        },
+      );
+
+      assert.equal(resolved.enabled, true);
+      assert.equal(resolved.failOnDetection, true);
+      assert.equal(resolved.requireSamples, true);
+    });
+
+  it('fails node-join-under-load cleanliness assertions on playback warnings', () => {
+    const result = evaluateScenarioCleanlinessAssertions(
+      'node-join-under-load',
+      {
+        playback: {
+          warnings: [{
+            code: 'service-query-failed',
+            message: 'Failed to query services on node seed-1',
+          }],
+        },
+      },
+    );
+
+    assert.equal(result.enabled, true);
+    assert.equal(result.required, true);
+    assert.equal(result.passed, false);
+    assert.match(result.error, /playback warnings present/i);
+  });
+
+  it('passes when no scenario-specific cleanliness policy applies', () => {
+    const result = evaluateScenarioCleanlinessAssertions(
+      'rolling-restart',
+      {
+        playback: {
+          warnings: [{
+            code: 'service-query-failed',
+            message: 'Failed to query services on node seed-1',
+          }],
+        },
+      },
+    );
+
+    assert.equal(result, null);
   });
 });
 

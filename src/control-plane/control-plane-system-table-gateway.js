@@ -1874,6 +1874,45 @@ class ControlPlaneSystemTableGateway {
    * @private
    */
   async executeOwnerLocalRead(tableName, sql, params, options) {
+    const cdcIntegrationService = this.resolveCdcIntegrationService();
+    if (typeof cdcIntegrationService?.executeAuthoritativeSystemTableRead ===
+        TYPEOF.FUNCTION) {
+      const authoritativeResult =
+        await cdcIntegrationService.executeAuthoritativeSystemTableRead(
+          tableName,
+          sql,
+          params,
+          {
+            localReadConsistency:
+              options?.localReadConsistency ||
+              CONTROL_PLANE_LOCAL_READ_CONSISTENCY,
+            replicaFallbackConsistency:
+              options?.replicaFallbackConsistency ||
+              CONTROL_PLANE_REPLICA_FALLBACK_CONSISTENCY,
+            allowSqlFallback: false,
+            queryOptions: this.buildQueryOptions(options),
+          },
+        );
+      return {
+        ...authoritativeResult,
+        tableName,
+        rows: Array.isArray(authoritativeResult?.rows) ?
+          authoritativeResult.rows :
+          [],
+        rowCount: Number.isFinite(authoritativeResult?.rowCount) ?
+          authoritativeResult.rowCount :
+          (
+            Array.isArray(authoritativeResult?.rows) ?
+              authoritativeResult.rows.length :
+              NUM.ZERO
+          ),
+        outcome:
+          authoritativeResult?.success === true ?
+            CONTROL_PLANE_READ_OUTCOME.OWNER_LOCAL_NON_PROPAGATED :
+            CONTROL_PLANE_READ_OUTCOME.OWNER_NOT_READY,
+        strategyUsed: CONTROL_PLANE_READ_STRATEGY.OWNER_LOCAL_NON_PROPAGATED,
+      };
+    }
     const sqlQueryEngine = this.resolveSqlQueryEngine();
     if (typeof sqlQueryEngine?.executeQuery !== TYPEOF.FUNCTION) {
       return {

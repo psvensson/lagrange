@@ -182,11 +182,14 @@ test('getInFlightOperations keeps replica_operations owner-local reads on ' +
   const coordinator = createMinimalCoordinator({
     cdcIntegrationService: {
       async waitForCacheUpdate() {},
-    },
-    sqlQueryEngine: {
-      async executeQuery(_sql, _params, options = {}) {
+      async executeAuthoritativeSystemTableRead(
+        _tableName,
+        _sql,
+        _params,
+        options = {},
+      ) {
         observedRoutingDimensions.push(
-          options?.routingReadinessDimension || null,
+          options?.queryOptions?.routingReadinessDimension || null,
         );
         return {success: true, rows: []};
       },

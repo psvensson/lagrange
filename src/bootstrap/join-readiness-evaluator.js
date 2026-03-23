@@ -53,6 +53,9 @@ import {
   waitForStartupConvergence,
 } from './shared/startup-convergence-gate.js';
 import {
+  getLocalQueryTransportReadiness,
+} from './shared/local-query-transport-readiness.js';
+import {
   JOIN_READINESS_DEFAULT_TABLE,
   JOIN_READINESS_REASON,
   JOIN_READINESS_REPAIR,
@@ -580,7 +583,10 @@ class JoinReadinessEvaluator {
       return false;
     }
     if (targetNodeId === this.nodeId) {
-      return true;
+      const readiness = getLocalQueryTransportReadiness(
+        this.delegates.getMessageRouter?.() || null,
+      );
+      return readiness.ready !== false;
     }
 
     const messageRouter = this.delegates.getMessageRouter();
@@ -666,7 +672,12 @@ class JoinReadinessEvaluator {
         continue;
       }
       if (targetNodeId === this.nodeId) {
-        connectionStates[targetAddress] = 'self';
+        const readiness = getLocalQueryTransportReadiness(
+          messageRouter || null,
+        );
+        connectionStates[targetAddress] = readiness.ready === false ?
+          `self:${readiness.state || 'deferred'}` :
+          'self';
         continue;
       }
       if (typeof messageRouter?.getConnectionState !== TYPEOF.FUNCTION) {

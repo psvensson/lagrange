@@ -19,6 +19,7 @@ import {getSystemCachePrimaryKeyField} from
   '../../src/cache/system-cache-key-descriptor.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
+import {LogsTableService} from '../../src/logging/logs-table-service.js';
 import {createInProcWebSocketPair} from '../../src/test-helpers/inproc-ws.js';
 import {TraceCollector} from '../../src/debug/trace-collector.js';
 import {COLUMN, TABLES, SERVICE_TYPE} from '../../src/constants/index.js';
@@ -1103,6 +1104,47 @@ test('AdminWebSocketAPI - load lane uses serveEligible instead of ' +
   ws.close();
   await api.shutdown();
 });
+
+test('AdminWebSocketAPI - query_result preserves retry metadata for deferred failures',
+  async (t) => {
+    const api = new AdminWebSocketAPI({
+      nodeId: 'test-node',
+      systemTableCache: createPopulatedCache(),
+      sqlQueryEngine: {
+        executeRequest: async () => ({
+          success: false,
+          error: 'Distributed operation failed due to participant failures',
+          errorCode: ErrorCode.INTERNAL_ERROR,
+          deferRetry: true,
+          retryAfterMs: 275,
+        }),
+      },
+    });
+
+    await api.initialize(0, {listen: false});
+    const {ws} = await connectAndReceive(api, 2000);
+
+    ws.send(JSON.stringify({
+      type: MessageType.QUERY,
+      queryId: 'q-retry-metadata',
+      sql: 'SELECT 1',
+    }));
+
+    const result = await waitForMessage(ws);
+    t.equal(result.type, MessageType.QUERY_RESULT,
+      'should return query_result envelope');
+    t.equal(result.queryId, 'q-retry-metadata',
+      'should preserve query id');
+    t.equal(result.errorCode, ErrorCode.INTERNAL_ERROR,
+      'should preserve error code');
+    t.equal(result.deferRetry, true,
+      'should preserve deferRetry on failed query results');
+    t.equal(result.retryAfterMs, 275,
+      'should preserve retryAfterMs on failed query results');
+
+    ws.close();
+    await api.shutdown();
+  });
 
 test('AdminWebSocketAPI - load lane prefers async readiness when available',
   async (t) => {
@@ -2244,6 +2286,24 @@ test('AdminWebSocketAPI - local control snapshot exposes structured control-plan
       },
     };
     const cache = createPopulatedCache();
+    const originalLogsTableInstance = LogsTableService.instance;
+    LogsTableService.instance = {
+      getStats() {
+        return {
+          pendingWrites: 4,
+          pendingWriteGrowthCount: 2,
+          retainedBacklogGrowthCount: 1,
+          retainedPressureBacklogCap: 16,
+          maxPendingWrites: 32,
+          isWriting: true,
+          consecutiveDeferredWriteFailures: 3,
+          sharedPressureBackpressured: true,
+        };
+      },
+    };
+    t.teardown(() => {
+      LogsTableService.instance = originalLogsTableInstance;
+    });
     cache.applySystemTableChange(TABLES.TABLES, 'UPDATE', {
       id: 'table-1',
       partition_transition_state: 'failed',
@@ -2353,6 +2413,21 @@ test('AdminWebSocketAPI - local control snapshot exposes structured control-plan
     });
 
     await api.initialize(0, {listen: false});
+    api.controlSnapshot.resolveLocalPartitionServices = () => new Map([
+      ['partition-1', {
+        getStats() {
+          return {
+            partitionId: 'partition-1',
+            cdcReplay: {
+              bufferedEvents: 7,
+              replayBufferGrowthCount: 3,
+              replayRetryDepth: 2,
+              replayInFlight: true,
+            },
+          };
+        },
+      }],
+    ]);
 
     const response = await api.getFastify().inject({
       method: 'GET',
@@ -2422,6 +2497,21 @@ test('AdminWebSocketAPI - local control snapshot exposes structured control-plan
       diagnostics.splitEvaluation.requestedReasonCodes,
       ['write_activity'],
       'snapshot should expose pending split-evaluation request reasons',
+    );
+    t.equal(
+      diagnostics.logsTable.pendingWriteGrowthCount,
+      2,
+      'snapshot should expose logs-table retained-object growth diagnostics',
+    );
+    t.equal(
+      diagnostics.cdcReplay.bufferedEvents,
+      7,
+      'snapshot should expose aggregated CDC replay backlog diagnostics',
+    );
+    t.equal(
+      diagnostics.cdcReplayByPartitionId['partition-1'].replayRetryDepth,
+      2,
+      'snapshot should expose bounded per-partition CDC replay diagnostics',
     );
 
     const preflightResult =
@@ -3097,7 +3187,6 @@ test(
   'AdminWebSocketAPI - forced control snapshot degrades when stale replica-operation repair fails',
   async (t) => {
     const nowMs = 1740589945123;
-    const staleHeartbeatMs = nowMs - 45000;
     const writableCache = createAuthoritativeRepairCache('node-local');
 
     writableCache.applySystemTableChange(TABLES.NODES, 'UPDATE', {
@@ -3107,8 +3196,8 @@ test(
       node_address: 'localhost:8080',
       status: 'active',
       connection_state: 'ready',
-      last_heartbeat: staleHeartbeatMs,
-      ready_lease_expires_at: staleHeartbeatMs + 15000,
+      last_heartbeat: nowMs - 1000,
+      ready_lease_expires_at: nowMs + 15000,
     });
     writableCache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'INSERT', {
       operation_id: 'op-stale-local',
@@ -3172,6 +3261,96 @@ test(
       getAuthoritativeRepairReadTables(failingReplicaOpEngine.executeRequestCalls),
       [TABLES.REPLICA_OPERATIONS].sort(),
       'degraded local snapshot should attempt only the scoped replica_operations repair',
+    );
+  },
+);
+
+test(
+  'AdminWebSocketAPI - forced control snapshot fails closed when replica-operation repair leaves active projection undercovered',
+  async (t) => {
+    const nowMs = 1740589945123;
+    const writableCache = createAuthoritativeRepairCache('node-local');
+
+    writableCache.applySystemTableChange(TABLES.NODES, 'UPDATE', {
+      id: 'node-local',
+      node_id: 'node-local',
+      address: 'localhost:8080',
+      node_address: 'localhost:8080',
+      status: 'active',
+      connection_state: 'ready',
+      last_heartbeat: nowMs - 1000,
+      ready_lease_expires_at: nowMs + 15000,
+    });
+    writableCache.applySystemTableChange(TABLES.NODES, 'INSERT', {
+      id: 'node-peer',
+      node_id: 'node-peer',
+      address: 'localhost:8081',
+      node_address: 'localhost:8081',
+      status: 'active',
+      connection_state: 'ready',
+      last_heartbeat: nowMs - 60000,
+      ready_lease_expires_at: nowMs - 1000,
+    });
+    writableCache.applySystemTableChange(TABLES.REPLICA_OPERATIONS, 'INSERT', {
+      operation_id: 'op-stale-local',
+      partition_id: `${TABLES.NODES}-p1`,
+      entity_type: 'partition',
+      entity_id: `${TABLES.NODES}-p1`,
+      operation_type: 'ADD',
+      status: 'creating',
+      target_node_id: 'node-peer',
+      workflow_step: 'CREATING',
+      created_at: nowMs - 180000,
+      updated_at: nowMs - 180000,
+    });
+
+    const failingReplicaOpEngine = {
+      executeRequestCalls: [],
+      async executeRequest(request) {
+        const statement = String(request?.statement || '').trim();
+        this.executeRequestCalls.push(statement);
+        if (/^select \* from replica_operations$/i.test(statement)) {
+          return {
+            success: false,
+            rows: [],
+            count: 0,
+            error: 'replica_operations_timeout',
+          };
+        }
+        return {success: true, rows: [], count: 0};
+      },
+    };
+
+    const api = new AdminWebSocketAPI({
+      nodeId: 'node-local',
+      systemTableCache: createReadOnlyCache(writableCache),
+      cacheMutationTarget: writableCache,
+      controlPlaneSystemTableGateway: createAuthoritativeCacheGateway(
+        writableCache,
+        {
+          queryEngine: failingReplicaOpEngine,
+        },
+      ),
+      sqlQueryEngine: failingReplicaOpEngine,
+      messageRouter: {
+        getConnectedNodes() {
+          return ['node-peer'];
+        },
+      },
+      nowFn: () => nowMs,
+    });
+
+    await t.rejects(
+      api.buildControlSnapshotQueryResult({
+        forceAuthoritativeRepair: true,
+      }),
+      /authoritative control snapshot repair failed/i,
+      'forced control snapshot should fail closed when active coverage still requires discovery repair',
+    );
+    t.ok(
+      getAuthoritativeRepairReadTables(failingReplicaOpEngine.executeRequestCalls)
+        .includes(TABLES.NODES),
+      'active projection coverage gaps should widen repair scope beyond replica_operations',
     );
   },
 );

@@ -45,6 +45,7 @@ test(
   async (t) => {
     const reconcileCalls = [];
     const readCalls = [];
+    const warnings = [];
     const discovery = new AdminServiceDiscovery({
       nodeId: 'node-a',
       systemTableCache: {
@@ -77,6 +78,12 @@ test(
         },
       },
     });
+    discovery.logger = {
+      warn(message, fields) {
+        warnings.push({message, fields});
+      },
+      info() {},
+    };
 
     const repair = await discovery.ensureAuthoritativeDiscoveryCacheRepair({
       reason: 'unit-test-partial-read-failure',
@@ -95,6 +102,258 @@ test(
       'repair should not mutate cache state after a read-stage failure');
     t.equal(readCalls.length > 0, true,
       'repair should attempt authoritative table reads through the gateway');
+    t.equal(warnings.length, 1,
+      'failed repair should emit one bounded warning');
+    t.equal(
+      warnings[0]?.fields?.requestedTableCount,
+      repair.requestedTableCount,
+      'warning should preserve requested table count',
+    );
+    t.same(
+      warnings[0]?.fields?.failedTables,
+      repair.failedTables,
+      'warning should preserve failed table names',
+    );
+    t.equal(
+      warnings[0]?.fields?.errorCount,
+      repair.errorCount,
+      'warning should preserve the error count',
+    );
+    t.same(
+      warnings[0]?.fields?.errorCodes,
+      ['authoritative_services_unavailable'],
+      'warning should emit a bounded error-code summary',
+    );
+  },
+);
+
+test(
+  'AdminServiceDiscovery classifies participant-failure repair cause chains',
+  async (t) => {
+    const warnings = [];
+    const participantFailure = {
+      success: false,
+      errorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE',
+      error: 'Distributed operation failed due to participant failures',
+      retryAfterMs: 250,
+      participantFailures: [{
+        partitionId: 'services-p1',
+        participantNodeId: 'node-pressure',
+        participantAddress: 'ws://node-pressure:7001',
+        errorCode: 'CONTROL_PLANE_PRESSURE_DEGRADED',
+        error: 'Outbound queue for node node-pressure is saturated',
+        durationMs: 412,
+        retryAfterMs: 250,
+        backpressured: true,
+        failedTable: TABLES.SERVICES,
+      }],
+      firstFailedParticipant: {
+        partitionId: 'services-p1',
+        participantNodeId: 'node-pressure',
+        participantAddress: 'ws://node-pressure:7001',
+        errorCode: 'CONTROL_PLANE_PRESSURE_DEGRADED',
+        error: 'Outbound queue for node node-pressure is saturated',
+        durationMs: 412,
+        retryAfterMs: 250,
+        backpressured: true,
+        failedTable: TABLES.SERVICES,
+      },
+    };
+    const discovery = new AdminServiceDiscovery({
+      nodeId: 'node-a',
+      systemTableCache: {
+        getAll() {
+          return [];
+        },
+      },
+      cacheMutationTarget: {
+        applySystemTableChange() {},
+      },
+      controlPlaneSystemTableGateway: {
+        async executeRead(readIntent) {
+          const tableName = String(readIntent?.tableName || '');
+          if (tableName === TABLES.SERVICES) {
+            return participantFailure;
+          }
+          return {
+            success: true,
+            tableName,
+            rows: [],
+          };
+        },
+        async reconcileAuthoritativeCacheRows() {
+          return {success: true, mutationCount: 1};
+        },
+      },
+    });
+    discovery.logger = {
+      warn(message, fields) {
+        warnings.push({message, fields});
+      },
+      info() {},
+    };
+
+    await discovery.ensureAuthoritativeDiscoveryCacheRepair({
+      reason: 'unit-test-participant-cause-chain',
+    });
+
+    t.equal(warnings.length, 1, 'failed repair should emit one bounded warning');
+    t.same(
+      warnings[0]?.fields?.causeChain,
+      ['query_participant_failure', 'control_plane_backpressure'],
+      'warning should classify participant failure and backpressure',
+    );
+    t.equal(
+      warnings[0]?.fields?.firstFailedParticipant?.participantNodeId,
+      'node-pressure',
+      'warning should preserve the first failed participant',
+    );
+  },
+);
+
+test(
+  'AdminServiceDiscovery classifies control-plane backpressure repair cause chains',
+  async (t) => {
+    const warnings = [];
+    const discovery = new AdminServiceDiscovery({
+      nodeId: 'node-a',
+      systemTableCache: {
+        getAll() {
+          return [];
+        },
+      },
+      cacheMutationTarget: {
+        applySystemTableChange() {},
+      },
+      controlPlaneSystemTableGateway: {
+        async executeRead(readIntent) {
+          const tableName = String(readIntent?.tableName || '');
+          if (tableName === TABLES.SERVICES) {
+            return {
+              success: false,
+              errorCode: 'CONTROL_PLANE_PRESSURE_DEGRADED',
+              error: 'control_plane_pressure_degraded',
+              retryAfterMs: 500,
+            };
+          }
+          return {
+            success: true,
+            tableName,
+            rows: [],
+          };
+        },
+        async reconcileAuthoritativeCacheRows() {
+          return {success: true, mutationCount: 1};
+        },
+      },
+    });
+    discovery.logger = {
+      warn(message, fields) {
+        warnings.push({message, fields});
+      },
+      info() {},
+    };
+
+    await discovery.ensureAuthoritativeDiscoveryCacheRepair({
+      reason: 'unit-test-backpressure-cause-chain',
+    });
+
+    t.equal(warnings.length, 1, 'failed repair should emit one bounded warning');
+    t.same(
+      warnings[0]?.fields?.causeChain,
+      ['control_plane_backpressure'],
+      'warning should classify control-plane backpressure directly',
+    );
+  },
+);
+
+test(
+  'AdminServiceDiscovery preserves local query transport gating diagnostics ' +
+    'from authoritative read failures',
+  async (t) => {
+    const warnings = [];
+    const discovery = new AdminServiceDiscovery({
+      nodeId: 'node-a',
+      systemTableCache: {
+        getAll() {
+          return [];
+        },
+      },
+      cacheMutationTarget: {
+        applySystemTableChange() {},
+      },
+      controlPlaneSystemTableGateway: {
+        async executeRead(readIntent) {
+          const tableName = String(readIntent?.tableName || '');
+          if (tableName === TABLES.SERVICES) {
+            return {
+              success: false,
+              errorCode: 'ROUTER_QUERY_TRANSPORT_NOT_READY',
+              error: 'query ingress owner not ready',
+              retryAfterMs: 321,
+              source: 'query_transport_preflight',
+              localQueryTransport: {
+                state: 'deferred',
+                ready: false,
+                reason: 'query ingress owner not ready',
+                retryAfterMs: 321,
+              },
+            };
+          }
+          return {
+            success: true,
+            tableName,
+            rows: [],
+          };
+        },
+        async reconcileAuthoritativeCacheRows() {
+          return {success: true, mutationCount: 1};
+        },
+      },
+    });
+    discovery.logger = {
+      warn(message, fields) {
+        warnings.push({message, fields});
+      },
+      info() {},
+    };
+
+    const repair = await discovery.ensureAuthoritativeDiscoveryCacheRepair({
+      reason: 'unit-test-query-transport-gating',
+    });
+
+    t.equal(repair.applied, false, 'repair should fail closed on transport gating');
+    t.equal(
+      repair.readSource,
+      'query_transport_preflight',
+      'repair result should preserve the bounded authoritative read source',
+    );
+    t.same(
+      repair.localQueryTransport,
+      {
+        state: 'deferred',
+        ready: false,
+        reason: 'query ingress owner not ready',
+        retryAfterMs: 321,
+      },
+      'repair result should preserve local query transport gating context',
+    );
+    t.equal(warnings.length, 1, 'failed repair should emit one bounded warning');
+    t.equal(
+      warnings[0]?.fields?.readSource,
+      'query_transport_preflight',
+      'warning should preserve the bounded authoritative read source',
+    );
+    t.same(
+      warnings[0]?.fields?.localQueryTransport,
+      {
+        state: 'deferred',
+        ready: false,
+        reason: 'query ingress owner not ready',
+        retryAfterMs: 321,
+      },
+      'warning should preserve local query transport gating context',
+    );
   },
 );
 

@@ -2112,6 +2112,7 @@ class MessageGroupService extends EventEmitter {
       payload.timestamp :
       null;
     const causeId = normalizeCauseId(payload.causeId);
+    const replayOnly = payload?.replayOnly === true;
     const relayDepth = Number.isInteger(payload.relayDepth) &&
       payload.relayDepth >= NUM.ZERO ?
       payload.relayDepth :
@@ -2152,6 +2153,7 @@ class MessageGroupService extends EventEmitter {
         timestamp: eventTimestamp || undefined,
         relayDepth: relayDepth + NUM.ONE,
         causeId,
+        replayOnly,
       });
       return {
         messageId,
@@ -2191,6 +2193,7 @@ class MessageGroupService extends EventEmitter {
    */
   async handleLatencyCdcPropagationBatchMessage(messageId, payload) {
     const events = Array.isArray(payload.events) ? payload.events : [];
+    const replayOnly = payload?.replayOnly === true;
     const relayDepth = Number.isInteger(payload.relayDepth) &&
       payload.relayDepth >= NUM.ZERO ?
       payload.relayDepth :
@@ -2237,6 +2240,7 @@ class MessageGroupService extends EventEmitter {
       }
       await this.forwardCDCBatchToLeader(events, {
         relayDepth: relayDepth + NUM.ONE,
+        replayOnly,
       });
       return {
         messageId,
@@ -2371,6 +2375,8 @@ class MessageGroupService extends EventEmitter {
           data: event.data,
           timestamp,
           causeId,
+          replayOnly:
+            event.replayOnly === true || options.replayOnly === true,
         };
       });
   }
@@ -2500,6 +2506,7 @@ class MessageGroupService extends EventEmitter {
           data: normalizedEvents[0].data,
           timestamp: normalizedEvents[0].timestamp,
           causeId: normalizedEvents[0].causeId,
+          replayOnly: normalizedEvents[0].replayOnly === true,
         } :
         {
           type: CDC_BATCH_COMMAND_TYPE,
@@ -2557,6 +2564,7 @@ class MessageGroupService extends EventEmitter {
             data: normalizedEvents[0].data,
             timestamp: normalizedEvents[0].timestamp,
             causeId: normalizedEvents[0].causeId,
+            replayOnly: normalizedEvents[0].replayOnly === true,
           } :
           {
             type: CDC_BATCH_COMMAND_TYPE,
@@ -2587,6 +2595,10 @@ class MessageGroupService extends EventEmitter {
       this.retryMaxAttempts :
       NUM.ONE;
     const proposeTimeoutMs = this.computeCdcProposeTimeoutMs(configuredRetryBudget);
+    const leaderTargetSource =
+      typeof this.raftProvider?.proposeWithLeaderRouting === 'function' ?
+        'forward_to_leader' :
+        'local_raft_propose';
     try {
       if (typeof this.raftProvider.proposeWithLeaderRouting === 'function') {
         await this.raftProvider.proposeWithLeaderRouting(this.raft, cdcCommand, {
@@ -2600,6 +2612,7 @@ class MessageGroupService extends EventEmitter {
               {
                 timestamp: command.timestamp,
                 causeId: command.causeId,
+                replayOnly: command.replayOnly === true,
               },
             );
           },
@@ -2637,7 +2650,11 @@ class MessageGroupService extends EventEmitter {
         tableName: cdcCommand.tableName,
         causeId: normalizeCauseId(cdcCommand.causeId),
         attempts: configuredRetryBudget,
+        configuredRetryBudget,
         proposeTimeoutMs,
+        isCurrentRaftLeader: this.isCurrentRaftLeader(),
+        raftState: this.raft?.state || null,
+        leaderTargetSource,
         error: error?.message || null,
       });
       throw wrapCdcProposeError(

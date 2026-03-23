@@ -2245,7 +2245,14 @@ class AdminWebSocketAPI {
       });
     } catch (error) {
       const errorCode = this.getErrorCode(error);
-      this.sendError(clientInfo, queryId, errorCode, error.message, error.adminHint);
+      this.sendError(
+        clientInfo,
+        queryId,
+        errorCode,
+        error.message,
+        error.adminHint,
+        error,
+      );
     }
   }
 
@@ -2695,7 +2702,14 @@ class AdminWebSocketAPI {
       this.sendQueryResult(clientInfo, queryId, result);
     } catch (error) {
       const errorCode = this.getErrorCode(error);
-      this.sendError(clientInfo, queryId, errorCode, error.message, error.adminHint);
+      this.sendError(
+        clientInfo,
+        queryId,
+        errorCode,
+        error.message,
+        error.adminHint,
+        error,
+      );
     }
   }
 
@@ -2734,7 +2748,14 @@ class AdminWebSocketAPI {
       this.sendQueryResult(clientInfo, queryId, result);
     } catch (error) {
       const errorCode = this.getErrorCode(error);
-      this.sendError(clientInfo, queryId, errorCode, error.message, error.adminHint);
+      this.sendError(
+        clientInfo,
+        queryId,
+        errorCode,
+        error.message,
+        error.adminHint,
+        error,
+      );
     }
   }
 
@@ -2852,6 +2873,15 @@ class AdminWebSocketAPI {
       if (result.hint) {
         message.hint = result.hint;
       }
+      if (result.deferRetry === true) {
+        message.deferRetry = true;
+      }
+      if (Number.isFinite(result.retryAfterMs)) {
+        message.retryAfterMs = Math.max(
+          NUM.ZERO,
+          Math.floor(result.retryAfterMs),
+        );
+      }
     } else if (result.hostResult ||
       result.executionMode === EXECUTION_MODE.PARTITION_CALLBACK) {
       message.operation = EXECUTION_MODE.PARTITION_CALLBACK;
@@ -2915,7 +2945,14 @@ class AdminWebSocketAPI {
       this.sendCacheDumpPayload(clientInfo, this.executeLocalCacheDumpEnvelope());
     } catch (error) {
       const errorCode = this.getErrorCode(error);
-      this.sendError(clientInfo, null, errorCode, error.message, error.adminHint);
+      this.sendError(
+        clientInfo,
+        null,
+        errorCode,
+        error.message,
+        error.adminHint,
+        error,
+      );
     }
   }
 
@@ -2928,7 +2965,7 @@ class AdminWebSocketAPI {
    * @param {string} hint - Optional hint for resolution.
    * @private
    */
-  sendError(clientInfo, queryId, errorCode, errorMessage, hint) {
+  sendError(clientInfo, queryId, errorCode, errorMessage, hint, options = {}) {
     const message = {
       type: queryId ? MessageType.QUERY_RESULT : MessageType.ERROR,
       timestamp: Date.now(),
@@ -2942,6 +2979,16 @@ class AdminWebSocketAPI {
 
     if (hint) {
       message.hint = hint;
+    }
+
+    if (options?.deferRetry === true) {
+      message.deferRetry = true;
+    }
+    if (Number.isFinite(options?.retryAfterMs)) {
+      message.retryAfterMs = Math.max(
+        NUM.ZERO,
+        Math.floor(options.retryAfterMs),
+      );
     }
 
     this.sendToClient(clientInfo, message);

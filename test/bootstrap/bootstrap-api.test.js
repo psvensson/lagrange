@@ -5,7 +5,10 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {BootstrapAPI, BootstrapStrategy} from '../../src/bootstrap/bootstrap-api.js';
-import {BOOTSTRAP_API_ERROR} from '../../src/bootstrap/bootstrap-api-constants.js';
+import {
+  BOOTSTRAP_API_ERROR,
+  BOOTSTRAP_API_LOG_MSG,
+} from '../../src/bootstrap/bootstrap-api-constants.js';
 import {
   BOOTSTRAP_PHASE,
   BOOTSTRAP_PIPELINE_ERROR_CODE,
@@ -332,9 +335,116 @@ test('BootstrapAPI - bootstrap control-plane mutations use the canonical gateway
       'bootstrap gateway mutations should keep repair-eligible routing semantics');
   });
 
+test('BootstrapAPI - MOVE_REPLICA handoff insert persists through canonical mutation ingress',
+  async (t) => {
+    initializeTestEnvironment();
+
+    let capturedMutation = null;
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: createEmptySystemTableCache(),
+      controlPlaneSystemTableGateway: {
+        async submitMutation(mutation) {
+          capturedMutation = mutation;
+          return {success: true, affectedRows: 1};
+        },
+      },
+    });
+
+    await api.insertMoveReplicaHandoffOperation({
+      operationId: 'op-1',
+      type: 'ADD',
+      partitionId: 'mg-1',
+      replicaId: 'mg-1-r1',
+      sourceNodeId: 'seed-node-1',
+      targetNodeId: 'joiner-1',
+      status: 'preparing',
+      workflowStep: 'CREATING',
+      createdAt: 100,
+      updatedAt: 100,
+      completedAt: null,
+      leaseExpiresAt: null,
+      errorMessage: null,
+      stepsHistory: [],
+      entityType: SERVICE_TYPE.MESSAGE_GROUP,
+      entityId: 'mg-1',
+    });
+
+    t.same(capturedMutation, {
+      operation: 'insert',
+      tableName: TABLES.REPLICA_OPERATIONS,
+      row: {
+        operation_id: 'op-1',
+        type: 'ADD',
+        partition_id: 'mg-1',
+        replica_id: 'mg-1-r1',
+        source_node_id: 'seed-node-1',
+        target_node_id: 'joiner-1',
+        status: 'preparing',
+        workflow_step: 'CREATING',
+        created_at: 100,
+        updated_at: 100,
+        completed_at: null,
+        lease_expires_at: null,
+        error_message: null,
+        steps_history: '[]',
+        entity_type: SERVICE_TYPE.MESSAGE_GROUP,
+        entity_id: 'mg-1',
+      },
+    }, 'handoff inserts should go through the shared mutation gateway');
+  });
+
+test('BootstrapAPI - MOVE_REPLICA handoff update persists through canonical mutation ingress',
+  async (t) => {
+    initializeTestEnvironment();
+
+    let capturedMutation = null;
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: createEmptySystemTableCache(),
+      controlPlaneSystemTableGateway: {
+        async submitMutation(mutation) {
+          capturedMutation = mutation;
+          return {success: true, affectedRows: 1};
+        },
+      },
+    });
+
+    await api.updateMoveReplicaHandoffOperation({
+      operationId: 'op-1',
+      status: 'committed',
+      workflowStep: 'ACTIVE',
+      updatedAt: 250,
+      completedAt: 250,
+      leaseExpiresAt: 250,
+      errorMessage: null,
+      stepsHistory: [{phase: 'commit', timestamp: 250}],
+    });
+
+    t.same(capturedMutation, {
+      operation: 'update',
+      tableName: TABLES.REPLICA_OPERATIONS,
+      whereClause: {
+        operation_id: 'op-1',
+      },
+      data: {
+        status: 'committed',
+        workflow_step: 'ACTIVE',
+        updated_at: 250,
+        completed_at: 250,
+        lease_expires_at: 250,
+        error_message: null,
+        steps_history: JSON.stringify([{phase: 'commit', timestamp: 250}]),
+      },
+    }, 'handoff updates should go through the shared mutation gateway');
+  });
+
 test('BootstrapAPI - register-service returns retryable 503 when the control-plane gateway defers',
   async (t) => {
     initializeTestEnvironment();
+    const warnEvents = [];
 
     const api = new BootstrapAPI({
       seedNodeId: 'seed-node-1',
@@ -363,6 +473,16 @@ test('BootstrapAPI - register-service returns retryable 503 when the control-pla
     });
 
     await api.initialize(0, {listen: false});
+    api.serviceRegistrationHandoffOwner.delegates
+      .getRegisterServiceWriteRetryTimeoutMs = () => 0;
+    api.logger = {
+      debug() {},
+      info() {},
+      warn(message, details) {
+        warnEvents.push({message, details});
+      },
+      error() {},
+    };
 
     const response = await api.getFastify().inject({
       method: 'POST',
@@ -389,6 +509,98 @@ test('BootstrapAPI - register-service returns retryable 503 when the control-pla
       body.error,
       'Distributed operation failed due to participant failures',
       'register-service should preserve the canonical failure message',
+    );
+    t.ok(
+      warnEvents.some((event) =>
+        event.message === BOOTSTRAP_API_LOG_MSG.SERVICE_REGISTRATION_DEFERRED,
+      ),
+      'register-service should classify deferred services publication separately',
+    );
+    t.notOk(
+      warnEvents.some((event) =>
+        event.message ===
+          BOOTSTRAP_API_LOG_MSG.MOVE_REPLICA_ASSIGNMENT_VALIDATION_FAILED,
+      ),
+      'retryable services publication defer should not be mislabeled as assignment validation',
+    );
+
+    await api.shutdown();
+  });
+
+test('BootstrapAPI - register-service retries deferred services publication before failing outward',
+  async (t) => {
+    initializeTestEnvironment();
+
+    let mutationAttempts = 0;
+    let fakeNow = 0;
+    const retryEvents = [];
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: createEmptySystemTableCache(),
+      sqlQueryEngine: {executeQuery: async () => ({success: true})},
+      controlPlaneSystemTableGateway: {
+        async submitMutation() {
+          mutationAttempts += 1;
+          if (mutationAttempts === 1) {
+            return {
+              success: false,
+              error: 'control_plane_pressure_degraded',
+              errorCode: 'CONTROL_PLANE_PRESSURE_DEGRADED',
+              pressureAction: 'defer',
+              pressureReason: 'transport_backpressure',
+              retryAfterMs: 250,
+              tableName: TABLES.SERVICES,
+            };
+          }
+          return {success: true, affectedRows: 1};
+        },
+        async executeQuery() {
+          return {success: true, rows: []};
+        },
+      },
+    });
+
+    await api.initialize(0, {listen: false});
+    api.serviceRegistrationHandoffOwner.delegates
+      .getRegisterServiceWriteRetryTimeoutMs = () => 1000;
+    api.serviceRegistrationHandoffOwner.delegates.getNow = () => fakeNow;
+    api.serviceRegistrationHandoffOwner.delegates.getSleep = () =>
+      async (delayMs) => {
+        fakeNow += delayMs;
+      };
+    api.waitForRegisteredServiceCacheVisibility = async () => {};
+    api.logger = {
+      debug() {},
+      info() {},
+      warn(message, details) {
+        retryEvents.push({message, details});
+      },
+      error() {},
+    };
+
+    const response = await api.getFastify().inject({
+      method: 'POST',
+      url: '/register-service',
+      payload: {
+        service_id: 'mg-1-r1',
+        service_type: SERVICE_TYPE.MESSAGE_GROUP,
+        node_id: 'joiner-node-1',
+        group_id: 'mg-1',
+        replica_id: 'mg-1-r1',
+      },
+    });
+
+    t.equal(response.statusCode, 200,
+      'register-service should absorb one retryable services write defer');
+    t.equal(mutationAttempts, 2,
+      'register-service should retry the canonical services write once');
+    t.same(
+      retryEvents.filter((event) =>
+        event.message === BOOTSTRAP_API_LOG_MSG.SERVICE_REGISTRATION_WRITE_RETRY,
+      ).map((event) => event.details.retryAfterMs),
+      [250],
+      'retry diagnostics should preserve the gateway retry hint',
     );
 
     await api.shutdown();
@@ -1001,6 +1213,124 @@ test('BootstrapAPI - readiness stays gated until startup dependencies and stable
     });
     t.equal(response.statusCode, 200,
       'readyz should promote after sustained success window elapses');
+    body = JSON.parse(response.body);
+    t.equal(body.ready, true, 'readyz should expose ready=true after promotion');
+
+    await api.shutdown();
+  });
+
+test('BootstrapAPI - readyz blocks on local query transport readiness before promotion',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const readinessCache = {
+      get() {
+        return null;
+      },
+      filter() {
+        return [];
+      },
+      find() {
+        return null;
+      },
+      getReadyNodes() {
+        return [];
+      },
+      getAll(tableName) {
+        if (tableName === TABLES.PARTITIONS) {
+          return [{
+            partition_id: 'partition-1',
+            table_name: TABLES.NODES,
+            leader_node_id: 'seed-node-1',
+          }];
+        }
+        if (tableName === TABLES.MESSAGE_GROUPS) {
+          return [{
+            group_id: 'mg-1',
+            leader_node_id: 'seed-node-1',
+          }];
+        }
+        if (tableName === TABLES.SERVICES) {
+          return [{
+            service_id: 'partition-1-leader',
+            service_type: SERVICE_TYPE.PARTITION,
+            partition_id: 'partition-1',
+            node_id: 'seed-node-1',
+            address: 'seed-node-1/partition/partition-1-leader',
+            raft_role: RAFT_ROLE.LEADER,
+            status: SERVICE_STATUS.ACTIVE,
+          }];
+        }
+        return [];
+      },
+    };
+
+    let nowMs = 1000;
+    let localTransportReady = false;
+    const readinessState = new BootstrapReadinessState({
+      readyStableWindowMs: 50,
+      demotionFailureThreshold: 2,
+      now: () => nowMs,
+      retryAfterMs: 250,
+    });
+
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: readinessCache,
+      bootstrapService: {
+        phase: BOOTSTRAP_PHASE.COMPLETE,
+      },
+      readinessState,
+      sqlQueryEngine: {executeQuery: async () => ({success: true})},
+      messageRouter: {
+        getQueryDataPlaneTransportReadiness() {
+          return localTransportReady ?
+            {ready: true, state: 'ready'} :
+            {
+              ready: false,
+              state: 'deferred',
+              reason: 'Query/data-plane message-group transport is not configured',
+              retryAfterMs: 75,
+            };
+        },
+      },
+    });
+
+    await api.initialize(0, {listen: false});
+
+    let response = await api.getFastify().inject({
+      method: 'GET',
+      url: '/readyz',
+    });
+    t.equal(response.statusCode, 503,
+      'readyz should stay unavailable while local query transport is deferred');
+    let body = JSON.parse(response.body);
+    t.ok(
+      body.reasons.includes(LIFECYCLE_REASON.LOCAL_QUERY_TRANSPORT_NOT_READY),
+      'readyz should expose the local query transport blocker',
+    );
+
+    localTransportReady = true;
+    response = await api.getFastify().inject({
+      method: 'GET',
+      url: '/readyz',
+    });
+    t.equal(response.statusCode, 503,
+      'readyz should still honor the stable window after transport recovers');
+    body = JSON.parse(response.body);
+    t.ok(
+      body.reasons.includes(LIFECYCLE_REASON.READINESS_STABLE_WINDOW_PENDING),
+      'readyz should move from transport gating into the stable window',
+    );
+
+    nowMs += 60;
+    response = await api.getFastify().inject({
+      method: 'GET',
+      url: '/readyz',
+    });
+    t.equal(response.statusCode, 200,
+      'readyz should promote once local query transport is ready and the stable window elapses');
     body = JSON.parse(response.body);
     t.equal(body.ready, true, 'readyz should expose ready=true after promotion');
 

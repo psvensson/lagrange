@@ -7,6 +7,7 @@ import {
   TABLES,
 } from '../../src/constants/index.js';
 import {
+  CONTROL_PLANE_PARTICIPATION_KIND,
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_PUBLICATION_MODE,
   CONTROL_PLANE_READINESS_REASON,
@@ -170,6 +171,200 @@ test('ControlPlaneReadinessService classifies a fully ready node', async (t) => 
   t.equal(readiness.dimensions.placementEligible, true);
   t.equal(readiness.dimensions.metadataPublicationHealthy, true);
   t.same(readiness.reasons, []);
+  t.end();
+});
+
+test('ControlPlaneReadinessService surfaces self local query transport ' +
+  'gating in readiness evidence', async (t) => {
+  const nodeId = 'node-self-query-transport';
+  const cache = createCache({
+    nodes: [createActiveNode(nodeId)],
+    services: [createMessageGroupService(nodeId)],
+  });
+  const readinessService = new ControlPlaneReadinessService({
+    nodeId,
+    systemTableCache: cache,
+    messageRouter: {
+      getConnectionState() {
+        return STATE.CONNECTED;
+      },
+      getQueryDataPlaneTransportReadiness() {
+        return {
+          ready: false,
+          reason: 'query ingress owner not ready',
+          retryAfterMs: 321,
+        };
+      },
+    },
+    storageAccountingService: createAccountingService({
+      [nodeId]: {
+        nodeId,
+        budgetBytes: 1000,
+        pressureState: 'normal',
+      },
+    }),
+    cdcGroupPropagationService: createPublicationService({
+      currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+      reasonCode: null,
+      enteredAt: '2026-03-04T00:00:00.000Z',
+      recentTransitions: [],
+    }),
+    now: () => 1500,
+  });
+
+  const readiness = await readinessService.getNodeReadiness(nodeId);
+
+  t.equal(
+    readiness.nodeEvidence?.localQueryTransportState,
+    'deferred',
+    'self readiness should expose the deferred local query transport state',
+  );
+  t.equal(
+    readiness.nodeEvidence?.localQueryTransportReady,
+    false,
+    'self readiness should preserve the local query transport readiness bit',
+  );
+  t.equal(
+    readiness.nodeEvidence?.localQueryTransportReason,
+    'query ingress owner not ready',
+    'self readiness should preserve the local query transport reason',
+  );
+  t.equal(
+    readiness.nodeEvidence?.localQueryTransportRetryAfterMs,
+    321,
+    'self readiness should preserve retry timing for local query transport',
+  );
+  t.end();
+});
+
+test('ControlPlaneReadinessService marks the self node unroutable for routed ' +
+  'reads while local query transport is deferred', async (t) => {
+  const nodeId = 'node-self-query-routing-gate';
+  const cache = createCache({
+    nodes: [createActiveNode(nodeId)],
+    services: [createMessageGroupService(nodeId)],
+  });
+  const readinessService = new ControlPlaneReadinessService({
+    nodeId,
+    systemTableCache: cache,
+    messageRouter: {
+      getConnectionState() {
+        return STATE.CONNECTED;
+      },
+      getQueryDataPlaneTransportReadiness() {
+        return {
+          ready: false,
+          reason: 'query ingress owner not ready',
+          retryAfterMs: 654,
+        };
+      },
+    },
+    storageAccountingService: createAccountingService({
+      [nodeId]: {
+        nodeId,
+        budgetBytes: 1000,
+        pressureState: 'normal',
+      },
+    }),
+    cdcGroupPropagationService: createPublicationService({
+      currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+      reasonCode: null,
+      enteredAt: '2026-03-04T00:00:00.000Z',
+      recentTransitions: [],
+    }),
+    now: () => 1500,
+  });
+
+  const readiness = await readinessService.getNodeReadiness(nodeId);
+  const reasonCodes = readiness.reasons.map((reason) => reason.code);
+
+  t.equal(
+    readiness.dimensions.routingReady,
+    false,
+    'self node should not remain routing-ready while local query transport is deferred',
+  );
+  t.equal(
+    readiness.dimensions.repairEligible,
+    false,
+    'self node should not remain repair-eligible while routed self queries are blocked',
+  );
+  t.equal(
+    readiness.dimensions.serveEligible,
+    false,
+    'self node should not remain serve-eligible while routed self queries are blocked',
+  );
+  t.ok(
+    reasonCodes.includes(
+      CONTROL_PLANE_READINESS_REASON.LOCAL_QUERY_TRANSPORT_NOT_READY,
+    ),
+    'readiness reasons should preserve the local query transport gating code',
+  );
+  t.end();
+});
+
+test('ControlPlaneReadinessService allows local replica-operation owner reads ' +
+  'to bypass self transport defer', async (t) => {
+  const nodeId = 'node-self-owner-read-local-safe';
+  const cache = createCache({
+    nodes: [createActiveNode(nodeId)],
+    services: [createMessageGroupService(nodeId)],
+  });
+  const readinessService = new ControlPlaneReadinessService({
+    nodeId,
+    systemTableCache: cache,
+    messageRouter: {
+      getConnectionState() {
+        return STATE.CONNECTED;
+      },
+      getQueryDataPlaneTransportReadiness() {
+        return {
+          ready: false,
+          reason: 'query ingress owner not ready',
+          retryAfterMs: 654,
+        };
+      },
+    },
+    storageAccountingService: createAccountingService({
+      [nodeId]: {
+        nodeId,
+        budgetBytes: 1000,
+        pressureState: 'normal',
+      },
+    }),
+    cdcGroupPropagationService: createPublicationService({
+      currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
+      reasonCode: null,
+      enteredAt: '2026-03-04T00:00:00.000Z',
+      recentTransitions: [],
+    }),
+    now: () => 1500,
+  });
+
+  const participation = readinessService.getControlPlaneParticipationSync(
+    nodeId,
+    {
+      participationKind:
+        CONTROL_PLANE_PARTICIPATION_KIND.REPLICA_OPERATION_OWNER_READ,
+      decisionDimension:
+        CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+    },
+  );
+
+  t.equal(
+    participation.decision,
+    'defer',
+    'owner-read participation should still expose the transport defer decision',
+  );
+  t.equal(
+    participation.reasonCode,
+    CONTROL_PLANE_READINESS_REASON.LOCAL_QUERY_TRANSPORT_NOT_READY,
+    'owner-read participation should preserve the canonical transport blocker',
+  );
+  t.equal(
+    participation.localExecutionAllowed,
+    true,
+    'owner-read participation should explicitly allow the local-safe execution path',
+  );
   t.end();
 });
 

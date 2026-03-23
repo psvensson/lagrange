@@ -182,6 +182,8 @@ class LogsTableService extends EventEmitter {
     this.droppedWrites = 0;
     this.selfLoopPreventedWrites = 0;
     this.consecutiveDeferredWriteFailures = 0;
+    this.pendingWriteGrowthCount = 0;
+    this.retainedBacklogGrowthCount = 0;
 
     // Logging (use console until we're fully initialized to avoid recursion)
     this.logger = console;
@@ -219,6 +221,8 @@ class LogsTableService extends EventEmitter {
     instance.initialized = false;
     instance.isShuttingDown = false;
     instance.consecutiveDeferredWriteFailures = 0;
+    instance.pendingWriteGrowthCount = 0;
+    instance.retainedBacklogGrowthCount = 0;
     instance.removeAllListeners();
     LogsTableService.instance = null;
   }
@@ -351,6 +355,7 @@ class LogsTableService extends EventEmitter {
 
     // Add to pending writes
     this.pendingWrites.push(entry);
+    this.incrementBoundedCounter('pendingWriteGrowthCount');
 
     // Flush if batch size reached
     if (this.pendingWrites.length >= this.batchSize) {
@@ -649,11 +654,12 @@ class LogsTableService extends EventEmitter {
    * @private
    */
   deferPendingWrites(entries, error) {
+    const requeuedEntries = Array.isArray(entries) ? entries.length : 0;
     if (Array.isArray(entries) && entries.length > 0) {
       this.pendingWrites = entries.concat(this.pendingWrites);
     }
     this.consecutiveDeferredWriteFailures += 1;
-    this.trimPendingWritesUnderPressure();
+    const droppedEntries = this.trimPendingWritesUnderPressure();
     const retryAfterMs = this.resolveWriteDeferMs(error);
     const desiredUntilMs = this.now() + retryAfterMs;
     this.writeDeferredUntilMs = Math.max(
@@ -666,7 +672,16 @@ class LogsTableService extends EventEmitter {
         retryAfterMs,
         this.pendingWrites.length,
       ),
-      error?.message || String(error),
+      {
+        error: error?.message || String(error),
+        retryAfterMs,
+        pendingWrites: this.pendingWrites.length,
+        retainedPressureBacklogCap: this.getRetainedPressureBacklogCap(),
+        maxPendingWrites: this.maxPendingWrites,
+        isWriting: false,
+        requeuedEntries,
+        droppedEntries,
+      },
     );
   }
 
@@ -722,6 +737,7 @@ class LogsTableService extends EventEmitter {
       flushChunkSize: this.flushChunkSize,
       flushYieldMs: this.flushYieldMs,
       maxPendingWrites: this.maxPendingWrites,
+      retainedPressureBacklogCap: this.getRetainedPressureBacklogCap(),
       pressureHighWatermark: this.pressureHighWatermark,
       pressureRetainedPendingWrites: this.pressureRetainedPendingWrites,
       droppedWrites: this.droppedWrites,
@@ -729,6 +745,8 @@ class LogsTableService extends EventEmitter {
       flushWorkScheduled: this.flushWorkScheduled,
       workClassSchedulerEnabled: Boolean(this.workClassScheduler),
       consecutiveDeferredWriteFailures: this.consecutiveDeferredWriteFailures,
+      pendingWriteGrowthCount: this.pendingWriteGrowthCount,
+      retainedBacklogGrowthCount: this.retainedBacklogGrowthCount,
       sharedPressureBackpressured: this.isSharedPressureBackpressured(),
     };
   }
@@ -1068,6 +1086,7 @@ class LogsTableService extends EventEmitter {
    */
   trimPendingWritesUnderPressure() {
     const retainedCap = this.getRetainedPressureBacklogCap();
+    let droppedCount = 0;
     while (this.pendingWrites.length > retainedCap) {
       const dropIndex = this.findPendingTrimDropIndex();
       if (dropIndex < 0) {
@@ -1075,7 +1094,15 @@ class LogsTableService extends EventEmitter {
       }
       this.pendingWrites.splice(dropIndex, 1);
       this.recordDroppedWrite();
+      droppedCount += 1;
     }
+    if (droppedCount > 0) {
+      this.incrementBoundedCounter(
+        'retainedBacklogGrowthCount',
+        droppedCount,
+      );
+    }
+    return droppedCount;
   }
 
   /**
@@ -1129,6 +1156,28 @@ class LogsTableService extends EventEmitter {
         ),
       );
     }
+  }
+
+  /**
+   * Increment a bounded diagnostic counter.
+   * @param {string} fieldName
+   * @param {number} [delta=1]
+   * @private
+   */
+  incrementBoundedCounter(fieldName, delta = 1) {
+    if (typeof fieldName !== 'string' || fieldName.length === 0) {
+      return;
+    }
+    if (!Number.isFinite(delta) || delta <= 0) {
+      return;
+    }
+    const currentValue = Number.isFinite(this[fieldName]) ?
+      this[fieldName] :
+      0;
+    this[fieldName] = Math.min(
+      Number.MAX_SAFE_INTEGER,
+      currentValue + Math.max(MIN_CHUNK_SIZE, Math.floor(delta)),
+    );
   }
 
   /**

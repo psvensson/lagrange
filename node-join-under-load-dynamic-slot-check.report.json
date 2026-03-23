@@ -1,0 +1,765 @@
+{
+  "timestamp": "2026-03-23T05:13:17.862Z",
+  "summary": {
+    "total": 1,
+    "passed": 0,
+    "failed": 1,
+    "duration": 196063
+  },
+  "optimizationSummary": {
+    "totalPriorityItems": 3,
+    "scenariosWithPriorities": 1,
+    "topComponents": [
+      {
+        "component": "memory_lifecycle",
+        "count": 1,
+        "highestPriority": "critical",
+        "highestScore": 95
+      },
+      {
+        "component": "replication_write_path",
+        "count": 1,
+        "highestPriority": "critical",
+        "highestScore": 95
+      },
+      {
+        "component": "convergence_control_plane",
+        "count": 1,
+        "highestPriority": "high",
+        "highestScore": 80
+      }
+    ],
+    "topPartitions": []
+  },
+  "standardSummary": {
+    "historicalReportsConsidered": 0,
+    "scenariosComparedToPrevious": 0,
+    "scenariosComparedToPostgresBaseline": 0,
+    "diagnosticsCoverageSummary": {
+      "scenariosWithCoverage": 0,
+      "scenariosWithoutCoverage": 1,
+      "totalSamples": 0,
+      "coverageRate": 0,
+      "scenarios": [
+        {
+          "scenario": "node-join-under-load",
+          "status": "unavailable",
+          "reason": "not_reported",
+          "sampleCount": 0
+        }
+      ]
+    },
+    "writePathAttributionSummary": {
+      "scenariosWithDiagnostics": 0,
+      "topPhases": []
+    },
+    "scaleEfficiencySummary": {
+      "observationCount": 1,
+      "comparableGroupCount": 0,
+      "groups": [],
+      "topOpportunities": []
+    },
+    "scenarios": [
+      {
+        "scenario": "node-join-under-load",
+        "similarityKey": "node-join-under-load|default",
+        "current": {
+          "passed": false,
+          "clusterSize": 5,
+          "durationMs": 196063,
+          "performanceMetricsAvailable": true,
+          "validForPerformanceComparison": false,
+          "performanceInvalidReason": "correctness_failed",
+          "observedOpsPerSec": 23.574233290028754,
+          "observedP99LatencyMs": 12168,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "previousSimilarRun": null,
+        "deltaVsPrevious": null,
+        "postgresBaseline": null,
+        "parity": null,
+        "writePathTopPhases": []
+      }
+    ]
+  },
+  "scenarios": [
+    {
+      "scenario": "node-join-under-load",
+      "passed": false,
+      "duration": 196063,
+      "clusterSize": 5,
+      "startedAt": "2026-03-23T05:10:00.995Z",
+      "convergenceTiming": {
+        "settledAfterMs": 16891,
+        "leaderChanges": 0,
+        "maxOverTargetMs": 0
+      },
+      "analysisSummary": null,
+      "error": "Expected no failed load operations during node join: observed 358",
+      "stackTrace": "Error: Expected no failed load operations during node join: observed 358\n    at buildNodeJoinFailure (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/scenarios/node-join-under-load.js:33:17)\n    at Module.run (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/scenarios/node-join-under-load.js:235:11)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async runScenarios (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:1400:9)\n    at async main (file:///media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/test/distributed/run.js:2209:33)",
+      "logs": null,
+      "playback": {
+        "scenarioName": "node-join-under-load",
+        "startedAt": 1774242600996,
+        "endedAt": 1774242797832,
+        "durationMs": 196836,
+        "files": {
+          "events": ".playback/node-join-under-load-dynamic-slot-check/node-join-under-load/events.ndjson",
+          "samples": ".playback/node-join-under-load-dynamic-slot-check/node-join-under-load/samples.ndjson",
+          "snapshots": ".playback/node-join-under-load-dynamic-slot-check/node-join-under-load/snapshots.ndjson",
+          "manifest": ".playback/node-join-under-load-dynamic-slot-check/node-join-under-load/playback-manifest.json",
+          "viewer": ".playback/node-join-under-load-dynamic-slot-check/node-join-under-load/playback-viewer.html"
+        },
+        "counts": {
+          "events": 114,
+          "samples": 98,
+          "snapshots": 134
+        },
+        "warnings": []
+      },
+      "trace": null,
+      "traceAssertion": null,
+      "cleanlinessAssertion": {
+        "enabled": true,
+        "required": true,
+        "playbackWarnings": [],
+        "passed": true,
+        "error": null
+      },
+      "memoryLeak": {
+        "enabled": true,
+        "analyzed": true,
+        "leakDetected": true,
+        "sampleCount": 98,
+        "nodeCount": 6,
+        "leakingNodeCount": 1,
+        "leakingNodes": [
+          "7493b0ab-a054-5fad-a91b-5e331db29304"
+        ],
+        "nodes": [
+          {
+            "nodeId": "11601fe0-72d6-5853-8590-ec2881853e72",
+            "analyzed": true,
+            "leakDetected": false,
+            "reason": "within-thresholds",
+            "sampleCount": 17,
+            "postWarmupSampleCount": 13,
+            "analysisWindowMs": 128314,
+            "slopeBytesPerMin": 4381062.165447597,
+            "tailSlopeBytesPerMin": 10030270.393539557,
+            "growthBytes": 7401472,
+            "growthPercent": 6.31244323342416,
+            "positiveDeltaRatio": 0.9166666666666666,
+            "maxMemoryUsageBytes": 130846720,
+            "maxMemoryUsagePercent": 12.186050415039062,
+            "recoveryDetected": false
+          },
+          {
+            "nodeId": "35a891b8-c1a0-5064-9c6e-2acfba61c2a7",
+            "analyzed": true,
+            "leakDetected": false,
+            "reason": "within-thresholds",
+            "sampleCount": 17,
+            "postWarmupSampleCount": 13,
+            "analysisWindowMs": 128317,
+            "slopeBytesPerMin": 2757014.8896124973,
+            "tailSlopeBytesPerMin": 12882414.985597795,
+            "growthBytes": 5120000,
+            "growthPercent": 4.309156094870381,
+            "positiveDeltaRatio": 0.75,
+            "maxMemoryUsageBytes": 138117120,
+            "maxMemoryUsagePercent": 12.8631591796875,
+            "recoveryDetected": false
+          },
+          {
+            "nodeId": "7493b0ab-a054-5fad-a91b-5e331db29304",
+            "analyzed": true,
+            "leakDetected": true,
+            "reason": "sustained-positive-trend",
+            "sampleCount": 26,
+            "postWarmupSampleCount": 14,
+            "analysisWindowMs": 138049,
+            "slopeBytesPerMin": 34163981.8607817,
+            "tailSlopeBytesPerMin": 46183206.719163395,
+            "growthBytes": 83869696,
+            "growthPercent": 39.58780426502717,
+            "positiveDeltaRatio": 1,
+            "maxMemoryUsageBytes": 295727104,
+            "maxMemoryUsagePercent": 27.541732788085938,
+            "recoveryDetected": false
+          },
+          {
+            "nodeId": "8be8d30f-4499-5eed-865c-71b4d529a67a",
+            "analyzed": true,
+            "leakDetected": false,
+            "reason": "within-thresholds",
+            "sampleCount": 16,
+            "postWarmupSampleCount": 12,
+            "analysisWindowMs": 118282,
+            "slopeBytesPerMin": 4174834.3603336792,
+            "tailSlopeBytesPerMin": 9027805.79761864,
+            "growthBytes": 8089600,
+            "growthPercent": 7.01748152359295,
+            "positiveDeltaRatio": 0.7272727272727273,
+            "maxMemoryUsageBytes": 123416576,
+            "maxMemoryUsagePercent": 11.494064331054688,
+            "recoveryDetected": false
+          },
+          {
+            "nodeId": "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58",
+            "analyzed": true,
+            "leakDetected": false,
+            "reason": "within-thresholds",
+            "sampleCount": 17,
+            "postWarmupSampleCount": 13,
+            "analysisWindowMs": 128311,
+            "slopeBytesPerMin": 1306692.2032054767,
+            "tailSlopeBytesPerMin": 3293139.8209742107,
+            "growthBytes": 2564096,
+            "growthPercent": 2.0102116181240164,
+            "positiveDeltaRatio": 0.9166666666666666,
+            "maxMemoryUsageBytes": 131391488,
+            "maxMemoryUsagePercent": 12.236785888671875,
+            "recoveryDetected": false
+          },
+          {
+            "nodeId": "ff60df70-c157-50cb-bfdf-f617df0e5cb4",
+            "analyzed": false,
+            "leakDetected": false,
+            "reason": "insufficient-samples",
+            "sampleCount": 5
+          }
+        ],
+        "warnings": [],
+        "config": {
+          "enabled": true,
+          "failOnDetection": true,
+          "requireSamples": true,
+          "minSamplesPerNode": 8,
+          "warmupFraction": 0.2,
+          "minWarmupMs": 30000,
+          "minAnalysisWindowMs": 60000,
+          "maxPositiveSlopeBytesPerMin": 1048576,
+          "minGrowthBytes": 16777216,
+          "minPositiveDeltaRatio": 0.65,
+          "captureHeapArtifacts": false,
+          "heapSnapshotNearLimitCount": 2
+        },
+        "samplesPath": "/media/peter/4509da27-4751-4dee-b366-f3983d077725/peter/projects/something/.playback/node-join-under-load-dynamic-slot-check/node-join-under-load/samples.ndjson"
+      },
+      "memoryLeakAssertion": {
+        "enabled": true,
+        "required": true,
+        "analyzed": true,
+        "leakDetected": true,
+        "leakingNodeCount": 1,
+        "leakingNodes": [
+          "7493b0ab-a054-5fad-a91b-5e331db29304"
+        ],
+        "sampleCount": 98,
+        "passed": false,
+        "error": "memory leak detected on nodes: 7493b0ab-a054-5fad-a91b-5e331db29304"
+      },
+      "performanceDiagnostics": null,
+      "details": {
+        "convergenceTiming": {
+          "settledAfterMs": 16891,
+          "leaderChanges": 0,
+          "maxOverTargetMs": 0
+        },
+        "newNodeId": "ff60df70-c157-50cb-bfdf-f617df0e5cb4",
+        "failurePhase": "verify_load",
+        "dominantAssertion": "failed_operations",
+        "diagnostics": {
+          "partialResult": {
+            "loadMetrics": {
+              "total": 1615,
+              "success": 1436,
+              "failed": 179,
+              "errors": 179,
+              "latency": {
+                "avg": 3116.8210306406686,
+                "p50": 3566,
+                "p95": 9074,
+                "p99": 12168
+              },
+              "opsPerSec": 23.574233290028754,
+              "attemptErrors": 459,
+              "queueDelay": {
+                "avg": 5792.411136107987,
+                "p50": 3254,
+                "p95": 17620,
+                "p99": 23984,
+                "max": 24275
+              },
+              "distinctErrors": [
+                "Admin API query failed for node ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 on lane default: Distributed operation failed due to participant failures",
+                "Admin API query failed for node 11601fe0-72d6-5853-8590-ec2881853e72 on lane default: Distributed operation failed due to participant failures",
+                "Admin API query failed for node 8be8d30f-4499-5eed-865c-71b4d529a67a on lane default: Distributed operation failed due to participant failures",
+                "Admin API query failed for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 on lane default: Distributed operation failed due to participant failures",
+                "Admin API query timed out for node 7493b0ab-a054-5fad-a91b-5e331db29304 on lane default after 10000ms",
+                "Admin API query timed out for node 8be8d30f-4499-5eed-865c-71b4d529a67a on lane default after 10000ms",
+                "Admin API query timed out for node 11601fe0-72d6-5853-8590-ec2881853e72 on lane default after 10000ms",
+                "Admin API query failed for node 11601fe0-72d6-5853-8590-ec2881853e72 on lane default: Query timeout after 10000ms",
+                "Admin API query timed out for node ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 on lane default after 10000ms"
+              ],
+              "targetOperations": 3000,
+              "dispatchedOperations": 1778,
+              "undispatchedOperations": 1222,
+              "undispatchedByReason": {
+                "capacity": 1222,
+                "durationTimeout": 1222,
+                "cancelled": 0
+              },
+              "perNode": {
+                "7493b0ab-a054-5fad-a91b-5e331db29304": {
+                  "dispatched": 472,
+                  "success": 385,
+                  "attemptErrors": 87,
+                  "admissionSignals": 0,
+                  "queuePressureSignals": 758,
+                  "waitReasons": {
+                    "nodeSlotUnavailable": 650,
+                    "nodeAdmissionBlocked": 108,
+                    "retryableControlPlanePressure": 0,
+                    "timeoutWaits": 87,
+                    "queueCapacityRejected": 0
+                  },
+                  "rejected": 0,
+                  "rejectedByReason": {
+                    "queueFull": 0
+                  }
+                },
+                "35a891b8-c1a0-5064-9c6e-2acfba61c2a7": {
+                  "dispatched": 370,
+                  "success": 263,
+                  "attemptErrors": 107,
+                  "admissionSignals": 107,
+                  "queuePressureSignals": 816,
+                  "waitReasons": {
+                    "nodeSlotUnavailable": 595,
+                    "nodeAdmissionBlocked": 221,
+                    "retryableControlPlanePressure": 107,
+                    "timeoutWaits": 0,
+                    "queueCapacityRejected": 0
+                  },
+                  "rejected": 0,
+                  "rejectedByReason": {
+                    "queueFull": 0
+                  }
+                },
+                "11601fe0-72d6-5853-8590-ec2881853e72": {
+                  "dispatched": 300,
+                  "success": 191,
+                  "attemptErrors": 109,
+                  "admissionSignals": 70,
+                  "queuePressureSignals": 929,
+                  "waitReasons": {
+                    "nodeSlotUnavailable": 628,
+                    "nodeAdmissionBlocked": 301,
+                    "retryableControlPlanePressure": 70,
+                    "timeoutWaits": 39,
+                    "queueCapacityRejected": 0
+                  },
+                  "rejected": 0,
+                  "rejectedByReason": {
+                    "queueFull": 0
+                  }
+                },
+                "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58": {
+                  "dispatched": 345,
+                  "success": 277,
+                  "attemptErrors": 68,
+                  "admissionSignals": 56,
+                  "queuePressureSignals": 863,
+                  "waitReasons": {
+                    "nodeSlotUnavailable": 427,
+                    "nodeAdmissionBlocked": 436,
+                    "retryableControlPlanePressure": 56,
+                    "timeoutWaits": 12,
+                    "queueCapacityRejected": 0
+                  },
+                  "rejected": 0,
+                  "rejectedByReason": {
+                    "queueFull": 0
+                  }
+                },
+                "8be8d30f-4499-5eed-865c-71b4d529a67a": {
+                  "dispatched": 408,
+                  "success": 320,
+                  "attemptErrors": 88,
+                  "admissionSignals": 44,
+                  "queuePressureSignals": 791,
+                  "waitReasons": {
+                    "nodeSlotUnavailable": 577,
+                    "nodeAdmissionBlocked": 214,
+                    "retryableControlPlanePressure": 44,
+                    "timeoutWaits": 44,
+                    "queueCapacityRejected": 0
+                  },
+                  "rejected": 0,
+                  "rejectedByReason": {
+                    "queueFull": 0
+                  }
+                }
+              },
+              "rejectedOperations": 0,
+              "rejectedByReason": {
+                "queueFull": 0
+              },
+              "queuePressure": {
+                "samples": 44364,
+                "pendingQueueDepth": {
+                  "avg": 537.5678478045262,
+                  "p95": 1149,
+                  "p99": 1207,
+                  "max": 1222
+                }
+              },
+              "waitReasons": {
+                "nodeSlotUnavailable": 2877,
+                "nodeAdmissionBlocked": 1280,
+                "retryableControlPlanePressure": 277,
+                "timeoutWaits": 182,
+                "queueCapacityRejected": 0
+              }
+            },
+            "convergenceTiming": {
+              "settledAfterMs": 16891,
+              "leaderChanges": 0,
+              "maxOverTargetMs": 0
+            },
+            "newNodeId": "ff60df70-c157-50cb-bfdf-f617df0e5cb4",
+            "failurePhase": "verify_load",
+            "dominantAssertion": "failed_operations"
+          },
+          "controlPlaneDiagnostics": {
+            "logsTable": {
+              "pendingWrites": 41,
+              "pendingWriteGrowthCount": 432,
+              "retainedBacklogGrowthCount": 0,
+              "retainedPressureBacklogCap": 128,
+              "maxPendingWrites": 10000,
+              "isWriting": false,
+              "consecutiveDeferredWriteFailures": 0,
+              "sharedPressureBackpressured": false
+            },
+            "cdcReplay": {
+              "bufferedEvents": 6,
+              "replayBufferGrowthCount": 291,
+              "replayRetryDepth": 1,
+              "partitionCount": 96,
+              "replayInFlightPartitionCount": 2,
+              "byPartitionId": {
+                "replica_operations-p1": {
+                  "partitionId": "replica_operations-p1",
+                  "bufferedEvents": 0,
+                  "replayBufferGrowthCount": 108,
+                  "replayRetryDepth": 0,
+                  "replayInFlight": false
+                },
+                "nodes-p1": {
+                  "partitionId": "nodes-p1",
+                  "bufferedEvents": 4,
+                  "replayBufferGrowthCount": 79,
+                  "replayRetryDepth": 1,
+                  "replayInFlight": true
+                },
+                "partitions-p1": {
+                  "partitionId": "partitions-p1",
+                  "bufferedEvents": 2,
+                  "replayBufferGrowthCount": 69,
+                  "replayRetryDepth": 1,
+                  "replayInFlight": true
+                },
+                "services-p1": {
+                  "partitionId": "services-p1",
+                  "bufferedEvents": 0,
+                  "replayBufferGrowthCount": 13,
+                  "replayRetryDepth": 0,
+                  "replayInFlight": false
+                },
+                "service_endpoints-p1": {
+                  "partitionId": "service_endpoints-p1",
+                  "bufferedEvents": 0,
+                  "replayBufferGrowthCount": 9,
+                  "replayRetryDepth": 0,
+                  "replayInFlight": false
+                }
+              }
+            },
+            "cdcReplayByPartitionId": {
+              "replica_operations-p1": {
+                "partitionId": "replica_operations-p1",
+                "bufferedEvents": 0,
+                "replayBufferGrowthCount": 108,
+                "replayRetryDepth": 0,
+                "replayInFlight": false
+              },
+              "nodes-p1": {
+                "partitionId": "nodes-p1",
+                "bufferedEvents": 4,
+                "replayBufferGrowthCount": 79,
+                "replayRetryDepth": 1,
+                "replayInFlight": true
+              },
+              "partitions-p1": {
+                "partitionId": "partitions-p1",
+                "bufferedEvents": 2,
+                "replayBufferGrowthCount": 69,
+                "replayRetryDepth": 1,
+                "replayInFlight": true
+              },
+              "services-p1": {
+                "partitionId": "services-p1",
+                "bufferedEvents": 0,
+                "replayBufferGrowthCount": 13,
+                "replayRetryDepth": 0,
+                "replayInFlight": false
+              },
+              "service_endpoints-p1": {
+                "partitionId": "service_endpoints-p1",
+                "bufferedEvents": 0,
+                "replayBufferGrowthCount": 9,
+                "replayRetryDepth": 0,
+                "replayInFlight": false
+              }
+            }
+          }
+        }
+      },
+      "invariantBreaches": {
+        "totalCount": 0,
+        "hardCount": 0,
+        "softCount": 0,
+        "failing": [],
+        "hardBreaches": [],
+        "softBreaches": []
+      },
+      "exampleResults": null,
+      "loadMetrics": {
+        "total": 1615,
+        "success": 1436,
+        "failed": 179,
+        "errors": 179,
+        "latency": {
+          "avg": 3116.8210306406686,
+          "p50": 3566,
+          "p95": 9074,
+          "p99": 12168
+        },
+        "opsPerSec": 23.574233290028754,
+        "attemptErrors": 459,
+        "queueDelay": {
+          "avg": 5792.411136107987,
+          "p50": 3254,
+          "p95": 17620,
+          "p99": 23984,
+          "max": 24275
+        },
+        "distinctErrors": [
+          "Admin API query failed for node ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 on lane default: Distributed operation failed due to participant failures",
+          "Admin API query failed for node 11601fe0-72d6-5853-8590-ec2881853e72 on lane default: Distributed operation failed due to participant failures",
+          "Admin API query failed for node 8be8d30f-4499-5eed-865c-71b4d529a67a on lane default: Distributed operation failed due to participant failures",
+          "Admin API query failed for node 35a891b8-c1a0-5064-9c6e-2acfba61c2a7 on lane default: Distributed operation failed due to participant failures",
+          "Admin API query timed out for node 7493b0ab-a054-5fad-a91b-5e331db29304 on lane default after 10000ms",
+          "Admin API query timed out for node 8be8d30f-4499-5eed-865c-71b4d529a67a on lane default after 10000ms",
+          "Admin API query timed out for node 11601fe0-72d6-5853-8590-ec2881853e72 on lane default after 10000ms",
+          "Admin API query failed for node 11601fe0-72d6-5853-8590-ec2881853e72 on lane default: Query timeout after 10000ms",
+          "Admin API query timed out for node ebc4aa0b-06c6-506d-93ea-1dd2deca3f58 on lane default after 10000ms"
+        ],
+        "targetOperations": 3000,
+        "dispatchedOperations": 1778,
+        "undispatchedOperations": 1222,
+        "undispatchedByReason": {
+          "capacity": 1222,
+          "durationTimeout": 1222,
+          "cancelled": 0
+        },
+        "waitReasons": {
+          "nodeSlotUnavailable": 2877,
+          "nodeAdmissionBlocked": 1280,
+          "retryableControlPlanePressure": 277,
+          "timeoutWaits": 182,
+          "queueCapacityRejected": 0
+        },
+        "perNode": {
+          "7493b0ab-a054-5fad-a91b-5e331db29304": {
+            "dispatched": 472,
+            "success": 385,
+            "attemptErrors": 87,
+            "admissionSignals": 0,
+            "waitReasons": {
+              "nodeSlotUnavailable": 650,
+              "nodeAdmissionBlocked": 108,
+              "retryableControlPlanePressure": 0,
+              "timeoutWaits": 87,
+              "queueCapacityRejected": 0
+            }
+          },
+          "35a891b8-c1a0-5064-9c6e-2acfba61c2a7": {
+            "dispatched": 370,
+            "success": 263,
+            "attemptErrors": 107,
+            "admissionSignals": 107,
+            "waitReasons": {
+              "nodeSlotUnavailable": 595,
+              "nodeAdmissionBlocked": 221,
+              "retryableControlPlanePressure": 107,
+              "timeoutWaits": 0,
+              "queueCapacityRejected": 0
+            }
+          },
+          "11601fe0-72d6-5853-8590-ec2881853e72": {
+            "dispatched": 300,
+            "success": 191,
+            "attemptErrors": 109,
+            "admissionSignals": 70,
+            "waitReasons": {
+              "nodeSlotUnavailable": 628,
+              "nodeAdmissionBlocked": 301,
+              "retryableControlPlanePressure": 70,
+              "timeoutWaits": 39,
+              "queueCapacityRejected": 0
+            }
+          },
+          "ebc4aa0b-06c6-506d-93ea-1dd2deca3f58": {
+            "dispatched": 345,
+            "success": 277,
+            "attemptErrors": 68,
+            "admissionSignals": 56,
+            "waitReasons": {
+              "nodeSlotUnavailable": 427,
+              "nodeAdmissionBlocked": 436,
+              "retryableControlPlanePressure": 56,
+              "timeoutWaits": 12,
+              "queueCapacityRejected": 0
+            }
+          },
+          "8be8d30f-4499-5eed-865c-71b4d529a67a": {
+            "dispatched": 408,
+            "success": 320,
+            "attemptErrors": 88,
+            "admissionSignals": 44,
+            "waitReasons": {
+              "nodeSlotUnavailable": 577,
+              "nodeAdmissionBlocked": 214,
+              "retryableControlPlanePressure": 44,
+              "timeoutWaits": 44,
+              "queueCapacityRejected": 0
+            }
+          }
+        },
+        "rejectedOperations": 0,
+        "rejectedByReason": {
+          "queueFull": 0
+        },
+        "queuePressure": {
+          "samples": 44364,
+          "pendingQueueDepth": {
+            "avg": 537.5678478045262,
+            "p95": 1149,
+            "p99": 1207,
+            "max": 1222
+          }
+        }
+      },
+      "performanceMeasurement": {
+        "available": true,
+        "validForComparison": false,
+        "invalidReason": "correctness_failed",
+        "observedOpsPerSec": 23.574233290028754,
+        "observedP99LatencyMs": 12168
+      },
+      "bottleneckEstimate": {
+        "kind": "dispatch_queue_backlog",
+        "primaryEvidence": {
+          "undispatchedOperations": 1222,
+          "undispatchedRatio": 0.4073333333333333,
+          "queueDelayP95Ms": 17620
+        },
+        "likelyWaitingTimeSource": "dispatch_queue"
+      },
+      "partitionHotspots": null,
+      "optimizationPriorities": [
+        {
+          "component": "memory_lifecycle",
+          "signal": "memory_leak",
+          "priority": "critical",
+          "score": 95,
+          "reason": "Leak signal detected in sustained sampling and should be treated as release-blocking.",
+          "evidence": {
+            "leakingNodeCount": 1,
+            "leakingNodes": [
+              "7493b0ab-a054-5fad-a91b-5e331db29304"
+            ]
+          }
+        },
+        {
+          "component": "replication_write_path",
+          "signal": "dispatch_queue_pressure",
+          "priority": "critical",
+          "score": 95,
+          "reason": "Dispatch backlog and queue delay indicate scheduler pressure and insufficient load completion capacity.",
+          "evidence": {
+            "targetOperations": 3000,
+            "undispatchedOperations": 1222,
+            "undispatchedRatio": 0.4073333333333333,
+            "queueDelayP95Ms": 17620,
+            "queueDelayP99Ms": 23984
+          }
+        },
+        {
+          "component": "convergence_control_plane",
+          "signal": "convergence_settle_time",
+          "priority": "high",
+          "score": 80,
+          "reason": "Convergence delay suggests extra work in replica movement, promotion, or membership updates.",
+          "evidence": {
+            "settledAfterMs": 16891,
+            "leaderChanges": 0
+          }
+        }
+      ],
+      "failureBundle": {
+        "jsonPath": ".playback/node-join-under-load-dynamic-slot-check/node-join-under-load/failure-bundle.json",
+        "markdownPath": ".playback/node-join-under-load-dynamic-slot-check/node-join-under-load/failure-bundle.md"
+      }
+    }
+  ],
+  "benchmarkRegressionGate": {
+    "enabled": false,
+    "status": "skipped",
+    "reason": "disabled",
+    "settings": {
+      "enabled": false,
+      "maxThroughputRegressionRatio": 0.1,
+      "minimumThroughputRatioSutToBaseline": null,
+      "baselineProvider": "liferaft",
+      "failIfBaselineMissing": false,
+      "approvedMitigationId": null,
+      "parityMismatchPolicy": "warn"
+    },
+    "currentProvider": "liferaft",
+    "baselineProvider": "liferaft",
+    "comparedScenarioCount": 0,
+    "failedScenarioCount": 0,
+    "mitigatedScenarioCount": 0,
+    "missingBaselineScenarios": [],
+    "comparisons": [],
+    "parityMismatchCount": 0,
+    "lowThroughputRatioCount": 0,
+    "warnings": []
+  },
+  "failureBundle": {
+    "jsonPath": ".playback/node-join-under-load-dynamic-slot-check/failure-bundles/run-failure-bundle.json",
+    "markdownPath": ".playback/node-join-under-load-dynamic-slot-check/failure-bundles/run-failure-bundle.md"
+  },
+  "metadata": {
+    "raftProvider": "liferaft",
+    "configPath": "test/distributed/config/local.json",
+    "scenarioFilter": "node-join-under-load"
+  }
+}

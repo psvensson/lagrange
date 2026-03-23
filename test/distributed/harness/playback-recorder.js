@@ -775,6 +775,7 @@ class PlaybackRecorder {
     this._resourcePollTimer = null;
     this._topologyCapturePromise = null;
     this._resourceCapturePromise = null;
+    this._shutdownStartedAt = null;
     this._started = false;
     this._adminReadinessObserved = false;
   }
@@ -831,6 +832,7 @@ class PlaybackRecorder {
     this._startedAt = Date.now();
     this._started = true;
     this._adminReadinessObserved = false;
+    this._shutdownStartedAt = null;
 
     this.recordEvent({
       type: PLAYBACK_EVENT_TYPE.CLUSTER_START,
@@ -854,13 +856,20 @@ class PlaybackRecorder {
       return this._manifest;
     }
 
-    this._stopPollers();
     const skipFinalCapture = Boolean(options.skipFinalCapture);
-    if (!skipFinalCapture) {
+    if (skipFinalCapture) {
+      await this.beginShutdown({
+        awaitInFlightCaptures: true,
+      });
+    } else {
+      this._stopPollers();
       await this._awaitCapture('_topologyCapturePromise');
       await this._awaitCapture('_resourceCapturePromise');
       await this._collectTopologySnapshot();
       await this._collectResourceSamples();
+    }
+    if (this._shutdownStartedAt === null) {
+      this._shutdownStartedAt = Date.now();
     }
 
     this.recordEvent({
@@ -936,6 +945,19 @@ class PlaybackRecorder {
     this._stopPollers();
   }
 
+  async beginShutdown(options = {}) {
+    if (this._shutdownStartedAt === null) {
+      this._shutdownStartedAt = Date.now();
+    }
+    this._stopPollers();
+    if (options.awaitInFlightCaptures !== false) {
+      await Promise.all([
+        this._awaitCapture('_topologyCapturePromise'),
+        this._awaitCapture('_resourceCapturePromise'),
+      ]);
+    }
+  }
+
   recordEvent(event) {
     if (!this._started || !this._eventsStream) {
       return;
@@ -991,10 +1013,13 @@ class PlaybackRecorder {
   }
 
   async _collectTopologySnapshotOnce() {
-    if (!this._cluster) {
+    if (!this._cluster || this._shutdownStartedAt !== null) {
       return;
     }
     const selection = await this._selectReachableSnapshotNodes();
+    if (this._shutdownStartedAt !== null) {
+      return;
+    }
     const snapshotNodes = selection.nodes;
     if (selection.adminReady) {
       this._adminReadinessObserved = true;
@@ -1098,7 +1123,9 @@ class PlaybackRecorder {
   }
 
   async _collectResourceSamplesOnce() {
-    if (!this._cluster || !this._samplesStream) {
+    if (!this._cluster ||
+        !this._samplesStream ||
+        this._shutdownStartedAt !== null) {
       return;
     }
 
@@ -1106,6 +1133,9 @@ class PlaybackRecorder {
       this._cluster.getNodes() :
       [];
     for (const node of nodes) {
+      if (this._shutdownStartedAt !== null) {
+        return;
+      }
       const sample = {
         timestamp: Date.now(),
         nodeId: node?.id || null,

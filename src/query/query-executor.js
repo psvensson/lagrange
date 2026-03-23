@@ -44,6 +44,7 @@ import {ParallelQueryCoordinator} from './distributed/parallel-query-coordinator
 import {DISTRIBUTED_JOIN_STRATEGY} from './distributed/distributed-query-plan-constants.js';
 import {MIGRATION_PARTITION_OPERATION} from '../migration/migration-constants.js';
 import {
+  CONTROL_PLANE_PARTICIPATION_KIND,
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../control-plane/control-plane-readiness-constants.js';
 import {
@@ -57,6 +58,66 @@ const QUERY_MESSAGE_FIELD_MIGRATION_ID = 'migrationId';
 const QUERY_MESSAGE_FIELD_SESSION_ID = 'sessionId';
 const LEADER_GAP_REASON_OWNER_MISSING = 'owner_missing';
 const LEADER_GAP_REASON_SERVICE_MISSING = 'service_missing';
+
+function normalizeParticipantFailureString(value) {
+  return typeof value === 'string' && value.length > NUM.ZERO ?
+    value :
+    null;
+}
+
+function normalizeParticipantRetryAfterMs(value) {
+  return Number.isFinite(value) && value >= NUM.ZERO ?
+    Math.floor(value) :
+    null;
+}
+
+function resolveParticipantBackpressureState(result = {}) {
+  if (typeof result?.backpressured === 'boolean') {
+    return result.backpressured;
+  }
+  if (result?.deferRetry === true) {
+    return true;
+  }
+  return Number.isFinite(result?.retryAfterMs) &&
+    result.retryAfterMs > NUM.ZERO;
+}
+
+function buildParticipantFailureEntry(result) {
+  return {
+    partitionId: result.partitionId,
+    participantNodeId:
+      normalizeParticipantFailureString(result.participantNodeId),
+    participantAddress:
+      normalizeParticipantFailureString(result.participantAddress),
+    errorCode:
+      normalizeParticipantFailureString(result.errorCode),
+    error: result.error || ERRORS.QUERY_FAILED,
+    durationMs: Number.isFinite(result?.durationMs) ?
+      Math.max(NUM.ZERO, Math.floor(result.durationMs)) :
+      null,
+    retryAfterMs:
+      normalizeParticipantRetryAfterMs(result?.retryAfterMs),
+    deferRetry: result?.deferRetry === true,
+    backpressured: resolveParticipantBackpressureState(result),
+    failedTable:
+      normalizeParticipantFailureString(result.failedTable),
+  };
+}
+
+function buildDistributedFailureSummary(failedResults) {
+  const participantFailures = failedResults.map((result) =>
+    buildParticipantFailureEntry(result),
+  );
+  return {
+    failedPartitions: failedResults.map((result) => result.partitionId),
+    partitionErrors: participantFailures,
+    participantFailures,
+    firstFailedParticipant:
+      participantFailures.length > NUM.ZERO ?
+        participantFailures[NUM.ZERO] :
+        null,
+  };
+}
 
 /**
  * QueryExecutor handles parallel query execution across partitions
@@ -264,6 +325,7 @@ class QueryExecutor {
         timeoutMs: options.timeoutMs,
         cancellationToken:
           options.cancellationToken || null,
+        tableName: ast.table,
       },
     );
     const fanoutMetrics = this.getLastCoordinatorMetrics();
@@ -272,17 +334,14 @@ class QueryExecutor {
       .filter((result) => !result.success)
       .map((result) => result.partitionId);
     if (failedPartitions.length > NUM.ZERO) {
+      const failureSummary = buildDistributedFailureSummary(
+        results.filter((result) => !result.success),
+      );
       return {
         success: false,
         errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
         error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
-        failedPartitions,
-        partitionErrors: results
-          .filter((result) => !result.success)
-          .map((result) => ({
-            partitionId: result.partitionId,
-            error: result.error || ERRORS.QUERY_FAILED,
-          })),
+        ...failureSummary,
         partitions: partitionIds,
         distributedMetrics: {
           fanout: fanoutMetrics,
@@ -409,20 +468,18 @@ class QueryExecutor {
         timeoutMs: options.timeoutMs,
         cancellationToken:
           options.cancellationToken || null,
+        tableName: ast.from.name,
       },
     );
     fanoutMetrics.push(this.getLastCoordinatorMetrics());
     const mainFailures = mainResults.filter((result) => !result.success);
     if (mainFailures.length > NUM.ZERO) {
+      const failureSummary = buildDistributedFailureSummary(mainFailures);
       return {
         success: false,
         errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
         error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
-        failedPartitions: mainFailures.map((result) => result.partitionId),
-        partitionErrors: mainFailures.map((result) => ({
-          partitionId: result.partitionId,
-          error: result.error || ERRORS.QUERY_FAILED,
-        })),
+        ...failureSummary,
         distributedMetrics: {
           fanout: fanoutMetrics,
           mergeDurationMs: 0,
@@ -460,20 +517,18 @@ class QueryExecutor {
             timeoutMs: options.timeoutMs,
             cancellationToken:
               options.cancellationToken || null,
+            tableName: joinTableName,
           },
         );
         fanoutMetrics.push(this.getLastCoordinatorMetrics());
         const joinFailures = joinResults.filter((result) => !result.success);
         if (joinFailures.length > NUM.ZERO) {
+          const failureSummary = buildDistributedFailureSummary(joinFailures);
           return {
             success: false,
             errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
             error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
-            failedPartitions: joinFailures.map((result) => result.partitionId),
-            partitionErrors: joinFailures.map((result) => ({
-              partitionId: result.partitionId,
-              error: result.error || ERRORS.QUERY_FAILED,
-            })),
+            ...failureSummary,
             distributedMetrics: {
               fanout: fanoutMetrics,
               mergeDurationMs: 0,
@@ -963,26 +1018,44 @@ class QueryExecutor {
   ) {
     const cancellationToken =
       executionOptions?.cancellationToken || null;
+    const failedTable =
+      normalizeParticipantFailureString(executionOptions?.tableName);
     this.throwIfCancelled(cancellationToken);
+
+    const buildFailureResult = (errorMessage, details = {}) => ({
+      partitionId,
+      success: false,
+      error: errorMessage || ERRORS.QUERY_FAILED,
+      errorCode:
+        normalizeParticipantFailureString(
+          details?.errorCode || details?.code,
+        ),
+      retryAfterMs:
+        normalizeParticipantRetryAfterMs(details?.retryAfterMs),
+      deferRetry: details?.deferRetry === true,
+      participantNodeId:
+        normalizeParticipantFailureString(details?.participantNodeId),
+      participantAddress:
+        normalizeParticipantFailureString(details?.participantAddress),
+      backpressured: resolveParticipantBackpressureState(details),
+      failedTable,
+      rows: [],
+    });
 
     // Validate dependencies
     if (!this.messageRouter) {
       this.logger.error(QUERY_LOG_MSG.MESSAGE_ROUTER_UNAVAILABLE, {partitionId});
       return {
-        partitionId,
-        success: false,
-        error: QUERY_ERROR_MSG.MESSAGE_ROUTER_UNAVAILABLE,
-        rows: [],
+        ...buildFailureResult(
+          QUERY_ERROR_MSG.MESSAGE_ROUTER_UNAVAILABLE,
+        ),
       };
     }
 
     if (!this.systemCache) {
       this.logger.error(LOG_MSG.SYSTEM_CACHE_NOT_AVAILABLE, {partitionId});
       return {
-        partitionId,
-        success: false,
-        error: ERRORS.SYSTEM_CACHE_NOT_AVAILABLE,
-        rows: [],
+        ...buildFailureResult(ERRORS.SYSTEM_CACHE_NOT_AVAILABLE),
       };
     }
 
@@ -990,6 +1063,7 @@ class QueryExecutor {
       this.getReadRetryAttemptLimit() :
       this.getWriteRetryAttemptLimit();
     let lastError = null;
+    let lastFailureDetails = null;
     let awaitedRoutingRepair = false;
     const routingReadinessDimension =
       executionOptions.routingReadinessDimension ||
@@ -1049,19 +1123,17 @@ class QueryExecutor {
               attempts: attempt,
             });
             return {
-              partitionId,
-              success: false,
-              error: ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE,
-              rows: [],
+              ...buildFailureResult(
+                ERRORS.NO_LEADER_AVAILABLE_FOR_WRITE,
+              ),
             };
           }
           if (!hasRoutableService) {
             this.logNoServiceForPartition(partitionId, routingSnapshot);
             return {
-              partitionId,
-              success: false,
-              error: QUERY_ERROR_MSG.PARTITION_SERVICE_NOT_FOUND,
-              rows: [],
+              ...buildFailureResult(
+                QUERY_ERROR_MSG.PARTITION_SERVICE_NOT_FOUND,
+              ),
             };
           }
         } else {
@@ -1078,10 +1150,9 @@ class QueryExecutor {
             partitionId, routingSnapshot,
           );
           return {
-            partitionId,
-            success: false,
-            error: QUERY_ERROR_MSG.PARTITION_SERVICE_NOT_FOUND,
-            rows: [],
+            ...buildFailureResult(
+              QUERY_ERROR_MSG.PARTITION_SERVICE_NOT_FOUND,
+            ),
           };
         }
       }
@@ -1173,6 +1244,15 @@ class QueryExecutor {
 
             // Redirect target also failed - continue to next candidate
             lastError = redirectResponse.error || ERRORS.QUERY_FAILED;
+            lastFailureDetails = {
+              errorCode: redirectResponse?.errorCode,
+              retryAfterMs: redirectResponse?.retryAfterMs,
+              deferRetry: redirectResponse?.deferRetry,
+              participantNodeId: serviceInfo?.nodeId,
+              participantAddress: response.leaderAddress,
+              backpressured:
+                resolveParticipantBackpressureState(redirectResponse),
+            };
             continue;
           }
 
@@ -1184,6 +1264,14 @@ class QueryExecutor {
               address,
             });
             lastError = errorMessage;
+            lastFailureDetails = {
+              errorCode: response?.errorCode,
+              retryAfterMs: response?.retryAfterMs,
+              deferRetry: response?.deferRetry,
+              participantNodeId: serviceInfo?.nodeId,
+              participantAddress: address,
+              backpressured: resolveParticipantBackpressureState(response),
+            };
             if (!forRead && this.isLeaderUnavailable(errorMessage)) {
               continue;
             }
@@ -1193,6 +1281,14 @@ class QueryExecutor {
           const errorMessage = response.error || ERRORS.QUERY_FAILED;
           if (!forRead && this.isLeaderUnavailable(errorMessage)) {
             lastError = errorMessage;
+            lastFailureDetails = {
+              errorCode: response?.errorCode,
+              retryAfterMs: response?.retryAfterMs,
+              deferRetry: response?.deferRetry,
+              participantNodeId: serviceInfo?.nodeId,
+              participantAddress: address,
+              backpressured: resolveParticipantBackpressureState(response),
+            };
             continue;
           }
 
@@ -1204,18 +1300,42 @@ class QueryExecutor {
               {partitionId, address},
             );
             lastError = errorMessage;
+            lastFailureDetails = {
+              errorCode: response?.errorCode,
+              retryAfterMs: response?.retryAfterMs,
+              deferRetry: response?.deferRetry,
+              participantNodeId: serviceInfo?.nodeId,
+              participantAddress: address,
+              backpressured: resolveParticipantBackpressureState(response),
+            };
             continue;
           }
 
           return {
-            partitionId,
-            success: false,
-            error: errorMessage,
-            rows: [],
+            ...buildFailureResult(
+              errorMessage,
+              {
+                errorCode: response?.errorCode,
+                retryAfterMs: response?.retryAfterMs,
+                deferRetry: response?.deferRetry,
+                participantNodeId: serviceInfo?.nodeId,
+                participantAddress: address,
+                backpressured:
+                  resolveParticipantBackpressureState(response),
+              },
+            ),
           };
         } catch (error) {
           if (!forRead && this.isLeaderUnavailable(error.message)) {
             lastError = error.message;
+            lastFailureDetails = {
+              errorCode: error?.code || error?.errorCode,
+              retryAfterMs: error?.retryAfterMs,
+              deferRetry: error?.deferRetry,
+              participantNodeId: serviceInfo?.nodeId,
+              participantAddress: address,
+              backpressured: resolveParticipantBackpressureState(error),
+            };
             continue;
           }
 
@@ -1227,6 +1347,14 @@ class QueryExecutor {
               {partitionId, address, error: error.message},
             );
             lastError = error.message;
+            lastFailureDetails = {
+              errorCode: error?.code || error?.errorCode,
+              retryAfterMs: error?.retryAfterMs,
+              deferRetry: error?.deferRetry,
+              participantNodeId: serviceInfo?.nodeId,
+              participantAddress: address,
+              backpressured: resolveParticipantBackpressureState(error),
+            };
             continue;
           }
 
@@ -1246,10 +1374,7 @@ class QueryExecutor {
     }
 
     return {
-      partitionId,
-      success: false,
-      error: lastError || ERRORS.QUERY_FAILED,
-      rows: [],
+      ...buildFailureResult(lastError || ERRORS.QUERY_FAILED, lastFailureDetails),
     };
   }
 
@@ -1987,8 +2112,13 @@ class QueryExecutor {
     const nodeId = service?.node_id || service?.nodeId || null;
     if (!nodeId ||
         !this.controlPlaneReadinessService ||
-        typeof this.controlPlaneReadinessService.getNodeReadinessSync !==
-          'function') {
+        (
+          typeof this.controlPlaneReadinessService
+            .getControlPlaneParticipationSync !==
+              'function' &&
+          typeof this.controlPlaneReadinessService.getNodeReadinessSync !==
+            'function'
+        )) {
       return {
         routable: true,
         reasonCode: QUERY_ROUTING_DIAGNOSTIC_REASON.OK,
@@ -1996,33 +2126,61 @@ class QueryExecutor {
       };
     }
 
-    const readiness =
-      this.controlPlaneReadinessService.getNodeReadinessSync(
-        nodeId,
-        {
-          allowAuthoritativeRefresh: true,
-          requireFreshOnIneligible: true,
-          decisionDimension: routingReadinessDimension,
-        },
-      );
-    if (!readiness || !readiness.dimensions) {
-      return {
-        routable: false,
-        reasonCode: QUERY_ROUTING_DIAGNOSTIC_REASON.READINESS_UNAVAILABLE,
-        readinessSummary: null,
+    let decision = null;
+    let compactSnapshot = null;
+    let readiness = null;
+
+    if (typeof this.controlPlaneReadinessService
+      .getControlPlaneParticipationSync === 'function') {
+      const participation =
+        this.controlPlaneReadinessService.getControlPlaneParticipationSync(
+          nodeId,
+          {
+            allowAuthoritativeRefresh: true,
+            requireFreshOnIneligible: true,
+            participationKind:
+              CONTROL_PLANE_PARTICIPATION_KIND.ROUTED_READ,
+            decisionDimension: routingReadinessDimension,
+          },
+        );
+      readiness = participation?.snapshot || null;
+      decision = {
+        eligible: participation?.eligible === true,
+        failedDimensions: Array.isArray(participation?.failedDimensions) ?
+          participation.failedDimensions :
+          Object.freeze([]),
       };
+      compactSnapshot = participation?.summary || null;
+    } else {
+      readiness =
+        this.controlPlaneReadinessService.getNodeReadinessSync(
+          nodeId,
+          {
+            allowAuthoritativeRefresh: true,
+            requireFreshOnIneligible: true,
+            decisionDimension: routingReadinessDimension,
+          },
+        );
+      if (!readiness || !readiness.dimensions) {
+        return {
+          routable: false,
+          reasonCode: QUERY_ROUTING_DIAGNOSTIC_REASON.READINESS_UNAVAILABLE,
+          readinessSummary: null,
+        };
+      }
+
+      decision = evaluateEligibilityDecision(
+        readiness,
+        routingReadinessDimension,
+      );
+      compactSnapshot = compactEligibilitySnapshot(
+        readiness,
+        routingReadinessDimension,
+      );
     }
 
-    const decision = evaluateEligibilityDecision(
-      readiness,
-      routingReadinessDimension,
-    );
-    const compactSnapshot = compactEligibilitySnapshot(
-      readiness,
-      routingReadinessDimension,
-    );
     const bootstrapGraceRoutable =
-      decision.eligible !== true &&
+      decision?.eligible !== true &&
       this.shouldAllowFreshBootstrapRoutingGrace(
         service,
         readiness,
@@ -3106,7 +3264,10 @@ class QueryExecutor {
       false,
       false,
       false,
-      executionOptions,
+      {
+        ...executionOptions,
+        tableName: ast.table,
+      },
     );
     const fanoutMetrics = this.getLastCoordinatorMetrics();
 
@@ -3123,16 +3284,13 @@ class QueryExecutor {
     }
 
     if (failedResults.length > NUM.ZERO) {
+      const failureSummary = buildDistributedFailureSummary(failedResults);
       return {
         success: false,
         operation: QUERY_AST_TYPE.UPDATE,
         affectedRows: totalChanges,
         partitions: partitionIds,
-        failedPartitions: failedResults.map((result) => result.partitionId),
-        partitionErrors: failedResults.map((result) => ({
-          partitionId: result.partitionId,
-          error: result.error || ERRORS.QUERY_FAILED,
-        })),
+        ...failureSummary,
         errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
         error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
         rows: returningRows,
@@ -3205,7 +3363,10 @@ class QueryExecutor {
       false,
       false,
       false,
-      executionOptions,
+      {
+        ...executionOptions,
+        tableName: ast.table,
+      },
     );
     const fanoutMetrics = this.getLastCoordinatorMetrics();
 
@@ -3222,16 +3383,13 @@ class QueryExecutor {
     }
 
     if (failedResults.length > NUM.ZERO) {
+      const failureSummary = buildDistributedFailureSummary(failedResults);
       return {
         success: false,
         operation: QUERY_AST_TYPE.DELETE,
         affectedRows: totalChanges,
         partitions: partitionIds,
-        failedPartitions: failedResults.map((result) => result.partitionId),
-        partitionErrors: failedResults.map((result) => ({
-          partitionId: result.partitionId,
-          error: result.error || ERRORS.QUERY_FAILED,
-        })),
+        ...failureSummary,
         errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
         error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
         rows: returningRows,

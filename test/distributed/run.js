@@ -112,6 +112,8 @@ const TRACE_ASSERTION_NO_EVENTS = 'no trace events captured';
 const TRACE_ASSERTION_LINEAGE_PREFIX_MISSING =
   'required lineage prefix not found: ';
 const MEMORY_ASSERTION_ERROR_PREFIX = 'Memory leak assertion failed: ';
+const CLEANLINESS_ASSERTION_ERROR_PREFIX =
+  'Scenario cleanliness assertion failed: ';
 const MEMORY_ASSERTION_SAMPLES_MISSING = 'memory samples unavailable';
 const MEMORY_ASSERTION_LEAK_DETECTED_PREFIX =
   'memory leak detected on nodes: ';
@@ -119,6 +121,16 @@ const MEMORY_ASSERTION_ANALYSIS_INSUFFICIENT =
   'memory analysis window insufficient for leak verdict';
 const MEMORY_ANALYSIS_WARNING_SAMPLES_PATH_MISSING = 'samples-path-missing';
 const MEMORY_ANALYSIS_WARNING_SAMPLES_READ_FAILED = 'samples-read-failed';
+const SCENARIO_ASSERTION_POLICY = Object.freeze({
+  'node-join-under-load': Object.freeze({
+    failOnPlaybackWarnings: true,
+    memoryLeak: Object.freeze({
+      enabled: true,
+      failOnDetection: true,
+      requireSamples: true,
+    }),
+  }),
+});
 const SCENARIO_FILTER_ALL = 'all';
 const BENCHMARK_GATE_STATUS = Object.freeze({
   PASSED: 'passed',
@@ -1283,6 +1295,34 @@ function extractBuildProgressLine(event) {
   return parts.join(' ').trim();
 }
 
+function extractScenarioFailurePartialResult(errorDiagnostics) {
+  const partialResult = errorDiagnostics?.partialResult;
+  if (!partialResult || typeof partialResult !== 'object' ||
+      Array.isArray(partialResult)) {
+    return null;
+  }
+  return partialResult;
+}
+
+function mergeFailedScenarioDetails(errorDiagnostics, partialResult) {
+  const diagnostics = errorDiagnostics && typeof errorDiagnostics === 'object' ?
+    {...errorDiagnostics} :
+    {};
+  if (partialResult) {
+    diagnostics.partialResult = partialResult;
+  }
+  const detailEntries = partialResult &&
+    typeof partialResult === 'object' &&
+    !Array.isArray(partialResult) ?
+    Object.entries(partialResult).filter(([field]) => field !== 'loadMetrics') :
+    [];
+  const details = Object.fromEntries(detailEntries);
+  if (Object.keys(diagnostics).length > 0) {
+    details.diagnostics = diagnostics;
+  }
+  return Object.keys(details).length > 0 ? details : null;
+}
+
 /**
  * Run discovered scenarios sequentially.
  * Each scenario runs in isolation: createCluster → run → teardown.
@@ -1295,6 +1335,7 @@ function extractBuildProgressLine(event) {
  *   verbose: boolean,
  *   historyReports?: Array<Object>,
  *   dockerOperationSink?: Function|null,
+ *   clusterFactory?: Function|null,
  *   reportMetadata?: Object|null,
  * }} options
  * @returns {Promise<{report: ReportWriter, hasFailures: boolean}>}
@@ -1311,6 +1352,9 @@ async function runScenarios(config, scenarios, options) {
   const dockerOperationSink = typeof options?.dockerOperationSink === 'function' ?
     options.dockerOperationSink :
     null;
+  const clusterFactory = typeof options?.clusterFactory === 'function' ?
+    options.clusterFactory :
+    createCluster;
 
   for (const scenario of scenarios) {
     const startedAt = new Date().toISOString();
@@ -1328,7 +1372,7 @@ async function runScenarios(config, scenarios, options) {
       const clusterConfig = dockerOperationSink ?
         {...config, dockerOperationSink} :
         config;
-      cluster = createCluster(clusterConfig);
+      cluster = clusterFactory(clusterConfig);
       if (typeof cluster.setScenarioName === 'function') {
         cluster.setScenarioName(scenario.name);
       }
@@ -1413,6 +1457,7 @@ async function runScenarios(config, scenarios, options) {
         typeof err.diagnostics === 'object' ?
         err.diagnostics :
         null;
+      const partialResult = extractScenarioFailurePartialResult(errorDiagnostics);
       let performanceDiagnostics = null;
 
       // Attempt fallback log collection on failure
@@ -1447,7 +1492,9 @@ async function runScenarios(config, scenarios, options) {
         error: err.message,
         stackTrace: err.stack || null,
         analysisSummary,
-        details: errorDiagnostics ? {diagnostics: errorDiagnostics} : null,
+        details: mergeFailedScenarioDetails(errorDiagnostics, partialResult),
+        convergenceTiming: partialResult?.convergenceTiming || null,
+        loadMetrics: partialResult?.loadMetrics || null,
         clusterSize: resolveClusterSize(config),
         performanceDiagnostics,
       };
@@ -1532,9 +1579,13 @@ async function runScenarios(config, scenarios, options) {
         };
       }
 
+      const scenarioMemoryLeakConfig = resolveScenarioMemoryLeakConfig(
+        scenario.name,
+        config,
+      );
       scenarioResult.memoryLeak = await analyzeMemoryLeakFromPlayback(
         scenarioResult.playback,
-        config.memoryLeak || {},
+        scenarioMemoryLeakConfig,
       );
 
       const traceAssertion = evaluateTraceAssertions(
@@ -1552,7 +1603,7 @@ async function runScenarios(config, scenarios, options) {
 
       const memoryLeakAssertion = evaluateMemoryLeakAssertions(
         scenarioResult.memoryLeak,
-        config.memoryLeak || {},
+        scenarioMemoryLeakConfig,
       );
       if (memoryLeakAssertion) {
         scenarioResult.memoryLeakAssertion = memoryLeakAssertion;
@@ -1560,6 +1611,19 @@ async function runScenarios(config, scenarios, options) {
           scenarioResult.passed = false;
           scenarioResult.error = MEMORY_ASSERTION_ERROR_PREFIX +
             memoryLeakAssertion.error;
+          hasFailures = true;
+        }
+      }
+      const cleanlinessAssertion = evaluateScenarioCleanlinessAssertions(
+        scenario.name,
+        scenarioResult,
+      );
+      if (cleanlinessAssertion) {
+        scenarioResult.cleanlinessAssertion = cleanlinessAssertion;
+        if (scenarioResult.passed && !cleanlinessAssertion.passed) {
+          scenarioResult.passed = false;
+          scenarioResult.error = CLEANLINESS_ASSERTION_ERROR_PREFIX +
+            cleanlinessAssertion.error;
           hasFailures = true;
         }
       }
@@ -1661,6 +1725,82 @@ function evaluateTraceAssertions(traceArtifact, debugTraceConfig) {
       assertion.error =
         TRACE_ASSERTION_LINEAGE_PREFIX_MISSING + requiredPrefix;
     }
+  }
+
+  return assertion;
+}
+
+function resolveScenarioAssertionPolicy(scenarioName) {
+  const normalizedScenarioName = String(scenarioName || '').trim();
+  if (!normalizedScenarioName) {
+    return null;
+  }
+  return SCENARIO_ASSERTION_POLICY[normalizedScenarioName] || null;
+}
+
+function resolveScenarioMemoryLeakConfig(scenarioName, config = {}) {
+  const scenarioPolicy = resolveScenarioAssertionPolicy(scenarioName);
+  const baseConfig = config?.memoryLeak &&
+    typeof config.memoryLeak === 'object' ?
+    config.memoryLeak :
+    {};
+  if (!scenarioPolicy?.memoryLeak ||
+      typeof scenarioPolicy.memoryLeak !== 'object') {
+    return baseConfig;
+  }
+  return {
+    ...baseConfig,
+    ...scenarioPolicy.memoryLeak,
+  };
+}
+
+function collectPlaybackWarningMessages(playbackArtifact) {
+  if (!playbackArtifact || typeof playbackArtifact !== 'object') {
+    return [];
+  }
+  const warnings = [];
+  if (typeof playbackArtifact.warning === 'string' &&
+      playbackArtifact.warning.length > 0) {
+    warnings.push(playbackArtifact.warning);
+  }
+  if (Array.isArray(playbackArtifact.warnings)) {
+    for (const warning of playbackArtifact.warnings) {
+      const message = typeof warning?.message === 'string' ?
+        warning.message :
+        (typeof warning === 'string' ? warning : null);
+      if (message) {
+        warnings.push(message);
+      }
+    }
+  }
+  return [...new Set(warnings)];
+}
+
+function evaluateScenarioCleanlinessAssertions(
+  scenarioName,
+  scenarioResult,
+) {
+  const scenarioPolicy = resolveScenarioAssertionPolicy(scenarioName);
+  if (!scenarioPolicy) {
+    return null;
+  }
+
+  const playbackWarnings = collectPlaybackWarningMessages(
+    scenarioResult?.playback,
+  );
+  const assertion = {
+    enabled: true,
+    required: true,
+    playbackWarnings,
+    passed: true,
+    error: null,
+  };
+
+  if (scenarioPolicy.failOnPlaybackWarnings === true &&
+      playbackWarnings.length > 0) {
+    assertion.passed = false;
+    assertion.error = 'playback warnings present: ' +
+      playbackWarnings.join('; ');
   }
 
   return assertion;
@@ -2146,8 +2286,10 @@ export {
   normalizeScenarioPayload,
   evaluateTraceAssertions,
   evaluateMemoryLeakAssertions,
+  evaluateScenarioCleanlinessAssertions,
   evaluateBenchmarkRegressionGate,
   resolveBenchmarkGateConfig,
+  resolveScenarioMemoryLeakConfig,
   resolveRunRaftProvider,
   buildImage,
   loadScenarioModule,

@@ -14,6 +14,9 @@ import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {SERVICE_TYPE} from '../../src/constants/service.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
+  CONTROL_PLANE_READINESS_REASON,
+} from '../../src/control-plane/control-plane-readiness-constants.js';
+import {
   OperationType,
   TERMINAL_STATUSES,
 } from '../../src/rebalancer/replica-status.js';
@@ -59,6 +62,8 @@ function createTestRepository(overrides = {}) {
     systemTableCache: mockCache,
     cdcIntegrationService: mockCdc,
     controlPlaneSystemTableGateway: mockGateway,
+    controlPlaneReadinessService:
+      overrides.controlPlaneReadinessService || null,
     logger: mockLogger,
     emitter: overrides.emitter || null,
   });
@@ -245,6 +250,90 @@ test('queryIncompleteOperations backs off SQL retries after retryable read failu
     t.equal(readCalls, 1,
       'retryable failures should arm a cooldown instead of hammering replica_operations SQL');
   });
+
+test('queryIncompleteOperations uses the local-safe owner-read path when ' +
+  'canonical participation defers only on self query transport', async (t) => {
+  let readCalls = 0;
+  const repo = createTestRepository({
+    controlPlaneSystemTableGateway: {
+      readRows: async () => {
+        readCalls += 1;
+        return {success: true, rows: []};
+      },
+      executeQuery: async () => ({success: true}),
+    },
+    systemTableCache: {
+      get: () => null,
+      getAll: () => [],
+      filter: () => [],
+    },
+    controlPlaneReadinessService: {
+      getControlPlaneParticipationSync(nodeId, options = {}) {
+        return {
+          nodeId,
+          participationKind: options.participationKind || null,
+          eligible: false,
+          decision: 'defer',
+          reasonCode:
+            CONTROL_PLANE_READINESS_REASON.LOCAL_QUERY_TRANSPORT_NOT_READY,
+          reasonCodes: [
+            CONTROL_PLANE_READINESS_REASON.LOCAL_QUERY_TRANSPORT_NOT_READY,
+          ],
+          deferRetry: true,
+          localExecutionAllowed: true,
+          retryAfterMs: 321,
+          errorCode: 'ROUTER_QUERY_TRANSPORT_NOT_READY',
+          error: 'query ingress owner not ready',
+        };
+      },
+    },
+  });
+  const operations = await repo.queryIncompleteOperations();
+
+  t.same(operations, [],
+    'local-safe execution should still fail closed to empty owner observations when no rows exist');
+  t.equal(readCalls, 1,
+    'owner read should proceed through the local-safe gateway path');
+});
+
+test('queryIncompleteOperations ignores non-transport participation blocks for ' +
+  'owner-local SQL reads', async (t) => {
+  let readCalls = 0;
+  const repo = createTestRepository({
+    controlPlaneSystemTableGateway: {
+      readRows: async () => {
+        readCalls += 1;
+        return {success: true, rows: []};
+      },
+      executeQuery: async () => ({success: true}),
+    },
+    controlPlaneReadinessService: {
+      getControlPlaneParticipationSync(nodeId, options = {}) {
+        return {
+          nodeId,
+          participationKind: options.participationKind || null,
+          eligible: false,
+          decision: 'blocked',
+          reasonCode: CONTROL_PLANE_READINESS_REASON.NODE_ROW_MISSING,
+          reasonCodes: [
+            CONTROL_PLANE_READINESS_REASON.NODE_ROW_MISSING,
+          ],
+          deferRetry: false,
+          retryAfterMs: null,
+          errorCode: 'CONTROL_PLANE_PARTICIPATION_BLOCKED',
+          error: 'missing node row',
+        };
+      },
+    },
+  });
+
+  const operations = await repo.queryIncompleteOperations();
+
+  t.same(operations, [],
+    'owner read should still fail closed to empty results when SQL sees no rows');
+  t.equal(readCalls, 1,
+    'non-transport readiness blocks should not suppress owner-local SQL reads');
+});
 
 // ── isOperationTerminal ─────────────────────────────────────────
 

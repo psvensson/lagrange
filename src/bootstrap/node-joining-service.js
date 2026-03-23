@@ -29,6 +29,12 @@ import {CDCIntegrationSetup} from './shared/cdc-integration-setup.js';
 import {ControlPlaneSetup} from './shared/control-plane-setup.js';
 import {LatencyTopologySetup} from './shared/latency-topology-setup.js';
 import {
+  waitForLocalQueryTransportReadiness,
+} from './shared/local-query-transport-readiness.js';
+import {
+  waitForMetadataPublicationReadiness,
+} from './traffic-readiness-utils.js';
+import {
   buildMessageGroupOwnerNotReadyError,
   resolveOperationalMessageGroupSelection,
   resolveOperationalMessageGroupSelectionAsync,
@@ -1386,6 +1392,64 @@ class NodeJoiningService extends EventEmitter {
   }
 
   /**
+   * Wait for local query/data-plane transport readiness before
+   * advertising READY through the control plane.
+   * @return {Promise<void>}
+   * @private
+   */
+  async awaitLocalQueryTransportReadinessForReadySignal() {
+    await waitForLocalQueryTransportReadiness({
+      messageRouter: this.messageRouter,
+      sleep: (delayMs) => this.sleep(delayMs),
+      maxAttempts: this.config.readySignalMaxAttempts,
+      initialDelayMs: this.config.readySignalRetryDelayMs,
+      maxDelayMs: this.config.readySignalRetryMaxDelayMs,
+      backoffMultiplier: this.config.readySignalRetryBackoffMultiplier,
+      onRetry: ({attempt, maxAttempts, delayMs, readiness}) => {
+        this.logger.warn(JOINING_LOG_MSG.READY_SIGNAL_RETRYING, {
+          nodeId: this.nodeId,
+          attempt,
+          maxAttempts,
+          nextDelayMs: delayMs,
+          error:
+            readiness?.reason ||
+            'Local query/data-plane transport is not ready',
+          gate: 'local_query_transport',
+          localQueryTransport: readiness,
+        });
+      },
+    });
+  }
+
+  /**
+   * Wait for canonical lifecycle metadata-publication readiness before
+   * advertising READY through the control plane.
+   * @return {Promise<void>}
+   * @private
+   */
+  async awaitMetadataPublicationReadinessForReadySignal() {
+    await waitForMetadataPublicationReadiness({
+      readinessState: this.bootstrapReadinessState,
+      sleep: (delayMs) => this.sleep(delayMs),
+      maxAttempts: this.config.readySignalMaxAttempts,
+      initialDelayMs: this.config.readySignalRetryDelayMs,
+      maxDelayMs: this.config.readySignalRetryMaxDelayMs,
+      backoffMultiplier: this.config.readySignalRetryBackoffMultiplier,
+      onRetry: ({attempt, maxAttempts, delayMs, snapshot}) => {
+        this.logger.warn(JOINING_LOG_MSG.READY_SIGNAL_RETRYING, {
+          nodeId: this.nodeId,
+          attempt,
+          maxAttempts,
+          nextDelayMs: delayMs,
+          error: 'Lifecycle metadata publication readiness is not satisfied',
+          gate: 'metadata_publication_readiness',
+          lifecycleReadiness: snapshot || null,
+        });
+      },
+    });
+  }
+
+  /**
    * Signal readiness to accept replica assignments.
    * @return {Promise<void>}
    * @private
@@ -1395,6 +1459,30 @@ class NodeJoiningService extends EventEmitter {
     // readiness. If not confirmed within timeout, proceed with
     // degraded status rather than blocking indefinitely (Req 5.3).
     await this.awaitCdcSubscriptionsForReadiness();
+    try {
+      await this.awaitLocalQueryTransportReadinessForReadySignal();
+    } catch (error) {
+      this.logger.error(JOINING_LOG_MSG.READY_SIGNAL_FAILED, {
+        nodeId: this.nodeId,
+        error: error?.message || 'Local query/data-plane transport is not ready',
+        gate: 'local_query_transport',
+        localQueryTransport: error?.localQueryTransport || null,
+      });
+      throw error;
+    }
+    try {
+      await this.awaitMetadataPublicationReadinessForReadySignal();
+    } catch (error) {
+      this.logger.error(JOINING_LOG_MSG.READY_SIGNAL_FAILED, {
+        nodeId: this.nodeId,
+        error:
+          error?.message ||
+          'Lifecycle metadata publication readiness is not satisfied',
+        gate: 'metadata_publication_readiness',
+        lifecycleReadiness: error?.lifecycleReadiness || null,
+      });
+      throw error;
+    }
 
     const heartbeat = assertCritical(
       this.heartbeatService,

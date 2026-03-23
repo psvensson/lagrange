@@ -31,10 +31,19 @@ import {
   ServiceLifecycleManager,
   ServiceReconciler,
 } from '../../service/index.js';
+import {
+  ControlPlaneMessageType,
+  getControlPlaneMessageRequiredTables,
+} from '../../control-plane/control-plane-constants.js';
 
 const MESSAGE_ROUTER_SETUP_OWNER = 'MessageRouterSetup';
 const RECONCILER_INIT_REQUIRED =
   'Bootstrap reconciler must be initialized before reconciliation';
+const QUERY_TRANSPORT_REQUIRED_TABLES = Object.freeze(
+  getControlPlaneMessageRequiredTables(
+    ControlPlaneMessageType.NODE_STATE_UPDATE,
+  ),
+);
 
 function resolveInitializedQueryMessageGroupService(getService) {
   if (typeof getService !== TYPEOF.FUNCTION) {
@@ -137,7 +146,9 @@ class SeedInfrastructurePhase {
         TYPEOF.FUNCTION) {
       messageRouter.setQueryMessageGroupServiceResolver(() =>
         resolveInitializedQueryMessageGroupService(
-          () => d.getLeaderMessageGroupService(),
+          () => d.getLeaderMessageGroupService({
+            requiredTables: QUERY_TRANSPORT_REQUIRED_TABLES,
+          }),
         ),
       );
     }

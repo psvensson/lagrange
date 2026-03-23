@@ -207,6 +207,7 @@ class MoveReplicaHandoffOwner {
       createdAt: now,
       updatedAt: now,
       completedAt: null,
+      leaseExpiresAt: null,
       errorMessage: null,
       stepsHistory: [],
     };
@@ -231,7 +232,8 @@ class MoveReplicaHandoffOwner {
       workflowStep: WORKFLOW_STEP.PENDING,
       createdAt: now,
       updatedAt: now,
-      completedAt: Number.isFinite(assignmentContext.leaseExpiresAt) ?
+      completedAt: null,
+      leaseExpiresAt: Number.isFinite(assignmentContext.leaseExpiresAt) ?
         Math.floor(assignmentContext.leaseExpiresAt) :
         null,
       errorMessage: null,
@@ -295,7 +297,7 @@ class MoveReplicaHandoffOwner {
         ...assignmentContext,
         status: BOOTSTRAP_API_HANDOFF_STATUS.PREPARING,
         updatedAt: handoffContext.updatedAt,
-        leaseExpiresAt: handoffContext.completedAt,
+        leaseExpiresAt: handoffContext.leaseExpiresAt,
         stepsHistory: handoffContext.stepsHistory,
       });
     } else {
@@ -369,6 +371,7 @@ class MoveReplicaHandoffOwner {
       BOOTSTRAP_API_HANDOFF_STATUS.COMMITTED,
     );
     handoffContext.completedAt = handoffContext.updatedAt;
+    handoffContext.leaseExpiresAt = handoffContext.updatedAt;
     handoffContext.errorMessage = null;
     try {
       await this.updateMoveReplicaHandoffOperation(handoffContext);
@@ -391,7 +394,7 @@ class MoveReplicaHandoffOwner {
       targetNodeId: handoffContext.targetNodeId,
       groupId: handoffContext.partitionId,
       status: BOOTSTRAP_API_HANDOFF_STATUS.COMMITTED,
-      leaseExpiresAt: handoffContext.completedAt,
+      leaseExpiresAt: handoffContext.leaseExpiresAt,
       updatedAt: handoffContext.updatedAt,
       stepsHistory: handoffContext.stepsHistory,
     });
@@ -413,6 +416,7 @@ class MoveReplicaHandoffOwner {
         BOOTSTRAP_API_HANDOFF_STATUS.FAILED,
       );
       handoffContext.completedAt = handoffContext.updatedAt;
+      handoffContext.leaseExpiresAt = handoffContext.updatedAt;
       handoffContext.errorMessage =
         error?.message || 'unknown MOVE_REPLICA handoff failure';
       await this.updateMoveReplicaHandoffOperation(handoffContext);
@@ -424,7 +428,7 @@ class MoveReplicaHandoffOwner {
         targetNodeId: handoffContext.targetNodeId,
         groupId: handoffContext.partitionId,
         status: BOOTSTRAP_API_HANDOFF_STATUS.FAILED,
-        leaseExpiresAt: handoffContext.completedAt,
+        leaseExpiresAt: handoffContext.leaseExpiresAt,
         updatedAt: handoffContext.updatedAt,
         stepsHistory: handoffContext.stepsHistory,
       });

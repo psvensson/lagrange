@@ -301,6 +301,8 @@ class PartitionService extends EventEmitter {
     this.cdcBufferReplayInFlight = false;
     this.cdcBufferReplayDelayMs =
       PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
+    this.cdcReplayBufferGrowthCount = NUM.ZERO;
+    this.cdcReplayRetryDepth = NUM.ZERO;
     // CDC pipeline metrics (shared across the node)
     this.cdcPipelineMetrics = options.cdcPipelineMetrics ||
       new CDCPipelineMetrics();
@@ -6552,6 +6554,14 @@ class PartitionService extends EventEmitter {
       role: this.role,
       isLeader: this.isLeader,
       initialized: this.initialized,
+      cdcReplay: {
+        bufferedEvents: this.cdcEventBuffer.size(),
+        replayBufferGrowthCount: this.cdcReplayBufferGrowthCount,
+        replayRetryDepth: this.cdcReplayRetryDepth,
+        replayDelayMs: this.cdcBufferReplayDelayMs,
+        replayInFlight: this.cdcBufferReplayInFlight,
+        subscriberCount: this.cdcSubscribers.size,
+      },
       pendingRequestCount: pendingRequestTrackerStats?.pendingCount || NUM.ZERO,
       pendingRequestTracker: pendingRequestTrackerStats,
     };
@@ -6637,6 +6647,8 @@ class PartitionService extends EventEmitter {
     this.cdcEventSequenceNumber = NUM.ZERO;
     this.cdcBufferReplayDelayMs =
       PARTITION_SERVICE_DEFAULT.CDC_BUFFER_REPLAY_INITIAL_DELAY_MS;
+    this.cdcReplayBufferGrowthCount = NUM.ZERO;
+    this.cdcReplayRetryDepth = NUM.ZERO;
     this.recentlyAppliedEntryKeys.clear();
     this.recentlyAppliedEntryOrder = [];
 

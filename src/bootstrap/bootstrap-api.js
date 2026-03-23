@@ -320,6 +320,11 @@ class BootstrapAPI {
             this.bootstrapAdmissionRetryAfterMs,
           executeBootstrapControlPlaneQuery: (sql, params) =>
             this.executeBootstrapControlPlaneQuery(sql, params),
+          executeBootstrapControlPlaneMutation: (mutation, mutationOptions) =>
+            this.executeBootstrapControlPlaneMutation(
+              mutation,
+              mutationOptions,
+            ),
           buildBootstrapControlPlaneQueryError: (result, message) =>
             this.buildBootstrapControlPlaneQueryError(result, message),
           buildRegisterServiceValidationError:
@@ -1462,6 +1467,39 @@ class BootstrapAPI {
       .isCanonicalGroupHomeNode(groupId, nodeId);
   }
 
+  buildReplicaOperationMutationRow(operationContext) {
+    return {
+      operation_id: operationContext.operationId,
+      type: operationContext.type,
+      partition_id: operationContext.partitionId,
+      replica_id: operationContext.replicaId,
+      source_node_id: operationContext.sourceNodeId,
+      target_node_id: operationContext.targetNodeId,
+      status: operationContext.status,
+      workflow_step: operationContext.workflowStep,
+      created_at: operationContext.createdAt,
+      updated_at: operationContext.updatedAt,
+      completed_at: operationContext.completedAt,
+      lease_expires_at: operationContext.leaseExpiresAt ?? null,
+      error_message: operationContext.errorMessage,
+      steps_history: JSON.stringify(operationContext.stepsHistory || []),
+      entity_type: operationContext.entityType,
+      entity_id: operationContext.entityId,
+    };
+  }
+
+  buildReplicaOperationMutationData(operationContext) {
+    return {
+      status: operationContext.status,
+      workflow_step: operationContext.workflowStep,
+      updated_at: operationContext.updatedAt,
+      completed_at: operationContext.completedAt,
+      lease_expires_at: operationContext.leaseExpiresAt ?? null,
+      error_message: operationContext.errorMessage,
+      steps_history: JSON.stringify(operationContext.stepsHistory || []),
+    };
+  }
+
   /**
    * Persist a new MOVE_REPLICA handoff operation row.
    *
@@ -1485,28 +1523,11 @@ class BootstrapAPI {
    * @private
    */
   async insertMoveReplicaHandoffOperation(handoffContext) {
-    const params = [
-      handoffContext.operationId,
-      handoffContext.type,
-      handoffContext.partitionId,
-      handoffContext.replicaId,
-      handoffContext.sourceNodeId,
-      handoffContext.targetNodeId,
-      handoffContext.status,
-      handoffContext.workflowStep,
-      handoffContext.createdAt,
-      handoffContext.updatedAt,
-      handoffContext.completedAt,
-      handoffContext.errorMessage,
-      JSON.stringify(handoffContext.stepsHistory),
-      handoffContext.entityType,
-      handoffContext.entityId,
-    ];
-
-      const result = await this.executeBootstrapControlPlaneQuery(
-        BOOTSTRAP_API_SQL.INSERT_REPLICA_OPERATION,
-        params,
-      );
+    const result = await this.executeBootstrapControlPlaneMutation({
+      operation: 'insert',
+      tableName: TABLES.REPLICA_OPERATIONS,
+      row: this.buildReplicaOperationMutationRow(handoffContext),
+    });
     if (!result.success) {
       throw this.buildBootstrapControlPlaneQueryError(
         result,
@@ -1522,20 +1543,14 @@ class BootstrapAPI {
    * @private
    */
   async updateMoveReplicaHandoffOperation(handoffContext) {
-    const params = [
-      handoffContext.status,
-      handoffContext.workflowStep,
-      handoffContext.updatedAt,
-      handoffContext.completedAt,
-      handoffContext.errorMessage,
-      JSON.stringify(handoffContext.stepsHistory),
-      handoffContext.operationId,
-    ];
-
-    const result = await this.executeBootstrapControlPlaneQuery(
-      BOOTSTRAP_API_SQL.UPDATE_REPLICA_OPERATION,
-      params,
-    );
+    const result = await this.executeBootstrapControlPlaneMutation({
+      operation: 'update',
+      tableName: TABLES.REPLICA_OPERATIONS,
+      whereClause: {
+        operation_id: handoffContext.operationId,
+      },
+      data: this.buildReplicaOperationMutationData(handoffContext),
+    });
     if (!result.success) {
       throw this.buildBootstrapControlPlaneQueryError(
         result,
