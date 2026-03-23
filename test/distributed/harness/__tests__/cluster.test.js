@@ -120,6 +120,7 @@ test('Unit: createCluster exposes every required method', async () => {
     'getNodes',
     'addNode',
     'randomNonSeed',
+    'waitForLoadReadinessStability',
     'waitForConvergence',
     'assertConsistency',
     'assertDataIntegrity',
@@ -2558,6 +2559,68 @@ test('Unit: _waitForAllActive exposes diagnostic summary on timeout',
         );
         return true;
       },
+    );
+  });
+
+test('Unit: waitForLoadReadinessStability requires a sustained ACTIVE window',
+  async () => {
+    const cluster = createCluster({
+      size: 3,
+      docker: {socketPath: '/var/run/docker.sock'},
+      image: 'distributed-db:test',
+    });
+
+    const readinessSamples = [
+      {
+        allActive: true,
+        nodeDiagnostics: [],
+        snapshotCoverage: {completeCoverage: true},
+      },
+      {
+        allActive: false,
+        nodeDiagnostics: [{nodeId: 'node-b', active: false, state: 'warming'}],
+        snapshotCoverage: {completeCoverage: false},
+      },
+      {
+        allActive: true,
+        nodeDiagnostics: [],
+        snapshotCoverage: {completeCoverage: true},
+      },
+      {
+        allActive: true,
+        nodeDiagnostics: [],
+        snapshotCoverage: {completeCoverage: true},
+      },
+      {
+        allActive: true,
+        nodeDiagnostics: [],
+        snapshotCoverage: {completeCoverage: true},
+      },
+    ];
+    let probeCallCount = 0;
+    cluster._probeClusterActiveState = async () => {
+      const sample = readinessSamples[Math.min(
+        probeCallCount,
+        readinessSamples.length - 1,
+      )];
+      probeCallCount += 1;
+      return sample;
+    };
+    cluster._sleep = async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1));
+    };
+    cluster._collectFailureLogs = async () => {
+      throw new Error('should not collect failure logs when stability succeeds');
+    };
+
+    await cluster.waitForLoadReadinessStability({
+      stableWindowMs: 2,
+      timeoutMs: 50,
+    });
+
+    assert.ok(
+      probeCallCount >= 4,
+      'stability window should restart when readiness briefly regresses',
     );
   });
 

@@ -123,24 +123,28 @@ SQL-->>Client: results
 
 # 5. Distributed Execution
 
-``` mermaid
+```mermaid
 flowchart TD
 
-Runtime[Runtime.run(ctx)]
+Runtime[runtime.run + ctx.call]
 
-Runtime --> Planner
-Planner --> Partitions
+Runtime --> Planner[SqlCore target planner]
+Planner --> Partitions[Partition fanout]
 
-Partitions --> Worker1
-Partitions --> Worker2
-Partitions --> Worker3
+Partitions --> Worker1[Worker 1 local stage]
+Partitions --> Worker2[Worker 2 local stage]
+Partitions --> WorkerN[Worker N local stage]
 
-Worker1 --> Emit
-Worker2 --> Emit
-Worker3 --> Emit
+Worker1 --> Emit1[ctx.emit key,value]
+Worker2 --> Emit2[ctx.emit key,value]
+WorkerN --> EmitN[ctx.emit key,value]
 
-Emit --> Reduce
-Reduce --> Result
+Emit1 --> Shuffle[Shuffle by key]
+Emit2 --> Shuffle
+EmitN --> Shuffle
+
+Shuffle --> Reduce[Reduce / aggregate]
+Reduce --> Result[Result stream]
 ```
 
 ------------------------------------------------------------------------

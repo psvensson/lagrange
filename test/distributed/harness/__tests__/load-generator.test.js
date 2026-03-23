@@ -1418,6 +1418,72 @@ test('dispatch-ready nodes reuse blocked-node slot budget under admission pressu
     }
   });
 
+test('adaptive dispatch guardrail reduces effective dispatch pressure during sustained admission stress',
+  async () => {
+    const nodes = [
+      {
+        id: 'guardrail-blocked-node',
+        breakerOwner: BREAKER_OWNER_NODE_CLIENT,
+        async query(_sql) {
+          const error = new Error('query_admission_deferred');
+          error.code = NODE_CLIENT_ERROR_CODE_OPERATION;
+          error.deferRetry = true;
+          error.retryAfterMs = 200;
+          throw error;
+        },
+      },
+      {
+        id: 'guardrail-healthy-node',
+        async query(_sql) {
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          return {rows: []};
+        },
+      },
+    ];
+
+    const configuredMaxInFlight = 16;
+    const gen = new LoadGenerator(nodes, {
+      opsPerSec: 700,
+      duration: 260,
+      maxInFlight: configuredMaxInFlight,
+      nodeMaxInFlight: 8,
+      admissionBackoffMs: 10,
+      adaptiveDispatchGuardrail: {
+        enabled: true,
+        pressureSignalThreshold: 2,
+        queueDepthThreshold: 4,
+        reductionStepRatio: 0.25,
+        minMaxInFlight: 4,
+        recoveryQuietTicks: 4,
+      },
+    });
+    const run = gen.start();
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 160));
+      run.cancel();
+      const metrics = await run.waitComplete();
+      assert.ok(
+        Number(metrics?.waitReasons?.nodeAdmissionBlocked || ZERO) > ZERO,
+        'expected sustained admission stress to be observed',
+      );
+      assert.ok(
+        metrics.dispatchGuardrail,
+        'expected dispatch guardrail diagnostics to be present',
+      );
+      assert.ok(
+        Number(metrics.dispatchGuardrail.engagedTransitions || ZERO) > ZERO,
+        'expected adaptive guardrail to engage under sustained admission stress',
+      );
+      assert.ok(
+        Number(metrics.dispatchGuardrail.minEffectiveMaxInFlight || configuredMaxInFlight) <
+          configuredMaxInFlight,
+        'expected guardrail to reduce effective dispatch pressure below configured maxInFlight',
+      );
+    } finally {
+      run.cancel();
+    }
+  });
+
 test('cancel stops the load run immediately', async () => {
   const nodes = [createMockNode('n1')];
   const gen = new LoadGenerator(nodes, {

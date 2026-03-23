@@ -1,14 +1,17 @@
 import LifeRaft from '@markwylde/liferaft';
 import {test} from '../../src/test-helpers/tap.js';
+import {BootstrapAPI} from '../../src/bootstrap/bootstrap-api.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {CDCIntegrationService} from '../../src/cdc/cdc-integration-service.js';
+import {ControlPlaneSystemTableGateway} from
+  '../../src/control-plane/control-plane-system-table-gateway.js';
 import {MessageGroupService} from '../../src/message-group/message-group-service.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
 import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {CDC_OPERATION} from '../../src/constants/cdc.js';
-import {NUM} from '../../src/constants/index.js';
+import {NUM, TABLES} from '../../src/constants/index.js';
 
 function initializeIntegrationEnvironment(nodeId) {
   ConfigurationManager.resetInstance();
@@ -70,6 +73,45 @@ function buildBufferedNodeEvent(nodeId, sequence) {
     timestamp: `${2000000000000 + sequence}`,
     sourcePartition: 'cdc-pressure-p1',
     sourceReplica: 'cdc-pressure-p1-r1',
+  };
+}
+
+function createEmptySystemTableCache() {
+  return {
+    get() {
+      return null;
+    },
+    getAll() {
+      return [];
+    },
+    filter() {
+      return [];
+    },
+    find() {
+      return null;
+    },
+    getReadyNodes() {
+      return [];
+    },
+  };
+}
+
+function createSaturatedControlPlaneRouter() {
+  return {
+    getStats() {
+      return {
+        outboundQueues: {
+          'node-pressure-target': {
+            pending: 44,
+            pendingCritical: 16,
+            pendingBackground: 28,
+            criticalReserve: 16,
+            backgroundPendingLimit: 48,
+            maxPending: 64,
+          },
+        },
+      };
+    },
   };
 }
 
@@ -293,6 +335,93 @@ test('CDC/bootstrap/control-plane pressure integration', async (t) => {
       t.equal(
         partition.getStats().cdcReplay.replayRetryDepth,
         1,
+      );
+    },
+  );
+
+  await t.test(
+    'join-critical bootstrap query and mutation stay available under ' +
+      'saturated control-plane pressure',
+    async (t) => {
+      initializeIntegrationEnvironment('integration-pressure-node');
+
+      const messageRouter = createSaturatedControlPlaneRouter();
+      let readQueryCalls = NUM.ZERO;
+      let mutationQueryCalls = NUM.ZERO;
+      const sqlQueryEngine = {
+        async executeQuery(sql) {
+          if (String(sql || '').toUpperCase().startsWith('SELECT')) {
+            readQueryCalls += NUM.ONE;
+            return {
+              success: true,
+              rows: [{service_id: 'svc-pressure'}],
+            };
+          }
+          mutationQueryCalls += NUM.ONE;
+          return {
+            success: true,
+            affectedRows: 1,
+            rows: [],
+          };
+        },
+      };
+
+      const cdcIntegrationService = new CDCIntegrationService({
+        nodeId: 'integration-pressure-node',
+        sqlQueryEngine,
+        messageRouter,
+      });
+      cdcIntegrationService.initialize();
+
+      const gateway = new ControlPlaneSystemTableGateway({
+        nodeId: 'integration-pressure-node',
+        cdcIntegrationService,
+        sqlQueryEngine,
+        messageRouter,
+      });
+
+      const api = new BootstrapAPI({
+        seedNodeId: 'integration-pressure-node',
+        seedNodeAddress: 'ws://127.0.0.1:7999',
+        systemTableCache: createEmptySystemTableCache(),
+        sqlQueryEngine,
+        cdcIntegrationService,
+        controlPlaneSystemTableGateway: gateway,
+        messageRouter,
+      });
+
+      const queryResult = await api.executeBootstrapControlPlaneQuery(
+        'SELECT * FROM services WHERE service_id = ?',
+        ['svc-pressure'],
+      );
+      t.equal(queryResult.success, true,
+        'join-critical bootstrap query should remain available under pressure');
+
+      const mutationResult = await api.executeBootstrapControlPlaneMutation(
+        {
+          operation: 'upsert',
+          tableName: TABLES.SERVICES,
+          row: {
+            service_id: 'svc-pressure',
+            service_type: 'message_group',
+            node_id: 'integration-pressure-node',
+          },
+        },
+        {
+          skipCacheWait: true,
+        },
+      );
+      t.equal(mutationResult.success, true,
+        'join-critical bootstrap mutation should remain available under pressure');
+      t.equal(
+        readQueryCalls,
+        1,
+        'bootstrap query should execute through the SQL owner path',
+      );
+      t.equal(
+        mutationQueryCalls,
+        1,
+        'bootstrap mutation should execute through the SQL owner path',
       );
     },
   );

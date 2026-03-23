@@ -520,15 +520,20 @@ test('MOVE_REPLICA handoff ownership integration', {timeout: 180000}, async (t) 
       const phases = stepsHistory
         .map((step) => step.phase)
         .filter(Boolean);
+      t.equal(
+        phases[0],
+        'reserved',
+        'handoff history should preserve the initial reservation phase',
+      );
       t.same(
-        phases,
+        phases.filter((phase) => Object.values(HANDOFF_PHASE).includes(phase)),
         [
           HANDOFF_PHASE.PREPARE_TARGET,
           HANDOFF_PHASE.VERIFY_TARGET,
           HANDOFF_PHASE.REMOVE_SOURCE,
           HANDOFF_PHASE.COMMIT_METADATA,
         ],
-        'handoff phase history should be explicit and ordered',
+        'handoff phase history should include the explicit handoff phases in order',
       );
     } finally {
       await gracefulJoiningShutdown(joiningService);

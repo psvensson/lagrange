@@ -295,6 +295,7 @@ test('REPLACE replica workflow', async (t) => {
         });
 
         await coordinator.executeOperation(operation);
+        coordinator.workflowOwner.incompleteOperationQueryEmptyBackoffMs = 0;
         await coordinator.checkTimeouts();
         await coordinator.checkTimeouts();
         const persistedOperation =
@@ -380,6 +381,7 @@ test('REPLACE replica workflow', async (t) => {
 
         await coordinator.executeOperation(operation);
         await coordinator.updateStep(operation, WORKFLOW_STEP.ACTIVE);
+        coordinator.workflowOwner.incompleteOperationQueryEmptyBackoffMs = 0;
         await coordinator.checkTimeouts();
         const persistedOperation =
           await coordinator.getOperation(operation.operationId);
@@ -598,6 +600,7 @@ test('REPLACE replica workflow', async (t) => {
       });
 
       try {
+        coordinator.workflowOwner.incompleteOperationQueryEmptyBackoffMs = 0;
         const result = await rebalancer.executeMove({
           type: MoveType.ADD,
           nodeId: 'node-2',

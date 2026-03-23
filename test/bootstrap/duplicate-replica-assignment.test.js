@@ -432,6 +432,9 @@ test(
     };
     const mockCdcIntegrationService = {
       sqlQueryEngine: mockSqlQueryEngine,
+      async insertSystemTableRow(tableName, rowData) {
+        return this.upsertSystemTableRow(tableName, rowData);
+      },
       async upsertSystemTableRow(tableName, rowData) {
         if (tableName === 'services') {
           const timer = setTimeout(() => {

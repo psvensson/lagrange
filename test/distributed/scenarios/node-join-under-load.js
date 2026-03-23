@@ -12,6 +12,8 @@ import {CONVERGENCE_DEFAULTS} from '../harness/constants.js';
 const LOAD_OPS_PER_SEC = 50;
 const LOAD_DURATION = '60s';
 const PRE_JOIN_SETTLE_MS = 5000;
+const LOAD_READINESS_STABLE_WINDOW_MS = 5000;
+const LOAD_READINESS_STABILIZATION_TIMEOUT_MS = 30000;
 const POST_JOIN_CONVERGENCE_TIMEOUT_MS = 60000;
 const CONSISTENCY_TIMEOUT_MS = 15000;
 const CONSISTENCY_POLL_INTERVAL_MS = 500;
@@ -19,9 +21,39 @@ const ZERO_FAILURES = 0;
 const MAX_FAILED_OPERATIONS = 0;
 const MAX_UNDISPATCHED_RATIO = 0.05;
 const MAX_QUEUE_DELAY_P95_MS = 250;
+const ADAPTIVE_DISPATCH_GUARDRAIL_ENABLED = true;
+const ADAPTIVE_DISPATCH_GUARDRAIL_PRESSURE_SIGNAL_THRESHOLD = 2;
+const ADAPTIVE_DISPATCH_GUARDRAIL_QUEUE_DEPTH_THRESHOLD = 4;
+const ADAPTIVE_DISPATCH_GUARDRAIL_REDUCTION_STEP_RATIO = 0.25;
+const ADAPTIVE_DISPATCH_GUARDRAIL_MIN_MAX_IN_FLIGHT = 4;
+const ADAPTIVE_DISPATCH_GUARDRAIL_RECOVERY_QUIET_TICKS = 4;
 const FAILURE_PHASE_CONVERGENCE = 'wait_for_convergence';
+const FAILURE_PHASE_LOAD_READINESS = 'wait_for_load_readiness';
 const FAILURE_PHASE_LOAD_VERIFICATION = 'verify_load';
 const FAILURE_PHASE_CONSISTENCY = 'verify_consistency';
+
+function normalizeNonNegativeMetricCount(value) {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) {
+    return null;
+  }
+  return Math.max(ZERO_FAILURES, Math.floor(numericValue));
+}
+
+function resolveCanonicalFailedOperationCount(metrics) {
+  const failedCount = normalizeNonNegativeMetricCount(metrics?.failed);
+  const errorCount = normalizeNonNegativeMetricCount(metrics?.errors);
+  if (failedCount !== null && errorCount !== null) {
+    return Math.max(failedCount, errorCount);
+  }
+  if (failedCount !== null) {
+    return failedCount;
+  }
+  if (errorCount !== null) {
+    return errorCount;
+  }
+  return ZERO_FAILURES;
+}
 
 /**
  * Build a structured scenario failure for node-join-under-load diagnostics.
@@ -141,6 +173,16 @@ async function run(cluster, options = {}) {
   const preJoinSettleMs = Number.isFinite(options.preJoinSettleMs) ?
     Number(options.preJoinSettleMs) :
     PRE_JOIN_SETTLE_MS;
+  const loadReadinessStableWindowMs = Number.isFinite(
+    options.loadReadinessStableWindowMs,
+  ) ?
+    Number(options.loadReadinessStableWindowMs) :
+    LOAD_READINESS_STABLE_WINDOW_MS;
+  const loadReadinessStabilizationTimeoutMs = Number.isFinite(
+    options.loadReadinessStabilizationTimeoutMs,
+  ) ?
+    Number(options.loadReadinessStabilizationTimeoutMs) :
+    LOAD_READINESS_STABILIZATION_TIMEOUT_MS;
   const postJoinConvergenceTimeoutMs = Number.isFinite(
     options.postJoinConvergenceTimeoutMs,
   ) ?
@@ -163,17 +205,76 @@ async function run(cluster, options = {}) {
   const maxQueueDelayP95Ms = Number.isFinite(options.maxQueueDelayP95Ms) ?
     Number(options.maxQueueDelayP95Ms) :
     MAX_QUEUE_DELAY_P95_MS;
+  const adaptiveDispatchGuardrailEnabled =
+    options.adaptiveDispatchGuardrailEnabled === undefined ?
+      ADAPTIVE_DISPATCH_GUARDRAIL_ENABLED :
+      options.adaptiveDispatchGuardrailEnabled === true;
+  const adaptiveDispatchGuardrailPressureSignalThreshold = Number.isFinite(
+    options.adaptiveDispatchGuardrailPressureSignalThreshold,
+  ) ?
+    Number(options.adaptiveDispatchGuardrailPressureSignalThreshold) :
+    ADAPTIVE_DISPATCH_GUARDRAIL_PRESSURE_SIGNAL_THRESHOLD;
+  const adaptiveDispatchGuardrailQueueDepthThreshold = Number.isFinite(
+    options.adaptiveDispatchGuardrailQueueDepthThreshold,
+  ) ?
+    Number(options.adaptiveDispatchGuardrailQueueDepthThreshold) :
+    ADAPTIVE_DISPATCH_GUARDRAIL_QUEUE_DEPTH_THRESHOLD;
+  const adaptiveDispatchGuardrailReductionStepRatio = Number.isFinite(
+    options.adaptiveDispatchGuardrailReductionStepRatio,
+  ) ?
+    Number(options.adaptiveDispatchGuardrailReductionStepRatio) :
+    ADAPTIVE_DISPATCH_GUARDRAIL_REDUCTION_STEP_RATIO;
+  const adaptiveDispatchGuardrailMinMaxInFlight = Number.isFinite(
+    options.adaptiveDispatchGuardrailMinMaxInFlight,
+  ) ?
+    Number(options.adaptiveDispatchGuardrailMinMaxInFlight) :
+    ADAPTIVE_DISPATCH_GUARDRAIL_MIN_MAX_IN_FLIGHT;
+  const adaptiveDispatchGuardrailRecoveryQuietTicks = Number.isFinite(
+    options.adaptiveDispatchGuardrailRecoveryQuietTicks,
+  ) ?
+    Number(options.adaptiveDispatchGuardrailRecoveryQuietTicks) :
+    ADAPTIVE_DISPATCH_GUARDRAIL_RECOVERY_QUIET_TICKS;
 
-  // 1. Start sustained write load against the running cluster.
+  // 1. Hold full load pressure until readiness is stable.
+  if (typeof cluster.waitForLoadReadinessStability === 'function' &&
+      loadReadinessStableWindowMs > ZERO_FAILURES) {
+    try {
+      await cluster.waitForLoadReadinessStability({
+        stableWindowMs: loadReadinessStableWindowMs,
+        timeoutMs: loadReadinessStabilizationTimeoutMs,
+      });
+    } catch (error) {
+      throw buildNodeJoinFailure(
+        error?.message || 'Cluster load readiness did not stabilize',
+        await buildFailureDetails(cluster, {
+          convergenceTiming: null,
+          newNodeId: null,
+          failurePhase: FAILURE_PHASE_LOAD_READINESS,
+          dominantAssertion: 'load_readiness_stability',
+        }),
+      );
+    }
+  }
+
+  // 2. Start sustained write load against the running cluster.
   const loadRun = cluster.startLoad({
     opsPerSec: loadOpsPerSec,
     duration: loadDuration,
+    adaptiveDispatchGuardrail: {
+      enabled: adaptiveDispatchGuardrailEnabled,
+      pressureSignalThreshold:
+        adaptiveDispatchGuardrailPressureSignalThreshold,
+      queueDepthThreshold: adaptiveDispatchGuardrailQueueDepthThreshold,
+      reductionStepRatio: adaptiveDispatchGuardrailReductionStepRatio,
+      minMaxInFlight: adaptiveDispatchGuardrailMinMaxInFlight,
+      recoveryQuietTicks: adaptiveDispatchGuardrailRecoveryQuietTicks,
+    },
   });
 
-  // 2. Let load stabilize before adding a node.
+  // 3. Let load stabilize before adding a node.
   await sleep(preJoinSettleMs);
 
-  // 3. Add a new node to the cluster while load is active.
+  // 4. Add a new node to the cluster while load is active.
   const newNode = await cluster.addNode();
   const nodeHandles = resolveClusterNodes(cluster);
   const expectedPostJoinNodes = Math.max(
@@ -181,7 +282,7 @@ async function run(cluster, options = {}) {
     nodeHandles.length,
   );
 
-  // 4. Wait for the cluster to converge with the new node.
+  // 5. Wait for the cluster to converge with the new node.
   const convergence = await cluster.waitForConvergence({
     settleTimeoutMs: postJoinConvergenceTimeoutMs,
     quietWindowMs: CONVERGENCE_DEFAULTS.quietWindowMs,
@@ -201,7 +302,7 @@ async function run(cluster, options = {}) {
     );
   }
 
-  // 5. Wait for load to complete and verify metrics.
+  // 6. Wait for load to complete and verify metrics.
   const metrics = await loadRun.waitComplete();
 
   if (metrics.total <= ZERO_FAILURES) {
@@ -228,9 +329,7 @@ async function run(cluster, options = {}) {
       }),
     );
   }
-  const failedOperationCount =
-    Number(metrics.failed || ZERO_FAILURES) +
-    Number(metrics.errors || ZERO_FAILURES);
+  const failedOperationCount = resolveCanonicalFailedOperationCount(metrics);
   if (failedOperationCount > maxFailedOperations) {
     throw buildNodeJoinFailure(
       'Expected no failed load operations during node join: observed ' +
@@ -293,7 +392,7 @@ async function run(cluster, options = {}) {
     targetVoterCount: expectedPostJoinNodes,
   });
 
-  // 6. Assert cluster consistency after join + load.
+  // 7. Assert cluster consistency after join + load.
   try {
     await cluster.waitForConsistencyConvergence({
       timeoutMs: consistencyTimeoutMs,

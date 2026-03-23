@@ -194,6 +194,7 @@ function createTimeoutTestCoordinator(options = {}) {
   });
 
   coordinator.initialize();
+  coordinator.workflowOwner.incompleteOperationQueryEmptyBackoffMs = 0;
   // Set very short timeouts for testing
   coordinator.config.pendingTimeoutMs = options.pendingTimeoutMs || 10;
   coordinator.config.creatingTimeoutMs = options.creatingTimeoutMs || 10;

@@ -89,6 +89,7 @@ async (t) => {
       return ReplicaStatus.ACTIVE;
     };
 
+    coordinator.workflowOwner.incompleteOperationQueryEmptyBackoffMs = 0;
     await coordinator.checkTimeouts();
     const persistedOperation =
       await coordinator.getOperation(operation.operationId);

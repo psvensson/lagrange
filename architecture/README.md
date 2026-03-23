@@ -7,6 +7,20 @@ the root [architecture.md](../architecture.md).
 subsystem documents here only when the material is architectural and link them
 from the root document.
 
+## Diagram Packs
+
+- [Lagrange Architecture Diagrams](lagrange_architecture_diagrams.md)
+- [Lagrange Advanced Architecture Diagrams](lagrange_advanced_architecture_diagrams.md)
+
+These two files are the primary visual architecture references and should stay
+aligned with the ownership and execution model in `../architecture.md`.
+
+## Current Supporting Documents
+
+- [Lagrange Kernel Platform API v0](lagrange-kernel-platform-api-v0.md)
+- [Lagrange Service Manifest](lagrange-service-manifest.md)
+- [Lagrange Service Registry](lagrange-service-registry.md)
+
 ## Future Architecture
 
 The `future/` subdirectory contains forward-looking architecture documents

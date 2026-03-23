@@ -18,6 +18,47 @@ const UNKNOWN_VALUE = 'unknown';
 const NO_PROGRESS_REASON_CODE = 'stalled_no_progress';
 const NODE_DIAGNOSTICS_TRACE_LIMIT = 5;
 const NODE_ID_ERROR_PATTERN = /\bnode=([a-z0-9._:-]+)\b/gi;
+const PLAYBACK_EVENTS_FILENAME = 'events.ndjson';
+const PLAYBACK_EVENT_TYPE_CLUSTER_STAGE = 'cluster.stage';
+const PLAYBACK_EVENT_TYPE_LOAD_STARTED = 'load.started';
+const PLAYBACK_EVENT_TYPE_LOAD_PROGRESS = 'load.progress';
+const PLAYBACK_EVENT_TYPE_LOAD_COMPLETED = 'load.completed';
+const ROOT_CAUSE_CLASS_UNKNOWN = 'unknown';
+const ROOT_CAUSE_CLASS_STARTUP = 'startup';
+const ROOT_CAUSE_CLASS_DISCOVERY = 'discovery';
+const ROOT_CAUSE_CLASS_TOPOLOGY = 'topology';
+const ROOT_CAUSE_CLASS_LOAD = 'load';
+const ROOT_CAUSE_CLASS_CDC = 'cdc';
+const ROOT_CAUSE_CLASS_CACHE = 'cache';
+const FIRST_FAULT_MARKER_QUEUE_PRESSURE = 'queuePressureOnset';
+const FIRST_FAULT_MARKER_ATTEMPT_ERRORS = 'attemptErrorOnset';
+const FIRST_FAULT_MARKER_HARD_FAILURE = 'hardFailureOnset';
+const LOAD_WAIT_REASON_NODE_SLOT_UNAVAILABLE = 'nodeSlotUnavailable';
+const LOAD_WAIT_REASON_NODE_ADMISSION_BLOCKED = 'nodeAdmissionBlocked';
+const LOAD_WAIT_REASON_RETRYABLE_CONTROL_PLANE_PRESSURE =
+  'retryableControlPlanePressure';
+const LOAD_WAIT_REASON_TIMEOUT_WAITS = 'timeoutWaits';
+const LOAD_WAIT_REASON_QUEUE_CAPACITY_REJECTED = 'queueCapacityRejected';
+const READINESS_REASON_MAX_NODES = 25;
+const READINESS_REASON_MAX_PER_NODE = 5;
+const AFFECTED_NODE_ID_LIMIT = 25;
+
+const LOAD_WAIT_REASON_KEYS = Object.freeze([
+  LOAD_WAIT_REASON_NODE_SLOT_UNAVAILABLE,
+  LOAD_WAIT_REASON_NODE_ADMISSION_BLOCKED,
+  LOAD_WAIT_REASON_RETRYABLE_CONTROL_PLANE_PRESSURE,
+  LOAD_WAIT_REASON_TIMEOUT_WAITS,
+  LOAD_WAIT_REASON_QUEUE_CAPACITY_REJECTED,
+]);
+
+const LOAD_REASON_ROOT_CAUSE_CLASS_BY_REASON = Object.freeze({
+  [LOAD_WAIT_REASON_NODE_SLOT_UNAVAILABLE]: ROOT_CAUSE_CLASS_LOAD,
+  [LOAD_WAIT_REASON_NODE_ADMISSION_BLOCKED]: ROOT_CAUSE_CLASS_LOAD,
+  [LOAD_WAIT_REASON_RETRYABLE_CONTROL_PLANE_PRESSURE]:
+    ROOT_CAUSE_CLASS_DISCOVERY,
+  [LOAD_WAIT_REASON_TIMEOUT_WAITS]: ROOT_CAUSE_CLASS_LOAD,
+  [LOAD_WAIT_REASON_QUEUE_CAPACITY_REJECTED]: ROOT_CAUSE_CLASS_LOAD,
+});
 
 function toWorkspaceRelative(targetPath, workspaceRoot = process.cwd()) {
   if (typeof targetPath !== 'string' || targetPath.length === ZERO) {
@@ -73,9 +114,42 @@ function resolveFailureDiagnostics(entry) {
   return diagnostics && typeof diagnostics === 'object' ? diagnostics : {};
 }
 
-function resolveFailureReasonCounts(entry) {
+function isRecord(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function normalizeNonNegativeCount(value) {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) {
+    return null;
+  }
+  return Math.max(ZERO, Math.floor(numericValue));
+}
+
+function resolveCanonicalFailedOperationCount(metrics) {
+  const failedCount = normalizeNonNegativeCount(metrics?.failed);
+  const errorCount = normalizeNonNegativeCount(metrics?.errors);
+  if (failedCount !== null && errorCount !== null) {
+    return Math.max(failedCount, errorCount);
+  }
+  if (failedCount !== null) {
+    return failedCount;
+  }
+  if (errorCount !== null) {
+    return errorCount;
+  }
+  return ZERO;
+}
+
+function resolveFailureReasonCounts(entry, fallbackReasonCounts = null) {
   const reasonCounts = resolveFailureDiagnostics(entry)?.failure?.reasonCounts;
-  return reasonCounts && typeof reasonCounts === 'object' ? reasonCounts : {};
+  if (reasonCounts && typeof reasonCounts === 'object') {
+    return reasonCounts;
+  }
+  if (fallbackReasonCounts && typeof fallbackReasonCounts === 'object') {
+    return fallbackReasonCounts;
+  }
+  return {};
 }
 
 function buildTopReasonCounts(reasonCounts, limit = 5) {
@@ -89,7 +163,397 @@ function buildTopReasonCounts(reasonCounts, limit = 5) {
     .slice(ZERO, limit);
 }
 
-function resolveReadinessSnapshot(entry) {
+function buildDominantReason(reasonCounts) {
+  const topReasons = buildTopReasonCounts(reasonCounts, 1);
+  return topReasons.length > ZERO ? topReasons[ZERO].reason : null;
+}
+
+function mergeReasonCounts(...entries) {
+  const merged = {};
+  for (const entry of entries) {
+    if (!isRecord(entry)) {
+      continue;
+    }
+    for (const [reason, count] of Object.entries(entry)) {
+      const normalizedCount = normalizeNonNegativeCount(count);
+      if (normalizedCount === null || normalizedCount <= ZERO) {
+        continue;
+      }
+      if (!Object.hasOwn(merged, reason)) {
+        merged[reason] = ZERO;
+      }
+      merged[reason] += normalizedCount;
+    }
+  }
+  return merged;
+}
+
+function deriveReasonCountsFromLoadMetrics(loadMetrics) {
+  if (!isRecord(loadMetrics)) {
+    return {};
+  }
+  const waitReasons = isRecord(loadMetrics.waitReasons) ?
+    loadMetrics.waitReasons :
+    {};
+  const reasonCounts = {};
+  for (const key of LOAD_WAIT_REASON_KEYS) {
+    const count = normalizeNonNegativeCount(waitReasons[key]);
+    if (count !== null && count > ZERO) {
+      reasonCounts[key] = count;
+    }
+  }
+  const hardFailures = resolveCanonicalFailedOperationCount(loadMetrics);
+  if (hardFailures > ZERO) {
+    reasonCounts.hardLoadFailures = hardFailures;
+  }
+  return reasonCounts;
+}
+
+function deriveReasonCountsFromReadiness(nodeReasonsByNodeId) {
+  if (!isRecord(nodeReasonsByNodeId)) {
+    return {};
+  }
+  const reasonCounts = {};
+  for (const reasons of Object.values(nodeReasonsByNodeId)) {
+    for (const reason of Array.isArray(reasons) ? reasons : []) {
+      const normalizedReason = String(reason || '').trim();
+      if (normalizedReason.length === ZERO) {
+        continue;
+      }
+      if (!Object.hasOwn(reasonCounts, normalizedReason)) {
+        reasonCounts[normalizedReason] = ZERO;
+      }
+      reasonCounts[normalizedReason] += 1;
+    }
+  }
+  return reasonCounts;
+}
+
+function resolveRootCauseClassFromReason(reason) {
+  const normalizedReason = String(reason || '').trim();
+  if (normalizedReason.length === ZERO) {
+    return null;
+  }
+  if (Object.hasOwn(LOAD_REASON_ROOT_CAUSE_CLASS_BY_REASON, normalizedReason)) {
+    return LOAD_REASON_ROOT_CAUSE_CLASS_BY_REASON[normalizedReason];
+  }
+  if (normalizedReason === 'hardLoadFailures') {
+    return ROOT_CAUSE_CLASS_LOAD;
+  }
+
+  const lowered = normalizedReason.toLowerCase();
+  if (lowered.includes('cdc')) {
+    return ROOT_CAUSE_CLASS_CDC;
+  }
+  if (lowered.includes('cache')) {
+    return ROOT_CAUSE_CLASS_CACHE;
+  }
+  if (lowered.includes('query_transport') ||
+      lowered.includes('readiness') ||
+      lowered.includes('bootstrap') ||
+      lowered.includes('join_ready') ||
+      lowered.includes('metadata_publication')) {
+    return ROOT_CAUSE_CLASS_STARTUP;
+  }
+  if (lowered.includes('topology') ||
+      lowered.includes('leader') ||
+      lowered.includes('partition') ||
+      lowered.includes('replica')) {
+    return ROOT_CAUSE_CLASS_TOPOLOGY;
+  }
+  if (lowered.includes('routing') ||
+      lowered.includes('discovery') ||
+      lowered.includes('service') ||
+      lowered.includes('schema')) {
+    return ROOT_CAUSE_CLASS_DISCOVERY;
+  }
+  if (lowered.includes('load') ||
+      lowered.includes('queue') ||
+      lowered.includes('dispatch') ||
+      lowered.includes('timeout') ||
+      lowered.includes('admission') ||
+      lowered.includes('failed')) {
+    return ROOT_CAUSE_CLASS_LOAD;
+  }
+  return null;
+}
+
+function resolveRootCauseClass({
+  rootCauseClass,
+  dominantReason,
+  reasonCounts,
+  loadMetrics,
+  firstFaultTimeline,
+  readiness,
+  controlPlane,
+}) {
+  if (typeof rootCauseClass === 'string' && rootCauseClass.length > ZERO) {
+    return rootCauseClass;
+  }
+
+  const fromDominantReason = resolveRootCauseClassFromReason(dominantReason);
+  if (fromDominantReason) {
+    return fromDominantReason;
+  }
+  for (const reason of Object.keys(reasonCounts || {})) {
+    const fromReason = resolveRootCauseClassFromReason(reason);
+    if (fromReason) {
+      return fromReason;
+    }
+  }
+  if (resolveCanonicalFailedOperationCount(loadMetrics) > ZERO) {
+    return ROOT_CAUSE_CLASS_LOAD;
+  }
+  const orderedMarkers = Array.isArray(firstFaultTimeline?.orderedMarkers) ?
+    firstFaultTimeline.orderedMarkers :
+    [];
+  const earliestMarker = orderedMarkers.length > ZERO ?
+    orderedMarkers[ZERO].marker :
+    null;
+  if (earliestMarker === FIRST_FAULT_MARKER_QUEUE_PRESSURE ||
+      earliestMarker === FIRST_FAULT_MARKER_ATTEMPT_ERRORS ||
+      earliestMarker === FIRST_FAULT_MARKER_HARD_FAILURE) {
+    return ROOT_CAUSE_CLASS_LOAD;
+  }
+  if (isRecord(readiness?.nodeReasonsByNodeId) &&
+      Object.keys(readiness.nodeReasonsByNodeId).length > ZERO) {
+    return ROOT_CAUSE_CLASS_STARTUP;
+  }
+  if (Array.isArray(controlPlane?.timeoutClassifications) &&
+      controlPlane.timeoutClassifications.length > ZERO) {
+    return ROOT_CAUSE_CLASS_TOPOLOGY;
+  }
+  return ROOT_CAUSE_CLASS_UNKNOWN;
+}
+
+function normalizeAffectedNodeIds(entry, fallbackNodeIds = []) {
+  const explicitNodeIds = Array.isArray(
+    resolveFailureDiagnostics(entry)?.failure?.affectedNodeIds,
+  ) ?
+    resolveFailureDiagnostics(entry).failure.affectedNodeIds :
+    [];
+  const sourceNodeIds = explicitNodeIds.length > ZERO ?
+    explicitNodeIds :
+    fallbackNodeIds;
+  return sourceNodeIds
+    .map((value) => String(value || '').trim())
+    .filter((value) => value.length > ZERO)
+    .slice(ZERO, AFFECTED_NODE_ID_LIMIT);
+}
+
+function buildMarker(timestampMs, loadStartAtMs) {
+  if (!Number.isFinite(timestampMs)) {
+    return null;
+  }
+  return {
+    atMs: timestampMs,
+    at: toIsoTimestamp(timestampMs),
+    deltaFromLoadStartMs:
+      Number.isFinite(loadStartAtMs) ?
+        Math.max(ZERO, Math.floor(timestampMs - loadStartAtMs)) :
+        null,
+  };
+}
+
+function resolveLoadMetricsFromPlaybackEvent(event) {
+  const metrics = event?.details?.metrics;
+  return isRecord(metrics) ? metrics : null;
+}
+
+function resolveLoadQueuePressureSignalCount(loadMetrics) {
+  if (!isRecord(loadMetrics)) {
+    return ZERO;
+  }
+  const waitReasons = isRecord(loadMetrics.waitReasons) ?
+    loadMetrics.waitReasons :
+    {};
+  let signalCount = ZERO;
+  for (const key of [
+    LOAD_WAIT_REASON_NODE_SLOT_UNAVAILABLE,
+    LOAD_WAIT_REASON_NODE_ADMISSION_BLOCKED,
+    LOAD_WAIT_REASON_QUEUE_CAPACITY_REJECTED,
+  ]) {
+    signalCount += normalizeNonNegativeCount(waitReasons[key]) || ZERO;
+  }
+  return signalCount;
+}
+
+function buildFirstFaultTimelineFromPlaybackEvents(events) {
+  const sortedEvents = [...(Array.isArray(events) ? events : [])]
+    .filter((event) => isRecord(event))
+    .sort((left, right) =>
+      Number(left.timestamp || ZERO) - Number(right.timestamp || ZERO),
+    );
+  const loadStart = sortedEvents.find((event) =>
+    event.type === PLAYBACK_EVENT_TYPE_LOAD_STARTED,
+  );
+  const loadStartAtMs = normalizeNonNegativeCount(loadStart?.timestamp);
+  if (loadStartAtMs === null) {
+    return null;
+  }
+  let queuePressureOnsetAtMs = null;
+  let attemptErrorOnsetAtMs = null;
+  let hardFailureOnsetAtMs = null;
+
+  for (const event of sortedEvents) {
+    if (event.type !== PLAYBACK_EVENT_TYPE_LOAD_PROGRESS &&
+        event.type !== PLAYBACK_EVENT_TYPE_LOAD_COMPLETED) {
+      continue;
+    }
+    const timestampMs = normalizeNonNegativeCount(event?.timestamp);
+    if (timestampMs === null) {
+      continue;
+    }
+    const metrics = resolveLoadMetricsFromPlaybackEvent(event);
+    if (!metrics) {
+      continue;
+    }
+    if (queuePressureOnsetAtMs === null &&
+        resolveLoadQueuePressureSignalCount(metrics) > ZERO) {
+      queuePressureOnsetAtMs = timestampMs;
+    }
+    if (attemptErrorOnsetAtMs === null &&
+        (normalizeNonNegativeCount(metrics.attemptErrors) || ZERO) > ZERO) {
+      attemptErrorOnsetAtMs = timestampMs;
+    }
+    if (hardFailureOnsetAtMs === null &&
+        resolveCanonicalFailedOperationCount(metrics) > ZERO) {
+      hardFailureOnsetAtMs = timestampMs;
+    }
+  }
+
+  const markers = {
+    [FIRST_FAULT_MARKER_QUEUE_PRESSURE]:
+      buildMarker(queuePressureOnsetAtMs, loadStartAtMs),
+    [FIRST_FAULT_MARKER_ATTEMPT_ERRORS]:
+      buildMarker(attemptErrorOnsetAtMs, loadStartAtMs),
+    [FIRST_FAULT_MARKER_HARD_FAILURE]:
+      buildMarker(hardFailureOnsetAtMs, loadStartAtMs),
+  };
+  const orderedMarkers = Object.entries(markers)
+    .filter(([, marker]) => marker && Number.isFinite(marker.atMs))
+    .map(([marker, value]) => ({
+      marker,
+      ...value,
+    }))
+    .sort((left, right) => left.atMs - right.atMs);
+
+  if (orderedMarkers.length === ZERO) {
+    return null;
+  }
+  return {
+    loadStartAtMs,
+    loadStartAt: toIsoTimestamp(loadStartAtMs),
+    markers,
+    orderedMarkers,
+  };
+}
+
+function buildReadinessFromPlaybackEvents(events) {
+  const sortedEvents = [...(Array.isArray(events) ? events : [])]
+    .filter((event) => isRecord(event))
+    .sort((left, right) =>
+      Number(left.timestamp || ZERO) - Number(right.timestamp || ZERO),
+    );
+  const nodeReasonsByNodeId = {};
+  let lastReadinessTimelineEntry = null;
+
+  for (const event of sortedEvents) {
+    if (event.type !== PLAYBACK_EVENT_TYPE_CLUSTER_STAGE) {
+      continue;
+    }
+    const nodeDiagnostics = Array.isArray(event?.details?.nodeDiagnostics) ?
+      event.details.nodeDiagnostics :
+      [];
+    if (nodeDiagnostics.length === ZERO) {
+      continue;
+    }
+    const nodeReasonCountsByNodeId = {};
+    for (const nodeDiagnostic of nodeDiagnostics) {
+      const nodeId = String(nodeDiagnostic?.nodeId || '').trim();
+      if (nodeId.length === ZERO) {
+        continue;
+      }
+      const reasons = Array.isArray(nodeDiagnostic?.reasons) ?
+        nodeDiagnostic.reasons
+          .map((reason) => String(reason || '').trim())
+          .filter((reason) => reason.length > ZERO) :
+        [];
+      nodeReasonCountsByNodeId[nodeId] = reasons.length;
+      if (reasons.length === ZERO) {
+        continue;
+      }
+      if (!Object.hasOwn(nodeReasonsByNodeId, nodeId)) {
+        if (Object.keys(nodeReasonsByNodeId).length >= READINESS_REASON_MAX_NODES) {
+          continue;
+        }
+        nodeReasonsByNodeId[nodeId] = [];
+      }
+      for (const reason of reasons) {
+        if (nodeReasonsByNodeId[nodeId].includes(reason)) {
+          continue;
+        }
+        nodeReasonsByNodeId[nodeId].push(reason);
+        if (nodeReasonsByNodeId[nodeId].length >= READINESS_REASON_MAX_PER_NODE) {
+          break;
+        }
+      }
+    }
+    lastReadinessTimelineEntry = {
+      timestampMs: normalizeNonNegativeCount(event?.timestamp),
+      timestamp: toIsoTimestamp(normalizeNonNegativeCount(event?.timestamp)),
+      stage: String(event?.details?.stage || ''),
+      nodeReasonCountsByNodeId,
+    };
+  }
+
+  if (Object.keys(nodeReasonsByNodeId).length === ZERO &&
+      !lastReadinessTimelineEntry) {
+    return null;
+  }
+  return {
+    nodeReasonsByNodeId:
+      Object.keys(nodeReasonsByNodeId).length > ZERO ?
+        nodeReasonsByNodeId :
+        null,
+    lastReadinessTimelineEntry,
+  };
+}
+
+async function collectPlaybackEventInsights(scenarioDir, workspaceRoot) {
+  const playbackEventsAbsolutePath = join(scenarioDir, PLAYBACK_EVENTS_FILENAME);
+  try {
+    const content = await readFile(playbackEventsAbsolutePath, UTF8_ENCODING);
+    const events = String(content || '')
+      .split('\n')
+      .map((line) => String(line || '').trim())
+      .filter((line) => line.length > ZERO)
+      .map((line) => {
+        try {
+          const parsed = JSON.parse(line);
+          return isRecord(parsed) ? parsed : null;
+        } catch (_error) {
+          return null;
+        }
+      })
+      .filter((event) => event !== null);
+    if (events.length === ZERO) {
+      return null;
+    }
+    return {
+      playbackEventsPath: toWorkspaceRelative(
+        playbackEventsAbsolutePath,
+        workspaceRoot,
+      ),
+      firstFaultTimeline: buildFirstFaultTimelineFromPlaybackEvents(events),
+      readiness: buildReadinessFromPlaybackEvents(events),
+    };
+  } catch (_error) {
+    return null;
+  }
+}
+
+function resolveReadinessSnapshot(entry, playbackReadiness = null) {
   const diagnostics = resolveFailureDiagnostics(entry);
   const failedArtifacts = diagnostics?.failedPhase?.artifacts || {};
   const readinessTimeline = Array.isArray(failedArtifacts.readinessTimeline) ?
@@ -97,15 +561,28 @@ function resolveReadinessSnapshot(entry) {
     (Array.isArray(failedArtifacts?.gateResult?.readinessTimeline) ?
       failedArtifacts.gateResult.readinessTimeline :
       []);
+  const artifactNodeReasonsByNodeId = isRecord(failedArtifacts.nodeReasonsByNodeId) ?
+    failedArtifacts.nodeReasonsByNodeId :
+    null;
+  const failureNodeReasonsByNodeId = isRecord(diagnostics?.failure?.nodeReasonsByNodeId) ?
+    diagnostics.failure.nodeReasonsByNodeId :
+    null;
+  const playbackNodeReasonsByNodeId = isRecord(playbackReadiness?.nodeReasonsByNodeId) ?
+    playbackReadiness.nodeReasonsByNodeId :
+    null;
+  const nodeReasonsByNodeId =
+    failureNodeReasonsByNodeId ||
+    artifactNodeReasonsByNodeId ||
+    playbackNodeReasonsByNodeId ||
+    null;
   return {
-    nodeReasonsByNodeId:
-      diagnostics?.failure?.nodeReasonsByNodeId ||
-      failedArtifacts.nodeReasonsByNodeId ||
-      null,
+    nodeReasonsByNodeId,
     strictDiscoveryGate: failedArtifacts.strictDiscoveryGate || null,
     sutLoadDiscovery: failedArtifacts.sutLoadDiscovery || null,
     lastReadinessTimelineEntry:
-      readinessTimeline.length > ZERO ? readinessTimeline[readinessTimeline.length - 1] : null,
+      readinessTimeline.length > ZERO ?
+        readinessTimeline[readinessTimeline.length - 1] :
+        (playbackReadiness?.lastReadinessTimelineEntry || null),
   };
 }
 
@@ -539,6 +1016,9 @@ async function collectScenarioLogArtifacts(scenarioDir, relevantNodeIds, workspa
     scenarioDirPath: toWorkspaceRelative(scenarioDir, workspaceRoot),
     timelinePath: null,
     analysisPath: null,
+    playbackEventsPath: null,
+    firstFaultTimeline: null,
+    playbackReadiness: null,
     nodeLogPaths: {},
     excerptsByNodeId: {},
   };
@@ -590,6 +1070,16 @@ async function collectScenarioLogArtifacts(scenarioDir, relevantNodeIds, workspa
       // Best effort: missing per-node logs are allowed.
     }
   }));
+
+  const playbackInsights = await collectPlaybackEventInsights(
+    scenarioDir,
+    workspaceRoot,
+  );
+  if (playbackInsights) {
+    result.playbackEventsPath = playbackInsights.playbackEventsPath;
+    result.firstFaultTimeline = playbackInsights.firstFaultTimeline || null;
+    result.playbackReadiness = playbackInsights.readiness || null;
+  }
 
   return result;
 }
@@ -684,6 +1174,99 @@ function buildFocusedNodeDiagnostics(
   return nodeDiagnostics;
 }
 
+function resolveFirstFaultTimeline(entry, fallbackTimeline = null) {
+  const diagnostics = resolveFailureDiagnostics(entry);
+  if (isRecord(diagnostics?.firstFaultTimeline)) {
+    return diagnostics.firstFaultTimeline;
+  }
+  return isRecord(fallbackTimeline) ? fallbackTimeline : null;
+}
+
+function mapFirstFaultMarkerToReason(marker) {
+  if (marker === FIRST_FAULT_MARKER_QUEUE_PRESSURE) {
+    return LOAD_WAIT_REASON_NODE_SLOT_UNAVAILABLE;
+  }
+  if (marker === FIRST_FAULT_MARKER_ATTEMPT_ERRORS) {
+    return 'attemptErrors';
+  }
+  if (marker === FIRST_FAULT_MARKER_HARD_FAILURE) {
+    return 'hardLoadFailures';
+  }
+  return null;
+}
+
+function resolveDominantReasonFromFirstFaultTimeline(firstFaultTimeline) {
+  const orderedMarkers = Array.isArray(firstFaultTimeline?.orderedMarkers) ?
+    firstFaultTimeline.orderedMarkers :
+    [];
+  if (orderedMarkers.length === ZERO) {
+    return null;
+  }
+  return mapFirstFaultMarkerToReason(orderedMarkers[ZERO].marker);
+}
+
+function buildFailureArtifact({
+  entry,
+  readiness,
+  controlPlane,
+  firstFaultTimeline,
+}) {
+  const diagnostics = resolveFailureDiagnostics(entry);
+  const hasExistingFailure = isRecord(diagnostics.failure);
+  const existingFailure = hasExistingFailure ?
+    diagnostics.failure :
+    {};
+  const loadMetrics = resolveLoadMetrics(entry);
+  const loadReasonCounts = deriveReasonCountsFromLoadMetrics(loadMetrics);
+  const readinessReasonCounts = deriveReasonCountsFromReadiness(
+    readiness?.nodeReasonsByNodeId,
+  );
+  const reasonCounts = mergeReasonCounts(
+    isRecord(existingFailure.reasonCounts) ? existingFailure.reasonCounts : null,
+    loadReasonCounts,
+    readinessReasonCounts,
+  );
+  const timelineDominantReason = resolveDominantReasonFromFirstFaultTimeline(
+    firstFaultTimeline,
+  );
+  const dominantReason = typeof existingFailure.dominantReason === 'string' &&
+    existingFailure.dominantReason.length > ZERO ?
+    existingFailure.dominantReason :
+    (buildDominantReason(reasonCounts) || timelineDominantReason || null);
+  if (dominantReason && !Object.hasOwn(reasonCounts, dominantReason)) {
+    reasonCounts[dominantReason] = 1;
+  }
+  const rootCauseClass = resolveRootCauseClass({
+    rootCauseClass: existingFailure.rootCauseClass,
+    dominantReason,
+    reasonCounts,
+    loadMetrics,
+    firstFaultTimeline,
+    readiness,
+    controlPlane,
+  });
+  const affectedNodeIds = normalizeAffectedNodeIds(
+    entry,
+    resolveRelevantNodeIds(entry),
+  );
+
+  if (!hasExistingFailure &&
+      Object.keys(reasonCounts).length === ZERO &&
+      !dominantReason &&
+      affectedNodeIds.length === ZERO &&
+      rootCauseClass === ROOT_CAUSE_CLASS_UNKNOWN) {
+    return null;
+  }
+
+  return {
+    ...existingFailure,
+    rootCauseClass,
+    dominantReason,
+    reasonCounts,
+    affectedNodeIds,
+  };
+}
+
 function buildScenarioFailureBundle({
   entry,
   reportOutputPath,
@@ -693,9 +1276,26 @@ function buildScenarioFailureBundle({
   logs,
 }) {
   const diagnostics = resolveFailureDiagnostics(entry);
-  const failure = diagnostics.failure || null;
   const noProgress = diagnostics.noProgress || null;
   const controlPlane = resolveControlPlaneDiagnostics(entry);
+  const readiness = resolveReadinessSnapshot(
+    entry,
+    logs?.playbackReadiness || null,
+  );
+  const firstFaultTimeline = resolveFirstFaultTimeline(
+    entry,
+    logs?.firstFaultTimeline || null,
+  );
+  const failure = buildFailureArtifact({
+    entry,
+    readiness,
+    controlPlane,
+    firstFaultTimeline,
+  });
+  const failureReasonCounts = resolveFailureReasonCounts(
+    entry,
+    failure?.reasonCounts || null,
+  );
   const timelineCorrelationByNodeId = buildTimelineCorrelationByNodeId(
     entry,
     controlPlane,
@@ -729,13 +1329,14 @@ function buildScenarioFailureBundle({
       invariantBreaches: diagnostics.invariantBreaches || entry.invariantBreaches || null,
       controlPlaneDiagnostics: diagnostics.controlPlaneDiagnostics || null,
       rootCauseBundle: diagnostics.rootCauseBundle || null,
+      firstFaultTimeline,
     },
     controlSnapshot: resolveControlSnapshot(entry),
     controlPlane,
-    readiness: resolveReadinessSnapshot(entry),
+    readiness,
     topFailures: {
-      reasonCounts: resolveFailureReasonCounts(entry),
-      topReasons: buildTopReasonCounts(resolveFailureReasonCounts(entry)),
+      reasonCounts: failureReasonCounts,
+      topReasons: buildTopReasonCounts(failureReasonCounts),
       affectedNodeIds: Array.isArray(failure?.affectedNodeIds) ?
         failure.affectedNodeIds :
         [],
@@ -979,6 +1580,30 @@ function formatAdminQueryTraceEntry(entry) {
   ].join(', ');
 }
 
+function formatFirstFaultTimeline(firstFaultTimeline) {
+  if (!firstFaultTimeline || typeof firstFaultTimeline !== 'object') {
+    return '- none';
+  }
+  const lines = [
+    '- Load Start: ' + String(firstFaultTimeline.loadStartAt || UNKNOWN_VALUE),
+  ];
+  const orderedMarkers = Array.isArray(firstFaultTimeline.orderedMarkers) ?
+    firstFaultTimeline.orderedMarkers :
+    [];
+  if (orderedMarkers.length === ZERO) {
+    lines.push('- Markers: none');
+    return lines.join('\n');
+  }
+  lines.push('- Markers:');
+  for (const marker of orderedMarkers) {
+    lines.push(
+      `  - ${marker.marker}: ${String(marker.at || UNKNOWN_VALUE)} ` +
+      `(deltaMs=${String(marker.deltaFromLoadStartMs ?? UNKNOWN_VALUE)})`,
+    );
+  }
+  return lines.join('\n');
+}
+
 function renderScenarioFailureBundleMarkdown(bundle) {
   const topReasons = Array.isArray(bundle?.topFailures?.topReasons) ?
     bundle.topFailures.topReasons :
@@ -1039,6 +1664,19 @@ function renderScenarioFailureBundleMarkdown(bundle) {
       relevantLogs.map(([nodeId, path]) => `- ${nodeId}: ${path}`).join('\n') :
       '- none'),
   );
+  if (bundle?.logs?.playbackEventsPath) {
+    sections.push(
+      '## Playback Events\n' +
+      '- ' + String(bundle.logs.playbackEventsPath),
+    );
+  }
+
+  if (bundle?.diagnostics?.firstFaultTimeline) {
+    sections.push(
+      '## First-Fault Timeline\n' +
+      formatFirstFaultTimeline(bundle.diagnostics.firstFaultTimeline),
+    );
+  }
 
   const excerpts = bundle?.logs?.excerptsByNodeId &&
     typeof bundle.logs.excerptsByNodeId === 'object' ?
@@ -1324,6 +1962,45 @@ function renderRunFailureBundleMarkdown(bundle) {
   ].join(MARKDOWN_SECTION_BREAK) + '\n';
 }
 
+function ensureScenarioDiagnostics(entry) {
+  if (!isRecord(entry)) {
+    return null;
+  }
+  if (!isRecord(entry.details)) {
+    entry.details = {};
+  }
+  if (!isRecord(entry.details.diagnostics)) {
+    entry.details.diagnostics = {};
+  }
+  return entry.details.diagnostics;
+}
+
+function applyBundleDiagnosticsToScenarioEntry(entry, bundleJson) {
+  const diagnostics = ensureScenarioDiagnostics(entry);
+  if (!diagnostics || !isRecord(bundleJson)) {
+    return;
+  }
+
+  if (isRecord(bundleJson.diagnostics?.failure)) {
+    diagnostics.failure = bundleJson.diagnostics.failure;
+  }
+
+  if (isRecord(bundleJson.diagnostics?.firstFaultTimeline)) {
+    diagnostics.firstFaultTimeline = bundleJson.diagnostics.firstFaultTimeline;
+  }
+
+  if (isRecord(bundleJson.readiness?.nodeReasonsByNodeId)) {
+    if (!isRecord(diagnostics.failedPhase)) {
+      diagnostics.failedPhase = {};
+    }
+    if (!isRecord(diagnostics.failedPhase.artifacts)) {
+      diagnostics.failedPhase.artifacts = {};
+    }
+    diagnostics.failedPhase.artifacts.nodeReasonsByNodeId =
+      bundleJson.readiness.nodeReasonsByNodeId;
+  }
+}
+
 export async function writeFailureBundlesForReport({
   scenarios,
   reportOutputPath,
@@ -1358,6 +2035,7 @@ export async function writeFailureBundlesForReport({
       benchmarkRegressionGate,
       logs,
     });
+    applyBundleDiagnosticsToScenarioEntry(entry, bundleJson);
     const jsonAbsolutePath = join(scenarioDir, FAILURE_BUNDLE_JSON_FILENAME);
     const markdownAbsolutePath = join(scenarioDir, FAILURE_BUNDLE_MARKDOWN_FILENAME);
     await writeFile(

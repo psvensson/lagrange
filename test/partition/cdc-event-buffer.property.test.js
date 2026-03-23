@@ -74,6 +74,33 @@ function createMockLogger() {
   };
 }
 
+/**
+ * Model the current internal-table buffering semantics for the nodes table:
+ * keep only the latest buffered event per primary key and preserve the
+ * position of that latest occurrence.
+ * @param {Array<Object>} events
+ * @param {number} [capacity=Infinity]
+ * @return {Array<Object>}
+ */
+function modelBufferedNodeEvents(events, capacity = Infinity) {
+  const coalesced = [];
+  for (const event of events) {
+    const nodeId = event?.data?.node_id;
+    const existingIndex = coalesced.findIndex((candidate) => {
+      return candidate?.data?.node_id === nodeId;
+    });
+    if (existingIndex !== -1) {
+      coalesced.splice(existingIndex, 1);
+    }
+    coalesced.push(event);
+  }
+
+  if (coalesced.length <= capacity) {
+    return coalesced;
+  }
+  return coalesced.slice(coalesced.length - capacity);
+}
+
 test(
   'Feature: bootstrap-lifecycle-hardening, ' +
   'Property 5: Buffer captures events with no subscribers',
@@ -101,7 +128,8 @@ test(
                 buffer.buffer(event);
               }
 
-              const expectedSize = Math.min(events.length, capacity);
+              const expectedSize =
+                modelBufferedNodeEvents(events, capacity).length;
               return buffer.size() === expectedSize &&
                 buffer.hasEvents() === true;
             },
@@ -112,12 +140,12 @@ test(
     );
 
     t.test(
-      'all events captured when count is within capacity',
+      'latest event per node is retained when capacity exceeds coalesced size',
       async () => {
         await fc.assert(
-          fc.property(
+          fc.asyncProperty(
             uniqueEventsArb,
-            (events) => {
+            async (events) => {
               const capacity = events.length + 10;
               const logger = createMockLogger();
               const buffer = new CDCEventBuffer({capacity, logger});
@@ -127,7 +155,27 @@ test(
                 if (!buffered) return false;
               }
 
-              return buffer.size() === events.length;
+              const expectedBufferedEvents =
+                modelBufferedNodeEvents(events, capacity);
+              if (buffer.size() !== expectedBufferedEvents.length) {
+                return false;
+              }
+              const replayed = [];
+              await buffer.replay((event) => {
+                replayed.push(event);
+              });
+
+              if (replayed.length !== expectedBufferedEvents.length) {
+                return false;
+              }
+
+              for (let i = 0; i < expectedBufferedEvents.length; i++) {
+                if (buildEventIdentity(replayed[i]) !==
+                    buildEventIdentity(expectedBufferedEvents[i])) {
+                  return false;
+                }
+              }
+              return true;
             },
           ),
           {numRuns: 10},

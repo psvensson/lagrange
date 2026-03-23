@@ -465,28 +465,28 @@ until a safer design is available.
 
 ## A26 - Canonical Failed-Operation Accounting
 
-- [ ] 60. Add failing regressions for canonical failed-operation accounting in `node-join-under-load`
+- [x] 60. Add failing regressions for canonical failed-operation accounting in `node-join-under-load`
   - Reproduce load metrics where `failed` and `errors` carry overlapping
     operation failures and assert scenario failure messages do not double-count.
   - Reproduce metrics with only `failed` populated and only `errors` populated,
     and assert deterministic fallback behavior.
   - _Requirements: 5.1, 8.2, 25.1, 25.2. Design: D23.1, Verification Strategy._
 
-- [ ] 61. Implement canonical failure counting and preserve diagnostic detail
+- [x] 61. Implement canonical failure counting and preserve diagnostic detail
   - Replace assertion-path double-counting with one canonical operation-failure
     measure in `node-join-under-load` while preserving both raw counters in
     diagnostics output.
   - Keep existing failure-bundle/report schemas stable.
   - _Requirements: 8.1, 8.3, 25.1, 25.3. Design: D23.2, D23.3._
 
-- [ ] 62. Run focused verification for the failure-counting slice
+- [x] 62. Run focused verification for the failure-counting slice
   - Run touched scenario-unit tests and report/failure-bundle tests.
   - Record before/after assertion-message values on one controlled fixture run.
   - _Requirements: 5.1, 5.3, 25.4. Design: D23.3, Verification Strategy._
 
 ## A27 - Root-Cause And Readiness Attribution Completeness
 
-- [ ] 63. Add failing regressions for non-null root-cause and readiness attribution in failed bundles
+- [x] 63. Add failing regressions for non-null root-cause and readiness attribution in failed bundles
   - Reproduce a failed run with waiting-active readiness reasons in playback
     events and assert bundle `summary.rootCauseClass` and
     `summary.dominantReason` are populated.
@@ -494,14 +494,14 @@ until a safer design is available.
     instead of null when stage diagnostics contain them.
   - _Requirements: 9.4, 17.2, 26.1, 26.2. Design: D24.1, D24.2, Verification Strategy._
 
-- [ ] 64. Implement root-cause derivation and readiness reason extraction in failure-bundle generation
+- [x] 64. Implement root-cause derivation and readiness reason extraction in failure-bundle generation
   - Derive root-cause class and dominant reason from first-fault diagnostics,
     wait reasons, and bounded control-plane signals.
   - Extract canonical readiness reasons from cluster-stage diagnostics into the
     scenario bundle with bounded size limits.
   - _Requirements: 9.1, 9.4, 17.1, 26.1, 26.3. Design: D24.2, D24.3._
 
-- [ ] 65. Run focused verification and one failed-scenario rerun for attribution quality
+- [x] 65. Run focused verification and one failed-scenario rerun for attribution quality
   - Run touched failure-bundle/report tests plus one authoritative
     `node-join-under-load` rerun.
   - Record whether bundle-only triage is sufficient without opening raw logs.
@@ -509,40 +509,40 @@ until a safer design is available.
 
 ## A28 - First-Fault Timeline Correlation
 
-- [ ] 66. Add failing regressions for first-fault timeline telemetry
+- [x] 66. Add failing regressions for first-fault timeline telemetry
   - Reproduce a run where attempt errors, queue-pressure growth, and hard load
     failures happen at different times.
   - Assert report/bundle diagnostics expose first timestamps and ordered deltas
     from load start.
   - _Requirements: 8.3, 11.3, 27.1, 27.2. Design: D25.1, D25.2, Verification Strategy._
 
-- [ ] 67. Implement first-fault timeline capture in report and failure bundle output
+- [x] 67. Implement first-fault timeline capture in report and failure bundle output
   - Capture first-seen markers for attempt-error onset, queue-pressure breach,
     and hard-failure onset from playback events.
   - Emit bounded causal-order summaries in machine-readable diagnostics fields.
   - _Requirements: 8.2, 8.3, 27.1, 27.3. Design: D25.2, D25.3._
 
-- [ ] 68. Run focused verification for first-fault correlation accuracy
+- [x] 68. Run focused verification for first-fault correlation accuracy
   - Run touched diagnostics tests with deterministic event fixtures.
   - Validate timestamp ordering and delta math on at least one integration run.
   - _Requirements: 5.1, 5.3, 27.4. Design: D25.3, Verification Strategy._
 
 ## A29 - Control-Plane Protected Capacity Under Join Load
 
-- [ ] 69. Add a failing integration repro for control-plane starvation during join-under-load
+- [x] 69. Add a failing integration repro for control-plane starvation during join-under-load
   - Reproduce load pressure where critical control-plane reads/writes are
     starved and degrade into participant-failure/timeouts.
   - Assert bounded critical operations miss latency/availability SLO without
     protected capacity.
   - _Requirements: 18.1, 18.3, 28.1, 28.2. Design: D26.1, D26.2, Verification Strategy._
 
-- [ ] 70. Implement protected admission/work-class capacity for critical control-plane paths
+- [x] 70. Implement protected admission/work-class capacity for critical control-plane paths
   - Reserve bounded execution/admission capacity for critical control-plane
     metadata and readiness operations during load.
   - Preserve existing backpressure behavior for non-critical replay/churn paths.
   - _Requirements: 18.2, 20.4, 28.1, 28.3. Design: D26.2, D26.3._
 
-- [ ] 71. Run focused verification and one authoritative rerun for the protected-capacity slice
+- [x] 71. Run focused verification and one authoritative rerun for the protected-capacity slice
   - Run touched owner tests and the starvation repro.
   - Rerun `node-join-under-load` and record whether participant-failure storms
     and timeout-shaped errors materially fall.
@@ -550,20 +550,20 @@ until a safer design is available.
 
 ## A30 - Readiness Stabilization Before Full Load Pressure
 
-- [ ] 72. Add failing regressions for unstable readiness-to-load transition
+- [x] 72. Add failing regressions for unstable readiness-to-load transition
   - Reproduce delayed local query-transport readiness that clears just before
     cluster active.
   - Assert load readiness remains gated until a bounded stabilization window
     passes with no regressions.
   - _Requirements: 16.1, 17.1, 29.1, 29.2. Design: D27.1, D27.2, Verification Strategy._
 
-- [ ] 73. Implement readiness stabilization gating for join/load start conditions
+- [x] 73. Implement readiness stabilization gating for join/load start conditions
   - Gate full-load admission on stabilized readiness windows after transport
     readiness clears.
   - Preserve existing bootstrap and join progression semantics.
   - _Requirements: 16.2, 17.2, 29.1, 29.3. Design: D27.2, D27.3._
 
-- [ ] 74. Run focused verification and one scenario rerun for stabilization gating
+- [x] 74. Run focused verification and one scenario rerun for stabilization gating
   - Run touched readiness/startup/load-admission suites.
   - Rerun `node-join-under-load` and record whether early-run instability no
     longer precedes load collapse.
@@ -571,19 +571,19 @@ until a safer design is available.
 
 ## A31 - Adaptive Dispatch Guardrails During Join Pressure
 
-- [ ] 75. Add failing regressions for runaway dispatch backlog under join-time pressure
+- [x] 75. Add failing regressions for runaway dispatch backlog under join-time pressure
   - Reproduce admission-pressure escalation where queue delay and undispatched
     ratio run away while control-plane stress is active.
   - Assert no adaptive reduction in effective dispatch pressure occurs today.
   - _Requirements: 7.1, 18.3, 30.1, 30.2. Design: D28.1, D28.2, Verification Strategy._
 
-- [ ] 76. Implement bounded adaptive dispatch guardrails tied to control-plane pressure signals
+- [x] 76. Implement bounded adaptive dispatch guardrails tied to control-plane pressure signals
   - Reduce effective dispatch pressure when bounded control-plane pressure
     thresholds are exceeded; restore capacity when signals recover.
   - Keep failure visibility explicit and avoid masking hard correctness errors.
   - _Requirements: 7.2, 18.2, 30.1, 30.3. Design: D28.2, D28.3._
 
-- [ ] 77. Run focused verification and one authoritative rerun for adaptive guardrails
+- [x] 77. Run focused verification and one authoritative rerun for adaptive guardrails
   - Run touched load-generator and scenario tests.
   - Rerun `node-join-under-load` and record impacts on queue-delay p95,
     undispatched ratio, and timeout waits.
@@ -591,19 +591,19 @@ until a safer design is available.
 
 ## A32 - Reliability Gate And Multi-Run Validation
 
-- [ ] 78. Add repeat-run validation harness coverage for `node-join-under-load`
+- [x] 78. Add repeat-run validation harness coverage for `node-join-under-load`
   - Add a repeatable validation driver that runs the scenario across multiple
     seeds/runs and captures pass/fail plus key degradation metrics.
   - Assert output includes distribution summaries, not only single-run values.
   - _Requirements: 5.2, 5.5, 31.1, 31.2. Design: D29.1, D29.2, Verification Strategy._
 
-- [ ] 79. Execute the validation matrix after A26-A31 and record outcome distributions
+- [x] 79. Execute the validation matrix after A26-A31 and record outcome distributions
   - Run the agreed matrix and attach aggregate metrics for failed ops,
     attemptErrors, queue-delay p95, undispatched ratio, and timeout waits.
   - Record whether failures are stable/narrowed or still multi-modal.
   - _Requirements: 5.3, 5.4, 31.1, 31.3. Design: D29.2, D29.3._
 
-- [ ] 80. Define ship/no-ship gate and residual-risk closure note for this spec
+- [x] 80. Define ship/no-ship gate and residual-risk closure note for this spec
   - Codify pass criteria for scenario reliability and diagnostics completeness.
   - Document residual risks and next branch-selection rules if gate is not met.
   - _Requirements: 5.4, 5.5, 31.4. Design: D29.3, Verification Strategy._

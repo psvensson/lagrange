@@ -57,8 +57,9 @@ function createInProcHttpPost(seedApi) {
 
 /**
  * Create a mock system table cache that simulates incomplete leader metadata.
- * This cache wraps the real cache but removes leader information for specified
- * partitions and message groups.
+ * This cache wraps the real cache but masks canonical owner metadata for
+ * specified partitions and message groups. It also removes explicit leader
+ * service rows for the same entities so diagnostics reflect the degraded view.
  * @param {Object} realCache - The real system table cache.
  * @param {Object} options - Configuration for what to remove.
  * @param {Array<string>} options.removePartitionLeaders - Partition IDs to remove leaders for.
@@ -71,57 +72,74 @@ function createIncompleteLeaderCache(realCache, options = {}) {
     removeMessageGroupLeaders = [],
   } = options;
 
+  const maskOwnerRow = (tableName, row) => {
+    if (!row) {
+      return row;
+    }
+
+    if (tableName === TABLES.PARTITIONS &&
+        removePartitionLeaders.includes(row[COLUMN.PARTITION_ID])) {
+      return {
+        ...row,
+        [COLUMN.LEADER_NODE_ID]: null,
+        leader_node_id: null,
+      };
+    }
+
+    if (tableName === TABLES.MESSAGE_GROUPS &&
+        removeMessageGroupLeaders.includes(row[COLUMN.GROUP_ID])) {
+      return {
+        ...row,
+        [COLUMN.LEADER_NODE_ID]: null,
+        leader_node_id: null,
+      };
+    }
+
+    return row;
+  };
+
+  const filterServiceRows = (rows) => rows.filter((service) => {
+    if (service[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.PARTITION &&
+        service[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER &&
+        removePartitionLeaders.includes(service[COLUMN.PARTITION_ID])) {
+      return false;
+    }
+    if (service[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP &&
+        service[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER &&
+        removeMessageGroupLeaders.includes(service[COLUMN.GROUP_ID])) {
+      return false;
+    }
+    return true;
+  });
+
+  const getMaskedRows = (tableName) => {
+    const rows = realCache.getAll(tableName) || [];
+    if (tableName === TABLES.SERVICES) {
+      return filterServiceRows(rows);
+    }
+    if (tableName === TABLES.PARTITIONS || tableName === TABLES.MESSAGE_GROUPS) {
+      return rows.map((row) => maskOwnerRow(tableName, row));
+    }
+    return rows;
+  };
+
+  const getMaskedRecord = (tableName, key) => {
+    const record = realCache.get(tableName, key);
+    if (!record) {
+      return record;
+    }
+    if (tableName === TABLES.SERVICES) {
+      const filtered = filterServiceRows([record]);
+      return filtered[0] || null;
+    }
+    return maskOwnerRow(tableName, record);
+  };
+
   return {
-    get: (...args) => realCache.get(...args),
+    get: (tableName, key) => getMaskedRecord(tableName, key),
     find: (...args) => realCache.find?.(...args),
-    getAll: (tableName) => {
-      const rows = realCache.getAll(tableName) || [];
-
-      // For services table, filter out leaders for specified partitions/groups
-      if (tableName === TABLES.SERVICES) {
-        return rows.filter((service) => {
-          // Remove partition leaders for specified partitions
-          if (service[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.PARTITION &&
-              service[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER &&
-              removePartitionLeaders.includes(service[COLUMN.PARTITION_ID])) {
-            return false;
-          }
-          // Remove message group leaders for specified groups
-          if (service[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP &&
-              service[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER &&
-              removeMessageGroupLeaders.includes(service[COLUMN.GROUP_ID])) {
-            return false;
-          }
-          return true;
-        });
-      }
-
-      return rows;
-    },
-    filter: (tableName, predicate) => {
-      const rows = realCache.filter(tableName, predicate) || [];
-
-      // For services table, filter out leaders for specified partitions/groups
-      if (tableName === TABLES.SERVICES) {
-        return rows.filter((service) => {
-          // Remove partition leaders for specified partitions
-          if (service[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.PARTITION &&
-              service[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER &&
-              removePartitionLeaders.includes(service[COLUMN.PARTITION_ID])) {
-            return false;
-          }
-          // Remove message group leaders for specified groups
-          if (service[COLUMN.SERVICE_TYPE] === SERVICE_TYPE.MESSAGE_GROUP &&
-              service[COLUMN.RAFT_ROLE] === RAFT_ROLE.LEADER &&
-              removeMessageGroupLeaders.includes(service[COLUMN.GROUP_ID])) {
-            return false;
-          }
-          return true;
-        });
-      }
-
-      return rows;
-    },
+    getAll: (tableName) => getMaskedRows(tableName),
+    filter: (tableName, predicate) => getMaskedRows(tableName).filter(predicate),
     getReadyNodes: () => realCache.getReadyNodes?.() || [],
   };
 }
@@ -285,7 +303,7 @@ test('Leader metadata validation on join', {timeout: 30000}, async (t) => {
       }
     });
 
-  await t.test('join fails with LEADER_METADATA_INCOMPLETE when message group leaders missing',
+  await t.test('join succeeds when only message group leaders are missing',
     async (t) => {
       // =========================================================================
       // PHASE 1: Bootstrap seed node with system tables

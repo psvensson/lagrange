@@ -362,6 +362,46 @@ function buildLoadLaneTimeoutFailureScenario() {
   };
 }
 
+function buildPlaybackDerivedFailureResult() {
+  return {
+    passed: false,
+    duration: 1000,
+    error: 'Expected no failed load operations during node join: observed 4',
+    loadMetrics: {
+      total: 100,
+      success: 96,
+      failed: 4,
+      errors: 4,
+      attemptErrors: 8,
+      latency: {p50: 8, p95: 40, p99: 90},
+      opsPerSec: 25,
+      waitReasons: {
+        nodeSlotUnavailable: 2,
+        nodeAdmissionBlocked: 9,
+        retryableControlPlanePressure: 0,
+        timeoutWaits: 1,
+        queueCapacityRejected: 0,
+      },
+      perNode: {
+        'node-1': {
+          dispatched: 60,
+          success: 57,
+          attemptErrors: 3,
+          admissionSignals: 2,
+        },
+      },
+    },
+    details: {
+      diagnostics: {
+        failedPhase: {
+          phase: 'verify_load',
+          artifacts: {},
+        },
+      },
+    },
+  };
+}
+
 describe('failure-bundle', () => {
   let tempDir;
   let outputDir;
@@ -720,5 +760,196 @@ describe('failure-bundle', () => {
         },
         likelyWaitingTimeSource: 'dispatch_queue',
       });
+    });
+
+  it('derives root-cause, readiness reasons, and first-fault timeline from playback events',
+    async () => {
+      const scenarioDir = join(outputDir, 'node-join-under-load');
+      await mkdir(scenarioDir, {recursive: true});
+      await writeFile(
+        join(scenarioDir, 'events.ndjson'),
+        [
+          JSON.stringify({
+            timestamp: 1000,
+            type: 'cluster.stage',
+            scope: 'cluster',
+            entityId: 'cluster',
+            details: {
+              stage: 'setup.cluster.waiting-active',
+              nodeDiagnostics: [{
+                nodeId: 'node-1',
+                reasons: ['local_query_transport_not_ready'],
+              }],
+            },
+          }),
+          JSON.stringify({
+            timestamp: 2000,
+            type: 'load.started',
+            scope: 'load',
+            entityId: 'load-run',
+            details: {
+              options: {opsPerSec: 50, duration: '30s'},
+            },
+          }),
+          JSON.stringify({
+            timestamp: 2010,
+            type: 'load.progress',
+            scope: 'load',
+            entityId: 'load-run',
+            details: {
+              metrics: {
+                failed: 0,
+                errors: 0,
+                attemptErrors: 0,
+                waitReasons: {
+                  nodeSlotUnavailable: 0,
+                  nodeAdmissionBlocked: 0,
+                  queueCapacityRejected: 0,
+                },
+              },
+            },
+          }),
+          JSON.stringify({
+            timestamp: 2030,
+            type: 'load.progress',
+            scope: 'load',
+            entityId: 'load-run',
+            details: {
+              metrics: {
+                failed: 0,
+                errors: 0,
+                attemptErrors: 0,
+                waitReasons: {
+                  nodeSlotUnavailable: 0,
+                  nodeAdmissionBlocked: 2,
+                  queueCapacityRejected: 0,
+                },
+              },
+            },
+          }),
+          JSON.stringify({
+            timestamp: 2050,
+            type: 'load.progress',
+            scope: 'load',
+            entityId: 'load-run',
+            details: {
+              metrics: {
+                failed: 0,
+                errors: 0,
+                attemptErrors: 3,
+                waitReasons: {
+                  nodeSlotUnavailable: 0,
+                  nodeAdmissionBlocked: 3,
+                  queueCapacityRejected: 0,
+                },
+              },
+            },
+          }),
+          JSON.stringify({
+            timestamp: 2070,
+            type: 'load.progress',
+            scope: 'load',
+            entityId: 'load-run',
+            details: {
+              metrics: {
+                failed: 1,
+                errors: 1,
+                attemptErrors: 4,
+                waitReasons: {
+                  nodeSlotUnavailable: 0,
+                  nodeAdmissionBlocked: 4,
+                  queueCapacityRejected: 0,
+                },
+              },
+            },
+          }),
+          JSON.stringify({
+            timestamp: 2080,
+            type: 'cluster.stage',
+            scope: 'cluster',
+            entityId: 'cluster',
+            details: {
+              stage: 'setup.cluster.waiting-active',
+              nodeDiagnostics: [{
+                nodeId: 'node-2',
+                reasons: ['READINESS_STABLE_WINDOW_PENDING'],
+              }],
+            },
+          }),
+        ].join('\n') + '\n',
+      );
+
+      const writer = new ReportWriter(reportPath);
+      writer.addResult('node-join-under-load', buildPlaybackDerivedFailureResult());
+      const scenarioEntry = writer.scenarios[0];
+
+      const {scenarioBundles, runBundle} = await writeFailureBundlesForReport({
+        scenarios: writer.scenarios,
+        reportOutputPath: reportPath,
+        outputDir,
+        reportSummary: {total: 1, fail: 1, pass: 0},
+        standardSummary: {scenarios: []},
+        benchmarkRegressionGate: {status: 'skipped'},
+        workspaceRoot: tempDir,
+      });
+      await writer.write({failureBundle: runBundle});
+
+      assert.equal(scenarioBundles.length, 1);
+      const scenarioBundle = JSON.parse(
+        await readFile(resolve(tempDir, scenarioBundles[0].links.jsonPath), UTF8_ENCODING),
+      );
+      assert.equal(scenarioBundle.summary.rootCauseClass, 'load');
+      assert.equal(scenarioBundle.summary.dominantReason, 'nodeAdmissionBlocked');
+      assert.deepEqual(scenarioBundle.readiness.nodeReasonsByNodeId, {
+        'node-1': ['local_query_transport_not_ready'],
+        'node-2': ['READINESS_STABLE_WINDOW_PENDING'],
+      });
+      assert.equal(
+        scenarioBundle.diagnostics.firstFaultTimeline
+          .markers.queuePressureOnset.deltaFromLoadStartMs,
+        30,
+      );
+      assert.equal(
+        scenarioBundle.diagnostics.firstFaultTimeline
+          .markers.attemptErrorOnset.deltaFromLoadStartMs,
+        50,
+      );
+      assert.equal(
+        scenarioBundle.diagnostics.firstFaultTimeline
+          .markers.hardFailureOnset.deltaFromLoadStartMs,
+        70,
+      );
+      assert.deepEqual(
+        scenarioBundle.diagnostics.firstFaultTimeline.orderedMarkers
+          .map((entry) => entry.marker),
+        ['queuePressureOnset', 'attemptErrorOnset', 'hardFailureOnset'],
+      );
+
+      assert.equal(
+        scenarioEntry.details.diagnostics.failure.rootCauseClass,
+        'load',
+      );
+      assert.equal(
+        scenarioEntry.details.diagnostics.failure.dominantReason,
+        'nodeAdmissionBlocked',
+      );
+      assert.ok(
+        scenarioEntry.details.diagnostics.firstFaultTimeline,
+        'report scenario entry should include derived first-fault timeline',
+      );
+
+      const reportJson = JSON.parse(await readFile(reportPath, UTF8_ENCODING));
+      assert.equal(
+        reportJson.scenarios[0].details.diagnostics.failure.rootCauseClass,
+        'load',
+      );
+      assert.equal(
+        reportJson.scenarios[0].details.diagnostics.failure.dominantReason,
+        'nodeAdmissionBlocked',
+      );
+      assert.ok(
+        reportJson.scenarios[0].details.diagnostics.firstFaultTimeline,
+        'written report should persist derived first-fault timeline',
+      );
     });
 });

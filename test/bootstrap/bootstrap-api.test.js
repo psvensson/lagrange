@@ -261,8 +261,8 @@ test('BootstrapAPI - bootstrap control-plane queries use the canonical gateway w
       'bootstrap queries should preserve parameters');
     t.equal(capturedOptions.owner, 'bootstrap-api',
       'bootstrap gateway queries should identify the bootstrap owner');
-    t.equal(capturedOptions.workClass, 'interactive',
-      'bootstrap gateway queries should be admission-controlled instead of bypassing pressure');
+    t.equal(capturedOptions.workClass, 'critical',
+      'bootstrap gateway queries should reserve critical protected capacity');
     t.equal(capturedOptions.deliveryPriority, 'critical',
       'bootstrap gateway queries should still use critical transport delivery');
     t.equal(capturedOptions.enforcePressureAdmission, true,
@@ -321,8 +321,8 @@ test('BootstrapAPI - bootstrap control-plane mutations use the canonical gateway
     }, 'bootstrap mutations should execute through the gateway');
     t.equal(capturedOptions.owner, 'bootstrap-api',
       'bootstrap gateway mutations should identify the bootstrap owner');
-    t.equal(capturedOptions.workClass, 'interactive',
-      'bootstrap gateway mutations should remain admission-controlled');
+    t.equal(capturedOptions.workClass, 'critical',
+      'bootstrap gateway mutations should reserve critical protected capacity');
     t.equal(capturedOptions.deliveryPriority, 'critical',
       'bootstrap gateway mutations should still use critical delivery');
     t.equal(capturedOptions.allowPressureDefer, true,

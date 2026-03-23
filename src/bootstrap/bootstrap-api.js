@@ -533,7 +533,7 @@ class BootstrapAPI {
     }
     return controlPlaneSystemTableGateway.executeQuery(sql, params, {
       owner: BOOTSTRAP_API_SUBSYSTEM,
-      workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+      workClass: PRESSURE_WORK_CLASS.CRITICAL,
       deliveryPriority: 'critical',
       enforcePressureAdmission: true,
       allowPressureDefer: true,
@@ -561,7 +561,7 @@ class BootstrapAPI {
     }
     return controlPlaneSystemTableGateway.submitMutation(mutation, {
       owner: BOOTSTRAP_API_SUBSYSTEM,
-      workClass: PRESSURE_WORK_CLASS.INTERACTIVE,
+      workClass: PRESSURE_WORK_CLASS.CRITICAL,
       deliveryPriority: 'critical',
       allowPressureDefer: true,
       allowPressureDegrade: false,

@@ -42,6 +42,8 @@ import {
 
 const BOOTSTRAP_POLL_INTERVAL_MS = 500;
 const ACTIVE_POLL_INTERVAL_MS = 1000;
+const LOAD_READINESS_STABLE_WINDOW_MS = 5000;
+const LOAD_READINESS_STABILITY_TIMEOUT_MS = 30000;
 const ACTIVE_WAIT_MIN_CLUSTER_SIZE = 1;
 const ACTIVE_WAIT_TIMEOUT_SCALE_PERCENT_PER_EXTRA_NODE = 25;
 const ACTIVE_WAIT_TIMEOUT_SCALE_PERCENT_DENOMINATOR = 100;
@@ -132,6 +134,9 @@ const CLUSTER_STAGE_SETUP_JOINER_STARTED = 'setup.joiner.started';
 const CLUSTER_STAGE_SETUP_CLUSTER_WAITING_ACTIVE =
   'setup.cluster.waiting-active';
 const CLUSTER_STAGE_SETUP_CLUSTER_ACTIVE = 'setup.cluster.active';
+const CLUSTER_STAGE_LOAD_READINESS_WAITING =
+  'scenario.load-readiness.waiting';
+const CLUSTER_STAGE_LOAD_READINESS_STABLE = 'scenario.load-readiness.stable';
 const STARTUP_GATE_STATE_SEED_LIVE = 'seed_live';
 const STARTUP_GATE_STATE_SEED_JOIN_READY = 'seed_join_ready';
 const STARTUP_GATE_STATE_CLUSTER_ACTIVE = 'cluster_active';
@@ -3610,6 +3615,32 @@ class Cluster {
     return Math.min(scaledTimeout, maxScaledTimeout);
   }
 
+  _resolveLoadReadinessStableWindowMs(options = {}) {
+    if (Number.isFinite(options.stableWindowMs)) {
+      return Math.max(ZERO, Math.floor(options.stableWindowMs));
+    }
+    if (Number.isFinite(this._config?.timeouts?.loadReadinessStableWindowMs)) {
+      return Math.max(
+        ZERO,
+        Math.floor(this._config.timeouts.loadReadinessStableWindowMs),
+      );
+    }
+    return LOAD_READINESS_STABLE_WINDOW_MS;
+  }
+
+  _resolveLoadReadinessStabilityTimeoutMs(options = {}) {
+    if (Number.isFinite(options.timeoutMs)) {
+      return Math.max(MIN_TIMEOUT_MS, Math.floor(options.timeoutMs));
+    }
+    if (Number.isFinite(this._config?.timeouts?.loadReadinessStabilityTimeoutMs)) {
+      return Math.max(
+        MIN_TIMEOUT_MS,
+        Math.floor(this._config.timeouts.loadReadinessStabilityTimeoutMs),
+      );
+    }
+    return LOAD_READINESS_STABILITY_TIMEOUT_MS;
+  }
+
   async _waitForAllActive() {
     const timeout = this._resolveActiveWaitTimeoutMs();
     const deadline = Date.now() + timeout;
@@ -3668,6 +3699,119 @@ class Cluster {
       ', nodeDiagnostics=' + (nodeDiagnosticsSummary || 'none') +
       ', snapshotCoverage=' + snapshotCoverageSummary +
       ', inactiveSummary=' + (inactiveSummary || 'none') +
+      ')',
+    );
+  }
+
+  async waitForLoadReadinessStability(options = {}) {
+    const stableWindowMs = this._resolveLoadReadinessStableWindowMs(options);
+    if (stableWindowMs <= ZERO) {
+      return;
+    }
+    const timeoutMs = this._resolveLoadReadinessStabilityTimeoutMs(options);
+    const deadline = Date.now() + timeoutMs;
+    let stableWindowStartedAtMs = null;
+    const instabilitySummaryCounts = new Map();
+    this._recordClusterStage(
+      CLUSTER_STAGE_LOAD_READINESS_WAITING,
+      {
+        stableWindowMs,
+        timeoutMs,
+      },
+    );
+    const pollResult = await pollUntilCondition({
+      deadline,
+      intervalMs: ACTIVE_POLL_INTERVAL_MS,
+      sleep: (ms) => this._sleep(ms),
+      probe: async () => {
+        const activeProbe = await this._probeClusterActiveState(deadline);
+        const now = Date.now();
+        if (activeProbe.allActive === true) {
+          if (stableWindowStartedAtMs === null) {
+            stableWindowStartedAtMs = now;
+          }
+        } else {
+          stableWindowStartedAtMs = null;
+        }
+        const stableElapsedMs = stableWindowStartedAtMs === null ?
+          ZERO :
+          now - stableWindowStartedAtMs;
+        return {
+          ...activeProbe,
+          stableElapsedMs,
+          stable: activeProbe.allActive === true &&
+            stableElapsedMs >= stableWindowMs,
+        };
+      },
+      isSuccess: (result) => result.stable === true,
+      onAttempt: ({attempts, elapsedMs, lastResult}) => {
+        for (const diagnostic of lastResult.nodeDiagnostics || []) {
+          if (diagnostic.active === true) {
+            continue;
+          }
+          const summaryKey = diagnostic.error ?
+            'error:' + diagnostic.error :
+            'state:' + (diagnostic.state || UNKNOWN_STATE);
+          instabilitySummaryCounts.set(
+            summaryKey,
+            (instabilitySummaryCounts.get(summaryKey) || ZERO) + 1,
+          );
+        }
+        this._recordPeriodicStartupWaitingStage(
+          CLUSTER_STAGE_LOAD_READINESS_WAITING,
+          {
+            attempts,
+            elapsedMs,
+          },
+          {
+            stableWindowMs,
+            stableElapsedMs: lastResult?.stableElapsedMs ?? ZERO,
+            nodeDiagnostics: lastResult.nodeDiagnostics || [],
+            snapshotCoverage: lastResult.snapshotCoverage || null,
+          },
+        );
+      },
+    });
+
+    if (pollResult.success) {
+      this._recordClusterStage(
+        CLUSTER_STAGE_LOAD_READINESS_STABLE,
+        {
+          stableWindowMs,
+          timeoutMs,
+          attempts: pollResult.attempts,
+          elapsedMs: pollResult.elapsedMs,
+          snapshotCoverage: pollResult.lastResult?.snapshotCoverage || null,
+        },
+      );
+      return;
+    }
+
+    await this._collectFailureLogs();
+    const nodeDiagnosticsSummary = formatNodeDiagnostics(
+      pollResult.lastResult?.nodeDiagnostics || [],
+    );
+    const instabilitySummary = formatCountSummary(instabilitySummaryCounts);
+    const snapshotCoverageSummary = formatSnapshotCoverage(
+      pollResult.lastResult?.snapshotCoverage || null,
+    );
+    throw new Error(
+      'Cluster load readiness did not stabilize within ' +
+      timeoutMs +
+      'ms (attempts=' +
+      pollResult.attempts +
+      ', elapsedMs=' +
+      pollResult.elapsedMs +
+      ', stableWindowMs=' +
+      stableWindowMs +
+      ', stableElapsedMs=' +
+      (pollResult.lastResult?.stableElapsedMs ?? ZERO) +
+      ', nodeDiagnostics=' +
+      (nodeDiagnosticsSummary || 'none') +
+      ', snapshotCoverage=' +
+      snapshotCoverageSummary +
+      ', instabilitySummary=' +
+      (instabilitySummary || 'none') +
       ')',
     );
   }

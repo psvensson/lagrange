@@ -37,6 +37,12 @@ const NODE_CLIENT_ADMISSION_ERROR_ROUTING_NOT_READY = 'routing_not_ready';
 const UNDISPATCHED_REASON_CAPACITY = 'capacity';
 const UNDISPATCHED_REASON_DURATION_TIMEOUT = 'durationTimeout';
 const UNDISPATCHED_REASON_CANCELLED = 'cancelled';
+const ADAPTIVE_DISPATCH_GUARDRAIL_SCORE_MAX = 3;
+const ADAPTIVE_DISPATCH_GUARDRAIL_PRESSURE_SIGNAL_THRESHOLD_DEFAULT = 4;
+const ADAPTIVE_DISPATCH_GUARDRAIL_QUEUE_DEPTH_THRESHOLD_DEFAULT = 16;
+const ADAPTIVE_DISPATCH_GUARDRAIL_REDUCTION_STEP_RATIO_DEFAULT = 0.25;
+const ADAPTIVE_DISPATCH_GUARDRAIL_MIN_MAX_IN_FLIGHT_RATIO_DEFAULT = 0.25;
+const ADAPTIVE_DISPATCH_GUARDRAIL_RECOVERY_QUIET_TICKS_DEFAULT = 8;
 const DISPATCH_STOP_REASON_TARGET = 'target';
 const DISPATCH_STOP_REASON_DURATION = 'duration';
 const DISPATCH_STOP_REASON_CANCELLED = 'cancelled';
@@ -115,6 +121,23 @@ function createWaitReasonCounters() {
     [WAIT_REASON_TIMEOUT_WAITS]: ZERO,
     [WAIT_REASON_QUEUE_CAPACITY_REJECTED]: ZERO,
   };
+}
+
+function normalizePositiveInteger(value, fallback) {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) {
+    return fallback;
+  }
+  const boundedValue = Math.floor(numericValue);
+  return boundedValue > ZERO ? boundedValue : fallback;
+}
+
+function normalizeRatio(value, fallback) {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) {
+    return fallback;
+  }
+  return Math.max(ZERO, Math.min(ONE, numericValue));
 }
 
 /**
@@ -233,7 +256,7 @@ function computeMetrics(
   latencies, successCount, failedCount, operationErrorCount, durationMs,
   distinctErrors, attemptErrorCount = ZERO, queueDelays = [],
   dispatchAccounting = null, perNodeMetrics = null, rejectedAccounting = null,
-  queuePressure = null, waitReasons = null,
+  queuePressure = null, waitReasons = null, dispatchGuardrail = null,
 ) {
   const sorted = [...latencies].sort((a, b) => a - b);
   const total = successCount + failedCount;
@@ -340,6 +363,11 @@ function computeMetrics(
     ...createWaitReasonCounters(),
     ...(waitReasons && typeof waitReasons === 'object' ? waitReasons : {}),
   };
+  if (dispatchGuardrail && typeof dispatchGuardrail === 'object') {
+    metrics.dispatchGuardrail = {
+      ...dispatchGuardrail,
+    };
+  }
   return metrics;
 }
 
@@ -365,10 +393,12 @@ class LoadRun {
    *   for timeout-aware node handles.
   * @param {number} [options.nodeMaxInFlight] - Per-node in-flight
   *   cap to prevent one node from monopolizing global concurrency.
-   * @param {number} [options.maxPendingQueueDepth] - Optional max
-   *   dispatch queue depth before overload rejection.
-   * @param {boolean} [options.earlyRejectOnQueueFull] - Reject
-   *   scheduled operations when pending queue exceeds depth.
+  * @param {number} [options.maxPendingQueueDepth] - Optional max
+  *   dispatch queue depth before overload rejection.
+  * @param {boolean} [options.earlyRejectOnQueueFull] - Reject
+  *   scheduled operations when pending queue exceeds depth.
+   * @param {Object|boolean} [options.adaptiveDispatchGuardrail] -
+   *   Adaptive dispatch guardrail settings for control-plane pressure.
    */
   constructor(nodes, options) {
     this._nodes = [...nodes];
@@ -464,6 +494,10 @@ class LoadRun {
       options.nodeMaxInFlight > ZERO ?
         options.nodeMaxInFlight :
         derivedNodeMaxInFlight;
+    this._adaptiveDispatchGuardrail =
+      this._createAdaptiveDispatchGuardrailState(
+        options.adaptiveDispatchGuardrail,
+      );
     for (let index = ZERO; index < this._availableNodes.length; index++) {
       const node = this._availableNodes[index];
       const nodeId = String(node?.id || 'unknown');
@@ -497,6 +531,163 @@ class LoadRun {
     return breakerOwner === NODE_BREAKER_OWNER_NODE_CLIENT ?
       NODE_BREAKER_OWNER_NODE_CLIENT :
       '';
+  }
+
+  _createAdaptiveDispatchGuardrailState(config) {
+    const configObject = config && typeof config === 'object' ?
+      config :
+      {};
+    const enabled = config === true || configObject.enabled === true;
+    if (enabled !== true) {
+      return {
+        enabled: false,
+      };
+    }
+    const pressureSignalThreshold = normalizePositiveInteger(
+      configObject.pressureSignalThreshold,
+      ADAPTIVE_DISPATCH_GUARDRAIL_PRESSURE_SIGNAL_THRESHOLD_DEFAULT,
+    );
+    const queueDepthThreshold = normalizePositiveInteger(
+      configObject.queueDepthThreshold,
+      ADAPTIVE_DISPATCH_GUARDRAIL_QUEUE_DEPTH_THRESHOLD_DEFAULT,
+    );
+    const reductionStepRatio = normalizeRatio(
+      configObject.reductionStepRatio,
+      ADAPTIVE_DISPATCH_GUARDRAIL_REDUCTION_STEP_RATIO_DEFAULT,
+    );
+    const recoveryQuietTicks = normalizePositiveInteger(
+      configObject.recoveryQuietTicks,
+      ADAPTIVE_DISPATCH_GUARDRAIL_RECOVERY_QUIET_TICKS_DEFAULT,
+    );
+    const defaultMinMaxInFlight = Math.max(
+      ONE,
+      Math.floor(
+        this._maxInFlight * ADAPTIVE_DISPATCH_GUARDRAIL_MIN_MAX_IN_FLIGHT_RATIO_DEFAULT,
+      ),
+    );
+    const minMaxInFlight = Math.max(
+      ONE,
+      Math.min(
+        this._maxInFlight,
+        normalizePositiveInteger(
+          configObject.minMaxInFlight,
+          defaultMinMaxInFlight,
+        ),
+      ),
+    );
+    return {
+      enabled: true,
+      pressureSignalThreshold,
+      queueDepthThreshold,
+      reductionStepRatio,
+      recoveryQuietTicks,
+      minMaxInFlight,
+      pressureScore: ZERO,
+      quietTicks: ZERO,
+      lastPressureSignalsTotal: ZERO,
+      currentEffectiveMaxInFlight: this._maxInFlight,
+      minEffectiveMaxInFlight: this._maxInFlight,
+      engagedTransitions: ZERO,
+      recoveryTransitions: ZERO,
+      maxPressureSignalsDelta: ZERO,
+      maxPendingQueueDepth: ZERO,
+    };
+  }
+
+  _updateAdaptiveDispatchGuardrail(nowMs) {
+    const state = this._adaptiveDispatchGuardrail;
+    if (!state || state.enabled !== true) {
+      return;
+    }
+    const pressureSignalsTotal =
+      Number(this._waitReasons[WAIT_REASON_NODE_ADMISSION_BLOCKED] || ZERO) +
+      Number(
+        this._waitReasons[WAIT_REASON_RETRYABLE_CONTROL_PLANE_PRESSURE] || ZERO,
+      );
+    const pressureSignalsDelta = Math.max(
+      ZERO,
+      pressureSignalsTotal - Number(state.lastPressureSignalsTotal || ZERO),
+    );
+    state.lastPressureSignalsTotal = pressureSignalsTotal;
+
+    const pendingQueueDepth = this._estimatePendingQueueDepth(nowMs);
+    state.maxPressureSignalsDelta = Math.max(
+      Number(state.maxPressureSignalsDelta || ZERO),
+      pressureSignalsDelta,
+    );
+    state.maxPendingQueueDepth = Math.max(
+      Number(state.maxPendingQueueDepth || ZERO),
+      pendingQueueDepth,
+    );
+
+    const overloaded = pressureSignalsDelta >= state.pressureSignalThreshold ||
+      pendingQueueDepth >= state.queueDepthThreshold;
+    if (overloaded) {
+      state.quietTicks = ZERO;
+      state.pressureScore = Math.min(
+        ADAPTIVE_DISPATCH_GUARDRAIL_SCORE_MAX,
+        Number(state.pressureScore || ZERO) + ONE,
+      );
+    } else if (Number(state.pressureScore || ZERO) > ZERO) {
+      state.quietTicks = Number(state.quietTicks || ZERO) + ONE;
+      if (state.quietTicks >= state.recoveryQuietTicks) {
+        state.pressureScore = Math.max(
+          ZERO,
+          Number(state.pressureScore || ZERO) - ONE,
+        );
+        state.quietTicks = ZERO;
+      }
+    }
+
+    const reductionRatio = Math.max(
+      ZERO,
+      Math.min(
+        0.9,
+        Number(state.pressureScore || ZERO) * state.reductionStepRatio,
+      ),
+    );
+    const reducedMaxInFlight = Math.floor(
+      this._maxInFlight * (ONE - reductionRatio),
+    );
+    const nextEffectiveMaxInFlight = Math.max(
+      ONE,
+      Math.min(
+        this._maxInFlight,
+        Math.max(state.minMaxInFlight, reducedMaxInFlight),
+      ),
+    );
+    const previousEffectiveMaxInFlight = Number(
+      state.currentEffectiveMaxInFlight || this._maxInFlight,
+    );
+    if (nextEffectiveMaxInFlight < previousEffectiveMaxInFlight) {
+      state.engagedTransitions =
+        Number(state.engagedTransitions || ZERO) + ONE;
+    } else if (nextEffectiveMaxInFlight > previousEffectiveMaxInFlight) {
+      state.recoveryTransitions =
+        Number(state.recoveryTransitions || ZERO) + ONE;
+    }
+    state.currentEffectiveMaxInFlight = nextEffectiveMaxInFlight;
+    state.minEffectiveMaxInFlight = Math.min(
+      Number(state.minEffectiveMaxInFlight || this._maxInFlight),
+      nextEffectiveMaxInFlight,
+    );
+  }
+
+  _resolveEffectiveMaxInFlight() {
+    const state = this._adaptiveDispatchGuardrail;
+    if (!state || state.enabled !== true) {
+      return this._maxInFlight;
+    }
+    return Math.max(
+      ONE,
+      Math.min(
+        this._maxInFlight,
+        normalizePositiveInteger(
+          state.currentEffectiveMaxInFlight,
+          this._maxInFlight,
+        ),
+      ),
+    );
   }
 
   /**
@@ -575,6 +766,7 @@ class LoadRun {
     }
     this._recordPendingQueueDepth(now);
     this._enforceQueueDepthBound(now);
+    this._updateAdaptiveDispatchGuardrail(now);
     if (this._counter >= this._targetOperationCount) {
       this._schedulingStopped = true;
       if (!this._dispatchStoppedBy) {
@@ -584,11 +776,12 @@ class LoadRun {
       return;
     }
 
+    const effectiveMaxInFlight = this._resolveEffectiveMaxInFlight();
     let dispatchedThisTick = ZERO;
     while (
       Number.isFinite(this._nextDispatchAtMs) &&
       now >= this._nextDispatchAtMs &&
-      this._inFlight < this._maxInFlight &&
+      this._inFlight < effectiveMaxInFlight &&
       this._counter < this._targetOperationCount &&
       this._hasDispatchCapacity(now, {trackQueuePressure: true}) &&
       dispatchedThisTick < MAX_DISPATCHES_PER_TICK
@@ -930,6 +1123,7 @@ class LoadRun {
     if (availableNodeCount <= ZERO) {
       return this._nodeMaxInFlight;
     }
+    const effectiveMaxInFlight = this._resolveEffectiveMaxInFlight();
     let dispatchReadyNodeCount = ZERO;
     for (let index = ZERO; index < availableNodeCount; index++) {
       const healthKey = this._nodeHealthKeys[index];
@@ -944,7 +1138,7 @@ class LoadRun {
     }
     const dynamicCap = Math.max(
       ONE,
-      Math.ceil(this._maxInFlight / dispatchReadyNodeCount),
+      Math.ceil(effectiveMaxInFlight / dispatchReadyNodeCount),
     );
     return Math.max(this._nodeMaxInFlight, dynamicCap);
   }
@@ -1327,6 +1521,31 @@ class LoadRun {
     };
   }
 
+  _buildDispatchGuardrailSummary() {
+    const state = this._adaptiveDispatchGuardrail;
+    if (!state || state.enabled !== true) {
+      return null;
+    }
+    return {
+      enabled: true,
+      configuredMaxInFlight: this._maxInFlight,
+      currentEffectiveMaxInFlight: this._resolveEffectiveMaxInFlight(),
+      minEffectiveMaxInFlight: Number(
+        state.minEffectiveMaxInFlight || this._maxInFlight,
+      ),
+      pressureScore: Number(state.pressureScore || ZERO),
+      pressureSignalThreshold: state.pressureSignalThreshold,
+      queueDepthThreshold: state.queueDepthThreshold,
+      reductionStepRatio: state.reductionStepRatio,
+      minMaxInFlight: state.minMaxInFlight,
+      recoveryQuietTicks: state.recoveryQuietTicks,
+      engagedTransitions: Number(state.engagedTransitions || ZERO),
+      recoveryTransitions: Number(state.recoveryTransitions || ZERO),
+      maxPressureSignalsDelta: Number(state.maxPressureSignalsDelta || ZERO),
+      maxPendingQueueDepth: Number(state.maxPendingQueueDepth || ZERO),
+    };
+  }
+
   _computeCurrentMetrics() {
     const elapsed = this._startTime ?
       Date.now() - this._startTime :
@@ -1341,6 +1560,7 @@ class LoadRun {
     };
     const queuePressureSummary = this._buildQueuePressureSummary();
     const waitReasonSummary = this._buildWaitReasonSummary();
+    const dispatchGuardrailSummary = this._buildDispatchGuardrailSummary();
     return computeMetrics(
       this._latencies,
       this._successCount,
@@ -1355,6 +1575,7 @@ class LoadRun {
       rejectedAccounting,
       queuePressureSummary,
       waitReasonSummary,
+      dispatchGuardrailSummary,
     );
   }
 
@@ -1417,6 +1638,8 @@ class LoadGenerator {
    *   dispatch queue depth before overload rejection.
    * @param {boolean} [options.earlyRejectOnQueueFull] - Reject
    *   scheduled operations when pending queue exceeds depth.
+   * @param {Object|boolean} [options.adaptiveDispatchGuardrail] -
+   *   Optional adaptive dispatch guardrail settings.
    */
   constructor(nodes, options = {}) {
     this._nodes = nodes;
@@ -1466,6 +1689,7 @@ class LoadGenerator {
         options.maxPendingQueueDepth :
         null;
     this._earlyRejectOnQueueFull = options.earlyRejectOnQueueFull === true;
+    this._adaptiveDispatchGuardrail = options.adaptiveDispatchGuardrail;
     this._tableName = normalizeTableName(
       options.tableName,
       this._workloadProfile === WORKLOAD_PROFILE_BENCHMARK_EVENTS ?
@@ -1502,6 +1726,7 @@ class LoadGenerator {
       admissionBackoffMs: this._admissionBackoffMs,
       maxPendingQueueDepth: this._maxPendingQueueDepth,
       earlyRejectOnQueueFull: this._earlyRejectOnQueueFull,
+      adaptiveDispatchGuardrail: this._adaptiveDispatchGuardrail,
       ...(this._nodeMaxInFlight !== null ?
         {nodeMaxInFlight: this._nodeMaxInFlight} :
         {}),

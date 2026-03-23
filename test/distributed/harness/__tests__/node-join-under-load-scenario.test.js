@@ -3,6 +3,51 @@ import assert from 'node:assert/strict';
 import {run} from '../../scenarios/node-join-under-load.js';
 
 describe('node-join-under-load scenario', () => {
+  it('waits for stabilized load readiness before starting pressure', async () => {
+    let readinessGateSettled = false;
+    let startLoadObserved = false;
+
+    const cluster = {
+      waitForLoadReadinessStability: async () => {
+        readinessGateSettled = true;
+      },
+      startLoad: () => {
+        startLoadObserved = true;
+        assert.equal(
+          readinessGateSettled,
+          true,
+          'load should not start before readiness stabilization completes',
+        );
+        return {
+          getMetrics: () => ({failed: 0}),
+          waitComplete: async () => ({
+            total: 10,
+            success: 10,
+            failed: 0,
+            errors: 0,
+            targetOperations: 10,
+            undispatchedOperations: 0,
+            queueDelay: {p95: 10},
+          }),
+        };
+      },
+      addNode: async () => ({id: 'joiner-3'}),
+      nodes: () => [{id: 'seed'}, {id: 'joiner-1'}, {id: 'joiner-2'}, {id: 'joiner-3'}],
+      waitForConvergence: async () => ({
+        settledAfterMs: 1,
+      }),
+      waitForConsistencyConvergence: async () => {},
+    };
+
+    await run(cluster, {
+      preJoinSettleMs: 0,
+      loadReadinessStableWindowMs: 250,
+      loadReadinessStabilizationTimeoutMs: 1000,
+    });
+
+    assert.equal(startLoadObserved, true, 'scenario should still execute load once gated');
+  });
+
   it('calls waitForConsistencyConvergence after join and load', async () => {
     let convergenceCalls = 0;
 
@@ -155,4 +200,89 @@ describe('node-join-under-load scenario', () => {
         }
       }, /dispatch backlog/i);
     });
+
+  it('counts overlapping failed/errors once in failure assertions', async () => {
+    const cluster = {
+      startLoad: () => ({
+        waitComplete: async () => ({
+          total: 10,
+          success: 6,
+          failed: 4,
+          errors: 4,
+          targetOperations: 10,
+          undispatchedOperations: 0,
+          queueDelay: {p95: 10},
+        }),
+      }),
+      addNode: async () => ({id: 'joiner-3'}),
+      nodes: () => [{id: 'seed'}, {id: 'joiner-1'}, {id: 'joiner-2'}, {id: 'joiner-3'}],
+      waitForConvergence: async () => ({
+        settledAfterMs: 1,
+      }),
+      waitForConsistencyConvergence: async () => {},
+    };
+
+    await assert.rejects(async () => {
+      await run(cluster, {
+        preJoinSettleMs: 0,
+        maxFailedOperations: 3,
+      });
+    }, /observed 4/);
+  });
+
+  it('falls back to failed when errors is absent', async () => {
+    const cluster = {
+      startLoad: () => ({
+        waitComplete: async () => ({
+          total: 10,
+          success: 8,
+          failed: 2,
+          targetOperations: 10,
+          undispatchedOperations: 0,
+          queueDelay: {p95: 10},
+        }),
+      }),
+      addNode: async () => ({id: 'joiner-3'}),
+      nodes: () => [{id: 'seed'}, {id: 'joiner-1'}, {id: 'joiner-2'}, {id: 'joiner-3'}],
+      waitForConvergence: async () => ({
+        settledAfterMs: 1,
+      }),
+      waitForConsistencyConvergence: async () => {},
+    };
+
+    await assert.rejects(async () => {
+      await run(cluster, {
+        preJoinSettleMs: 0,
+        maxFailedOperations: 1,
+      });
+    }, /observed 2/);
+  });
+
+  it('falls back to errors when failed is absent', async () => {
+    const cluster = {
+      startLoad: () => ({
+        waitComplete: async () => ({
+          total: 10,
+          success: 8,
+          errors: 2,
+          targetOperations: 10,
+          undispatchedOperations: 0,
+          queueDelay: {p95: 10},
+        }),
+      }),
+      addNode: async () => ({id: 'joiner-3'}),
+      nodes: () => [{id: 'seed'}, {id: 'joiner-1'}, {id: 'joiner-2'}, {id: 'joiner-3'}],
+      waitForConvergence: async () => ({
+        settledAfterMs: 1,
+      }),
+      waitForConsistencyConvergence: async () => {},
+    };
+
+    await assert.rejects(async () => {
+      await run(cluster, {
+        preJoinSettleMs: 0,
+        maxFailedOperations: 1,
+      });
+    }, /observed 2/);
+  });
 });
