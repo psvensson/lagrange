@@ -147,6 +147,7 @@ import {
   COLUMN,
   NUM,
   SERVICE_DESCRIPTOR_FIELD,
+  SERVICE_LIFECYCLE_STATE,
   SERVICE_STATUS,
   SERVICE_TYPE,
   STATE,
@@ -183,6 +184,7 @@ import {
 } from './join-schema-version-resolver.js';
 import {
   MessageGroupServiceAdapter,
+  PartitionServiceAdapter,
   RuntimeServiceAdapter,
   ServiceLifecycleManager,
   ServiceReconciler,
@@ -192,6 +194,14 @@ import {
   JOIN_CHECKPOINT,
   JoinSessionStore,
 } from './join-session-store.js';
+import {
+  STARTUP_JOIN_MODE,
+} from './rejoin-hints-constants.js';
+import {
+  getSchemaByTableName,
+} from './system-table-schemas-constants.js';
+import {getPartitionDbPath} from '../storage/data-directory-manager.js';
+import {ReplicaStatus} from '../rebalancer/replica-status.js';
 
 const JoiningPhase = JOINING_PHASE;
 const JoiningEvent = BOOTSTRAP_EVENT;
@@ -205,6 +215,51 @@ const JOIN_SESSION_PHASE = Object.freeze({
 import {
   shouldAttachPartitionCdcPropagation,
 } from './shared/cdc-propagation-filter.js';
+
+const RESTORABLE_DURABLE_REJOIN_PARTITION_STATUSES = new Set([
+  ReplicaStatus.ACTIVE,
+  SERVICE_STATUS.ACTIVE,
+]);
+
+function normalizeJoinMetadataString(value) {
+  return typeof value === TYPEOF.STRING ? value.trim() : '';
+}
+
+function readJoinCacheRows(systemTableCache, tableName) {
+  if (!systemTableCache) {
+    return [];
+  }
+  if (typeof systemTableCache.getAll === TYPEOF.FUNCTION) {
+    const rows = systemTableCache.getAll(tableName);
+    return Array.isArray(rows) ? rows : [];
+  }
+  if (typeof systemTableCache.filter === TYPEOF.FUNCTION) {
+    const rows = systemTableCache.filter(tableName, () => true);
+    return Array.isArray(rows) ? rows : [];
+  }
+  return [];
+}
+
+function getJoinCacheRow(
+  systemTableCache,
+  tableName,
+  key,
+  predicate = null,
+) {
+  if (key !== null &&
+      key !== undefined &&
+      typeof systemTableCache?.get === TYPEOF.FUNCTION) {
+    const row = systemTableCache.get(tableName, key);
+    if (row) {
+      return row;
+    }
+  }
+  if (typeof predicate !== TYPEOF.FUNCTION) {
+    return null;
+  }
+  return readJoinCacheRows(systemTableCache, tableName)
+    .find(predicate) || null;
+}
 
 
 /**
@@ -279,12 +334,22 @@ class NodeJoiningService extends EventEmitter {
       new JoinCoordinator({
         joinSessionStore: defaultJoinSessionStore,
       });
+    this.onLocalAdminRuntimeReady =
+      typeof options.onLocalAdminRuntimeReady === TYPEOF.FUNCTION ?
+        options.onLocalAdminRuntimeReady :
+        null;
+    this.localAdminRuntimeReadyNotified = false;
     this.joinSessionStore = this.joinCoordinator.joinSessionStore;
     this.joinReadinessSnapshotProvider =
       typeof options.joinReadinessSnapshotProvider === TYPEOF.FUNCTION ?
         options.joinReadinessSnapshotProvider :
         null;
     this.bootstrapReadinessState = options.readinessState || null;
+    this.startupMode =
+      typeof options.startupMode === TYPEOF.STRING &&
+      options.startupMode.length > NUM.ZERO ?
+        options.startupMode :
+        STARTUP_JOIN_MODE.FRESH_JOIN;
 
     // Allow tests to bypass real network I/O by providing an in-process HTTP POST.
     this.httpPostImpl = typeof options.httpPost === TYPEOF.FUNCTION ?
@@ -568,6 +633,8 @@ class NodeJoiningService extends EventEmitter {
           this.messageGroupServices,
         getNodeStorageBudgetService: () =>
           this.getNodeStorageBudgetService(),
+        getSystemTableCache: () =>
+          NodeService.getInstance().getSystemTableCache(),
         ensureLatencyTopologyOwners: () =>
           this.ensureLatencyTopologyOwners(),
         ensureTablePolicyService: (cache) => {
@@ -580,6 +647,8 @@ class NodeJoiningService extends EventEmitter {
             this.tablePolicyService.initialize();
           }
         },
+        restoreDurableRejoinLocalPartitionServices: (cache) =>
+          this.restoreDurableRejoinLocalPartitionServices(cache),
         applySystemCacheToPartitions: (cache) => {
           for (const partition of
             this.partitionServices.values()) {
@@ -602,6 +671,8 @@ class NodeJoiningService extends EventEmitter {
         },
         getJoinMembershipPublished: () =>
           this.joinMembershipPublished,
+        getJoinStartupMode: () =>
+          this.startupMode,
         getNodeCapabilities: () =>
           this.getNodeCapabilities(),
         setMessageGroupServiceEndpointsPublished: (value) => {
@@ -683,6 +754,8 @@ class NodeJoiningService extends EventEmitter {
             this.bootstrapResponse,
           getBootstrapReadinessState: () =>
             this.bootstrapReadinessState,
+          getSeedNodeId: () =>
+            this.seedNodeId,
           getSeedNodeAddress: () =>
             this.seedNodeAddress,
           getHttpPostImpl: () => this.httpPostImpl,
@@ -692,11 +765,15 @@ class NodeJoiningService extends EventEmitter {
             this.classifySeedContactFailure(err, msg),
           computeSeedContactRetryDelayMs: (opts) =>
             this.computeSeedContactRetryDelayMs(opts),
-          upsertSystemTableRow: (table, data) =>
-            this.upsertSystemTableRow(table, data),
-          registerMessageGroupService: (gId, rId, svc, opts) =>
-            this.registerMessageGroupService(gId, rId, svc, opts),
-        },
+        upsertSystemTableRow: (table, data) =>
+          this.upsertSystemTableRow(table, data),
+        upsertSystemTableRowWithRetry: (table, data, options) =>
+          this.upsertSystemTableRowWithRetry(table, data, options),
+        seedJoinTimeCacheRow: (table, data) =>
+          this.seedJoinTimeCacheRow(table, data),
+        registerMessageGroupService: (gId, rId, svc, opts) =>
+          this.registerMessageGroupService(gId, rId, svc, opts),
+      },
       });
 
     // Join message group phase (extracted helper)
@@ -1058,6 +1135,7 @@ class NodeJoiningService extends EventEmitter {
       phases: infraPhases.slice(NUM.ONE),
     });
     await this.initializeJoinInfrastructure();
+    await this.notifyLocalAdminRuntimeReady();
     this.lifecycleStateMachine.transition(NodeState.JOINING);
     this._applyDeferredJoinSubPhases();
   }
@@ -1102,6 +1180,43 @@ class NodeJoiningService extends EventEmitter {
     this.messageGroupServiceHandlerRegistered = true;
     await this.initializeControlPlaneService();
     this.initializeRuntimeServiceHandler();
+    this.openExternalTransportAdmission();
+  }
+
+  /**
+   * Open remote transport admission after join-owned runtime handlers exist.
+   * Self-routing remains available earlier during bootstrap discovery.
+   * @return {void}
+   * @private
+   */
+  openExternalTransportAdmission() {
+    if (this.messageRouter &&
+        typeof this.messageRouter.setExternalAdmissionEnabled ===
+          TYPEOF.FUNCTION) {
+      this.messageRouter.setExternalAdmissionEnabled(true);
+    }
+  }
+
+  /**
+   * Notify one startup-owned hook that cache-backed local admin surfaces can
+   * come online before full join publication completes.
+   * @return {Promise<void>}
+   * @private
+   */
+  async notifyLocalAdminRuntimeReady() {
+    if (this.localAdminRuntimeReadyNotified ||
+        typeof this.onLocalAdminRuntimeReady !== TYPEOF.FUNCTION) {
+      return;
+    }
+    this.localAdminRuntimeReadyNotified = true;
+    await this.onLocalAdminRuntimeReady({
+      nodeId: this.nodeId,
+      systemTableCache: NodeService.getInstance().getSystemTableCache(),
+      cacheMutationTarget: NodeService.getInstance().getSystemTableCache(),
+      messageRouter: this.messageRouter,
+      partitionServices: this.partitionServices,
+      owner: this,
+    });
   }
 
   /**
@@ -1135,6 +1250,8 @@ class NodeJoiningService extends EventEmitter {
       }
     }
     this.activateControlPlaneBackgroundWriters();
+    this.flushDeferredCreateSelfHostedMetadata();
+    this.activateDistributedTransactionRecovery();
     this.startLatencyTopologyLifecycle();
     this.phase = JoiningPhase.COMPLETE;
     const duration = this.now() - this.startTime;
@@ -1661,6 +1778,49 @@ class NodeJoiningService extends EventEmitter {
   }
 
   /**
+   * Activate steady-state distributed transaction recovery after the node has
+   * crossed the READY cutover. Join-time query engines intentionally defer
+   * recovery replay until this point to avoid querying through an incomplete
+   * self-hosted control-plane path during restart hydration.
+   *
+   * @return {void}
+   * @private
+   */
+  activateDistributedTransactionRecovery() {
+    const sqlQueryEngine = this.cdcIntegrationService?.sqlQueryEngine;
+    if (typeof sqlQueryEngine?.activateDistributedTransactionRecovery !==
+      TYPEOF.FUNCTION) {
+      return;
+    }
+    void sqlQueryEngine.activateDistributedTransactionRecovery();
+  }
+
+  /**
+   * Flush staged CREATE_SELF_HOSTED message-group metadata after the READY
+   * cutover. This is intentionally non-blocking.
+   *
+   * @return {void}
+   * @private
+   */
+  flushDeferredCreateSelfHostedMetadata() {
+    if (typeof this.createMessageGroupPhase
+      ?.flushDeferredCreateSelfHostedMetadata !== TYPEOF.FUNCTION) {
+      return;
+    }
+    void this.createMessageGroupPhase
+      .flushDeferredCreateSelfHostedMetadata()
+      .catch((error) => {
+        this.logger.warn(
+          'Deferred CREATE_SELF_HOSTED message-group metadata publication failed',
+          {
+            nodeId: this.nodeId,
+            error: error?.message || String(error),
+          },
+        );
+      });
+  }
+
+  /**
    * Execute a joining phase with logging and timing.
    * @param {string} phaseName - Phase name.
    * @param {Function} phaseFunction - Phase implementation function.
@@ -1922,6 +2082,18 @@ class NodeJoiningService extends EventEmitter {
       });
     }
 
+    for (const replicaId of this.partitionServices.keys()) {
+      const handle = this.createJoinServiceDescriptor(
+        UNIFIED_SERVICE_TYPE.PARTITION,
+        replicaId,
+      );
+      rows.push({
+        ...handle,
+        [SERVICE_DESCRIPTOR_FIELD.LIFECYCLE_STATE]:
+          this.serviceLifecycleManager.getReplicaState(handle),
+      });
+    }
+
     return rows;
   }
 
@@ -1943,6 +2115,15 @@ class NodeJoiningService extends EventEmitter {
           this.startJoinMessageGroupReplica(replicaHandle, context),
         stopReplica: (replicaHandle, context) =>
           this.stopJoinMessageGroupReplica(replicaHandle, context),
+      }),
+    );
+    this.serviceLifecycleManager.registerAdapter(
+      new PartitionServiceAdapter({
+        createReplica: (context) => this.createJoinPartitionReplica(context),
+        startReplica: (replicaHandle, context) =>
+          this.startJoinPartitionReplica(replicaHandle, context),
+        stopReplica: (replicaHandle, context) =>
+          this.stopJoinPartitionReplica(replicaHandle, context),
       }),
     );
     this.serviceLifecycleManager.registerAdapter(
@@ -2002,6 +2183,114 @@ class NodeJoiningService extends EventEmitter {
   async createJoinMessageGroupReplica(context) {
     return this.createMessageGroupPhase
       .createJoinMessageGroupReplica(context);
+  }
+
+  /**
+   * Unified lifecycle create hook for join partition replicas.
+   * @param {Object} context
+   * @return {Promise<Object>}
+   * @private
+   */
+  async createJoinPartitionReplica(context) {
+    const definition = context?.definition || {};
+    const directOptions = context?.replicaOptions || null;
+    const serviceId =
+      directOptions?.replicaId ||
+      definition[SERVICE_DESCRIPTOR_FIELD.SERVICE_ID];
+    const options = directOptions ||
+      this.resolveJoinReplicaOptions(
+        serviceId,
+        UNIFIED_SERVICE_TYPE.PARTITION,
+      );
+
+    if (this.partitionServices.has(options.replicaId)) {
+      return {status: SERVICE_LIFECYCLE_STATE.CREATED};
+    }
+
+    if (options.createDelayMs > NUM.ZERO) {
+      await this.sleep(options.createDelayMs);
+    }
+
+    await this.createJoinLocalPartitionService(options);
+    return {status: SERVICE_LIFECYCLE_STATE.CREATED};
+  }
+
+  /**
+   * Unified lifecycle start hook for join partition replicas.
+   * @param {Object} replicaHandle
+   * @param {Object} context
+   * @return {Promise<Object>}
+   * @private
+   */
+  async startJoinPartitionReplica(replicaHandle, context) {
+    const directOptions = context?.replicaOptions || null;
+    const serviceId =
+      directOptions?.replicaId ||
+      replicaHandle[SERVICE_DESCRIPTOR_FIELD.SERVICE_ID] ||
+      replicaHandle[SERVICE_DESCRIPTOR_FIELD.REPLICA_ID];
+    const options = directOptions ||
+      this.resolveJoinReplicaOptions(
+        serviceId,
+        UNIFIED_SERVICE_TYPE.PARTITION,
+      );
+    const partition =
+      this.partitionServices.get(options.replicaId);
+
+    assertCritical(
+      partition,
+      `Join partition replica ${options.replicaId} missing at start`,
+    );
+
+    if (!options.deferElection &&
+        typeof partition.startElection === TYPEOF.FUNCTION) {
+      partition.startElection();
+    }
+
+    return {
+      status: SERVICE_LIFECYCLE_STATE.RUNNING,
+      deferred: Boolean(options.deferElection),
+    };
+  }
+
+  /**
+   * Unified lifecycle stop hook for join partition replicas.
+   * @param {Object} replicaHandle
+   * @param {Object} context
+   * @return {Promise<Object>}
+   * @private
+   */
+  async stopJoinPartitionReplica(replicaHandle, context) {
+    const directOptions = context?.replicaOptions || null;
+    const serviceId =
+      directOptions?.replicaId ||
+      replicaHandle[SERVICE_DESCRIPTOR_FIELD.SERVICE_ID] ||
+      replicaHandle[SERVICE_DESCRIPTOR_FIELD.REPLICA_ID];
+    const options = directOptions ||
+      this.resolveJoinReplicaOptions(
+        serviceId,
+        UNIFIED_SERVICE_TYPE.PARTITION,
+      );
+    const partition =
+      this.partitionServices.get(options.replicaId);
+    if (!partition) {
+      return {status: SERVICE_LIFECYCLE_STATE.STOPPED};
+    }
+
+    if (typeof partition.shutdown === TYPEOF.FUNCTION) {
+      await partition.shutdown();
+    }
+
+    const unifiedAddress = typeof partition.getUnifiedAddress === TYPEOF.FUNCTION ?
+      partition.getUnifiedAddress() :
+      `${this.nodeId}${ADDRESS.SEPARATOR}` +
+      `${ENTITY_TYPE.PARTITION}${ADDRESS.SEPARATOR}` +
+      `${options.replicaId}`;
+    this.messageRouter?.unregister?.(unifiedAddress);
+    this.partitionServices.delete(options.replicaId);
+    this.replicaHandler?.localServices?.delete?.(options.replicaId);
+    this.replicaHandler?.localReplicas?.delete?.(options.replicaId);
+
+    return {status: SERVICE_LIFECYCLE_STATE.STOPPED};
   }
 
   /**
@@ -2616,6 +2905,21 @@ class NodeJoiningService extends EventEmitter {
   async upsertSystemTableRow(tableName, rowData) {
     return this.querySystemStatePhase
       .upsertSystemTableRow(tableName, rowData);
+  }
+
+  /**
+   * Upsert a system-table row through the shared retryable join-time
+   * control-plane publication path.
+   * Delegates to QuerySystemStatePhase.
+   * @param {string} tableName
+   * @param {Object} rowData
+   * @param {Object} [options={}]
+   * @return {Promise<Object>}
+   * @private
+   */
+  async upsertSystemTableRowWithRetry(tableName, rowData, options = {}) {
+    return this.querySystemStatePhase
+      .upsertSystemTableRowWithRetry(tableName, rowData, options);
   }
 
   /**
@@ -3633,6 +3937,310 @@ class NodeJoiningService extends EventEmitter {
   }
 
   /**
+   * Restore durable local partition runtimes from hydrated system metadata
+   * before join admission writes depend on canonical partition leadership.
+   * @param {Object} systemTableCache
+   * @return {Promise<Object[]>}
+   * @private
+   */
+  async restoreDurableRejoinLocalPartitionServices(systemTableCache) {
+    if (this.startupMode !== STARTUP_JOIN_MODE.DURABLE_REJOIN) {
+      return [];
+    }
+
+    const restorePlans =
+      this.buildDurableRejoinPartitionRestorePlans(
+        systemTableCache,
+      );
+    if (restorePlans.length === NUM.ZERO) {
+      return [];
+    }
+
+    await this.initializeJoiningLifecycleOwners();
+    for (const restorePlan of restorePlans) {
+      this.queueJoinServiceReplica(
+        this.createJoinServiceDescriptor(
+          UNIFIED_SERVICE_TYPE.PARTITION,
+          restorePlan.replicaId,
+        ),
+        restorePlan,
+      );
+    }
+
+    await this.triggerJoinReconciler(
+      JOINING_UNIFIED_RECONCILE.HYDRATION_REASON,
+    );
+    this.startDurableRejoinLocalPartitionElections(
+      restorePlans,
+    );
+
+    this.logger.info(
+      'Restored durable local partition services from cached topology',
+      {
+        nodeId: this.nodeId,
+        restoredReplicaCount: restorePlans.length,
+        restoredPartitionIds: restorePlans.map(
+          ({partitionId}) => partitionId,
+        ),
+      },
+    );
+
+    return restorePlans;
+  }
+
+  /**
+   * Build partition restore plans from canonical cache rows for durable rejoin.
+   * @param {Object} systemTableCache
+   * @return {Object[]}
+   * @private
+   */
+  buildDurableRejoinPartitionRestorePlans(systemTableCache) {
+    const serviceRows = readJoinCacheRows(
+      systemTableCache,
+      TABLES.SERVICES,
+    );
+    const restorePlans = [];
+    const seenReplicaIds = new Set();
+
+    for (const serviceRow of serviceRows) {
+      const serviceType = normalizeJoinMetadataString(
+        serviceRow?.service_type,
+      ).toLowerCase();
+      const nodeId = normalizeJoinMetadataString(
+        serviceRow?.node_id,
+      );
+      const replicaId = normalizeJoinMetadataString(
+        serviceRow?.replica_id || serviceRow?.service_id,
+      );
+      const partitionId = normalizeJoinMetadataString(
+        serviceRow?.partition_id,
+      );
+      const status = normalizeJoinMetadataString(
+        serviceRow?.status,
+      ).toLowerCase();
+
+      if (serviceType !== SERVICE_TYPE.PARTITION ||
+          nodeId !== this.nodeId ||
+          replicaId.length === NUM.ZERO ||
+          partitionId.length === NUM.ZERO ||
+          !RESTORABLE_DURABLE_REJOIN_PARTITION_STATUSES.has(status) ||
+          seenReplicaIds.has(replicaId)) {
+        continue;
+      }
+
+      seenReplicaIds.add(replicaId);
+      restorePlans.push(
+        this.buildDurableRejoinPartitionRestoreOptions(
+          systemTableCache,
+          serviceRows,
+          serviceRow,
+          partitionId,
+          replicaId,
+        ),
+      );
+    }
+
+    return restorePlans;
+  }
+
+  /**
+   * Resolve one durable rejoin partition restore plan from cache rows.
+   * @param {Object} systemTableCache
+   * @param {Object[]} serviceRows
+   * @param {Object} serviceRow
+   * @param {string} partitionId
+   * @param {string} replicaId
+   * @return {Object}
+   * @private
+   */
+  buildDurableRejoinPartitionRestoreOptions(
+    systemTableCache,
+    serviceRows,
+    serviceRow,
+    partitionId,
+    replicaId,
+  ) {
+    const partitionRow = getJoinCacheRow(
+      systemTableCache,
+      TABLES.PARTITIONS,
+      partitionId,
+      (row) => normalizeJoinMetadataString(
+        row?.partition_id,
+      ) === partitionId,
+    );
+    assertCritical(
+      partitionRow,
+      `Missing partition metadata for durable rejoin replica ${replicaId}`,
+    );
+
+    const tableId = normalizeJoinMetadataString(
+      partitionRow.table_id || partitionRow.table_name,
+    );
+    assertCritical(
+      tableId,
+      `Missing table metadata reference for durable rejoin partition ${partitionId}`,
+    );
+
+    const tableName = normalizeJoinMetadataString(
+      partitionRow.table_name || tableId,
+    );
+    const tableRow = getJoinCacheRow(
+      systemTableCache,
+      TABLES.TABLES,
+      tableId,
+      (row) => normalizeJoinMetadataString(
+        row?.table_id,
+      ) === tableId ||
+        normalizeJoinMetadataString(
+          row?.table_name,
+        ) === tableName,
+    );
+    let schema = null;
+    if (tableRow?.schema_definition) {
+      schema = typeof tableRow.schema_definition === TYPEOF.STRING ?
+        JSON.parse(tableRow.schema_definition) :
+        tableRow.schema_definition;
+    } else {
+      schema = getSchemaByTableName(tableName);
+    }
+    assertCritical(
+      schema,
+      `Missing schema definition for durable rejoin partition ${partitionId}`,
+    );
+
+    const replicaIds = [];
+    const peerAddresses = [];
+    const seenReplicaIds = new Set();
+    const seenPeerAddresses = new Set();
+    const partitionServiceRows = serviceRows.filter((row) => {
+      return normalizeJoinMetadataString(
+        row?.partition_id,
+      ) === partitionId &&
+        normalizeJoinMetadataString(
+          row?.service_type,
+        ).toLowerCase() === SERVICE_TYPE.PARTITION &&
+        RESTORABLE_DURABLE_REJOIN_PARTITION_STATUSES.has(
+          normalizeJoinMetadataString(
+            row?.status,
+          ).toLowerCase(),
+        );
+    });
+
+    for (const partitionServiceRow of partitionServiceRows) {
+      const serviceReplicaId = normalizeJoinMetadataString(
+        partitionServiceRow?.replica_id ||
+          partitionServiceRow?.service_id,
+      );
+      if (serviceReplicaId.length > NUM.ZERO &&
+          !seenReplicaIds.has(serviceReplicaId)) {
+        seenReplicaIds.add(serviceReplicaId);
+        replicaIds.push(serviceReplicaId);
+      }
+
+      const serviceNodeId = normalizeJoinMetadataString(
+        partitionServiceRow?.node_id,
+      );
+      const peerAddress = normalizeJoinMetadataString(
+        partitionServiceRow?.address,
+      ) ||
+        `${serviceNodeId}${ADDRESS.SEPARATOR}` +
+        `${ENTITY_TYPE.PARTITION}${ADDRESS.SEPARATOR}` +
+        `${serviceReplicaId}`;
+      if (serviceNodeId.length > NUM.ZERO &&
+          serviceReplicaId.length > NUM.ZERO &&
+          peerAddress.length > NUM.ZERO &&
+          !seenPeerAddresses.has(peerAddress)) {
+        seenPeerAddresses.add(peerAddress);
+        peerAddresses.push(peerAddress);
+      }
+    }
+
+    if (!seenReplicaIds.has(replicaId)) {
+      replicaIds.push(replicaId);
+    }
+
+    const selfAddress = normalizeJoinMetadataString(
+      serviceRow?.address,
+    ) ||
+      `${this.nodeId}${ADDRESS.SEPARATOR}` +
+      `${ENTITY_TYPE.PARTITION}${ADDRESS.SEPARATOR}` +
+      `${replicaId}`;
+    if (!seenPeerAddresses.has(selfAddress)) {
+      peerAddresses.push(selfAddress);
+    }
+
+    const leaderNodeId = normalizeJoinMetadataString(
+      partitionRow?.leader_node_id,
+    );
+    const leaderService = leaderNodeId.length > NUM.ZERO ?
+      partitionServiceRows.find((row) =>
+        normalizeJoinMetadataString(
+          row?.node_id,
+        ) === leaderNodeId,
+      ) :
+      null;
+    const leaderReplicaId = normalizeJoinMetadataString(
+      leaderService?.replica_id ||
+        leaderService?.service_id,
+    );
+    const leaderAddress = leaderService ?
+      (
+        normalizeJoinMetadataString(leaderService?.address) ||
+        `${leaderNodeId}${ADDRESS.SEPARATOR}` +
+        `${ENTITY_TYPE.PARTITION}${ADDRESS.SEPARATOR}` +
+        `${leaderReplicaId}`
+      ) :
+      null;
+
+    return {
+      serviceType: UNIFIED_SERVICE_TYPE.PARTITION,
+      partitionId,
+      tableId,
+      tableName,
+      schema,
+      keyRange: {
+        start: partitionRow.partition_key_start || null,
+        end: partitionRow.partition_key_end || null,
+      },
+      replicaId,
+      replicaIds,
+      peerAddresses,
+      nodeId: this.nodeId,
+      dbPath: getPartitionDbPath(
+        this.dataDir,
+        partitionId,
+        replicaId,
+      ),
+      leaderAddress,
+      isJoiningExistingGroup: false,
+      deferElection: true,
+      suppressLifecycleLogs: true,
+      restoringExistingReplica: true,
+    };
+  }
+
+  /**
+   * Start elections for restored durable partition replicas once the batch
+   * has been recreated locally.
+   * @param {Object[]} restorePlans
+   * @return {void}
+   * @private
+   */
+  startDurableRejoinLocalPartitionElections(restorePlans = []) {
+    for (const restorePlan of restorePlans) {
+      const replicaId = restorePlan?.replicaId;
+      if (typeof replicaId !== TYPEOF.STRING ||
+          replicaId.length === NUM.ZERO) {
+        continue;
+      }
+      const partition = this.partitionServices.get(replicaId);
+      if (typeof partition?.startElection === TYPEOF.FUNCTION) {
+        partition.startElection();
+      }
+    }
+  }
+
+  /**
    * Initialize the ReplicaHandler to handle CREATE_REPLICA/REMOVE_REPLICA.
    * Requirements: 3.1, 3.2 - Use MessageRouter directly for all communication.
    * @private
@@ -3657,108 +4265,11 @@ class NodeJoiningService extends EventEmitter {
       this.tablePolicyService.initialize();
     }
 
-    // Caller-specific partition creation factory
-    const createPartitionService = async (options) => {
-      const cacheForPartition = this.systemCacheHydrated ? systemTableCache : null;
-      // ReplicaHandler owns the join/bootstrap decision for each partition.
-      // Reusing this handler after join completion must not force fresh user
-      // tables into learner mode on this node.
-      const partition = new PartitionService({
+    const createPartitionService = async (options) =>
+      this.createJoinLocalPartitionService({
         ...options,
-        transport: this.transport,
-        messageGroupService: messageGroupService,
-        messageRouter: this.messageRouter,
-        rebalanceCoordinator: this.rebalanceCoordinator,
-        replicaStateMachine: this.replicaStateMachine,
-        systemTableCache: cacheForPartition,
-        cdcIntegrationService: cdcIntegrationService,
-        sqlQueryEngine: cdcIntegrationService?.sqlQueryEngine || null,
-        tablePolicyService: this.tablePolicyService,
-        bootstrapReadinessState: this.bootstrapReadinessState,
+        messageGroupService,
       });
-
-      await partition.initialize();
-
-      this.partitionServices.set(options.replicaId, partition);
-
-      const tableName = options.tableName;
-      if (tableName &&
-          shouldAttachPartitionCdcPropagation(tableName)) {
-        const subscriptionSelection =
-          await this.resolveOperationalMessageGroupSelectionAsync({
-            requiredTables: [tableName],
-          });
-        const subscriptionMessageGroupService =
-          subscriptionSelection.service;
-        if (!subscriptionMessageGroupService) {
-          throw buildMessageGroupOwnerNotReadyError(
-            subscriptionSelection,
-            {
-              message:
-                `Operational message-group ingress not ready ` +
-                `for ${tableName} CDC subscription`,
-            },
-          );
-        }
-
-        await subscriptionMessageGroupService.subscribeToCDC(tableName);
-
-        const subscriberId = [
-          'joining',
-          this.nodeId,
-          tableName,
-          options.replicaId,
-          subscriptionMessageGroupService?.groupId || 'message-group',
-        ].join(':');
-        const cdcSubscriber = async (cdcEvent) => {
-          if (cdcEvent.tableName === tableName) {
-            this.logger.debug(JOINING_LOG_MSG.CDC_EVENT_RECEIVED, {
-              tableName: cdcEvent.tableName,
-              operation: cdcEvent.operation,
-              partitionId: options.partitionId,
-              replicaId: options.replicaId,
-            });
-            const propagationSelection =
-              await this.resolveOperationalMessageGroupSelectionAsync({
-                requiredTables: [tableName],
-              });
-            const propagationMessageGroupService =
-              propagationSelection.service;
-            if (!propagationMessageGroupService) {
-              throw buildMessageGroupOwnerNotReadyError(
-                propagationSelection,
-                {
-                  message:
-                    `Operational message-group ingress not ready ` +
-                    `for ${tableName} CDC propagation`,
-                },
-              );
-            }
-
-            await this.propagatePartitionCDCEvent(
-              propagationMessageGroupService,
-              cdcEvent,
-            );
-          }
-        };
-        const handshake = await partition.subscribeToCDCWithHandshake(
-          cdcSubscriber,
-          {subscriberId},
-        );
-
-        this.logger.debug(JOINING_LOG_MSG.CDC_SUBSCRIPTION_REGISTERED, {
-          tableName,
-          partitionId: options.partitionId,
-          replicaId: options.replicaId,
-          subscriberId: handshake.subscriberId,
-          subscriptionEpoch: handshake.subscriptionEpoch,
-          catchupMode: handshake.catchup.mode,
-          bufferedEventsReplayed: handshake.catchup.bufferedEventsReplayed,
-        });
-      }
-
-      return partition;
-    };
 
     // Use shared ReplicaHandlerSetup component
     const {replicaHandler, replicaStateMachine} = ReplicaHandlerSetup.create({
@@ -3778,6 +4289,165 @@ class NodeJoiningService extends EventEmitter {
       nodeId: this.nodeId,
       hasMessageGroupService: !!messageGroupService,
     });
+  }
+
+  /**
+   * Create and initialize one local partition service on the join path.
+   * Shared by the replica handler and durable-rejoin restore lifecycle.
+   * @param {Object} options
+   * @return {Promise<PartitionService>}
+   * @private
+   */
+  async createJoinLocalPartitionService(options) {
+    const cdcIntegrationService = this.createCdcIntegrationService();
+    const systemTableCache = NodeService.getInstance().getSystemTableCache();
+    if (!this.tablePolicyService) {
+      this.tablePolicyService = new TablePolicyService({
+        systemTableCache,
+        cdcIntegrationService,
+      });
+      this.tablePolicyService.initialize();
+    }
+
+    const cacheForPartition = this.systemCacheHydrated ?
+      systemTableCache :
+      null;
+    const messageGroupService = options.messageGroupService ||
+      this.getLeaderMessageGroupService();
+    const partition = new PartitionService({
+      ...options,
+      transport: this.transport,
+      messageGroupService,
+      messageRouter: this.messageRouter,
+      rebalanceCoordinator: this.rebalanceCoordinator,
+      replicaStateMachine: this.replicaStateMachine,
+      systemTableCache: cacheForPartition,
+      cdcIntegrationService,
+      sqlQueryEngine: cdcIntegrationService?.sqlQueryEngine || null,
+      tablePolicyService: this.tablePolicyService,
+      bootstrapReadinessState: this.bootstrapReadinessState,
+    });
+
+    await partition.initialize();
+    this.partitionServices.set(options.replicaId, partition);
+    this.trackJoinPartitionReplica(
+      options.replicaId,
+      options.partitionId,
+      partition,
+    );
+
+    const tableName = options.tableName;
+    if (tableName &&
+        shouldAttachPartitionCdcPropagation(tableName)) {
+      const subscriptionSelection =
+        await this.resolveOperationalMessageGroupSelectionAsync({
+          requiredTables: [tableName],
+        });
+      const subscriptionMessageGroupService =
+        subscriptionSelection.service;
+      if (!subscriptionMessageGroupService) {
+        throw buildMessageGroupOwnerNotReadyError(
+          subscriptionSelection,
+          {
+            message:
+              `Operational message-group ingress not ready ` +
+              `for ${tableName} CDC subscription`,
+          },
+        );
+      }
+
+      await subscriptionMessageGroupService.subscribeToCDC(tableName);
+
+      const subscriberId = [
+        'joining',
+        this.nodeId,
+        tableName,
+        options.replicaId,
+        subscriptionMessageGroupService?.groupId || 'message-group',
+      ].join(':');
+      const cdcSubscriber = async (cdcEvent) => {
+        if (cdcEvent.tableName === tableName) {
+          this.logger.debug(JOINING_LOG_MSG.CDC_EVENT_RECEIVED, {
+            tableName: cdcEvent.tableName,
+            operation: cdcEvent.operation,
+            partitionId: options.partitionId,
+            replicaId: options.replicaId,
+          });
+          const propagationSelection =
+            await this.resolveOperationalMessageGroupSelectionAsync({
+              requiredTables: [tableName],
+            });
+          const propagationMessageGroupService =
+            propagationSelection.service;
+          if (!propagationMessageGroupService) {
+            throw buildMessageGroupOwnerNotReadyError(
+              propagationSelection,
+              {
+                message:
+                  `Operational message-group ingress not ready ` +
+                  `for ${tableName} CDC propagation`,
+              },
+            );
+          }
+
+          await this.propagatePartitionCDCEvent(
+            propagationMessageGroupService,
+            cdcEvent,
+          );
+        }
+      };
+      const handshake = await partition.subscribeToCDCWithHandshake(
+        cdcSubscriber,
+        {subscriberId},
+      );
+
+      this.logger.debug(JOINING_LOG_MSG.CDC_SUBSCRIPTION_REGISTERED, {
+        tableName,
+        partitionId: options.partitionId,
+        replicaId: options.replicaId,
+        subscriberId: handshake.subscriberId,
+        subscriptionEpoch: handshake.subscriptionEpoch,
+        catchupMode: handshake.catchup.mode,
+        bufferedEventsReplayed: handshake.catchup.bufferedEventsReplayed,
+      });
+    }
+
+    return partition;
+  }
+
+  /**
+   * Register one locally restored partition with replica-handler recovery state.
+   * @param {string} replicaId
+   * @param {string} partitionId
+   * @param {Object} partition
+   * @return {void}
+   * @private
+   */
+  trackJoinPartitionReplica(replicaId, partitionId, partition) {
+    if (!this.replicaHandler) {
+      return;
+    }
+
+    this.replicaHandler.localServices?.set?.(replicaId, partition);
+    this.replicaHandler.setLocalReplica?.(replicaId, {
+      replicaId,
+      partitionId,
+      status: ReplicaStatus.ACTIVE,
+      service: partition,
+    });
+    this.replicaHandler.replicaStateMachine
+      ?.registerReplicaSnapshot?.(replicaId, {
+        partitionId,
+        nodeId: this.nodeId,
+        state: ReplicaStatus.ACTIVE,
+        serviceId: replicaId,
+        serviceType: SERVICE_TYPE.PARTITION,
+        serviceAddress: typeof partition?.getUnifiedAddress === TYPEOF.FUNCTION ?
+          partition.getUnifiedAddress() :
+          `${this.nodeId}${ADDRESS.SEPARATOR}` +
+          `${ENTITY_TYPE.PARTITION}${ADDRESS.SEPARATOR}` +
+          `${replicaId}`,
+      });
   }
 
   /**
@@ -4045,6 +4715,7 @@ class NodeJoiningService extends EventEmitter {
       defaultRoutingReadinessDimension:
         CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
       migrationAutoWire: false,
+      autoStartDistributedTransactionRecovery: false,
     });
     sqlQueryEngine.seedBootstrapRoutingOverlayFromSnapshots(
       this.bootstrapResponse?.systemTableSnapshots || null,

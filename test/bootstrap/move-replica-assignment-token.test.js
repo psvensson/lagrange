@@ -401,6 +401,40 @@ async function bootstrapMoveReplicaAssignment(t, options = {}) {
   };
 }
 
+function configureSyntheticMoveReplicaRegisterServiceHandoff(
+  api,
+  expectedServiceRow,
+  options = {},
+) {
+  const assignmentId = options.assignmentId || 'assignment-1';
+  const sourceNodeId = options.sourceNodeId || 'seed-node-1';
+
+  api.validateMoveReplicaAssignmentToken = async () => ({assignmentId});
+  api.assertSingleOwnerReplicaRegistration = () => {};
+  api.startMoveReplicaHandoff = async () => ({
+    operationId: assignmentId,
+    replicaId: expectedServiceRow.replica_id,
+    sourceNodeId,
+    targetNodeId: expectedServiceRow.node_id,
+  });
+  api.executeMoveReplicaHandoffPhase = async (
+    _handoffContext,
+    _phase,
+    _workflowStep,
+    _status,
+    work,
+  ) => work();
+  api.verifyMoveReplicaHandoffTarget = async () => {};
+  api.readCurrentRegisteredServiceRow = async () => null;
+  api.removeLocalSourceReplicaForMoveReplica = async () => {};
+  api.completeMoveReplicaHandoff = async () => {};
+  api.restoreRegisteredServiceRowAfterFailedHandoff = async () => {};
+  api.shouldPreserveMoveReplicaHandoffReservation = () => false;
+  api.failMoveReplicaHandoff = async () => {};
+
+  return assignmentId;
+}
+
 test('BootstrapAPI register-service rejects missing and unknown assignment token', async (t) => {
   const fixture = await bootstrapMoveReplicaAssignment(t);
   const {api, assignment, joiningNodeId} = fixture;
@@ -999,6 +1033,14 @@ test('BootstrapAPI register-service emits retryable cache visibility timeout res
         return {success: true, rows: []};
       },
     });
+    const assignmentId = configureSyntheticMoveReplicaRegisterServiceHandoff(
+      api,
+      {
+        service_id: 'mg-2-r1',
+        node_id: '550e8400-e29b-41d4-a716-446655440324',
+        replica_id: 'mg-2-r1',
+      },
+    );
     t.teardown(async () => {
       await api.shutdown();
     });
@@ -1022,6 +1064,7 @@ test('BootstrapAPI register-service emits retryable cache visibility timeout res
         node_id: '550e8400-e29b-41d4-a716-446655440324',
         group_id: 'mg-2',
         replica_id: 'mg-2-r1',
+        assignment_id: assignmentId,
         raft_role: RAFT_ROLE.FOLLOWER,
         status: SERVICE_STATUS.ACTIVE,
         address: '550e8400-e29b-41d4-a716-446655440324/message-group/mg-2-r1',
@@ -1104,6 +1147,10 @@ test('BootstrapAPI register-service remains retryable when storage is visible bu
       cdcIntegrationService: createCdcIntegrationServiceFixture(rows),
     });
     await api.initialize(0, {listen: false});
+    const assignmentId = configureSyntheticMoveReplicaRegisterServiceHandoff(
+      api,
+      expectedServiceRow,
+    );
     api.setSqlQueryEngine({
       async executeQuery(sql) {
         if (sql.includes('INSERT OR REPLACE INTO services')) {
@@ -1129,6 +1176,7 @@ test('BootstrapAPI register-service remains retryable when storage is visible bu
         node_id: expectedServiceRow.node_id,
         group_id: expectedServiceRow.group_id,
         replica_id: expectedServiceRow.replica_id,
+        assignment_id: assignmentId,
         raft_role: expectedServiceRow.raft_role,
         status: expectedServiceRow.status,
         address: expectedServiceRow.address,
@@ -1222,9 +1270,24 @@ test('BootstrapAPI register-service repairs cache-visible hole from authoritativ
         t.equal(tableName, 'services', 'repair should target the services table');
         t.equal(key, expectedServiceRow.service_id, 'repair should target the registered service');
         t.equal(expectPresent, true, 'repair should expect the services row to exist');
+        t.same(
+          Object.keys(expectedFields).sort(),
+          [
+            'address',
+            'group_id',
+            'node_id',
+            'replica_id',
+            'service_id',
+            'service_type',
+            'status',
+          ],
+          'repair should only require the service visibility fields, not timestamp equality',
+        );
         systemTableCache.applySystemTableChange(tableName, 'UPSERT', {
           ...expectedFields,
           ...expectedServiceRow,
+          created_at: 1234,
+          updated_at: 5678,
         });
         return true;
       },
@@ -1238,6 +1301,10 @@ test('BootstrapAPI register-service repairs cache-visible hole from authoritativ
       cdcIntegrationService,
     });
     await api.initialize(0, {listen: false});
+    const assignmentId = configureSyntheticMoveReplicaRegisterServiceHandoff(
+      api,
+      expectedServiceRow,
+    );
     api.setSqlQueryEngine({
       async executeQuery(sql) {
         if (sql.includes('INSERT OR REPLACE INTO services')) {
@@ -1263,6 +1330,7 @@ test('BootstrapAPI register-service repairs cache-visible hole from authoritativ
         node_id: expectedServiceRow.node_id,
         group_id: expectedServiceRow.group_id,
         replica_id: expectedServiceRow.replica_id,
+        assignment_id: assignmentId,
         raft_role: expectedServiceRow.raft_role,
         status: expectedServiceRow.status,
         address: expectedServiceRow.address,
@@ -1630,6 +1698,14 @@ test('BootstrapAPI register-service timeout diagnostics include mismatch fields'
       return {success: true, rows: []};
     },
   });
+  const assignmentId = configureSyntheticMoveReplicaRegisterServiceHandoff(
+    api,
+    {
+      service_id: 'mg-2-r1',
+      node_id: '550e8400-e29b-41d4-a716-446655440324',
+      replica_id: 'mg-2-r1',
+    },
+  );
   t.teardown(async () => {
     await api.shutdown();
   });
@@ -1653,6 +1729,7 @@ test('BootstrapAPI register-service timeout diagnostics include mismatch fields'
       node_id: '550e8400-e29b-41d4-a716-446655440324',
       group_id: 'mg-2',
       replica_id: 'mg-2-r1',
+      assignment_id: assignmentId,
       raft_role: RAFT_ROLE.FOLLOWER,
       status: SERVICE_STATUS.ACTIVE,
       address: '550e8400-e29b-41d4-a716-446655440324/message-group/mg-2-r1',

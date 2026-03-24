@@ -30,6 +30,10 @@ import {
   JOINING_ERROR_MSG,
   JOINING_LOG_MSG,
 } from '../../src/bootstrap/node-joining-constants.js';
+import {
+  JOIN_PLAN_SEGMENT,
+} from '../../src/bootstrap/bootstrap-constants.js';
+import {STARTUP_JOIN_MODE} from '../../src/bootstrap/rejoin-hints-constants.js';
 import {WORK_CLASS} from '../../src/runtime/work-class-scheduler.js';
 import {ENTRYPOINT_DEFAULT} from '../../src/constants/entrypoint.js';
 import {
@@ -83,6 +87,124 @@ test('NodeJoiningService - initialization', async (t) => {
   t.equal(service.nodeAddress, 'ws://localhost:9090');
   t.equal(service.seedNodeAddress, 'http://localhost:8080');
 });
+
+test('NodeJoiningService - initializeJoinInfrastructure opens external transport admission after handlers are ready',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const calls = [];
+    const service = new NodeJoiningService({
+      nodeId: 'joining-node-open-admission',
+      nodeAddress: 'ws://localhost:9090',
+      seedNodeAddress: 'http://localhost:8080',
+    });
+
+    service.messageRouter = {
+      setExternalAdmissionEnabled(value) {
+        calls.push(['setExternalAdmissionEnabled', value]);
+      },
+    };
+    service.getLeaderMessageGroupService = () => ({sendMessage: async () => ({})});
+    service.createCdcIntegrationService = () => {
+      calls.push(['createCdcIntegrationService']);
+      service.cdcIntegrationService = {};
+    };
+    service.ensureLatencyTopologyOwners = () => {
+      calls.push(['ensureLatencyTopologyOwners']);
+    };
+    service.initializeReplicaHandler = () => {
+      calls.push(['initializeReplicaHandler']);
+    };
+    service.initializeMessageGroupServiceHandler = () => {
+      calls.push(['initializeMessageGroupServiceHandler']);
+    };
+    service.initializeControlPlaneService = async () => {
+      calls.push(['initializeControlPlaneService']);
+    };
+    service.initializeRuntimeServiceHandler = () => {
+      calls.push(['initializeRuntimeServiceHandler']);
+    };
+
+    await service.initializeJoinInfrastructure();
+
+    t.same(
+      calls,
+      [
+        ['createCdcIntegrationService'],
+        ['ensureLatencyTopologyOwners'],
+        ['initializeReplicaHandler'],
+        ['initializeMessageGroupServiceHandler'],
+        ['initializeControlPlaneService'],
+        ['initializeRuntimeServiceHandler'],
+        ['setExternalAdmissionEnabled', true],
+      ],
+      'join infrastructure should only open external admission after runtime handlers are initialized',
+    );
+  });
+
+test('NodeJoiningService - runJoinInfrastructurePhases notifies local admin runtime before JOINING',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const cache = {cache: true};
+    const originalGetNodeService = NodeService.getInstance;
+    const calls = [];
+    try {
+      NodeService.getInstance = () => ({
+        getSystemTableCache() {
+          return cache;
+        },
+      });
+
+      const service = new NodeJoiningService({
+        nodeId: 'joining-node-local-admin',
+        nodeAddress: 'ws://localhost:9090',
+        seedNodeAddress: 'http://localhost:8080',
+        onLocalAdminRuntimeReady: async ({owner, systemTableCache}) => {
+          calls.push(['onLocalAdminRuntimeReady']);
+          t.equal(owner, service,
+            'callback should receive the active join owner');
+          t.same(systemTableCache, cache,
+            'callback should receive the current system cache');
+        },
+      });
+
+      service.initializeJoinInfrastructure = async () => {
+        calls.push(['initializeJoinInfrastructure']);
+      };
+      service._applyDeferredJoinSubPhases = () => {
+        calls.push(['applyDeferredJoinSubPhases']);
+      };
+      const originalTransition = service.lifecycleStateMachine.transition
+        .bind(service.lifecycleStateMachine);
+      service.lifecycleStateMachine.transition = (state) => {
+        calls.push(['transition', state]);
+        return originalTransition(state);
+      };
+
+      await service.runJoinInfrastructurePhases({
+        run: async () => {},
+      }, {
+        segments: {
+          [JOIN_PLAN_SEGMENT.INFRASTRUCTURE]: ['phase-a', 'phase-b'],
+        },
+      });
+
+      t.same(
+        calls,
+        [
+          ['transition', 'discovering'],
+          ['initializeJoinInfrastructure'],
+          ['onLocalAdminRuntimeReady'],
+          ['transition', 'joining'],
+          ['applyDeferredJoinSubPhases'],
+        ],
+        'join runtime should expose local admin surfaces before transitioning into JOINING',
+      );
+    } finally {
+      NodeService.getInstance = originalGetNodeService;
+    }
+  });
 
 test('NodeJoiningService - getStatus', async (t) => {
   initializeTestEnvironment();
@@ -208,6 +330,130 @@ test('NodeJoiningService - initializeMessageGroupServiceHandler uses NodeService
     } finally {
       NodeService.getInstance = originalGetNodeService;
     }
+  });
+
+test('NodeJoiningService - durable rejoin restore queues local partition replicas as existing voters',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const service = new NodeJoiningService({
+      nodeId: 'durable-join-node',
+      nodeAddress: 'ws://localhost:9090',
+      seedNodeAddress: 'http://localhost:8080',
+      startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
+      dataDir: '/tmp/durable-join-data',
+    });
+
+    const calls = [];
+    service.initializeJoiningLifecycleOwners = async () => {
+      calls.push('init');
+    };
+    service.triggerJoinReconciler = async () => {
+      calls.push('reconcile');
+      for (const replicaId of service.joinReplicaOptionsByServiceId.keys()) {
+        service.partitionServices.set(replicaId, {
+          startElection() {
+            calls.push(`start:${replicaId}`);
+          },
+        });
+      }
+    };
+
+    const schemaDefinition = {
+      tableName: 'nodes',
+      columns: [{name: 'node_id', type: 'TEXT', primaryKey: true}],
+    };
+    const rowsByTable = new Map([
+      [TABLES.TABLES, [{
+        table_id: 'nodes',
+        table_name: 'nodes',
+        schema_definition: JSON.stringify(schemaDefinition),
+      }]],
+      [TABLES.PARTITIONS, [{
+        partition_id: 'nodes-p1',
+        table_id: 'nodes',
+        table_name: 'nodes',
+        partition_key_start: null,
+        partition_key_end: null,
+        leader_node_id: 'durable-join-node',
+      }]],
+      [TABLES.SERVICES, [{
+        service_id: 'nodes-p1-r1',
+        replica_id: 'nodes-p1-r1',
+        service_type: SERVICE_TYPE.PARTITION,
+        node_id: 'durable-join-node',
+        partition_id: 'nodes-p1',
+        status: 'active',
+        address: 'durable-join-node/partition/nodes-p1-r1',
+      }, {
+        service_id: 'nodes-p1-r2',
+        replica_id: 'nodes-p1-r2',
+        service_type: SERVICE_TYPE.PARTITION,
+        node_id: 'peer-node-2',
+        partition_id: 'nodes-p1',
+        status: 'active',
+        address: 'peer-node-2/partition/nodes-p1-r2',
+      }, {
+        service_id: 'nodes-p1-r3',
+        replica_id: 'nodes-p1-r3',
+        service_type: SERVICE_TYPE.PARTITION,
+        node_id: 'peer-node-3',
+        partition_id: 'nodes-p1',
+        status: 'active',
+        address: 'peer-node-3/partition/nodes-p1-r3',
+      }]],
+    ]);
+    const systemTableCache = {
+      getAll(tableName) {
+        return rowsByTable.get(tableName) || [];
+      },
+      get(tableName, key) {
+        const rows = rowsByTable.get(tableName) || [];
+        return rows.find((row) =>
+          row.partition_id === key ||
+          row.table_id === key ||
+          row.service_id === key,
+        ) || null;
+      },
+    };
+
+    const restored =
+      await service.restoreDurableRejoinLocalPartitionServices(
+        systemTableCache,
+      );
+
+    t.same(
+      calls,
+      ['init', 'reconcile', 'start:nodes-p1-r1'],
+      'durable rejoin should recreate local partition runtimes before starting their elections',
+    );
+    t.same(
+      restored.map((plan) => plan.replicaId),
+      ['nodes-p1-r1'],
+      'only cached local active partition replicas should be restored',
+    );
+    const restorePlan =
+      service.joinReplicaOptionsByServiceId.get('nodes-p1-r1');
+    t.equal(
+      restorePlan.isJoiningExistingGroup,
+      false,
+      'durable restore should reactivate existing voters instead of restarting them as learners',
+    );
+    t.equal(
+      restorePlan.deferElection,
+      true,
+      'durable restore should defer elections until the local restore batch is recreated',
+    );
+    t.same(
+      restorePlan.replicaIds,
+      ['nodes-p1-r1', 'nodes-p1-r2', 'nodes-p1-r3'],
+      'restore plan should preserve the canonical durable peer set',
+    );
+    t.match(
+      restorePlan.dbPath,
+      /\/tmp\/durable-join-data\/partitions\/nodes-p1\/nodes-p1-r1\.db$/,
+      'restore plan should point at the durable local partition database path',
+    );
   });
 
 test('NodeJoiningService - retries bootstrap when seed responds BOOTSTRAP_NOT_READY',
@@ -460,6 +706,61 @@ test('NodeJoiningService - includes assignment_id on MOVE_REPLICA register-servi
       '5ef301f9-6f73-4cb5-bb4e-8d73ef2a9ce5',
       'MOVE_REPLICA register-service should include assignment_id token',
     );
+  });
+
+test('NodeJoiningService - bypasses HTTP register-service for local seed self-registration',
+  async (t) => {
+    initializeTestEnvironment();
+
+    let httpCalls = 0;
+    const upsertCalls = [];
+    const seededRows = [];
+    const service = new NodeJoiningService({
+      nodeId: 'seed-node-1',
+      nodeAddress: 'ws://localhost:9090',
+      seedNodeAddress: 'http://localhost:8080',
+      httpPost: async () => {
+        httpCalls += 1;
+        return {success: true};
+      },
+    });
+    service.seedNodeId = 'seed-node-1';
+    service.upsertSystemTableRowWithRetry = async (tableName, row, options) => {
+      upsertCalls.push({tableName, row, options});
+      return {success: true};
+    };
+    service.seedJoinTimeCacheRow = (tableName, row) => {
+      seededRows.push({tableName, row});
+    };
+
+    await service.registerMessageGroupService(
+      'mg-1',
+      'mg-1-r0',
+      {getRole: () => 'leader'},
+      {status: SERVICE_STATUS.STOPPED},
+    );
+
+    t.equal(
+      httpCalls,
+      0,
+      'local seed CREATE_SELF_HOSTED registration should not loop through HTTP',
+    );
+    t.equal(upsertCalls.length, 1,
+      'local seed shortcut should persist the service row directly');
+    t.equal(upsertCalls[0].tableName, 'services',
+      'local seed shortcut should write to the services table');
+    t.equal(
+      upsertCalls[0].row.service_id,
+      'mg-1-r0',
+      'local seed shortcut should write the targeted replica row',
+    );
+    t.equal(
+      upsertCalls[0].row.status,
+      SERVICE_STATUS.STOPPED,
+      'local seed shortcut should preserve requested status',
+    );
+    t.equal(seededRows.length, 1,
+      'local seed shortcut should seed the join-time cache row');
   });
 
 test('NodeJoiningService - fails fast on unauthorized replica owner conflict at startup',
@@ -2234,6 +2535,119 @@ test('NodeJoiningService disables reporter visibility verification before steady
       'steady-state heartbeat loop should use the prepared options',
     );
   });
+
+test('NodeJoiningService - join-time CDC engine defers distributed transaction ' +
+  'recovery until steady-state activation',
+async (t) => {
+  initializeTestEnvironment();
+
+  const cache = new SystemTableCache();
+  const service = new NodeJoiningService({
+    nodeId: 'joining-node-recovery-gate',
+    nodeAddress: 'ws://localhost:19102',
+    seedNodeAddress: 'http://localhost:8080',
+  });
+
+  service.seedNodeId = 'seed-node-1';
+  service.bootstrapResponse = {
+    systemTableSnapshots: {},
+  };
+  service.messageRouter = {
+    deliver: async () => ({acknowledged: true, success: true}),
+  };
+  service.rebalanceCoordinator = {
+    controlPlaneReadinessService: null,
+  };
+  service.messageGroupServices = new Map([
+    ['mg-1', {
+      getReadOnlyCache() {
+        return cache;
+      },
+      getWritableCache() {
+        return cache;
+      },
+      setCdcIntegrationService() {},
+    }],
+  ]);
+
+  const cdcIntegrationService = service.createCdcIntegrationService();
+  const sqlQueryEngine = cdcIntegrationService.sqlQueryEngine;
+  const replay = await sqlQueryEngine.waitForDistributedTransactionRecoveryReplay();
+
+  t.equal(
+    sqlQueryEngine.transactionCoordinator.recoverySweepTimer,
+    null,
+    'join-time engine should not start periodic recovery before READY cutover',
+  );
+  t.same(
+    replay,
+    {
+      totalRecovered: 0,
+      resumed: 0,
+      failed: 0,
+      results: [],
+    },
+    'join-time engine should keep replay dormant until the owner activates it',
+  );
+
+  await sqlQueryEngine.shutdown();
+});
+
+test('NodeJoiningService - completeSuccessfulJoin activates distributed ' +
+  'transaction recovery after steady-state cutover',
+async (t) => {
+  initializeTestEnvironment();
+
+  const order = [];
+  const service = new NodeJoiningService({
+    nodeId: 'joining-node-recovery-activate',
+    nodeAddress: 'ws://localhost:19103',
+    seedNodeAddress: 'http://localhost:8080',
+  });
+
+  service.lifecycleStateMachine.transition = () => {
+    order.push('state-transition');
+  };
+  service.cdcIntegrationService = {
+    sqlQueryEngine: {
+      activateDistributedTransactionRecovery() {
+        order.push('tx-recovery');
+        return Promise.resolve({
+          totalRecovered: 0,
+          resumed: 0,
+          failed: 0,
+          results: [],
+        });
+      },
+    },
+  };
+  service.activateControlPlaneBackgroundWriters = () => {
+    order.push('background-writers');
+  };
+  service.createMessageGroupPhase = {
+    flushDeferredCreateSelfHostedMetadata() {
+      order.push('self-hosted-metadata');
+      return Promise.resolve({success: true});
+    },
+  };
+  service.startLatencyTopologyLifecycle = () => {
+    order.push('latency-topology');
+  };
+
+  service.completeSuccessfulJoin();
+
+  t.same(
+    order,
+    [
+      'state-transition',
+      'background-writers',
+      'self-hosted-metadata',
+      'tx-recovery',
+      'latency-topology',
+    ],
+    'steady-state recovery should start only after the READY cutover owners activate',
+  );
+});
 
 test('NodeJoiningService - activates message-group rows after membership write',
   async (t) => {

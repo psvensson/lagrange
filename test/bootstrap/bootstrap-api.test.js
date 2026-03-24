@@ -27,6 +27,7 @@ import {
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {BootstrapReadinessState} from '../../src/bootstrap/bootstrap-readiness-state.js';
 import {LIFECYCLE_REASON} from '../../src/bootstrap/lifecycle-controller-constants.js';
+import {STARTUP_RECOVERY_STAGE} from '../../src/bootstrap/startup-recovery-coordinator.js';
 
 // Initialize configuration and logging for tests
 function initializeTestEnvironment() {
@@ -606,6 +607,109 @@ test('BootstrapAPI - register-service retries deferred services publication befo
     await api.shutdown();
   });
 
+test('BootstrapAPI - register-service falls back to bootstrap-scoped SQL ' +
+  'mutation routing when CDC mutation helpers are not ready yet',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const sqlCalls = [];
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: createEmptySystemTableCache(),
+      sqlQueryEngine: {
+        async executeQuery(sql, params, options) {
+          sqlCalls.push({sql, params, options});
+          return {success: true, affectedRows: 1};
+        },
+      },
+      cdcIntegrationService: null,
+    });
+
+    await api.initialize(0, {listen: false});
+    api.waitForRegisteredServiceCacheVisibility = async () => {};
+
+    const response = await api.getFastify().inject({
+      method: 'POST',
+      url: '/register-service',
+      payload: {
+        service_id: 'mg-1-r1',
+        service_type: SERVICE_TYPE.MESSAGE_GROUP,
+        node_id: 'joiner-node-1',
+        group_id: 'mg-1',
+        replica_id: 'mg-1-r1',
+        status: SERVICE_STATUS.STOPPED,
+      },
+    });
+
+    t.equal(response.statusCode, 200,
+      'register-service should not fail just because the bootstrap seed has not wired CDC mutations yet');
+    t.equal(sqlCalls.length, 1,
+      'bootstrap register-service should route through the SQL fallback once');
+    t.match(
+      sqlCalls[0].sql,
+      /^INSERT OR REPLACE INTO services \(/,
+      'register-service should persist through the canonical services table',
+    );
+    t.equal(
+      sqlCalls[0].options.phaseScope,
+      'bootstrap',
+      'bootstrap writes should opt into the explicit startup fallback scope',
+    );
+    t.equal(
+      sqlCalls[0].options.skipCacheWait,
+      true,
+      'bootstrap SQL fallback should rely on the later visibility gate instead of inline cache waits',
+    );
+
+    await api.shutdown();
+  });
+
+test('BootstrapAPI - register-service acknowledges plain self-hosted registration without waiting for cache visibility',
+  async (t) => {
+    initializeTestEnvironment();
+
+    let visibilityChecks = 0;
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: createEmptySystemTableCache(),
+      sqlQueryEngine: {
+        async executeQuery() {
+          return {success: true, rows: []};
+        },
+      },
+      cdcIntegrationService: null,
+    });
+
+    await api.initialize(0, {listen: false});
+    api.waitForRegisteredServiceCacheVisibility = async () => {
+      visibilityChecks += 1;
+      throw new Error('plain self-hosted register-service should not wait for cache visibility');
+    };
+
+    const response = await api.getFastify().inject({
+      method: 'POST',
+      url: '/register-service',
+      payload: {
+        service_id: 'mg-1-r1',
+        service_type: SERVICE_TYPE.MESSAGE_GROUP,
+        node_id: 'joiner-node-1',
+        group_id: 'mg-1',
+        replica_id: 'mg-1-r1',
+        status: SERVICE_STATUS.ACTIVE,
+        address: 'joiner-node-1/message-group/mg-1-r1',
+      },
+    });
+
+    t.equal(response.statusCode, 200,
+      'plain self-hosted register-service should return as soon as the durable write succeeds');
+    t.equal(visibilityChecks, 0,
+      'plain self-hosted register-service should skip the cache visibility gate');
+
+    await api.shutdown();
+  });
+
 test('BootstrapAPI - keeps legacy /health available while readiness remains blocked',
   async (t) => {
     initializeTestEnvironment();
@@ -909,6 +1013,68 @@ test('BootstrapAPI - readyz allows isolated message-group leader lag', async (t)
 
   await api.shutdown();
 });
+
+test('BootstrapAPI - readiness probes surface startup recovery coordinator fields',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const readinessSnapshot = {
+      ready: false,
+      phase: 'CONTROL_READY',
+      phaseRank: 1,
+      state: 'warming',
+      reasons: ['local_query_transport_not_ready'],
+      retryAfterMs: 250,
+      timestamp: 1700000000400,
+    };
+    const readinessState = {
+      evaluate() {
+        return readinessSnapshot;
+      },
+      getSnapshot() {
+        return readinessSnapshot;
+      },
+      recordProbeResult() {},
+    };
+
+    const api = new BootstrapAPI({
+      seedNodeId: 'seed-node-1',
+      seedNodeAddress: 'ws://localhost:8080',
+      systemTableCache: createEmptySystemTableCache(),
+      readinessState,
+      startupRecoveryCoordinator: {
+        evaluate() {
+          return {
+            controlPlaneRecoveryReady: true,
+            metadataPublicationReady: true,
+            backgroundWorkReady: false,
+            recoveryBlocked: false,
+            recoveryStage: STARTUP_RECOVERY_STAGE.CONTROL_PLANE_RECOVERY_READY,
+            recoveryStageRank: 2,
+          };
+        },
+      },
+    });
+
+    await api.initialize(0, {listen: false});
+
+    const bootstrapReadyResponse = await api.getFastify().inject({
+      method: 'GET',
+      url: '/bootstrap/ready',
+    });
+    const bootstrapReadyBody = JSON.parse(bootstrapReadyResponse.body);
+    t.equal(bootstrapReadyBody.controlPlaneRecoveryReady, true);
+    t.equal(bootstrapReadyBody.metadataPublicationReady, true);
+    t.equal(bootstrapReadyBody.backgroundWorkReady, false);
+    t.equal(bootstrapReadyBody.recoveryBlocked, false);
+    t.equal(
+      bootstrapReadyBody.recoveryStage,
+      STARTUP_RECOVERY_STAGE.CONTROL_PLANE_RECOVERY_READY,
+    );
+    t.equal(bootstrapReadyBody.recoveryStageRank, 2);
+
+    await api.shutdown();
+  });
 
 test('BootstrapAPI - readyz still blocks missing partition leader metadata', async (t) => {
   initializeTestEnvironment();

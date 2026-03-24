@@ -202,13 +202,15 @@ class ServiceRegistrationHandoffOwner {
       }
       targetServiceRowWritten = true;
 
-      const expectedRegisteredService =
-        this.delegates.buildExpectedRegisteredServiceData(
-          registeredServiceRow,
+      if (handoffContext) {
+        const expectedRegisteredService =
+          this.delegates.buildExpectedRegisteredServiceData(
+            registeredServiceRow,
+          );
+        await this.delegates.waitForRegisteredServiceCacheVisibility(
+          expectedRegisteredService,
         );
-      await this.delegates.waitForRegisteredServiceCacheVisibility(
-        expectedRegisteredService,
-      );
+      }
 
       if (handoffContext) {
         await this.delegates.executeMoveReplicaHandoffPhase(

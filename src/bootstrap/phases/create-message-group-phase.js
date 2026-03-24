@@ -69,6 +69,8 @@ class CreateMessageGroupPhase {
   constructor(options = {}) {
     this.nodeId = options.nodeId;
     this.delegates = options.delegates || {};
+    this.pendingCreateSelfHostedMessageGroupRow = null;
+    this.createSelfHostedMetadataFlushPromise = null;
   }
 
   /**
@@ -443,6 +445,10 @@ class CreateMessageGroupPhase {
     const now = nowFn();
     const moveReplicaAssignment =
       bootstrapResponse?.messageGroupAssignment || null;
+    const seedNodeId =
+      typeof this.delegates.getSeedNodeId === 'function' ?
+        this.delegates.getSeedNodeId() :
+        null;
     const assignmentId = moveReplicaAssignment &&
       moveReplicaAssignment.strategy ===
         AssignmentStrategy.MOVE_REPLICA &&
@@ -478,6 +484,43 @@ class CreateMessageGroupPhase {
         registerUrl,
       },
     );
+
+    const useLocalSeedRegistrationShortcut =
+      !assignmentId &&
+      typeof seedNodeId === 'string' &&
+      seedNodeId.length > NUM.ZERO &&
+      seedNodeId === this.nodeId &&
+      typeof this.delegates.upsertSystemTableRowWithRetry === 'function';
+
+    if (useLocalSeedRegistrationShortcut) {
+      await this.delegates.upsertSystemTableRowWithRetry(
+        TABLES.SERVICES,
+        serviceData,
+        {
+          admissionTarget:
+            'create-self-hosted local seed service registration',
+        },
+      );
+
+      if (typeof this.delegates.seedJoinTimeCacheRow === 'function') {
+        this.delegates.seedJoinTimeCacheRow(
+          TABLES.SERVICES,
+          serviceData,
+        );
+      }
+
+      logger.info(
+        JOINING_LOG_MSG.MESSAGE_GROUP_REGISTERED,
+        {
+          nodeId: this.nodeId,
+          replicaId,
+          groupId,
+          attempt: NUM.ONE,
+          localSeedShortcut: true,
+        },
+      );
+      return;
+    }
 
     const retryPolicy =
       this.delegates.resolveJoinRetryPolicy();
@@ -670,16 +713,11 @@ class CreateMessageGroupPhase {
       created_at: now,
       updated_at: now,
     };
-
-    const groupResult =
-      await this.delegates.upsertSystemTableRow(
+    this.pendingCreateSelfHostedMessageGroupRow = messageGroupRow;
+    if (typeof this.delegates.seedJoinTimeCacheRow === 'function') {
+      this.delegates.seedJoinTimeCacheRow(
         TABLES.MESSAGE_GROUPS,
         messageGroupRow,
-      );
-    if (!groupResult?.success) {
-      throw new Error(
-        JOINING_ERROR_MSG
-          .selfHostedMetadataUpsertFailed(groupId),
       );
     }
 
@@ -692,14 +730,70 @@ class CreateMessageGroupPhase {
       );
     }
 
-    logger.info(
-      JOINING_LOG_MSG.SELF_HOSTED_METADATA_REGISTERED,
-      {
-        nodeId: this.nodeId,
-        groupId,
-        replicaCount: replicas.length,
-      },
-    );
+    logger.info('CREATE_SELF_HOSTED message-group metadata staged for deferred authoritative publication', {
+      nodeId: this.nodeId,
+      groupId,
+      replicaCount: replicas.length,
+    });
+  }
+
+  /**
+   * Flush one staged CREATE_SELF_HOSTED message_groups row after the node has
+   * crossed the READY cutover. The durable publication is intentionally
+   * deferred out of query-state hydration because restarted owners may still
+   * be bringing their control-plane partitions back online at that point.
+   *
+   * @return {Promise<Object|null>}
+   */
+  async flushDeferredCreateSelfHostedMetadata() {
+    const messageGroupRow =
+      this.pendingCreateSelfHostedMessageGroupRow;
+    if (!messageGroupRow) {
+      return null;
+    }
+    if (this.createSelfHostedMetadataFlushPromise) {
+      return this.createSelfHostedMetadataFlushPromise;
+    }
+
+    const groupId = messageGroupRow.group_id;
+    this.createSelfHostedMetadataFlushPromise = (async () => {
+      const upsertResult =
+        typeof this.delegates.upsertSystemTableRowWithRetry === 'function' ?
+          await this.delegates.upsertSystemTableRowWithRetry(
+            TABLES.MESSAGE_GROUPS,
+            messageGroupRow,
+            {
+              admissionTarget:
+                'create-self-hosted message-group metadata publication',
+            },
+          ) :
+          await this.delegates.upsertSystemTableRow(
+            TABLES.MESSAGE_GROUPS,
+            messageGroupRow,
+          );
+
+      if (!upsertResult?.success) {
+        throw new Error(
+          JOINING_ERROR_MSG
+            .selfHostedMetadataUpsertFailed(groupId),
+        );
+      }
+
+      this.pendingCreateSelfHostedMessageGroupRow = null;
+      this.delegates.getLogger().info(
+        JOINING_LOG_MSG.SELF_HOSTED_METADATA_REGISTERED,
+        {
+          nodeId: this.nodeId,
+          groupId,
+        },
+      );
+      return upsertResult;
+    })()
+      .finally(() => {
+        this.createSelfHostedMetadataFlushPromise = null;
+      });
+
+    return this.createSelfHostedMetadataFlushPromise;
   }
 }
 

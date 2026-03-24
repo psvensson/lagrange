@@ -60,8 +60,10 @@ class MessageGroupAssignment {
     // it is a restarting node. Skip MOVE_REPLICA and go straight
     // to CREATE_SELF_HOSTED so it rejoins its existing group
     // with the same deterministic group ID.
-    if (this.hasExistingMembership(newNodeId, messageGroups)) {
-      const newGroupId = this.generateGroupId(newNodeId);
+    const existingMembershipGroupId =
+      this.findExistingMembershipGroupId(newNodeId, messageGroups);
+    if (existingMembershipGroupId) {
+      const newGroupId = existingMembershipGroupId;
 
       this.logger.info(
         MESSAGE_GROUP_ASSIGNMENT_LOG_MSG.EXISTING_MEMBERSHIP_DETECTED,
@@ -129,26 +131,47 @@ class MessageGroupAssignment {
    * CREATE_SELF_HOSTED rather than receiving a MOVE_REPLICA
    * assignment for a different group.
    *
-   * Only returns true when the node's canonical self-hosted
-   * group (derived from its node ID) already exists in the
-   * cluster. Nodes that joined via MOVE_REPLICA without ever
-   * creating a self-hosted group are not considered to have
-   * canonical membership and remain eligible for MOVE_REPLICA.
+   * Returns true when the node already owns a canonical restart group.
+   * This is normally the node-ID-derived self-hosted group, but the original
+   * seed node also canonically owns the initial control-plane group `mg-1`.
+   * Nodes that only host a moved replica on behalf of some other group remain
+   * eligible for MOVE_REPLICA.
    * @param {string} nodeId - Joining node ID.
    * @param {Array<Object>} messageGroups - Existing message groups.
    * @return {boolean} True when the node's canonical group exists.
    */
   hasExistingMembership(nodeId, messageGroups) {
+    return this.findExistingMembershipGroupId(nodeId, messageGroups) !== null;
+  }
+
+  /**
+   * Resolve the canonical restart group already owned by the joining node.
+   * @param {string} nodeId - Joining node ID.
+   * @param {Array<Object>} messageGroups - Existing message groups.
+   * @return {string|null} Existing canonical group ID or null.
+   */
+  findExistingMembershipGroupId(nodeId, messageGroups) {
     if (typeof nodeId !== 'string' || nodeId.length === NUM.ZERO) {
-      return false;
+      return null;
     }
     const canonicalGroupId = this.generateGroupId(nodeId);
     for (const group of messageGroups) {
       if (group.group_id === canonicalGroupId) {
-        return true;
+        return canonicalGroupId;
       }
     }
-    return false;
+
+    for (const group of messageGroups) {
+      const replicas = Array.isArray(group?.replicas) ? group.replicas : [];
+      const ownedReplicaCount = replicas.filter((replica) =>
+        replica?.node_id === nodeId,
+      ).length;
+      if (ownedReplicaCount >= MESSAGE_GROUP_ASSIGNMENT_DEFAULT.REPLICA_COUNT) {
+        return group.group_id || null;
+      }
+    }
+
+    return null;
   }
 
   /**
